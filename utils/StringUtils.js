@@ -1968,7 +1968,7 @@ const $scope = constants?.$scope || function()
     const DEFAULT_PROPERCASE_OPTIONS =
         {
             separator: _spc,
-            surnamePrefixes: ["Mc", "Mac", "O'"]
+            surnamePrefixes: ["Mc", "Mac"]
         };
 
     /**
@@ -2102,20 +2102,88 @@ const $scope = constants?.$scope || function()
      */
     const isUnpopulated = function( pStr )
     {
-        return (_ud === typeof pStr || null == pStr || (_str !== typeof pStr || isBlank( pStr )));
+        return (_ud === typeof pStr || null == pStr || ( !typeUtils.isString( pStr ) || isBlank( pStr )));
+    };
+
+    const reverseString = function( pStr )
+    {
+        let arr = [].concat( pStr );
+
+        if ( null == pStr || _ud === typeof pStr )
+        {
+            return _mt_str;
+        }
+
+        switch ( typeof pStr )
+        {
+            case _ud:
+                arr = [];
+                break;
+
+            case _str:
+                arr = pStr.split( _mt_chr );
+                break;
+
+            case _num:
+            case _big:
+                let s = asString( pStr );
+                arr = s.split( _mt_chr );
+                break;
+
+            case _fun:
+                arr = [];
+                break;
+
+            case _obj:
+
+                if ( typeUtils.isArray( pStr ) )
+                {
+                    arr = [].concat( pStr );
+                }
+
+                break;
+
+            default:
+                break;
+        }
+
+        arr = arr.reverse();
+
+        return asString( arr.join( _mt_chr ) );
     };
 
     const DEFAULT_TIDY_OPTIONS =
         {
-            trim: true
+            trim: true,
+            removeRedundantSpaces: true,
+            replaceTabsWithSpaces: false,
+            replaceSpacesWithTabs: false,
+            spacesPerTab: 4,
+            functions: [],
+            lowercase: false,
+            uppercase: false,
+            camelCase: false,
+            snakeCase: false,
+            properCase: false
         };
 
     /**
      * A null-safe, type-safe, alternative to the String method, trim
-     * Trims and returns a string or a char[] or a string representation of the value passed (and performs optional transformations specified in the optional second argument)
+     * Trims and returns a string or a char[] or a string representation
+     * of the value passed
+     *
+     * Tidy performs optional transformations specified in the optional second argument, pOptions.
+     * This function can be used as a sort of 'swiss army knife' for strings, based on the options passed,
+     * especially the ability to pass one or more functions to transform the result
+     *
      * @param {string} s - the value to trim and return as a String
-     * @param {object} pOptions - optional operations or transformations to perform on the string, such as toLowerCase
-     * @returns {string} a string or char[] or a string representation of the value passed with whitespace removed and any optional transformations applied
+     * @param {object} pOptions - optional operations or transformations to perform on the string,
+     *                            such as toLowerCase, toUpperCase, removeRedundantSpaces, replaceSpacesWithTabs, replaceTabsWithSpaces, etc.
+     *                            It is also possible to pass one or more functions to apply to the string before it is returned.
+     *
+     * @returns {string} a string or char[] or a string representation
+     * of the value passed with whitespace removed
+     * and any optional transformations applied
      */
     const tidy = function( s, pOptions = DEFAULT_TIDY_OPTIONS )
     {
@@ -2124,7 +2192,7 @@ const $scope = constants?.$scope || function()
             // note that we code this in such a way that it can be bound to the String.prototype as a member function (a.k.a. method)
             if ( (this instanceof String || String === this?.constructor) && _fun === typeof this.tidy )
             {
-                return tidy( String( this ).valueOf() || asString( this, true ), pOptions );
+                return tidy( String( this ).valueOf() || asString( this, pOptions?.trim ), pOptions );
             }
 
             return _mt_str;
@@ -2132,13 +2200,58 @@ const $scope = constants?.$scope || function()
 
         const options = Object.assign( Object.assign( {}, DEFAULT_TIDY_OPTIONS ), pOptions || {} );
 
-        let str = (asString( s, true ).replace( /[\s\r\n ]/g, _mt_str )).trim();
+        let str = asString( s, options?.trim );
+
+        if ( options?.trim )
+        {
+            str = str.replace( /[\r\n]/g, _mt_str ).trim();
+        }
+
+        if ( options.replaceTabsWithSpaces )
+        {
+            str = str.replace( /\t/g, _spc.repeat( Math.max( 1, asInt( options?.spacesPerTab || 1 ) ) ) );
+        }
+
+        if ( options.replaceSpacesWithTabs )
+        {
+            str = str.replace( new RegExp( _spc.repeat( Math.max( 1, asInt( options?.spacesPerTab || 1 ) ) ), "g" ), "\t" );
+        }
+
+        if ( options.removeRedundantSpaces )
+        {
+            str = str.replace( / {2,}/g, _spc );
+        }
 
         let operations = [];
 
         if ( options?.functions )
         {
-            operations = operations.concat( ...(pOptions?.functions || []) ).filter( e => _fun === typeof e && e.length > 0 );
+            operations = operations.concat( ...(options?.functions || []) ).filter( e => isFunction( e ) && e.length > 0 );
+        }
+
+        if ( options?.toLowerCase || options?.lowercase )
+        {
+            str = lcase( str );
+        }
+        else if ( options?.toUpperCase || options?.uppercase )
+        {
+            str = ucase( str );
+        }
+        else if ( options?.capitalize )
+        {
+            str = str.length > 1 ? ucase( str.slice( 0, 1 ) ) + lcase( str.slice( 1 ) ) : ucase( str );
+        }
+        else if ( options?.camelCase || options?.toCamelCase )
+        {
+            str = toCamelCase( str );
+        }
+        else if ( options?.snakeCase || options?.toSnakeCase )
+        {
+            str = toSnakeCase( str );
+        }
+        else if ( options?.properCase || options?.toProperCase )
+        {
+            str = toProperCase( str, Object.assign( {}, options || {} ) );
         }
 
         let temp = (_mt_str + asString( str ));
@@ -2149,11 +2262,11 @@ const $scope = constants?.$scope || function()
             {
                 const func = operations[i];
 
-                if ( _fun === typeof func )
+                if ( isFunction( func ) )
                 {
                     try
                     {
-                        str = func.apply( $scope, [str, ...options] );
+                        str = func.apply( $scope, [str, options] );
                     }
                     catch( ex )
                     {
@@ -2165,46 +2278,9 @@ const $scope = constants?.$scope || function()
             }
         }
 
-        str = (asString( str, true ));
+        str = (asString( str, options?.trim ));
 
-        if ( options?.toLowerCase )
-        {
-            str = str.toLowerCase();
-        }
-        else if ( options?.toUpperCase )
-        {
-            str = str.toUpperCase();
-        }
-        else if ( options?.capitalize )
-        {
-            str = str.length > 1 ? (str.slice( 0, 1 ).toUpperCase()) + (str.slice( 1 ).toLowerCase()) : str.toUpperCase();
-        }
-        else if ( options?.camelCase )
-        {
-            str = toCamelCase( str );
-            /*
-             let parts = str.split( /_/ ) || [str];
-
-             str = asString( parts.shift(), true );
-
-             while ( parts.length )
-             {
-             const part = asString( parts.shift(), true );
-
-             str += tidy( part, { capitalize: true } );
-             }
-             */
-        }
-        else if ( options.snakeCase )
-        {
-            str = toSnakeCase( str );
-        }
-        else if ( options.properCase )
-        {
-            str = toProperCase( str, options );
-        }
-
-        return str.trim();
+        return str;
     };
 
     String.prototype.tidy = tidy;
@@ -2252,6 +2328,7 @@ const $scope = constants?.$scope || function()
             toSnakeCase,
             toProperCase,
             copyString,
+            reverseString,
             capitalize: (( str ) => (((str?.length || 0) > 1) ? (str.slice( 0, 1 ).toUpperCase()) + (str.slice( 1 ).toLowerCase()) : asString( str, false ).toUpperCase())),
             toUnixPath,
             isRelativePath,

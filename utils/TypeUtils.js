@@ -58,14 +58,42 @@ const $scope = constants?.$scope || function()
     const VALID_TYPES = [_str, _num, _big, _symbol, _bool, _obj, _fun];
     const JS_TYPES = [_ud].concat( VALID_TYPES );
 
-    const isObject = function( pObj )
+    const DEFAULT_IS_OBJECT_OPTIONS =
+        {
+            rejectPrimitiveWrappers: true,
+            rejectArrays: false
+        };
+
+    const isObject = function( pObj, pOptions = DEFAULT_IS_OBJECT_OPTIONS )
     {
-        return (_obj === typeof pObj) || pObj instanceof Object;
+        if ( (_obj === typeof pObj) || pObj instanceof Object )
+        {
+            const options = Object.assign( Object.assign( {}, DEFAULT_IS_OBJECT_OPTIONS ), pOptions || {} );
+
+            if ( options.rejectPrimitiveWrappers )
+            {
+                if ( pObj instanceof String || pObj instanceof Number || pObj instanceof Boolean || pObj instanceof BigInt )
+                {
+                    return false;
+                }
+            }
+
+            if ( options.rejectArrays )
+            {
+                if ( ((isFunction( Array.isArray )) ? Array.isArray( pObj ) : Object.prototype.toString.call( pObj ).toString() === "[object Array]") )
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+        return false;
     };
 
     const isCustomObject = function( pObj )
     {
-        return isObject( pObj ) && pObj.prototype !== null;
+        return isObject( pObj ) && pObj.prototype !== null && pObj.prototype !== Object && (pObj.constructor === null || pObj.constructor !== Object);
     };
 
     const isFunction = function( pObj )

@@ -1489,3 +1489,209 @@ test( "toSnakeCase('A__Variable__Name') === 'a_variable_name'",
           expect( stringUtils.toSnakeCase( s ) ).toEqual( "a_variable_name" );
       } );
 
+test( "copyString('abc') === 'abc'",
+      () =>
+      {
+          let s = "abc";
+          expect( stringUtils.copyString( s ) ).toEqual( "abc" );
+      } );
+
+test( "copyString('  abc  ') === '  abc  '",
+      () =>
+      {
+          let s = "  abc  ";
+          expect( stringUtils.copyString( s ) ).toEqual( "  abc  " );
+      } );
+
+test( "copyString('abc') === 'abc', but not the *same*",
+      () =>
+      {
+          // make a string
+          let s = "abc";
+
+          // make a 'copy' of the variable; one might think that s1 simply points to s
+          let s1 = s;
+
+          // make a 'copy' of the string in variable s
+          // this is unnecessary, as we will prove below
+          let s2 = stringUtils.copyString( s );
+
+          // add characters to s1 (this actually creates a new String)
+          s1 += "def";
+
+          // console.log( "s =", s, "s1 =", s1, "s2 =", s2 );
+
+          expect( s !== s1 && s === s2 && s2 !== s1 ).toBe( true );
+      } );
+
+test( "isUnpopulated('') === true",
+      () =>
+      {
+          let s = "";
+          expect( stringUtils.isUnpopulated( s ) ).toBe( true );
+      } );
+
+test( "isUnpopulated(new String('')) === true",
+      () =>
+      {
+          let s = new String( "" );
+          expect( stringUtils.isUnpopulated( s ) ).toBe( true );
+      } );
+
+test( "isUnpopulated(new String('abc')) === false",
+      () =>
+      {
+          let s = new String( "abc" );
+          expect( stringUtils.isUnpopulated( s ) ).toBe( false );
+      } );
+
+test( "isUnpopulated(789) === true",
+      () =>
+      {
+          let s = 789;
+          expect( stringUtils.isUnpopulated( s ) ).toBe( true );
+      } );
+
+test( "isUnpopulated({}) === true",
+      () =>
+      {
+          let s = {};
+          expect( stringUtils.isUnpopulated( s ) ).toBe( true );
+      } );
+
+
+test( "reverseString('a b c d E f g H') === 'H g f E d c b a'",
+      () =>
+      {
+          let s = "a b c d E f g H";
+          expect( stringUtils.reverseString( s ) ).toEqual( "H g f E d c b a" );
+      } );
+
+test( "tidy('abc') === 'abc'",
+      () =>
+      {
+          let s = "abc";
+          expect( stringUtils.tidy( s ) ).toEqual( "abc" );
+      } );
+
+
+test( "tidy(' abc ') === 'abc'",
+      () =>
+      {
+          let s = " abc ";
+          expect( stringUtils.tidy( s ) ).toEqual( "abc" );
+      } );
+
+test( "tidy(' abc ', {trim:false}) === ' abc '",
+      () =>
+      {
+          let s = " abc ";
+          expect( stringUtils.tidy( s, { trim: false } ) ).toEqual( " abc " );
+      } );
+
+
+test( "tidy(' Abc ', {lowercase:true}) === 'abc'",
+      () =>
+      {
+          let s = " Abc ";
+          expect( stringUtils.tidy( s, { lowercase: true } ) ).toEqual( "abc" );
+      } );
+
+test( "tidy(' Abc ', {trim:false, lowercase:true}) === 'abc'",
+      () =>
+      {
+          let s = " Abc ";
+          expect( stringUtils.tidy( s, { trim: false, lowercase: true } ) ).toEqual( " abc " );
+      } );
+
+test( "tidy('  A  b c  ', {removeRedundantSpaces:true, lowercase:true}) === 'a b c'",
+      () =>
+      {
+          expect( stringUtils.tidy( "  A  b c  ", {
+              removeRedundantSpaces: true,
+              lowercase: true
+          } ) ).toEqual( "a b c" );
+      } );
+
+test( "tidy('  A  b c  ', {removeRedundantSpaces:true, uppercase:true}) === 'A B C'",
+      () =>
+      {
+          expect( stringUtils.tidy( "  A  b c  ", {
+              removeRedundantSpaces: true,
+              uppercase: true
+          } ) ).toEqual( "A B C" );
+      } );
+
+test( "tidy('A\tb\tc', {replaceTabsWithSpaces:true, lowercase: true}) === 'a b c'",
+      () =>
+      {
+          let s = "A\tb\tc";
+          expect( stringUtils.tidy( s, { replaceTabsWithSpaces: true, lowercase: true } ) ).toEqual( "a b c" );
+      } );
+
+test( "tidy('A\tb\tc', {replaceTabsWithSpaces:true, removeRedundantSpaces:false, trim:false}) === '    A    b    c '",
+      () =>
+      {
+          let s = "\tA\tb\tc ";
+          expect( stringUtils.tidy( s,
+                                    {
+                                        replaceTabsWithSpaces: true,
+                                        removeRedundantSpaces: false,
+                                        trim: false
+                                    } ) ).toEqual( "    A    b    c " );
+      } );
+
+test( "tidy(' A    b  c ', {replaceSpacesWithTabs:true}) === 'A\tb c'",
+      () =>
+      {
+          let s = " A    b  c ";
+          expect( stringUtils.tidy( s, { replaceSpacesWithTabs: true } ) ).toEqual( "A\tb c" );
+      } );
+
+test( "tidy(' A    b  c ', {replaceSpacesWithTabs:true, removeRedundantSpaces:false}) === 'A\tb  c'",
+      () =>
+      {
+          let s = " A    b  c ";
+          expect( stringUtils.tidy( s,
+                                    {
+                                        replaceSpacesWithTabs: true,
+                                        removeRedundantSpaces: false
+                                    } ) ).toEqual( "A\tb  c" );
+      } );
+
+const padString = function( pStr )
+{
+    return pStr.padStart( 5, "*" );
+};
+
+test( "tidy('Abc', {functions:[padString]}) === '**Abc'",
+      () =>
+      {
+          let s = "Abc";
+          expect( stringUtils.tidy( s, { functions: [padString] } ) ).toEqual( "**Abc" );
+      } );
+
+const noOp = function()
+{
+    return "doesn't matter";
+};
+
+test( "tidy('Abc', {functions:[noOp]}) === 'Abc'",
+      () =>
+      {
+          let s = "Abc";
+          expect( stringUtils.tidy( s, { functions: [noOp] } ) ).toEqual( "Abc" );
+      } );
+
+const reverse = function( pStr )
+{
+    return stringUtils.reverseString( pStr );
+};
+
+test( "tidy('Abc', {functions:[reverse]}) === 'cbA'",
+      () =>
+      {
+          let s = "Abc";
+          expect( stringUtils.tidy( s, { functions: [reverse] } ) ).toEqual( "cbA" );
+      } );
+
