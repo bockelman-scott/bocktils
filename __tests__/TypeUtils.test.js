@@ -2,12 +2,8 @@
 // let jester = require( "jest" );
 // jester.run( __filename );
 
-/** import the Constants.js we are testing */
-const constants = require( "../utils/Constants.js" );
-
 /** import the utilities to test **/
 const typeUtils = require( "../utils/TypeUtils.js" );
-const stringUtils = require( "../utils/StringUtils" );
 
 let VALID_TYPES = typeUtils.VALID_TYPES;
 let JS_TYPES = typeUtils.JS_TYPES;
