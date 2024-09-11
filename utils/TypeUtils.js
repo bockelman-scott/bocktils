@@ -6,9 +6,6 @@
 /** import the Constants.js we depend upon using require for maximum compatibility with Node versions */
 const constants = require( "./Constants.js" );
 
-/** create an alias for the console to avoid Lint warnings */
-const konsole = console || {};
-
 /**
  * Defines a string to represent the type, undefined
  */
