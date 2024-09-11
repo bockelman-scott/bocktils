@@ -61,7 +61,8 @@ const $scope = constants?.$scope || function()
     const DEFAULT_IS_OBJECT_OPTIONS =
         {
             rejectPrimitiveWrappers: true,
-            rejectArrays: false
+            rejectArrays: false,
+            rejectNull: false
         };
 
     const isObject = function( pObj, pOptions = DEFAULT_IS_OBJECT_OPTIONS )
@@ -69,6 +70,11 @@ const $scope = constants?.$scope || function()
         if ( (_obj === typeof pObj) || pObj instanceof Object )
         {
             const options = Object.assign( Object.assign( {}, DEFAULT_IS_OBJECT_OPTIONS ), pOptions || {} );
+
+            if ( options.rejectNull && null === pObj )
+            {
+                return false;
+            }
 
             if ( options.rejectPrimitiveWrappers )
             {
