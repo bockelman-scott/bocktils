@@ -94,7 +94,7 @@ const $scope = constants?.$scope || function()
             this.status = pStatus || httpUtils.STATUS_CODES.OK;
             this.body = pBody || _mt_str;
             this.headers = pHeaders;
-            this.errors = [].concat( forceToArray( pErrors || [] ) );
+            this.errors = [].concat( asArray( pErrors || [] ) );
             this.sent = pSent;
         }
 
@@ -103,7 +103,7 @@ const $scope = constants?.$scope || function()
             this.status = pStatus || this.status;
             this.body = pBody || this.body;
             this.headers = pHeaders || this.headers;
-            this.errors = [].concat( forceToArray( pErrors || this.errors ) ) || this.errors;
+            this.errors = [].concat( asArray( pErrors || this.errors ) ) || this.errors;
             this.sent = pSent || this.sent;
         }
 

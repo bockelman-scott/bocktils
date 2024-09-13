@@ -55,6 +55,18 @@ const $scope = constants?.$scope || function()
     const VALID_TYPES = [_str, _num, _big, _symbol, _bool, _obj, _fun];
     const JS_TYPES = [_ud].concat( VALID_TYPES );
 
+    const TYPE_DEFAULTS =
+        {
+            [_str]: _mt_str,
+            [_big]: 0n,
+            [_num]: 0,
+            [_bool]: false,
+            [_fun]: null,
+            [_obj]: null,
+            [_symbol]: null,
+            [_ud]: undefined
+        };
+
     const DEFAULT_IS_OBJECT_OPTIONS =
         {
             rejectPrimitiveWrappers: true,
@@ -119,9 +131,54 @@ const $scope = constants?.$scope || function()
         return [_num, _big].includes( typeof pObj ) || pObj instanceof Number;
     };
 
-    const isNumeric = function( pObj )
+    function isHex( pObj )
     {
-        return isNumber( pObj ) || !(isNaN( parseFloat( pObj ) ) && Number.isFinite( Number( pObj ) ));
+        return /^(-)?(0x)([\dA-Fa-f]+)(\.([\dA-Fa-f]+))?$/.test( pObj ) && !/[G-Wg-w\s]|[yzYZ]/.test( pObj );
+    }
+
+    function isOctal( pObj )
+    {
+        return /^(-)?0([0-7]+)(\.([0-7]+))?$/.test( pObj ) && !/[A-Za-z\s]/.test( pObj );
+    }
+
+    function isDecimal( pObj )
+    {
+        return /^(-)?[1-9]+([0-9]+)?(\.([0-9]+))?$/.test( pObj ) && !/[A-Za-z\s]/.test( pObj );
+    }
+
+    const isNumeric = function( pObj, pAllowLeadingZeroForBase10 = false )
+    {
+        if ( isNumber( pObj ) )
+        {
+            return true;
+        }
+
+        let value = String( pObj || _mt_str );
+
+        if ( isHex( value ) || isOctal( value ) || isDecimal( value ) )
+        {
+            if ( pAllowLeadingZeroForBase10 )
+            {
+                if ( !isHex( value ) && !isOctal( value ) && isDecimal( value ) )
+                {
+                    while ( /^0/.test( value ) )
+                    {
+                        value = value.slice( 1 );
+                    }
+                }
+            }
+
+            if ( _mt_str === value )
+            {
+                return false;
+            }
+
+            let integer = parseInt( pObj, isHex( pObj ) ? 16 : isOctal( pObj ) ? 8 : isDecimal( pObj ) ? 10 : 0 );
+
+            return !(isNaN( integer ) && Number.isFinite( integer ));
+        }
+
+        return false;
     };
 
     const isZero = function( pValue )
@@ -160,12 +217,13 @@ const $scope = constants?.$scope || function()
 
     const isNonNullObject = function( pObject, pStrict = false, pOptions = { allow_empty_object: true } )
     {
-        if ( !isNull( pObject ) && isObject( pObject ) )
+        if ( !isNull( pObject, pStrict ) && isObject( pObject ) )
         {
-            const options = Object.assign( { allow_empty_object: true }, pOptions );
+            const options = Object.assign( { allow_empty_object: true }, pOptions || {} );
 
             return options.allow_empty_object || (Object.entries( pObject )?.length > 0 && !isNull( Object.entries( pObject )[0][1], pStrict ));
         }
+        return false;
     };
 
     const isArray = function( pObj )
@@ -175,14 +233,18 @@ const $scope = constants?.$scope || function()
 
     const isSymbol = function( pValue )
     {
-        return _str === typeof pValue || pValue instanceof Symbol;
+        return _symbol === typeof pValue || pValue instanceof Symbol;
     };
 
     const isType = function( pValue, pType )
     {
-        if ( isString( pType ) && JS_TYPES.includes( (pType).trim().toLowerCase() ) )
+        const typeName = (isString( pType ) && JS_TYPES.includes( pType )) ?
+                         (pType).trim().toLowerCase() :
+                         typeof pType;
+
+        if ( JS_TYPES.includes( typeName ) )
         {
-            return ((pType).trim().toLowerCase()) === (typeof pValue);
+            return (typeof pValue) === typeName;
         }
 
         if ( isObject( pValue ) && isObject( pType ) )
@@ -195,7 +257,7 @@ const $scope = constants?.$scope || function()
 
     const isMap = function( pObject, pStrict = true )
     {
-        if ( isUndefined( pObject ) || isNull( pObject ) )
+        if ( isUndefined( pObject ) || isNull( pObject ) || [_str, _num, _big, _bool, _symbol].includes( typeof pObject ) )
         {
             return false;
         }
@@ -214,11 +276,16 @@ const $scope = constants?.$scope || function()
 
         if ( isObject( pObject ) )
         {
-            const keys = Object.keys( pObject );
+            const entries = Object.entries( pObject );
 
-            const strings = keys.filter( key => isString( key ) );
+            const strings = entries.filter( entry => isString( entry[0] ) && !(entry[0].startsWith( "[object" )) );
 
-            return keys.length === strings.length;
+            return (entries.length === strings.length);
+        }
+        else if ( isFunction( pObject ) && pObject?.length === 1 )
+        {
+            // perhaps we have a function that takes a key and returns a value...
+            return true;
         }
 
         return false;
@@ -243,7 +310,7 @@ const $scope = constants?.$scope || function()
             return false;
         }
 
-        if ( isArray( pObject ) )
+        if ( isArray( pObject ) || pObject?.length >= 0 )
         {
             const length = pObject.length;
             let set = new Set( [...pObject] );
@@ -253,14 +320,75 @@ const $scope = constants?.$scope || function()
         return false;
     };
 
-    const isDate = function( pObj )
+    const isDate = function( pObj, pStrict = true, pDateFormatter = (function( pStr ) {}) )
     {
-        if ( isUndefined( pObj ) || isNull( pObj ) || isString( pObj ) )
+        if ( isUndefined( pObj ) || isNull( pObj ) )
         {
             return false;
         }
 
-        return (pObj instanceof Date) || ("[object Date]" === Object.prototype.toString.call( pObj ) || (pObj.constructor === Date) || (pObj.prototype === Date));
+        if ( (pObj instanceof Date) || ("[object Date]" === Object.prototype.toString.call( pObj ) || (pObj.constructor === Date) || (pObj.prototype === Date)) )
+        {
+            return true;
+        }
+
+        if ( pStrict )
+        {
+            return false;
+        }
+
+        let date = isObject( pObj ) && pObj instanceof Number ? new Date( pObj.valueOf() ) : null;
+
+        if ( isString( pObj ) || pObj instanceof String )
+        {
+            try
+            {
+                date = new Date( pObj );
+            }
+            catch( ex )
+            {
+                console.error( constants.S_ERR_PREFIX, "evaluating a value as a Date", ex );
+            }
+
+            if ( null == date && isFunction( pDateFormatter ) )
+            {
+                date = pDateFormatter( pObj );
+            }
+        }
+
+        if ( null == date || !isDate( date, true ) )
+        {
+            switch ( typeof pObj )
+            {
+                case _str:
+                case _num:
+                case _big:
+                    try
+                    {
+                        date = new Date( pObj );
+                    }
+                    catch( ex )
+                    {
+                        console.error( constants.S_ERR_PREFIX, "evaluating a value as a Date", ex );
+                    }
+
+                    if ( null == date && isFunction( pDateFormatter ) )
+                    {
+                        try
+                        {
+                            date = pDateFormatter( pObj );
+                        }
+                        catch( ex )
+                        {
+                            console.error( constants.S_ERR_PREFIX, "formatting a value as a Date", ex );
+                        }
+                    }
+
+                    break;
+            }
+        }
+
+        return (isDate( date, true ));
     };
 
     const isRegExp = function( pObject, pStrict = true )
@@ -275,11 +403,18 @@ const $scope = constants?.$scope || function()
             return pObject instanceof RegExp;
         }
 
-        const s = pObject.toString();
+        const s = isString( pObject ) ? String( pObject ) : pObject.toString();
 
-        if ( ("/" + pObject.source + "/") === s )
+        let pattern = s.replace( /\/[gimsuy]+$/, "/" );
+
+        try
         {
-            return isObject( pObject ) || _mt_str !== s;
+            let regExp = new RegExp( pattern );
+            return isRegExp( regExp );
+        }
+        catch( ex )
+        {
+            console.warn( constants.S_ERR_PREFIX, "evaluating an object as a Regular Expression", ex );
         }
 
         return false;
@@ -290,18 +425,38 @@ const $scope = constants?.$scope || function()
      * JavaScript classes return "function" for the typeof operator,
      * so this function is necessary to determine the difference between a function and a class definition
      * @param {function} pFunction
+     * @param pStrict
      * @returns true if the function specified is a class definition
      */
-    const isClass = function( pFunction )
+    const isClass = function( pFunction, pStrict = true )
     {
-        if ( _fun === typeof pFunction )
+        if ( _fun === typeof pFunction || ( !pStrict && constants.BUILTIN_TYPE_NAMES.includes( pFunction?.name )) )
         {
-            return /^class\s/.test( String( Function.prototype.toString.call( pFunction ) ).trim() );
+            if ( /^class\s/.test( String( Function.prototype.toString.call( pFunction ) ).trim() ) )
+            {
+                return true;
+            }
+
+            if ( pStrict )
+            {
+                return false;
+            }
+
+            return ( !pStrict && constants.BUILTIN_TYPE_NAMES.includes( pFunction?.name ));
         }
 
         return false;
     };
 
+    const defaultFor = function( pType )
+    {
+        if ( isString( pType ) )
+        {
+            return TYPE_DEFAULTS[pType.toLowerCase()];
+        }
+
+        return defaultFor( typeof pType );
+    };
 
     const mod =
         {
@@ -330,7 +485,8 @@ const $scope = constants?.$scope || function()
             isRegExp,
             isClass,
             isSymbol,
-            isType
+            isType,
+            defaultFor
         };
 
     if ( _ud !== typeof module )

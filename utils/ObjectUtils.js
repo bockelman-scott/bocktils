@@ -38,10 +38,10 @@ const $scope = constants?.$scope || function()
             ucase = stringUtils?.ucase || function( s ) { return asString( s ).toUpperCase(); },
             isValidNumber = stringUtils?.isValidNumber || function( n ) { return !(/[^_\d.]+/.test( asString( n ) )); },
             asInt = stringUtils?.asInt || function( s ) { return parseInt( asString( s ).replace( /\..*/, _mt_str ).replace( /\D/g, _mt_str ) ); },
-            forceToArray = arrayUtils?.forceToArray || function( pArr ) { return Array.isArray( pArr ) ? pArr : [pArr]; },
-            pruneArray = arrayUtils?.pruneArray || function( pArr ) { return forceToArray( pArr ).filter( e => !(_ud === typeof e || null === e) ); },
-            unique = arrayUtils?.unique || function( pArr ) { return [...(new Set( forceToArray( pArr ) ))]; },
-            hasElementAt = arrayUtils?.hasElementAt || function( pArr, pIndex ) {return forceToArray( pArr )?.length > asInt( pIndex );},
+            asArray = arrayUtils?.asArray || function( pArr ) { return Array.isArray( pArr ) ? pArr : [pArr]; },
+            pruneArray = arrayUtils?.pruneArray || function( pArr ) { return asArray( pArr ).filter( e => !(_ud === typeof e || null === e) ); },
+            unique = arrayUtils?.unique || function( pArr ) { return [...(new Set( asArray( pArr ) ))]; },
+            hasElementAt = arrayUtils?.hasElementAt || function( pArr, pIndex ) {return asArray( pArr )?.length > asInt( pIndex );},
             AsyncFunction = ((async function() {}).constructor),
             EMPTY_ARRAY = Object.freeze( [] ),
             EMPTY_OBJECT = Object.freeze( {} ),
@@ -196,7 +196,7 @@ const $scope = constants?.$scope || function()
 
     const instanceOfAny = function( pObject, ...pClasses )
     {
-        const classes = [].concat( forceToArray( pClasses ) || [] ) || [];
+        const classes = [].concat( asArray( pClasses ) || [] ) || [];
 
         let is = false;
 
@@ -492,7 +492,7 @@ const $scope = constants?.$scope || function()
 
     const getKeys = function( ...pObject )
     {
-        let objects = [].concat( forceToArray( pObject ) || [] );
+        let objects = [].concat( asArray( pObject ) || [] );
 
         if ( null == objects || ((objects?.length || 0) <= 0) )
         {
@@ -528,7 +528,7 @@ const $scope = constants?.$scope || function()
 
     const getProperties = function( ...pObject )
     {
-        let objects = [].concat( forceToArray( pObject ) || [] );
+        let objects = [].concat( asArray( pObject ) || [] );
 
         if ( null == objects || ((objects?.length || 0) <= 0) )
         {
@@ -560,7 +560,7 @@ const $scope = constants?.$scope || function()
 
     const getValues = function( ...pObject )
     {
-        let objects = [].concat( forceToArray( pObject ) || [] );
+        let objects = [].concat( asArray( pObject ) || [] );
 
         if ( null == objects || ((objects?.length || 0) <= 0) )
         {
@@ -589,7 +589,7 @@ const $scope = constants?.$scope || function()
 
     const getEntries = function( ...pObject )
     {
-        let objects = [].concat( forceToArray( pObject ) || [] );
+        let objects = [].concat( asArray( pObject ) || [] );
 
         if ( null == objects || ((objects?.length || 0) <= 0) )
         {
@@ -624,7 +624,7 @@ const $scope = constants?.$scope || function()
 
     const getEnumerableEntries = function( ...pObject )
     {
-        let objects = [].concat( forceToArray( pObject ) || [] );
+        let objects = [].concat( asArray( pObject ) || [] );
 
         if ( null == objects || ((objects?.length || 0) <= 0) )
         {
@@ -781,7 +781,7 @@ const $scope = constants?.$scope || function()
     {
         let object = null;
 
-        let objects = forceToArray( pObject || [] );
+        let objects = asArray( pObject || [] );
 
         if ( null == objects || (objects?.length || 0) <= 0 )
         {
@@ -802,7 +802,7 @@ const $scope = constants?.$scope || function()
 
         let object = null;
 
-        let objects = forceToArray( pObject || [] );
+        let objects = asArray( pObject || [] );
 
         if ( null == objects || (objects?.length || 0) <= 0 )
         {
@@ -870,7 +870,7 @@ const $scope = constants?.$scope || function()
 
             if ( isArray( pArgs ) )
             {
-                const args = forceToArray( pArgs );
+                const args = asArray( pArgs );
 
                 this._key = (args?.length || 0) > 0 ? args[0] : _mt_str;
                 this._value = (args?.length || 0) > 1 ? args[1] : _mt_str;
@@ -1355,7 +1355,7 @@ const $scope = constants?.$scope || function()
 
     const arrayToObject = function( pArr, pKeyProperty )
     {
-        let arr = arrayUtils.forceToArray( pArr || [] ) || [];
+        let arr = arrayUtils.asArray( pArr || [] ) || [];
 
         let keyProperty = asString( pKeyProperty, true );
 
@@ -1434,9 +1434,9 @@ const $scope = constants?.$scope || function()
 
     const findImplementor = function( pFunctionNames, ...pCandidates )
     {
-        let methodNames = forceToArray( pFunctionNames || [] );
+        let methodNames = asArray( pFunctionNames || [] );
 
-        const candidates = forceToArray( [].concat( pCandidates || [] ) ).flat( Infinity );
+        const candidates = asArray( [].concat( pCandidates || [] ) ).flat( Infinity );
 
         let implementor = null;
 
@@ -1463,9 +1463,9 @@ const $scope = constants?.$scope || function()
 
     const collectImplementors = function( pMethodNames, ...pCandidates )
     {
-        let methodNames = forceToArray( pMethodNames || [] );
+        let methodNames = asArray( pMethodNames || [] );
 
-        const arr = forceToArray( pCandidates || [] ) || [];
+        const arr = asArray( pCandidates || [] ) || [];
 
         const implementors = [];
 
@@ -1527,7 +1527,7 @@ const $scope = constants?.$scope || function()
 
         let twin = Object.assign( {}, obj );
 
-        const stack = forceToArray( pStack || [] );
+        const stack = asArray( pStack || [] );
 
         if ( stack.length > MAX_CLONE_DEPTH || detectCycles( stack, 3, 3 ) )
         {
@@ -1646,7 +1646,7 @@ const $scope = constants?.$scope || function()
 
     const ingest = function( pObject, ...pDefault )
     {
-        let defaults = forceToArray( pDefault || [{}] ) || [{}];
+        let defaults = asArray( pDefault || [{}] ) || [{}];
 
         let newObj = pObject || {};
 
@@ -1669,7 +1669,7 @@ const $scope = constants?.$scope || function()
                 appendToSets: true,
                 mergeUnmatchedClasses: true
             };
-        let defaults = forceToArray( pDefault || [{}] ) || [{}];
+        let defaults = asArray( pDefault || [{}] ) || [{}];
 
         let newObj = pObject || {};
 
@@ -1742,13 +1742,13 @@ const $scope = constants?.$scope || function()
      case _obj:
      if ( isArray( pValue ) )
      {
-     value = forceToArray( pValue );
+     value = asArray( pValue );
 
      let arr = new Array( value.length || 0 ); // this allocates the memory for the new array
 
      value.forEach( ( elem, index ) => arr[index] = unalias( elem, pBinding ) );
 
-     value = forceToArray( arr || [].concat( value ) );
+     value = asArray( arr || [].concat( value ) );
 
      break;
      }
@@ -2017,9 +2017,9 @@ const $scope = constants?.$scope || function()
             source = source.clone();
         }
 
-        let paths = [].concat( forceToArray( pPaths || [] ) || [] );
+        let paths = [].concat( asArray( pPaths || [] ) || [] );
 
-        let totalPaths = [].concat( forceToArray( pTotalPaths || [] ) || [] );
+        let totalPaths = [].concat( asArray( pTotalPaths || [] ) || [] );
 
         const cycles = detectCycles( paths, 3, 3 ) || detectCycles( totalPaths, 5, 5 );
 
@@ -2123,7 +2123,7 @@ const $scope = constants?.$scope || function()
     {
         const visited = pVisited || new Set();
 
-        const path = forceToArray( pPath ) || [];
+        const path = asArray( pPath ) || [];
 
         // start by creating a shallow copy of each object
         let objA = Object.assign( {}, pTarget || pSource || {} );
@@ -2195,7 +2195,7 @@ const $scope = constants?.$scope || function()
 
         const visited = pVisited || new Set();
 
-        const path = forceToArray( pPath ) || [];
+        const path = asArray( pPath ) || [];
 
         let objA = pTarget || {};
 
@@ -2608,7 +2608,7 @@ const $scope = constants?.$scope || function()
     {
         let obj = pObject || {};
 
-        const propertyNames = unique( pruneArray( [].concat( forceToArray( pPropertyNames || [] ) ) ) );
+        const propertyNames = unique( pruneArray( [].concat( asArray( pPropertyNames || [] ) ) ) );
 
         for( let i = 0, n = propertyNames.length; i < n; i++ )
         {

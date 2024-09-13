@@ -330,6 +330,110 @@ test( "isString(undefined) === false",
           expect( typeUtils.isString( undefined ) ).toBe( false );
       } );
 
+function generateRandomNumber( pMin, pMax )
+{
+    const min = parseInt( pMin ) || 0;
+    const max = parseInt( pMax ) || 1;
+
+    return (Math.random() * (max - min + 1)) + min;
+}
+
+function generateRandomInteger( pMin, pMax )
+{
+    return Math.floor( generateRandomNumber( pMin, pMax ) );
+}
+
+function generateStringValues( pHowMany, pMinLength, pMaxLength )
+{
+    const howMany = Math.min( 100, Math.max( 1, parseInt( pHowMany ) || 25 ) );
+
+    const min = Math.max( 0, Math.min( 4096, parseInt( pMinLength ) || 0 ) );
+    const max = Math.min( 4096, Math.max( 0, parseInt( pMaxLength ) || 0 ) );
+
+    const strings = [];
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!@#$%^&*()_-+={}[];:'\"><?/\\|~`";
+
+    for( let i = howMany; i--; )
+    {
+        const len = generateRandomInteger( min, max );
+
+        let str = "";
+
+        for( let j = len; j--; )
+        {
+            str += chars[j];
+        }
+
+        strings.push( str );
+    }
+
+    return strings;
+}
+
+function generateHexValues( pHowMany, pMin, pMax, pIncludeFractionalValues = true )
+{
+    const howMany = Math.min( 100, Math.max( 1, parseInt( pHowMany ) || 25 ) );
+
+    const min = Math.max( -10_000, Math.min( 0, parseFloat( pMin ) || -1000 ) );
+    const max = Math.min( +10_000, Math.max( 0, parseFloat( pMax ) || +1000 ) );
+
+    const hexadecimals = [];
+
+    for( let i = howMany; i--; )
+    {
+        let value = Math.random() * (max - min + 1) + min;
+
+        if ( false === pIncludeFractionalValues )
+        {
+            value = Math.floor( value );
+        }
+
+        let hexString = value.toString( 16 );
+
+        if ( !(/^0x/.test( hexString ) || /^-0x/.test( hexString )) )
+        {
+            hexString = (hexString.startsWith( "-" ) ? "-0x" : "0x") + hexString.replace( /^-/, "" );
+        }
+
+        hexadecimals.push( hexString );
+    }
+
+    return hexadecimals;
+}
+
+function generateOctalValues( pHowMany, pMin, pMax, pIncludeFractionalValues = true )
+{
+    const howMany = Math.min( 100, Math.max( 1, parseInt( pHowMany ) || 25 ) );
+
+    const min = Math.max( -10_000, Math.min( 0, parseFloat( pMin ) || -1000 ) );
+    const max = Math.min( +10_000, Math.max( 0, parseFloat( pMax ) || +1000 ) );
+
+    const octalValues = [];
+
+    for( let i = howMany; i--; )
+    {
+        let value = Math.random() * (max - min + 1) + min; // Math.random() * 1000;
+
+        if ( false === pIncludeFractionalValues )
+        {
+            value = Math.floor( value );
+        }
+
+        let octString = value.toString( 8 );
+
+        if ( !(/^0/.test( octString ) || /^-0/.test( octString )) )
+        {
+            octString = (octString.startsWith( "-" ) ? "-0" : "0") + octString.replace( /^-/, "" );
+        }
+
+        octalValues.push( octString );
+    }
+
+    return octalValues;
+}
+
+const hexadecimals = generateHexValues( 25, -1000, 1000 );
+const octals = generateOctalValues( 25, -1000, 1000 );
 
 test( "isNumber(0) === true",
       () =>
@@ -355,8 +459,594 @@ test( "isNumber(new Number('123')) === true",
           expect( typeUtils.isNumber( new Number( "123" ) ) ).toBe( true );
       } );
 
+test( "isNumber(MIN_VALUE) === true",
+      () =>
+      {
+          expect( typeUtils.isNumber( Number.MIN_VALUE ) ).toBe( true );
+      } );
+
+test( "isNumber(MAX_VALUE) === true",
+      () =>
+      {
+          expect( typeUtils.isNumber( Number.MAX_VALUE ) ).toBe( true );
+      } );
+
 test( "isNumeric('123') === true",
       () =>
       {
           expect( typeUtils.isNumeric( "123" ) ).toBe( true );
       } );
+
+test( "isNumeric('0123') === true",
+      () =>
+      {
+          expect( typeUtils.isNumeric( "0123" ) ).toBe( true );
+      } );
+
+test( "isNumeric('000123') === true",
+      () =>
+      {
+          expect( typeUtils.isNumeric( "000123" ) ).toBe( true );
+      } );
+
+test( "isNumeric('0z0123') === false",
+      () =>
+      {
+          expect( typeUtils.isNumeric( "0z0123" ) ).toBe( false );
+      } );
+
+test( "isNumeric(hexadecimals) === true",
+      () =>
+      {
+          const hexes = [].concat( hexadecimals );
+          const valid = hexadecimals.filter( e => typeUtils.isNumeric( e ) );
+          expect( valid.length ).toBe( hexes.length );
+      } );
+
+test( "isNumeric(octals) === true",
+      () =>
+      {
+          const octs = [].concat( octals );
+          const valid = octals.filter( e => typeUtils.isNumeric( e ) );
+          expect( valid.length ).toBe( octs.length );
+      } );
+
+test( "isNumeric(strings) === false",
+      () =>
+      {
+          const strings = generateStringValues( 25, 3, 64 );
+          const valid = strings.filter( e => typeUtils.isNumeric( e ) );
+          expect( valid.length ).toEqual( 0 );
+      } );
+
+test( "isZero(0) === true",
+      () =>
+      {
+          expect( typeUtils.isZero( 0 ) ).toBe( true );
+      } );
+
+test( "isZero('0') === false",
+      () =>
+      {
+          expect( typeUtils.isZero( "0" ) ).toBe( false );
+      } );
+
+test( "isZero(1) === false",
+      () =>
+      {
+          expect( typeUtils.isZero( 1 ) ).toBe( false );
+      } );
+
+test( "isZero(1/0) === false",
+      () =>
+      {
+          expect( typeUtils.isZero( 1 / 0 ) ).toBe( false );
+      } );
+
+test( "isZero(POSITIVE_INFINITY) === false",
+      () =>
+      {
+          expect( typeUtils.isZero( Number.POSITIVE_INFINITY ) ).toBe( false );
+      } );
+
+test( "isZero(NEGATIVE_INFINITY) === false",
+      () =>
+      {
+          expect( typeUtils.isZero( Number.NEGATIVE_INFINITY ) ).toBe( false );
+      } );
+
+test( "isZero('abc') === false",
+      () =>
+      {
+          expect( typeUtils.isZero( "abc" ) ).toBe( false );
+      } );
+
+
+test( "isBoolean(false) === true",
+      () =>
+      {
+          expect( typeUtils.isBoolean( false ) ).toBe( true );
+      } );
+
+test( "isBoolean(true) === true",
+      () =>
+      {
+          expect( typeUtils.isBoolean( true ) ).toBe( true );
+      } );
+
+test( "isBoolean(new Boolean(false)) === true",
+      () =>
+      {
+          expect( typeUtils.isBoolean( new Boolean( false ) ) ).toBe( true );
+      } );
+
+test( "isBoolean( 1 === 1 ) === true",
+      () =>
+      {
+          expect( typeUtils.isBoolean( 1 === 1 ) ).toBe( true );
+      } );
+
+test( "isBoolean('abc') === false",
+      () =>
+      {
+          expect( typeUtils.isBoolean( "abc" ) ).toBe( false );
+      } );
+
+test( "isBoolean('true') === false",
+      () =>
+      {
+          expect( typeUtils.isBoolean( "true" ) ).toBe( false );
+      } );
+
+test( "isUndefined() === true",
+      () =>
+      {
+          expect( typeUtils.isUndefined() ).toBe( true );
+      } );
+
+test( "isUndefined(undefined) === true",
+      () =>
+      {
+          expect( typeUtils.isUndefined( undefined ) ).toBe( true );
+      } );
+
+test( "isUndefined(x) === true",
+      () =>
+      {
+          function testUndefined()
+          {
+              return typeUtils.isUndefined( x );
+          }
+
+          expect( testUndefined ).toThrow( ReferenceError );
+      } );
+
+test( "isUndefined(object.property) === true",
+      () =>
+      {
+          const obj =
+              {
+                  "a": 1,
+                  "b": 2
+              };
+
+          expect( typeUtils.isUndefined( obj.c ) ).toBe( true );
+      } );
+
+
+test( "isUndefined(null object.property) === false",
+      () =>
+      {
+          const obj =
+              {
+                  "a": 1,
+                  "b": 2,
+                  "c": null
+              };
+
+          expect( typeUtils.isUndefined( obj.c ) ).toBe( false );
+      } );
+
+// isDefined is just an inversion of isUndefined, so only one trivial test is provided
+test( "isDefined() === false",
+      () =>
+      {
+          expect( typeUtils.isDefined() ).toBe( false );
+      } );
+
+test( "isNull(undefined,true) === false",
+      () =>
+      {
+          expect( typeUtils.isNull( undefined, true ) ).toBe( false );
+      } );
+
+test( "isNull() === true",
+      () =>
+      {
+          expect( typeUtils.isNull() ).toBe( true );
+      } );
+
+test( "isNull(null,true) === true",
+      () =>
+      {
+          expect( typeUtils.isNull( null, true ) ).toBe( true );
+      } );
+
+test( "isNull('',true) === false",
+      () =>
+      {
+          expect( typeUtils.isNull( "", true ) ).toBe( false );
+      } );
+
+test( "isNull('') === true",
+      () =>
+      {
+          expect( typeUtils.isNull( "" ) ).toBe( true );
+      } );
+
+// isNotNull is just a negation of isNull, so no tests are provided
+
+test( "isNonNullObject() === false",
+      () =>
+      {
+          expect( typeUtils.isNonNullObject() ).toBe( false );
+      } );
+
+test( "isNonNullObject({}) === true",
+      () =>
+      {
+          expect( typeUtils.isNonNullObject( {} ) ).toBe( true );
+      } );
+
+test( "isNonNullObject({},true,{ allow_empty_object: true }) === true",
+      () =>
+      {
+          expect( typeUtils.isNonNullObject( {}, true, { allow_empty_object: true } ) ).toBe( true );
+      } );
+
+test( "isNonNullObject({},true,{ allow_empty_object: false }) === false",
+      () =>
+      {
+          expect( typeUtils.isNonNullObject( {}, true, { allow_empty_object: false } ) ).toBe( false );
+      } );
+
+test( "isNonNullObject({'a':null},true,{ allow_empty_object: false }) === false",
+      () =>
+      {
+          expect( typeUtils.isNonNullObject( { "a": null }, true, { allow_empty_object: false } ) ).toBe( false );
+      } );
+
+test( "isNonNullObject({'a':1},true,{ allow_empty_object: false }) === true",
+      () =>
+      {
+          expect( typeUtils.isNonNullObject( { "a": 1 }, true, { allow_empty_object: false } ) ).toBe( true );
+      } );
+
+test( "isArray([]) === true",
+      () =>
+      {
+          expect( typeUtils.isArray( [] ) ).toBe( true );
+      } );
+
+test( "isArray('abc'.split(_mt_chr)) === true",
+      () =>
+      {
+          expect( typeUtils.isArray( "abc".split( "" ) ) ).toBe( true );
+      } );
+
+test( "isArray({}) === false",
+      () =>
+      {
+          expect( typeUtils.isArray( {} ) ).toBe( false );
+      } );
+
+test( "isArray(...pArgs) === true",
+      () =>
+      {
+          function tested( ...pArgs )
+          {
+              expect( typeUtils.isArray( pArgs ) ).toBe( true );
+          }
+
+          tested( 1 );
+      } );
+
+test( "isSymbol(Symbol('a')) === true",
+      () =>
+      {
+          expect( typeUtils.isSymbol( Symbol( "a" ) ) ).toBe( true );
+      } );
+
+test( "isSymbol(Symbol.iterator) === true",
+      () =>
+      {
+          expect( typeUtils.isSymbol( Symbol.iterator ) ).toBe( true );
+      } );
+
+test( "isFunction(Array.prototype[Symbol.iterator]) === true",
+      () =>
+      {
+          expect( typeUtils.isFunction( Array.prototype[Symbol.iterator] ) ).toBe( true );
+      } );
+
+test( "isType('abc','string') === true",
+      () =>
+      {
+          expect( typeUtils.isType( "abc", "string" ) ).toBe( true );
+      } );
+
+test( "isType('123','number') === false",
+      () =>
+      {
+          expect( typeUtils.isType( "123", "number" ) ).toBe( false );
+      } );
+
+test( "isType('abc','xyz') === true",
+      () =>
+      {
+          expect( typeUtils.isType( "abc", "xyz" ) ).toBe( true );
+      } );
+
+test( "isType('123',123) === false",
+      () =>
+      {
+          expect( typeUtils.isType( "123", 123 ) ).toBe( false );
+      } );
+
+test( "isType(123,789) === false",
+      () =>
+      {
+          expect( typeUtils.isType( 123, 789 ) ).toBe( true );
+      } );
+
+////
+test( "isMap( new Map() ) ) === true",
+      () =>
+      {
+          expect( typeUtils.isMap( new Map() ) ).toBe( true );
+      } );
+
+test( "isMap( {'a':1,'b':2 } ) ) === false",
+      () =>
+      {
+          expect( typeUtils.isMap( { "a": 1, "b": 2 } ) ).toBe( false );
+      } );
+
+test( "isMap( {'a':1,'b':2 }, false ) ) === true",
+      () =>
+      {
+          expect( typeUtils.isMap( { "a": 1, "b": 2 }, false ) ).toBe( true );
+      } );
+
+// in non-strict mode, we still expect map keys to be strings
+test( "isMap( { [objKey]: 1 }, false ) ) === false",
+      () =>
+      {
+          const objKey = {};
+          expect( typeUtils.isMap( { [objKey]: 1 }, false ) ).toBe( false );
+      } );
+
+// any key other than an Object becomes a string when it defines a property of an Object
+test( "isMap( {{ [boolKey]: 1}, false ) ) === true",
+      () =>
+      {
+          const boolKey = true;
+          expect( typeUtils.isMap( { [boolKey]: 1 }, false ) ).toBe( true );
+      } );
+
+///\\\///
+// Maps are not Sets
+test( "isSet( new Map() ) ) === false",
+      () =>
+      {
+          expect( typeUtils.isSet( new Map() ) ).toBe( false );
+      } );
+
+test( "isSet( new Map(), false ) ) === false",
+      () =>
+      {
+          expect( typeUtils.isSet( new Map(), false ) ).toBe( false );
+      } );
+
+test( "isSet( {'a':1,'b':2 } ) ) === false",
+      () =>
+      {
+          expect( typeUtils.isSet( { "a": 1, "b": 2 } ) ).toBe( false );
+      } );
+
+test( "isSet( new Set() ) === true",
+      () =>
+      {
+          expect( typeUtils.isSet( new Set() ) ).toBe( true );
+      } );
+
+// in strict mode, only instances of Set are considered a Set
+test( "isSet([1,2,3]) === false",
+      () =>
+      {
+          expect( typeUtils.isSet( [1, 2, 3] ) ).toBe( false );
+      } );
+
+// in lax mode, any Array-like object whose values are unique is a Set
+test( "isSet([1,2,3], false) === true",
+      () =>
+      {
+          expect( typeUtils.isSet( [1, 2, 3], false ) ).toBe( true );
+      } );
+
+// elements have to be unique, though
+test( "isSet([1,2,3,2], false) === false",
+      () =>
+      {
+          expect( typeUtils.isSet( [1, 2, 3, 2], false ) ).toBe( false );
+      } );
+
+// even a String can be a 'set of characters' if the characters are unique
+test( "isSet('abc', false) === true",
+      () =>
+      {
+          expect( typeUtils.isSet( "abc", false ) ).toBe( true );
+      } );
+
+// a string is a set of characters if and only if the characters are unique
+test( "isSet('abcb', false) === false",
+      () =>
+      {
+          expect( typeUtils.isSet( "abcb", false ) ).toBe( false );
+      } );
+
+test( "isDate('abc') === false",
+      () =>
+      {
+          expect( typeUtils.isDate( "abc" ) ).toBe( false );
+      } );
+
+test( "isDate(new Date()) === true",
+      () =>
+      {
+          expect( typeUtils.isDate( new Date() ) ).toBe( true );
+      } );
+
+test( "isDate(now, false) === true",
+      () =>
+      {
+          let date = Date.now();
+          expect( typeUtils.isDate( date, false ) ).toBe( true );
+      } );
+
+// Date.now() returns a number; in strict mode, a number is NOT a date
+test( "isDate(now) === false",
+      () =>
+      {
+          let date = Date.now();
+          expect( typeUtils.isDate( date ) ).toBe( false );
+      } );
+
+// strings that can be parsed as a date are Dates in lax mode
+test( "isDate('09/12/2024', false) === true",
+      () =>
+      {
+          let dateString = "09/12/2024";
+          expect( typeUtils.isDate( dateString, false ) ).toBe( true );
+      } );
+
+// but not in strict mode
+test( "isDate('09/12/2024') === false",
+      () =>
+      {
+          let dateString = "09/12/2024";
+          expect( typeUtils.isDate( dateString ) ).toBe( false );
+      } );
+
+/////
+// default is strict mode and returns true only if the argument is an instanceof RegExp
+test( "isRegExp( rx ) === true",
+      () =>
+      {
+          let rx = /^a/g;
+          expect( typeUtils.isRegExp( rx ) ).toBe( true );
+      } );
+
+// in strict mode, strings that may be RegExp patterns are stoll not considered to a RegExp
+test( "isRegExp( '/^a/g' ) === false",
+      () =>
+      {
+          let rx = "/^a/g";
+          expect( typeUtils.isRegExp( rx ) ).toBe( false );
+      } );
+
+// in lax mode, a properly formed regular expression pattern is considered a RegExp
+test( "isRegExp( '/^a/g', false ) === true",
+      () =>
+      {
+          let rx = "/^a/g";
+          expect( typeUtils.isRegExp( rx, false ) ).toBe( true );
+      } );
+
+// but not strings that cannot be interpreted as a valid RegExp
+test( "isRegExp( '/^a((/g', false ) === false",
+      () =>
+      {
+          let rx = "/^a((/g";
+          expect( typeUtils.isRegExp( rx, false ) ).toBe( false );
+      } );
+
+
+test( "isClass(A) === true",
+      () =>
+      {
+          let obj = A;
+          expect( typeUtils.isClass( obj ) ).toBe( true );
+      } );
+
+test( "isClass(new A()) === false",
+      () =>
+      {
+          let obj = new A();
+          expect( typeUtils.isClass( obj ) ).toBe( false );
+      } );
+
+// in strict mode, built-in 'classes' are NOT classes
+test( "isClass(Array) === false",
+      () =>
+      {
+          let obj = Array;
+          expect( typeUtils.isClass( obj ) ).toBe( false );
+      } );
+
+// in lax mode, built-in 'classes' ARE classes
+test( "isClass(Array, false) === true",
+      () =>
+      {
+          let obj = Array;
+          expect( typeUtils.isClass( obj, false ) ).toBe( true );
+      } );
+
+test( "defaultFor( \"string\" ) === '' ",
+      () =>
+      {
+          expect( typeUtils.defaultFor( "string" ) ).toEqual( "" );
+      } );
+
+test( "defaultFor( \"number\" ) === 0 ",
+      () =>
+      {
+          expect( typeUtils.defaultFor( "number" ) ).toEqual( 0 );
+      } );
+
+test( "defaultFor( \"bigint\" ) === 0n ",
+      () =>
+      {
+          expect( typeUtils.defaultFor( "bigint" ) ).toEqual( 0n );
+      } );
+
+test( "defaultFor( \"boolean\" ) === false ",
+      () =>
+      {
+          expect( typeUtils.defaultFor( "boolean" ) ).toEqual( false );
+      } );
+
+test( "defaultFor( \"function\" ) === null ",
+      () =>
+      {
+          expect( typeUtils.defaultFor( "function" ) ).toEqual( null );
+      } );
+
+test( "defaultFor( \"object\" ) === null ",
+      () =>
+      {
+          expect( typeUtils.defaultFor( "object" ) ).toEqual( null );
+      } );
+
+test( "defaultFor( \"symbol\" ) === null ",
+      () =>
+      {
+          expect( typeUtils.defaultFor( "symbol" ) ).toEqual( null );
+      } );
+
+test( "defaultFor( \"undefined\" ) === null ",
+      () =>
+      {
+          expect( typeUtils.defaultFor( "undefined" ) ).toEqual( undefined );
+      } );
+

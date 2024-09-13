@@ -101,7 +101,7 @@ const $scope = utils?.$scope || function()
             this._array = [];
 
             const args = isArray( pValues ) ?
-                         [].concat( forceToArray( pValues ) || [] ) || [] :
+                         [].concat( asArray( pValues ) || [] ) || [] :
                          isObject( pValues ) ? [].concat( Object.assign( {}, pValues ) || {} ) : [pValues];
 
             switch ( args.length )

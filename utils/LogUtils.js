@@ -66,7 +66,7 @@ const _isNodeJs = envUtils.isNodeJs();
     let pruneArray = arrayUtils?.pruneArray || function( pArr ) { return pArr.filter( e => !(typeof e === _ud || null == e || isBlank( e ) || ([_num, _big].includes( typeof e ) && isNaN( e ))) ); };
 
     let asInt = stringUtils?.asInt || function( s ) { return parseInt( asString( s ) ); };
-    let forceToArray = arrayUtils?.forceToArray || function( pArr ) { return Array.isArray( pArr ) ? pArr : [pArr]; };
+    let asArray = arrayUtils?.asArray || function( pArr ) { return Array.isArray( pArr ) ? pArr : [pArr]; };
 
     let toUnixPath = stringUtils?.toUnixPath || function( s ) { return asString( s, true ).replace( /[\/\\]/g, S_PATH_SEP ).replace( /\/\//g, S_PATH_SEP ); };
 
@@ -1042,7 +1042,7 @@ const _isNodeJs = envUtils.isNodeJs();
 
             const prefix = level.makePrefix( pPrefix );
 
-            let data = [].concat( forceToArray( pData || [] ) ) || [];
+            let data = [].concat( asArray( pData || [] ) ) || [];
 
             data.unshift( prefix, this.timestamp, " -> " );
             data.push( "\n" );
@@ -1111,7 +1111,7 @@ const _isNodeJs = envUtils.isNodeJs();
 
         async _log( pMethod, pPrefix, pMap, pValues, ...pData )
         {
-            let data = pruneArray( [].concat( forceToArray( pData ) ) );
+            let data = pruneArray( [].concat( asArray( pData ) ) );
 
             if ( null == data || ((data?.length || 0) <= 0) )
             {
@@ -1134,7 +1134,7 @@ const _isNodeJs = envUtils.isNodeJs();
             let prefix = asString( pPrefix, true ) || _mt_str;
 
             let map = pMap instanceof Map ? pMap : (isPopulated( pMap ) ? new Map( Object.entries( pMap ) ) : {});
-            let values = [].concat( forceToArray( pValues || [] ) );
+            let values = [].concat( asArray( pValues || [] ) );
 
             data = data.map( e => this.formatMessage( e, map, values ) );
             data = this.prependPrefix( method, prefix, data );
@@ -1190,7 +1190,7 @@ const _isNodeJs = envUtils.isNodeJs();
 
         async log( ...pData )
         {
-            let data = pruneArray( [].concat( forceToArray( pData ) ) );
+            let data = pruneArray( [].concat( asArray( pData ) ) );
 
             if ( null != data && ((data?.length || 0) > 0) )
             {
@@ -1200,7 +1200,7 @@ const _isNodeJs = envUtils.isNodeJs();
 
         async info( ...pData )
         {
-            let data = pruneArray( [].concat( forceToArray( pData ) ) );
+            let data = pruneArray( [].concat( asArray( pData ) ) );
 
             if ( null != data && ((data?.length || 0) > 0) )
             {
@@ -1210,7 +1210,7 @@ const _isNodeJs = envUtils.isNodeJs();
 
         async warn( ...pData )
         {
-            let data = pruneArray( [].concat( forceToArray( pData ) ) );
+            let data = pruneArray( [].concat( asArray( pData ) ) );
 
             if ( null != data && ((data?.length || 0) > 0) )
             {
@@ -1220,7 +1220,7 @@ const _isNodeJs = envUtils.isNodeJs();
 
         async error( ...pData )
         {
-            let data = pruneArray( [].concat( forceToArray( pData ) ) );
+            let data = pruneArray( [].concat( asArray( pData ) ) );
 
             if ( null != data && ((data?.length || 0) > 0) )
             {
@@ -1230,7 +1230,7 @@ const _isNodeJs = envUtils.isNodeJs();
 
         async debug( ...pData )
         {
-            let data = pruneArray( [].concat( forceToArray( pData ) ) );
+            let data = pruneArray( [].concat( asArray( pData ) ) );
 
             if ( null != data && ((data?.length || 0) > 0) )
             {
@@ -1242,7 +1242,7 @@ const _isNodeJs = envUtils.isNodeJs();
         {
             if ( this.verbose )
             {
-                let data = pruneArray( [].concat( forceToArray( pData ) ) );
+                let data = pruneArray( [].concat( asArray( pData ) ) );
 
                 if ( null != data && ((data?.length || 0) > 0) )
                 {
@@ -1253,7 +1253,7 @@ const _isNodeJs = envUtils.isNodeJs();
 
         prepareContent( pFor, ...pData )
         {
-            const data = forceToArray( pData );
+            const data = asArray( pData );
 
             if ( data && data?.length )
             {
@@ -1494,7 +1494,7 @@ const _isNodeJs = envUtils.isNodeJs();
 
                             if ( objectUtils.isArray( pLoggers ) )
                             {
-                                entries = forceToArray( pLoggers );
+                                entries = asArray( pLoggers );
                             }
 
                             entries = Object.entries( pLoggers );

@@ -35,15 +35,15 @@ const $scope = constants?.$scope || function()
 
     let isArray = objectUtils.isArray || function( pArr ) { return Array.isArray( pArr ); };
 
-    let forceToArray = arrayUtils.forceToArray || function( pArr ) { return Array.isArray( pArr ) ? pArr : [pArr]; };
+    let asArray = arrayUtils.asArray || function( pArr ) { return Array.isArray( pArr ) ? pArr : [pArr]; };
     let pruneArray = arrayUtils.pruneArray || function( pArr )
     {
-        const arr = forceToArray( pArr || [] );
+        const arr = asArray( pArr || [] );
         return arr.filter( e => (null !== e) && (_ud !== typeof e) && (_mt_str !== e) );
     };
     let unique = arrayUtils.unique || function( pArr )
     {
-        const arr = forceToArray( pArr || [] );
+        const arr = asArray( pArr || [] );
         return [...(new Set( arr ))];
     };
 
@@ -74,10 +74,10 @@ const $scope = constants?.$scope || function()
 
     const buildReplacer = function( pExclusions, ...pNameValuePairs )
     {
-        let exclusions = unique( pruneArray( forceToArray( pExclusions || DEFAULT_EXCLUSIONS ).filter( arrayUtils.Filters.NON_BLANK ) ) );
+        let exclusions = unique( pruneArray( asArray( pExclusions || DEFAULT_EXCLUSIONS ).filter( arrayUtils.Filters.NON_BLANK ) ) );
         exclusions = (exclusions?.length || 0) <= 0 ? DEFAULT_EXCLUSIONS : exclusions;
 
-        const nvPairs = forceToArray( pNameValuePairs || [] ).filter( e => Array.isArray( e ) && 2 === (e?.length || 0) );
+        const nvPairs = asArray( pNameValuePairs || [] ).filter( e => Array.isArray( e ) && 2 === (e?.length || 0) );
 
         return function( pKey, pValue )
         {
@@ -122,7 +122,7 @@ const $scope = constants?.$scope || function()
 
         const options = Object.assign( {}, pOptions || {} );
 
-        const keysToRemove = forceToArray( options?.keysToExclude || options?.exclude || [] ) || [];
+        const keysToRemove = asArray( options?.keysToExclude || options?.exclude || [] ) || [];
 
         options.keysToExclude = [].concat( keysToRemove || [] );
 
@@ -261,9 +261,9 @@ const $scope = constants?.$scope || function()
             }
         }
 
-        const _include = unique( pruneArray( [].concat( ...(forceToArray( options.include || [] )) ) ) ) || [];
+        const _include = unique( pruneArray( [].concat( ...(asArray( options.include || [] )) ) ) ) || [];
 
-        const _exclude = unique( pruneArray( ["constructor", "prototype", "toJson", "toObject", "global", "this"].concat( (forceToArray( options.exclude || options.transientProperties || [] )) ) ).filter( e => !_include.includes( e ) ) ) || [];
+        const _exclude = unique( pruneArray( ["constructor", "prototype", "toJson", "toObject", "global", "this"].concat( (asArray( options.exclude || options.transientProperties || [] )) ) ).filter( e => !_include.includes( e ) ) ) || [];
 
         const _includeEmptyProperties = !(false === (options.includeEmpty || options.includeEmptyProperties));
 
@@ -379,7 +379,7 @@ const $scope = constants?.$scope || function()
 
     const bruteForceJson = function( pObject, pOptions = DEFAULT_REFLECTION_OPTIONS, pStack = [] )
     {
-        let stack = forceToArray( pStack || [] );
+        let stack = asArray( pStack || [] );
 
         if ( objectUtils.detectCycles( stack, 4, 4 ) )
         {
@@ -398,7 +398,7 @@ const $scope = constants?.$scope || function()
                 return true;
             }
 
-            let transientProperties = forceToArray( options.transient );
+            let transientProperties = asArray( options.transient );
 
             let excluded = ((transientProperties.length > 0) && (transientProperties.includes( pProperty )));
 
@@ -407,7 +407,7 @@ const $scope = constants?.$scope || function()
                 return true;
             }
 
-            let exclusions = forceToArray( options.excluded || [] ).concat( transientProperties );
+            let exclusions = asArray( options.excluded || [] ).concat( transientProperties );
 
             for( let exclusion of exclusions )
             {

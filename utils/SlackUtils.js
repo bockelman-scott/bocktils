@@ -447,7 +447,7 @@ const $scope = constants?.$scope || function()
                 return;
             }
 
-            let queued = (forceToArray( handler.queuedMessages || [] ) || []).filter( msg => !msg.sent );
+            let queued = (asArray( handler.queuedMessages || [] ) || []).filter( msg => !msg.sent );
 
             while ( (queued?.length || 0) > 0 )
             {
@@ -484,7 +484,7 @@ const $scope = constants?.$scope || function()
             }
 
 
-            this._queuedMessages = forceToArray( queued || [] ).filter( msg => !msg.sent );
+            this._queuedMessages = asArray( queued || [] ).filter( msg => !msg.sent );
         }
     }
 

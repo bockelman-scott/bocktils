@@ -115,7 +115,7 @@ const logUtils = require( "./LogUtils.js" );
 
                 let results = await db.select( dbCollection, queryOptions );
 
-                results = forceToArray( results || [] ) || [];
+                results = asArray( results || [] ) || [];
 
                 if ( results?.length )
                 {

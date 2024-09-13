@@ -30,9 +30,9 @@ const $scope = constants?.$scope || function()
     {
         const options = Object.assign( { replacements: [[/ /g, "+"],[/ /,"+"]] }, pOptions || {} );
 
-        let replacements = (forceToArray( options.replacements || [[/ /g,"+"],[/ /, "+"]] ) || [[/ /g, "+"],[/ /,"+"]]).filter( e => Array.isArray( e ) && 2 === e.length );
+        let replacements = (asArray( options.replacements || [[/ /g,"+"],[/ /, "+"]] ) || [[/ /g, "+"],[/ /,"+"]]).filter( e => Array.isArray( e ) && 2 === e.length );
 
-        replacements = ((replacements?.length || 0) <= 0) || forceToArray( replacements[0] || [] ).length !== 2 ? [[/ /g, "+"]] : replacements;
+        replacements = ((replacements?.length || 0) <= 0) || asArray( replacements[0] || [] ).length !== 2 ? [[/ /g, "+"]] : replacements;
 
         let str = asString( pStr, true ).replaceAll( /[\r\n]+/g, _mt_str );
 

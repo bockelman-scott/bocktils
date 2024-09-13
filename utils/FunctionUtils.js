@@ -15,7 +15,7 @@ const $scope = constants?.$scope || function()
     let asString = stringUtils.asString;
     let asInt = stringUtils.asInt;
 
-    let forceToArray = arrayUtils.forceToArray;
+    let asArray = arrayUtils.asArray;
 
     let isFunction = objectUtils.isFunction;
     let isAsyncFunction = objectUtils.isAsyncFunction;
@@ -131,7 +131,7 @@ const $scope = constants?.$scope || function()
             {
                 try
                 {
-                    returnValue = await pOperation.apply( $scope(), forceToArray( pArgs ) );
+                    returnValue = await pOperation.apply( $scope(), asArray( pArgs ) );
                 }
                 catch( ex2 )
                 {
@@ -172,7 +172,7 @@ const $scope = constants?.$scope || function()
 
                 try
                 {
-                    returnValue = pOperation.apply( $scope(), forceToArray( pArgs ) );
+                    returnValue = pOperation.apply( $scope(), asArray( pArgs ) );
                 }
                 catch( ex2 )
                 {
@@ -205,7 +205,7 @@ const $scope = constants?.$scope || function()
             {
                 try
                 {
-                    returnValue = await pMethod.apply( (pObject || $scope()), forceToArray( pArgs ) );
+                    returnValue = await pMethod.apply( (pObject || $scope()), asArray( pArgs ) );
                 }
                 catch( ex2 )
                 {
@@ -246,7 +246,7 @@ const $scope = constants?.$scope || function()
 
                 try
                 {
-                    returnValue = pMethod.apply( (pObject || $scope()), forceToArray( pArgs ) );
+                    returnValue = pMethod.apply( (pObject || $scope()), asArray( pArgs ) );
                 }
                 catch( ex2 )
                 {

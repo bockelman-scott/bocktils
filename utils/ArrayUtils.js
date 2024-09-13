@@ -1101,7 +1101,7 @@ const $scope = constants?.$scope || function()
      * @param {object} pOptions
      * @returns
      */
-    const forceToArray = function( pMaybeAnArray, pOptions = {} )
+    const asArray = function( pMaybeAnArray, pOptions = {} )
     {
         const opts = Object.assign( {}, (pOptions || EMPTY_OBJECT) );
 
@@ -1167,13 +1167,13 @@ const $scope = constants?.$scope || function()
                         {
                             const clazz = arr;
 
-                            arr = forceToArray( new clazz( opts ), opts ) || [];
+                            arr = asArray( new clazz( opts ), opts ) || [];
                         }
                         else
                         {
                             const func = arr;
 
-                            arr = forceToArray( func( opts ), opts ) || [];
+                            arr = asArray( func( opts ), opts ) || [];
                         }
                     }
                     catch( ex )
@@ -1205,7 +1205,7 @@ const $scope = constants?.$scope || function()
                             }
                         }
 
-                        arr = forceToArray( returnValue, opts ) || [];
+                        arr = asArray( returnValue, opts ) || [];
                     }
             } // end switch
         } // end else
@@ -1249,7 +1249,7 @@ const $scope = constants?.$scope || function()
     const pruneArray = function( pArr, pRejectNaN = true, ...pRejectedTypes )
     {
         // force the input argument to be an array
-        let arr = forceToArray( pArr, { "sanitize": true } );
+        let arr = asArray( pArr, { "sanitize": true } );
 
         // this is the array we will return, so we do not modify the input argument
         let pruned = [].concat( arr || [] ).filter( Predicates.IS_NOT_NULL );
@@ -1326,7 +1326,7 @@ const $scope = constants?.$scope || function()
 
     const copyArray = function( pArr )
     {
-        let arr = forceToArray( pArr || [] );
+        let arr = asArray( pArr || [] );
 
         let clone = structuredClone( arr );
 
@@ -1350,8 +1350,8 @@ const $scope = constants?.$scope || function()
     {
         let strip = (false !== pTrim);
 
-        let arrA = forceToArray( pArrA || [] );
-        let arrB = forceToArray( pArrB || [] );
+        let arrA = asArray( pArrA || [] );
+        let arrB = asArray( pArrB || [] );
 
         const strA = arrA.map( e => asString( e, strip ).replace( /\//g, "_slash_" ) ).join( "/" );
         const strB = arrB.map( e => asString( e, strip ).replace( /\//g, "_slash_" ) ).join( "/" );
@@ -1376,8 +1376,8 @@ const $scope = constants?.$scope || function()
     {
         let strip = (false !== pTrim);
 
-        let arrA = forceToArray( pArrA || [] );
-        let arrB = forceToArray( pArrB || [] );
+        let arrA = asArray( pArrA || [] );
+        let arrB = asArray( pArrB || [] );
 
         const strA = arrA.map( e => asString( e, strip ).replace( /\//g, "_slash_" ) ).join( "/" );
         const strB = arrB.map( e => asString( e, strip ).replace( /\//g, "_slash_" ) ).join( "/" );
@@ -1397,8 +1397,8 @@ const $scope = constants?.$scope || function()
      */
     const superset = function( pArrA, pArrB, pUnique )
     {
-        let arrA = forceToArray( pArrA || [] );
-        let arrB = forceToArray( pArrB || [] );
+        let arrA = asArray( pArrA || [] );
+        let arrB = asArray( pArrB || [] );
 
         const pruned = pruneArray( arrA.concat( arrB ), false );
 
@@ -1431,8 +1431,8 @@ const $scope = constants?.$scope || function()
      */
     const intersection = function( pArrA, pArrB, pUnique )
     {
-        let arrA = Object.freeze( forceToArray( pArrA || [] ) );
-        let arrB = Object.freeze( forceToArray( pArrB || [] ) );
+        let arrA = Object.freeze( asArray( pArrA || [] ) );
+        let arrB = Object.freeze( asArray( pArrB || [] ) );
 
         let arr = arrA.concat( arrB );
 
@@ -1452,8 +1452,8 @@ const $scope = constants?.$scope || function()
      */
     const disjunction = function( pArrA, pArrB )
     {
-        let arrA = Object.freeze( forceToArray( pArrA || [] ) );
-        let arrB = Object.freeze( forceToArray( pArrB || [] ) );
+        let arrA = Object.freeze( asArray( pArrA || [] ) );
+        let arrB = Object.freeze( asArray( pArrB || [] ) );
 
         let arr = arrA.concat( arrB );
 
@@ -1502,7 +1502,7 @@ const $scope = constants?.$scope || function()
             }
             else
             {
-                this._arr = [].concat( (forceToArray( pArr ) || []) ) || [];
+                this._arr = [].concat( (asArray( pArr ) || []) ) || [];
 
                 this._limit = desiredLimit;
             }
@@ -1651,7 +1651,7 @@ const $scope = constants?.$scope || function()
 
             this._limit = Math.max( limit, this._limit );
 
-            let newElems = [].concat( (forceToArray( pElems )) );
+            let newElems = [].concat( (asArray( pElems )) );
 
             let numNewElems = newElems.length;
 
@@ -1688,14 +1688,14 @@ const $scope = constants?.$scope || function()
     {
         const limit = Math.min( Math.max( 1, asInt( pLimit, (pArr?.length || pArr?.size) ) ), 65_536 );
 
-        const arr = Array.isArray( pArr ) ? pArr : ((null != pArr && pArr instanceof BoundedQueue) ? pArr : forceToArray( pArr ));
+        const arr = Array.isArray( pArr ) ? pArr : ((null != pArr && pArr instanceof BoundedQueue) ? pArr : asArray( pArr ));
 
         return new BoundedQueue( limit, arr );
     };
 
     const hasEntry = function( pArr, pIndex )
     {
-        const arr = forceToArray( pArr || [] ) || [];
+        const arr = asArray( pArr || [] ) || [];
         const index = [_num, _big].includes( typeof pIndex ) ? (0 + pIndex) : Number.MAX_SAFE_INTEGER;
 
         return (index >= 0) && (arr.length > index) && (_ud !== typeof arr[index]);
@@ -1705,7 +1705,7 @@ const $scope = constants?.$scope || function()
 
     const at = function( pArr, pIdx, pDefault )
     {
-        const arr = forceToArray( pArr ) || [];
+        const arr = asArray( pArr ) || [];
 
         const idx = asInt( pIdx );
 
@@ -1716,35 +1716,22 @@ const $scope = constants?.$scope || function()
 
     const mod =
         {
-            TRANSFORMATIONS: Object.freeze( TRANSFORMATIONS ),
-            Predicates: Object.freeze( Predicates ),
-            predicate,
-            Filters: Object.freeze( Filters ),
-            Mappers: Object.freeze( Mappers ),
-            calculateLength,
-            Comparators: Object.freeze( Comparators ),
-            Transformer,
-            TransformerChain,
-            FilterChain,
-            MapperChain,
-            ComparatorChain,
-            chainFilters,
-            chainMappers,
+            asArray,
+            unique,
+            pruneArray,
+            hasElements,
+            isEmptyArray,
             isPopulatedArray,
             firstPopulatedArray,
-            unique,
             sortArray,
-            forceToArray,
-            pruneArray,
             copyArray,
+            calculateLength,
             arraysEqual,
             arraysIntersect,
             superset,
             union,
             intersection,
             disjunction,
-            enQueue,
-            BoundedQueue,
             hasEntry,
             hasElementAt,
             at,
@@ -1753,8 +1740,30 @@ const $scope = constants?.$scope || function()
             arrLenGtEq,
             arrLenLt,
             arrLenLtEq,
-            hasElements,
-            isEmptyArray
+            TRANSFORMATIONS: Object.freeze( TRANSFORMATIONS ),
+            Predicates: Object.freeze( Predicates ),
+            Filters: Object.freeze( Filters ),
+            Mappers: Object.freeze( Mappers ),
+            Comparators: Object.freeze( Comparators ),
+            predicate,
+            Transformer,
+            TransformerChain,
+            FilterChain,
+            MapperChain,
+            ComparatorChain,
+            BoundedQueue,
+            chainFilters,
+            chainMappers,
+            enQueue,
+            classes:
+                {
+                    Transformer,
+                    TransformerChain,
+                    FilterChain,
+                    MapperChain,
+                    ComparatorChain,
+                    BoundedQueue
+                }
         };
 
     if ( _ud !== typeof module )

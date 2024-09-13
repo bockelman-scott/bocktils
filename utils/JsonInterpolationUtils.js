@@ -586,9 +586,9 @@ const $scope = constants?.$scope || function()
 
         const _assumeUnderscoreConvention = options?.assumeUnderscoresConvention || options._assumeUnderscoreConvention;
 
-        const _exclude = pruneArray( ["constructor", "prototype", "toJson", "toObject", "global", "this"].concat( (forceToArray( options.exclude || [] )) ) );
+        const _exclude = pruneArray( ["constructor", "prototype", "toJson", "toObject", "global", "this"].concat( (asArray( options.exclude || [] )) ) );
 
-        const _include = pruneArray( [].concat( ...(forceToArray( options.include || [] )) ) );
+        const _include = pruneArray( [].concat( ...(asArray( options.include || [] )) ) );
 
         const _trimStrings = options.trimStrings || false;
 
@@ -712,11 +712,11 @@ const $scope = constants?.$scope || function()
 
                     if ( isInstanceOfUserDefinedClass( object ) || isUserDefinedClass( object ) )
                     {
-                        transient = transient.concat( forceToArray( object.transientProperties || [] ) );
+                        transient = transient.concat( asArray( object.transientProperties || [] ) );
 
                         const clazz = getClass( pObject ) || pObject;
 
-                        transient = transient.concat( forceToArray( clazz?.TRANSIENT_PROPERTIES || clazz?.transientProperties || [] ) );
+                        transient = transient.concat( asArray( clazz?.TRANSIENT_PROPERTIES || clazz?.transientProperties || [] ) );
 
                         transient.push( "TRANSIENT_PROPERTIES", "transientProperties" );
 
