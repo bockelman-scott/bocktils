@@ -1,4 +1,5 @@
 const constants = require( "./Constants.js" );
+const typeUtils = require( "./TypeUtils.js" );
 const stringUtils = require( "./StringUtils.js" );
 
 const konsole = console || {};
@@ -9,6 +10,7 @@ const $scope = constants?.$scope || function()
 {
     return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
 };
+
 
 (function exposeArrayUtils()
 {
@@ -34,7 +36,21 @@ const $scope = constants?.$scope || function()
         } = constants || {};
 
     Object.assign( this, constants );
+    Object.assign( this, typeUtils );
     Object.assign( this, stringUtils );
+
+    /**
+     * An array of this module's dependencies
+     * which are re-exported with this module,
+     * so if you want to, you can just import the leaf module
+     * and then use the other utilities as properties of that module
+     */
+    const dependencies =
+        {
+            constants,
+            typeUtils,
+            stringUtils
+        };
 
     if ( _fun !== typeof Array.isArray )
     {
@@ -1020,26 +1036,26 @@ const $scope = constants?.$scope || function()
     {
         let arr = [].concat( ...(pArr || []) );
 
-        let opts = { orderBy: pOrderBy || "compareTo" };
+        let opts = { comparator: pOrderBy || "compareTo" };
 
         if ( _fun === typeof pOrderBy )
         {
-            opts.orderBy = pOrderBy;
+            opts.comparator = pOrderBy;
         }
 
-        if ( _str === typeof opts?.orderBy && "true" === opts?.orderBy )
+        if ( _str === typeof opts?.comparator && "true" === opts?.comparator )
         {
-            opts.orderBy = true;
+            opts.comparator = true;
         }
 
-        if ( _bool === typeof opts?.orderBy )
+        if ( _bool === typeof opts?.comparator )
         {
-            opts.orderBy = opts.orderBy ? "compareTo" : "toString";
+            opts.comparator = opts.comparator ? "compareTo" : "toString";
         }
 
-        const comparator = ((_fun === typeof opts?.orderBy) ? opts?.orderBy : function( pElemA, pElemB, pProperty )
+        const comparator = ((_fun === typeof opts?.comparator) ? opts?.comparator : function( pElemA, pElemB, pProperty )
         {
-            let property = asString( asString( pProperty ) || asString( opts?.orderBy ) || "compareTo" );
+            let property = asString( asString( pProperty ) || asString( opts?.comparator ) || "compareTo" );
 
             if ( property )
             {
@@ -1089,6 +1105,17 @@ const $scope = constants?.$scope || function()
         return arr || pArr;
     };
 
+    const DEFAULT_AS_ARRAY_OPTIONS =
+        {
+            flatten: false,
+            splitOn: undefined,
+            filter: null,
+            sanitize: false,
+            type: null,
+            unique: false,
+            comparator: null
+        };
+
     /**
      * Returns an array based on its input.
      * If its input *is* an array, just returns it, unmodified, unaliased
@@ -1101,29 +1128,13 @@ const $scope = constants?.$scope || function()
      * @param {object} pOptions
      * @returns
      */
-    const asArray = function( pMaybeAnArray, pOptions = {} )
+    const asArray = function( pMaybeAnArray, pOptions = DEFAULT_AS_ARRAY_OPTIONS )
     {
-        const opts = Object.assign( {}, (pOptions || EMPTY_OBJECT) );
-
-        const flatten = opts?.flatten || false;
-
-        let flattenLevel = (opts?.flatten?.level);
-
-        if ( isNaN( flattenLevel ) || flattenLevel <= 0 )
-        {
-            flattenLevel = Infinity;
-        }
+        const options = Object.assign( Object.assign( {}, DEFAULT_AS_ARRAY_OPTIONS ), (pOptions || EMPTY_OBJECT) );
 
         let arr = (_ud === typeof pMaybeAnArray ? EMPTY_ARRAY : (_str === typeof pMaybeAnArray && _mt_str === pMaybeAnArray) ? [pMaybeAnArray] : (pMaybeAnArray || EMPTY_ARRAY));
 
-        if ( Array.isArray( arr ) )
-        {
-            if ( flatten && arr.flat )
-            {
-                arr = arr.flat( flattenLevel );
-            }
-        }
-        else
+        if ( !Array.isArray( arr ) )
         {
             switch ( typeof arr )
             {
@@ -1132,18 +1143,13 @@ const $scope = constants?.$scope || function()
                     {
                         arr = Object.values( arr );
                     }
-
-                    if ( flatten && arr.flat )
-                    {
-                        arr = arr.flat( flattenLevel ) || EMPTY_ARRAY;
-                    }
-
                     break;
 
                 case _str:
-                    if ( opts && (Object.hasOwn( opts, "splitOn" )) )
+                    if ( !typeUtils.isUndefined( options?.splitOn ) && typeUtils.isString( options?.splitOn ) )
                     {
-                        arr = arr.split( opts.splitOn || _comma ) || [arr];
+                        const sep = asString( options?.splitOn );
+                        arr = arr.split( sep ) || [arr];
                     }
                     else
                     {
@@ -1167,13 +1173,13 @@ const $scope = constants?.$scope || function()
                         {
                             const clazz = arr;
 
-                            arr = asArray( new clazz( opts ), opts ) || [];
+                            arr = asArray( new clazz( options ), options ) || [];
                         }
                         else
                         {
                             const func = arr;
 
-                            arr = asArray( func( opts ), opts ) || [];
+                            arr = asArray( func( options ), options ) || [];
                         }
                     }
                     catch( ex )
@@ -1191,9 +1197,9 @@ const $scope = constants?.$scope || function()
                         {
                             if ( value )
                             {
-                                if ( opts && opts.filter )
+                                if ( options && options.filter )
                                 {
-                                    if ( opts.filter( value ) )
+                                    if ( options.filter( value ) )
                                     {
                                         returnValue.push( value );
                                     }
@@ -1205,35 +1211,44 @@ const $scope = constants?.$scope || function()
                             }
                         }
 
-                        arr = asArray( returnValue, opts ) || [];
+                        arr = asArray( returnValue, options ) || [];
                     }
             } // end switch
         } // end else
 
         let eia = EMPTY_ARRAY;
 
-        arr = ((flatten && arr.flat) ? arr.flat( flattenLevel ) : arr) || eia;
+        const flatten = options?.flatten || false;
 
-        arr = (opts?.sanitize ? (arr || eia).filter( e => (_ud !== typeof e && null != e) ) : (arr || eia)) || eia;
+        let flattenLevel = (options?.flatten?.level);
 
-        arr = (opts?.type ? (arr || eia).filter( e => (opts?.type === typeof e) ) : (arr || eia)) || eia;
-
-        if ( _fun === typeof opts?.filter && opts?.filter?.length >= 1 && opts?.filter?.length <= 3 )
+        if ( isNaN( flattenLevel ) || flattenLevel <= 0 )
         {
-            arr = arr.filter( opts?.filter );
+            flattenLevel = Infinity;
         }
 
-        if ( opts?.unique )
+        arr = ((flatten && arr.flat) ? arr.flat( flattenLevel ) : arr) || eia;
+
+        arr = (options?.sanitize ? (arr || eia).filter( e => (_ud !== typeof e && null != e && !stringUtils.isEmpty( e )) ) : (arr || eia)) || eia;
+
+        arr = (options?.type ? (arr || eia).filter( e => (options?.type === typeof e) ) : (arr || eia)) || eia;
+
+        if ( _fun === typeof options?.filter && options?.filter?.length >= 1 && options?.filter?.length <= 3 )
+        {
+            arr = arr.filter( options?.filter );
+        }
+
+        if ( options?.unique )
         {
             arr = [...(new Set( arr ))];
         }
 
-        let orderBy = opts?.orderBy;
+        let comparator = options?.comparator;
 
-        if ( _fun === typeof orderBy && orderBy?.length === 2 )
+        if ( _fun === typeof comparator && comparator?.length === 2 )
         {
-            arr = [].concat( ...(arr || eia) );
-            arr = arr.sort( orderBy );
+            arr = [].concat( (arr || eia) );
+            arr = arr.sort( comparator );
         }
 
         return arr || [];
@@ -1716,6 +1731,7 @@ const $scope = constants?.$scope || function()
 
     const mod =
         {
+            dependencies,
             asArray,
             unique,
             pruneArray,

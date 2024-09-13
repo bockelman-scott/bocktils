@@ -3,6 +3,7 @@ const stringUtils = require( "./StringUtils.js" );
 const arrayUtils = require( "./ArrayUtils.js" );
 
 const guidUtils = require( "./GUIDUtils.js" );
+const typeUtils = require( "./TypeUtils" );
 
 const _ud = constants?._ud || "undefined";
 
@@ -56,6 +57,21 @@ const $scope = constants?.$scope || function()
     {
         return $scope()[INTERNAL_NAME];
     }
+
+    /**
+     * An array of this module's dependencies
+     * which are re-exported with this module,
+     * so if you want to, you can just import the leaf module
+     * and then use the other utilities as properties of that module
+     */
+    const dependencies =
+        {
+            constants,
+            typeUtils,
+            stringUtils,
+            arrayUtils,
+            guidUtils
+        };
 
     const MAX_CLONE_DEPTH = 6;
 
@@ -1091,12 +1107,12 @@ const $scope = constants?.$scope || function()
         const options = Object.freeze( Object.assign( {}, pOptions || {} ) );
 
         const prop = (asString( _str === typeof pPropertyPath ?
-                               pPropertyPath :
-                               (isValidObject( pPropertyPath ) ?
-                                (Array.isArray( pPropertyPath ) ?
-                                 pPropertyPath.join( _dot ) :
-                                 _mt_str) :
-                                _mt_str) ));
+                                pPropertyPath :
+                                (isValidObject( pPropertyPath ) ?
+                                 (Array.isArray( pPropertyPath ) ?
+                                  pPropertyPath.join( _dot ) :
+                                  _mt_str) :
+                                 _mt_str) ));
 
         let propertyName = asString( prop ).trim();
 
@@ -2712,10 +2728,10 @@ const $scope = constants?.$scope || function()
             }
 
             key = asString( key, true ).replaceAll( /(-|\s)(\w)/g,
-                                                   ( match, group1, group2 ) =>
-                                                   {
-                                                       return group1 + group2.toUpperCase();
-                                                   } ).replaceAll( /\s/g, _mt_str ).replaceAll( /[^A-Za-z0-9]/g, _mt_str );
+                                                    ( match, group1, group2 ) =>
+                                                    {
+                                                        return group1 + group2.toUpperCase();
+                                                    } ).replaceAll( /\s/g, _mt_str ).replaceAll( /[^A-Za-z0-9]/g, _mt_str );
 
             obj[key] = asString( value ).replaceAll( /\s/g, _mt_str ).replaceAll( /[^A-Za-z0-9]/g, _mt_str );
         }

@@ -267,6 +267,17 @@
         return Object.freeze( variables );
     };
 
+    /**
+     * An array of this module's dependencies
+     * which are re-exported with this module,
+     * so if you want to, you can just import the leaf module
+     * and then use the other utilities as properties of that module
+     */
+    const dependencies =
+        {
+            // this module has no dependencies
+        };
+
     const mod =
         {
             _ud,
@@ -346,7 +357,6 @@
             EMPTY_OBJECT,
             RESERVED_WORDS,
             AsyncFunction: (async function() {}).constructor,
-            Funkshun: (Function || (function() {}).constructor),
             TYPED_ARRAYS,
             TYPED_ARRAY_NAMES,
             ERROR_TYPES,
@@ -375,7 +385,8 @@
             catchHandler: function( pErr )
             {
                 return true;
-            }
+            },
+            dependencies
         };
 
     mod.clone = function()

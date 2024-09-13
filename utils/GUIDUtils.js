@@ -1,10 +1,9 @@
 const constants = require( "./Constants.js" );
+const typeUtils = require( "./TypeUtils" );
 const stringUtils = require( "./StringUtils.js" );
 const arrayUtils = require( "./ArrayUtils.js" );
 
 const crypto = require( "crypto" );
-
-const { v4: uuidv4 } = require( "uuid" );
 
 const _ud = constants?._ud || "undefined";
 
@@ -21,6 +20,21 @@ const _ud = constants?._ud || "undefined";
      */
     constants.importUtilities( this, constants, stringUtils, arrayUtils );
 
+    /**
+     * An array of this module's dependencies
+     * which are re-exported with this module,
+     * so if you want to, you can just import the leaf module
+     * and then use the other utilities as properties of that module
+     */
+    const dependencies =
+        {
+            constants,
+            typeUtils,
+            stringUtils,
+            arrayUtils,
+            crypto
+        };
+
     const MAX_CACHED_VALUES = 10_000;
     const DEFAULT_CACHED_VALUES = 1_000;
 
@@ -36,11 +50,11 @@ const _ud = constants?._ud || "undefined";
 
             this._cached = [];
 
-            if( this._options.preload )
+            if ( this._options.preload )
             {
                 let num = Math.max( 10, Math.min( MAX_CACHED_VALUES, asInt( this._options.numPreload, DEFAULT_CACHED_VALUES ) || DEFAULT_CACHED_VALUES ) );
 
-                for( let i=num; i--; )
+                for( let i = num; i--; )
                 {
                     this._cached.push( this._mytselplick() );
                 }
@@ -61,12 +75,12 @@ const _ud = constants?._ud || "undefined";
         {
             let value = _mt_str;
 
-            if( this._cached.length > 0 )
+            if ( this._cached.length > 0 )
             {
                 value = asString( this._cached.shift(), true );
             }
 
-            if( !isBlank( value ) )
+            if ( !isBlank( value ) )
             {
                 return asString( value, true );
             }
@@ -103,7 +117,7 @@ const _ud = constants?._ud || "undefined";
             legacyUUID: function()
             {
                 return asString( uuidv4.v4() );
-            }        
+            }
         };
 
     if ( _ud !== typeof module )

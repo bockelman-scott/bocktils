@@ -39,8 +39,14 @@ const $scope = constants?.$scope || function()
 
     /**
      * An array of this module's dependencies
+     * which are re-exported with this module,
+     * so if you want to, you can just import the leaf module
+     * and then use the other utilities as properties of that module
      */
-    const dependencies = ["Constants.js"];
+    const dependencies =
+        {
+            constants
+        };
 
     let _mt_str = constants._mt_str || "";
 
