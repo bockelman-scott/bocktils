@@ -71,6 +71,155 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
+    const DEFAULT_AS_ARRAY_OPTIONS =
+        {
+            flatten: false,
+            splitOn: undefined,
+            filter: null,
+            sanitize: false,
+            type: null,
+            unique: false,
+            comparator: null
+        };
+
+    /**
+     * Returns an array based on its input.
+     * If its input *is* an array, just returns it, unmodified, unaliased
+     * If it is a string, then, depending on the options optionally specified, that string is either split on a value and resulting array is returned,or...
+     *                          the string is wrapped in an array literal and a one element array containing the string is returned.
+     * if the input is a primitive value, a one element array containing that value is returned.
+     * if the input is a function, that function is executed with the options as its argument and the result is passed back into this function
+     * if the input is an object, a new array is created and populated with the "first-level" properties of the object and then returned
+     * @param {any} pMaybeAnArray
+     * @param {object} pOptions
+     * @returns
+     */
+    const asArray = function( pMaybeAnArray, pOptions = DEFAULT_AS_ARRAY_OPTIONS )
+    {
+        const options = Object.assign( Object.assign( {}, DEFAULT_AS_ARRAY_OPTIONS ), (pOptions || EMPTY_OBJECT) );
+
+        let arr = (_ud === typeof pMaybeAnArray ? EMPTY_ARRAY : (_str === typeof pMaybeAnArray && _mt_str === pMaybeAnArray) ? [pMaybeAnArray] : (pMaybeAnArray || EMPTY_ARRAY));
+
+        if ( !Array.isArray( arr ) )
+        {
+            switch ( typeof arr )
+            {
+                case _obj:
+                    if ( !Array.isArray( arr ) )
+                    {
+                        arr = Object.values( arr );
+                    }
+                    break;
+
+                case _str:
+                    if ( !typeUtils.isUndefined( options?.splitOn ) && typeUtils.isString( options?.splitOn ) )
+                    {
+                        const sep = asString( options?.splitOn );
+                        arr = arr.split( sep ) || [arr];
+                    }
+                    else
+                    {
+                        arr = [arr];
+                    }
+                    break;
+
+                case _num:
+                case _big:
+                case _bool:
+                    arr = [arr];
+                    break;
+
+                case _fun:
+
+                    const isConstructor = function( pFunction ) { return _fun === typeof pFunction && /^class\s/.test( (_mt_str + Function.prototype.toString.call( pFunction, pFunction )).trim() ); };
+
+                    try
+                    {
+                        if ( isConstructor( arr ) )
+                        {
+                            const clazz = arr;
+
+                            arr = asArray( new clazz( options ), options ) || [];
+                        }
+                        else
+                        {
+                            const func = arr;
+
+                            arr = asArray( func( options ), options ) || [];
+                        }
+                    }
+                    catch( ex )
+                    {
+                        konsole.error( "Could not execute " + (arr?.name || arr), ex );
+                    }
+                    break;
+
+                default:
+                    if ( _ud !== (typeof arr[Symbol.iterator]) )
+                    {
+                        const returnValue = [];
+
+                        for( const value of arr )
+                        {
+                            if ( value )
+                            {
+                                if ( options && options.filter )
+                                {
+                                    if ( options.filter( value ) )
+                                    {
+                                        returnValue.push( value );
+                                    }
+                                }
+                                else
+                                {
+                                    returnValue.push( value );
+                                }
+                            }
+                        }
+
+                        arr = asArray( returnValue, options ) || [];
+                    }
+            } // end switch
+        } // end else
+
+        let eia = EMPTY_ARRAY;
+
+        const flatten = options?.flatten || false;
+
+        let flattenLevel = (options?.flatten?.level);
+
+        if ( isNaN( flattenLevel ) || flattenLevel <= 0 )
+        {
+            flattenLevel = Infinity;
+        }
+
+        arr = ((flatten && arr.flat) ? arr.flat( flattenLevel ) : arr) || eia;
+
+        arr = (options?.sanitize ? (arr || eia).filter( e => (_ud !== typeof e && null != e && !stringUtils.isEmpty( e )) ) : (arr || eia)) || eia;
+
+        arr = (options?.type ? (arr || eia).filter( e => (options?.type === typeof e) ) : (arr || eia)) || eia;
+
+        if ( _fun === typeof options?.filter && options?.filter?.length >= 1 && options?.filter?.length <= 3 )
+        {
+            arr = arr.filter( options?.filter );
+        }
+
+        if ( options?.unique )
+        {
+            arr = [...(new Set( arr ))];
+        }
+
+        let comparator = options?.comparator;
+
+        if ( _fun === typeof comparator && comparator?.length === 2 )
+        {
+            arr = [].concat( (arr || eia) );
+            arr = arr.sort( comparator );
+        }
+
+        return arr || [];
+    };
+
     const TRANSFORMATIONS =
         {
             FILTER: "filter",
@@ -479,7 +628,7 @@ const $scope = constants?.$scope || function()
     {
         const functions = [].concat( ...(pFunction || [Predicates.IDENTITY]) ).filter( Predicates.IS_PREDICATE );
 
-        Predicates.MATCHES_ALL( ...(functions || [Predicates.IDENTITY]) );
+        return Predicates.MATCHES_ALL( ...(functions || [Predicates.IDENTITY]) );
     };
 
     let Filters = Object.assign( {}, Predicates );
@@ -594,8 +743,8 @@ const $scope = constants?.$scope || function()
             },
             DEFAULT: function( a, b, pType )
             {
-                let aa = Predicates.IS_NOT_NULL( a ) ? a : defaultOfSameType( b, pType );
-                let bb = Predicates.IS_NOT_NULL( b ) ? b : defaultOfSameType( a, pType );
+                let aa = Predicates.IS_NOT_NULL( a ) ? a : typeUtils.defaultFor( pType || typeof a );
+                let bb = Predicates.IS_NOT_NULL( b ) ? b : typeUtils.defaultFor( pType || typeof a );
 
                 return Comparators._compare( aa, bb );
             },
@@ -1025,22 +1174,22 @@ const $scope = constants?.$scope || function()
      * @param {Array} pArr
      * @returns {Array} a copy of the array with duplicates removed
      */
-    const unique = function( pArr )
+    const unique = function( ...pArr )
     {
-        let arr = [].concat( ...(pArr || []) );
+        let arr = [].concat( ...(asArray( pArr || [] )) );
 
         return [...(new Set( arr ))];
     };
 
-    const sortArray = function( pArr, pOrderBy )
+    const sortArray = function( pArr, pComparator )
     {
         let arr = [].concat( ...(pArr || []) );
 
-        let opts = { comparator: pOrderBy || "compareTo" };
+        let opts = { comparator: pComparator || "compareTo" };
 
-        if ( _fun === typeof pOrderBy )
+        if ( _fun === typeof pComparator )
         {
-            opts.comparator = pOrderBy;
+            opts.comparator = pComparator;
         }
 
         if ( _str === typeof opts?.comparator && "true" === opts?.comparator )
@@ -1103,155 +1252,6 @@ const $scope = constants?.$scope || function()
         }
 
         return arr || pArr;
-    };
-
-    const DEFAULT_AS_ARRAY_OPTIONS =
-        {
-            flatten: false,
-            splitOn: undefined,
-            filter: null,
-            sanitize: false,
-            type: null,
-            unique: false,
-            comparator: null
-        };
-
-    /**
-     * Returns an array based on its input.
-     * If its input *is* an array, just returns it, unmodified, unaliased
-     * If it is a string, then, depending on the options optionally specified, that string is either split on a value and resulting array is returned,or...
-     *                          the string is wrapped in an array literal and a one element array containing the string is returned.
-     * if the input is a primitive value, a one element array containing that value is returned.
-     * if the input is a function, that function is executed with the options as its argument and the result is passed back into this function
-     * if the input is an object, a new array is created and populated with the "first-level" properties of the object and then returned
-     * @param {any} pMaybeAnArray
-     * @param {object} pOptions
-     * @returns
-     */
-    const asArray = function( pMaybeAnArray, pOptions = DEFAULT_AS_ARRAY_OPTIONS )
-    {
-        const options = Object.assign( Object.assign( {}, DEFAULT_AS_ARRAY_OPTIONS ), (pOptions || EMPTY_OBJECT) );
-
-        let arr = (_ud === typeof pMaybeAnArray ? EMPTY_ARRAY : (_str === typeof pMaybeAnArray && _mt_str === pMaybeAnArray) ? [pMaybeAnArray] : (pMaybeAnArray || EMPTY_ARRAY));
-
-        if ( !Array.isArray( arr ) )
-        {
-            switch ( typeof arr )
-            {
-                case _obj:
-                    if ( !Array.isArray( arr ) )
-                    {
-                        arr = Object.values( arr );
-                    }
-                    break;
-
-                case _str:
-                    if ( !typeUtils.isUndefined( options?.splitOn ) && typeUtils.isString( options?.splitOn ) )
-                    {
-                        const sep = asString( options?.splitOn );
-                        arr = arr.split( sep ) || [arr];
-                    }
-                    else
-                    {
-                        arr = [arr];
-                    }
-                    break;
-
-                case _num:
-                case _big:
-                case _bool:
-                    arr = [arr];
-                    break;
-
-                case _fun:
-
-                    const isConstructor = function( pFunction ) { return _fun === typeof pFunction && /^class\s/.test( (_mt_str + Function.prototype.toString.call( pFunction, pFunction )).trim() ); };
-
-                    try
-                    {
-                        if ( isConstructor( arr ) )
-                        {
-                            const clazz = arr;
-
-                            arr = asArray( new clazz( options ), options ) || [];
-                        }
-                        else
-                        {
-                            const func = arr;
-
-                            arr = asArray( func( options ), options ) || [];
-                        }
-                    }
-                    catch( ex )
-                    {
-                        konsole.error( "Could not execute " + (arr?.name || arr), ex );
-                    }
-                    break;
-
-                default:
-                    if ( _ud !== (typeof arr[Symbol.iterator]) )
-                    {
-                        const returnValue = [];
-
-                        for( const value of arr )
-                        {
-                            if ( value )
-                            {
-                                if ( options && options.filter )
-                                {
-                                    if ( options.filter( value ) )
-                                    {
-                                        returnValue.push( value );
-                                    }
-                                }
-                                else
-                                {
-                                    returnValue.push( value );
-                                }
-                            }
-                        }
-
-                        arr = asArray( returnValue, options ) || [];
-                    }
-            } // end switch
-        } // end else
-
-        let eia = EMPTY_ARRAY;
-
-        const flatten = options?.flatten || false;
-
-        let flattenLevel = (options?.flatten?.level);
-
-        if ( isNaN( flattenLevel ) || flattenLevel <= 0 )
-        {
-            flattenLevel = Infinity;
-        }
-
-        arr = ((flatten && arr.flat) ? arr.flat( flattenLevel ) : arr) || eia;
-
-        arr = (options?.sanitize ? (arr || eia).filter( e => (_ud !== typeof e && null != e && !stringUtils.isEmpty( e )) ) : (arr || eia)) || eia;
-
-        arr = (options?.type ? (arr || eia).filter( e => (options?.type === typeof e) ) : (arr || eia)) || eia;
-
-        if ( _fun === typeof options?.filter && options?.filter?.length >= 1 && options?.filter?.length <= 3 )
-        {
-            arr = arr.filter( options?.filter );
-        }
-
-        if ( options?.unique )
-        {
-            arr = [...(new Set( arr ))];
-        }
-
-        let comparator = options?.comparator;
-
-        if ( _fun === typeof comparator && comparator?.length === 2 )
-        {
-            arr = [].concat( (arr || eia) );
-            arr = arr.sort( comparator );
-        }
-
-        return arr || [];
     };
 
     /**

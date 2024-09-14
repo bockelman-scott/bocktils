@@ -1,6 +1,6 @@
 /**
  * This statement imports the common utils modules:
- * Constants, StringUtils, ArrayUtils, ObjectUtils, and JsonUtils
+ * Constants, TypeUtils, StringUtils, ArrayUtils, ObjectUtils, and JsonUtils
  */
 const utils = require( "./CommonUtils" );
 
@@ -9,10 +9,13 @@ const utils = require( "./CommonUtils" );
  * @see ../utils/CommonUtils.js
  */
 const constants = utils?.constants || require( "../utils/Constants.js" );
+const typeUtils = utils?.typeUtils || require( "../utils/TypeUtils.js" );
 const stringUtils = utils?.stringUtils || require( "../utils/StringUtils.js" );
 const arrayUtils = utils?.arrayUtils || require( "../utils/ArrayUtils.js" );
 const objectUtils = utils?.objectUtils || require( "../utils/ObjectUtils.js" );
 const jsonUtils = utils?.jsonUtils || require( "../utils/JsonUtils.js" );
+
+const logUtils = require( "../utils/LogUtils.js" );
 
 (function makeModule()
 {
@@ -32,11 +35,86 @@ const jsonUtils = utils?.jsonUtils || require( "../utils/JsonUtils.js" );
     /**
      * This statement makes all the values exposed by the imported modules local variables in the current scope.
      */
-    constants.importUtilities( this, utils, constants, stringUtils, arrayUtils, objectUtils );
+    utils.importUtilities( this, utils, constants, stringUtils, arrayUtils, objectUtils );
+
+    class ActivityType
+    {
+        #name;
+        #code;
+        #description;
+
+        #error;
+
+        constructor( pName, pCode, pDescription )
+        {
+            this.#name = asString( pName );
+            this.#code = asString( pCode );
+            this.#description = asString( pDescription );
+        }
+
+        get name()
+        {
+            return this.#name;
+        }
+
+        get code()
+        {
+            return this.#code;
+        }
+
+        get description()
+        {
+            return this.#description;
+        }
+
+        get isError()
+        {
+            return this.#error;
+        }
+
+        set isError( value )
+        {
+            this.#error = value;
+        }
+    }
+
+    const REQUEST_RECEIVED = new ActivityType( "REQUEST_RECEIVED", "01", "A request was received" );
+    const REQUEST_PARSED = new ActivityType( "REQUEST_PARSED", "02", "A request was parsed" );
+
+    const RESPONSE_SENT = new ActivityType( "RESPONSE_SENT", "99", "A response was sent" );
+
+    class Activity
+    {
+        #payload;
+        #type;
+        #requestId;
+
+        constructor( pPayload, pType, pRequestId )
+        {
+            this.#payload = pPayload;
+            this.#type = pType;
+            this.#requestId = pRequestId;
+        }
+
+        get payload()
+        {
+            return this.#payload;
+        }
+
+        get type()
+        {
+            return this.#type;
+        }
+
+        get requestId()
+        {
+            return this.#requestId;
+        }
+    }
 
     /**
      * This class is used to create an object that will log activities
-     * to the local storage container and to the log file
+     * to a storage container and (optionally) to a log file
      *
      * Optionally, given a remote URI, it can post activities to a central server
      * for offsite observation
@@ -47,90 +125,77 @@ const jsonUtils = utils?.jsonUtils || require( "../utils/JsonUtils.js" );
      */
     class ActivityLogger
     {
-        constructor( pDatabase, pLogger, pRemoteUrl )
+        #database;
+        #logger;
+        #remoteUrl;
+        #defaultStorageCollection = "activities";
+        #storageOverrides = {};
+
+        constructor( pDatabase, pLogger, pStorageCollection, pRemoteUrl )
         {
-            this._database = pDatabase;
+            this.#database = pDatabase;
 
-            this._logger = pLogger;
+            this.#logger = pLogger;
 
-            this._remoteUrl = asString( pRemoteUrl, true ) || _mt_str;
+            this.#remoteUrl = asString( pRemoteUrl, true ) || _mt_str;
 
-            this._defaultStorageCollection = "activities";
+            this.#defaultStorageCollection = "activities";
 
-            this._storageOverrides = {};
+            this.#storageOverrides = {};
         }
 
         get logger()
         {
-            return this._logger || logUtils.findDefaultLogger() || console;
+            return this.#logger || logUtils.findDefaultLogger() || console;
         }
 
         async findLogger()
         {
-            return this._logger || await logUtils.findGlobalLogger();
+            return this.#logger || await logUtils.findGlobalLogger();
         }
 
         get remoteUrl()
         {
-            return this._remoteUrl;
-        }
-
-        get Types()
-        {
-            return Activity.Types;
+            return this.#remoteUrl;
         }
 
         async getDatabase()
         {
-            if ( this._database && this._database instanceof Database )
+            if ( this.#database && isFunction( this.#database?.insert ) )
             {
-                return Promise.resolve( this._database );
+                return Promise.resolve( this.#database );
             }
-
-            let { server, db } = await databaseFactoryModule.findDatabaseServer();
-
-            this._database = db;
-
-            return Promise.resolve( this._database );
+            return Promise.resolve( { insert: no_op } );
         }
 
         overrideStorageCollectionFor( pType, pCollectionName )
         {
             if ( !(isBlank( pType ) || isBlank( pCollectionName )) )
             {
-                this._storageOverrides[pType] = pCollectionName;
+                this.#storageOverrides[pType] = pCollectionName;
             }
         }
 
         getStorageCollectionFor( pType )
         {
-            return this._storageOverrides[pType] || this._defaultStorageCollection || "activities";
+            return this.#storageOverrides[pType] || this.#defaultStorageCollection || "activities";
         }
 
-        async logActivity( pRequestId, pActivityType, pPayload )
+        async logActivity( pPayload, pActivityType, pRequestId )
         {
-            let args = arguments;
-
-            let requestId = pRequestId;
-            let activityType = pActivityType;
             let payload = pPayload;
+            let activityType = pActivityType;
+            let requestId = pRequestId;
 
-            if ( args.length < 3 || stringUtils.isAllCaps( args[0], false ) )
-            {
-                requestId = this.requestId || pRequestId;
-                activityType = pRequestId || pActivityType;
-                payload = pActivityType || pPayload;
-            }
-
-            const activity = Activity.create( requestId, activityType, payload );
+            const activity = new Activity( payload, activityType, requestId );
 
             const db = await this.getDatabase();
 
-            if ( db )
+            if ( db && isFunction( db?.insert ) )
             {
                 try
                 {
-                    const collectionName = this.getStorageCollectionFor( pActivityType ) || this._defaultStorageCollection;
+                    const collectionName = this.getStorageCollectionFor( pActivityType ) || this.#defaultStorageCollection;
 
                     await db.insert( collectionName, activity );
                 }
@@ -149,42 +214,22 @@ const jsonUtils = utils?.jsonUtils || require( "../utils/JsonUtils.js" );
 
             if ( logger || this.logger )
             {
-                if ( activityType.includes( "ERROR" ) )
+                if ( activityType.isError )
                 {
-                    (logger || this.logger).error( activity?.message || activity );
+                    (logger || this.logger).error( activity );
                 }
                 else
                 {
-                    (logger || this.logger).info( activity?.message || activity );
+                    (logger || this.logger).info( activity );
                 }
             }
 
-            if ( !isBlank( this._remoteUrl ) )
+            if ( !isBlank( this.#remoteUrl ) )
             {
                 // TODO
             }
 
             return activity;
-        }
-
-        async logError( pRequestId, pError )
-        {
-            let args = arguments;
-
-            let requestId = pRequestId;
-
-            let activityType = this.Types.ERROR_ENCOUNTERED || this.Types.getValue( "ERROR_ENCOUNTERED" );
-
-            let payload = pError || { "message": "An error occurred while handling request, " + requestId || "--unidentified request--" };
-
-            if ( args.length < 2 )
-            {
-                requestId = this.requestId || pRequestId;
-
-                payload = pRequestId || { "message": "An error occurred while handling request, " + requestId || "--unidentified request--" };
-            }
-
-            return await this.logActivity( requestId, activityType, payload );
         }
 
         requestSpecificActivityLogger( pRequestId )

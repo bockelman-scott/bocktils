@@ -1,7 +1,21 @@
-const constants = require( "./Constants.js" );
-const stringUtils = require( "./StringUtils.js" );
-const arrayUtils = require( "./ArrayUtils.js" );
-const objectUtils = require( "./ObjectUtils.js" );
+/**
+ * This statement imports the common utils modules:
+ * Constants, TypeUtils, StringUtils, ArrayUtils, ObjectUtils, and JsonUtils
+ */
+const utils = require( "./CommonUtils" );
+
+/**
+ * Establish separate constants for each of the common utilities imported
+ * @see ../utils/CommonUtils.js
+ */
+const constants = utils?.constants || require( "../utils/Constants.js" );
+const typeUtils = utils?.typeUtils || require( "../utils/TypeUtils.js" );
+const stringUtils = utils?.stringUtils || require( "../utils/StringUtils.js" );
+const arrayUtils = utils?.arrayUtils || require( "../utils/ArrayUtils.js" );
+const objectUtils = utils?.objectUtils || require( "../utils/ObjectUtils.js" );
+const jsonUtils = utils?.jsonUtils || require( "../utils/JsonUtils.js" );
+
+const logUtils = require( "../utils/LogUtils.js" );
 
 const _ud = constants?._ud || "undefined";
 
@@ -12,10 +26,20 @@ const $scope = constants?.$scope || function()
 
 (function exposeBase64Utils()
 {
+    let _mt_str = constants._mt_str;
+
+    let _str = constants._str;
+
+    let asString = stringUtils.asString;
+
+    let lcase = stringUtils.lcase;
+
+    let asArray = arrayUtils.asArray;
+
     /**
      * This statement makes all the values exposed by the imported modules local variables in the current scope.
      */
-    constants.importUtilities( this, constants, stringUtils, arrayUtils, objectUtils );
+    utils.importUtilities( this, constants, typeUtils, stringUtils, arrayUtils, objectUtils );
 
     const INTERNAL_NAME = "__BOCK__BASE64_UTILS__";
 
@@ -24,19 +48,20 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
+
     const validEncodings = Object.freeze( ["ascii", "utf8", "utf-8", "utf16le", "utf-16le", "ucs2", "ucs-2", "base64", "base64url", "latin1", "binary", "hex"] );
 
     const cleanBase64 = function( pStr, pOptions )
     {
-        const options = Object.assign( { replacements: [[/ /g, "+"],[/ /,"+"]] }, pOptions || {} );
+        const options = Object.assign( { replacements: [[/ /g, "+"], [/ /, "+"]] }, pOptions || {} );
 
-        let replacements = (asArray( options.replacements || [[/ /g,"+"],[/ /, "+"]] ) || [[/ /g, "+"],[/ /,"+"]]).filter( e => Array.isArray( e ) && 2 === e.length );
+        let replacements = (asArray( options.replacements || [[/ /g, "+"], [/ /, "+"]] ) || [[/ /g, "+"], [/ /, "+"]]).filter( e => Array.isArray( e ) && 2 === e.length );
 
         replacements = ((replacements?.length || 0) <= 0) || asArray( replacements[0] || [] ).length !== 2 ? [[/ /g, "+"]] : replacements;
 
         let str = asString( pStr, true ).replaceAll( /[\r\n]+/g, _mt_str );
 
-        str = asString( str, true ).replaceAll( new RegExp("\\\\r|\\\\n", "g"), _mt_str );
+        str = asString( str, true ).replaceAll( new RegExp( "\\\\r|\\\\n", "g" ), _mt_str );
 
         for( let i = 0, n = replacements.length; i < n; i++ )
         {
@@ -103,10 +128,10 @@ const $scope = constants?.$scope || function()
     {
         constructor( pStr, pBytes, pEncoding )
         {
-            this._text = cleanBase64( stringUtils.asString( pStr, true ) );
+            this._text = cleanBase64( asString( pStr, true ) );
             this._bytes = pBytes || new Uint8Array( this.toBinary( this._text ) );
 
-            let encoding = stringUtils.asString( pEncoding, true ).toLowerCase();
+            let encoding = asString( pEncoding, true ).toLowerCase();
             encoding = validEncodings.includes( encoding ) ? encoding : "utf-8";
 
             this._encoding = encoding;
@@ -116,26 +141,26 @@ const $scope = constants?.$scope || function()
         {
             let str = (_str === typeof pStr) ? (pStr.replaceAll( /[\r\n]/g, _mt_str )) : pStr;
 
-            str = stringUtils.asString( str, true ) || this._text || constants._mt_str;
+            str = asString( str, true ) || this._text || constants._mt_str;
 
             return cleanBase64( str, pOptions );
         }
 
         isValid( pStr )
         {
-            const str = stringUtils.asString( pStr, false ) || this._text || constants._mt_str;
+            const str = asString( pStr, false ) || this._text || constants._mt_str;
             return isValidBase64( str );
         }
 
         toBinary( pStr, pOptions )
         {
-            const str = this.clean( stringUtils.asString( pStr, true ) || this._text || constants._mt_str, pOptions );
+            const str = this.clean( asString( pStr, true ) || this._text || constants._mt_str, pOptions );
             return toBytes( str );
         }
 
         toBuffer( pStr )
         {
-            const str = this.clean( stringUtils.asString( pStr, true ) || this._text || constants._mt_str );
+            const str = this.clean( asString( pStr, true ) || this._text || constants._mt_str );
             return typedArrayToBuffer( this.toBinary( str ) );
         }
 

@@ -196,3 +196,23 @@ test( "asArray with a comparator",
           expect( actual ).toEqual( expected );
       } );
 
+
+test( "unique array from varargs",
+      () =>
+      {
+          let actual = arrayUtils.unique( "a", "b", "a", "c", "d", "b", "c");
+
+          let expected = ["a", "b", "c", "d"];
+
+          expect( actual ).toEqual( expected );
+      } );
+
+test( "unique array from input",
+      () =>
+      {
+          let actual = arrayUtils.unique( ["a", "b", "a", "c", "d", "b", "c"] );
+
+          let expected = ["a", "b", "c", "d"];
+
+          expect( actual ).toEqual( expected );
+      } );

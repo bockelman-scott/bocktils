@@ -1,4 +1,5 @@
 const constants = require( "./Constants.js" );
+const typeUtils = require( "./TypeUtils.js" );
 const stringUtils = require( "./StringUtils.js" );
 const arrayUtils = require( "./ArrayUtils.js" );
 const objectUtils = require( "./ObjectUtils.js" );
@@ -56,6 +57,7 @@ const $scope = constants?.$scope || function()
         };
 
     mod = Object.assign( mod, constants );
+    mod = Object.assign( mod, typeUtils );
     mod = Object.assign( mod, stringUtils );
     mod = Object.assign( mod, arrayUtils );
     mod = Object.assign( mod, objectUtils );
