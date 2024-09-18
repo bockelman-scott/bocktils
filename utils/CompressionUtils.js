@@ -1,10 +1,29 @@
-const constants = require( "./Constants.js" );
-const stringUtils = require( "./StringUtils.js" );
-const arrayUtils = require( "./ArrayUtils.js" );
-const objectUtils = require( "./ObjectUtils.js" );
+/**
+ * This statement imports the common utils modules:
+ * Constants, TypeUtils, StringUtils, ArrayUtils, ObjectUtils, and JsonUtils
+ */
+const utils = require( "./CommonUtils" );
+
+/**
+ * Establish separate constants for each of the common utilities imported
+ * @see ../utils/CommonUtils.js
+ */
+const constants = utils?.constants || require( "../utils/Constants.js" );
+const typeUtils = utils?.typeUtils || require( "../utils/TypeUtils.js" );
+const stringUtils = utils?.stringUtils || require( "../utils/StringUtils.js" );
+const arrayUtils = utils?.arrayUtils || require( "../utils/ArrayUtils.js" );
+const objectUtils = utils?.objectUtils || require( "../utils/ObjectUtils.js" );
+const jsonUtils = utils?.jsonUtils || require( "../utils/JsonUtils.js" );
+
+const logUtils = require( "../utils/LogUtils.js" );
 
 const admZip = require( "adm-zip" );
+
 const zLib = require( "zlib" );
+
+const konsole = console || {};
+
+const _ud = constants?._ud || "undefined";
 
 const $scope = constants?.$scope || function()
 {

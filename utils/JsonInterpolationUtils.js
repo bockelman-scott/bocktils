@@ -4,6 +4,7 @@ const arrayUtils = require( "./ArrayUtils.js" );
 const objectUtils = require( "./ObjectUtils.js" );
 
 let _ud = constants._ud || "undefined";
+
 let _mt_str = constants._mt_str || "";
 
 const $scope = constants?.$scope || function()

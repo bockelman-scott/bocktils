@@ -1,5 +1,19 @@
 const utils = require( "./CommonUtils.js" );
 
+/**
+ * Establish separate constants for each of the common utilities imported
+ * @see ../utils/CommonUtils.js
+ */
+const constants = utils?.constants || require( "../utils/Constants.js" );
+const typeUtils = utils?.typeUtils || require( "../utils/TypeUtils.js" );
+const stringUtils = utils?.stringUtils || require( "../utils/StringUtils.js" );
+const arrayUtils = utils?.arrayUtils || require( "../utils/ArrayUtils.js" );
+const objectUtils = utils?.objectUtils || require( "../utils/ObjectUtils.js" );
+
+const konsole = console || {};
+
+const _ud = constants?._ud || "undefined";
+
 const $scope = utils?.$scope || function()
 {
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
@@ -15,8 +29,6 @@ const $scope = utils?.$scope || function()
     {
         return $scope()[INTERNAL_NAME];
     }
-
-    const constants = utils.constants || this.constants;
 
     const IllegalArgumentError = constants.IllegalArgumentError;
 
@@ -232,7 +244,7 @@ const $scope = utils?.$scope || function()
 
         getValue( pKey )
         {
-            return this[pKey] || this[ucase(pKey)] || this._map.get( pKey ) || ( isNumeric( pKey ) ? this._array[asInt(pKey)] : null );
+            return this[pKey] || this[ucase( pKey )] || this._map.get( pKey ) || (isNumeric( pKey ) ? this._array[asInt( pKey )] : null);
         }
 
         toString()

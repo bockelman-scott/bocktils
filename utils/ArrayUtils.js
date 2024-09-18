@@ -220,82 +220,53 @@ const $scope = constants?.$scope || function()
         return arr || [];
     };
 
+    const calculateLength = function( pElem )
+    {
+        let len;
+
+        switch ( typeof pElem )
+        {
+            case _ud:
+                len = 0;
+                break;
+
+            case _str:
+                len = pElem?.length;
+                break;
+
+            case _num:
+            case _big:
+                len = (asString( _mt_str + pElem || _mt_str ))?.length;
+                break;
+
+            case _obj:
+                if ( null == pElem )
+                {
+                    len = 0;
+                    break;
+                }
+                if ( Array.isArray( pElem ) )
+                {
+                    len = pElem?.length;
+                    break;
+                }
+                len = Object.keys( pElem ).length;
+                break;
+
+            default:
+                len = 0;
+                break;
+        }
+
+        return len;
+    };
+
     const TRANSFORMATIONS =
         {
             FILTER: "filter",
             MAP: "map",
             SORT: "sort"
         };
-
-    /**
-     * Returns the default initialization value for a value of the type of the value specified or the type specified
-     *
-     * @param pVal the value whose type is to be used to calculate the default value to return
-     * @param pType the type string to be used to calculate the default value to return when the first argument is null or undefined
-     *
-     * @returns {undefined|bigint|number|null|string|*|*[]|{}|(function())|boolean}
-     */
-    const defaultOfSameType = function( pVal, pType )
-    {
-        switch ( typeof pVal )
-        {
-            case _ud:
-                switch ( pType )
-                {
-                    case _ud:
-                        return undefined;
-
-                    case _str:
-                        return _mt_str;
-
-                    case _bool:
-                        return false;
-
-                    case _num:
-                        return 0;
-
-                    case _big:
-                        return 0n;
-
-                    case _obj:
-                        return ((null == pVal) ? ("Array" === pType ? [] : {}) : (Array.isArray( pVal ) || "Array" === pType) ? [] : {});
-
-                    case _fun:
-                        return function() {};
-
-                    case _symbol:
-                        return Symbol.prototype;
-
-                    default:
-                        return null;
-                }
-                break;
-
-            case _str:
-                return _mt_str;
-
-            case _bool:
-                return false;
-
-            case _num:
-                return 0;
-
-            case _big:
-                return 0n;
-
-            case _obj:
-                return ((null == pVal) ? ("Array" === pType ? [] : {}) : (Array.isArray( pVal ) || "Array" === pType) ? [] : {});
-
-            case _fun:
-                return function() {};
-
-            case _symbol:
-                return Symbol.prototype;
-
-            default:
-                return null;
-        }
-    };
 
     const Predicates =
         {
@@ -689,47 +660,6 @@ const $scope = constants?.$scope || function()
                 };
             }
         };
-
-    const calculateLength = function( pElem )
-    {
-        let len;
-
-        switch ( typeof pElem )
-        {
-            case _ud:
-                len = 0;
-                break;
-
-            case _str:
-                len = pElem?.length;
-                break;
-
-            case _num:
-            case _big:
-                len = (asString( _mt_str + pElem || _mt_str ))?.length;
-                break;
-
-            case _obj:
-                if ( null == pElem )
-                {
-                    len = 0;
-                    break;
-                }
-                if ( Array.isArray( pElem ) )
-                {
-                    len = pElem?.length;
-                    break;
-                }
-                len = Object.keys( pElem ).length;
-                break;
-
-            default:
-                len = 0;
-                break;
-        }
-
-        return len;
-    };
 
     const Comparators =
         {
@@ -1133,21 +1063,37 @@ const $scope = constants?.$scope || function()
         return arr;
     };
 
+    const DEFAULT_POPULATED_ARRAY_OPTIONS =
+        {
+            minimumLength: 1,
+            acceptArrayLike: false,
+            acceptObjects: false
+        };
     /**
      * Returns true if the specified object is an array and has at least one element
      * @param pArr (array or indexed object -- that is, something with a length property and the ability to address members via an integer key)
-     * @param pMinimumLength (optional) the minimum length pArr must have to be considered "populated"; defaults to 1
+     * @param pOptions
      * @returns {boolean}
      */
-    const isPopulatedArray = function( pArr, pMinimumLength )
+    const isPopulatedArray = function( pArr, pOptions = DEFAULT_POPULATED_ARRAY_OPTIONS )
     {
-        const minLength = Math.max( 1, asInt( asString( pMinimumLength ) || 1 ) );
+        const minLength = Math.max( 1, asInt( asString( pOptions?.minimumLength, true ) || 1 ) );
 
         const arr = !((_ud === typeof pArr) || (null === pArr)) ? (pArr || []) : [];
 
-        const isIndexedObject = (Array.isArray( pArr )) || Object.hasOwn( arr, "length" );
+        if ( true === pOptions?.acceptArrayLike )
+        {
+            const isIndexedObject = (Array.isArray( pArr )) || Object.hasOwn( arr, "length" );
 
-        return isIndexedObject && (minLength <= (arr?.length || 0));
+            return isIndexedObject && (minLength <= (arr?.length || 0));
+        }
+
+        if ( true === pOptions?.acceptObjects && typeUtils.isObject( pArr ) )
+        {
+            return (Object.keys( pArr )?.length || 0) >= minLength;
+        }
+
+        return (Array.isArray( pArr )) && pArr.length >= minLength;
     };
 
     /**
@@ -1166,8 +1112,28 @@ const $scope = constants?.$scope || function()
         let candidates = (pCandidates || []).filter( Predicates.MATCHES_ALL( Predicates.IS_ARRAY, Predicates.IS_POPULATED_OBJECT ) );
 
         // if any of the candidates matched the filter, return the first of these, otherwise, return an empty array
-        return isPopulatedArray( candidates, 1 ) ? candidates[0] : [];
+        return isPopulatedArray( candidates ) ? candidates[0] : [];
     };
+
+    /**
+     * Returns the last array specified that has a length > 0
+     * or a zero-length array if none of the candidates are arrays with a length > 0
+     *
+     * @param{Array<Array|any>} pCandidates an array of values, each expected to be an Array
+     *
+     * @returns {Array} the last array specified that has a length > 0
+     * or a zero-length array if none of the candidates are arrays with a length > 0
+     */
+    const lastPopulatedArray = function( ...pCandidates )
+    {
+        // filter the arguments so the resulting array is either empty or holds at least one array matching the filter,
+        // where the filter matches only elements that are arrays with one or more elements
+        let candidates = (pCandidates || []).filter( Predicates.MATCHES_ALL( Predicates.IS_ARRAY, Predicates.IS_POPULATED_OBJECT ) );
+
+        // if any of the candidates matched the filter, return the first of these, otherwise, return an empty array
+        return isPopulatedArray( candidates ) ? candidates[candidates.length - 1] : [];
+    };
+
 
     /**
      * Returns a copy of an array with duplicate elements removed
@@ -1739,6 +1705,7 @@ const $scope = constants?.$scope || function()
             isEmptyArray,
             isPopulatedArray,
             firstPopulatedArray,
+            lastPopulatedArray,
             sortArray,
             copyArray,
             calculateLength,

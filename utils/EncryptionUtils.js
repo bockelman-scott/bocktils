@@ -5,7 +5,6 @@ const crypto = require( "crypto" );
 const utils = require( "./CommonUtils.js" );
 
 const dateUtils = require( "./DateUtils.js" );
-const { encrypt, decrypt } = require( "adm-zip/methods/zipcrypto" );
 
 const constants = utils?.constants || require( "./Constants.js" );
 
@@ -23,7 +22,7 @@ const $scope = constants?.$scope || function()
     let arrayUtils = utils.arrayUtils;
     let objectUtils = utils.objectUtils;
 
-    let importUtilities = constants?.importUtilities;
+    let importUtilities = utils?.importUtilities;
 
     let _ud = constants._ud || "undefined";
     let _str = constants._str || "string";
@@ -33,7 +32,6 @@ const $scope = constants?.$scope || function()
 
     let asString = stringUtils.asString || (function( s ) { return (_mt_str + s).trim(); });
     let isBlank = stringUtils.isBlank || (function( s ) { return null == s || _mt_str === asString( s, true ).trim(); });
-
 
 
     const mod =
@@ -46,8 +44,8 @@ const $scope = constants?.$scope || function()
             {
                 return pString;
             },
-            encode: encrypt,
-            decode: decrypt
+            encode: this.encrypt,
+            decode: this.decrypt
         };
 
 

@@ -267,6 +267,31 @@
         return Object.freeze( variables );
     };
 
+    const importUtilities = function( pScope, ...pUtils )
+    {
+        const scope = pScope || $scope();
+
+        const utils = ([].concat( (pUtils || []) ));
+
+        let obj = {};
+
+        for( let i = 0, n = utils?.length; i < n; i++ )
+        {
+            const util = utils[i];
+
+            try
+            {
+                obj = Object.assign( scope, (util || {}) );
+            }
+            catch( ex )
+            {
+                console.error( "Could not import " + util?.name + " into scope", scope, ex.message );
+            }
+        }
+
+        return obj;
+    };
+
     /**
      * An array of this module's dependencies
      * which are re-exported with this module,
@@ -277,6 +302,323 @@
         {
             // this module has no dependencies
         };
+
+    const DEFAULT_COMPARATOR_OPTIONS =
+        {
+            strict: true,
+            nullsFirst: true,
+            caseSensitive: true,
+            trimStrings: false,
+            reverse: false
+        };
+
+    /* abstract*/
+    class ComparatorFactory
+    {
+        #type;
+        #strict = true;
+        #nullsFirst = true;
+        #reverse = false;
+        #caseSensitive = true;
+        #trimStrings = false;
+
+        #options = DEFAULT_COMPARATOR_OPTIONS;
+
+        constructor( pType, pOptions = DEFAULT_COMPARATOR_OPTIONS )
+        {
+            this.#type = pType || _obj;
+
+            this.#options = Object.assign( Object.assign( {}, DEFAULT_COMPARATOR_OPTIONS ), pOptions || {} );
+
+            const options = this.#options;
+
+            this.#strict = false !== options?.strict;
+            this.#nullsFirst = false !== options?.nullsFirst;
+            this.#caseSensitive = false !== options?.caseSensitive;
+            this.#trimStrings = false !== options?.trimStrings;
+            this.#reverse = true === options?.reverse;
+        }
+
+        get type()
+        {
+            return this.#type;
+        }
+
+        set type( value )
+        {
+            this.#type = !!value;
+        }
+
+        get options()
+        {
+            return Object.assign( {}, this.#options );
+        }
+
+        get strict()
+        {
+            return true === this.#strict;
+        }
+
+        set strict( value )
+        {
+            this.#strict = !!value;
+        }
+
+        get nullsFirst()
+        {
+            return this.#nullsFirst;
+        }
+
+        set nullsFirst( value )
+        {
+            this.#nullsFirst = !!value;
+        }
+
+        get caseSensitive()
+        {
+            return this.#caseSensitive;
+        }
+
+        set caseSensitive( value )
+        {
+            this.#caseSensitive = !!value;
+        }
+
+        get trimStrings()
+        {
+            return this.#trimStrings;
+        }
+
+        set trimStrings( value )
+        {
+            this.#trimStrings = !!value;
+        }
+
+        get reverse()
+        {
+            return this.#reverse;
+        }
+
+        set reverse( value )
+        {
+            this.#reverse = !!value;
+        }
+
+        _compare( pA, pB, pOptions )
+        {
+            const options = Object.assign( Object.assign( {}, DEFAULT_COMPARATOR_OPTIONS ), pOptions || {} );
+
+            let strict = (true === options?.strict) || this.strict;
+
+            let isExpectedType = this.matchesType( pA, pB );
+
+            if ( strict && !isExpectedType )
+            {
+                return 0;
+            }
+
+            let a = pA;
+            let b = pB;
+
+            let comp = 0;
+
+            if ( isExpectedType )
+            {
+                switch ( this.type )
+                {
+                    case _ud:
+                        return 0;
+
+                    case _str:
+
+                        a = this.trimStrings ? (_mt_str + pA).trim() : pA;
+                        b = this.trimStrings ? (_mt_str + pB).trim() : pB;
+
+                        if ( !this.caseSensitive )
+                        {
+                            a = (_mt_str + a).toUpperCase();
+                            b = (_mt_str + b).toUpperCase();
+                        }
+
+                        comp = a > b ? 1 : a < b ? -1 : 0;
+
+                        break;
+
+                    case _num:
+                    case _big:
+
+                        if ( isNaN( pA ) )
+                        {
+                            if ( isNaN( pB ) )
+                            {
+                                return 0;
+                            }
+                            return (this.nullsFirst ? -1 : 1);
+                        }
+                        else if ( isNaN( pB ) )
+                        {
+                            return (this.nullsFirst ? 1 : -1);
+                        }
+
+                        comp = pA > pB ? 1 : pA < pB ? -1 : 0;
+
+                        break;
+
+                    case _bool:
+                        a = (pA ? 1 : -1);
+                        b = (pB ? 1 : -1);
+
+                        comp = a > b ? 1 : a < b ? -1 : 0;
+
+                        break;
+
+                    case _fun:
+                        return 0;
+
+                    case _symbol:
+                        return 0;
+
+                    case _obj:
+
+                        if ( null === pA )
+                        {
+                            if ( null === pB )
+                            {
+                                return 0;
+                            }
+                            return (this.nullsFirst ? -1 : 1);
+                        }
+                        else if ( null === pB )
+                        {
+                            return (this.nullsFirst ? 1 : -1);
+                        }
+
+                        if ( _fun === typeof pA?.compareTo )
+                        {
+                            comp = pA.compareTo( pB ) || 0;
+                            break;
+                        }
+
+                        if ( Array.isArray( pA ) && Array.isArray( pB ) )
+                        {
+                            let comp = pA.length > pB.length ? -1 : pA.length < pB.length ? 1 : 0;
+
+                            if ( 0 === comp )
+                            {
+                                for( let i = 0, n = pA.length; i < n && 0 === comp; i++ )
+                                {
+                                    comp = this._compare( pA[i], pB[i] );
+                                }
+                            }
+                            break;
+                        }
+
+                        if ( pA instanceof Date && pB instanceof Date )
+                        {
+                            comp = pA > pB ? 1 : pA < pB ? -1 : 0;
+                            break;
+                        }
+
+                        for( let prop in pA )
+                        {
+                            let propValue = pA[prop];
+                            let otherValue = pB[prop];
+
+                            comp = this._compare( propValue, otherValue, options );
+
+                            if ( 0 !== comp )
+                            {
+                                break;
+                            }
+                        }
+
+                        break;
+
+                    default:
+                        comp = 0;
+                }
+
+                return this.reverse ? -comp : comp;
+            }
+
+            return 0;
+        }
+
+        comparator()
+        {
+            const me = this;
+
+            return function( pA, pB )
+            {
+                return me._compare( pA, pB, me.options );
+            };
+        }
+
+        matchesType( pA, pB )
+        {
+            let typeofA = typeof pA;
+            let typeofB = typeof pB;
+
+            return (typeofA === typeofB) && (typeofA === this.type || pA instanceof this.type) && (typeofB === this.type || pB instanceof this.type);
+        }
+
+        nullsFirstComparator()
+        {
+            const options =
+                {
+                    type: this.type,
+                    strict: this.strict,
+                    nullsFirst: true,
+                    caseSensitive: this.caseSensitive,
+                    trimStrings: this.trimStrings,
+                    reverse: this.reverse
+                };
+            return new ComparatorFactory( this.type, options );
+        }
+
+        nullsLastComparator()
+        {
+            const options =
+                {
+                    type: this.type,
+                    strict: this.strict,
+                    nullsFirst: false,
+                    caseSensitive: this.caseSensitive,
+                    trimStrings: this.trimStrings,
+                    reverse: this.reverse
+                };
+            return new ComparatorFactory( this.type, options );
+        }
+
+        caseInsensitiveComparator()
+        {
+            const options =
+                {
+                    type: this.type,
+                    strict: this.strict,
+                    nullsFirst: this.nullsFirst,
+                    caseSensitive: false,
+                    trimStrings: this.trimStrings,
+                    reverse: this.reverse
+                };
+            return new ComparatorFactory( this.type, options );
+        }
+
+        reverseComparator()
+        {
+            const options =
+                {
+                    type: this.type,
+                    strict: this.strict,
+                    nullsFirst: this.nullsFirst,
+                    caseSensitive: this.caseSensitive,
+                    trimStrings: this.trimStrings,
+                    reverse: true
+                };
+            return new ComparatorFactory( this.type, options );
+        }
+
+    }
 
     const mod =
         {
@@ -386,7 +728,10 @@
             {
                 return true;
             },
-            dependencies
+            dependencies,
+            importUtilities,
+            classes: { ComparatorFactory, IllegalArgumentError },
+            ComparatorFactory
         };
 
     mod.clone = function()

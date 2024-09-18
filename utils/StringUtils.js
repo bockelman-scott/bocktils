@@ -96,6 +96,8 @@ const $scope = constants?.$scope || function()
     let _obj = constants._obj || "object";
     let _symbol = constants._symbol || "symbol";
 
+    let ComparatorFactory = constants.ComparatorFactory || constants.classes?.ComparatorFactory;
+
     /**
      * This statement makes the functions in the constants module available as local functions.
      */
@@ -2292,6 +2294,48 @@ const $scope = constants?.$scope || function()
 
     String.prototype.tidy = tidy;
 
+    class StringComparatorFactory extends ComparatorFactory
+    {
+        constructor( pOptions )
+        {
+            super( _str, pOptions );
+        }
+
+        _compare( pA, pB, pOptions )
+        {
+            let comp = super._compare( pA, pB, pOptions );
+
+            if ( 0 === comp )
+            {
+                let a = asString( pA, this.trimStrings );
+                let b = asString( pB, this.trimStrings );
+
+                if ( !this.caseSensitive )
+                {
+                    a = ucase( a );
+                    b = ucase( b );
+                }
+
+                comp = a > b ? 1 : a < b ? -1 : 0;
+
+                if ( 0 === comp )
+                {
+                    a = asString( pA, this.trimStrings );
+                    b = asString( pB, this.trimStrings );
+
+                    comp = a > b ? 1 : a < b ? -1 : 0;
+                }
+
+                if ( this.reverse )
+                {
+                    comp = -comp;
+                }
+            }
+
+            return comp;
+        }
+    }
+
     const mod =
         {
             dependencies,
@@ -2343,7 +2387,9 @@ const $scope = constants?.$scope || function()
             toCString,
             fromCString,
             formatMessage,
-            interpolate
+            interpolate,
+            classes: { StringComparatorFactory },
+            StringComparatorFactory
         };
 
     if ( _ud !== typeof module )

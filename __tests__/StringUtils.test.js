@@ -19,6 +19,8 @@ function testAsString( pStr, pTrim, pOptions )
     return asString( pStr, pTrim, pOptions );
 }
 
+let strings = ["abc", "abd", "bcd", "cbd", "dbc", "acb", "dogs", "cats", "lions", "lion", "cat", "Dog", "Cat", "ABC", "AbC", "CAB", "DDD", "CBD", "DBC", "ACb", "DOGS", "DoGs", "CATS", "cAtS", "   abc", "abc   ", "   ", "", "   CAB   "];
+
 test( "asString(string) returns the input string",
       () => expect( "abc" === testAsString( "abc" ) ).toBe( true )
 );
@@ -1693,5 +1695,107 @@ test( "tidy('Abc', {functions:[reverse]}) === 'cbA'",
       {
           let s = "Abc";
           expect( stringUtils.tidy( s, { functions: [reverse] } ) ).toEqual( "cbA" );
+      } );
+
+test( "StringComparator - natural order",
+      () =>
+      {
+          let comparator = new stringUtils.StringComparatorFactory().comparator();
+
+          let arr = [].concat( strings );
+          let arr2 = [].concat( strings );
+
+          arr = arr.sort();
+          arr2 = arr2.sort( comparator );
+
+          expect( arr2 ).toEqual( arr2 );
+
+          // console.log( "arr: ", arr, "arr2: ", arr2, "strings: ", strings );
+      } );
+
+test( "StringComparator - natural order, reversed",
+      () =>
+      {
+          let comparator = new stringUtils.StringComparatorFactory( { reverse: true } ).comparator();
+
+          let arr = [].concat( strings );
+          let arr2 = [].concat( strings );
+
+          arr = arr.sort();
+          arr2 = arr2.sort( comparator );
+
+          expect( arr2 ).toEqual( arr.reverse() );
+
+          // console.log( "arr: ", arr, "arr2: ", arr2, "strings: ", strings );
+      } );
+
+test( "StringComparator - case insensitive",
+      () =>
+      {
+          let options = { caseSensitive: false };
+          let comparator = new stringUtils.StringComparatorFactory( options ).comparator();
+
+          let arr = [].concat( strings );
+
+          arr = arr.sort( comparator );
+
+          expect( arr ).toEqual( [
+                                     "", "   ", "   abc",
+                                     "   CAB   ", "ABC", "AbC",
+                                     "abc", "abc   ", "abd",
+                                     "ACb", "acb", "bcd",
+                                     "CAB", "Cat", "cat",
+                                     "CATS", "cAtS", "cats",
+                                     "CBD", "cbd", "DBC",
+                                     "dbc", "DDD", "Dog",
+                                     "DOGS", "DoGs", "dogs",
+                                     "lion", "lions"
+                                 ] );
+      } );
+
+test( "StringComparator - case insensitive, ignore whitespace",
+      () =>
+      {
+          let options = { caseSensitive: false, trimStrings: true };
+          let comparator = new stringUtils.StringComparatorFactory( options ).comparator();
+
+          let arr = [].concat( strings );
+
+          arr = arr.sort( comparator );
+
+          expect( arr ).toEqual( [
+                                     "   ",
+                                     "",
+                                     "ABC",
+                                     "AbC",
+                                     "abc",
+                                     "   abc",
+                                     "abc   ",
+                                     "abd",
+                                     "ACb",
+                                     "acb",
+                                     "bcd",
+                                     "CAB",
+                                     "   CAB   ",
+                                     "Cat",
+                                     "cat",
+                                     "CATS",
+                                     "cAtS",
+                                     "cats",
+                                     "CBD",
+                                     "cbd",
+                                     "DBC",
+                                     "dbc",
+                                     "DDD",
+                                     "Dog",
+                                     "DOGS",
+                                     "DoGs",
+                                     "dogs",
+                                     "lion",
+                                     "lions"
+                                 ] );
+
+          // console.log( arr );
+
       } );
 

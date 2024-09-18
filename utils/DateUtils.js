@@ -1,13 +1,20 @@
 const utils = require( "./CommonUtils.js" );
 
-let constants = utils.constants;
-let stringUtils = utils.stringUtils;
-let arrayUtils = utils.arrayUtils;
-let objectUtils = utils.objectUtils;
+/**
+ * Establish separate constants for each of the common utilities imported
+ * @see ../utils/CommonUtils.js
+ */
+const constants = utils?.constants || require( "../utils/Constants.js" );
+const typeUtils = utils?.typeUtils || require( "../utils/TypeUtils.js" );
+const stringUtils = utils?.stringUtils || require( "../utils/StringUtils.js" );
+const arrayUtils = utils?.arrayUtils || require( "../utils/ArrayUtils.js" );
+const objectUtils = utils?.objectUtils || require( "../utils/ObjectUtils.js" );
+
+const konsole = console || {};
 
 const _ud = constants?._ud || "undefined";
 
-const $scope = constants?.$scope || function()
+const $scope = utils?.$scope || function()
 {
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };
@@ -31,7 +38,7 @@ const $scope = constants?.$scope || function()
             isDate = objectUtils.isDate || function( pVal ) { return pVal instanceof Date; }
         } = utils;
 
-    constants.importUtilities( this, constants, stringUtils, arrayUtils, objectUtils );
+    utils.importUtilities( this, constants, stringUtils, arrayUtils, objectUtils );
 
     const INTERNAL_NAME = "__BOCK__DATE_UTILS__";
 

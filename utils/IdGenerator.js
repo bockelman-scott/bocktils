@@ -1,40 +1,38 @@
-// noinspection SpellCheckingInspection
+const utils = require( "./CommonUtils.js" );
 
-const constants = require( "./Constants.js" );
-const stringUtils = require( "./StringUtils.js" );
-const arrayUtils = require( "./ArrayUtils.js" );
-const objectUtils = require( "./ObjectUtils.js" );
+/**
+ * Establish separate constants for each of the common utilities imported
+ * @see ../utils/CommonUtils.js
+ */
+const constants = utils?.constants || require( "./Constants.js" );
+const typeUtils = utils?.typeUtils || require( "./TypeUtils.js" );
+const stringUtils = utils?.stringUtils || require( "./StringUtils.js" );
+const arrayUtils = utils?.arrayUtils || require( "./ArrayUtils.js" );
+const objectUtils = utils?.objectUtils || require( "./ObjectUtils.js" );
 
-const baseEntitiesModule = require( "../entities/AbstractEntity.js" );
+const konsole = console || {};
 
-const SimpleValue = baseEntitiesModule.SimpleValue;
+const _ud = constants?._ud || "undefined";
 
-const $scope = constants?.$scope || function()
+const $scope = utils?.$scope || function()
 {
-    return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
+    return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };
 
 const logUtils = require( "./LogUtils.js" );
 
 (function exposeGenerator()
 {
-    constants.importUtilities( this, constants, stringUtils, arrayUtils, objectUtils );
+    utils.importUtilities( this, constants, stringUtils, arrayUtils, objectUtils );
 
-    const INTERNAL_NAME = "__BOCK_CLAIM_ID_GENERATOR__";
+    const INTERNAL_NAME = "__BOCK_UTILS_ID_GENERATOR__";
 
     if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
     {
         return $scope()[INTERNAL_NAME];
     }
 
-    /**
-     * Uniquely identifies the SyncEngage 'instance'
-     * Each instance of a PMS will be paired with a unique instance of SyncEngage,
-     * so, this ID is an NDS-specific practice location identifier, for all intents and purposes
-     *
-     * This is prepended to each claim we process.
-     */
-    const defaultPrefix = "SE0001";
+    const defaultPrefix = "";
 
     // noinspection SpellCheckingInspection
     /**
@@ -48,7 +46,46 @@ const logUtils = require( "./LogUtils.js" );
 
     const defaultLast = "ZZZZZZ";
 
-    const makeGenerator = async function( pLocationId, pStorageHandler, pOptions )
+
+    const readLastValue = async function( pDatastore, pTableOrCollection, pKeyColumnOrProperty, pKeyValue, pValueColumnOrProperty )
+    {
+        let last = defaultLast;
+
+        const db = (pDatastore || pStorageHandler);
+
+        const dbCollection = pTableOrCollection || "value_store";
+        const dbKey = pKeyColumnOrProperty || "key";
+        const dbKeyValue = pKeyValue;
+        const dbValueKey = pValueColumnOrProperty;
+
+        try
+        {
+            const queryOptions =
+                {
+                    fields: "value",
+                    conditions: { "key": dbLastValueLookupKey }
+                };
+
+            let results = await db.select( dbCollection, queryOptions );
+
+            results = asArray( results || [] ) || [];
+
+            if ( results?.length )
+            {
+                last = asString( asString( (results[0]?.value || results), true ) || last, true );
+            }
+        }
+        catch( ex )
+        {
+            console.error( "An error occurred while reading the last generated claim ID", logUtils.err( ex ) );
+        }
+
+        last = ucase( asString( last, true ) );
+
+        return last;
+    };
+
+    const makeGenerator = async function( pPrefix, pStorageHandler, pOptions )
     {
         /**
          * This is an optional argument to define the 'seed' values,
@@ -60,11 +97,11 @@ const logUtils = require( "./LogUtils.js" );
         /**
          * This is the instance specific prefix, a.k.a. LocationID
          */
-        const prefix = asString( pLocationId ) || asString( asString( options?.prefix, true ) || defaultPrefix, true );
+        const prefix = asString( pPrefix ) || asString( asString( options?.prefix, true ) || defaultPrefix, true );
 
         /**
          * This is an optional separator that, if specified is inserted
-         * between the practice-location ID and the incrementing base-n numeric portion of the claim ID
+         * between the prefix and the incrementing base-n numeric portion of the ID
          * The default is no separator (that is, the empty string)
          */
         const separator = asString( (options?.separator || _mt_str), true ) || _mt_str;
@@ -77,8 +114,9 @@ const logUtils = require( "./LogUtils.js" );
         const digits = asString( (asString( options?.digits, true ) || defaultDigits), true );
 
         const arrDigits = digits.split( _mt_chr );
+
         /**
-         * This is the numeric base of the incrementing portion of the NDS Claim ID
+         * This is the numeric base of the incrementing portion of the ID
          * The default is base-36, using the numerals 0-9 and the letters A-Z
          */
         const base = asString( digits, true )?.length;
@@ -88,49 +126,11 @@ const logUtils = require( "./LogUtils.js" );
         /**
          * Optional value limiting the length of the numeric portion of the ID
          * The default is 7.
-         * A 7-digit base-36 number has a maximum value somewhere between 21.76 billion and 783.6 billion,
-         * so this should be sufficient to generate unique values for a single location or perhaps even all locations.
+         * A 7-digit base-36 number has a maximum value somewhere between 21.76 billion and 783.6 billion.
          *
          * @type {number}
          */
         const maxLength = Math.min( Math.max( 1, asInt( options?.maxLength ) || 7 ), 12 );
-
-        const dbCollection = "value_store";
-        const dbKey = "key";
-        const dbLastValueLookupKey = "_" + prefix + "_lastValue";
-
-        const readLastValue = async function( pDatastore )
-        {
-            let last = defaultLast;
-
-            const db = (pDatastore || pStorageHandler);
-
-            try
-            {
-                const queryOptions =
-                    {
-                        fields: "value",
-                        conditions: { "key": dbLastValueLookupKey }
-                    };
-
-                let results = await db.select( dbCollection, queryOptions );
-
-                results = asArray( results || [] ) || [];
-
-                if ( results?.length )
-                {
-                    last = asString( asString( (results[0]?.value || results), true ) || last, true );
-                }
-            }
-            catch( ex )
-            {
-                console.error( "An error occurred while reading the last generated claim ID", logUtils.err( ex ) );
-            }
-
-            last = ucase( asString( last, true ) );
-
-            return last;
-        };
 
         /**
          * This is the last numeric value generated by this function.

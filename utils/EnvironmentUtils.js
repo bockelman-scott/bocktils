@@ -5,12 +5,23 @@ const os = require('os');
 
 const proc = process || os;
 
-const constants = require("./Constants.js");
-const stringUtils = require("./StringUtils.js");
-const arrayUtils = require("./ArrayUtils.js");
-const objectUtils = require("./ObjectUtils.js");
+const utils = require( "./CommonUtils.js" );
 
-const $scope = constants?.$scope || function()
+/**
+ * Establish separate constants for each of the common utilities imported
+ * @see ../utils/CommonUtils.js
+ */
+const constants = utils?.constants || require( "../utils/Constants.js" );
+const typeUtils = utils?.typeUtils || require( "../utils/TypeUtils.js" );
+const stringUtils = utils?.stringUtils || require( "../utils/StringUtils.js" );
+const arrayUtils = utils?.arrayUtils || require( "../utils/ArrayUtils.js" );
+const objectUtils = utils?.objectUtils || require( "../utils/ObjectUtils.js" );
+
+const konsole = console || {};
+
+const _ud = constants?._ud || "undefined";
+
+const $scope = utils?.$scope || function()
 {
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };

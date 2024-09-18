@@ -1,4 +1,5 @@
 const constants = require( "./Constants.js" );
+const typeUtils = require( "./TypeUtils.js" );
 const stringUtils = require( "./StringUtils.js" );
 const arrayUtils = require( "./ArrayUtils.js" );
 const objectUtils = require( "./ObjectUtils.js" );
@@ -17,9 +18,9 @@ const $scope = constants?.$scope || function()
 
     let asArray = arrayUtils.asArray;
 
-    let isFunction = objectUtils.isFunction;
-    let isAsyncFunction = objectUtils.isAsyncFunction;
-    let isClass = objectUtils.isClass;
+    let isFunction = typeUtils.isFunction;
+    let isAsyncFunction = typeUtils.isAsyncFunction;
+    let isClass = typeUtils.isClass;
     let no_op = objectUtils.no_op || function() {};
 
     constants.importUtilities( this, constants, stringUtils, arrayUtils, objectUtils );

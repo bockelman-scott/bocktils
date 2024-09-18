@@ -7,6 +7,14 @@ const crypto = require( "crypto" );
 
 const _ud = constants?._ud || "undefined";
 
+/**
+ * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
+ */
+const $scope = constants?.$scope || function()
+{
+    return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
+};
+
 (function makeGuidGenerator()
 {
     let _mt_str = constants._mt_str || "";
@@ -92,7 +100,7 @@ const _ud = constants?._ud || "undefined";
                 return value;
             }
 
-            return asString( uuidv4.v4(), true );
+            return "0000-0000-0000-0000";
         }
     }
 
@@ -114,10 +122,7 @@ const _ud = constants?._ud || "undefined";
             {
                 return asString( crypto.randomUUID( RandomUUIDOptions ) );
             },
-            legacyUUID: function()
-            {
-                return asString( uuidv4.v4() );
-            }
+            dependencies
         };
 
     if ( _ud !== typeof module )

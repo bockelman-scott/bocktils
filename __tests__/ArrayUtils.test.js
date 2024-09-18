@@ -11,6 +11,7 @@ const typeUtils = require( "../utils/TypeUtils" );
 Object.assign( this, constants );
 Object.assign( this, arrayUtils );
 
+const exampleArray = ["a", "b", "c", 1, 2, 3, 4, 5, {}, ["a", "b", "c", 1, 2, 3, 4, 5, {}], new Date(), true, false, null, undefined, function() {}, Object.create( null )];
 
 test( "asArray([1,2,3]) === [1,2,3]",
       () =>
@@ -200,7 +201,7 @@ test( "asArray with a comparator",
 test( "unique array from varargs",
       () =>
       {
-          let actual = arrayUtils.unique( "a", "b", "a", "c", "d", "b", "c");
+          let actual = arrayUtils.unique( "a", "b", "a", "c", "d", "b", "c" );
 
           let expected = ["a", "b", "c", "d"];
 
@@ -216,3 +217,158 @@ test( "unique array from input",
 
           expect( actual ).toEqual( expected );
       } );
+
+test( "Is the exampleArray an Array with at least 1 element",
+      () =>
+      {
+          expect( arrayUtils.isPopulatedArray( exampleArray ) ).toBe( true );
+      } );
+
+test( "Is a string an Array with at least 1 element - by default, no",
+      () =>
+      {
+          expect( arrayUtils.isPopulatedArray( "abc" ) ).toBe( false );
+      } );
+
+test( "Is a string an Array with at least 1 element - with options.acceptArrayLike, yes",
+      () =>
+      {
+          expect( arrayUtils.isPopulatedArray( "abc", { acceptArrayLike: true } ) ).toBe( true );
+      } );
+
+test( "Is [] an Array with at least 1 element - no",
+      () =>
+      {
+          expect( arrayUtils.isPopulatedArray( [] ) ).toBe( false );
+      } );
+
+test( "Is ['a','b','c'] an Array with at least 3 elements - yes",
+      () =>
+      {
+          expect( arrayUtils.isPopulatedArray( ["a", "b", "c"], { minimumLength: 3 } ) ).toBe( true );
+      } );
+
+
+test( "Is ['a','b'] an Array with at least 3 elements - no",
+      () =>
+      {
+          expect( arrayUtils.isPopulatedArray( ["a", "b"], { minimumLength: 3 } ) ).toBe( false );
+      } );
+
+test( "Is {} an Array-like object with at least 1 element - no",
+      () =>
+      {
+          expect( arrayUtils.isPopulatedArray( {}, { minimumLength: 3, acceptArrayLike: true } ) ).toBe( false );
+      } );
+
+test( "Is {a:1,b:2,c:3} an Array-like object with at least 1 element - no",
+      () =>
+      {
+          expect( arrayUtils.isPopulatedArray( { a: 1, b: 2, c: 3 },
+                                               {
+                                                   minimumLength: 3,
+                                                   acceptArrayLike: true
+                                               } ) ).toBe( false );
+      } );
+
+
+test( "Is {a:1,b:2,c:3} an Object with at least 1 property - yes",
+      () =>
+      {
+          expect( arrayUtils.isPopulatedArray( { a: 1, b: 2, c: 3 },
+                                               {
+                                                   minimumLength: 3,
+                                                   acceptObjects: true
+                                               } ) ).toBe( true );
+      } );
+
+test( "Is {a:1,b:2,c:3} an Array with at least 4 elements - no",
+      () =>
+      {
+          expect( arrayUtils.isPopulatedArray( { a: 1, b: 2, c: 3 },
+                                               {
+                                                   minimumLength: 4,
+                                                   acceptObjects: true,
+                                                   acceptArrayLike: true
+                                               } ) ).toBe( false );
+      } );
+
+test( "The firstPopulatedArray is [1,2,3]",
+      () =>
+      {
+          expect( arrayUtils.firstPopulatedArray( [], {}, { a: 1 }, [1, 2, 3], [1, 2, 3, 4], [] ) ).toEqual( [1, 2, 3] );
+      } );
+
+test( "The firstPopulatedArray is [1,2]",
+      () =>
+      {
+          expect( arrayUtils.firstPopulatedArray( undefined, null, [], { a: 1 }, [1, 2], [1, 2, 3], [] ) ).toEqual( [1, 2] );
+      } );
+
+
+test( "The lastPopulatedArray is [1,2,3,4]",
+      () =>
+      {
+          expect( arrayUtils.lastPopulatedArray( [], {}, { a: 1 }, [1, 2, 3], [1, 2, 3, 4], [] ) ).toEqual( [1, 2, 3, 4] );
+      } );
+
+test( "The lastPopulatedArray is [1,2,3]",
+      () =>
+      {
+          expect( arrayUtils.lastPopulatedArray( undefined, null, [], { a: 1 }, [1, 2], [1, 2, 3], [] ) ).toEqual( [1, 2, 3] );
+      } );
+
+
+// The following classes and object are used in the tests for sortArray
+
+class Person
+{
+    #firstName;
+    #lastName;
+    #age;
+    #eyeColor;
+
+    constructor( pLastName, pFirstName, pAge, pEyeColor )
+    {
+        this.#lastName = pLastName;
+        this.#firstName = pFirstName;
+        this.#age = pAge;
+        this.#eyeColor = pEyeColor;
+    }
+
+    get firstName()
+    {
+        return this.#firstName;
+    }
+
+    get lastName()
+    {
+        return this.#lastName;
+    }
+
+    get age()
+    {
+        return this.#age;
+    }
+
+    get eyeColor()
+    {
+        return this.#eyeColor;
+    }
+
+    get name()
+    {
+        return this.firstName + " " + this.lastName;
+    }
+
+    compareTo( pOther )
+    {
+        if ( !(pOther instanceof Person) )
+        {
+            throw new Error( "Cannot compare" + (typeof pOther) + "to an instance of Person" );
+        }
+
+        return this.lastName > pOther?.lastName ? 1 : pOther?.lastName > this.lastName ? -1 : 0;
+    }
+}
+

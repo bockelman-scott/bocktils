@@ -1,4 +1,5 @@
 const constants = require( "./Constants.js" );
+const typeUtils = require( "./TypeUtils.js" );
 const stringUtils = require( "./StringUtils.js" );
 const arrayUtils = require( "./ArrayUtils.js" );
 const objectUtils = require( "./ObjectUtils.js" );
@@ -6,7 +7,6 @@ const objectUtils = require( "./ObjectUtils.js" );
 const jsonInterpolationUtils = require( "./JsonInterpolationUtils.js" );
 
 const _ud = constants._ud || "undefined";
-
 
 const $scope = constants?.$scope || function()
 {
