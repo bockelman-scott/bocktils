@@ -1,19 +1,29 @@
+/** import dependencies **/
 const constants = require( "./Constants.js" );
 const typeUtils = require( "./TypeUtils.js" );
 const stringUtils = require( "./StringUtils.js" );
 
+/** create an alias for console **/
 const konsole = console || {};
 
+/** define a variable fir typeof undefined **/
 const _ud = constants?._ud || "undefined";
 
+/**
+ * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
+ */
 const $scope = constants?.$scope || function()
 {
     return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
 };
 
-
 (function exposeArrayUtils()
 {
+    /**
+     * Create local variables for the imported values and functions we use.
+     * This is technically unnecessary, but some IDEs cannot recognize the imported variables otherwise.
+     * IDEs that report unrecognized variables are more useful if we remove the false positives this way.
+     */
     let
         {
             _mt_str = constants._mt_str || "",
@@ -35,6 +45,7 @@ const $scope = constants?.$scope || function()
             EMPTY_OBJECT = Object.freeze( {} )
         } = constants || {};
 
+    // These statements make the functions and properties of the imported modules local variables and functions.
     Object.assign( this, constants );
     Object.assign( this, typeUtils );
     Object.assign( this, stringUtils );
@@ -52,6 +63,7 @@ const $scope = constants?.$scope || function()
             stringUtils
         };
 
+    // poly-fill for isArray; probably obsolete with modern environments
     if ( _fun !== typeof Array.isArray )
     {
         Array.isArray = function( pArg )
@@ -64,13 +76,37 @@ const $scope = constants?.$scope || function()
         };
     }
 
+    // defines a key we can use to store this module in global scope
     const INTERNAL_NAME = "__BOCK__ARRAY_UTILS__";
 
+    // if we've already executed this code, just return the module
     if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
     {
         return $scope()[INTERNAL_NAME];
     }
 
+    /**
+     * This object defines the default options for the asArray function.
+     * flatten: when truthy, any elements of the array that are also arrays
+     * are turned into individual elements of the returned array (@see Array.flat)
+     *
+     * flatten.level: if flatten is an object with a property named level,
+     * the integer value of level is used in the call to Array.flat
+     *
+     * splitOn: a character or string to split a string if the argument to the function is a string.
+     * For example, calling asArray("a.b.c") with splitOn:"." yields ["a","b","c"]
+     *
+     * filter: a function that can be used to filter the resulting array
+     *
+     * sanitize: if true, the resulting array will not contain any elements that are null, undefined, or an empty string
+     *
+     * type: string defining the typeof elements the resulting array should include --or-- a class for which each element must be an instance
+     *       type conversions are not performed; if necessary to convert types, omit this option and use Array.map on the returned value
+     *
+     * unique: when true, the resulting array will contain no duplicated values
+     *
+     * comparator: a function to use to determine the order of the elements in the resulting array
+     */
     const DEFAULT_AS_ARRAY_OPTIONS =
         {
             flatten: false,
@@ -195,9 +231,9 @@ const $scope = constants?.$scope || function()
 
         arr = ((flatten && arr.flat) ? arr.flat( flattenLevel ) : arr) || eia;
 
-        arr = (options?.sanitize ? (arr || eia).filter( e => (_ud !== typeof e && null != e && !stringUtils.isEmpty( e )) ) : (arr || eia)) || eia;
+        arr = (options?.sanitize ? (arr || eia).filter( e => !(_ud !== typeof e || null == e || stringUtils.isEmpty( e )) ) : (arr || eia)) || eia;
 
-        arr = (options?.type ? (arr || eia).filter( e => (options?.type === typeof e) ) : (arr || eia)) || eia;
+        arr = (options?.type ? (arr || eia).filter( e => (options?.type === typeof e || e instanceof options?.type) ) : (arr || eia)) || eia;
 
         if ( _fun === typeof options?.filter && options?.filter?.length >= 1 && options?.filter?.length <= 3 )
         {
@@ -220,37 +256,46 @@ const $scope = constants?.$scope || function()
         return arr || [];
     };
 
-    const calculateLength = function( pElem )
+    /**
+     * Returns either the number of elements in an array,
+     * the number of characters in a string (or the number of characters in the string representation of a number),
+     * or the number of keys in an object
+     * @param pObject an array, string, number, or object whose "length" should be returned
+     * @returns {number} the number of elements in an array,
+     * the number of characters in a string (or the number of characters in the string representation of a number),
+     * or the number of keys in an object
+     */
+    const calculateLength = function( pObject )
     {
         let len;
 
-        switch ( typeof pElem )
+        switch ( typeof pObject )
         {
             case _ud:
                 len = 0;
                 break;
 
             case _str:
-                len = pElem?.length;
+                len = pObject?.length;
                 break;
 
             case _num:
             case _big:
-                len = (asString( _mt_str + pElem || _mt_str ))?.length;
+                len = (asString( _mt_str + pObject || _mt_str ))?.length;
                 break;
 
             case _obj:
-                if ( null == pElem )
+                if ( null == pObject )
                 {
                     len = 0;
                     break;
                 }
-                if ( Array.isArray( pElem ) )
+                if ( Array.isArray( pObject ) )
                 {
-                    len = pElem?.length;
+                    len = pObject?.length;
                     break;
                 }
-                len = Object.keys( pElem ).length;
+                len = Object.keys( pObject ).length;
                 break;
 
             default:
@@ -261,24 +306,34 @@ const $scope = constants?.$scope || function()
         return len;
     };
 
-    const TRANSFORMATIONS =
-        {
-            FILTER: "filter",
-            MAP: "map",
-            SORT: "sort"
-        };
-
+    /**
+     * This is a collection of functions that can be used as filters or functions that return a filter.
+     * These can be chained or combined using other features of this module
+     */
     const Predicates =
         {
+            /** A filter that returns the same array elements of the source array **/
             IDENTITY: e => true,
+
+            /** a filter to return the elements of an array that are filter functions **/
             IS_PREDICATE: e => _fun === typeof e && e?.length > 0 && e?.length <= 3,
+
+            /** a filter to return the elements of an array that are comparator functions **/
             IS_COMPARATOR: e => _fun === typeof e && e?.length === 2,
+
+            /** a filter to return the elements of an array that are not undefined **/
             IS_DEFINED: e => _ud !== typeof e,
+
+            /** a filter to return the elements of an array that are not null or undefined **/
             IS_NOT_NULL: e => Predicates.IS_DEFINED( e ) && null !== e,
+
+            /** a function to return an array of filter functions from varargs **/
             _copyPredicateArguments: function( ...pPredicates )
             {
                 return ([].concat( ...(pPredicates || [Predicates.IDENTITY]) )).filter( Predicates.IS_PREDICATE );
             },
+
+            /** a function that returns a filter to return the elements of an array that match one of the specified types **/
             MATCHES_TYPE: function( ...pType )
             {
                 const types = [].concat( ...(pType || []) ).filter( e => [_ud, _obj, _fun, _str, _num, _big, _bool, _symbol].includes( e ) );
@@ -299,6 +354,8 @@ const $scope = constants?.$scope || function()
                     return matches;
                 };
             },
+
+            /** a function that returns a filter that returns an array whose elements satisfy ALL specified filters **/
             MATCHES_ALL: function( ...pPredicates )
             {
                 const predicates = Predicates._copyPredicateArguments( ...pPredicates );
@@ -329,6 +386,8 @@ const $scope = constants?.$scope || function()
                     return matches;
                 };
             },
+
+            /** a function that returns a filter that returns an array whose elements satisfy ANY of the specified filters **/
             MATCHES_ANY: function( ...pPredicates )
             {
                 const predicates = Predicates._copyPredicateArguments( ...pPredicates );
@@ -356,6 +415,8 @@ const $scope = constants?.$scope || function()
                     return matches;
                 };
             },
+
+            /** a function that returns a filter that returns an array whose elements satisfy NONE of the specified filters **/
             MATCHES_NONE: function( ...pPredicates )
             {
                 const predicates = [].concat( ...(pPredicates || []) ).filter( Predicates.IS_PREDICATE );
@@ -372,12 +433,16 @@ const $scope = constants?.$scope || function()
 
                 return function( e ) { return true; };
             },
+
+            /** a helper function that returns true if the specified value is a valid number or BigInt **/
             _numExpected: function( pNum )
             {
                 let num = [_num, _big].includes( typeof pNum ) ? parseInt( Number( pNum ).toFixed( 0 ) ) : _str === typeof pNum ? parseInt( pNum ) : 1;
 
                 return [_num, _big].includes( typeof num ) && !isNaN( num ) && isFinite( num ) ? num : 1;
             },
+
+            /** a function that returns a filter that returns an array whose elements satisfy AT LEAST n of the specified filters **/
             MATCHES_N_OR_MORE: function( pNumMatches, ...pPredicates )
             {
                 const predicates = Predicates._copyPredicateArguments( ...pPredicates );
@@ -408,6 +473,8 @@ const $scope = constants?.$scope || function()
                     return (numMatches >= numExpected);
                 };
             },
+
+            /** a function that returns a filter that returns an array whose elements satisfy EXACTLY n of the specified filters **/
             MATCHES_ONLY_N: function( pNumMatches, ...pPredicates )
             {
                 const predicates = [].concat( ...(pPredicates || []) ).filter( Predicates.IS_PREDICATE );
@@ -436,6 +503,8 @@ const $scope = constants?.$scope || function()
                     return (numMatches === numExpected);
                 };
             },
+
+            /** a function that returns a filter that returns an array whose elements satisfy LESS THAN n of the specified filters **/
             MATCHES_LESS_THAN_N: function( pNumAllowed, ...pPredicates )
             {
                 const predicates = [].concat( ...(pPredicates || []) ).filter( Predicates.IS_PREDICATE );
@@ -464,23 +533,59 @@ const $scope = constants?.$scope || function()
                     return (numMatches < numAllowed);
                 };
             },
+
+            /** a filter to return the elements of an array that are strings **/
             IS_STRING: e => _str === typeof e,
+
+            /** a filter to return the elements of an array that are empty strings **/
             IS_EMPTY_STRING: e => Predicates.IS_STRING( e ) && _mt_str === e,
+
+            /** a filter to return the elements of an array that are composed of whitespace characters only **/
             IS_WHITESPACE: e => Predicates.IS_STRING( e ) && _mt_str === e.trim().replace( /\s+/g, _mt_str ),
+
+            /** a filter to return the elements of an array that are non-empty strings **/
             IS_POPULATED_STRING: e => Predicates.IS_STRING( e ) && !(Predicates.IS_EMPTY_STRING( e )),
+
+            /** a filter to return the elements of an array that are non-blank strings  **/
             IS_NON_WHITESPACE: e => Predicates.IS_STRING( e ) && !Predicates.IS_WHITESPACE( e ),
+
+            /** a filter to return the elements of an array that are numbers **/
             IS_NUMBER: e => [_num, _big].includes( (typeof e) ),
+
+            /** a filter to return the elements of an array that are integers (whole numbers) **/
             IS_INTEGER: e => Predicates.IS_NUMBER( e ) && (Math.abs( e - Math.round( e ) ) < 0.0000000001),
+
+            /** a filter to return the elements of an array that are objects **/
             IS_OBJECT: e => _obj === typeof e,
+
+            /** a filter to return the elements of an array that are also arrays **/
             IS_ARRAY: e => Predicates.IS_OBJECT( e ) && Array.isArray( e ),
+
+            /** a filter to return the elements of an array that are functions **/
             IS_FUNCTION: e => _fun === typeof e,
+
+            /** a filter to return the elements of an array that are asynchronous functions **/
             IS_ASYNC_FUNCTION: e => Predicates.IS_FUNCTION( e ) && e instanceof AsyncFunction,
+
+            /** a filter to return the elements of an array that are objects with at least one non-null/non-empty property **/
             IS_POPULATED_OBJECT: e => Predicates.IS_OBJECT( e ) && Predicates.IS_NOT_NULL( e ) && (Predicates.IS_ARRAY( e ) ? ((e?.length || 0) > 0) : (Object.keys( e )?.length || 0) > 0),
+
+            /** a filter to return the elements of an array that are objects that are not arrays with at least one non-null/non-empty property **/
             IS_POPULATED_NON_ARRAY_OBJECT: e => Predicates.IS_OBJECT( e ) && Predicates.IS_NOT_NULL( e ) && ( !Predicates.IS_ARRAY( e ) && Object.keys( e ).length > 0),
+
+            /** a filter to return the elements of an array that are also arrays with at least one non-null/non-empty element **/
             IS_POPULATED_ARRAY: e => Predicates.IS_OBJECT( e ) && Predicates.IS_NOT_NULL( e ) && (Predicates.IS_ARRAY( e ) && e?.length > 0),
+
+            /** a filter to return the elements of an array that are valid numbers **/
             IS_VALID_NUMBER: e => Predicates.IS_NUMBER( e ) && !isNaN( e ) && isFinite( e ),
+
+            /** a filter to return the elements of an array that are either non-empty strings, objects with at least one property, arrays with at least one element, or valid numbers **/
             NON_EMPTY: e => Predicates.IS_POPULATED_STRING( e ) || Predicates.IS_POPULATED_OBJECT( e ) || Predicates.IS_VALID_NUMBER( e ) || Predicates.IS_FUNCTION || _bool === typeof e,
+
+            /** a filter to return the elements of an array that are strings with at least one non-whitespace character **/
             NON_BLANK: e => Predicates.IS_POPULATED_STRING( e ) && _mt_str !== e.trim() && !Predicates.IS_WHITESPACE( e ),
+
+            /** a function that returns a filter that returns an array whose elements match the specified regular expression **/
             MATCHES_REGEXP: function( pRx )
             {
                 const rx = new RegExp( pRx || /.*/s );
@@ -497,17 +602,23 @@ const $scope = constants?.$scope || function()
                     return re.test( e );
                 };
             },
+
+            /** a filter to return the elements of an array that are not elements of the specified array **/
             NOT_IN: function( ...pArr )
             {
                 const arr = [].concat( ...(pArr || []) ).flat();
                 return e => arr?.length > 0 ? !(arr.includes( e )) : (_ud !== typeof e && null !== e);
             },
+
+            /** a filter to return the elements of an array that are also elements of the specified array **/
             IN:
                 function( ...pArr )
                 {
                     const arr = [].concat( ...(pArr || []) ).flat();
                     return e => arr?.length > 0 && (arr.includes( e ));
                 },
+
+            /** a function that returns a filter that returns an array whose elements each start with one or more of the strings in the specified array **/
             STARTS_WITH: function( ...pArr )
             {
                 const arr = [].concat( ...(pArr || []) ).flat().map( e => asString( e ) );
@@ -518,7 +629,7 @@ const $scope = constants?.$scope || function()
 
                     for( const elem of arr )
                     {
-                        if ( elem && e && e.startsWith( elem ) )
+                        if ( elem && e && asString( e ).startsWith( elem ) )
                         {
                             does = true;
                             break;
@@ -527,6 +638,8 @@ const $scope = constants?.$scope || function()
                     return does;
                 };
             },
+
+            /** a function that returns a filter that returns an array whose elements each end with one or more of the strings in the specified array **/
             ENDS_WITH: function( ...pArr )
             {
                 const arr = [].concat( ...(pArr || []) ).flat().map( e => asString( e ) );
@@ -537,7 +650,7 @@ const $scope = constants?.$scope || function()
 
                     for( const elem of arr )
                     {
-                        if ( elem && e && e.endsWith( elem ) )
+                        if ( elem && e && asString( e ).endsWith( elem ) )
                         {
                             does = true;
                             break;
@@ -547,6 +660,8 @@ const $scope = constants?.$scope || function()
                     return does;
                 };
             },
+
+            /** a function that returns a filter that is composed of the filters specified **/
             buildPredicate: function( ...pFunctions )
             {
                 const functions = [].concat( ...(pFunctions || [Predicates.IDENTITY]) ).filter( Predicates.IS_PREDICATE );
@@ -573,6 +688,8 @@ const $scope = constants?.$scope || function()
                     return true;
                 };
             },
+
+            /** a function that returns a filter that is composed of the filters specified **/
             chain: function( ...pFilters )
             {
                 const filters = ([].concat( ...(pFilters || [Predicates.IDENTITY]) )).filter( Predicates.IS_PREDICATE );
@@ -595,6 +712,11 @@ const $scope = constants?.$scope || function()
             }
         };
 
+    /**
+     * This is a top-level function that returns a filter that returns an array whose elements match all the filter functions specified
+     * @param pFunction
+     * @returns {function(*): boolean}
+     */
     const predicate = function( ...pFunction )
     {
         const functions = [].concat( ...(pFunction || [Predicates.IDENTITY]) ).filter( Predicates.IS_PREDICATE );
@@ -602,15 +724,34 @@ const $scope = constants?.$scope || function()
         return Predicates.MATCHES_ALL( ...(functions || [Predicates.IDENTITY]) );
     };
 
+    /**
+     * This object is used to export the Predicates collection
+     * @type {{_numExpected: (function(*): number|number), IS_NOT_NULL: (function(*): *), MATCHES_NONE: ((function(...[*]): (function(*): *))|*), IS_POPULATED_STRING: (function(*): *), buildPredicate: (function(...[*]): function(*, *, *): (boolean)), MATCHES_N_OR_MORE: (function(*, ...[*]): function(*): boolean), IS_DEFINED: (function(*): boolean), IS_POPULATED_OBJECT: (function(*): *), IS_WHITESPACE: (function(*): *), IS_PREDICATE: (function(*): *), MATCHES_TYPE: (function(...[*]): function(*): boolean), MATCHES_ONLY_N: (function(*, ...[*]): function(*): boolean), IS_NON_WHITESPACE: (function(*): *), IS_POPULATED_ARRAY: (function(*): *), NON_EMPTY: (function(*): *), IS_EMPTY_STRING: (function(*): *), IS_ARRAY: (function(*): *), IS_VALID_NUMBER: (function(*): *), ENDS_WITH: (function(...[*]): function(*, *, *): boolean), MATCHES_ALL: (function(...[*]): function(*): boolean), IS_STRING: (function(*): boolean), IS_NUMBER: (function(*): boolean), _copyPredicateArguments: (function(...[*]): *[]), chain: (function(...[*]): function(*, *, *): boolean), STARTS_WITH: (function(...[*]): function(*, *, *): boolean), IN: (function(...[*]): function(*): *), IS_ASYNC_FUNCTION: (function(*): *), NOT_IN: (function(...[*]): function(*): *), IS_FUNCTION: (function(*): boolean), IS_COMPARATOR: (function(*): *), MATCHES_ANY: (function(...[*]): function(*): boolean), IDENTITY: (function(*): boolean), MATCHES_REGEXP: (function(*): function(*): (boolean|boolean)), IS_INTEGER: (function(*): *), IS_POPULATED_NON_ARRAY_OBJECT: (function(*): *), MATCHES_LESS_THAN_N: (function(*, ...[*]): function(*): boolean), IS_OBJECT: (function(*): boolean), NON_BLANK: (function(*): *)}}
+     */
     let Filters = Object.assign( {}, Predicates );
 
+    /**
+     * This is a filter that returns an array whose elements are all suitable comparator functions for the Array.sort method
+     * @type {function(*): *}
+     */
     Filters.comparators = (e => Predicates.IS_FUNCTION( e ) && Predicates.IS_COMPARATOR( e ));
 
+    /**
+     * This a collection of functions to map an array of elements to an array of modified elements.
+     * @type {{IDENTITY: (function(*): *), TO_NUMBER: (function(*): *|number), chain: (function(...[*]): function(*, *, *): *), TO_LOWERCASE: (function(*): string), TO_UPPERCASE: (function(*): string), TO_VALID_NUMBER: ((function(*): (number|number))|*), TRIMMED: (function(*): string), TO_STRING: (function(*): *|string), REPLACE: (function(*, *): function(*): string), APPEND: (function(*): function(*): *), PREPEND: (function(*): function(*): *)}}
+     */
     const Mappers =
         {
+            /** This mapper simply returns an array with the same elements as the source array **/
             IDENTITY: e => e,
+
+            /** This mapper is used to return an array with its elements converted to strings **/
             TO_STRING: e => _str === typeof e ? e : asString( e ),
-            TO_NUMBER: e => [_num, _big].includes( typeof e ) ? e : parseFloat( asString( e ) ),
+
+            /** This mapper is used to return an array with its elements converted to numbers **/
+            TO_NUMBER: e => [_num, _big].includes( typeof e ) ? e : stringUtils.asFloat( e ),
+
+            /** This mapper is used to return an array with its elements converted to valid numbers or 0 **/
             TO_VALID_NUMBER: function( e )
             {
                 let n = Mappers.TO_NUMBER( e );
@@ -622,27 +763,45 @@ const $scope = constants?.$scope || function()
 
                 return 0;
             },
+
+            /** This mapper is used to return an array with its elements converted to strings with leading and trailing whitespace removed **/
             TRIMMED: e => asString( e ).trim(),
+
+            /** This function returns a mapper that is used to return an array with each of its elements converted to strings that are then appended with the specified string **/
             APPEND: function( pStr )
             {
                 return e => asString( e ) + (asString( pStr ) || _mt_str);
             },
+
+            /** This function returns a mapper that is used to return an array with each of its elements converted to strings that are prefixed with the specified string **/
             PREPEND: function( pStr )
             {
                 return e => (asString( pStr ) || _mt_str) + asString( e );
             },
+
+            /** This function returns a mapper that is used to return an array with each of its elements converted to strings modified by replacing the search string with the replacement string **/
             REPLACE: function( pSearchStr, pReplacement )
             {
                 return e => asString( e ).replace( pSearchStr, (asString( pReplacement || _mt_str ) || _mt_str) );
             },
+
+            /** This mapper is used to return an array with its elements converted to strings and then converted to lowercase **/
             TO_LOWERCASE: function( e )
             {
                 return asString( e ).toLowerCase();
             },
+
+            /** This mapper is used to return an array with its elements converted to strings and then converted to UPPERCASE **/
             TO_UPPERCASE: function( e )
             {
                 return asString( e ).toUpperCase();
             },
+
+            /**
+             * This function returns a mapper function that returns an array with all specified mappers applied
+             * @param pMappers
+             * @returns {function(*, *, *): *}
+             */
             chain: function( ...pMappers )
             {
                 const mappers = [].concat( ...(pMappers || [Mappers.IDENTITY]) );
@@ -661,23 +820,42 @@ const $scope = constants?.$scope || function()
             }
         };
 
+    /**
+     * This is a collection of functions that can be used as arguments to the Array sort method
+     * or functions that create comparators
+     */
     const Comparators =
         {
+            /** This is the basic comparison of 2 values that can be considered greater than or less than one another **/
             _compare: function( a, b )
             {
                 return (a < b ? -1 : a > b ? 1 : 0);
             },
+
+            /** This is a no op function that will leave a collection in the same order **/
             NONE: function( a, b )
             {
                 return 0;
             },
-            DEFAULT: function( a, b, pType )
-            {
-                let aa = Predicates.IS_NOT_NULL( a ) ? a : typeUtils.defaultFor( pType || typeof a );
-                let bb = Predicates.IS_NOT_NULL( b ) ? b : typeUtils.defaultFor( pType || typeof a );
 
-                return Comparators._compare( aa, bb );
+            /**
+             * This function returns a default comparator that treats null values as the default value for the specified type.
+             *
+             * @param pType
+             * @returns {function}
+             */
+            CREATE_DEFAULT: function( pType )
+            {
+                return function( a, b )
+                {
+                    let aa = Predicates.IS_NOT_NULL( a ) ? a : typeUtils.defaultFor( pType || typeof a );
+                    let bb = Predicates.IS_NOT_NULL( b ) ? typeUtils.castTo( b, typeof a ) : typeUtils.defaultFor( pType || typeof a );
+
+                    return Comparators._compare( aa, bb );
+                };
             },
+
+            /** This comparison function converted each element to a string before comparison **/
             BY_STRING_VALUE: function( a, b )
             {
                 let sA = asString( a ) || (_fun === typeof a?.toString ? a.toString() : _mt_str);
@@ -711,11 +889,13 @@ const $scope = constants?.$scope || function()
 
                 if ( 0 === comp )
                 {
-                    comp = Comparators.DEFAULT( a, b );
+                    comp = Comparators.CREATE_DEFAULT( "string" )( sA, sB );
                 }
 
                 return comp;
             },
+
+            /** This comparator is used to order an array by the length of its elements **/
             BY_LENGTH: function( a, b )
             {
                 let lenA = a?.length || calculateLength( a );
@@ -723,6 +903,8 @@ const $scope = constants?.$scope || function()
 
                 return Comparators._compare( lenA, lenB );
             },
+
+            /** This function returns a comparison function that orders one array by the position of elements in another array **/
             BY_POSITION: function( pReference, pPositionFunction, pTransformation )
             {
                 const ref = [].concat( ...(pReference || []) );
@@ -774,7 +956,7 @@ const $scope = constants?.$scope || function()
                         let cmp = Comparators.BY_STRING_VALUE( a, b );
                         if ( 0 === cmp )
                         {
-                            cmp = Comparators.DEFAULT( a, b );
+                            cmp = Comparators.CREATE_DEFAULT( typeof a )( a, b );
                         }
 
                         return cmp;
@@ -803,17 +985,19 @@ const $scope = constants?.$scope || function()
 
                     if ( 0 === comp )
                     {
-                        comp = Comparators.DEFAULT( aa, bb );
+                        comp = Comparators.CREATE_DEFAULT( typeof aa )( aa, bb );
                     }
 
                     if ( 0 === comp )
                     {
-                        comp = Comparators.DEFAULT( a, b );
+                        comp = Comparators.CREATE_DEFAULT( typeof a )( a, b );
                     }
 
                     return comp;
                 };
             },
+
+            /** This function creates a chain of comparators applied in order until one of them returns a non-zero value **/
             chain: function( ...pComparators )
             {
                 const comparators = [].concat( ...(pComparators || [Comparators.NONE]) ).filter( Filters.comparators );
@@ -834,6 +1018,12 @@ const $scope = constants?.$scope || function()
                     return comp;
                 };
             },
+
+            /**
+             * This function creates a chain of comparators
+             * applied in order until one of them returns a non-zero value
+             * and then reverses that comparison to return an array sorted in reverse order
+             * **/
             descending: function( ...pComparators )
             {
                 const comparators = [].concat( ...(pComparators || [Comparators.NONE]) ).filter( Filters.comparators );
@@ -854,6 +1044,8 @@ const $scope = constants?.$scope || function()
                     return comp;
                 };
             },
+
+            /** This function returns true if the specified value is a comparator **/
             isComparator: function( pCandidate )
             {
                 if ( _ud === typeof pCandidate || null == pCandidate )
@@ -865,24 +1057,63 @@ const $scope = constants?.$scope || function()
             }
         };
 
+    /**
+     * This is a map of the methods that can be called on an array
+     * to transform its contents (or return a new array with the modified content)
+     * @type {{FILTER: string, SORT: string, MAP: string}}
+     */
+    const TRANSFORMATIONS =
+        {
+            FILTER: "filter",
+            MAP: "map",
+            SORT: "sort"
+        };
+
+    /**
+     * This class encapsulates the sort, map, or filter method of an array into an object,
+     * which can further be chained to perform multiple transformations on an array
+     */
     class Transformer
     {
+        /**
+         * Constructs a Transformer which can map, filter, or sort an array
+         * @param pMethod
+         * @param pFunction
+         */
         constructor( pMethod, pFunction )
         {
-            this._method = pMethod;
-            this._function = pFunction;
+            this._method = pMethod; // should be one of TRANSFORMATIONS.filter, TRANSFORMATIONS.map, or TRANSFORMATIONS.sort
+            this._function = pFunction; // should be a function suitable as an argument to the specified method
         }
 
         get method()
         {
-            return (_str === this._method ? this._method : this._method?.name) || TRANSFORMATIONS.FILTER;
+            let funcName = asString( (_str === this._method ? this._method : asString( this._method?.name )) ) || TRANSFORMATIONS.FILTER;
+            return asString( Object.values( TRANSFORMATIONS ).includes( funcName ) ? funcName : TRANSFORMATIONS.FILTER );
+        }
+
+        get defaultArgument()
+        {
+            if ( TRANSFORMATIONS.FILTER === this.method )
+            {
+                return Filters.IDENTITY;
+            }
+            if ( TRANSFORMATIONS.MAP === this.method )
+            {
+                return Mappers.IDENTITY;
+            }
+            if ( TRANSFORMATIONS.SORT === this.method )
+            {
+                return Comparators.NONE;
+            }
+            return ( e, o ) => (_ud === typeof o) ? e : 0;
         }
 
         get argument()
         {
             let func = this._function;
 
-            return (_fun === typeof func) ? func : ((TRANSFORMATIONS.FILTER === this.method ? Filters.IDENTITY : TRANSFORMATIONS.MAP === this.method ? Mappers.IDENTITY : e => e));
+            return (_fun === typeof func) ? func : this.defaultArgument;
         }
 
         transform( pArr )
@@ -906,11 +1137,10 @@ const $scope = constants?.$scope || function()
         }
     }
 
-    Mappers.toTransformer = function( pTransformation )
-    {
-        return e => new Transformer( pTransformation, e );
-    };
-
+    /**
+     * This class encapsulates one or more transformations to perform on an array.
+     *
+     */
     class TransformerChain
     {
         constructor( ...pTransformers )
@@ -924,14 +1154,14 @@ const $scope = constants?.$scope || function()
 
             for( const transformer of this._transformers )
             {
-                if ( (transformer instanceof this.constructor) || (transformer instanceof TransformerChain) )
+                if ( (transformer instanceof Transformer) || (transformer instanceof this.constructor) )
                 {
                     arr = transformer.transform( arr );
                 }
                 else
                 {
-                    const method = transformer.method;
-                    const func = transformer?.argument;
+                    const method = transformer?.method || transformer;
+                    const func = transformer?.argument || transformer;
 
                     if ( _fun === typeof arr[method] && _fun === typeof func )
                     {
@@ -949,6 +1179,9 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    /**
+     * This subclass of TransformerChain encapsulates the application of one or more filters to an array
+     */
     class FilterChain extends TransformerChain
     {
         constructor( ...pFilters )
@@ -962,9 +1195,15 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    /** A filter chain to return strings that are not undefined, null, or empty **/
     FilterChain.NON_EMPTY_STRINGS = new FilterChain( Filters.IS_DEFINED, Filters.IS_NOT_NULL, Filters.MATCHES_TYPE( _str ), Filters.NON_EMPTY );
+
+    /** A filter chain to return strings that are not undefined, null, or composed entirely of whitespace **/
     FilterChain.NON_BLANK_STRINGS = new FilterChain( Filters.IS_DEFINED, Filters.IS_NOT_NULL, Filters.MATCHES_TYPE( _str ), Filters.NON_BLANK );
 
+    /**
+     * This subclass of TransformerChain encapsulates the application of one or more mappers to an array
+     */
     class MapperChain extends TransformerChain
     {
         constructor( ...pMappers )
@@ -978,8 +1217,12 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    /** A mapper/filter combination that returns an array with each element converted to a string and empty strings removed **/
     MapperChain.NON_EMPTY_STRINGS = new TransformerChain( new Transformer( TRANSFORMATIONS.MAP, Mappers.TO_STRING ), FilterChain.NON_EMPTY_STRINGS );
 
+    /**
+     * This subclass of TransformerChain encapsulates the application of one or more comparators to sort an array
+     */
     class ComparatorChain extends TransformerChain
     {
         constructor( ...pComparators )
@@ -1147,6 +1390,17 @@ const $scope = constants?.$scope || function()
         return [...(new Set( arr ))];
     };
 
+    /**
+     * This function returns an array ordered according to either the comparator specified --
+     * -- OR --
+     * If the second argument is a string,
+     * the array elements are assumed to be objects
+     * that will ordered by the value of the property of the specified name
+     *
+     * @param pArr
+     * @param pComparator
+     * @returns {*[]}
+     */
     const sortArray = function( pArr, pComparator )
     {
         let arr = [].concat( ...(pArr || []) );
@@ -1251,21 +1505,39 @@ const $scope = constants?.$scope || function()
         return pruned || [];
     };
 
+    /**
+     * Returns true if the specified array has at least the specified number of elements (default=1)
+     * @param pArr
+     * @param pMinimum
+     * @returns {boolean}
+     */
     const hasElements = function( pArr, pMinimum )
     {
-        let minimum = asInt( pMinimum || 0, 0 ) || 0;
+        let minimum = asInt( pMinimum || 1, 1 ) || 1;
 
-        return (Array.isArray( pArr ) && (pArr?.length || 0) > minimum);
+        return (Array.isArray( pArr ) && (pArr?.length || 0) >= minimum);
     };
 
+    /**
+     * Returns true if the specified array is empty or null or undefined
+     * @param pArr
+     * @returns {boolean}
+     */
     const isEmptyArray = function( pArr )
     {
         return (Array.isArray( pArr ) && (pArr?.length || 0) <= 0);
     };
 
-    const arrLength = function( pArr, pAllowStrings )
+    /**
+     * Returns the length of the specified array (or string if the second argument is true)
+     * If the specified array is null or undefined, returns 0
+     * @param pArr an array (or string if the second argument is true) whose length is to be returned
+     * @param pAllowStringArg if true, the first argument can be a string whose length will be returned
+     * @returns {number} the length of the array (or string, when the second argument is true)
+     */
+    const arrLength = function( pArr, pAllowStringArg = false )
     {
-        if ( Array.isArray( pArr ) || pAllowStrings )
+        if ( Array.isArray( pArr ) || pAllowStringArg )
         {
             return asInt( (pArr?.length || 0), 0 );
         }
@@ -1273,38 +1545,72 @@ const $scope = constants?.$scope || function()
         return 0;
     };
 
-    const arrLenGt = function( pArr, pMinLength )
+    /**
+     * Returns true if the length of the specified array (or string, if the third argument is true) is greater than the specified minimum
+     * @param pArr
+     * @param pMinLength
+     * @param pAllowStringArg
+     * @returns {boolean}
+     */
+    const arrLenGt = function( pArr, pMinLength, pAllowStringArg = false )
     {
         const minLength = asInt( pMinLength, 0 ) || 0;
 
-        const len = arrLength( pArr ) || 0;
+        const len = arrLength( pArr, pAllowStringArg ) || 0;
 
         return len > minLength;
     };
 
-    const arrLenGtEq = function( pArr, pMinLength )
+    /**
+     * Returns true if the length of the specified array (or string, if the third argument is true) is greater than or equal to the specified minimum
+     * @param pArr
+     * @param pMinLength
+     * @param pAllowStringArg
+     * @returns {boolean}
+     */
+    const arrLenGtEq = function( pArr, pMinLength, pAllowStringArg = false )
     {
         const minLength = Math.max( 0, Math.max( 0, asInt( pMinLength, 0 ) || 0 ) - 1 );
 
-        return arrLenGt( pArr, minLength );
+        return arrLenGt( pArr, minLength, pAllowStringArg );
     };
 
-    const arrLenLt = function( pArr, pMaxLength )
+    /**
+     * Returns true if the length of the specified array (or string, if the third argument is true) is less than the specified value
+     * @param pArr
+     * @param pMaxLength
+     * @param pAllowStringArg
+     * @returns {boolean}
+     */
+    const arrLenLt = function( pArr, pMaxLength, pAllowStringArg = false )
     {
         const maxLength = asInt( pMaxLength, 0 ) || 0;
 
-        const len = arrLength( pArr ) || 0;
+        const len = arrLength( pArr, pAllowStringArg ) || 0;
 
         return len < maxLength;
     };
 
-    const arrLenLtEq = function( pArr, pMaxLength )
+    /**
+     * Returns true if the length of the specified array (or string, if the third argument is true) is less than or equal to the specified value
+     * @param pArr
+     * @param pMaxLength
+     * @param pAllowStringArg
+     * @returns {boolean}
+     */
+    const arrLenLtEq = function( pArr, pMaxLength, pAllowStringArg = false )
     {
         const maxLength = Math.max( 0, Math.max( 0, asInt( pMaxLength, 0 ) || 0 ) + 1 );
 
         return arrLenLt( pArr, maxLength );
     };
 
+    /**
+     * Returns a deep clone of the specified array.
+     * Note that this uses structuredClone, so functions will be omitted
+     * @param pArr
+     * @returns {*[]}
+     */
     const copyArray = function( pArr )
     {
         let arr = asArray( pArr || [] );
@@ -1353,7 +1659,7 @@ const $scope = constants?.$scope || function()
      *
      * @returns {boolean}
      */
-    const arraysIntersect = function( pArrA, pArrB, pTrim = true )
+    const areSubsets = function( pArrA, pArrB, pTrim = true )
     {
         let strip = (false !== pTrim);
 
@@ -1483,7 +1789,7 @@ const $scope = constants?.$scope || function()
             }
             else
             {
-                this._arr = [].concat( (asArray( pArr ) || []) ) || [];
+                this._arr = [].concat( ...(asArray( pArr ) || []) ) || [];
 
                 this._limit = desiredLimit;
             }
@@ -1540,7 +1846,7 @@ const $scope = constants?.$scope || function()
 
         toArray()
         {
-            return [].concat( (this._arr || []) );
+            return [].concat( ...(this._arr || []) );
         }
 
         canTake()
@@ -1710,7 +2016,7 @@ const $scope = constants?.$scope || function()
             copyArray,
             calculateLength,
             arraysEqual,
-            arraysIntersect,
+            arraysIntersect: areSubsets,
             superset,
             union,
             intersection,

@@ -6,6 +6,10 @@
 /** import the Constants.js we depend upon using require for maximum compatibility with Node versions */
 const constants = require( "./Constants.js" );
 
+/** Create an alias for the console **/
+
+const konsole = console;
+
 /**
  * Defines a string to represent the type, undefined
  */
@@ -464,6 +468,67 @@ const $scope = constants?.$scope || function()
         return defaultFor( typeof pType );
     };
 
+    const castTo = function( pValue, pType )
+    {
+        const type = isString( pType ) && VALID_TYPES.includes( pType ) ? pType : _str;
+
+        let value = pValue || null;
+
+        switch ( type )
+        {
+            case _str:
+                value = (isFunction( pValue?.toString )) ? pValue.toString() : (_mt_str + value);
+                break;
+
+            case _num:
+            case _big:
+                try
+                {
+                    value = (isFunction( pValue?.asFloat )) ? pValue.asFloat() : parseFloat( value );
+                }
+                catch( ex )
+                {
+                    konsole.error( constants.S_ERR_PREFIX, "casting to a number", ex );
+                }
+                break;
+
+            case _bool:
+                value = Boolean( value );
+                break;
+
+            case _obj:
+                switch ( typeof value )
+                {
+                    case _obj:
+                        break;
+
+                    case _str:
+                        value = new String( value );
+                        break;
+
+                    case _num:
+                        value = new Number( value );
+                        break;
+
+                    case _big:
+                        value = new Number( BigInt( value ) );
+                        break;
+
+                    case _bool:
+                        value = new Boolean( value );
+                        break;
+
+                    default:
+                        break;
+                }
+                break;
+
+            default:
+                break;
+        }
+        return value;
+    };
+
     const mod =
         {
             dependencies,
@@ -492,7 +557,8 @@ const $scope = constants?.$scope || function()
             isClass,
             isSymbol,
             isType,
-            defaultFor
+            defaultFor,
+            castTo
         };
 
     if ( _ud !== typeof module )
