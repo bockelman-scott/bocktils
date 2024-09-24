@@ -2741,6 +2741,7 @@ const $scope = constants?.$scope || function()
 
     const mod =
         {
+            dependencies,
             classes: { IterationCap, ObjectEntry },
             ALWAYS_EXCLUDED,
             no_op,

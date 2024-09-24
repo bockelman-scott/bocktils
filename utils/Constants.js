@@ -22,7 +22,12 @@
         return $scope()[INTERNAL_NAME];
     }
 
-    const operatingSystem = ("" + (require( "os" )?.platform)).toLowerCase();
+    const isNodeJs = function()
+    {
+        return (_ud === typeof self) && (null != global) && (_ud !== typeof process);
+    };
+
+    const operatingSystem = isNodeJs() ? ("" + (require( "os" )?.platform)).toLowerCase() : "browser";
 
     const isWindows = function( pOs ) { return ["windows", "win32", "windows_nt"].includes( pOs || operatingSystem ); };
 
