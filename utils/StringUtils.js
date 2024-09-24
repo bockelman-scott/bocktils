@@ -295,8 +295,8 @@ const $scope = constants?.$scope || function()
             case _big:
                 try
                 {
-                    let n = parseFloat( input );
-                    s = isNaN( n ) || !isFinite( n ) ? 0 : (_mt_str + n);
+                    let n = isNaN( input ) || !isFinite( input ) ? 0 : parseFloat( input );
+                    s = isNaN( n ) || !isFinite( n ) ? "0" : (_mt_str + n);
                 }
                 catch( ex )
                 {
@@ -304,7 +304,7 @@ const $scope = constants?.$scope || function()
                 }
                 break;
 
-            // booleans are converted to either the string "true" or the string "false
+            // booleans are converted to either the string "true" or the string "false"
             case _bool:
                 s = input ? S_TRUE : S_FALSE;
                 break;
@@ -427,13 +427,30 @@ const $scope = constants?.$scope || function()
 
                 if ( !options.omitFunctions )
                 {
-                    try
+                    if ( options.executeFunctions )
                     {
-                        s = input.name || input?.constructor?.name || (options.executeFunctions ? input.call( $scope() ) : Function.prototype.toString.call( input, input ));
+                        try
+                        {
+                            s = input.call( $scope() );
+                        }
+                        catch( ex )
+                        {
+                            konsole.warn( constants.S_ERR_PREFIX, "while executing a function as input to asString", ex );
+
+                            s = input.name || input?.constructor?.name || Function.prototype.toString.call( input, input );
+                        }
                     }
-                    catch( ex )
+
+                    if ( isBlank( s ) )
                     {
-                        s = Function.prototype.toString.call( input, input );
+                        try
+                        {
+                            s = input.name || input?.constructor?.name || (options.executeFunctions ? input.call( $scope() ) : Function.prototype.toString.call( input, input ));
+                        }
+                        catch( ex )
+                        {
+                            s = Function.prototype.toString.call( input, input );
+                        }
                     }
 
                     s = asString( s, pTrim );
@@ -1183,11 +1200,11 @@ const $scope = constants?.$scope || function()
      * @returns {number} an floating-point value represented or implied by the value provided
      */
     const asFloat = function( pValue, pDefault = 0, pOptions =
-        {
-            decimal_point: ".",
-            grouping_separator: ",",
-            currency_symbol: /\$|USD/
-        } )
+    {
+        decimal_point: ".",
+        grouping_separator: ",",
+        currency_symbol: /\$|USD/
+    } )
     {
         const zero = 0.0;
         const one = 1.0;

@@ -284,6 +284,10 @@ const $scope = constants?.$scope || function()
                 len = (asString( _mt_str + pObject || _mt_str ))?.length;
                 break;
 
+            case _bool:
+                len = asString( pObject )?.length || 0;
+                break;
+
             case _obj:
                 if ( null == pObject )
                 {
@@ -299,7 +303,7 @@ const $scope = constants?.$scope || function()
                 break;
 
             default:
-                len = 0;
+                len = pObject?.length || 0;
                 break;
         }
 
@@ -837,6 +841,12 @@ const $scope = constants?.$scope || function()
             /** This mapper is used to return an array with its elements converted to strings **/
             TO_STRING: e => _str === typeof e ? e : asString( e ),
 
+            TO_STRING_WITH_OPTIONS: function( pOptions )
+            {
+                const options = Object.assign( {}, pOptions || {} );
+                return e => _str === typeof e ? e : asString( e, options.trim, options );
+            },
+
             /** This mapper is used to return an array with its elements converted to numbers **/
             TO_NUMBER: e => [_num, _big].includes( typeof e ) ? e : stringUtils.asFloat( e ),
 
@@ -915,7 +925,9 @@ const $scope = constants?.$scope || function()
      */
     const Comparators =
         {
-            /** This is the basic comparison of 2 values that can be considered greater than or less than one another **/
+            /** This is the basic comparison of 2 values
+             * that can be considered greater than or less than one another
+             **/
             _compare: function( a, b )
             {
                 return (a < b ? -1 : a > b ? 1 : 0);
@@ -928,7 +940,8 @@ const $scope = constants?.$scope || function()
             },
 
             /**
-             * This function returns a default comparator that treats null values as the default value for the specified type.
+             * This function returns a default comparator
+             * that treats null values as the default value for the specified type.
              *
              * @param pType
              * @returns {function}
@@ -937,14 +950,16 @@ const $scope = constants?.$scope || function()
             {
                 return function( a, b )
                 {
-                    let aa = Predicates.IS_NOT_NULL( a ) ? a : typeUtils.defaultFor( pType || typeof a );
-                    let bb = Predicates.IS_NOT_NULL( b ) ? typeUtils.castTo( b, typeof a ) : typeUtils.defaultFor( pType || typeof a );
+                    let type = pType || typeof a;
+
+                    let aa = Predicates.IS_NOT_NULL( a ) ? typeUtils.castTo( a, type ) : typeUtils.defaultFor( type );
+                    let bb = Predicates.IS_NOT_NULL( b ) ? typeUtils.castTo( b, type ) : typeUtils.defaultFor( type );
 
                     return Comparators._compare( aa, bb );
                 };
             },
 
-            /** This comparison function converted each element to a string before comparison **/
+            /** This comparison function converts each element to a string before comparison **/
             BY_STRING_VALUE: function( a, b )
             {
                 let sA = asString( a ) || (_fun === typeof a?.toString ? a.toString() : _mt_str);
@@ -987,13 +1002,15 @@ const $scope = constants?.$scope || function()
             /** This comparator is used to order an array by the length of its elements **/
             BY_LENGTH: function( a, b )
             {
-                let lenA = a?.length || calculateLength( a );
-                let lenB = b?.length || calculateLength( b );
+                let lenA = calculateLength( a ) || a?.length;
+                let lenB = calculateLength( b ) || b?.length;
 
                 return Comparators._compare( lenA, lenB );
             },
 
-            /** This function returns a comparison function that orders one array by the position of elements in another array **/
+            /** This function returns a comparison function
+             * that orders one array by the position of elements in another array
+             **/
             BY_POSITION: function( pReference, pPositionFunction, pTransformation )
             {
                 const ref = [].concat( ...(pReference || []) );
@@ -1086,7 +1103,8 @@ const $scope = constants?.$scope || function()
                 };
             },
 
-            /** This function creates a chain of comparators applied in order until one of them returns a non-zero value **/
+            /** This function creates a chain of comparators
+             * applied in order until one of them returns a non-zero value **/
             chain: function( ...pComparators )
             {
                 const comparators = [].concat( ...(pComparators || [Comparators.NONE]) ).filter( Filters.COMPARATORS );
@@ -1112,7 +1130,7 @@ const $scope = constants?.$scope || function()
              * This function creates a chain of comparators
              * applied in order until one of them returns a non-zero value
              * and then reverses that comparison to return an array sorted in reverse order
-             * **/
+             **/
             descending: function( ...pComparators )
             {
                 const comparators = [].concat( ...(pComparators || [Comparators.NONE]) ).filter( Filters.COMPARATORS );
@@ -1134,7 +1152,7 @@ const $scope = constants?.$scope || function()
                 };
             },
 
-            /** This function returns true if the specified value is a comparator **/
+            /** This function returns true if the specified value is (probably) a comparator **/
             isComparator: function( pCandidate )
             {
                 if ( _ud === typeof pCandidate || null == pCandidate )

@@ -6,7 +6,8 @@
 const constants = require( "../utils/Constants.js" );
 
 const arrayUtils = require( "../utils/ArrayUtils.js" );
-const typeUtils = require( "../utils/TypeUtils" );
+const typeUtils = arrayUtils.dependencies.typeUtils || require( "../utils/TypeUtils.js" );
+const stringUtils = arrayUtils.dependencies.stringUtils || require( "../utils/StringUtils.js" );
 
 Object.assign( this, constants );
 Object.assign( this, arrayUtils );
@@ -814,12 +815,269 @@ test( "The predicate FUNCTION returns a filter to retain only elements that matc
           expect( filtered ).toEqual( ["b"] );
       } );
 
+/*****   MAPPERS    ************/
+
+test( "The Mappers.IDENTITY function simply returns a new array with the same elements as the source array",
+      () =>
+      {
+          const arr = ["a", 1, true, "b", {}, ["a", "b"], function( a, b ) {}];
+
+          let expected = ["a", 1, true, "b", {}, ["a", "b"], function( a, b ) {}];
+
+          expect( arrayUtils.arraysEqual( expected, arr.map( arrayUtils.Mappers.IDENTITY ) ) ).toBe( true );
+      } );
+
+test( "The Mappers.TO_STRING function returns a new array with each element converted to a string",
+      () =>
+      {
+          const arr = ["a", 1, true, "b", {}, ["a", "b"], function( a, b ) {}];
+
+          const expected = ["a", "1", "true", "b", "{}", "ab", ""];
+
+          const actual = arr.map( arrayUtils.Mappers.TO_STRING );
+
+          expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+      } );
+
+test( "The Mappers.TO_STRING_WITH_OPTIONS function returns a function that is used to return a new array with each element converted to a string",
+      () =>
+      {
+          const opts =
+              {
+                  omitFunctions: true,
+                  executeFunctions: false,
+                  joinOn: ",",
+                  jsonify: JSON.stringify,
+                  removeLeadingZeroes: true,
+                  assumeNumeric: false,
+                  assumeAlphabetic: true,
+                  dateFormatter: null
+              };
+
+          const arr = ["a", 1, true, "b", {}, ["a", "b"], function( a, b ) {}];
+
+          const expected = ["a", "1", "true", "b", "{}", "a,b", ""];
+
+          const actual = arr.map( arrayUtils.Mappers.TO_STRING_WITH_OPTIONS( opts ) );
+
+          expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+      } );
 
 
+test( "The Mappers.TO_STRING_WITH_OPTIONS with options to include functions",
+      () =>
+      {
+          const opts =
+              {
+                  omitFunctions: false,
+                  executeFunctions: false,
+                  joinOn: ",",
+                  jsonify: JSON.stringify,
+                  removeLeadingZeroes: true,
+                  assumeNumeric: false,
+                  assumeAlphabetic: true,
+                  dateFormatter: null
+              };
+
+          const arr = ["a", 1, true, "b", {}, ["a", "b"], function( a, b ) {}];
+
+          const expected = ["a", "1", "true", "b", "{}", "a,b", "Function"];
+
+          const actual = arr.map( arrayUtils.Mappers.TO_STRING_WITH_OPTIONS( opts ) );
+
+          expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+      } );
 
 
+test( "The Mappers.TO_STRING_WITH_OPTIONS with options to execute functions",
+      () =>
+      {
+          const opts =
+              {
+                  omitFunctions: false,
+                  executeFunctions: true,
+                  joinOn: ",",
+                  jsonify: JSON.stringify,
+                  removeLeadingZeroes: true,
+                  assumeNumeric: false,
+                  assumeAlphabetic: true,
+                  dateFormatter: null
+              };
 
-// The following classes and object are used in the tests for sortArray
+          const arr = ["a", 1, true, "b", {}, ["a", "b"], function() { return "xyz"; }];
+
+          const expected = ["a", "1", "true", "b", "{}", "a,b", "xyz"];
+
+          const actual = arr.map( arrayUtils.Mappers.TO_STRING_WITH_OPTIONS( opts ) );
+
+          expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+      } );
+
+
+test( "The Mappers.TO_STRING_WITH_OPTIONS with options to include a date formatter",
+      () =>
+      {
+          const opts =
+              {
+                  omitFunctions: true,
+                  executeFunctions: false,
+                  joinOn: "~",
+                  jsonify: JSON.stringify,
+                  removeLeadingZeroes: true,
+                  assumeNumeric: false,
+                  assumeAlphabetic: true,
+                  dateFormatter: function( pDate )
+                  {
+                      const date = (pDate instanceof Date) ? pDate : new Date( pDate );
+
+                      let fullYear = date.getFullYear();
+                      let month = stringUtils.asString( date.getMonth() + 1 ).padStart( 2, "0" );
+                      let day = stringUtils.asString( date.getDate() ).padStart( 2, "0" );
+
+                      return month + "/" + day + "/" + fullYear;
+                  }
+              };
+
+          let date = new Date( 1727114146310 ); // 09/23/2024
+
+          const arr = ["a", 1, true, "b", {}, ["a", "b"], date];
+
+          const expected = ["a", "1", "true", "b", "{}", "a~b", "09/23/2024"];
+
+          const actual = arr.map( arrayUtils.Mappers.TO_STRING_WITH_OPTIONS( opts ) );
+
+          expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+      } );
+
+
+test( "The Mappers.TO_NUMBER function returns a new array with each element converted to a number",
+      () =>
+      {
+          const arr = ["a", 1, true, "b", {}, ["a", "b"], function( a, b ) {}, "007", "3", "0xFFF", "017", NaN];
+
+          const expected = [0, 1, 1, 0, 0, 0, 0, 7, 3, 4095, 15, NaN];
+
+          const actual = arr.map( arrayUtils.Mappers.TO_NUMBER );
+
+          expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+      } );
+
+
+test( "The Mappers.TO_VALID_NUMBER function returns a new array with each element that can be converted to a number converted to a number",
+      () =>
+      {
+          const arr = ["a", 1, true, "b", {}, ["a", "b"], function( a, b ) {}, "007", "3", "0xFFF", "017", NaN];
+
+          const expected = [0, 1, 1, 0, 0, 0, 0, 7, 3, 4095, 15, 0];
+
+          const actual = arr.map( arrayUtils.Mappers.TO_VALID_NUMBER );
+
+          expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+      } );
+
+test( "The Mappers.TRIMMED function returns a new array with each element converted to a string without leading or trailing whitespace",
+      () =>
+      {
+          const arr = [" a ", 1, true, "abc ", {}, ["a", "b", "cde "], function() { return " xyz "; }, NaN];
+
+          const expected = ["a", "1", "true", "abc", "{}", "abcde", "", "0"];
+
+          const actual = arr.map( arrayUtils.Mappers.TRIMMED );
+
+          expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+      } );
+
+
+test( "The Mappers.APPEND function returns a function to return a new array with each element converted to a string with the specified value appended",
+      () =>
+      {
+          const arr = [" a ", 1, true, "abc ", {}, ["a", "b", "cde "], function() { return " xyz "; }, NaN];
+
+          const expected = [" a foo", "1foo", "truefoo", "abc foo", "{}foo", "abcde foo", "foo", "0foo"];
+
+          const actual = arr.map( arrayUtils.Mappers.APPEND( "foo" ) );
+
+          expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+      } );
+
+test( "The Mappers.PREPEND function returns a function to return a new array with each element converted to a string with the specified value prepended",
+      () =>
+      {
+          const arr = [" a ", 1, true, "abc ", {}, ["a", "b", "cde "], function() { return " xyz "; }, NaN];
+
+          const expected = ["bar a ", "bar1", "bartrue", "barabc ", "bar{}", "barabcde ", "bar", "bar0"];
+
+          const actual = arr.map( arrayUtils.Mappers.PREPEND( "bar" ) );
+
+          expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+      } );
+
+test( "The Mappers.REPLACE function returns a function to return a new array with each element converted to a string with the specified value replaced",
+      () =>
+      {
+          const arr = [" a ", 1, true, "abc ", {}, ["a", "b", "cde "], function() { return " xyz "; }, NaN];
+
+          const expected = [" ** ", "1", "true", "**bc ", "{}", "**bcde ", "", "0"];
+
+          const actual = arr.map( arrayUtils.Mappers.REPLACE( /a/g, "**" ) );
+
+          expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+      } );
+
+
+test( "The Mappers.TO_LOWERCASE returns a new array with each element converted to a lowercase string",
+      () =>
+      {
+          const arr = [];
+
+          const expected = [];
+
+          const actual = arr.map( arrayUtils.Mappers.TO_LOWERCASE );
+
+          expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+      } );
+
+
+test( "The Mappers.TO_LOWERCASE returns a new array with each element converted to a lowercase string",
+      () =>
+      {
+          const arr = ["AbC", "abc", "dEf", 1, true];
+
+          const expected = ["abc", "abc", "def", "1", "true"];
+
+          const actual = arr.map( arrayUtils.Mappers.TO_LOWERCASE );
+
+          expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+      } );
+
+
+test( "The Mappers.TO_UPPERCASE returns a new array with each element converted to an UPPERCASE string",
+      () =>
+      {
+          const arr = ["AbC", "abc", "dEf", 1, true];
+
+          const expected = ["ABC", "ABC", "DEF", "1", "TRUE"];
+
+          const actual = arr.map( arrayUtils.Mappers.TO_UPPERCASE );
+
+          expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+      } );
+
+
+test( "The Mappers.chain function returns a function that maps each element of the array as per the provided mappers",
+      () =>
+      {
+          const arr = [" AbC ", "def", 12, true, " xYz "];
+
+          const expected = ["abc", "def", "12", "true", "xyz"];
+
+          const actual = arr.map( arrayUtils.Mappers.chain( arrayUtils.Mappers.TO_STRING, arrayUtils.Mappers.TRIMMED, arrayUtils.Mappers.TO_LOWERCASE ) );
+
+          expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+      } );
+
+
+// The following classes and object are used in the tests for comparators and the top-level sortArray function
 
 class Person
 {
@@ -872,5 +1130,76 @@ class Person
     }
 }
 
+/*****   COMPARATORS    ************/
 
+test( "The Comparator._compare function is a #private# function to compare 2 comparable values",
+      () =>
+      {
+          const arr = [4, 2, 5, 3, 1, 7];
 
+          const expected = [1, 2, 3, 4, 5, 7];
+
+          const actual = arr.sort( arrayUtils.Comparators._compare );
+
+          expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+      } );
+
+test( "The Comparator.NONE function is a comparison function that leaves the array in the same order",
+      () =>
+      {
+          const arr = [4, 2, 5, 3, 1, 7];
+
+          const expected = [4, 2, 5, 3, 1, 7];
+
+          const actual = arr.sort( arrayUtils.Comparators.NONE );
+
+          expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+      } );
+
+test( "The Comparator.CREATE_DEFAULT function returns a comparison function that orders the array elements according the specified type",
+      () =>
+      {
+          const arr = [1, 2, 3, 4, 11, 22, 12, 13, 33, 34, 35];
+
+          const expected = [1, 2, 3, 4, 11, 12, 13, 22, 33, 34, 35];
+
+          const actual = arr.sort( arrayUtils.Comparators.CREATE_DEFAULT( "number" ) );
+
+          expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+      } );
+
+test( "The Comparator.CREATE_DEFAULT function returns a comparison function that orders the array elements as strings",
+      () =>
+      {
+          const arr = [1, 2, 3, 4, 11, 22, 12, 13, 33, 34, 35];
+
+          const expected = ["1", "11", "12", "13", "2", "22", "3", "33", "34", "35", "4"];
+
+          const actual = arr.sort( arrayUtils.Comparators.CREATE_DEFAULT( "string" ) );
+
+          expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+      } );
+
+test( "The Comparator.BY_STRING_VALUE is a comparison function that converts elements to strings prior to ordering the array",
+      () =>
+      {
+          const arr = [1, 2, 3, 4, 11, 22, 12, 13, 33, 34, 35];
+
+          const expected = ["1", "11", "12", "13", "2", "22", "3", "33", "34", "35", "4"];
+
+          const actual = arr.sort( arrayUtils.Comparators.BY_STRING_VALUE );
+
+          expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+      } );
+
+test( "The Comparator.BY_LENGTH is a comparison function that orders the array elements according the length of their string representation",
+      () =>
+      {
+          const arr = ["some", "random", "elements", 2, true, {}, "that", "can", "be", "ordered by length"];
+
+          const expected = [2, "be", "can", "some", true, "that", "random", "elements", {}, "ordered by length"];
+
+          const actual = arr.sort( arrayUtils.Comparators.BY_LENGTH );
+
+          expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+      } );

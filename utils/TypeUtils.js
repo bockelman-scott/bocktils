@@ -477,7 +477,7 @@ const $scope = constants?.$scope || function()
         switch ( type )
         {
             case _str:
-                value = (isFunction( pValue?.toString )) ? pValue.toString() : (_mt_str + value);
+                value = (isFunction( pValue?.asString )) ? pValue.asString() : (_mt_str + value);
                 break;
 
             case _num:
