@@ -1076,59 +1076,6 @@ test( "The Mappers.chain function returns a function that maps each element of t
       } );
 
 
-// The following classes and object are used in the tests for comparators and the top-level sortArray function
-
-class Person
-{
-    #firstName;
-    #lastName;
-    #age;
-    #eyeColor;
-
-    constructor( pLastName, pFirstName, pAge, pEyeColor )
-    {
-        this.#lastName = pLastName;
-        this.#firstName = pFirstName;
-        this.#age = pAge;
-        this.#eyeColor = pEyeColor;
-    }
-
-    get firstName()
-    {
-        return this.#firstName;
-    }
-
-    get lastName()
-    {
-        return this.#lastName;
-    }
-
-    get age()
-    {
-        return this.#age;
-    }
-
-    get eyeColor()
-    {
-        return this.#eyeColor;
-    }
-
-    get name()
-    {
-        return this.firstName + " " + this.lastName;
-    }
-
-    compareTo( pOther )
-    {
-        if ( !(pOther instanceof Person) )
-        {
-            throw new Error( "Cannot compare" + (typeof pOther) + "to an instance of Person" );
-        }
-
-        return this.lastName > pOther?.lastName ? 1 : pOther?.lastName > this.lastName ? -1 : 0;
-    }
-}
-
 /*****   COMPARATORS    ************/
 
 test( "The Comparator._compare function is a #private# function to compare 2 comparable values",
@@ -1316,5 +1263,126 @@ test( "Transformers can be chained",
           const arr2 = transformerChain.transform( arr );
 
           expect( arr2 ).toEqual( ["ABC", "TRUE", "XYZ"] );
+      } );
+
+test( "pruneArray removes empty strings",
+      () =>
+      {
+          const arr = ["", "abc", " "];
+
+          expect( arrayUtils.pruneArray( arr ) ).toEqual( ["abc", " "] );
+      } );
+
+test( "pruneArray removes null and undefined elements as well as invalid numbers",
+      () =>
+      {
+          const arr = ["", "abc", " ", null, undefined, 1 / 0];
+
+          expect( arrayUtils.pruneArray( arr ) ).toEqual( ["abc", " "] );
+      } );
+
+test( "pruneArray removes null and undefined elements as well as invalid numbers",
+      () =>
+      {
+          const arr = ["", "abc", " ", null, undefined, 1 / 0];
+
+          expect( arrayUtils.pruneArray( arr ) ).toEqual( ["abc", " "] );
+      } );
+
+test( "pruneArray removes null and undefined elements and elements of specified types",
+      () =>
+      {
+          const arr = ["", "abc", " ", null, undefined, 1 / 0, true, false];
+
+          expect( arrayUtils.pruneArray( arr, false, "boolean" ) ).toEqual( ["abc", " ", Number.POSITIVE_INFINITY] );
+      } );
+
+
+// The following classes and object are used in the tests for comparators and the top-level sortArray function
+
+class Person
+{
+    #firstName;
+    #lastName;
+    #age;
+    #eyeColor;
+
+    constructor( pLastName, pFirstName, pAge, pEyeColor )
+    {
+        this.#lastName = pLastName;
+        this.#firstName = pFirstName;
+        this.#age = pAge;
+        this.#eyeColor = pEyeColor;
+    }
+
+    get firstName()
+    {
+        return this.#firstName;
+    }
+
+    get lastName()
+    {
+        return this.#lastName;
+    }
+
+    get age()
+    {
+        return this.#age;
+    }
+
+    get eyeColor()
+    {
+        return this.#eyeColor;
+    }
+
+    get name()
+    {
+        return this.firstName + " " + this.lastName;
+    }
+
+    compareTo( pOther )
+    {
+        if ( !(pOther instanceof Person) )
+        {
+            throw new Error( "Cannot compare" + (typeof pOther) + "to an instance of Person" );
+        }
+
+        return this.age > pOther?.age ? 1 : pOther?.age > this.age ? -1 : 0;
+    }
+}
+
+
+test( "sortArray can take a comparator",
+      () =>
+      {
+          const arr = [1, 2, 3, 11, 12, 22, 23, 33, 4];
+
+          expect( arrayUtils.sortArray( arr, arrayUtils.Comparators.BY_STRING_VALUE ) ).toEqual( [1, 11, 12, 2, 22, 23, 3, 33, 4] );
+      } );
+
+test( "sortArray can take a property name",
+      () =>
+      {
+          let stewart = new Person( "Copeland", "Stewart", "61", "Brown" );
+          let danny = new Person( "Carry", "Danny", "52", "Brown" );
+          let charlie = new Person( "Watts", "Charlie", "88", "Brown" );
+          let ginger = new Person( "Baker", "Ginger", "73", "Green" );
+
+          const arr = [charlie, stewart, danny, ginger];
+
+          expect( arrayUtils.sortArray( arr, "lastName" ) ).toEqual( [ginger, danny, stewart, charlie] );
+      } );
+
+test( "sortArray can use 'compareTo'",
+      () =>
+      {
+          let stewart = new Person( "Copeland", "Stewart", "61", "Brown" );
+          let danny = new Person( "Carry", "Danny", "52", "Brown" );
+          let charlie = new Person( "Watts", "Charlie", "88", "Brown" );
+          let ginger = new Person( "Baker", "Ginger", "73", "Green" );
+
+          const arr = [charlie, stewart, danny, ginger];
+
+          expect( arrayUtils.sortArray( arr, true ) ).toEqual( [danny, stewart, ginger, charlie] );
       } );
 
