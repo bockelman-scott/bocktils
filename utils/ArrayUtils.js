@@ -1195,7 +1195,7 @@ const $scope = constants?.$scope || function()
 
         get method()
         {
-            let funcName = asString( ( isString( this._method ) ? this._method : asString( this._method?.name )) ) || TRANSFORMATIONS.FILTER;
+            let funcName = asString( (isString( this._method ) ? this._method : asString( this._method?.name )) ) || TRANSFORMATIONS.FILTER;
             return asString( Object.values( TRANSFORMATIONS ).includes( funcName ) ? funcName : TRANSFORMATIONS.FILTER );
         }
 
@@ -1751,7 +1751,27 @@ const $scope = constants?.$scope || function()
     {
         let arr = asArray( pArr || [] );
 
-        let clone = structuredClone( arr );
+        let clone = [].concat( ...arr );
+
+        try
+        {
+            clone = structuredClone( arr );
+        }
+        catch( ex )
+        {
+            // functions cannot be cloned
+            clone = arr.filter( e => !typeUtils.isFunction( e ) );
+
+            try
+            {
+                clone = structuredClone( clone );
+            }
+            catch( ex2 )
+            {
+                // functions cannot be cloned
+                clone = arr.filter( e => !typeUtils.isFunction( e ) );
+            }
+        }
 
         return [].concat( ...clone );
     };
@@ -1883,9 +1903,10 @@ const $scope = constants?.$scope || function()
      * @param pArrA the first array
      * @param pArrB the second array
      *
+     * @param pUnique
      * @returns {*}
      */
-    const disjunction = function( pArrA, pArrB )
+    const disjunction = function( pArrA, pArrB, pUnique = false )
     {
         let arrA = Object.freeze( asArray( pArrA || [] ) );
         let arrB = Object.freeze( asArray( pArrB || [] ) );
@@ -1893,6 +1914,11 @@ const $scope = constants?.$scope || function()
         let arr = arrA.concat( arrB );
 
         arr = arr.filter( e => !(arrA.includes( e ) && arrB.includes( e )) );
+
+        if ( pUnique )
+        {
+            arr = unique( arr );
+        }
 
         return arr;
     };
@@ -2338,7 +2364,7 @@ const $scope = constants?.$scope || function()
             copyArray,
             calculateLength,
             arraysEqual,
-            arraysIntersect: areSubsets,
+            areSubsets,
             superset,
             union,
             intersection,
@@ -2363,6 +2389,7 @@ const $scope = constants?.$scope || function()
             MapperChain,
             ComparatorChain,
             BoundedQueue,
+            AsyncBoundedQueue,
             chainFilters,
             chainMappers,
             enQueue,
@@ -2373,7 +2400,8 @@ const $scope = constants?.$scope || function()
                     FilterChain,
                     MapperChain,
                     ComparatorChain,
-                    BoundedQueue
+                    BoundedQueue,
+                    AsyncBoundedQueue
                 }
         };
 

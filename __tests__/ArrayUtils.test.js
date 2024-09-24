@@ -1386,3 +1386,272 @@ test( "sortArray can use 'compareTo'",
           expect( arrayUtils.sortArray( arr, true ) ).toEqual( [danny, stewart, ginger, charlie] );
       } );
 
+test( "hasElements returns true if the array has at least 1 element",
+      () =>
+      {
+          const arr = [];
+
+          expect( arrayUtils.hasElements( arr ) ).toBe( false );
+      } );
+
+test( "hasElements(array, 2) returns true if the array has at least 2 elements",
+      () =>
+      {
+          const arr = [1];
+
+          expect( arrayUtils.hasElements( arr, 2 ) ).toBe( false );
+      } );
+
+test( "hasElements(array, 2) returns true if the array has at least 2 elements",
+      () =>
+      {
+          const arr = [1, 2];
+
+          expect( arrayUtils.hasElements( arr, 2 ) ).toBe( true );
+      } );
+
+test( "isEmptyArray returns false if the array has any elements",
+      () =>
+      {
+          const arr = [1, 2];
+
+          expect( arrayUtils.isEmptyArray( arr ) ).toBe( false );
+      } );
+
+test( "isEmptyArray returns true if the array has no elements",
+      () =>
+      {
+          const arr = [];
+
+          expect( arrayUtils.isEmptyArray( arr ) ).toBe( true );
+      } );
+
+test( "arrLength returns the length of the array or 0 if the value is not an array",
+      () =>
+      {
+          const arr = [1, 2];
+
+          expect( arrayUtils.arrLength( arr ) ).toEqual( 2 );
+      } );
+
+test( "arrLength returns 0 if the value is not an array",
+      () =>
+      {
+          const arr = "abc";
+
+          expect( arrayUtils.arrLength( arr ) ).toEqual( 0 );
+      } );
+
+test( "arrLength returns the length of an array-like value",
+      () =>
+      {
+          const arr = "abc";
+
+          expect( arrayUtils.arrLength( arr, true ) ).toEqual( 3 );
+      } );
+
+///
+test( "arrLenGt returns true if the length of the array is greater than n",
+      () =>
+      {
+          const arr = [1, 2];
+
+          expect( arrayUtils.arrLenGt( arr, 1 ) ).toBe( true );
+      } );
+
+test( "arrLenGt returns false if the value is not an array",
+      () =>
+      {
+          const arr = "abc";
+
+          expect( arrayUtils.arrLenGt( arr, 1 ) ).toBe( false );
+      } );
+
+test( "arrLenGt returns true if the length of an array-like value is greater than n",
+      () =>
+      {
+          const arr = "abc";
+
+          expect( arrayUtils.arrLenGt( arr, 2, true ) ).toBe( true );
+      } );
+///
+test( "arrLenGtEq returns true if the length of the array is greater than or equal to n",
+      () =>
+      {
+          const arr = [1, 2];
+
+          expect( arrayUtils.arrLenGtEq( arr, 2 ) ).toBe( true );
+      } );
+
+test( "arrLenGtEq returns false if the value is not an array",
+      () =>
+      {
+          const arr = "abc";
+
+          expect( arrayUtils.arrLenGtEq( arr, 1 ) ).toBe( false );
+      } );
+
+test( "arrLenGtEq returns true if the length of an array-like value is greater than or equal to n",
+      () =>
+      {
+          const arr = "abc";
+
+          expect( arrayUtils.arrLenGtEq( arr, 2, true ) ).toBe( true );
+      } );
+
+///
+test( "arrLenLt returns true if the length of the array is less than n",
+      () =>
+      {
+          const arr = [1, 2];
+
+          expect( arrayUtils.arrLenLt( arr, 3 ) ).toBe( true );
+      } );
+
+test( "arrLenLt returns true if the value is not an array",
+      () =>
+      {
+          const arr = "abc";
+
+          expect( arrayUtils.arrLenLt( arr, 4 ) ).toBe( true );
+      } );
+
+test( "arrLenLt returns true if the length of an array-like value is less than n",
+      () =>
+      {
+          const arr = "abc";
+
+          expect( arrayUtils.arrLenLt( arr, 4, true ) ).toBe( true );
+      } );
+///
+test( "arrLenLtEq returns true if the length of the array is less than or equal to n",
+      () =>
+      {
+          const arr = [1, 2];
+
+          expect( arrayUtils.arrLenLtEq( arr, 2 ) ).toBe( true );
+      } );
+
+test( "arrLenLtEq returns true if the value is not an array",
+      () =>
+      {
+          const arr = "abc";
+
+          expect( arrayUtils.arrLenLtEq( arr, 1 ) ).toBe( true );
+      } );
+
+test( "arrLenLtEq returns true if the length of an array-like value is less than or equal to n",
+      () =>
+      {
+          const arr = "abc";
+
+          expect( arrayUtils.arrLenLtEq( arr, 3, true ) ).toBe( true );
+      } );
+
+
+test( "copyArray returns a new array equal to, but not identical to, the source array",
+      () =>
+      {
+          const arr = ["abc", 2, {}, 3, true];
+
+          const clone = arrayUtils.copyArray( arr );
+
+          expect( arrayUtils.arraysEqual( arr, clone ) && arr !== clone ).toBe( true );
+      } );
+
+test( "copyArray cannot preserve functions",
+      () =>
+      {
+          const arr = ["abc", 2, {}, 3, true, function() {}];
+
+          const clone = arrayUtils.copyArray( arr );
+
+          expect( clone ).toEqual( ["abc", 2, {}, 3, true] );
+      } );
+
+test( "areSubsets only returns true if one of the array completely contains the other",
+      () =>
+      {
+          const arr = [1, 2, 3];
+          const arr2 = [2, 3, 4];
+
+          expect( arrayUtils.areSubsets( arr, arr2 ) ).toBe( false );
+      } );
+
+test( "areSubsets returns true if one of the array contains the other",
+      () =>
+      {
+          const arr = [1, 2, 3, 4];
+          const arr2 = [2, 3, 4];
+
+          expect( arrayUtils.areSubsets( arr, arr2 ) ).toBe( true );
+      } );
+
+
+test( "superset returns an array containing all defined, non-null, non-empty values from the input arrays",
+      () =>
+      {
+          const arr = [1, 2, 3, null];
+          const arr2 = [2, 3, 4, undefined, ""];
+
+          expect( arrayUtils.superset( arr, arr2 ) ).toEqual( [1, 2, 3, 2, 3, 4] );
+      } );
+
+test( "superset with the 'unique' options returns an array containing all unique defined, non-null, non-empty values from the input arrays",
+      () =>
+      {
+          const arr = [1, 2, 3];
+          const arr2 = [2, 3, 4];
+
+          expect( arrayUtils.superset( arr, arr2, true ) ).toEqual( [1, 2, 3, 4] );
+      } );
+
+test( "intersection returns an array containing only elements common to both input arrays",
+      () =>
+      {
+          const arr = [1, 2, 3];
+          const arr2 = [2, 3, 4];
+
+          expect( arrayUtils.intersection( arr, arr2 ) ).toEqual( [2, 3, 2, 3] );
+      } );
+
+test( "intersection with the 'unique' option returns an array containing only the unique elements common to both input arrays",
+      () =>
+      {
+          const arr = [1, 2, 3];
+          const arr2 = [2, 3, 4];
+
+          expect( arrayUtils.intersection( arr, arr2, true ) ).toEqual( [2, 3] );
+      } );
+
+
+test( "disjunction returns an array containing only elements unique to one or the other of the input arrays",
+      () =>
+      {
+          const arr = [1, 2, 3, 1, 2, 3];
+          const arr2 = [2, 3, 4, 2, 3, 4];
+
+          expect( arrayUtils.disjunction( arr, arr2 ) ).toEqual( [1, 1, 4, 4] );
+      } );
+
+test( "disjunction with the 'unique' option returns an array containing only the unique elements unique to one or the other of the input arrays",
+      () =>
+      {
+          const arr = [1, 2, 3, 1, 2, 3];
+          const arr2 = [2, 3, 4, 2, 3, 4];
+
+          expect( arrayUtils.disjunction( arr, arr2, true ) ).toEqual( [1, 4] );
+      } );
+
+test( "enQueue pushes new elements onto the end of an array, but shifts elements off of the front if the array length would exceed the limit",
+      () =>
+      {
+          let arr = [1, 2, 3];
+
+          arr = arrayUtils.enQueue( arr, 4, 3 );
+
+          expect( arr ).toEqual( [2, 3, 4] );
+      } );
+
+
+
