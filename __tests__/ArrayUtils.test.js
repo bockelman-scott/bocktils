@@ -306,7 +306,6 @@ test( "The firstPopulatedArray is [1,2]",
           expect( arrayUtils.firstPopulatedArray( undefined, null, [], { a: 1 }, [1, 2], [1, 2, 3], [] ) ).toEqual( [1, 2] );
       } );
 
-
 test( "The lastPopulatedArray is [1,2,3,4]",
       () =>
       {
@@ -1203,3 +1202,119 @@ test( "The Comparator.BY_LENGTH is a comparison function that orders the array e
 
           expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
       } );
+
+test( "The Comparator.BY_POSITION is function that returns a comparison function that orders the array elements according their position in the reference array",
+      () =>
+      {
+          const arr = ["a", "b", "c", "d", "e", "f"];
+
+          const ref = ["d", "e", "f", "a", "b", "c"];
+
+          const expected = ["d", "e", "f", "a", "b", "c"];
+
+          const actual = arr.sort( arrayUtils.Comparators.BY_POSITION( ref ) );
+
+          expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+      } );
+
+
+test( "The Comparator.chain is a function that returns a comparison function composed of the specified comparators",
+      () =>
+      {
+          const arr = ["abc", "abc", "abc", "abcd", "abcd", "def", "def", "Def", "ABC"];
+
+          const expected = ["ABC", "Def", "abc", "abc", "abc", "def", "def", "abcd", "abcd"];
+
+          const actual = arr.sort( arrayUtils.Comparators.chain( arrayUtils.Comparators.BY_LENGTH, arrayUtils.Comparators.BY_STRING_VALUE ) );
+
+          expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+      } );
+
+test( "Comparator.chain is a function that returns a comparison function composed of the specified comparators executed in order",
+      () =>
+      {
+          const arr = ["abc", "abc", "abc", "abcd", "abcd", "def", "def", "Def", "ABC"];
+
+          const expected = ["ABC", "Def", "abc", "abc", "abc", "abcd", "abcd", "def", "def"];
+
+          const actual = arr.sort( arrayUtils.Comparators.chain( arrayUtils.Comparators.BY_STRING_VALUE, arrayUtils.Comparators.BY_LENGTH ) );
+
+          expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+      } );
+
+test( "Comparator.descending is a function that wraps any comparison function to reverse the order",
+      () =>
+      {
+          const arr = ["abc", "abc", "abc", "abcd", "abcd", "def", "def", "Def", "ABC"];
+
+          const expected = ["def", "def", "abcd", "abcd", "abc", "abc", "abc", "Def", "ABC"];
+
+          const actual = arr.sort( arrayUtils.Comparators.descending( arrayUtils.Comparators.chain( arrayUtils.Comparators.BY_STRING_VALUE, arrayUtils.Comparators.BY_LENGTH ) ) );
+
+          expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+      } );
+
+
+test( "Comparator.descending is a function that wraps any comparison function to reverse the order",
+      () =>
+      {
+          const arr = ["abc", "abc", "abc", "abcd", "abcd", "def", "def", "Def", "ABC"];
+
+          const expected = ["def", "def", "abcd", "abcd", "abc", "abc", "abc", "Def", "ABC"];
+
+          const actual = arr.sort( arrayUtils.Comparators.chain( arrayUtils.Comparators.descending( arrayUtils.Comparators.BY_STRING_VALUE ), arrayUtils.Comparators.descending( arrayUtils.Comparators.BY_LENGTH ) ) );
+
+          expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+      } );
+
+test( "Comparator.isComparator returns true if the specified value is a function that takes 2 arguments",
+      () =>
+      {
+          expect( arrayUtils.Comparators.isComparator( arrayUtils.Comparators.BY_LENGTH ) ).toBe( true );
+      } );
+
+test( "Comparator.isComparator returns false if the specified value is not a function that takes 2 arguments",
+      () =>
+      {
+          expect( arrayUtils.Comparators.isComparator( arrayUtils.Predicates.IS_OBJECT ) ).toBe( false );
+      } );
+
+test( "Comparator.isComparator returns false if the specified value is not a function",
+      () =>
+      {
+          expect( arrayUtils.Comparators.isComparator( "abc" ) ).toBe( false );
+      } );
+
+test( "Transformers are objects that can be used to manipulate collections",
+      () =>
+      {
+          let transformer = new arrayUtils.Transformer( arrayUtils.TRANSFORMATIONS.MAP, e => stringUtils.asString( e, true ) );
+
+          const arr = [1, true, "abc ", " xyz"];
+
+          const arr2 = transformer.transform( arr );
+
+          expect( arr2 ).toEqual( ["1", "true", "abc", "xyz"] );
+      } );
+
+
+test( "Transformers can be chained",
+      () =>
+      {
+          let mapper = new arrayUtils.Transformer( arrayUtils.TRANSFORMATIONS.MAP, e => stringUtils.asString( e, true ) );
+
+          let mapper2 = new arrayUtils.Transformer( arrayUtils.TRANSFORMATIONS.MAP, e => stringUtils.ucase( e ) );
+
+          let filter = new arrayUtils.Transformer( arrayUtils.TRANSFORMATIONS.FILTER, e => e?.length > 1 );
+
+          let comparator = new arrayUtils.Transformer( arrayUtils.TRANSFORMATIONS.SORT, ( a, b ) => a > b ? 1 : a < b ? -1 : 0 );
+
+          let transformerChain = new arrayUtils.TransformerChain( mapper, mapper2, filter, comparator );
+
+          const arr = [1, true, "abc ", " xyz"];
+
+          const arr2 = transformerChain.transform( arr );
+
+          expect( arr2 ).toEqual( ["ABC", "TRUE", "XYZ"] );
+      } );
+

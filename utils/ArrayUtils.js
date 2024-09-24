@@ -1195,7 +1195,7 @@ const $scope = constants?.$scope || function()
 
         get method()
         {
-            let funcName = asString( (_str === this._method ? this._method : asString( this._method?.name )) ) || TRANSFORMATIONS.FILTER;
+            let funcName = asString( ( isString( this._method ) ? this._method : asString( this._method?.name )) ) || TRANSFORMATIONS.FILTER;
             return asString( Object.values( TRANSFORMATIONS ).includes( funcName ) ? funcName : TRANSFORMATIONS.FILTER );
         }
 
@@ -1227,13 +1227,13 @@ const $scope = constants?.$scope || function()
         {
             let arr = [].concat( ...(pArr || []) );
 
-            if ( _str === typeof arr[this.method] )
+            if ( _str === typeof this.method )
             {
                 const operation = arr[this._method];
 
                 if ( _fun === typeof operation )
                 {
-                    if ( _fun === typeof this.argument )
+                    if ( _fun === typeof this.argument && this.argument?.length >= 1 )
                     {
                         arr = arr[this.method]( this.argument );
                     }
