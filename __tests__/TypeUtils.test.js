@@ -1000,6 +1000,106 @@ test( "isClass(Array, false) === true",
           expect( typeUtils.isClass( Array, false ) ).toBe( true );
       } );
 
+
+test( "instanceOfAny returns true if the object is an instance of one of the classes specified",
+      () =>
+      {
+          const a = new A();
+          expect( typeUtils.instanceOfAny( a, A ) ).toBe( true );
+      } );
+
+test( "instanceOfAny returns false if the object is an instance of the base class of the classes specified",
+      () =>
+      {
+          const a = new A();
+          expect( typeUtils.instanceOfAny( a, B, C ) ).toBe( false );
+      } );
+
+test( "instanceOfAny returns true if the object is an instance of a subclass of one of the classes specified",
+      () =>
+      {
+          const c = new C();
+          expect( typeUtils.instanceOfAny( c, A, B ) ).toBe( true );
+      } );
+
+test( "isUserDefinedClass returns false if the object is a built-in class",
+      () =>
+      {
+          expect( typeUtils.isUserDefinedClass( Array ) ).toBe( false );
+      } );
+
+test( "isUserDefinedClass returns true if the object a user-defined class",
+      () =>
+      {
+          expect( typeUtils.isUserDefinedClass( B ) ).toBe( true );
+      } );
+
+test( "isListedClass returns true if the object is one of the classes specified",
+      () =>
+      {
+          expect( typeUtils.isListedClass( C, C ) ).toBe( true );
+      } );
+
+test( "isListedClass returns true if the object is one of the classes specified or a subclass of one of the classes",
+      () =>
+      {
+          expect( typeUtils.isListedClass( C, A ) ).toBe( true );
+      } );
+
+test( "isListedClass returns false if the object is not one of the classes specified",
+      () =>
+      {
+          expect( typeUtils.isListedClass( Object, C, B, A ) ).toBe( false );
+      } );
+
+test( "isInstanceOfUserDefinedClass returns true if the object is an instance of one of the classes specified",
+      () =>
+      {
+          const a = new A();
+          expect( typeUtils.isInstanceOfUserDefinedClass( a, A ) ).toBe( true );
+      } );
+
+test( "isInstanceOfUserDefinedClass returns true if the object is an instance of a subclass of one of the classes specified",
+      () =>
+      {
+          const c = new C();
+          expect( typeUtils.isInstanceOfUserDefinedClass( c, A ) ).toBe( true );
+      } );
+
+test( "isInstanceOfUserDefinedClass returns false if the object is not an instance of a subclass of one of the classes specified",
+      () =>
+      {
+          const a = new A();
+          expect( typeUtils.isInstanceOfUserDefinedClass( a, B ) ).toBe( false );
+      } );
+
+
+test( "isInstanceOfUserDefinedClass returns true if the object is an instance of a user defined class",
+      () =>
+      {
+          const a = new A();
+          expect( typeUtils.isInstanceOfUserDefinedClass( a ) ).toBe( true );
+      } );
+
+test( "isInstanceOfListedClass returns true if the object is an instance of one of the classes specified",
+      () =>
+      {
+          expect( typeUtils.isInstanceOfListedClass( new C(), C ) ).toBe( true );
+      } );
+
+test( "isInstanceOfListedClass returns true if the object is an instance of one of the classes specified or a subclass of one of the classes",
+      () =>
+      {
+          expect( typeUtils.isInstanceOfListedClass( new C(), A ) ).toBe( true );
+      } );
+
+test( "isInstanceOfListedClass returns false if the object is not one of the classes specified",
+      () =>
+      {
+          expect( typeUtils.isInstanceOfListedClass( {}, C, B, A ) ).toBe( false );
+      } );
+
+
 test( "defaultFor( \"string\" ) === '' ",
       () =>
       {

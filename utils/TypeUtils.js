@@ -499,13 +499,13 @@ const $scope = constants?.$scope || function()
 
     const isListedClass = function( pFunction, ...pListedClasses )
     {
-        return isClass( pFunction ) && instanceOfAny( pFunction, ...pListedClasses );
+        return isClass( pFunction ) && instanceOfAny( new pFunction(), ...pListedClasses );
     };
 
-    const isInstanceOfUserDefinedClass = function( pObject, pClass )
+    const isInstanceOfUserDefinedClass = function( pObject, pClass = null )
     {
         let clazz = isClass( pClass ) ? pClass || pObject?.constructor : pObject?.constructor || pObject?.prototype?.constructor || pObject?.prototype;
-        return isUserDefinedClass( clazz );
+        return isUserDefinedClass( clazz ) && instanceOfAny( pObject, clazz );
     };
 
     const isInstanceOfListedClass = function( pObject, ...pListedClasses )

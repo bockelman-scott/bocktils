@@ -178,7 +178,7 @@ const $scope = constants?.$scope || function()
          *
          * To account for the possibility
          * that there is a repeating sequence that is LONGER than the runLength specified,
-         * we have an outer loop that increasing the runLength by 1
+         * we have an outer loop that increases the runLength by 1
          *
          * In the next-most inner loop,
          * we stagger the start index into the array by 1
@@ -187,7 +187,8 @@ const $scope = constants?.$scope || function()
          * Within the innermost loop,
          * we get the number of elements for each sequence
          * and create a string we can compare to other sequences
-         * then compare and count repetitions, returning true if we reach or exceed the maximum number of repetitions of a sequence
+         * then compare and count repetitions, returning true if we reach or exceed
+         * the maximum number of repetitions of a sequence
          */
         while ( runLength <= _stack.length / maxRepeats )
         {
@@ -541,17 +542,6 @@ const $scope = constants?.$scope || function()
         return Object.freeze( entries );
     };
 
-    const isEmptyValue = function( pValue, pOptions = { recursive: true } )
-    {
-        const options = Object.assign( {}, pOptions || { recursive: true } );
-
-        return _ud === typeof pValue ||
-               null === pValue ||
-               isBlank( asString( pValue, true ) ) ||
-               (isObject( pValue ) && hasNoProperties( pValue, options )) ||
-               (isArray( pValue ) && ((pValue?.length || 0) <= 0));
-    };
-
     const hasNoProperties = function( pObject, pOptions = { recursive: true } )
     {
         const options = Object.assign( {}, pOptions || { recursive: true } );
@@ -585,6 +575,17 @@ const $scope = constants?.$scope || function()
 
         return result;
 
+    };
+
+    const isEmptyValue = function( pValue, pOptions = { recursive: true } )
+    {
+        const options = Object.assign( {}, pOptions || { recursive: true } );
+
+        return _ud === typeof pValue ||
+               null === pValue ||
+               isBlank( asString( pValue, true ) ) ||
+               (isObject( pValue ) && hasNoProperties( pValue, options )) ||
+               (isArray( pValue ) && ((pValue?.length || 0) <= 0));
     };
 
     const isPopulated = function( pObject, pOptions )
