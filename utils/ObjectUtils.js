@@ -227,24 +227,36 @@ const $scope = constants?.$scope || function()
         return false;
     };
 
-    const isEmptyObject = function( pObject )
+    const isEmptyObject = function( pObject, pTreatStringsAsObjects = false )
     {
-        return (_str === typeof pObject && _mt_str === pObject.trim()) || !isNonNullObject( pObject ) || (isObject( pObject ) && !isPopulated( pObject ));
+        if ( (isObject( pObject ) && !isNull( pObject )) || (isString( pObject ) && !!pTreatStringsAsObjects) )
+        {
+            return (pTreatStringsAsObjects ? ((_str === typeof pObject && _mt_str === pObject.trim())) : false) ||
+                   !isNonNullObject( pObject, !!!pTreatStringsAsObjects ) ||
+                   (isObject( pObject ) && !isPopulated( pObject ));
+        }
+        return false;
     };
 
-    const isNullOrEmpty = function( pObject )
+    const isNullOrEmpty = function( pObject, pTreatStringsAsObjects = false )
     {
-        return isNull( pObject ) || isEmptyObject( pObject );
+        if ( isObject( pObject ) || (isString( pObject ) && !!pTreatStringsAsObjects) )
+        {
+            return isNull( pObject ) || isEmptyObject( pObject, pTreatStringsAsObjects );
+        }
+        return false;
     };
 
-    const isNullOrNaN = function( pObject )
+    const isNullOrNaN = function( pObject, pTreatStringsAsObjects = false )
     {
-        return isNull( pObject ) || (isNumber( pObject ) && (isNaN( pObject ) || !isFinite( pObject )));
+        return isNull( pObject, !pTreatStringsAsObjects ) || (isNumber( pObject ) && (isNaN( pObject ) || !isFinite( pObject )));
     };
 
-    const isMissing = function( pObject )
+    const isMissing = function( pObject, pTreatStringsAsObjects = false )
     {
-        return isNull( pObject ) || isNullOrEmpty( pObject ) || isNullOrNaN( pObject );
+        return isNull( pObject, !pTreatStringsAsObjects ) ||
+               isNullOrEmpty( pObject, pTreatStringsAsObjects ) ||
+               isNullOrNaN( pObject );
     };
 
     const getClassName = function( pObject )
@@ -330,6 +342,21 @@ const $scope = constants?.$scope || function()
         return clazz;
     };
 
+    const convertToInstanceOf = function( pObject, pClass )
+    {
+        const clazz = isClass( pClass ) ? pClass : getClass( pClass || pObject ) || getClass( pObject );
+
+        let object = Object.assign( {}, pObject || {} );
+
+        object.__proto__ = clazz.prototype;
+
+        let newObject = new clazz();
+
+        Object.assign( newObject, object );
+
+        return newObject;
+    };
+
     const isValidEntry = function( pKey, pValue )
     {
         const key = asString( pKey, true );
@@ -337,15 +364,17 @@ const $scope = constants?.$scope || function()
         return !isBlank( key ) && !(_ud === typeof pValue || null === pValue);
     };
 
-    const generateUniqueObjectId = function( pObject, pClass, pTimestamp )
+    const generateUniqueObjectId = function( pObject, pClass, pTimestamp = new Date() )
     {
         let uniqueId = pObject?.uniqueObjectId || pObject?._uniqueObjectId;
 
         if ( isBlank( asString( uniqueId, true ) ) )
         {
+            const clazz = isClass( pClass ) ? pClass : getClass( pClass || pObject ) || getClass( pObject );
+
             if ( pObject && isObject( pObject ) )
             {
-                if ( pClass && isClass( pClass ) )
+                if ( clazz && isClass( clazz ) )
                 {
                     if ( pTimestamp && pTimestamp > 0 )
                     {
@@ -2454,6 +2483,7 @@ const $scope = constants?.$scope || function()
             isDate,
             getClass,
             getClassName,
+            convertToInstanceOf,
             isValidEntry,
             getKeys,
             getEntries,
