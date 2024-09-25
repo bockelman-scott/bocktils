@@ -269,7 +269,7 @@ test( "getClassName returns the class name for object literals that have been 'c
 test( "getClass returns the class of the object",
       () =>
       {
-            expect( check1 && check2 && check3 && check4 && check5 && check6 && check7 && check8 ).toBe( true );
+          expect( check1 && check2 && check3 && check4 && check5 && check6 && check7 && check8 ).toBe( true );
 
       } );
 
@@ -321,4 +321,113 @@ test( "generateUniqueObjectId returns a value unique to the object",
           console.log( "uniqueObjectId2:", uniqueObjectId2 );
 
           expect( uniqueObjectId !== uniqueObjectId2 ).toBe( true );
+      } );
+
+////
+
+test( "getKeys returns an array of the unique keys of the object(s) specified",
+      () =>
+      {
+          let a = { "a": 1, "b": 2, "c": 3, "d": 4, "e": 5 };
+          let b = { "aa": 1, "b": 2, "cc": 3, "d": 4, "ee": 5 };
+          let c = { "f": 6, "g": 7, "h": 8, "i": 9, "j": 10 };
+          let d = { "f": 6, "gg": 7, "h": 8, "ii": 9, "j": 10 };
+
+          expect( objectUtils.getKeys( a, b, c, d ) ).toEqual( ["a", "b", "c", "d", "e", "aa", "cc", "ee", "f", "g", "h", "i", "j", "gg", "ii"] );
+
+      } );
+
+test( "getKeys returns an empty array if none of the arguments are populated objects",
+      () =>
+      {
+          let a = {};
+          let b = {};
+          let c = null;
+          let d = "a string";
+
+          expect( objectUtils.getKeys( a, b, c, d ) ).toEqual( [] );
+
+      } );
+
+///
+
+test( "getProperties returns an array of the unique keys of the object(s) specified",
+      () =>
+      {
+          let a = { "a": 1, "b": 2, "c": 3, "d": 4, "e": 5 };
+          let b = { "aa": 1, "b": 2, "cc": 3, "d": 4, "ee": 5 };
+          let c = { "f": 6, "g": 7, "h": 8, "i": 9, "j": 10 };
+          let d = { "f": 6, "gg": 7, "h": 8, "ii": 9, "j": 10 };
+
+          expect( objectUtils.getProperties( a, b, c, d ) ).toEqual( ["a", "b", "c", "d", "e", "aa", "cc", "ee", "f", "g", "h", "i", "j", "gg", "ii"] );
+
+      } );
+
+test( "getProperties returns an empty array if none of the arguments are populated objects",
+      () =>
+      {
+          let a = {};
+          let b = {};
+          let c = null;
+          let d = "a string";
+
+          expect( objectUtils.getProperties( a, b, c, d ) ).toEqual( [] );
+
+      } );
+
+test( "getProperties returns all of the properties accessible via the specified object",
+      () =>
+      {
+          class A
+          {
+              #id = 0;
+              #code = "a";
+
+              constructor( pId, pCode )
+              {
+                  this.#id = pId || this.#id;
+                  this.#code = pCode || this.#code;
+              }
+
+              get id()
+              {
+                  return this.#id;
+              }
+
+              get code()
+              {
+                  return this.#code;
+              }
+          }
+
+          class B extends A
+          {
+              #name = "default";
+              #description = "A user-defined class";
+
+              constructor( pId, pCode, pName, pDescription )
+              {
+                  super( pId, pCode );
+
+                  this.#name = pName || this.#name;
+                  this.#description = pDescription || this.#description;
+              }
+
+              get name()
+              {
+                  return this.#name;
+              }
+
+              get description()
+              {
+                  return this.#description;
+              }
+          }
+
+          let a = new A( 7, "777" );
+          let b = new B( 8, "888", "Eight", "One more than seven" );
+
+          let properties = objectUtils.getProperties( a, b );
+
+          expect( properties ).toEqual( ["id", "code", "name", "description"] );
       } );

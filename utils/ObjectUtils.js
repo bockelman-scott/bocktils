@@ -441,7 +441,7 @@ const $scope = constants?.$scope || function()
 
     const getKeys = function( ...pObject )
     {
-        let objects = [].concat( asArray( pObject ) || [] );
+        let objects = [].concat( asArray( pObject ) || [] ).filter( arrayUtils.Filters.IS_POPULATED_OBJECT );
 
         if ( null == objects || ((objects?.length || 0) <= 0) )
         {
@@ -454,7 +454,7 @@ const $scope = constants?.$scope || function()
         {
             let obj = isObject( object ) ? object : {};
 
-            keys = keys.concat( (Object.keys( obj ) || []) );
+            keys = keys.concat( (Object.keys( obj || {} ) || []) );
 
             let proto = obj?.prototype;
 
@@ -475,9 +475,35 @@ const $scope = constants?.$scope || function()
         return Object.freeze( unique( pruneArray( keys || [] ) ) );
     };
 
+    const _getPrivateProperties = function( pObject )
+    {
+        let properties = [];
+
+        let clazz = getClass( pObject );
+
+        let source = isClass( clazz ) ? Function.prototype.toString.call( clazz || {} ) : Function.prototype.toString.call( pObject || {} );
+
+        let rx = /(get (\w+)\(\))|(#\w[;\r\n])/;
+
+        let matches = rx.exec( source );
+
+        while ( matches && matches?.length > 2 && source?.length > 4 )
+        {
+            let match = matches[2];
+
+            properties.push( match );
+
+            source = source.slice( matches.index + match.length + 4 );
+
+            matches = rx.exec( source );
+        }
+
+        return properties;
+    };
+
     const getProperties = function( ...pObject )
     {
-        let objects = [].concat( asArray( pObject ) || [] );
+        let objects = [].concat( asArray( pObject ) || [] ).filter( arrayUtils.Filters.IS_OBJECT );
 
         if ( null == objects || ((objects?.length || 0) <= 0) )
         {
@@ -490,7 +516,9 @@ const $scope = constants?.$scope || function()
 
         for( let object of objects )
         {
-            let propertyNames = Object.getOwnPropertyNames( object );
+            let propertyNames = Object.getOwnPropertyNames( object || {} );
+
+            propertyNames = propertyNames.concat( _getPrivateProperties( object ) || [] );
 
             const proto = object?.prototype;
 
