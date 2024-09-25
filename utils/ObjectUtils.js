@@ -1,9 +1,9 @@
 const constants = require( "./Constants.js" );
+const typeUtils = require( "./TypeUtils.js" );
 const stringUtils = require( "./StringUtils.js" );
 const arrayUtils = require( "./ArrayUtils.js" );
 
 const guidUtils = require( "./GUIDUtils.js" );
-const typeUtils = require( "./TypeUtils" );
 
 const _ud = constants?._ud || "undefined";
 
@@ -32,6 +32,58 @@ const $scope = constants?.$scope || function()
             _underscore = constants?._underscore || "_",
             ignore = function() {},
             IllegalArgumentError = constants?.IllegalArgumentError || Error,
+            IterationCap = constants?.IterationCap,
+            BUILTIN_TYPES = constants.BUILTIN_TYPES || [],
+            REG_EXP_DOT = constants?.REG_EXP_DOT || /\./,
+            REG_EXP_LEADING_DOT = constants?.REG_EXP_LEADING_DOT || /^\./,
+            REG_EXP_TRAILING_DOT = constants?.REG_EXP_TRAILING_DOT || /\.$/,
+
+            asArray = arrayUtils?.asArray || function( pArr ) { return Array.isArray( pArr ) ? pArr : [pArr]; },
+            pruneArray = arrayUtils?.pruneArray || function( pArr ) { return asArray( pArr ).filter( e => !(_ud === typeof e || null === e) ); },
+            unique = arrayUtils?.unique || function( pArr ) { return [...(new Set( asArray( pArr ) ))]; },
+            hasElementAt = arrayUtils?.hasElementAt || function( pArr, pIndex ) {return asArray( pArr )?.length > asInt( pIndex );},
+
+            AsyncFunction = ((async function() {}).constructor),
+
+            EMPTY_ARRAY = Object.freeze( [] ),
+            EMPTY_OBJECT = Object.freeze( {} ),
+
+        } = constants || {};
+
+    let
+        {
+            isString = typeUtils.isString,
+            isUndefined = typeUtils.isUndefined,
+            isDefined = typeUtils.isDefined,
+            isNull = typeUtils.isNull,
+            isNotNull = typeUtils.isNotNull,
+            isObject = typeUtils.isObject,
+            isCustomObject = typeUtils.isCustomObject,
+            isNonNullObject = typeUtils.isNonNullObject,
+            isFunction = typeUtils.isFunction,
+            isAsyncFunction = typeUtils.isAsyncFunction,
+            isNumber = typeUtils.isNumber,
+            isNumeric = typeUtils.isNumeric,
+            isZero = typeUtils.isZero,
+            isBoolean = typeUtils.isBoolean,
+            isArray = typeUtils.isArray,
+            isMap = typeUtils.isMap,
+            isSet = typeUtils.isSet,
+            isDate = typeUtils.isDate,
+            isRegExp = typeUtils.isRegExp,
+            isClass = typeUtils.isClass,
+            isUserDefinedClass = typeUtils.isUserDefinedClass,
+            isListedClass = typeUtils.isListedClass,
+            isInstanceOfUserDefinedClass = typeUtils.isInstanceOfUserDefinedClass,
+            isInstanceOfListedClass = typeUtils.isInstanceOfListedClass,
+            isSymbol = typeUtils.isSymbol,
+            isType = typeUtils.isType,
+            instanceOfAny = typeUtils.instanceOfAny
+
+        } = typeUtils || {};
+
+    let
+        {
             asString = stringUtils?.asString || function( s ) { return (_mt_str + s).trim(); },
             isBlank = stringUtils?.isBlank || function( s ) { return _mt_str === asString( s ).trim(); },
             asKey = stringUtils.asKey || function( s ) { return (constants._dblqt + asString( s, true ).trim() + constants._dblqt); },
@@ -39,17 +91,11 @@ const $scope = constants?.$scope || function()
             ucase = stringUtils?.ucase || function( s ) { return asString( s ).toUpperCase(); },
             isValidNumber = stringUtils?.isValidNumber || function( n ) { return !(/[^_\d.]+/.test( asString( n ) )); },
             asInt = stringUtils?.asInt || function( s ) { return parseInt( asString( s ).replace( /\..*/, _mt_str ).replace( /\D/g, _mt_str ) ); },
-            asArray = arrayUtils?.asArray || function( pArr ) { return Array.isArray( pArr ) ? pArr : [pArr]; },
-            pruneArray = arrayUtils?.pruneArray || function( pArr ) { return asArray( pArr ).filter( e => !(_ud === typeof e || null === e) ); },
-            unique = arrayUtils?.unique || function( pArr ) { return [...(new Set( asArray( pArr ) ))]; },
-            hasElementAt = arrayUtils?.hasElementAt || function( pArr, pIndex ) {return asArray( pArr )?.length > asInt( pIndex );},
-            AsyncFunction = ((async function() {}).constructor),
-            EMPTY_ARRAY = Object.freeze( [] ),
-            EMPTY_OBJECT = Object.freeze( {} ),
-            BUILTIN_TYPES = constants.BUILTIN_TYPES || []
-        } = constants || {};
+            evaluateBoolean = stringUtils.evaluateBoolean,
+            toBool = stringUtils.toBool
+        } = stringUtils || {};
 
-    constants.importUtilities( this, constants, stringUtils, arrayUtils );
+    constants.importUtilities( this, constants, typeUtils, stringUtils, arrayUtils );
 
     const INTERNAL_NAME = "__BOCK__OBJECT_UTILS__";
 
@@ -82,37 +128,7 @@ const $scope = constants?.$scope || function()
     // does nothing, on purpose
     const no_op = function() {};
 
-    const REG_EXP_DOT = /\./;
-
-    const REG_EXP_LEADING_DOT = /^\./;
-
-    const REG_EXP_TRAILING_DOT = /\.$/;
-
-    let NON_BLANK_STRINGS = e => (_str === typeof e && _mt_str !== e.trim());
-
-    const MAX_ITERATIONS = constants?.MAX_ITERATIONS || 10_000;
-
-    class IterationCap
-    {
-        constructor( pMaxIterations )
-        {
-            this._maxIterations = Math.min( Math.max( 1, asInt( pMaxIterations ) ), MAX_ITERATIONS );
-
-            this._iterations = 0;
-        }
-
-        get iterations()
-        {
-            return this._iterations;
-        }
-
-        get reached()
-        {
-            return (this._iterations++ >= this._maxIterations);
-        }
-    }
-
-    IterationCap.MAX_CAP = MAX_ITERATIONS;
+    const NON_BLANK_STRINGS = e => (_str === typeof e && _mt_str !== e.trim());
 
     const NumberProperties = ["EPSILON", "MAX_SAFE_INTEGER", "MAX_VALUE", "MIN_SAFE_INTEGER", "MIN_VALUE", "NaN", "NEGATIVE_INFINITY", "POSITIVE_INFINITY"];
 
@@ -210,81 +226,6 @@ const $scope = constants?.$scope || function()
         return false;
     };
 
-    const instanceOfAny = function( pObject, ...pClasses )
-    {
-        const classes = [].concat( asArray( pClasses ) || [] ) || [];
-
-        let is = false;
-
-        while ( !is && classes.length )
-        {
-            const cls = classes.shift();
-            if ( isClass( cls ) )
-            {
-                try
-                {
-                    is = (pObject instanceof cls);
-                }
-                catch( e )
-                {
-                    console.warn( "Attempt to call instanceof without a class or callable" );
-                }
-            }
-        }
-
-        return is;
-    };
-
-    const isObject = function( pObj )
-    {
-        return (_obj === typeof pObj);
-    };
-
-    const isString = function( pObj )
-    {
-        return (_str === typeof pObj);
-    };
-
-    const isNumber = function( pObj )
-    {
-        return [_num, _big].includes( typeof pObj );
-    };
-
-    const isNumeric = function( pObj )
-    {
-        return isNumber( pObj ) || !isNaN( parseFloat( pObj ) );
-    };
-
-    const isZero = function( pValue )
-    {
-        return isNumber( pValue ) && 0 === pValue;
-    };
-
-    const isBoolean = function( pValue )
-    {
-        return (_bool === typeof pValue) && ((false === pValue) || true === pValue);
-    };
-
-    const isUndefined = function( pObject )
-    {
-        return (_ud === typeof pObject || undefined === pObject);
-    };
-
-    const isNull = function( pObject )
-    {
-        return (isUndefined( pObject ) || null == pObject);
-    };
-
-    const isNonNullObject = function( pObj )
-    {
-        return isObject( pObj ) && !isNull( pObj );
-    };
-
-    const isArray = function( pObj )
-    {
-        return isNonNullObject( pObj ) && Array.isArray( pObj );
-    };
-
     const isEmptyObject = function( pObject )
     {
         return (_str === typeof pObject && _mt_str === pObject.trim()) || !isNonNullObject( pObject ) || (isObject( pObject ) && !isPopulated( pObject ));
@@ -303,73 +244,6 @@ const $scope = constants?.$scope || function()
     const isMissing = function( pObject )
     {
         return isNull( pObject ) || isNullOrEmpty( pObject ) || isNullOrNaN( pObject );
-    };
-
-    const isFunction = function( pObject )
-    {
-        return (_fun === typeof pObject || pObject instanceof AsyncFunction || pObject instanceof Function);
-    };
-
-    const isAsyncFunction = function( pObject )
-    {
-        return isFunction( pObject ) && (pObject.constructor === constants.AsyncFunction || pObject === constants.AsyncFunction);
-    };
-
-    /**
-     * Returns true if the value passed represents a JavaScript Class
-     * JavaScript classes return "function" for the typeof operator,
-     * so this function is necessary to determine the difference between a function and a class definition
-     * @param {function} pFunction
-     * @param pOptions
-     * @returns
-     */
-    const isClass = function( pFunction, pOptions = { userDefinedOnly: false } )
-    {
-        const options = Object.assign( {}, pOptions || {} );
-
-        if ( _fun === typeof pFunction )
-        {
-            let is = /^class\s/.test( asString( Function.prototype.toString.call( pFunction ), true ) );
-
-            if ( true === options.userDefinedOnly )
-            {
-                is &= !(instanceOfAny( pFunction, ...(BUILTIN_TYPES || [Object]) ));
-            }
-
-            return is;
-        }
-
-        return false;
-    };
-
-    const isUserDefinedClass = function( pFunction )
-    {
-        return isClass( pFunction, { userDefinedOnly: true } );
-    };
-
-    const isListedClass = function( pFunction, ...pListedClasses )
-    {
-        return isClass( pFunction ) && instanceOfAny( pFunction, ...pListedClasses );
-    };
-
-    const isInstanceOfUserDefinedClass = function( pObject )
-    {
-        return isUserDefinedClass( getClass( pObject ) );
-    };
-
-    const isInstanceOfListedClass = function( pObject, ...pListedClasses )
-    {
-        return instanceOfAny( pObject, ...pListedClasses );
-    };
-
-    const isDate = function( pObj )
-    {
-        if ( isMissing( pObj ) || isString( pObj ) )
-        {
-            return false;
-        }
-
-        return (pObj instanceof Date) || ("[object Date]" === Object.prototype.toString.call( pObj ) || (pObj.constructor === Date) || (pObj.prototype === Date));
     };
 
     const getClassName = function( pObject )
@@ -400,7 +274,7 @@ const $scope = constants?.$scope || function()
 
         const obj = pObject || {};
 
-        let clazz = isClass( obj, options ) ? obj : obj?.constructor || obj?.entityClass || obj?._entityClass;
+        let clazz = isClass( obj, options ) ? obj : obj?.constructor || obj?.prototype?.constructor || obj?.prototype;
 
         if ( isClass( clazz, options ) )
         {
@@ -412,12 +286,6 @@ const $scope = constants?.$scope || function()
             if ( isClass( obj, options ) )
             {
                 clazz = obj;
-            }
-            else if ( isClass( obj?.entityClass, options ) || isClass( obj?._entityClass, options ) )
-            {
-                clazz = obj.entityClass || obj?._entityClass;
-
-                options.userDefinedOnly = true;
             }
 
             if ( isClass( clazz, options ) )
@@ -505,6 +373,41 @@ const $scope = constants?.$scope || function()
 
         return asString( uniqueId, true );
     };
+
+    class ObjectEntry extends Array
+    {
+        constructor( ...pArgs )
+        {
+            super( ...pArgs );
+
+            this._key = _mt_str;
+            this._value = null;
+
+            if ( this.length < 2 )
+            {
+                this[0] = this[0] || _mt_str;
+                this[1] = this[1] || null;
+            }
+
+            if ( isArray( pArgs ) )
+            {
+                const args = asArray( pArgs );
+
+                this._key = (args?.length || 0) > 0 ? args[0] : _mt_str;
+                this._value = (args?.length || 0) > 1 ? args[1] : _mt_str;
+            }
+        }
+
+        get key()
+        {
+            return this._key || (this.length > 0 ? this[0] : _mt_str);
+        }
+
+        get value()
+        {
+            return this._value || (this.length > 1 ? this[1] : null);
+        }
+    }
 
     const getKeys = function( ...pObject )
     {
@@ -617,41 +520,6 @@ const $scope = constants?.$scope || function()
         for( let object of objects )
         {
             const properties = getProperties( object );
-
-            for( let property of properties )
-            {
-                const value = object[property] || getProperty( object, property );
-
-                if ( !(_ud === typeof value || null === value) )
-                {
-                    entries.push( [property, value] );
-                }
-            }
-
-            entries = entries.filter( e => isArray( e ) && ((e?.length || 0) > 1) );
-        }
-
-        entries = ((entries || []).filter( e => isArray( e ) && ((e?.length || 0) > 1) ));
-
-        entries = entries.map( entry => new ObjectEntry( ...entry ) );
-
-        return Object.freeze( entries );
-    };
-
-    const getEnumerableEntries = function( ...pObject )
-    {
-        let objects = [].concat( asArray( pObject ) || [] );
-
-        if ( null == objects || ((objects?.length || 0) <= 0) )
-        {
-            return [];
-        }
-
-        let entries = [];
-
-        for( let object of objects )
-        {
-            const properties = getKeys( object );
 
             for( let property of properties )
             {
@@ -833,77 +701,6 @@ const $scope = constants?.$scope || function()
         return object;
     };
 
-    const identical = function( pSelf, pOther )
-    {
-        return (pOther === pSelf) || (isNullOrEmpty( pSelf ) && isNullOrEmpty( pOther ));
-    };
-
-    const evaluateBoolean = function( pVal )
-    {
-        switch ( typeof pVal )
-        {
-            case _ud:
-                return false;
-
-            case _num:
-            case _big:
-                return !isNaN( pVal ) && pVal > 0;
-
-            case _bool:
-                return pVal;
-
-            case _str:
-                const s = lcase( asString( pVal ).trim() );
-                return (_mt_str !== s) && ["true", "1", "enabled", "on", "t", "yes"].includes( s );
-
-            case _obj:
-                if ( isArray( pVal ) )
-                {
-                    return pruneArray( pVal ).length > 0;
-                }
-                return isPopulated( pVal );
-        }
-
-        return false;
-    };
-
-    const toBool = evaluateBoolean;
-
-    class ObjectEntry extends Array
-    {
-        constructor( ...pArgs )
-        {
-            super( ...pArgs );
-
-            this._key = _mt_str;
-            this._value = null;
-
-            if ( this.length < 2 )
-            {
-                this[0] = this[0] || _mt_str;
-                this[1] = this[1] || null;
-            }
-
-            if ( isArray( pArgs ) )
-            {
-                const args = asArray( pArgs );
-
-                this._key = (args?.length || 0) > 0 ? args[0] : _mt_str;
-                this._value = (args?.length || 0) > 1 ? args[1] : _mt_str;
-            }
-        }
-
-        get key()
-        {
-            return this._key || (this.length > 0 ? this[0] : _mt_str);
-        }
-
-        get value()
-        {
-            return this._value || (this.length > 1 ? this[1] : null);
-        }
-    }
-
     /**
      * Returns the value of a property compensating for a naming convention
      * by which class members are prefixed with an _ (underscore) and using the regular name for the setter/getter pair
@@ -1019,7 +816,7 @@ const $scope = constants?.$scope || function()
 
         if ( !found )
         {
-            let accessor = obj["get" + stringUtils.toProperCase( propertyName, _spc ).replace( /\.\w+/g, _mt_str )];
+            let accessor = obj["get" + stringUtils.toProperCase( propertyName ).replace( /\.\w+/g, _mt_str )];
 
             if ( _fun === typeof accessor )
             {
@@ -1193,6 +990,11 @@ const $scope = constants?.$scope || function()
         }
 
         return pValue;
+    };
+
+    const identical = function( pSelf, pOther )
+    {
+        return (pOther === pSelf) || (isNullOrEmpty( pSelf ) && isNullOrEmpty( pOther ));
     };
 
     /**
@@ -1699,125 +1501,6 @@ const $scope = constants?.$scope || function()
         return newObj;
     };
 
-    /**
-     * Returns a copy of the value specified to avoid allowing a consumer to break encapsulation.
-     * Returning a property from an object
-     * that is itself a mutable object could allow consumer code to change the value
-     * through difficult to trace modifications to state that are not controlled or validated by the owning object
-     *
-     *
-     * @param pValue a value for which to make a copy
-     * @param pBinding an optional "this" for calling any copied functions
-     * @param pStack   DO NOT EXPLICITLY PASS THIS VALUE; IT IS USED INTERNALLY TO CONTROL RECURSION
-     */
-    /*    const unalias = function( pValue, pBinding, pStack )
-     {
-     let value = null;
-
-     const _stack = pStack || [];
-
-     if ( detectCycles( _stack, 3, 2 ) )
-     {
-     return pValue;
-     }
-
-     switch ( typeof pValue )
-     {
-     case _ud:
-     value = undefined;
-     break;
-
-     case _str:
-     value = asString( pValue ); // strings are already immutable
-     // we can be super-paranoid about it anyway
-     value = value.split( _mt_chr ).join( _mt_chr );
-     break;
-
-     case _num:
-     case _big:
-     // numbers are also immutable, but let us handle NaN and Infinity
-     try
-     {
-     value = parseFloat( pValue );
-     value = isNaN( value ) ? NaN : !isFinite( value ) ? Number.POSITIVE_INFINITY : value;
-     }
-     catch( ex )
-     {
-     console.warn( pValue + " could not be parsed as a floating point number", ex.message );
-     }
-     break;
-
-     case _bool:
-     value = pValue;
-     break;
-
-     case _fun:
-     value = pValue;
-     break;
-
-     case _obj:
-     if ( isArray( pValue ) )
-     {
-     value = asArray( pValue );
-
-     let arr = new Array( value.length || 0 ); // this allocates the memory for the new array
-
-     value.forEach( ( elem, index ) => arr[index] = unalias( elem, pBinding ) );
-
-     value = asArray( arr || [].concat( value ) );
-
-     break;
-     }
-     else
-     {
-     value = Object.assign( {}, pValue || {} );
-
-     let entries = getEntries( value );
-
-     entries.forEach( entry =>
-     {
-     const prop = entry.key || entry[0];
-     const val = entry.value || entry[1];
-
-     // do not assign an object as a property of itself
-     if ( !(val === pValue || val === value || _ud === typeof val || null === val) )
-     {
-     // do not unalias the global scope
-     if ( ["self", "global", "globalThis"].includes( prop ) || $scope() === val || exposeObjectUtils === val )
-     {
-     value[prop] = val;
-     }
-     else
-     {
-     _stack.push( prop );
-
-     try
-     {
-     value[prop] = unalias( val, value, _stack );
-     }
-     catch( e )
-     {
-     value[prop] = val;
-     }
-     finally
-     {
-     _stack.pop();
-     }
-     }
-     }
-     } );
-     }
-     break;
-     }
-
-     return value;
-     };*/
-
-    const unalias = function( pValue, pBinding, pStack )
-    {
-        return pValue;
-    };
-
     const printObject = function( pObject, pCurrentDepth )
     {
         let obj = pObject || {};
@@ -1936,7 +1619,7 @@ const $scope = constants?.$scope || function()
 
             _stack.push( key );
 
-            let value = hasElementAt( entry, 1 ) ? unalias( entry[1], objA ) : null;
+            let value = hasElementAt( entry, 1 ) ? (entry[1]) : null;
 
             if ( !isBlank( key ) && !(_ud === typeof value || null === value) )
             {
@@ -1944,12 +1627,12 @@ const $scope = constants?.$scope || function()
 
                 if ( _ud === typeof valueA || null == valueA )
                 {
-                    objA[key] = unalias( value, objA );
+                    objA[key] = value;
                 }
                 else if ( isArray( valueA ) && isArray( value ) )
                 {
-                    objA[key] = unalias( valueA );
-                    let arrB = unalias( value );
+                    objA[key] = valueA;
+                    let arrB = value;
 
                     valueA = objA[key];
                     value = arrB;
@@ -1960,7 +1643,7 @@ const $scope = constants?.$scope || function()
                         {
                             if ( i >= valueA.length )
                             {
-                                valueA.push( unalias( value[i] ) );
+                                valueA.push( (value[i]) );
                             }
                         }
                     }
@@ -1973,7 +1656,7 @@ const $scope = constants?.$scope || function()
                                    {
                                        if ( !(valueA.has( key )) )
                                        {
-                                           valueA.set( key, unalias( val ) );
+                                           valueA.set( key, val );
                                        }
                                    } );
                 }
@@ -1981,7 +1664,7 @@ const $scope = constants?.$scope || function()
                 {
                     if ( _fun === typeof valueA.union )
                     {
-                        objA[key] = valueA.union( unalias( value ) );
+                        objA[key] = valueA.union( value );
                     }
                     else
                     {
@@ -1989,7 +1672,7 @@ const $scope = constants?.$scope || function()
                                        {
                                            if ( !(valueA.has( val )) )
                                            {
-                                               valueA.add( unalias( val ) );
+                                               valueA.add( (val) );
                                            }
                                        } );
                     }
@@ -2006,7 +1689,7 @@ const $scope = constants?.$scope || function()
                     {
                         _stack.push( key );
 
-                        objA[key] = safeAssign( objA[key], unalias( value ), options, _stack );
+                        objA[key] = safeAssign( objA[key], (value), options, _stack );
 
                         _stack.pop();
                     }
@@ -2188,7 +1871,7 @@ const $scope = constants?.$scope || function()
 
                 path.push( key );
 
-                objA[key] = ((isObject( value )) ? populate( valueA, value, visited, path ) : unalias( value ));
+                objA[key] = ((isObject( value )) ? populate( valueA, value, visited, path ) : (value));
 
                 path.pop();
             }
@@ -2805,7 +2488,6 @@ const $scope = constants?.$scope || function()
             printObject,
             evaluateBoolean,
             toBool,
-            unalias,
             safeAssign,
             deepAssign,
             assignPublic,

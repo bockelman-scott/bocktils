@@ -990,16 +990,14 @@ test( "isClass(new A()) === false",
 test( "isClass(Array) === false",
       () =>
       {
-          let obj = Array;
-          expect( typeUtils.isClass( obj ) ).toBe( false );
+          expect( typeUtils.isClass( Array ) ).toBe( false );
       } );
 
 // in lax mode, built-in 'classes' ARE classes
 test( "isClass(Array, false) === true",
       () =>
       {
-          let obj = Array;
-          expect( typeUtils.isClass( obj, false ) ).toBe( true );
+          expect( typeUtils.isClass( Array, false ) ).toBe( true );
       } );
 
 test( "defaultFor( \"string\" ) === '' ",

@@ -437,7 +437,7 @@ const $scope = constants?.$scope || function()
                         {
                             konsole.warn( constants.S_ERR_PREFIX, "while executing a function as input to asString", ex );
 
-                            s = input.name || input?.constructor?.name || Function.prototype.toString.call( input, input );
+                            s = input?.name || input?.constructor?.name || Function.prototype.toString.call( input, input );
                         }
                     }
 
@@ -445,7 +445,7 @@ const $scope = constants?.$scope || function()
                     {
                         try
                         {
-                            s = input.name || input?.constructor?.name || (options.executeFunctions ? input.call( $scope() ) : Function.prototype.toString.call( input, input ));
+                            s = input?.name || input?.constructor?.name || (options.executeFunctions ? input.call( $scope() ) : Function.prototype.toString.call( input, input ));
                         }
                         catch( ex )
                         {
@@ -1504,6 +1504,7 @@ const $scope = constants?.$scope || function()
     };
 
     const isTrue = evaluateBoolean;
+    const toBool = evaluateBoolean;
 
     Boolean.prototype.evaluate = evaluateBoolean;
 
@@ -2381,6 +2382,7 @@ const $scope = constants?.$scope || function()
             includesAll,
             evaluateBoolean,
             isTrue,
+            toBool,
             toUnixLinebreaks,
             toWindowsLinebreaks,
             isValidString,

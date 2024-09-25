@@ -205,6 +205,20 @@
                  "with"]
         } = ($scope() || {});
 
+    const REG_EXP_DOT = /\./;
+
+    const REG_EXP_LEADING_DOT = /^\./;
+
+    const REG_EXP_TRAILING_DOT = /\.$/;
+
+    const REG_EXP =
+        {
+            DOT: REG_EXP_DOT,
+            LEADING_DOT: REG_EXP_LEADING_DOT,
+            TRAILING_DOT: REG_EXP_TRAILING_DOT,
+
+        };
+
     class IllegalArgumentError extends Error
     {
         constructor( pMessage, pOptions, pLineNumber )
@@ -625,6 +639,34 @@
 
     }
 
+    const MAX_ITERATIONS = 10_000;
+
+    class IterationCap
+    {
+        #maxIterations = MAX_ITERATIONS;
+        #iterations = 0;
+
+        constructor( pMaxIterations )
+        {
+            this.#maxIterations = Math.min( Math.max( 1, parseInt( pMaxIterations ) ), MAX_ITERATIONS );
+
+            this.#iterations = 0;
+        }
+
+        get iterations()
+        {
+            return this.#iterations;
+        }
+
+        get reached()
+        {
+            return (this.#iterations++ >= this.#maxIterations);
+        }
+    }
+
+    IterationCap.MAX_CAP = MAX_ITERATIONS;
+
+
     const mod =
         {
             _ud,
@@ -735,8 +777,13 @@
             },
             dependencies,
             importUtilities,
-            classes: { ComparatorFactory, IllegalArgumentError },
-            ComparatorFactory
+            classes: { IterationCap, ComparatorFactory, IllegalArgumentError },
+            ComparatorFactory,
+            IterationCap,
+            REG_EXP,
+            REG_EXP_DOT,
+            REG_EXP_LEADING_DOT,
+            REG_EXP_TRAILING_DOT
         };
 
     mod.clone = function()

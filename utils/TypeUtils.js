@@ -1,3 +1,5 @@
+// noinspection JSPrimitiveTypeWrapperUsage
+
 /**
  * Defines several useful functions for detecting the type of a variable or object.
  * DEPENDS ON Constants.js
@@ -77,6 +79,16 @@ const $scope = constants?.$scope || function()
             [_ud]: undefined
         };
 
+    const isFunction = function( pObj )
+    {
+        return null !== pObj && _fun === typeof pObj;
+    };
+
+    const isAsyncFunction = function( pObject )
+    {
+        return isFunction( pObject ) && (pObject.constructor === constants.AsyncFunction || pObject === constants.AsyncFunction);
+    };
+
     const DEFAULT_IS_OBJECT_OPTIONS =
         {
             rejectPrimitiveWrappers: true,
@@ -119,16 +131,6 @@ const $scope = constants?.$scope || function()
     const isCustomObject = function( pObj )
     {
         return isObject( pObj ) && pObj.prototype !== null && pObj.prototype !== Object && (pObj.constructor === null || pObj.constructor !== Object);
-    };
-
-    const isFunction = function( pObj )
-    {
-        return null !== pObj && _fun === typeof pObj;
-    };
-
-    const isAsyncFunction = function( pObject )
-    {
-        return isFunction( pObject ) && (pObject.constructor === constants.AsyncFunction || pObject === constants.AsyncFunction);
     };
 
     const isString = function( pObj )
@@ -458,6 +460,59 @@ const $scope = constants?.$scope || function()
         return false;
     };
 
+    const instanceOfAny = function( pObject, ...pClasses )
+    {
+        const classes = [].concat( ...(pClasses || []) ) || [];
+
+        let is = false;
+
+        while ( !is && classes?.length )
+        {
+            try
+            {
+                const cls = classes.shift();
+                if ( isClass( cls ) )
+                {
+                    try
+                    {
+                        is = (pObject instanceof cls);
+                    }
+                    catch( e )
+                    {
+                        console.warn( "Attempt to call instanceof without a class or callable" );
+                    }
+                }
+            }
+            catch( ex )
+            {
+                // continue
+            }
+        }
+
+        return is;
+    };
+
+    const isUserDefinedClass = function( pFunction )
+    {
+        return isClass( pFunction );
+    };
+
+    const isListedClass = function( pFunction, ...pListedClasses )
+    {
+        return isClass( pFunction ) && instanceOfAny( pFunction, ...pListedClasses );
+    };
+
+    const isInstanceOfUserDefinedClass = function( pObject, pClass )
+    {
+        let clazz = isClass( pClass ) ? pClass || pObject?.constructor : pObject?.constructor || pObject?.prototype?.constructor || pObject?.prototype;
+        return isUserDefinedClass( clazz );
+    };
+
+    const isInstanceOfListedClass = function( pObject, ...pListedClasses )
+    {
+        return instanceOfAny( pObject, ...pListedClasses );
+    };
+
     const defaultFor = function( pType )
     {
         if ( isString( pType ) )
@@ -555,8 +610,13 @@ const $scope = constants?.$scope || function()
             isDate,
             isRegExp,
             isClass,
+            isUserDefinedClass,
+            isListedClass,
+            isInstanceOfUserDefinedClass,
+            isInstanceOfListedClass,
             isSymbol,
             isType,
+            instanceOfAny,
             defaultFor,
             castTo
         };

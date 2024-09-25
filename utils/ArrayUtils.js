@@ -233,7 +233,7 @@ const $scope = constants?.$scope || function()
 
         arr = (options?.sanitize ? (arr || eia).filter( e => !(_ud === typeof e || null == e || stringUtils.isEmpty( e )) ) : (arr || eia)) || eia;
 
-        arr = (options?.type ? (arr || eia).filter( e => (options?.type === typeof e || (isClass( options?.type ) && (e instanceof options?.type))) ) : (arr || eia)) || eia;
+        arr = (options?.type ? (arr || eia).filter( e => (options?.type === typeof e || (typeUtils.isClass( options?.type ) && (e instanceof options?.type))) ) : (arr || eia)) || eia;
 
         if ( _fun === typeof options?.filter && options?.filter?.length >= 1 && options?.filter?.length <= 3 )
         {
@@ -718,9 +718,9 @@ const $scope = constants?.$scope || function()
 
                 return function( e, i, a )
                 {
-                    let does = arr?.length <= 0 && _mt_str === e.trim();
+                    let does = (arr || a)?.length <= 0 && _mt_str === e.trim();
 
-                    for( const elem of arr )
+                    for( const elem of (arr || a) )
                     {
                         if ( elem && e && asString( e ).startsWith( elem ) )
                         {
@@ -739,9 +739,9 @@ const $scope = constants?.$scope || function()
 
                 return function( e, i, a )
                 {
-                    let does = arr?.length <= 0 && _mt_str === e.trim();
+                    let does = (arr || a)?.length <= 0 && _mt_str === e.trim();
 
-                    for( const elem of arr )
+                    for( const elem of (arr || a) )
                     {
                         if ( elem && e && asString( e ).endsWith( elem ) )
                         {
@@ -1195,7 +1195,7 @@ const $scope = constants?.$scope || function()
 
         get method()
         {
-            let funcName = asString( (isString( this._method ) ? this._method : asString( this._method?.name )) ) || TRANSFORMATIONS.FILTER;
+            let funcName = asString( (typeUtils.isString( this._method ) ? this._method : asString( this._method?.name )) ) || TRANSFORMATIONS.FILTER;
             return asString( Object.values( TRANSFORMATIONS ).includes( funcName ) ? funcName : TRANSFORMATIONS.FILTER );
         }
 
@@ -1738,7 +1738,7 @@ const $scope = constants?.$scope || function()
     {
         const maxLength = Math.max( 0, Math.max( 0, asInt( pMaxLength, 0 ) || 0 ) + 1 );
 
-        return arrLenLt( pArr, maxLength );
+        return arrLenLt( pArr, maxLength, pAllowStringArg );
     };
 
     /**
