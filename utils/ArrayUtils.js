@@ -1802,10 +1802,12 @@ const $scope = constants?.$scope || function()
             return false;
         }
 
-        if ( Predicates.IS_COMPARATOR( pComparator ) )
+        let comparator = Predicates.IS_COMPARATOR( pTrim ) ? pTrim : Predicates.IS_COMPARATOR( pComparator ) ? pComparator : null;
+
+        if ( Predicates.IS_COMPARATOR( comparator ) )
         {
-            arrA = arrA.sort( pComparator );
-            arrB = arrB.sort( pComparator );
+            arrA = arrA.sort( comparator );
+            arrB = arrB.sort( comparator );
         }
 
         const strA = arrA.map( e => asString( e, strip ).replace( /\//g, "_slash_" ) ).join( "/" );

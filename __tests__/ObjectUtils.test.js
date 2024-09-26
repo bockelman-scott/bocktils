@@ -431,3 +431,63 @@ test( "getProperties returns all of the properties accessible via the specified 
 
           expect( properties ).toEqual( ["id", "code", "name", "description"] );
       } );
+
+
+test( "getValues returns all of the values accessible via the specified object",
+      () =>
+      {
+          class A
+          {
+              #id = 0;
+              #code = "a";
+
+              constructor( pId, pCode )
+              {
+                  this.#id = pId || this.#id;
+                  this.#code = pCode || this.#code;
+              }
+
+              get id()
+              {
+                  return this.#id;
+              }
+
+              get code()
+              {
+                  return this.#code;
+              }
+          }
+
+          class B extends A
+          {
+              #name = "default";
+              #description = "A user-defined class";
+
+              constructor( pId, pCode, pName, pDescription )
+              {
+                  super( pId, pCode );
+
+                  this.#name = pName || this.#name;
+                  this.#description = pDescription || this.#description;
+              }
+
+              get name()
+              {
+                  return this.#name;
+              }
+
+              get description()
+              {
+                  return this.#description;
+              }
+          }
+
+          let a = new A( 7, "777" );
+          let b = new B( 8, "888", "Eight", "One more than seven" );
+
+          let values = [].concat( objectUtils.getValues( b ) );
+
+          let comparator = arrayUtils.Comparators.BY_STRING_VALUE;
+
+          expect( arrayUtils.arraysEqual( values, [8, "888", "Eight", "One more than seven"], comparator ) ).toBe( true );
+      } );

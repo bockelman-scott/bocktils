@@ -372,7 +372,21 @@ const $scope = constants?.$scope || function()
                     {
                         // try to get the value of a name property or the constructor's name
                         // note that this could return undesirable results for objects with a coincidental name property
-                        s = input?.name || input?.constructor?.name || _mt_str;
+                        try
+                        {
+                            s = input?.name || input?.constructor?.name || _mt_str;
+                        }
+                        catch( ex )
+                        {
+                            try
+                            {
+                                s = input?.constructor?.name || _mt_str;
+                            }
+                            catch( e )
+                            {
+                                konsole.warn( constants?.S_ERR_PREFIX, "obtaining the name of a function", e );
+                            }
+                        }
 
                         if ( "[object object]" === lcase( s ) || "Object" === s )
                         {

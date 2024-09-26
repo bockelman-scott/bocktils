@@ -123,7 +123,18 @@ const $scope = constants?.$scope || function()
 
     const MAX_ASSIGN_DEPTH = 6;
 
-    const ALWAYS_EXCLUDED = Object.freeze( ["uniqueObjectId", "instantiationTimestamp", "_uniqueObjectId", "_instantiationTimestamp"] );
+    const ALWAYS_EXCLUDED = Object.freeze( ["uniqueObjectId",
+                                            "instantiationTimestamp",
+                                            "_uniqueObjectId",
+                                            "_instantiationTimestamp",
+                                            "constructor",
+                                            "hasOwnProperty",
+                                            "isPrototypeOf",
+                                            "propertyIsEnumerable",
+                                            "toString",
+                                            "valueOf",
+                                            "toLocaleString"
+                                           ] );
 
     // does nothing, on purpose
     const no_op = function() {};
@@ -466,10 +477,10 @@ const $scope = constants?.$scope || function()
 
                 obj = proto;
 
-                proto = proto?.prototype;
+                proto = proto?.__proto__ || proto?.prototype;
             }
 
-            keys = unique( pruneArray( keys ) );
+            keys = unique( pruneArray( keys ) ).filter( e => !ALWAYS_EXCLUDED.includes( e ) );
         }
 
         return Object.freeze( unique( pruneArray( keys || [] ) ) );
@@ -481,7 +492,7 @@ const $scope = constants?.$scope || function()
 
         let clazz = getClass( pObject );
 
-        let source = isClass( clazz ) ? Function.prototype.toString.call( clazz || {} ) : Function.prototype.toString.call( pObject || {} );
+        let source = isClass( clazz ) ? Function.prototype.toString.call( clazz || {} ) : (pObject || (function() {})).toString();
 
         let rx = /(get (\w+)\(\))|(#\w[;\r\n])/;
 
@@ -498,7 +509,7 @@ const $scope = constants?.$scope || function()
             matches = rx.exec( source );
         }
 
-        return properties;
+        return [].concat( (properties || []).filter( e => !ALWAYS_EXCLUDED.includes( e ) ) || [] );
     };
 
     const getProperties = function( ...pObject )
@@ -519,25 +530,28 @@ const $scope = constants?.$scope || function()
             let propertyNames = Object.getOwnPropertyNames( object || {} );
 
             propertyNames = propertyNames.concat( _getPrivateProperties( object ) || [] );
+            propertyNames = propertyNames.filter( e => !e.startsWith( "__" ) );
 
-            const proto = object?.prototype;
+            const proto = object?.__proto__ || object?.prototype;
 
-            while ( null != proto && proto !== Object )
+            if ( null != proto && !(([object].concat( BUILTIN_TYPES )).includes( proto )) )
             {
                 propertyNames = propertyNames.concat( getProperties( proto ) ).map( e => asString( e, true ) ).filter( NON_BLANK_STRINGS );
+                propertyNames = propertyNames.filter( e => !e.startsWith( "__" ) );
             }
 
             properties = unique( properties.concat( propertyNames || [] ) );
         }
 
         properties = properties.filter( NON_BLANK_STRINGS ).map( e => asString( e, true ).trim() );
+        properties = properties.filter( e => !ALWAYS_EXCLUDED.includes( e ) );
 
         return Object.freeze( unique( pruneArray( properties ) ) );
     };
 
     const getValues = function( ...pObject )
     {
-        let objects = [].concat( asArray( pObject ) || [] );
+        let objects = [].concat( asArray( pObject ) || [] ).filter( arrayUtils.Filters.IS_OBJECT );
 
         if ( null == objects || ((objects?.length || 0) <= 0) )
         {
@@ -552,11 +566,18 @@ const $scope = constants?.$scope || function()
 
             for( let property of properties )
             {
-                const value = object[property] || getProperty( object, property );
-
-                if ( !(_ud === typeof value || null === value) )
+                try
                 {
-                    values.push( value );
+                    const value = object[property] || getProperty( object, property );
+
+                    if ( !(_ud === typeof value || null === value || isClass( value )) )
+                    {
+                        values.push( value );
+                    }
+                }
+                catch( ex )
+                {
+                    // ignore
                 }
             }
         }
@@ -566,7 +587,7 @@ const $scope = constants?.$scope || function()
 
     const getEntries = function( ...pObject )
     {
-        let objects = [].concat( asArray( pObject ) || [] );
+        let objects = [].concat( asArray( pObject ) || [] ).filter( arrayUtils.Filters.IS_OBJECT );
 
         if ( null == objects || ((objects?.length || 0) <= 0) )
         {
