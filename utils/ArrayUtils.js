@@ -6,7 +6,7 @@ const stringUtils = require( "./StringUtils.js" );
 /** create an alias for console **/
 const konsole = console || {};
 
-/** define a variable fir typeof undefined **/
+/** define a variable for typeof undefined **/
 const _ud = constants?._ud || "undefined";
 
 /**
@@ -84,6 +84,50 @@ const $scope = constants?.$scope || function()
     {
         return $scope()[INTERNAL_NAME];
     }
+
+    /**
+     * An array of the names of the methods exposed by Array
+     * @type {string[]}
+     */
+    const ARRAY_METHODS =
+        [
+            "length",
+            "constructor",
+            "concat",
+            "copyWithin",
+            "fill",
+            "find",
+            "findIndex",
+            "lastIndexOf",
+            "pop",
+            "push",
+            "reverse",
+            "shift",
+            "unshift",
+            "slice",
+            "sort",
+            "splice",
+            "includes",
+            "indexOf",
+            "join",
+            "keys",
+            "entries",
+            "values",
+            "forEach",
+            "filter",
+            "flat",
+            "flatMap",
+            "map",
+            "every",
+            "some",
+            "reduce",
+            "reduceRight",
+            "toLocaleString",
+            "toString",
+            "at",
+            "findLast",
+            "findLastIndex"
+        ];
 
     /**
      * This object defines the default options for the asArray function.
@@ -2354,6 +2398,7 @@ const $scope = constants?.$scope || function()
     const mod =
         {
             dependencies,
+            ARRAY_METHODS,
             asArray,
             unique,
             pruneArray,

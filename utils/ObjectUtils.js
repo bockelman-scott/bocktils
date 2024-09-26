@@ -1,3 +1,9 @@
+/**
+ *
+ * This module exposes useful methods for working with objects, collections of objects, and classes.
+ * Dependencies: Constants, TypeUtils, StringUtils, ArrayUtils, and GUIDUtils
+ */
+
 const constants = require( "./Constants.js" );
 const typeUtils = require( "./TypeUtils.js" );
 const stringUtils = require( "./StringUtils.js" );
@@ -5,15 +11,27 @@ const arrayUtils = require( "./ArrayUtils.js" );
 
 const guidUtils = require( "./GUIDUtils.js" );
 
+/** create an alias for console **/
+const konsole = console || {};
+
+/** define a variable for typeof undefined **/
 const _ud = constants?._ud || "undefined";
 
+/**
+ * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
+ */
 const $scope = constants?.$scope || function()
 {
-    return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
+    return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
 };
 
+/**
+ * This is the Immediately Invoked Function Expression (IIFE) that builds and returns the module
+ */
 (function exposeObjectUtils()
 {
+    // explicitly define several variables that are imported from the dependencies
+    // this is done to help IDEs that cannot infer what is in scope otherwise
     let
         {
             _mt_str = constants?._mt_str || "",
@@ -50,6 +68,8 @@ const $scope = constants?.$scope || function()
 
         } = constants || {};
 
+    // explicitly define several variables that are imported from the dependencies
+    // this is done to help IDEs that cannot infer what is in scope otherwise
     let
         {
             isString = typeUtils.isString,
@@ -82,6 +102,8 @@ const $scope = constants?.$scope || function()
 
         } = typeUtils || {};
 
+    // explicitly define several variables that are imported from the dependencies
+    // this is done to help IDEs that cannot infer what is in scope otherwise
     let
         {
             asString = stringUtils?.asString || function( s ) { return (_mt_str + s).trim(); },
@@ -95,10 +117,19 @@ const $scope = constants?.$scope || function()
             toBool = stringUtils.toBool
         } = stringUtils || {};
 
+    /**
+     * An array of the names of the methods exposed by Array
+     * @type {string[]}
+     */
+    let ARRAY_METHODS = arrayUtils.ARRAY_METHODS;
+
+    // Make the functions and properties of the imported modules local variables and functions.
     constants.importUtilities( this, constants, typeUtils, stringUtils, arrayUtils );
 
+    // defines a key we can use to store this module in global scope
     const INTERNAL_NAME = "__BOCK__OBJECT_UTILS__";
 
+    // if we've already executed this code, just return the module
     if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
     {
         return $scope()[INTERNAL_NAME];
@@ -119,29 +150,81 @@ const $scope = constants?.$scope || function()
             guidUtils
         };
 
+    /**
+     * Defines the maximum length of a branch of an object graph that will be cloned when copying an object.
+     * example:
+     *          cloning this ->  {a: { b: { c: {d: {e: { f: {g: "exceeds maximum"} } } } } } }
+     *          returns this ->  {a: { b: { c: {d: {e: { f: null } } } } } }
+     * @type {number}
+     */
     const MAX_CLONE_DEPTH = 6;
 
+    /**
+     * Defines the maximum length of a branch of an object graph that will be assigned when using ObjectUtils.assign
+     * ObjectUtils assign perform a DEEP Object::assign for each property of the source that is an object.
+     * example:
+     *          cloning this ->  {a: { b: { c: {d: {e: { f: {g: "exceeds maximum"} } } } } } }
+     *          returns this ->  {a: { b: { c: {d: {e: { f: null } } } } } }
+     * @type {number}
+     */
     const MAX_ASSIGN_DEPTH = 6;
 
+    /**
+     * An array of the names of the methods exposed by Object
+     * @type {string[]}
+     */
+    const OBJECT_METHODS =
+        [
+            "constructor",
+            "prototype",
+            "__proto__",
+            "hasOwnProperty",
+            "isPrototypeOf",
+            "propertyIsEnumerable",
+            "toString",
+            "valueOf",
+            "toLocaleString",
+            "__defineGetter__",
+            "__defineSetter__",
+            "__lookupGetter__",
+            "__lookupSetter__"
+        ];
+
+    /**
+     * An array of property names that are never included in calls to getProperties, getKeys, getValues, or getEntries
+     * @type {Readonly<string[]>}
+     */
     const ALWAYS_EXCLUDED = Object.freeze( ["uniqueObjectId",
                                             "instantiationTimestamp",
                                             "_uniqueObjectId",
                                             "_instantiationTimestamp",
-                                            "constructor",
-                                            "hasOwnProperty",
-                                            "isPrototypeOf",
-                                            "propertyIsEnumerable",
-                                            "toString",
-                                            "valueOf",
-                                            "toLocaleString"
                                            ] );
+
+
+    /**
+     * An array of property names that are excluded in calls to getProperties, getKeys, getValues, or getEntries
+     * @type {string[]}
+     */
+    const EXCLUDED_PROPERTIES = [].concat( OBJECT_METHODS ).concat( ARRAY_METHODS ).concat( ALWAYS_EXCLUDED );
 
     // does nothing, on purpose
     const no_op = function() {};
 
+    // a filter to return only strings containing at least one non-whitespace character
     const NON_BLANK_STRINGS = e => (_str === typeof e && _mt_str !== e.trim());
 
-    const NumberProperties = ["EPSILON", "MAX_SAFE_INTEGER", "MAX_VALUE", "MIN_SAFE_INTEGER", "MIN_VALUE", "NaN", "NEGATIVE_INFINITY", "POSITIVE_INFINITY"];
+    /**
+     * An array of the Number constants
+     * @type {string[]}
+     */
+    const NumberProperties = ["EPSILON",
+                              "MAX_SAFE_INTEGER",
+                              "MAX_VALUE",
+                              "MIN_SAFE_INTEGER",
+                              "MIN_VALUE",
+                              "NaN",
+                              "NEGATIVE_INFINITY",
+                              "POSITIVE_INFINITY"];
 
     /**
      * This function attempts to detect potential infinite loops.
@@ -238,6 +321,14 @@ const $scope = constants?.$scope || function()
         return false;
     };
 
+    /**
+     * Returns true if the specified value is an object with no meaningful properties.
+     * Returns false if the specified value is null or undefined.
+     * If the second argument is true, will also return true for empty or whitespace-only strings
+     * @param pObject the value to evaluate
+     * @param pTreatStringsAsObjects a boolean value that indicates whether to return true for empty strings
+     * @returns {boolean} true if the specified value is an object with no meaningful properties
+     */
     const isEmptyObject = function( pObject, pTreatStringsAsObjects = false )
     {
         if ( (isObject( pObject ) && !isNull( pObject )) || (isString( pObject ) && !!pTreatStringsAsObjects) )
@@ -249,6 +340,13 @@ const $scope = constants?.$scope || function()
         return false;
     };
 
+    /**
+     * Returns true if the specified value is either null or an object with no meaningful properties.
+     * If the second argument is true, will also return true for empty or whitespace-only strings
+     * @param pObject the value to evaluate
+     * @param pTreatStringsAsObjects a boolean value that indicates whether to return true for empty strings
+     * @returns {boolean} true if the specified value is null or an object with no meaningful properties
+     */
     const isNullOrEmpty = function( pObject, pTreatStringsAsObjects = false )
     {
         if ( isObject( pObject ) || (isString( pObject ) && !!pTreatStringsAsObjects) )
@@ -258,11 +356,27 @@ const $scope = constants?.$scope || function()
         return false;
     };
 
+    /**
+     * Returns true if the specified object is either null, undefined, or a number that is not valid or not finite.
+     * If the second argument is true, will also return true for empty or whitespace-only strings
+     * @param pObject the value to evaluate
+     * @param pTreatStringsAsObjects a boolean value that indicates whether to return true for empty strings
+     * @returns {boolean} true if the value is null, undefined, or NaN (or one of the Infinity values)
+     */
     const isNullOrNaN = function( pObject, pTreatStringsAsObjects = false )
     {
         return isNull( pObject, !pTreatStringsAsObjects ) || (isNumber( pObject ) && (isNaN( pObject ) || !isFinite( pObject )));
     };
 
+    /**
+     * Returns true if the specified (expected) value is null, undefined, NaN, or empty.
+     * If the second argument is true, will also return true for empty or whitespace-only strings
+     * @param pObject the value to evaluate
+     * @param pTreatStringsAsObjects a boolean to indicate whether to return true for empty strings
+     * @returns {boolean} if the specified (expected) value is null, undefined, NaN, or empty
+     *
+     * Note: this is useful in validating the expected arguments to a function
+     */
     const isMissing = function( pObject, pTreatStringsAsObjects = false )
     {
         return isNull( pObject, !pTreatStringsAsObjects ) ||
@@ -270,6 +384,12 @@ const $scope = constants?.$scope || function()
                isNullOrNaN( pObject );
     };
 
+    /**
+     * Returns the name of the class of which the specified object is an instance
+     * or the name of the class if the specified value *is* a class (function)
+     * @param pObject an instance of some class or a function that is a class
+     * @returns {string} the name of the class of which the object is an instance or the name of the class if the object is a class function
+     */
     const getClassName = function( pObject )
     {
         const obj = pObject || {};
@@ -292,13 +412,20 @@ const $scope = constants?.$scope || function()
         return name;
     };
 
-    const getClass = function( pObject, pOptions )
+    /**
+     * Returns the class (function) of which the specified object is an instance
+     * or the class itself if the specified value *is* a class (function)
+     * @param pObject an instance of some class or a function that is a class
+     * @param pOptions an object to pass options to the isClass method of TypeUtils
+     * @returns {string} the class of which the object is an instance or the class itself if the object is a class function
+     */
+    const getClass = function( pObject, pOptions = { strict: true } )
     {
         const options = Object.assign( {}, pOptions || {} );
 
         const obj = pObject || {};
 
-        let clazz = isClass( obj, options ) ? obj : obj?.constructor || obj?.prototype?.constructor || obj?.prototype;
+        let clazz = isClass( obj, options ) ? obj : obj?.constructor || obj?.prototype?.constructor || obj?.prototype || obj?.__proto__;
 
         if ( isClass( clazz, options ) )
         {
@@ -307,23 +434,24 @@ const $scope = constants?.$scope || function()
 
         if ( obj )
         {
-            if ( isClass( obj, options ) )
+            if ( isClass( obj, options?.strict ) )
             {
                 clazz = obj;
             }
 
-            if ( isClass( clazz, options ) )
+            if ( isClass( clazz, options?.strict ) )
             {
                 return clazz;
             }
 
             let _class = clazz;
 
-            const loopCap = new IterationCap( 4 );
+            const loopCap = new IterationCap( 5 );
 
-            // the IterationCap object will return reached when iterations exceed the cap, so ignore the linter warnings
+            // the IterationCap object will return reached when iterations exceed the cap,
+            // so ignore the linter warnings
             // noinspection LoopStatementThatDoesntLoopJS
-            while ( !isClass( _class, options ) && !loopCap.reached )
+            while ( !isClass( _class, options?.strict ) && !loopCap.reached )
             {
                 const tries = loopCap.iterations;
 
@@ -335,11 +463,15 @@ const $scope = constants?.$scope || function()
                         break;
 
                     case 2:
-                        _class = (obj?.prototype?.constructor || isClass( obj?.prototype, pOptions ) ? obj?.prototype : _class);
+                        _class = (obj?.prototype?.constructor || isClass( obj?.prototype, options?.strict ) ? obj?.prototype : _class);
                         break;
 
                     case 3:
-                        _class = isClass( obj?.prototype, pOptions ) ? obj?.prototype : _class;
+                        _class = isClass( obj?.prototype, options?.strict ) ? obj?.prototype : _class;
+                        break;
+
+                    case 4:
+                        _class = isClass( obj?.__proto__, options?.strict ) ? obj?.__proto__ : _class;
                         break;
 
                     default:
@@ -347,12 +479,18 @@ const $scope = constants?.$scope || function()
                 }
             }
 
-            return (isClass( _class, options ) ? _class : (isClass( clazz, options ) ? clazz : (isClass( clazz ) ? clazz : Object))) || Object;
+            return (isClass( _class, options?.strict ) ? _class : (isClass( clazz, options?.strict ) ? clazz : (isClass( clazz ) ? clazz : Object))) || Object;
         }
 
         return clazz;
     };
 
+    /**
+     * Returns a new object with the same properties that is also an instance of the specified class
+     * @param pObject an object from which to create the new instance
+     * @param pClass the class to use for the new object
+     * @returns {*} a new object with the same properties that is also an instance of the specified class
+     */
     const convertToInstanceOf = function( pObject, pClass )
     {
         const clazz = isClass( pClass ) ? pClass : getClass( pClass || pObject ) || getClass( pObject );
@@ -368,13 +506,14 @@ const $scope = constants?.$scope || function()
         return newObject;
     };
 
-    const isValidEntry = function( pKey, pValue )
-    {
-        const key = asString( pKey, true );
-
-        return !isBlank( key ) && !(_ud === typeof pValue || null === pValue);
-    };
-
+    /**
+     * This function returns a unique identifier that can be assigned to an an object in its constructor.
+     * It is useful for debugging when an object is unintentionally aliased or copied.
+     * @param pObject the object to which to assign the uniqueId
+     * @param pClass the class of the object
+     * @param pTimestamp a number derived from a valid Date, defaults to NOW
+     * @returns {string} a unique string identifying the specific instance of the object
+     */
     const generateUniqueObjectId = function( pObject, pClass, pTimestamp = new Date() )
     {
         let uniqueId = pObject?.uniqueObjectId || pObject?._uniqueObjectId;
@@ -399,7 +538,7 @@ const $scope = constants?.$scope || function()
                         {
                             const char = guid.charAt( i );
 
-                            newUid += (char + (tsString?.length > j ? tsString.charAt( j ) : tsString.charAt( tsString.length - 1 )));
+                            newUid += (char + (tsString?.length > j ? tsString.charAt( j ) : guid.charAt( j - 1 )));
                         }
 
                         const alphas = "ZYXWVUTSRQPONMLKJIHGFEDCBA";
@@ -415,14 +554,23 @@ const $scope = constants?.$scope || function()
         return asString( uniqueId, true );
     };
 
+    /**
+     * This class wraps the 2-element arrays returned from Object.entries,
+     * so we can treat them like objects with a key and a value property instead of an array.
+     * This class extends Array, so it retains all of the functionality normally available for Object entries
+     */
     class ObjectEntry extends Array
     {
+        #key;
+        #value;
+        #type;
+
         constructor( ...pArgs )
         {
             super( ...pArgs );
 
-            this._key = _mt_str;
-            this._value = null;
+            this.#key = _mt_str;
+            this.#value = null;
 
             if ( this.length < 2 )
             {
@@ -434,29 +582,94 @@ const $scope = constants?.$scope || function()
             {
                 const args = asArray( pArgs );
 
-                this._key = (args?.length || 0) > 0 ? args[0] : _mt_str;
-                this._value = (args?.length || 0) > 1 ? args[1] : _mt_str;
+                this.#key = (args?.length || 0) > 0 ? args[0] : this[0] || _mt_str;
+                this.#value = (args?.length || 0) > 1 ? args[1] : this[1] || _mt_str;
             }
+
+            this.#type = typeof this.#value;
+
+            Object.defineProperty( this,
+                                   "uniqueObjectId",
+                                   {
+                                       configurable: false,
+                                       enumerable: false,
+                                       writable: false,
+                                       value: generateUniqueObjectId( this, this.constructor, new Date().getTime() )
+                                   } );
         }
 
         get key()
         {
-            return this._key || (this.length > 0 ? this[0] : _mt_str);
+            return this.#key || (this.length > 0 ? this[0] : _mt_str);
         }
 
         get value()
         {
-            return this._value || (this.length > 1 ? this[1] : null);
+            return this.#value || (this.length > 1 ? this[1] : null);
+        }
+
+        get type()
+        {
+            return this.#type;
+        }
+
+        /**
+         * Returns true if the value property of this entry is null or undefined
+         * @returns {*}
+         */
+        isEmpty()
+        {
+            return isEmptyValue( this.value );
+        }
+
+        /**
+         * Returns true if this entry has a string key and a defined/non-null value
+         * @returns {*|boolean}
+         */
+        isValid()
+        {
+            return isString( this.key ) && !(_ud === typeof this.value || null === this.value);
         }
     }
 
+    /**
+     * Defines a constant for an invalid entry
+     * @type {Readonly<ObjectEntry>}
+     */
+    ObjectEntry.INVALID_ENTRY = Object.freeze( new ObjectEntry() );
+
+    /**
+     * Returns true if the specified value(s) represent a valid ObjectEntry
+     * @param pEntry an ObjectEntry -- or -- a string representing the key for the entry
+     * @param pValue (optional) the value property of the entry (or omitted if the first argument is an instance of ObjectEntry)
+     * @returns {boolean} true if the specified value(s) represent a valid ObjectEntry
+     */
+    const isValidEntry = function( pEntry, pValue = undefined )
+    {
+        let entry = (isString( pEntry ) ? new ObjectEntry( pEntry, pValue ) : (isObject( pEntry ) && pEntry instanceof ObjectEntry) ? pEntry : ObjectEntry.INVALID_ENTRY);
+
+        const key = asString( entry?.key || asString( pEntry, true ), true );
+
+        const value = entry?.value;
+
+        return !isBlank( key ) && !(_ud === typeof value || null === value);
+    };
+
+    /**
+     * Returns an array of the unique property keys of the objects specified,
+     * including those inherited from their prototype or superclass
+     * @param pObject one or more objects whose keys will be returned
+     * @returns {Readonly<*[]>|*[]} an array of the unique property keys of the objects specified
+     */
     const getKeys = function( ...pObject )
     {
+        // filter out empty objects and non-objects
         let objects = [].concat( asArray( pObject ) || [] ).filter( arrayUtils.Filters.IS_POPULATED_OBJECT );
 
+        // return an empty array if there are no objects left after applying the filter
         if ( null == objects || ((objects?.length || 0) <= 0) )
         {
-            return [];
+            return Object.freeze( [] );
         }
 
         let keys = [];
@@ -480,12 +693,21 @@ const $scope = constants?.$scope || function()
                 proto = proto?.__proto__ || proto?.prototype;
             }
 
-            keys = unique( pruneArray( keys ) ).filter( e => !ALWAYS_EXCLUDED.includes( e ) );
+            keys = unique( pruneArray( keys ) ).filter( e => !EXCLUDED_PROPERTIES.includes( e ) );
         }
 
         return Object.freeze( unique( pruneArray( keys || [] ) ) );
     };
 
+    /**
+     * Returns the names of any properties declared as #private in an object's class.
+     * This is done by parsing the source of the class function to find accessor methods.
+     * Therefore, write-only properties,
+     * or properties defined via Object::defineProperty are not (necessarily) returned
+     * @param pObject an object from which to collect the names of properties declared private
+     * @returns {string[]}
+     * @private
+     */
     const _getPrivateProperties = function( pObject )
     {
         let properties = [];
@@ -494,7 +716,7 @@ const $scope = constants?.$scope || function()
 
         let source = isClass( clazz ) ? Function.prototype.toString.call( clazz || {} ) : (pObject || (function() {})).toString();
 
-        let rx = /(get (\w+)\(\))|(#\w[;\r\n])/;
+        let rx = /(get +(\w+)\( *\))|(#(\w)[;\r\n,])/;
 
         let matches = rx.exec( source );
 
@@ -509,9 +731,16 @@ const $scope = constants?.$scope || function()
             matches = rx.exec( source );
         }
 
-        return [].concat( (properties || []).filter( e => !ALWAYS_EXCLUDED.includes( e ) ) || [] );
+        return [].concat( (properties || []).filter( e => !EXCLUDED_PROPERTIES.includes( e ) ) || [] );
     };
 
+
+    /**
+     * Returns an array of the unique property names of the objects specified,
+     * including those inherited from their prototype or superclass
+     * @param pObject one or more objects whose keys will be returned
+     * @returns {Readonly<*[]>|*[]} an array of the unique property names of the objects specified
+     */
     const getProperties = function( ...pObject )
     {
         let objects = [].concat( asArray( pObject ) || [] ).filter( arrayUtils.Filters.IS_OBJECT );
@@ -544,11 +773,18 @@ const $scope = constants?.$scope || function()
         }
 
         properties = properties.filter( NON_BLANK_STRINGS ).map( e => asString( e, true ).trim() );
-        properties = properties.filter( e => !ALWAYS_EXCLUDED.includes( e ) );
+        properties = properties.filter( e => !EXCLUDED_PROPERTIES.includes( e ) );
 
         return Object.freeze( unique( pruneArray( properties ) ) );
     };
 
+
+    /**
+     * Returns an array of the unique property values of the objects specified,
+     * including those inherited from their prototype or superclass
+     * @param pObject one or more objects whose values will be returned
+     * @returns {Readonly<*[]>|*[]} an array of the unique property values of the objects specified
+     */
     const getValues = function( ...pObject )
     {
         let objects = [].concat( asArray( pObject ) || [] ).filter( arrayUtils.Filters.IS_OBJECT );
@@ -585,6 +821,16 @@ const $scope = constants?.$scope || function()
         return Object.freeze( unique( pruneArray( values || [] ) ) );
     };
 
+
+    /**
+     * Returns an array of the entries of the objects specified,
+     * including those inherited from their prototype or superclass.
+     *
+     * This is the null-safe equivalent of calling Object::entries on each object and concatenating the results.
+     *
+     * @param pObject one or more objects whose entries will be returned
+     * @returns {Readonly<*[]>|*[]} an array of the entries of the objects specified
+     */
     const getEntries = function( ...pObject )
     {
         let objects = [].concat( asArray( pObject ) || [] ).filter( arrayUtils.Filters.IS_OBJECT );
@@ -620,6 +866,13 @@ const $scope = constants?.$scope || function()
         return Object.freeze( entries );
     };
 
+    /**
+     * Returns true if the object has no properties
+     * whose value is a scalar or an object with properties that satisfy the same conditions
+     * @param pObject an object to evaluate
+     * @param pOptions an object to define whether (and how deep) to recursively check for valid properties
+     * @returns {boolean} true if the object has no populated properties
+     */
     const hasNoProperties = function( pObject, pOptions = { recursive: true } )
     {
         const options = Object.assign( {}, pOptions || { recursive: true } );
@@ -644,7 +897,7 @@ const $scope = constants?.$scope || function()
         {
             let value = getProperty( pObject, propertyName );
 
-            if ( !isEmptyValue( value, { recursive: false } ) )
+            if ( !isEmptyValue( value, { recursive: !shallow } ) )
             {
                 result = false;
                 break;
@@ -655,6 +908,20 @@ const $scope = constants?.$scope || function()
 
     };
 
+    /**
+     * Returns true if the specified value is
+     * undefined,
+     * null,
+     * a string containing only whitespace characters,
+     * an object with no properties,
+     * or an array with no non-empty elements.
+     *
+     * CAUTION: there is a potential to enter an infinite loop if an empty object graph is self-referential (RARE)
+     *
+     * @param pValue a value to evaluate
+     * @param pOptions an object to define options related to recursion
+     * @returns {boolean|*} true if the value is "empty"
+     */
     const isEmptyValue = function( pValue, pOptions = { recursive: true } )
     {
         const options = Object.assign( {}, pOptions || { recursive: true } );
@@ -663,7 +930,7 @@ const $scope = constants?.$scope || function()
                null === pValue ||
                isBlank( asString( pValue, true ) ) ||
                (isObject( pValue ) && hasNoProperties( pValue, options )) ||
-               (isArray( pValue ) && ((pValue?.length || 0) <= 0));
+               (isArray( pValue ) && ((pValue?.length || 0) <= 0 || hasNoProperties( pValue, options )));
     };
 
     const isPopulated = function( pObject, pOptions )
@@ -1921,21 +2188,21 @@ const $scope = constants?.$scope || function()
         {
             const entry = entries[i];
 
-            const key = hasElementAt( entry, 0 ) ? asString( entry[0], true ) : "$";
+            const key = entry.key || "~$~";
 
-            if ( ALWAYS_EXCLUDED.includes( key ) )
+            if ( EXCLUDED_PROPERTIES.includes( key ) || "~$~" === key )
             {
                 continue;
             }
 
-            if ( key.startsWith( "$" ) || !(objAProperties.includes( key ) || key in objA) )
+            if ( key.startsWith( "~$~" ) || !(objAProperties.includes( key ) || key in objA) )
             {
                 continue;
             }
 
-            const value = hasElementAt( entry, 1 ) ? entry[1] : null;
+            const value = entry.value;
 
-            if ( isValidEntry( key, value ) )
+            if ( isValidEntry( entry ) )
             {
                 let valueA = objA[key];
 
@@ -1996,7 +2263,7 @@ const $scope = constants?.$scope || function()
         {
             let propertyName = objBProperties[i];
 
-            if ( skip.test( propertyName ) || (ALWAYS_EXCLUDED.includes( propertyName )) )
+            if ( skip.test( propertyName ) || (EXCLUDED_PROPERTIES.includes( propertyName )) )
             {
                 continue;
             }
@@ -2408,7 +2675,7 @@ const $scope = constants?.$scope || function()
         return obj;
     };
 
-    const deepAssign = function( pTarget, pSource, pStack = [] )
+    const assign = function( pTarget, pSource, pStack = [] )
     {
         let target = pTarget || {};
         let source = pSource || {};
@@ -2440,7 +2707,7 @@ const $scope = constants?.$scope || function()
 
                                  try
                                  {
-                                     value = deepAssign( (target[property] || {}), (value || {}), stack );
+                                     value = assign( (target[property] || {}), (value || {}), stack );
 
                                      target[property] = Object.assign( {}, value || {} );
                                  }
@@ -2569,7 +2836,7 @@ const $scope = constants?.$scope || function()
             evaluateBoolean,
             toBool,
             safeAssign,
-            deepAssign,
+            deepAssign: assign,
             assignPublic,
             ingest,
             safeIngest,

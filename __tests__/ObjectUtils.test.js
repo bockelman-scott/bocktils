@@ -491,3 +491,123 @@ test( "getValues returns all of the values accessible via the specified object",
 
           expect( arrayUtils.arraysEqual( values, [8, "888", "Eight", "One more than seven"], comparator ) ).toBe( true );
       } );
+
+test( "getEntries returns an array of ObjectEntry values",
+      () =>
+      {
+          let baz = "baz";
+
+          let a = { a: 1, b: 2, c: 3, d: 4 };
+          let b = { a: "a", b: "b", c: "c", d: "d" };
+          let c = { foo: "bar", baz: "baz", o: a };
+
+          let entries = objectUtils.getEntries( a, b, c );
+
+          expect( entries?.length ).toEqual( 11 );
+
+          for( let entry of entries )
+          {
+              expect( entry instanceof objectUtils.ObjectEntry ).toBe( true );
+          }
+      } );
+
+test( "getEntries returns the entries of all objects specified",
+      () =>
+      {
+          let baz = "baz";
+
+          let a = { a: 1, b: 2, c: 3, d: 4 };
+          let b = { a: "a", b: "b", c: "c", d: "d" };
+          let c = { foo: "bar", baz: "baz", o: a };
+
+          let entries = objectUtils.getEntries( a, b, c, baz );
+
+          expect( entries?.length ).toEqual( 11 );
+
+          expect( entries[0]?.key ).toEqual( "a" );
+          expect( entries[0]?.value ).toEqual( 1 );
+
+          expect( entries[1]?.key ).toEqual( "b" );
+          expect( entries[1]?.value ).toEqual( 2 );
+
+          expect( entries[2]?.key ).toEqual( "c" );
+          expect( entries[2]?.value ).toEqual( 3 );
+
+          expect( entries[3]?.key ).toEqual( "d" );
+          expect( entries[3]?.value ).toEqual( 4 );
+
+          expect( entries[4]?.key ).toEqual( "a" );
+          expect( entries[4]?.value ).toEqual( "a" );
+
+          expect( entries[5]?.key ).toEqual( "b" );
+          expect( entries[5]?.value ).toEqual( "b" );
+
+          expect( entries[6]?.key ).toEqual( "c" );
+          expect( entries[6]?.value ).toEqual( "c" );
+
+          expect( entries[7]?.key ).toEqual( "d" );
+          expect( entries[7]?.value ).toEqual( "d" );
+
+          expect( entries[8]?.key ).toEqual( "foo" );
+          expect( entries[8]?.value ).toEqual( "bar" );
+
+          expect( entries[9]?.key ).toEqual( "baz" );
+          expect( entries[9]?.value ).toEqual( "baz" );
+
+          expect( entries[10]?.key ).toEqual( "o" );
+          expect( entries[10]?.value ).toEqual( a );
+
+      } );
+
+test( "hasNoProperties returns true if no property holds a value or populated object",
+      () =>
+      {
+          let a = { a: {}, b: { a: {} } };
+
+          expect( objectUtils.hasNoProperties( a ) ).toBe( true );
+
+      } );
+
+test( "hasNoProperties returns false if the options are not recursive and one or more properties holds a value (even if that value is an object with no properties)",
+      () =>
+      {
+          let a = { a: {}, b: { a: {} } };
+
+          expect( objectUtils.hasNoProperties( a, { recursive: false } ) ).toBe( false );
+
+      } );
+
+
+test( "isEmptyValue returns true if the specified argument is a string of only whitespace",
+      () =>
+      {
+          let s = "\n";
+
+          expect( objectUtils.isEmptyValue( s ) ).toBe( true );
+
+          s = "   \n   \t   ";
+
+          expect( objectUtils.isEmptyValue( s ) ).toBe( true );
+
+          s = " a ";
+
+          expect( objectUtils.isEmptyValue( s ) ).toBe( false );
+      } );
+
+test( "isEmptyValue returns true if the specified argument is an array of length 0",
+      () =>
+      {
+          let arr =[];
+
+          expect( objectUtils.isEmptyValue( arr ) ).toBe( true );
+      } );
+
+
+test( "isEmptyValue returns true if the specified argument is an array whose elements are all 'empty values'",
+      () =>
+      {
+          let arr =[{},[],""];
+
+          expect( objectUtils.isEmptyValue( arr ) ).toBe( true );
+      } );
+
