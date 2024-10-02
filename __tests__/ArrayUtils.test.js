@@ -2,12 +2,12 @@
 // let jester = require( "jest" );
 // jester.run( __filename );
 
-/** import the Constants.js we are testing */
-const constants = require( "../utils/Constants.js" );
+/** import the Constants.cjs we are testing */
+const constants = require( "../utils/Constants.cjs" );
 
-const arrayUtils = require( "../utils/ArrayUtils.js" );
-const typeUtils = arrayUtils.dependencies.typeUtils || require( "../utils/TypeUtils.js" );
-const stringUtils = arrayUtils.dependencies.stringUtils || require( "../utils/StringUtils.js" );
+const arrayUtils = require( "../utils/ArrayUtils.cjs" );
+const typeUtils = arrayUtils.dependencies.typeUtils || require( "../utils/TypeUtils.cjs" );
+const stringUtils = arrayUtils.dependencies.stringUtils || require( "../utils/StringUtils.cjs" );
 
 Object.assign( this, constants );
 Object.assign( this, arrayUtils );

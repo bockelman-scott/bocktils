@@ -1,14 +1,14 @@
-const utils = require( "./CommonUtils.js" );
+const utils = require( "./CommonUtils.cjs" );
 
 /**
  * Establish separate constants for each of the common utilities imported
- * @see ../utils/CommonUtils.js
+ * @see ../utils/CommonUtils.cjs
  */
-const constants = utils?.constants || require( "./Constants.js" );
-const typeUtils = utils?.typeUtils || require( "./TypeUtils.js" );
-const stringUtils = utils?.stringUtils || require( "./StringUtils.js" );
-const arrayUtils = utils?.arrayUtils || require( "./ArrayUtils.js" );
-const objectUtils = utils?.objectUtils || require( "./ObjectUtils.js" );
+const constants = utils?.constants || require( "./Constants.cjs" );
+const typeUtils = utils?.typeUtils || require( "./TypeUtils.cjs" );
+const stringUtils = utils?.stringUtils || require( "./StringUtils.cjs" );
+const arrayUtils = utils?.arrayUtils || require( "./ArrayUtils.cjs" );
+const objectUtils = utils?.objectUtils || require( "./ObjectUtils.cjs" );
 
 const konsole = console || {};
 
@@ -19,7 +19,7 @@ const $scope = utils?.$scope || function()
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };
 
-const logUtils = require( "./LogUtils.js" );
+const logUtils = require( "./LogUtils.cjs" );
 
 (function exposeGenerator()
 {

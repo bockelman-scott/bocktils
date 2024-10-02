@@ -3,17 +3,17 @@ const os = require( "os" );
 const fs = require( "fs" );
 const fsAsync = require( "fs/promises" );
 
-const utils = require( "../utils/CommonUtils" );
+const utils = require( "./CommonUtils.cjs" );
 
-const constants = utils?.constants || require( "../utils/Constants.js" );
-const stringUtils = utils?.stringUtils || require( "../utils/StringUtils.js" );
-const arrayUtils = utils?.arrayUtils || require( "../utils/ArrayUtils.js" );
-const objectUtils = utils?.objectUtils || require( "../utils/ObjectUtils.js" );
+const constants = utils?.constants || require( "./Constants.cjs" );
+const stringUtils = utils?.stringUtils || require( "./StringUtils.cjs" );
+const arrayUtils = utils?.arrayUtils || require( "./ArrayUtils.cjs" );
+const objectUtils = utils?.objectUtils || require( "./ObjectUtils.cjs" );
 
-const dateUtils = require( "./DateUtils.js" );
+const dateUtils = require( "./DateUtils.cjs" );
 
-const envUtils = require( "./EnvironmentUtils.js" );
-const { catchHandler } = require("./FunctionUtils.js");
+const envUtils = require( "./EnvironmentUtils.cjs" );
+const { catchHandler } = require( "./FunctionUtils.cjs");
 
 const _ud = constants._ud || "undefined";
 

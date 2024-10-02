@@ -1,5 +1,12 @@
 {
   "dependencies": {
-    "jest": "^29.7.0"
+    "grunt": "^1.6.1",
+    "grunt-contrib-uglify": "^5.2.2",
+    "jest": "^29.7.0",
+    "uglify-js": "^3.19.3"
+  },
+  "type": "module",
+  "devDependencies": {
+    "jest-ctrf-json-reporter": "^0.0.9"
   }
 }

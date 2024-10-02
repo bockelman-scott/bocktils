@@ -1,7 +1,7 @@
 /** import dependencies **/
-const constants = require( "./Constants.js" );
-const typeUtils = require( "./TypeUtils.js" );
-const stringUtils = require( "./StringUtils.js" );
+const constants = require( "./Constants.cjs" );
+const typeUtils = require( "./TypeUtils.cjs" );
+const stringUtils = require( "./StringUtils.cjs" );
 
 /** create an alias for console **/
 const konsole = console || {};
@@ -17,8 +17,10 @@ const $scope = constants?.$scope || function()
     return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
 };
 
-(function exposeArrayUtils()
+(function exposeModule()
 {
+    const me = exposeModule;
+
     /**
      * Create local variables for the imported values and functions we use.
      * This is technically unnecessary, but some IDEs cannot recognize the imported variables otherwise.
@@ -46,9 +48,9 @@ const $scope = constants?.$scope || function()
         } = constants || {};
 
     // These statements make the functions and properties of the imported modules local variables and functions.
-    Object.assign( this, constants );
-    Object.assign( this, typeUtils );
-    Object.assign( this, stringUtils );
+    Object.assign( this || me, constants );
+    Object.assign( this || me, typeUtils );
+    Object.assign( this || me, stringUtils );
 
     /**
      * An array of this module's dependencies
@@ -1919,6 +1921,36 @@ const $scope = constants?.$scope || function()
         return superset( pArrA, pArrB, true );
     };
 
+    if ( typeUtils.isUndefined( Array.prototype.union ) || !typeUtils.isFunction( Array.prototype.union ) )
+    {
+        try
+        {
+            Array.prototype.union = function( pArr )
+            {
+                return union( this, pArr );
+            };
+        }
+        catch( ex )
+        {
+            konsole.warn( constants.S_ERR_PREFIX, "extending the Array prototype", ex );
+        }
+    }
+
+    if ( typeUtils.isUndefined( Set.prototype.union ) || !typeUtils.isFunction( Set.prototype.union ) )
+    {
+        try
+        {
+            Set.prototype.union = function( pArr )
+            {
+                return union( this, pArr );
+            };
+        }
+        catch( ex )
+        {
+            konsole.warn( constants.S_ERR_PREFIX, "extending the Set prototype", ex );
+        }
+    }
+
     /**
      * Returns an array containing only those elements common to both arrays specified
      *
@@ -1930,7 +1962,7 @@ const $scope = constants?.$scope || function()
      *
      * @returns {*}
      */
-    const intersection = function( pArrA, pArrB, pUnique )
+    const intersection = function( pArrA, pArrB, pUnique = false )
     {
         let arrA = Object.freeze( asArray( pArrA || [] ) );
         let arrB = Object.freeze( asArray( pArrB || [] ) );
@@ -1939,8 +1971,23 @@ const $scope = constants?.$scope || function()
 
         arr = arr.filter( e => arrA.includes( e ) && arrB.includes( e ) );
 
-        return pUnique ? unique( arr ) : arr;
+        return (false !== pUnique) ? unique( arr ) : arr;
     };
+
+    if ( typeUtils.isUndefined( Array.prototype.intersection ) || !typeUtils.isFunction( Array.prototype.intersection ) )
+    {
+        try
+        {
+            Array.prototype.intersection = function( pArr, pUnique = true )
+            {
+                return intersection( this, pArr, (false !== pUnique) );
+            };
+        }
+        catch( ex )
+        {
+            konsole.warn( constants.S_ERR_PREFIX, "extending the Array prototype", ex );
+        }
+    }
 
     /**
      * Returns an array containing only those elements unique to either of the arrays specified
@@ -1961,13 +2008,28 @@ const $scope = constants?.$scope || function()
 
         arr = arr.filter( e => !(arrA.includes( e ) && arrB.includes( e )) );
 
-        if ( pUnique )
+        if ( false !== pUnique )
         {
             arr = unique( arr );
         }
 
         return arr;
     };
+
+    if ( typeUtils.isUndefined( Array.prototype.disjunction ) || !typeUtils.isFunction( Array.prototype.disjunction ) )
+    {
+        try
+        {
+            Array.prototype.disjunction = function( pArr, pUnique = false )
+            {
+                return disjunction( this, pArr, (false !== pUnique) );
+            };
+        }
+        catch( ex )
+        {
+            konsole.warn( constants.S_ERR_PREFIX, "extending the Array prototype", ex );
+        }
+    }
 
     const enQueue = function( pArr, pElem, pLimit )
     {

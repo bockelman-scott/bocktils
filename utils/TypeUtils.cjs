@@ -2,14 +2,13 @@
 
 /**
  * Defines several useful functions for detecting the type of a variable or object.
- * DEPENDS ON Constants.js
+ * DEPENDS ON Constants.cjs
  */
 
-/** import the Constants.js we depend upon using require for maximum compatibility with Node versions */
-const constants = require( "./Constants.js" );
+/** import the Constants.cjs we depend upon using require for maximum compatibility with Node versions */
+const constants = require( "./Constants.cjs" );
 
 /** Create an alias for the console **/
-
 const konsole = console;
 
 /**
@@ -25,7 +24,7 @@ const $scope = constants?.$scope || function()
     return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
 };
 
-(function exposeTypeUtils()
+(function exposeModule()
 {
     /**
      * Define a string key which is unlikely to collide with other libraries or properties.
@@ -359,7 +358,7 @@ const $scope = constants?.$scope || function()
             }
             catch( ex )
             {
-                console.error( constants.S_ERR_PREFIX, "evaluating a value as a Date", ex );
+                konsole.error( constants.S_ERR_PREFIX, "evaluating a value as a Date", ex );
             }
 
             if ( null == date && isFunction( pDateFormatter ) )
@@ -381,7 +380,7 @@ const $scope = constants?.$scope || function()
                     }
                     catch( ex )
                     {
-                        console.error( constants.S_ERR_PREFIX, "evaluating a value as a Date", ex );
+                        konsole.error( constants.S_ERR_PREFIX, "evaluating a value as a Date", ex );
                     }
 
                     if ( null == date && isFunction( pDateFormatter ) )
@@ -392,7 +391,7 @@ const $scope = constants?.$scope || function()
                         }
                         catch( ex )
                         {
-                            console.error( constants.S_ERR_PREFIX, "formatting a value as a Date", ex );
+                            konsole.error( constants.S_ERR_PREFIX, "formatting a value as a Date", ex );
                         }
                     }
 
@@ -426,7 +425,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            console.warn( constants.S_ERR_PREFIX, "evaluating an object as a Regular Expression", ex );
+            konsole.warn( constants.S_ERR_PREFIX, "evaluating an object as a Regular Expression", ex );
         }
 
         return false;
@@ -479,7 +478,7 @@ const $scope = constants?.$scope || function()
                     }
                     catch( e )
                     {
-                        console.warn( "Attempt to call instanceof without a class or callable" );
+                        konsole.warn( "Attempt to call instanceof without a class or callable" );
                     }
                 }
             }

@@ -1,7 +1,7 @@
-const constants = require( "./Constants.js" );
-const typeUtils = require( "./TypeUtils" );
-const stringUtils = require( "./StringUtils.js" );
-const arrayUtils = require( "./ArrayUtils.js" );
+const constants = require( "./Constants.cjs" );
+const typeUtils = require( "./TypeUtils.cjs" );
+const stringUtils = require( "./StringUtils.cjs" );
+const arrayUtils = require( "./ArrayUtils.cjs" );
 
 const crypto = require( "crypto" );
 
@@ -15,8 +15,10 @@ const $scope = constants?.$scope || function()
     return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
 };
 
-(function makeGuidGenerator()
+(function exposeModule()
 {
+    const me = exposeModule;
+
     let _mt_str = constants._mt_str || "";
 
     let asString = stringUtils.asString || function( s ) { return (_mt_str + s).trim(); };
@@ -26,7 +28,7 @@ const $scope = constants?.$scope || function()
     /**
      * This statement makes all the values exposed by the imported modules local variables in the current scope.
      */
-    constants.importUtilities( this, constants, stringUtils, arrayUtils );
+    constants.importUtilities( this || me, constants, stringUtils, arrayUtils );
 
     /**
      * An array of this module's dependencies

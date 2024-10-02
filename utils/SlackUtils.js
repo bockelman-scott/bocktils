@@ -1,16 +1,16 @@
-const constants = require( "./Constants.js" );
-const stringUtils = require( "./StringUtils.js" );
-const arrayUtils = require( "./ArrayUtils.js" );
-const objectUtils = require( "./ObjectUtils.js" );
-const funcUtils = require( "./FunctionUtils.js" );
+const constants = require( "./Constants.cjs" );
+const stringUtils = require( "./StringUtils.cjs" );
+const arrayUtils = require( "./ArrayUtils.cjs" );
+const objectUtils = require( "./ObjectUtils.cjs" );
+const funcUtils = require( "./FunctionUtils.cjs" );
 
-const jsonUtils = require( "./JsonUtils.js" );
+const jsonUtils = require( "./JsonUtils.cjs" );
 
 const httpUtils = require( "./HttpUtils.js" );
 
-const guidUtils = require( "./GUIDUtils.js" );
+const guidUtils = require( "./GUIDUtils.cjs" );
 
-const logUtils = require( "./LogUtils.js" );
+const logUtils = require( "./LogUtils.cjs" );
 
 const axios = require( "axios" );
 

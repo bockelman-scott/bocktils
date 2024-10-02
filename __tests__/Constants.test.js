@@ -2,8 +2,8 @@
 // let jester = require( "jest" );
 // jester.run( __filename );
 
-/** import the Constants.js we are testing */
-const constants = require( "../utils/Constants.js" );
+/** import the Constants.cjs we are testing */
+const constants = require( "../utils/Constants.cjs" );
 
 function TestAffirmatives( pVal )
 {

@@ -1,10 +1,10 @@
 const os = require( "os" );
 
-const constants = require( "./Constants.js" );
-const stringUtils = require( "./StringUtils.js" );
-const arrayUtils = require( "./ArrayUtils.js" );
-const objectUtils = require( "./ObjectUtils.js" );
-const jsonUtils = require( "./JsonUtils.js" );
+const constants = require( "./Constants.cjs" );
+const stringUtils = require( "./StringUtils.cjs" );
+const arrayUtils = require( "./ArrayUtils.cjs" );
+const objectUtils = require( "./ObjectUtils.cjs" );
+const jsonUtils = require( "./JsonUtils.cjs" );
 
 const configurator = require( "../Configuration.js" );
 

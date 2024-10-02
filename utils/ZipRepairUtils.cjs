@@ -1,7 +1,7 @@
 const fs = require( "fs" );
 const fsAsync = require( "fs/promises" );
 
-const utils = require( "./CommonUtils.js" );
+const utils = require( "./CommonUtils.cjs" );
 
 let constants = utils.constants;
 let stringUtils = utils.stringUtils;

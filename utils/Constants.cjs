@@ -2,7 +2,7 @@
  * Defines several useful constants and utility functions common to JavaScript applications.
  */
 
-(function exposeConstants()
+(function exposeModule()
 {
     // The typeof a variable that does not exist or has been declared without a default value
     const _ud = "undefined";
@@ -26,12 +26,6 @@
     {
         return (_ud === typeof self) && (null != global) && (_ud !== typeof process);
     };
-
-    const operatingSystem = isNodeJs() ? ("" + (require( "os" )?.platform)).toLowerCase() : "browser";
-
-    const isWindows = function( pOs ) { return ["windows", "win32", "windows_nt"].includes( pOs || operatingSystem ); };
-
-    const EOL = isWindows( operatingSystem ) ? "\r\n" : "\n";
 
     const currentDirectory = (_ud !== typeof process) ? process.cwd() : ((_ud !== typeof __dirname) ? __dirname : ".");
 
@@ -68,7 +62,6 @@
             _ellipsis = "...",
             _crlf = "\r\n",
             _lf = "\n",
-            _eol = EOL,
             _z = "\u0000",
             _dblqt = "\"",
             _sglqt = "'",
@@ -87,7 +80,7 @@
             _reverse_solidus = "\\",
             _backslash = "\\",
 
-            _pathSep = ((_ud === typeof process) ? _slash : isWindows() ? _backslash : _slash),
+            _pathSep = ((_ud === typeof process) ? _backslash : _slash),
             _prevDir = (_dot + _dot + _pathSep),
             _thisDir = (_dot + _pathSep),
 
@@ -245,7 +238,7 @@
      * Returns a new Object whose properties and functions match those of the Object specified.
      * Use this to create a copy of some scope, such as global, self, or the current closure.
      * THIS FUNCTION WILL BIND FUNCTIONS TO THE NEW OBJECT
-     * IF YOU WANT TO COPY THE FUNCTIONS INSTEAD. USE FunctionUtils.js copyScope INSTEAD
+     * IF YOU WANT TO COPY THE FUNCTIONS INSTEAD. USE FunctionUtils.cjs copyScope INSTEAD
      *
      * @param pScope the object (or scope) whose properties and functions should be copied to the new object to be returned.
      *
@@ -700,7 +693,6 @@
             _ellipsis,
             _lf,
             _crlf,
-            _eol,
             _browser,
             _worker,
             _nodejs,

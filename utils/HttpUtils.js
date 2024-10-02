@@ -1,14 +1,14 @@
-const utils = require( "./CommonUtils.js" );
+const utils = require( "./CommonUtils.cjs" );
 
 /**
  * Establish separate constants for each of the common utilities imported
- * @see ../utils/CommonUtils.js
+ * @see ../utils/CommonUtils.cjs
  */
-const constants = utils?.constants || require( "../utils/Constants.js" );
-const typeUtils = utils?.typeUtils || require( "../utils/TypeUtils.js" );
-const stringUtils = utils?.stringUtils || require( "../utils/StringUtils.js" );
-const arrayUtils = utils?.arrayUtils || require( "../utils/ArrayUtils.js" );
-const objectUtils = utils?.objectUtils || require( "../utils/ObjectUtils.js" );
+const constants = utils?.constants || require( "./Constants.cjs" );
+const typeUtils = utils?.typeUtils || require( "./TypeUtils.cjs" );
+const stringUtils = utils?.stringUtils || require( "./StringUtils.cjs" );
+const arrayUtils = utils?.arrayUtils || require( "./ArrayUtils.cjs" );
+const objectUtils = utils?.objectUtils || require( "./ObjectUtils.cjs" );
 
 const konsole = console || {};
 

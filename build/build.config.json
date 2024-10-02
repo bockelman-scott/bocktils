@@ -1,0 +1,13 @@
+{
+  "directories":
+  {
+    "source": "../utils",
+    "staging": "/staging",
+    "distribution": "/dist"
+
+  },
+  "minification":
+  {
+
+  }
+}

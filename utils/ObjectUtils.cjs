@@ -3,13 +3,12 @@
  * This module exposes useful methods for working with objects, collections of objects, and classes.
  * Dependencies: Constants, TypeUtils, StringUtils, ArrayUtils, and GUIDUtils
  */
+const constants = require( "./Constants.cjs" );
+const typeUtils = require( "./TypeUtils.cjs" );
+const stringUtils = require( "./StringUtils.cjs" );
+const arrayUtils = require( "./ArrayUtils.cjs" );
 
-const constants = require( "./Constants.js" );
-const typeUtils = require( "./TypeUtils.js" );
-const stringUtils = require( "./StringUtils.js" );
-const arrayUtils = require( "./ArrayUtils.js" );
-
-const guidUtils = require( "./GUIDUtils.js" );
+const guidUtils = require( "./GUIDUtils.cjs" );
 
 /** create an alias for console **/
 const konsole = console || {};
@@ -28,8 +27,10 @@ const $scope = constants?.$scope || function()
 /**
  * This is the Immediately Invoked Function Expression (IIFE) that builds and returns the module
  */
-(function exposeObjectUtils()
+(function exposeModule()
 {
+    const me = exposeModule;
+
     // explicitly define several variables that are imported from the dependencies
     // this is done to help IDEs that cannot infer what is in scope otherwise
     let
@@ -124,7 +125,7 @@ const $scope = constants?.$scope || function()
     let ARRAY_METHODS = arrayUtils.ARRAY_METHODS;
 
     // Make the functions and properties of the imported modules local variables and functions.
-    constants.importUtilities( this, constants, typeUtils, stringUtils, arrayUtils );
+    constants.importUtilities( (this || me), constants, typeUtils, stringUtils, arrayUtils );
 
     // defines a key we can use to store this module in global scope
     const INTERNAL_NAME = "__BOCK__OBJECT_UTILS__";
@@ -187,7 +188,9 @@ const $scope = constants?.$scope || function()
             "__defineGetter__",
             "__defineSetter__",
             "__lookupGetter__",
-            "__lookupSetter__"
+            "__lookupSetter__",
+            "isIdenticalTo",
+            "equals"
         ];
 
     /**
@@ -933,6 +936,36 @@ const $scope = constants?.$scope || function()
                (isArray( pValue ) && ((pValue?.length || 0) <= 0 || hasNoProperties( pValue, options )));
     };
 
+    /**
+     * Returns true if the specified value is
+     *
+     * an object with at least n non-empty properties
+     * (where n is the value specified in the options argument or 1)
+     * and (optionally) having the specified keys
+     *
+     * or
+     *
+     *  DEPENDING ON VALUES PASSED IN THE OPTIONS ARGUMENT:
+     *
+     *  an array with at least n non-null, non-empty elements
+     *  (where n is the value specified in the options argument or 1) or
+     *
+     *
+     *  a valid number or
+     *  a boolean or
+     *  a function or
+     *  a non-empty string
+     *
+     * @param pObject a value to evaluate
+     * @param pOptions an object defining optional characteristics the value must satisfy
+     *                 validTypes: an array of types to accept (defaults to ["object"]
+     *                 minimumKeys: an integer defining how many properties an object must have
+     *                              (or elements a pruned array must have)
+     *                              defaults to 1
+     *                 acceptArrays: whether to return true if the evaluated value is an array
+     *                               defaults to false
+     * @returns {*|boolean}
+     */
     const isPopulated = function( pObject, pOptions )
     {
         let opts = Object.assign( {}, (pOptions || { validTypes: [_obj], minimumKeys: 1, acceptArrays: false }) );
@@ -954,7 +987,7 @@ const $scope = constants?.$scope || function()
             case _obj:
                 if ( isArray( pObject ) )
                 {
-                    return opts?.acceptArrays && pObject?.length >= minimumKeys;
+                    return opts?.acceptArrays && arrayUtils.pruneArray( pObject || [] ).length >= minimumKeys;
                 }
 
                 if ( hasNoProperties( pObject ) )
@@ -1002,11 +1035,21 @@ const $scope = constants?.$scope || function()
         return false;
     };
 
+    /**
+     * Returns true if the specified value is a non-null object with at least one key
+     * @param pObject
+     * @returns {*|boolean}
+     */
     const isValidObject = function( pObject )
     {
         return isNonNullObject( pObject ) && getKeys( pObject ).length > 0;
     };
 
+    /**
+     * Returns the first value specified that is a valid object
+     * @param pObject
+     * @returns {null}
+     */
     const firstValidObject = function( ...pObject )
     {
         let object = null;
@@ -1026,6 +1069,14 @@ const $scope = constants?.$scope || function()
         return object;
     };
 
+
+    /**
+     * Returns the first value specified that is a populated object, as per the criteria
+     * @param pCriteria an object to to pass options to the isPopulated function used internally
+     * @param pObject one or more values that might be populated objects
+     * @returns {object} the first object satisfying the criteria
+     * @see isPopulated
+     */
     const firstPopulatedObject = function( pCriteria, ...pObject )
     {
         const options = Object.assign( {}, pCriteria || {} );
@@ -1049,8 +1100,9 @@ const $scope = constants?.$scope || function()
 
     /**
      * Returns the value of a property compensating for a naming convention
-     * by which class members are prefixed with an _ (underscore) and using the regular name for the setter/getter pair
-     * or for read-only properties;  not supported "hash syntax"
+     * by which class members are prefixed with an _ (underscore)
+     * and using the regular name for the setter/getter pair
+     * or for read-only properties
      * @param {Object} pObject
      * @param {String} pPropertyName
      * @returns
@@ -1123,7 +1175,7 @@ const $scope = constants?.$scope || function()
         propertyName = propertyName.replace( REG_EXP_LEADING_DOT, _mt_str ).replace( REG_EXP_TRAILING_DOT, _mt_str );
 
         // this statement accounts for a convention of using _ as the private property name, but will use the getter if it exists or the private property is null or false
-        let propertyValue = obj["_" + propertyName] || obj[propertyName];
+        let propertyValue = obj[propertyName] || obj["_" + propertyName];
 
         // if this is a normal property name (not a path like a.b.c or a[0][1][2]) and we have a value, we return it
         let found = !propertyName.includes( _dot ) && ((null !== propertyValue && (_ud !== typeof propertyValue)) || isNumber( propertyValue ));
@@ -1193,7 +1245,7 @@ const $scope = constants?.$scope || function()
         return found ? obj : (obj[propertyName] || _mt_str);
     };
 
-    const hasProperty = function( pObject, pName, pOnlyOwn, pStrict )
+    const hasProperty = function( pObject, pName, pOnlyOwn = false, pStrict = false )
     {
         if ( isMissing( pObject ) )
         {
@@ -1314,7 +1366,14 @@ const $scope = constants?.$scope || function()
 
                     let nm = ("_" + asString( propertyName, true ).replace( rx, _mt_str ));
 
-                    obj[nm] = pValue;
+                    try
+                    {
+                        obj[nm] = pValue;
+                    }
+                    catch( ex )
+                    {
+                        konsole.warn( constants.S_ERR_PREFIX, "setting", nm, ex );
+                    }
                 }
 
                 break;
@@ -1331,16 +1390,18 @@ const $scope = constants?.$scope || function()
                 }
                 catch( ex )
                 {
-                    console.warn( ex.message );
+                    konsole.warn( ex.message );
                 }
         }
 
         return pValue;
     };
 
-    const identical = function( pSelf, pOther )
+    const identical = function( pSelf, pOther, pCheckUniqueObjectId = false )
     {
-        return (pOther === pSelf) || (isNullOrEmpty( pSelf ) && isNullOrEmpty( pOther ));
+        let is = (pOther === pSelf) || (isNullOrEmpty( pSelf ) && isNullOrEmpty( pOther ));
+
+        return is && ( !!!pCheckUniqueObjectId || pOther?.uniqueObjectId === pSelf?.uniqueObjectId);
     };
 
     /**
@@ -1454,7 +1515,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            console.error( "An error occurred while comparing 2 objects", ex.message );
+            konsole.error( "An error occurred while comparing 2 objects", ex.message );
         }
 
         return false;
@@ -1462,59 +1523,17 @@ const $scope = constants?.$scope || function()
 
     const canCompare = function( pObject, pStrict, pClass )
     {
-        return !isNull( pObject ) && (pStrict && pClass ? pObject instanceof pClass : true);
+        return !isNull( pObject ) && ( !(pStrict && pClass) || pObject instanceof pClass);
     };
 
-    const isIdenticalTo = function( pOther, pStrict, pClass )
+    Object.prototype.isIdenticalTo = function( pOther, pStrict, pClass )
     {
         return canCompare( pOther, pStrict, pClass ) && (identical( this, pOther ) || same( this, pOther, pStrict, pClass ));
     };
 
-    const toScalar = function( pObject )
+    Object.prototype.equals = function( pObject )
     {
-        let obj = isObject( pObject ) ? (isPopulated( pObject ) ? (pObject || EMPTY_OBJECT) : EMPTY_OBJECT) : pObject;
-
-        let scalar = _mt_str;
-
-        switch ( typeof obj )
-        {
-            case _ud:
-                scalar = _ud;
-                break;
-
-            case _str:
-            case _bool:
-            case _num:
-            case _big:
-                scalar = asString( obj ).replace( /\t/g, "  " );
-                break;
-
-            case _fun:
-                scalar = asString( asString( obj?.name ) || asString( obj?.toString ? obj?.toString() : Function.prototype.toString.call( obj, obj ) ) );
-                scalar = scalar.replace( /\t/g, "  " );
-                break;
-
-            default:
-                break;
-        }
-
-        if ( !isBlank( scalar ) )
-        {
-            return scalar;
-        }
-
-        if ( obj )
-        {
-            for( let prop in obj )
-            {
-                const key = toScalar( prop );
-                const value = toScalar( getProperty( obj, prop ) );
-
-                scalar += (asString( key ) + _colon + asString( value ) + "\t");
-            }
-        }
-
-        return scalar;
+        return same( this, pObject, true, getClass( this ) );
     };
 
     const arrayToObject = function( pArr, pKeyProperty )
@@ -1724,7 +1743,7 @@ const $scope = constants?.$scope || function()
                     }
                     catch( ex )
                     {
-                        console.warn( ex.message );
+                        konsole.warn( ex.message );
                     }
                     break;
 
@@ -1765,7 +1784,7 @@ const $scope = constants?.$scope || function()
 
             if ( !msg.includes( "could not be cloned" ) )
             {
-                console.warn( msg );
+                konsole.warn( msg );
             }
         }
 
@@ -1789,7 +1808,7 @@ const $scope = constants?.$scope || function()
                 }
                 catch( ex )
                 {
-                    console.warn( ex.message );
+                    konsole.warn( ex.message );
                 }
             }
         }
@@ -1837,11 +1856,11 @@ const $scope = constants?.$scope || function()
 
         let newObj = pObject || {};
 
-        newObj = safeAssign( (newObj || {}), pObject || {}, options );
+        newObj = augment( (newObj || {}), pObject || {}, options );
 
         for( let i = 0, n = defaults.length; i < n; i++ )
         {
-            newObj = safeAssign( newObj, defaults[i], options );
+            newObj = augment( newObj, defaults[i], options );
         }
 
         return newObj;
@@ -1934,7 +1953,7 @@ const $scope = constants?.$scope || function()
      * @param pStack --- do not pass this argument, it is used to detect cycles and infinite loops
      * and is only passed to recursive calls from within the function itself
      */
-    const safeAssign = function( pObject, pObjectB, pOptions, pStack = [] )
+    const augment = function( pObject, pObjectB, pOptions, pStack = [] )
     {
         const options = Object.assign( {}, pOptions || {} );
 
@@ -1950,38 +1969,70 @@ const $scope = constants?.$scope || function()
             return Object.assign( objA, objB );
         }
 
-        const entries = Object.entries( objB );
+        const entries = getEntries( objB );
 
         for( let i = 0, n = entries.length; i < n; i++ )
         {
             const entry = entries[i];
 
-            const key = hasElementAt( entry, 0 ) ? asString( entry[0], true ) : null;
+            const key = asString( entry?.key || entry[0] );
 
-            if ( ALWAYS_EXCLUDED.includes( key ) )
+            if ( isBlank( key ) || EXCLUDED_PROPERTIES.includes( key ) )
             {
                 continue;
             }
 
             _stack.push( key );
 
-            let value = hasElementAt( entry, 1 ) ? (entry[1]) : null;
+            let value = entry?.value || entry[1];
 
             if ( !isBlank( key ) && !(_ud === typeof value || null === value) )
             {
-                let valueA = objA[key];
+                let valueA = null;
+
+                try
+                {
+                    valueA = objA[key];
+                }
+                catch( ex )
+                {
+                    konsole.warn( constants.S_ERR_PREFIX, "accessing", key, ex );
+                }
 
                 if ( _ud === typeof valueA || null == valueA )
                 {
-                    objA[key] = value;
+                    try
+                    {
+                        objA[key] = value;
+                    }
+                    catch( ex )
+                    {
+                        konsole.warn( constants.S_ERR_PREFIX, "modifying", key, ex );
+                    }
                 }
                 else if ( isArray( valueA ) && isArray( value ) )
                 {
-                    objA[key] = valueA;
-                    let arrB = value;
+                    try
+                    {
+                        objA[key] = valueA;
+                    }
+                    catch( ex )
+                    {
+                        konsole.warn( constants.S_ERR_PREFIX, "modifying", key, ex );
+                    }
 
-                    valueA = objA[key];
-                    value = arrB;
+                    let arrB = value || [];
+
+                    try
+                    {
+                        valueA = objA[key] || [];
+                    }
+                    catch( ex )
+                    {
+                        konsole.warn( constants.S_ERR_PREFIX, "accessing", key, ex );
+                    }
+
+                    value = arrB || [];
 
                     if ( value.length > valueA.length && options.appendToArrays )
                     {
@@ -1994,7 +2045,14 @@ const $scope = constants?.$scope || function()
                         }
                     }
 
-                    objA[key] = [].concat( valueA );
+                    try
+                    {
+                        objA[key] = [].concat( valueA );
+                    }
+                    catch( ex )
+                    {
+                        konsole.warn( constants.S_ERR_PREFIX, "modifying", key, ex );
+                    }
                 }
                 else if ( (valueA instanceof Map) && (value instanceof Map) && options.addMissingMapEntries )
                 {
@@ -2035,7 +2093,7 @@ const $scope = constants?.$scope || function()
                     {
                         _stack.push( key );
 
-                        objA[key] = safeAssign( objA[key], (value), options, _stack );
+                        objA[key] = augment( objA[key], (value), options, _stack );
 
                         _stack.pop();
                     }
@@ -2044,74 +2102,6 @@ const $scope = constants?.$scope || function()
         }
 
         return objA;
-    };
-
-    const classPreservingAssign = function( pTarget, pObject, pPaths, pTotalPaths )
-    {
-        let target = pTarget || pObject || {};
-
-        if ( !constants.BUILTIN_TYPES.includes( getClass( target ) ) && _fun === typeof target.clone )
-        {
-            target = target.clone();
-        }
-
-        let source = pObject || target || {};
-
-        if ( !constants.BUILTIN_TYPES.includes( getClass( source ) ) && _fun === typeof source.clone )
-        {
-            source = source.clone();
-        }
-
-        let paths = [].concat( asArray( pPaths || [] ) || [] );
-
-        let totalPaths = [].concat( asArray( pTotalPaths || [] ) || [] );
-
-        const cycles = detectCycles( paths, 3, 3 ) || detectCycles( totalPaths, 5, 5 );
-
-        if ( cycles )
-        {
-            return target;
-        }
-
-        const propertyNames = Object.getOwnPropertyNames( source );
-
-        for( let propertyName of propertyNames )
-        {
-            if ( ALWAYS_EXCLUDED.includes( propertyName ) )
-            {
-                continue;
-            }
-
-            totalPaths.push( propertyName );
-
-            target[propertyName] = (target[propertyName] || source[propertyName]);
-
-            if ( _obj === typeof target[propertyName] )
-            {
-                if ( !constants.BUILTIN_TYPES.includes( getClass( target[propertyName] ) ) && _fun === typeof target[propertyName].clone )
-                {
-                    target[propertyName] = target[propertyName].clone();
-                }
-
-                paths.push( propertyName );
-
-                target[propertyName] = classPreservingAssign( target[propertyName], source[propertyName] || target[propertyName], paths, totalPaths );
-
-                paths.pop();
-
-                if ( !constants.BUILTIN_TYPES.includes( getClass( target[propertyName] ) ) && _fun === typeof target[propertyName].clone )
-                {
-                    target[propertyName] = target[propertyName].clone();
-                }
-            }
-        }
-
-        if ( !constants.BUILTIN_TYPES.includes( getClass( target ) ) && _fun === typeof target.clone )
-        {
-            target = target.clone();
-        }
-
-        return target || source;
     };
 
     /**
@@ -2631,7 +2621,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            console.error( ex.message );
+            konsole.error( ex.message );
         }
 
         for( let prefix of prefixes )
@@ -2642,7 +2632,7 @@ const $scope = constants?.$scope || function()
             }
             catch( ex )
             {
-                console.error( ex.message );
+                konsole.error( ex.message );
             }
         }
 
@@ -2667,7 +2657,7 @@ const $scope = constants?.$scope || function()
                 }
                 catch( ex )
                 {
-                    console.warn( ex.message );
+                    konsole.warn( ex.message );
                 }
             }
         }
@@ -2822,25 +2812,22 @@ const $scope = constants?.$scope || function()
             hasProperty,
             setProperty,
             same,
-            isIdenticalTo,
             findImplementor,
             collectImplementors,
             emptyClone,
             copy: clone,
             clone,
             toStructuredCloneableObject,
-            toScalar,
             toLiteral,
             arrayToObject,
             printObject,
             evaluateBoolean,
             toBool,
-            safeAssign,
+            safeAssign: augment,
             deepAssign: assign,
             assignPublic,
             ingest,
             safeIngest,
-            classPreservingAssign,
             populateObject: populate,
             updateObject,
             detectCycles,

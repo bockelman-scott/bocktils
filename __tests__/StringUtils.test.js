@@ -3,10 +3,10 @@
 // jester.run( __filename );
 
 /** import the dependencies **/
-const constants = require( "../utils/Constants.js" );
+const constants = require( "../utils/Constants.cjs" );
 
 /** import the utilities we are testing */
-const stringUtils = require( "../utils/StringUtils.js" );
+const stringUtils = require( "../utils/StringUtils.cjs" );
 
 Object.assign( this, constants );
 Object.assign( this, stringUtils );
@@ -1190,9 +1190,9 @@ test( "isRelativePath",
 test( "toAbsolutePath",
       () =>
       {
-          let path = "../utils/StringUtils.js";
+          let path = "../utils/StringUtils.cjs";
           let absolutePath = stringUtils.toAbsolutePath( path, __dirname );
-          expect( absolutePath ).toEqual( "C:/Projects/bocktils/__tests__/utils/StringUtils.js" );
+          expect( absolutePath ).toEqual( "C:/Projects/bocktils/__tests__/utils/StringUtils.cjs" );
       } );
 
 test( "isValidString - 1",

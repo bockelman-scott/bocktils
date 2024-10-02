@@ -11,13 +11,13 @@
 const http = require( "http" );
 const https = require( "https" );
 
-const constants = require( "./Constants.js" );
-const stringUtils = require( "./StringUtils.js" );
-const arrayUtils = require( "./ArrayUtils.js" );
-const objectUtils = require( "./ObjectUtils.js" );
-const funcUtils = require( "./FunctionUtils.js" );
+const constants = require( "./Constants.cjs" );
+const stringUtils = require( "./StringUtils.cjs" );
+const arrayUtils = require( "./ArrayUtils.cjs" );
+const objectUtils = require( "./ObjectUtils.cjs" );
+const funcUtils = require( "./FunctionUtils.cjs" );
 
-const guidUtils = require( "./GUIDUtils.js" );
+const guidUtils = require( "./GUIDUtils.cjs" );
 const httpUtils = require( "./HttpUtils" );
 
 const _ud = constants._ud || "undefined";

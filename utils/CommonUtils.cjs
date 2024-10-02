@@ -1,9 +1,9 @@
-const constants = require( "./Constants.js" );
-const typeUtils = require( "./TypeUtils.js" );
-const stringUtils = require( "./StringUtils.js" );
-const arrayUtils = require( "./ArrayUtils.js" );
-const objectUtils = require( "./ObjectUtils.js" );
-const jsonUtils = require( "./JsonUtils.js" );
+const constants = require( "./Constants.cjs" );
+const typeUtils = require( "./TypeUtils.cjs" );
+const stringUtils = require( "./StringUtils.cjs" );
+const arrayUtils = require( "./ArrayUtils.cjs" );
+const objectUtils = require( "./ObjectUtils.cjs" );
+const jsonUtils = require( "./JsonUtils.cjs" );
 
 let _ud = constants._ud || "undefined";
 
@@ -70,7 +70,7 @@ const $scope = constants?.$scope || function()
                                enumerable: false,
                                get: function()
                                {
-                                   return require( "./FunctionUtils.js" );
+                                   return require( "./FunctionUtils.cjs" );
                                },
                                set: function() {}
                            } );

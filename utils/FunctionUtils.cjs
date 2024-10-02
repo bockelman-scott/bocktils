@@ -1,8 +1,8 @@
-const constants = require( "./Constants.js" );
-const typeUtils = require( "./TypeUtils.js" );
-const stringUtils = require( "./StringUtils.js" );
-const arrayUtils = require( "./ArrayUtils.js" );
-const objectUtils = require( "./ObjectUtils.js" );
+const constants = require( "./Constants.cjs" );
+const typeUtils = require( "./TypeUtils.cjs" );
+const stringUtils = require( "./StringUtils.cjs" );
+const arrayUtils = require( "./ArrayUtils.cjs" );
+const objectUtils = require( "./ObjectUtils.cjs" );
 
 const _ud = constants?._ud || "undefined";
 

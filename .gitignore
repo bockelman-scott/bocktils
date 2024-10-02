@@ -6,4 +6,9 @@ package-lock.json
 .idea/*
 *.iml
 
+build/staging
+build/dist
+build/ctrf
+
+
 reflect_files.js

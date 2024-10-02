@@ -2,11 +2,11 @@ const os = require( "os" );
 
 const crypto = require( "crypto" );
 
-const utils = require( "./CommonUtils.js" );
+const utils = require( "./CommonUtils.cjs" );
 
-const dateUtils = require( "./DateUtils.js" );
+const dateUtils = require( "./DateUtils.cjs" );
 
-const constants = utils?.constants || require( "./Constants.js" );
+const constants = utils?.constants || require( "./Constants.cjs" );
 
 const _ud = constants?._ud || "undefined";
 
