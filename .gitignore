@@ -10,5 +10,9 @@ build/staging
 build/dist
 build/ctrf
 
+staging
+dist
+ctrf
+
 
 reflect_files.js

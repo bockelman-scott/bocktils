@@ -15,7 +15,7 @@ const $scope = constants?.$scope || function()
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };
 
-(function exposeEncryptionUtils()
+(function exposeModule()
 {
     let constants = utils.constants;
     let stringUtils = utils.stringUtils;

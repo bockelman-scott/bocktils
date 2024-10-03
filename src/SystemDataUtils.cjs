@@ -13,7 +13,7 @@ const $scope = constants?.$scope || function()
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };
 
-(function makeModule()
+(function exposeModule()
 {
     constants.importUtilities( this, constants, stringUtils, arrayUtils, objectUtils );
 

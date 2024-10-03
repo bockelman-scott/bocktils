@@ -7,7 +7,7 @@ module.exports = function( grunt )
 
                               },
                               build: {
-                                  src: "**/utils/*.js",
+                                  src: "**/src/*.js",
                                   dest: "build/*.min.js"
                               }
                           }

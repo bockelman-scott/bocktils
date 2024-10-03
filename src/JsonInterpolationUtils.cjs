@@ -12,7 +12,7 @@ const $scope = constants?.$scope || function()
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };
 
-(function makeModule()
+(function exposeModule()
 {
     /**
      * This statement makes all the values exposed by the imported modules local variables in the current scope.

@@ -6,7 +6,7 @@ const utils = require( "./CommonUtils.cjs" );
 
 /**
  * Establish separate constants for each of the common utilities imported
- * @see ../utils/CommonUtils.cjs
+ * @see ../src/CommonUtils.cjs
  */
 const constants = utils?.constants || require( "./Constants.cjs" );
 const typeUtils = utils?.typeUtils || require( "./TypeUtils.cjs" );
@@ -24,7 +24,7 @@ const $scope = constants?.$scope || function()
     return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
 };
 
-(function exposeBase64Utils()
+(function exposeModule()
 {
     let _mt_str = constants._mt_str;
 

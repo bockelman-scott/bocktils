@@ -737,7 +737,6 @@ const $scope = constants?.$scope || function()
         return [].concat( (properties || []).filter( e => !EXCLUDED_PROPERTIES.includes( e ) ) || [] );
     };
 
-
     /**
      * Returns an array of the unique property names of the objects specified,
      * including those inherited from their prototype or superclass

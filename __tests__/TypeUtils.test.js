@@ -3,7 +3,7 @@
 // jester.run( __filename );
 
 /** import the utilities to test **/
-const typeUtils = require( "../utils/TypeUtils.cjs" );
+const typeUtils = require( "../src/TypeUtils.cjs" );
 
 let VALID_TYPES = typeUtils.VALID_TYPES;
 let JS_TYPES = typeUtils.JS_TYPES;

@@ -3,11 +3,11 @@
 // jester.run( __filename );
 
 /** import the Constants.cjs we are testing */
-const constants = require( "../utils/Constants.cjs" );
+const constants = require( "../src/Constants.cjs" );
 
-const arrayUtils = require( "../utils/ArrayUtils.cjs" );
-const typeUtils = arrayUtils.dependencies.typeUtils || require( "../utils/TypeUtils.cjs" );
-const stringUtils = arrayUtils.dependencies.stringUtils || require( "../utils/StringUtils.cjs" );
+const arrayUtils = require( "../src/ArrayUtils.cjs" );
+const typeUtils = arrayUtils.dependencies.typeUtils || require( "../src/TypeUtils.cjs" );
+const stringUtils = arrayUtils.dependencies.stringUtils || require( "../src/StringUtils.cjs" );
 
 Object.assign( this, constants );
 Object.assign( this, arrayUtils );

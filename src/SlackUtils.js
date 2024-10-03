@@ -21,7 +21,7 @@ const $scope = constants?.$scope || function()
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };
 
-(function exposeSlackUtils()
+(function exposeModule()
 {
     let no_op = objectUtils.no_op || function() {};
     let catchHandler = funcUtils.catchHandler || function( pErr ) { return true; };

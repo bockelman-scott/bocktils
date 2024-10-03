@@ -2,7 +2,7 @@ const utils = require( "./CommonUtils.cjs" );
 
 /**
  * Establish separate constants for each of the common utilities imported
- * @see ../utils/CommonUtils.cjs
+ * @see ../src/CommonUtils.cjs
  */
 const constants = utils?.constants || require( "./Constants.cjs" );
 const typeUtils = utils?.typeUtils || require( "./TypeUtils.cjs" );
@@ -21,7 +21,7 @@ const $scope = utils?.$scope || function()
 
 const logUtils = require( "./LogUtils.cjs" );
 
-(function exposeGenerator()
+(function exposeModule()
 {
     utils.importUtilities( this, constants, stringUtils, arrayUtils, objectUtils );
 

@@ -1,9 +1,9 @@
-const objectUtils = require( "../utils/ObjectUtils.cjs" );
+const objectUtils = require( "../src/ObjectUtils.cjs" );
 
-const constants = objectUtils?.dependencies?.constants || require( "../utils/Constants.cjs" );
-const typeUtils = objectUtils?.dependencies?.typeUtils || require( "../utils/TypeUtils.cjs" );
-const stringUtils = objectUtils?.dependencies?.stringUtils || require( "../utils/StringUtils.cjs" );
-const arrayUtils = objectUtils?.dependencies?.arrayUtils || require( "../utils/ArrayUtils.cjs" );
+const constants = objectUtils?.dependencies?.constants || require( "../src/Constants.cjs" );
+const typeUtils = objectUtils?.dependencies?.typeUtils || require( "../src/TypeUtils.cjs" );
+const stringUtils = objectUtils?.dependencies?.stringUtils || require( "../src/StringUtils.cjs" );
+const arrayUtils = objectUtils?.dependencies?.arrayUtils || require( "../src/ArrayUtils.cjs" );
 
 
 test( "detectCycles relies on populating an array and passing it into any recursive calls",

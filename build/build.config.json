@@ -1,13 +1,11 @@
 {
-  "directories":
-  {
-    "source": "../utils",
-    "staging": "/staging",
-    "distribution": "/dist"
-
+  "directories": {
+    "source": "src",
+    "build": "build",
+    "staging": "staging",
+    "distribution": "dist",
+    "tests": "__tests__"
   },
-  "minification":
-  {
-
+  "minification": {
   }
 }

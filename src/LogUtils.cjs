@@ -31,7 +31,7 @@ const isWindows = envUtils?.isWindows || function()
 
 const _isNodeJs = envUtils.isNodeJs();
 
-(function makeModule()
+(function exposeModule()
 {
     const MAXIMUM_DAYS_LOG_FILE_RETENTION = 180;
     const MINIMUM_DAYS_LOG_FILE_RETENTION = 14;
@@ -89,7 +89,7 @@ const _isNodeJs = envUtils.isNodeJs();
         return $scope()[INTERNAL_NAME];
     }
 
-    const rootDir = __dirname.replace( /utils/, _mt_str );
+    const rootDir = __dirname.replace( /utils|src/, _mt_str );
 
     const S_LOG_DIR = "logs";
     const S_LOG_EXT = "log";

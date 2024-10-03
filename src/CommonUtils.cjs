@@ -12,7 +12,7 @@ const $scope = constants?.$scope || function()
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };
 
-(function exportCommonUtilities()
+(function exposeModule()
 {
     const INTERNAL_NAME = "__BOCK__COMMON_UTILITIES__";
 

@@ -6,7 +6,7 @@ const utils = require( "./CommonUtils.cjs" );
 
 /**
  * Establish separate constants for each of the common utilities imported
- * @see ../utils/CommonUtils.cjs
+ * @see ../src/CommonUtils.cjs
  */
 const constants = utils?.constants || require( "./Constants.cjs" );
 const typeUtils = utils?.typeUtils || require( "./TypeUtils.cjs" );
@@ -17,7 +17,7 @@ const jsonUtils = utils?.jsonUtils || require( "./JsonUtils.cjs" );
 
 const logUtils = require( "./LogUtils.cjs" );
 
-(function makeModule()
+(function exposeModule()
 {
     let _mt_str = constants._mt_str || "";
 
