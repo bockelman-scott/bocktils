@@ -935,6 +935,8 @@ const $scope = constants?.$scope || function()
                (isArray( pValue ) && ((pValue?.length || 0) <= 0 || hasNoProperties( pValue, options )));
     };
 
+    const DEFAULT_IS_POPULATED_OPTIONS = { validTypes: [_obj], minimumKeys: 1, acceptArrays: false };
+
     /**
      * Returns true if the specified value is
      *
@@ -965,9 +967,10 @@ const $scope = constants?.$scope || function()
      *                               defaults to false
      * @returns {*|boolean}
      */
-    const isPopulated = function( pObject, pOptions )
+    const isPopulated = function( pObject, pOptions = DEFAULT_IS_POPULATED_OPTIONS )
     {
-        let opts = Object.assign( {}, (pOptions || { validTypes: [_obj], minimumKeys: 1, acceptArrays: false }) );
+
+        let opts = Object.assign( {}, (pOptions || DEFAULT_IS_POPULATED_OPTIONS) );
 
         const validTypes = [_obj].concat( ...(opts.validTypes || EMPTY_ARRAY) );
 
@@ -1071,7 +1074,7 @@ const $scope = constants?.$scope || function()
 
     /**
      * Returns the first value specified that is a populated object, as per the criteria
-     * @param pCriteria an object to to pass options to the isPopulated function used internally
+     * @param pCriteria an object to pass options to the isPopulated function used internally
      * @param pObject one or more values that might be populated objects
      * @returns {object} the first object satisfying the criteria
      * @see isPopulated
@@ -1094,7 +1097,12 @@ const $scope = constants?.$scope || function()
             object = objects.shift();
         }
 
-        return object;
+        if ( null !== object && isPopulated( object, options ) )
+        {
+            return object;
+        }
+
+        return null;
     };
 
     /**
@@ -1244,6 +1252,14 @@ const $scope = constants?.$scope || function()
         return found ? obj : (obj[propertyName] || _mt_str);
     };
 
+    /**
+     * Returns true if the specified object has the specified property
+     * @param pObject the object to check for the existence of the property
+     * @param pName the property name/key for which to check
+     * @param pOnlyOwn boolean indicating whether to climb the prototype chain
+     * @param pStrict boolean to indicate whether to check for _pName as a property
+     * @returns {boolean|boolean|*} true if the specified object has the specified property
+     */
     const hasProperty = function( pObject, pName, pOnlyOwn = false, pStrict = false )
     {
         if ( isMissing( pObject ) )
@@ -1251,7 +1267,7 @@ const $scope = constants?.$scope || function()
             return false;
         }
 
-        const name = asString( pName );
+        const name = asString( pName, true );
 
         if ( Object.hasOwn( pObject, name ) || ( !!!pStrict && Object.hasOwn( pObject, ("_" + name) )) )
         {

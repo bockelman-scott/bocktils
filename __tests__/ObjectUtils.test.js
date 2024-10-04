@@ -597,7 +597,7 @@ test( "isEmptyValue returns true if the specified argument is a string of only w
 test( "isEmptyValue returns true if the specified argument is an array of length 0",
       () =>
       {
-          let arr =[];
+          let arr = [];
 
           expect( objectUtils.isEmptyValue( arr ) ).toBe( true );
       } );
@@ -606,8 +606,214 @@ test( "isEmptyValue returns true if the specified argument is an array of length
 test( "isEmptyValue returns true if the specified argument is an array whose elements are all 'empty values'",
       () =>
       {
-          let arr =[{},[],""];
+          let arr = [{}, [], ""];
 
           expect( objectUtils.isEmptyValue( arr ) ).toBe( true );
       } );
+
+test( "isPopulatedObject returns true if the specified argument is an object wi at least one populated property",
+      () =>
+      {
+          let obj = { a: 1 };
+
+          expect( objectUtils.isPopulatedObject( obj ) ).toBe( true );
+      } );
+
+test( "isPopulatedObject returns false if the specified argument is an object with less than 2 populated properties",
+      () =>
+      {
+          let obj = { a: 1 };
+
+          expect( objectUtils.isPopulatedObject( obj, { minimumKeys: 2 } ) ).toBe( false );
+      } );
+
+test( "isPopulatedObject returns true if the specified argument is an object with at least 2 populated properties",
+      () =>
+      {
+          let obj = { a: 1, b: 1 };
+
+          expect( objectUtils.isPopulatedObject( obj, { minimumKeys: 2 } ) ).toBe( true );
+      } );
+
+test( "isPopulatedObject returns false if the specified argument is an object that does not contain a mandatory key",
+      () =>
+      {
+          let obj = { a: 1 };
+
+          expect( objectUtils.isPopulatedObject( obj, { manadatoryKeys: ["b", "c"] } ) ).toBe( false );
+      } );
+
+test( "isPopulatedObject returns false if the specified argument is an object that does not contain all mandatory keys",
+      () =>
+      {
+          let obj = { a: 1, b: 1 };
+
+          expect( objectUtils.isPopulatedObject( obj, { manadatoryKeys: ["b", "c"] } ) ).toBe( false );
+      } );
+
+test( "isPopulatedObject returns true if the specified argument is an object that contains all mandatory keys",
+      () =>
+      {
+          let obj = { a: 1, b: 1, c: 1 };
+
+          expect( objectUtils.isPopulatedObject( obj, { manadatoryKeys: ["b", "c"] } ) ).toBe( true );
+      } );
+
+test( "isPopulatedObject returns false if the specified argument is an object with no populated properties",
+      () =>
+      {
+          let obj = { a: {} };
+
+          expect( objectUtils.isPopulatedObject( obj ) ).toBe( false );
+      } );
+
+
+test( "isPopulatedObject returns false if the specified argument is an object graph with no populated properties",
+      () =>
+      {
+          let obj = { a: { b: { c: null } } };
+
+          expect( objectUtils.isPopulatedObject( obj ) ).toBe( false );
+      } );
+
+
+test( "isPopulatedObject returns true if the specified argument is an object graph with at least one populated properties",
+      () =>
+      {
+          let obj = { a: { b: { c: 1 } } };
+
+          expect( objectUtils.isPopulatedObject( obj ) ).toBe( true );
+      } );
+
+test( "isPopulatedObject returns true if the specified argument is one of the valid types and is not considered 'empty'",
+      () =>
+      {
+          let obj = "abc";
+
+          expect( objectUtils.isPopulatedObject( obj, { validTypes: ["string", "object"] } ) ).toBe( true );
+      } );
+
+test( "isPopulatedObject returns false if the specified argument is one of the valid types but is considered 'empty'",
+      () =>
+      {
+          let obj = "";
+
+          expect( objectUtils.isPopulatedObject( obj, { validTypes: ["string", "object"] } ) ).toBe( false );
+      } );
+
+test( "isPopulatedObject returns false if the specified argument is an array (by default)",
+      () =>
+      {
+          let obj = [1, 2, 3];
+
+          expect( objectUtils.isPopulatedObject( obj ) ).toBe( false );
+      } );
+
+test( "isPopulatedObject returns true for an array with at least one populated element, when option set",
+      () =>
+      {
+          let obj = [1, 2, 3];
+
+          expect( objectUtils.isPopulatedObject( obj, { acceptArrays: true } ) ).toBe( true );
+      } );
+
+test( "isPopulatedObject returns false for an array with no populated elements, even when option set",
+      () =>
+      {
+          let obj = [null, undefined, null];
+
+          expect( objectUtils.isPopulatedObject( obj, { acceptArrays: true } ) ).toBe( false );
+      } );
+
+
+test( "isValidObject returns true if the argument is an object with at least one property (regardless of population)",
+      () =>
+      {
+          let obj = { a: null };
+
+          expect( objectUtils.isValidObject( obj ) ).toBe( true );
+      } );
+
+
+test( "firstValidObject returns the leftmost argument that satisfies the function, isValidObject",
+      () =>
+      {
+          let obj = [{}, 1, true, null, undefined, "abc", { a: null }, [], {}];
+
+          expect( objectUtils.firstValidObject( ...obj ) ).toEqual( { a: null } );
+      } );
+
+test( "firstPopulatedObject returns the leftmost argument that satisfies the function, isPopulated, or null",
+      () =>
+      {
+          let obj = [{}, 1, true, null, undefined, "abc", { a: null }, {}, []];
+
+          expect( objectUtils.firstPopulatedObject( ...obj ) ).toEqual( null );
+      } );
+
+test( "firstPopulatedObject returns the leftmost argument that satisfies the function, isPopulated",
+      () =>
+      {
+          let obj = [{}, 1, true, null, undefined, "abc", { a: 1 }, {}, []];
+
+          expect( objectUtils.firstPopulatedObject( ...obj ) ).toEqual( { a: 1 } );
+      } );
+
+test( "getProperty returns the value of the 'property' specified",
+      () =>
+      {
+          let obj = new ClassTwo();
+
+          expect( objectUtils.getProperty( obj, "id" ) ).toEqual( 777 );
+      } );
+
+test( "getProperty returns an empty string if the 'property' specified cannot be read",
+      () =>
+      {
+          let obj = new ClassTwo();
+
+          expect( objectUtils.getProperty( obj, "nope" ) ).toEqual( "" );
+      } );
+
+test( "getProperty returns the value of the 'property path' specified",
+      () =>
+      {
+          let obj = { a: { b: { c: 666 } } };
+
+          expect( objectUtils.getProperty( obj, "a.b.c" ) ).toEqual( 666 );
+      } );
+
+test( "hasProperty returns true if the 'property path' exists",
+      () =>
+      {
+          let obj = { a: { b: { c: 666 } } };
+
+          expect( objectUtils.hasProperty( obj, "a.b.c" ) ).toBe( true );
+      } );
+
+test( "hasProperty returns true if the 'property' exists",
+      () =>
+      {
+          let obj = { a: { b: { c: 666 } } };
+
+          expect( objectUtils.hasProperty( obj, "a" ) ).toBe( true );
+      } );
+
+test( "hasProperty returns false if the 'property' does not exist",
+      () =>
+      {
+          let obj = { a: { b: { c: 666 } } };
+
+          expect( objectUtils.hasProperty( obj, "d" ) ).toBe( false );
+      } );
+
+test( "hasProperty returns false if the 'property path' does not exist",
+      () =>
+      {
+          let obj = { a: { b: { c: 666 } } };
+
+          expect( objectUtils.hasProperty( obj, "a.b.z" ) ).toBe( false );
+      } );
+
+
 

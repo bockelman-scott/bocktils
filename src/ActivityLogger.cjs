@@ -185,9 +185,8 @@ const logUtils = require( "./LogUtils.cjs" );
         {
             let payload = pPayload;
             let activityType = pActivityType;
-            let requestId = pRequestId;
 
-            const activity = new Activity( payload, activityType, requestId );
+            const activity = new Activity( payload, activityType, pRequestId );
 
             const db = await this.getDatabase();
 
