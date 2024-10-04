@@ -218,6 +218,16 @@ class ClassThree extends ClassOne
 
         this.name = "ClassThree";
     }
+
+    async doSomething()
+    {
+        return "did something";
+    }
+
+    doSomethingElse()
+    {
+        return "did something else";
+    }
 }
 
 const obj = {};
@@ -963,5 +973,133 @@ test( "arrayToObject can unwrap an object from a one-element array",
                                      }
                                  }
           );
+      } );
+
+test( "findImplementor returns the first object that implements the specified method",
+      () =>
+      {
+          let implementor = objectUtils.findImplementor( "doSomething", new ClassOne(), new ClassTwo(), new ClassThree(), { "doSomething": function() {} } );
+
+          expect( implementor instanceof ClassThree ).toBe( true );
+      } );
+
+test( "findImplementor returns null  if none of the objects implement the specified method",
+      () =>
+      {
+          let implementor = objectUtils.findImplementor( "doNothing", new ClassOne(), new ClassTwo(), new ClassThree(), { "doSomething": function() {} } );
+
+          expect( implementor ).toBe( null );
+      } );
+
+test( "collectImplementors returns a collection of objects that implement the specified method",
+      () =>
+      {
+          let classOne = new ClassOne();
+          let classTwo = new ClassTwo();
+          let classThree = new ClassThree();
+
+          let obj = { "doSomething": function() {} };
+
+          let implementors = objectUtils.collectImplementors( "doSomething", classOne, classTwo, classThree, obj );
+
+          expect( implementors ).toEqual( [classThree, obj] );
+      } );
+
+test( "collectImplementors returns an empty collection if none of the objects implement the specified method",
+      () =>
+      {
+          let implementors = objectUtils.collectImplementors( "doNothing", new ClassOne(), new ClassTwo(), new ClassThree(), { "doSomething": function() {} } );
+
+          expect( implementors ).toEqual( [] );
+      } );
+
+
+test( "emptyClone returns an object with the same structure as the specified source object",
+      () =>
+      {
+          let obj = { a: "", b: { c: {} }, "foo": true, "bar": 7 };
+          let clone = objectUtils.emptyClone( obj );
+
+          expect( clone ).toEqual( { a: "", b: { c: {} }, "foo": false, "bar": 0 } );
+
+      } );
+
+test( "clone returns a new object with the same structure and properties/values as the specified source object",
+      () =>
+      {
+          let a = "a";
+          let b = { c: 3 };
+          let c = { d: { e: 42 } };
+          let d = { foo: "bar" };
+
+          let composite = { a: a, b: b, c: c, d: d };
+
+          let obj = { composite: composite, a: a, b: b, c: c, d: d };
+
+          let clone = objectUtils.clone( obj );
+
+          expect( clone ).toEqual( {
+                                       composite: { a: "a", b: { c: 3 }, c: { d: { e: 42 } }, d: { foo: "bar" } },
+                                       a: "a",
+                                       b: { c: 3 },
+                                       c: { d: { e: 42 } },
+                                       d: { foo: "bar" }
+                                   } );
+
+          a = "AY";
+          b = { c: "three" };
+          c = {};
+          d = { "foo": "foo" };
+
+          composite = { a: a, b: b, c: c, d: d };
+
+          expect( a === clone.a ).toBe( false );
+          expect( b === clone.b ).toBe( false );
+          expect( c === clone.c ).toBe( false );
+          expect( d === clone.d ).toBe( false );
+          expect( composite === clone.composite ).toBe( false );
+
+          obj.a = a;
+          obj.b = b;
+          obj.c = c;
+          obj.d = d;
+
+          obj.composite = composite;
+
+          expect( a === clone.a ).toBe( false );
+          expect( b === clone.b ).toBe( false );
+          expect( c === clone.c ).toBe( false );
+          expect( d === clone.d ).toBe( false );
+          expect( composite === clone.composite ).toBe( false );
+
+          expect( a === obj.a ).toBe( true );
+          expect( b === obj.b ).toBe( true );
+          expect( c === obj.c ).toBe( true );
+          expect( d === obj.d ).toBe( true );
+          expect( composite === obj.composite ).toBe( true );
+
+          expect( clone.a === obj.a ).toBe( false );
+          expect( clone.b === obj.b ).toBe( false );
+          expect( clone.c === obj.c ).toBe( false );
+          expect( clone.d === obj.d ).toBe( false );
+          expect( clone.composite === obj.composite ).toBe( false );
+
+      } );
+
+
+test( "ingest applies the properties of each object to the first object",
+      () =>
+      {
+          let obj = { a: 1, b: 2, c: { d: { e: 42 } } };
+
+          let obj2 = { a: "ay", b: 2, c: { d: { e: 42 } }, "baz": false };
+          let obj3 = { a: "ay", b: "bee", c: { d: { e: 777 } }, "foo": "bar" };
+          let obj4 = { a: 1, b: "bee", c: { d: { e: 777 } }, "zzz": "xyz" };
+
+          let obj5 = objectUtils.ingest( obj, obj2, obj3, obj4 );
+
+          expect( obj5 ).toEqual( { a: 1, b: "bee", c: { d: { e: 777 } }, "baz": false, "foo": "bar", "zzz": "xyz" } );
+
+          expect( obj ).toEqual( obj5 );
       } );
 

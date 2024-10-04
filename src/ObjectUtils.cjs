@@ -242,7 +242,7 @@ const $scope = constants?.$scope || function()
      * @param {Number} pMaxRepetitions the maximum number of times a sequence of run-length operations can appear before being considered a repeating/infinite loop
      * @returns true if cycling
      */
-    const detectCycles = function( pStack, pRunLength, pMaxRepetitions )
+    const detectCycles = function( pStack, pRunLength = 5, pMaxRepetitions = 3 )
     {
         /**
          * The list of operations to evaluate
@@ -252,12 +252,12 @@ const $scope = constants?.$scope || function()
         /**
          * The length of a single sequence
          */
-        let runLength = (pRunLength || 3);
+        let runLength = stringUtils.asInt( pRunLength || 3 );
 
         /**
          * The maximum number of times a sequence can repeat before this function will return true
          */
-        let maxRepeats = (pMaxRepetitions || 2);
+        let maxRepeats = stringUtils.asInt( pMaxRepetitions || 3 );
 
         // if the list of operations
         // isn't even as long as it would have to be
@@ -575,18 +575,12 @@ const $scope = constants?.$scope || function()
             this.#key = _mt_str;
             this.#value = null;
 
-            if ( this.length < 2 )
-            {
-                this[0] = this[0] || _mt_str;
-                this[1] = this[1] || null;
-            }
-
             if ( isArray( pArgs ) )
             {
                 const args = asArray( pArgs );
 
                 this.#key = (args?.length || 0) > 0 ? args[0] : this[0] || _mt_str;
-                this.#value = (args?.length || 0) > 1 ? args[1] : this[1] || _mt_str;
+                this.#value = (args?.length || 0) > 1 ? args[1] || this[1] : this[1];
             }
 
             this.#type = typeof this.#value;
@@ -608,7 +602,7 @@ const $scope = constants?.$scope || function()
 
         get value()
         {
-            return this.#value || (this.length > 1 ? this[1] : null);
+            return this.#value;
         }
 
         get type()
@@ -907,7 +901,6 @@ const $scope = constants?.$scope || function()
         }
 
         return result;
-
     };
 
     /**
@@ -1165,7 +1158,7 @@ const $scope = constants?.$scope || function()
 
         if ( isArray( obj ) && (/^\d+$/.test( prop ) || ["length"].includes( prop )) )
         {
-            return obj[prop];
+            return obj[stringUtils.asInt( prop )];
         }
 
         // trim the property name again...
@@ -1181,11 +1174,16 @@ const $scope = constants?.$scope || function()
         // remove any leading or trailing dots, because those would be missing or empty property names
         propertyName = propertyName.replace( REG_EXP_LEADING_DOT, _mt_str ).replace( REG_EXP_TRAILING_DOT, _mt_str );
 
-        // this statement accounts for a convention of using _ as the private property name, but will use the getter if it exists or the private property is null or false
-        let propertyValue = obj[propertyName] || obj["_" + propertyName];
+        let propertyValue = obj[propertyName];
+
+        // this statement accounts for a convention of using _ as a prefix for the private property name
+        if ( null === propertyValue || _ud === typeof propertyValue )
+        {
+            propertyValue = obj["_" + propertyName];
+        }
 
         // if this is a normal property name (not a path like a.b.c or a[0][1][2]) and we have a value, we return it
-        let found = !propertyName.includes( _dot ) && ((null !== propertyValue && (_ud !== typeof propertyValue)) || isNumber( propertyValue ));
+        let found = !propertyName.includes( _dot ) && ((null !== propertyValue && (_ud !== typeof propertyValue)) || isNumber( propertyValue ) || isBoolean( propertyValue ));
 
         if ( found )
         {
@@ -1204,9 +1202,9 @@ const $scope = constants?.$scope || function()
             {
                 try
                 {
-                    let value = accessorMethod.call( obj );
+                    let value = accessorMethod.call( obj ) || propertyValue;
 
-                    if ( value || (([_num, _big].includes( typeof value ) || isNumber( value )) && 0 === value) || (isString( value ) && isBlank( value )) )
+                    if ( value || (([_num, _big].includes( typeof value ) || isNumber( value )) && 0 === value) || (isString( value )) )
                     {
                         propertyValue = value;
                         found = true;
@@ -1225,15 +1223,12 @@ const $scope = constants?.$scope || function()
 
             if ( _fun === typeof accessor )
             {
-                propertyValue = accessor.call( obj );
+                propertyValue = accessor.call( obj ) || propertyValue;
             }
 
             if ( !(_ud === typeof propertyValue || null === propertyValue) )
             {
-                if ( propertyValue || (isNumber( propertyValue ) && 0 === propertyValue) || (isString( propertyValue ) && isBlank( propertyValue )) )
-                {
-                    return propertyValue;
-                }
+                return propertyValue;
             }
 
             if ( propertyName.includes( _dot ) )
@@ -1249,7 +1244,9 @@ const $scope = constants?.$scope || function()
             }
         }
 
-        return found ? obj : (obj[propertyName] || _mt_str);
+        let returnValue = found ? obj : (obj[propertyName]);
+
+        return (!(_ud === typeof returnValue || null === returnValue) ? returnValue : _mt_str);
     };
 
     /**
@@ -1692,14 +1689,14 @@ const $scope = constants?.$scope || function()
     /**
      * Returns an array of objects that implement one or more of the method(s) specified
      * @param pMethodNames an array of strings that are method names (or a string that is a method name)
-     * @param pCandidates one or more object, the subset of which to return if the object implemetnts one or more of the specified methid(s)
+     * @param pCandidates one or more objects, the subset of which to return if the object implements one or more of the specified methid(s)
      * @returns {*[]}  an array of objects that implement one or more of the method(s) specified
      */
     const collectImplementors = function( pMethodNames, ...pCandidates )
     {
         let methodNames = asArray( pMethodNames || [] );
 
-        const arr = asArray( pCandidates || [] ) || [];
+        const arr = (asArray( pCandidates || [] ) || []).filter( arrayUtils.Filters.IS_OBJECT );
 
         const implementors = [];
 
@@ -1707,7 +1704,14 @@ const $scope = constants?.$scope || function()
         {
             for( const candidate of arr )
             {
-                if ( !isMissing( candidate ) && _fun === typeof candidate[methodName] )
+                if ( null == candidate )
+                {
+                    continue;
+                }
+
+                let type = typeof candidate[methodName];
+
+                if ( _fun === type )
                 {
                     implementors.push( candidate );
                 }
@@ -1717,8 +1721,17 @@ const $scope = constants?.$scope || function()
         return implementors;
     };
 
-
-    const emptyClone = function( pAny, pTypeHint )
+    /**
+     * Returns an object with the same structure or type with all values replaced with the default for that type.
+     * For primitive types, returns the default value for that type (examples: 0, false, "")
+     * For arrays, returns an array of the same length, filled with nulls
+     * For an object, returns a new object with the same structure with all values populated with an emptyClone of that value
+     * @param pAny an object or primitive for which to return an empty clone or default value
+     * @param pTypeHint a string describing the type of the first argument
+     * @param pThis an object to which to bind any functions being empty-cloned
+     * @returns {{}|undefined|number|string|*[]|unknown|(function(...[*]): *)|boolean} an object with the same structure or type with all values replaced with the default for that type
+     */
+    const emptyClone = function( pAny, pTypeHint, pThis = null )
     {
         let typeHint = (pTypeHint ? (_str === typeof pTypeHint ? pTypeHint : typeof pTypeHint) : undefined);
 
@@ -1735,6 +1748,7 @@ const $scope = constants?.$scope || function()
                 return _mt_str;
 
             case _num:
+            case _big:
                 return 0;
 
             case _bool:
@@ -1745,16 +1759,48 @@ const $scope = constants?.$scope || function()
                 {
                     return [].fill( null, 0, pAny.length );
                 }
-                return {}; //// TODO: copy the structure
+
+                let obj = {};
+
+                let entries = getEntries( pAny );
+
+                for( let entry of entries )
+                {
+                    if ( entry )
+                    {
+                        let key = entry.key || entry[0];
+                        let value = entry.value || entry[1];
+
+                        obj[key] = emptyClone( value, typeof value, obj );
+                    }
+                }
+
+                return Object.assign( {}, obj );
 
             case _ud:
                 return undefined;
+
+            case _symbol:
+                return pAny;
+
+            case _fun:
+                return function( ...pArgs )
+                {
+                    return pAny.call( pThis || this || pAny, ...pArgs );
+                };
 
             default:
                 return {};
         }
     };
 
+    /**
+     * Returns a new object that is a deep copy of the specified argument
+     * @param pObject an object to clone
+     * @param pOmitFunctions boolean indicating whether to return an object with or without its methods preserved
+     * @param pStack the paths previously traversed to detect an infinite cycle; used internally
+     * @returns {object} a new object that is a deep copy of the specified argument
+     */
     const clone = function( pObject, pOmitFunctions = false, pStack = [] )
     {
         let obj = Object.assign( {}, pObject || {} );
@@ -1867,6 +1913,12 @@ const $scope = constants?.$scope || function()
         return twin || Object.assign( {}, obj );
     };
 
+    /**
+     * Creates a clone of the specified object that can be transferred to a worker or service worker
+     * @param pObject the object to clone
+     * @param pOptions options to control the cloning
+     * @returns {unknown} a new object that can be transferred to a worker or service worker
+     */
     const toStructuredCloneableObject = function( pObject, pOptions )
     {
         let options = Object.assign( {}, (pOptions || { freeze: false, omitFunctions: true }) );
@@ -1878,119 +1930,26 @@ const $scope = constants?.$scope || function()
         return _ud === typeof structuredClone ? obj : toTransfer?.length ? structuredClone( obj, { transfer: toTransfer } ) : structuredClone( obj );
     };
 
+    /**
+     * Returns the SAME object with each of the subsequent objects properties assigned to it
+     * @param pObject the object to modify
+     * @param pDefault one or more objects to assign to the first object
+     * @returns {{}|{}} the original object modified by assigning the subsequent objects to it
+     */
     const ingest = function( pObject, ...pDefault )
     {
-        let defaults = asArray( pDefault || [{}] ) || [{}];
+        let defaults = [].concat( asArray( pDefault || [{}] ) || [{}] ).filter( arrayUtils.Filters.IS_POPULATED_OBJECT );
 
-        let newObj = pObject || {};
-
-        newObj = Object.assign( (newObj || {}), pObject || {} );
+        pObject = isObject( pObject ) ? pObject || {} : {};
 
         for( let i = 0, n = defaults.length; i < n; i++ )
         {
-            newObj = Object.assign( newObj, defaults[i] );
+            let source = defaults[i];
+
+            pObject = assign( pObject, source );
         }
 
-        return newObj;
-    };
-
-    const safeIngest = function( pObject, ...pDefault )
-    {
-        const options =
-            {
-                appendToArrays: true,
-                addMissingMapEntries: true,
-                appendToSets: true,
-                mergeUnmatchedClasses: true
-            };
-        let defaults = asArray( pDefault || [{}] ) || [{}];
-
-        let newObj = pObject || {};
-
-        newObj = augment( (newObj || {}), pObject || {}, options );
-
-        for( let i = 0, n = defaults.length; i < n; i++ )
-        {
-            newObj = augment( newObj, defaults[i], options );
-        }
-
-        return newObj;
-    };
-
-    const printObject = function( pObject, pCurrentDepth )
-    {
-        let obj = pObject || {};
-
-        let depth = Math.max( asInt( pCurrentDepth ) || 0, 0 );
-
-        let out = _mt_str;
-
-        let indent = (depth > 0) ? ("\t".repeat( depth )) : "";
-
-        switch ( typeof obj )
-        {
-            case _ud:
-                out += "undefined";
-                break;
-
-            case _num:
-            case _big:
-                out += obj;
-                break;
-
-            case _str:
-                out += (_dblqt + obj + _dblqt);
-                break;
-
-            case _bool:
-                out += (obj ? "true" : "false");
-                break;
-
-            case _fun:
-                // skip
-                break;
-
-            case _obj:
-                if ( isArray( obj ) )
-                {
-                    out += "[";
-
-                    if ( (obj?.length || 0) > 0 )
-                    {
-                        for( let i = 0, n = obj.length; i < n; i++ )
-                        {
-                            let elem = obj[i];
-                            out += printObject( elem, depth + 1 );
-                            out += (i < (n - 1)) ? "," : "";
-                        }
-                    }
-
-                    out += "]";
-                }
-                else if ( isPopulated( obj ) )
-                {
-                    out += ("\n{" + "\n");
-
-                    out += indent;
-
-                    for( let prop in obj )
-                    {
-                        out += (indent + (_dblqt + asString( prop ) + _dblqt));
-                        out += ": ";
-                        out += printObject( obj[prop], depth + 1 );
-                        out += ",\n";
-                    }
-
-                    out += indent + ("\n" + "}" + "\n");
-                }
-                else
-                {
-                    out += "{}";
-                }
-                break;
-        }
-
-        return out;
+        return pObject;
     };
 
     /**
@@ -2156,47 +2115,6 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * Returns a new object with the superset of properties from each object specified
-     *
-     * @param pObjectA the first object, into which the second object's properties will be merged
-     * @param pObjectB the second object, from which properties will be merged with those of the first object
-     *                 the role of first and second object might swap as per the options specified, @see #pOptions
-     *
-     * @param pOptions an object specifying exactly how the 2 objects will be merged
-     *                 {
-     *                     preserveLeft: (boolean) if true, the 'left' object's properties will not be overwritten with the 'right' object's values
-     *                     preserveRight: (boolean) if true, the 'right' object's properties will not be overwritten with the 'left' object's values
-     *                     accumulate: (boolean) if true, numeric properties will be added together and represent the sum of values in the resulting object
-     *                     concatenate: (boolean) if true, string properties will be concatenated (with an optional separator) in the resulting object
-     *                     xor: (boolean) if true, boolean properties will be evaluated to true only in the case that exactly only one of them is true (exclusive or)
-     *                     nand: (boolean) if true, boolean values will be evaluated as !( a && b ) where a is the value from one object and b is the value from the other
-     *                     intersection: (boolean) if true, the resulting object will have only those properties present in both the first and second object
-     *                     disjunction: (boolean) if true, only those properties unique to one or the other of the objects will be present in the resulting object
-     *                     joinLeft: (boolean) if true, the merge is of the second object into the first, making the first object the 'left' object
-     *                     joinRight: (boolean) if true, the merge is of the first object into the second, making the first object the 'right' object
-     *                 }
-     */
-    const merge = function( pObjectA, pObjectB, pOptions )
-    {
-        // TODO: implement when needed
-
-        const options = Object.assign( {}, pOptions || {} );
-
-        const objA = Object.assign( {}, pObjectA || pObjectB || {} );
-        const objB = Object.assign( {}, pObjectB || pObjectA || {} );
-
-        const leftObj = options.joinLeft ? objA : objB;
-        const rightObj = options.joinLeft ? objB : objA;
-
-        for( let [key, value] of Object.entries( rightObj ) )
-        {
-
-        }
-
-        return Object.assign( objA, Object.assign( objB, objA ) );
-    };
-
-    /**
      * Returns a new object with the properties of the first replaced with the properties of the second
      * but with any properties unique to the first object preserved
      * and any properties unique to the second, ignored
@@ -2267,329 +2185,164 @@ const $scope = constants?.$scope || function()
         return objA;
     };
 
-    const updateObject = function( pTarget, pSource, pOptions, pVisited, pPath )
-    {
-        const options = Object.assign( {}, pOptions || pSource || { skip: /^\$/ } );
-
-        const skip = options.skip || /^\$/;
-
-        const maxDepth = options.maxDepth || 5;
-
-        const maxCycles = Math.min( Math.max( 2, options.maxCycles || 2 ), 8 );
-
-        const cycleLength = Math.min( 2 * maxDepth, Math.max( options.cycleLength || 4, 2 ) );
-
-        const visited = pVisited || new Set();
-
-        const path = asArray( pPath ) || [];
-
-        let objA = pTarget || {};
-
-        const objB = pSource || objA;
-
-        if ( detectCycles( path, cycleLength, maxCycles ) || (maxDepth < (path?.length || 0)) )
+    const DEFAULT_PRUNING_OPTIONS =
         {
-            return objA;
-        }
+            removeEmptyObjects: true,
+            removeEmptyArrays: true,
+            removeEmptyStrings: false,
+            removeFunctions: false,
+            pruneArrays: false
+        };
 
-        let objAProperties = unique( [].concat( Object.getOwnPropertyNames( objA ) ).concat( Object.keys( objA ) ).filter( e => !(e.startsWith( "_" )) ) );
-
-        let objBProperties = unique( [].concat( Object.getOwnPropertyNames( objB ) ).concat( Object.keys( objB ) ).filter( e => !(e.startsWith( "_" )) ) );
-
-        objBProperties = unique( [].concat( objBProperties.concat( Object.entries( objB._doc || objB ) || [] ) ).filter( e => objAProperties.includes( e ) ) );
-
-        objBProperties = unique( [].concat( objBProperties ).concat( objBProperties ) );
-
-        for( let i = 0, n = objBProperties.length; i < n; i++ )
-        {
-            let propertyName = objBProperties[i];
-
-            if ( skip.test( propertyName ) || (EXCLUDED_PROPERTIES.includes( propertyName )) )
-            {
-                continue;
-            }
-
-            const value = objB[propertyName] || objB["_" + propertyName];
-
-            if ( isValidEntry( propertyName, value ) )
-            {
-                let valueA = objA[propertyName] || objA["_" + propertyName];
-
-                if ( isObject( value ) && visited.has( value ) && (value === valueA) )
-                {
-                    continue;
-                }
-
-                if ( isObject( value ) )
-                {
-                    visited.add( value );
-                }
-
-                path.push( propertyName );
-
-                setProperty( objA, propertyName, ((_obj === typeof value) ? updateObject( valueA, value, options, visited, path ) : value) );
-
-                path.pop();
-            }
-        }
-
-        return objA;
-    };
-
-    const getPublicPropertyNames = function( pObject )
-    {
-        const keys = [].concat( Object.keys( pObject ) );
-        const propertyNames = [].concat( Object.getOwnPropertyNames( pObject ) );
-
-        let properties = [].concat( keys ).concat( propertyNames );
-
-        properties = properties.map( e => asString( e, true ).replace( /^_+/, _mt_str ) ).filter( e => !(["uniqueObjectId", "instantiationTimestamp", "_uniqueObjectId", "_instantiationTimestamp"].includes( e )) );
-
-        return properties;
-    };
-
-    const pruneObject = function( pObject, pOptions )
+    /**
+     * Returns a new object based on the specified object but with all 'empty' nodes removed, recursively
+     * @param pObject an object to 'prune'
+     * @param pOptions options to control what is pruned
+     * @param pStack - INTERNALLY USED TO PREVENT INFINITE LOOPS
+     * @returns {unknown} a new object with empty nodes removed
+     */
+    const pruneObject = function( pObject, pOptions = DEFAULT_PRUNING_OPTIONS, pStack )
     {
         const options = Object.assign( {}, pOptions || {} );
 
-        let obj = pObject || {};
+        let obj = assign( {}, pObject || {} );
 
-        const keys = Object.keys( obj );
-        const propertyNames = Object.getOwnPropertyNames( obj );
-        const getters = getPublicPropertyNames( obj );
+        const keys = getKeys( obj );
+        const propertyNames = getProperties( obj );
 
-        let properties = unique( pruneArray( [].concat( keys ).concat( propertyNames ).concat( getters ) ) );
+        let properties = unique( pruneArray( [].concat( keys ).concat( propertyNames ) ) );
         properties = properties.map( e => asString( e, true ) ).filter( arrayUtils.Filters.NON_BLANK );
 
-        if ( options?.publicOnly )
+        let stack = [].concat( arrayUtils.asArray( pStack || [] ) );
+
+        if ( detectCycles( stack, 3, 3 ) )
         {
-            obj = assignPublic( (Array.isArray( pObject ) ? [] : {}), obj, options );
+            return obj;
         }
 
-        let removed = [];
-
-        if ( options.removeEmptyStrings )
+        for( let i = properties?.length || 0; i--; )
         {
-            for( let i = properties?.length || 0; i--; )
+            const propertyName = properties[i];
+
+            let value = null;
+
+            try
             {
-                const propertyName = properties[i];
-
-                let value = obj[propertyName];
-
-                if ( (_str === typeof value && isBlank( value )) )
-                {
-                    obj = removeProperty( obj, propertyName, options );
-                    removed.push( propertyName );
-                }
-                else if ( (isObject( value ) && !Array.isArray( value )) && options.deep )
-                {
-                    value = pruneObject( value, options );
-                    obj[propertyName] = value;
-                }
-                else if ( Array.isArray( value ) )
-                {
-                    value = value.filter( e => _str !== typeof e || !isBlank( e ) );
-                    obj[propertyName] = value;
-                }
+                value = obj[propertyName] || getProperty( obj, propertyName );
             }
-        }
-
-        properties = properties.filter( e => !(removed.includes( e )) );
-
-        if ( options.removeEmptyObjects )
-        {
-            for( let i = properties?.length || 0; i--; )
+            catch( ex )
             {
-                const propertyName = properties[i];
+                konsole.warn( ex );
+            }
 
-                let value = obj[propertyName] || getProperty( obj, propertyName );
-
-                if ( _ud === typeof value || null === value )
-                {
+            switch ( typeof value )
+            {
+                case _ud:
                     obj = removeProperty( obj, propertyName, options );
-                    removed.push( propertyName );
-                }
-                else if ( (_obj === typeof value && Array.isArray( value ) && value?.length <= 0) )
-                {
-                    if ( options.removeEmptyArrays )
+                    break;
+
+                case _str:
+                    if ( isBlank( value ) && options.removeEmptyStrings )
                     {
                         obj = removeProperty( obj, propertyName, options );
-                        removed.push( propertyName );
                     }
-                }
-                else if ( (isObject( value ) && !Array.isArray( value )) && options.deep )
-                {
-                    value = pruneObject( value, options );
-                    obj[propertyName] = value;
-                }
-                else
-                {
-                    obj[propertyName] = value;
-                }
+                    else
+                    {
+                        setProperty( obj, propertyName, value || obj[propertyName] || getProperty( obj, propertyName ) );
+                    }
+                    break;
+
+                case _num:
+                case _big:
+                    if ( isNaN( value ) || !isFinite( value ) )
+                    {
+                        obj = removeProperty( obj, propertyName, options );
+                    }
+                    else
+                    {
+                        setProperty( obj, propertyName, value || obj[propertyName] || getProperty( obj, propertyName ) );
+                    }
+                    break;
+
+                case _bool:
+                    setProperty( obj, propertyName, value || obj[propertyName] || getProperty( obj, propertyName ) );
+                    break;
+
+                case _fun:
+                    if ( options.removeFunctions )
+                    {
+                        obj = removeProperty( obj, propertyName, options );
+                    }
+                    else
+                    {
+                        setProperty( obj, propertyName, value || obj[propertyName] || getProperty( obj, propertyName ) );
+                    }
+                    break;
+
+                default:
+                    if ( options.removeEmptyObjects )
+                    {
+                        if ( _ud === typeof value || null === value || isEmptyValue( value ) )
+                        {
+                            obj = removeProperty( obj, propertyName, options );
+                        }
+                        else
+                        {
+                            setProperty( obj, propertyName, value || obj[propertyName] || getProperty( obj, propertyName ) );
+                        }
+                    }
+                    else if ( (isObject( value ) && Array.isArray( value )) )
+                    {
+                        if ( options.pruneArrays )
+                        {
+                            value = arrayUtils.pruneArray( value );
+                        }
+
+                        if ( options.removeEmptyArrays && value?.length <= 0 )
+                        {
+                            obj = removeProperty( obj, propertyName, options );
+                        }
+                        else
+                        {
+                            setProperty( obj, propertyName, value || obj[propertyName] || getProperty( obj, propertyName ) );
+                        }
+                    }
+                    else if ( (isObject( value ) && !Array.isArray( value )) )
+                    {
+                        stack.push( propertyName );
+
+                        try
+                        {
+                            value = pruneObject( value, options );
+                            setProperty( obj, propertyName, value );
+                        }
+                        catch( ex )
+                        {
+                            konsole.warn( ex );
+                        }
+                        finally
+                        {
+                            stack.pop();
+                        }
+                    }
+                    else
+                    {
+                        setProperty( obj, propertyName, value || obj[propertyName] || getProperty( obj, propertyName ) );
+                    }
+
+                    break;
             }
         }
 
         return obj;
     };
 
-    const defaultAssignOptions =
-        Object.freeze( {
-                           included: [],
-                           excluded: ["_", "instantiationTimestamp", "uniqueObjectId"],
-                           publicOnly: true,
-                           privateOnly: false,
-                           deep: true,
-                           depth: 0,
-                           stack: []
-                       } );
-
     /**
-     * Similar to Object::assign, but assigns the publicly accessible names as properties to the returned POJO
-     *
-     * @param pTarget
-     * @param pSource
-     * @param pOptions
+     * Returns an object literal based on the specified object.
+     * That is, this erases the class or prototype information and just returns a POJO of the object's current state
+     * @param pObject object from which to construct an object literal
+     * @returns {*} a new object with no class or prototype affiliation
      */
-    const assignPublic = function( pTarget,
-                                   pSource,
-                                   pOptions = defaultAssignOptions )
-    {
-        const defaultOptions =
-            {
-                included: [],
-                excluded: ["_", "instantiationTimestamp", "uniqueObjectId"],
-                publicOnly: true,
-                privateOnly: false,
-                deep: true,
-                depth: 0,
-                stack: []
-            };
-
-        let options = Object.assign( {}, defaultAssignOptions || {} );
-        options = Object.assign( options, defaultOptions || {} );
-        options = Object.assign( options, pOptions || defaultOptions );
-        options.deep = (false !== pOptions?.deep) && (false !== options?.deep);
-
-        const included = [].concat( options.included || [] ).flat();
-
-        let excluded = ([].concat( options.excluded || options.transientProperties ).flat()).filter( e => !included.includes( e ) );
-
-        const publicOnly = false !== options.publicOnly || excluded.includes( "_" );
-
-        const deep = (false !== options?.deep) || false;
-
-        let source = isObject( pSource ) || Array.isArray( pSource ) ? pSource : Array.isArray( pTarget ) ? [] : pSource;
-        let target = isObject( pTarget ) || Array.isArray( pTarget ) ? pTarget : Array.isArray( pSource ) ? [] : source;
-
-        if ( target?.transientProperties )
-        {
-            excluded = unique( pruneArray( excluded.concat( target?.transientProperties || [] ) ) );
-        }
-
-        if ( source?.transientProperties )
-        {
-            excluded = unique( pruneArray( excluded.concat( source?.transientProperties || [] ) ) );
-        }
-
-        if ( !(isObject( target ) || Array.isArray( target )) || null === target )
-        {
-            return target || source;
-        }
-
-        if ( !(isObject( source ) || Array.isArray( source )) || null === source )
-        {
-            return target || source;
-        }
-
-        if ( (options?.depth || 0) > 17 || detectCycles( options?.stack || [], 3, 4 ) )
-        {
-            return target || pTarget;
-        }
-
-        if ( Array.isArray( target ) && Array.isArray( source ) )
-        {
-            for( let i = 0, n = Math.max( source?.length, target?.length ); i < n; i++ )
-            {
-                if ( arrayUtils.arrLenGt( source, i ) )
-                {
-                    let value = source[i] || (arrayUtils.arrLenGt( target, i ) ? target[i] : null);
-
-                    if ( (isObject( value ) || Array.isArray( value )) && deep )
-                    {
-                        if ( null === value )
-                        {
-                            continue;
-                        }
-
-                        const opts = Object.assign( {}, options );
-
-                        opts.depth += 1;
-
-                        opts.stack.push( i );
-
-                        value = assignPublic( Array.isArray( value ) ? [] : {}, value, opts );
-
-                        opts.stack.pop();
-                    }
-
-                    target[i] = value;
-                }
-            }
-
-            return pruneArray( target || source );
-        }
-
-        const keys = Object.keys( source );
-        const propertyNames = Object.getOwnPropertyNames( source );
-        const getters = getPublicPropertyNames( source );
-
-        let properties = unique( ([].concat( keys ).
-                                     concat( propertyNames ).
-                                     concat( included ).
-                                     concat( getters )).
-                                     flat().
-                                     map( e => asString( e, true ).trim() ).
-                                     filter( e => !excluded.includes( e ) ) );
-
-        for( let i = properties.length; i--; )
-        {
-            let propertyName = properties[i];
-
-            propertyName = (_str === typeof propertyName) ? asString( propertyName, true ) : ([_num, _big].includes( typeof propertyName ) ? propertyName : _mt_str);
-
-            if ( isBlank( asString( propertyName, true ) ) || (excluded.includes( propertyName ) || excluded.includes( asString( propertyName, true ) )) )
-            {
-                continue;
-            }
-
-            let value = (source[propertyName] || getProperty( source, propertyName )) || (target[propertyName] || getProperty( target, propertyName ));
-
-            if ( (isObject( value ) || Array.isArray( value )) && deep )
-            {
-                if ( null === value )
-                {
-                    continue;
-                }
-
-                const opts = Object.assign( {}, options );
-
-                opts.depth += 1;
-
-                opts.stack.push( propertyName );
-
-                value = assignPublic( Array.isArray( value ) ? [] : {}, value, opts );
-
-                opts.stack.pop();
-            }
-
-            const name = publicOnly ? propertyName.replace( /^_+/, _mt_str ) : propertyName;
-
-            target[name] = value || target[name];
-        }
-
-        return target || Object.assign( target, source );
-    };
-
     const toLiteral = function( pObject )
     {
         let literal = {};
@@ -2607,16 +2360,65 @@ const $scope = constants?.$scope || function()
         }
         else if ( pObject instanceof Set )
         {
-            literal = [].concat( [...pObject] );
+            literal = [].concat( [...pObject] ).map( e => toLiteral( e ) );
         }
         else
         {
-            literal = Object.assign( {}, pObject || {} );
+            switch ( typeof pObject )
+            {
+                case _ud:
+                    literal = undefined;
+                    break;
+
+                case _str:
+                case _num:
+                case _big:
+                case _bool:
+                case _fun:
+                case _symbol:
+
+                    literal = pObject;
+                    break;
+
+                default:
+                    literal = assign( {}, pObject || {} );
+                    break;
+            }
+        }
+
+        if ( null !== literal )
+        {
+            try
+            {
+                literal.prototype = null;
+                literal.__proto__ = null;
+            }
+            catch( e )
+            {
+                konsole.warn( ex );
+            }
+
+            try
+            {
+                literal.constructor = null;
+            }
+            catch( ex )
+            {
+                konsole.warn( ex );
+            }
         }
 
         return literal;
     };
 
+    /**
+     * Removes the specified property and returns the modified object
+     *
+     * @param pObject the object to modify
+     * @param pPropertyName the property to delete, or remove
+     * @param pOptions
+     * @returns {*} the same object with the specified properties removed
+     */
     const removeProperty = function( pObject, pPropertyName, pOptions = { assumeUnderscoresConvention: true } )
     {
         if ( !isObject( pObject ) || Object.isFrozen( pObject ) || Object.isSealed( pObject ) )
@@ -2690,6 +2492,12 @@ const $scope = constants?.$scope || function()
         return pObject;
     };
 
+    /**
+     * Removes the specified properties and returns the modified object
+     * @param pObject an object to modify (by removing the specified properties)
+     * @param pPropertyNames
+     * @returns {object} the modified object (without the specified properties)
+     */
     const removeProperties = function( pObject, ...pPropertyNames )
     {
         let obj = pObject || {};
@@ -2704,7 +2512,7 @@ const $scope = constants?.$scope || function()
             {
                 try
                 {
-                    obj = removeProperty( obj, propertyName, { "assumeUnderscoreConvention": true } );
+                    obj = removeProperty( obj, propertyName );
                 }
                 catch( ex )
                 {
@@ -2716,6 +2524,14 @@ const $scope = constants?.$scope || function()
         return obj;
     };
 
+    /**
+     * Performs a 'deep' Object.assign of the properties of the source to the target.
+     * Returns the modified target unless the specified target is frozen, in which case, a new object is returned
+     * @param pTarget the object to which to assign the properties of the source
+     * @param pSource an object from which to assign properties to the target
+     * @param pStack INTERNALLY USED TO PREVENT INFINITE LOOPS
+     * @returns {object} an object (potentially the original target) with the source properties assigned
+     */
     const assign = function( pTarget, pSource, pStack = [] )
     {
         let target = pTarget || {};
@@ -2723,16 +2539,21 @@ const $scope = constants?.$scope || function()
 
         if ( target === source )
         {
-            return Object.assign( {}, source || target );
+            return pTarget;
         }
 
-        target = Object.assign( target, source );
+        if ( Object.isFrozen( pTarget ) )
+        {
+            target = Object.assign( {}, target || pTarget || {} );
+        }
+
+        pTarget = Object.assign( target, source );
 
         const stack = pStack || [];
 
         if ( stack.length > MAX_ASSIGN_DEPTH || detectCycles( stack, 4, 4 ) )
         {
-            return clone( target, false, stack );
+            return clone( pTarget, false, stack );
         }
 
         const entries = getEntries( target );
@@ -2748,13 +2569,13 @@ const $scope = constants?.$scope || function()
 
                                  try
                                  {
-                                     value = assign( (target[property] || {}), (value || {}), stack );
+                                     value = assign( (pTarget[property] || {}), (value || {}), stack );
 
-                                     target[property] = Object.assign( {}, value || {} );
+                                     pTarget[property] = Object.assign( {}, value || {} );
                                  }
                                  catch( ex )
                                  {
-                                     target[property] = Object.assign( {}, (value || {}) );
+                                     pTarget[property] = Object.assign( {}, (value || {}) );
                                  }
                                  finally
                                  {
@@ -2763,13 +2584,19 @@ const $scope = constants?.$scope || function()
                              }
                              else
                              {
-                                 target[property] = value;
+                                 pTarget[property] = value;
                              }
                          } );
 
-        return Object.assign( {}, target || source );
+        return pTarget || target || source;
     };
 
+    /**
+     * Returns an object whose keys are the values of the specified object's properties
+     * and whose values are the keys pointing to those values in the original
+     * @param pObject an object from which to build a new object that swaps values and keys for each property
+     * @returns {object}
+     */
     const invertProperties = function( pObject )
     {
         let obj = {};
@@ -2846,12 +2673,12 @@ const $scope = constants?.$scope || function()
             getEntries,
             getValues,
             getProperties,
-            getPublicPropertyNames,
             isEmptyValue,
             hasNoProperties,
             isPopulated,
             isPopulatedObject: isPopulated,
             pruneObject,
+            prune: pruneObject,
             IterationCap,
             ObjectEntry,
             generateUniqueObjectId,
@@ -2871,16 +2698,12 @@ const $scope = constants?.$scope || function()
             toStructuredCloneableObject,
             toLiteral,
             arrayToObject,
-            printObject,
             evaluateBoolean,
             toBool,
-            safeAssign: augment,
-            deepAssign: assign,
-            assignPublic,
+            augment,
+            assign,
             ingest,
-            safeIngest,
             populateObject: populate,
-            updateObject,
             detectCycles,
             removeProperty,
             removeProperties,
