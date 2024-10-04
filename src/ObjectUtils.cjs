@@ -1312,6 +1312,14 @@ const $scope = constants?.$scope || function()
         return false;
     };
 
+    /**
+     * If possible, changes the value of the specified property to the specified value
+     * @param pObject the object whose property is to be updated
+     * @param pPropertyPath the proerty name or path to the property to change
+     * @param pValue the value to assign to the specified property
+     * @param pOptions options to control subtle behavior for edge cases
+     * @returns {*} the value of the object property
+     */
     const setProperty = function( pObject, pPropertyPath, pValue, pOptions )
     {
         const options = Object.freeze( Object.assign( {}, pOptions || {} ) );
@@ -1324,11 +1332,11 @@ const $scope = constants?.$scope || function()
                                   _mt_str) :
                                  _mt_str) ));
 
-        let propertyName = asString( prop ).trim();
+        let propertyName = asString( prop, true ).trim();
 
         if ( isBlank( propertyName ) )
         {
-            return pValue;
+            return null;
         }
 
         const rx = /\[\d+]/g;
@@ -1348,7 +1356,8 @@ const $scope = constants?.$scope || function()
             case _num:
             case _big:
             case _bool:
-                break;
+            case _symbol:
+                return pObject;
 
             case _obj:
 
@@ -1362,7 +1371,7 @@ const $scope = constants?.$scope || function()
                     {
                         let p = keys.shift();
 
-                        obj = obj["_" + p] || obj[p];
+                        obj = obj[p] || obj["_" + p];
 
                         if ( options.createIfMissing )
                         {
@@ -1379,7 +1388,7 @@ const $scope = constants?.$scope || function()
                 {
                     let rx = /^_+/;
 
-                    let nm = ("_" + asString( propertyName, true ).replace( rx, _mt_str ));
+                    let nm = (asString( propertyName, true )).replace( rx, _mt_str );
 
                     try
                     {
@@ -1388,6 +1397,15 @@ const $scope = constants?.$scope || function()
                     catch( ex )
                     {
                         konsole.warn( constants.S_ERR_PREFIX, "setting", nm, ex );
+
+                        try
+                        {
+                            obj["_" + nm] = pValue;
+                        }
+                        catch( e )
+                        {
+                            konsole.warn( constants.S_ERR_PREFIX, "setting", "_" + nm, e );
+                        }
                     }
                 }
 
@@ -1409,24 +1427,30 @@ const $scope = constants?.$scope || function()
                 }
         }
 
-        return pValue;
+        return pObject?.[prop];
     };
 
-    const identical = function( pSelf, pOther, pCheckUniqueObjectId = false )
+    /**
+     * Returns true if the objects are actually the exact same object
+     *
+     * @param pSelf the first object
+     * @param pOther the other object
+     * @returns {boolean}
+     */
+    const identical = function( pSelf, pOther )
     {
-        let is = (pOther === pSelf) || (isNullOrEmpty( pSelf ) && isNullOrEmpty( pOther ));
-
-        return is && ( !!!pCheckUniqueObjectId || pOther?.uniqueObjectId === pSelf?.uniqueObjectId);
+        return (pOther === pSelf) || (isNullOrEmpty( pSelf ) && isNullOrEmpty( pOther ));
     };
 
     /**
      * Returns true if the 2 arguments represent the same object graph or the same number or other data type.
+     *
      * Basically a deep ==, not limited to ===
-     * @param {any} pFirst
-     * @param {any} pSecond
-     * @param pStrict
-     * @param pClass
-     * @returns
+     * @param {any} pFirst the first object
+     * @param {any} pSecond the other object
+     * @param pStrict boolean to indicate whether both objects have to have the same type or class, defaults to false
+     * @param pClass (optional) the type or class both arguments must be to be considered the same if pStrict is true
+     * @returns true if the 2 arguments represent the same object graph or the same number or other data type
      */
     const same = function( pFirst, pSecond, pStrict = false, pClass = null )
     {
@@ -1543,7 +1567,7 @@ const $scope = constants?.$scope || function()
 
     Object.prototype.isIdenticalTo = function( pOther, pStrict, pClass )
     {
-        return canCompare( pOther, pStrict, pClass ) && (identical( this, pOther ) || same( this, pOther, pStrict, pClass ));
+        return canCompare( pOther, pStrict, pClass ) && (identical( this, pOther ));
     };
 
     Object.prototype.equals = function( pObject )
@@ -1569,7 +1593,7 @@ const $scope = constants?.$scope || function()
                 let obj = {};
                 obj[key] = value;
 
-                return obj || { key: value };
+                return obj || { [keyProperty]: value };
             }
             return arr[0];
         }
@@ -1630,9 +1654,15 @@ const $scope = constants?.$scope || function()
         return obj;
     };
 
-    const findImplementor = function( pFunctionNames, ...pCandidates )
+    /**
+     * Returns the first candidate object that has a method named pFunctionName
+     * @param pFunctionName the name of the method the object must implement to be returned
+     * @param pCandidates one or more objects that might implement the specified method
+     * @returns {object} the leftmost object that implements the specified method
+     */
+    const findImplementor = function( pFunctionName, ...pCandidates )
     {
-        let methodNames = asArray( pFunctionNames || [] );
+        let methodNames = asArray( pFunctionName || [] );
 
         const candidates = asArray( [].concat( pCandidates || [] ) ).flat( Infinity );
 
@@ -1659,6 +1689,12 @@ const $scope = constants?.$scope || function()
         return null;
     };
 
+    /**
+     * Returns an array of objects that implement one or more of the method(s) specified
+     * @param pMethodNames an array of strings that are method names (or a string that is a method name)
+     * @param pCandidates one or more object, the subset of which to return if the object implemetnts one or more of the specified methid(s)
+     * @returns {*[]}  an array of objects that implement one or more of the method(s) specified
+     */
     const collectImplementors = function( pMethodNames, ...pCandidates )
     {
         let methodNames = asArray( pMethodNames || [] );
@@ -1709,7 +1745,7 @@ const $scope = constants?.$scope || function()
                 {
                     return [].fill( null, 0, pAny.length );
                 }
-                return {};
+                return {}; //// TODO: copy the structure
 
             case _ud:
                 return undefined;

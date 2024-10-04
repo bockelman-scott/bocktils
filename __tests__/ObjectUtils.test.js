@@ -815,5 +815,153 @@ test( "hasProperty returns false if the 'property path' does not exist",
           expect( objectUtils.hasProperty( obj, "a.b.z" ) ).toBe( false );
       } );
 
+test( "setProperty changes, if possible, the value of the specified property and returns the value of the property",
+      () =>
+      {
+          let obj = { a: 5 };
 
+          expect( objectUtils.setProperty( obj, "a", 7 ) ).toEqual( 7 );
+      } );
+
+test( "setProperty does not change the value of the specified property if the object is frozen",
+      () =>
+      {
+          let obj = Object.freeze( { a: 5 } );
+
+          expect( objectUtils.setProperty( obj, "a", 7 ) ).toEqual( 5 );
+      } );
+
+test( "setProperty changes, if possible, the value of the specified property path and returns the value of the property",
+      () =>
+      {
+          let obj = { a: { b: { c: 666 } } };
+
+          expect( objectUtils.setProperty( obj, "a.b.c", 888 ) ).toEqual( 888 );
+      } );
+
+test( "identical returns true only if the 2 objects are the exact same object",
+      () =>
+      {
+          let objA = { a: { b: { c: 666 } } };
+          let objB = { a: { b: { c: 666 } } };
+
+          expect( objectUtils.identical( objA, objB ) ).toBe( false );
+      } );
+
+test( "identical returns true when the 2 objects are the exact same object",
+      () =>
+      {
+          let objA = { a: { b: { c: 666 } } };
+          let objB = objA;
+
+          expect( objectUtils.identical( objA, objB ) ).toBe( true );
+      } );
+
+test( "same returns true if the 2 objects have the same properties and values",
+      () =>
+      {
+          let objA = { a: { b: { c: 666 } } };
+          let objB = { a: { b: { c: 666 } } };
+
+          expect( objectUtils.same( objA, objB ) ).toBe( true );
+      } );
+
+test( "same also returns true if the 2 object are the exact same object",
+      () =>
+      {
+          let objA = { a: { b: { c: 666 } } };
+          let objB = objA;
+
+          expect( objectUtils.same( objA, objB ) ).toBe( true );
+      } );
+
+test( "same returns true for other types",
+      () =>
+      {
+          let objA = 5;
+          let objB = 5;
+
+          expect( objectUtils.same( objA, objB ) ).toBe( true );
+      } );
+
+test( "same returns true for strings ignoring whitespace",
+      () =>
+      {
+          let objA = " abc";
+          let objB = "abc";
+
+          expect( objectUtils.same( objA, objB ) ).toBe( true );
+      } );
+
+test( "same returns false for strings differing in whitespace if pStrict is true",
+      () =>
+      {
+          let objA = " abc";
+          let objB = "abc";
+
+          expect( objectUtils.same( objA, objB, true ) ).toBe( false );
+      } );
+
+////////////
+
+test( "Object.isIdenticalTo returns true only if the other object is the exact same object",
+      () =>
+      {
+          let objA = { a: { b: { c: 666 } } };
+          let objB = { a: { b: { c: 666 } } };
+
+          expect( objA.isIdenticalTo( objB ) ).toBe( false );
+      } );
+
+test( "Object.isIdenticalTo returns when the other object is the exact same object",
+      () =>
+      {
+          let objA = { a: { b: { c: 666 } } };
+          let objB = objA;
+
+          expect( objA.isIdenticalTo( objB ) ).toBe( true );
+      } );
+
+test( "Object.equals returns true if the other object has the same properties and values",
+      () =>
+      {
+          let objA = { a: { b: { c: 666 } } };
+          let objB = { a: { b: { c: 666 } } };
+
+          expect( objA.equals( objB ) ).toBe( true );
+      } );
+
+test( "Object.equals also returns true if the other object is the exact same object",
+      () =>
+      {
+          let objA = { a: { b: { c: 666 } } };
+          let objB = objA;
+
+          expect( objA.equals( objB ) ).toBe( true );
+      } );
+
+
+test( "arrayToObject normally just converts indices to property keys",
+      () =>
+      {
+          let arr = [1, 2, 3];
+          let obj = objectUtils.arrayToObject( arr );
+
+          expect( obj ).toEqual( { 0: 1, 1: 2, 2: 3 } );
+      } );
+
+test( "arrayToObject can unwrap an object from a one-element array",
+      () =>
+      {
+          let arr = [{ a: 1, b: 2 }];
+          let obj = objectUtils.arrayToObject( arr, "b" );
+
+          expect( obj ).toEqual( {
+                                     "2": {
+                                         "a": 1,
+                                         "b": 2
+                                     }
+                                 }
+          );
+      } );
 
