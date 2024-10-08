@@ -1952,6 +1952,15 @@ const $scope = constants?.$scope || function()
         return pObject;
     };
 
+    const DEFAULT_AUGMENT_OPTIONS =
+        {
+            recursive: true,
+            appendToArrays: false,
+            addMissingMapEntries: false,
+            appendToSets: false,
+            mergeUnmatchedClasses: false
+        };
+
     /**
      * Returns a new object with any properties of the second object
      * copied to the first object, without overwriting existing properties
@@ -1963,7 +1972,7 @@ const $scope = constants?.$scope || function()
      * @param pStack --- do not pass this argument, it is used to detect cycles and infinite loops
      * and is only passed to recursive calls from within the function itself
      */
-    const augment = function( pObject, pObjectB, pOptions, pStack = [] )
+    const augment = function( pObject, pObjectB, pOptions = DEFAULT_AUGMENT_OPTIONS, pStack = [] )
     {
         const options = Object.assign( {}, pOptions || {} );
 
@@ -2024,14 +2033,14 @@ const $scope = constants?.$scope || function()
                 {
                     try
                     {
-                        objA[key] = valueA;
+                        objA[key] = [].concat( valueA || [] );
                     }
                     catch( ex )
                     {
                         konsole.warn( constants.S_ERR_PREFIX, "modifying", key, ex );
                     }
 
-                    let arrB = value || [];
+                    let arrB = [].concat( value || [] );
 
                     try
                     {
@@ -2066,29 +2075,49 @@ const $scope = constants?.$scope || function()
                 }
                 else if ( (valueA instanceof Map) && (value instanceof Map) && options.addMissingMapEntries )
                 {
-                    value.forEach( ( val, key ) =>
-                                   {
-                                       if ( !(valueA.has( key )) )
+                    if ( !Object.isFrozen( valueA ) )
+                    {
+                        value.forEach( ( val, key ) =>
                                        {
-                                           valueA.set( key, val );
-                                       }
-                                   } );
+                                           if ( !(valueA.has( key )) )
+                                           {
+                                               try
+                                               {
+                                                   valueA.set( key, val );
+                                               }
+                                               catch( ex )
+                                               {
+                                                   konsole.warn( constants.S_ERR_PREFIX, "modifying map entry", key, ex );
+                                               }
+                                           }
+                                       } );
+                    }
                 }
                 else if ( (valueA instanceof Set) && (value instanceof Set) && (options.appendToSets || options.unionOfSets) )
                 {
-                    if ( _fun === typeof valueA.union )
+                    if ( !Object.isFrozen( valueA ) )
                     {
-                        objA[key] = valueA.union( value );
-                    }
-                    else
-                    {
-                        value.forEach( ( val ) =>
-                                       {
-                                           if ( !(valueA.has( val )) )
+                        if ( _fun === typeof valueA.union )
+                        {
+                            objA[key] = valueA.union( value );
+                        }
+                        else
+                        {
+                            value.forEach( ( val ) =>
                                            {
-                                               valueA.add( (val) );
-                                           }
-                                       } );
+                                               if ( !(valueA.has( val )) )
+                                               {
+                                                   try
+                                                   {
+                                                       valueA.add( (val) );
+                                                   }
+                                                   catch( ex )
+                                                   {
+                                                       konsole.warn( constants.S_ERR_PREFIX, "modifying", key, ex );
+                                                   }
+                                               }
+                                           } );
+                        }
                     }
                 }
                 else if ( (_obj === typeof valueA && _obj === typeof value) && (false !== options.recursive) && !isDate( valueA ) )

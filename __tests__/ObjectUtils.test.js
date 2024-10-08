@@ -1103,3 +1103,388 @@ test( "ingest applies the properties of each object to the first object",
           expect( obj ).toEqual( obj5 );
       } );
 
+test( "augment with default options - returns expected object",
+      () =>
+      {
+          const obj =
+              {
+                  a: 1,
+                  b: 2,
+                  c:
+                      {
+                          a: 1,
+                          b: 2,
+                          c:
+                              {
+                                  a: 1,
+                                  b: 2,
+                                  c:
+                                      {
+                                          a: 1,
+                                          b: 2,
+                                          c:
+                                              {
+                                                  a: 11,
+                                                  b: 22
+                                              }
+                                      }
+                              }
+                      }
+              };
+
+          const obj2 =
+              {
+                  a: "a",
+                  b: "b",
+                  c:
+                      {
+                          a: "a",
+                          b: "b",
+                          c:
+                              {
+                                  a: "a",
+                                  b: "b",
+                                  c:
+                                      {
+                                          a: "a",
+                                          b: "b",
+                                          c:
+                                              {
+                                                  a: "aa",
+                                                  b: "bb",
+                                                  c: 3
+                                              },
+                                          d: 4
+                                      },
+                                  d: "ddd",
+                                  e: "efg",
+                                  f: "eff"
+                              },
+                          d: "dee",
+                          e: "eee"
+                      },
+                  d: "d",
+                  e:
+                      {
+                          "ee": "ee",
+                          "ff": "ff",
+                          g:
+                              {
+                                  a: [1, 2, 3],
+                                  b: [4, 5, 6]
+                              }
+                      }
+              };
+
+          let augmented = objectUtils.augment( obj, obj2 );
+
+          expect( augmented === obj ).toBe( false );
+          expect( augmented === obj2 ).toBe( false );
+          expect( obj2 === obj ).toBe( false );
+          expect( obj === obj2 ).toBe( false );
+
+          expect( augmented ).toEqual( {
+                                           "a": 1,
+                                           "b": 2,
+                                           "c": {
+                                               "a": 1,
+                                               "b": 2,
+                                               "c": {
+                                                   "a": 1,
+                                                   "b": 2,
+                                                   "c": {
+                                                       "a": "a",
+                                                       "b": "b",
+                                                       "c": {
+                                                           "a": "aa",
+                                                           "b": "bb",
+                                                           "c": 3
+                                                       },
+                                                       "d": 4
+                                                   },
+                                                   "d": "ddd",
+                                                   "e": "efg",
+                                                   "f": "eff"
+                                               },
+                                               "d": "dee",
+                                               "e": "eee"
+                                           },
+                                           "d": "d",
+                                           "e": {
+                                               "ee": "ee",
+                                               "ff": "ff",
+                                               "g": {
+                                                   "a": [
+                                                       1,
+                                                       2,
+                                                       3
+                                                   ],
+                                                   "b": [
+                                                       4,
+                                                       5,
+                                                       6
+                                                   ]
+                                               }
+                                           }
+                                       } );
+      } );
+
+test( "augment non-recursive - returns expected object",
+      () =>
+      {
+          const obj =
+              {
+                  a: 1,
+                  b: 2,
+                  c:
+                      {
+                          a: 1,
+                          b: 2,
+                          c:
+                              {
+                                  a: 1,
+                                  b: 2,
+                                  c:
+                                      {
+                                          a: 1,
+                                          b: 2,
+                                          c:
+                                              {
+                                                  a: 11,
+                                                  b: 22
+                                              }
+                                      }
+                              }
+                      }
+              };
+
+          const obj2 =
+              {
+                  a: "a",
+                  b: "b",
+                  c:
+                      {
+                          a: "a",
+                          b: "b",
+                          c:
+                              {
+                                  a: "a",
+                                  b: "b",
+                                  c:
+                                      {
+                                          a: "a",
+                                          b: "b",
+                                          c:
+                                              {
+                                                  a: "aa",
+                                                  b: "bb",
+                                                  c: 3
+                                              },
+                                          d: 4
+                                      },
+                                  d: "ddd",
+                                  e: "efg",
+                                  f: "eff"
+                              },
+                          d: "dee",
+                          e: "eee"
+                      },
+                  d: "d",
+                  e:
+                      {
+                          "ee": "ee",
+                          "ff": "ff",
+                          g:
+                              {
+                                  a: [1, 2, 3],
+                                  b: [4, 5, 6]
+                              }
+                      }
+              };
+
+          let augmented = objectUtils.augment( obj, obj2, { recursive: false } );
+
+          expect( augmented === obj ).toBe( false );
+          expect( augmented === obj2 ).toBe( false );
+          expect( obj2 === obj ).toBe( false );
+          expect( obj === obj2 ).toBe( false );
+
+          expect( augmented ).toEqual( {
+                                           "a": 1,
+                                           "b": 2,
+                                           "c": {
+                                               "a": 1,
+                                               "b": 2,
+                                               "c": {
+                                                   "a": 1,
+                                                   "b": 2,
+                                                   "c": {
+                                                       "a": 1,
+                                                       "b": 2,
+                                                       "c": {
+                                                           "a": 11,
+                                                           "b": 22
+                                                       }
+                                                   }
+                                               }
+                                           },
+                                           "d": "d",
+                                           "e": {
+                                               "ee": "ee",
+                                               "ff": "ff",
+                                               "g": {
+                                                   "a": [
+                                                       1,
+                                                       2,
+                                                       3
+                                                   ],
+                                                   "b": [
+                                                       4,
+                                                       5,
+                                                       6
+                                                   ]
+                                               }
+                                           }
+                                       } );
+      } );
+
+
+test( "augment with appendToArrays option with equal length array - returns expected object",
+      () =>
+      {
+          const obj =
+              {
+                  a: 1,
+                  b: 2,
+                  c: [1, 2, 3]
+              };
+
+          const obj2 =
+              {
+                  a: "a",
+                  b: "b",
+                  c: [4, 5, 6]
+              };
+
+          let augmented = objectUtils.augment( obj, obj2, { appendToArrays: true } );
+
+          expect( augmented ).toEqual( {
+                                           a: 1,
+                                           b: 2,
+                                           c: [1, 2, 3]
+                                       } );
+      } );
+
+test( "augment with appendToArrays option with objectB array having more elements - returns expected object",
+      () =>
+      {
+          const obj =
+              {
+                  a: 1,
+                  b: 2,
+                  c: [1, 2, 3]
+              };
+
+          const obj2 =
+              {
+                  a: "a",
+                  b: "b",
+                  c: [4, 5, 6, 7, 8, 9]
+              };
+
+          let augmented = objectUtils.augment( obj, obj2, { appendToArrays: true } );
+
+          expect( augmented ).toEqual( {
+                                           a: 1,
+                                           b: 2,
+                                           c: [1, 2, 3, 7, 8, 9]
+                                       } );
+      } );
+
+test( "augment with addMissingMapEntries option - returns expected object",
+      () =>
+      {
+          const mapA = new Map();
+          const mapB = new Map();
+
+          mapA.set("a", 1);
+          mapA.set("b", 2);
+
+          mapB.set("a", "a");
+          mapB.set("b", "b");
+          mapB.set("c", "c");
+
+          const obj =
+              {
+                  a: 1,
+                  b: 2,
+                  c: mapA
+              };
+
+          const obj2 =
+              {
+                  a: "a",
+                  b: "b",
+                  c: mapB
+              };
+
+          let augmented = objectUtils.augment( obj, obj2, { addMissingMapEntries: true } );
+
+          expect( augmented.c.get("a") ).toEqual( 1 );
+          expect( augmented.c.get("b") ).toEqual( 2 );
+          expect( augmented.c.get("c") ).toEqual( "c" );
+
+      } );
+
+
+test( "populate returns expected object",
+      () =>
+      {
+        const obj =
+            {
+                a:1,
+                b:2,
+                c:
+                    {
+                        a:"a",
+                        b:"b"
+                    },
+                foo: "bar"
+            }
+
+        const obj2 =
+            {
+                b:"bee",
+                c:
+                    {
+                        a:1,
+                        b:2
+                    },
+                d: 4,
+                e: 5
+            };
+
+        const expected =
+            {
+                a: 1,
+                b:"bee",
+                c:
+                    {
+                        a:1,
+                        b:2
+                    },
+                foo:"bar"
+            }
+
+
+          let populated = objectUtils.populateObject( obj, obj2 );
+
+          expect( populated === obj ).toBe( false );
+          expect( populated === obj2 ).toBe( false );
+          expect( obj2 === obj ).toBe( false );
+          expect( obj === obj2 ).toBe( false );
+
+          expect( populated ).toEqual( expected );
+
+      } );
+
