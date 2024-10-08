@@ -2220,7 +2220,8 @@ const $scope = constants?.$scope || function()
             removeEmptyArrays: true,
             removeEmptyStrings: false,
             removeFunctions: false,
-            pruneArrays: false
+            pruneArrays: false,
+            trimStrings: false
         };
 
     /**
@@ -2232,9 +2233,33 @@ const $scope = constants?.$scope || function()
      */
     const pruneObject = function( pObject, pOptions = DEFAULT_PRUNING_OPTIONS, pStack )
     {
-        const options = Object.assign( {}, pOptions || {} );
+        const options = ingest( {}, DEFAULT_PRUNING_OPTIONS, pOptions || {} );
 
-        let obj = assign( {}, pObject || {} );
+        if ( !isObject( pObject ) )
+        {
+            switch ( typeof pObject )
+            {
+                case _ud:
+                    return null;
+
+                case _str:
+                    let str = asString( pObject, options.trimStrings );
+                    return (options.removeEmptyStrings ? isBlank( str ) ? null : str : str);
+
+                case _num:
+                case _big:
+                    if ( isValidNumber( pObject ) )
+                    {
+                        return pObject;
+                    }
+                    return null;
+
+                default:
+                    return pObject;
+            }
+        }
+
+        let obj = assign( typeUtils.defaultFor( pObject ) || {}, pObject || {} );
 
         const keys = getKeys( obj );
         const propertyNames = getProperties( obj );
@@ -2271,14 +2296,15 @@ const $scope = constants?.$scope || function()
                     break;
 
                 case _str:
+                    value = asString( value, options.trimStrings );
+
+                    setProperty( obj, propertyName, value );
+
                     if ( isBlank( value ) && options.removeEmptyStrings )
                     {
                         obj = removeProperty( obj, propertyName, options );
                     }
-                    else
-                    {
-                        setProperty( obj, propertyName, value || obj[propertyName] || getProperty( obj, propertyName ) );
-                    }
+
                     break;
 
                 case _num:
@@ -2287,14 +2313,9 @@ const $scope = constants?.$scope || function()
                     {
                         obj = removeProperty( obj, propertyName, options );
                     }
-                    else
-                    {
-                        setProperty( obj, propertyName, value || obj[propertyName] || getProperty( obj, propertyName ) );
-                    }
                     break;
 
                 case _bool:
-                    setProperty( obj, propertyName, value || obj[propertyName] || getProperty( obj, propertyName ) );
                     break;
 
                 case _fun:
@@ -2302,41 +2323,23 @@ const $scope = constants?.$scope || function()
                     {
                         obj = removeProperty( obj, propertyName, options );
                     }
-                    else
-                    {
-                        setProperty( obj, propertyName, value || obj[propertyName] || getProperty( obj, propertyName ) );
-                    }
                     break;
 
-                default:
-                    if ( options.removeEmptyObjects )
-                    {
-                        if ( _ud === typeof value || null === value || isEmptyValue( value ) )
-                        {
-                            obj = removeProperty( obj, propertyName, options );
-                        }
-                        else
-                        {
-                            setProperty( obj, propertyName, value || obj[propertyName] || getProperty( obj, propertyName ) );
-                        }
-                    }
-                    else if ( (isObject( value ) && Array.isArray( value )) )
+                case _obj:
+                    if ( Array.isArray( value ) )
                     {
                         if ( options.pruneArrays )
                         {
                             value = arrayUtils.pruneArray( value );
+                            setProperty( obj, propertyName, value );
                         }
 
                         if ( options.removeEmptyArrays && value?.length <= 0 )
                         {
                             obj = removeProperty( obj, propertyName, options );
                         }
-                        else
-                        {
-                            setProperty( obj, propertyName, value || obj[propertyName] || getProperty( obj, propertyName ) );
-                        }
                     }
-                    else if ( (isObject( value ) && !Array.isArray( value )) )
+                    else
                     {
                         stack.push( propertyName );
 
@@ -2353,12 +2356,18 @@ const $scope = constants?.$scope || function()
                         {
                             stack.pop();
                         }
-                    }
-                    else
-                    {
-                        setProperty( obj, propertyName, value || obj[propertyName] || getProperty( obj, propertyName ) );
-                    }
 
+                        if ( options.removeEmptyObjects )
+                        {
+                            if ( _ud === typeof value || null === value || isEmptyValue( value ) )
+                            {
+                                obj = removeProperty( obj, propertyName, options );
+                            }
+                        }
+                    }
+                    break;
+
+                default:
                     break;
             }
         }
@@ -2568,12 +2577,24 @@ const $scope = constants?.$scope || function()
 
         if ( target === source )
         {
-            return pTarget;
+            return target;
         }
 
-        if ( Object.isFrozen( pTarget ) )
+        if ( ![_obj].includes( typeof target ) )
         {
-            target = Object.assign( {}, target || pTarget || {} );
+            return target;
+        }
+
+        if ( Object.isFrozen( target ) )
+        {
+            if ( isArray( target ) )
+            {
+                target = [].concat( asArray( target || pTarget || [] ) );
+            }
+            else
+            {
+                target = Object.assign( {}, target || pTarget || {} );
+            }
         }
 
         pTarget = Object.assign( target, source );
@@ -2598,13 +2619,13 @@ const $scope = constants?.$scope || function()
 
                                  try
                                  {
-                                     value = assign( (pTarget[property] || {}), (value || {}), stack );
+                                     value = assign( (pTarget[property] || typeUtils.defaultFor( value ) || {}), (value || {}), stack );
 
-                                     pTarget[property] = Object.assign( {}, value || {} );
+                                     pTarget[property] = Object.assign( (pTarget[property] || typeUtils.defaultFor( value ) || {}), value || {} );
                                  }
                                  catch( ex )
                                  {
-                                     pTarget[property] = Object.assign( {}, (value || {}) );
+                                     pTarget[property] = Object.assign( typeUtils.defaultFor( value ) || {}, (value || {}) );
                                  }
                                  finally
                                  {

@@ -1407,12 +1407,12 @@ test( "augment with addMissingMapEntries option - returns expected object",
           const mapA = new Map();
           const mapB = new Map();
 
-          mapA.set("a", 1);
-          mapA.set("b", 2);
+          mapA.set( "a", 1 );
+          mapA.set( "b", 2 );
 
-          mapB.set("a", "a");
-          mapB.set("b", "b");
-          mapB.set("c", "c");
+          mapB.set( "a", "a" );
+          mapB.set( "b", "b" );
+          mapB.set( "c", "c" );
 
           const obj =
               {
@@ -1430,9 +1430,9 @@ test( "augment with addMissingMapEntries option - returns expected object",
 
           let augmented = objectUtils.augment( obj, obj2, { addMissingMapEntries: true } );
 
-          expect( augmented.c.get("a") ).toEqual( 1 );
-          expect( augmented.c.get("b") ).toEqual( 2 );
-          expect( augmented.c.get("c") ).toEqual( "c" );
+          expect( augmented.c.get( "a" ) ).toEqual( 1 );
+          expect( augmented.c.get( "b" ) ).toEqual( 2 );
+          expect( augmented.c.get( "c" ) ).toEqual( "c" );
 
       } );
 
@@ -1440,41 +1440,41 @@ test( "augment with addMissingMapEntries option - returns expected object",
 test( "populate returns expected object",
       () =>
       {
-        const obj =
-            {
-                a:1,
-                b:2,
-                c:
-                    {
-                        a:"a",
-                        b:"b"
-                    },
-                foo: "bar"
-            }
+          const obj =
+              {
+                  a: 1,
+                  b: 2,
+                  c:
+                      {
+                          a: "a",
+                          b: "b"
+                      },
+                  foo: "bar"
+              };
 
-        const obj2 =
-            {
-                b:"bee",
-                c:
-                    {
-                        a:1,
-                        b:2
-                    },
-                d: 4,
-                e: 5
-            };
+          const obj2 =
+              {
+                  b: "bee",
+                  c:
+                      {
+                          a: 1,
+                          b: 2
+                      },
+                  d: 4,
+                  e: 5
+              };
 
-        const expected =
-            {
-                a: 1,
-                b:"bee",
-                c:
-                    {
-                        a:1,
-                        b:2
-                    },
-                foo:"bar"
-            }
+          const expected =
+              {
+                  a: 1,
+                  b: "bee",
+                  c:
+                      {
+                          a: 1,
+                          b: 2
+                      },
+                  foo: "bar"
+              };
 
 
           let populated = objectUtils.populateObject( obj, obj2 );
@@ -1486,5 +1486,213 @@ test( "populate returns expected object",
 
           expect( populated ).toEqual( expected );
 
+      } );
+
+//// prune ////
+
+test( "prune with default options returns expected object",
+      () =>
+      {
+          const obj =
+              {
+                  a: {},
+                  b: 2,
+                  c: { d: {} },
+                  d: [1, 2, 3],
+                  e: [],
+                  f: "foo",
+                  g: "",
+                  h: function() { return 5; },
+                  i: function( ...pArgs ) { return 5; },
+                  j: "",
+                  k: ["", ""]
+              };
+
+          const expected =
+              {
+                  b: 2,
+                  d: [1, 2, 3],
+                  f: "foo",
+                  g: "",
+                  h: function() { return 5; },
+                  i: function( ...pArgs ) { return 5; },
+                  j: "",
+                  k: ["", ""]
+              };
+
+          expect( JSON.stringify( objectUtils.prune( obj ) ) ).toEqual( JSON.stringify( expected ) );
+      } );
+
+test( "prune with options to remove empty string returns expected object",
+      () =>
+      {
+          const obj =
+              {
+                  a: {},
+                  b: 2,
+                  c: { d: {} },
+                  d: [1, 2, 3],
+                  e: [],
+                  f: "foo",
+                  g: "",
+                  h: function() { return 5; },
+                  i: function( ...pArgs ) { return 5; },
+                  j: "",
+                  k: ["", ""]
+              };
+
+          const expected =
+              {
+                  b: 2,
+                  d: [1, 2, 3],
+                  f: "foo",
+                  h: function() { return 5; },
+                  i: function( ...pArgs ) { return 5; },
+                  k: ["", ""]
+              };
+
+          let actual = objectUtils.prune( obj, { removeEmptyStrings: true } );
+
+          expect( JSON.stringify( actual ) ).toEqual( JSON.stringify( expected ) );
+      } );
+
+test( "prune with options to prune arrays returns expected object",
+      () =>
+      {
+          const obj =
+              {
+                  a: {},
+                  b: 2,
+                  c: { d: {} },
+                  d: [1, 2, 3, 1 / 0],
+                  e: [],
+                  f: "foo",
+                  g: "",
+                  h: function() { return 5; },
+                  i: function( ...pArgs ) { return 5; },
+                  j: "",
+                  k: ["", ""]
+              };
+
+          const expected =
+              {
+                  b: 2,
+                  d: [1, 2, 3],
+                  f: "foo",
+                  g: "",
+                  h: function() { return 5; },
+                  i: function( ...pArgs ) { return 5; },
+                  j: ""
+              };
+
+          expect( JSON.stringify( objectUtils.prune( obj, { pruneArrays: true } ) ) ).toEqual( JSON.stringify( expected ) );
+      } );
+
+test( "prune with options to prune arrays, but not remove empty arrays, returns expected object",
+      () =>
+      {
+          const obj =
+              {
+                  a: {},
+                  b: 2,
+                  c: { d: {} },
+                  d: [1, 2, 3, 1 / 0, 4],
+                  e: [],
+                  f: "foo",
+                  g: "",
+                  h: function() { return 5; },
+                  i: function( ...pArgs ) { return 5; },
+                  j: "",
+                  k: ["", ""]
+              };
+
+          const expected =
+              {
+                  b: 2,
+                  d: [1, 2, 3, 4],
+                  e: [],
+                  f: "foo",
+                  g: "",
+                  h: function() { return 5; },
+                  i: function( ...pArgs ) { return 5; },
+                  j: "",
+                  k: []
+              };
+
+          expect( JSON.stringify( objectUtils.prune( obj,
+                                                     {
+                                                         pruneArrays: true,
+                                                         removeEmptyArrays: false
+                                                     } ) ) ).toEqual( JSON.stringify( expected ) );
+      } );
+
+test( "prune with options to prune arrays and remove empty strings returns expected object",
+      () =>
+      {
+          const obj =
+              {
+                  a: {},
+                  b: 2,
+                  c: { d: {} },
+                  d: [1, 2, 3, 1 / 0, 4],
+                  e: [],
+                  f: "foo",
+                  g: "",
+                  h: function() { return 5; },
+                  i: function( ...pArgs ) { return 5; },
+                  j: "",
+                  k: ["", ""]
+              };
+
+          const expected =
+              {
+                  b: 2,
+                  d: [1, 2, 3, 4],
+                  f: "foo",
+                  h: function() { return 5; },
+                  i: function( ...pArgs ) { return 5; },
+              };
+
+          const options = { pruneArrays: true, removeEmptyStrings: true };
+
+          expect( JSON.stringify( objectUtils.prune( obj, options ) ) ).toEqual( JSON.stringify( expected ) );
+      } );
+
+test( "prune with most agressive options returns expected object",
+      () =>
+      {
+          const obj =
+              {
+                  a: {},
+                  b: 2,
+                  c: { d: {} },
+                  d: [1, 2, 3, 1 / 0, 4],
+                  e: [],
+                  f: " foo ",
+                  g: "",
+                  h: function() { return 5; },
+                  i: function( ...pArgs ) { return 5; },
+                  j: "",
+                  k: ["", ""]
+              };
+
+          const expected =
+              {
+                  b: 2,
+                  d: [1, 2, 3, 4],
+                  f: "foo"
+              };
+
+          const options =
+              {
+                  removeEmptyObjects: true,
+                  removeEmptyArrays: true,
+                  removeEmptyStrings: true,
+                  removeFunctions: true,
+                  pruneArrays: true,
+                  trimStrings: true
+              };
+
+          expect( JSON.stringify( objectUtils.prune( obj, options ) ) ).toEqual( JSON.stringify( expected ) );
       } );
 
