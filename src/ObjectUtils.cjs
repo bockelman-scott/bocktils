@@ -1733,9 +1733,9 @@ const $scope = constants?.$scope || function()
      */
     const emptyClone = function( pAny, pTypeHint, pThis = null )
     {
-        let typeHint = (pTypeHint ? (_str === typeof pTypeHint ? pTypeHint : typeof pTypeHint) : undefined);
+        let typeHint = (pTypeHint ? (_str === typeof pTypeHint ? pTypeHint : typeof pTypeHint) : _ud);
 
-        let type = (pAny ? typeof pAny || typeHint : typeHint);
+        let type = asString( pAny ? typeof pAny || typeHint : typeHint ).toLowerCase();
 
         if ( _ud === type )
         {
@@ -1744,6 +1744,9 @@ const $scope = constants?.$scope || function()
 
         switch ( type )
         {
+            case _ud:
+                return undefined;
+
             case _str:
                 return _mt_str;
 
@@ -1757,7 +1760,7 @@ const $scope = constants?.$scope || function()
             case _obj:
                 if ( isArray( pAny ) )
                 {
-                    return [].fill( null, 0, pAny.length );
+                    return [].fill( null, 0, (pAny?.length || 0) );
                 }
 
                 let obj = {};
@@ -1777,16 +1780,24 @@ const $scope = constants?.$scope || function()
 
                 return Object.assign( {}, obj );
 
-            case _ud:
-                return undefined;
-
             case _symbol:
                 return pAny;
 
             case _fun:
                 return function( ...pArgs )
                 {
-                    return pAny.call( pThis || this || pAny, ...pArgs );
+                    let result = null;
+
+                    try
+                    {
+                        result = pAny.call( (pThis || this || pAny), ...pArgs );
+                    }
+                    catch( ex )
+                    {
+                        konsole.warn( ex );
+                    }
+
+                    return result;
                 };
 
             default:
@@ -2375,15 +2386,37 @@ const $scope = constants?.$scope || function()
         return obj;
     };
 
+    const DEFAULT_LITERAL_OPTIONS =
+        {
+            removeFunctions: true
+        };
+
     /**
      * Returns an object literal based on the specified object.
-     * That is, this erases the class or prototype information and just returns a POJO of the object's current state
+     * That is, this erases the class or prototype information
+     * and just returns a POJO of the object's current state
      * @param pObject object from which to construct an object literal
+     * @param pOptions
+     * @param pStack
      * @returns {*} a new object with no class or prototype affiliation
      */
-    const toLiteral = function( pObject )
+    const toLiteral = function( pObject, pOptions = DEFAULT_LITERAL_OPTIONS, pStack = [] )
     {
+        const options = ingest( {}, DEFAULT_LITERAL_OPTIONS, pOptions || {} );
+
         let literal = {};
+
+        if ( isNullOrEmpty( pObject ) )
+        {
+            return emptyClone( pObject, _obj );
+        }
+
+        const stack = pStack || [];
+
+        if ( detectCycles( stack, 3, 3 ) )
+        {
+            return assign( (emptyClone( pObject, _obj ) || {}), pObject || {} );
+        }
 
         if ( pObject instanceof Map )
         {
@@ -2391,20 +2424,27 @@ const $scope = constants?.$scope || function()
 
             for( let entry of pObject.entries() )
             {
-                _map[entry[0]] = entry[1];
+                let key = entry[0];
+
+                stack.push( key );
+
+                _map[key] = toLiteral( entry[1], pOptions, stack );
+
+                stack.pop();
             }
 
             literal = Object.assign( {}, _map );
         }
         else if ( pObject instanceof Set )
         {
-            literal = [].concat( [...pObject] ).map( e => toLiteral( e ) );
+            literal = [].concat( [...pObject] ).map( e => toLiteral( e, pOptions, stack ) );
         }
         else
         {
             switch ( typeof pObject )
             {
                 case _ud:
+
                     literal = undefined;
                     break;
 
@@ -2412,26 +2452,89 @@ const $scope = constants?.$scope || function()
                 case _num:
                 case _big:
                 case _bool:
+
+                    literal = pObject;
+                    break;
+
                 case _fun:
+
+                    if ( options.removeFunctions )
+                    {
+                        literal = undefined;
+                    }
+                    break;
+
                 case _symbol:
 
                     literal = pObject;
                     break;
 
+                case _obj:
+                    if ( isArray( pObject ) )
+                    {
+                        literal = [];
+
+                        for( let element of pObject )
+                        {
+                            literal.push( toLiteral( element, pOptions, stack ) );
+                        }
+                    }
+                    else
+                    {
+                        literal = emptyClone( pObject, _obj ) || {};
+
+                        let entries = getEntries( pObject );
+
+                        for( let entry of entries )
+                        {
+                            let key = entry.key || entry[0];
+                            let value = entry.value || entry[1];
+
+                            if ( !isBlank( key ) )
+                            {
+                                stack.push( key );
+
+                                let literalValue = toLiteral( value, pOptions, stack );
+
+                                let remove = false;
+
+                                if ( !options.prune || !isEmptyValue( literalValue ) )
+                                {
+                                    if ( !options.removeFunctions || !(isFunction( literalValue )) )
+                                    {
+                                        setProperty( literal, key, literalValue );
+                                    }
+                                    else
+                                    {
+                                        remove = true;
+                                    }
+                                }
+
+                                stack.pop();
+
+                                if ( remove )
+                                {
+                                    removeProperty( literal, key );
+                                }
+                            }
+                        }
+                    }
+
+                    break;
+
                 default:
-                    literal = assign( {}, pObject || {} );
                     break;
             }
         }
 
-        if ( null !== literal )
+        if ( null !== literal && isObject( literal ) )
         {
             try
             {
                 literal.prototype = null;
                 literal.__proto__ = null;
             }
-            catch( e )
+            catch( ex )
             {
                 konsole.warn( ex );
             }
@@ -2443,6 +2546,11 @@ const $scope = constants?.$scope || function()
             catch( ex )
             {
                 konsole.warn( ex );
+            }
+
+            if ( options.prune )
+            {
+                literal = pruneObject( literal, pOptions );
             }
         }
 

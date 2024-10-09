@@ -514,9 +514,11 @@ const $scope = constants?.$scope || function()
 
     const defaultFor = function( pType )
     {
-        if ( isString( pType ) )
+        let type = isString( pType ) ? (_mt_str + pType).toLowerCase() : typeof (pType);
+
+        if ( isString( pType ) && JS_TYPES.includes( pType ) )
         {
-            return TYPE_DEFAULTS[pType.toLowerCase()];
+            return TYPE_DEFAULTS[type];
         }
 
         return defaultFor( typeof pType );

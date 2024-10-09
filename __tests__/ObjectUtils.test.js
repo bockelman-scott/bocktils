@@ -1658,7 +1658,7 @@ test( "prune with options to prune arrays and remove empty strings returns expec
           expect( JSON.stringify( objectUtils.prune( obj, options ) ) ).toEqual( JSON.stringify( expected ) );
       } );
 
-test( "prune with most agressive options returns expected object",
+test( "prune with most aggressive options returns expected object",
       () =>
       {
           const obj =
@@ -1696,3 +1696,217 @@ test( "prune with most agressive options returns expected object",
           expect( JSON.stringify( objectUtils.prune( obj, options ) ) ).toEqual( JSON.stringify( expected ) );
       } );
 
+////
+
+test( "toLiteral with default options returns expected object",
+      () =>
+      {
+
+          class Address
+          {
+              #city = "";
+              #state = "";
+              #zip = "";
+
+              constructor( pCity, pState, pZip )
+              {
+                  this.#city = pCity;
+                  this.#state = pState;
+                  this.#zip = pZip;
+              }
+
+              get city()
+              {
+                  return this.#city;
+              }
+
+              get state()
+              {
+                  return this.#state;
+              }
+
+              get zip()
+              {
+                  return this.#zip;
+              }
+          }
+
+          class House
+          {
+              #style = "";
+              #address = {};
+
+              #locked = false;
+
+              constructor( pStyle, pAddress )
+              {
+                  this.#style = pStyle;
+                  this.#address = pAddress || {};
+              }
+
+              get style()
+              {
+                  return this.#style;
+              }
+
+              get address()
+              {
+                  return this.#address;
+              }
+
+              get city()
+              {
+                  return this.#address?.city;
+              }
+
+              get state()
+              {
+                  return this.#address?.state;
+              }
+
+              get zip()
+              {
+                  return this.#address?.zip;
+              }
+
+              lock()
+              {
+                  this.#locked = true;
+              }
+
+              unlock()
+              {
+                  this.#locked = false;
+              }
+          }
+
+          let address = new Address( "Chicago", "Illinois", "60601" );
+
+          let house = new House( "Brownstone", address );
+
+          house.lock();
+
+          let obj = objectUtils.toLiteral( house );
+
+          expect( obj === house ).toBe( false );
+
+          expect( obj instanceof House ).toBe( false );
+
+          expect( obj.city ).toEqual( "Chicago" );
+
+          expect( obj.state ).toEqual( "Illinois" );
+
+          expect( obj.locked ).toBe( undefined );
+
+          expect( obj.address instanceof Address ).toBe( false );
+
+          expect( typeof obj.lock ).toEqual( "undefined" );
+
+      } );
+
+test( "toLiteral with options to include functions returns expected object",
+      () =>
+      {
+          class Address
+          {
+              #city = "";
+              #state = "";
+              #zip = "";
+
+              constructor( pCity, pState, pZip )
+              {
+                  this.#city = pCity;
+                  this.#state = pState;
+                  this.#zip = pZip;
+              }
+
+              get city()
+              {
+                  return this.#city;
+              }
+
+              get state()
+              {
+                  return this.#state;
+              }
+
+              get zip()
+              {
+                  return this.#zip;
+              }
+          }
+
+          class House
+          {
+              #style = "";
+              #address = {};
+
+              #locked = false;
+
+              constructor( pStyle, pAddress )
+              {
+                  this.#style = pStyle;
+                  this.#address = pAddress || {};
+              }
+
+              get style()
+              {
+                  return this.#style;
+              }
+
+              get address()
+              {
+                  return this.#address;
+              }
+
+              get city()
+              {
+                  return this.#address?.city;
+              }
+
+              get state()
+              {
+                  return this.#address?.state;
+              }
+
+              get zip()
+              {
+                  return this.#address?.zip;
+              }
+
+              lock()
+              {
+                  this.#locked = true;
+              }
+
+              unlock()
+              {
+                  this.#locked = false;
+              }
+          }
+
+          let address = new Address( "Chicago", "Illinois", "60601" );
+
+          let house = new House( "Brownstone", address );
+
+          house.lock();
+
+          let obj = objectUtils.toLiteral( house, { removeFunctions: false } );
+
+          expect( obj === house ).toBe( false );
+
+          expect( obj instanceof House ).toBe( false );
+
+          expect( obj.city ).toEqual( "Chicago" );
+
+          expect( obj.state ).toEqual( "Illinois" );
+
+          expect( obj.locked ).toBe( undefined );
+
+          expect( obj.address instanceof Address ).toBe( false );
+
+          expect( typeof obj.lock ).toEqual( "function" );
+
+      } );
+
+////
