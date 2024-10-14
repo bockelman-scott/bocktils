@@ -93,6 +93,8 @@ const $scope = constants?.$scope || function()
                 // ignored
             }
         }
+
+        return returnValue;
     };
 
     const execAsyncMethod = async function( pObject, pMethod, ...pArgs )
@@ -110,6 +112,8 @@ const $scope = constants?.$scope || function()
                 // ignored
             }
         }
+
+        return returnValue;
     };
 
     const fireAndForget = function( pAsyncFunction, ...pArgs )
@@ -145,12 +149,7 @@ const $scope = constants?.$scope || function()
             exceptions.push( ex );
         }
 
-        if ( exceptions.length > 0 )
-        {
-            return exceptions;
-        }
-
-        return returnValue;
+        return { returnValue, exceptions };
     };
 
     const attempt = function( pOperation, ...pArgs )
@@ -186,12 +185,7 @@ const $scope = constants?.$scope || function()
             exceptions.push( ex );
         }
 
-        if ( exceptions.length > 0 )
-        {
-            return exceptions;
-        }
-
-        return returnValue;
+        return { returnValue, exceptions };
     };
 
     const attemptAsyncMethod = async function( pObject, pMethod, ...pArgs )
@@ -219,12 +213,7 @@ const $scope = constants?.$scope || function()
             exceptions.push( ex );
         }
 
-        if ( exceptions.length > 0 )
-        {
-            return exceptions;
-        }
-
-        return returnValue;
+        return { returnValue, exceptions };
     };
 
     const attemptMethod = function( pObject, pMethod, ...pArgs )
@@ -260,12 +249,7 @@ const $scope = constants?.$scope || function()
             exceptions.push( ex );
         }
 
-        if ( exceptions.length > 0 )
-        {
-            return exceptions;
-        }
-
-        return returnValue;
+        return { returnValue, exceptions };
     };
 
     const isImplemented = function( pClass, pMethodName, pMinArgs, pMaxInheritance )

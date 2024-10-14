@@ -9,13 +9,11 @@ const utils = require( "./CommonUtils.cjs" );
  * @see ../src/CommonUtils.cjs
  */
 const constants = utils?.constants || require( "./Constants.cjs" );
+
 const typeUtils = utils?.typeUtils || require( "./TypeUtils.cjs" );
 const stringUtils = utils?.stringUtils || require( "./StringUtils.cjs" );
 const arrayUtils = utils?.arrayUtils || require( "./ArrayUtils.cjs" );
 const objectUtils = utils?.objectUtils || require( "./ObjectUtils.cjs" );
-const jsonUtils = utils?.jsonUtils || require( "./JsonUtils.cjs" );
-
-const logUtils = require( "./LogUtils.cjs" );
 
 const _ud = constants?._ud || "undefined";
 
@@ -28,18 +26,18 @@ const $scope = constants?.$scope || function()
 {
     let _mt_str = constants._mt_str;
 
-    let _str = constants._str;
-
     let asString = stringUtils.asString;
 
     let lcase = stringUtils.lcase;
 
     let asArray = arrayUtils.asArray;
 
+    let importUtilities = utils?.importUtilities || constants.importUtilities;
+
     /**
      * This statement makes all the values exposed by the imported modules local variables in the current scope.
      */
-    utils.importUtilities( this, constants, typeUtils, stringUtils, arrayUtils, objectUtils );
+    importUtilities( this, constants, typeUtils, stringUtils, arrayUtils, objectUtils );
 
     const INTERNAL_NAME = "__BOCK__BASE64_UTILS__";
 
@@ -48,12 +46,27 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
+    const base64 = "base64";
 
-    const validEncodings = Object.freeze( ["ascii", "utf8", "utf-8", "utf16le", "utf-16le", "ucs2", "ucs-2", "base64", "base64url", "latin1", "binary", "hex"] );
+    const utf8 = "utf-8";
 
-    const cleanBase64 = function( pStr, pOptions )
+    const DEFAULT_TEXT_ENCODING = utf8;
+
+    const validEncodings = Object.freeze( ["ascii", "utf8", utf8, "utf16le", "utf-16le", "ucs2", "ucs-2", base64, "base64url", "latin1", "binary", "hex"] );
+
+    const DEFAULT_BASE64_OPTIONS = Object.freeze( { replacements: [[/ /g, "+"], [/ /, "+"]] } );
+
+    /**
+     * Returns a valid base64 encoded string by replacing spaces with '+'
+     * and ensuring that the number of characters is a multiple of 4
+     * @param pStr {string} a base64 encoded value
+     * @param pOptions {object} optional object to specify the replacement characters
+     * @returns {string} a valid base64 encoded value
+     */
+    const cleanBase64 = function( pStr, pOptions = DEFAULT_BASE64_OPTIONS )
     {
-        const options = Object.assign( { replacements: [[/ /g, "+"], [/ /, "+"]] }, pOptions || {} );
+        let options = Object.assign( {}, DEFAULT_BASE64_OPTIONS );
+        options = Object.assign( options, pOptions || {} );
 
         let replacements = (asArray( options.replacements || [[/ /g, "+"], [/ /, "+"]] ) || [[/ /g, "+"], [/ /, "+"]]).filter( e => Array.isArray( e ) && 2 === e.length );
 
@@ -89,6 +102,11 @@ const $scope = constants?.$scope || function()
         return str.trim();
     };
 
+    /**
+     * Returns true if the specified string is valid base64 encoded content
+     * @param pStr {string} a string to evaluate
+     * @returns {boolean} true if the specified string is valid base64 encoded content
+     */
     const isValidBase64 = function( pStr )
     {
         const str = asString( pStr );
@@ -96,131 +114,62 @@ const $scope = constants?.$scope || function()
         return (0 === ((str?.length || 0) % 4)) && !(/[ \r\n]/.test( str ));
     };
 
-    function toBytes( pStr, pOptions )
+    function resolveEncoding( pEncoding )
+    {
+        let encoding = lcase( asString( pEncoding, true ) );
+        return validEncodings.includes( encoding ) ? encoding : utf8;
+    }
+
+    /**
+     * Returns a Buffer of bytes corresponding to the content encoded in base 64
+     * @param pStr {string} a base64 encoded value
+     * @param pOptions {object} (optional) an object specifying the options
+     * to use when cleaning/validating the base 64 string
+     * @returns {Buffer} a Buffer of bytes corresponding to the content encoded in base 64
+     */
+    function toBytes( pStr, pOptions = DEFAULT_BASE64_OPTIONS )
     {
         const str = cleanBase64( asString( pStr, true ), pOptions );
 
-        return Buffer.from( str, "base64" );
-    }
-
-    function toText( pBytes, pEncoding )
-    {
-        const buffer = Buffer.from( pBytes );
-
-        let encoding = asString( pEncoding, true ).toLowerCase();
-
-        encoding = validEncodings.includes( encoding ) ? encoding : "utf-8";
-
-        return buffer.toString( encoding );
-    }
-
-    function bufferToTypedArray( pBuffer )
-    {
-        return new Uint8Array( pBuffer );
-    }
-
-    function typedArrayToBuffer( pArray )
-    {
-        return Buffer.from( pArray );
-    }
-
-    class Base64Base
-    {
-        constructor( pStr, pBytes, pEncoding )
-        {
-            this._text = cleanBase64( asString( pStr, true ) );
-            this._bytes = pBytes || new Uint8Array( this.toBinary( this._text ) );
-
-            let encoding = asString( pEncoding, true ).toLowerCase();
-            encoding = validEncodings.includes( encoding ) ? encoding : "utf-8";
-
-            this._encoding = encoding;
-        }
-
-        clean( pStr, pOptions )
-        {
-            let str = (_str === typeof pStr) ? (pStr.replaceAll( /[\r\n]/g, _mt_str )) : pStr;
-
-            str = asString( str, true ) || this._text || constants._mt_str;
-
-            return cleanBase64( str, pOptions );
-        }
-
-        isValid( pStr )
-        {
-            const str = asString( pStr, false ) || this._text || constants._mt_str;
-            return isValidBase64( str );
-        }
-
-        toBinary( pStr, pOptions )
-        {
-            const str = this.clean( asString( pStr, true ) || this._text || constants._mt_str, pOptions );
-            return toBytes( str );
-        }
-
-        toBuffer( pStr )
-        {
-            const str = this.clean( asString( pStr, true ) || this._text || constants._mt_str );
-            return typedArrayToBuffer( this.toBinary( str ) );
-        }
-
-        fromBuffer( pBuffer )
-        {
-            return bufferToTypedArray( pBuffer );
-        }
-
-        toBase64( pBytes, pEncoding )
-        {
-            const bytes = pBytes || this._bytes || new Uint8Array( this.toBinary( this._text ) );
-
-            let encoding = lcase( asString( asString( (pEncoding) || asString( this._encoding ) ), true ) );
-
-            encoding = validEncodings.includes( encoding ) ? encoding : "utf-8";
-
-            return this.clean( toText( bytes, encoding ) );
-        }
+        return Buffer.from( str, base64 );
     }
 
     /**
-     * This class supports converting binary data into Base64
+     * Returns a base64 encoded string corresponding to the Array-like argument pBytes
+     * @param pBytes {Array|Buffer|ArrayBuffer|SharedArrayBuffer|string} an array-like value to encode
+     * @returns {string} a base64 encoded string corresponding to the Array-like argument pBytes
      */
-    class Base64Encoder extends Base64Base
+    function toBase64( pBytes )
     {
-        constructor( pBytes )
-        {
-            super( constants._mt_str, pBytes, "ascii" );
-        }
+        let bytes = pBytes || [];
 
-        encode()
-        {
-            return this.toBase64( this._bytes, this._encoding );
-        }
+        const buffer = Buffer.from( bytes );
+
+        return cleanBase64( buffer.toString( base64 ) );
     }
 
-    /**
-     * This class supports converting Base64 encoded data (strings) into bytes
-     */
-    class Base64Decoder extends Base64Base
+    function toString( pBase64Text, pEncoding = DEFAULT_TEXT_ENCODING )
     {
-        constructor( pStr, pBytes, pEncoding )
-        {
-            super( pStr, pBytes, (pEncoding || "ascii") );
-        }
+        const str = typeUtils.isString( pBase64Text ) ? cleanBase64( asString( pBase64Text, true ) ) : toBase64( pBase64Text, pEncoding );
 
-        decode()
-        {
-            return this.toBinary();
-        }
+        const buffer = Buffer.from( str, base64 );
+
+        return buffer.toString( resolveEncoding( pEncoding ) );
     }
 
     const mod =
         {
-            classes: { Base64Encoder, Base64Decoder },
-            Base64Encoder,
-            Base64Decoder,
+            dependencies:
+                {
+                    constants,
+                    stringUtils,
+                    arrayUtils,
+                    objectUtils
+                },
             validEncodings,
-            toText,
+            toBase64,
             toBytes,
+            toString,
             isValidBase64,
             cleanBase64
         };

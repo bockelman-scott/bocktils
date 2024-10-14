@@ -21,7 +21,7 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
-    const importUtilities = function( pScope, ...pUtils )
+    const importUtilities = constants?.importUtilities || function( pScope, ...pUtils )
     {
         const scope = pScope || $scope();
 
@@ -53,7 +53,15 @@ const $scope = constants?.$scope || function()
             arrayUtils,
             objectUtils,
             jsonUtils,
-            importUtilities
+            importUtilities,
+            dependencies:
+                {
+                    constants,
+                    stringUtils,
+                    arrayUtils,
+                    objectUtils,
+                    jsonUtils,
+                }
         };
 
     mod = Object.assign( mod, constants );

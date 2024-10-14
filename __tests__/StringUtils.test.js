@@ -1192,7 +1192,7 @@ test( "toAbsolutePath",
       {
           let path = "../src/StringUtils.cjs";
           let absolutePath = stringUtils.toAbsolutePath( path, __dirname );
-          expect( absolutePath ).toEqual( "C:/Projects/bocktils/__tests__/src/StringUtils.cjs" );
+          expect( absolutePath ).toEqual( "C:/Projects/bocktils/src/StringUtils.cjs" );
       } );
 
 test( "isValidString - 1",

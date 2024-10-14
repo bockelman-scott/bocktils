@@ -64,7 +64,7 @@ const $scope = utils?.$scope || function()
         {
             const obj = {};
 
-            obj[asString( this.this.ordinal )] = this.value;
+            obj[asString( this.ordinal )] = this.value;
 
             return obj;
         }

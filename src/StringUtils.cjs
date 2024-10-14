@@ -1607,13 +1607,14 @@ const $scope = constants?.$scope || function()
 
         let filepath = toUnixPath( asString( pPath, true ) ) || __dirname;
 
+        if ( filepath.startsWith( rootPath ) )
+        {
+            filepath = toUnixPath( filepath.replace( rootPath, _mt_str ) );
+        }
+
         if ( !isRelativePath( filepath ) )
         {
-            if ( filepath.startsWith( _unixPathSep ) )
-            {
-                return toUnixPath( rootPath + "/" + filepath );
-            }
-            return filepath;
+            return toUnixPath( rootPath + "/" + filepath.replace( new RegExp( "^" + rootPath ), _mt_str ) );
         }
 
         const thisDir = _unixThisDir;
@@ -1625,12 +1626,7 @@ const $scope = constants?.$scope || function()
             filepath = filepath.length > thisDir.length ? filepath.slice( thisDir.length ) : _mt_str;
         }
 
-        if ( filepath.startsWith( rootPath ) )
-        {
-            filepath = toUnixPath( filepath.replace( rootPath, _mt_str ) );
-        }
-
-        let dirs = [].concat( (filepath.split( _unixPathSep ) || []) ).filter( e => !isBlank( e ) );
+        let dirs = [].concat( (rootPath.split( _unixPathSep ) || []) ).concat( (filepath.split( _unixPathSep ) || []) ).filter( e => !isBlank( e ) );
 
         // the ".." sequence means the directory one level prior, so...
         // every time we find this, we will remove that array element and the previous array element
@@ -1644,7 +1640,7 @@ const $scope = constants?.$scope || function()
 
         while ( moreDirectoriesToProcess( idx, dirs ) )
         {
-            dirs.shift();
+            dirs = dirs.slice( 0, Math.max( 0, idx - 1 ) ).concat( dirs.slice( Math.min( dirs.length - 1, idx + 1 ) ) );
 
             // look for the next previous directory token
             idx = dirs.indexOf( _dot + _dot );
@@ -1653,7 +1649,7 @@ const $scope = constants?.$scope || function()
         // rebuild the path for the array of directories
         filepath = dirs.join( _unixPathSep );
 
-        return toUnixPath( rootPath + "/" + filepath );
+        return toUnixPath( filepath );
     };
 
     /**
