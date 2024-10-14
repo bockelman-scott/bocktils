@@ -38,9 +38,11 @@ const stringUtils = utils?.stringUtils || require( "./StringUtils.cjs" );
 const arrayUtils = utils?.arrayUtils || require( "./ArrayUtils.cjs" );
 const objectUtils = utils?.objectUtils || require( "./ObjectUtils.cjs" );
 
+/**
+ * Import adm-zip dependency
+ * @type {(function(String, Object): {getZipComment: function(): String, toBufferPromise: function(): Promise<Buffer>, readAsTextAsync: function((exports|string), callback, string=): String, addLocalFolderPromise: function(string, {zipPath?: string, filter?: (RegExp|Function), namefix?: (Function|string)}): Promise<unknown>, toBuffer: function(*, *, *, *): Buffer, addLocalFile: function(string, string=, string=, string=): void, addZipEntryComment: function(exports, string): void, extractAllToAsync: function(string, boolean=, boolean=, Function): (Promise<unknown>|undefined), addLocalFolderAsync2: function(({localPath: string, zipPath?: string, filter?: (RegExp|Function), namefix?: (Function|string)}|string), doneCallback): void, writeZipPromise: function(string, {overwrite?: boolean, perm?: boolean}=): Promise<void>, addLocalFolderAsync: function(string, callback, string=, (RegExp|Function)=): void, addLocalFileAsync: function(({localPath: string, comment?: string, zipPath?: string, zipName?: string}|string), doneCallback): void, addZipComment: function(string): void, getEntry: function(string): exports, addLocalFolder: function(string, string=, (RegExp|Function)=): void, deleteFile: function((exports|string), boolean=): void, test: function(string=): (boolean), extractAllTo: function(string, boolean=, boolean=, (string|Buffer)=): void, forEach: function(*): *, getZipEntryComment: function(exports): String, readAsText: function((exports|string), string): String, childCount: function((exports|string)): integer, updateFile: function(exports, Buffer): void, writeZip: function(string, Function): void, getEntries: function(string=): Array, readFile: function((exports|string), (Buffer|string)=): *, deleteEntry: function((exports|string)): void, readFileAsync: function((exports|string), callback): void, getEntryCount: function(): *, extractEntryTo: function((string|exports), string, boolean=, boolean=, boolean=, string=): Boolean, addFile: function(string, (Buffer|string), string=, (number|Object)=): exports})|{}}
+ */
 const admZip = require( "adm-zip" );
-
-const zLib = require( "zlib" );
 
 const _ud = constants?._ud || "undefined";
 
@@ -76,12 +78,27 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
+    /**
+     * The actual number of bytes in a megabyte
+     * @type {number}
+     */
     const BYTES_PER_MEGABYTE = 1_048_576;
 
+    /**
+     * The maximum number of entries an archive may have before we consider it potentially unsafe
+     * @type {number}
+     */
     const MAX_ENTRIES_ALLOWED = 100;
 
+    /**
+     * The largest uncompressed size supported for an archive
+     * @type {number}
+     */
     const MAX_SIZE_ALLOWED = (25 * BYTES_PER_MEGABYTE);
 
+    /**
+     * This class represents the PkZip internal header for an archive
+     */
     class ArchiveDataHeader
     {
         constructor( pOptions, pImpl )
@@ -104,11 +121,20 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    /**
+     * This static factory method returns a new instance of ArchiveDataHeader
+     * for the specified portion of the PkZip archive
+     * @param pHeader
+     * @returns {ArchiveDataHeader}
+     */
     ArchiveDataHeader.fromDataHeader = function( pHeader )
     {
         return new ArchiveDataHeader( pHeader );
     };
 
+    /**
+     * This class represents the PkZip internal header for an archive Entry
+     */
     class ArchiveEntryHeader
     {
         constructor( pOptions, pImpl )
@@ -145,31 +171,38 @@ const $scope = constants?.$scope || function()
 
         loadDataHeaderFromBinary( pBuffer )
         {
-
+            // TODO: if necessary or desired in a future release
         }
 
         loadFromBinary( pBuffer )
         {
-
+            // TODO: if necessary or desired in a future release
         }
 
         dataHeaderToBinary()
         {
-
+            // TODO: if necessary or desired in a future release
         }
 
         entryHeaderToBinary()
         {
-
+            // TODO: if necessary or desired in a future release
         }
 
         toString()
         {
-
+            // TODO: if necessary or desired in a future release
         }
 
     }
 
+
+    /**
+     * This static factory method returns a new instance of ArchiveEntryHeader
+     * for the specified portion of the PkZip archive
+     * @param pHeader
+     * @returns {ArchiveDataHeader}
+     */
     ArchiveEntryHeader.fromHeader = function( pHeader )
     {
         return new ArchiveEntryHeader( pHeader );
@@ -189,7 +222,8 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * This is a wrapper around a zip entry, so that consumer code does not rely on a specific library's implementation.
+     * This is a wrapper around a zip entry,
+     * so that consumer code does not rely on a specific library's implementation.
      * Note that even this module uses both AdmZip and zLib and could change in the future.
      * Consumers of this module should not need to know what libraries are being used.
      */
@@ -214,6 +248,10 @@ const $scope = constants?.$scope || function()
             this.extra = options.extra || this.zipEntry.extra;
         }
 
+        /**
+         * Returns a Buffer containing the bytes of the still-compressed data
+         * @returns {Buffer|*|Buffer}
+         */
         getCompressedData()
         {
             if ( this.zipEntry && (isFunction( this.zipEntry.getCompressedData )) )
@@ -229,6 +267,11 @@ const $scope = constants?.$scope || function()
             return Buffer.alloc( 0 );
         }
 
+        /**
+         * Returns a Promise for a Buffer containing the bytes of the still-compressed data
+         * @param pCallback
+         * @returns {Promise<*|Buffer|void|Buffer>}
+         */
         async getCompressedDataAsync( pCallback )
         {
             if ( this.zipEntry && (isFunction( this.zipEntry.getCompressedDataAsync )) )
@@ -244,24 +287,20 @@ const $scope = constants?.$scope || function()
             return Buffer.alloc( 0 );
         }
 
-        setData( pData )
-        {
-            if ( this.zipEntry && (isFunction( this.zipEntry.setData )) )
-            {
-                this.zipEntry.setData( pData );
-            }
-
-            if ( this.implementation && (isFunction( this.implementation.setData )) )
-            {
-                this.implementation.setData( pData );
-            }
-        }
-
+        /**
+         * Returns either the specified encoding, if is valid or the default encoding, utf-8
+         * @param pEncoding the encoding to use for converting a buffer from one format to another
+         * @returns {string}
+         */
         resolveEncoding( pEncoding )
         {
-            return pEncoding || "utf-8";
+            return lcase( pEncoding || "utf-8" );
         }
 
+        /**
+         * Returns a Buffer of the uncompressed bytes for this entry
+         * @returns {Buffer}
+         */
         getData()
         {
             if ( this.zipEntry && (isFunction( this.zipEntry.getData )) )
@@ -274,9 +313,23 @@ const $scope = constants?.$scope || function()
                 return this.implementation.getData();
             }
 
-            return _mt_str;
+            return Buffer.alloc( 0 );
         }
 
+        /**
+         * Returns the uncompressed content of this entry as the specified data type, if possible.
+         * Particularly useful if unzipping text files,
+         * as you can specify "string" and the character encoding expected,
+         * and the method will return that string
+         *
+         * If called without arguments, returns a new Uint8Array of the uncompressed bytes
+         *
+         * @param pType {string} the data type to return
+         * @param pEncoding the character encoding to use if the specified type is "string"
+         * (or a scalar type that requires a temporary string: see implementation)
+         *
+         * @returns {Uint8Array|number|{}|{}|boolean|string}
+         */
         getDataAs( pType, pEncoding = "utf-8" )
         {
             const buffer = this.getData();
@@ -316,6 +369,10 @@ const $scope = constants?.$scope || function()
             }
         }
 
+        /**
+         * Returns a Promise for a Buffer of the uncompressed bytes for this entry
+         * @returns {Promise<Buffer>}
+         */
         async getDataAsync( pCallback )
         {
             if ( this.zipEntry && (isFunction( this.zipEntry.getDataAsync )) )
@@ -328,22 +385,7 @@ const $scope = constants?.$scope || function()
                 return await this.implementation.getDataAsync( pCallback );
             }
 
-            return _mt_str;
-        }
-
-        packHeader()
-        {
-            if ( this.zipEntry && (isFunction( this.zipEntry.packHeader )) )
-            {
-                return this.zipEntry.packHeader();
-            }
-
-            if ( this.implementation && (isFunction( this.implementation.packHeader )) )
-            {
-                return this.implementation.packHeader();
-            }
-
-            return {};
+            return Buffer.alloc( 0 );
         }
 
         toString()
@@ -360,14 +402,23 @@ const $scope = constants?.$scope || function()
 
             return Object.toString.call( this.zipEntry || this );
         }
-
     }
 
+    /**
+     * Static factory method for creating an instance of ArchiveEntry
+     * @param pZipEntry
+     * @returns {ArchiveEntry}
+     */
     ArchiveEntry.fromZipEntry = function( pZipEntry )
     {
         return new ArchiveEntry( pZipEntry, pZipEntry );
     };
 
+    /**
+     * Returns the number of entries in the archive
+     * @param pArchive a Buffer or a TypedArray of bytes represenring an archive
+     * @returns {number} the number of entries in the archive
+     */
     const getEntryCount = function( pArchive )
     {
         let archiver;
@@ -388,6 +439,12 @@ const $scope = constants?.$scope || function()
         return count;
     };
 
+    /**
+     * Returns an array of ArchiveEntry objects found in the specified archive
+     * @param pArchive {Buffer|Array} a Buffer or an array of bytes representing an archive
+     * @param pPassword {string} (optional) password required to access the contents of the archive
+     * @returns {*[]} an array of ArchiveEntry objects found in the specified archive
+     */
     const getEntries = function( pArchive, pPassword )
     {
         let archiver;
@@ -413,19 +470,35 @@ const $scope = constants?.$scope || function()
         return entries;
     };
 
-    const getEntry = function( pArchive, pName )
+    /**
+     * Returns an instance of ArchiveEntry representing the named entry (or the entry at the specified index)
+     * @param pArchive {Buffer|Array} a Buffer or an array of bytes representing an archive
+     * @param pName {string|number} The file name of the entry to return or the index of the entry to return
+     * @param pPassword {string} (optional) password required to access the contents of the archive
+     * @returns {ArchiveEntry} an instance of ArchiveEntry representing the named entry (or the entry at the specified index)
+     */
+    const getEntry = function( pArchive, pName, pPassword = _mt_str )
     {
         let archiver, entry, archiveEntry = null;
 
-        try
-        {
-            archiver = new admZip( pArchive );
+        const name = typeUtils.isString( pName ) ? asString( pName ) : typeUtils.isNumeric( pName ) ? stringUtils.asInt( pName ) : 0;
 
-            entry = archiver.getEntry( asString( pName ) );
-        }
-        catch( ex )
+        if ( typeUtils.isString( name ) )
         {
-            console.error( ex.message );
+            try
+            {
+                archiver = new admZip( pArchive );
+                entry = archiver.getEntry( name );
+            }
+            catch( ex )
+            {
+                console.error( ex.message );
+            }
+        }
+        else
+        {
+            const entries = getEntries( pArchive, pPassword );
+            entry = entries?.length > name ? entries[name] : null;
         }
 
         if ( entry )
@@ -441,11 +514,6 @@ const $scope = constants?.$scope || function()
         }
 
         return archiveEntry || entry;
-    };
-
-    const testZipFileIntegrity = function( pArchive )
-    {
-
     };
 
     const repair = function( pArchive )
@@ -558,28 +626,6 @@ const $scope = constants?.$scope || function()
         return true;
     };
 
-    const decompressBuffer = function( pBuffer )
-    {
-        if ( isSafeArchive( pBuffer ) )
-        {
-            return zLib.unzipSync( pBuffer );
-        }
-
-        return Buffer.alloc( 0 );
-    };
-
-    const decompressTypedArray = function( pByteArray )
-    {
-        const buffer = Buffer.from( pByteArray );
-
-        if ( isSafeArchive( buffer ) )
-        {
-            return decompressBuffer( buffer );
-        }
-
-        return Buffer.alloc( 0 );
-    };
-
     // onSuccess(Buffer buffer);
     // onFail(String error);
     // onItemStart(String fileName);
@@ -618,8 +664,7 @@ const $scope = constants?.$scope || function()
                     stringUtils,
                     arrayUtils,
                     objectUtils,
-                    admZip,
-                    zLib,
+                    admZip
                 },
             isEmptyArchive,
             isSafeArchive,
@@ -629,8 +674,7 @@ const $scope = constants?.$scope || function()
             isPotentialZipBomb,
             getEntryCount,
             getEntries,
-            getEntry,
-            forEach
+            getEntry
         };
 
     if ( _ud !== typeof module )
