@@ -131,7 +131,9 @@ const logUtils = require( "./LogUtils.cjs" );
         #defaultStorageCollection = "activities";
         #storageOverrides = {};
 
-        constructor( pDatabase, pLogger, pStorageCollection, pRemoteUrl )
+        #requestId = _mt_str;
+
+        constructor( pDatabase, pLogger, pStorageCollection, pRemoteUrl, pRequestId )
         {
             this.#database = pDatabase;
 
@@ -142,6 +144,8 @@ const logUtils = require( "./LogUtils.cjs" );
             this.#defaultStorageCollection = "activities";
 
             this.#storageOverrides = {};
+
+            this.#requestId = pRequestId || "--unidentified request--";
         }
 
         get logger()
@@ -179,6 +183,11 @@ const logUtils = require( "./LogUtils.cjs" );
         getStorageCollectionFor( pType )
         {
             return this.#storageOverrides[pType] || this.#defaultStorageCollection || "activities";
+        }
+
+        get requestId()
+        {
+            return this.#requestId || "--unidentified request--";
         }
 
         async logActivity( pPayload, pActivityType, pRequestId )
@@ -237,7 +246,7 @@ const logUtils = require( "./LogUtils.cjs" );
             {
                 return this;
             }
-            return new RequestActivityLogger( pRequestId || this.requestId, this._database, this._logger, this._remoteUrl );
+            return new RequestActivityLogger( pRequestId || this.requestId, this.#database, this.#logger, this._remoteUrl );
         }
     }
 
@@ -251,18 +260,13 @@ const logUtils = require( "./LogUtils.cjs" );
      */
     class RequestActivityLogger extends ActivityLogger
     {
-        constructor( pRequestId, pDatabase, pLogger, pRemoteUrl )
+        #activitiesPerformed = [];
+
+        constructor( pRequestId, pDatabase, pLogger, pStorageCollection, pRemoteUrl )
         {
-            super( pDatabase, pLogger, pRemoteUrl );
+            super( pDatabase, pLogger, pStorageCollection, pRemoteUrl, pRequestId );
 
-            this._requestId = pRequestId || "--unidentified request--";
-
-            this._activitiesPerformed = [];
-        }
-
-        get requestId()
-        {
-            return this._requestId || "--unidentified request--";
+            this.#activitiesPerformed = [];
         }
 
         // noinspection FunctionWithInconsistentReturnsJS
@@ -283,7 +287,7 @@ const logUtils = require( "./LogUtils.cjs" );
 
             const activity = await super.logActivity( requestId, activityType, payload );
 
-            this._activitiesPerformed.push( activity );
+            this.#activitiesPerformed.push( activity );
 
             return activity;
         }
@@ -303,14 +307,14 @@ const logUtils = require( "./LogUtils.cjs" );
 
             const activity = await super.logActivity( requestId, "ERROR_ENCOUNTERED", ...[(payload || pError)] );
 
-            this._activitiesPerformed.push( activity );
+            this.#activitiesPerformed.push( activity );
 
             return activity;
         }
 
         get activitiesPerformed()
         {
-            return [].concat( this._activitiesPerformed || [] );
+            return [].concat( this.#activitiesPerformed || [] );
         }
     }
 

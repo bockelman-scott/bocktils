@@ -1,4 +1,28 @@
 /**
+ * This module provides some convenience methods for working with compressed (zipped) data.
+ *
+ * The most common use case is probably to read a zip file from the file system or from a memory buffer.
+ *
+ * Example - from File:
+ *
+ *           // read the file into a Buffer
+ *           const zipContents = fs.readFileSync( zipFilePath );
+ *
+ *           // get the entries of the archive (pkzip stores archives as a collection of entries)
+ *           const entries = zipUtils.getEntries( zipContents );
+ *
+ *           // read the first entry into a Buffer
+ *           const data = entries[0].getData();
+ *
+ *           // do something with the buffer... such as convert it to a string, for example
+ *           const str = data.toString("utf-8");
+ *
+ *  For more example usage and features, see CompressionUtils.test.js in the __tests__ directory.
+ *
+ *  @dependencies adm-zip, zlib, and the common utilities provided in this package
+ */
+
+/**
  * This statement imports the common utils modules:
  * Constants, TypeUtils, StringUtils, ArrayUtils, ObjectUtils, and JsonUtils
  */
@@ -13,15 +37,10 @@ const typeUtils = utils?.typeUtils || require( "./TypeUtils.cjs" );
 const stringUtils = utils?.stringUtils || require( "./StringUtils.cjs" );
 const arrayUtils = utils?.arrayUtils || require( "./ArrayUtils.cjs" );
 const objectUtils = utils?.objectUtils || require( "./ObjectUtils.cjs" );
-const jsonUtils = utils?.jsonUtils || require( "./JsonUtils.cjs" );
-
-const logUtils = require( "./LogUtils.cjs" );
 
 const admZip = require( "adm-zip" );
 
 const zLib = require( "zlib" );
-
-const konsole = console || {};
 
 const _ud = constants?._ud || "undefined";
 
@@ -32,10 +51,23 @@ const $scope = constants?.$scope || function()
 
 (function exposeModule()
 {
+    let _mt_str = constants._mt_str;
+    let _str = constants._str;
+    let _num = constants._num;
+    let _big = constants._big;
+    let _bool = constants._bool;
+    let _obj = constants._obj;
+
+    let asString = stringUtils.asString;
+    let isBlank = stringUtils.isBlank;
+    let lcase = stringUtils.lcase;
+
+    let isFunction = typeUtils.isFunction;
+
     /**
      * This statement makes all the values exposed by the imported modules local variables in the current scope.
      */
-    constants.importUtilities( this, constants, stringUtils, arrayUtils, objectUtils );
+    utils.importUtilities( this, constants, stringUtils, arrayUtils, objectUtils );
 
     const INTERNAL_NAME = "__BOCK__COMPRESSION_UTILS__";
 
@@ -184,12 +216,12 @@ const $scope = constants?.$scope || function()
 
         getCompressedData()
         {
-            if ( this.zipEntry && (_fun === typeof this.zipEntry.getCompressedData) )
+            if ( this.zipEntry && (isFunction( this.zipEntry.getCompressedData )) )
             {
                 return this.zipEntry.getCompressedData();
             }
 
-            if ( this.implementation && (_fun === typeof this.implementation.getCompressedData) )
+            if ( this.implementation && (isFunction( this.implementation.getCompressedData )) )
             {
                 return this.implementation.getCompressedData();
             }
@@ -199,12 +231,12 @@ const $scope = constants?.$scope || function()
 
         async getCompressedDataAsync( pCallback )
         {
-            if ( this.zipEntry && (_fun === typeof this.zipEntry.getCompressedDataAsync) )
+            if ( this.zipEntry && (isFunction( this.zipEntry.getCompressedDataAsync )) )
             {
                 return await this.zipEntry.getCompressedDataAsync( pCallback );
             }
 
-            if ( this.implementation && (_fun === typeof this.implementation.getCompressedDataAsync) )
+            if ( this.implementation && (isFunction( this.implementation.getCompressedDataAsync )) )
             {
                 return await this.implementation.getCompressedDataAsync( pCallback );
             }
@@ -214,25 +246,30 @@ const $scope = constants?.$scope || function()
 
         setData( pData )
         {
-            if ( this.zipEntry && (_fun === typeof this.zipEntry.setData) )
+            if ( this.zipEntry && (isFunction( this.zipEntry.setData )) )
             {
                 this.zipEntry.setData( pData );
             }
 
-            if ( this.implementation && (_fun === typeof this.implementation.setData) )
+            if ( this.implementation && (isFunction( this.implementation.setData )) )
             {
                 this.implementation.setData( pData );
             }
         }
 
+        resolveEncoding( pEncoding )
+        {
+            return pEncoding || "utf-8";
+        }
+
         getData()
         {
-            if ( this.zipEntry && (_fun === typeof this.zipEntry.getData) )
+            if ( this.zipEntry && (isFunction( this.zipEntry.getData )) )
             {
                 return this.zipEntry.getData();
             }
 
-            if ( this.implementation && (_fun === typeof this.implementation.getData) )
+            if ( this.implementation && (isFunction( this.implementation.getData )) )
             {
                 return this.implementation.getData();
             }
@@ -240,14 +277,53 @@ const $scope = constants?.$scope || function()
             return _mt_str;
         }
 
+        getDataAs( pType, pEncoding = "utf-8" )
+        {
+            const buffer = this.getData();
+
+            switch ( lcase( pType ) )
+            {
+                case _str:
+                    return buffer.toString( this.resolveEncoding( pEncoding ) );
+
+                case _num:
+                case _big:
+                    return stringUtils.asFloat( this.getDataAs( _str, this.resolveEncoding( pEncoding ) ) );
+
+                case _bool:
+                    return stringUtils.toBool( this.getDataAs( _str, this.resolveEncoding( pEncoding ) ) );
+
+                case _obj:
+                    let obj = {};
+
+                    let json = this.getDataAs( _str, this.resolveEncoding( pEncoding ) );
+
+                    if ( stringUtils.isValidJson( json ) )
+                    {
+                        try
+                        {
+                            obj = JSON.parse( json );
+                        }
+                        catch( ex )
+                        {
+                            console.error( ex );
+                        }
+                    }
+                    return obj || {};
+
+                default:
+                    return new Uint8Array( buffer );
+            }
+        }
+
         async getDataAsync( pCallback )
         {
-            if ( this.zipEntry && (_fun === typeof this.zipEntry.getDataAsync) )
+            if ( this.zipEntry && (isFunction( this.zipEntry.getDataAsync )) )
             {
                 return await this.zipEntry.getDataAsync( pCallback );
             }
 
-            if ( this.implementation && (_fun === typeof this.implementation.getDataAsync) )
+            if ( this.implementation && (isFunction( this.implementation.getDataAsync )) )
             {
                 return await this.implementation.getDataAsync( pCallback );
             }
@@ -257,12 +333,12 @@ const $scope = constants?.$scope || function()
 
         packHeader()
         {
-            if ( this.zipEntry && (_fun === typeof this.zipEntry.packHeader) )
+            if ( this.zipEntry && (isFunction( this.zipEntry.packHeader )) )
             {
                 return this.zipEntry.packHeader();
             }
 
-            if ( this.implementation && (_fun === typeof this.implementation.packHeader) )
+            if ( this.implementation && (isFunction( this.implementation.packHeader )) )
             {
                 return this.implementation.packHeader();
             }
@@ -272,12 +348,12 @@ const $scope = constants?.$scope || function()
 
         toString()
         {
-            if ( this.zipEntry && (_fun === typeof this.zipEntry.toString) )
+            if ( this.zipEntry && (isFunction( this.zipEntry.toString )) )
             {
                 return this.zipEntry.toString();
             }
 
-            if ( this.implementation && (_fun === typeof this.implementation.toString) )
+            if ( this.implementation && (isFunction( this.implementation.toString )) )
             {
                 return this.implementation.toString();
             }
@@ -331,7 +407,7 @@ const $scope = constants?.$scope || function()
             console.warn( ex.message );
 
             let archive = repair( pArchive );
-            
+
         }
 
         return entries;
@@ -429,9 +505,7 @@ const $scope = constants?.$scope || function()
 
                     if ( hdr )
                     {
-                        let dataHdr = hdr?.dataHeader;
-
-                        let size = Math.max( hdr?.size, dataHdr?.size, 0 );
+                        let size = Math.max( stringUtils.asInt( hdr?.size, 0 ), 0 );
 
                         totalUncompressedSize += size;
                     }
@@ -511,7 +585,6 @@ const $scope = constants?.$scope || function()
     // onItemStart(String fileName);
     // onItemEnd(String fileName);
 
-
     class ZipListener
     {
         constructor( pZip, pOnSuccessCallback, pOnFailCallback )
@@ -536,24 +609,28 @@ const $scope = constants?.$scope || function()
         }
     }
 
-
     const mod =
         {
-            decompressBuffer,
-            decompressTypedArray,
-            getEntryCount,
-            getEntries,
-            getEntry,
-            forEach,
-            ZipListener,
-            admZip,
-            zLib,
+            dependencies:
+                {
+                    constants,
+                    typeUtils,
+                    stringUtils,
+                    arrayUtils,
+                    objectUtils,
+                    admZip,
+                    zLib,
+                },
             isEmptyArchive,
             isSafeArchive,
             exceedsMaxEntries,
             exceedsMaxSize,
             calculateTotalUncompressedSize,
-            isPotentialZipBomb
+            isPotentialZipBomb,
+            getEntryCount,
+            getEntries,
+            getEntry,
+            forEach
         };
 
     if ( _ud !== typeof module )
