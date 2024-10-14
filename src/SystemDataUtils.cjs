@@ -6,8 +6,6 @@ const arrayUtils = require( "./ArrayUtils.cjs" );
 const objectUtils = require( "./ObjectUtils.cjs" );
 const jsonUtils = require( "./JsonUtils.cjs" );
 
-const configurator = require( "../Configuration.js" );
-
 const $scope = constants?.$scope || function()
 {
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
@@ -259,11 +257,6 @@ const $scope = constants?.$scope || function()
             {
                 ports = Object.assign( ports, this._ports );
             }
-
-            const configuration = new configurator.Configurator( "./config.json" );
-            const config = configuration.config || new configurator.Configuration( { server: { port: 3000 } } );
-
-            ports["listen"] = stringUtils.asInt( asString( config.getValue( "service.server.port" ), true ) || "8080" );
 
             return Object.freeze( ports );
         }

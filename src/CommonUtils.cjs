@@ -49,6 +49,7 @@ const $scope = constants?.$scope || function()
     let mod =
         {
             constants,
+            typeUtils,
             stringUtils,
             arrayUtils,
             objectUtils,
@@ -57,6 +58,7 @@ const $scope = constants?.$scope || function()
             dependencies:
                 {
                     constants,
+                    typeUtils,
                     stringUtils,
                     arrayUtils,
                     objectUtils,
