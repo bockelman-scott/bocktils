@@ -92,9 +92,9 @@ const asyncThrowAnError = async function()
     throw new Error( "Impending Doom" );
 };
 
-const doSomething = async function( pThing, pTimes )
+const doSomething = async function( pThing, pTimes, pCollector = [] )
 {
-    console.log( "Starting", pThing, pTimes, "times" );
+    pCollector.push( `Starting ${pThing}` );
 
     let count = 0;
 
@@ -112,7 +112,7 @@ const doSomething = async function( pThing, pTimes )
         count += 2;
     }
 
-    console.log( "Did", pThing, count, "times", msgs );
+    pCollector.push( `Did ${pThing}` );
 
     return count;
 };
@@ -158,23 +158,31 @@ test( "partial allows us to specialize a function",
 test( "fireAndForget just executes without blocking",
       () =>
       {
-          console.log( "Beginning fireAndForget test" );
+          const messages = [];
 
-          funcUtils.fireAndForget( doSomething, "it", 100_000_000 );
+          messages.push( "Beginning fireAndForget test" );
 
-          console.log( "fired it off" );
+          funcUtils.fireAndForget( doSomething, "it", 100_000_000, messages );
+
+          messages.push( "fired it off" );
 
           funcUtils.fireAndForget( throwAnError );
 
-          console.log( "ignored an error" );
+          messages.push( "ignored an error" );
 
-          funcUtils.fireAndForget( doSomething, "that", 20 );
+          funcUtils.fireAndForget( doSomething, "that", 20, messages );
 
-          console.log( "fired that off" );
+          messages.push( "fired that off" );
 
           funcUtils.fireAndForget( asyncThrowAnError );
 
-          console.log( "ignored another error" );
+          messages.push( "ignored another error" );
+
+          expect( messages ).toEqual( ["Beginning fireAndForget test",
+                                       "fired it off",
+                                       "ignored an error",
+                                       "fired that off",
+                                       "ignored another error"] );
       } );
 
 

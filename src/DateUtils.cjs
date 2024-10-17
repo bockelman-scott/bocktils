@@ -9,6 +9,7 @@ const typeUtils = utils?.typeUtils || require( "./TypeUtils.cjs" );
 const stringUtils = utils?.stringUtils || require( "./StringUtils.cjs" );
 const arrayUtils = utils?.arrayUtils || require( "./ArrayUtils.cjs" );
 const objectUtils = utils?.objectUtils || require( "./ObjectUtils.cjs" );
+const funcUtils = utils?.funcUtils || require( "./FunctionUtils.cjs" );
 
 const konsole = console || {};
 
@@ -21,24 +22,30 @@ const $scope = utils?.$scope || function()
 
 (function exposeModule()
 {
-    let
-        {
-            _mt_str = constants._mt_str || "",
-            _mt_chr = constants._mt_chr || "",
-            _num = constants._num || "number",
-            _big = constants._big || "bigint",
-            _str = constants._str || "string",
-            _spc = constants._spc || " ",
-            asString = stringUtils.asString || function( s ) { return (_mt_str + s).trim(); },
-            isNumber = objectUtils.isNumber || function( s ) { return [_num, _big].includes( typeof s ) || /[\d.,]/.test( s ); },
-            isString = objectUtils.isString || function( s ) { return _str === typeof s; },
-            ucase = stringUtils.ucase || function( s ) { return asString( s, true ).toUpperCase(); },
-            asInt = stringUtils.asInt || function( s ) { return isNumber( s ) ? parseInt( s, 10 ) : 0; },
-            asFloat = stringUtils.asFloat || function( s ) { return isNumber( s ) ? parseFloat( s ) : 0; },
-            isDate = objectUtils.isDate || function( pVal ) { return pVal instanceof Date; }
-        } = utils;
+    const me = exposeModule;
 
-    utils.importUtilities( this, constants, stringUtils, arrayUtils, objectUtils );
+    const dependencies =
+        {
+            constants,
+            typeUtils,
+            stringUtils,
+            arrayUtils,
+            objectUtils
+        };
+
+    let isDate = typeUtils.isDate;
+    let isNumber = typeUtils.isNumber;
+    let isFunction = typeUtils.isFunction;
+
+    let TriState = typeUtils.TriState;
+
+    let asInt = stringUtils.asInt;
+
+    let asArray = arrayUtils.asArray;
+
+    let attempt = funcUtils.attempt;
+
+    constants.importUtilities( this, constants, typeUtils, stringUtils, arrayUtils, objectUtils );
 
     const INTERNAL_NAME = "__BOCK__DATE_UTILS__";
 
@@ -81,217 +88,379 @@ const $scope = utils?.$scope || function()
 
     const ONE_DAY = MILLIS_PER_DAY;
 
-    const calculateMillisPer = function( pNum, pInterval )
+    const isLeapYear = function( pYear )
     {
-        const interval = isNumber( pInterval ) ? pInterval : (isString( pInterval ) ? MILLIS_PER[ucase( asString( pInterval ) )] : MILLISECOND);
-
-        const FIVE_THOUSAND_YEARS = 5_000 * MILLIS_PER_YEAR;
-
-        let num = isNumber( pNum ) && !isNaN( pNum ) && isFinite( pNum ) ? Math.min( pNum, FIVE_THOUSAND_YEARS ) : asFloat( asString( pNum ) );
-
-        num = isNumber( num ) && !isNaN( num ) && isFinite( num ) ? Math.min( num, FIVE_THOUSAND_YEARS ) : 1;
-
-        return Math.floor( num * interval );
+        return (((0 === (pYear % 4)) && ((0 !== (pYear % 100)) || (0 === (pYear % 400)))));
     };
 
-    const correctCentury = function( pYear )
+
+    class Month
     {
-        let year = asInt( asString( pYear ).trim() );
+        #index = 0;
+        #name;
+        #abbreviation;
+        #days;
 
-        if ( year <= 0 )
+        constructor( pName, pIndex, pDays )
         {
-            year = new Date().getFullYear();
-        }
-        else if ( year < 100 )
-        {
-            year = (2000 + year);
-        }
-        else if ( year < 1000 )
-        {
-            const s = ("2" + asString( year ).padStart( 3, "0" ));
-            year = parseInt( s );
+            this.#index = Math.max( 0, Math.min( 11, asInt( pIndex ) ) );
+            this.#name = stringUtils.toProperCase( stringUtils.asString( pName, true ) );
+            this.#days = Math.max( 28, Math.min( 31, asInt( pDays ) ) );
         }
 
-        return year;
-    };
-
-    const parseDateWithoutSeparator = function( pDateString, pFormat )
-    {
-        const str = asString( pDateString ).trim();
-
-        // noinspection SpellCheckingInspection
-        const format = ucase( asString( pFormat ) || "MMDDYYYY" );
-
-        let fmt = format.split( _mt_chr );
-
-        let tokens =
-            {
-                "M": {},
-                "D": {},
-                "Y": {}
-            };
-
-        let token = {};
-
-        for( let i = 0, n = fmt.length; i < n; i++ )
+        get index()
         {
-            let c = ucase( asString( fmt[i] ).trim() );
-
-            token = tokens[c];
-
-            token.position = i;
-            token.length = 1;
-
-            let m = i;
-
-            while ( c === fmt[++m] && i < n )
-            {
-                token.length += 1;
-            }
-
-            i += (token.length - 1);
+            return this.#index;
         }
 
-        token = tokens["Y"];
-        let year = asInt( str.slice( token.position, token.position + token.length ) );
-        year = correctCentury( year );
-
-        token = tokens["M"];
-        let month = asInt( str.slice( token.position, token.position + token.length ) );
-        month -= 1; // months are 0-based on the Date constructor
-
-        token = tokens["D"];
-        let day = asInt( str.slice( token.position, token.position + token.length ) );
-
-        return new Date( year, month, day );
-    };
-
-    const parseDate = function( pDateString, pFormat )
-    {
-        const str = asString( pDateString ).trim();
-
-        const format = asString( pFormat ) || "MM/DD/YYYY";
-
-        const rx = /([\/. -])/g;
-
-        let separators = [];
-
-        let matches = rx.exec( format );
-
-        if ( matches && matches.length > 1 )
+        get name()
         {
-            // first element matches the entire string
-
-            for( let i = 1, n = matches.length; i < n; i++ )
-            {
-                separators.push( asString( matches[i] ).trim() );
-            }
+            return this.#name;
         }
 
-        if ( separators.length <= 0 )
+        get abbreviation()
         {
-            return parseDateWithoutSeparator( str, format );
+            return this.#abbreviation;
         }
 
-        let year = 0;
-        let month = 0;
-        let day = 0;
-
-        const formatParts = format.split( rx );
-
-        for( let i = 0, n = formatParts.length; i < n; i++ )
+        get days()
         {
-            let part = ucase( asString( formatParts[i] ).trim() );
-
-            let pos = format.indexOf( part );
-            let len = part.length;
-            let val = asInt( str.slice( pos, pos + len ) );
-
-            switch ( part )
-            {
-                case "MM":
-                case "M":
-                    month = asInt( val || 0, 0 );
-                    break;
-
-                case "DD":
-                case "D":
-                    day = asInt( val || 0, 0 );
-                    break;
-
-                case "YYYY":
-                case "YY":
-                case "Y":
-                    year = asInt( (val || new Date().getFullYear()), 2000 );
-                    break;
-            }
+            return this.#days;
         }
 
-        year = correctCentury( year );
-        month -= 1; // months are 0-based on the Date constructor
-
-        return new Date( year, month, day );
-    };
-
-    const parseTime = function( pTimeString, pFormat )
-    {
-        // TODO:
-        return _mt_str;
-    };
-
-    const parseDateTime = function( pDateTimeString, pFormat )
-    {
-        if ( isDate( pDateTimeString ) )
+        clone( pYear )
         {
-            return pDateTimeString;
+            return this;
         }
-
-        // TODO:
-        // separate the format into date and time parts
-
-        let date = parseDate( pDateTimeString, pFormat );
-        let time = parseTime( pDateTimeString, pFormat );
-
-        // set the time portion of the data to the time and return it;
-
-        return asString( date ).trim() + _spc + asString( time ).trim();
-    };
-
-    const formatDate = function( pDate, pFormat )
-    {
-        switch ( pFormat )
-        {
-            case _ud:
-                return pDate.toLocaleString();
-
-            case "YYYY-MM-DD":
-            case "yyyy-mm-dd":
-                return asString( pDate.getFullYear(), true ) + "-" + asString( (pDate.getMonth() + 1), true ).padStart( 2, "0" ) + asString( pDate.getDate(), true ).padStart( 2, "0" );
-
-            default:
-                // TODO:  my old logic
-                return pDate.toLocaleString();
-        }
-    };
-
-    try
-    {
-        Date.parse = parseDate;
     }
-    catch( ex )
+
+    class February extends Month
     {
-        // never mind, this environment does not allow extending built-ins
+        #year;
+
+        constructor( pName, pIndex )
+        {
+            super( pName, pIndex, 28 );
+
+            this.#year = new Date().getFullYear();
+        }
+
+        get year()
+        {
+            return this.#year;
+        }
+
+        set year( value )
+        {
+            this.#year = value;
+        }
+
+        get days()
+        {
+            if ( isLeapYear( this.year ) )
+            {
+                return 29;
+            }
+            return super.days;
+        }
+
+        clone( pYear )
+        {
+            let month = new February( this.name, this.index );
+            month.year = pYear;
+            return Object.freeze( month );
+        }
     }
+
+    const MONTHS_DATA =
+        {
+            JANUARY: Object.freeze( new Month( "January", 0, 31 ) ),
+            FEBRUARY: Object.freeze( new February( "February", 1 ) ),
+            MARCH: Object.freeze( new Month( "March", 2, 31 ) ),
+            APRIL: Object.freeze( new Month( "April", 3, 30 ) ),
+            MAY: Object.freeze( new Month( "May", 4, 31 ) ),
+            JUNE: Object.freeze( new Month( "June", 5, 30 ) ),
+            JULY: Object.freeze( new Month( "July", 6, 31 ) ),
+            AUGUST: Object.freeze( new Month( "August", 7, 31 ) ),
+            SEPTEMBER: Object.freeze( new Month( "September", 8, 30 ) ),
+            OCTOBER: Object.freeze( new Month( "October", 9, 31 ) ),
+            NOVEMBER: Object.freeze( new Month( "November", 10, 30 ) ),
+            DECEMBER: Object.freeze( new Month( "December", 11, 31 ) )
+        };
+
+    const months = objectUtils.getEntries( MONTHS_DATA );
+
+    const isValidDateArgument = function( pDate )
+    {
+        return isDate( pDate ) || isNumber( pDate );
+    };
+
+    const toTimestamp = function( pDate, pDefault = Date.now() )
+    {
+        return isDate( pDate ) ? pDate.getTime() : isNumber( pDate ) ? Math.floor( pDate ) : pDefault || Date.now();
+    };
+
+    const transform = function( pDate, pFunction )
+    {
+        let result = { returnValue: pDate, exceptions: [] };
+
+        if ( isFunction( pFunction ) )
+        {
+            result = attempt( pFunction, pDate );
+        }
+
+        return result?.exceptions?.length > 0 ? pDate : result.returnValue;
+    };
+
+    const _shortCircuit = function( pDateA, pDateB )
+    {
+        let state = new TriState();
+
+        const validA = isValidDateArgument( pDateA );
+
+        if ( !isValidDateArgument( pDateB ) )
+        {
+            state.returnValue = validA;
+            state.hasReturnValue = true;
+        }
+        else if ( !validA )
+        {
+            state.returnValue = false;
+            state.hasReturnValue = true;
+        }
+        else
+        {
+            state.returnValue = null;
+            state.hasReturnValue = false;
+        }
+
+        return state;
+    };
+
+    const _compare = function( pDateA, pDateB, pTransformerFunction )
+    {
+        const dateA = isValidDateArgument( pDateA ) ? transform( pDateA, pTransformerFunction ) : null;
+        const dateB = isValidDateArgument( pDateB ) ? transform( pDateB, pTransformerFunction ) : null;
+
+        const tsA = toTimestamp( dateA, Number.MAX_VALUE );
+        const tsB = toTimestamp( dateB, Number.MIN_VALUE );
+
+        return tsA - tsB;
+    };
+
+    const _setFields = function( pDateA, pYear, pMonth, pDay, pHours, pMinutes, pSeconds )
+    {
+        if ( isValidDateArgument( pDateA ) )
+        {
+            const year = asInt( pYear, pDateA.getFullYear() );
+            const month = asInt( pMonth );
+            const day = asInt( pDay );
+
+            const hour = asInt( pHours );
+            const minutes = asInt( pMinutes );
+            const seconds = asInt( pSeconds );
+
+            const date = new Date( pDateA );
+
+            date.setFullYear( year );
+            date.setMonth( month );
+            date.setDate( day );
+            date.setHours( hour );
+            date.setMinutes( minutes );
+            date.setSeconds( seconds );
+
+            return date;
+        }
+
+        return pDateA;
+    };
+
+    const numDaysIn = function( pMonth, pYear )
+    {
+        const year = isNumber( pYear ) ? asInt( pYear ) : new Date().getFullYear();
+
+        let arr = months.map( ( entry ) => entry.value );
+
+        arr = arr.map( ( month ) => month.clone( year ) );
+
+        let days = arr.map( ( month ) => month.days );
+
+        return days[pMonth];
+    };
+
+    const addDays = function( pDate, pNumDays )
+    {
+        if ( isValidDateArgument( pDate ) )
+        {
+            const ts = toTimestamp( pDate );
+
+            const numDays = isNumber( pNumDays ) ? asInt( pNumDays ) : 0;
+
+            return new Date( ts + (MILLIS_PER_DAY * numDays) );
+        }
+    };
+
+    const subtractDays = function( pDate, pNumDays )
+    {
+        const numDays = isNumber( pNumDays ) ? asInt( pNumDays ) : 0;
+        return addDays( pDate, -(numDays) );
+    };
+
+    const toNoon = function( pDateA )
+    {
+        if ( isValidDateArgument( pDateA ) )
+        {
+            let date = new Date( pDateA );
+
+            date = _setFields( date, date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0, 0, 0 );
+
+            return date;
+        }
+
+        return pDateA;
+    };
+
+    const toMidnight = function( pDateA )
+    {
+        if ( isValidDateArgument( pDateA ) )
+        {
+            let date = new Date( pDateA );
+
+            date = _setFields( date, date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0, 0 );
+
+            return date;
+        }
+
+        return pDateA;
+    };
+
+    const avoidWeekend = function( pDate )
+    {
+        if ( isValidDateArgument( pDate ) )
+        {
+            let date = new Date( pDate );
+
+            const map = { 0: 1, 6: 2 };
+
+            const weekday = date.getDay();
+
+            return addDays( date, asInt( map[weekday] || 0, 0 ) );
+        }
+
+        return pDate;
+    };
+
+    /**
+     * Returns true if the first date is earlier than the second date.
+     *
+     * If the first argument is not a date or a number, returns false.
+     * If the second argument is omitted or not a date or a number, returns true.
+     *
+     * @param pDateA a date to compare to another date
+     * @param pDateB a date to which to compare pDateA
+     * @param pTransformerFunction (optional) function to call on each argument before comparison
+     */
+    const before = function( pDateA, pDateB, pTransformerFunction )
+    {
+        const state = _shortCircuit( pDateA, pDateB );
+
+        if ( state.hasReturnValue )
+        {
+            return state.returnValue;
+        }
+
+        const comp = _compare( pDateA, pDateB, pTransformerFunction );
+
+        return comp < 0;
+    };
+
+    /**
+     * Returns true if the first date is later than the second date.
+     *
+     * If the first argument is not a date or a number, returns false.
+     * If the second argument is omitted or not a date or a number, returns true.
+     *
+     * @param pDateA a date to compare to another date
+     * @param pDateB a date to which to compare pDateA
+     * @param pTransformerFunction (optional) function to call on each argument before comparison
+     */
+    const after = function( pDateA, pDateB, pTransformerFunction )
+    {
+        const state = _shortCircuit( pDateA, pDateB );
+
+        if ( state.hasReturnValue )
+        {
+            return state.returnValue;
+        }
+
+        const comp = _compare( pDateA, pDateB, pTransformerFunction );
+
+        return comp > 0;
+    };
+
+    /**
+     * Returns true if the first date is the same date as the second date.
+     *
+     * If the first argument is not a date or a number, returns false.
+     * If the second argument is omitted or not a date or a number, returns true.
+     *
+     * @param pDateA a date to compare to another date
+     * @param pDateB a date to which to compare pDateA
+     * @param pTransformerFunction (optional) function to call on each argument before comparison
+     *                             For example, you could convert both dates to noon,
+     *                             if you just want to know if it is the same DAY
+     */
+    const equal = function( pDateA, pDateB, pTransformerFunction )
+    {
+        const state = _shortCircuit( pDateA, pDateB );
+
+        if ( state.hasReturnValue )
+        {
+            return state.returnValue;
+        }
+
+        const comp = _compare( pDateA, pDateB, pTransformerFunction );
+
+        return comp === 0;
+    };
+
+    const sortDates = function( ...pDates )
+    {
+        let dates = [].concat( asArray( pDates || [] ) || [] );
+
+        dates = dates.filter( isValidDateArgument ).map( ( date ) => toTimestamp( date, Number.MAX_VALUE ) );
+
+        dates = dates.sort( ( a, b ) => a - b );
+
+        return [].concat( dates.map( ( date ) => new Date( +date ) ) );
+    };
+
+    const earliest = function( ...pDates )
+    {
+        const dates = sortDates( ...pDates );
+
+        return (dates?.length || 0) > 0 ? new Date( dates[0] ) : null;
+    };
+
+    const latest = function( ...pDates )
+    {
+        const dates = sortDates( ...pDates );
+
+        return (dates?.length || 0) > 0 ? new Date( dates[dates.length - 1] ) : null;
+    };
+
+    const daysBetween = function( pStartDate, pEndDate )
+    {
+        const start = toTimestamp( toNoon( pStartDate ) );
+        const end = toTimestamp( toNoon( pEndDate ) );
+
+        return Math.floor( ((end - start) * 1000) / (MILLIS_PER_DAY * 1000) );
+    };
 
     const mod =
         {
-            formatDate,
-            parseDate,
-            parseTime,
-            parseDateTime,
-            parse: parseDateTime,
+            dependencies,
             MILLIS_PER,
-            calculateMillisPer,
             ONE_MINUTE,
             TWO_MINUTES,
             FIVE_MINUTES,
@@ -304,7 +473,19 @@ const $scope = utils?.$scope || function()
             SIX_HOURS,
             EIGHT_HOURS,
             TWELVE_HOURS,
-            ONE_DAY
+            ONE_DAY,
+            numDaysIn,
+            avoidWeekend,
+            addDays,
+            subtractDays,
+            toNoon,
+            toMidnight,
+            before,
+            after,
+            equal,
+            earliest,
+            latest,
+            daysBetween
         };
 
     if ( _ud !== typeof module )

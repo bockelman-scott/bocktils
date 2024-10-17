@@ -585,6 +585,39 @@ const $scope = constants?.$scope || function()
         return value;
     };
 
+    class TriState
+    {
+        #returnValue;
+        #hasReturnValue;
+
+        constructor( pReturnValue, pHasReturnValue )
+        {
+            this.#returnValue = pReturnValue;
+            this.#hasReturnValue = !!pHasReturnValue;
+        }
+
+        get returnValue()
+        {
+            return this.#returnValue;
+        }
+
+        set returnValue( value )
+        {
+            this.#returnValue = value;
+            this.#hasReturnValue |= (false === value || 0 === value || _mt_str === value || isNotNull( value, false ));
+        }
+
+        get hasReturnValue()
+        {
+            return true === this.#hasReturnValue;
+        }
+
+        set hasReturnValue( pHas )
+        {
+            this.#hasReturnValue = pHas;
+        }
+    }
+
     const mod =
         {
             dependencies,
@@ -619,7 +652,9 @@ const $scope = constants?.$scope || function()
             isType,
             instanceOfAny,
             defaultFor,
-            castTo
+            castTo,
+            classes: { TriState },
+            TriState
         };
 
     if ( _ud !== typeof module )
