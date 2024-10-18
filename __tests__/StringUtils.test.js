@@ -292,15 +292,9 @@ test( "round trip string to and from c-string",
       {
           let s = "ABC123 456XYZ";
 
-          // console.info( "s: ", s );
-
           let buffer = stringUtils.toCString( s );
 
-          // console.info( "buffer: ", buffer );
-
           let s2 = stringUtils.fromCString( buffer );
-
-          // console.info( "s2: ", s2 );
 
           expect( s2 ).toEqual( s );
       }
@@ -1521,8 +1515,6 @@ test( "copyString('abc') === 'abc', but not the *same*",
           // add characters to s1 (this actually creates a new String)
           s1 += "def";
 
-          // console.log( "s =", s, "s1 =", s1, "s2 =", s2 );
-
           expect( s !== s1 && s === s2 && s2 !== s1 ).toBe( true );
       } );
 
@@ -1709,8 +1701,6 @@ test( "StringComparator - natural order",
           arr2 = arr2.sort( comparator );
 
           expect( arr2 ).toEqual( arr2 );
-
-          // console.log( "arr: ", arr, "arr2: ", arr2, "strings: ", strings );
       } );
 
 test( "StringComparator - natural order, reversed",
@@ -1725,8 +1715,6 @@ test( "StringComparator - natural order, reversed",
           arr2 = arr2.sort( comparator );
 
           expect( arr2 ).toEqual( arr.reverse() );
-
-          // console.log( "arr: ", arr, "arr2: ", arr2, "strings: ", strings );
       } );
 
 test( "StringComparator - case insensitive",
@@ -1794,8 +1782,6 @@ test( "StringComparator - case insensitive, ignore whitespace",
                                      "lion",
                                      "lions"
                                  ] );
-
-          // console.log( arr );
 
       } );
 

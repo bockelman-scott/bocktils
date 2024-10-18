@@ -327,9 +327,6 @@ test( "generateUniqueObjectId returns a value unique to the object",
 
           let uniqueObjectId2 = objectUtils.generateUniqueObjectId( o2 );
 
-          console.log( "uniqueObjectId:", uniqueObjectId );
-          console.log( "uniqueObjectId2:", uniqueObjectId2 );
-
           expect( uniqueObjectId !== uniqueObjectId2 ).toBe( true );
       } );
 

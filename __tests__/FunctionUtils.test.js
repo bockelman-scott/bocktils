@@ -80,15 +80,11 @@ const asyncDivide = async function( a, b )
 
 const throwAnError = function()
 {
-    console.log( "throwAnError" );
-
     throw new Error( "Yikes" );
 };
 
 const asyncThrowAnError = async function()
 {
-    console.log( "asyncThrowAnError" );
-
     throw new Error( "Impending Doom" );
 };
 

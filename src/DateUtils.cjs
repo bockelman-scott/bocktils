@@ -11,8 +11,6 @@ const arrayUtils = utils?.arrayUtils || require( "./ArrayUtils.cjs" );
 const objectUtils = utils?.objectUtils || require( "./ObjectUtils.cjs" );
 const funcUtils = utils?.funcUtils || require( "./FunctionUtils.cjs" );
 
-const konsole = console || {};
-
 const _ud = constants?._ud || "undefined";
 
 const $scope = utils?.$scope || function()
@@ -87,6 +85,110 @@ const $scope = utils?.$scope || function()
     const TWELVE_HOURS = MILLIS_PER_HOUR * 12;
 
     const ONE_DAY = MILLIS_PER_DAY;
+
+    const UNIT =
+        {
+            MILLISECOND: 1,
+            SECOND: 2,
+            MINUTE: 3,
+            HOUR: 4,
+            DAY: 5,
+            WEEK: 6,
+            WORK_WEEK: 7,
+            MONTH: 8,
+            YEAR: 9,
+            DECADE: 10
+        };
+
+    /**
+     * Returns a function that will add or subtract one unit to the specified date
+     *
+     * @param pUnit one of the UNIT constants
+     * @param pDecrement {boolean} pass true to returns a function that subtracts one unit instead
+     */
+    const incrementer = function( pUnit, pDecrement = false )
+    {
+        let millis = 0;
+
+        let increment = true === pDecrement ? -1 : 1;
+
+        switch ( pUnit )
+        {
+            case UNIT.MILLISECOND:
+                millis = MILLISECOND;
+                break;
+
+            case UNIT.SECOND:
+                millis = MILLIS_PER_SECOND;
+                break;
+
+            case UNIT.MINUTE:
+                return function( pDate )
+                {
+                    let date = new Date( pDate );
+                    date.setMinutes( date.getMinutes() + increment );
+                    return date;
+                };
+
+            case UNIT.HOUR:
+                return function( pDate )
+                {
+                    let date = new Date( pDate );
+                    date.setHours( date.getHours() + increment );
+                    return date;
+                };
+
+            case UNIT.DAY:
+                return function( pDate )
+                {
+                    let date = new Date( pDate );
+                    date.setDate( date.getDate() + increment );
+                    return date;
+                };
+
+            case UNIT.WEEK:
+                return function( pDate )
+                {
+                    let date = new Date( pDate );
+                    date.setDate( date.getDate() + (7 * increment) );
+                    return date;
+                };
+
+            case UNIT.YEAR:
+                return function( pDate )
+                {
+                    let date = new Date( pDate );
+                    date.setFullYear( date.getFullYear() + increment );
+                    return date;
+                };
+
+            case UNIT.MONTH:
+                return function( pDate )
+                {
+                    let date = new Date( pDate );
+                    date.setMonth( date.getMonth() + increment );
+                    return date;
+                };
+
+            case UNIT.DECADE:
+                return function( pDate )
+                {
+                    let date = new Date( pDate );
+                    date.setFullYear( date.getFullYear() + (10 - (date.getFullYear() % 10)) );
+                    if ( true === pDecrement )
+                    {
+                        date.setFullYear( date.getFullYear() + (2 * increment) );
+                    }
+                    return date;
+                };
+
+        }
+
+        return function( pDate )
+        {
+            return new Date( pDate.getTime() + millis );
+        };
+    };
 
     const isLeapYear = function( pYear )
     {
@@ -172,7 +274,7 @@ const $scope = utils?.$scope || function()
         }
     }
 
-    const MONTHS_DATA =
+    const MONTHS_DATA = Object.freeze(
         {
             JANUARY: Object.freeze( new Month( "January", 0, 31 ) ),
             FEBRUARY: Object.freeze( new February( "February", 1 ) ),
@@ -186,9 +288,9 @@ const $scope = utils?.$scope || function()
             OCTOBER: Object.freeze( new Month( "October", 9, 31 ) ),
             NOVEMBER: Object.freeze( new Month( "November", 10, 30 ) ),
             DECEMBER: Object.freeze( new Month( "December", 11, 31 ) )
-        };
+        } );
 
-    const months = objectUtils.getEntries( MONTHS_DATA );
+    const months = Object.freeze( objectUtils.getEntries( MONTHS_DATA ) );
 
     const isValidDateArgument = function( pDate )
     {
@@ -275,7 +377,7 @@ const $scope = utils?.$scope || function()
         return pDateA;
     };
 
-    const numDaysIn = function( pMonth, pYear )
+    const numDaysInMonth = function( pMonth, pYear )
     {
         const year = isNumber( pYear ) ? asInt( pYear ) : new Date().getFullYear();
 
@@ -288,15 +390,211 @@ const $scope = utils?.$scope || function()
         return days[pMonth];
     };
 
+    const numDaysInYear = function( pYear )
+    {
+        const year = isNumber( pYear ) ? asInt( pYear ) : new Date().getFullYear();
+
+        return (isLeapYear( year )) ? 366 : 365;
+    };
+
+    /**
+     * Returns a date representing the start of the period specified in which the date occurs.
+     *
+     * @param pUnit one of the UNIT constants or a string matches the key of one of the unit constants
+     * @param pDate the date for which to return the start of the specified period (unit)
+     */
+    const getStartOf = function( pUnit, pDate )
+    {
+        const date = isDate( pDate ) ? new Date( pDate ) : new Date();
+
+        const day = date.getDay();
+
+        const unit = isNumber( pUnit ) ? pUnit : UNIT[stringUtils.asString( pUnit ).toUpperCase()];
+
+        switch ( unit )
+        {
+            case UNIT.WEEK:
+                date.setDate( date.getDate() - day );
+                break;
+
+            case UNIT.WORK_WEEK:
+                date.setDate( (date.getDate() - day) + 1 );
+                break;
+
+            case UNIT.DECADE:
+                date.setFullYear( date.getFullYear() - (date.getFullYear() % 10) );
+            //fallthrough
+
+            case UNIT.YEAR:
+                date.setMonth( 0 );
+            // fallthrough
+
+            case UNIT.MONTH:
+                date.setDate( 1 );
+            //fallthrough
+
+            case UNIT.DAY:
+                date.setHours( 0 );
+            //fallthrough
+
+            case UNIT.HOUR:
+                date.setMinutes( 0 );
+            //fallthrough
+
+            case UNIT.MINUTE:
+                date.setSeconds( 0 );
+            // fallthrough
+
+            case UNIT.SECOND:
+                date.setMilliseconds( 0 );
+            // fallthrough
+
+            case UNIT.MILLISECOND:
+                date.setMilliseconds( 0 );
+        }
+
+        return new Date( date );
+    };
+
+    const startOfWeek = function( pDate )
+    {
+        return getStartOf( UNIT.WEEK, pDate );
+    };
+
+    const startOfDecade = function( pDate )
+    {
+        return getStartOf( UNIT.DECADE, pDate );
+    };
+
+    const startOfYear = function( pDate )
+    {
+        return getStartOf( UNIT.YEAR, pDate );
+    };
+
+    const startOfMonth = function( pDate )
+    {
+        return getStartOf( UNIT.MONTH, pDate );
+    };
+
+    const startOfDay = function( pDate )
+    {
+        return getStartOf( UNIT.DAY, pDate );
+    };
+
+    const startOfHour = function( pDate )
+    {
+        return getStartOf( UNIT.HOUR, pDate );
+    };
+
+    const startOfMinute = function( pDate )
+    {
+        return getStartOf( UNIT.MINUTE, pDate );
+    };
+
+    const startOfSecond = function( pDate )
+    {
+        return getStartOf( UNIT.SECOND, pDate );
+    };
+
+    /**
+     * Returns a date representing the last millisecond of the specified period in which the date occurs
+     *
+     * @param pUnit
+     * @param pDate
+     *
+     * @returns {Date}
+     */
+    const getEndOf = function( pUnit, pDate )
+    {
+        let date = isDate( pDate ) ? new Date( pDate ) : new Date();
+
+        const unit = isNumber( pUnit ) ? pUnit : UNIT[stringUtils.asString( pUnit ).toUpperCase()];
+
+        switch ( unit )
+        {
+            case UNIT.WEEK:
+                date = getStartOf( unit, date );
+                date.setDate( date.getDate() + 6 );
+                return date;
+
+            case UNIT.WORK_WEEK:
+                date = getStartOf( unit, date );
+                date.setDate( date.getDate() + 4 );
+                return date;
+
+            default:
+                const increment = incrementer( unit );
+                const next = increment( date );
+                date = getStartOf( unit, next );
+                break;
+        }
+
+        date.setMilliseconds( date.getMilliseconds() - 1 );
+
+        return new Date( date );
+    };
+
+    const endOfWeek = function( pDate )
+    {
+        return getEndOf( UNIT.WEEK, pDate );
+    };
+
+    const endOfDecade = function( pDate )
+    {
+        return getEndOf( UNIT.DECADE, pDate );
+    };
+
+    const endOfYear = function( pDate )
+    {
+        return getEndOf( UNIT.YEAR, pDate );
+    };
+
+    const endOfMonth = function( pDate )
+    {
+        return getEndOf( UNIT.MONTH, pDate );
+    };
+
+    const endOfDay = function( pDate )
+    {
+        return getEndOf( UNIT.DAY, pDate );
+    };
+
+    const endOfHour = function( pDate )
+    {
+        return getEndOf( UNIT.HOUR, pDate );
+    };
+
+    const endOfMinute = function( pDate )
+    {
+        return getEndOf( UNIT.MINUTE, pDate );
+    };
+
+    const endOfSecond = function( pDate )
+    {
+        return getEndOf( UNIT.SECOND, pDate );
+    };
+
+    const daysBetween = function( pStartDate, pEndDate )
+    {
+        const start = toTimestamp( toNoon( pStartDate ) );
+        const end = toTimestamp( toNoon( pEndDate ) );
+
+        return Math.floor( ((end - start) * 1000) / (MILLIS_PER_DAY * 1000) );
+    };
+
     const addDays = function( pDate, pNumDays )
     {
         if ( isValidDateArgument( pDate ) )
         {
             const ts = toTimestamp( pDate );
 
+            const newDate = new Date( ts );
+
             const numDays = isNumber( pNumDays ) ? asInt( pNumDays ) : 0;
 
-            return new Date( ts + (MILLIS_PER_DAY * numDays) );
+            newDate.setDate( newDate.getDate() + numDays );
+
+            return newDate;
         }
     };
 
@@ -304,6 +602,22 @@ const $scope = utils?.$scope || function()
     {
         const numDays = isNumber( pNumDays ) ? asInt( pNumDays ) : 0;
         return addDays( pDate, -(numDays) );
+    };
+
+    const addWeeks = function( pDate, pNumWeeks )
+    {
+        if ( isValidDateArgument( pDate ) )
+        {
+            const numWeeks = isNumber( pNumWeeks ) ? asInt( pNumWeeks ) : 0;
+
+            return addDays( pDate, (numWeeks * 7) );
+        }
+    };
+
+    const subtractWeeks = function( pDate, pNumWeeks )
+    {
+        const numWeeks = isNumber( pNumWeeks ) ? asInt( pNumWeeks ) : 0;
+        return addWeeks( pDate, -(numWeeks) );
     };
 
     const toNoon = function( pDateA )
@@ -449,14 +763,6 @@ const $scope = utils?.$scope || function()
         return (dates?.length || 0) > 0 ? new Date( dates[dates.length - 1] ) : null;
     };
 
-    const daysBetween = function( pStartDate, pEndDate )
-    {
-        const start = toTimestamp( toNoon( pStartDate ) );
-        const end = toTimestamp( toNoon( pEndDate ) );
-
-        return Math.floor( ((end - start) * 1000) / (MILLIS_PER_DAY * 1000) );
-    };
-
     const mod =
         {
             dependencies,
@@ -474,10 +780,29 @@ const $scope = utils?.$scope || function()
             EIGHT_HOURS,
             TWELVE_HOURS,
             ONE_DAY,
-            numDaysIn,
+            UNIT,
+            isLeapYear,
+            numDaysInMonth,
+            numDaysInYear,
+            startOfYear,
+            startOfMonth,
+            startOfDay,
+            startOfWeek,
+            startOfHour,
+            startOfMinute,
+            startOfDecade,
+            endOfYear,
+            endOfMonth,
+            endOfDay,
+            endOfWeek,
+            endOfHour,
+            endOfMinute,
+            endOfDecade,
             avoidWeekend,
             addDays,
+            addWeeks,
             subtractDays,
+            subtractWeeks,
             toNoon,
             toMidnight,
             before,

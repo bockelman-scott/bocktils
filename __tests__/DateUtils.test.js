@@ -112,11 +112,24 @@ test( "DateUtils.latest returns the latest date from the arguments",
           expect( dateUtils.latest( today, tomorrow, anHourLater, anHourAgo ) ).toEqual( tomorrow );
       } );
 
-test( "DateUtils.numDaysIn returns the correct value for leap years",
+test( "DateUtils.numDaysInMonth returns the correct value for leap years",
       () =>
       {
-          expect( dateUtils.numDaysIn( 1, 2023 ) ).toEqual( 28 );
-          expect( dateUtils.numDaysIn( 1, 2024 ) ).toEqual( 29 );
+          expect( dateUtils.numDaysInMonth( 1, 2023 ) ).toEqual( 28 );
+          expect( dateUtils.numDaysInMonth( 1, 2024 ) ).toEqual( 29 );
+      } );
+
+test( "DateUtils.numDaysInYear returns the correct value for leap years",
+      () =>
+      {
+          for( let i = 1967; i <= 2030; i++ )
+          {
+              const daysInYear = dateUtils.numDaysInYear( i );
+
+              const leapYear = dateUtils.isLeapYear( i );
+
+              expect( daysInYear ).toEqual( leapYear ? 366 : 365 );
+          }
       } );
 
 test( "DateUtils.addDays returns January 4th, 2025 when you add 5 days to December 30th, 2024",
@@ -126,6 +139,16 @@ test( "DateUtils.addDays returns January 4th, 2025 when you add 5 days to Decemb
           let expected = new Date( 2025, 0, 4, 9, 37, 0, 0 );
 
           expect( dateUtils.addDays( dateA, 5 ) ).toEqual( expected );
+      } );
+
+
+test( "DateUtils.addDays returns the expected date even when the number of days is equal to several years",
+      () =>
+      {
+          let dateA = new Date( 1967, 9, 3, 9, 37, 0, 0 );
+          let expected = new Date( 2024, 9, 17, 9, 37, 0, 0 );
+
+          expect( dateUtils.addDays( dateA, 20_834 ) ).toEqual( expected );
       } );
 
 test( "DateUtils.addDays returns December 30th, 2024 when you add -5 days from January 4th, 2025",
@@ -169,3 +192,41 @@ test( "DateUtils.daysBetween returns the correct value",
           expect( dateUtils.daysBetween( tuesday, monday ) ).toEqual( -1 );
           expect( dateUtils.daysBetween( thursday, monday ) ).toEqual( 4 );
       } );
+
+
+test( "DateUtils.daysBetween returns 5 for December 30th, 2024 to January 4th, 2025",
+      () =>
+      {
+          let dateA = new Date( 2024, 11, 30, 9, 37, 0, 0 );
+          let dateB = new Date( 2025, 0, 4, 9, 37, 0, 0 );
+
+          expect( dateUtils.daysBetween( dateA, dateB ) ).toEqual( 5 );
+      } );
+
+test( "DateUtils.daysBetween returns 20,834 for October 3rd, 1967 to October 17th, 2024",
+      () =>
+      {
+          let dateA = new Date( 1967, 9, 3, 9, 37, 0, 0 );
+          let dateB = new Date( 2024, 9, 17, 9, 37, 0, 0 );
+
+          expect( dateUtils.daysBetween( dateA, dateB ) ).toEqual( 20_834 );
+      } );
+
+test( "DateUtils.addDays returns -5 for January 4th, 2025 to December 30th, 2024",
+      () =>
+      {
+          let dateA = new Date( 2025, 0, 4, 9, 37, 0, 0 );
+          let dateB = new Date( 2024, 11, 30, 9, 37, 0, 0 );
+
+          expect( dateUtils.daysBetween( dateA, dateB ) ).toEqual( -5 );
+      } );
+
+test( "DateUtils.addWeeks returns October 17th, 2024 when you add 2 weeks to October 3rd, 2024",
+      () =>
+      {
+          let dateA = new Date( 2024, 9, 3, 9, 37, 0, 0 );
+          let expected = new Date( 2024, 9, 17, 9, 37, 0, 0 );
+
+          expect( dateUtils.addWeeks( dateA, 2 ) ).toEqual( expected );
+      } );
+

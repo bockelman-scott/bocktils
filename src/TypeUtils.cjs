@@ -352,18 +352,28 @@ const $scope = constants?.$scope || function()
 
         if ( isString( pObj ) || pObj instanceof String )
         {
-            try
-            {
-                date = new Date( pObj );
-            }
-            catch( ex )
-            {
-                konsole.error( constants.S_ERR_PREFIX, "evaluating a value as a Date", ex );
-            }
-
             if ( null == date && isFunction( pDateFormatter ) )
             {
-                date = pDateFormatter( pObj );
+                try
+                {
+                    date = pDateFormatter( pObj );
+                }
+                catch( ex )
+                {
+                    //ignore
+                }
+            }
+
+            if ( null == date )
+            {
+                try
+                {
+                    date = new Date( pObj );
+                }
+                catch( ex )
+                {
+                    konsole.error( constants.S_ERR_PREFIX, "evaluating a value as a Date", ex );
+                }
             }
         }
 
