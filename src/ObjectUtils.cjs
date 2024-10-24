@@ -1814,11 +1814,18 @@ const $scope = constants?.$scope || function()
      */
     const clone = function( pObject, pOmitFunctions = false, pStack = [] )
     {
-        let obj = Object.assign( {}, pObject || {} );
-
-        let twin = Object.assign( {}, obj );
+        if ( !isObject( pObject ) )
+        {
+            return pObject;
+        }
 
         const stack = asArray( pStack || [] );
+
+
+        let obj = isObject( pObject ) ? isArray( pObject ) ? [].concat( pObject ).map( e => clone( e, pOmitFunctions, stack ) ) : Object.assign( {}, pObject || {} ) : pObject;
+
+        let twin = isObject( obj ) ? isArray( obj ) ? [].concat( obj ).map( e => clone( e, pOmitFunctions, stack ) ) : Object.assign( {}, obj || {} ) : obj;
+
 
         if ( stack.length > MAX_CLONE_DEPTH || detectCycles( stack, 3, 3 ) )
         {

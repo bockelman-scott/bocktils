@@ -48,6 +48,11 @@ const $scope = constants?.$scope || function()
     let isClass = typeUtils.isClass;
 
     let no_op = objectUtils.no_op || function() {};
+    let op_true = function() { return true; };
+    let op_false = function() { return false; };
+    let op_identity = function( pArg ) { return pArg; };
+
+    let Result = typeUtils.Result;
 
     // import the dependencies
     constants.importUtilities( this || me, constants, typeUtils, stringUtils, arrayUtils, objectUtils );
@@ -127,14 +132,42 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * Returns a Promise of an object with two properties:
-     * returnValue: the value returned by the specified asynchronous function, if any
+     * A subclass of Result, which is a subclass of Option
+     * @see TypeUtils: Option and TypeUtils: Result
+     */
+    class FunctionResult extends Result
+    {
+        #args = [];
+
+        constructor( pValue, pErrors, ...pArgs )
+        {
+            super( pValue, pErrors );
+
+            this.#args = [].concat( asArray( pArgs ) ).map( e => objectUtils.copy( e ) );
+        }
+
+        get arguments()
+        {
+            return [].concat( asArray( this.#args ) ).map( e => objectUtils.copy( e ) );
+        }
+    }
+
+    /**
+     * Returns a Promise of an object of type, FunctionResult
+     *
+     * FunctionResult is an Option with an extra property to capture errors.
+     * FunctionResult objects also store their arguments.
+     * This can be used to memento-ize functions if desired.
+     *
+     * value: the value returned by the specified asynchronous function, if any
      * exceptions: an array of any errors thrown during the execution of the specified function.
      *
      * @param pOperation an asynchronous function to execute (or a synchronous function to execute asynchronously)
      * @param pArgs (optional) one or more arguments to pass to the function
      *
-     * @returns {Promise<{returnValue: *, exceptions: *[]}>} a Promise of an object of the form {returnValue, exceptions}
+     * @returns {Promise<FunctionResult>} a Promise of an object of type, FunctionResult
+     *
+     * @see FunctionResult
      */
     const attemptAsync = async function( pOperation, ...pArgs )
     {
@@ -161,19 +194,23 @@ const $scope = constants?.$scope || function()
             exceptions.push( ex );
         }
 
-        return { returnValue, exceptions };
+        return new FunctionResult( returnValue, exceptions, ...pArgs );
     };
 
-
     /**
-     * Returns an object with two properties:
-     * returnValue: the value returned by the specified function, if any
+     * Returns a FunctionResult.
+     *
+     * FunctionResult is an Option with an extra property to capture errors.
+     * FunctionResult objects also store their arguments.
+     * This can be used to memento-ize functions if desired.
+     *
+     * value: the value returned by the specified asynchronous function, if any
      * exceptions: an array of any errors thrown during the execution of the specified function.
      *
      * @param pOperation a function to execute
      * @param pArgs (optional) one or more arguments to pass to the function
      *
-     * @returns {{returnValue: *, exceptions: *[]}|Promise<{returnValue: *, exceptions: *[]}>} an object of the form {returnValue, exceptions}
+     * @returns {FunctionResult} an object of type, FunctionResult
      *
      * If an asynchronous function is passed, this function will return a Promise.
      * Normally, calling attemptAsync is preferred, however, this function can be used to return a Promise
@@ -213,7 +250,7 @@ const $scope = constants?.$scope || function()
             exceptions.push( ex );
         }
 
-        return { returnValue, exceptions };
+        return new FunctionResult( returnValue, exceptions, ...pArgs );
     };
 
     /**
@@ -237,15 +274,20 @@ const $scope = constants?.$scope || function()
     }
 
     /**
-     * Returns a Promise of an object with two properties:
-     * returnValue: the value returned by the specified asynchronous function, if any
+     * Returns a Promise of FunctionResult.
+     *
+     * FunctionResult is an Option with an extra property to capture errors.
+     * FunctionResult objects also store their arguments.
+     * This can be used to memento-ize functions if desired.
+     *
+     * value: the value returned by the specified asynchronous function, if any
      * exceptions: an array of any errors thrown during the execution of the specified function.
      *
      * @param pObject the object on which to call the method (or function)
      * @param pMethod an asynchronous method to execute (or a synchronous method to execute asynchronously)
      * @param pArgs (optional) one or more arguments to pass to the function
      *
-     * @returns {Promise<{returnValue: *, exceptions: *[]}>} a Promise of an object of the form {returnValue, exceptions}
+     * @returns {Promise<FunctionResult>} a Promise of a FunctionResult
      */
     const attemptAsyncMethod = async function( pObject, pMethod, ...pArgs )
     {
@@ -276,19 +318,24 @@ const $scope = constants?.$scope || function()
             exceptions.push( ex );
         }
 
-        return { returnValue, exceptions };
+        return new FunctionResult( returnValue, exceptions, ...pArgs );
     };
 
     /**
-     * Returns an object with two properties:
-     * returnValue: the value returned by the specified asynchronous function, if any
+     * Returns a FunctionResult
+     *
+     * FunctionResult is an Option with an extra property to capture errors.
+     * FunctionResult objects also store their arguments.
+     * This can be used to memento-ize functions if desired.
+     *
+     * value: the value returned by the specified asynchronous function, if any
      * exceptions: an array of any errors thrown during the execution of the specified function.
      *
      * @param pObject the object on which to call the method (or function)
      * @param pMethod a method or function to execute
      * @param pArgs (optional) one or more arguments to pass to the function
      *
-     * @returns {{returnValue: *, exceptions: *[]}|Promise<{returnValue: *, exceptions: *[]}>} an object of the form {returnValue, exceptions}
+     * @returns {FunctionResult} a FunctionResult
      *
      * If an asynchronous function is passed, this function will return a Promise.
      * Normally, calling attemptAsync is preferred, however, this function can be used to return a Promise
@@ -332,7 +379,7 @@ const $scope = constants?.$scope || function()
             exceptions.push( ex );
         }
 
-        return { returnValue, exceptions };
+        return new FunctionResult( returnValue, exceptions, ...pArgs );
     };
 
     /**
@@ -344,7 +391,7 @@ const $scope = constants?.$scope || function()
      * @param pFunction the function wrap in 'attempt' semantics
      * @param pObject (optional) an object on which to call the specified function (as a method)
      *
-     * @returns {(function(...[*]): {returnValue: *, exceptions: *[]}|Promise<{returnValue: *, exceptions: *[]}>)|(function(...[*]): Promise<{returnValue: *, exceptions: *[]}>)}
+     * @returns {(function(...[*]): {FunctionResult}|Promise<FunctionResult>)|(function(...[*]): Promise<FunctionResult>)}
      */
     const asAttempt = function( pFunction, pObject = $scope() )
     {
@@ -370,7 +417,7 @@ const $scope = constants?.$scope || function()
             }
         }
 
-        return function() { return { returnValue: null, exceptions: [] }; };
+        return function() { return new FunctionResult(); };
     };
 
     const _DEFAULT_OPTIONS = {
@@ -502,6 +549,9 @@ const $scope = constants?.$scope || function()
             isAsyncFunction,
             isClass,
             no_op,
+            op_true,
+            op_false,
+            op_identity,
             isImplemented,
             fireAndForget,
             attempt,
@@ -514,7 +564,9 @@ const $scope = constants?.$scope || function()
             catchHandler: function( pErr )
             {
                 return true;
-            }
+            },
+            classes: { FunctionResult },
+            FunctionResult
         };
 
     // when running in a Node.js environment, we assign the module to the global module.exports

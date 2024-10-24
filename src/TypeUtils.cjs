@@ -435,7 +435,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            konsole.warn( constants.S_ERR_PREFIX, "evaluating an object as a Regular Expression", ex );
+            // ignored
         }
 
         return false;
@@ -628,6 +628,180 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    class Option
+    {
+        #value;
+
+        constructor( pValue )
+        {
+            this.#value = (pValue instanceof this.constructor) ? pValue.#value : pValue;
+        }
+
+        get value()
+        {
+            return Object.freeze( isObject( this.#value ) ? isArray( this.#value ) ? [].concat( this.#value ).map( e => new Option( e ).value ) : Object.assign( {}, this.#value ) : Object.freeze( this.#value ) );
+        }
+
+        static Some( pValue )
+        {
+            return new Option( pValue );
+        }
+
+        static None()
+        {
+            return new Option( null );
+        }
+
+        isSome()
+        {
+            return (null !== this.#value);
+        }
+
+        isNone()
+        {
+            return isUndefined( this.#value ) || null === this.#value;
+        }
+
+        map( pFunction )
+        {
+            const func = isFunction( pFunction ) ? pFunction : ( e ) => e;
+            return this.isSome() ? Option.Some( func( this.#value ) ) : Option.None();
+        }
+
+        flatMap( pFunction )
+        {
+            const func = isFunction( pFunction ) ? pFunction : ( e ) => e;
+            return this.map( func ).getOrElse( Option.None() );
+        }
+
+        getOrElse( pDefault )
+        {
+            return this.isSome() ? this.#value : pDefault;
+        }
+    }
+
+    class TypedOption extends Option
+    {
+        #type;
+
+        constructor( pValue, pType )
+        {
+            super( pValue );
+
+            this.#type = pType;
+        }
+
+        static Some( pValue, pType )
+        {
+            return new TypedOption( pValue, pType );
+        }
+
+        static None()
+        {
+            return new Option( null );
+        }
+
+        isSome()
+        {
+            return super.isSome() && isType( this.value, this.#type );
+        }
+
+        isNone()
+        {
+            return super.isNone() || !isType( this.value, this.#type );
+        }
+
+        map( pFunction )
+        {
+            const type = this.#type;
+
+            const func = isFunction( pFunction ) ? pFunction : ( e ) => castTo( e, type );
+
+            return super.map( func );
+        }
+
+        flatMap( pFunction )
+        {
+            const type = this.#type;
+
+            const func = isFunction( pFunction ) ? pFunction : ( e ) => castTo( e, type );
+
+            return super.flatMap( func );
+        }
+
+        getOrElse( pDefault )
+        {
+            const value = super.getOrElse( pDefault );
+
+            if ( this.#type === typeof (value) )
+            {
+                return value;
+            }
+
+            if ( this.#type === typeof (pDefault) )
+            {
+                return pDefault;
+            }
+        }
+    }
+
+    class StringOption extends TypedOption
+    {
+        constructor( pValue )
+        {
+            super( pValue, _str );
+        }
+    }
+
+    class NumericOption extends TypedOption
+    {
+        constructor( pValue )
+        {
+            super( pValue, _num );
+        }
+    }
+
+    class BooleanOption extends TypedOption
+    {
+        constructor( pValue )
+        {
+            super( pValue, _bool );
+        }
+    }
+
+    class Result extends Option
+    {
+        #exceptions = [];
+
+        constructor( pValue, pErrors = [] )
+        {
+            super( pValue );
+
+            this.#exceptions = [].concat( pErrors || [] ).flat();
+        }
+
+        get returnValue()
+        {
+            return super.getOrElse( null );
+        }
+
+        get exceptions()
+        {
+            return [].concat( this.#exceptions ).flat();
+        }
+
+        addErrors( ...pError )
+        {
+            this.#exceptions.push( ...pError );
+            this.#exceptions = this.#exceptions.flat();
+        }
+
+        hasErrors()
+        {
+            return (this.#exceptions?.length || 0) > 0;
+        }
+    }
+
     const mod =
         {
             dependencies,
@@ -663,8 +837,14 @@ const $scope = constants?.$scope || function()
             instanceOfAny,
             defaultFor,
             castTo,
-            classes: { TriState },
-            TriState
+            classes: { TriState, Option, TypedOption, StringOption, NumericOption, BooleanOption, Result },
+            TriState,
+            Option,
+            TypedOption,
+            StringOption,
+            NumericOption,
+            BooleanOption,
+            Result
         };
 
     if ( _ud !== typeof module )
