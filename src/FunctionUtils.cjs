@@ -37,6 +37,7 @@ const $scope = constants?.$scope || function()
 
     let asString = stringUtils.asString;
     let asInt = stringUtils.asInt;
+    let asFloat = stringUtils.asFloat;
 
     let asArray = arrayUtils.asArray;
 
@@ -513,7 +514,6 @@ const $scope = constants?.$scope || function()
         };
     };
 
-
     /**
      * Returns a new version of the specified asynchronous function with one or more arguments captured
      * that now only requires passing the remaining arguments.
@@ -538,6 +538,11 @@ const $scope = constants?.$scope || function()
         };
     };
 
+    const sum = function( ...pArgs )
+    {
+        const arr = asArray( pArgs );
+        return arr.flat().map( asFloat ).reduce( ( a, c ) => a + c, 0 );
+    };
 
     /**
      * This is the exported module.
@@ -552,6 +557,7 @@ const $scope = constants?.$scope || function()
             op_true,
             op_false,
             op_identity,
+            sum,
             isImplemented,
             fireAndForget,
             attempt,

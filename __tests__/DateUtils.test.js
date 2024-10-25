@@ -26,6 +26,12 @@ const sunday = new Date( 2024, 9, 20, 9, 37, 0, 0 );
 const monday = new Date( 2024, 9, 21, 9, 37, 0, 0 );
 const tuesday = new Date( 2024, 9, 22, 9, 37, 0, 0 );
 
+const sum = function( ...pArgs )
+{
+    const arr = arrayUtils.asArray( pArgs );
+    return arr.flat().map( stringUtils.asFloat ).reduce( ( a, c ) => a + c, 0 );
+};
+
 describe( "DateUtils.before", () =>
 {
     test( "DateUtils.before returns true for ( today, tomorrow )",
@@ -159,6 +165,10 @@ describe( "DateUtils.addDays / subtractDays", () =>
               let dateA = new Date( 1967, 9, 3, 9, 37, 0, 0 );
               let expected = new Date( 2024, 9, 17, 9, 37, 0, 0 );
 
+              const days = dateUtils.daysBetween( dateA, expected );
+
+              expect( dateUtils.addDays( dateA, days ) ).toEqual( expected );
+
               expect( dateUtils.addDays( dateA, 20_834 ) ).toEqual( expected );
           } );
 
@@ -237,6 +247,23 @@ describe( "DateUtils.daysBetween", () =>
 
 describe( "DateUtils.addWeeks / subtractWeeks", () =>
 {
+    test( "DateUtils.addWeeks returns October 3rd, 2024 when you add 0 weeks to October 3rd, 2024",
+          () =>
+          {
+              let dateA = new Date( 2024, 9, 3, 9, 37, 0, 0 );
+
+              expect( dateUtils.addWeeks( dateA, 0 ) ).toEqual( dateA );
+          } );
+
+    test( "DateUtils.addWeeks returns October 10th, 2024 when you add 1 week to October 3rd, 2024",
+          () =>
+          {
+              let dateA = new Date( 2024, 9, 3, 9, 37, 0, 0 );
+              let expected = new Date( 2024, 9, 10, 9, 37, 0, 0 );
+
+              expect( dateUtils.addWeeks( dateA, 1 ) ).toEqual( expected );
+          } );
+
     test( "DateUtils.addWeeks returns October 17th, 2024 when you add 2 weeks to October 3rd, 2024",
           () =>
           {
@@ -655,6 +682,21 @@ describe( "DateUtils.calculateNthOccurrenceOfDay", () =>
 
 describe( "Work Day / Business Days functionality", () =>
 {
+    test( "DateUtils.workDaysBetween October 21st, 2024 and October 21st, 2024 is 0",
+          () =>
+          {
+              const oct21 = new Date( 2024, 9, 21 );
+
+              let workDays = dateUtils.workDaysBetween( oct21, oct21 );
+
+              let calendarDays = dateUtils.daysBetween( oct21, oct21 );
+
+              expect( workDays ).toEqual( 0 );
+              expect( workDays ).toEqual( calendarDays );
+
+              expect( dateUtils.addWorkdays( oct21, workDays ) ).toEqual( oct21 );
+          } );
+
     test( "DateUtils.workDaysBetween October 21st, 2024 and October 25th, 2024 is 4",
           () =>
           {
@@ -732,6 +774,177 @@ describe( "Work Day / Business Days functionality", () =>
               expect( dateUtils.addWorkdays( dateA, daysRegardlessOfHolidays ) ).toEqual( dateB );
 
               expect( dateUtils.addWorkdays( dateA, daysAccountingForHolidays, dateUtils.US_HOLIDAYS ) ).toEqual( dateB );
+
+          } );
+
+    test( "DateUtils.weekdays in January 2024 is 23", () =>
+    {
+        const weekdays = dateUtils.workDaysBetween( new Date( 2023, 11, 31 ), new Date( 2024, 0, 31 ) );
+
+        expect( weekdays ).toEqual( 23 );
+
+        expect( dateUtils.addWorkdays( new Date( 2023, 11, 31 ), weekdays ) ).toEqual( dateUtils.avoidWeekend( new Date( 2024, 0, 31 ), -1 ) );
+    } );
+
+    test( "DateUtils.weekdays in February 2024 is 21", () =>
+    {
+        const weekdays = dateUtils.workDaysBetween( new Date( 2024, 0, 31 ), new Date( 2024, 1, 29 ) );
+
+        expect( weekdays ).toEqual( 21 );
+
+        expect( dateUtils.addWorkdays( new Date( 2024, 0, 31 ), weekdays ) ).toEqual( dateUtils.avoidWeekend( new Date( 2024, 1, 29 ), -1 ) );
+    } );
+
+    test( "DateUtils.weekdays in March 2024 is 21", () =>
+    {
+        const weekdays = dateUtils.workDaysBetween( new Date( 2024, 1, 29 ), new Date( 2024, 2, 31 ) );
+
+        expect( weekdays ).toEqual( 21 );
+
+        expect( dateUtils.addWorkdays( new Date( 2024, 1, 29 ), weekdays ) ).toEqual( dateUtils.avoidWeekend( new Date( 2024, 2, 31 ), -1 ) );
+    } );
+
+    test( "DateUtils.weekdays in April 2024 is 22", () =>
+    {
+        const weekdays = dateUtils.workDaysBetween( new Date( 2024, 2, 31 ), new Date( 2024, 3, 30 ) );
+
+        expect( weekdays ).toEqual( 22 );
+
+        expect( dateUtils.addWorkdays( new Date( 2024, 2, 31 ), weekdays ) ).toEqual( dateUtils.avoidWeekend( new Date( 2024, 3, 30 ), -1 ) );
+    } );
+
+    test( "DateUtils.weekdays in May 2024 is 23", () =>
+    {
+        const weekdays = dateUtils.workDaysBetween( new Date( 2024, 3, 30 ), new Date( 2024, 4, 31 ) );
+
+        expect( weekdays ).toEqual( 23 );
+
+        expect( dateUtils.addWorkdays( new Date( 2024, 3, 30 ), weekdays ) ).toEqual( dateUtils.avoidWeekend( new Date( 2024, 4, 31 ), -1 ) );
+    } );
+
+    test( "DateUtils.weekdays in June 2024 is 20", () =>
+    {
+        const weekdays = dateUtils.workDaysBetween( new Date( 2024, 4, 31 ), new Date( 2024, 5, 30 ) );
+
+        expect( weekdays ).toEqual( 20 );
+
+        expect( dateUtils.addWorkdays( new Date( 2024, 4, 31 ), weekdays ) ).toEqual( dateUtils.avoidWeekend( new Date( 2024, 5, 30 ), -1 ) );
+    } );
+
+    test( "DateUtils.weekdays in July 2024 is 23", () =>
+    {
+        const weekdays = dateUtils.workDaysBetween( new Date( 2024, 5, 30 ), new Date( 2024, 6, 31 ) );
+
+        expect( weekdays ).toEqual( 23 );
+    } );
+
+    test( "DateUtils.weekdays in August 2024 is 22", () =>
+    {
+        const weekdays = dateUtils.workDaysBetween( new Date( 2024, 6, 31 ), new Date( 2024, 7, 31 ) );
+
+        expect( weekdays ).toEqual( 22 );
+    } );
+
+    test( "DateUtils.weekdays in September 2024 is 21", () =>
+    {
+        const weekdays = dateUtils.workDaysBetween( new Date( 2024, 7, 31 ), new Date( 2024, 8, 30 ) );
+
+        expect( weekdays ).toEqual( 21 );
+    } );
+
+    test( "DateUtils.weekdays in October 2024 is 23", () =>
+    {
+        const weekdays = dateUtils.workDaysBetween( new Date( 2024, 8, 30 ), new Date( 2024, 9, 31 ) );
+
+        expect( weekdays ).toEqual( 23 );
+    } );
+
+    test( "DateUtils.weekdays in November 2024 is 21", () =>
+    {
+        const weekdays = dateUtils.workDaysBetween( new Date( 2024, 9, 31 ), new Date( 2024, 10, 30 ) );
+
+        expect( weekdays ).toEqual( 21 );
+    } );
+
+    test( "DateUtils.weekdays in December 2024 is 22", () =>
+    {
+        const weekdays = dateUtils.workDaysBetween( new Date( 2024, 10, 30 ), new Date( 2024, 11, 31 ) );
+
+        expect( weekdays ).toEqual( 22 );
+    } );
+
+
+    test( "DateUtils.workDaysBetween returns values that can be summed",
+          () =>
+          {
+              let dates = [];
+
+              let workdaysPerMonth = {};
+              let workDaysMinusHolidaysPerMonth = {};
+
+              let workdaysPerYear = 0;
+              let workdaysPerYearMinusHolidays = 0;
+
+              for( let i = 0; i < 12; i++ )
+              {
+                  const firstOfMonth = new Date( 2024, i, 1 );
+                  dates.push( firstOfMonth );
+              }
+
+              dates.forEach( date =>
+                             {
+                                 const year = date.getFullYear();
+                                 const month = date.getMonth();
+
+                                 let priorDay = dateUtils.subtractDays( date, 1 );
+                                 let endOfMonth = new Date( year, month, dateUtils.numDaysInMonth( month, year ) );
+
+                                 const workDaysBetween = dateUtils.workDaysBetween( priorDay, endOfMonth );
+                                 workdaysPerMonth[month] = workDaysBetween;
+                                 workdaysPerYear += workDaysBetween;
+
+                                 const workDaysBetweenMinusHolidays = dateUtils.workDaysBetween( priorDay, endOfMonth, dateUtils.US_HOLIDAYS );
+                                 workDaysMinusHolidaysPerMonth[month] = workDaysBetweenMinusHolidays;
+                                 workdaysPerYearMinusHolidays += workDaysBetweenMinusHolidays;
+                             } );
+
+              const workDays2024 = dateUtils.workDaysBetween( new Date( 2023, 11, 31 ), new Date( 2024, 11, 31 ) );
+
+              const workDays2024MinusHolidays = dateUtils.workDaysBetween( new Date( 2023, 11, 31 ), new Date( 2024, 11, 31 ), dateUtils.US_HOLIDAYS );
+
+              expect( workDays2024 ).toEqual( workdaysPerYear );
+              expect( workDays2024MinusHolidays ).toEqual( workdaysPerYearMinusHolidays );
+
+          } );
+
+    test( "DateUtils.daysBetween January 1st, 2020 and December 31st, 2024 when added to the first date returns the second date",
+          () =>
+          {
+              const dateA = Object.freeze( new Date( 2020, 0, 1 ) );
+              const dateB = Object.freeze( new Date( 2024, 11, 31 ) );
+
+              const days = dateUtils.daysBetween( dateA, dateB );
+
+              expect( dateUtils.addDays( dateA, days ) ).toEqual( dateB );
+          } );
+
+    test( "DateUtils.workDaysBetween January 1st, 2020 and December 31st, 2024, accounting for holidays is ",
+          () =>
+          {
+              const dateA = Object.freeze( new Date( 2020, 0, 1 ) );
+              const dateB = Object.freeze( new Date( 2024, 11, 31 ) );
+
+              const daysRegardlessOfHolidays = dateUtils.workDaysBetween( dateA, dateB );
+
+              const daysAccountingForHolidays = dateUtils.workDaysBetween( dateA, dateB, dateUtils.US_HOLIDAYS );
+
+              expect( daysRegardlessOfHolidays ).toEqual( 1_306 );
+
+              expect( daysAccountingForHolidays ).toEqual( 1_259 );
+
+              // expect( dateUtils.addWorkdays( dateA, daysRegardlessOfHolidays ) ).toEqual( dateUtils.avoidWeekend( dateB, -1 ) );
+
+              // expect( dateUtils.addWorkdays( dateA, daysAccountingForHolidays, dateUtils.US_HOLIDAYS ) ).toEqual( dateUtils.avoidWeekend( dateB, -1 ) );
 
           } );
 } );

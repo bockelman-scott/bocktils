@@ -1,5 +1,4 @@
 const utils = require( "./CommonUtils.cjs" );
-const { date } = require( "grunt/lib/grunt/template.js" );
 
 /**
  * Establish separate constants for each of the common utilities imported
@@ -185,7 +184,7 @@ const $scope = utils?.$scope || function()
                 {
                     let date = new Date( pDate );
                     date.setMinutes( date.getMinutes() + increment );
-                    return date;
+                    return Object.freeze( date );
                 };
 
             case UNIT.HOUR:
@@ -193,7 +192,7 @@ const $scope = utils?.$scope || function()
                 {
                     let date = new Date( pDate );
                     date.setHours( date.getHours() + increment );
-                    return date;
+                    return Object.freeze( date );
                 };
 
             case UNIT.DAY:
@@ -201,7 +200,7 @@ const $scope = utils?.$scope || function()
                 {
                     let date = new Date( pDate );
                     date.setDate( date.getDate() + increment );
-                    return date;
+                    return Object.freeze( date );
                 };
 
             case UNIT.WEEK:
@@ -209,7 +208,7 @@ const $scope = utils?.$scope || function()
                 {
                     let date = new Date( pDate );
                     date.setDate( date.getDate() + (DateConstants.DAYS_PER_WEEK * increment) );
-                    return date;
+                    return Object.freeze( date );
                 };
 
             case UNIT.YEAR:
@@ -217,7 +216,7 @@ const $scope = utils?.$scope || function()
                 {
                     let date = new Date( pDate );
                     date.setFullYear( date.getFullYear() + increment );
-                    return date;
+                    return Object.freeze( date );
                 };
 
             case UNIT.MONTH:
@@ -225,7 +224,7 @@ const $scope = utils?.$scope || function()
                 {
                     let date = new Date( pDate );
                     date.setMonth( date.getMonth() + increment );
-                    return date;
+                    return Object.freeze( date );
                 };
 
             case UNIT.DECADE:
@@ -237,14 +236,14 @@ const $scope = utils?.$scope || function()
                     {
                         date.setFullYear( date.getFullYear() + (2 * increment) );
                     }
-                    return date;
+                    return Object.freeze( date );
                 };
 
         }
 
         return function( pDate )
         {
-            return new Date( pDate.getTime() + millis );
+            return Object.freeze( new Date( pDate.getTime() + millis ) );
         };
     };
 
@@ -430,7 +429,7 @@ const $scope = utils?.$scope || function()
             date.setSeconds( seconds );
             date.setMilliseconds( milliseconds );
 
-            return date;
+            return Object.freeze( date );
         }
 
         return pDate;
@@ -526,14 +525,14 @@ const $scope = utils?.$scope || function()
     {
         const dates = sortDates( ...pDates );
 
-        return (dates?.length || 0) > 0 ? new Date( dates[0] ) : null;
+        return (dates?.length || 0) > 0 ? Object.freeze( new Date( dates[0] ) ) : null;
     };
 
     const latest = function( ...pDates )
     {
         const dates = sortDates( ...pDates );
 
-        return (dates?.length || 0) > 0 ? new Date( dates[dates.length - 1] ) : null;
+        return (dates?.length || 0) > 0 ? Object.freeze( new Date( dates[dates.length - 1] ) ) : null;
     };
 
     const numDaysInMonth = function( pMonth, pYear )
@@ -564,7 +563,7 @@ const $scope = utils?.$scope || function()
 
             date = _setFields( date, date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0, 0, 0 );
 
-            return date;
+            return Object.freeze( date );
         }
 
         return pDate;
@@ -578,7 +577,7 @@ const $scope = utils?.$scope || function()
 
             date = _setFields( date, date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0, 0 );
 
-            return date;
+            return Object.freeze( date );
         }
 
         return pDate;
@@ -592,7 +591,7 @@ const $scope = utils?.$scope || function()
 
             date = _setFields( date, date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999 );
 
-            return date;
+            return Object.freeze( date );
         }
 
         return pDate;
@@ -615,20 +614,20 @@ const $scope = utils?.$scope || function()
         switch ( unit )
         {
             case UNIT.WEEK:
-                date = toNoon( date );
+                date = new Date( toNoon( date ) );
                 date.setDate( date.getDate() - day );
                 date = toMidnight( date );
 
                 break;
 
             case UNIT.WORK_WEEK:
-                date = toNoon( date );
+                date = new Date( toNoon( date ) );
                 date.setDate( (date.getDate() - day) + 1 );
                 date = toMidnight( date );
                 break;
 
             case UNIT.DECADE:
-                date = toNoon( date );
+                date = new Date( toNoon( date ) );
                 date.setFullYear( date.getFullYear() - (date.getFullYear() % 10) );
             //fallthrough
 
@@ -660,7 +659,7 @@ const $scope = utils?.$scope || function()
                 date.setMilliseconds( 0 );
         }
 
-        return new Date( date );
+        return Object.freeze( new Date( date ) );
     };
 
     const startOfWeek = function( pDate )
@@ -720,12 +719,12 @@ const $scope = utils?.$scope || function()
         switch ( unit )
         {
             case UNIT.WEEK:
-                date = getStartOf( unit, date );
+                date = new Date( getStartOf( unit, date ) );
                 date.setDate( date.getDate() + 6 );
                 return getEndOf( UNIT.DAY, date );
 
             case UNIT.WORK_WEEK:
-                date = getStartOf( unit, date );
+                date = new Date( getStartOf( unit, date ) );
                 date.setDate( date.getDate() + 4 );
                 return getEndOf( UNIT.DAY, date );
 
@@ -738,7 +737,7 @@ const $scope = utils?.$scope || function()
 
         date.setMilliseconds( date.getMilliseconds() - 1 );
 
-        return new Date( date );
+        return Object.freeze( new Date( date ) );
     };
 
     const endOfWeek = function( pDate )
@@ -836,7 +835,7 @@ const $scope = utils?.$scope || function()
 
                     return function( e )
                     {
-                        return isDate( e ) && e >= startDate && e < endDate;
+                        return isDate( e ) && e > startDate && e <= endDate;
                     };
                 }
 
@@ -885,7 +884,7 @@ const $scope = utils?.$scope || function()
 
         occurrences = occurrences.filter( e => isDate( e ) && (e.getMonth() === month) );
 
-        return occurrences;
+        return Object.freeze( occurrences.map( e => Object.freeze( e ) ) );
     };
 
     const calculateNthOccurrenceOfDay = function( pYear, pMonth, pOccurrence, pDay )
@@ -938,7 +937,7 @@ const $scope = utils?.$scope || function()
         {
             if ( this.#exactDate )
             {
-                return new Date( pYear, this.#month, this.#date );
+                return Object.freeze( new Date( pYear, this.#month, this.#date ) );
             }
 
             return calculateNthOccurrenceOfDay( pYear, this.#month, this.#occurrence, this.#weekday );
@@ -1002,7 +1001,7 @@ const $scope = utils?.$scope || function()
                 }
             }
 
-            return date || pDate;
+            return Object.freeze( date || pDate );
         }
 
         generate( pStartDate, pEndDate )
@@ -1035,7 +1034,7 @@ const $scope = utils?.$scope || function()
                 dates = dates.filter( date => isDate( date ) && (toTimestamp( date ) > toTimestamp( toMidnight( pStartDate ) )) && (toTimestamp( date ) <= toTimestamp( lastInstant( endDate ) )) );
             }
 
-            return dates;
+            return dates.map( e => Object.freeze( e ) );
         }
     }
 
@@ -1161,20 +1160,37 @@ const $scope = utils?.$scope || function()
         const start = toTimestamp( toNoon( pStartDate ) );
         const end = toTimestamp( toNoon( pEndDate ) );
 
-        return (Math.floor( ((end - start) * 1_000_000) / (MILLIS_PER_DAY * 1_000_000) ));
+        let days = ((end - start) * 1_000) / (MILLIS_PER_DAY * 1_000);
+
+        // accounting for DST
+        const decimalPortion = days - Math.trunc( days );
+
+        if ( decimalPortion > (23 / 24.25) )
+        {
+            days += decimalPortion;
+        }
+
+        return (Math.floor( days ));
     };
 
     const _weekdaysBetween = function( pStartDate, pEndDate )
     {
-        const start = avoidWeekend( toNoon( pStartDate ) );
+        let start = toNoon( pStartDate );
+        const startDay = start.getDay();
 
-        let end = avoidWeekend( lastInstant( pEndDate ), DateConstants.Direction.PAST );
+        if ( startDay > 5 )
+        {
+            start = addDays( start, 1 );
+        }
+
+        const end = avoidWeekend( lastInstant( pEndDate ), DateConstants.Direction.PAST );
+        const endDay = end.getDay();
 
         const days = daysBetween( start, end );
 
         const weeks = Math.floor( days / DateConstants.DAYS_PER_WEEK );
 
-        const extraDays = Math.abs( days ) % DateConstants.DAYS_PER_WEEK;
+        let extraDays = Math.abs( days ) % DateConstants.DAYS_PER_WEEK;
 
         return (weeks * DateConstants.DAYS_PER_WORK_WEEK) + extraDays;
     };
@@ -1229,21 +1245,24 @@ const $scope = utils?.$scope || function()
 
     const addDays = function( pDate, pNumDays )
     {
+        let numDays = isNumber( pNumDays ) ? asInt( pNumDays ) : 0;
+
+        if ( 0 === numDays )
+        {
+            return pDate;
+        }
+
         if ( isValidDateArgument( pDate ) )
         {
-            const ts = toTimestamp( pDate );
-
-            let newDate = new Date( ts );
+            let newDate = new Date( pDate );
 
             const hour = newDate.getHours();
             const minute = newDate.getMinutes();
             const second = newDate.getSeconds();
             const millis = newDate.getMilliseconds();
 
-            const numDays = isNumber( pNumDays ) ? asInt( pNumDays ) : 0;
-
             // convert as noon to avoid some potential DST side effects
-            newDate = toNoon( newDate );
+            newDate = new Date( toNoon( newDate ) );
 
             // add the days
             newDate.setDate( newDate.getDate() + numDays );
@@ -1251,13 +1270,19 @@ const $scope = utils?.$scope || function()
             // restore the hours, minutes, seconds, and milliseconds
             newDate = _setFields( newDate, newDate.getFullYear(), newDate.getMonth(), newDate.getDate(), hour, minute, second, millis );
 
-            return newDate;
+            return Object.freeze( newDate );
         }
     };
 
     const subtractDays = function( pDate, pNumDays )
     {
         const numDays = isNumber( pNumDays ) ? asInt( pNumDays ) : 0;
+
+        if ( 0 === numDays )
+        {
+            return pDate;
+        }
+
         return addDays( pDate, -(numDays) );
     };
 
@@ -1305,7 +1330,7 @@ const $scope = utils?.$scope || function()
 
     const addWorkdays = function( pDate, pNumDays, pHolidays = [] )
     {
-        // unless the specified date is a Monday, move to start of the next workweek
+        // unless the specified date is a Sunday, move to start of the next week
         // add days in increments of 7, subtracting 5 from the specified number of days
         if ( isValidDateArgument( pDate ) )
         {
@@ -1313,7 +1338,9 @@ const $scope = utils?.$scope || function()
 
             const sign = numDays < 0 ? -1 : 1;
 
-            const startDate = avoidWeekend( pDate, sign );
+            // const startDate = avoidWeekend( pDate, sign );
+            let startDate = new Date( pDate );
+            const startDay = startDate.getDay();
 
             const hour = startDate.getHours();
             const minute = startDate.getMinutes();
@@ -1334,7 +1361,7 @@ const $scope = utils?.$scope || function()
             {
                 let holidays = _processHolidays( pHolidays, startDate, date );
 
-                const loopCap = new objectUtils.IterationCap( Math.max( holidays?.length || 0, 12 ) );
+                const loopCap = new objectUtils.IterationCap( Math.max( numWeeks, 12 ) );
 
                 while ( holidays?.length > 0 && !loopCap.reached )
                 {
@@ -1348,7 +1375,7 @@ const $scope = utils?.$scope || function()
 
             date = _setFields( date, date.getFullYear(), date.getMonth(), date.getDate(), hour, minute, second, millis );
 
-            return date;
+            return Object.freeze( date );
         }
 
         return pDate;
@@ -1402,14 +1429,9 @@ const $scope = utils?.$scope || function()
                 endDate = new Date( pStartDate );
             }
 
-            startDate = toMidnight( avoidWeekend( startDate ) );
+            startDate = toNoon( startDate );
 
             endDate = lastInstant( endDate );
-
-            while ( [DateConstants.Days.SUNDAY, DateConstants.Days.SATURDAY].includes( endDate.getDay() ) )
-            {
-                endDate = subtractDays( endDate, 1 );
-            }
 
             let days = _weekdaysBetween( startDate, endDate );
 
