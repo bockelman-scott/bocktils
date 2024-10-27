@@ -849,7 +849,7 @@ const $scope = utils?.$scope || function()
         const year = asInt( pYear );
         const month = asInt( pMonth );
 
-        const dayNumber = asInt( pDay, DateConstants.Days.MONDAY );
+        const dayNumber = 0 === pDay ? 0 : asInt( pDay, DateConstants.Days.MONDAY );
 
         let startDate = new Date( year, month, 1, 0, 0, 0, 0 );
 
@@ -1474,6 +1474,7 @@ const $scope = utils?.$scope || function()
             UNIT,
             HOLIDAYS,
             US_HOLIDAYS: HOLIDAYS.USA,
+            isValidDateArgument,
             isLeapYear,
             numDaysInMonth,
             numDaysInYear,
