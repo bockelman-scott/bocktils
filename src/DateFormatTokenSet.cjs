@@ -56,6 +56,12 @@ const $scope = utils?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
+    const dateConstants = dateUtils.DateConstants;
+
+    const MONTHS = dateConstants.Months;
+    const DAYS = dateConstants.Days;
+    const OCCURRENCE = dateConstants.Occurrence;
+
     class TimeZone
     {
         #standardOffset;
@@ -112,11 +118,11 @@ const $scope = utils?.$scope || function()
 
     const MONTH_NAMES = Object.freeze( ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"] );
 
-    const MONTH_NAMES_SHORT = Object.freeze( ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sept", "Oct", "Nov", "Dec"] );
+    const MONTH_NAMES_SHORT = Object.freeze( ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] );
 
     const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-    const DAY_NAMES_SHORT = ["Sun", "Mon", "Tues", "Wed", "Thurs", "Fri", "Sat"];
+    const DAY_NAMES_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
     const DAY_LETTERS = ["S", "M", "T", "W", "R", "F", "Sa"];
 
@@ -127,6 +133,33 @@ const $scope = utils?.$scope || function()
             REPEAT: 2,
             VARY_FORMAT: 4
         };
+
+    const DEFINED_TOKENS =
+        [
+            { "G": "Era designator" },
+            { "y": "Year" },
+            { "Y": "Week year" },
+            { "M": "Month in year (context sensitive)" },
+            { "L": "Month in year (standalone form)" },
+            { "d": "Day in month" },
+            { "E": "Day name in week" },
+            { "u": "Day number of week (1 = Monday, ..., 7 = Sunday)" },
+            { "a": "Am/pm marker" },
+            { "H": "Hour in day (0-23)" },
+            { "h": "Hour in am/pm (1-12)" },
+            { "K": "Hour in am/pm (0-11)" },
+            { "k": "Hour in day (1-24)" },
+            { "m": "Minute in hour" },
+            { "s": "Second in minute" },
+            { "S": "Millisecond" }
+        ];
+
+    const SUPPORTED_TOKENS = ([].concat( DEFINED_TOKENS ).map( e => Object.keys( e ).flat() ).flat());
+
+    const resolveDate = function( pDate )
+    {
+        return isDate( pDate ) ? pDate : isNumber( pDate ) ? new Date( pDate ) : new Date();
+    };
 
     /**
      * Common Week Numbering Systems:
@@ -146,17 +179,46 @@ const $scope = utils?.$scope || function()
 
         constructor( pFirstDayOfWeek )
         {
-            this.#firstDayOfWeek = pFirstDayOfWeek || dateUtils.DateConstants.Days.MONDAY;
+            this.#firstDayOfWeek = pFirstDayOfWeek || DAYS.MONDAY;
         }
 
         calculateWeekInYear( pDate )
         {
+            const date = resolveDate( pDate );
 
+            // the first week of the year is the week that contains the first Thursday of the year
+            const firstThursday = dateUtils.calculateNthOccurrenceOfDay( date.getFullYear(), MONTHS.JANUARY, OCCURRENCE.FIRST, DAYS.THURSDAY );
+
+            const startOfWeek = dateUtils.subtractDays( firstThursday, ((6 - DAYS.THURSDAY) + this.firstDayOfWeek) );
+
+            const days = dateUtils.daysBetween( startOfWeek, date ) + this.firstDayOfWeek;
+
+            return Math.floor( days / dateConstants.DAYS_PER_WEEK ) + 1;
         }
 
         calculateWeekInMonth( pDate )
         {
+            /**
+             * Determine the first day of the month: This is the first day of the specified month.
+             *
+             * Determine the first day of the week containing the first day of the month:
+             * This is the first day of the week (usually Sunday or Monday, depending on the locale) that is on or before the first day of the month.
+             *
+             * Calculate the difference in days between the first day of the month and the given date:
+             * This gives you the number of days that have passed in the month.
+             *
+             * Divide the number of days by 7 and round up: This gives you the week number within the month.
+             */
 
+            const date = new Date( resolveDate( pDate ) );
+
+            const startOfMonth = dateUtils.startOfMonth( date );
+
+            const startOfWeek = dateUtils.subtractDays( startOfMonth, ((6 - startOfMonth.getDay()) + this.firstDayOfWeek) );
+
+            const days = dateUtils.daysBetween( startOfWeek, date );
+
+            return Math.ceil( days / dateConstants.DAYS_PER_WEEK );
         }
 
         get firstDayOfWeek()
@@ -182,7 +244,7 @@ const $scope = utils?.$scope || function()
     {
         constructor()
         {
-            super( dateUtils.DateConstants.Days.MONDAY );
+            super( DAYS.MONDAY );
         }
     }
 
@@ -303,7 +365,7 @@ const $scope = utils?.$scope || function()
 
             let value = this.getValue( date );
 
-            if ( this.minValue > 0 )
+            if ( this.minValue > value )
             {
                 value += this.minValue;
             }
@@ -432,12 +494,12 @@ const $scope = utils?.$scope || function()
         #am;
         #pm;
 
-        constructor( pCharacters, pAmString, pPmString )
+        constructor( pCharacters, pAmString = "AM", pPmString = "PM" )
         {
             super( asString( pCharacters ) || "a", REPETITION_RULES.NONE );
 
-            this.#am = (asString( pAmString ) || "am");
-            this.#pm = (asString( pPmString ) || "pm");
+            this.#am = (asString( pAmString ) || "AM");
+            this.#pm = (asString( pPmString ) || "PM");
         }
 
         getValue( pDate )
@@ -476,7 +538,7 @@ const $scope = utils?.$scope || function()
 
             let s = asString( year );
 
-            if ( this.characters.length <= 2 )
+            if ( this.characters.length === 2 )
             {
                 return s.slice( -2 );
             }
@@ -623,7 +685,7 @@ const $scope = utils?.$scope || function()
 
             const first = new Date( year, 0, 0 );
 
-            return dateUtils.daysBetween( first, date ) + 1;
+            return dateUtils.daysBetween( first, date );
         }
 
         format( pDate )
@@ -654,9 +716,11 @@ const $scope = utils?.$scope || function()
 
             let occurrences = dateUtils.calculateOccurrencesOf( date.getFullYear(), date.getMonth(), dayNum );
 
-            occurrences = occurrences.map( e => dateUtils.toNoon( e ) );
+            occurrences = occurrences.map( e => dateUtils.toNoon( e ).getTime() );
 
-            return occurrences.indexOf( date ) + 1;
+            const index = occurrences.indexOf( date.getTime() );
+
+            return index + 1;
         }
 
         format( pDate )
@@ -781,6 +845,23 @@ const $scope = utils?.$scope || function()
 
             return date.getHours(); // return a value between 0-23
         }
+
+        format( pDate )
+        {
+            let value = this.getValue( pDate );
+
+            if ( value < this.minValue )
+            {
+                value = this.maxValue;
+            }
+
+            if ( value > this.maxValue )
+            {
+                value = this.minValue + (value - this.maxValue - 1);
+            }
+
+            return asString( super.formatNumber( value, this.characters.length ) );
+        }
     }
 
     class TokenMinute extends TokenNumber
@@ -864,7 +945,7 @@ const $scope = utils?.$scope || function()
         #eras;
 
         #weekNumberingSystem;
-        #firstDayOfWeek = dateUtils.DateConstants.Days.MONDAY;
+        #firstDayOfWeek = DAYS.MONDAY;
 
         constructor( pMonthNames = MONTH_NAMES,
                      pMonthAbbreviations = MONTH_NAMES_SHORT,
@@ -872,10 +953,10 @@ const $scope = utils?.$scope || function()
                      pDayAbbreviations = DAY_NAMES_SHORT,
                      pDayLetters = DAY_LETTERS,
                      pEras = ERAS,
-                     pAmString = "am",
-                     pPmString = "pm",
+                     pAmString = "AM",
+                     pPmString = "PM",
                      pWeekNumberingSystem = new ISO8601_WeekNumberingSystem(),
-                     pFirstDayOfWeek = dateUtils.DateConstants.Days.MONDAY )
+                     pFirstDayOfWeek = DAYS.MONDAY )
         {
             this.#monthNames = [].concat( pMonthNames || MONTH_NAMES );
             this.#monthAbbreviations = [].concat( pMonthAbbreviations || MONTH_NAMES_SHORT );
@@ -891,7 +972,7 @@ const $scope = utils?.$scope || function()
 
             this.#weekNumberingSystem = pWeekNumberingSystem || new ISO8601_WeekNumberingSystem();
 
-            this.#firstDayOfWeek = Math.min( 6, 0 === pFirstDayOfWeek ? 0 : pFirstDayOfWeek || dateUtils.DateConstants.Days.MONDAY );
+            this.#firstDayOfWeek = Math.min( 6, 0 === pFirstDayOfWeek ? 0 : pFirstDayOfWeek || DAYS.MONDAY );
 
             this.#weekNumberingSystem.firstDayOfWeek = this.#firstDayOfWeek;
         }
@@ -950,6 +1031,11 @@ const $scope = utils?.$scope || function()
         {
             let char = asString( pCharacters ).slice( 0, 1 );
 
+            if( !SUPPORTED_TOKENS.includes(char) )
+            {
+                return new TokenLiteral( pCharacters );
+            }
+
             switch ( char )
             {
                 case "G":
@@ -971,7 +1057,7 @@ const $scope = utils?.$scope || function()
                     return new TokenDayInYear( pCharacters );
 
                 case "d":
-                    return new TokenMonth( pCharacters );
+                    return new TokenMonthDay( pCharacters );
 
                 case "F":
                     return new TokenOccurrenceOfDayInMonth( pCharacters );
@@ -1053,6 +1139,8 @@ const $scope = utils?.$scope || function()
                     TokenIso8601TimeZone,
                     TokenSet
                 },
+            DEFINED_TOKENS,
+            SUPPORTED_TOKENS,
             TIME_ZONES,
             ERAS,
             MONTH_NAMES,
@@ -1071,10 +1159,10 @@ const $scope = utils?.$scope || function()
                                      pDayAbbreviations = DAY_NAMES_SHORT,
                                      pDayLetters = DAY_LETTERS,
                                      pEras = ERAS,
-                                     pAmString = "am",
-                                     pPmString = "pm",
+                                     pAmString = "AM",
+                                     pPmString = "PM",
                                      pWeekNumberingSystem = new ISO8601_WeekNumberingSystem(),
-                                     pFirstDayOfWeek = dateUtils.DateConstants.Days.MONDAY )
+                                     pFirstDayOfWeek = DAYS.MONDAY )
             {
                 return new TokenSet( pMonthNames,
                                      pMonthAbbreviations,

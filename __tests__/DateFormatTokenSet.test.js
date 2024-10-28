@@ -1,6 +1,12 @@
 const tokenSet = require( "../src/DateFormatTokenSet.cjs" );
 
+const stringUtils = require( "../src/StringUtils.cjs" );
+
+const objectUtils = require( "../src/ObjectUtils.cjs" );
+
 const dateUtils = require( "../src/DateUtils.cjs" );
+
+const javaTokensData = require( "../__test_data__/JavaDateTokensTestData.json" );
 
 const tokenClasses = tokenSet.classes;
 
@@ -17,6 +23,10 @@ const TokenHour = tokenClasses.TokenHour;
 const TokenMinute = tokenClasses.TokenMinute;
 const TokenSecond = tokenClasses.TokenSecond;
 const TokenMillisecond = tokenClasses.TokenMillisecond;
+
+const defaultTokenSet = tokenSet.getDefaultTokenSet();
+
+let asString = stringUtils.asString;
 
 describe( "TokenLiteral", () =>
 {
@@ -65,46 +75,46 @@ describe( "TokenAmPm", () =>
     {
         const token = new TokenAmPm();
 
-        expect( token.format( new Date( 2024, 9, 26, 9, 0, 0 ) ) ).toEqual( "am" );
+        expect( token.format( new Date( 2024, 9, 26, 9, 0, 0 ) ) ).toEqual( "AM" );
     } );
 
     test( "TokenAmPm returns pm after noon", () =>
     {
         const token = new TokenAmPm();
 
-        expect( token.format( new Date( 2024, 9, 26, 11, 0, 0 ) ) ).toEqual( "pm" );
+        expect( token.format( new Date( 2024, 9, 26, 11, 0, 0 ) ) ).toEqual( "PM" );
     } );
 
     test( "TokenAmPm returns pm for noon", () =>
     {
         const token = new TokenAmPm();
 
-        expect( token.format( dateUtils.toNoon( new Date( 2024, 9, 26, 8, 0, 0 ) ) ) ).toEqual( "pm" );
+        expect( token.format( dateUtils.toNoon( new Date( 2024, 9, 26, 8, 0, 0 ) ) ) ).toEqual( "PM" );
     } );
 
     test( "TokenAmPm returns am for midnight", () =>
     {
         const token = new TokenAmPm();
 
-        expect( token.format( new Date( 2024, 9, 26, 0, 0, 0 ) ) ).toEqual( "am" );
+        expect( token.format( new Date( 2024, 9, 26, 0, 0, 0 ) ) ).toEqual( "AM" );
     } );
 
     test( "TokenAmPm returns the specified strings", () =>
     {
-        const token = new TokenAmPm( "a", "AM", "PM" );
+        const token = new TokenAmPm( "a", "am", "pm" );
 
-        expect( token.format( dateUtils.toNoon( new Date( 2024, 9, 26, 8, 0, 0 ) ) ) ).toEqual( "PM" );
-        expect( token.format( dateUtils.toMidnight( new Date( 2024, 9, 26, 8, 0, 0 ) ) ) ).toEqual( "AM" );
+        expect( token.format( dateUtils.toNoon( new Date( 2024, 9, 26, 8, 0, 0 ) ) ) ).toEqual( "pm" );
+        expect( token.format( dateUtils.toMidnight( new Date( 2024, 9, 26, 8, 0, 0 ) ) ) ).toEqual( "am" );
     } );
 } );
 
 describe( "TokenYear", () =>
 {
-    test( "TokenYear returns 24 for 2024 when the token is y", () =>
+    test( "TokenYear returns 2024 for 2024 when the token is y", () =>
     {
         const token = new TokenYear( "y" );
 
-        expect( token.format( dateUtils.toNoon( new Date( 2024, 9, 26, 8, 0, 0 ) ) ) ).toEqual( "24" );
+        expect( token.format( dateUtils.toNoon( new Date( 2024, 9, 26, 8, 0, 0 ) ) ) ).toEqual( "2024" );
     } );
 
     test( "TokenYear returns 24 for 2024 when the token is yy", () =>
@@ -211,7 +221,7 @@ describe( "TokenDayName", () =>
     {
         const token = new TokenDayName( "EEE" );
 
-        expect( token.format( dateUtils.toNoon( new Date( 2024, 9, 3, 8, 0, 0 ) ) ) ).toEqual( "Thurs" );
+        expect( token.format( dateUtils.toNoon( new Date( 2024, 9, 3, 8, 0, 0 ) ) ) ).toEqual( "Thu" );
     } );
 
     test( "TokenDayName returns Thursday when the token is EEEE", () =>
@@ -276,11 +286,11 @@ describe( "TokenHour", () =>
         expect( token.format( new Date( 2024, 9, 3, 8, 0, 0 ) ) ).toEqual( "008" );
     } );
 
-    test( "TokenHour returns 9 when the token is k", () =>
+    test( "TokenHour returns 8 when the token is k", () =>
     {
         const token = new TokenHour( "H", 1, 24 );
 
-        expect( token.format( new Date( 2024, 9, 3, 8, 0, 0 ) ) ).toEqual( "9" );
+        expect( token.format( new Date( 2024, 9, 3, 8, 0, 0 ) ) ).toEqual( "8" );
     } );
 
     test( "TokenHour returns 08 when the token is HH", () =>
@@ -299,5 +309,43 @@ describe( "TokenHour", () =>
 
 } );
 
+describe( "Java Compatibility", () =>
+{
+    test( "Tokens Produce same values as Java SimpleDateFormat", () =>
+    {
+        const dates = [].concat( javaTokensData.dates );
+
+        for( let dateObj of dates )
+        {
+            const date = new Date( dateObj.date );
+
+            const entries = objectUtils.getEntries( dateObj );
+
+            for( let entry of entries )
+            {
+                const key = entry.key;
+
+                const char = key.slice( 0, 1 );
+
+                if ( !tokenSet.SUPPORTED_TOKENS.includes( char ) )
+                {
+                    continue;
+                }
+
+                if ( ["date", "EE", "S", "SS", "SSS"].includes( key ) )
+                {
+                    continue;
+                }
+
+                const token = defaultTokenSet.getToken( key );
+
+                expect( "For date, " + date + ", " + key + ": " + asString( token instanceof Token ) ).toEqual( "For date, " + date + ", " + key + ": true" );
+
+                expect( "For date, " + date + ", " + key + ": " + token.format( date ) ).toEqual( "For date, " + date + ", " + key + ": " + entry.value );
+            }
+        }
+
+    } );
+} );
 
 
