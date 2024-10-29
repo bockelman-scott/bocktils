@@ -17,6 +17,8 @@ const objectUtils = utils?.objectUtils || require( "./ObjectUtils.cjs" );
 
 const dateUtils = require( "./DateUtils.cjs" );
 
+const localeUtils = require( "./LocaleUtils.cjs" );
+
 const _ud = constants?._ud || "undefined";
 
 const $scope = utils?.$scope || function()
@@ -35,15 +37,22 @@ const $scope = utils?.$scope || function()
             stringUtils,
             arrayUtils,
             objectUtils,
-            dateUtils
+            dateUtils,
+            localeUtils
         };
+
+    let _mt_str = constants._mt_str;
 
     let isNull = typeUtils.isNull;
     let isDate = typeUtils.isDate;
     let isNumber = typeUtils.isNumber;
+    let isString = typeUtils.isString;
+    let isFunction = typeUtils.isFunction;
 
     let asString = stringUtils.asString;
     let asInt = stringUtils.asInt;
+
+    let lcase = stringUtils.lcase;
 
     let asArray = arrayUtils.asArray;
 
@@ -62,69 +71,28 @@ const $scope = utils?.$scope || function()
     const DAYS = dateConstants.Days;
     const OCCURRENCE = dateConstants.Occurrence;
 
-    class TimeZone
-    {
-        #standardOffset;
-        #name;
-        #abbreviation;
-
-        #skipAheadDate;
-        #fallbackDate;
-
-        constructor( pStandardOffset, pName, pAbbreviation, pSkipAheadDate, pFallbackDate )
-        {
-            this.#standardOffset = pStandardOffset;
-            this.#name = pName;
-            this.#abbreviation = pAbbreviation;
-
-            this.#skipAheadDate = isDate( pSkipAheadDate ) ? new Date( pSkipAheadDate ) : null;
-            this.#fallbackDate = isDate( pFallbackDate ) ? new Date( pFallbackDate ) : null;
-        }
-
-        get standardOffset()
-        {
-            return this.#standardOffset;
-        }
-
-        get name()
-        {
-            return this.#name;
-        }
-
-        get abbreviation()
-        {
-            return this.#abbreviation;
-        }
-
-        get skipAheadDate()
-        {
-            return isDate( this.#skipAheadDate ) ? this.#skipAheadDate : null;
-        }
-
-        get fallbackDate()
-        {
-            return isDate( this.#fallbackDate ) ? new Date( this.#fallbackDate ) : null;
-        }
-    }
-
-    const TIME_ZONES =
-        [];
+    const DEFAULT_LOCALE = new Intl.Locale( localeUtils.DEFAULT_LOCALE_STRING );
 
     const ERAS =
         [
-            { start: new Date( 0, 0, 0, 0, 0, 0 ), end: null, name: "AD" },
-            { start: null, end: new Date( new Date( 0, 0, 0, 0, 0, 0 ).getTime() - 1 ), name: "BC" },
+            { start: new Date( 0, 0, 0, 0, 0, 0 ), end: null, name: "AD", longName: "Anno Domini" },
+            {
+                start: null,
+                end: new Date( new Date( 0, 0, 0, 0, 0, 0 ).getTime() - 1 ),
+                name: "BC",
+                longName: "Before Common Era"
+            },
         ];
 
-    const MONTH_NAMES = Object.freeze( ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"] );
+    const MONTH_NAMES = Object.freeze( localeUtils.DEFAULTS.MONTH_NAMES );
 
-    const MONTH_NAMES_SHORT = Object.freeze( ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] );
+    const MONTH_NAMES_SHORT = Object.freeze( localeUtils.DEFAULTS.MONTH_NAMES_SHORT );
 
-    const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const DAY_NAMES = Object.freeze( localeUtils.DEFAULTS.DAY_NAMES );
 
-    const DAY_NAMES_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const DAY_NAMES_SHORT = Object.freeze( localeUtils.DEFAULTS.DAY_NAMES_SHORT );
 
-    const DAY_LETTERS = ["S", "M", "T", "W", "R", "F", "Sa"];
+    const DAY_LETTERS = Object.freeze( localeUtils.DEFAULTS.DAY_LETTERS );
 
     const REPETITION_RULES =
         {
@@ -134,7 +102,7 @@ const $scope = utils?.$scope || function()
             VARY_FORMAT: 4
         };
 
-    const DEFINED_TOKENS =
+    const DEFINED_TOKENS = Object.freeze(
         [
             { "G": "Era designator" },
             { "y": "Year" },
@@ -152,14 +120,16 @@ const $scope = utils?.$scope || function()
             { "m": "Minute in hour" },
             { "s": "Second in minute" },
             { "S": "Millisecond" }
-        ];
+        ] );
 
-    const SUPPORTED_TOKENS = ([].concat( DEFINED_TOKENS ).map( e => Object.keys( e ).flat() ).flat());
+    const SUPPORTED_TOKENS = Object.freeze( [].concat( DEFINED_TOKENS ).map( e => Object.keys( e ).flat() ).flat() );
 
     const resolveDate = function( pDate )
     {
         return isDate( pDate ) ? pDate : isNumber( pDate ) ? new Date( pDate ) : new Date();
     };
+
+    const resolveLocale = localeUtils.resolveLocale;
 
     /**
      * Common Week Numbering Systems:
@@ -172,7 +142,6 @@ const $scope = utils?.$scope || function()
      * US Week Numbering:
      * This system defines the first week of the year as the first week that has at least 4 days in the new year.
      */
-
     class WeekNumberingSystem
     {
         #firstDayOfWeek;
@@ -275,12 +244,18 @@ const $scope = utils?.$scope || function()
             return isDate( pDate ) ? pDate : isNumber( pDate ) ? new Date( pDate ) : new Date();
         }
 
+        resolveLocale( pLocale )
+        {
+            return resolveLocale( pLocale );
+        }
+
         /**
          * Returns the portion of the date relevant to this token
-         * @param pDate
+         * @param pDate {Date} a date from which to calculate the specified portion
+         * @param pLocale {Intl.Locale|string} the locale to use, if relevant
          * @returns {number|string} the portion of the date relevant to this token
          */
-        getValue( pDate )
+        getValue( pDate, pLocale )
         {
             // subclasses must define
             throw new Error( "Not Implemented" );
@@ -288,10 +263,11 @@ const $scope = utils?.$scope || function()
 
         /**
          * Returns a string representation of the portion of a date corresponding to this token
-         * @param pDate
+         * @param pDate {Date|number} a date to format as a string
+         * @param pLocale {Intl.Locale|string} the Locale to use when formatting the string
          * @return {string} a string representation of the portion of a date corresponding to this token
          */
-        format( pDate )
+        format( pDate, pLocale )
         {
             // subclasses must define
             throw new Error( "Not Implemented" );
@@ -305,7 +281,7 @@ const $scope = utils?.$scope || function()
             super( pCharacters, pRepetitionRule );
         }
 
-        format( pDate )
+        format( pDate, pLocale )
         {
             return asString( this.characters );
         }
@@ -351,28 +327,31 @@ const $scope = utils?.$scope || function()
         /**
          * Returns the portion of the date relevant to this token
          * @param pDate
+         * @param pLocale
          * @returns {number|string} the portion of the date relevant to this token
          */
-        getValue( pDate )
+        getValue( pDate, pLocale )
         {
             // subclasses must define
             throw new Error( "Not Implemented" );
         }
 
-        format( pDate )
+        format( pDate, pLocale )
         {
             const date = this.resolveDate( pDate );
 
-            let value = this.getValue( date );
+            const locale = this.resolveLocale( pLocale );
+
+            let value = this.getValue( date, locale );
 
             if ( this.minValue > value )
             {
-                value += this.minValue;
+                value = this.minValue;
             }
 
             if ( value > this.maxValue )
             {
-                value -= this.maxValue;
+                value = this.minValue + (value - this.maxValue);
             }
 
             return this.formatNumber( value, asString( this.characters ).length );
@@ -395,7 +374,7 @@ const $scope = utils?.$scope || function()
             return [].concat( this.#eras || ERAS );
         }
 
-        getValue( pDate )
+        getValue( pDate, pLocale )
         {
             const date = this.resolveDate( pDate );
 
@@ -483,7 +462,7 @@ const $scope = utils?.$scope || function()
             return value;
         }
 
-        format( pDate )
+        format( pDate, pLocale )
         {
             return this.getValue( pDate );
         }
@@ -502,14 +481,14 @@ const $scope = utils?.$scope || function()
             this.#pm = (asString( pPmString ) || "PM");
         }
 
-        getValue( pDate )
+        getValue( pDate, pLocale )
         {
             const date = this.resolveDate( pDate );
 
             return date.getHours();
         }
 
-        format( pDate )
+        format( pDate, pLocale )
         {
             const value = this.getValue( pDate );
 
@@ -525,14 +504,14 @@ const $scope = utils?.$scope || function()
             super( pCharacters, pRepetitionRule );
         }
 
-        getValue( pDate )
+        getValue( pDate, pLocale )
         {
             const date = this.resolveDate( pDate );
 
             return date.getFullYear();
         }
 
-        format( pDate )
+        format( pDate, pLocale )
         {
             const year = this.getValue( pDate );
 
@@ -570,14 +549,14 @@ const $scope = utils?.$scope || function()
             return this.#abbreviations;
         }
 
-        getValue( pDate )
+        getValue( pDate, pLocale )
         {
             const date = this.resolveDate( pDate );
 
             return date.getMonth();
         }
 
-        format( pDate )
+        format( pDate, pLocale )
         {
             const value = asInt( this.getValue( pDate ) );
 
@@ -608,7 +587,7 @@ const $scope = utils?.$scope || function()
             this.#numberingScheme = pWeekNumberingSystem || new ISO8601_WeekNumberingSystem( pFirstDayOfWeek );
         }
 
-        getValue( pDate )
+        getValue( pDate, pLocale )
         {
             const date = this.resolveDate( pDate );
 
@@ -626,7 +605,7 @@ const $scope = utils?.$scope || function()
             return 0;
         }
 
-        format( pDate )
+        format( pDate, pLocale )
         {
             let value = asString( this.getValue( pDate ) );
 
@@ -647,14 +626,14 @@ const $scope = utils?.$scope || function()
             super( pCharacters, pRepetitionRule );
         }
 
-        getValue( pDate )
+        getValue( pDate, pLocale )
         {
             const date = this.resolveDate( pDate );
 
             return date.getDate();
         }
 
-        format( pDate )
+        format( pDate, pLocale )
         {
             const value = this.getValue( pDate );
 
@@ -677,7 +656,7 @@ const $scope = utils?.$scope || function()
             super( pCharacters, pRepetitionRule );
         }
 
-        getValue( pDate )
+        getValue( pDate, pLocale )
         {
             const date = this.resolveDate( pDate );
 
@@ -688,7 +667,7 @@ const $scope = utils?.$scope || function()
             return dateUtils.daysBetween( first, date );
         }
 
-        format( pDate )
+        format( pDate, pLocale )
         {
             let s = asString( this.getValue( pDate ) );
 
@@ -708,7 +687,7 @@ const $scope = utils?.$scope || function()
             super( pCharacters, pRepetitionRule );
         }
 
-        getValue( pDate )
+        getValue( pDate, pLocale )
         {
             const date = dateUtils.toNoon( this.resolveDate( pDate ) );
 
@@ -723,7 +702,7 @@ const $scope = utils?.$scope || function()
             return index + 1;
         }
 
-        format( pDate )
+        format( pDate, pLocale )
         {
             let s = asString( this.getValue( pDate ) );
 
@@ -766,14 +745,14 @@ const $scope = utils?.$scope || function()
             return [].concat( this.#dayLetters || DAY_LETTERS );
         }
 
-        getValue( pDate )
+        getValue( pDate, pLocale )
         {
             const date = this.resolveDate( pDate );
 
             return date.getDay();
         }
 
-        format( pDate )
+        format( pDate, pLocale )
         {
             let index = asInt( this.getValue( pDate ) );
 
@@ -805,14 +784,14 @@ const $scope = utils?.$scope || function()
             super( pCharacters, 1, 7, pRepetitionRule );
         }
 
-        getValue( pDate )
+        getValue( pDate, pLocale )
         {
             const date = this.resolveDate( pDate );
 
             return date.getDay();
         }
 
-        format( pDate )
+        format( pDate, pLocale )
         {
             const dayNum = this.getValue( pDate );
 
@@ -839,14 +818,14 @@ const $scope = utils?.$scope || function()
             super( pCharacters, pMinValue, pMaxValue, pRepetitionRule );
         }
 
-        getValue( pDate )
+        getValue( pDate, pLocale )
         {
             const date = this.resolveDate( pDate );
 
             return date.getHours(); // return a value between 0-23
         }
 
-        format( pDate )
+        format( pDate, pLocale )
         {
             let value = this.getValue( pDate );
 
@@ -871,7 +850,7 @@ const $scope = utils?.$scope || function()
             super( pCharacter, 0, 59 );
         }
 
-        getValue( pDate )
+        getValue( pDate, pLocale )
         {
             const date = this.resolveDate( pDate );
 
@@ -886,7 +865,7 @@ const $scope = utils?.$scope || function()
             super( pCharacter );
         }
 
-        getValue( pDate )
+        getValue( pDate, pLocale )
         {
             const date = this.resolveDate( pDate );
 
@@ -901,7 +880,7 @@ const $scope = utils?.$scope || function()
             super( pCharacter, 0, 999 );
         }
 
-        getValue( pDate )
+        getValue( pDate, pLocale )
         {
             const date = this.resolveDate( pDate );
 
@@ -929,92 +908,113 @@ const $scope = utils?.$scope || function()
 
     }
 
+    const DEFAULT_OPTIONS =
+        {
+            monthNames: MONTH_NAMES,
+            monthAbbreviations: MONTH_NAMES_SHORT,
+            dayNames: DAY_NAMES,
+            dayAbbreviations: DAY_NAMES_SHORT,
+            dayLetters: DAY_LETTERS,
+            eras: ERAS,
+            amString: "AM",
+            pmString: "PM",
+            weekNumberingSystem: new ISO8601_WeekNumberingSystem(),
+            firstDayOfWeek: DAYS.MONDAY
+        };
 
     class TokenSet
     {
-        #monthNames;
-        #monthAbbreviations;
+        #locale = DEFAULT_LOCALE;
+        #options = DEFAULT_OPTIONS;
 
-        #dayNames;
-        #dayAbbreviations;
-        #dayLetters;
+        #monthNames = MONTH_NAMES;
+        #monthAbbreviations = MONTH_NAMES_SHORT;
 
-        #amString;
-        #pmString;
+        #dayNames = DAY_NAMES;
+        #dayAbbreviations = DAY_NAMES_SHORT;
+        #dayLetters = DAY_LETTERS;
 
-        #eras;
+        #amString = "AM";
+        #pmString = "PM";
 
-        #weekNumberingSystem;
+        #eras = ERAS;
+
+        #weekNumberingSystem = new ISO8601_WeekNumberingSystem();
         #firstDayOfWeek = DAYS.MONDAY;
 
-        constructor( pMonthNames = MONTH_NAMES,
-                     pMonthAbbreviations = MONTH_NAMES_SHORT,
-                     pDayNames = DAY_NAMES,
-                     pDayAbbreviations = DAY_NAMES_SHORT,
-                     pDayLetters = DAY_LETTERS,
-                     pEras = ERAS,
-                     pAmString = "AM",
-                     pPmString = "PM",
-                     pWeekNumberingSystem = new ISO8601_WeekNumberingSystem(),
-                     pFirstDayOfWeek = DAYS.MONDAY )
+        constructor( pLocale = DEFAULT_LOCALE, pOptions = DEFAULT_OPTIONS )
         {
-            this.#monthNames = [].concat( pMonthNames || MONTH_NAMES );
-            this.#monthAbbreviations = [].concat( pMonthAbbreviations || MONTH_NAMES_SHORT );
+            this.#locale = resolveLocale( pLocale );
 
-            this.#dayNames = [].concat( pDayNames || DAY_NAMES );
-            this.#dayAbbreviations = [].concat( pDayAbbreviations || DAY_NAMES_SHORT );
-            this.#dayLetters = [].concat( pDayLetters || DAY_LETTERS );
+            this.#options = Object.assign( {}, pOptions || DEFAULT_OPTIONS );
 
-            this.#eras = [].concat( pEras || ERAS );
+            this.#monthNames = [].concat( this.#options?.monthNames || localeUtils.getMonthNames( this.#locale ) || MONTH_NAMES );
+            this.#monthAbbreviations = [].concat( this.#options?.monthAbbreviations || localeUtils.getMonthAbbreviations( this.#locale ) || MONTH_NAMES_SHORT );
 
-            this.#amString = pAmString;
-            this.#pmString = pPmString;
+            this.#dayNames = [].concat( this.#options?.dayNames || localeUtils.getDayNames( this.#locale ) || DAY_NAMES );
+            this.#dayAbbreviations = [].concat( this.#options?.dayAbbreviations || localeUtils.getDayAbbreviations( this.#locale ) || DAY_NAMES_SHORT );
+            this.#dayLetters = [].concat( this.#options?.dayLetters || localeUtils.getDayLetters( this.#locale ) || DAY_LETTERS );
 
-            this.#weekNumberingSystem = pWeekNumberingSystem || new ISO8601_WeekNumberingSystem();
+            this.#eras = [].concat( this.#options?.eras || localeUtils.getEras( this.#locale ) || ERAS );
 
-            this.#firstDayOfWeek = Math.min( 6, 0 === pFirstDayOfWeek ? 0 : pFirstDayOfWeek || DAYS.MONDAY );
+            this.#amString = this.#options?.amString || ((localeUtils.getAmPmStrings( this.#locale ) || [_mt_str])[0]) || "AM";
+            this.#pmString = this.#options?.pmString || ((localeUtils.getAmPmStrings( this.#locale ) || [_mt_str])[1]) || "PM";
+
+            this.#weekNumberingSystem = this.#options?.weekNumberingSystem || new ISO8601_WeekNumberingSystem();
+
+            this.#firstDayOfWeek = (DAYS.SUNDAY === this.#options.firstDayOfWeek || 7 === this.#options.firstDayOfWeek ? DAYS.SUNDAY : (this.#options.firstDayOfWeek || localeUtils.getFirstDayOfWeek( this.#locale ) || DAYS.MONDAY));
 
             this.#weekNumberingSystem.firstDayOfWeek = this.#firstDayOfWeek;
         }
 
+        get locale()
+        {
+            return Object.freeze( resolveLocale( this.#locale ) || DEFAULT_LOCALE );
+        }
+
+        get options()
+        {
+            return Object.freeze( this.#options || DEFAULT_OPTIONS );
+        }
+
         get monthNames()
         {
-            return [].concat( this.#monthNames || MONTH_NAMES );
+            return [].concat( this.#monthNames || localeUtils.getMonthNames( this.locale ) || MONTH_NAMES );
         }
 
         get monthAbbreviations()
         {
-            return [].concat( this.#monthAbbreviations || MONTH_NAMES_SHORT );
+            return [].concat( this.#monthAbbreviations || localeUtils.getMonthAbbreviations( this.locale ) || MONTH_NAMES_SHORT );
         }
 
         get dayNames()
         {
-            return [].concat( this.#dayNames || DAY_NAMES );
+            return [].concat( this.#dayNames || localeUtils.getDayNames( this.locale ) || DAY_NAMES );
         }
 
         get dayAbbreviations()
         {
-            return [].concat( this.#dayAbbreviations || DAY_NAMES_SHORT );
+            return [].concat( this.#dayAbbreviations || localeUtils.getDayAbbreviations( this.locale ) || DAY_NAMES_SHORT );
         }
 
         get dayLetters()
         {
-            return [].concat( this.#dayLetters || DAY_LETTERS );
+            return [].concat( this.#dayLetters || localeUtils.getDayLetters( this.locale ) || DAY_LETTERS );
         }
 
         get eras()
         {
-            return [].concat( this.#eras || ERAS );
+            return [].concat( this.#eras || localeUtils.getEras( this.locale ) || ERAS );
         }
 
         get amString()
         {
-            return this.#amString;
+            return this.#amString || localeUtils.getAmPmStrings( this.locale )[0] || "AM";
         }
 
         get pmString()
         {
-            return this.#pmString;
+            return this.#pmString || localeUtils.getAmPmStrings( this.locale )[1] || "PM";
         }
 
         get weekNumberingSystem()
@@ -1031,7 +1031,7 @@ const $scope = utils?.$scope || function()
         {
             let char = asString( pCharacters ).slice( 0, 1 );
 
-            if( !SUPPORTED_TOKENS.includes(char) )
+            if ( !SUPPORTED_TOKENS.includes( char ) )
             {
                 return new TokenLiteral( pCharacters );
             }
@@ -1112,7 +1112,6 @@ const $scope = utils?.$scope || function()
             dependencies,
             classes:
                 {
-                    TimeZone,
                     WeekNumberingSystem,
                     ISO8601_WeekNumberingSystem,
                     US_WeekNumberingSystem,
@@ -1141,7 +1140,6 @@ const $scope = utils?.$scope || function()
                 },
             DEFINED_TOKENS,
             SUPPORTED_TOKENS,
-            TIME_ZONES,
             ERAS,
             MONTH_NAMES,
             MONTH_NAMES_SHORT,
@@ -1149,31 +1147,21 @@ const $scope = utils?.$scope || function()
             DAY_NAMES_SHORT,
             DAY_LETTERS,
             REPETITION_RULES,
-            getDefaultTokenSet: function()
+            getDefaultTokenSet: function( pLocale = DEFAULT_LOCALE )
             {
-                return new TokenSet();
+                const locale = resolveLocale( pLocale );
+
+                const baseName = asString( locale.baseName, true ) || "en-US";
+
+                if ( lcase( asString( baseName ) ).startsWith( "en-us" ) )
+                {
+                    return new TokenSet();
+                }
+
             },
-            buildTokenSet: function( pMonthNames = MONTH_NAMES,
-                                     pMonthAbbreviations = MONTH_NAMES_SHORT,
-                                     pDayNames = DAY_NAMES,
-                                     pDayAbbreviations = DAY_NAMES_SHORT,
-                                     pDayLetters = DAY_LETTERS,
-                                     pEras = ERAS,
-                                     pAmString = "AM",
-                                     pPmString = "PM",
-                                     pWeekNumberingSystem = new ISO8601_WeekNumberingSystem(),
-                                     pFirstDayOfWeek = DAYS.MONDAY )
+            buildTokenSet: function( pLocale, pOptions )
             {
-                return new TokenSet( pMonthNames,
-                                     pMonthAbbreviations,
-                                     pDayNames,
-                                     pDayAbbreviations,
-                                     pDayLetters,
-                                     pEras,
-                                     pAmString,
-                                     pPmString,
-                                     pWeekNumberingSystem,
-                                     pFirstDayOfWeek );
+                return new TokenSet( pLocale, pOptions );
             }
         };
 
@@ -1190,6 +1178,4 @@ const $scope = utils?.$scope || function()
 
     return Object.freeze( mod );
 
-
 }());
-
