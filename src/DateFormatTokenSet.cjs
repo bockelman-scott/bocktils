@@ -65,7 +65,7 @@ const $scope = utils?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
-    const dateConstants = dateUtils.DateConstants;
+    const dateConstants = Object.freeze( dateUtils.DateConstants );
 
     const MONTHS = dateConstants.Months;
     const DAYS = dateConstants.Days;
@@ -84,23 +84,25 @@ const $scope = utils?.$scope || function()
             },
         ];
 
-    const MONTH_NAMES = Object.freeze( localeUtils.DEFAULTS.MONTH_NAMES );
+    const MONTH_NAMES = Object.freeze( [].concat( localeUtils.DEFAULTS.MONTH_NAMES || localeUtils.getMonthNames( DEFAULT_LOCALE ) ) );
 
-    const MONTH_NAMES_SHORT = Object.freeze( localeUtils.DEFAULTS.MONTH_NAMES_SHORT );
+    const MONTH_NAMES_SHORT = Object.freeze( [].concat( localeUtils.DEFAULTS.MONTH_NAMES_SHORT || localeUtils.getMonthAbbreviations( DEFAULT_LOCALE ) ) );
 
-    const DAY_NAMES = Object.freeze( localeUtils.DEFAULTS.DAY_NAMES );
+    const DAY_NAMES = Object.freeze( [].concat( localeUtils.DEFAULTS.DAY_NAMES || localeUtils.getDayNames( DEFAULT_LOCALE ) ) );
 
-    const DAY_NAMES_SHORT = Object.freeze( localeUtils.DEFAULTS.DAY_NAMES_SHORT );
+    const DAY_NAMES_SHORT = Object.freeze( [].concat( localeUtils.DEFAULTS.DAY_NAMES_SHORT || localeUtils.getDayAbbreviations( DEFAULT_LOCALE ) ) );
 
-    const DAY_LETTERS = Object.freeze( localeUtils.DEFAULTS.DAY_LETTERS );
+    const DAY_LETTERS = Object.freeze( [].concat( localeUtils.DEFAULTS.DAY_LETTERS || localeUtils.getDayLetters( DEFAULT_LOCALE ) ) );
 
-    const REPETITION_RULES =
+    const FORMATS = Object.assign( {}, localeUtils.FORMATS );
+
+    const REPETITION_RULES = Object.freeze(
         {
             NONE: -32,
             PAD: 0,
             REPEAT: 2,
             VARY_FORMAT: 4
-        };
+        } );
 
     const DEFINED_TOKENS = Object.freeze(
         [
@@ -121,6 +123,113 @@ const $scope = utils?.$scope || function()
             { "s": "Second in minute" },
             { "S": "Millisecond" }
         ] );
+
+    const DEFINED_INTL_OPTIONS = Object.freeze(
+        {
+            weekday: Object.freeze(
+                {
+                    character: "E",
+                    [FORMATS.LONG]: 4,
+                    [FORMATS.SHORT]: 3,
+                    [FORMATS.NARROW]: 1
+                } ),
+            era: Object.freeze(
+                {
+                    character: "G",
+                    [FORMATS.LONG]: 4,
+                    [FORMATS.SHORT]: 3,
+                    [FORMATS.NARROW]: 1
+                } ),
+            year: Object.freeze(
+                {
+                    character: "y",
+                    [FORMATS.LONG]: 4,
+                    [FORMATS.NUMERIC]: 3,
+                    [FORMATS.TWO_DIGIT]: 2
+                } ),
+            month: Object.freeze(
+                {
+                    character: "M",
+                    [FORMATS.NUMERIC]: 1,
+                    [FORMATS.TWO_DIGIT]: 2,
+                    [FORMATS.LONG]: 4,
+                    [FORMATS.SHORT]: 3,
+                    [FORMATS.NARROW]: 1
+                } ),
+            day: Object.freeze(
+                {
+                    character: "d",
+                    [FORMATS.NUMERIC]: 1,
+                    [FORMATS.TWO_DIGIT]: 2,
+                    [FORMATS.LONG]: 4,
+                    [FORMATS.SHORT]: 3,
+                    [FORMATS.NARROW]: 1
+                } ),
+            hour: Object.freeze(
+                {
+                    character: "h",
+                    getCharacter: function( pHourCycle )
+                    {
+                        const cycle = lcase( asString( pHourCycle, true ) || "h12" );
+
+                        switch ( cycle )
+                        {
+                            case "h12":
+                                return "h";
+
+                            case "h11":
+                                return "K";
+                            case "h23":
+                                return "H";
+                            case "h24":
+                                return "k";
+                        }
+                    },
+                    [FORMATS.NUMERIC]: 1,
+                    [FORMATS.TWO_DIGIT]: 2,
+                    [FORMATS.LONG]: 4,
+                    [FORMATS.SHORT]: 3,
+                    [FORMATS.NARROW]: 1
+                } ),
+            minute: Object.freeze(
+                {
+                    character: "m",
+                    [FORMATS.NUMERIC]: 1,
+                    [FORMATS.TWO_DIGIT]: 2,
+                    [FORMATS.LONG]: 4,
+                    [FORMATS.SHORT]: 3,
+                    [FORMATS.NARROW]: 1
+                } ),
+            second: Object.freeze(
+                {
+                    character: "s",
+                    [FORMATS.NUMERIC]: 1,
+                    [FORMATS.TWO_DIGIT]: 2,
+                    [FORMATS.LONG]: 4,
+                    [FORMATS.SHORT]: 3,
+                    [FORMATS.NARROW]: 1
+                } ),
+            fractionalSecondDigits: Object.freeze(
+                {
+                    character: "S",
+                    [FORMATS.NUMERIC]: 1,
+                    [FORMATS.TWO_DIGIT]: 2,
+                    [FORMATS.LONG]: 3,
+                    [FORMATS.SHORT]: 3,
+                    [FORMATS.NARROW]: 1
+                } ),
+            dayPeriod: Object.freeze(
+                {
+                    character: "a",
+                    [FORMATS.NUMERIC]: 1,
+                    [FORMATS.TWO_DIGIT]: 2,
+                    [FORMATS.LONG]: 4,
+                    [FORMATS.SHORT]: 2,
+                    [FORMATS.NARROW]: 1
+                } )
+        } );
+
+    const SUPPORTED_INTL_OPTIONS = Object.freeze( Object.keys( DEFINED_INTL_OPTIONS ) );
 
     const SUPPORTED_TOKENS = Object.freeze( [].concat( DEFINED_TOKENS ).map( e => Object.keys( e ).flat() ).flat() );
 
@@ -272,6 +381,25 @@ const $scope = utils?.$scope || function()
             // subclasses must define
             throw new Error( "Not Implemented" );
         }
+
+        /**
+         * Returns the string that produced this token
+         * @returns {string} the string that produced this token
+         */
+        toPattern()
+        {
+            return this.characters;
+        }
+
+        /**
+         * Returns an object compatible with Intl.DateFormat
+         * @return {object} an object compatible with Intl.DateFormat
+         */
+        toOption()
+        {
+            // subclasses must define
+            throw new Error( "Not Implemented" );
+        }
     }
 
     class TokenLiteral extends Token
@@ -284,6 +412,11 @@ const $scope = utils?.$scope || function()
         format( pDate, pLocale )
         {
             return asString( this.characters );
+        }
+
+        toOption()
+        {
+            return {};
         }
     }
 
@@ -372,6 +505,23 @@ const $scope = utils?.$scope || function()
         get eras()
         {
             return [].concat( this.#eras || ERAS );
+        }
+
+        toPattern()
+        {
+            return super.toPattern();
+        }
+
+        toOption()
+        {
+            let opt = { era: FORMATS.SHORT };
+
+            if ( this.characters.length > 2 )
+            {
+                opt.era = FORMATS.LONG;
+            }
+
+            return Object.freeze( opt );
         }
 
         getValue( pDate, pLocale )
@@ -481,6 +631,22 @@ const $scope = utils?.$scope || function()
             this.#pm = (asString( pPmString ) || "PM");
         }
 
+        toPattern()
+        {
+            return super.toPattern();
+        }
+
+        toOption()
+        {
+            const opt =
+                {
+                    timeStyle: "short",
+                    hourCycle: "h12"
+                };
+
+            return Object.freeze( opt );
+        }
+
         getValue( pDate, pLocale )
         {
             const date = this.resolveDate( pDate );
@@ -502,6 +668,23 @@ const $scope = utils?.$scope || function()
         constructor( pCharacters, pRepetitionRule )
         {
             super( pCharacters, pRepetitionRule );
+        }
+
+        toPattern()
+        {
+            return asString( super.toPattern() ).slice( 0, 4 );
+        }
+
+        toOption()
+        {
+            const opt = { year: FORMATS.NUMERIC };
+
+            if ( 2 === this.characters.length )
+            {
+                opt.year = FORMATS.SHORT;
+            }
+
+            return Object.freeze( opt );
         }
 
         getValue( pDate, pLocale )
@@ -549,6 +732,37 @@ const $scope = utils?.$scope || function()
             return this.#abbreviations;
         }
 
+        toPattern()
+        {
+            return asString( super.toPattern() ).slice( 0, 4 );
+        }
+
+        toOption()
+        {
+            const opt = { month: FORMATS.TWO_DIGIT };
+
+            switch ( this.characters.length )
+            {
+                case 0:
+                case 1:
+                    opt.month = FORMATS.NUMERIC;
+                    break;
+
+                case 2:
+                    break;
+
+                case 3:
+                    opt.month = FORMATS.SHORT;
+                    break;
+
+                default:
+                    opt.month = FORMATS.LONG;
+                    break;
+            }
+
+            return Object.freeze( opt );
+        }
+
         getValue( pDate, pLocale )
         {
             const date = this.resolveDate( pDate );
@@ -585,6 +799,16 @@ const $scope = utils?.$scope || function()
             super( pCharacters, pRepetitionRule );
 
             this.#numberingScheme = pWeekNumberingSystem || new ISO8601_WeekNumberingSystem( pFirstDayOfWeek );
+        }
+
+        toPattern()
+        {
+            return asString( super.toPattern() ).slice( 0, 2 );
+        }
+
+        toOption()
+        {
+            return {};
         }
 
         getValue( pDate, pLocale )
@@ -626,6 +850,23 @@ const $scope = utils?.$scope || function()
             super( pCharacters, pRepetitionRule );
         }
 
+        toPattern()
+        {
+            return asString( super.toPattern() ).slice( 0, 2 );
+        }
+
+        toOption()
+        {
+            const opt = { day: FORMATS.TWO_DIGIT };
+
+            if ( this.characters.length < 2 )
+            {
+                opt.day = FORMATS.NUMERIC;
+            }
+
+            return Object.freeze( opt );
+        }
+
         getValue( pDate, pLocale )
         {
             const date = this.resolveDate( pDate );
@@ -654,6 +895,16 @@ const $scope = utils?.$scope || function()
         constructor( pCharacters, pRepetitionRule = REPETITION_RULES.PAD )
         {
             super( pCharacters, pRepetitionRule );
+        }
+
+        toPattern()
+        {
+            return super.toPattern();
+        }
+
+        toOption()
+        {
+            return {};
         }
 
         getValue( pDate, pLocale )
@@ -685,6 +936,16 @@ const $scope = utils?.$scope || function()
         constructor( pCharacters, pRepetitionRule = REPETITION_RULES.PAD )
         {
             super( pCharacters, pRepetitionRule );
+        }
+
+        toPattern()
+        {
+            return super.toPattern();
+        }
+
+        toOption()
+        {
+            return {};
         }
 
         getValue( pDate, pLocale )
@@ -745,6 +1006,34 @@ const $scope = utils?.$scope || function()
             return [].concat( this.#dayLetters || DAY_LETTERS );
         }
 
+        toPattern()
+        {
+            return asString( super.toPattern() ).slice( 0, 4 );
+        }
+
+        toOption()
+        {
+            const opt = { weekday: FORMATS.LONG };
+
+            switch ( this.characters.length )
+            {
+                case 0:
+                case 1:
+                case 2:
+                    opt.weekday = FORMATS.NARROW;
+                    break;
+
+                case 3:
+                    opt.weekday = FORMATS.SHORT;
+                    break;
+
+                default:
+                    break;
+            }
+
+            return Object.freeze( opt );
+        }
+
         getValue( pDate, pLocale )
         {
             const date = this.resolveDate( pDate );
@@ -784,6 +1073,16 @@ const $scope = utils?.$scope || function()
             super( pCharacters, 1, 7, pRepetitionRule );
         }
 
+        toPattern()
+        {
+            return super.toPattern();
+        }
+
+        toOption()
+        {
+            return {};
+        }
+
         getValue( pDate, pLocale )
         {
             const date = this.resolveDate( pDate );
@@ -797,7 +1096,7 @@ const $scope = utils?.$scope || function()
 
             let s = asString( dayNum );
 
-            if ( 0 === dayNum )
+            if ( DAYS.SUNDAY === dayNum )
             {
                 s = "7";
             }
@@ -816,6 +1115,23 @@ const $scope = utils?.$scope || function()
         constructor( pCharacters, pMinValue, pMaxValue, pRepetitionRule = REPETITION_RULES.PAD )
         {
             super( pCharacters, pMinValue, pMaxValue, pRepetitionRule );
+        }
+
+        toPattern()
+        {
+            return asString( super.toPattern() ).slice( 0, 2 );
+        }
+
+        toOption()
+        {
+            const opt = { hour: FORMATS.TWO_DIGIT };
+
+            if ( this.characters.length < 2 )
+            {
+                opt.hour = FORMATS.NUMERIC;
+            }
+
+            return Object.freeze( opt );
         }
 
         getValue( pDate, pLocale )
@@ -850,6 +1166,23 @@ const $scope = utils?.$scope || function()
             super( pCharacter, 0, 59 );
         }
 
+        toPattern()
+        {
+            return asString( super.toPattern() ).slice( 0, 2 );
+        }
+
+        toOption()
+        {
+            const opt = { minute: FORMATS.TWO_DIGIT };
+
+            if ( this.characters.length < 2 )
+            {
+                opt.minute = FORMATS.NUMERIC;
+            }
+
+            return Object.freeze( opt );
+        }
+
         getValue( pDate, pLocale )
         {
             const date = this.resolveDate( pDate );
@@ -863,6 +1196,23 @@ const $scope = utils?.$scope || function()
         constructor( pCharacter )
         {
             super( pCharacter );
+        }
+
+        toPattern()
+        {
+            return asString( super.toPattern() ).slice( 0, 2 );
+        }
+
+        toOption()
+        {
+            const opt = { second: FORMATS.TWO_DIGIT };
+
+            if ( this.characters.length < 2 )
+            {
+                opt.second = FORMATS.NUMERIC;
+            }
+
+            return Object.freeze( opt );
         }
 
         getValue( pDate, pLocale )
@@ -880,6 +1230,18 @@ const $scope = utils?.$scope || function()
             super( pCharacter, 0, 999 );
         }
 
+        toPattern()
+        {
+            return asString( super.toPattern() ).slice( 0, 3 );
+        }
+
+        toOption()
+        {
+            const opt = { fractionalSecondDigits: this.characters.length };
+
+            return Object.freeze( opt );
+        }
+
         getValue( pDate, pLocale )
         {
             const date = this.resolveDate( pDate );
@@ -891,6 +1253,19 @@ const $scope = utils?.$scope || function()
     class TokenTimeZone extends Token
     {
 
+        toPattern()
+        {
+            return asString( super.toPattern() ).slice( 0, 4 );
+        }
+
+        toOption()
+        {
+            const opt = { timeZoneName: "longOffset" };
+
+            // TODO
+
+            return Object.freeze( opt );
+        }
     }
 
     class TokenGeneralTimeZone extends TokenTimeZone
@@ -908,7 +1283,7 @@ const $scope = utils?.$scope || function()
 
     }
 
-    const DEFAULT_OPTIONS =
+    const DEFAULT_OPTIONS = Object.freeze(
         {
             monthNames: MONTH_NAMES,
             monthAbbreviations: MONTH_NAMES_SHORT,
@@ -920,7 +1295,7 @@ const $scope = utils?.$scope || function()
             pmString: "PM",
             weekNumberingSystem: new ISO8601_WeekNumberingSystem(),
             firstDayOfWeek: DAYS.MONDAY
-        };
+        } );
 
     class TokenSet
     {
@@ -942,11 +1317,13 @@ const $scope = utils?.$scope || function()
         #weekNumberingSystem = new ISO8601_WeekNumberingSystem();
         #firstDayOfWeek = DAYS.MONDAY;
 
-        constructor( pLocale = DEFAULT_LOCALE, pOptions = DEFAULT_OPTIONS )
+        #hourCycle;
+
+        constructor( pLocale = DEFAULT_LOCALE, pOptions = {} )
         {
             this.#locale = resolveLocale( pLocale );
 
-            this.#options = Object.assign( {}, pOptions || DEFAULT_OPTIONS );
+            this.#options = Object.assign( {}, pOptions || {} );
 
             this.#monthNames = [].concat( this.#options?.monthNames || localeUtils.getMonthNames( this.#locale ) || MONTH_NAMES );
             this.#monthAbbreviations = [].concat( this.#options?.monthAbbreviations || localeUtils.getMonthAbbreviations( this.#locale ) || MONTH_NAMES_SHORT );
@@ -965,6 +1342,8 @@ const $scope = utils?.$scope || function()
             this.#firstDayOfWeek = (DAYS.SUNDAY === this.#options.firstDayOfWeek || 7 === this.#options.firstDayOfWeek ? DAYS.SUNDAY : (this.#options.firstDayOfWeek || localeUtils.getFirstDayOfWeek( this.#locale ) || DAYS.MONDAY));
 
             this.#weekNumberingSystem.firstDayOfWeek = this.#firstDayOfWeek;
+
+            this.#hourCycle = this.#locale?.hourCycle;
         }
 
         get locale()
@@ -1005,6 +1384,11 @@ const $scope = utils?.$scope || function()
         get eras()
         {
             return [].concat( this.#eras || localeUtils.getEras( this.locale ) || ERAS );
+        }
+
+        get hourCycle()
+        {
+            return this.#hourCycle;
         }
 
         get amString()
@@ -1063,13 +1447,13 @@ const $scope = utils?.$scope || function()
                     return new TokenOccurrenceOfDayInMonth( pCharacters );
 
                 case "E":
-                    return new TokenDayName( pCharacters );
+                    return new TokenDayName( pCharacters, this.dayNames, this.dayAbbreviations, this.dayLetters );
 
                 case "u":
                     return new TokenDayNumber( pCharacters );
 
                 case "a":
-                    return new TokenAmPm( pCharacters );
+                    return new TokenAmPm( pCharacters, this.amString, this.pmString );
 
                 case "H":
                     return new TokenHour( pCharacters, 0, 23 );
@@ -1105,6 +1489,88 @@ const $scope = utils?.$scope || function()
                     return new TokenLiteral( pCharacters );
             }
         }
+
+        /**
+         * Returns an array of Tokens corresponding to the Intl.DateFormat option/value specified
+         *
+         * @param pOptions {object} an object defining one or more of
+         * the Date-time component options compatible with Intl.DateFormat
+         * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat/DateTimeFormat#date-time_component_options
+         *
+         * @return {Array<Token>} an array of Tokens corresponding to the Intl.DateFormat option/value specified
+         *
+         * NOTE: style shortcuts are not supported
+         */
+        fromOptions( pOptions )
+        {
+            const options = Object.assign( {}, pOptions || {} );
+
+            const tokens = [];
+
+            const entries = objectUtils.getEntries( options );
+
+            for( let entry of entries )
+            {
+                const key = asString( entry.key || entry[0] );
+
+                let value = entry.value || entry[1];
+                value = isNumber( value ) ? asInt( value ) : asString( value, true );
+
+                const option = DEFINED_INTL_OPTIONS[key];
+
+                if ( option )
+                {
+                    let char = _mt_str;
+                    let repetitions = isNumber( value ) ? value : asInt( option[value] );
+
+                    switch ( key )
+                    {
+                        case "hour":
+                            char = option.getCharacter( asString( options["hourCycle"] || this.hourCycle || "h12" ) );
+                            break;
+
+                        default:
+                            char = option.character;
+                            break;
+                    }
+
+                    tokens.push( this.getToken( asString( char ).repeat( repetitions ) ) );
+                }
+            }
+
+            let results = [];
+
+            for( let i = 0, n = tokens.length - 1; i < n; i++ )
+            {
+                const left = tokens[i];
+                const right = tokens[i + 1];
+
+                results.push( left );
+
+                if ( left.characters.length > 2 || ["E"].includes( left.characters[0] ) || ["h", "H", "K", "k", "G", "a"].includes( right.characters[0] ) )
+                {
+                    results.push( new TokenLiteral( constants._spc ) );
+                }
+                else if ( ["L", "M", "D", "d", "y"].includes( left.characters[0] ) )
+                {
+                    if ( ["L", "M", "D", "d", "y"].includes( right.characters[0] ) )
+                    {
+                        results.push( new TokenLiteral( constants._slash ) );
+                    }
+                }
+                else if ( ["h", "H", "K", "k", "m", "s", "S"].includes( left.characters[0] ) )
+                {
+                    if ( ["h", "H", "K", "k", "m", "s", "S"].includes( right.characters[0] ) )
+                    {
+                        results.push( new TokenLiteral( constants._colon ) );
+                    }
+                }
+            }
+
+            results.push( tokens[tokens.length - 1] );
+
+            return Object.freeze( results );
+        };
     }
 
     const mod =
@@ -1138,14 +1604,19 @@ const $scope = utils?.$scope || function()
                     TokenIso8601TimeZone,
                     TokenSet
                 },
+            DEFAULT_LOCALE,
+            DEFAULT_OPTIONS: Object.freeze( Object.assign( {}, DEFAULT_OPTIONS ) ),
             DEFINED_TOKENS,
             SUPPORTED_TOKENS,
+            DEFINED_INTL_OPTIONS,
+            SUPPORTED_INTL_OPTIONS,
             ERAS,
             MONTH_NAMES,
             MONTH_NAMES_SHORT,
             DAY_NAMES,
             DAY_NAMES_SHORT,
             DAY_LETTERS,
+            FORMATS,
             REPETITION_RULES,
             getDefaultTokenSet: function( pLocale = DEFAULT_LOCALE )
             {
@@ -1162,7 +1633,8 @@ const $scope = utils?.$scope || function()
             buildTokenSet: function( pLocale, pOptions )
             {
                 return new TokenSet( pLocale, pOptions );
-            }
+            },
+            DateConstants: dateConstants
         };
 
 

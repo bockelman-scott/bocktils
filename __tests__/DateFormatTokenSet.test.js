@@ -24,6 +24,8 @@ const TokenMinute = tokenClasses.TokenMinute;
 const TokenSecond = tokenClasses.TokenSecond;
 const TokenMillisecond = tokenClasses.TokenMillisecond;
 
+const TokenSet = tokenClasses.TokenSet;
+
 const defaultTokenSet = tokenSet.getDefaultTokenSet();
 
 let asString = stringUtils.asString;
@@ -306,6 +308,168 @@ describe( "TokenHour", () =>
 
         expect( token.format( new Date( 2024, 9, 3, 8, 0, 0 ) ) ).toEqual( "008" );
     } );
+
+} );
+
+describe( "TokenMinute", () =>
+{
+    test( "TokenMinute returns 5 when the token is m", () =>
+    {
+        const token = new TokenMinute( "m" );
+
+        expect( token.format( new Date( 2024, 9, 3, 8, 5, 0 ) ) ).toEqual( "5" );
+    } );
+
+    test( "TokenMinute returns 05 when the token is mm", () =>
+    {
+        const token = new TokenMinute( "mm" );
+
+        expect( token.format( new Date( 2024, 9, 3, 8, 5, 0 ) ) ).toEqual( "05" );
+    } );
+
+} );
+
+describe( "TokenSecond", () =>
+{
+    test( "TokenSecond returns 5 when the token is s", () =>
+    {
+        const token = new TokenSecond( "s" );
+
+        expect( token.format( new Date( 2024, 9, 3, 8, 5, 5 ) ) ).toEqual( "5" );
+    } );
+
+    test( "TokenSecond returns 05 when the token is ss", () =>
+    {
+        const token = new TokenSecond( "ss" );
+
+        expect( token.format( new Date( 2024, 9, 3, 8, 5, 5 ) ) ).toEqual( "05" );
+    } );
+
+} );
+
+describe( "TokenMillisecond", () =>
+{
+    test( "TokenMillisecond returns 5 when the token is S", () =>
+    {
+        const token = new TokenMillisecond( "S" );
+
+        expect( token.format( new Date( 2024, 9, 3, 8, 5, 5, 5 ) ) ).toEqual( "5" );
+    } );
+
+    test( "TokenSecond returns 05 when the token is ss", () =>
+    {
+        const token = new TokenMillisecond( "SS" );
+
+        expect( token.format( new Date( 2024, 9, 3, 8, 5, 5, 5 ) ) ).toEqual( "05" );
+    } );
+
+    test( "TokenSecond returns 005 when the token is SSS", () =>
+    {
+        const token = new TokenMillisecond( "SSS" );
+
+        expect( token.format( new Date( 2024, 9, 3, 8, 5, 5, 5 ) ) ).toEqual( "005" );
+    } );
+
+} );
+
+
+describe( "TokenSet Locales", () =>
+{
+    test( "TokenSet constructed for es locale uses Spanish month names", () =>
+    {
+        const tokenSet = new TokenSet( "es" );
+
+        expect( tokenSet.monthNames ).toEqual( [
+                                                   "enero",
+                                                   "febrero",
+                                                   "marzo",
+                                                   "abril",
+                                                   "mayo",
+                                                   "junio",
+                                                   "julio",
+                                                   "agosto",
+                                                   "septiembre",
+                                                   "octubre",
+                                                   "noviembre",
+                                                   "diciembre"
+                                               ] );
+
+        expect( tokenSet.monthAbbreviations ).toEqual( [
+                                                           "ene",
+                                                           "feb",
+                                                           "mar",
+                                                           "abr",
+                                                           "may",
+                                                           "jun",
+                                                           "jul",
+                                                           "ago",
+                                                           "sept",
+                                                           "oct",
+                                                           "nov",
+                                                           "dic"
+                                                       ] );
+
+    } );
+
+    test( "TokenSet constructed for es locale uses Spanish day names", () =>
+    {
+        const tokenSet = new TokenSet( "es" );
+
+        expect( tokenSet.dayNames ).toEqual( [
+                                                 "domingo",
+                                                 "lunes",
+                                                 "martes",
+                                                 "miércoles",
+                                                 "jueves",
+                                                 "viernes",
+                                                 "sábado"
+                                             ] );
+
+        expect( tokenSet.dayAbbreviations ).toEqual( [
+                                                         "dom",
+                                                         "lun",
+                                                         "mar",
+                                                         "mié",
+                                                         "jue",
+                                                         "vie",
+                                                         "sáb"
+                                                     ] );
+
+        expect( tokenSet.dayLetters ).toEqual( [
+                                                   "D",
+                                                   "L",
+                                                   "M",
+                                                   "X",
+                                                   "J",
+                                                   "V",
+                                                   "S"
+                                               ] );
+    } );
+
+    test( "TokenSet constructed for es locale uses Spanish terms for am/pm", () =>
+    {
+        const tokenSet = new TokenSet( "es" );
+
+        expect( tokenSet.amString ).toEqual( " a. m." );
+        expect( tokenSet.pmString ).toEqual( " p. m." );
+    } );
+
+    test( "TokenSet constructed for es locale uses Spanish terms for Era", () =>
+    {
+        const tokenSet = new TokenSet( "es" );
+
+        const eras = tokenSet.eras;
+
+        // AD
+        expect( eras[0].name ).toEqual( "d. C." );
+        expect( eras[0].longName ).toEqual( "después de Cristo" );
+
+        //BC
+        expect( eras[1].name ).toEqual( "a. C." );
+        expect( eras[1].longName ).toEqual( "antes de Cristo" );
+
+    } );
+
 
 } );
 

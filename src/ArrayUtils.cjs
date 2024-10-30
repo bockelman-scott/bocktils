@@ -1862,6 +1862,25 @@ const $scope = constants?.$scope || function()
         return strA === strB && ((arrA?.length || 0) === (arrB?.length || 0));
     };
 
+    const includesAny = function( pArr, ...pSearchFor )
+    {
+        const a = asArray( pArr );
+        const b = asArray( pSearchFor );
+
+        let result = false;
+
+        for( let elem of b )
+        {
+            if ( a.includes( elem ) )
+            {
+                result = true;
+                break;
+            }
+        }
+
+        return result;
+    };
+
     /**
      * Returns true if either of the 2 arrays contains the other
      *
@@ -2473,6 +2492,7 @@ const $scope = constants?.$scope || function()
             copyArray,
             calculateLength,
             arraysEqual,
+            includesAny,
             areSubsets,
             superset,
             union,

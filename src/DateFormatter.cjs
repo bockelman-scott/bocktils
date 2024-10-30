@@ -51,6 +51,8 @@ const $scope = utils?.$scope || function()
     let asString = stringUtils.asString;
     let isBlank = stringUtils.isBlank;
 
+    let asArray = arrayUtils.asArray;
+
     constants.importUtilities( this, constants, typeUtils, stringUtils, arrayUtils, objectUtils );
 
     const INTERNAL_NAME = "__BOCK__DATE_FORMATTER__";
@@ -61,6 +63,8 @@ const $scope = utils?.$scope || function()
     }
 
     const TokenSet = tokenSetUtils.classes.TokenSet;
+
+    const Token = tokenSetUtils.classes.Token;
 
     const DEFAULT_LOCALE = Object.freeze( new Intl.Locale( "en-US" ) );
 
@@ -75,57 +79,6 @@ const $scope = utils?.$scope || function()
 
     const resolveLocale = localeUtils.resolveLocale;
 
-    const processFormat = function( pFormat = DEFAULT_FORMAT, pTokenSet = DEFAULT_TOKEN_SET )
-    {
-        let arr = (asString( pFormat ) || DEFAULT_FORMAT).split( constants._mt_chr );
-
-        const tokenSet = pTokenSet || DEFAULT_TOKEN_SET;
-
-        let format = [];
-
-        let elem = constants._mt_str;
-
-        for( let i = 0, len = arr.length; i < len; i++ )
-        {
-            const char = arr.charAt( i );
-
-            if ( char === elem.slice( -1 ) )
-            {
-                elem += char;
-            }
-            else
-            {
-                format.push( elem );
-                elem = constants._mt_str;
-            }
-        }
-
-        format.map( e => tokenSet.getToken( e ) );
-
-        return format;
-    };
-
-    const format = function( pDate, pFormat = DEFAULT_FORMAT, pTokenSet = DEFAULT_TOKEN_SET )
-    {
-        const date = resolveDate( pDate );
-
-        let format = processFormat( pFormat, pTokenSet );
-
-        format = format.map( e => e.format( date ) );
-
-        return format.join( constants._mt_str );
-    };
-
-    const convertOptionsToPattern = function( pOptions, pTokenSet = DEFAULT_TOKEN_SET )
-    {
-
-    };
-
-    const convertPatternToOptions = function( pPattern, pTokenSet = DEFAULT_TOKEN_SET )
-    {
-
-    };
-
     class DateFormatter
     {
         #locale = DEFAULT_LOCALE;
@@ -133,6 +86,8 @@ const $scope = utils?.$scope || function()
 
         #pattern = DEFAULT_FORMAT;
         #options = null;
+
+        #useIntlDateFormat = false;
 
         constructor( pFormat = DEFAULT_FORMAT, pLocale = DEFAULT_LOCALE, pTokenSet = DEFAULT_TOKEN_SET )
         {
@@ -143,8 +98,14 @@ const $scope = utils?.$scope || function()
             this.#pattern = isString( pFormat ) ? asString( pFormat ) : isObject( pFormat ) ? null : DEFAULT_FORMAT;
 
             this.#options = isString( pFormat ) ? null : isObject( pFormat ) ? Object.assign( {}, pFormat ) : null;
+
+            this.#useIntlDateFormat = isObject( pFormat ) && (arrayUtils.includesAny( Object.keys( pFormat ), ["dateStyle", "timeStyle"] ) || arrayUtils.includesAny( Object.keys( pFormat ), tokenSetUtils.SUPPORTED_INTL_OPTIONS ));
         }
 
+        /**
+         *
+         * @returns {Readonly<Intl.Locale>}
+         */
         get locale()
         {
             return Object.freeze( resolveLocale( this.#locale ) );
@@ -152,30 +113,71 @@ const $scope = utils?.$scope || function()
 
         get tokenSet()
         {
-            return Object.freeze( (this.#tokenSet instanceof TokenSet) ? this.#tokenSet : tokenSetUtils.getDefaultTokenSet( this.locale ) );
+            this.#tokenSet = Object.freeze( (this.#tokenSet instanceof TokenSet) ? this.#tokenSet : tokenSetUtils.getDefaultTokenSet( this.locale ) );
+            if ( !localeUtils.isSameLocale( this.#tokenSet.locale, this.#locale ) )
+            {
+                this.#tokenSet = new TokenSet( this.locale, this.#tokenSet.options );
+            }
+            return this.#tokenSet || tokenSetUtils.getDefaultTokenSet( this.locale );
+        }
+
+        get useIntlDateFormat()
+        {
+            return !!this.#useIntlDateFormat;
+        }
+
+        convertOptionsToPattern( pOptions, pTokenSet )
+        {
+            let tokenSet = this.resolveTokenSet( pTokenSet || this.tokenSet ) || this.tokenSet;
+
+            const tokens = tokenSet.fromOptions( pOptions );
+
+            const characters = tokens.map( token => token.characters );
+
+            return characters.join( constants._mt_chr );
+        }
+
+        /**
+         * Returns an object suitable for using to construct an instance of Intl.DateFormat
+         *
+         * @param pPattern {string} a date format pattern, such as "MM/dd/yyyy hh:mm:ss a"
+         * @param pTokenSet {TokenSet} the token set to use to interpret the date format
+         * @returns {Readonly<{}>} an object suitable for using to construct an instance of Intl.DateFormat
+         */
+        convertPatternToOptions( pPattern, pTokenSet )
+        {
+            let tokenSet = this.resolveTokenSet( pTokenSet || this.tokenSet ) || this.tokenSet;
+
+            const tokens = this.processFormat( pPattern, tokenSet );
+
+            const options = tokens.map( token => token.toOption() );
+
+            let obj = {};
+
+            for( let option of options )
+            {
+                obj = Object.assign( obj, option );
+            }
+
+            return Object.freeze( obj );
         }
 
         get pattern()
         {
             if ( isNull( this.#pattern ) || (_mt_str === asString( this.#pattern, true )) )
             {
-                this.#pattern = convertOptionsToPattern( this.#options, this.tokenSet );
+                this.#pattern = this.convertOptionsToPattern( this.#options, this.tokenSet );
             }
-            return asString( this.#pattern );
+            return asString( this.#pattern ) || DEFAULT_FORMAT;
         }
 
         get options()
         {
             if ( isNull( this.#options ) )
             {
-                this.#options = convertPatternToOptions( this.#pattern, this.tokenSet );
+                this.#options = this.convertPatternToOptions( this.#pattern, this.tokenSet );
             }
             return Object.freeze( Object.assign( {}, this.#options ) );
-        }
-
-        resolveLocale( pLocale )
-        {
-            return (isNull( pLocale ) || (isString( pLocale ) && isBlank( pLocale ))) ? this.locale : resolveLocale( pLocale );
         }
 
         resolveTokenSet( pTokenSet )
@@ -187,17 +189,67 @@ const $scope = utils?.$scope || function()
             return this.tokenSet;
         }
 
-        format( pDate, pFormat = _mt_str, pLocale = _mt_str, pTokenSet = null )
+        processFormat( pFormat, pTokenSet )
         {
-            const date = resolveDate( pDate );
+            const pattern = pFormat || this.pattern;
 
-            const locale = this.resolveLocale( pLocale );
+            let arr = (asString( pattern ) || DEFAULT_FORMAT).split( constants._mt_chr );
 
             const tokenSet = this.resolveTokenSet( pTokenSet );
 
+            let format = [];
 
+            let elem = _mt_str;
+
+            for( let i = 0, len = arr.length; i < len; i++ )
+            {
+                const char = arr[i];
+
+                if ( _mt_str === elem || char === elem.slice( -1 ) )
+                {
+                    elem += char;
+                }
+                else
+                {
+                    format.push( elem );
+                    elem = char;
+                }
+            }
+
+            if ( _mt_str !== elem )
+            {
+                format.push( elem );
+            }
+
+            format = format.map( e => tokenSet.getToken( e ) ).filter( e => e instanceof Token );
+
+            return format;
         }
 
+        format( pDate )
+        {
+            const date = resolveDate( pDate );
+
+            if ( !this.useIntlDateFormat )
+            {
+                let format = this.processFormat( this.pattern, this.tokenSet );
+
+                format = format.map( e => e.format( date ) );
+
+                return format.join( constants._mt_str );
+            }
+
+            if ( isObject( this.options ) )
+            {
+                const options = Object.assign( {}, this.options || {} );
+
+                const dateTimeFormat = new Intl.DateTimeFormat( this.locale.baseName, options );
+
+                return dateTimeFormat.format( date );
+            }
+
+            return date.toLocaleString( [this.locale, DEFAULT_LOCALE] );
+        }
     }
 
     const mod =
@@ -209,6 +261,7 @@ const $scope = utils?.$scope || function()
             DEFAULT_TOKEN_SET,
             DEFAULT_FORMAT,
             DateFormatter,
+            classes: { DateFormatter }
         };
 
     if ( _ud !== typeof module )

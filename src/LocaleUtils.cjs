@@ -62,6 +62,16 @@ const $scope = utils?.$scope || function()
     const FORMAT_SHORT = "short";
     const FORMAT_NARROW = "narrow";
 
+    const FORMAT_2DIGIT = "2-digit";
+    const FORMAT_NUMERIC = "numeric";
+
+    let START_AD = new Date( 1, 0, 1, 0, 0, 0, 0 );
+    START_AD.setFullYear( START_AD.getFullYear() - 1900 );
+
+    let END_AD = new Date( START_AD.getTime() - 1 );
+    END_AD.setFullYear( START_AD.getFullYear() - 2 );
+    END_AD.setDate( START_AD.getDate() - 1 );
+
     const DEFAULTS = Object.freeze(
         {
             LOCALE_STRING: DEFAULT_LOCALE_STRING,
@@ -74,14 +84,14 @@ const $scope = utils?.$scope || function()
             ERAS:
                 [
                     {
-                        start: new Date( 0, 0, 0, 0, 0, 0 ),
+                        start: START_AD,
                         end: null,
                         name: "AD",
                         longName: "Anno Domini"
                     },
                     {
                         start: null,
-                        end: new Date( new Date( 0, 0, 0, 0, 0, 0 ).getTime() - 1 ),
+                        end: END_AD,
                         name: "BC",
                         longName: "Before Common Era"
                     },
@@ -90,7 +100,9 @@ const $scope = utils?.$scope || function()
                 {
                     LONG: FORMAT_LONG,
                     SHORT: FORMAT_SHORT,
-                    NARROW: FORMAT_NARROW
+                    NARROW: FORMAT_NARROW,
+                    TWO_DIGIT: FORMAT_2DIGIT,
+                    NUMERIC: FORMAT_NUMERIC
                 }
         } );
 
@@ -129,7 +141,33 @@ const $scope = utils?.$scope || function()
 
         let locale = resolveLocale( pLocale );
 
-        return locale === DEFAULT_LOCALE || locale.baseName === DEFAULT_LOCALE_STRING;
+        return locale === DEFAULT_LOCALE || asString( locale.baseName ) === DEFAULT_LOCALE_STRING;
+    }
+
+    function isSameLocale( pLocaleA, pLocaleB )
+    {
+        let localeA = resolveLocale( pLocaleA );
+        let localeB = resolveLocale( pLocaleB );
+
+        return localeA === localeB || localeA.baseName === localeB.baseName;
+    }
+
+    function isSameLanguage( pLocaleA, pLocaleB )
+    {
+        let localeA = resolveLocale( pLocaleA );
+        let localeB = resolveLocale( pLocaleB );
+
+        if ( isSameLocale( localeA, localeB ) )
+        {
+            return true;
+        }
+
+        return asString( localeA.baseName ).split( constants._hyphen )[0] === asString( localeB.baseName ).split( constants._hyphen )[0];
+    }
+
+    function isDefaultLanguage( pLocale )
+    {
+        return isDefaultLocale( pLocale ) || isSameLanguage( DEFAULT_LOCALE, pLocale );
     }
 
     const getMonthDisplayValues = function( pLocale, pFormat )
@@ -181,17 +219,17 @@ const $scope = utils?.$scope || function()
 
     const getDayNames = function( pLocale )
     {
-        return getMonthDisplayValues( pLocale, FORMAT_LONG );
+        return getDayDisplayValues( pLocale, FORMAT_LONG );
     };
 
     const getDayAbbreviations = function( pLocale )
     {
-        return getMonthDisplayValues( pLocale, FORMAT_SHORT );
+        return getDayDisplayValues( pLocale, FORMAT_SHORT );
     };
 
     const getDayLetters = function( pLocale )
     {
-        return getMonthDisplayValues( pLocale, FORMAT_NARROW );
+        return getDayDisplayValues( pLocale, FORMAT_NARROW );
     };
 
     const getEras = function( pLocale )
@@ -214,8 +252,8 @@ const $scope = utils?.$scope || function()
             eras.push( {
                            start: era.start,
                            end: era.end,
-                           name: dfShort.format( era.start || era.end ),
-                           longName: dfLong.format( era.start || era.end )
+                           name: asString( dfShort.format( era.start || era.end ) ).replace( /[\d\/\\]/g, _mt_str ).trim(),
+                           longName: asString( dfLong.format( era.start || era.end ) ).replace( /[\d\/\\]/g, _mt_str ).trim()
                        } );
         }
 
@@ -231,10 +269,11 @@ const $scope = utils?.$scope || function()
             return Object.freeze( ["AM", "PM"] );
         }
 
-        const dateTimeFormat = new Intl.DateTimeFormat( locale.baseName || pLocale, {
-            timeStyle: "short",
-            hourCycle: "h12"
-        } );
+        const dateTimeFormat = new Intl.DateTimeFormat( locale.baseName || pLocale,
+                                                        {
+                                                            timeStyle: "short",
+                                                            hourCycle: "h12"
+                                                        } );
 
         return amPmDates.map( e => asString( dateTimeFormat.format( e ) ).replace( /(0?8|20)[: ]?(00)([: ]?(00))?/, _mt_str ) );
     };
@@ -288,10 +327,15 @@ const $scope = utils?.$scope || function()
                 {
                     LONG: FORMAT_LONG,
                     SHORT: FORMAT_SHORT,
-                    NARROW: FORMAT_NARROW
+                    NARROW: FORMAT_NARROW,
+                    TWO_DIGIT: FORMAT_2DIGIT,
+                    NUMERIC: FORMAT_NUMERIC,
                 },
             resolveLocale,
             isDefaultLocale,
+            isDefaultLanguage,
+            isSameLocale,
+            isSameLanguage,
             getMonthNames,
             getMonthAbbreviations,
             getMonthShortNames: getMonthAbbreviations,

@@ -95,7 +95,7 @@ const $scope = utils?.$scope || function()
                     FRIDAY: 5,
                     SATURDAY: 6
                 } ),
-            Occurrence:
+            Occurrence: Object.freeze(
                 {
                     LAST: -1,
                     FIRST: 0,
@@ -108,13 +108,13 @@ const $scope = utils?.$scope || function()
                     EIGHTH: 7,
                     NINTH: 8,
                     TENTH: 9
-                },
-            Direction:
+                } ),
+            Direction: Object.freeze(
                 {
                     FUTURE: 0,
                     PAST: -1
-                },
-            Units: UNIT,
+                } ),
+            Units: Object.freeze( UNIT ),
             MILLISECONDS_PER_SECOND: 1_000,
             SECONDS_PER_MINUTE: 60,
             MINUTES_PER_HOUR: 60,
