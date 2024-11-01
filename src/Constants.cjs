@@ -693,6 +693,7 @@
             _ellipsis,
             _lf,
             _crlf,
+            _nbsp: " ",
             _browser,
             _worker,
             _nodejs,

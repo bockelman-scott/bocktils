@@ -47,6 +47,8 @@ const $scope = utils?.$scope || function()
     let isBlank = stringUtils.isBlank;
     let lcase = stringUtils.lcase;
 
+    let asInt = stringUtils.asInt;
+
     constants.importUtilities( this, constants, typeUtils, stringUtils, arrayUtils, objectUtils );
 
     const INTERNAL_NAME = "__BOCK__LOCALE_UTILS__";
@@ -275,7 +277,7 @@ const $scope = utils?.$scope || function()
                                                             hourCycle: "h12"
                                                         } );
 
-        return amPmDates.map( e => asString( dateTimeFormat.format( e ) ).replace( /(0?8|20)[: ]?(00)([: ]?(00))?/, _mt_str ) );
+        return amPmDates.map( e => asString( dateTimeFormat.format( e ) ).replace( /(0?8|20)[: ]?(00)([: ]?(00))?/, _mt_str ).trim() );
     };
 
     const getWeekData = function( pLocale )
@@ -347,7 +349,8 @@ const $scope = utils?.$scope || function()
             getEras,
             getAmPmStrings,
             getWeekData,
-            getFirstDayOfWeek
+            getFirstDayOfWeek,
+
 
         };
 

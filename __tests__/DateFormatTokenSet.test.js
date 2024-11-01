@@ -450,8 +450,8 @@ describe( "TokenSet Locales", () =>
     {
         const tokenSet = new TokenSet( "es" );
 
-        expect( tokenSet.amString ).toEqual( " a. m." );
-        expect( tokenSet.pmString ).toEqual( " p. m." );
+        expect( tokenSet.amString ).toEqual( "a. m." );
+        expect( tokenSet.pmString ).toEqual( "p. m." );
     } );
 
     test( "TokenSet constructed for es locale uses Spanish terms for Era", () =>
