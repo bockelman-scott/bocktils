@@ -522,6 +522,108 @@ const $scope = constants?.$scope || function()
         return instanceOfAny( pObject, ...pListedClasses );
     };
 
+
+    /**
+     * Returns the name of the class of which the specified object is an instance
+     * or the name of the class if the specified value *is* a class (function)
+     * @param pObject an instance of some class or a function that is a class
+     * @returns {string} the name of the class of which the object is an instance or the name of the class if the object is a class function
+     */
+    const getClassName = function( pObject )
+    {
+        const obj = pObject || {};
+
+        let name = _mt_str;
+
+        if ( obj )
+        {
+            if ( isClass( obj ) )
+            {
+                name = asString( obj.name || asString( obj.constructor ) );
+            }
+
+            if ( isBlank( name ) )
+            {
+                name = asString( obj?.constructor?.name || obj?.prototype?.constructor?.name || obj?.prototype?.name );
+            }
+        }
+
+        return name;
+    };
+
+    /**
+     * Returns the class (function) of which the specified object is an instance
+     * or the class itself if the specified value *is* a class (function)
+     * @param pObject an instance of some class or a function that is a class
+     * @param pOptions an object to pass options to the isClass method of TypeUtils
+     * @returns {string} the class of which the object is an instance or the class itself if the object is a class function
+     */
+    const getClass = function( pObject, pOptions = { strict: true } )
+    {
+        const options = Object.assign( {}, pOptions || {} );
+
+        const obj = pObject || {};
+
+        let clazz = isClass( obj, options ) ? obj : obj?.constructor || obj?.prototype?.constructor || obj?.prototype || obj?.__proto__;
+
+        if ( isClass( clazz, options ) )
+        {
+            return clazz;
+        }
+
+        if ( obj )
+        {
+            if ( isClass( obj, options?.strict ) )
+            {
+                clazz = obj;
+            }
+
+            if ( isClass( clazz, options?.strict ) )
+            {
+                return clazz;
+            }
+
+            let _class = clazz;
+
+            const loopCap = new IterationCap( 5 );
+
+            // the IterationCap object will return reached when iterations exceed the cap,
+            // so ignore the linter warnings
+            // noinspection LoopStatementThatDoesntLoopJS
+            while ( !isClass( _class, options?.strict ) && !loopCap.reached )
+            {
+                const tries = loopCap.iterations;
+
+                switch ( tries )
+                {
+                    case 0:
+                    case 1:
+                        _class = (obj.constructor || obj?.prototype?.constructor) || _class;
+                        break;
+
+                    case 2:
+                        _class = (obj?.prototype?.constructor || isClass( obj?.prototype, options?.strict ) ? obj?.prototype : _class);
+                        break;
+
+                    case 3:
+                        _class = isClass( obj?.prototype, options?.strict ) ? obj?.prototype : _class;
+                        break;
+
+                    case 4:
+                        _class = isClass( obj?.__proto__, options?.strict ) ? obj?.__proto__ : _class;
+                        break;
+
+                    default:
+                        break;
+                }
+            }
+
+            return (isClass( _class, options?.strict ) ? _class : (isClass( clazz, options?.strict ) ? clazz : (isClass( clazz ) ? clazz : Object))) || Object;
+        }
+
+        return clazz;
+    };
+
     const defaultFor = function( pType )
     {
         let type = isString( pType ) ? (_mt_str + pType).toLowerCase() : typeof (pType);
@@ -835,6 +937,8 @@ const $scope = constants?.$scope || function()
             isSymbol,
             isType,
             instanceOfAny,
+            getClassName,
+            getClass,
             defaultFor,
             castTo,
             classes: { TriState, Option, TypedOption, StringOption, NumericOption, BooleanOption, Result },

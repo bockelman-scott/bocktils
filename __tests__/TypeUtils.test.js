@@ -10,7 +10,7 @@ let JS_TYPES = typeUtils.JS_TYPES;
 
 const anAsyncFunction = async function()
 {
-    await console.log( "When I get around to it..." );
+    // await console.log( "When I get around to it..." );
 };
 
 class A
@@ -22,20 +22,20 @@ class A
 
     doSomething()
     {
-        console.log( "I did it!" );
+        // console.log( "I did it!" );
     }
 
     makeFunction()
     {
         return function()
         {
-            console.log( "A function that returns a function?!  What will they think of next?!!" );
+            // console.log( "A function that returns a function?!  What will they think of next?!!" );
         };
     }
 
     static doNothing()
     {
-        console.log( "\"I didn't do it.  No one saw me do it.  You can't prove anything\" -- Bart Simpson" );
+        // console.log( "\"I didn't do it.  No one saw me do it.  You can't prove anything\" -- Bart Simpson" );
     }
 
     async lazyLog()

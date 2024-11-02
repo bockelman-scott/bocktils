@@ -65,7 +65,8 @@ const $scope = utils?.$scope || function()
             WORK_WEEK: 7,
             MONTH: 8,
             YEAR: 9,
-            DECADE: 10
+            DECADE: 10,
+            DAY_OF_WEEK:11
         } );
 
     const DateConstants = Object.freeze(

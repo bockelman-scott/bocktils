@@ -19,7 +19,8 @@ const $scope = function()
         {
             constants,
             typeUtils,
-            stringUtils
+            stringUtils,
+            localeUtils
         };
 
     let _mt_str = constants._mt_str;
@@ -44,6 +45,30 @@ const $scope = function()
     {
         return $scope()[INTERNAL_NAME];
     }
+
+    const getReForDec = function( pDecimalSeparator )
+    {
+        const decimalSeparator = asString( pDecimalSeparator );
+
+        if ( decimalSeparator.charCodeAt( 0 ) > 127 )
+        {
+            // substitute a space for now...
+            return " ";
+        }
+        return ("." === decimalSeparator ? "\\." : decimalSeparator);
+    };
+
+    const getReForGrp = function( pGroupingSeparator )
+    {
+        const groupingSeparator = asString( pGroupingSeparator );
+
+        if ( groupingSeparator.charCodeAt( 0 ) > 127 )
+        {
+            // substitute a space for now...
+            return " ";
+        }
+        return ("." === groupingSeparator ? "\\." : groupingSeparator);
+    };
 
     /**
      * Class to parse a string as a number, according to the Locale and Intl.NumberFormat Options specified
@@ -181,26 +206,6 @@ const $scope = function()
             return asString( this.separators?.negativeSign, true ) || "-";
         }
 
-        getReForDec()
-        {
-            if ( this.decimalSeparator.charCodeAt( 0 ) > 127 )
-            {
-                // substitute a space for now...
-                return " ";
-            }
-            return ("." === this.decimalSeparator ? "\\." : this.decimalSeparator);
-        }
-
-        getReForGrp()
-        {
-            if ( this.groupingSeparator.charCodeAt( 0 ) > 127 )
-            {
-                // substitute a space for now...
-                return " ";
-            }
-            return ("." === this.groupingSeparator ? "\\." : this.groupingSeparator);
-        }
-
         parse( pString )
         {
             const numberFormatter = this.numberFormat;
@@ -222,13 +227,13 @@ const $scope = function()
 
             s = s.replace( /^0+/, "" );
 
-            const re = new RegExp( "[^E\\d" + this.getReForDec() + this.negativeSign + "]", "g" );
+            const re = new RegExp( "[^E\\d" + getReForDec( this.decimalSeparator ) + this.negativeSign + "]", "g" );
 
             s = s.replace( re, "" );
 
             // temporarily switch to the internal numeric format expected by parseFloat
 
-            const re2 = new RegExp( this.getReForDec(), "g" );
+            const re2 = new RegExp( getReForDec( this.decimalSeparator ), "g" );
 
             s = s.replace( re2, "." );
 

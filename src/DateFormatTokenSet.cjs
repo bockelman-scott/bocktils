@@ -15,9 +15,9 @@ const stringUtils = utils?.stringUtils || require( "./StringUtils.cjs" );
 const arrayUtils = utils?.arrayUtils || require( "./ArrayUtils.cjs" );
 const objectUtils = utils?.objectUtils || require( "./ObjectUtils.cjs" );
 
-const dateUtils = require( "./DateUtils.cjs" );
-
 const localeUtils = require( "./LocaleUtils.cjs" );
+
+const dateUtils = require( "./DateUtils.cjs" );
 
 const _ud = constants?._ud || "undefined";
 
@@ -37,8 +37,8 @@ const $scope = utils?.$scope || function()
             stringUtils,
             arrayUtils,
             objectUtils,
-            dateUtils,
-            localeUtils
+            localeUtils,
+            dateUtils
         };
 
     let _mt_str = constants._mt_str;
@@ -70,6 +70,8 @@ const $scope = utils?.$scope || function()
     const MONTHS = dateConstants.Months;
     const DAYS = dateConstants.Days;
     const OCCURRENCE = dateConstants.Occurrence;
+
+    const UNITS = dateConstants.Units;
 
     const DEFAULT_LOCALE = new Intl.Locale( localeUtils.DEFAULT_LOCALE_STRING );
 
@@ -1346,6 +1348,18 @@ const $scope = utils?.$scope || function()
             this.#hourCycle = this.#locale?.hourCycle;
         }
 
+        cloneForLocale( pLocale )
+        {
+            let locale = resolveLocale( pLocale || this.#locale ) || this.#locale;
+
+            if ( locale?.baseName !== this.locale?.baseName )
+            {
+                return new TokenSet( locale, this.options );
+            }
+
+            return this;
+        }
+
         get locale()
         {
             return Object.freeze( resolveLocale( this.#locale ) || DEFAULT_LOCALE );
@@ -1409,6 +1423,144 @@ const $scope = utils?.$scope || function()
         get firstDayOfWeek()
         {
             return this.#firstDayOfWeek;
+        }
+
+        get tokenDefinitions()
+        {
+            return Object.freeze( DEFINED_TOKENS );
+        }
+
+        get supportedTokens()
+        {
+            return Object.freeze( SUPPORTED_TOKENS );
+        }
+
+        getIndexOf( pUnit, pValue )
+        {
+            let index = -1;
+
+            const value = asString( pValue );
+
+            switch ( pUnit )
+            {
+                case UNITS.MONTH:
+                    for( let i = 0; i < 4 && index < 0; i++ )
+                    {
+                        switch ( i )
+                        {
+                            case 0:
+                                index = this.monthNames.indexOf( value );
+
+                                if ( index < 0 )
+                                {
+                                    index = this.monthNames.map( e => lcase( e ) ).indexOf( lcase( value ) );
+                                }
+
+                                break;
+
+                            case 1:
+                                index = this.monthAbbreviations.indexOf( value );
+
+                                if ( index < 0 )
+                                {
+                                    index = this.monthAbbreviations.map( e => lcase( e ) ).indexOf( lcase( value ) );
+                                }
+                                break;
+
+                            case 2:
+                                index = MONTH_NAMES.indexOf( value );
+
+                                if ( index < 0 )
+                                {
+                                    index = MONTH_NAMES.map( e => lcase( e ) ).indexOf( lcase( value ) );
+                                }
+                                break;
+
+                            case 3:
+                                index = MONTH_NAMES_SHORT.indexOf( value );
+                                if ( index < 0 )
+                                {
+                                    index = MONTH_NAMES_SHORT.map( e => lcase( e ) ).indexOf( lcase( value ) );
+                                }
+                                break;
+
+                            default:
+                                break;
+                        }
+                    }
+                    break;
+
+                case UNITS.DAY_OF_WEEK:
+                    for( let i = 0; i < 6 && index < 0; i++ )
+                    {
+                        switch ( i )
+                        {
+                            case 0:
+                                index = this.dayNames.indexOf( value );
+                                if ( index < 0 )
+                                {
+                                    index = this.dayNames.map( e => lcase( e ) ).indexOf( lcase( value ) );
+                                }
+                                break;
+
+                            case 1:
+                                index = this.dayAbbreviations.indexOf( value );
+                                if ( index < 0 )
+                                {
+                                    index = this.dayAbbreviations.map( e => lcase( e ) ).indexOf( lcase( value ) );
+                                }
+                                break;
+
+                            case 2:
+                                index = this.dayLetters.indexOf( value );
+                                if ( index < 0 )
+                                {
+                                    index = this.dayLetters.map( e => lcase( e ) ).indexOf( lcase( value ) );
+                                }
+                                break;
+
+                            case 3:
+                                index = DAY_NAMES.indexOf( value );
+                                if ( index < 0 )
+                                {
+                                    index = DAY_NAMES.map( e => lcase( e ) ).indexOf( lcase( value ) );
+                                }
+                                break;
+
+                            case 4:
+                                index = DAY_NAMES_SHORT.indexOf( value );
+                                if ( index < 0 )
+                                {
+                                    index = DAY_NAMES_SHORT.map( e => lcase( e ) ).indexOf( lcase( value ) );
+                                }
+                                break;
+
+                            case 5:
+                                index = DAY_LETTERS.indexOf( value );
+                                if ( index < 0 )
+                                {
+                                    index = DAY_LETTERS.map( e => lcase( e ) ).indexOf( lcase( value ) );
+                                }
+                                break;
+
+                            default:
+                                break;
+                        }
+                    }
+                    break;
+            }
+
+            return index;
+        }
+
+        getMonthNumber( pString )
+        {
+            return this.getIndexOf( UNITS.MONTH, pString );
+        }
+
+        getDayNumber( pString )
+        {
+            return this.getIndexOf( UNITS.DAY_OF_WEEK, pString );
         }
 
         getToken( pCharacters )
@@ -1488,6 +1640,48 @@ const $scope = utils?.$scope || function()
                 default:
                     return new TokenLiteral( pCharacters );
             }
+        }
+
+        fromPattern( pFormat )
+        {
+            const pattern = asString( pFormat );
+
+            let arr = pattern.split( constants._mt_chr );
+
+            let tokens = [];
+
+            let elem = _mt_str;
+
+            for( let i = 0, len = arr.length; i < len; i++ )
+            {
+                const char = arr[i];
+
+                if ( _mt_str === elem || char === elem.slice( -1 ) )
+                {
+                    elem += char;
+                }
+                else
+                {
+                    tokens.push( elem );
+                    elem = char;
+                }
+            }
+
+            if ( _mt_str !== elem )
+            {
+                tokens.push( elem );
+            }
+
+            const me = this;
+
+            const mapper = function( e )
+            {
+                return me.getToken( e );
+            };
+
+            tokens = tokens.map( mapper ).filter( e => e instanceof Token );
+
+            return tokens;
         }
 
         /**
