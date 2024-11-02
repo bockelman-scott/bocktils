@@ -1323,6 +1323,34 @@ const $scope = constants?.$scope || function()
     Number.prototype.asFloat = asFloat;
     Boolean.prototype.asFloat = asFloat;
 
+    const asPositiveInt = function( pStr )
+    {
+        return Math.max( 0, asInt( pStr ) );
+    };
+
+    const asPositiveFloat = function( pStr )
+    {
+        return Math.max( 0.0, asFloat( pStr ) );
+    };
+
+    const toIntWithinRange = function( pStr, pMin, pMax )
+    {
+        const value = asInt( pStr );
+        const minimum = asInt( pMin );
+        const maximum = asInt( pMax );
+
+        return Math.min( maximum, Math.max( minimum, value ) );
+    };
+
+    const toFloatWithinRange = function( pStr, pMin, pMax )
+    {
+        const value = asFloat( pStr );
+        const minimum = asFloat( pMin );
+        const maximum = asFloat( pMax );
+
+        return Math.min( maximum, Math.max( minimum, value ) );
+    };
+
     /**
      * Returns the specified value if it is >= 0 and < the length of the specified indexed object
      *                                                               (such as an Array or String)
@@ -2385,6 +2413,10 @@ const $scope = constants?.$scope || function()
             trimMatchingChars,
             asInt,
             asFloat,
+            asPositiveInt,
+            asPositiveFloat,
+            toIntWithinRange,
+            toFloatWithinRange,
             safeIndex,
             validIdentifier,
             asKey,
