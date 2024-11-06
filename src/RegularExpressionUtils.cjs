@@ -408,7 +408,7 @@ const $scope = constants?.$scope || function()
             BACKSLASHES: Object.freeze( /\\/ ),
 
             /**
-             * Matches the file extension of a filename.
+             * Matches the file extension of a filename and captures it
              * More reliable than EXTENSION, but more complex to use
              */
             EXTENSION_MATCH: Object.freeze( /((((?<!\.)\.(?!\.))[^.]+)+$)/ ),
