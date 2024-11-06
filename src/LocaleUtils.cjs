@@ -23,8 +23,7 @@ const $scope = utils?.$scope || function()
 
 (function exposeModule()
 {
-    const me = exposeModule;
-
+    // Capture the dependencies for re-export with this module
     const dependencies =
         {
             constants,
@@ -34,32 +33,34 @@ const $scope = utils?.$scope || function()
             objectUtils
         };
 
+    // Create local aliases for values imported from other modules
     let _mt_str = constants._mt_str;
 
-    let isNull = typeUtils.isNull;
-    let isDate = typeUtils.isDate;
-    let isNumber = typeUtils.isNumber;
+    let isDefined = typeUtils.isDefined;
     let isString = typeUtils.isString;
-    let isObject = typeUtils.isObject;
     let isFunction = typeUtils.isFunction;
 
     let asString = stringUtils.asString;
     let isBlank = stringUtils.isBlank;
     let lcase = stringUtils.lcase;
 
-    let asInt = stringUtils.asInt;
-
+    // Make all functions imported from other modules locally available in this module
     constants.importUtilities( this, constants, typeUtils, stringUtils, arrayUtils, objectUtils );
 
+    // define a key under which we can cache this module in the global scope
     const INTERNAL_NAME = "__BOCK__LOCALE_UTILS__";
 
+    // if this module has already been built and is available in the global scope,
+    // just return that instance of this module
     if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
     {
         return $scope()[INTERNAL_NAME];
     }
 
+    // The locale assumed if no Locale is provided to this module's functions
     const DEFAULT_LOCALE_STRING = "en-US";
 
+    // defines constants to be used with Intl.DateFormat functionality
     const FORMAT_LONG = "long";
     const FORMAT_SHORT = "short";
     const FORMAT_NARROW = "narrow";
@@ -67,13 +68,19 @@ const $scope = utils?.$scope || function()
     const FORMAT_2DIGIT = "2-digit";
     const FORMAT_NUMERIC = "numeric";
 
+    // TODO: figure out how to actually get the first instant of A.D
     let START_AD = new Date( 1, 0, 1, 0, 0, 0, 0 );
     START_AD.setFullYear( START_AD.getFullYear() - 1900 );
 
     let END_AD = new Date( START_AD.getTime() - 1 );
     END_AD.setFullYear( START_AD.getFullYear() - 2 );
     END_AD.setDate( START_AD.getDate() - 1 );
+    // END TODO
 
+    /**
+     * Defines the default values for date-related functionality.
+     * Used when the locale is the default locale or no values are available for a specified locale
+     */
     const DEFAULTS = Object.freeze(
         {
             LOCALE_STRING: DEFAULT_LOCALE_STRING,
@@ -108,15 +115,24 @@ const $scope = utils?.$scope || function()
                 }
         } );
 
+    // local variable used to generate locale-specific month names and abbreviations
     const sampleMonthDates = DEFAULTS.MONTH_NAMES.map( ( e, i ) => new Date( 2024, i, 1, 12, 0, 0, 0 ) );
 
-    // September 2024 starts on a Sunday
+    // local variable used to generate locale-specific day names. abbreviations, and single-letter values.
+    // Note that we use September 2024 because September 2024 starts on a Sunday
     const sampleDayDates = DEFAULTS.DAY_NAMES.map( ( e, i ) => new Date( 2024, 8, (i + 1), 12, 0, 0, 0 ) );
 
+    // local variable used to generate locale-specific AM/PM strings
     const amPmDates = [new Date( 2024, 0, 1, 8, 0, 0, 0 ), new Date( 2024, 0, 1, 20, 0, 0, 0 )];
 
+    // Intl.Locale object representing the default locale
     const DEFAULT_LOCALE = new Intl.Locale( DEFAULT_LOCALE_STRING );
 
+    /**
+     * Returns an Intl.Locale object corresponding to the specified locale string or Intl.Locale
+     * @param pLocale {string|Intl.Locale} a string representing a Locale or an instance of Intl.Locale
+     * @returns {Readonly<Intl.Locale>} An Intl.Locale object corresponding to the specified locale string or Intl.Locale
+     */
     const resolveLocale = function( pLocale )
     {
         let locale = DEFAULT_LOCALE;
@@ -134,6 +150,11 @@ const $scope = utils?.$scope || function()
         return Object.freeze( locale || DEFAULT_LOCALE );
     };
 
+    /**
+     * Returns true if the specified locale is the default locale (en-US)
+     * @param pLocale {string|Intl.Locale} the locale to test
+     * @returns {boolean} true if the specified locale is the default locale (en-US)
+     */
     function isDefaultLocale( pLocale )
     {
         if ( isString( pLocale ) )
@@ -143,13 +164,27 @@ const $scope = utils?.$scope || function()
 
         let locale = resolveLocale( pLocale );
 
-        return locale === DEFAULT_LOCALE || asString( locale.baseName ) === DEFAULT_LOCALE_STRING;
+        return locale === DEFAULT_LOCALE || asString( locale?.baseName ).startsWith( DEFAULT_LOCALE_STRING );
     }
 
-    function isSameLocale( pLocaleA, pLocaleB )
+    /**
+     * Returns true if the specified locales represent the same Locale.
+     *
+     * @param pLocaleA the first locale to compare to the second locale
+     * @param pLocaleB the locale to compare to the first locale
+     * @param pMinimize (optional) specify true to compare only the language component  of the locales
+     * @returns {boolean} true if the specified locales represent the same Locale
+     */
+    function isSameLocale( pLocaleA, pLocaleB, pMinimize = false )
     {
         let localeA = resolveLocale( pLocaleA );
         let localeB = resolveLocale( pLocaleB );
+
+        if ( true === pMinimize )
+        {
+            localeA = localeA.minimize();
+            localeB = localeB.minimize();
+        }
 
         return localeA === localeB || localeA.baseName === localeB.baseName;
     }
@@ -164,7 +199,7 @@ const $scope = utils?.$scope || function()
             return true;
         }
 
-        return asString( localeA.baseName ).split( constants._hyphen )[0] === asString( localeB.baseName ).split( constants._hyphen )[0];
+        return asString( asString( localeA?.baseName ).split( constants._hyphen )[0] ) === asString( asString( localeB?.baseName ).split( constants._hyphen )[0] );
     }
 
     function isDefaultLanguage( pLocale )
@@ -315,14 +350,38 @@ const $scope = utils?.$scope || function()
 
         if ( weekData )
         {
-            firstDay = (7 === weekData.firstDay ? 0 : weekData.firstDay || 1);
+            firstDay = ((7 === weekData.firstDay || 0 === weekData.firstDay) ? 0 : weekData.firstDay || 1);
         }
 
         return firstDay;
     };
 
+    const getSegments = function( pString, pLocale, pGranularity )
+    {
+        const str = asString( pString );
+
+        if ( isBlank( str ) )
+        {
+            return [str];
+        }
+
+        const locale = resolveLocale( pLocale || DEFAULT_LOCALE );
+
+        if ( isDefined( Intl.Segmenter ) )
+        {
+            const segmenter = new Intl.Segmenter( locale?.baseName || DEFAULT_LOCALE_STRING, { granularity: pGranularity } );
+            const segments = segmenter.segment( str );
+            return Array.from( segments ).map( ( e, i ) => asString( e?.segment ) );
+        }
+
+        let splitArg = "word" === pGranularity ? /\b/ : _mt_str;
+
+        return str.split( splitArg ).filter( e => !isBlank( e ) );
+    };
+
     const mod =
         {
+            dependencies,
             DEFAULT_LOCALE_STRING,
             DEFAULTS,
             FORMATS:
@@ -351,7 +410,15 @@ const $scope = utils?.$scope || function()
             getWeekData,
             getFirstDayOfWeek,
 
+            getWords: function( pString, pLocale )
+            {
+                return getSegments( asString( pString ), pLocale, "word" );
+            },
 
+            getCharacters: function( pString, pLocale )
+            {
+                return getSegments( asString( pString ), pLocale, "grapheme" );
+            }
         };
 
 

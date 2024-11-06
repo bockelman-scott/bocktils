@@ -1,3 +1,7 @@
+/**
+ * This module provides a library of commonly used Regular Expressions.
+ */
+
 const constants = require( "./Constants.cjs" );
 const typeUtils = require( "./TypeUtils.cjs" );
 const stringUtils = require( "./StringUtils.cjs" );
@@ -65,8 +69,6 @@ const $scope = constants?.$scope || function()
     let _obj = constants._obj || "object";
     let _fun = constants._fun || "function";
 
-    let _reg_ex_literal = constants._slash || "/";
-
     let isString = typeUtils.isString || function( s ) { return _str === typeof s; };
     let isObject = typeUtils.isObject || function( s ) { return _obj === typeof s; };
 
@@ -79,13 +81,14 @@ const $scope = constants?.$scope || function()
     let ucase = stringUtils.ucase;
 
     let asArray = arrayUtils.asArray;
+    let unique = arrayUtils.unique;
 
-    constants.importUtilities( me, ...dependencies );
+    constants.importUtilities( me || this, ...Object.values( dependencies ) );
 
     /**
      * Constants for regular expression flags
      */
-    const FLAGS =
+    const FLAGS = Object.freeze(
         {
             GLOBAL: "g",
             INSENSITIVE: "i",
@@ -94,21 +97,38 @@ const $scope = constants?.$scope || function()
             MULTILINE: "m",
             STICKY: "y",
             UNICODE: "u"
-        };
+        } );
 
-    const VALID_FLAGS = [FLAGS.GLOBAL, FLAGS.INSENSITIVE, FLAGS.WITH_INDICES, FLAGS.DOTALL, FLAGS.MULTILINE, FLAGS.STICKY, FLAGS.UNICODE];
+    /**
+     * An array of the valid Regular Expression flags
+     * @type {(string)[]}
+     */
+    const VALID_FLAGS = Object.freeze( [FLAGS.GLOBAL, FLAGS.INSENSITIVE, FLAGS.WITH_INDICES, FLAGS.DOTALL, FLAGS.MULTILINE, FLAGS.STICKY, FLAGS.UNICODE] );
 
+    /**
+     * Returns an array of only those strings which are valid RegExp flags
+     * @param pFlags one or more strings that may or may not be valid RegExp flags
+     * @returns {*[]} an array of only those strings which are valid RegExp flags
+     */
     const getValidFlags = function( ...pFlags )
     {
         let flags = [].concat( asArray( pFlags ) );
 
         flags = flags.filter( e => isString( e ) );
-        flags = flags.map( e => lcase( e.trim() ).split( _mt_chr ) ).flat();
-        flags = flags.filter( e => e.length === 1 && VALID_FLAGS.includes( e ) );
+        flags = unique( flags.map( e => lcase( e.trim() ).split( _mt_chr ) ).flat() );
+        flags = unique( flags.filter( e => e.length === 1 && VALID_FLAGS.includes( e ) ) );
 
         return flags;
     };
 
+    /**
+     * This function compares two RegExp flags and orders them according to their position in the VALID_FLAGS array
+     * @param pFlagA the first value
+     * @param pFlagB the second value
+     * @returns {number} a value < 0 if the first value should appear before the second,
+     *                   a value > 0 if the first flag should appear after the second,
+     *                   or 0 if the flags are the same value
+     */
     const flagComparator = function( pFlagA, pFlagB )
     {
         const a = asString( pFlagA );
@@ -127,6 +147,11 @@ const $scope = constants?.$scope || function()
         return comp;
     };
 
+    /**
+     * Returns an array of flags ordered according to their position in the VALID_FLAGS array
+     * @param pFlags one or more flags to filter and sort according to the values in VALID_FLAGS
+     * @returns {*[]} an array of flags ordered according to their position in the VALID_FLAGS array
+     */
     const sortFlags = function( ...pFlags )
     {
         let flags = getValidFlags( ...pFlags );
@@ -141,95 +166,265 @@ const $scope = constants?.$scope || function()
         return flags;
     };
 
+    /**
+     * This object is a map of commonly useful regular expressions.
+     *
+     * Because regular expressions can sometimes be used in stateful contexts,
+     * the recommended practice is to use the 'get' method of this map
+     * to receive a fresh and mutable instance of the RegExp.
+     *
+     * @type {Readonly<{NON_DIGIT: Readonly<RegExp>, REGEX: Readonly<RegExp>, BACKSLASHES: Readonly<RegExp>, EXTENSION: Readonly<RegExp>, DEPENDENCIES_DECLARATION: Readonly<RegExp>, VARIABLE_TOKEN_END: Readonly<RegExp>, QUESTION_MARK: Readonly<RegExp>, DOLLAR_SYMBOL: Readonly<RegExp>, BACKSLASH: Readonly<RegExp>, WINDOWS_NEWLINE: Readonly<RegExp>, RIGHT_TRIM_WHITESPACE: Readonly<RegExp>, AWAIT_HINT: Readonly<RegExp>, FUNCTION_BODY_START_HINT: Readonly<RegExp>, QUERY_STRING_SEPARATOR: Readonly<RegExp>, URL_LOCATION_HASH_SEPARATOR: Readonly<RegExp>, SEPARATOR: Readonly<RegExp>, NEWLINE: Readonly<RegExp>, REDUNDANT_NEWLINES: Readonly<RegExp>, DOT: Readonly<RegExp>, SIMPLE_FUNCTION_SIGNATURE: Readonly<RegExp>, FUNCTION_DECLARATION: Readonly<RegExp>, HASH: Readonly<RegExp>, NON_INTEGER_DIGIT: Readonly<RegExp>, TRAILING_WHITESPACE: Readonly<RegExp>, ASSIGNMENT_OPERATOR: Readonly<RegExp>, reset: ((function(*, *): (*))|*), NON_UNIX_LINEBREAK: Readonly<RegExp>, TRAILING_SEMICOLON: Readonly<RegExp>, LEADING_NEWLINE: Readonly<RegExp>, flags: (function(...[*]): string), SIMPLE_ASYNC_FUNCTION_SIGNATURE: Readonly<RegExp>, FUNCTION_SIGNATURE: Readonly<RegExp>, TRAILING_NEWLINE: Readonly<RegExp>, LEADING_HASH: Readonly<RegExp>, TRAILING_SLASH: Readonly<RegExp>, FUNCTION_PARAMETERS: Readonly<RegExp>, LEADING_WHITESPACE: Readonly<RegExp>, LEADING_OR_TRAILING_SLASH: Readonly<RegExp>, ARTIFACTS: Readonly<RegExp>, get: ((function(*, ...[*]): (RegExp|undefined))|*), EXTENSION_MATCH: Readonly<RegExp>, LEFT_TRIM_WHITESPACE: Readonly<RegExp>, REDUNDANT_WHITESPACE: Readonly<RegExp>, FUNCTION_BODY_END_HINT: Readonly<RegExp>, LEADING_SLASH: Readonly<RegExp>, extractFlags: ((function(*): (string))|*), TRAILING_DOT: Readonly<RegExp>, LEADING_DOT: Readonly<RegExp>, SLASH: Readonly<RegExp>, DOUBLE_SLASH: Readonly<RegExp>, VARIABLE_TOKEN_START: Readonly<RegExp>, VARIABLE_DECLARATION: Readonly<RegExp>, RIGHT_TRIM: Readonly<RegExp>, FUNCTION_NAME: Readonly<RegExp>, LEFT_TRIM: Readonly<RegExp>, DOUBLE_SLASHES: Readonly<RegExp>, COPYRIGHT_COMMENT: Readonly<RegExp>, ANNOTATED_FUNCTION_BODY: Readonly<RegExp>, clone: ((function(*, ...[*]): (*|undefined))|*), REDUNDANT_SPACES: Readonly<RegExp>, ASYNC_FUNCTION_SIGNATURE: Readonly<RegExp>, ASYNC_HINT: Readonly<RegExp>}>}
+     */
     const REGULAR_EXPRESSIONS = Object.freeze(
         {
-            // matches regular expression literal
+            /**
+             * Matches a regular expression literal
+             */
             REGEX: Object.freeze( /^\/.+\/[gidsmyu]*$/ ),
 
+            /**
+             * Matches a single literal 'dot'
+             */
             DOT: Object.freeze( /\./ ),
+
+            /**
+             * Matches two repeated slash characters.
+             * Useful for replacing duplicated slashes in a path for example.
+             */
             DOUBLE_SLASH: Object.freeze( /\/\// ),
-            LEADING_NEWLINE: Object.freeze( /^\n+/ ),
-            TRAILING_NEWLINE: Object.freeze( /\n+$/ ),
-            TRAILING_SEMICOLON: Object.freeze( /;+$|(;\n+)$/ ),
+
+            /**
+             * Matches one or more newline characters at the start of a character string
+             */
+            LEADING_NEWLINE: Object.freeze( /^(\r\n)+|^\n+|^\r+/ ),
+
+            /**
+             * Matches one or more newline characters at the end of a character string
+             */
+            TRAILING_NEWLINE: Object.freeze( /(\r\n)+$|\n+$|\r+$/ ),
+
+            /**
+             * Matches one or more semicolons ';' at the end of a character string
+             */
+            TRAILING_SEMICOLON: Object.freeze( /;+$|(;((\r\n)+|\n+)+)$/ ),
+
+            /**
+             * Matches all whitespace characters at the start of a character string
+             */
             LEADING_WHITESPACE: Object.freeze( /^\s+/ ),
+
+            /**
+             * Matches all whitespace characters at the end of a character string
+             */
             TRAILING_WHITESPACE: Object.freeze( /\s+$/ ),
+
+            /**
+             * Matches the character string, '${', at the start of a character string
+             */
             VARIABLE_TOKEN_START: Object.freeze( /^\$\{/ ),
+
+            /**
+             * Matches the character string, '}', at the end of a character string
+             */
             VARIABLE_TOKEN_END: Object.freeze( /}$/ ),
+
+            /**
+             * Matches a single slash, '/', character anywhere is a string
+             */
             SLASH: Object.freeze( /\// ),
+
+            /**
+             * Matches one or more slashes at the end of a character string.
+             * Useful for trimming trailing slashes from paths or URLs
+             */
             LEADING_OR_TRAILING_SLASH: Object.freeze( /^\/+|\/+$/ ),
+
+            /**
+             * Matches a single backslash, '\', character anywhere is a string
+             */
             BACKSLASH: Object.freeze( /\\/ ),
+
+            /**
+             * Matches the literal dollar symbol, $, anywhere in a character string
+             */
             DOLLAR_SYMBOL: Object.freeze( /\$/ ),
+
+            /**
+             * Matches the last sequence of characters starting with a dot, followed by alphanumeric characters.
+             * Useful for extracting a file extension
+             */
             EXTENSION: Object.freeze( /\.\w+$/ ),
+
+            /**
+             * Matches either a colon or an equals sign.
+             * Useful when parsing source code or json text
+             */
             ASSIGNMENT_OPERATOR: Object.freeze( /[=:]/ ),
+
+            /**
+             * Matches either a comma or a semicolon anywhere in a string.
+             * Useful for splitting or joining values
+             */
             SEPARATOR: Object.freeze( /[,;]/ ),
+
+            /**
+             * Matches the carriage return + newline sequence used as a newline in non-unix environments.
+             */
             WINDOWS_NEWLINE: Object.freeze( /\r\n/ ),
+
+            /**
+             * Matches the '\n' character used as a newline in unix/linux environments
+             */
             NEWLINE: Object.freeze( /\n/ ),
-            REDUNDANT_NEWLINES: Object.freeze( /\n{2,}/ ),
 
-            SIMPLE_FUNCTION_SIGNATURE: Object.freeze( /(function)\s*\(([^)]*)\)/ ),
-            SIMPLE_ASYNC_FUNCTION_SIGNATURE: Object.freeze( /(async)\s*(function)\s*\(([^)]*)\)/ ),
+            /**
+             * Matches two or more repeated newlines.
+             * Useful for removing extraneous whitespace
+             */
+            REDUNDANT_NEWLINES: Object.freeze( /\n{2,}|(\r\n){2,}/ ),
 
+            /**
+             * Matches the source text corresponding to a function signature.
+             * Useful for parsing source code
+             */
+            SIMPLE_FUNCTION_SIGNATURE: Object.freeze( /(function)\s*([^(]*)*\(([^)]*)\)/ ),
+
+            /**
+             * Matches the source text corresponding to an asynchronous function signature.
+             * Useful for parsing source code
+             */
+            SIMPLE_ASYNC_FUNCTION_SIGNATURE: Object.freeze( /(async)\s*(function)\s*([^(]*)*\(([^)]*)\)/ ),
+
+            /**
+             * Matches any character that is not in the set [0,1,2,3,4,5,6,7,8,9]
+             */
             NON_INTEGER_DIGIT: Object.freeze( /\D/ ),
-            NON_DIGIT: Object.freeze( /[^\d.]/ ),
-            LEFT_TRIM: Object.freeze( /[ ]*((\S+\s*)*)/ ),
-            RIGHT_TRIM: Object.freeze( /((\s*\S+)*)[ ]*/ ),
-            LEFT_TRIM_WHITESPACE: Object.freeze( /\s*((\S+\s*)*)/ ),
-            RIGHT_TRIM_WHITESPACE: Object.freeze( /((\s*\S+)*)\s*/ ),
-            REDUNDANT_SPACES: Object.freeze( /[ ]{2,}/ ),
 
+            /**
+             * Matches any character that is not a numeric digit or decimal point
+             */
+            NON_DIGIT: Object.freeze( /[^\d.]/ ),
+
+            /**
+             * Matches spaces at the start of a character sequence
+             */
+            LEFT_TRIM: Object.freeze( /^[ ]+((\S+\s*)*)/ ),
+
+            /**
+             * Matches spaces at the end of a character sequence
+             */
+            RIGHT_TRIM: Object.freeze( /((\s*\S+)*)[ ]+$/ ),
+
+            /**
+             * Matches all whitespace at the start of a character sequence
+             */
+            LEFT_TRIM_WHITESPACE: Object.freeze( /^\s+((\S+\s*)*)/ ),
+
+            /**
+             * Matches all whitespace at the end of a character sequence
+             */
+            RIGHT_TRIM_WHITESPACE: Object.freeze( /((\s*\S+)*)\s+$/ ),
+
+            /**
+             * Matches repeated spaces anywhere in a character sequence
+             */
+            REDUNDANT_SPACE: Object.freeze( /[ ]{2,}/ ),
+
+            /**
+             * Matches repeated whitespace anywhere in a character sequence
+             */
+            REDUNDANT_WHITESPACE: Object.freeze( /[ \s]{2,}/ ),
+
+            /**
+             * Matches the literal question-mark character, '?' anywhere in a character string.
+             * Useful for parsing URLs
+             */
             QUERY_STRING_SEPARATOR: Object.freeze( /\?/ ),
+
+            /**
+             * Matches the literal question-mark character, '?' anywhere in a character string.
+             * Useful when using a '?' character could be ambiguous in a regular expression
+             */
             QUESTION_MARK: Object.freeze( /\?/ ),
+
+            /**
+             * Matches the literal hash, or pound, character, '#' anywhere in a character string.
+             * Useful for parsing URLs
+             */
             URL_LOCATION_HASH_SEPARATOR: Object.freeze( /#/ ),
+
+            /**
+             * Matches the literal hash, or pound, character, '#' anywhere in a character string.
+             * A shorter alias for URL_LOCATION_HASH_SEPARATOR
+             */
             HASH: Object.freeze( /#/ ),
+
+            /**
+             * Matches the literal hash, or pound, character, '#' at the start of a character string.
+             * Useful for parsing hashtags
+             */
             LEADING_HASH: Object.freeze( /^#/ ),
 
             /**
-             * This constant defines a regular expression that matches a leading dot (extension separator)
+             * Matches a leading dot (extension separator)
              */
             LEADING_DOT: Object.freeze( /^\./ ),
 
             /**
-             * This constant defines a regular expression that matches a trailing dot (an unexpected path suffix)
+             * Matches a trailing dot (an unexpected path suffix)
              */
             TRAILING_DOT: Object.freeze( /\.$/ ),
 
             /**
-             * This constant defines a regular expression that matches a leading slash (path separator)
+             * Matches a leading slash (path separator)
              */
             LEADING_SLASH: Object.freeze( /^\/+/ ),
 
             /**
-             * This constant defines a regular expression that matches a trailing slash (path separator)
+             * Matches a trailing slash (path separator)
              */
             TRAILING_SLASH: Object.freeze( /\/+$/ ),
 
             /**
-             * This constant defines a regular expression that matches doubled slashes (path separators)
+             * Matches doubled slashes (path separators)
              */
             DOUBLE_SLASHES: Object.freeze( /\/\// ),
 
             /**
-             * This constant defines a regular expression that matches linebreaks in files formatted on Windows (or DOS) operating systems
+             * Matches linebreaks in files formatted on Windows (or DOS) operating systems
              */
             NON_UNIX_LINEBREAK: Object.freeze( /\r\n/ ),
 
             /**
-             * This regular expression matches text that may be produced from type coercion of undefined, null, or void types
+             * Matches text that may be produced from type coercion of undefined, null, or void types
+             * Useful when parsing HTTP Requests in some environments
              */
             ARTIFACTS: Object.freeze( /null|undefined|void/i ),
 
+            /**
+             * Matches the backslash character, '\' anywhere in a character string.
+             * Useful when constructing values that require escaping the backslash
+             */
             BACKSLASHES: Object.freeze( /\\/ ),
 
+            /**
+             * Matches the file extension of a filename.
+             * More reliable than EXTENSION, but more complex to use
+             */
             EXTENSION_MATCH: Object.freeze( /((((?<!\.)\.(?!\.))[^.]+)+$)/ ),
 
+            /**
+             * Matches a comment that appears to be the source file copyright statement.
+             */
             COPYRIGHT_COMMENT: Object.freeze( /[^"'`]?(\/\s*[\s\S.]*?(@license)+[\s\S.]*(Copyright)+?[\s\S.]*(\d{4})+[\s\S.]*?(@ignore)+?[\s\S.]*?\*\/)+[^"'`]?/s ),
 
             /**
-             * matches any text that starts with or without an open parenthesis,
+             * Matches a function signature by
+             * matching any text that starts with or without an open parenthesis,
              * followed by one or more whitespace characters
              * followed by either 'async function' or 'function'
              * followed by one or more whitespace characters,
-             * followed by a legal function name (or not),
+             * followed by a legal function name (or not for anonymous functions),
              * followed by one or more whitespace characters
              * followed by an open parenthesis, which begins the parameter list
              * followed by one or more whitespaces,
@@ -240,7 +435,7 @@ const $scope = constants?.$scope || function()
              * followed by one or more whitespaces,
              * followed by a closing parenthesis that is not immediately preceded by a comma
              *
-             * executing this regular expression with a valid string yields the following matches:
+             * Executing this regular expression with a valid string yields the following matches:
              * 0: the entire matched string
              * 1: the function declaration, potentially including the initial parenthesis if the function is an IIFE
              * 2: the function declaration, minus any opening parenthesis, regardless of whether the function is an IIFE
@@ -252,33 +447,88 @@ const $scope = constants?.$scope || function()
              */
             FUNCTION_SIGNATURE: Object.freeze( /^(\(?\s*((async\s+)?\s*function))\s*?([$_\w]+[$_\w\d]*)?\s*\((\s*(([$_\w]+[$_\w\d]*\s*,?)\s*)*(\.{3}([$_\w]+[$_\w\d]*\s*,?)*\s*)*)(?<!,\s*)\)/ ),
 
+            /**
+             * Matches specifically an asynchronous function signature, using the same rules as FUNCTION_SIGNATURE.
+             * @see FUNCTION_SIGNATURE
+             */
             ASYNC_FUNCTION_SIGNATURE: Object.freeze( /^(\(?\s*((async\s+)\s*function))\s*?([$_\w]+[$_\w\d]*)?\s*\((\s*(([$_\w]+[$_\w\d]*\s*,?)\s*)*(\.{3}([$_\w]+[$_\w\d]*\s*,?)*\s*)*)(?<!,\s*)\)/ ),
 
+            /**
+             * Matches the start of a function signature, capturing the name of the function in the first group.
+             */
             FUNCTION_NAME: Object.freeze( /function([^(]*)\(/ ),
 
+            /**
+             * Matches the start of a function signature, capturing the named parameters in the first group.
+             */
             FUNCTION_PARAMETERS: Object.freeze( /\(?\s*(async\s+)?\s*function\s*?([^(]*)\(([_ ),\w$]*)\)/ ),
 
+            /**
+             * Matches a special annotation indicating the start of a function body.
+             * Useful if parsing source code
+             */
             FUNCTION_BODY_START_HINT: Object.freeze( /\/\*\+\s*function_body\s*:\s*start\s*\*\// ),
 
+            /**
+             * Matches a special annotation indicating the end of a function body.
+             * Useful if parsing source code
+             */
             FUNCTION_BODY_END_HINT: Object.freeze( /\/\*\+\s*function_body\s*:\s*end\*\// ),
 
+            /**
+             * Matches all text between the special annotations indicating the start and end of a function body.
+             * Useful if parsing source code
+             */
             ANNOTATED_FUNCTION_BODY: Object.freeze( /\/\*\+\s*function_body\s*:\s*start\s*\*\/(.*?)\/\*\+\s*function_body\s*:\s*end\s*\*\//is ),
 
+            /**
+             * Matches a special annotation indicating the start of a statement
+             * that can be converted to an asynchronous function call.
+             * Useful if parsing source code
+             */
             AWAIT_HINT: Object.freeze( /\/\*+\+[ ]*await[ ]*\*+\// ),
 
+            /**
+             * Matches a special annotation indicating the start of a function
+             * that can be converted to an asynchronous function.
+             * Useful if parsing source code
+             */
             ASYNC_HINT: Object.freeze( /\/\*+\+[ ]*async[ ]*\*+\// ),
 
+            /**
+             * Matches a statement defining a module's dependencies.
+             * Useful if parsing source code
+             */
             DEPENDENCIES_DECLARATION: Object.freeze( /const\s+dependencies\s*=\s*(([\[{])(["' ),\/_])*([\[{]))?/ ),
 
+            /**
+             * Matches the start of a function or async function declaration.
+             * Useful if parsing source code
+             */
             FUNCTION_DECLARATION: Object.freeze( /^\(*\s*(async\s+)?\s*function([^(]*)\(/ ),
 
+            /**
+             * Matches text corresponding to a variable declaration and assignment.
+             * Useful if parsing source code, and injecting new variables
+             */
             VARIABLE_DECLARATION: Object.freeze( /((const|let|var) +)([a-zA-Z_$]+[a-zA-Z0-9_$]*)([ \s\n]*= [ \s\n]*)([^; \n]+)([ \s\n]* [; \n])([ \s\n]*(\/\/ *injected)*)*/ ),
 
+            /**
+             * Returns a string of flags ordered according to their position in the VALID_FLAGS array
+             * @param pFlags one or more flags to filter and sort according to the values in VALID_FLAGS
+             * @returns {string} an string of flags ordered according to their position in the VALID_FLAGS array
+             */
             flags: function( ...pFlags )
             {
                 return sortFlags( ...pFlags ).join( _mt_chr );
             },
 
+            /**
+             * Returns a new mutable instance of the RegExp (or RegExp pattern) specified
+             * @param pRegExp {RegExp|string} a regular expression or the string key of a regular expression from this library
+             * @param pFlags one or more flags to control the behavior of the RegExp returned
+             * @returns {RegExp|*} a new mutable instance of the RegExp (or RegExp pattern) specified
+             */
             clone: function( pRegExp, ...pFlags )
             {
                 const signals = this.flags( ...pFlags );
@@ -296,13 +546,28 @@ const $scope = constants?.$scope || function()
                 throw new Error( "This method requires a regular expression or a string matching the name of a property of this object or that represents a regular expression pattern\nThe specified value, " + pRegExp + ", is not a valid argument." );
             },
 
+            /**
+             * Returns the string of flags used by the specified RegExp
+             * @param pRegEx {RegExp|string} a RegExp object or a string defining a regular expression
+             * @returns {string} the string of flags used by the specified RegExp
+             */
             extractFlags: function( pRegEx )
             {
                 let rx = pRegEx;
 
                 if ( isString( pRegEx ) )
                 {
-                    rx = new RegExp( pRegEx );
+                    try
+                    {
+                        rx = new RegExp( pRegEx );
+                    }
+                    catch( ex )
+                    {
+                        const s = asString( pRegEx );
+                        const index = s.lastIndexOf( constants._slash );
+                        const arr = [].concat( asArray( s.slice( index + 1 ) || _mt_str ).split( "" ) );
+                        return this.flags( ...arr );
+                    }
                 }
 
                 if ( !isObject( rx ) || !(rx instanceof RegExp) )
@@ -313,6 +578,13 @@ const $scope = constants?.$scope || function()
                 return asString( rx.flags );
             },
 
+            /**
+             * Returns a mutable RegExp object corresponding to the name specified.
+             * Used when you need a mutable instance of the RegExp.
+             * @param pName {string} one of the property keys of this object or a regular expression literal
+             * @param pFlags one or more flags to apply when using the return RegExp
+             * @returns {RegExp} a mutable RegExp object corresponding to the name or expression specified.
+             */
             get: function( pName, ...pFlags )
             {
                 let signals = this.flags( ...pFlags );
@@ -355,7 +627,13 @@ const $scope = constants?.$scope || function()
                 throw new Error( "pName must be a string or regular expression" );
             },
 
-            reset: function( pRegExp, pResetFlags )
+            /**
+             * Returns a RegExp after resetting its state (example, lastIndex = -1)
+             * @param pRegExp {RegExp|string} the regular expression to reset
+             * @param pResetFlags (optional) pass true to return a new RegExp with no flags
+             * @returns {RegExp} a mutable RegExp with its state reset
+             */
+            reset: function( pRegExp, pResetFlags = false )
             {
                 let rx = pRegExp;
 
@@ -402,6 +680,12 @@ const $scope = constants?.$scope || function()
             }
         } );
 
+    /**
+     * Instances of this class make working with the exec method of RegExp more convenient.
+     * RegExp exec returns 'matches', which is an Array-like object (or null, when there are no matches).
+     * Extracting useful information from this object can be cumbersome.
+     * This class aims to make it a little easier.
+     */
     class MatchesHelper
     {
         #matches = [];
@@ -413,7 +697,7 @@ const $scope = constants?.$scope || function()
 
         get matches()
         {
-            return this.#matches;
+            return this.#matches || [];
         }
 
         /**
@@ -436,9 +720,9 @@ const $scope = constants?.$scope || function()
         }
 
         /**
-         *
-         * @param {number} pGroup
-         * @returns {(*|number)[]|*}
+         * Returns the index of the specified group, if the RegExp used to call exec included the 'd' flag
+         * @param {number} pGroup the capture group whose index you want to return
+         * @returns {number}
          */
         getIndex( pGroup )
         {
@@ -457,9 +741,23 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    /**
+     * Returns a new instance of MatchesHelper
+     * populated with the return value of calling exec
+     * on the specified RegExp with the specified string
+     * @param pRegEx {RegExp|string} a Regular Expression object
+     *                               or string corresponding to the property key of the REGULAR_EXPRESSIONS object
+     *                               or a pattern that can be interpreted as a regular expression
+     * @param pString {string} the string to pass to the RegExp exec method
+     * @param pFlags one or more flags to include with the regular expression
+     * @returns {MatchesHelper} a new instance of MatchesHelper populated with the return value of calling exec
+     *                                                          on the specified RegExp with the specified string
+     */
     MatchesHelper.execute = function( pRegEx, pString, ...pFlags )
     {
-        const rx = REGULAR_EXPRESSIONS.get( pRegEx, ...pFlags );
+        const flags = [FLAGS.WITH_INDICES].concat( ...pFlags );
+
+        const rx = REGULAR_EXPRESSIONS.get( pRegEx, ...flags );
 
         const s = asString( pString );
 
