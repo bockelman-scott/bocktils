@@ -619,7 +619,7 @@ describe( "REGULAR_EXPRESSIONS", () =>
 
               expect( rx.test( "\nabc\n" ) ).toBe( false );
 
-              expect( literal.split( rx ) ).toEqual( ["/github.com/project","header"] );
+              expect( literal.split( rx ) ).toEqual( ["/github.com/project", "header"] );
           } );
 
     test( "HASH matches the # character",
@@ -633,7 +633,7 @@ describe( "REGULAR_EXPRESSIONS", () =>
 
               expect( rx.test( "\nabc\n" ) ).toBe( false );
 
-              expect( literal.split( rx ) ).toEqual( ["/github.com/project","header"] );
+              expect( literal.split( rx ) ).toEqual( ["/github.com/project", "header"] );
           } );
 
     test( "LEADING_HASH matches # at the start of a string",
@@ -700,6 +700,836 @@ describe( "REGULAR_EXPRESSIONS", () =>
               expect( literal.replace( rx, "" ) ).toEqual( "/path/to/file" );
           } );
 
+    test( "ARTIFACTS matches 'null', 'void', or 'undefined' anywhere in a string",
+          () =>
+          {
+              const literal = String( null );
+
+              const rx = RE.ARTIFACTS;
+
+              expect( rx.test( literal ) ).toBe( true );
+
+              expect( rx.test( "abc" ) ).toBe( false );
+
+              let a = undefined;
+
+              expect( rx.test( "" + a ) ).toBe( true );
+
+              function abc() {}
+
+              expect( rx.test( abc() ) ).toBe( true );
+
+              expect( literal.replace( rx, "" ) ).toEqual( "" );
+          } );
+
+    test( "EXTENSION_MATCH matches and captures a file extension at the end of a string",
+          () =>
+          {
+              const literal = "/path/to/file/filename.test.ext";
+
+              const rx = RE.EXTENSION_MATCH;
+
+              const matches = rx.exec( literal );
+
+              expect( matches[0] ).toEqual( ".test.ext" );
+
+              expect( matches[1] ).toEqual( ".test.ext" );
+
+              expect( matches[2] ).toEqual( ".ext" );
+
+              expect( matches[3] ).toEqual( "." );
+          } );
+
+    test( "COPYRIGHT_COMMENT matches a block comment that is likely a copyright statement",
+          () =>
+          {
+              const comment = `/**
+  Copyright (c) 2015, 2024, BizCo and/or its affiliates.
+  Licensed under The Universal Permissive License (UPL), Version 1.0
+  as shown at https://some.link.com/licenses/
+*/`;
+
+              const rx = RE.COPYRIGHT_COMMENT;
+
+              expect( rx.test( comment ) ).toBe( true );
+
+              expect( rx.test( "/path/to/file" ) ).toBe( false );
+
+              expect( rx.test( `/** 
+              some other block comment
+              */` ) ).toBe( false );
+
+              expect( comment.replace( rx, "" ) ).toEqual( "" );
+          } );
+
+    test( "FUNCTION_SIGNATURE matches and captures elements of a function signature",
+          () =>
+          {
+              const func = function funky( pArgA, pArgB )
+              {
+                  return pArgA + pArgB;
+              };
+
+              const literal = Function.prototype.toString.call( func );
+
+              const rx = RE.FUNCTION_SIGNATURE;
+
+              const matches = rx.exec( literal );
+
+              expect( matches[0] ).toEqual( "function funky(pArgA, pArgB)" );
+              expect( matches[1] ).toEqual( "function" );
+              expect( matches[2] ).toEqual( "function" );
+              expect( matches[3] ).toBe( undefined );
+              expect( matches[3] ).toBe( undefined );
+              expect( matches[5] ).toEqual( "funky" );
+              expect( matches[6] ).toEqual( "pArgA, pArgB" );
+          } );
+
+    test( "FUNCTION_SIGNATURE matches and captures elements of an IIFE",
+          () =>
+          {
+              const a = 1;
+              const b = 2;
+
+              const func = (function funky( pArgA, pArgB )
+              {
+                  return pArgA + pArgB;
+              }( a, b ));
+
+              const literal = `(function funky( pArgA, pArgB )
+              {
+                  return pArgA + pArgB;
+              }(a,b))`;
+
+              const rx = RE.FUNCTION_SIGNATURE;
+
+              const matches = rx.exec( literal );
+
+              expect( matches[0] ).toEqual( "(function funky( pArgA, pArgB )" );
+              expect( matches[1] ).toEqual( "(function" );
+              expect( matches[2] ).toEqual( "function" );
+              expect( matches[3] ).toBe( undefined );
+              expect( matches[4] ).toBe( undefined );
+              expect( matches[5] ).toEqual( "funky" );
+              expect( matches[6] ).toEqual( " pArgA, pArgB " );
+          } );
+
+    test( "ASYNC_FUNCTION_SIGNATURE matches and captures elements of an asynchronous function signature",
+          () =>
+          {
+              const func = async function funky( pArgA, pArgB )
+              {
+                  return pArgA + pArgB;
+              };
+
+              const literal = Function.prototype.toString.call( func );
+
+              const rx = RE.FUNCTION_SIGNATURE;
+
+              const matches = rx.exec( literal );
+
+              expect( matches[0] ).toEqual( "async function funky(pArgA, pArgB)" );
+              expect( matches[1] ).toEqual( "async function" );
+              expect( matches[2] ).toEqual( "async function" );
+              expect( matches[3] ).toBe( "async " );
+              expect( matches[4] ).toEqual( " " );
+              expect( matches[5] ).toEqual( "funky" );
+              expect( matches[6] ).toEqual( "pArgA, pArgB" );
+          } );
+
+    test( "FUNCTION_NAME matches and captures the name of a function from its source",
+          () =>
+          {
+              const func = function funky( pArgA, pArgB )
+              {
+                  return pArgA + pArgB;
+              };
+
+              const literal = Function.prototype.toString.call( func );
+
+              const rx = RE.FUNCTION_NAME;
+
+              const matches = rx.exec( literal );
+
+              expect( matches[1] ).toEqual( "funky" );
+          } );
+
+    test( "FUNCTION_PARAMETERS matches and captures the parameters of a function signature",
+          () =>
+          {
+              const func = function funky( pArgA, pArgB )
+              {
+                  return pArgA + pArgB;
+              };
+
+              const literal = Function.prototype.toString.call( func );
+
+              const rx = RE.FUNCTION_PARAMETERS;
+
+              const matches = rx.exec( literal );
+
+              expect( matches[3] ).toEqual( "pArgA, pArgB" );
+          } );
+
+    test( "FUNCTION_BODY_START_HINT matches a special comment",
+          () =>
+          {
+              const func = function funky( pArgA, pArgB )
+              {
+                  /*+function_body:start*/
+                  return pArgA + pArgB;
+                  /*+function_body:end*/
+              };
+
+              const literal = Function.prototype.toString.call( func );
+
+              const rx = RE.FUNCTION_BODY_START_HINT;
+
+              expect( rx.test( literal ) ).toBe( true );
+
+              const helper = MatchesHelper.execute( rx, literal );
+
+              const indices = helper.getIndices( 1 );
+
+              expect( indices ).toEqual( [37, 61] );
+          } );
+
+    test( "FUNCTION_BODY_END_HINT matches a special comment",
+          () =>
+          {
+              const func = function funky( pArgA, pArgB )
+              {
+                  /*+function_body:start*/
+                  return pArgA + pArgB;
+                  /*+function_body:end*/
+              };
+
+              const literal = Function.prototype.toString.call( func );
+
+              const rx = RE.FUNCTION_BODY_END_HINT;
+
+              expect( rx.test( literal ) ).toBe( true );
+
+              const helper = MatchesHelper.execute( rx, literal );
+
+              const indices = helper.getIndices( 1 );
+
+              expect( indices ).toEqual( [96, 118] );
+          } );
+
+    test( "FUNCTION_BODY_*_HINTs can be used to extract a function body",
+          () =>
+          {
+              const func = function funky( pArgA, pArgB )
+              {
+                  /*+function_body:start*/
+                  return pArgA + pArgB;
+                  /*+function_body:end*/
+              };
+
+              const literal = Function.prototype.toString.call( func );
+
+              const rxStart = RE.FUNCTION_BODY_START_HINT;
+              const rxEnd = RE.FUNCTION_BODY_END_HINT;
+
+              let helper = MatchesHelper.execute( rxStart, literal );
+
+              const startIndices = helper.getIndices( 1 );
+
+              helper = MatchesHelper.execute( rxEnd, literal );
+
+              const endIndices = helper.getIndices( 1 );
+
+              const body = literal.slice( startIndices[1], endIndices[0] );
+
+              expect( body.replaceAll( RE.get( RE.NEWLINE, "g" ), "" ).trim() ).toEqual( "return pArgA + pArgB;" );
+
+          } );
+
+    test( "ANNOTATED_FUNCTION_BODY can be used to extract a function body",
+          () =>
+          {
+              const func = function funky( pArgA, pArgB )
+              {
+                  /*+function_body:start*/
+                  return pArgA + pArgB;
+                  /*+function_body:end*/
+              };
+
+              const literal = Function.prototype.toString.call( func );
+
+              const rx = RE.ANNOTATED_FUNCTION_BODY;
+
+              let helper = MatchesHelper.execute( rx, literal, "is" );
+
+              const body = helper.getText( 1 );
+
+              expect( body.replaceAll( RE.get( RE.NEWLINE, "g" ), "" ).trim() ).toEqual( "return pArgA + pArgB;" );
+
+          } );
+
+    test( "AWAIT_HINT matches a special comment",
+          () =>
+          {
+              const someAsyncFunction = async function()
+              {
+                  return await Promise.resolve( 2 );
+              };
+
+              const func = /*+ async */ function funky( pArgA, pArgB )
+              {
+                  /*+function_body:start*/
+                  return /*+ await */ someAsyncFunction();
+                  /*+function_body:end*/
+              };
+
+              const literal = Function.prototype.toString.call( func );
+
+              const rx = RE.AWAIT_HINT;
+
+              expect( rx.test( literal ) ).toBe( true );
+
+              expect( rx.test( Function.prototype.toString.call( someAsyncFunction ) ) ).toBe( false );
+          } );
+
+    test( "ASYNC_HINT matches a special comment",
+          () =>
+          {
+              const someAsyncFunction = async function()
+              {
+                  return await Promise.resolve( 2 );
+              };
+
+              const func = /*+ async */ function funky( pArgA, pArgB )
+              {
+                  /*+function_body:start*/
+                  return /*+ await */ someAsyncFunction();
+                  /*+function_body:end*/
+              };
+
+              const literal = `/*+ async */ function funky( pArgA, pArgB )
+              {
+                  /*+function_body:start*/
+                  return /*+ await */ someAsyncFunction();
+                  /*+function_body:end*/
+              }`;
+
+              const rx = RE.ASYNC_HINT;
+
+              expect( rx.test( literal ) ).toBe( true );
+
+              expect( rx.test( Function.prototype.toString.call( someAsyncFunction ) ) ).toBe( false );
+          } );
+
+    test( "DEPENDENCIES_DECLARATION matches a variable declaration and assignment",
+          () =>
+          {
+              const func = /*+ async */ function funky( pArgA, pArgB )
+              {
+                  const dependencies =
+                      {
+                          rxUtils,
+                          MatchesHelper
+                      };
+
+                  /*+function_body:start*/
+                  return pArgA + pArgB;
+                  /*+function_body:end*/
+              };
+
+              const literal = Function.prototype.toString.call( func );
+
+              const rx = RE.DEPENDENCIES_DECLARATION;
+
+              expect( rx.test( literal ) ).toBe( true );
+
+              const helper = MatchesHelper.execute( rx, literal );
+
+              const dependencies = helper.getText( 4 ).split( /[,\s]/ ).filter( e => "" !== e );
+
+              expect( dependencies ).toEqual( ["rxUtils", "MatchesHelper"] );
+          } );
+
+    test( "FUNCTION_DECLARATION matches a function declaration",
+          () =>
+          {
+              const someAsyncFunction = async function()
+              {
+                  return await Promise.resolve( 2 );
+              };
+
+              const func = /*+ async */ function funky( pArgA, pArgB )
+              {
+                  /*+function_body:start*/
+                  return /*+ await */ someAsyncFunction();
+                  /*+function_body:end*/
+              };
+
+              const rx = RE.FUNCTION_DECLARATION;
+
+              let literal = Function.prototype.toString.call( func );
+
+              expect( rx.test( literal ) ).toBe( true );
+
+              const matches = rx.exec( literal );
+
+              literal = Function.prototype.toString.call( someAsyncFunction );
+
+              expect( rx.test( literal ) ).toBe( true );
+
+              expect( matches[2].trim() ).toEqual( "funky" );
+          } );
+
+    test( "VARIABLE_DECLARATION matches a variable declaration",
+          () =>
+          {
+              const someAsyncFunction = async function()
+              {
+                  let a = 1;
+                  const b = "2";
+                  var c = true;
+
+                  return await Promise.resolve( 2 );
+              };
+
+              const func = /*+ async */ function funky( pArgA, pArgB )
+              {
+                  /*+function_body:start*/
+                  let a = pArgA;
+                  const b = pArgB;
+                  var c = [pArgA, pArgB];
+
+                  return /*+ await */ someAsyncFunction();
+                  /*+function_body:end*/
+              };
+
+              const literal = Function.prototype.toString.call( func );
+
+              const rx = RE.get( RE.VARIABLE_DECLARATION, "g", "s", "d" );
 
 
+              let matches = rx.exec( literal );
+
+              expect( matches[3].trim() ).toEqual( "a" );
+
+              expect( matches[4].trim() ).toEqual( "=" );
+
+              expect( matches[5].trim() ).toEqual( "pArgA" );
+
+
+              matches = rx.exec( literal );
+
+              expect( matches[3].trim() ).toEqual( "b" );
+
+              expect( matches[4].trim() ).toEqual( "=" );
+
+              expect( matches[5].trim() ).toEqual( "pArgB" );
+
+
+              matches = rx.exec( literal );
+
+              expect( matches[3].trim() ).toEqual( "c" );
+
+              expect( matches[4].trim() ).toEqual( "=" );
+
+              expect( matches[5].trim() ).toEqual( "[pArgA, pArgB]" );
+
+          } );
+} );
+
+
+describe( "exposed functions", () =>
+{
+    test( "flags returns a string of flags ordered according to their position in the VALID_FLAGS array",
+          () =>
+          {
+              const flags = RE.flags( "a", "m", "i", "d", "g", "e", 4, true, {}, [], "gis" );
+
+              expect( flags ).toEqual( "gidsm" );
+          } );
+
+    test( "clone returns a new mutable instance of the RegExp (or RegExp pattern) specified",
+          () =>
+          {
+              const rxA = /\s+/gis;
+              let rxAA = RE.clone( rxA );
+
+              const rxB = RE.clone( "\\s+" );
+              let rxBB = RE.clone( rxB, "gis" );
+
+              const rxC = RE.clone( "/\\s+/gis" );
+              let rxCC = RE.clone( rxC );
+
+              const rx = RE.SLASH;
+              let rxx = RE.clone( rx, "gis" );
+
+              const literal = "a /path/to/file ";
+
+              expect( rxA === rxAA ).toBe( false );
+              expect( rxB === rxBB ).toBe( false );
+              expect( rxC === rxCC ).toBe( false );
+              expect( rx === rxx ).toBe( false );
+
+              expect( Object.isFrozen( rx ) ).toBe( true );
+              expect( Object.isFrozen( rxx ) ).toBe( false );
+
+
+              expect( rxA.test( literal ) ).toBe( true );
+
+              expect( rxA.lastIndex ).toEqual( 2 );
+
+              expect( rxA.test( literal ) ).toBe( true );
+
+              expect( rxA.lastIndex ).toEqual( 16 );
+
+
+              expect( rxAA.lastIndex <= 0 ).toBe( true );
+
+              expect( rxAA.test( literal ) ).toBe( true );
+
+              expect( rxAA.lastIndex ).toEqual( 2 );
+
+              expect( rxAA.test( literal ) ).toBe( true );
+
+              expect( rxAA.lastIndex ).toEqual( 16 );
+
+
+              rxAA = RE.clone( rxAA );
+
+              expect( rxAA.lastIndex <= 0 ).toBe( true );
+
+              expect( rxAA.test( literal ) ).toBe( true );
+
+              expect( rxAA.lastIndex ).toEqual( 2 );
+
+              expect( rxAA.test( literal ) ).toBe( true );
+
+              expect( rxAA.lastIndex ).toEqual( 16 );
+
+
+              ////
+
+              expect( rxB.test( literal ) ).toBe( true );
+
+              expect( rxB.lastIndex ).toEqual( 0 );
+
+              expect( rxB.test( literal ) ).toBe( true );
+
+              expect( rxB.lastIndex ).toEqual( 0 );
+
+
+              expect( rxBB.lastIndex <= 0 ).toBe( true );
+
+              expect( rxBB.test( literal ) ).toBe( true );
+
+              expect( rxBB.lastIndex ).toEqual( 2 );
+
+              expect( rxBB.test( literal ) ).toBe( true );
+
+              expect( rxBB.lastIndex ).toEqual( 16 );
+
+
+              rxBB = RE.clone( rxBB );
+
+              expect( rxBB.lastIndex <= 0 ).toBe( true );
+
+              expect( rxBB.test( literal ) ).toBe( true );
+
+              expect( rxBB.lastIndex ).toEqual( 2 );
+
+              expect( rxBB.test( literal ) ).toBe( true );
+
+              expect( rxBB.lastIndex ).toEqual( 16 );
+
+
+////
+              expect( rxC.test( literal ) ).toBe( true );
+
+              expect( rxC.lastIndex ).toEqual( 2 );
+
+              expect( rxC.test( literal ) ).toBe( true );
+
+              expect( rxC.lastIndex ).toEqual( 16 );
+
+
+              expect( rxCC.lastIndex <= 0 ).toBe( true );
+
+              expect( rxCC.test( literal ) ).toBe( true );
+
+              expect( rxCC.lastIndex ).toEqual( 2 );
+
+              expect( rxCC.test( literal ) ).toBe( true );
+
+              expect( rxCC.lastIndex ).toEqual( 16 );
+
+
+              rxCC = RE.clone( rxCC );
+
+              expect( rxCC.lastIndex <= 0 ).toBe( true );
+
+              expect( rxCC.test( literal ) ).toBe( true );
+
+              expect( rxCC.lastIndex ).toEqual( 2 );
+
+              expect( rxCC.test( literal ) ).toBe( true );
+
+              expect( rxCC.lastIndex ).toEqual( 16 );
+
+////
+              expect( rx.test( literal ) ).toBe( true );
+
+              expect( rx.lastIndex ).toEqual( 0 );
+
+              expect( rx.test( literal ) ).toBe( true );
+
+              expect( rx.lastIndex ).toEqual( 0 );
+
+
+              expect( rxx.lastIndex <= 0 ).toBe( true );
+
+              expect( rxx.test( literal ) ).toBe( true );
+
+              expect( rxx.lastIndex ).toEqual( 3 );
+
+              expect( rxx.test( literal ) ).toBe( true );
+
+              expect( rxx.lastIndex ).toEqual( 8 );
+
+              expect( rxx.test( literal ) ).toBe( true );
+
+              expect( rxx.lastIndex ).toEqual( 11 );
+
+
+              rxx = RE.clone( rxx );
+
+              expect( rxx.lastIndex <= 0 ).toBe( true );
+
+              expect( rxx.test( literal ) ).toBe( true );
+
+              expect( rxx.lastIndex ).toEqual( 3 );
+
+              expect( rxx.test( literal ) ).toBe( true );
+
+              expect( rxx.lastIndex ).toEqual( 8 );
+
+              expect( rxx.test( literal ) ).toBe( true );
+
+              expect( rxx.lastIndex ).toEqual( 11 );
+          } );
+
+    test( "extractFlags returns a string of flags from the specified argument",
+          () =>
+          {
+              const rx = RE.clone( RE.SLASH, "gis" );
+              const rxA = /\s+/gis;
+              const rxB = "\\s+";
+              const rxC = "/\\s+/gis";
+
+              expect( RE.extractFlags( rx ) ).toEqual( "gis" );
+              expect( RE.extractFlags( rxA ) ).toEqual( "gis" );
+              expect( RE.extractFlags( rxB ) ).toEqual( "" );
+              expect( RE.extractFlags( rxC ) ).toEqual( "gis" );
+
+              expect( RE.extractFlags( /a/ ) ).toEqual( "" );
+              expect( RE.extractFlags( /a/i ) ).toEqual( "i" );
+
+
+          } );
+
+    test( "'get' returns a mutable RegExp according to the arguments specified",
+          () =>
+          {
+              const rx = RE.SLASH;
+
+              const rxA = /\s+/gis;
+              const rxB = "\\s+";
+              const rxC = "/\\s+/gis";
+
+              const rxx = RE.get( rx );
+
+              const rxAA = RE.get( rxA, RE.extractFlags( rxA ) );
+              const rxBB = RE.get( rxB );
+              const rxCC = RE.get( rxC );
+
+              expect( Object.isFrozen( rx ) ).toBe( true );
+
+              expect( rxx instanceof RegExp ).toBe( true );
+              expect( Object.isFrozen( rxx ) ).toBe( false );
+
+              expect( rxA instanceof RegExp ).toBe( true );
+              expect( Object.isFrozen( rxA ) ).toBe( false );
+
+              expect( rxAA instanceof RegExp ).toBe( true );
+              expect( Object.isFrozen( rxAA ) ).toBe( false );
+
+              expect( rxB instanceof RegExp ).toBe( false );
+              expect( Object.isFrozen( rxB ) ).toBe( true ); // strings are immutable
+
+              expect( rxBB instanceof RegExp ).toBe( true );
+              expect( Object.isFrozen( rxBB ) ).toBe( false );
+
+              expect( rxC instanceof RegExp ).toBe( false );
+              expect( Object.isFrozen( rxC ) ).toBe( true ); // strings are immutable
+
+              expect( rxCC instanceof RegExp ).toBe( true );
+              expect( Object.isFrozen( rxCC ) ).toBe( false );
+
+              expect( rxA.flags ).toEqual( "gis" );
+              expect( rxAA.flags ).toEqual( "gis" );
+
+              expect( rxC.flags ).toBe( undefined );
+              expect( rxCC.flags ).toEqual( "gis" );
+          } );
+
+    test( "reset returns an instance of the RegExp with a fresh state",
+          () =>
+          {
+              let rx = RE.SLASH;
+              let rxA = /\s+/gis;
+              let rxB = RE.clone( "\\s+" );
+              let rxC = RE.clone( "/\\s+/gis" );
+
+              const literal = "a /path/to/file ";
+
+              expect( rxA.test( literal ) ).toBe( true );
+              expect( rxA.lastIndex ).toEqual( 2 );
+              expect( rxA.test( literal ) ).toBe( true );
+              expect( rxA.lastIndex ).toEqual( 16 );
+
+              rxA = RE.reset( rxA );
+
+              expect( rxA.lastIndex <= 0 ).toBe( true );
+
+              expect( rxA.test( literal ) ).toBe( true );
+              expect( rxA.lastIndex ).toEqual( 2 );
+              expect( rxA.test( literal ) ).toBe( true );
+              expect( rxA.lastIndex ).toEqual( 16 );
+
+              ////
+
+              expect( rxB.test( literal ) ).toBe( true );
+              expect( rxB.lastIndex ).toEqual( 0 );
+              expect( rxB.test( literal ) ).toBe( true );
+              expect( rxB.lastIndex ).toEqual( 0 );
+
+              rxB = RE.reset( rxB );
+
+              expect( rxB.lastIndex <= 0 ).toBe( true );
+
+              expect( rxB.test( literal ) ).toBe( true );
+              expect( rxB.lastIndex <= 0 ).toBe( true );
+              expect( rxB.test( literal ) ).toBe( true );
+              expect( rxB.lastIndex <= 0 ).toBe( true );
+
+////
+              expect( rxC.test( literal ) ).toBe( true );
+              expect( rxC.lastIndex ).toEqual( 2 );
+              expect( rxC.test( literal ) ).toBe( true );
+              expect( rxC.lastIndex ).toEqual( 16 );
+
+              rxC = RE.reset( rxC );
+
+              expect( rxC.lastIndex <= 0 ).toBe( true );
+
+              expect( rxC.test( literal ) ).toBe( true );
+              expect( rxC.lastIndex ).toEqual( 2 );
+              expect( rxC.test( literal ) ).toBe( true );
+              expect( rxC.lastIndex ).toEqual( 16 );
+
+////
+              expect( rx.test( literal ) ).toBe( true );
+              expect( rx.lastIndex <= 0 ).toBe( true );
+              expect( rx.test( literal ) ).toBe( true );
+              expect( rx.lastIndex <= 0 ).toBe( true );
+
+              rx = RE.reset( rx );
+
+              expect( rx.test( literal ) ).toBe( true );
+              expect( rx.lastIndex <= 0 ).toBe( true );
+              expect( rx.test( literal ) ).toBe( true );
+              expect( rx.lastIndex <= 0 ).toBe( true );
+
+          } );
+} );
+
+describe( "MatchesHelper", () =>
+{
+    test( "Static method, execute, returns a new MatchesHelper",
+          () =>
+          {
+              const rx = /([ab]??)?([bc]??)?([cd]??)?/;
+
+              const textA = "abc";
+              const textB = "bcd";
+              const textC = "cde";
+
+              let helper = MatchesHelper.execute( rx, textA );
+
+              expect( helper.getText( 1 ) ).toEqual( "a" );
+              expect( helper.getText( 2 ) ).toEqual( "b" );
+              expect( helper.getText( 3 ) ).toEqual( "c" );
+
+              helper = MatchesHelper.execute( rx, textB );
+
+              expect( helper.getText( 1 ) ).toEqual( "b" );
+              expect( helper.getText( 2 ) ).toEqual( "c" );
+              expect( helper.getText( 3 ) ).toEqual( "d" );
+
+              helper = MatchesHelper.execute( rx, textC );
+
+              expect( helper.getText( 1 ) ).toEqual( undefined );
+              expect( helper.getText( 2 ) ).toEqual( "c" );
+              expect( helper.getText( 3 ) ).toEqual( "d" );
+
+          } );
+
+    test( "MatchesHelper::matches property is the same as the returned value from exec",
+          () =>
+          {
+              const rx = /([ab]??)?([bc]??)?([cd]??)?/;
+
+              const textA = "abc";
+              const textB = "bcd";
+              const textC = "cde";
+
+              let matches = rx.exec( textA );
+              let helper = MatchesHelper.execute( rx, textA );
+              expect( [].concat( matches ) ).toEqual( [].concat( helper.matches ) );
+
+              matches = rx.exec( textB );
+              helper = MatchesHelper.execute( rx, textB );
+              expect( [].concat( matches ) ).toEqual( [].concat( helper.matches ) );
+
+              matches = rx.exec( textC );
+              helper = MatchesHelper.execute( rx, textC );
+              expect( [].concat( matches ) ).toEqual( [].concat( helper.matches ) );
+          } );
+
+    test( "MatchesHelper::getIndices returns the start and end index of each matched group",
+          () =>
+          {
+              const rx = /([ab]??)?([bc]??)?([cd]??)?/d;
+
+              const textA = "abc";
+              const textB = "bcd";
+              const textC = "cde";
+
+              let helper = MatchesHelper.execute( rx, textA );
+
+              expect( helper.getIndices( 1 ) ).toEqual( [0, 1] );
+              expect( helper.getIndices( 2 ) ).toEqual( [1, 2] );
+              expect( helper.getIndices( 3 ) ).toEqual( [2, 3] );
+
+              helper = MatchesHelper.execute( rx, textB );
+
+              expect( helper.getIndices( 1 ) ).toEqual( [0, 1] );
+              expect( helper.getIndices( 2 ) ).toEqual( [1, 2] );
+              expect( helper.getIndices( 3 ) ).toEqual( [2, 3] );
+
+              helper = MatchesHelper.execute( rx, textC );
+
+              expect( helper.getIndices( 1 ) ).toEqual( [] );
+              expect( helper.getIndices( 2 ) ).toEqual( [0, 1] );
+              expect( helper.getIndices( 3 ) ).toEqual( [1, 2] );
+          } );
 } );

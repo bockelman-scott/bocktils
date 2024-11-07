@@ -71,6 +71,7 @@ const $scope = constants?.$scope || function()
 
     let isString = typeUtils.isString || function( s ) { return _str === typeof s; };
     let isObject = typeUtils.isObject || function( s ) { return _obj === typeof s; };
+    let isFunction = typeUtils.isFunction || function( s ) { return _fun === typeof s; };
 
     let asString = stringUtils.asString;
     let asInt = stringUtils.asInt;
@@ -386,26 +387,10 @@ const $scope = constants?.$scope || function()
             TRAILING_SLASH: Object.freeze( /\/+$/ ),
 
             /**
-             * Matches doubled slashes (path separators)
-             */
-            DOUBLE_SLASHES: Object.freeze( /\/\// ),
-
-            /**
-             * Matches linebreaks in files formatted on Windows (or DOS) operating systems
-             */
-            NON_UNIX_LINEBREAK: Object.freeze( /\r\n/ ),
-
-            /**
              * Matches text that may be produced from type coercion of undefined, null, or void types
              * Useful when parsing HTTP Requests in some environments
              */
             ARTIFACTS: Object.freeze( /null|undefined|void/i ),
-
-            /**
-             * Matches the backslash character, '\' anywhere in a character string.
-             * Useful when constructing values that require escaping the backslash
-             */
-            BACKSLASHES: Object.freeze( /\\/ ),
 
             /**
              * Matches the file extension of a filename and captures it
@@ -416,7 +401,7 @@ const $scope = constants?.$scope || function()
             /**
              * Matches a comment that appears to be the source file copyright statement.
              */
-            COPYRIGHT_COMMENT: Object.freeze( /[^"'`]?(\/\s*[\s\S.]*?(@license)+[\s\S.]*(Copyright)+?[\s\S.]*(\d{4})+[\s\S.]*?(@ignore)+?[\s\S.]*?\*\/)+[^"'`]?/s ),
+            COPYRIGHT_COMMENT: Object.freeze( /[^"'`]?(\/\s*[\s\S.]*?(@license)?[\s\S.]*(Copyright)+?[\s\S.]*(\d{4})+[\s\S.]*?(@ignore)?[\s\S.]*?\*\/)+[^"'`]?/s ),
 
             /**
              * Matches a function signature by
@@ -440,23 +425,24 @@ const $scope = constants?.$scope || function()
              * 1: the function declaration, potentially including the initial parenthesis if the function is an IIFE
              * 2: the function declaration, minus any opening parenthesis, regardless of whether the function is an IIFE
              * 3: the text, 'async' potentially preceded and/or followed by whitespace (useful for testing for asynchronous by trimming the match and comparing to the text, 'async')
-             * 4: the name of the function or undefined (if the function is anonymous)
-             * 5: the parameters list
-             * 6 - n: artifacts of the necessary groupings used to perform negative look-behind or otherwise enforce that only the last parameter can use the spread operator
+             * 4:
+             * 5: the name of the function or undefined (if the function is anonymous)
+             * 6: the parameters list
+             * 7 - n: artifacts of the necessary groupings used to perform negative look-behind or otherwise enforce that only the last parameter can use the spread operator
              *
              */
-            FUNCTION_SIGNATURE: Object.freeze( /^(\(?\s*((async\s+)?\s*function))\s*?([$_\w]+[$_\w\d]*)?\s*\((\s*(([$_\w]+[$_\w\d]*\s*,?)\s*)*(\.{3}([$_\w]+[$_\w\d]*\s*,?)*\s*)*)(?<!,\s*)\)/ ),
+            FUNCTION_SIGNATURE: Object.freeze( /^(\(?\s*((async(\s+))?\s*function))\s*?([$_\w]+[$_\w\d]*)?\s*\((\s*(([$_\w]+[$_\w\d]*\s*,?)\s*)*(\.{3}([$_\w]+[$_\w\d]*\s*,?)*\s*)*)(?<!,\s*)\)/ ),
 
             /**
              * Matches specifically an asynchronous function signature, using the same rules as FUNCTION_SIGNATURE.
              * @see FUNCTION_SIGNATURE
              */
-            ASYNC_FUNCTION_SIGNATURE: Object.freeze( /^(\(?\s*((async\s+)\s*function))\s*?([$_\w]+[$_\w\d]*)?\s*\((\s*(([$_\w]+[$_\w\d]*\s*,?)\s*)*(\.{3}([$_\w]+[$_\w\d]*\s*,?)*\s*)*)(?<!,\s*)\)/ ),
+            ASYNC_FUNCTION_SIGNATURE: Object.freeze( /^(\(?\s*((async(\s+))\s*function))\s*?([$_\w]+[$_\w\d]*)?\s*\((\s*(([$_\w]+[$_\w\d]*\s*,?)\s*)*(\.{3}([$_\w]+[$_\w\d]*\s*,?)*\s*)*)(?<!,\s*)\)/ ),
 
             /**
              * Matches the start of a function signature, capturing the name of the function in the first group.
              */
-            FUNCTION_NAME: Object.freeze( /function([^(]*)\(/ ),
+            FUNCTION_NAME: Object.freeze( /function\s*([^( ]*\s*)\(/ ),
 
             /**
              * Matches the start of a function signature, capturing the named parameters in the first group.
@@ -467,13 +453,13 @@ const $scope = constants?.$scope || function()
              * Matches a special annotation indicating the start of a function body.
              * Useful if parsing source code
              */
-            FUNCTION_BODY_START_HINT: Object.freeze( /\/\*\+\s*function_body\s*:\s*start\s*\*\// ),
+            FUNCTION_BODY_START_HINT: Object.freeze( /(\/\*\+\s*function_body\s*:\s*start\s*\*\/)+/ ),
 
             /**
              * Matches a special annotation indicating the end of a function body.
              * Useful if parsing source code
              */
-            FUNCTION_BODY_END_HINT: Object.freeze( /\/\*\+\s*function_body\s*:\s*end\*\// ),
+            FUNCTION_BODY_END_HINT: Object.freeze( /(\/\*\+\s*function_body\s*:\s*end\*\/)/ ),
 
             /**
              * Matches all text between the special annotations indicating the start and end of a function body.
@@ -499,7 +485,7 @@ const $scope = constants?.$scope || function()
              * Matches a statement defining a module's dependencies.
              * Useful if parsing source code
              */
-            DEPENDENCIES_DECLARATION: Object.freeze( /const\s+dependencies\s*=\s*(([\[{])(["' ),\/_])*([\[{]))?/ ),
+            DEPENDENCIES_DECLARATION: Object.freeze( /(const|let|var)\s+(dependencies)\s*=\s*([{\[])?\s*(((["'`])?\s*([\w_$]+)\s*?(["'`,:])?(["'`])?\s*([\w_$]+)\s*?(["'`,])?)*)\s*([}\]])/ ),
 
             /**
              * Matches the start of a function or async function declaration.
@@ -511,7 +497,7 @@ const $scope = constants?.$scope || function()
              * Matches text corresponding to a variable declaration and assignment.
              * Useful if parsing source code, and injecting new variables
              */
-            VARIABLE_DECLARATION: Object.freeze( /((const|let|var) +)([a-zA-Z_$]+[a-zA-Z0-9_$]*)([ \s\n]*= [ \s\n]*)([^; \n]+)([ \s\n]* [; \n])([ \s\n]*(\/\/ *injected)*)*/ ),
+            VARIABLE_DECLARATION: Object.freeze( /((const|let|var) +)([a-zA-Z_$]+[a-zA-Z0-9_$]*)+([ \s\n]*=[ \s\n]*)([^;\n]+)+?([;\n,])+?/ ),
 
             /**
              * Returns a string of flags ordered according to their position in the VALID_FLAGS array
@@ -557,17 +543,10 @@ const $scope = constants?.$scope || function()
 
                 if ( isString( pRegEx ) )
                 {
-                    try
-                    {
-                        rx = new RegExp( pRegEx );
-                    }
-                    catch( ex )
-                    {
-                        const s = asString( pRegEx );
-                        const index = s.lastIndexOf( constants._slash );
-                        const arr = [].concat( asArray( s.slice( index + 1 ) || _mt_str ).split( "" ) );
-                        return this.flags( ...arr );
-                    }
+                    const s = asString( pRegEx );
+                    const index = s.lastIndexOf( constants._slash );
+                    const arr = index >= 0 ? [].concat( asArray( s.slice( index + 1 ) || _mt_str ).map( e => asString( e ).split( _mt_chr ) ).flat() ).flat() : [];
+                    return this.flags( ...arr );
                 }
 
                 if ( !isObject( rx ) || !(rx instanceof RegExp) )
@@ -581,7 +560,7 @@ const $scope = constants?.$scope || function()
             /**
              * Returns a mutable RegExp object corresponding to the name specified.
              * Used when you need a mutable instance of the RegExp.
-             * @param pName {string} one of the property keys of this object or a regular expression literal
+             * @param pName {string|RegExp} one of the property keys of this object or a regular expression literal
              * @param pFlags one or more flags to apply when using the return RegExp
              * @returns {RegExp} a mutable RegExp object corresponding to the name or expression specified.
              */
@@ -591,7 +570,7 @@ const $scope = constants?.$scope || function()
 
                 if ( isString( pName ) )
                 {
-                    if ( this.REGEX.test( pName ) )
+                    if ( this.REGEX.test( pName ) || this.REGEX.test( constants._slash + pName + constants._slash ) )
                     {
                         let flags = this.extractFlags( pName );
 
@@ -602,7 +581,7 @@ const $scope = constants?.$scope || function()
 
                         let name = pName.replace( /\/+[gidsmyu]*$/, _mt_str );
 
-                        const pattern = name.replace( this.LEADING_OR_TRAILING_SLASH, _mt_str ).replace( this.BACKSLASH, "\\" );
+                        const pattern = name.replace( this.LEADING_OR_TRAILING_SLASH, _mt_str ).replaceAll( this.get( this.BACKSLASH, FLAGS.GLOBAL ), "\\" );
 
                         return signals ? new RegExp( pattern, signals ) : new RegExp( pattern );
                     }
@@ -640,13 +619,19 @@ const $scope = constants?.$scope || function()
                 switch ( typeof pRegExp )
                 {
                     case _str:
-                        rx = this.get( pRegExp );
+                        rx = this.get( pRegExp, (pResetFlags ? "" : this.extractFlags( pRegExp )) );
                         break;
 
                     case _obj:
                         if ( pRegExp instanceof RegExp )
                         {
                             rx = pRegExp;
+
+                            if ( Object.isFrozen( rx ) || pResetFlags )
+                            {
+                                rx = pResetFlags ? new RegExp( rx ) : this.get( rx, rx.flags );
+                            }
+
                             break;
                         }
                         break;
@@ -655,12 +640,16 @@ const $scope = constants?.$scope || function()
                         try
                         {
                             rx = pRegExp();
-                            return this.reset( rx );
+                            if ( !isFunction( rx ) )
+                            {
+                                return this.reset( rx );
+                            }
                         }
                         catch( ex )
                         {
                             throw new Error( "Reset requires a valid string, regular expression, or a function that returns a string or regular expression\n" + ex.message );
                         }
+                        break;
 
                     default:
                         throw new Error( "Reset requires a valid string, regular expression, or a function that returns a string or regular expression" );
@@ -720,24 +709,25 @@ const $scope = constants?.$scope || function()
         }
 
         /**
-         * Returns the index of the specified group, if the RegExp used to call exec included the 'd' flag
+         * Returns the index of the start and end of the specified group,
+         * if the RegExp used to call exec included the 'd' flag
          * @param {number} pGroup the capture group whose index you want to return
-         * @returns {number}
+         * @returns {Array<number>} [startIndex, endIndex] of the specified group
          */
-        getIndex( pGroup )
+        getIndices( pGroup )
         {
             let matches = this.#matches || [];
 
-            let indices = matches.indices || [];
+            let indices = matches.indices || [matches.index];
 
-            let idx = Math.max( 0, asInt( pGroup ) );
+            let grp = Math.max( 0, asInt( pGroup ) );
 
-            if ( idx < indices.length )
+            if ( grp < indices.length )
             {
-                return indices[idx];
+                return asArray( indices[grp] );
             }
 
-            return -1;
+            return [-1, 0];
         }
     }
 
@@ -755,7 +745,7 @@ const $scope = constants?.$scope || function()
      */
     MatchesHelper.execute = function( pRegEx, pString, ...pFlags )
     {
-        const flags = [FLAGS.WITH_INDICES].concat( ...pFlags );
+        const flags = [FLAGS.WITH_INDICES].concat( ...pFlags ).concat( typeUtils.isRegExp( pRegEx ) ? asString( pRegEx.flags, true ).split( _mt_chr ) : [] );
 
         const rx = REGULAR_EXPRESSIONS.get( pRegEx, ...flags );
 
