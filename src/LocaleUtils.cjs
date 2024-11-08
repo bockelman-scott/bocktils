@@ -286,12 +286,13 @@ const $scope = utils?.$scope || function()
 
         for( let era of DEFAULTS.ERAS )
         {
-            eras.push( {
-                           start: era.start,
-                           end: era.end,
-                           name: asString( dfShort.format( era.start || era.end ) ).replace( /[\d\/\\]/g, _mt_str ).trim(),
-                           longName: asString( dfLong.format( era.start || era.end ) ).replace( /[\d\/\\]/g, _mt_str ).trim()
-                       } );
+            eras.push( Object.freeze(
+                {
+                    start: era.start,
+                    end: era.end,
+                    name: asString( dfShort.format( era.start || era.end ) ).replace( /[\d\/\\]/g, _mt_str ).trim(),
+                    longName: asString( dfLong.format( era.start || era.end ) ).replace( /[\d\/\\]/g, _mt_str ).trim()
+                } ) );
         }
 
         return Object.freeze( eras );
