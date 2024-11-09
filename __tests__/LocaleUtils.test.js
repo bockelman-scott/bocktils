@@ -227,6 +227,8 @@ describe( "Other", () =>
     const britishLocale = new Intl.Locale( "en-GB" );
     const germanLocale = new Intl.Locale( "de" );
     const mexicanLocale = new Intl.Locale( "es-MX" );
+    const frenchLocale = new Intl.Locale( "fr-FR" );
+    const japaneseLocale = new Intl.Locale( "ja-JP" );
 
     test( "getEras returns an array of objects describing the known Eras",
           () =>
@@ -253,5 +255,169 @@ describe( "Other", () =>
 
               expect( eras[0].longName ).toEqual( "después de Cristo" );
               expect( eras[1].longName ).toEqual( "antes de Cristo" );
+          } );
+
+    test( "getAmPmStrings returns an array of strings used for AM/PM according to the Locale specified",
+          () =>
+          {
+              let amPmStrings = localeUtils.getAmPmStrings( usLocale );
+
+              expect( amPmStrings[0] ).toEqual( "AM" );
+              expect( amPmStrings[1] ).toEqual( "PM" );
+
+              amPmStrings = localeUtils.getAmPmStrings( britishLocale );
+
+              expect( amPmStrings[0] ).toEqual( "am" );
+              expect( amPmStrings[1] ).toEqual( "pm" );
+
+              amPmStrings = localeUtils.getAmPmStrings( germanLocale );
+
+              expect( amPmStrings[0] ).toEqual( "AM" );
+              expect( amPmStrings[1] ).toEqual( "PM" );
+
+              amPmStrings = localeUtils.getAmPmStrings( mexicanLocale );
+
+              expect( amPmStrings[0] ).toEqual( "a. m." );
+              expect( amPmStrings[1] ).toEqual( "p. m." );
+          } );
+
+    test( "getWeekData returns an object describing various aspects of a locale's rules for weeks",
+          () =>
+          {
+              let weekInfo = localeUtils.getWeekData( usLocale );
+
+              expect( weekInfo ).toEqual( { firstDay: 0, minimalDays: 1, weekend: [6, 0] } );
+
+
+              weekInfo = localeUtils.getWeekData( britishLocale );
+
+              expect( weekInfo ).toEqual( { firstDay: 1, minimalDays: 4, weekend: [6, 0] } );
+
+
+              weekInfo = localeUtils.getWeekData( frenchLocale );
+
+              expect( weekInfo ).toEqual( { firstDay: 1, minimalDays: 4, weekend: [6, 0] } );
+
+
+              weekInfo = localeUtils.getWeekData( germanLocale );
+
+              expect( weekInfo ).toEqual( { firstDay: 1, minimalDays: 4, weekend: [6, 0] } );
+
+
+              weekInfo = localeUtils.getWeekData( mexicanLocale );
+
+              expect( weekInfo ).toEqual( { firstDay: 0, minimalDays: 1, weekend: [6, 0] } );
+          } );
+
+    test( "getFirstDayOfWeek returns Sunday or Monday depending on the Locale",
+          () =>
+          {
+              let day = localeUtils.getFirstDayOfWeek( usLocale );
+
+              expect( day ).toEqual( 0 );
+
+
+              day = localeUtils.getFirstDayOfWeek( britishLocale );
+
+              expect( day ).toEqual( 1 );
+
+
+              day = localeUtils.getFirstDayOfWeek( frenchLocale );
+
+              expect( day ).toEqual( 1 );
+
+
+              day = localeUtils.getFirstDayOfWeek( germanLocale );
+
+              expect( day ).toEqual( 1 );
+
+
+              day = localeUtils.getFirstDayOfWeek( mexicanLocale );
+
+              expect( day ).toEqual( 0 );
+          } );
+
+    test( "getWords returns an array of strings considered to be 'words' according to the specified locale",
+          () =>
+          {
+              const english = "We're off to see the wizard, the wonderful wizard of Oz";
+
+              const englishWords = ["We're", "off", "to", "see", "the", "wizard", ",", "the", "wonderful", "wizard", "of", "Oz"];
+
+              const englishWordsOnly = ["We're", "off", "to", "see", "the", "wizard", "the", "wonderful", "wizard", "of", "Oz"];
+
+              const japanese = "吾輩は猫である。名前はたぬき。";
+
+              const japaneseWords = ["吾輩", "は", "猫", "で", "ある", "。", "名前", "は", "たぬき", "。"];
+
+              const japaneseWordsOnly = ["吾輩", "は", "猫", "で", "ある", "名前", "は", "たぬき"];
+
+
+              let words = localeUtils.getWords( english, usLocale );
+
+              expect( words ).toEqual( englishWords );
+
+              words = localeUtils.getWords( english, usLocale, true, true );
+
+              expect( words ).toEqual( englishWordsOnly );
+
+
+              words = localeUtils.getWords( japanese, usLocale );
+
+              expect( words ).toEqual( japaneseWords );
+
+              words = localeUtils.getWords( japanese, usLocale, true, true );
+
+              expect( words ).toEqual( japaneseWordsOnly );
+
+
+              words = localeUtils.getWords( english, japaneseLocale );
+
+              expect( words ).toEqual( englishWords );
+
+
+              words = localeUtils.getWords( japanese, japaneseLocale );
+
+              expect( words ).toEqual( japaneseWords );
+
+
+              words = localeUtils.getWords( english, britishLocale );
+
+              expect( words ).toEqual( englishWords );
+
+
+              words = localeUtils.getWords( japanese, britishLocale );
+
+              expect( words ).toEqual( japaneseWords );
+
+
+              words = localeUtils.getWords( english, frenchLocale );
+
+              expect( words ).toEqual( englishWords );
+
+
+              words = localeUtils.getWords( japanese, frenchLocale );
+
+              expect( words ).toEqual( japaneseWords );
+
+
+              words = localeUtils.getWords( english, germanLocale );
+
+              expect( words ).toEqual( englishWords );
+
+
+              words = localeUtils.getWords( japanese, germanLocale );
+
+              expect( words ).toEqual( japaneseWords );
+
+
+              words = localeUtils.getWords( english, mexicanLocale );
+
+              expect( words ).toEqual( englishWords );
+
+
+              words = localeUtils.getWords( japanese, mexicanLocale );
+
+              expect( words ).toEqual( japaneseWords );
           } );
 } );

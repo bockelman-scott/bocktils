@@ -320,17 +320,17 @@ const $scope = utils?.$scope || function()
     {
         const locale = resolveLocale( pLocale );
 
-        let weekData = null;
+        let weekData = {};
 
         try
         {
             if ( isFunction( locale.getWeekInfo ) )
             {
-                weekData = locale.getWeekInfo() || locale.weekInfo;
+                weekData = Object.assign( locale.getWeekInfo() || locale.weekInfo || {} );
             }
             else
             {
-                weekData = locale.weekInfo || weekData;
+                weekData = Object.assign( locale.weekInfo || weekData || {} );
             }
         }
         catch( ex )
@@ -338,7 +338,13 @@ const $scope = utils?.$scope || function()
             console.error( ex );
         }
 
-        return weekData;
+        if ( weekData )
+        {
+            weekData.firstDay = [0, 7].includes( weekData.firstDay ) ? 0 : weekData.firstDay;
+            weekData.weekend = asArray( weekData.weekend ).map( e => 7 === e ? 0 : e );
+        }
+
+        return Object.freeze( weekData );
     };
 
     const getFirstDayOfWeek = function( pLocale )
@@ -357,13 +363,13 @@ const $scope = utils?.$scope || function()
         return firstDay;
     };
 
-    const getSegments = function( pString, pLocale, pGranularity )
+    const getSegments = function( pString, pLocale, pGranularity, pExcludeWhitespace = true, pExcludePunctuation = false )
     {
         const str = asString( pString );
 
         if ( isBlank( str ) )
         {
-            return [str];
+            return pExcludeWhitespace ? [] : [str];
         }
 
         const locale = resolveLocale( pLocale || DEFAULT_LOCALE );
@@ -371,13 +377,39 @@ const $scope = utils?.$scope || function()
         if ( isDefined( Intl.Segmenter ) )
         {
             const segmenter = new Intl.Segmenter( locale?.baseName || DEFAULT_LOCALE_STRING, { granularity: pGranularity } );
+
             const segments = segmenter.segment( str );
-            return Array.from( segments ).map( ( e, i ) => asString( e?.segment ) );
+
+            let arr = Array.from( segments );
+
+            if ( pExcludeWhitespace )
+            {
+                //  /["'`,.:;?/\\{}\[\]=+()*&^%$#@!~_。-]/
+                arr = arr.filter( e => e.isWordLike || !/\s+/.test( e.segment ) );
+            }
+
+            if ( pExcludePunctuation )
+            {
+                //  /["'`,.:;?/\\{}\[\]=+()*&^%$#@!~_。-]/
+                arr = arr.filter( e => e.isWordLike || /\s+/.test( e.segment ) );
+            }
+
+            arr = arr.map( ( e ) => asString( e?.segment ) );
+
+            arr = pExcludeWhitespace ? arr.filter( arrayUtils.Filters.NON_BLANK ) : arr;
+
+            return Object.freeze( arr );
         }
 
         let splitArg = "word" === pGranularity ? /\b/ : _mt_str;
 
-        return str.split( splitArg ).filter( e => !isBlank( e ) );
+        let arr = str.split( splitArg );
+
+        arr = pExcludeWhitespace ? arr.filter( arrayUtils.Filters.NON_BLANK ) : arr;
+
+        arr = pExcludePunctuation ? arr.filter( e => /[\w\s]+/.test( e ) ) : arr;
+
+        return Object.freeze( arr );
     };
 
     const mod =
@@ -411,14 +443,14 @@ const $scope = utils?.$scope || function()
             getWeekData,
             getFirstDayOfWeek,
 
-            getWords: function( pString, pLocale )
+            getWords: function( pString, pLocale, pExcludeWhitespace = true, pExcludePunctuation = false )
             {
-                return getSegments( asString( pString ), pLocale, "word" );
+                return getSegments( asString( pString ), pLocale, "word", pExcludeWhitespace, pExcludePunctuation );
             },
 
-            getCharacters: function( pString, pLocale )
+            getCharacters: function( pString, pLocale, pExcludeWhitespace = true, pExcludePunctuation = false )
             {
-                return getSegments( asString( pString ), pLocale, "grapheme" );
+                return getSegments( asString( pString ), pLocale, "grapheme", pExcludePunctuation, pExcludePunctuation );
             }
         };
 
