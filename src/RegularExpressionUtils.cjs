@@ -1,5 +1,8 @@
 /**
  * This module provides a library of commonly used Regular Expressions.
+ *
+ * For more sophisticated use cases,
+ * consider using Regex+ (https://www.npmjs.com/package/regex)
  */
 
 const constants = require( "./Constants.cjs" );
@@ -70,6 +73,7 @@ const $scope = constants?.$scope || function()
     let _fun = constants._fun || "function";
 
     let isString = typeUtils.isString || function( s ) { return _str === typeof s; };
+    let isRegExp = typeUtils.isRegExp || function( s ) { return s instanceof RegExp; };
     let isObject = typeUtils.isObject || function( s ) { return _obj === typeof s; };
     let isFunction = typeUtils.isFunction || function( s ) { return _fun === typeof s; };
 
@@ -174,7 +178,6 @@ const $scope = constants?.$scope || function()
      * the recommended practice is to use the 'get' method of this map
      * to receive a fresh and mutable instance of the RegExp.
      *
-     * @type {Readonly<{NON_DIGIT: Readonly<RegExp>, REGEX: Readonly<RegExp>, BACKSLASHES: Readonly<RegExp>, EXTENSION: Readonly<RegExp>, DEPENDENCIES_DECLARATION: Readonly<RegExp>, VARIABLE_TOKEN_END: Readonly<RegExp>, QUESTION_MARK: Readonly<RegExp>, DOLLAR_SYMBOL: Readonly<RegExp>, BACKSLASH: Readonly<RegExp>, WINDOWS_NEWLINE: Readonly<RegExp>, RIGHT_TRIM_WHITESPACE: Readonly<RegExp>, AWAIT_HINT: Readonly<RegExp>, FUNCTION_BODY_START_HINT: Readonly<RegExp>, QUERY_STRING_SEPARATOR: Readonly<RegExp>, URL_LOCATION_HASH_SEPARATOR: Readonly<RegExp>, SEPARATOR: Readonly<RegExp>, NEWLINE: Readonly<RegExp>, REDUNDANT_NEWLINES: Readonly<RegExp>, DOT: Readonly<RegExp>, SIMPLE_FUNCTION_SIGNATURE: Readonly<RegExp>, FUNCTION_DECLARATION: Readonly<RegExp>, HASH: Readonly<RegExp>, NON_INTEGER_DIGIT: Readonly<RegExp>, TRAILING_WHITESPACE: Readonly<RegExp>, ASSIGNMENT_OPERATOR: Readonly<RegExp>, reset: ((function(*, *): (*))|*), NON_UNIX_LINEBREAK: Readonly<RegExp>, TRAILING_SEMICOLON: Readonly<RegExp>, LEADING_NEWLINE: Readonly<RegExp>, flags: (function(...[*]): string), SIMPLE_ASYNC_FUNCTION_SIGNATURE: Readonly<RegExp>, FUNCTION_SIGNATURE: Readonly<RegExp>, TRAILING_NEWLINE: Readonly<RegExp>, LEADING_HASH: Readonly<RegExp>, TRAILING_SLASH: Readonly<RegExp>, FUNCTION_PARAMETERS: Readonly<RegExp>, LEADING_WHITESPACE: Readonly<RegExp>, LEADING_OR_TRAILING_SLASH: Readonly<RegExp>, ARTIFACTS: Readonly<RegExp>, get: ((function(*, ...[*]): (RegExp|undefined))|*), EXTENSION_MATCH: Readonly<RegExp>, LEFT_TRIM_WHITESPACE: Readonly<RegExp>, REDUNDANT_WHITESPACE: Readonly<RegExp>, FUNCTION_BODY_END_HINT: Readonly<RegExp>, LEADING_SLASH: Readonly<RegExp>, extractFlags: ((function(*): (string))|*), TRAILING_DOT: Readonly<RegExp>, LEADING_DOT: Readonly<RegExp>, SLASH: Readonly<RegExp>, DOUBLE_SLASH: Readonly<RegExp>, VARIABLE_TOKEN_START: Readonly<RegExp>, VARIABLE_DECLARATION: Readonly<RegExp>, RIGHT_TRIM: Readonly<RegExp>, FUNCTION_NAME: Readonly<RegExp>, LEFT_TRIM: Readonly<RegExp>, DOUBLE_SLASHES: Readonly<RegExp>, COPYRIGHT_COMMENT: Readonly<RegExp>, ANNOTATED_FUNCTION_BODY: Readonly<RegExp>, clone: ((function(*, ...[*]): (*|undefined))|*), REDUNDANT_SPACES: Readonly<RegExp>, ASYNC_FUNCTION_SIGNATURE: Readonly<RegExp>, ASYNC_HINT: Readonly<RegExp>}>}
      */
     const REGULAR_EXPRESSIONS = Object.freeze(
         {
@@ -220,14 +223,19 @@ const $scope = constants?.$scope || function()
             TRAILING_WHITESPACE: Object.freeze( /\s+$/ ),
 
             /**
-             * Matches the character string, '${', at the start of a character string
+             * Matches the character string, '${', anywhere in a character string
              */
-            VARIABLE_TOKEN_START: Object.freeze( /^\$\{/ ),
+            VARIABLE_TOKEN_START: Object.freeze( /\$\{/ ),
 
             /**
-             * Matches the character string, '}', at the end of a character string
+             * Matches the character string, '}', anywhere in a character string
              */
-            VARIABLE_TOKEN_END: Object.freeze( /}$/ ),
+            VARIABLE_TOKEN_END: Object.freeze( /}/ ),
+
+            /**
+             * Matches an interpolated variable such as ${myValue}
+             */
+            VARIABLE_TOKEN: Object.freeze( /\{[^}{]+}/ ),
 
             /**
              * Matches a single slash, '/', character anywhere is a string
@@ -297,6 +305,26 @@ const $scope = constants?.$scope || function()
             SIMPLE_ASYNC_FUNCTION_SIGNATURE: Object.freeze( /(async)\s*(function)\s*([^(]*)*\(([^)]*)\)/ ),
 
             /**
+             * Matches the first integer portion of a string
+             */
+            INTEGER: Object.freeze( /(-?\d+)/ ),
+
+            /**
+             * Matches only strings that represent a whole number value
+             */
+            VALID_INTEGER: Object.freeze( /^(-?\d+)$/ ),
+
+            /**
+             * Matches the first floating point value portion of a string
+             */
+            FLOAT: Object.freeze( /(-?\d+(\.\d+)?)/ ),
+
+            /**
+             * Matches only strings that represent a valid number
+             */
+            VALID_FLOAT: Object.freeze( /^(-?\d+(\.\d+)?)$/ ),
+
+            /**
              * Matches any character that is not in the set [0,1,2,3,4,5,6,7,8,9]
              */
             NON_INTEGER_DIGIT: Object.freeze( /\D/ ),
@@ -309,12 +337,12 @@ const $scope = constants?.$scope || function()
             /**
              * Matches spaces at the start of a character sequence
              */
-            LEFT_TRIM: Object.freeze( /^[ ]+((\S+\s*)*)/ ),
+            LEFT_TRIM: Object.freeze( /^ +((\S+\s*)*)/ ),
 
             /**
              * Matches spaces at the end of a character sequence
              */
-            RIGHT_TRIM: Object.freeze( /((\s*\S+)*)[ ]+$/ ),
+            RIGHT_TRIM: Object.freeze( /((\s*\S+)*) +$/ ),
 
             /**
              * Matches all whitespace at the start of a character sequence
@@ -329,12 +357,43 @@ const $scope = constants?.$scope || function()
             /**
              * Matches repeated spaces anywhere in a character sequence
              */
-            REDUNDANT_SPACE: Object.freeze( /[ ]{2,}/ ),
+            REDUNDANT_SPACE: Object.freeze( / {2,}/ ),
 
             /**
              * Matches repeated whitespace anywhere in a character sequence
              */
             REDUNDANT_WHITESPACE: Object.freeze( /[ \s]{2,}/ ),
+
+            /**
+             * Matches an opening parenthesis character anywhere in a string
+             */
+            OPEN_PAREN: Object.freeze( /\(/ ),
+
+            /**
+             * Matches a closing parenthesis character anywhere in a string
+             */
+            CLOSE_PAREN: Object.freeze( /\)/ ),
+
+            /**
+             * Matches an opening parenthesis character at the start of a string
+             */
+            START_OPEN_PAREN: Object.freeze( /^\(/ ),
+
+            /**
+             * Matches a closing parenthesis character at the end of a string
+             */
+            END_CLOSE_PAREN: Object.freeze( /\)$/ ),
+
+            /**
+             * Matches any of the characters that perform simple mathematics operations,
+             * that is, addition, multiplication, division, or subtraction
+             */
+            MATHS_OPERATORS: Object.freeze( /[+*/-]/ ),
+
+            /**
+             * Matches a simple mathematics expression, such as '3 * 2' or ( 3 * 2 )
+             */
+            MATHS_EXPRESSION: Object.freeze( /(\(\s*(-?\d+(\.?\d+)?)\s*([+*/-])\s*(-?\d+(\.?\d+)?)\s*\))|(\s*(-?\d+(\.?\d+)?)\s*([+*/-])\s*(-?\d+(\.?\d+)?)\s*)|\s*(-?\d+(\.?\d+)?)\s*/ ),
 
             /**
              * Matches the literal question-mark character, '?' anywhere in a character string.
@@ -606,6 +665,15 @@ const $scope = constants?.$scope || function()
                 throw new Error( "pName must be a string or regular expression" );
             },
 
+            compose: function( ...pRegExp )
+            {
+                const flags = this.flags( ...(asArray( pRegExp ).map( e => this.get( e )?.flags )) );
+
+                const arr = asArray( pRegExp ).map( e => asString( this.get( e ) ).replace( /^\//, _mt_str ).replace( /\/[gidsmyu]*$/, _mt_str ) );
+
+                return new RegExp( arr.join( _mt_chr ), flags );
+            },
+
             /**
              * Returns a RegExp after resetting its state (example, lastIndex = -1)
              * @param pRegExp {RegExp|string} the regular expression to reset
@@ -668,6 +736,22 @@ const $scope = constants?.$scope || function()
                 return rx;
             }
         } );
+
+    const removeAll = function( pString, ...pSearch )
+    {
+        let s = asString( pString );
+
+        const expressions = [].concat( asArray( pSearch ).filter( e => isString( e ) || isRegExp( e ) ) );
+
+        for( let expression of expressions )
+        {
+            let rx = REGULAR_EXPRESSIONS.get( expression, FLAGS.GLOBAL );
+
+            s = s.replaceAll( rx, _mt_str );
+        }
+
+        return s;
+    };
 
     /**
      * Instances of this class make working with the exec method of RegExp more convenient.
@@ -766,6 +850,7 @@ const $scope = constants?.$scope || function()
                 return sortFlags( ...pFlags ).join( _mt_chr );
             },
             REGULAR_EXPRESSIONS,
+            removeAll,
             classes:
                 {
                     MatchesHelper

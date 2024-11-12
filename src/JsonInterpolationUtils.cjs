@@ -1,11 +1,10 @@
 const constants = require( "./Constants.cjs" );
+const typeUtils = require( "./TypeUtils.cjs" );
 const stringUtils = require( "./StringUtils.cjs" );
 const arrayUtils = require( "./ArrayUtils.cjs" );
 const objectUtils = require( "./ObjectUtils.cjs" );
 
 let _ud = constants._ud || "undefined";
-
-let _mt_str = constants._mt_str || "";
 
 const $scope = constants?.$scope || function()
 {
@@ -14,10 +13,46 @@ const $scope = constants?.$scope || function()
 
 (function exposeModule()
 {
+    const me = exposeModule;
+
+    const dependencies =
+        {
+            constants,
+            typeUtils,
+            stringUtils,
+            arrayUtils,
+            objectUtils
+        };
+
+    let _mt_str = constants._mt_str;
+    let _dot = constants._dot;
+    let _colon = constants._colon;
+    let _dblqt = constants._dblqt;
+
+    let _str = constants._str;
+    let _fun = constants._fun;
+    let _obj = constants._obj;
+    let _bool = constants._bool;
+    let _num = constants._num;
+    let _big = constants._big;
+
+    let isString = typeUtils.isString;
+    let isFunction = typeUtils.isFunction;
+    let isDate = typeUtils.isDate;
+
+
+    let asString = stringUtils.asString;
+    let isBlank = stringUtils.isBlank;
+
+    let asArray = arrayUtils.asArray;
+    let pruneArray = arrayUtils.pruneArray;
+
+    let isPopulated = objectUtils.isPopulatedObject || objectUtils.isPopulated;
+
     /**
      * This statement makes all the values exposed by the imported modules local variables in the current scope.
      */
-    constants.importUtilities( this, constants, stringUtils, arrayUtils, objectUtils );
+    constants.importUtilities( me || this, constants, typeUtils, stringUtils, arrayUtils, objectUtils );
 
     const INTERNAL_NAME = "__BOCK_JSON_INTERPOLATION__";
 
@@ -26,47 +61,67 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
+    const arrayToString = function( pArr )
+    {
+        const arr = asArray( pArr );
+
+        return arr.map( e => asString( e ) ).join( _mt_str );
+    };
+
     const MAX_RUN_TIME = 5_000;
 
     class InterpolationEntry
     {
+        #hintString;
+
+        #type;
+
+        #typeArgs;
+        #argument;
+
+        #useGraph;
+        #useScope;
+
+        #base;
+        #key;
+
         constructor( pHintsString, pArgument )
         {
-            this._hintString = _str === typeof pHintsString ? pHintsString.trim() : (_str === typeof pArgument ? pArgument.trim() : _mt_str);
+            this.#hintString = isString( pHintsString ) ? asString( pHintsString, true ) : (isString( pArgument ) ? asString( pArgument, true ) : _mt_str);
 
-            this._hintString = this._hintString.replace( /^\(/, _mt_chr ).replace( /:$/, _mt_str ).replace( /\)$/, _mt_str );
+            this.#hintString = this.#hintString.replace( /^\(/, _mt_str ).replace( /:$/, _mt_str ).replace( /\)$/, _mt_str );
 
-            let hintParts = ([].concat( ...(this._hintString.split( ";" ) || [this._hintString]) ).map( e => _str === typeof e ? e.trim() : _mt_str ).filter( e => _mt_str !== e )) || [];
+            let hintParts = ([].concat( ...(this.#hintString.split( ";" ) || [this.#hintString]) ).map( e => isString( e ) ? e.trim() : _mt_str ).filter( e => _mt_str !== e )) || [];
 
-            this._type = (hintParts?.length > 0 ? hintParts[0].trim().replace( /^@/, _mt_str ) : "var").toLowerCase();
+            this.#type = (hintParts?.length > 0 ? hintParts[0].trim().replace( /^@/, _mt_str ) : "var").toLowerCase();
 
-            this._useGraph = (InterpolationEntry.GRAPH_TYPES.includes( this._type ));
+            this.#useGraph = (InterpolationEntry.GRAPH_TYPES.includes( this.#type ));
 
-            this._useScope = !this._useGraph || (InterpolationEntry.SCOPE_TYPES.includes( this._type ));
+            this.#useScope = !this.#useGraph || (InterpolationEntry.SCOPE_TYPES.includes( this.#type ));
 
-            this._typeArgs = ([].concat( ...(hintParts?.length > 1 ? hintParts.slice( 1, hintParts.length ) : []) )).map( e => e.split( ":" ).map( ee => _str === typeof ee ? ee.trim().replace( /^@/, _mt_str ).replace( "(", _mt_str ).replace( ")", _mt_str ) : _mt_str ) ).map( e => Object.fromEntries( [e] ) );
+            this.#typeArgs = ([].concat( ...(hintParts?.length > 1 ? hintParts.slice( 1, hintParts.length ) : []) )).map( e => e.split( ":" ).map( ee => isString( ee ) ? ee.trim().replace( /^@|[)(]/, _mt_str ) : _mt_str ) ).map( e => Object.fromEntries( [e] ) );
 
             let args = {};
 
-            this._typeArgs = this._typeArgs.map( e => Object.assign( args, e ) );
+            this.#typeArgs = this.#typeArgs.map( e => Object.assign( args, e ) );
 
-            this._typeArgs = args || this._typeArgs;
+            this.#typeArgs = args || this.#typeArgs;
 
-            this._argument = (_str === typeof pArgument ? pArgument.trim() : this._hintString || _mt_str).replace( /['"`]/, _mt_str );
+            this.#argument = (isString( pArgument ) ? pArgument.trim() : this.#hintString || _mt_str).replace( /['"`]/, _mt_str );
 
-            this._base = this._useGraph ? (this._typeArgs?.["base"] || "this") : (this._typeArgs?.["scope"] || "global");
+            this.#base = this.#useGraph ? (this.#typeArgs?.["base"] || "this") : (this.#typeArgs?.["scope"] || "global");
 
-            this._key = "${(@" + this._type + ";" + [...(Object.entries( this._typeArgs ))].map( e => _mt_str + ("@" + e[0] + _colon + e[1]) ).join( ";" ) + "):" + this._argument + "}";
+            this.#key = "${(@" + this.#type + ";" + [...(Object.entries( this.#typeArgs ))].map( e => _mt_str + ("@" + e[0] + _colon + e[1]) ).join( ";" ) + "):" + this.#argument + "}";
         }
 
         isVariable()
         {
-            return this._useScope;
+            return this.#useScope;
         }
 
         isTreeNode()
         {
-            return this._useGraph;
+            return this.#useGraph;
         }
 
         resolve( pScope, pRoot, pCurrent, pResolved, pPaths )
@@ -79,13 +134,15 @@ const $scope = constants?.$scope || function()
 
             let resolved = pResolved || new Map();
 
-            let paths = [].concat( ...(pPaths || []) );
+            resolved = resolved instanceof Map ? resolved : new Map();
 
-            let variableName = (this._argument || "~$~").trim() || "~$~";
+            let paths = [].concat( ...(asArray( pPaths || [] )) );
 
-            let base = this._base || (this._useGraph ? (this._typeArgs?.["base"] || "this") : (this._typeArgs?.["scope"] || "global"));
+            let variableName = (this.#argument || "~$~").trim() || "~$~";
 
-            let node = this._useGraph ? ((["root"].includes( base ) || ("@root" === this._argument)) ? root : (["this", "current", "cur", _mt_str].includes( base ) ? current : scp)) : (["global", "self"].includes( base ) ? scp : scp?.[base] || scp);
+            let base = this.#base || (this.#useGraph ? (this.#typeArgs?.["base"] || "this") : (this.#typeArgs?.["scope"] || "global"));
+
+            let node = this.#useGraph ? ((["root"].includes( base ) || ("@root" === this.#argument)) ? root : (["this", "current", "cur", _mt_str].includes( base ) ? current : scp)) : (["global", "self"].includes( base ) ? scp : scp?.[base] || scp);
 
             if ( variableName.includes( "../" ) )
             {
@@ -96,7 +153,7 @@ const $scope = constants?.$scope || function()
                     variableName = variableName.slice( idx + 3, variableName.length );
                 }
 
-                if ( this._useGraph && base !== "root" && paths.length > 0 )
+                if ( this.#useGraph && base !== "root" && paths.length > 0 )
                 {
                     while ( variableName.startsWith( "../" ) )
                     {
@@ -114,7 +171,7 @@ const $scope = constants?.$scope || function()
                 }
             }
 
-            let value = variableName.startsWith( "@" ) ? resolved.get( variableName ) : (node?.[variableName] || resolved.get( this._key ));
+            let value = variableName.startsWith( "@" ) ? resolved.get( variableName ) : (node?.[variableName] || resolved.get( this.#key ));
 
             if ( (_ud === typeof value || null == value) && (variableName.includes( _dot ) || variableName.includes( "/" )) )
             {
@@ -132,7 +189,7 @@ const $scope = constants?.$scope || function()
 
             if ( value && ["global", "self", "root"].includes( base ) )
             {
-                resolved.set( this._key, value );
+                resolved.set( this.#key, value );
             }
 
             return value;
@@ -144,49 +201,35 @@ const $scope = constants?.$scope || function()
 
     class InterpolationMatch
     {
-        constructor( pMatches )
+        #text;
+
+        #matchedString;
+        #hintString;
+        #argument;
+
+        constructor( pString )
         {
-            this._input = pMatches;
-            this._matchedString = _mt_str;
-            this._hintString = _mt_str;
-            this._argument = _mt_str;
+            this.#text = pString;
 
-            let matches = null;
+            this.#matchedString = _mt_str;
+            this.#hintString = _mt_str;
+            this.#argument = _mt_str;
 
-            switch ( typeof pMatches )
+            let matches = [].concat( ...(InterpolationMatch.expression().exec( pString ) || []) );
+
+            if ( matches && matches?.length )
             {
-                case _ud:
-                    throw new Error( "Invalid Argument. The InterpolationMatch constructor requires either a string or the result of a call to RegExp.exec or String.match" );
+                this.#matchedString = matches[0] || _mt_str;
 
-                case _obj:
+                this.#hintString = (_mt_str + (matches.length > 1 ? matches[1] || (matches.length > 2 ? matches[2] : _mt_str) : _mt_str)).trim();
 
-                    matches = [].concat( ...(pMatches || []) );
-
-                // fallthrough
-                case _str:
-
-                    matches = [].concat( ...(InterpolationMatch.expression().exec( pMatches ) || []) );
-
-                    if ( matches && matches?.length )
-                    {
-                        this._matchedString = matches[0] || _mt_str;
-
-                        this._hintString = (_mt_str + (matches.length > 1 ? matches[1] || (matches.length > 2 ? matches[2] : _mt_str) : _mt_str)).trim();
-
-                        this._argument = matches.length > 3 ? matches[3] : matches.length > 2 ? matches[2] : _mt_str;
-                    }
-
-                    this.interpolationHint = new InterpolationEntry( this._hintString || this._input, this._argument || this._hintString || this._input );
-
-                    break;
-
-                default:
-                    throw new Error( "Invalid Argument. The InterpolationMatch constructor requires either a string or the result of a call to RegExp.exec or String.match" );
-
+                this.#argument = matches.length > 3 ? matches[3] : matches.length > 2 ? matches[2] : _mt_str;
             }
+
+            this.interpolationHint = new InterpolationEntry( this.#hintString || this.#text, this.#argument || this.#hintString || this.#text );
         }
 
-        resolve( pScope, pRoot, pCurrent, pResolved, pPaths )
+        resolve( pScope, pRoot, pCurrent, pResolved = new Map(), pPaths = [] )
         {
             return this.interpolationHint.resolve( pScope, pRoot, pCurrent, pResolved, pPaths );
         }
@@ -195,18 +238,18 @@ const $scope = constants?.$scope || function()
         {
             if ( this.interpolationHint.isVariable() )
             {
-                return this.resolve( pScope, EMPTY_OBJECT, EMPTY_OBJECT, pResolved, EMPTY_ARRAY );
+                return this.resolve( pScope, {}, {}, pResolved, [] );
             }
-            return this._matchedString;
+            return this.#matchedString;
         }
 
-        resolveTreeNodes( pRoot, pCurrent, pResolved, pPaths )
+        resolveTreeNodes( pRoot, pCurrent, pResolved = new Map(), pPaths = [] )
         {
             if ( this.interpolationHint.isTreeNode() )
             {
                 return this.resolve( $scope(), pRoot, pCurrent, pResolved, pPaths );
             }
-            return this._matchedString;
+            return this.#matchedString;
         }
 
         static expression()
@@ -226,17 +269,17 @@ const $scope = constants?.$scope || function()
 
         static canInterpolate( pString )
         {
-            return _str === typeof pString && (new RegExp( InterpolationMatch.EXPRESSION )).test( pString.trim() );
+            return isString( pString ) && (new RegExp( InterpolationMatch.EXPRESSION )).test( pString.trim() );
         }
 
         static canInterpolateVariables( pString )
         {
-            return _str === typeof pString && (new RegExp( InterpolationMatch.VARIABLE_EXPRESSION )).test( pString.trim() );
+            return isString( pString ) && (new RegExp( InterpolationMatch.VARIABLE_EXPRESSION )).test( pString.trim() );
         }
 
         static canInterpolateTreeNodes( pString )
         {
-            return _str === typeof pString && (new RegExp( InterpolationMatch.GRAPH_EXPRESSION )).test( pString.trim() );
+            return isString( pString ) && (new RegExp( InterpolationMatch.GRAPH_EXPRESSION )).test( pString.trim() );
         }
 
         static Literal( pMatches )
@@ -246,7 +289,7 @@ const $scope = constants?.$scope || function()
 
         static create( pString )
         {
-            if ( _str === typeof pString )
+            if ( isString( pString ) )
             {
                 if ( InterpolationMatch.canInterpolate( pString ) )
                 {
@@ -260,18 +303,22 @@ const $scope = constants?.$scope || function()
 
     class InterpolationMatchLiteral extends InterpolationMatch
     {
-        constructor( pMatches )
-        {
-            super( pMatches );
+        #text;
+        #hintString;
+        #argument;
 
-            this._matchedString = pMatches;
-            this._hintString = pMatches;
-            this._argument = pMatches;
+        constructor( pString )
+        {
+            super( pString );
+
+            this.#text = pString;
+            this.#hintString = pString;
+            this.#argument = pString;
         }
 
         resolve( pRootOrScope, pCurrent, pResolved )
         {
-            return this._argument || this._matchedString || this._input;
+            return this.#argument || this.#text || this.#hintString;
         }
     }
 
@@ -279,26 +326,27 @@ const $scope = constants?.$scope || function()
     InterpolationMatch.VARIABLE_EXPRESSION = /\$\{(\((@var|@variable|@value)[^)]+\):?)([^}]+)}/;
     InterpolationMatch.GRAPH_EXPRESSION = /\$\{(\((@path|@tree|@object|@obj)[^)]+\):?)([^}]+)}/;
 
-
     class Interpolator
     {
+        #text;
+        #segments;
+        #matchers;
+
         constructor( pString )
         {
-            this._input = (_mt_str + (pString || _mt_str));
+            this.#text = asString( pString );
 
-            this._length = this._input?.length;
+            this.#segments = [];
 
-            this._segments = [];
+            this.#matchers = [];
 
-            this._interpolationMatchers = [];
+            let s = this.#text || _mt_str;
 
-            let s = this._input || _mt_str;
-
-            let len = this._input?.length || 0;
+            let len = this.#text?.length || 0;
 
             let start = 0;
 
-            let rx = new RegExp( InterpolationMatch.EXPRESSION, "gd" );
+            let rx = new RegExp( InterpolationMatch.EXPRESSION, "gds" );
 
             let matches = rx.exec( s );
 
@@ -332,17 +380,17 @@ const $scope = constants?.$scope || function()
 
         get length()
         {
-            return this._input?.length || this._length || 0;
+            return this.#text?.length || 0;
         }
 
-        get input()
+        get text()
         {
-            return (_mt_str + (this._input || _mt_str));
+            return asString( this.#text );
         }
 
         get segments()
         {
-            return [].concat( ...(this._segments || EMPTY_ARRAY) );
+            return [].concat( ...(this.#segments || []) );
         }
 
         get matchers()
@@ -358,70 +406,40 @@ const $scope = constants?.$scope || function()
 
             let end = Math.min( pEnd, len );
 
-            let segment = this._input.slice( start, end );
+            let segment = this.#text.slice( start, end );
 
-            this._segments.push( segment );
+            this.#segments.push( segment );
 
             let interpolatorMatch = InterpolationMatch.create( segment );
 
-            this._interpolationMatchers.push( interpolatorMatch );
+            this.#matchers.push( interpolatorMatch );
 
             return this;
         }
 
         resolve( pScope, pRoot, pCurrent, pResolved, pPaths )
         {
-            let arr = this._interpolationMatchers.map( e => e.resolve( pScope, pRoot, pCurrent, pResolved, pPaths ) );
+            let arr = this.#matchers.map( e => e.resolve( pScope, pRoot, pCurrent, pResolved, pPaths ) );
 
-            if ( arr?.length > 1 )
-            {
-                if ( arr.every( e => _str === typeof e ) )
-                {
-                    return arr.join( _mt_chr );
-                }
-
-                return arr;
-            }
-
-            return arr[0];
+            return arrayToString( arr );
         }
 
         resolveVariables( pScope, pResolved )
         {
-            let arr = this._interpolationMatchers.map( e => e.resolveVariables( pScope, pResolved ) );
+            let arr = this.#matchers.map( e => e.resolveVariables( pScope, pResolved ) );
 
-            if ( arr?.length > 1 )
-            {
-                if ( arr.every( e => _str === typeof e ) )
-                {
-                    return arr.join( _mt_chr );
-                }
-
-                return arr;
-            }
-
-            return arr[0];
+            return arrayToString( arr );
         }
 
-        resolveTreeNodes( pRoot, pCurrent, pResolved, pPaths )
+        resolveTreeNodes( pRoot, pCurrent, pResolved = new Map(), pPaths = [] )
         {
-            let arr = this._interpolationMatchers.map( e => e.resolveTreeNodes( $scope(), pRoot, pCurrent, pResolved, pPaths ) );
+            let arr = this.#matchers.map( e => e.resolveTreeNodes( $scope(), pRoot, pCurrent, pResolved, pPaths ) );
 
-            if ( arr?.length > 1 )
-            {
-                if ( arr.every( e => _str === typeof e ) )
-                {
-                    return arr.join( _mt_chr );
-                }
-
-                return arr;
-            }
-
-            return arr[0];
+            return arrayToString( arr );
         }
     }
 
-    const interpolate = function( pScope, pRoot, pCurrent, pResolved, pPaths, pOptions )
+    const interpolate = function( pScope = $scope(), pRoot, pCurrent, pResolved = new Map(), pPaths = [], pOptions = {} )
     {
         let resolved = pResolved || new Map();
 
@@ -429,30 +447,19 @@ const $scope = constants?.$scope || function()
 
         let options = Object.assign( {}, pOptions || {} );
 
-        const _assumeUnderscoreConvention = options._assumeUnderscoreConvention || options.assumeUnderscoreConvention;
-
         let scp = pScope || $scope();
 
         let root = pRoot || pCurrent || scp;
 
         let obj = pCurrent || root || scp;
 
-        let entries = Object.entries( obj );
-
-        let interpolateVariables = pOptions?.interpolateVariables || pOptions?.interpolateAll || ( !isPopulated( pOptions ));
-        let interpolateTreeNodes = pOptions?.interpolateTreeNodes || pOptions?.interpolateAll || ( !isPopulated( pOptions ));
-        let interpolateAll = (interpolateVariables && interpolateTreeNodes) || !isPopulated( pOptions );
+        let entries = objectUtils.getEntries( obj );
 
         for( const entry of entries )
         {
-            let key = entry?.length > 0 ? entry[0] : _mt_str;
+            let key = entry.key || entry[0];
 
-            if ( _assumeUnderscoreConvention )
-            {
-                key = key.replace( /^_/, _mt_str );
-            }
-
-            const value = entry?.length > 1 ? entry[1] || obj[key] || _mt_str : _mt_str;
+            const value = entry.value || obj[key] || _mt_str;
 
             switch ( typeof value )
             {
@@ -461,17 +468,13 @@ const $scope = constants?.$scope || function()
                     break;
 
                 case _str:
-                    if ( interpolateAll && InterpolationMatch.canInterpolate( value ) )
+                    const interpolator = new Interpolator( value );
+
+                    if ( InterpolationMatch.canInterpolate( value ) )
                     {
-                        obj[key] = new Interpolator( value ).resolve( pScope || $scope(), root, obj, resolved, paths );
-                    }
-                    else if ( interpolateVariables && InterpolationMatch.canInterpolateVariables( value ) )
-                    {
-                        obj[key] = new Interpolator( value ).resolveVariables( pScope || $scope(), resolved );
-                    }
-                    else if ( interpolateTreeNodes && InterpolationMatch.canInterpolateTreeNodes( value ) )
-                    {
-                        obj[key] = new Interpolator( value ).resolveTreeNodes( root, obj, resolved, paths );
+                        obj[key] = interpolator.resolve( pScope || $scope(), root, obj, resolved, paths );
+                        obj[key] = interpolator.resolveTreeNodes( root, obj, resolved, paths );
+                        obj[key] = interpolator.resolveVariables( pScope || $scope(), resolved );
                     }
                     break;
 
@@ -500,26 +503,15 @@ const $scope = constants?.$scope || function()
 
     const DEFAULT_NULL_HANDLER = function( pValue, pOptions )
     {
-        if ( _ud === typeof pValue )
-        {
-            return _dblqt + _dblqt;
-        }
-        else if ( null === pValue )
-        {
-            return null;
-        }
-        else
-        {
-            return asJson( pValue, pOptions );
-        }
+        return _ud === typeof pValue ? _dblqt + _dblqt : (null === pValue ? null : asJson( pValue, pOptions ));
     };
 
     const DEFAULT_OPTIONS_FOR_JSON =
         {
             handleNull: DEFAULT_NULL_HANDLER,
             omitFunctions: false,
-            assumeUnderscoresConvention: true,
-            useToJson: true
+            useToJson: true,
+            quoteBooleans: false
         };
 
     const canUseToJson = function( pObj, pToJsonMethod )
@@ -539,7 +531,7 @@ const $scope = constants?.$scope || function()
         return false;
     };
 
-    const asJson = function( pObject, pOptions = DEFAULT_OPTIONS_FOR_JSON, pVisited = new Set(), pResolved = new Map(), pPaths = [], pIsReentry = false )
+    const asJson = function( pObject, pOptions = DEFAULT_OPTIONS_FOR_JSON, pVisited = new Set(), pResolved = new Map(), pPaths = [] )
     {
         const options = Object.assign( {}, pOptions || {} );
 
@@ -554,7 +546,7 @@ const $scope = constants?.$scope || function()
             return handleNull( pObject, options );
         }
 
-        if ( canUseToJson( pObject, pObject?.toJson ) )
+        if ( useToJson && canUseToJson( pObject, pObject?.toJson ) )
         {
             let json = null;
 
@@ -573,9 +565,9 @@ const $scope = constants?.$scope || function()
             }
         }
 
-        const startTime = options.startTime || new Date().getTime();
-
         const now = new Date().getTime();
+
+        const startTime = options.startTime || now;
 
         options.startTime = startTime;
 
@@ -585,8 +577,6 @@ const $scope = constants?.$scope || function()
             return (_fun === typeof pObject?.toString ? pObject.toString() : pObject?.name);
         }
 
-        const _assumeUnderscoreConvention = options?.assumeUnderscoresConvention || options._assumeUnderscoreConvention;
-
         const _exclude = pruneArray( ["constructor", "prototype", "toJson", "toObject", "global", "this"].concat( (asArray( options.exclude || [] )) ) );
 
         const _include = pruneArray( [].concat( ...(asArray( options.include || [] )) ) );
@@ -595,10 +585,9 @@ const $scope = constants?.$scope || function()
 
         const _quoteBooleans = options.quoteBooleans || false;
 
-        const _convertDatesToString = false;
+        const _convertDatesToString = options.convertDatesToString || false;
 
-        const _dateTimeFormat = _convertDatesToString ? (options.dateTimeFormat || "MM/DD/YYYY hh:mm:ss") : _mt_str;
-
+        const _dateTimeFormatter = _convertDatesToString ? (options.dateTimeFormatter) : null;
 
         let resolved = pResolved || options.resolved || new Map();
 
@@ -654,7 +643,7 @@ const $scope = constants?.$scope || function()
             case _fun:
                 if ( omitFunctions )
                 {
-                    jsonString = "\"\"";
+                    jsonString = _dblqt + _dblqt;
                     break;
                 }
 
@@ -672,11 +661,9 @@ const $scope = constants?.$scope || function()
 
                 if ( isDate( pObject ) )
                 {
-                    if ( _convertDatesToString && !isBlank( _dateTimeFormat ) )
+                    if ( _convertDatesToString && null !== _dateTimeFormatter && isFunction( _dateTimeFormatter?.format ) )
                     {
-                        const dateUtils = require( "./DateUtils.cjs" );
-
-                        jsonString += _dblqt + dateUtils.parseDateTime( pObject, _dateTimeFormat ) + _dblqt;
+                        jsonString += JSON.stringify( _dateTimeFormatter.format( pObject ) );
                     }
                     else
                     {
@@ -707,111 +694,58 @@ const $scope = constants?.$scope || function()
 
                     let s = isArr ? "[" : "{";
 
-                    let entries = Object.entries( object ) || [];
+                    let entries = objectUtils.getEntries( object ) || [];
 
-                    let transient = [].concat( _exclude || [] );
+                    let transient = [].concat( _exclude || [] ).filter( e => !_include.includes( e ) );
 
-                    if ( isInstanceOfUserDefinedClass( object ) || isUserDefinedClass( object ) )
-                    {
-                        transient = transient.concat( asArray( object.transientProperties || [] ) );
-
-                        const clazz = getClass( pObject ) || pObject;
-
-                        transient = transient.concat( asArray( clazz?.TRANSIENT_PROPERTIES || clazz?.transientProperties || [] ) );
-
-                        transient.push( "TRANSIENT_PROPERTIES", "transientProperties" );
-
-                        transient = unique( pruneArray( transient ) );
-                    }
-
-                    entries = entries.filter( e => !_exclude.includes( asString( e[0], true ) ) ).filter( e => !_exclude.includes( "_" + asString( e[0], true ) ) );
-
-                    if ( 0 < _include.length || 0 )
-                    {
-                        entries = entries.filter( e => _include.includes( asString( e[0], true ) ) );
-                    }
+                    entries = entries.filter( e => !transient.includes( asString( e.key, true ) ) );
 
                     let prependComma = false;
 
-                    if ( entries && (0 < entries?.length || 0) )
+                    for( const entry of entries )
                     {
-                        for( const entry of entries )
+                        let key = asString( entry.key || entry[0], true );
+
+                        const value = entry.value || entry[1];
+
+                        if ( (isFunction( value ) && omitFunctions) || isBlank( key ) )
                         {
-                            let key = asString( (_mt_str + ((0 < entry?.length || 0) ? entry[0] : _mt_str)), true );
+                            continue;
+                        }
 
-                            if ( _assumeUnderscoreConvention )
+                        if ( prependComma )
+                        {
+                            s += ",";
+                        }
+
+                        if ( !isArr )
+                        {
+                            s += (_dblqt + key + _dblqt + _colon);
+                        }
+
+                        if ( _obj === typeof value && null != value )
+                        {
+                            resolvedValue = resolved.get( value );
+
+                            asResolved = resolvedValue || ("${(@path;@base:root):" + (paths.length > 0 ? paths.join( _dot ) : "@root") + "}");
+
+                            if ( visited.has( value ) )
                             {
-                                key = key.replace( /^_/, _mt_str );
-                            }
-
-                            const value = (1 < entry?.length || 0) ? entry[1] : _mt_str;
-
-                            if ( _fun === typeof value && omitFunctions )
-                            {
-                                continue;
-                            }
-
-                            if ( isBlank( key.trim() ) )
-                            {
-                                continue;
-                            }
-
-                            if ( prependComma )
-                            {
-                                s += ",";
-                            }
-
-                            if ( _assumeUnderscoreConvention )
-                            {
-                                key = key.replace( /^_/, _mt_str );
-                            }
-
-                            if ( !isArr )
-                            {
-                                s += (_dblqt + key + _dblqt + _colon);
-                            }
-
-                            if ( _obj === typeof value && null != value )
-                            {
-                                resolvedValue = resolved.get( value );
-
-                                asResolved = resolvedValue || ("${(@path;@base:root):" + (paths.length > 0 ? paths.join( _dot ) : "@root") + "}");
-
-                                if ( visited.has( value ) )
+                                try
                                 {
-                                    try
-                                    {
-                                        s += JSON.stringify( asResolved );
-                                    }
-                                    catch( ex )
-                                    {
-                                        console.warn( ex );
-
-                                        s += JSON.stringify( ex.message );
-                                    }
+                                    s += JSON.stringify( asResolved );
                                 }
-                                else
+                                catch( ex )
                                 {
-                                    paths.push( key );
+                                    console.warn( ex );
 
-                                    try
-                                    {
-                                        s += asJson( value, options, visited, resolved, paths );
-                                    }
-                                    catch( ex )
-                                    {
-                                        console.warn( ex );
-
-                                        s += JSON.stringify( ex.message );
-                                    }
-
-                                    visited.add( value );
-
-                                    paths.pop();
+                                    s += JSON.stringify( ex.message );
                                 }
                             }
                             else
                             {
+                                paths.push( key );
+
                                 try
                                 {
                                     s += asJson( value, options, visited, resolved, paths );
@@ -822,10 +756,27 @@ const $scope = constants?.$scope || function()
 
                                     s += JSON.stringify( ex.message );
                                 }
-                            }
 
-                            prependComma = true;
+                                visited.add( value );
+
+                                paths.pop();
+                            }
                         }
+                        else
+                        {
+                            try
+                            {
+                                s += asJson( value, options, visited, resolved, paths );
+                            }
+                            catch( ex )
+                            {
+                                console.warn( ex );
+
+                                s += JSON.stringify( ex.message );
+                            }
+                        }
+
+                        prependComma = true;
                     }
 
                     s += isArr ? "]" : "}";
@@ -850,8 +801,6 @@ const $scope = constants?.$scope || function()
         let paths = pPaths || [];
 
         const options = Object.assign( {}, pOptions || {} );
-
-        const _assumeUnderscoreConvention = options._assumeUnderscoreConvention || options.assumeUnderscoreConvention;
 
         let rx = /\$\{[^}]+}/g;
 
@@ -898,6 +847,7 @@ const $scope = constants?.$scope || function()
 
     const mod =
         {
+            dependencies,
             asJson,
             parseJson
         };

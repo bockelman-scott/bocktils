@@ -1,6 +1,5 @@
 /** import the utilities to test **/
 const localeUtils = require( "../src/LocaleUtils.cjs" );
-const arrayUtils = require( "../src/ArrayUtils.cjs" );
 
 describe( "resolveLocale", () =>
 {
@@ -337,7 +336,7 @@ describe( "Other", () =>
               expect( day ).toEqual( 0 );
           } );
 
-    test( "getWords returns an array of strings considered to be 'words' according to the specified locale",
+    test( "getWords returns an array of strings considered to be 'words' according to the specified locale or detected language",
           () =>
           {
               const english = "We're off to see the wizard, the wonderful wizard of Oz";

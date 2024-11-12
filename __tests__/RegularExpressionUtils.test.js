@@ -209,6 +209,150 @@ describe( "REGULAR_EXPRESSIONS", () =>
               expect( interpolated ).toEqual( "a" );
           } );
 
+    test( "VARIABLE_TOKEN matches ${...} anywhere in a string",
+          () =>
+          {
+              const a = "a";
+
+              const s = "The first lowercase letter of the latin alphabet is '${a}'.";
+
+              const interpolated = `The first lowercase letter of the latin alphabet is '${a}'.`;
+
+              const rx = RE.VARIABLE_TOKEN;
+
+              expect( rx.test( s ) ).toBe( true );
+
+              expect( rx.test( interpolated ) ).toBe( false );
+
+              expect( interpolated ).toEqual( "The first lowercase letter of the latin alphabet is 'a'." );
+          } );
+
+    test( "INTEGER matches one or more digits in a string",
+          () =>
+          {
+              const rx = RE.INTEGER;
+
+              expect( rx.test( "abc123" ) ).toBe( true );
+
+              expect( rx.test( "123" ) ).toBe( true );
+
+              expect( rx.test( "-123" ) ).toBe( true );
+
+              expect( rx.test( "abc" ) ).toBe( false );
+
+              expect( rx.test( "123.456" ) ).toBe( true );
+
+              let matches = rx.exec( "abc123d5" );
+
+              expect( matches[0] ).toEqual( "123" );
+
+              expect( matches[1] ).toEqual( "123" );
+
+              matches = rx.exec( "123.456" );
+
+              expect( matches[0] ).toEqual( "123" );
+
+              expect( matches[1] ).toEqual( "123" );
+
+              matches = rx.exec( "-123.456" );
+
+              expect( matches[0] ).toEqual( "-123" );
+
+              expect( matches[1] ).toEqual( "-123" );
+          } );
+
+    test( "VALID_INTEGER matches a string if it is  representation of a valid whole number",
+          () =>
+          {
+              const rx = RE.VALID_INTEGER;
+
+              expect( rx.test( "" ) ).toBe( false );
+
+              expect( rx.test( "123" ) ).toBe( true );
+
+              expect( rx.test( " 123" ) ).toBe( false );
+
+              expect( rx.test( "123 " ) ).toBe( false );
+
+              expect( rx.test( "-123" ) ).toBe( true );
+
+              expect( rx.test( "+123" ) ).toBe( false );
+          } );
+
+    test( "FLOAT matches one or more digits in a string",
+          () =>
+          {
+              const rx = RE.FLOAT;
+
+              expect( rx.test( "abc123" ) ).toBe( true );
+
+              expect( rx.test( "123" ) ).toBe( true );
+
+              expect( rx.test( "-123" ) ).toBe( true );
+
+              expect( rx.test( "abc" ) ).toBe( false );
+
+              expect( rx.test( "123.456" ) ).toBe( true );
+
+              expect( rx.test( "-123.456" ) ).toBe( true );
+
+              let matches = rx.exec( "abc123.456d7" );
+
+              expect( matches[0] ).toEqual( "123.456" );
+
+              expect( matches[1] ).toEqual( "123.456" );
+
+              expect( matches[2] ).toEqual( ".456" );
+
+              matches = rx.exec( "123.456.789" );
+
+              expect( matches[0] ).toEqual( "123.456" );
+
+              expect( matches[1] ).toEqual( "123.456" );
+
+              expect( matches[2] ).toEqual( ".456" );
+
+              matches = rx.exec( "-123.456.789" );
+
+              expect( matches[0] ).toEqual( "-123.456" );
+
+              expect( matches[1] ).toEqual( "-123.456" );
+
+              expect( matches[2] ).toEqual( ".456" );
+          } );
+
+    test( "VALID_FLOAT matches a string if it is a representation of a valid number",
+          () =>
+          {
+              const rx = RE.VALID_FLOAT;
+
+              expect( rx.test( "" ) ).toBe( false );
+
+              expect( rx.test( "123" ) ).toBe( true );
+
+              expect( rx.test( " 123" ) ).toBe( false );
+
+              expect( rx.test( "123 " ) ).toBe( false );
+
+              expect( rx.test( "-123" ) ).toBe( true );
+
+              expect( rx.test( "+123" ) ).toBe( false );
+
+
+              expect( rx.test( "123.456" ) ).toBe( true );
+
+              expect( rx.test( "123.456.789" ) ).toBe( false );
+
+              expect( rx.test( "123 .456" ) ).toBe( false );
+
+              expect( rx.test( "-123.456" ) ).toBe( true );
+
+              expect( rx.test( "+123.456" ) ).toBe( false );
+
+              expect( rx.test( "-123.456.789" ) ).toBe( false );
+
+          } );
+
     test( "SLASH matches '/' anywhere in a string",
           () =>
           {
@@ -578,6 +722,96 @@ describe( "REGULAR_EXPRESSIONS", () =>
               expect( literal.replace( rx, " " ) ).toEqual( "a b c\n\n  " );
 
               expect( literal.replaceAll( RE.get( rx, "g" ), " " ) ).toEqual( "a b c " );
+          } );
+
+    test( "OPEN_PAREN matches the ( character anywhere in a string",
+          () =>
+          {
+              const literal = "3 + (6 / 2) - 1";
+
+              const rx = RE.OPEN_PAREN;
+
+              expect( rx.test( literal ) ).toBe( true );
+
+              expect( rx.test( "\nabc\n" ) ).toBe( false );
+
+              expect( literal.replace( rx, "" ) ).toEqual( "3 + 6 / 2) - 1" );
+          } );
+
+    test( "START_OPEN_PAREN matches the ( character only at the start of a string",
+          () =>
+          {
+              const literal = "3 + (6 / 2) - 1";
+
+              const literal2 = "(6 / 2) + 3 - 1";
+
+              const rx = RE.START_OPEN_PAREN;
+
+              expect( rx.test( literal ) ).toBe( false );
+
+              expect( rx.test( literal2 ) ).toBe( true );
+
+              expect( literal.replace( rx, "" ) ).toEqual( "3 + (6 / 2) - 1" );
+
+              expect( literal2.replace( rx, "" ) ).toEqual( "6 / 2) + 3 - 1" );
+          } );
+
+    test( "CLOSE_PAREN matches the ) character anywhere in a string",
+          () =>
+          {
+              const literal = "3 + (6 / 2) - 1";
+
+              const rx = RE.CLOSE_PAREN;
+
+              expect( rx.test( literal ) ).toBe( true );
+
+              expect( rx.test( "\nabc\n" ) ).toBe( false );
+
+              expect( literal.replace( rx, "" ) ).toEqual( "3 + (6 / 2 - 1" );
+          } );
+
+    test( "END_CLOSE_PAREN matches the ) character only at the end of a string",
+          () =>
+          {
+              const literal = "3 + (6 / 2) - 1";
+
+              const literal2 = "(6 / 2) + (3 - 1)";
+
+              const rx = RE.END_CLOSE_PAREN;
+
+              expect( rx.test( literal ) ).toBe( false );
+
+              expect( rx.test( literal2 ) ).toBe( true );
+
+              expect( literal.replace( rx, "" ) ).toEqual( "3 + (6 / 2) - 1" );
+
+              expect( literal2.replace( rx, "" ) ).toEqual( "(6 / 2) + (3 - 1" );
+          } );
+
+    test( "MATHS_OPERATORS matches any of the simple mathematics operators anywhere in a string",
+          () =>
+          {
+              const literal = " 3 + 2 - 1";
+
+              const rx = RE.MATHS_OPERATORS;
+
+              expect( rx.test( literal ) ).toBe( true );
+
+              expect( rx.test( "\nabc\n" ) ).toBe( false );
+          } );
+
+    test( "MATHS_EXPRESSION matches a simple mathematics expression anywhere in a string",
+          () =>
+          {
+              const literal = " (3 + 2) - 1";
+
+              const rx = RE.MATHS_EXPRESSION;
+
+              expect( rx.test( literal ) ).toBe( true );
+
+              expect( rx.test( "\n(abc)\n" ) ).toBe( false );
+
+              // expect( rx.test( "(6 / 2) + (3 - 1" ) ).toBe( false );
           } );
 
     test( "QUERY_STRING_SEPARATOR matches the ? in a URL",
@@ -1380,6 +1614,25 @@ describe( "exposed functions", () =>
               expect( rxC.flags ).toBe( undefined );
               expect( rxCC.flags ).toEqual( "gis" );
           } );
+
+    test( "'compose' returns a mutable RegExp composed of the patterns of the RegExp objects specified",
+          () =>
+          {
+              const rx = RE.compose( RE.VARIABLE_TOKEN_START, /[^}]+/, RE.VARIABLE_TOKEN_END );
+
+              const a = "a";
+
+              const s = "The first lowercase letter of the latin alphabet is '${a}'.";
+
+              const interpolated = `The first lowercase letter of the latin alphabet is '${a}'.`;
+
+              expect( rx.test( s ) ).toBe( true );
+
+              expect( rx.test( interpolated ) ).toBe( false );
+
+              expect( interpolated ).toEqual( "The first lowercase letter of the latin alphabet is 'a'." );
+          } );
+
 
     test( "reset returns an instance of the RegExp with a fresh state",
           () =>

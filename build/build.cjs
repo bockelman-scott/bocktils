@@ -22,8 +22,6 @@ const arrayUtils = utils?.arrayUtils || require( "../src/ArrayUtils.cjs" );
 const objectUtils = utils?.objectUtils || require( "../src/ObjectUtils.cjs" );
 const jsonUtils = utils?.jsonUtils || require( "../src/JsonUtils.cjs" );
 
-const logUtils = require( "../src/LogUtils.cjs" );
-
 const configUtils = require( "./build-utils/config.cjs" );
 const cleanUtils = require( "./build-utils/clean.cjs" );
 
