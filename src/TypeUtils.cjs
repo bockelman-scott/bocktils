@@ -88,6 +88,11 @@ const $scope = constants?.$scope || function()
         return isFunction( pObject ) && (pObject.constructor === constants.AsyncFunction || pObject === constants.AsyncFunction);
     };
 
+    function isGeneratorFunction( pObject )
+    {
+        return isFunction( pObject ) && isDefined( pObject[Symbol.iterator] );
+    }
+
     const DEFAULT_IS_OBJECT_OPTIONS =
         {
             rejectPrimitiveWrappers: true,
@@ -235,6 +240,11 @@ const $scope = constants?.$scope || function()
             return options.allow_empty_object || (Object.entries( pObject )?.length > 0 && !isNull( Object.entries( pObject )[0][1], pStrict ));
         }
         return false;
+    };
+
+    const isNonNullValue = function( pObject )
+    {
+        return (false === pObject || 0 === pObject || _mt_str === pObject || isNotNull( pObject, false ));
     };
 
     const isArray = function( pObj )
@@ -697,6 +707,144 @@ const $scope = constants?.$scope || function()
         return value;
     };
 
+    class _IterableIterator
+    {
+        #iterable;
+
+        #index = 0;
+
+        constructor( pIterable )
+        {
+            this.#iterable = Object.hasOwn( pIterable, "length" ) ? pIterable : [pIterable];
+            this.#iterable = isString( this.#iterable ) ? [].concat( this.#iterable.split( _mt_str ) ) : this.#iterable;
+        }
+
+        [Symbol.iterator]()
+        {
+            return this;
+        }
+
+        next()
+        {
+            if ( this.#index >= this.#iterable.length )
+            {
+                return { done: true };
+            }
+
+            const value = this.#iterable[this.#index++];
+
+            return { value, done: false };
+        }
+
+        previous()
+        {
+            if ( this.#index < 1 )
+            {
+                return { done: true };
+            }
+
+            const value = this.#iterable[--this.#index];
+
+            return { value, done: false };
+        }
+
+        reset()
+        {
+            this.#index = 0;
+        }
+    }
+
+    class NullIterator extends _IterableIterator
+    {
+        constructor()
+        {
+            super( [] );
+        }
+
+        next()
+        {
+            return { done: true };
+        }
+
+        previous()
+        {
+            return { done: true };
+        }
+    }
+
+    /**
+     * Returns an IterableIterator for the specified value
+     *
+     * @param pArrayLike almost any kind of value, but generally expected to be an "indexable" collection of values
+     *                   strings are converted into an array of characters,
+     *                   scalar values are converted into a 1-element array containing the value
+     *
+     * @returns {IterableIterator} an instance of _IterableIterator
+     */
+    const toIterator = function( pArrayLike )
+    {
+        switch ( typeof pArrayLike )
+        {
+            case _ud:
+                return new NullIterator();
+
+            case _str:
+                return new _IterableIterator( pArrayLike.split( _mt_str ) );
+
+            case _num:
+            case _big:
+            case _bool:
+                return new _IterableIterator( [pArrayLike] );
+
+            case _fun:
+                if ( isGeneratorFunction( pArrayLike ) )
+                {
+                    return pArrayLike;
+                }
+
+                return new _IterableIterator( [pArrayLike] );
+
+            case _obj:
+                if ( isArray( pArrayLike ) )
+                {
+                    return new _IterableIterator( pArrayLike );
+                }
+
+                if ( pArrayLike instanceof Map )
+                {
+                    return new _IterableIterator( [...pArrayLike.entries()] );
+                }
+
+                if ( pArrayLike instanceof Set )
+                {
+                    return new _IterableIterator( [...pArrayLike] );
+                }
+
+                if ( isDate( pArrayLike ) )
+                {
+                    return new _IterableIterator( [pArrayLike] );
+                }
+
+                const newObject = {};
+
+                const entries = Object.entries( pArrayLike );
+
+                for( let entry of entries )
+                {
+                    const key = entry[0];
+
+                    const value = entry[1];
+
+                    newObject[key] = toIterator( value );
+                }
+
+                return new _IterableIterator( Object.entries( newObject ) );
+
+            default:
+                return new NullIterator();
+        }
+    };
+
     class TriState
     {
         #returnValue;
@@ -914,11 +1062,13 @@ const $scope = constants?.$scope || function()
             isDefined,
             isNull,
             isNotNull,
+            isNonNullValue,
             isObject,
             isCustomObject,
             isNonNullObject,
             isFunction,
             isAsyncFunction,
+            isGeneratorFunction,
             isString,
             isNumber,
             isNumeric,
@@ -941,6 +1091,7 @@ const $scope = constants?.$scope || function()
             getClass,
             defaultFor,
             castTo,
+            toIterator,
             classes: { TriState, Option, TypedOption, StringOption, NumericOption, BooleanOption, Result },
             TriState,
             Option,

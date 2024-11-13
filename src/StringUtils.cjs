@@ -1027,12 +1027,12 @@ const $scope = constants?.$scope || function()
 
     const isJson = function( pStr )
     {
-        if ( _str !== typeof pStr || isBlank( pStr ) )
+        if ( !isString( pStr ) || isBlank( pStr ) )
         {
-            return false;
+            return isNumber( pStr );
         }
 
-        const str = tidy( pStr ).trim().replace( /^[ \n\r]+/, _mt_str ).replace( /[ \n\r]+$/, _mt_str );
+        const str = tidy( asString( pStr, true ) ).trim().replace( /^[ \n\r]+/, _mt_str ).replace( /[ \n\r]+$/, _mt_str );
 
         const chars = (str.split( constants._mt_chr ));
 
@@ -1058,7 +1058,7 @@ const $scope = constants?.$scope || function()
                 return true;
             }
 
-            if ( "null" === str || "void" === str || "undefined" === str || !(/[^0-9-.]+/.test( str )) )
+            if ( "null" === str || "void" === str || "undefined" === str || isNumber( str ) || !(/[^0-9-.]+/.test( str )) )
             {
                 return true;
             }

@@ -78,6 +78,7 @@ const $scope = constants?.$scope || function()
             isDefined = typeUtils.isDefined,
             isNull = typeUtils.isNull,
             isNotNull = typeUtils.isNotNull,
+            isNonNullValue = typeUtils.isNonNullValue,
             isObject = typeUtils.isObject,
             isCustomObject = typeUtils.isCustomObject,
             isNonNullObject = typeUtils.isNonNullObject,
@@ -576,7 +577,7 @@ const $scope = constants?.$scope || function()
         {
             let obj = isObject( object ) ? object : {};
 
-            keys = keys.concat( (Object.keys( obj || {} ) || []) );
+            keys = (obj instanceof Map) ? keys.concat( ...(obj.keys()) ) : keys.concat( ...(Object.keys( obj || {} ) || []) );
 
             let proto = obj?.prototype;
 
@@ -584,12 +585,14 @@ const $scope = constants?.$scope || function()
 
             while ( null != proto && proto !== Object && proto !== obj && !iterationCap.reached )
             {
-                keys = keys.concat( getKeys( proto ) ).map( e => asString( e, true ) ).filter( NON_BLANK_STRINGS );
+                keys = keys.concat( ...(getKeys( proto )) ).map( e => asString( e, true ) ).filter( NON_BLANK_STRINGS );
 
                 obj = proto;
 
                 proto = proto?.__proto__ || proto?.prototype;
             }
+
+            keys = keys.map( e => asString( e, true ) ).filter( NON_BLANK_STRINGS );
 
             keys = unique( pruneArray( keys ) ).filter( e => !EXCLUDED_PROPERTIES.includes( e ) );
         }
@@ -669,12 +672,11 @@ const $scope = constants?.$scope || function()
             properties = unique( properties.concat( propertyNames || [] ) );
         }
 
-        properties = properties.filter( NON_BLANK_STRINGS ).map( e => asString( e, true ).trim() );
+        properties = properties.map( e => asString( e, true ) ).filter( NON_BLANK_STRINGS );
         properties = properties.filter( e => !EXCLUDED_PROPERTIES.includes( e ) );
 
         return Object.freeze( unique( pruneArray( properties ) ) );
     };
-
 
     /**
      * Returns an array of the unique property values of the objects specified,
@@ -695,22 +697,33 @@ const $scope = constants?.$scope || function()
 
         for( let object of objects )
         {
-            const properties = getProperties( object );
-
-            for( let property of properties )
+            if ( object instanceof Map )
             {
-                try
-                {
-                    const value = object[property] || getProperty( object, property );
+                values = (values.concat( ...(object.values() || []) ));
+            }
+            else if ( object instanceof Set || isArray( object ) )
+            {
+                values = (values.concat( ...object ));
+            }
+            else
+            {
+                const properties = getProperties( object );
 
-                    if ( !(_ud === typeof value || null === value || isClass( value )) )
-                    {
-                        values.push( value );
-                    }
-                }
-                catch( ex )
+                for( let property of properties )
                 {
-                    // ignore
+                    try
+                    {
+                        const value = object[property] || getProperty( object, property );
+
+                        if ( !(_ud === typeof value || null === value || isClass( value )) )
+                        {
+                            values.push( value );
+                        }
+                    }
+                    catch( ex )
+                    {
+                        // ignore
+                    }
                 }
             }
         }
@@ -741,19 +754,28 @@ const $scope = constants?.$scope || function()
 
         for( let object of objects )
         {
-            const properties = getProperties( object );
-
-            for( let property of properties )
+            if ( object instanceof Map )
             {
-                const value = object[property] || getProperty( object, property );
+                entries = (entries.concat( ...(object.entries()) ));
+            }
+            else if ( object instanceof Set || isArray( object ) )
+            {
+                entries = (entries.concat( getEntries( arrayToObject( [...object] ) ) ));
+            }
+            else
+            {
+                const properties = getProperties( object );
 
-                if ( !(_ud === typeof value || null === value) )
+                for( let property of properties )
                 {
-                    entries.push( [property, value] );
+                    const value = object[property] || getProperty( object, property );
+
+                    if ( !(_ud === typeof value || null === value) )
+                    {
+                        entries.push( [property, value] );
+                    }
                 }
             }
-
-            entries = entries.filter( e => isArray( e ) && ((e?.length || 0) > 1) );
         }
 
         entries = ((entries || []).filter( e => isArray( e ) && ((e?.length || 0) > 1) ));

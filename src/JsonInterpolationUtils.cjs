@@ -36,13 +36,22 @@ const $scope = constants?.$scope || function()
     let _num = constants._num;
     let _big = constants._big;
 
+    let isObject = typeUtils.isObject;
+    let isArray = typeUtils.isArray;
     let isString = typeUtils.isString;
     let isFunction = typeUtils.isFunction;
+    let isClass = typeUtils.isClass;
     let isDate = typeUtils.isDate;
 
+    const toIterator = typeUtils.toIterator;
+
+    let isNonNullObject = typeUtils.isNonNullObject;
+    let isNonNullValue = typeUtils.isNonNullValue;
 
     let asString = stringUtils.asString;
+    let asInt = stringUtils.asInt;
     let isBlank = stringUtils.isBlank;
+    let isJson = stringUtils.isJson;
 
     let asArray = arrayUtils.asArray;
     let pruneArray = arrayUtils.pruneArray;
@@ -61,6 +70,10 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
+    const PRIOR_NODE = "../";
+
+    const DEFAULT_EXCLUSIONS = Object.freeze( ["constructor", "prototype", "toJson", "toObject", "global", "this"] );
+
     const arrayToString = function( pArr )
     {
         const arr = asArray( pArr );
@@ -69,6 +82,209 @@ const $scope = constants?.$scope || function()
     };
 
     const MAX_RUN_TIME = 5_000;
+
+    class ResolvedValue
+    {
+        #expression;
+
+        #root;
+        #current;
+
+        #value;
+
+        #json;
+
+        constructor( pExpression, pRoot, pCurrent, pValue, pJsonString )
+        {
+            this.#expression = asString( pExpression );
+            this.#root = isNonNullObject( pRoot ) ? pRoot : null;
+            this.#current = pCurrent;
+            this.#value = pValue;
+            this.#json = asString( pJsonString || _mt_str );
+        }
+
+        get expression()
+        {
+            return asString( this.#expression );
+        }
+
+        get key()
+        {
+            return this.expression;
+        }
+
+        get root()
+        {
+            return this.#root;
+        }
+
+        get current()
+        {
+            return this.#current;
+        }
+
+        get value()
+        {
+            return this.#value;
+        }
+
+        get json()
+        {
+            return asString( this.#json, true );
+        }
+
+        set json( value )
+        {
+            this.#json = asString( value, true );
+        }
+    }
+
+    ResolvedValue.prototype.equals = function( pOther )
+    {
+        if ( !(pOther instanceof ResolvedValue) )
+        {
+            return false;
+        }
+
+        if ( asString( pOther?.expression ) !== asString( this.expression ) )
+        {
+            return false;
+        }
+
+        if ( !objectUtils.same( pOther?.root, this.root ) )
+        {
+            return false;
+        }
+
+        if ( !objectUtils.same( pOther?.current, this.current ) )
+        {
+            return false;
+        }
+
+        return objectUtils.same( pOther?.value, this.value );
+    };
+
+    class ResolvedMap extends Map
+    {
+        #map = new Map();
+
+        constructor( pMap = new Map() )
+        {
+            super();
+
+            this.#map = (pMap instanceof Map) ? new Map( pMap.entries() ) : pMap;
+
+            this.#map = (this.#map instanceof Map) ? this.#map : new Map();
+        }
+
+        entries()
+        {
+            return toIterator( objectUtils.getEntries( this.#map ) );
+        }
+
+        keys()
+        {
+            return toIterator( objectUtils.getKeys( this.#map ) );
+        }
+
+        values()
+        {
+            return toIterator( objectUtils.getValues( this.#map ) );
+        }
+
+        [Symbol.iterator]()
+        {
+            return this.entries();
+        }
+
+        clear()
+        {
+            this.#map.clear();
+        }
+
+        delete( pKey )
+        {
+            return this.#map.delete( pKey );
+        }
+
+        forEach( pCallback, pHostObject )
+        {
+            this.#map.forEach( pCallback, pHostObject );
+        }
+
+        get( pKey )
+        {
+            let value = this.#map.get( pKey );
+
+            if ( isNonNullObject( value ) )
+            {
+                if ( !(value instanceof ResolvedValue) )
+                {
+                    value = new ResolvedValue( asString( pKey ), {}, {}, value );
+
+                    this.set( pKey, value );
+                }
+
+                return value;
+            }
+
+            return null;
+        }
+
+        find( pValue, pRoot, pCurrent )
+        {
+            let V = null;
+
+            for( let entry of this.entries() )
+            {
+                const key = entry.key || entry[0];
+                const value = entry.value || entry[1];
+
+                if ( isNonNullValue( value ) && objectUtils.same( pValue, value ) )
+                {
+                    if ( !isNonNullObject( pCurrent ) || objectUtils.same( pCurrent, value?.current ) )
+                    {
+                        if ( !isNonNullObject( pRoot ) || objectUtils.same( pRoot, value?.root ) )
+                        {
+                            V = value;
+
+                            V = (V instanceof ResolvedValue) ? V : (null === V ? null : new ResolvedValue( key, pRoot, pCurrent, V ));
+
+                            break;
+                        }
+                    }
+                }
+            }
+
+            return V;
+        }
+
+        has( pKey )
+        {
+            return this.#map.has( pKey );
+        }
+
+        set( pKey, pValue )
+        {
+            let value = pValue;
+
+            if ( !(value instanceof ResolvedValue) )
+            {
+                value = new ResolvedValue( pKey, {}, {}, pValue );
+            }
+
+            return this.#map.set( pKey, value );
+        }
+    }
+
+    ResolvedMap.fromMap = function( pMap )
+    {
+        if ( pMap instanceof Map )
+        {
+            return new ResolvedMap( pMap );
+        }
+        return new ResolvedMap();
+    };
 
     class InterpolationEntry
     {
@@ -144,18 +360,18 @@ const $scope = constants?.$scope || function()
 
             let node = this.#useGraph ? ((["root"].includes( base ) || ("@root" === this.#argument)) ? root : (["this", "current", "cur", _mt_str].includes( base ) ? current : scp)) : (["global", "self"].includes( base ) ? scp : scp?.[base] || scp);
 
-            if ( variableName.includes( "../" ) )
+            if ( variableName.includes( PRIOR_NODE ) )
             {
-                while ( !variableName.startsWith( "../" ) )
+                while ( !variableName.startsWith( PRIOR_NODE ) )
                 {
-                    let idx = variableName.indexOf( "../" );
+                    let idx = variableName.indexOf( PRIOR_NODE );
 
                     variableName = variableName.slice( idx + 3, variableName.length );
                 }
 
                 if ( this.#useGraph && base !== "root" && paths.length > 0 )
                 {
-                    while ( variableName.startsWith( "../" ) )
+                    while ( variableName.startsWith( PRIOR_NODE ) )
                     {
                         paths.pop();
 
@@ -164,9 +380,9 @@ const $scope = constants?.$scope || function()
                 }
                 else
                 {
-                    while ( variableName.includes( "../" ) )
+                    while ( variableName.includes( PRIOR_NODE ) )
                     {
-                        variableName = variableName.replace( "../", _mt_str );
+                        variableName = variableName.replace( PRIOR_NODE, _mt_str );
                     }
                 }
             }
@@ -234,24 +450,6 @@ const $scope = constants?.$scope || function()
             return this.interpolationHint.resolve( pScope, pRoot, pCurrent, pResolved, pPaths );
         }
 
-        resolveVariables( pScope, pResolved )
-        {
-            if ( this.interpolationHint.isVariable() )
-            {
-                return this.resolve( pScope, {}, {}, pResolved, [] );
-            }
-            return this.#matchedString;
-        }
-
-        resolveTreeNodes( pRoot, pCurrent, pResolved = new Map(), pPaths = [] )
-        {
-            if ( this.interpolationHint.isTreeNode() )
-            {
-                return this.resolve( $scope(), pRoot, pCurrent, pResolved, pPaths );
-            }
-            return this.#matchedString;
-        }
-
         static expression()
         {
             return new RegExp( InterpolationMatch.EXPRESSION );
@@ -316,7 +514,7 @@ const $scope = constants?.$scope || function()
             this.#argument = pString;
         }
 
-        resolve( pRootOrScope, pCurrent, pResolved )
+        resolve()
         {
             return this.#argument || this.#text || this.#hintString;
         }
@@ -332,13 +530,23 @@ const $scope = constants?.$scope || function()
         #segments;
         #matchers;
 
-        constructor( pString )
+        #root;
+        #current;
+
+        #resolved;
+
+        constructor( pString, pRoot, pCurrent, pResolved = new ResolvedMap() )
         {
             this.#text = asString( pString );
 
             this.#segments = [];
 
             this.#matchers = [];
+
+            this.#root = isNonNullObject( pRoot ) ? pRoot : null;
+            this.#current = pCurrent;
+
+            this.#resolved = (pResolved instanceof ResolvedMap) ? pResolved : (pResolved instanceof Map) ? ResolvedMap.fromMap( pResolved ) : null;
 
             let s = this.#text || _mt_str;
 
@@ -417,31 +625,26 @@ const $scope = constants?.$scope || function()
             return this;
         }
 
-        resolve( pScope, pRoot, pCurrent, pResolved, pPaths )
+        resolve( pScope = $scope(), pRoot, pCurrent, pResolved = new ResolvedMap(), pPaths = [] )
         {
-            let arr = this.#matchers.map( e => e.resolve( pScope, pRoot, pCurrent, pResolved, pPaths ) );
+            let scope = pScope || $scope();
 
-            return arrayToString( arr );
-        }
+            let root = isNonNullObject( pRoot ) ? pRoot : this.#root;
+            let current = pCurrent || this.#current;
 
-        resolveVariables( pScope, pResolved )
-        {
-            let arr = this.#matchers.map( e => e.resolveVariables( pScope, pResolved ) );
+            let resolved = (pResolved instanceof ResolvedMap) ? pResolved : (pResolved instanceof Map) ? ResolvedMap.fromMap( pResolved ) : this.#resolved;
 
-            return arrayToString( arr );
-        }
+            let paths = asArray( pPaths || [] ) || [];
 
-        resolveTreeNodes( pRoot, pCurrent, pResolved = new Map(), pPaths = [] )
-        {
-            let arr = this.#matchers.map( e => e.resolveTreeNodes( $scope(), pRoot, pCurrent, pResolved, pPaths ) );
+            let arr = asArray( this.#matchers.map( e => e.resolve( scope, root, current, resolved, paths ) ) );
 
-            return arrayToString( arr );
+            return arr?.length > 1 ? arr : arr[0];
         }
     }
 
-    const interpolate = function( pScope = $scope(), pRoot, pCurrent, pResolved = new Map(), pPaths = [], pOptions = {} )
+    const interpolate = function( pScope = $scope(), pRoot, pCurrent, pResolved = new ResolvedMap(), pPaths = [], pOptions = {} )
     {
-        let resolved = pResolved || new Map();
+        let resolved = (pResolved instanceof ResolvedMap) ? pResolved : (pResolved instanceof Map) ? ResolvedMap.fromMap( pResolved ) : new ResolvedMap();
 
         let paths = pPaths || [];
 
@@ -453,13 +656,13 @@ const $scope = constants?.$scope || function()
 
         let obj = pCurrent || root || scp;
 
-        let entries = objectUtils.getEntries( obj );
+        let entries = isObject( obj ) ? objectUtils.getEntries( obj ) : toIterator( obj );
 
         for( const entry of entries )
         {
             let key = entry.key || entry[0];
 
-            const value = entry.value || obj[key] || _mt_str;
+            const value = entry.value || entry[1] || obj[key] || key || _mt_str;
 
             switch ( typeof value )
             {
@@ -468,13 +671,11 @@ const $scope = constants?.$scope || function()
                     break;
 
                 case _str:
-                    const interpolator = new Interpolator( value );
+                    const interpolator = new Interpolator( value, root, obj, resolved );
 
                     if ( InterpolationMatch.canInterpolate( value ) )
                     {
                         obj[key] = interpolator.resolve( pScope || $scope(), root, obj, resolved, paths );
-                        obj[key] = interpolator.resolveTreeNodes( root, obj, resolved, paths );
-                        obj[key] = interpolator.resolveVariables( pScope || $scope(), resolved );
                     }
                     break;
 
@@ -511,7 +712,10 @@ const $scope = constants?.$scope || function()
             handleNull: DEFAULT_NULL_HANDLER,
             omitFunctions: false,
             useToJson: true,
-            quoteBooleans: false
+            quoteBooleans: false,
+            quoteNumbers: false,
+            resolved: new Map(),
+            visited: new Set()
         };
 
     const canUseToJson = function( pObj, pToJsonMethod )
@@ -531,39 +735,31 @@ const $scope = constants?.$scope || function()
         return false;
     };
 
-    const asJson = function( pObject, pOptions = DEFAULT_OPTIONS_FOR_JSON, pVisited = new Set(), pResolved = new Map(), pPaths = [] )
+    const _toJson = function( obj )
     {
-        const options = Object.assign( {}, pOptions || {} );
+        let json = null;
 
-        const omitFunctions = options?.omitFunctions;
-
-        const useToJson = !(false === options.useToJson);
-
-        const handleNull = (_fun === typeof options.handleNull && options.handleNull.length >= 1) ? options.handleNull : DEFAULT_NULL_HANDLER;
-
-        if ( _ud === typeof pObject || null === pObject )
+        try
         {
-            return handleNull( pObject, options );
+            json = obj.toJson();
+        }
+        catch( ex )
+        {
+            console.error( ex );
         }
 
-        if ( useToJson && canUseToJson( pObject, pObject?.toJson ) )
+        if ( json && stringUtils.isValidJson( json ) )
         {
-            let json = null;
-
-            try
-            {
-                json = pObject.toJson();
-            }
-            catch( ex )
-            {
-                console.error( ex );
-            }
-
-            if ( json && stringUtils.isValidJson( json ) )
-            {
-                return json;
-            }
+            return json;
         }
+
+        return null;
+    };
+
+    // never allow this function to run longer than 5 seconds
+    const _exceededTimeLimit = function( pOptions, pMaxRunTime )
+    {
+        const options = (isDate( pOptions ) ? { startTime: pOptions } : pOptions) || Object.assign( {}, pOptions || {} );
 
         const now = new Date().getTime();
 
@@ -571,122 +767,284 @@ const $scope = constants?.$scope || function()
 
         options.startTime = startTime;
 
-        // never allow this function to run longer than 5 seconds
-        if ( (now - startTime) > MAX_RUN_TIME )
+        const maxTime = Math.max( 100, asInt( asInt( asInt( options?.maxRunTime, pMaxRunTime ), MAX_RUN_TIME ) || MAX_RUN_TIME ) );
+
+        return ((now - startTime) > maxTime);
+    };
+
+    function _resolveNullHandler( options )
+    {
+        return (isFunction( options.handleNull ) && options.handleNull.length >= 1) ? options.handleNull : DEFAULT_NULL_HANDLER;
+    }
+
+    function _resolveRoot( pRoot, pOptions, pObject )
+    {
+        return isNonNullObject( pRoot ) ? pRoot : ((isNonNullObject( pOptions.root ) ? pOptions.root : null) || (isObject( pObject ) ? pObject : null));
+    }
+
+    function _resolveInclusions( options )
+    {
+        return pruneArray( [].concat( ...(asArray( options.include || [] )) ) );
+    }
+
+    function _resolveExclusions( pOptions, pInclusions = [] )
+    {
+        const arr = pruneArray( (asArray( pOptions?.exclude || [] )).concat( DEFAULT_EXCLUSIONS ) );
+
+        const inclusions = asArray( pInclusions || [] );
+
+        return arr.filter( e => !inclusions.includes( e ) );
+    }
+
+    function funcToJson( pFunction, pOptions )
+    {
+        const options = Object.assign( {}, pOptions || DEFAULT_OPTIONS_FOR_JSON );
+
+        if ( options?.omitFunctions )
         {
-            return (_fun === typeof pObject?.toString ? pObject.toString() : pObject?.name);
+            return _dblqt + _dblqt;
         }
 
-        const _exclude = pruneArray( ["constructor", "prototype", "toJson", "toObject", "global", "this"].concat( (asArray( options.exclude || [] )) ) );
+        let name = pFunction?.name;
 
-        const _include = pruneArray( [].concat( ...(asArray( options.include || [] )) ) );
+        if ( isClass( pFunction ) )
+        {
+            name = asString( objectUtils.getClassName( pFunction ) || name ) || name;
+        }
 
-        const _trimStrings = options.trimStrings || false;
+        return JSON.stringify( {
+                                   type: _fun,
+                                   name: name || "anonymous"
+                               } );
+    }
 
-        const _quoteBooleans = options.quoteBooleans || false;
+    function _dateToJson( pDate, pOptions )
+    {
+        const options = Object.assign( {}, pOptions || {} );
 
-        const _convertDatesToString = options.convertDatesToString || false;
+        const _formatDates = options.formatDates || false;
 
-        const _dateTimeFormatter = _convertDatesToString ? (options.dateTimeFormatter) : null;
-
-        let resolved = pResolved || options.resolved || new Map();
-
-        let visited = pVisited || options.visited || new Set();
-
-        let paths = pPaths || options.paths || [];
+        const _dateTimeFormatter = _formatDates ? (options.dateTimeFormatter) : null;
 
         let jsonString = _mt_str;
 
-        let obj = pObject || options.object;
+        if ( _formatDates && null !== _dateTimeFormatter && isFunction( _dateTimeFormatter?.format ) )
+        {
+            jsonString += JSON.stringify( _dateTimeFormatter.format( pDate ) );
+        }
+        else
+        {
+            jsonString += asJson( (isFunction( pDate.getTime ) ? pDate.getTime() : asInt( pDate )), options );
+        }
 
-        switch ( typeof pObject )
+        return jsonString;
+    }
+
+    function _stringToJson( pString, pRoot, pCurrent, pResolved, pPaths, pOptions )
+    {
+        const s = asString( pString );
+
+        const options = Object.assign( {}, pOptions || {} );
+
+        const root = isNonNullObject( pRoot ) ? pRoot : options?.root || {};
+        const current = isNonNullObject( pCurrent ) ? pCurrent : options?.current || s;
+        const resolved = pResolved || options?.resolved || new Map();
+
+        let paths = pPaths || options?.paths || [];
+
+        let jsonString = _mt_str;
+
+        try
+        {
+            if ( InterpolationMatch.canInterpolate( s ) )
+            {
+                const value = new Interpolator( s ).resolve( $scope(), root, current, resolved, paths );
+
+                jsonString = JSON.stringify( value );
+            }
+            else
+            {
+                jsonString = JSON.stringify( asString( s, (true === pOptions.trimStrings) ) );
+            }
+        }
+        catch( ex )
+        {
+            console.error( ex.message );
+
+            if ( isBlank( jsonString ) )
+            {
+                jsonString = JSON.stringify( ex.message );
+            }
+        }
+
+        return asString( jsonString );
+    }
+
+    function _boolToJson( pBoolean, pOptions )
+    {
+        const options = Object.assign( {}, pOptions || DEFAULT_OPTIONS_FOR_JSON );
+
+        let jsonString = JSON.stringify( pBoolean );
+
+        if ( true === options?.quoteBooleans && !/"true"|"false"/.test( jsonString ) )
+        {
+            jsonString = _dblqt + jsonString + _dblqt;
+        }
+
+        return jsonString;
+    }
+
+    function _numToJson( pNum, pOptions )
+    {
+        const options = Object.assign( {}, pOptions || DEFAULT_OPTIONS_FOR_JSON );
+
+        let jsonString = _mt_str;
+
+        if ( isNaN( pNum ) )
+        {
+            jsonString = JSON.stringify( options?.NaN || "NaN" );
+        }
+        else if ( !isFinite( pNum ) )
+        {
+            jsonString = JSON.stringify( options?.Infinity || "Infinity" );
+        }
+        else
+        {
+            jsonString = JSON.stringify( pNum );
+        }
+
+        if ( true === options?.quoteNumbers && !/"[\d.]"/.test( jsonString ) )
+        {
+            jsonString = _dblqt + jsonString + _dblqt;
+        }
+
+        return jsonString;
+    }
+
+    function _resolveObject( obj )
+    {
+        if ( obj instanceof Set || obj instanceof Map )
+        {
+            return objectUtils.toLiteral( obj );
+        }
+
+        if ( isPopulated( obj ) || isArray( obj ) )
+        {
+            return obj;
+        }
+
+        return {};
+    }
+
+    function buildPathExpression( pPaths )
+    {
+        let paths = [].concat( (asArray( pPaths || [] ) || []).map( e => asString( e, true ) ).filter( e => !isBlank( e ) ) ).flat();
+
+        return "${(@path;@base:root):" + (paths.length > 0 ? paths.join( _dot ) : "@root") + "}";
+    }
+
+    const asJson = function( pObject, pOptions = DEFAULT_OPTIONS_FOR_JSON, pVisited = new Set(), pResolved = new ResolvedMap(), pPaths = [], pRoot, pScope = $scope() )
+    {
+        const options = Object.assign( {}, pOptions || {} );
+
+        const handleNull = _resolveNullHandler( options );
+
+        const obj = (isNonNullValue( pObject ) ? pObject : null) || options.object;
+
+        if ( _ud === typeof obj || null === obj )
+        {
+            return handleNull( obj, options );
+        }
+
+        const root = _resolveRoot( pRoot, options, obj );
+        options.root = root;
+
+        const current = obj;
+
+        if ( !(false === options?.useToJson) && canUseToJson( obj, obj?.toJson ) )
+        {
+            const json = _toJson( obj );
+            if ( json )
+            {
+                return json;
+            }
+        }
+
+        options.startTime = options.startTime || new Date().getTime();
+
+        // never allow this function to run longer than 5 seconds
+        if ( _exceededTimeLimit( options ) )
+        {
+            return JSON.stringify( isFunction( obj?.toString ) ? obj.toString() : obj?.name || obj?.source || obj?.value );
+        }
+
+        const _include = _resolveInclusions( options );
+        options.include = _include || [];
+
+        const _exclude = _resolveExclusions( options, _include );
+        options.exclude = _exclude || [];
+
+        let resolved = pResolved || options.resolved || new Map();
+        options.resolved = resolved;
+
+        let visited = pVisited || options.visited || new Set();
+        options.visited = visited;
+
+        let paths = pPaths || options.paths || [];
+        options.paths = paths;
+
+        const omitFunctions = options?.omitFunctions;
+
+        let jsonString = _mt_str;
+
+        switch ( typeof obj )
         {
             case _ud:
-                jsonString = handleNull( pObject, options ) || JSON.stringify( "undefined" );
+                jsonString = handleNull( obj, options ) || JSON.stringify( "undefined" );
                 break;
 
             case _str:
-                try
-                {
-                    if ( InterpolationMatch.canInterpolateVariables( pObject ) )
-                    {
-                        jsonString = JSON.stringify( new Interpolator( pObject ).resolveVariables( $scope(), resolved, options ) );
-                    }
-                    else
-                    {
-                        jsonString = JSON.stringify( asString( pObject, _trimStrings ) );
-                    }
-                }
-                catch( ex )
-                {
-                    console.error( ex.message );
-                }
+                jsonString = _stringToJson( obj, root, current, resolved, paths, options );
                 break;
 
             case _bool:
-                jsonString = JSON.stringify( pObject );
-
-                if ( _quoteBooleans )
-                {
-                    jsonString = _dblqt + jsonString + _dblqt;
-                }
+                jsonString = _boolToJson( obj, options );
                 break;
 
             case _num:
-                jsonString = (isNaN( pObject ) ? JSON.stringify( "NaN" ) : !isFinite( pObject ) ? JSON.stringify( "Infinity" ) : JSON.stringify( pObject ));
+                jsonString = _numToJson( obj, options );
                 break;
 
             case _big:
-                jsonString = (BigInt( pObject )).toString();
+                jsonString = (BigInt( obj )).toString();
                 break;
 
             case _fun:
-                if ( omitFunctions )
-                {
-                    jsonString = _dblqt + _dblqt;
-                    break;
-                }
-
-                obj =
-                    {
-                        type: _fun,
-                        name: pObject?.name || "anonymous"
-                    };
-
-                jsonString = JSON.stringify( obj );
+                jsonString = funcToJson( obj, options );
 
                 break;
 
             case _obj:
 
-                if ( isDate( pObject ) )
+                if ( isDate( obj ) )
                 {
-                    if ( _convertDatesToString && null !== _dateTimeFormatter && isFunction( _dateTimeFormatter?.format ) )
-                    {
-                        jsonString += JSON.stringify( _dateTimeFormatter.format( pObject ) );
-                    }
-                    else
-                    {
-                        jsonString += asJson( (isFunction( pObject.getTime ) ? pObject.getTime() : asInt( pObject )), options );
-                    }
+                    jsonString = _dateToJson( obj, options );
                     break;
                 }
 
-                let object = (pObject instanceof Set || pObject instanceof Map) ? objectUtils.toLiteral( pObject ) : (isPopulated( pObject ) || (null != pObject && Array.isArray( pObject )) ? pObject : (null != pObject && Array.isArray( pObject ) ? [] : {}));
+                let object = _resolveObject( obj, options );
 
-                object = object || {};
+                let isArr = isArray( object );
 
-                let isArr = (null != object) && (Array.isArray( object ));
+                let resolvedValue = resolved.find( object, root, current );
 
-                let resolvedValue = resolved.get( object );
+                let asResolved = resolvedValue || new ResolvedValue( buildPathExpression( paths ), root, current, object );
 
-                let asResolved = resolvedValue || ("${(@path;@base:root):" + (paths.length > 0 ? paths.join( _dot ) : "@root") + "}");
+                resolved.set( asResolved?.key, asResolved );
 
-                resolved.set( object, asResolved );
-
-                if ( visited.has( object ) )
+                if ( visited.has( object ) || (isNonNullValue( resolvedValue ) && resolvedValue instanceof ResolvedValue) )
                 {
-                    jsonString = JSON.stringify( asResolved );
+                    jsonString = asResolved?.json || JSON.stringify( asResolved?.expression );
                 }
                 else
                 {
@@ -698,7 +1056,7 @@ const $scope = constants?.$scope || function()
 
                     let transient = [].concat( _exclude || [] ).filter( e => !_include.includes( e ) );
 
-                    entries = entries.filter( e => !transient.includes( asString( e.key, true ) ) );
+                    entries = entries.filter( e => !transient.includes( asString( e.key || e[0], true ) ) );
 
                     let prependComma = false;
 
@@ -723,11 +1081,11 @@ const $scope = constants?.$scope || function()
                             s += (_dblqt + key + _dblqt + _colon);
                         }
 
-                        if ( _obj === typeof value && null != value )
+                        if ( isObject( value ) && isNonNullObject( value ) )
                         {
                             resolvedValue = resolved.get( value );
 
-                            asResolved = resolvedValue || ("${(@path;@base:root):" + (paths.length > 0 ? paths.join( _dot ) : "@root") + "}");
+                            asResolved = resolvedValue || buildPathExpression( paths );
 
                             if ( visited.has( value ) )
                             {
@@ -748,7 +1106,7 @@ const $scope = constants?.$scope || function()
 
                                 try
                                 {
-                                    s += asJson( value, options, visited, resolved, paths );
+                                    s += asJson( value, options, visited, resolved, paths, root );
                                 }
                                 catch( ex )
                                 {
@@ -782,21 +1140,27 @@ const $scope = constants?.$scope || function()
                     s += isArr ? "]" : "}";
 
                     jsonString = s;
+
+                    if ( asResolved instanceof ResolvedValue )
+                    {
+                        asResolved.json = jsonString;
+                        resolved.set( asResolved?.key, asResolved );
+                    }
                 }
 
                 break;
         }
 
-        return asString( jsonString ).replaceAll( /("[^"]+"\s*:\s*"\{"~~deleted~~"}\s*,*)/g, _mt_str );
+        return asString( jsonString );
     };
 
-    const parseJson = function( pString, pResolved = new Map(), pPaths = [], pOptions )
+    const parseJson = function( pString, pResolved = new ResolvedMap(), pPaths = [], pOptions )
     {
         let s = asString( pString );
 
         let obj = null;
 
-        let resolved = pResolved || new Map();
+        let resolved = pResolved || new ResolvedMap();
 
         let paths = pPaths || [];
 
@@ -815,32 +1179,21 @@ const $scope = constants?.$scope || function()
         catch( ex )
         {
             console.error( ex.message );
+
+            if ( !isJson( s ) )
+            {
+                return asArray( s );
+            }
         }
 
         if ( shouldInterpolate )
         {
-            let scp = $scope();
-
-            let root = obj;
-
             paths.push( "" );
 
-            resolved.set( "@root", root );
+            obj = interpolate( $scope(), obj, obj, resolved, paths, options );
 
-            obj = interpolate( scp, root, obj, resolved, paths, options );
-
-            scp = null;
-
-            root = null;
+            paths.pop();
         }
-
-        matchedVariables = null;
-
-        rx = null;
-
-        paths = null;
-
-        resolved = null;
 
         return obj;
     };

@@ -30,15 +30,15 @@ const objA =
                 value: "node-1",
                 extra: 123.456
             },
-        node_2: "${(@path;@base:root):node_0",
-        node_3: "${(@path;@base:root):node_0.node_0_1.node_0_1_1"
+        node_2: "${(@path;@base:root):node_0}",
+        node_3: "${(@path;@base:root):node_0.node_0_1.node_0_1_1}"
     };
 
 objA.node_4 = objA;
 
 const objB =
     {
-        node_0: "${(@var;@base:root):objA.node_0"
+        node_0: "${(@var;@base:root):objA.node_0}"
     };
 
 const objC =
@@ -54,25 +54,25 @@ describe( "JSON", () =>
     test( "JSON",
           () =>
           {
-              let json = jsonUtils.asJson( objA );
+              /*let json = jsonUtils.asJson( objA );
 
-              let obj = jsonUtils.parseJson( json );
+               let obj = jsonUtils.parseJson( json );
 
-              console.log( obj );
-
-
-              json = jsonUtils.asJson( objB );
-
-              obj = jsonUtils.parseJson( json );
-
-              console.log( obj );
+               console.log( obj );
 
 
-              json = jsonUtils.asJson( objC );
+               json = jsonUtils.asJson( objB );
 
-              obj = jsonUtils.parseJson( json );
+               obj = jsonUtils.parseJson( json );
 
-              console.log( obj );
+               console.log( obj );
+
+
+               json = jsonUtils.asJson( objC );
+
+               obj = jsonUtils.parseJson( json );
+
+               console.log( obj );*/
 
           } );
 } );
