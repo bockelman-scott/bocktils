@@ -335,6 +335,21 @@ const $scope = constants?.$scope || function()
             NON_DIGIT: Object.freeze( /[^\d.]/ ),
 
             /**
+             * Matches a string that begins and ends with a double-quote character
+             */
+            DOUBLE_QUOTED_STRING: Object.freeze( /^"([^"]|[\\"])*"$/ ),
+
+            /**
+             * Matches a string that begins and ends with a single-quote character
+             */
+            SINGLE_QUOTED_STRING: Object.freeze( /^'([^']|[\\'])*'$/ ),
+
+            /**
+             * Matches a string that begins and ends with a either a double-quote, single-quote, or back-tick character
+             */
+            QUOTED_STRING: Object.freeze( /^(?<quote>['"`])([^\1]|[\\\1])*\1$/ ),
+
+            /**
              * Matches spaces at the start of a character sequence
              */
             LEFT_TRIM: Object.freeze( /^ +((\S+\s*)*)/ ),
@@ -747,10 +762,25 @@ const $scope = constants?.$scope || function()
         {
             let rx = REGULAR_EXPRESSIONS.get( expression, FLAGS.GLOBAL );
 
-            s = s.replaceAll( rx, _mt_str );
+            if ( rx instanceof RegExp )
+            {
+                s = s.replaceAll( rx, _mt_str );
+            }
         }
 
         return s;
+    };
+
+    const isQuotedString = function( pString )
+    {
+        if ( !isString( pString ) )
+        {
+            return false;
+        }
+
+        let s = asString( pString );
+
+        return REGULAR_EXPRESSIONS.QUOTED_STRING.test( s );
     };
 
     /**
@@ -851,6 +881,7 @@ const $scope = constants?.$scope || function()
             },
             REGULAR_EXPRESSIONS,
             removeAll,
+            isQuotedString,
             classes:
                 {
                     MatchesHelper

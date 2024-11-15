@@ -44,6 +44,11 @@ const $scope = utils?.$scope || function()
     let isBlank = stringUtils.isBlank;
     let lcase = stringUtils.lcase;
 
+    let DEFAULT_NUMBER_SYMBOLS = stringUtils.DEFAULT_NUMBER_SYMBOLS;
+    let deriveDecimalSymbols = stringUtils.deriveDecimalSymbols;
+    let calculateDecimalSymbols = stringUtils.calculateDecimalSymbols;
+    let toCanonicalNumericFormat = stringUtils.toCanonicalNumericFormat;
+
     // Make all functions imported from other modules locally available in this module
     constants.importUtilities( this, constants, typeUtils, stringUtils, arrayUtils, objectUtils );
 
@@ -451,7 +456,12 @@ const $scope = utils?.$scope || function()
             getCharacters: function( pString, pLocale, pExcludeWhitespace = true, pExcludePunctuation = false )
             {
                 return getSegments( asString( pString ), pLocale, "grapheme", pExcludePunctuation, pExcludePunctuation );
-            }
+            },
+
+            DEFAULT_NUMBER_SYMBOLS,
+            deriveDecimalSymbols,
+            calculateDecimalSymbols,
+            toCanonicalNumericFormat
         };
 
 

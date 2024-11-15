@@ -1,6 +1,8 @@
 /** import the utilities to test **/
 const jsonUtils = require( "../src/JsonInterpolationUtils.cjs" );
 
+const objectUtils = jsonUtils.dependencies.objectUtils;
+
 const objA =
     {
         node_0:
@@ -54,25 +56,12 @@ describe( "JSON", () =>
     test( "JSON",
           () =>
           {
-              /*let json = jsonUtils.asJson( objA );
+/*
+              let json = jsonUtils.asJson( objA );
 
-               let obj = jsonUtils.parseJson( json );
+              let obj = jsonUtils.parseJson( json );
 
-               console.log( obj );
-
-
-               json = jsonUtils.asJson( objB );
-
-               obj = jsonUtils.parseJson( json );
-
-               console.log( obj );
-
-
-               json = jsonUtils.asJson( objC );
-
-               obj = jsonUtils.parseJson( json );
-
-               console.log( obj );*/
-
+              expect( objectUtils.same( objA, obj ) ).toBe( true );
+*/
           } );
 } );

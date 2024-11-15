@@ -144,34 +144,42 @@ const $scope = constants?.$scope || function()
 
     const isNumber = function( pObj )
     {
-        return [_num, _big].includes( typeof pObj ) || pObj instanceof Number;
+        return [_num, _big].includes( typeof pObj ) || pObj instanceof Number || pObj instanceof BigInt;
     };
+
+    function _toString( pObj )
+    {
+        return (0 === pObj || "0" === pObj) ? "0" : (_mt_str + String( pObj )).trim();
+    }
 
     function isHex( pObj )
     {
-        return /^(-)?(0x)([\dA-Fa-f]+)(\.([\dA-Fa-f]+))?$/.test( pObj ) && !/[G-Wg-w\s]|[yzYZ]/.test( pObj );
+        const s = _toString( pObj );
+        return ("0" !== s) && /^(-)?(0x)([\dA-Fa-f]+)(([.,])([\dA-Fa-f]+))?$/.test( s ) && !/[G-Wg-w\s]|[yzYZ]/.test( s );
     }
 
     function isOctal( pObj )
     {
-        return /^(-)?0([0-7]+)(\.([0-7]+))?$/.test( pObj ) && !/[A-Za-z\s]/.test( pObj );
+        const s = _toString( pObj );
+        return ("0" !== s) && /^(-)?0([0-7]+)(([.,])([0-7]+))?$/.test( s ) && !/[A-Za-z\s]/.test( s );
     }
 
     function isDecimal( pObj )
     {
-        return /^(-)?[1-9]+([0-9]+)?(\.([0-9]+))?$/.test( pObj ) && !/[A-Za-z\s]/.test( pObj );
+        const s = _toString( pObj );
+        return ("0" === s || "-0" === s || (/^0$|^(0?[1-9]*(\.\d+))$|^([1-9]+[0-9]*)$/.test( s ))) && !(isHex( s ) || isOctal( s ));
     }
 
     const isNumeric = function( pObj, pAllowLeadingZeroForBase10 = false )
     {
-        if ( isNumber( pObj ) )
+        if ( isNumber( pObj ) || "0" === pObj )
         {
             return true;
         }
 
-        let value = String( pObj || _mt_str );
+        let value = (_mt_str + String( pObj )).replace( /n+$/, _mt_str );
 
-        if ( isHex( value ) || isOctal( value ) || isDecimal( value ) )
+        if ( "0" === pObj || isHex( value ) || isOctal( value ) || isDecimal( value ) )
         {
             if ( pAllowLeadingZeroForBase10 )
             {
@@ -1073,6 +1081,9 @@ const $scope = constants?.$scope || function()
             isNumber,
             isNumeric,
             isZero,
+            isOctal,
+            isHex,
+            isDecimal,
             isBoolean,
             isArray,
             isMap,

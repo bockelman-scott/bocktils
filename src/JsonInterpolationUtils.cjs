@@ -74,14 +74,11 @@ const $scope = constants?.$scope || function()
 
     const DEFAULT_EXCLUSIONS = Object.freeze( ["constructor", "prototype", "toJson", "toObject", "global", "this"] );
 
-    const arrayToString = function( pArr )
-    {
-        const arr = asArray( pArr );
+    const MAX_RUN_TIME = 9_999_999_999; //5_000;
 
-        return arr.map( e => asString( e ) ).join( _mt_str );
-    };
+    const MAX_RECURSION = 32;
 
-    const MAX_RUN_TIME = 5_000;
+    const MAX_RECURSION_ERROR = `Maximum Recursion, ${MAX_RECURSION}, Exceeded`;
 
     class ResolvedValue
     {
@@ -283,6 +280,10 @@ const $scope = constants?.$scope || function()
         {
             return new ResolvedMap( pMap );
         }
+        else if ( isObject( pMap ) )
+        {
+            return new ResolvedMap( new Map( Object.entries( pMap || {} ) ) );
+        }
         return new ResolvedMap();
     };
 
@@ -348,9 +349,9 @@ const $scope = constants?.$scope || function()
 
             let current = pCurrent || root || scp;
 
-            let resolved = pResolved || new Map();
+            let resolved = pResolved || new ResolvedMap();
 
-            resolved = resolved instanceof Map ? resolved : new Map();
+            resolved = resolved instanceof ResolvedMap ? resolved : ResolvedMap.fromMap( resolved );
 
             let paths = [].concat( ...(asArray( pPaths || [] )) );
 
@@ -445,7 +446,7 @@ const $scope = constants?.$scope || function()
             this.interpolationHint = new InterpolationEntry( this.#hintString || this.#text, this.#argument || this.#hintString || this.#text );
         }
 
-        resolve( pScope, pRoot, pCurrent, pResolved = new Map(), pPaths = [] )
+        resolve( pScope, pRoot, pCurrent, pResolved = new ResolvedMap(), pPaths = [] )
         {
             return this.interpolationHint.resolve( pScope, pRoot, pCurrent, pResolved, pPaths );
         }
@@ -546,7 +547,7 @@ const $scope = constants?.$scope || function()
             this.#root = isNonNullObject( pRoot ) ? pRoot : null;
             this.#current = pCurrent;
 
-            this.#resolved = (pResolved instanceof ResolvedMap) ? pResolved : (pResolved instanceof Map) ? ResolvedMap.fromMap( pResolved ) : null;
+            this.#resolved = (pResolved instanceof ResolvedMap) ? pResolved : ResolvedMap.fromMap( pResolved );
 
             let s = this.#text || _mt_str;
 
@@ -840,17 +841,20 @@ const $scope = constants?.$scope || function()
         return jsonString;
     }
 
-    function _stringToJson( pString, pRoot, pCurrent, pResolved, pPaths, pOptions )
+    function _stringToJson( pString, pOptions, pPaths, pDepth )
     {
         const s = asString( pString );
 
         const options = Object.assign( {}, pOptions || {} );
 
-        const root = isNonNullObject( pRoot ) ? pRoot : options?.root || {};
-        const current = isNonNullObject( pCurrent ) ? pCurrent : options?.current || s;
-        const resolved = pResolved || options?.resolved || new Map();
+        const scp = options?.scope || $scope();
+        const root = options?.root || {};
+        const current = options?.current || s;
+        const resolved = options?.resolved || new ResolvedMap();
+        const visited = options?.visited || new Set();
 
         let paths = pPaths || options?.paths || [];
+        let depth = asInt( pDepth, asInt( options.depth ) );
 
         let jsonString = _mt_str;
 
@@ -858,9 +862,9 @@ const $scope = constants?.$scope || function()
         {
             if ( InterpolationMatch.canInterpolate( s ) )
             {
-                const value = new Interpolator( s ).resolve( $scope(), root, current, resolved, paths );
+                const value = new Interpolator( s, root, current, resolved ).resolve( scp, root, current, resolved, paths );
 
-                jsonString = JSON.stringify( value );
+                jsonString = isNonNullObject( value ) ? asJson( value, options, visited, resolved, paths, root, scp, depth ) : JSON.stringify( value );
             }
             else
             {
@@ -910,10 +914,14 @@ const $scope = constants?.$scope || function()
         }
         else
         {
+            if ( _big === typeof pNum )
+            {
+                jsonString = JSON.stringify( BigInt( pNum ).toString() );
+            }
             jsonString = JSON.stringify( pNum );
         }
 
-        if ( true === options?.quoteNumbers && !/"[\d.]"/.test( jsonString ) )
+        if ( true === options?.quoteNumbers && !/"[\d.]*(n)*"/.test( jsonString ) )
         {
             jsonString = _dblqt + jsonString + _dblqt;
         }
@@ -943,13 +951,13 @@ const $scope = constants?.$scope || function()
         return "${(@path;@base:root):" + (paths.length > 0 ? paths.join( _dot ) : "@root") + "}";
     }
 
-    const asJson = function( pObject, pOptions = DEFAULT_OPTIONS_FOR_JSON, pVisited = new Set(), pResolved = new ResolvedMap(), pPaths = [], pRoot, pScope = $scope() )
+    const asJson = function( pObject, pOptions = DEFAULT_OPTIONS_FOR_JSON, pVisited = new Set(), pResolved = new ResolvedMap(), pPaths = [], pRoot, pScope = $scope(), pDepth = 0 )
     {
         const options = Object.assign( {}, pOptions || {} );
 
         const handleNull = _resolveNullHandler( options );
 
-        const obj = (isNonNullValue( pObject ) ? pObject : null) || options.object;
+        const obj = (isNonNullValue( pObject ) ? pObject : options.object);
 
         if ( _ud === typeof obj || null === obj )
         {
@@ -970,13 +978,20 @@ const $scope = constants?.$scope || function()
             }
         }
 
+        // limit the depth of recursion
+        let depth = asInt( pDepth, asInt( options?.depth ) );
+
         options.startTime = options.startTime || new Date().getTime();
 
-        // never allow this function to run longer than 5 seconds
-        if ( _exceededTimeLimit( options ) )
+        // never allow this function to run longer than 5 seconds or to exceed a maximum recursion depth
+        if ( _exceededTimeLimit( options ) || depth > MAX_RECURSION )
         {
-            return JSON.stringify( isFunction( obj?.toString ) ? obj.toString() : obj?.name || obj?.source || obj?.value );
+            return (depth > MAX_RECURSION ? JSON.stringify( MAX_RECURSION_ERROR ) : (isFunction( obj?.toString ) ? obj.toString() : JSON.stringify( obj?.name || obj?.source || obj?.value )));
         }
+
+        // scope to use for resolving variables
+        let scp = pScope || options?.scope || $scope();
+        options.scope = scp;
 
         const _include = _resolveInclusions( options );
         options.include = _include || [];
@@ -984,13 +999,13 @@ const $scope = constants?.$scope || function()
         const _exclude = _resolveExclusions( options, _include );
         options.exclude = _exclude || [];
 
-        let resolved = pResolved || options.resolved || new Map();
+        let resolved = pResolved || options.resolved || new ResolvedMap();
         options.resolved = resolved;
 
         let visited = pVisited || options.visited || new Set();
         options.visited = visited;
 
-        let paths = pPaths || options.paths || [];
+        let paths = asArray( pPaths || options.paths || [] );
         options.paths = paths;
 
         const omitFunctions = options?.omitFunctions;
@@ -1004,7 +1019,8 @@ const $scope = constants?.$scope || function()
                 break;
 
             case _str:
-                jsonString = _stringToJson( obj, root, current, resolved, paths, options );
+                jsonString = _stringToJson( obj, options, paths, ++depth );
+                depth--;
                 break;
 
             case _bool:
@@ -1012,11 +1028,8 @@ const $scope = constants?.$scope || function()
                 break;
 
             case _num:
-                jsonString = _numToJson( obj, options );
-                break;
-
             case _big:
-                jsonString = (BigInt( obj )).toString();
+                jsonString = _numToJson( obj, options );
                 break;
 
             case _fun:
@@ -1081,50 +1094,57 @@ const $scope = constants?.$scope || function()
                             s += (_dblqt + key + _dblqt + _colon);
                         }
 
+                        function recurse()
+                        {
+                            paths.push( key );
+
+                            let ss = _mt_str;
+
+                            try
+                            {
+                                ss = asJson( value, options, visited, resolved, paths, root, scp, ++depth );
+                            }
+                            catch( ex )
+                            {
+                                console.warn( ex );
+
+                                ss = JSON.stringify( ex.message );
+                            }
+
+                            if ( isObject( value ) )
+                            {
+                                visited.add( value );
+                            }
+
+                            paths.pop();
+
+                            depth--;
+
+                            return ss;
+                        }
+
                         if ( isObject( value ) && isNonNullObject( value ) )
                         {
-                            resolvedValue = resolved.get( value );
+                            let resolvedEntry = resolved.find( value, root, value );
 
-                            asResolved = resolvedValue || buildPathExpression( paths );
+                            let asResolvedEntry = resolvedEntry || new ResolvedValue( buildPathExpression( paths ), root, current, object );
 
-                            if ( visited.has( value ) )
+                            if ( visited.has( value ) || (isNonNullValue( resolvedEntry ) && resolvedEntry instanceof ResolvedValue) )
                             {
-                                try
-                                {
-                                    s += JSON.stringify( asResolved );
-                                }
-                                catch( ex )
-                                {
-                                    console.warn( ex );
+                                const json = asString( asResolvedEntry?.json || JSON.stringify( asResolvedEntry?.expression ) );
 
-                                    s += JSON.stringify( ex.message );
-                                }
+                                s += !isBlank( json ) ? json : (depth < MAX_RECURSION ? recurse() : JSON.stringify( MAX_RECURSION_ERROR ));
                             }
                             else
                             {
-                                paths.push( key );
-
-                                try
-                                {
-                                    s += asJson( value, options, visited, resolved, paths, root );
-                                }
-                                catch( ex )
-                                {
-                                    console.warn( ex );
-
-                                    s += JSON.stringify( ex.message );
-                                }
-
-                                visited.add( value );
-
-                                paths.pop();
+                                s += depth < MAX_RECURSION ? recurse() : JSON.stringify( MAX_RECURSION_ERROR );
                             }
                         }
                         else
                         {
                             try
                             {
-                                s += asJson( value, options, visited, resolved, paths );
+                                s += depth < MAX_RECURSION ? recurse() : JSON.stringify( MAX_RECURSION_ERROR );
                             }
                             catch( ex )
                             {

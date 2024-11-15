@@ -212,6 +212,61 @@
 
         };
 
+    /**
+     * These are the default values assumed for number formatting
+     * @type {Readonly<{decimal_point: string, currency_symbol: RegExp, grouping_separator: string}>}
+     */
+    const DEFAULT_NUMBER_FORMATTING_SYMBOLS = Object.freeze(
+        {
+            decimal_point: ".",
+            grouping_separator: ",",
+            currency_symbol: /\$|USD/
+        } );
+
+    const calculateNumberFormattingSymbols = function( pLocale, pCurrency )
+    {
+        let locale = (pLocale instanceof Intl.Locale) ? (pLocale?.baseName || "en_US") : (null == pLocale) || (_mt_str === pLocale) ? (_mt_str + ((((new Intl.NumberFormat()).resolvedOptions())?.locale)?.baseName) || "en-US") : (_mt_str + pLocale);
+
+        let currency = (null == pCurrency) || (_mt_str === pCurrency) ? "USD" : (_mt_str + (pCurrency || "USD"));
+
+        const numberFormatter = new Intl.NumberFormat( (_mt_str + (locale) || "en-US"),
+                                                       {
+                                                           style: "currency",
+                                                           currency: currency
+                                                       } );
+
+        const parts = numberFormatter.formatToParts( 123_456.789 );
+
+        const symbols = { ...DEFAULT_NUMBER_FORMATTING_SYMBOLS };
+
+        parts.forEach( part =>
+                       {
+                           const type = (_mt_str + part?.type).trim().toLowerCase();
+                           const val = (_mt_str + part?.value);
+
+                           switch ( type )
+                           {
+                               case "currency":
+                                   symbols.currency_symbol = val || DEFAULT_NUMBER_FORMATTING_SYMBOLS.currency_symbol;
+                                   break;
+
+                               case "decimal":
+                                   symbols.decimal_point = val || DEFAULT_NUMBER_FORMATTING_SYMBOLS.decimal_point;
+                                   break;
+
+                               case "group":
+                                   symbols.grouping_separator = val || DEFAULT_NUMBER_FORMATTING_SYMBOLS.grouping_separator;
+                                   break;
+
+                               default:
+                                   break;
+                           }
+
+                       } );
+
+        return Object.freeze( symbols ) || DEFAULT_NUMBER_FORMATTING_SYMBOLS;
+    };
+
     class IllegalArgumentError extends Error
     {
         constructor( pMessage, pOptions, pLineNumber )
@@ -776,7 +831,9 @@
             REG_EXP,
             REG_EXP_DOT,
             REG_EXP_LEADING_DOT,
-            REG_EXP_TRAILING_DOT
+            REG_EXP_TRAILING_DOT,
+            DEFAULT_NUMBER_FORMATTING_SYMBOLS,
+            calculateNumberFormattingSymbols
         };
 
     mod.clone = function()

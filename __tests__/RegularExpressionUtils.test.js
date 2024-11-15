@@ -616,6 +616,104 @@ describe( "REGULAR_EXPRESSIONS", () =>
               expect( literal.replaceAll( RE.get( rx, "g" ), "" ) ).toEqual( "1.2345.6" );
           } );
 
+    test( "DOUBLE_QUOTED_STRING matches a string only if it begins and ends with a double-quote character",
+          () =>
+          {
+              const rx = RE.DOUBLE_QUOTED_STRING;
+
+              const doubleQuotedString = `"a double-quoted string"`;
+
+              const singleQuotedString = `'a single-quoted string'`;
+
+              expect( rx.test( doubleQuotedString ) ).toBe( true );
+
+              expect( rx.test( singleQuotedString ) ).toBe( false );
+
+              const doubleQuotedStringWithEscapedQuote = `"a double-\" string"`;
+
+              const singleQuotedStringWithEscapedQuote = `'a single-\' string'`;
+
+              expect( rx.test( doubleQuotedStringWithEscapedQuote ) ).toBe( true );
+
+              expect( rx.test( singleQuotedStringWithEscapedQuote ) ).toBe( false );
+
+          } );
+
+    test( "SINGLE_QUOTED_STRING matches a string only if it begins and ends with a single-quote character",
+          () =>
+          {
+              const rx = RE.SINGLE_QUOTED_STRING;
+
+              const doubleQuotedString = `"a double-quoted string"`;
+
+              const singleQuotedString = `'a single-quoted string'`;
+
+              expect( rx.test( doubleQuotedString ) ).toBe( false );
+
+              expect( rx.test( singleQuotedString ) ).toBe( true );
+
+              const doubleQuotedStringWithEscapedQuote = `"a double-\" string"`;
+
+              const singleQuotedStringWithEscapedQuote = `'a single-\' string'`;
+
+              expect( rx.test( doubleQuotedStringWithEscapedQuote ) ).toBe( false );
+
+              expect( rx.test( singleQuotedStringWithEscapedQuote ) ).toBe( true );
+          } );
+
+    test( "QUOTED_STRING matches a string if it begins and ends with either a double or single quote character",
+          () =>
+          {
+              const rx = RE.QUOTED_STRING;
+
+              const doubleQuotedString = `"a double-quoted string"`;
+
+              const singleQuotedString = `'a single-quoted string'`;
+
+              expect( rx.test( doubleQuotedString ) ).toBe( true );
+
+              expect( rx.test( singleQuotedString ) ).toBe( true );
+
+              const doubleQuotedStringWithEscapedQuote = `"a double-\" string"`;
+
+              const singleQuotedStringWithEscapedQuote = `'a single-\' string'`;
+
+              expect( rx.test( doubleQuotedStringWithEscapedQuote ) ).toBe( true );
+
+              expect( rx.test( singleQuotedStringWithEscapedQuote ) ).toBe( true );
+
+              const mismatchedQuotedString = `"not properly quoted'`;
+
+              const mismatchedQuotedStringWithEscapedQuotes = `'not properly \" \' quoted"`;
+
+              expect( rx.test( mismatchedQuotedString ) ).toBe( false );
+
+              expect( rx.test( mismatchedQuotedStringWithEscapedQuotes ) ).toBe( false );
+
+
+              const templateWithEscapedBackTicks = `\`another template?\``;
+
+              expect( rx.test( templateWithEscapedBackTicks ) ).toBe( true );
+
+              const templateWithoutBackTicks = `\`another template?`;
+
+              expect( rx.test( templateWithoutBackTicks ) ).toBe( false );
+
+              const isQuotedString = rxUtils.isQuotedString;
+
+              expect( isQuotedString( doubleQuotedString ) ).toBe( true );
+              expect( isQuotedString( singleQuotedString ) ).toBe( true );
+              expect( isQuotedString( doubleQuotedStringWithEscapedQuote ) ).toBe( true );
+              expect( isQuotedString( singleQuotedStringWithEscapedQuote ) ).toBe( true );
+              expect( isQuotedString( templateWithEscapedBackTicks ) ).toBe( true );
+
+              expect( isQuotedString( mismatchedQuotedString ) ).toBe( false );
+              expect( isQuotedString( mismatchedQuotedStringWithEscapedQuotes ) ).toBe( false );
+              expect( isQuotedString( templateWithoutBackTicks ) ).toBe( false );
+
+              expect( isQuotedString( 23 ) ).toBe( false );
+          } );
+
     test( "LEFT_TRIM matches any space characters at the start of a string",
           () =>
           {

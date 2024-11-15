@@ -343,7 +343,7 @@ describe( "Interpolation", () =>
     );
 } );
 
-describe( "validIdentified", () =>
+describe( "validIdentifier", () =>
 {
     test( "validIdentifier( '0xyz' ) return 'xyz",
           () =>
@@ -406,6 +406,99 @@ describe( "Detecting Capitalization", () =>
     test( "isAllCaps(ABC0, {allowDigits: false}) is false", () => expect( stringUtils.isAllCaps( "ABC0", { allowDigits: false } ) ).toEqual( false ) );
 
     test( "isAllCaps(ABC0, {allowDigits: true}) is true", () => expect( stringUtils.isAllCaps( "ABC0", { allowDigits: true } ) ).toEqual( true ) );
+} );
+
+describe( "Numeric-related 'helpers'", () =>
+{
+    test( "occurrencesOf('abcbc','c') === 2 ",
+          () =>
+          {
+              let s = "abcbc";
+              let count = stringUtils.occurrencesOf( s, "c" );
+              expect( count ).toEqual( 2 );
+          }
+    );
+
+    test( "occurrencesOf('abcbc','d') === 0 ",
+          () =>
+          {
+              let s = "abcbc";
+              let count = stringUtils.occurrencesOf( s, "d" );
+              expect( count ).toEqual( 0 );
+          }
+    );
+
+    test( "occurrencesOf('1,000.00',',') === 1 ",
+          () =>
+          {
+              let s = "1,000.00";
+              let count = stringUtils.occurrencesOf( s, "," );
+              expect( count ).toEqual( 1 );
+
+              count = stringUtils.occurrencesOf( s, "." );
+              expect( count ).toEqual( 1 );
+
+              count = stringUtils.occurrencesOf( s, "0" );
+              expect( count ).toEqual( 5 );
+          }
+    );
+
+    test( "calculateDecimalSymbols('de')",
+          () =>
+          {
+              const decimalSymbols = stringUtils.calculateDecimalSymbols( "de" );
+
+              expect( decimalSymbols?.grouping_separator ).toEqual( "." );
+              expect( decimalSymbols?.decimal_point ).toEqual( "," );
+          }
+    );
+
+    test( "toCanonicalNumericFormat removes grouping separators",
+          () =>
+          {
+              let s = "1,234.567";
+
+              s = stringUtils.toCanonicalNumericFormat( s );
+
+              expect( s ).toEqual( "1234.567" );
+
+              expect( parseFloat( s ) ).toEqual( 1_234.567 );
+          }
+    );
+
+    test( "toCanonicalNumericFormat corrects for suspicious mismatch between input and locale",
+          () =>
+          {
+              let s = "1.234.567,89";
+
+              s = stringUtils.toCanonicalNumericFormat( s );
+
+              expect( s ).toEqual( "1234567.89" );
+
+              expect( stringUtils.asFloat( s ) ).toEqual( 1_234_567.89 );
+          }
+    );
+
+    test( "toCanonicalNumericFormat respects corrected options",
+          () =>
+          {
+              const options =
+                  {
+                      decimal_point: ",",
+                      grouping_separator: ".",
+                      currency_symbol: /\$|USD/
+                  };
+
+              let s = "1.234.567,89";
+
+              s = stringUtils.toCanonicalNumericFormat( s, options );
+
+              expect( s ).toEqual( "1234567.89" );
+
+              expect( stringUtils.asFloat( s, 0, options ) ).toEqual( 1_234_567.89 );
+          }
+    );
+
 } );
 
 describe( "leftOf", () =>

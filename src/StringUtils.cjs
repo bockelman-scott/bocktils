@@ -73,6 +73,7 @@ const $scope = constants?.$scope || function()
 
     let _spc = constants._spc || " ";
     let _dot = constants._dot || ".";
+    let _comma = constants._comma || ",";
     let _underscore = constants._underscore || "_";
     let _ellipsis = constants._ellipsis || "...";
     let _z = constants._z || "\u0000";
@@ -109,16 +110,31 @@ const $scope = constants?.$scope || function()
     let isDefined = typeUtils.isDefined;
     let isNull = typeUtils.isNull;
     let isNotNull = typeUtils.isNotNull;
+    let isNonNullObject = typeUtils.isNonNullObject;
 
     let isString = typeUtils.isString;
     let isNumber = typeUtils.isNumber;
     let isBoolean = typeUtils.isBoolean;
+    let isObject = typeUtils.isObject;
     let isFunction = typeUtils.isFunction;
+    let isOctal = typeUtils.isOctal;
+    let isHex = typeUtils.isHex;
 
     /**
      * The preceding variable declarations are used
      * to help your IDE recognize shorthand usages of values imported into this scope
      */
+
+    /**
+     * These are the default values assumed for number formatting, when calling methods such as asInt or asFloat
+     * @type {Readonly<{decimal_point: string, currency_symbol: RegExp, grouping_separator: string}>}
+     */
+    const DEFAULT_NUMBER_SYMBOLS = constants?.DEFAULT_NUMBER_FORMATTING_SYMBOLS || Object.freeze(
+        {
+            decimal_point: ".",
+            grouping_separator: ",",
+            currency_symbol: /\$|USD/
+        } );
 
     /**
      * This regular expression is used to determine if a string
@@ -418,7 +434,7 @@ const $scope = constants?.$scope || function()
                         }
                         catch( ex )
                         {
-                            console.error( constants.S_ERR_PREFIX, "convert an object to JSON", pStr, ex );
+                            konsole.error( constants.S_ERR_PREFIX, "convert an object to JSON", pStr, ex );
                         }
                         break;
                     }
@@ -724,7 +740,9 @@ const $scope = constants?.$scope || function()
     {
         const options = Object.assign( {}, pOptions || {} );
 
-        let s = asString( pStr, true ).trim();
+        const type = typeof pStr;
+
+        let s = asString( pStr, true );
 
         if ( isBlank( s ) || constants.RESERVED_WORDS.includes( s ) )
         {
@@ -749,7 +767,7 @@ const $scope = constants?.$scope || function()
             return _dblqt + s + _dblqt;
         }
 
-        const validIndex = asInt( s, 0 );
+        const validIndex = isObject( pStr ) || /[^\d,.\sA-FXx]/.test( s ) ? "-1" : asInt( s, 0 );
 
         if ( asString( validIndex, true ) === s )
         {
@@ -895,6 +913,23 @@ const $scope = constants?.$scope || function()
 
         return truncate( s, pMaxLength );
     }
+
+    /**
+     * Returns the number of times a specified substring appears in the specified string
+     *
+     * @param pStr {string} string possibly containing one or more occurrences of substring
+     * @param pSubstring {string} the sequence of one or more characters  to count
+     * @returns {number} the number of times the substring appears in the string
+     */
+    const occurrencesOf = function( pStr, pSubstring )
+    {
+        let s = asString( pStr );
+        let s1 = asString( pSubstring );
+
+        const arr = s.split( s1 );
+
+        return arr.length - 1;
+    };
 
     /**
      * Returns the text to the left of the FIRST occurrence of pOf (or if pOf is a number, the index specified by pOf)
@@ -1126,6 +1161,169 @@ const $scope = constants?.$scope || function()
         return s;
     };
 
+    const calculateDecimalSymbols = function( pLocale, pCurrency )
+    {
+        let locale = (pLocale instanceof Intl.Locale) ? (pLocale?.baseName || "en_US") : isNull( pLocale ) || isBlank( pLocale ) ? asString( (((new Intl.NumberFormat()).resolvedOptions())?.locale)?.baseName ) || "en-US" : asString( pLocale );
+
+        let currency = isNull( pCurrency ) || isBlank( pCurrency ) ? "USD" : asString( pCurrency || "USD" );
+
+        const numberFormatter = new Intl.NumberFormat( (asString( locale ) || "en-US"),
+                                                       {
+                                                           style: "currency",
+                                                           currency: currency
+                                                       } );
+
+        const parts = numberFormatter.formatToParts( 123_456.789 );
+
+        const symbols = { ...DEFAULT_NUMBER_SYMBOLS };
+
+        parts.forEach( part =>
+                       {
+                           const type = lcase( asString( part?.type, true ) );
+                           const val = asString( part?.value );
+
+                           switch ( type )
+                           {
+                               case "currency":
+                                   symbols.currency_symbol = val || DEFAULT_NUMBER_SYMBOLS.currency_symbol;
+                                   break;
+
+                               case "decimal":
+                                   symbols.decimal_point = val || DEFAULT_NUMBER_SYMBOLS.decimal_point;
+                                   break;
+
+                               case "group":
+                                   symbols.grouping_separator = val || DEFAULT_NUMBER_SYMBOLS.grouping_separator;
+                                   break;
+
+                               default:
+                                   break;
+                           }
+
+                       } );
+
+        return Object.freeze( symbols ) || DEFAULT_NUMBER_SYMBOLS;
+    };
+
+    /**
+     * Returns an array of the lengths of the segments of the value separating by the grouping separator
+     *
+     * @param pFormattedNumber {string|number} the number to use to derive the group sizes
+     * @param pGroupingSeparator {string} the character(s) used to separate powers-of-ten groups
+     * @returns {[number]} an array of the lengths of the segments of the value separating by the grouping separator
+     *
+     * Notably, this might return something like [2,2,3] for a value formatted according to the Indian Numbering System
+     *
+     * @private
+     */
+    function _deriveGroupingSize( pFormattedNumber, pGroupingSeparator )
+    {
+        const s = asString( pFormattedNumber );
+        const parts = s.split( pGroupingSeparator || _comma );
+        return parts.map( e => e?.length || 0 );
+    }
+
+    const deriveDecimalSymbols = function( pNumString, pOptions = calculateDecimalSymbols() )
+    {
+        const options = Object.assign( {}, pOptions || DEFAULT_NUMBER_SYMBOLS );
+
+        let s = asString( pNumString );
+
+        let decimalPoint = options.decimal_point || _dot;
+        let groupingSeparator = options.grouping_separator || _comma;
+
+        let decimalCount = occurrencesOf( s, decimalPoint );
+        let groupCount = occurrencesOf( s, groupingSeparator );
+
+        let groupingSizes = [].concat( _deriveGroupingSize( s.trim(), groupingSeparator ) || [] );
+        let lastGroupSize = groupingSizes?.length > 0 ? groupingSizes[groupingSizes.length - 1] : 0;
+
+        if ( (decimalCount > 1 && groupCount <= 1) || (lastGroupSize > 0 && lastGroupSize < 3) )
+        {
+            const parts = s.split( decimalPoint );
+            s = parts.join( _mt_chr ).replaceAll( groupingSeparator, _dot ).replaceAll( decimalPoint, _dot );
+
+            options.grouping_separator = decimalPoint;
+            options.decimal_point = groupingSeparator;
+        }
+
+        const obj =
+            {
+                corrected_value: s,
+                decimal_point: options.decimal_point || _dot,
+                grouping_separator: options.grouping_separator || _comma,
+                currency_symbol: options.currency_symbol || "$",
+                original_value: asString( pNumString )
+            };
+
+        return Object.freeze( obj );
+    };
+
+    /**
+     * Returns a string representing a numeric value with the grouping separator(s) removed,
+     * currency symbol removed,
+     * the bigint literal 'n' removed
+     * and the decimal symbol replaced with a dot (.)
+     *
+     * @param pInput {string|number} the string (or number) to clean
+     * @param pOptions {object} (optional) an object identifying the characters used for the grouping separator, decimal point, and currency
+     * @returns {string} a string representing a numeric value with the grouping separator(s) removed,
+     * currency symbol removed,
+     * the bigint literal 'n' removed
+     * and the decimal symbol replaced with a dot (.)
+     */
+    function toCanonicalNumericFormat( pInput, pOptions = calculateDecimalSymbols() )
+    {
+        const options = Object.assign( {}, pOptions || DEFAULT_NUMBER_SYMBOLS );
+
+        let s = asString( pInput );
+
+        let {
+            corrected_value,
+            decimal_point,
+            grouping_separator,
+            currency_symbol
+        } = deriveDecimalSymbols( s, options );
+
+        s = asString( corrected_value );
+
+        let groupingSeparator = grouping_separator || options.grouping_separator || _comma;
+
+        if ( asString( groupingSeparator ) === asString( options.grouping_separator || groupingSeparator ) )
+        {
+            s = s.replaceAll( groupingSeparator, _mt_str );
+        }
+
+        let decimalPoint = decimal_point || options.decimal_point || _dot;
+
+        if ( asString( decimalPoint ) === asString( options.decimal_point || decimalPoint ) )
+        {
+            s = s.replace( decimalPoint, _dot );
+        }
+
+        let currencySymbol = currency_symbol || options.currency_symbol || /\$|USD/;
+
+        s = asString( s.replace( /n+$/, _mt_str ).replace( currencySymbol, _mt_str ), true );
+
+        s = s.replaceAll( /\s*[^\dXxA-F.,+-]/gi, _mt_str );
+
+        s = startsWithAny( s, _dot, _comma ) ? ("0" + s) : s;
+
+        return asString( s, true );
+    }
+
+    function _calculateRadix( pNum )
+    {
+        let input = asString( pNum, true );
+
+        if ( input.startsWith( "0" ) || lcase( input ).includes( "x" ) || /\D/.test( input ) )
+        {
+            return (isHex( input ) ? 16 : ((isOctal( input ) ? 8 : 10)));
+        }
+
+        return 10;
+    }
+
     /**
      * Returns an integer value represented or implied by the value provided
      * @param {any} pValue a number or string representing a number
@@ -1133,28 +1331,52 @@ const $scope = constants?.$scope || function()
      *
      * NOTE: when converting floating point number to an integer, we round using half_even rounding
      *
+     * @param pOptions
      * @returns {number} an integer value represented by or implied by the value provided
      */
-    const asInt = function( pValue, pDefault = 0 )
+    const asInt = function( pValue, pDefault = 0, pOptions = calculateDecimalSymbols() )
     {
         const zero = 0;
 
-        let input = _resolveInput.call( this, pValue );
+        const input = _resolveInput.call( this, pValue );
+
+        const dflt = isNumber( pDefault ) || isString( pDefault ) ? pDefault : 0;
+
+        const options = Object.assign( {}, (isNonNullObject( pOptions ) ? pOptions : (isNonNullObject( pDefault ) ? pDefault : pOptions)) || calculateDecimalSymbols() );
 
         const type = typeof input;
 
         if ( _ud === type || null === input )
         {
-            return asInt( pDefault, zero );
+            return asInt( dflt, zero, options );
         }
+
+        function warnValueOutOfRange( pInput )
+        {
+            konsole.warn( "asInt cannot return values greater than", Number.MAX_SAFE_INTEGER, "or less than", Number.MIN_SAFE_INTEGER, _dot, _spc, (pInput || input || "the specified value"), "cannot be converted to an Integer" );
+        }
+
+        let radix = _calculateRadix( input );
 
         if ( [_num, _big].includes( type ) )
         {
-            const val = parseInt( (input).toFixed( zero ) );
+            if ( isNaN( input ) || !isFinite( input ) )
+            {
+                return asInt( dflt, zero, options );
+            }
+
+            if ( _big === type && (input > Number.MAX_SAFE_INTEGER || input < Number.MIN_SAFE_INTEGER) )
+            {
+                warnValueOutOfRange( input );
+
+                return asInt( dflt, zero, options );
+            }
+
+            const val = parseInt( (input).toFixed( 0 ) );
 
             if ( isNaN( val ) || !isFinite( val ) )
             {
-                return asInt( pDefault, zero );
+                return asInt( dflt, zero, options );
             }
 
             return val;
@@ -1167,38 +1389,42 @@ const $scope = constants?.$scope || function()
 
         let val = zero;
 
-        input = asString( input, true );
+        let canonical = toCanonicalNumericFormat( input, options );
 
-        let radix = 10;
-
-        if ( input.startsWith( "0" ) )
+        if ( 10 === radix )
         {
-            if ( /^0x/i.test( input ) )
-            {
-                radix = 16;
-            }
-            else if ( !(/[^0-7.-]/.test( input )) )
-            {
-                radix = 8;
-            }
-            else
-            {
-                input = trimLeadingCharacters( input, "0" );
-            }
+            canonical = trimLeadingCharacters( input, "0" );
+            canonical = startsWithAny( canonical, _dot, _comma ) ? "0" + canonical : canonical;
         }
 
         try
         {
-            val = parseInt( asString( input, true ), radix );
+            val = parseInt( canonical, radix );
 
             if ( isNaN( val ) || !isFinite( val ) )
             {
-                val = asInt( pDefault, zero );
+                val = asInt( dflt, zero, options );
+            }
+
+            try
+            {
+                const asBig = 10 === radix ? BigInt( canonical ) : BigInt( val );
+
+                if ( asBig < val || asBig > val )
+                {
+                    warnValueOutOfRange( input );
+
+                    return asInt( dflt, zero, options );
+                }
+            }
+            catch( ex2 )
+            {
+                // ignore this one
             }
         }
         catch( ex )
         {
-            konsole.warn( pValue + " cannot be interpreted as a number", ex.message );
+            konsole.warn( (pValue || input), "cannot be interpreted as a number", ex.message );
         }
 
         return val || zero;
@@ -1215,45 +1441,49 @@ const $scope = constants?.$scope || function()
      * @param pOptions
      * @returns {number} an floating-point value represented or implied by the value provided
      */
-    const asFloat = function( pValue, pDefault = 0, pOptions =
-    {
-        decimal_point: ".",
-        grouping_separator: ",",
-        currency_symbol: /\$|USD/
-    } )
+    const asFloat = function( pValue, pDefault = 0, pOptions = calculateDecimalSymbols() )
     {
         const zero = 0.0;
         const one = 1.0;
 
-        let input = _resolveInput.call( this, pValue );
+        const input = _resolveInput.call( this, pValue );
+
+        const dflt = isNumber( pDefault ) || isString( pDefault ) ? pDefault : 0;
+
+        const options = Object.assign( {}, (isNonNullObject( pOptions ) ? pOptions : (isNonNullObject( pDefault ) ? pDefault : pOptions)) || calculateDecimalSymbols() );
 
         const type = typeof input;
 
-        let radix = 10;
-
         if ( _ud === type || null === input )
         {
-            return asFloat( pDefault, zero );
+            return asFloat( dflt, zero, options );
         }
 
-        if ( [_num, _big].includes( type ) )
+        let radix = _calculateRadix( input );
+
+        let canonical = toCanonicalNumericFormat( input, options );
+
+        if ( canonical.startsWith( "0" ) && 10 === radix )
         {
-            if ( asString( input ).startsWith( "0" ) )
-            {
-                input = asString( input );
-                return asFloat( input, pDefault, pOptions );
-            }
-            else
-            {
-                const val = parseFloat( input );
+            canonical = trimLeadingCharacters( input, "0" );
+            canonical = startsWithAny( canonical, _dot, _comma ) ? "0" + canonical : canonical;
+        }
 
-                if ( isNaN( val ) || !isFinite( val ) )
-                {
-                    return asFloat( pDefault, zero );
-                }
+        if ( _big === type )
+        {
+            return asInt( canonical, dflt, options );
+        }
 
-                return val;
+        if ( _num === type )
+        {
+            const val = parseFloat( canonical );
+
+            if ( isNaN( val ) || !isFinite( val ) )
+            {
+                return asFloat( dflt, zero, options );
             }
+
+            return val;
         }
 
         if ( _bool === type )
@@ -1263,41 +1493,21 @@ const $scope = constants?.$scope || function()
 
         let val = zero;
 
-        input = asString( input, true );
-
-        input = isBlank( pOptions.currency_symbol ) ? input : input.replaceAll( new RegExp( pOptions.currency_symbol, "g" ), _mt_str );
-
-        if ( input.startsWith( "0" ) )
-        {
-            if ( /^0x/i.test( input ) )
-            {
-                radix = 16;
-            }
-            else if ( !(/[^0-7.-]/.test( input )) )
-            {
-                radix = 8;
-            }
-            else
-            {
-                input = trimLeadingCharacters( input, "0" );
-            }
-        }
-
         try
         {
             if ( 10 === radix )
             {
-                val = parseFloat( asString( input, true ) );
+                val = parseFloat( canonical );
             }
             else
             {
-                let parts = input.split( pOptions.decimal_point || "." );
+                let parts = canonical.split( _dot );
 
                 let intPart = (parts?.length || 0) > 0 ? parts[0] : input;
 
                 let decPart = (parts?.length || 0) > 1 ? parts[1] : _mt_str;
 
-                val = asInt( intPart );
+                val = asInt( intPart, 0, options );
 
                 if ( !isBlank( decPart ) )
                 {
@@ -1308,7 +1518,7 @@ const $scope = constants?.$scope || function()
 
             if ( isNaN( val ) || !isFinite( val ) )
             {
-                val = asFloat( pDefault, zero );
+                val = asFloat( dflt, zero, options );
             }
         }
         catch( ex )
@@ -1333,22 +1543,35 @@ const $scope = constants?.$scope || function()
         return Math.max( 0.0, asFloat( pStr ) );
     };
 
-    const toIntWithinRange = function( pStr, pMin, pMax )
+    const toIntWithinRange = function( pStr, pMin, pMax, pOptions = calculateDecimalSymbols() )
     {
-        const value = asInt( pStr );
-        const minimum = asInt( pMin );
-        const maximum = asInt( pMax );
+        const options = Object.assign( {}, pOptions || calculateDecimalSymbols() );
 
-        return Math.min( maximum, Math.max( minimum, value ) );
+        const value = asInt( pStr, 0, options );
+
+        const minimum = asInt( pMin, 0, options );
+        const maximum = asInt( pMax, 0, options );
+
+        const greatest = Math.max( minimum, maximum );
+        const smallest = Math.min( minimum, maximum );
+
+
+        return Math.min( greatest, Math.max( smallest, value ) );
     };
 
-    const toFloatWithinRange = function( pStr, pMin, pMax )
+    const toFloatWithinRange = function( pStr, pMin, pMax, pOptions = calculateDecimalSymbols() )
     {
-        const value = asFloat( pStr );
-        const minimum = asFloat( pMin );
-        const maximum = asFloat( pMax );
+        const options = Object.assign( {}, pOptions || calculateDecimalSymbols() );
 
-        return Math.min( maximum, Math.max( minimum, value ) );
+        const value = asFloat( pStr, 0, options );
+
+        const minimum = asFloat( pMin, 0, options );
+        const maximum = asFloat( pMax, 0, options );
+
+        const greatest = Math.max( minimum, maximum );
+        const smallest = Math.min( minimum, maximum );
+
+        return Math.min( greatest, Math.max( smallest, value ) );
     };
 
     /**
@@ -1370,7 +1593,7 @@ const $scope = constants?.$scope || function()
 
         const minIdx = Math.max( zero, (pOptions?.min || -(one)) );
 
-        const idx = asInt( (isNumber( pIndex ) ? pIndex : asFloat( pIndex )), (pOptions?.defaultToEnd ? maxIdx : minIdx) );
+        const idx = asInt( (isNumber( pIndex ) ? pIndex : asInt( pIndex )), (pOptions?.defaultToEnd ? maxIdx : minIdx) );
 
         if ( (arr?.length || zero) > idx )
         {
@@ -1403,7 +1626,7 @@ const $scope = constants?.$scope || function()
     /**
      * Returns true if the string starts with any of the character sequences in the array
      * @param {string} pStr - a string to evaluate (the caller is responsible for removing whitespace if desired)
-     * @param {[string]} pArr - one or more strings with which the string might begin or regular expressions against which to test the string
+     * @param {...string} pArr - one or more strings with which the string might begin or regular expressions against which to test the string
      * @returns true if the string begins with any of the character sequences in the array
      */
     const startsWithAny = function( pStr, ...pArr )
@@ -1444,7 +1667,6 @@ const $scope = constants?.$scope || function()
 
         return arr?.length > 0 ? arr.every( e => s.includes( e ) ) : isEmpty( s );
     };
-
 
     /**
      * Returns true if the value specified can be interpreted as an affirmative.
@@ -1844,11 +2066,12 @@ const $scope = constants?.$scope || function()
         return false;
     };
 
-    const DEFAULT_VALID_NUMBER_OPTIONS =
+    const DEFAULT_VALID_NUMBER_OPTIONS = Object.freeze(
         {
             minimumValue: Number.MIN_VALUE,
-            maximumValue: Number.MAX_VALUE
-        };
+            maximumValue: Number.MAX_VALUE,
+            ...DEFAULT_NUMBER_SYMBOLS
+        } );
 
     /**
      * Returns true if the argument is a number
@@ -1907,7 +2130,9 @@ const $scope = constants?.$scope || function()
 
     const isValidNumeric = function( pStr, pOptions = DEFAULT_VALID_NUMBER_OPTIONS )
     {
-        if ( isValidNumber( pStr, pOptions ) )
+        const options = Object.assign( {}, pOptions || DEFAULT_VALID_NUMBER_OPTIONS );
+
+        if ( isValidNumber( pStr, options ) )
         {
             return true;
         }
@@ -1915,11 +2140,14 @@ const $scope = constants?.$scope || function()
         switch ( typeof pStr )
         {
             case _str:
-                let num = parseFloat( pStr ) || Number( pStr );
 
-                if ( !(isNaN( num ) && Number.isFinite( Number( pStr ) )) )
+                let s = toCanonicalNumericFormat( pStr, options );
+
+                let num = parseFloat( s ) || Number( s );
+
+                if ( !(isNaN( num ) && Number.isFinite( num )) )
                 {
-                    return isValidNumber( num, pOptions );
+                    return isValidNumber( num, options );
                 }
 
                 break;
@@ -1927,7 +2155,7 @@ const $scope = constants?.$scope || function()
             case _obj:
                 if ( pStr instanceof Number || pStr instanceof BigInt )
                 {
-                    return isValidNumber( parseInt( pStr ) );
+                    return isValidNumber( parseFloat( pStr ) );
                 }
                 break;
 
@@ -2405,12 +2633,17 @@ const $scope = constants?.$scope || function()
             isNoCaps,
             isMixedCase,
             tidy,
+            occurrencesOf,
             leftOf,
             leftOfLast,
             rightOf,
             rightOfLast,
             trimLeadingCharacters,
             trimMatchingChars,
+            DEFAULT_NUMBER_SYMBOLS,
+            calculateDecimalSymbols,
+            deriveDecimalSymbols,
+            toCanonicalNumericFormat,
             asInt,
             asFloat,
             asPositiveInt,

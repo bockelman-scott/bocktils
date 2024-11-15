@@ -37,7 +37,7 @@ const $scope = function()
     let lcase = stringUtils.lcase;
     let isBlank = stringUtils.isBlank;
 
-    constants.importUtilities( this, constants, typeUtils, stringUtils );
+    constants.importUtilities( me || this, constants, typeUtils, stringUtils );
 
     const INTERNAL_NAME = "__BOCK__NUMBER_PARSER__";
 

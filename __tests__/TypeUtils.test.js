@@ -519,6 +519,77 @@ test( "isNumeric(strings) === false",
           expect( valid.length ).toEqual( 0 );
       } );
 
+test( "isOctal(strings) === true",
+      () =>
+      {
+          const strings = octals.map( e => String( "" + e + "" ) );
+          const valid = strings.filter( e => typeUtils.isOctal( e ) );
+          expect( valid.length ).toEqual( octals.length );
+      } );
+
+test( "isOctal(values) === true",
+      () =>
+      {
+          const valid = octals.filter( e => typeUtils.isOctal( e ) );
+          expect( valid.length ).toEqual( octals.length );
+      } );
+
+test( "isOctal(hex values) === false",
+      () =>
+      {
+          const valid = hexadecimals.filter( e => typeUtils.isOctal( e ) );
+          expect( valid.length ).toEqual( 0 );
+      } );
+
+test( "isOctal(decimal values) === false",
+      () =>
+      {
+          let valid = [10, 34, 0.77, 77, 88.77].filter( e => typeUtils.isOctal( e ) );
+          expect( valid.length ).toEqual( 0 );
+
+          valid = ["017", 10, 17, 34, 0.77, 77, 88.77, "xx", "0xx", "0xA", 0xF].filter( e => typeUtils.isOctal( e ) );
+          expect( valid.length ).toEqual( 1 );
+      } );
+
+test( "isHex(strings) === false",
+      () =>
+      {
+          const strings = hexadecimals.map( e => String( "" + e + "" ) );
+          const valid = strings.filter( e => typeUtils.isHex( e ) );
+          expect( valid.length ).toEqual( hexadecimals.length );
+      } );
+
+test( "isHex(values) === false",
+      () =>
+      {
+          const valid = hexadecimals.filter( e => typeUtils.isHex( e ) );
+          expect( valid.length ).toEqual( hexadecimals.length );
+      } );
+
+test( "isHex(decimal values) === false",
+      () =>
+      {
+          // note that 0xF is interpreted as decimal value, 15, while the string "0xA" is fed directly to the method
+          let valid = ["017", 10, 17, 34, 0.77, 77, 88.77, "xx", "0xx", "0xA", 0xF].filter( e => typeUtils.isHex( e ) );
+          expect( valid.length ).toEqual( 1 );
+
+          valid = ["017", 10, 17, 34, 0.77, 77, 88.77, "xx", "0xx", "0xA", 0xF].map( e => ("" + (e) + "").trim() ).filter( e => typeUtils.isHex( e ) );
+          expect( valid.length ).toEqual( 1 );
+      } );
+
+test( "isDecimal(decimal values)",
+      () =>
+      {
+          // note that 0xF is interpreted as decimal value, 15, while the string "0xA" is fed directly to the method
+          const samples = ["017", "00.17", 0, 10, 100, 17, 34, 0.77, 77, 88.77, "xx", "0xx", "0xA", 0xF];
+
+          let valid = samples.filter( e => typeUtils.isDecimal( e ) );
+          expect( valid.length ).toEqual( 9 );
+
+          valid = samples.map( e => ("" + (e) + "").trim() ).filter( e => typeUtils.isDecimal( e ) );
+          expect( valid.length ).toEqual( 9 );
+      } );
+
 test( "isZero(0) === true",
       () =>
       {
@@ -560,7 +631,6 @@ test( "isZero('abc') === false",
       {
           expect( typeUtils.isZero( "abc" ) ).toBe( false );
       } );
-
 
 test( "isBoolean(false) === true",
       () =>
