@@ -39,12 +39,18 @@ const $scope = constants?.$scope || function()
             _bool = constants._bool || "boolean",
             _symbol = constants._symbol || "symbol",
             ignore = function( pErr ) {},
+            isNull = typeUtils.isNull,
+            isObject = typeUtils.isObject,
+            isFunction = typeUtils.isFunction || function( f ) { return _fun === typeof f; },
             asString = stringUtils.asString || function( s ) { return (_mt_str + s).trim(); },
             isBlank = stringUtils.isBlank || function( s ) { return _mt_str === asString( s ).trim(); },
             asInt = stringUtils.asInt || function( s ) { return parseInt( asString( s ).replace( /\..*/, _mt_str ).replace( /\D/g, _mt_str ) ); },
+            lcase = stringUtils.lcase,
+            isValidNumber = stringUtils.isValidNumber,
+            isValidNumeric = stringUtils.isValidNumeric,
             AsyncFunction = (async function() {}).constructor,
             EMPTY_ARRAY = Object.freeze( [] ),
-            EMPTY_OBJECT = Object.freeze( {} )
+            EMPTY_OBJECT = Object.freeze( {} ),
         } = constants || {};
 
     // These statements make the functions and properties of the imported modules local variables and functions.
@@ -890,7 +896,7 @@ const $scope = constants?.$scope || function()
             TO_STRING_WITH_OPTIONS: function( pOptions )
             {
                 const options = Object.assign( {}, pOptions || {} );
-                return e => _str === typeof e ? e : asString( e, options.trim, options );
+                return e => asString( e, options.trim, options );
             },
 
             /** This mapper is used to return an array with its elements converted to numbers **/
@@ -910,7 +916,7 @@ const $scope = constants?.$scope || function()
             },
 
             /** This mapper is used to return an array with its elements converted to strings with leading and trailing whitespace removed **/
-            TRIMMED: e => asString( e ).trim(),
+            TRIMMED: e => asString( e, true ).trim(),
 
             /** This function returns a mapper that is used to return an array with each of its elements converted to strings that are then appended with the specified string **/
             APPEND: function( pStr )
@@ -1219,7 +1225,8 @@ const $scope = constants?.$scope || function()
         {
             FILTER: "filter",
             MAP: "map",
-            SORT: "sort"
+            SORT: "sort",
+            FLAT: "flat"
         };
 
     /**
@@ -1228,60 +1235,128 @@ const $scope = constants?.$scope || function()
      */
     class Transformer
     {
+        #methodName;
+
+        #methodArgument;
+
+        #arguments;
+
         /**
          * Constructs a Transformer which can map, filter, or sort an array
-         * @param pMethod
+         * @param pMethodName
          * @param pFunction
+         * @param pArgs
          */
-        constructor( pMethod, pFunction )
+        constructor( pMethodName, pFunction, ...pArgs )
         {
-            this._method = pMethod; // should be one of TRANSFORMATIONS.filter, TRANSFORMATIONS.map, or TRANSFORMATIONS.sort
-            this._function = pFunction; // should be a function suitable as an argument to the specified method
+            // the array method to call
+            this.#methodName = pMethodName; // should be one of TRANSFORMATIONS.filter, TRANSFORMATIONS.map, or TRANSFORMATIONS.sort
+
+            // arguments to the function to be passed to the method
+            this.#arguments = [].concat( ...(asArray( pArgs || [] ) || []) );
+
+            // should be a function suitable as an argument to the specified method
+            this.#methodArgument = isFunction( pFunction ) ? pFunction : isFunction( this.#arguments[0] ) ? this.#arguments[0] : null;
         }
 
-        get method()
+        get methodName()
         {
-            let funcName = asString( (typeUtils.isString( this._method ) ? this._method : asString( this._method?.name )) ) || TRANSFORMATIONS.FILTER;
-            return asString( Object.values( TRANSFORMATIONS ).includes( funcName ) ? funcName : TRANSFORMATIONS.FILTER );
+            let funcName = asString( (typeUtils.isString( this.#methodName ) ? this.#methodName : asString( this.#methodName?.name )) ) || TRANSFORMATIONS.FILTER;
+            return lcase( asString( Object.values( TRANSFORMATIONS ).includes( funcName ) ? funcName : TRANSFORMATIONS.FILTER, true ) );
         }
 
         get defaultArgument()
         {
-            if ( TRANSFORMATIONS.FILTER === this.method )
+            switch ( this.methodName )
             {
-                return Filters.IDENTITY;
+                case TRANSFORMATIONS.FILTER:
+                    return Filters.IDENTITY;
+
+                case TRANSFORMATIONS.MAP:
+                    return Mappers.IDENTITY;
+
+                case TRANSFORMATIONS.SORT:
+                    return Comparators.NONE;
+
+                case TRANSFORMATIONS.FLAT:
+                    return Number.POSITIVE_INFINITY;
             }
-            if ( TRANSFORMATIONS.MAP === this.method )
-            {
-                return Mappers.IDENTITY;
-            }
-            if ( TRANSFORMATIONS.SORT === this.method )
-            {
-                return Comparators.NONE;
-            }
+
             return ( e, o ) => (_ud === typeof o) ? e : 0;
         }
 
-        get argument()
+        get methodArgument()
         {
-            let func = this._function;
+            let func = this.#methodArgument;
 
-            return (_fun === typeof func) ? func : this.defaultArgument;
+            func = (_fun === typeof func) ? func : this.defaultArgument;
+
+            if ( this.#arguments.length > 0 )
+            {
+                let args = [].concat( ...(asArray( this.#arguments )) );
+
+                if ( args[0] === func )
+                {
+                    args = args.slice( 1 );
+                }
+
+                if ( args.length > 0 )
+                {
+                    let f = func.apply( null, args );
+
+                    if ( isFunction( f ) && f?.length > 0 )
+                    {
+                        return f;
+                    }
+
+                    switch ( this.methodName )
+                    {
+                        case TRANSFORMATIONS.FILTER:
+                        case TRANSFORMATIONS.MAP:
+                            return function( e )
+                            {
+                                return func( e, ...args );
+                            };
+
+                        case TRANSFORMATIONS.SORT:
+                            return function( a, b )
+                            {
+                                return func( a, b, ...args );
+                            };
+
+                        case TRANSFORMATIONS.FLAT:
+                            return isValidNumeric( args[0] ) ? asInt( args[0] ) : undefined;
+                    }
+                }
+            }
+
+            return func;
         }
 
         transform( pArr )
         {
             let arr = [].concat( ...(pArr || []) );
 
-            if ( _str === typeof this.method )
+            if ( _str === typeof this.methodName )
             {
-                const operation = arr[this._method];
+                const operation = arr[this.methodName];
 
                 if ( _fun === typeof operation )
                 {
-                    if ( _fun === typeof this.argument && this.argument?.length >= 1 )
+                    if ( _fun === typeof this.methodArgument && this.methodArgument?.length >= 1 )
                     {
-                        arr = arr[this.method]( this.argument );
+                        arr = arr[this.methodName]( this.methodArgument );
+                    }
+                    else if ( TRANSFORMATIONS.FLAT === this.methodName )
+                    {
+                        if ( isValidNumber( this.methodArgument ) )
+                        {
+                            arr = arr[this.methodName]( this.methodArgument );
+                        }
+                        else
+                        {
+                            arr = arr[this.methodName];
+                        }
                     }
                 }
             }
@@ -1296,9 +1371,16 @@ const $scope = constants?.$scope || function()
      */
     class TransformerChain
     {
+        #transformers = [];
+
         constructor( ...pTransformers )
         {
-            this._transformers = [].concat( ...(pTransformers || []) );
+            this.#transformers = [].concat( ...(pTransformers || []) );
+        }
+
+        get transformers()
+        {
+            return [].concat( ...asArray( this.#transformers || [] ) );
         }
 
         /**
@@ -1309,29 +1391,41 @@ const $scope = constants?.$scope || function()
         transform( pArr )
         {
             // make a new array, so the source array remains unmodified
-            let arr = [].concat( ...(pArr || []) );
+            let arr = [].concat( ...(asArray( pArr || [] )) );
 
             // iterate the transformers in this chain
-            for( const transformer of this._transformers )
+            for( const transformer of this.transformers )
             {
                 // in the case that this chain is a composite chain, perform the transformations specified
-                if ( (transformer instanceof Transformer) || (transformer instanceof this.constructor) )
+                if ( (transformer instanceof Transformer) || (transformer instanceof this.constructor) || isFunction( transformer?.transform ) )
                 {
-                    arr = transformer.transform( arr );
+                    try
+                    {
+                        arr = transformer.transform( arr );
+                    }
+                    catch( ex )
+                    {
+                        konsole.error( ex );
+                    }
                 }
                 else
                 {
                     // the method should be the string name of the transforming method (filter, map, or sort)
-                    const method = transformer?.method || transformer;
+                    const method = transformer?.methodName || transformer;
 
                     // the function should be an appropriate function for the specified method
-                    const func = transformer?.argument || transformer;
+                    const func = transformer?.methodArgument || transformer;
 
-                    if ( _fun === typeof arr[method] &&
-                         _fun === typeof func &&
-                         ("sort" === method ? func?.length > 1 : func?.length > 0) )
+                    if ( this.canExecute( arr, method, func ) )
                     {
-                        arr = arr[method]( func );
+                        try
+                        {
+                            arr = arr[method]( func );
+                        }
+                        catch( ex )
+                        {
+                            konsole.error( ex );
+                        }
                     }
                 }
 
@@ -1345,7 +1439,28 @@ const $scope = constants?.$scope || function()
 
             return arr;
         }
+
+        canExecute( pArr, pMethodName, pMethodArgument )
+        {
+            if ( isNull( pArr ) || !isObject( pArr ) || !isFunction( pArr[pMethodName] ) )
+            {
+                return false;
+            }
+
+            let type = (TRANSFORMATIONS.FLAT === pMethodName) ? _num : _fun;
+            let minArgs = TRANSFORMATIONS.SORT === pMethodName ? 2 : TRANSFORMATIONS.FLAT === pMethodName ? 0 : 1;
+
+            return type === typeof pMethodArgument && (pMethodArgument?.length || 0) >= minArgs;
+        }
     }
+
+    TransformerChain.TO_NON_EMPTY_STRINGS = new TransformerChain( new Transformer( TRANSFORMATIONS.MAP, Mappers.TO_STRING ), new Transformer( TRANSFORMATIONS.FILTER, Filters.NON_EMPTY ) );
+    TransformerChain.TO_NON_BLANK_STRINGS = new TransformerChain( new Transformer( TRANSFORMATIONS.MAP, Mappers.TO_STRING ), new Transformer( TRANSFORMATIONS.FILTER, Filters.NON_BLANK ) );
+
+    TransformerChain.TRIMMED_NON_EMPTY_STRINGS = new TransformerChain( new Transformer( TRANSFORMATIONS.MAP, Mappers.TRIMMED ), new Transformer( TRANSFORMATIONS.FILTER, Filters.NON_EMPTY ) );
+    TransformerChain.TRIMMED_NON_BLANK_STRINGS = new TransformerChain( new Transformer( TRANSFORMATIONS.MAP, Mappers.TRIMMED ), new Transformer( TRANSFORMATIONS.FILTER, Filters.NON_BLANK ) );
+
+    TransformerChain.SPLIT_ON_DOT = new TransformerChain( TransformerChain.TRIMMED_NON_BLANK_STRINGS, new Transformer( TRANSFORMATIONS.MAP, e => e.split( _dot ) ) );
 
     /**
      * This subclass of TransformerChain encapsulates the application of one or more filters.
@@ -2473,6 +2588,30 @@ const $scope = constants?.$scope || function()
         return ((arr?.length || 0) > idx) ? arr[idx] : dflt;
     };
 
+    const toNonEmptyStrings = function( ...pArr )
+    {
+        let arr = [].concat( ...(asArray( pArr )) );
+        return TransformerChain.TO_NON_EMPTY_STRINGS.transform( arr );
+    };
+
+    const toNonBlankStrings = function( ...pArr )
+    {
+        let arr = [].concat( ...(asArray( pArr || [] )) );
+        return TransformerChain.TO_NON_BLANK_STRINGS.transform( arr );
+    };
+
+    const toTrimmedNonEmptyStrings = function( ...pArr )
+    {
+        let arr = [].concat( ...(asArray( pArr )) );
+        return TransformerChain.TRIMMED_NON_EMPTY_STRINGS.transform( arr );
+    };
+
+    const toTrimmedNonBlankStrings = function( ...pArr )
+    {
+        let arr = [].concat( ...(asArray( pArr || [] )) );
+        return TransformerChain.TRIMMED_NON_BLANK_STRINGS.transform( arr );
+    };
+
     /**
      * This is the exported module.
      */
@@ -2522,6 +2661,10 @@ const $scope = constants?.$scope || function()
             chainFilters,
             chainMappers,
             enQueue,
+            toNonEmptyStrings,
+            toNonBlankStrings,
+            toTrimmedNonEmptyStrings,
+            toTrimmedNonBlankStrings,
             classes:
                 {
                     Transformer,

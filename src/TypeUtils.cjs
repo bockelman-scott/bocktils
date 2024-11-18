@@ -54,6 +54,7 @@ const $scope = constants?.$scope || function()
         };
 
     let _mt_str = constants._mt_str || "";
+    let _dot = constants._dot || ".";
 
     let _str = constants._str || "string";
     let _fun = constants._fun || "function";
@@ -77,6 +78,26 @@ const $scope = constants?.$scope || function()
             [_symbol]: null,
             [_ud]: undefined
         };
+
+    // poly-fill for isArray; probably obsolete with modern environments
+    if ( _fun !== typeof Array.isArray )
+    {
+        try
+        {
+            Array.isArray = function( pArg )
+            {
+                if ( (_ud === typeof pArg) || (null == pArg) )
+                {
+                    return false;
+                }
+                return "[object Array]" === {}.toString.call( pArg );
+            };
+        }
+        catch( ex )
+        {
+            // if an environment does not allow extending the built-in object(s)
+        }
+    }
 
     const isFunction = function( pObj )
     {
@@ -142,15 +163,42 @@ const $scope = constants?.$scope || function()
         return (_str === typeof pObj) || pObj instanceof String;
     };
 
+    function _toString( pObj )
+    {
+        if ( isString( pObj ) )
+        {
+            return pObj;
+        }
+        return (0 === pObj || "0" === pObj) ? "0" : (_mt_str + String( pObj ) + _mt_str).trim();
+    }
+
     const isNumber = function( pObj )
     {
         return [_num, _big].includes( typeof pObj ) || pObj instanceof Number || pObj instanceof BigInt;
     };
 
-    function _toString( pObj )
+    const isInteger = function( pObj )
     {
-        return (0 === pObj || "0" === pObj) ? "0" : (_mt_str + String( pObj )).trim();
-    }
+        return isNumber( pObj ) && parseInt( pObj ) === pObj;
+    };
+
+    const isFloat = function( pObj )
+    {
+        if ( isNumber( pObj ) )
+        {
+            let s = _toString( pObj );
+
+            const parts = s.split( _dot );
+
+            return parts?.length < 2 || /[1-9]/.test( (parts[1]).trim() );
+        }
+        return false;
+    };
+
+    const HEX_DIGITS = "0123456789ABCDEF".split( _mt_str );
+    const HEX_DIGITS_MAP = new Map( HEX_DIGITS.map( ( e, i ) => [e, i] ) );
+    const OCT_DIGITS = "01234567".split( _mt_str );
+    const OCT_DIGITS_MAP = new Map( OCT_DIGITS.map( ( e, i ) => [e, i] ) );
 
     function isHex( pObj )
     {
@@ -177,7 +225,7 @@ const $scope = constants?.$scope || function()
             return true;
         }
 
-        let value = (_mt_str + String( pObj )).replace( /n+$/, _mt_str );
+        let value = (_mt_str + _toString( pObj )).replace( /n+$/, _mt_str );
 
         if ( "0" === pObj || isHex( value ) || isOctal( value ) || isDecimal( value ) )
         {
@@ -208,6 +256,93 @@ const $scope = constants?.$scope || function()
     const isZero = function( pValue )
     {
         return isNumber( pValue ) && 0 === pValue;
+    };
+
+    const toDecimal = function( pObj )
+    {
+        if ( !isNumeric( pObj ) )
+        {
+            return 0;
+        }
+
+        let value = 0;
+
+        if ( isDecimal( pObj ) )
+        {
+            try
+            {
+                value = parseFloat( pObj );
+            }
+            catch( ex )
+            {
+                konsole.warn( "Cannot parse", _toString( pObj ), ex );
+                value = 0;
+            }
+
+            return value;
+        }
+
+        if ( isNumber( pObj ) )
+        {
+            let num = Number( pObj );
+            return num.toString( 10 );
+        }
+
+        const s = _toString( pObj ).trim();
+
+        let sign = s.startsWith( "-" ) ? -1 : 1;
+
+        let power = isHex( s ) ? 16 : isOctal( s ) ? 8 : 10;
+
+        let parts = [].concat( ...(s.replace( /^-*[0x]+/, _mt_str ).split( _dot )) );
+
+        let integer = (parts[0] || "0");
+        let fraction = (parts[1] || "0");
+
+        if ( /^0+$/.test( fraction ) )
+        {
+            return parseInt( s, power ) * sign;
+        }
+
+        let digits_values = 16 === power ? HEX_DIGITS_MAP : 8 === power ? OCT_DIGITS_MAP : new Map( ("0123456789".split( _mt_str ).map( ( e, i ) => [e, i] )) );
+
+        let intDigits = [].concat( ...(integer.split( _mt_str ).reverse()) );
+
+        for( let i = 0, n = intDigits.length; i < n; i++ )
+        {
+            let digit = intDigits[i];
+
+            value += Math.pow( digits_values[digit], i );
+        }
+
+        let fractionDigits = fraction.split( _mt_str );
+
+        for( let i = 0, n = fractionDigits.length; i < n; i++ )
+        {
+            let digit = fractionDigits[i];
+
+            value += Math.pow( digits_values[digit], -(i + 1) );
+        }
+
+        return value;
+    };
+
+    const toHex = function( pObj )
+    {
+        const s = _toString( pObj );
+
+        let decimalValue = toDecimal( s );
+
+        return decimalValue.toString( 16 );
+    };
+
+    const toOctal = function( pObj )
+    {
+        const s = _toString( pObj );
+
+        let decimalValue = toDecimal( s );
+
+        return decimalValue.toString( 8 );
     };
 
     const isBoolean = function( pValue )
@@ -258,6 +393,24 @@ const $scope = constants?.$scope || function()
     const isArray = function( pObj )
     {
         return isObject( pObj ) && ((isFunction( Array.isArray )) ? Array.isArray( pObj ) : Object.prototype.toString.call( pObj ).toString() === "[object Array]");
+    };
+
+    const isLikeArray = function( pArg )
+    {
+        if ( isArray( pArg ) || isString( pArg ) )
+        {
+            return true;
+        }
+
+        if ( !isNull( pArg ) && !isNull( pArg?.length ) )
+        {
+            const keys = Object.keys( pArg );
+
+            return keys.every( key => isNumber( key ) );
+
+        }
+
+        return false;
     };
 
     const isSymbol = function( pValue )
@@ -557,12 +710,12 @@ const $scope = constants?.$scope || function()
         {
             if ( isClass( obj ) )
             {
-                name = asString( obj.name || asString( obj.constructor ) );
+                name = String( obj.name || (obj.constructor) );
             }
 
-            if ( isBlank( name ) )
+            if ( (_mt_str === name.trim()) )
             {
-                name = asString( obj?.constructor?.name || obj?.prototype?.constructor?.name || obj?.prototype?.name );
+                name = String( obj?.constructor?.name || obj?.prototype?.constructor?.name || obj?.prototype?.name );
             }
         }
 
@@ -1079,13 +1232,19 @@ const $scope = constants?.$scope || function()
             isGeneratorFunction,
             isString,
             isNumber,
+            isInteger,
+            isFloat,
             isNumeric,
             isZero,
             isOctal,
             isHex,
             isDecimal,
+            toDecimal,
+            toHex,
+            toOctal,
             isBoolean,
             isArray,
+            isLikeArray,
             isMap,
             isSet,
             isDate,

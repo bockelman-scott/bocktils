@@ -1,3 +1,34 @@
+/**
+ * This module provides the ability to parse self-referential or cyclic JSON
+ * and/or to convert objects with self-references of cycles into JSON
+ * that this module can then parse back into that object.
+ *
+ * When defining a self-referencing JSON string
+ * or when converting an object that contains self-referencing nodes,
+ * a basic 'grammar' is used to define the value as a path to the desired object or value.
+ *
+ * This grammar is as follows:
+ *
+ * ${(@<type>;@base:<relative_to>):<path_or_variable_name>}
+ *
+ * where <type> is either the string, path, to indicate a path to another node
+ * or the string, var, to indicate the name of a value expected to be in the provided scope
+ *
+ * Examples:
+ * ${(@path;@base:root):node_0}
+ * This value specifies that the value for the property should be the object found at root['node_0']
+ *
+ * ${(@path;@base:this):../../node_0}
+ * This value specifies that the value for the property should be the object found by
+ * traversing the tree from the root to the node that is 2 levels more shallow that the current node and then returning the object with the key, node_0
+ *
+ * ${(@var;@base:scope):foo}
+ * This value specifies that the value for the property should be the value of a variable, foo, found in the provided scope
+ *
+ * ${(@var;@base:global):foo}
+ * This value specifies that the value for the property should be the value of a variable, foo, found in the global scope
+ */
+
 const constants = require( "./Constants.cjs" );
 const typeUtils = require( "./TypeUtils.cjs" );
 const stringUtils = require( "./StringUtils.cjs" );
@@ -27,6 +58,7 @@ const $scope = constants?.$scope || function()
     let _mt_str = constants._mt_str;
     let _dot = constants._dot;
     let _colon = constants._colon;
+    let _semicolon = constants._semicolon;
     let _dblqt = constants._dblqt;
 
     let _str = constants._str;
@@ -43,15 +75,17 @@ const $scope = constants?.$scope || function()
     let isClass = typeUtils.isClass;
     let isDate = typeUtils.isDate;
 
-    const toIterator = typeUtils.toIterator;
-
+    let isNull = typeUtils.isNull;
     let isNonNullObject = typeUtils.isNonNullObject;
     let isNonNullValue = typeUtils.isNonNullValue;
+
+    const toIterator = typeUtils.toIterator;
 
     let asString = stringUtils.asString;
     let asInt = stringUtils.asInt;
     let isBlank = stringUtils.isBlank;
     let isJson = stringUtils.isJson;
+    let lcase = stringUtils.lcase;
 
     let asArray = arrayUtils.asArray;
     let pruneArray = arrayUtils.pruneArray;
@@ -70,6 +104,8 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
+    const konsole = console;
+
     const PRIOR_NODE = "../";
 
     const DEFAULT_EXCLUSIONS = Object.freeze( ["constructor", "prototype", "toJson", "toObject", "global", "this"] );
@@ -79,6 +115,38 @@ const $scope = constants?.$scope || function()
     const MAX_RECURSION = 32;
 
     const MAX_RECURSION_ERROR = `Maximum Recursion, ${MAX_RECURSION}, Exceeded`;
+
+    const NO_VARIABLE_DEFINED = "~~no-variable-defined~~";
+
+    const infiniteLoopMessage = function( pPaths, pLength, pRepetitions )
+    {
+        const paths = [].concat( asArray( pPaths || [] ) );
+        const len = asInt( pLength, paths?.length );
+        const repeats = asInt( pRepetitions, paths?.length );
+
+        return `An infinite loop was detected at ${paths.join( "->" )}. Loops are detected when sequences of ${len} paths repeat ${repeats} times or more.`;
+    };
+
+    function logWarning( pError, ...pArgs )
+    {
+        konsole.warn( pError, ...pArgs );
+
+        return false;
+    }
+
+    function logError( pError, ...pArgs )
+    {
+        konsole.warn( pError, ...pArgs );
+
+        return false;
+    }
+
+    function logFatal( pError, ...pArgs )
+    {
+        konsole.error( pError, ...pArgs );
+
+        return true;
+    }
 
     class ResolvedValue
     {
@@ -93,16 +161,16 @@ const $scope = constants?.$scope || function()
 
         constructor( pExpression, pRoot, pCurrent, pValue, pJsonString )
         {
-            this.#expression = asString( pExpression );
+            this.#expression = asString( pExpression, true );
             this.#root = isNonNullObject( pRoot ) ? pRoot : null;
-            this.#current = pCurrent;
-            this.#value = pValue;
-            this.#json = asString( pJsonString || _mt_str );
+            this.#current = isNonNullObject( pCurrent ) ? pCurrent : null;
+            this.#value = (pValue instanceof this.constructor) ? pValue?.value : pValue;
+            this.#json = asString( (pJsonString || _mt_str), true );
         }
 
         get expression()
         {
-            return asString( this.#expression );
+            return asString( this.#expression, true );
         }
 
         get key()
@@ -123,6 +191,11 @@ const $scope = constants?.$scope || function()
         get value()
         {
             return this.#value;
+        }
+
+        set value( value )
+        {
+            this.#value = (value instanceof this.constructor) ? value?.value : value;
         }
 
         get json()
@@ -165,13 +238,34 @@ const $scope = constants?.$scope || function()
     {
         #map = new Map();
 
-        constructor( pMap = new Map() )
+        #root;
+        #scope;
+
+        constructor( pMap = new Map(), pRoot, pScope )
         {
             super();
+
+            this.#root = pRoot;
+
+            this.#scope = objectUtils.firstValidObject( pScope, $scope() );
 
             this.#map = (pMap instanceof Map) ? new Map( pMap.entries() ) : pMap;
 
             this.#map = (this.#map instanceof Map) ? this.#map : new Map();
+
+            const me = this;
+
+            this.#map.forEach( ( [k, v] ) => ((me || this).#map || (this || me).#map).set( k, ((v instanceof ResolvedValue) ? v : new ResolvedValue( k, pRoot, null, v )) ) );
+        }
+
+        get root()
+        {
+            return this.#root;
+        }
+
+        get scope()
+        {
+            return this.#scope || $scope();
         }
 
         entries()
@@ -211,15 +305,17 @@ const $scope = constants?.$scope || function()
 
         get( pKey )
         {
-            let value = this.#map.get( pKey );
+            const key = asString( pKey, true );
+
+            let value = this.#map.get( key );
 
             if ( isNonNullObject( value ) )
             {
                 if ( !(value instanceof ResolvedValue) )
                 {
-                    value = new ResolvedValue( asString( pKey ), {}, {}, value );
+                    value = new ResolvedValue( key, this.root, {}, value );
 
-                    this.set( pKey, value );
+                    this.set( key, value );
                 }
 
                 return value;
@@ -263,14 +359,11 @@ const $scope = constants?.$scope || function()
 
         set( pKey, pValue )
         {
-            let value = pValue;
+            const key = asString( pKey, true );
 
-            if ( !(value instanceof ResolvedValue) )
-            {
-                value = new ResolvedValue( pKey, {}, {}, pValue );
-            }
+            const value = (pValue instanceof ResolvedValue) ? pValue : new ResolvedValue( key, this.root, {}, pValue );
 
-            return this.#map.set( pKey, value );
+            return this.#map.set( key, value );
         }
     }
 
@@ -287,79 +380,180 @@ const $scope = constants?.$scope || function()
         return new ResolvedMap();
     };
 
+    const parseKey = function( pKey )
+    {
+        const key = asString( pKey, true );
+
+        const parts = key.split( _semicolon );
+
+        let type = lcase( asString( asString( parts[0] || "path" ).replace( /\$\{\(@</, _mt_str ).replace( />/, _mt_str ), true ) );
+        type = ["path", "var"].includes( asString( type ) ) ? type : "path";
+
+        let base = "path" === type ? "root" : "global";
+
+        let variable = _mt_str;
+
+        const arr = asString( parts[1] || "@base:root):" + NO_VARIABLE_DEFINED + "}" ).split( _colon );
+
+        if ( (arr?.length || 0) > 1 )
+        {
+            if ( ["@base", "base"].includes( asString( arr[0], true ) ) )
+            {
+                base = lcase( asString( asString( arr[1], true ).replace( /[)\s@:]+/, _mt_str ), true ) );
+            }
+
+            variable = asString( asString( arr[2], true ).replace( /[}\s]/, _mt_str ), true ) || NO_VARIABLE_DEFINED;
+        }
+
+        return { type, base, variable, key };
+    };
+
+    function _resolveResolvedMap( pResolved )
+    {
+        let resolved = pResolved || new ResolvedMap();
+
+        return (resolved instanceof ResolvedMap) ? resolved : ResolvedMap.fromMap( resolved );
+    }
+
+    function findCurrentNode( pRoot, pPaths )
+    {
+        if ( isPopulated( pRoot ) )
+        {
+            let root = pRoot;
+
+            let paths = asArray( pPaths ).map( e => asString( e, true ) ).filter( e => !isBlank( e ) );
+
+            let node = root;
+
+            while ( paths.length && !isNull( node ) )
+            {
+                node = node?.[paths.shift()];
+            }
+
+            if ( paths.length <= 0 )
+            {
+                return node;
+            }
+        }
+        return null;
+
+
+    }
+
     class InterpolationEntry
     {
-        #hintString;
+        #key; // should be something in the form, ${(@<type>;@base:<relative_to>):<path_or_variable_name>}
 
-        #type;
+        #type = "path";
+        #base = "root";
 
-        #typeArgs;
-        #argument;
+        #variable;
 
-        #useGraph;
-        #useScope;
-
-        #base;
-        #key;
-
-        constructor( pHintsString, pArgument )
+        constructor( pKey )
         {
-            this.#hintString = isString( pHintsString ) ? asString( pHintsString, true ) : (isString( pArgument ) ? asString( pArgument, true ) : _mt_str);
+            this.#key = asString( pKey, true );
 
-            this.#hintString = this.#hintString.replace( /^\(/, _mt_str ).replace( /:$/, _mt_str ).replace( /\)$/, _mt_str );
+            if ( !isBlank( this.#key ) )
+            {
+                const parsed = parseKey( this.#key );
 
-            let hintParts = ([].concat( ...(this.#hintString.split( ";" ) || [this.#hintString]) ).map( e => isString( e ) ? e.trim() : _mt_str ).filter( e => _mt_str !== e )) || [];
-
-            this.#type = (hintParts?.length > 0 ? hintParts[0].trim().replace( /^@/, _mt_str ) : "var").toLowerCase();
-
-            this.#useGraph = (InterpolationEntry.GRAPH_TYPES.includes( this.#type ));
-
-            this.#useScope = !this.#useGraph || (InterpolationEntry.SCOPE_TYPES.includes( this.#type ));
-
-            this.#typeArgs = ([].concat( ...(hintParts?.length > 1 ? hintParts.slice( 1, hintParts.length ) : []) )).map( e => e.split( ":" ).map( ee => isString( ee ) ? ee.trim().replace( /^@|[)(]/, _mt_str ) : _mt_str ) ).map( e => Object.fromEntries( [e] ) );
-
-            let args = {};
-
-            this.#typeArgs = this.#typeArgs.map( e => Object.assign( args, e ) );
-
-            this.#typeArgs = args || this.#typeArgs;
-
-            this.#argument = (isString( pArgument ) ? pArgument.trim() : this.#hintString || _mt_str).replace( /['"`]/, _mt_str );
-
-            this.#base = this.#useGraph ? (this.#typeArgs?.["base"] || "this") : (this.#typeArgs?.["scope"] || "global");
-
-            this.#key = "${(@" + this.#type + ";" + [...(Object.entries( this.#typeArgs ))].map( e => _mt_str + ("@" + e[0] + _colon + e[1]) ).join( ";" ) + "):" + this.#argument + "}";
+                this.#type = asString( parsed.type || "path", true );
+                this.#base = asString( parsed.base || "root", true );
+                this.#variable = asString( parsed.variable || NO_VARIABLE_DEFINED, true );
+            }
         }
 
-        isVariable()
+        get key()
         {
-            return this.#useScope;
+            return this.#key;
         }
 
-        isTreeNode()
+        get type()
         {
-            return this.#useGraph;
+            return asString( this.#type, true ) || asString( parseKey( this.key )?.type ) || "path";
+        }
+
+        get base()
+        {
+            return asString( this.#base, true ) || asString( parseKey( this.key )?.base ) || ("path" === this.type ? "root" : "global");
+        }
+
+        get variable()
+        {
+            return asString( this.#variable, true ) || asString( parseKey( this.key )?.variable || NO_VARIABLE_DEFINED );
         }
 
         resolve( pScope, pRoot, pCurrent, pResolved, pPaths )
         {
-            let scp = pScope || $scope();
+            let scp = objectUtils.firstValidObject( pScope, $scope() );
 
-            let root = pRoot || pCurrent || scp;
+            let root = objectUtils.firstValidObject( pRoot, pCurrent, scp ) || {};
 
-            let current = pCurrent || root || scp;
+            let current = objectUtils.firstValidObject( pCurrent, root, scp ) || {};
 
-            let resolved = pResolved || new ResolvedMap();
-
-            resolved = resolved instanceof ResolvedMap ? resolved : ResolvedMap.fromMap( resolved );
+            let resolved = _resolveResolvedMap( pResolved );
 
             let paths = [].concat( ...(asArray( pPaths || [] )) );
 
-            let variableName = (this.#argument || "~$~").trim() || "~$~";
+            if ( objectUtils.detectCycles( paths, 5, 5 ) )
+            {
+                return infiniteLoopMessage( paths, 5, 5 );
+            }
 
-            let base = this.#base || (this.#useGraph ? (this.#typeArgs?.["base"] || "this") : (this.#typeArgs?.["scope"] || "global"));
+            let base = this.base;
 
-            let node = this.#useGraph ? ((["root"].includes( base ) || ("@root" === this.#argument)) ? root : (["this", "current", "cur", _mt_str].includes( base ) ? current : scp)) : (["global", "self"].includes( base ) ? scp : scp?.[base] || scp);
+            let { variableName, variablePath, variableRoot } = this.resolveVariable( paths, base, root, current );
+
+            paths = [].concat( asArray( variablePath || paths ) );
+
+            let resolvedValue = resolved.get( this.key ) || resolved.get( variableName );
+
+            let asResolved = resolvedValue instanceof ResolvedValue ? resolvedValue : new ResolvedValue( this.key, root, current, resolvedValue, this.key );
+
+            let value = asResolved?.value;
+
+            if ( (_ud === typeof value || null == value) && (variableName.includes( _dot ) || variableName.includes( "/" )) )
+            {
+                let node = "path" === this.type ? variableRoot || root : scp || $scope();
+
+                let keyPath = [paths].concat( ...(variableName.split( /[.\/]/ ).map( e => e.trim() ).filter( e => _mt_str !== e ) || []) );
+
+                while ( (null != node) && keyPath?.length > 0 )
+                {
+                    let key = asString( keyPath.shift() );
+
+                    node = node?.[key];
+
+                    value = node;
+
+                    if ( !isObject( value ) )
+                    {
+                        break;
+                    }
+                }
+
+                if ( keyPath.length <= 0 )
+                {
+                    asResolved.value = value;
+                }
+
+                resolved.set( this.key, asResolved );
+            }
+
+            return value;
+        }
+
+        resolveVariable( pPaths, pBase, pRoot, pCurrent, pScope = $scope() )
+        {
+            let variableName = asString( this.variable || NO_VARIABLE_DEFINED, true ) || NO_VARIABLE_DEFINED;
+
+            let variablePath = arrayUtils.toTrimmedNonBlankStrings( [].concat( asArray( pPaths || [] ) ) );
+
+            let variableBase = lcase( asString( pBase || this.base, true ) );
+
+            let root = isNonNullObject( pRoot ) ? pRoot : objectUtils.findRoot( pScope || $scope(), pCurrent, ...variablePath );
+
+            let current = isNonNullObject( pCurrent ) ? pCurrent : objectUtils.findNode( root, ...variablePath );
 
             if ( variableName.includes( PRIOR_NODE ) )
             {
@@ -367,62 +561,37 @@ const $scope = constants?.$scope || function()
                 {
                     let idx = variableName.indexOf( PRIOR_NODE );
 
-                    variableName = variableName.slice( idx + 3, variableName.length );
+                    variableName = variableName.slice( asInt( idx + PRIOR_NODE.length ), variableName.length );
                 }
 
-                if ( this.#useGraph && base !== "root" && paths.length > 0 )
+                while ( variableName.startsWith( PRIOR_NODE ) && variablePath.length > 0 )
                 {
-                    while ( variableName.startsWith( PRIOR_NODE ) )
-                    {
-                        paths.pop();
+                    variablePath.pop();
 
-                        variableName = variableName.slice( 3, variableName.length );
-                    }
-                }
-                else
-                {
-                    while ( variableName.includes( PRIOR_NODE ) )
-                    {
-                        variableName = variableName.replace( PRIOR_NODE, _mt_str );
-                    }
+                    variableName = variableName.slice( PRIOR_NODE.length, variableName.length );
                 }
             }
 
-            let value = variableName.startsWith( "@" ) ? resolved.get( variableName ) : (node?.[variableName] || resolved.get( this.#key ));
+            const variableRoot = objectUtils.findNode( root, variablePath );
 
-            if ( (_ud === typeof value || null == value) && (variableName.includes( _dot ) || variableName.includes( "/" )) )
-            {
-                let keyPath = [].concat( ...(variableName.split( /[.\/]/ ).map( e => e.trim() ).filter( e => _mt_str !== e ) || []) );
+            // adjust variablePath
 
-                while ( (null != node) && keyPath?.length > 0 )
-                {
-                    let key = keyPath.shift();
-
-                    node = ["global", "self", _mt_str].includes( key ) ? node : node?.[key];
-
-                    value = node;
-                }
-            }
-
-            if ( value && ["global", "self", "root"].includes( base ) )
-            {
-                resolved.set( this.#key, value );
-            }
-
-            return value;
+            return { variableName, variablePath, variableRoot };
         }
     }
 
     InterpolationEntry.GRAPH_TYPES = Object.freeze( ["path", "tree", "object", "obj"] );
     InterpolationEntry.SCOPE_TYPES = Object.freeze( ["var", "variable", "value", _mt_str] );
 
-    class InterpolationMatch
+    class InterpolationMatcher
     {
         #text;
 
+        #interpolationEntry;
+
         #matchedString;
         #hintString;
-        #argument;
+        #variable;
 
         constructor( pString )
         {
@@ -430,81 +599,66 @@ const $scope = constants?.$scope || function()
 
             this.#matchedString = _mt_str;
             this.#hintString = _mt_str;
-            this.#argument = _mt_str;
+            this.#variable = _mt_str;
 
-            let matches = [].concat( ...(InterpolationMatch.expression().exec( pString ) || []) );
+            let matches = [].concat( ...(InterpolationMatcher.expression().exec( pString ) || []) );
 
             if ( matches && matches?.length )
             {
                 this.#matchedString = matches[0] || _mt_str;
 
-                this.#hintString = (_mt_str + (matches.length > 1 ? matches[1] || (matches.length > 2 ? matches[2] : _mt_str) : _mt_str)).trim();
+                this.#hintString = (_mt_str + (matches.length > 0 ? matches[0] || (matches.length > 1 ? matches[1] : _mt_str) : _mt_str)).trim();
 
-                this.#argument = matches.length > 3 ? matches[3] : matches.length > 2 ? matches[2] : _mt_str;
+                this.#variable = matches.length > 2 ? matches[3] : matches.length > 1 ? matches[2] : _mt_str;
             }
 
-            this.interpolationHint = new InterpolationEntry( this.#hintString || this.#text, this.#argument || this.#hintString || this.#text );
+            this.#interpolationEntry = new InterpolationEntry( this.#hintString || this.#text, this.#variable || this.#hintString || this.#text );
+        }
+
+        get interpolationEntry()
+        {
+            return this.#interpolationEntry || new InterpolationEntry( this.#hintString || this.#text, this.#variable || this.#hintString || this.#text );
         }
 
         resolve( pScope, pRoot, pCurrent, pResolved = new ResolvedMap(), pPaths = [] )
         {
-            return this.interpolationHint.resolve( pScope, pRoot, pCurrent, pResolved, pPaths );
+            return this.interpolationEntry.resolve( pScope, pRoot, pCurrent, pResolved, pPaths );
         }
 
         static expression()
         {
-            return new RegExp( InterpolationMatch.EXPRESSION );
-        }
-
-        static variableExpression()
-        {
-            return new RegExp( InterpolationMatch.VARIABLE_EXPRESSION );
-        }
-
-        static graphExpression()
-        {
-            return new RegExp( InterpolationMatch.GRAPH_EXPRESSION );
+            return new RegExp( InterpolationMatcher.EXPRESSION, "dgi" );
         }
 
         static canInterpolate( pString )
         {
-            return isString( pString ) && (new RegExp( InterpolationMatch.EXPRESSION )).test( pString.trim() );
+            return isString( pString ) && (InterpolationMatcher.expression()).test( asString( pString, true ) );
         }
 
-        static canInterpolateVariables( pString )
+        static Literal( pString )
         {
-            return isString( pString ) && (new RegExp( InterpolationMatch.VARIABLE_EXPRESSION )).test( pString.trim() );
-        }
-
-        static canInterpolateTreeNodes( pString )
-        {
-            return isString( pString ) && (new RegExp( InterpolationMatch.GRAPH_EXPRESSION )).test( pString.trim() );
-        }
-
-        static Literal( pMatches )
-        {
-            return new InterpolationMatchLiteral( pMatches );
+            return new InterpolationMatchLiteral( pString );
         }
 
         static create( pString )
         {
             if ( isString( pString ) )
             {
-                if ( InterpolationMatch.canInterpolate( pString ) )
+                if ( InterpolationMatcher.canInterpolate( pString ) )
                 {
-                    return new InterpolationMatch( pString );
+                    return new InterpolationMatcher( pString );
                 }
-                return InterpolationMatch.Literal( pString );
+                return InterpolationMatcher.Literal( pString );
             }
             throw new Error( "Invalid Argument. The create method requires a string" );
         }
     }
 
-    class InterpolationMatchLiteral extends InterpolationMatch
+    class InterpolationMatchLiteral extends InterpolationMatcher
     {
         #text;
         #hintString;
-        #argument;
+        #variable;
 
         constructor( pString )
         {
@@ -512,18 +666,18 @@ const $scope = constants?.$scope || function()
 
             this.#text = pString;
             this.#hintString = pString;
-            this.#argument = pString;
+            this.#variable = pString;
         }
 
         resolve()
         {
-            return this.#argument || this.#text || this.#hintString;
+            return this.#variable || this.#text || this.#hintString;
         }
     }
 
-    InterpolationMatch.EXPRESSION = /\$\{(\([^)]+\):?)?([^}]+)}/;
-    InterpolationMatch.VARIABLE_EXPRESSION = /\$\{(\((@var|@variable|@value)[^)]+\):?)([^}]+)}/;
-    InterpolationMatch.GRAPH_EXPRESSION = /\$\{(\((@path|@tree|@object|@obj)[^)]+\):?)([^}]+)}/;
+    InterpolationMatcher.EXPRESSION = /\$\{(\([^)]+\):?)?([^}]+)}/;
+    InterpolationMatcher.VARIABLE_EXPRESSION = /\$\{(\((@var|@variable|@value)[^)]+\):?)([^}]+)}/;
+    InterpolationMatcher.GRAPH_EXPRESSION = /\$\{(\((@path|@tree|@object|@obj)[^)]+\):?)([^}]+)}/;
 
     class Interpolator
     {
@@ -555,7 +709,7 @@ const $scope = constants?.$scope || function()
 
             let start = 0;
 
-            let rx = new RegExp( InterpolationMatch.EXPRESSION, "gds" );
+            let rx = new RegExp( InterpolationMatcher.EXPRESSION, "gds" );
 
             let matches = rx.exec( s );
 
@@ -604,7 +758,7 @@ const $scope = constants?.$scope || function()
 
         get matchers()
         {
-            return this.segments.map( e => InterpolationMatch.create( e ) );
+            return this.#matchers || this.segments.map( e => InterpolationMatcher.create( e ) );
         }
 
         addSegment( pStart, pEnd )
@@ -619,7 +773,7 @@ const $scope = constants?.$scope || function()
 
             this.#segments.push( segment );
 
-            let interpolatorMatch = InterpolationMatch.create( segment );
+            let interpolatorMatch = InterpolationMatcher.create( segment );
 
             this.#matchers.push( interpolatorMatch );
 
@@ -637,7 +791,7 @@ const $scope = constants?.$scope || function()
 
             let paths = asArray( pPaths || [] ) || [];
 
-            let arr = asArray( this.#matchers.map( e => e.resolve( scope, root, current, resolved, paths ) ) );
+            let arr = asArray( this.matchers.map( e => e.resolve( scope, root, current, resolved, paths ) ) );
 
             return arr?.length > 1 ? arr : arr[0];
         }
@@ -645,17 +799,26 @@ const $scope = constants?.$scope || function()
 
     const interpolate = function( pScope = $scope(), pRoot, pCurrent, pResolved = new ResolvedMap(), pPaths = [], pOptions = {} )
     {
-        let resolved = (pResolved instanceof ResolvedMap) ? pResolved : (pResolved instanceof Map) ? ResolvedMap.fromMap( pResolved ) : new ResolvedMap();
-
-        let paths = pPaths || [];
-
         let options = Object.assign( {}, pOptions || {} );
 
-        let scp = pScope || $scope();
+        let paths = asArray( pPaths || options?.paths || [] );
 
-        let root = pRoot || pCurrent || scp;
+        if ( objectUtils.detectCycles( paths, 5, 5 ) )
+        {
+            return JSON.stringify( infiniteLoopMessage( paths, 5, 5 ) );
+        }
 
-        let obj = pCurrent || root || scp;
+        let resolved = pResolved || options?.resolved;
+
+        resolved = (resolved instanceof ResolvedMap) ? resolved : (resolved instanceof Map) ? ResolvedMap.fromMap( resolved ) : new ResolvedMap();
+
+        options.resolved = resolved;
+
+        let scp = pScope || options?.scope || $scope();
+
+        let root = pRoot || options?.root || pCurrent || scp;
+
+        let obj = pCurrent || options?.object || root || scp;
 
         let entries = isObject( obj ) ? objectUtils.getEntries( obj ) : toIterator( obj );
 
@@ -674,7 +837,7 @@ const $scope = constants?.$scope || function()
                 case _str:
                     const interpolator = new Interpolator( value, root, obj, resolved );
 
-                    if ( InterpolationMatch.canInterpolate( value ) )
+                    if ( InterpolationMatcher.canInterpolate( value ) )
                     {
                         obj[key] = interpolator.resolve( pScope || $scope(), root, obj, resolved, paths );
                     }
@@ -689,9 +852,14 @@ const $scope = constants?.$scope || function()
 
                     paths.push( key );
 
-                    obj[key] = interpolate( (pScope || $scope()), root, value, resolved, paths );
-
-                    paths.pop();
+                    try
+                    {
+                        obj[key] = interpolate( (pScope || $scope()), root, value, resolved, paths );
+                    }
+                    finally
+                    {
+                        paths.pop();
+                    }
 
                     break;
 
@@ -715,8 +883,9 @@ const $scope = constants?.$scope || function()
             useToJson: true,
             quoteBooleans: false,
             quoteNumbers: false,
-            resolved: new Map(),
-            visited: new Set()
+            resolved: new ResolvedMap(),
+            visited: new Set(),
+            onError: logWarning
         };
 
     const canUseToJson = function( pObj, pToJsonMethod )
@@ -736,7 +905,7 @@ const $scope = constants?.$scope || function()
         return false;
     };
 
-    const _toJson = function( obj )
+    const _toJson = function( obj, pOnError = logError )
     {
         let json = null;
 
@@ -746,7 +915,17 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            console.error( ex );
+            if ( isFunction( pOnError ) )
+            {
+                if ( pOnError( ex, "_toJson" ) )
+                {
+                    throw new Error( ex );
+                }
+            }
+            else
+            {
+                logError( ex, "_toJson" );
+            }
         }
 
         if ( json && stringUtils.isValidJson( json ) )
@@ -853,14 +1032,16 @@ const $scope = constants?.$scope || function()
         const resolved = options?.resolved || new ResolvedMap();
         const visited = options?.visited || new Set();
 
-        let paths = pPaths || options?.paths || [];
-        let depth = asInt( pDepth, asInt( options.depth ) );
+        let paths = asArray( pPaths || options?.paths || [] );
+        let depth = asInt( pDepth, asInt( options.depth, paths?.length ) );
+
+        let onError = isFunction( options?.onError ) ? options.onError : logError;
 
         let jsonString = _mt_str;
 
         try
         {
-            if ( InterpolationMatch.canInterpolate( s ) )
+            if ( InterpolationMatcher.canInterpolate( s ) )
             {
                 const value = new Interpolator( s, root, current, resolved ).resolve( scp, root, current, resolved, paths );
 
@@ -873,7 +1054,14 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            console.error( ex.message );
+            if ( onError( ex, "_stringToJson", options, paths, depth ) )
+            {
+                throw new Error( ex );
+            }
+            else
+            {
+                logError( ex, "_stringToJson", options, paths, depth );
+            }
 
             if ( isBlank( jsonString ) )
             {
@@ -916,12 +1104,12 @@ const $scope = constants?.$scope || function()
         {
             if ( _big === typeof pNum )
             {
-                jsonString = JSON.stringify( BigInt( pNum ).toString() );
+                jsonString = JSON.stringify( BigInt( pNum ) );
             }
             jsonString = JSON.stringify( pNum );
         }
 
-        if ( true === options?.quoteNumbers && !/"[\d.]*(n)*"/.test( jsonString ) )
+        if ( true === options?.quoteNumbers && !/^"[\d.,+-]*(n)*"$/.test( jsonString ) )
         {
             jsonString = _dblqt + jsonString + _dblqt;
         }
@@ -944,18 +1132,22 @@ const $scope = constants?.$scope || function()
         return {};
     }
 
-    function buildPathExpression( pPaths )
+    function buildPathExpression( pPaths, pBase )
     {
-        let paths = [].concat( (asArray( pPaths || [] ) || []).map( e => asString( e, true ) ).filter( e => !isBlank( e ) ) ).flat();
+        let paths = arrayUtils.toNonBlankStrings( ...pPaths ).flat();
 
-        return "${(@path;@base:root):" + (paths.length > 0 ? paths.join( _dot ) : "@root") + "}";
+        let base = asString( pBase ) || "root";
+
+        return "${(@path;@base:" + base + "):" + (paths.length > 0 ? paths.join( _dot ) : "@root") + "}";
     }
 
     const asJson = function( pObject, pOptions = DEFAULT_OPTIONS_FOR_JSON, pVisited = new Set(), pResolved = new ResolvedMap(), pPaths = [], pRoot, pScope = $scope(), pDepth = 0 )
     {
-        const options = Object.assign( {}, pOptions || {} );
+        const options = Object.assign( Object.assign( {}, DEFAULT_OPTIONS_FOR_JSON ), pOptions || DEFAULT_OPTIONS_FOR_JSON );
 
         const handleNull = _resolveNullHandler( options );
+
+        const onError = isFunction( options.onError ) ? options.onError : logWarning;
 
         const obj = (isNonNullValue( pObject ) ? pObject : options.object);
 
@@ -989,6 +1181,14 @@ const $scope = constants?.$scope || function()
             return (depth > MAX_RECURSION ? JSON.stringify( MAX_RECURSION_ERROR ) : (isFunction( obj?.toString ) ? obj.toString() : JSON.stringify( obj?.name || obj?.source || obj?.value )));
         }
 
+        let paths = asArray( pPaths || options.paths || [] );
+        options.paths = paths;
+
+        if ( objectUtils.detectCycles( paths, 5, 5 ) )
+        {
+            return JSON.stringify( infiniteLoopMessage( paths, 5, 5 ) );
+        }
+
         // scope to use for resolving variables
         let scp = pScope || options?.scope || $scope();
         options.scope = scp;
@@ -1005,9 +1205,6 @@ const $scope = constants?.$scope || function()
         let visited = pVisited || options.visited || new Set();
         options.visited = visited;
 
-        let paths = asArray( pPaths || options.paths || [] );
-        options.paths = paths;
-
         const omitFunctions = options?.omitFunctions;
 
         let jsonString = _mt_str;
@@ -1019,8 +1216,15 @@ const $scope = constants?.$scope || function()
                 break;
 
             case _str:
-                jsonString = _stringToJson( obj, options, paths, ++depth );
-                depth--;
+                try
+                {
+                    jsonString = _stringToJson( obj, options, paths, ++depth );
+                }
+                finally
+                {
+                    depth--;
+                }
+
                 break;
 
             case _bool:
@@ -1098,27 +1302,41 @@ const $scope = constants?.$scope || function()
                         {
                             paths.push( key );
 
-                            let ss = _mt_str;
+                            let ss = JSON.stringify( _mt_str );
 
                             try
                             {
-                                ss = asJson( value, options, visited, resolved, paths, root, scp, ++depth );
+                                try
+                                {
+                                    ss = asJson( value, options, visited, resolved, paths, root, scp, ++depth );
+                                }
+                                catch( ex )
+                                {
+                                    if ( isFunction( onError ) )
+                                    {
+                                        if ( onError( ex, "asJson::recurse", value, options, visited, resolved, paths, root, scp, depth ) )
+                                        {
+                                            throw new Error( ex );
+                                        }
+                                    }
+                                    else
+                                    {
+                                        logWarning( ex, "asJson::recurse", value, options, visited, resolved, paths, root, scp, depth );
+                                    }
+
+                                    ss = JSON.stringify( ex.message );
+                                }
+
+                                if ( isObject( value ) )
+                                {
+                                    visited.add( value );
+                                }
                             }
-                            catch( ex )
+                            finally
                             {
-                                console.warn( ex );
-
-                                ss = JSON.stringify( ex.message );
+                                paths.pop();
+                                depth--;
                             }
-
-                            if ( isObject( value ) )
-                            {
-                                visited.add( value );
-                            }
-
-                            paths.pop();
-
-                            depth--;
 
                             return ss;
                         }
@@ -1148,7 +1366,17 @@ const $scope = constants?.$scope || function()
                             }
                             catch( ex )
                             {
-                                console.warn( ex );
+                                if ( isFunction( onError ) )
+                                {
+                                    if ( onError( ex, "asJson::recurse", value, options, visited, resolved, paths, root, scp, depth ) )
+                                    {
+                                        throw new Error( ex );
+                                    }
+                                }
+                                else
+                                {
+                                    logWarning( ex, "asJson::recurse", value, options, visited, resolved, paths, root, scp, depth );
+                                }
 
                                 s += JSON.stringify( ex.message );
                             }
@@ -1174,39 +1402,54 @@ const $scope = constants?.$scope || function()
         return asString( jsonString );
     };
 
-    const parseJson = function( pString, pResolved = new ResolvedMap(), pPaths = [], pOptions )
+    const parseJson = function( pString, pOptions = DEFAULT_OPTIONS_FOR_JSON, pVisited = new Set(), pResolved = new ResolvedMap(), pPaths = [], pRoot, pScope = $scope(), pDepth = 0 )
     {
-        let s = asString( pString );
+        const options = Object.assign( Object.assign( {}, DEFAULT_OPTIONS_FOR_JSON ), pOptions || DEFAULT_OPTIONS_FOR_JSON );
+
+        const onError = isFunction( options?.onError ) ? options?.onError : logWarning;
+
+        let visited = pVisited || options?.visited || new Set();
+        visited = visited instanceof Set ? visited : new Set();
+
+        let resolved = pResolved || options?.resolved || new ResolvedMap();
+        resolved = resolved instanceof ResolvedMap ? resolved : ResolvedMap.fromMap( resolved );
+
+        let paths = asArray( pPaths || options?.paths || [] );
+        options.paths = paths;
+
+        let root = pRoot || options?.root || {};
+        let scp = pScope || options?.scope || $scope();
+        let depth = asInt( pDepth, options?.depth );
+
+        let json = asString( pString );
+
+        if ( !isJson( json ) )
+        {
+            return asArray( json );
+        }
 
         let obj = null;
 
-        let resolved = pResolved || new ResolvedMap();
-
-        let paths = pPaths || [];
-
-        const options = Object.assign( {}, pOptions || {} );
-
-        let rx = /\$\{[^}]+}/g;
-
-        let matchedVariables = rx.exec( s );
-
-        let shouldInterpolate = (matchedVariables && matchedVariables?.length > 0);
-
         try
         {
-            obj = JSON.parse( s );
+            obj = JSON.parse( json );
         }
         catch( ex )
         {
-            console.error( ex.message );
-
-            if ( !isJson( s ) )
+            if ( isFunction( onError ) )
             {
-                return asArray( s );
+                if ( onError( ex, "parseJson", json, options, visited, resolved, paths, root, scp, depth ) )
+                {
+                    throw new Error( ex );
+                }
+            }
+            else
+            {
+                logWarning( ex, "parseJson", json, options, visited, resolved, paths, root, scp, depth );
             }
         }
 
-        if ( shouldInterpolate )
+        if ( InterpolationMatcher.canInterpolate( json ) )
         {
             paths.push( "" );
 

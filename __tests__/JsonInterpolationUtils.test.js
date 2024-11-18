@@ -40,7 +40,7 @@ objA.node_4 = objA;
 
 const objB =
     {
-        node_0: "${(@var;@base:root):objA.node_0}"
+        node_0: "${(@var;@base:global):objA.node_0}"
     };
 
 const objC =
@@ -56,12 +56,10 @@ describe( "JSON", () =>
     test( "JSON",
           () =>
           {
-/*
               let json = jsonUtils.asJson( objA );
 
               let obj = jsonUtils.parseJson( json );
 
               expect( objectUtils.same( objA, obj ) ).toBe( true );
-*/
           } );
 } );

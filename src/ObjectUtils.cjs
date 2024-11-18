@@ -1021,6 +1021,84 @@ const $scope = constants?.$scope || function()
         return null;
     };
 
+    const findNode = function( pRoot, ...pPaths )
+    {
+        if ( isPopulated( pRoot ) )
+        {
+            let root = pRoot;
+
+            let paths = arrayUtils.toNonBlankStrings( ...pPaths );
+
+            let node = root;
+
+            while ( paths.length && !isNull( node ) )
+            {
+                node = node?.[paths.shift()];
+            }
+
+            if ( paths.length <= 0 )
+            {
+                return node;
+            }
+        }
+        return null;
+    };
+
+    const findRoot = function( pScope, pCurrent, ...pPath )
+    {
+        let scope = pScope || $scope();
+
+        let path = arrayUtils.toNonBlankStrings( ...pPath );
+
+        let node = scope;
+
+        let root = null;
+
+        if ( null == path || (path?.length || 0) <= 0 )
+        {
+            return pCurrent || scope;
+        }
+
+        if ( path[0] in scope )
+        {
+            root = scope;
+
+            let keys = [].concat( asArray( path ) );
+
+            while ( keys.length && !isNull( node ) )
+            {
+                node = node?.[keys.shift()];
+            }
+
+            if ( node === pCurrent )
+            {
+                root = node;
+
+                return root;
+            }
+        }
+        else
+        {
+            let scp = scope || {};
+
+            let props = Object.keys( scp ).filter( e => null != e && ["object"].includes( typeof scp[e] ) && !(/^on[\w]+$|^[\w]+bar(s?)$|[\w]+storage/i.test( e )) && scp[e] !== globalThis && Object.keys( scp[e] || {} )?.length > 0 );
+
+            for( let prop in props )
+            {
+                scp = scp[prop];
+
+                root = findRoot( scp, pCurrent, ...pPath );
+
+                if ( isPopulated( root ) )
+                {
+                    break;
+                }
+            }
+        }
+
+        return root;
+    };
+
     /**
      * Returns the value of a property compensating for a naming convention
      * by which class members are prefixed with an _ (underscore)
@@ -2795,7 +2873,9 @@ const $scope = constants?.$scope || function()
             detectCycles,
             removeProperty,
             removeProperties,
-            invertProperties
+            invertProperties,
+            findNode,
+            findRoot
         };
 
     if ( _ud !== typeof module )
