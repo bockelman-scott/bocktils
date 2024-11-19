@@ -1039,7 +1039,7 @@ describe( "findImplementor", () =>
 
               expect( implementor ).toBe( null );
           } );
-});
+} );
 
 describe( "collectImplementors", () =>
 {
@@ -1064,7 +1064,7 @@ describe( "collectImplementors", () =>
 
               expect( implementors ).toEqual( [] );
           } );
-});
+} );
 
 describe( "Cloning", () =>
 {
@@ -1139,7 +1139,7 @@ describe( "Cloning", () =>
               expect( clone.composite === obj.composite ).toBe( false );
 
           } );
-});
+} );
 
 describe( "ingest and augment", () =>
 {
@@ -1498,7 +1498,7 @@ describe( "ingest and augment", () =>
               expect( augmented.c.get( "c" ) ).toEqual( "c" );
 
           } );
-});
+} );
 
 describe( "populate", () =>
 {
@@ -1552,7 +1552,7 @@ describe( "populate", () =>
               expect( populated ).toEqual( expected );
 
           } );
-});
+} );
 
 describe( "prune removes 'dead' or undesired properties", () =>
 {
@@ -1761,7 +1761,7 @@ describe( "prune removes 'dead' or undesired properties", () =>
 
               expect( JSON.stringify( objectUtils.prune( obj, options ) ) ).toEqual( JSON.stringify( expected ) );
           } );
-});
+} );
 
 describe( "toLiteral erases class prototype", () =>
 {
@@ -1974,4 +1974,62 @@ describe( "toLiteral erases class prototype", () =>
               expect( typeof obj.lock ).toEqual( "function" );
 
           } );
-});
+} );
+
+describe( "findNode / findRoot",
+          function findNodesTest()
+          {
+              const obj =
+                  {
+                      a:
+                          {
+                              b:
+                                  {
+                                      c:
+                                          {
+                                              d: 4
+                                          }
+                                  }
+                          },
+                      b:
+                          {
+                              c:
+                                  {
+                                      d: 4
+                                  }
+                          },
+                      c:
+                          {
+                              d: 4
+                          },
+                      d: 4
+                  };
+
+              test( "findNode",
+                    () =>
+                    {
+                        let node = objectUtils.findNode( obj, "a", "b" );
+                        expect( node ).toBe( obj.a.b );
+
+                        node = objectUtils.findNode( obj, "a", "a" );
+                        expect( node ).toBe( undefined );
+                    } );
+
+              test( "findRoot",
+                    () =>
+                    {
+                        const root = objectUtils.findRoot( obj, obj.a.b.c );
+
+                        expect( root ).toEqual( obj );
+
+                        let pathTo = objectUtils.tracePathTo( obj.a.b.c, obj.a );
+
+                        expect( pathTo ).toEqual( "b.c" );
+
+                        pathTo = objectUtils.tracePathTo( obj.a.b.c.d, obj.a );
+
+                        expect( pathTo ).toEqual( "b.c.d" );
+
+                    } );
+          } );
+

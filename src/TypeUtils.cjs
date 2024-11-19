@@ -209,7 +209,7 @@ const $scope = constants?.$scope || function()
     function isOctal( pObj )
     {
         const s = _toString( pObj );
-        return ("0" !== s) && /^(-)?0([0-7]+)(([.,])([0-7]+))?$/.test( s ) && !/[A-Za-z\s]/.test( s );
+        return ("0" !== s) && /^(-)?0(o)*([0-7]+)(([.,])([0-7]+))?$/.test( s ) && !/[A-Za-z\s]/.test( s );
     }
 
     function isDecimal( pObj )
@@ -285,7 +285,7 @@ const $scope = constants?.$scope || function()
         if ( isNumber( pObj ) )
         {
             let num = Number( pObj );
-            return num.toString( 10 );
+            return parseFloat( num.toString( 10 ) );
         }
 
         const s = _toString( pObj ).trim();
@@ -329,20 +329,20 @@ const $scope = constants?.$scope || function()
 
     const toHex = function( pObj )
     {
-        const s = _toString( pObj );
+        let decimalValue = toDecimal( pObj );
 
-        let decimalValue = toDecimal( s );
+        const s = decimalValue.toString( 16 );
 
-        return decimalValue.toString( 16 );
+        return (s.startsWith( "-" ) ? "-0x" : "0x") + s.replace( /^-/, _mt_str ).trim();
     };
 
     const toOctal = function( pObj )
     {
-        const s = _toString( pObj );
+        let decimalValue = toDecimal( pObj );
 
-        let decimalValue = toDecimal( s );
+        const s = decimalValue.toString( 8 );
 
-        return decimalValue.toString( 8 );
+        return (s.startsWith( "-" ) ? "-0o" : "0o") + s.replace( /^-/, _mt_str ).trim();
     };
 
     const isBoolean = function( pValue )
@@ -406,8 +406,7 @@ const $scope = constants?.$scope || function()
         {
             const keys = Object.keys( pArg );
 
-            return keys.every( key => isNumber( key ) );
-
+            return keys.some( key => isNumeric( key ) );
         }
 
         return false;

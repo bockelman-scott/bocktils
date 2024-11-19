@@ -590,6 +590,107 @@ test( "isDecimal(decimal values)",
           expect( valid.length ).toEqual( 9 );
       } );
 
+
+describe( "isInteger",
+          () =>
+          {
+              test( "isInteger(0) === true",
+                    () =>
+                    {
+                        expect( typeUtils.isInteger( 0 ) ).toBe( true );
+                    } );
+          } );
+
+
+describe( "isFloat",
+          () =>
+          {
+              test( "isFloat(0) === true",
+                    () =>
+                    {
+                        expect( typeUtils.isFloat( 0 ) ).toBe( true );
+                    } );
+          } );
+
+
+describe( "toNumericBase",
+          () =>
+          {
+              test( "toDecimal('0xFF') === 255",
+                    () =>
+                    {
+                        expect( typeUtils.toDecimal( 0xff ) ).toEqual( 255 );
+                    } );
+
+              test( "toDecimal('-0xFF') === -255",
+                    () =>
+                    {
+                        expect( typeUtils.toDecimal( -0xff ) ).toEqual( -255 );
+                    } );
+
+              test( "toDecimal('111') === 111",
+                    () =>
+                    {
+                        expect( typeUtils.toDecimal( 111 ) ).toEqual( 111 );
+                    } );
+
+              test( "toDecimal('-111') === -111",
+                    () =>
+                    {
+                        expect( typeUtils.toDecimal( -111 ) ).toEqual( -111 );
+                    } );
+
+              test( "toDecimal('010') === 8",
+                    () =>
+                    {
+                        expect( typeUtils.toDecimal( 0o10 ) ).toEqual( 8 );
+                    } );
+
+              test( "toDecimal('-010') === -8",
+                    () =>
+                    {
+                        expect( typeUtils.toDecimal( -0o10 ) ).toEqual( -8 );
+                    } );
+
+              test( "toOctal('0xFF') === 0o377",
+                    () =>
+                    {
+                        expect( typeUtils.toOctal( 0xff ) ).toEqual( "0o377" );
+                    } );
+
+              test( "toOctal('-0xFF') === -0o377",
+                    () =>
+                    {
+                        expect( typeUtils.toOctal( -0xff ) ).toEqual( "-0o377" );
+                    } );
+
+              test( "toHex(255) === 0xff",
+                    () =>
+                    {
+                        expect( typeUtils.toHex( 255 ) ).toEqual( "0xff" );
+                    } );
+
+              test( "toHex(-255) === -0xff",
+                    () =>
+                    {
+                        expect( typeUtils.toHex( -255 ) ).toEqual( "-0xff" );
+                    } );
+
+          } );
+
+
+describe( "isLikeArray",
+          () =>
+          {
+              test( "isLikeArray() === true",
+                    () =>
+                    {
+                        let obj = { 0: 0, 1: 1, length: 2 };
+                        expect( typeUtils.isLikeArray( obj ) ).toBe( true );
+                    } );
+          } );
+
+
 test( "isZero(0) === true",
       () =>
       {

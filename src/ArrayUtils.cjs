@@ -41,6 +41,7 @@ const $scope = constants?.$scope || function()
             ignore = function( pErr ) {},
             isNull = typeUtils.isNull,
             isObject = typeUtils.isObject,
+            isBoolean = typeUtils.isBoolean,
             isFunction = typeUtils.isFunction || function( f ) { return _fun === typeof f; },
             asString = stringUtils.asString || function( s ) { return (_mt_str + s).trim(); },
             isBlank = stringUtils.isBlank || function( s ) { return _mt_str === asString( s ).trim(); },
@@ -401,8 +402,10 @@ const $scope = constants?.$scope || function()
             /** a filter to return the elements of an array that are numbers **/
             IS_NUMBER: e => [_num, _big].includes( (typeof e) ),
 
+            IS_NUMERIC: e => stringUtils.isValidNumeric( e ),
+
             /** a filter to return the elements of an array that are integers (whole numbers) **/
-            IS_INTEGER: e => Predicates.IS_NUMBER( e ) && (Math.abs( e - Math.round( e ) ) < 0.0000000001),
+            IS_INTEGER: e => Predicates.IS_NUMBER( e ) && (typeUtils.isInteger( e ) || Math.abs( e - Math.round( e ) ) < 0.0000000001),
 
             /** a filter to return the elements of an array that are objects **/
             IS_OBJECT: e => _obj === typeof e,
@@ -416,19 +419,25 @@ const $scope = constants?.$scope || function()
             /** a filter to return the elements of an array that are asynchronous functions **/
             IS_ASYNC_FUNCTION: e => Predicates.IS_FUNCTION( e ) && e instanceof AsyncFunction,
 
+            IS_BOOLEAN: e => isBoolean( e ),
+
+            IS_REGEXP: e => (e instanceof RegExp || /\/[^/]\/[gidsmyu]+$/.test( asString( e, true ) )),
+
+            IS_DATE: e => typeUtils.isDate( e ),
+
             /** a filter to returns the elements suitable as comparator functions for the Array 'sort' method */
             COMPARATORS: (e => Predicates.IS_FUNCTION( e ) && Predicates.IS_COMPARATOR( e )),
 
             /** a function to return an array of filter functions from varargs **/
             _copyPredicateArguments: function( ...pPredicates )
             {
-                return ([].concat( ...(pPredicates || [Predicates.IDENTITY]) )).filter( Predicates.IS_PREDICATE );
+                return ([].concat( ...asArray( (pPredicates || [Predicates.IDENTITY]) ) )).filter( Predicates.IS_PREDICATE );
             },
 
             /** a function that returns a filter to return the elements of an array that match one of the specified types **/
             MATCHES_TYPE: function( ...pType )
             {
-                const types = [].concat( ...(pType || []) ).filter( e => [_ud, _obj, _fun, _str, _num, _big, _bool, _symbol].includes( e ) );
+                const types = [].concat( ...(asArray( pType || [] )) ).filter( e => [_ud, _obj, _fun, _str, _num, _big, _bool, _symbol].includes( e ) );
 
                 return function( e )
                 {
@@ -654,6 +663,22 @@ const $scope = constants?.$scope || function()
             NON_EMPTY: function( e )
             {
                 const filter = Predicates.MATCHES_ANY( Predicates.IS_POPULATED_STRING, Predicates.IS_POPULATED_OBJECT, Predicates.IS_VALID_NUMBER, Predicates.IS_FUNCTION, e => _bool === typeof e );
+                return filter( e );
+            },
+
+            IS_POPULATED: function( e )
+            {
+                const filter =
+                    Predicates.MATCHES_ANY(
+                        Predicates.IS_POPULATED_STRING,
+                        Predicates.IS_VALID_NUMBER,
+                        Predicates.IS_BOOLEAN,
+                        Predicates.IS_REGEXP,
+                        Predicates.IS_DATE,
+                        Predicates.IS_POPULATED_OBJECT,
+                        Predicates.IS_POPULATED_ARRAY
+                    );
+
                 return filter( e );
             },
 
@@ -1289,7 +1314,7 @@ const $scope = constants?.$scope || function()
         {
             let func = this.#methodArgument;
 
-            func = (_fun === typeof func) ? func : this.defaultArgument;
+            func = (_fun === typeof func) ? func : (TRANSFORMATIONS.FLAT === this.methodName) ? firstNumericValue( this.#arguments ) : this.defaultArgument;
 
             if ( this.#arguments.length > 0 )
             {
@@ -1302,20 +1327,13 @@ const $scope = constants?.$scope || function()
 
                 if ( args.length > 0 )
                 {
-                    let f = func.apply( null, args );
-
-                    if ( isFunction( f ) && f?.length > 0 )
-                    {
-                        return f;
-                    }
-
                     switch ( this.methodName )
                     {
                         case TRANSFORMATIONS.FILTER:
                         case TRANSFORMATIONS.MAP:
-                            return function( e )
+                            return function( e, i, a )
                             {
-                                return func( e, ...args );
+                                return func( e, i, a, ...args );
                             };
 
                         case TRANSFORMATIONS.SORT:
@@ -1325,7 +1343,7 @@ const $scope = constants?.$scope || function()
                             };
 
                         case TRANSFORMATIONS.FLAT:
-                            return isValidNumeric( args[0] ) ? asInt( args[0] ) : undefined;
+                            return isValidNumeric( args[0] ) ? asInt( args[0] ) : func;
                     }
                 }
             }
@@ -1355,7 +1373,7 @@ const $scope = constants?.$scope || function()
                         }
                         else
                         {
-                            arr = arr[this.methodName];
+                            arr = arr[this.methodName]();
                         }
                     }
                 }
@@ -1454,13 +1472,40 @@ const $scope = constants?.$scope || function()
         }
     }
 
-    TransformerChain.TO_NON_EMPTY_STRINGS = new TransformerChain( new Transformer( TRANSFORMATIONS.MAP, Mappers.TO_STRING ), new Transformer( TRANSFORMATIONS.FILTER, Filters.NON_EMPTY ) );
-    TransformerChain.TO_NON_BLANK_STRINGS = new TransformerChain( new Transformer( TRANSFORMATIONS.MAP, Mappers.TO_STRING ), new Transformer( TRANSFORMATIONS.FILTER, Filters.NON_BLANK ) );
+    TransformerChain.TO_NON_EMPTY_STRINGS =
+        new TransformerChain(
+            new Transformer( TRANSFORMATIONS.FILTER, Filters.IS_POPULATED ),
+            new Transformer( TRANSFORMATIONS.MAP, Mappers.TO_STRING ),
+            new Transformer( TRANSFORMATIONS.FILTER, Filters.NON_EMPTY )
+        );
 
-    TransformerChain.TRIMMED_NON_EMPTY_STRINGS = new TransformerChain( new Transformer( TRANSFORMATIONS.MAP, Mappers.TRIMMED ), new Transformer( TRANSFORMATIONS.FILTER, Filters.NON_EMPTY ) );
-    TransformerChain.TRIMMED_NON_BLANK_STRINGS = new TransformerChain( new Transformer( TRANSFORMATIONS.MAP, Mappers.TRIMMED ), new Transformer( TRANSFORMATIONS.FILTER, Filters.NON_BLANK ) );
+    TransformerChain.TO_NON_BLANK_STRINGS =
+        new TransformerChain(
+            new Transformer( TRANSFORMATIONS.FILTER, Filters.IS_POPULATED ),
+            new Transformer( TRANSFORMATIONS.MAP, Mappers.TO_STRING ),
+            new Transformer( TRANSFORMATIONS.FILTER, Filters.NON_BLANK )
+        );
 
-    TransformerChain.SPLIT_ON_DOT = new TransformerChain( TransformerChain.TRIMMED_NON_BLANK_STRINGS, new Transformer( TRANSFORMATIONS.MAP, e => e.split( _dot ) ) );
+    TransformerChain.TRIMMED_NON_EMPTY_STRINGS =
+        new TransformerChain(
+            new Transformer( TRANSFORMATIONS.FILTER, Filters.IS_POPULATED ),
+            new Transformer( TRANSFORMATIONS.MAP, Mappers.TRIMMED ),
+            new Transformer( TRANSFORMATIONS.FILTER, Filters.NON_EMPTY )
+        );
+
+    TransformerChain.TRIMMED_NON_BLANK_STRINGS =
+        new TransformerChain(
+            new Transformer( TRANSFORMATIONS.FILTER, Filters.IS_POPULATED ),
+            new Transformer( TRANSFORMATIONS.MAP, Mappers.TRIMMED ),
+            new Transformer( TRANSFORMATIONS.FILTER, Filters.NON_BLANK )
+        );
+
+    TransformerChain.SPLIT_ON_DOT =
+        new TransformerChain(
+            TransformerChain.TRIMMED_NON_BLANK_STRINGS,
+            new Transformer( TRANSFORMATIONS.MAP, e => e.split( _dot ) ),
+            new Transformer( TRANSFORMATIONS.FLAT )
+        );
 
     /**
      * This subclass of TransformerChain encapsulates the application of one or more filters.
@@ -1674,6 +1719,70 @@ const $scope = constants?.$scope || function()
         return isPopulatedArray( candidates ) ? candidates[candidates.length - 1] : [];
     };
 
+    function _createFilters( ...pArgs )
+    {
+        let args = [].concat( ...(asArray( pArgs )) );
+
+        let filters = [];
+
+        for( let arg of args )
+        {
+            if ( Predicates.IS_PREDICATE( arg ) || (isFunction( arg ) && arg?.length > 0) )
+            {
+                filters.push( arg );
+            }
+            else if ( Predicates.IS_REGEXP( arg ) )
+            {
+                const rx = arg instanceof RegExp ? new RegExp( arg, asString( arg.flags ) ) : new RegExp( arg, stringUtils.rightOfLast( asString( arg ), "/" ).replaceAll( /[^gidsmyu]/g, _mt_str ) );
+
+                let f = function( e, i, a )
+                {
+                    return rx.test( asString( e ) );
+                };
+
+                filters.push( f );
+            }
+            else if ( [typeUtils.VALID_TYPES].includes( lcase( asString( arg ) ) ) )
+            {
+                const type = lcase( asString( arg ) );
+
+                let f = function( e, i, a )
+                {
+                    return type === typeof e;
+                };
+            }
+        }
+
+        return filters.filter( Predicates.IS_FUNCTION );
+    }
+
+    const createExclusiveFilter = function( ...pArgs )
+    {
+        const filters = _createFilters( ...pArgs );
+
+        return Predicates.MATCHES_ALL( filters );
+    };
+
+    const createInclusiveFilter = function( ...pArgs )
+    {
+        const filters = _createFilters( ...pArgs );
+
+        return Predicates.MATCHES_ANY( filters );
+    };
+
+    const firstMatchedValue = function( pMatcher, ...pArr )
+    {
+        let matcher = createExclusiveFilter( pMatcher );
+
+        let arr = [].concat( ...(asArray( pArr )) ).filter( matcher );
+
+        return (arr?.length || 0) > 0 ? arr[0] : null;
+    };
+
+    const firstNumericValue = function( ...pArr )
+    {
+        return firstMatchedValue( Predicates.IS_NUMERIC, ...pArr );
+    };
 
     /**
      * Returns a copy of an array with duplicate elements removed
@@ -2665,6 +2774,10 @@ const $scope = constants?.$scope || function()
             toNonBlankStrings,
             toTrimmedNonEmptyStrings,
             toTrimmedNonBlankStrings,
+            createExclusiveFilter,
+            createInclusiveFilter,
+            firstMatchedValue,
+            firstNumericValue,
             classes:
                 {
                     Transformer,

@@ -493,7 +493,7 @@ const $scope = constants?.$scope || function()
                                        configurable: false,
                                        enumerable: false,
                                        writable: false,
-                                       value: generateUniqueObjectId( this, this.constructor, new Date().getTime() )
+                                       value: generateUniqueObjectId( this, this.constructor, new Date() )
                                    } );
         }
 
@@ -1021,6 +1021,80 @@ const $scope = constants?.$scope || function()
         return null;
     };
 
+    const tracePathTo = function( pNode, pRoot, pPath = [], pStack = [] )
+    {
+        let stack = asArray( pStack || [] );
+
+        if ( detectCycles( stack, 5, 5 ) )
+        {
+            konsole.error( "Entered an infinite loop at", stack.join( _dot ) );
+            return _mt_str;
+        }
+
+        let paths = isString( pPath ) ? [pPath].split( _dot ) : isArray( pPath ) ? pPath || [] : [];
+
+        let target = isNull( pNode ) ? (isNull( pRoot ) ? null : pRoot) : pNode;
+
+        let root = isNull( pRoot ) ? $scope : (isPopulated( pRoot ) || isFunction( pRoot )) ? pRoot : $scope();
+
+        if ( isNull( target ) || root === target )
+        {
+            return paths.join( _dot );
+        }
+
+
+        let found = false;
+
+        const entries = getEntries( root );
+
+        const children = [];
+
+        for( let entry of entries )
+        {
+            let key = asString( entry.key || entry[0] );
+            let value = entry.value || entry[1];
+
+            if ( isNull( value ) )
+            {
+                continue;
+            }
+
+            if ( value === target || same( value, target ) )
+            {
+                paths.push( key );
+                found = true;
+                break;
+            }
+
+            if ( isPopulated( value ) )
+            {
+                children.push( new ObjectEntry( key, value ) );
+            }
+        }
+
+        if ( found )
+        {
+            return paths.join( _dot );
+        }
+
+        for( let child of children )
+        {
+            let key = child.key || child[0] || child;
+            let obj = child.value || child[1] || child;
+
+            const pathTo = tracePathTo( target, obj || child, paths.concat( key ), stack.concat( key ) );
+
+            if ( !isBlank( pathTo ) )
+            {
+                paths = (asArray( asString( pathTo ).split( _dot ) ));
+                found = true;
+                break;
+            }
+        }
+
+        return (found ? paths.join( _dot ) : null);
+    };
+
     const findNode = function( pRoot, ...pPaths )
     {
         if ( isPopulated( pRoot ) )
@@ -1048,21 +1122,28 @@ const $scope = constants?.$scope || function()
     {
         let scope = pScope || $scope();
 
-        let path = arrayUtils.toNonBlankStrings( ...pPath );
+        let path = arrayUtils.toTrimmedNonBlankStrings( ...pPath );
 
         let node = scope;
 
-        let root = null;
+        let root = (node === pCurrent || same( node, pCurrent )) ? node : null;
 
         if ( null == path || (path?.length || 0) <= 0 )
         {
-            return pCurrent || scope;
+            const pathTo = tracePathTo( pCurrent, scope );
+
+            const strings = asString( pathTo, true ).split( _dot );
+
+            path = asArray( strings );
+        }
+
+        if ( null == path || (path?.length || 0) <= 0 )
+        {
+            return root;
         }
 
         if ( path[0] in scope )
         {
-            root = scope;
-
             let keys = [].concat( asArray( path ) );
 
             while ( keys.length && !isNull( node ) )
@@ -1070,11 +1151,9 @@ const $scope = constants?.$scope || function()
                 node = node?.[keys.shift()];
             }
 
-            if ( node === pCurrent )
+            if ( node === pCurrent || same( node, pCurrent ) )
             {
-                root = node;
-
-                return root;
+                return scope;
             }
         }
         else
@@ -1484,7 +1563,7 @@ const $scope = constants?.$scope || function()
             {
                 if ( _obj === typeof pSecond && Array.isArray( pSecond ) )
                 {
-                    if ( pFirst.length !== pSecond.length )
+                    if ( (pFirst?.length || 0) !== (pSecond?.length || 0) )
                     {
                         return false;
                     }
@@ -1552,7 +1631,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            konsole.error( "An error occurred while comparing 2 objects", ex.message );
+            konsole.error( "An error occurred while comparing 2 objects", ex );
         }
 
         return false;
@@ -2875,6 +2954,7 @@ const $scope = constants?.$scope || function()
             removeProperties,
             invertProperties,
             findNode,
+            tracePathTo,
             findRoot
         };
 
