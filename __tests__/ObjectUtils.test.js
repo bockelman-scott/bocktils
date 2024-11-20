@@ -2030,6 +2030,10 @@ describe( "findNode / findRoot",
 
                         expect( pathTo ).toEqual( "b.c.d" );
 
+                        const found = objectUtils.findRoot( this, obj.a.b.c );
+
+                        expect( found ).toBe( null );
+
                     } );
           } );
 

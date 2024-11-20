@@ -9,6 +9,7 @@ const stringUtils = require( "./StringUtils.cjs" );
 const arrayUtils = require( "./ArrayUtils.cjs" );
 
 const guidUtils = require( "./GUIDUtils.cjs" );
+const path = require( "node:path" );
 
 /** create an alias for console **/
 const konsole = console || {};
@@ -128,7 +129,7 @@ const $scope = constants?.$scope || function()
     let ARRAY_METHODS = arrayUtils.ARRAY_METHODS;
 
     // Make the functions and properties of the imported modules local variables and functions.
-    constants.importUtilities( (this || me), constants, typeUtils, stringUtils, arrayUtils );
+    constants.importUtilities( (me || this), constants, typeUtils, stringUtils, arrayUtils );
 
     // defines a key we can use to store this module in global scope
     const INTERNAL_NAME = "__BOCK__OBJECT_UTILS__";
@@ -326,6 +327,162 @@ const $scope = constants?.$scope || function()
 
         return false;
     };
+
+    const rxFunctionSignature = Object.freeze( /^(\(?\s*((async(\s+))?\s*function))\s*?([$_\w]+[$_\w\d]*)?\s*\((\s*(([$_\w]+[$_\w\d]*\s*,?)\s*)*(\.{3}([$_\w]+[$_\w\d]*\s*,?)*\s*)*)(?<!,\s*)\)/ );
+
+    const extractFunctionBody = function( pFunction )
+    {
+        let s = asString( isString( pFunction ) ? pFunction : Function.prototype.toString.call( pFunction, pFunction ), true );
+
+        let rx = new RegExp( rxFunctionSignature );
+
+        s = asString( s.replace( rx, _mt_str ), true );
+
+        s = stringUtils.leftOfLast( stringUtils.rightOf( s, "{" ), "}" );
+
+        return s.trim();
+    };
+
+    const extractFunctionParameters = function( pFunction )
+    {
+        let s = asString( isString( pFunction ) ? pFunction : Function.prototype.toString.call( pFunction, pFunction ), true );
+
+        let rx = new RegExp( rxFunctionSignature );
+
+        const matches = rx.exec( s );
+
+        let params = asArray( (matches && matches.length >= 7) ? asArray( asString( matches[6], true ).split( "," ) ) : [] );
+
+        params = params.map( e => asString( e, true ) ).filter( e => !isBlank( e ) );
+
+        return params;
+    };
+
+    class LimitedRecursiveFunction extends Function
+    {
+        #count;
+        #limit;
+        #f;
+        #arguments;
+
+        #original;
+
+        constructor( pFunction, pLimit, ...pArgs )
+        {
+            super( extractFunctionParameters( pFunction ).join( ", " ), extractFunctionBody( pFunction ) );
+
+            this.#f = isFunction( pFunction ) ? ((pFunction instanceof this.constructor) ? pFunction?.original || pFunction : pFunction) : no_op;
+
+            this.#limit = Math.min( 32, asInt( pLimit, 12 ) );
+
+            this.#count = Math.max( 0, asInt( (pFunction instanceof this.constructor) ? pFunction?.count : asInt( pFunction?.callCount ), 0 ) );
+
+            this.#arguments = [].concat( ...(asArray( pArgs || [] )) );
+
+            this.#original = (pFunction instanceof this.constructor) ? pFunction?.original || this.#f : this.#f;
+        }
+
+        get count()
+        {
+            return Math.max( 0, Math.max( asInt( this.#count ), asInt( this.original?.callCount ) ) );
+        }
+
+        get callCount()
+        {
+            return this.count;
+        }
+
+        incrementCount()
+        {
+            return ++this.#count;
+        }
+
+        get limit()
+        {
+            return Math.min( 32, asInt( this.#limit, 12 ) );
+        }
+
+        get exhausted()
+        {
+            return this.count > this.limit;
+        }
+
+        get executable()
+        {
+            return this.#f || this;
+        }
+
+        get arguments()
+        {
+            return this.#arguments;
+        }
+
+        get original()
+        {
+            let original = this.#original;
+            while ( isFunction( original ) && original instanceof this.constructor )
+            {
+                original = original?.original;
+            }
+            return original || this.executable;
+        }
+
+        apply( thisArg, argArray )
+        {
+            if ( !this.exhausted )
+            {
+                const args = [].concat( ...(asArray( argArray || this.arguments )) );
+
+                this.incrementCount();
+
+                let returnValue = null;
+
+                try
+                {
+                    returnValue = this.executable.apply( me, args );
+                }
+                catch( ex )
+                {
+                    konsole.error( ex );
+                }
+
+                return returnValue;
+            }
+        }
+
+        call( thisArg, ...argArray )
+        {
+            if ( !this.exhausted )
+            {
+                const args = [].concat( ...(asArray( argArray || this.arguments )) );
+
+                this.incrementCount();
+
+                let returnValue = null;
+
+                try
+                {
+                    this.executable.call( me, ...args );
+                }
+                catch( ex )
+                {
+                    konsole.error( ex );
+                }
+
+                return returnValue;
+            }
+        }
+
+        bind( thisArg, ...argArray )
+        {
+            return super.bind( me, ...argArray );
+        }
+
+        toString()
+        {
+            return super.toString();
+        }
+    }
 
     /**
      * Returns true if the specified value is an object with no meaningful properties.
@@ -615,7 +772,7 @@ const $scope = constants?.$scope || function()
 
         let clazz = getClass( pObject );
 
-        let source = isClass( clazz ) ? Function.prototype.toString.call( clazz || {} ) : (pObject || (function() {})).toString();
+        let source = isClass( clazz ) ? Function.prototype.toString.call( clazz || {} ) : (isFunction( (pObject || (function() {})).toString ) ? (pObject || (function() {})).toString() : _mt_str);
 
         let rx = /(get +(\w+)\( *\))|(#(\w)[;\r\n,])/;
 
@@ -632,7 +789,7 @@ const $scope = constants?.$scope || function()
             matches = rx.exec( source );
         }
 
-        return [].concat( (properties || []).filter( e => !EXCLUDED_PROPERTIES.includes( e ) ) || [] );
+        return [].concat( ...(properties || []).filter( e => !EXCLUDED_PROPERTIES.includes( e ) ) || [] );
     };
 
     /**
@@ -1097,12 +1254,12 @@ const $scope = constants?.$scope || function()
 
     const findNode = function( pRoot, ...pPaths )
     {
-        if ( isPopulated( pRoot ) )
+        let root = pRoot || $scope();
+
+        let paths = arrayUtils.toNonBlankStrings( ...pPaths );
+
+        if ( isPopulated( root ) || (null == paths || paths.length <= 0) )
         {
-            let root = pRoot;
-
-            let paths = arrayUtils.toNonBlankStrings( ...pPaths );
-
             let node = root;
 
             while ( paths.length && !isNull( node ) )
@@ -1115,11 +1272,14 @@ const $scope = constants?.$scope || function()
                 return node;
             }
         }
+
         return null;
     };
 
-    const findRoot = function( pScope, pCurrent, ...pPath )
+    let findRoot = function( pScope, pCurrent, ...pPath )
     {
+        findRoot.callCount = asInt( findRoot.callCount ) + 1;
+
         let scope = pScope || $scope();
 
         let path = arrayUtils.toTrimmedNonBlankStrings( ...pPath );
@@ -1139,12 +1299,16 @@ const $scope = constants?.$scope || function()
 
         if ( null == path || (path?.length || 0) <= 0 )
         {
+            findRoot.callCount = 0;
+
             return root;
         }
 
         if ( path[0] in scope )
         {
-            let keys = [].concat( asArray( path ) );
+            let keys = [].concat( ...(asArray( path )) );
+
+            node = scope;
 
             while ( keys.length && !isNull( node ) )
             {
@@ -1153,27 +1317,54 @@ const $scope = constants?.$scope || function()
 
             if ( node === pCurrent || same( node, pCurrent ) )
             {
+                findRoot.callCount = 0;
+
                 return scope;
             }
         }
         else
         {
-            let scp = scope || {};
+            let scp = scope || root || $scope();
 
-            let props = Object.keys( scp ).filter( e => null != e && ["object"].includes( typeof scp[e] ) && !(/^on[\w]+$|^[\w]+bar(s?)$|[\w]+storage/i.test( e )) && scp[e] !== globalThis && Object.keys( scp[e] || {} )?.length > 0 );
+            const original = findRoot instanceof LimitedRecursiveFunction ? findRoot.original : findRoot;
 
-            for( let prop in props )
+            findRoot = findRoot instanceof LimitedRecursiveFunction ? findRoot : new LimitedRecursiveFunction( findRoot, 20 );
+
+            if ( isNonNullObject( scp ) )
             {
-                scp = scp[prop];
+                let props = Object.keys( scp );
 
-                root = findRoot( scp, pCurrent, ...pPath );
+                props = unique( props.filter( e => null != e && !isFunction( scp[e] ) && isPopulated( scp[e] ) && !(/^on\w+$|^\w+bar(s?)$|\w+storage|console|Socket/i.test( e )) && (scp[e] !== globalThis) && Object.keys( scp[e] || {} )?.length > 0 ) );
 
-                if ( isPopulated( root ) )
+                for( let prop of props )
                 {
-                    break;
+                    let node = scp;
+
+                    try
+                    {
+                        node = scp[prop];
+
+                        if ( isPopulated( node ) && asInt( findRoot.callCount ) < 20 )
+                        {
+                            root = findRoot.call( node, node, pCurrent, ...pPath );
+
+                            if ( isPopulated( root ) )
+                            {
+                                break;
+                            }
+                        }
+                    }
+                    catch( ex )
+                    {
+                        konsole.error( ex );
+                    }
                 }
             }
+
+            findRoot = findRoot.original || original;
         }
+
+        this.callCount = Math.max( 0, asInt( findRoot.callCount ) - 1 );
 
         return root;
     };

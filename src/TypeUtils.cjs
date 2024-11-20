@@ -366,7 +366,7 @@ const $scope = constants?.$scope || function()
         {
             return null === pObject;
         }
-        return (isUndefined( pObject ) || null == pObject || _mt_str === String( pObject ));
+        return (isUndefined( pObject ) || null == pObject || (_str === typeof pObject && _mt_str === String( pObject )));
     };
 
     const isNotNull = function( pObject, pStrict = false )
