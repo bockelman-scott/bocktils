@@ -696,12 +696,12 @@ const $scope = constants?.$scope || function()
     /**
      * Returns the name of the class of which the specified object is an instance
      * or the name of the class if the specified value *is* a class (function)
-     * @param pObject an instance of some class or a function that is a class
+     * @param pObject {function} an instance of some class or a function that is a class
      * @returns {string} the name of the class of which the object is an instance or the name of the class if the object is a class function
      */
     const getClassName = function( pObject )
     {
-        const obj = pObject || {};
+        const obj = pObject || function() {};
 
         let name = _mt_str;
 
@@ -732,7 +732,7 @@ const $scope = constants?.$scope || function()
     {
         const options = Object.assign( {}, pOptions || {} );
 
-        const obj = pObject || {};
+        const obj = pObject || function() {};
 
         let clazz = isClass( obj, options ) ? obj : obj?.constructor || obj?.prototype?.constructor || obj?.prototype || obj?.__proto__;
 
@@ -755,16 +755,15 @@ const $scope = constants?.$scope || function()
 
             let _class = clazz;
 
-            const loopCap = new IterationCap( 5 );
+            const iterationLimit = 5;
+            let iterations = 0;
 
             // the IterationCap object will return reached when iterations exceed the cap,
             // so ignore the linter warnings
             // noinspection LoopStatementThatDoesntLoopJS
-            while ( !isClass( _class, options?.strict ) && !loopCap.reached )
+            while ( !isClass( _class, options?.strict ) && (iterations++ <= iterationLimit) )
             {
-                const tries = loopCap.iterations;
-
-                switch ( tries )
+                switch ( iterations )
                 {
                     case 0:
                     case 1:
