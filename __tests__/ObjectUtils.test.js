@@ -2018,17 +2018,21 @@ describe( "findNode / findRoot",
               test( "findRoot",
                     () =>
                     {
+                        const dependencies = objectUtils.findNode( $scope(), "__BOCK__OBJECT_UTILS__", "dependencies" );
+
+                        expect( Object.keys( dependencies ).length ).toBe( 5 );
+
                         const root = objectUtils.findRoot( obj, obj.a.b.c );
 
                         expect( root ).toEqual( obj );
 
                         let pathTo = objectUtils.tracePathTo( obj.a.b.c, obj.a );
 
-                        expect( pathTo ).toEqual( "b.c" );
+                        expect( pathTo.join( "." ) ).toEqual( "b.c" );
 
                         pathTo = objectUtils.tracePathTo( obj.a.b.c.d, obj.a );
 
-                        expect( pathTo ).toEqual( "b.c.d" );
+                        expect( pathTo.join( "." ) ).toEqual( "b.c.d" );
 
                         const found = objectUtils.findRoot( this, obj.a.b.c );
 

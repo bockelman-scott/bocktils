@@ -417,6 +417,11 @@ const $scope = constants?.$scope || function()
         return _symbol === typeof pValue || pValue instanceof Symbol;
     };
 
+    const isReadOnly = constants?.isReadOnly || function( pObject )
+    {
+        return isObject( pObject ) && (isNull( pObject ) || Object.isFrozen( pObject ) || Object.isSealed( pObject ));
+    };
+
     const isType = function( pValue, pType )
     {
         const typeName = (isString( pType ) && JS_TYPES.includes( pType )) ?
@@ -1260,6 +1265,7 @@ const $scope = constants?.$scope || function()
             defaultFor,
             castTo,
             toIterator,
+            isReadOnly,
             classes: { TriState, Option, TypedOption, StringOption, NumericOption, BooleanOption, Result },
             TriState,
             Option,

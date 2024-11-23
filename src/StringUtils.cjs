@@ -177,13 +177,44 @@ const $scope = constants?.$scope || function()
             omitFunctions: true,
             executeFunctions: false,
             joinOn: _mt_chr,
-            jsonify: JSON.stringify,
             removeLeadingZeroes: true,
             assumeNumeric: false,
             assumeAlphabetic: true,
-            dateFormatter: null
-
+            dateFormatter: null,
+            transformations: [function( s ) { return s;}]
         };
+
+    function _executeTransformations( pString, ...pTransformations )
+    {
+        let s = (_mt_str + pString);
+
+        let prior = (_mt_str + s);
+
+        let transformations = ([].concat( ...pTransformations )).filter( e => isFunction( e ) && e.length > 0 );
+
+        if ( transformations?.length )
+        {
+            for( let f of transformations )
+            {
+                try
+                {
+                    s = f( s );
+                }
+                catch( ex )
+                {
+                    if ( isNull( s ) || (_mt_str === (_mt_str + s).trim()) )
+                    {
+                        s = prior;
+                    }
+                }
+
+                prior = s;
+            }
+        }
+
+        return s;
+    }
+
     /**
      * Returns a string representation of the argument passed, optionally removing leading and trailing whitespace.
      *
@@ -197,8 +228,7 @@ const $scope = constants?.$scope || function()
      * {
      *             omitFunctions: true,
      *             executeFunctions: false,
-     *             joinOn: _mt_chr,
-     *             jsonify: JSON.stringify
+     *             joinOn: _mt_chr
      * }
      *
      * @returns {string} a string representation of the argument
@@ -226,22 +256,6 @@ const $scope = constants?.$scope || function()
         // capture 'this' in a closure-scoped variable for use in the 'stringify' function below
         const me = asString || this;
 
-        me.stringify = me.stringify || options.jsonify || function( pObj )
-        {
-            let string = pObj;
-
-            try
-            {
-                string = JSON.stringify( pObj );
-            }
-            catch( ex )
-            {
-                konsole.error( constants.S_ERR_PREFIX, "converting value to JSON", ex );
-            }
-
-            return string || "|_|";
-        };
-
         let s = _mt_str;
 
         // allow this function to be added as a method to String.prototype if desired
@@ -255,6 +269,8 @@ const $scope = constants?.$scope || function()
         }
 
         let input = _resolveInput.call( this, pStr );
+
+        const transformations = ([].concat( options?.transformations || [] )).filter( e => isFunction( e ) && e.length > 0 );
 
         // handle the easiest case immediately
         if ( isString( input ) )
@@ -297,6 +313,8 @@ const $scope = constants?.$scope || function()
                 return (_mt_str + (s || _mt_str).trim());
             }
 
+            s = _executeTransformations( s, transformations );
+
             return s;
         }
 
@@ -332,7 +350,7 @@ const $scope = constants?.$scope || function()
                 // if the argument is an array, recursively call this function on each element and join the results on the joinOn option or the empty character
                 if ( Array.isArray( input ) )
                 {
-                    s = [].concat( ...(input || []) ).map( e => asString( e, pTrim ) ).join( (asString( options.joinOn ) || _mt_chr) );
+                    s = [].concat( ...(input || []) ).map( e => asString( e, pTrim, options ) ).join( (asString( options.joinOn ) || _mt_chr) );
                     break;
                 }
 
@@ -346,7 +364,7 @@ const $scope = constants?.$scope || function()
                 // handle ObjectWrapper types
                 if ( input instanceof Number )
                 {
-                    s = asString( _mt_str + input.valueOf(), pTrim );
+                    s = asString( _mt_str + input.valueOf(), pTrim, options );
                     break;
                 }
 
@@ -354,7 +372,7 @@ const $scope = constants?.$scope || function()
                 // unless a date formatter has been supplied
                 if ( input instanceof Date )
                 {
-                    if ( _fun === typeof options.dateFormatter )
+                    if ( isFunction( options.dateFormatter ) )
                     {
                         try
                         {
@@ -363,12 +381,12 @@ const $scope = constants?.$scope || function()
                         catch( ex )
                         {
                             konsole.warn( constants.S_ERR_PREFIX, "formatting a Date", input, ex );
-                            s = input.toLocaleString();
+                            s = input.toISOString();
                         }
                     }
                     else
                     {
-                        s = input.toLocaleString();
+                        s = input.toISOString();
                     }
                     break;
                 }
@@ -386,7 +404,7 @@ const $scope = constants?.$scope || function()
                     s = input.toString();
 
                     //if the string representation is the generic string,
-                    if ( "[object object]" === lcase( s ) || "Object" === s )
+                    if ( "[object object]" === lcase( s ) || "Object" === s || isBlank( s ) )
                     {
                         // try to get the value of a name property or the constructor's name
                         // note that this could return undesirable results for objects with a coincidental name property
@@ -406,51 +424,30 @@ const $scope = constants?.$scope || function()
                             }
                         }
 
-                        if ( "[object object]" === lcase( s ) || "Object" === s )
+                        if ( "[object object]" === lcase( s ) || "Object" === s || isBlank( s ) )
                         {
                             try
                             {
-                                s = JSON.stringify( input );
+                                s = isFunction( input?.toJson ) ? (input.toJson() || JSON.stringify( input )) : JSON.stringify( input );
                             }
                             catch( ex )
                             {
                                 konsole.warn( constants?.S_ERR_PREFIX, "while converting an object to JSON", ex );
+
+                                if ( !isString( s ) || isBlank( s ) )
+                                {
+                                    const entries = [...(Object.entries( input ) || [])];
+
+                                    s = entries.map( entry => asString( entry[0] ) + ":" + asString( entry[1] ) ).join( _comma );
+                                }
                             }
                         }
                     }
                 }
 
-                // if no toString method is available or {} === s or s is the empty string,
-                // try to render it as JSON
-
-                if ( isBlank( s ) || "{}" === s )
+                if ( isBlank( s ) )
                 {
-                    // if the object defines its own toJson (NOT toJSON in this case), try that first
-                    if ( _fun === typeof input?.toJson )
-                    {
-                        try
-                        {
-                            s = input.toJson();
-                        }
-                        catch( ex )
-                        {
-                            konsole.error( constants.S_ERR_PREFIX, "convert an object to JSON", pStr, ex );
-                        }
-                        break;
-                    }
-                }
-
-                if ( isBlank( s ) || "{}" === s )
-                {
-                    // try the stringify method, which is either JSON.stringify or an overridden jsonification function
-                    try
-                    {
-                        s = me.stringify( input );
-                    }
-                    catch( ex )
-                    {
-                        konsole.warn( ex.message );
-                    }
+                    s = input?.uniqueObjectId || input?._uniqueObjectId || input?.id;
                 }
 
                 break;
@@ -485,7 +482,7 @@ const $scope = constants?.$scope || function()
                         }
                     }
 
-                    s = asString( s, pTrim );
+                    s = asString( s, pTrim, options );
                 }
                 else
                 {
@@ -498,7 +495,7 @@ const $scope = constants?.$scope || function()
 
                     if ( regExp.test( s ) )
                     {
-                        s = asString( s.replace( regExp, _mt_str ), true );
+                        s = asString( s.replace( regExp, _mt_str ), true, options );
 
                         let idx = s.indexOf( _spc );
 
@@ -530,7 +527,7 @@ const $scope = constants?.$scope || function()
             return _mt_str;
         }
 
-        return (_mt_str + ((true === pTrim) ? s.trim() : s));
+        return _executeTransformations( _mt_str + ((true === pTrim) ? ((_mt_str + s).trim()) : s), transformations );
     };
 
     String.prototype.asString = asString;

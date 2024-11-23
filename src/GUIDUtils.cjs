@@ -17,6 +17,13 @@ const $scope = constants?.$scope || function()
 
 (function exposeModule()
 {
+    const INTERNAL_NAME = "__BOCK__GUID_UTILITIES__";
+
+    if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
+    {
+        return $scope()[INTERNAL_NAME];
+    }
+
     const me = exposeModule;
 
     let _mt_str = constants._mt_str || "";
@@ -28,7 +35,7 @@ const $scope = constants?.$scope || function()
     /**
      * This statement makes all the values exposed by the imported modules local variables in the current scope.
      */
-    constants.importUtilities( this || me, constants, stringUtils, arrayUtils );
+    constants.importUtilities( me || this, constants, stringUtils, arrayUtils );
 
     /**
      * An array of this module's dependencies
@@ -110,12 +117,9 @@ const $scope = constants?.$scope || function()
 
     const mod =
         {
+            dependencies,
             classes: { GUIDMaker },
             GUIDMaker,
-            getInstance: function( pOptions )
-            {
-                return INSTANCE || new GUIDMaker( pOptions || RandomUUIDOptions );
-            },
             guid: function()
             {
                 return (INSTANCE || new GUIDMaker( RandomUUIDOptions )).guid();
@@ -123,9 +127,13 @@ const $scope = constants?.$scope || function()
             uuid: function()
             {
                 return asString( crypto.randomUUID( RandomUUIDOptions ) );
-            },
-            dependencies
+            }
         };
+
+    if ( $scope() )
+    {
+        $scope()[INTERNAL_NAME] = Object.freeze( mod );
+    }
 
     if ( _ud !== typeof module )
     {

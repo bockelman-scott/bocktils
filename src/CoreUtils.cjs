@@ -1,12 +1,10 @@
-const core = require( "./CoreUtils.cjs" );
+const constants = require( "./Constants.cjs" );
+const typeUtils = require( "./TypeUtils.cjs" );
+const stringUtils = require( "./StringUtils.cjs" );
+const arrayUtils = require( "./ArrayUtils.cjs" );
+const objectUtils = require( "./ObjectUtils.cjs" );
 
-const constants = core.constants || require( "./Constants.cjs" );
-const typeUtils = core.typeUtils || require( "./TypeUtils.cjs" );
-const stringUtils = core.stringUtils || require( "./StringUtils.cjs" );
-const arrayUtils = core.arrayUtils || require( "./ArrayUtils.cjs" );
-const objectUtils = core.objectUtils || require( "./ObjectUtils.cjs" );
-
-const jsonUtils = require( "./JsonUtils.cjs" );
+const guidUtils = objectUtils?.guidUtils || objectUtils?.dependencies?.guidUtils || require( "./GUIDUtils.cjs" );
 
 let _ud = constants._ud || "undefined";
 
@@ -17,7 +15,7 @@ const $scope = constants?.$scope || function()
 
 (function exposeModule()
 {
-    const INTERNAL_NAME = "__BOCK__COMMON_UTILITIES__";
+    const INTERNAL_NAME = "__BOCK__CORE_UTILITIES__";
 
     if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
     {
@@ -56,7 +54,7 @@ const $scope = constants?.$scope || function()
             stringUtils,
             arrayUtils,
             objectUtils,
-            jsonUtils,
+            guidUtils,
             importUtilities,
             dependencies:
                 {
@@ -64,8 +62,7 @@ const $scope = constants?.$scope || function()
                     typeUtils,
                     stringUtils,
                     arrayUtils,
-                    objectUtils,
-                    jsonUtils,
+                    objectUtils
                 }
         };
 
@@ -74,19 +71,8 @@ const $scope = constants?.$scope || function()
     mod = Object.assign( mod, stringUtils );
     mod = Object.assign( mod, arrayUtils );
     mod = Object.assign( mod, objectUtils );
-    mod = Object.assign( mod, jsonUtils );
 
-    Object.defineProperty( mod,
-                           "funcUtils",
-                           {
-                               configurable: false,
-                               enumerable: false,
-                               get: function()
-                               {
-                                   return require( "./FunctionUtils.cjs" );
-                               },
-                               set: function() {}
-                           } );
+    mod = Object.freeze( mod );
 
     if ( _ud !== typeof module )
     {

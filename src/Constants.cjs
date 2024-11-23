@@ -93,7 +93,7 @@
             _inlineCommentStart = "//",
 
             _rxHeaderComment = /^\/\*.*?\*\//s,
-            _rxValidJson = /^([{\[])(.*)*([}\]])$/s,
+            _rxValidJson = /^((([{\[])(.*)*([}\]]))|(\d+)|((\d*,?\d+)*\.?\d+)|("[^"]+")|('[^']+')|(true|false))$/s,
 
             _xZ = /\u0000/,
 
@@ -143,7 +143,7 @@
 
             GLOBAL_TYPES = [Object, Function, String, Number, Boolean, Array, BigInt, Date, RegExp, Symbol, Math, JSON, Map, Set, Promise, ArrayBuffer, SharedArrayBuffer, DataView, WeakMap, WeakRef, WeakSet],
 
-            BUILTIN_TYPES = [].concat( TYPED_ARRAYS ).concat( ERROR_TYPES ).concat( GLOBAL_TYPES ),
+            BUILTIN_TYPES = [].concat( ...TYPED_ARRAYS ).concat( ...ERROR_TYPES ).concat( ...GLOBAL_TYPES ),
 
             TYPED_ARRAY_NAMES = ["Int8Array", "Uint8Array", "Uint8ClampedArray", "Int16Array", "Uint16Array", "Int32Array", "Uint32Array", "Float16Array", "Float32Array", "Float64Array", "BigInt64Array", "BigUint64Array"],
 
@@ -151,7 +151,9 @@
 
             GLOBAL_TYPE_NAMES = ["Object", "Function", "String", "Number", "Boolean", "Array", "BigInt", "Date", "RegExp", "Symbol", "Math", "JSON", "Map", "Set", "Promise", "ArrayBuffer", "SharedArrayBuffer", "DataView", "WeakMap", "WeakRef", "WeakSet"],
 
-            BUILTIN_TYPE_NAMES = [].concat( TYPED_ARRAY_NAMES ).concat( ERROR_TYPE_NAMES ).concat( GLOBAL_TYPE_NAMES ),
+            BUILTIN_TYPE_NAMES = [].concat( ...TYPED_ARRAY_NAMES ).concat( ...ERROR_TYPE_NAMES ).concat( ...GLOBAL_TYPE_NAMES ),
+
+            SERIALIZABLE_TYPES = [Object, String, Number, Boolean, Array, Date, RegExp, Error],
 
             /**
              * Strings that are interpreted as 'true' when encountered in JSON or other configuration contexts
@@ -160,7 +162,7 @@
 
             ignore = function() { },
 
-            RESERVED_WORDS =
+            RESERVED_WORDS = Object.freeze(
                 ["break",
                  "case",
                  "catch",
@@ -195,7 +197,7 @@
                  "var",
                  "void",
                  "while",
-                 "with"]
+                 "with"] )
         } = ($scope() || {});
 
     const REG_EXP_DOT = /\./;
@@ -714,6 +716,66 @@
 
     IterationCap.MAX_CAP = MAX_ITERATIONS;
 
+    const isReadOnly = function( pObject )
+    {
+        if ( _obj === typeof pObject )
+        {
+            return (null === pObject) || Object.isFrozen( pObject ) || Object.isSealed( pObject );
+        }
+
+        if ( [_num, _big].includes( typeof pObject ) )
+        {
+            const value = (0 + pObject);
+
+            try
+            {
+                let n = ++pObject;
+                n = --pObject;
+
+                return n !== value;
+            }
+            catch( ex )
+            {
+                return true;
+            }
+        }
+
+        return true;
+    };
+
+    const deepFreeze = function( pObject )
+    {
+        let obj = pObject;
+
+        if ( _obj === typeof pObject && null !== pObject )
+        {
+            if ( BUILTIN_TYPES.map( e => _fun === typeof e && pObject instanceof e ).some( e => true === e ) )
+            {
+                return pObject;
+            }
+
+            obj = isReadOnly( pObject ) ? Object.assign( {}, pObject ) : pObject;
+
+            const entries = Object.entries( obj );
+
+            for( let entry of entries )
+            {
+                const key = entry[0];
+                const value = entry[1];
+
+                try
+                {
+                    obj[key] = deepFreeze( value );
+                }
+                catch( ex )
+                {
+                    // ignored when properties are read-only
+                }
+            }
+        }
+
+        return Object.freeze( obj );
+    };
 
     const mod =
         {
@@ -799,11 +861,14 @@
             ERROR_TYPES,
             ERROR_TYPE_NAMES,
             GLOBAL_TYPES,
+            SERIALIZABLE_TYPES,
             GLOBAL_TYPE_NAMES,
             BUILTIN_TYPES,
             BUILTIN_TYPE_NAMES,
             IllegalArgumentError,
             copyScope,
+            deepFreeze,
+            isReadOnly,
             _fileOptions: { encoding: "utf-8" },
             ignore,
             _rxHeaderComment,
@@ -843,14 +908,14 @@
 
     if ( _ud !== typeof module )
     {
-        module.exports = Object.freeze( mod );
+        module.exports = deepFreeze( mod );
     }
 
     if ( $scope() )
     {
-        $scope()[INTERNAL_NAME] = Object.freeze( mod );
+        $scope()[INTERNAL_NAME] = deepFreeze( mod );
     }
 
-    return Object.freeze( mod );
+    return deepFreeze( mod );
 
 }());

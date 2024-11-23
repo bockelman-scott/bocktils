@@ -25,7 +25,10 @@ const $scope = constants?.$scope || function()
     let _big = constants._big || "bigint";
     let _bool = constants._bool || "boolean";
 
-    let isString = objectUtils.isString || function( s ) { return _str === typeof s; };
+    let isString = typeUtils.isString || function( s ) { return _str === typeof s; };
+    let isFunction = typeUtils.isFunction || function( s ) { return _fun === typeof s; };
+    let isSymbol = typeUtils.isSymbol || function( s ) { return _symbol === typeof s; };
+
     let asString = stringUtils.asString || function( s ) { return (_mt_str + s).trim(); };
     let isBlank = stringUtils.isBlank || function( s ) { return _mt_str === asString( s, true ).trim(); };
     let isJson = stringUtils.isJson || function( s ) { return (asString( s ).startsWith( "{" ) && asString( s ).endsWith( "}" )) || (asString( s ).startsWith( "[" ) && asString( s ).endsWith( "]" )); };
@@ -65,10 +68,21 @@ const $scope = constants?.$scope || function()
 
     const replacer = function( key, value )
     {
-        if ( isBlank( key ) || DEFAULT_EXCLUSIONS.includes( key ) || "function" === typeof value )
+        if ( isBlank( key ) || DEFAULT_EXCLUSIONS.includes( key ) || isFunction( value ) )
         {
             return "\"\"";
         }
+
+        if ( value instanceof Map )
+        {
+            return { ...value.entries() };
+        }
+
+        if ( value instanceof Set )
+        {
+            return [...value.values()];
+        }
+
         return value;
     };
 
@@ -81,7 +95,7 @@ const $scope = constants?.$scope || function()
 
         return function( pKey, pValue )
         {
-            if ( isBlank( pKey ) || exclusions.includes( pKey ) || "function" === typeof pValue || "symbol" === typeof pValue )
+            if ( isBlank( pKey ) || exclusions.includes( pKey ) || isFunction( pValue ) || isSymbol( pValue ) )
             {
                 return "\"\"";
             }
@@ -112,7 +126,7 @@ const $scope = constants?.$scope || function()
     {
         if ( _fun === typeof (pObj) )
         {
-            return "function " + pObj?.name || pObj?.constructor?.name || _mt_str + "(){}";
+            return "function " + (pObj?.name || pObj?.constructor?.name || _mt_str) + "(){}";
         }
 
         if ( _obj !== typeof pObj || null === pObj )
@@ -237,7 +251,8 @@ const $scope = constants?.$scope || function()
             assumeUnderscoresConvention: true,
             includeEmpty: true,
             includeEmptyProperties: true,
-            trimStrings: false
+            trimStrings: false,
+            omitFunctions: false
         };
 
     const toObjectLiteral = function( pObject, pOptions = DEFAULT_OBJECT_LITERAL_OPTIONS )
@@ -249,15 +264,19 @@ const $scope = constants?.$scope || function()
 
         let obj = pObject || options.target;
 
-        if ( isString( obj ) && isJson( obj ) )
+        if ( isString( obj ) )
         {
-            try
+            let json = asString( obj, true );
+            if ( isJson( json ) )
             {
-                obj = jsonInterpolationUtils.parseJson( obj );
-            }
-            catch( ex )
-            {
-                console.warn( ex.message );
+                try
+                {
+                    obj = jsonInterpolationUtils.parseJson( json, options );
+                }
+                catch( ex )
+                {
+                    console.warn( ex.message );
+                }
             }
         }
 

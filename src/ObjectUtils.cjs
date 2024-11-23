@@ -9,7 +9,6 @@ const stringUtils = require( "./StringUtils.cjs" );
 const arrayUtils = require( "./ArrayUtils.cjs" );
 
 const guidUtils = require( "./GUIDUtils.cjs" );
-const path = require( "node:path" );
 
 /** create an alias for console **/
 const konsole = console || {};
@@ -232,6 +231,8 @@ const $scope = constants?.$scope || function()
                               "NaN",
                               "NEGATIVE_INFINITY",
                               "POSITIVE_INFINITY"];
+
+    const DEFAULT_RECURSION_OPTIONS = { recursive: true, depth: 0, maxDepth: 10 };
 
     /**
      * This function attempts to detect potential infinite loops.
@@ -925,9 +926,27 @@ const $scope = constants?.$scope || function()
 
                 for( let property of properties )
                 {
-                    const value = object[property] || getProperty( object, property );
+                    let value = null;
 
-                    if ( !(_ud === typeof value || null === value) )
+                    try
+                    {
+                        value = object[property] || getProperty( object, property );
+                    }
+                    catch( ex )
+                    {
+                        // this can occur if we try to read a private member variable,
+                        // but we make a second attempt
+                        try
+                        {
+                            value = getProperty( object, property ) || object[property];
+                        }
+                        catch( ex2 )
+                        {
+                            // this can occur if we try to read a private member variable
+                        }
+                    }
+
+                    if ( _ud !== typeof value && null !== value )
                     {
                         entries.push( [property, value] );
                     }
@@ -949,20 +968,23 @@ const $scope = constants?.$scope || function()
      * @param pOptions an object to define whether (and how deep) to recursively check for valid properties
      * @returns {boolean} true if the object has no populated properties
      */
-    const hasNoProperties = function( pObject, pOptions = { recursive: true } )
+    const hasNoProperties = function( pObject, pOptions = { recursive: true, depth: 0, maxDepth: 10 } )
     {
-        const options = Object.assign( {}, pOptions || { recursive: true } );
+        const options = Object.assign( {}, pOptions || { recursive: true, depth: 0, maxDepth: 10 } );
 
         const shallow = false === options.recursive;
+        const maxDepth = asInt( options.maxDepth, 10 );
 
-        if ( _ud === typeof pObject || _obj !== typeof pObject || null === pObject )
+        let depth = asInt( options.depth );
+
+        if ( _ud === typeof pObject || null === pObject || !isObject( pObject ) )
         {
             return true;
         }
 
         const arr = getProperties( pObject );
 
-        if ( shallow )
+        if ( shallow || depth >= maxDepth )
         {
             return (arr?.length || 0) <= 0;
         }
@@ -973,7 +995,7 @@ const $scope = constants?.$scope || function()
         {
             let value = getProperty( pObject, propertyName );
 
-            if ( !isEmptyValue( value, { recursive: !shallow } ) )
+            if ( !isEmptyValue( value, { recursive: !shallow, depth: depth + 1, maxDepth } ) )
             {
                 result = false;
                 break;
@@ -995,17 +1017,78 @@ const $scope = constants?.$scope || function()
      *
      * @param pValue a value to evaluate
      * @param pOptions an object to define options related to recursion
-     * @returns {boolean|*} true if the value is "empty"
+     * @returns {boolean} true if the value is "empty"
      */
-    const isEmptyValue = function( pValue, pOptions = { recursive: true } )
+    const isEmptyValue = function( pValue, pOptions = DEFAULT_RECURSION_OPTIONS )
     {
-        const options = Object.assign( {}, pOptions || { recursive: true } );
+        if ( _ud === typeof pValue || null === pValue ||
+             (isString( pValue ) && isBlank( asString( pValue, true ) )) ||
+             (isArray( pValue ) && ((pValue?.length || 0) <= 0)) )
+        {
+            return true;
+        }
 
-        return _ud === typeof pValue ||
-               null === pValue ||
-               isBlank( asString( pValue, true ) ) ||
-               (isObject( pValue ) && hasNoProperties( pValue, options )) ||
-               (isArray( pValue ) && ((pValue?.length || 0) <= 0 || hasNoProperties( pValue, options )));
+        const options = Object.assign( {}, pOptions || DEFAULT_RECURSION_OPTIONS );
+
+        const shallow = false === options.recursive;
+        const maxDepth = asInt( options.maxDepth, 10 );
+
+        let depth = asInt( options.depth );
+
+        if ( isObject( pValue ) )
+        {
+            if ( isNull( pValue ) )
+            {
+                return true;
+            }
+
+            if ( isArray( pValue ) )
+            {
+                if ( (pValue?.length || 0) <= 0 )
+                {
+                    return true;
+                }
+
+                if ( shallow || depth > maxDepth )
+                {
+                    return false;
+                }
+
+                for( let i = pValue.length; i--; )
+                {
+                    if ( !isEmptyValue( pValue[i], { recursive: !shallow, depth: depth + 1, maxDepth } ) )
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+            const properties = getProperties( pValue );
+
+            if ( null == properties || properties?.length <= 0 )
+            {
+                return true;
+            }
+
+            if ( shallow || depth > maxDepth )
+            {
+                return false;
+            }
+
+            for( let property of properties )
+            {
+                if ( !isEmptyValue( pValue[property], { recursive: !shallow, depth: depth + 1, maxDepth } ) )
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        return false;
     };
 
     const DEFAULT_IS_POPULATED_OPTIONS = { validTypes: [_obj], minimumKeys: 1, acceptArrays: false };
@@ -1015,7 +1098,7 @@ const $scope = constants?.$scope || function()
      *
      * an object with at least n non-empty properties
      * (where n is the value specified in the options argument or 1)
-     * and (optionally) having the specified keys
+     * and (optionally) having the specified key(s)
      *
      * or
      *
@@ -1032,7 +1115,7 @@ const $scope = constants?.$scope || function()
      *
      * @param pObject a value to evaluate
      * @param pOptions an object defining optional characteristics the value must satisfy
-     *                 validTypes: an array of types to accept (defaults to ["object"]
+     *                 validTypes: an array of types to accept (defaults to ["object"])
      *                 minimumKeys: an integer defining how many properties an object must have
      *                              (or elements a pruned array must have)
      *                              defaults to 1
@@ -1042,7 +1125,6 @@ const $scope = constants?.$scope || function()
      */
     const isPopulated = function( pObject, pOptions = DEFAULT_IS_POPULATED_OPTIONS )
     {
-
         let opts = Object.assign( {}, (pOptions || DEFAULT_IS_POPULATED_OPTIONS) );
 
         const validTypes = [_obj].concat( ...(opts.validTypes || EMPTY_ARRAY) );
@@ -1144,7 +1226,6 @@ const $scope = constants?.$scope || function()
         return object;
     };
 
-
     /**
      * Returns the first value specified that is a populated object, as per the criteria
      * @param pCriteria an object to pass options to the isPopulated function used internally
@@ -1178,17 +1259,17 @@ const $scope = constants?.$scope || function()
         return null;
     };
 
-    const tracePathTo = function( pNode, pRoot, pPath = [], pStack = [] )
+    const tracePathTo = function( pNode, pRoot, pPath = [], pStack = [], pVisited = [] )
     {
         let stack = asArray( pStack || [] );
 
         if ( detectCycles( stack, 5, 5 ) )
         {
             konsole.error( "Entered an infinite loop at", stack.join( _dot ) );
-            return _mt_str;
+            return [];
         }
 
-        let paths = isString( pPath ) ? [pPath].split( _dot ) : isArray( pPath ) ? pPath || [] : [];
+        let paths = isString( pPath ) ? [...(pPath.split( _dot ).flat())] : isArray( pPath ) ? pPath || [] : [];
 
         let target = isNull( pNode ) ? (isNull( pRoot ) ? null : pRoot) : pNode;
 
@@ -1196,25 +1277,42 @@ const $scope = constants?.$scope || function()
 
         if ( isNull( target ) || root === target )
         {
-            return paths.join( _dot );
+            return paths;
         }
 
+        const scope = $scope();
+
+        const visited = asArray( pVisited || [] ) || [];
 
         let found = false;
 
-        const entries = getEntries( root );
+        const predicate = entry =>
+        {
+            return entry.value !== root &&
+                   entry.value !== scope &&
+                   !visited.includes( entry.value )
+                   && isPopulated( entry.value,
+                                   {
+                                       minimumKeys: 1,
+                                       acceptArrays: true,
+                                       validTypes: [_obj, _num, _big, _str, _bool]
+                                   } );
+        };
 
-        const children = [];
+        const entries = getEntries( root ).filter( predicate );
 
         for( let entry of entries )
         {
             let key = asString( entry.key || entry[0] );
+
             let value = entry.value || entry[1];
 
             if ( isNull( value ) )
             {
                 continue;
             }
+
+            visited.push( value );
 
             if ( value === target || same( value, target ) )
             {
@@ -1225,55 +1323,37 @@ const $scope = constants?.$scope || function()
 
             if ( isPopulated( value ) )
             {
-                children.push( new ObjectEntry( key, value ) );
+                let result = tracePathTo( target, value, paths.concat( key ), stack.concat( key ), visited );
+
+                if ( (result?.length || 0) > 0 )
+                {
+                    paths = asArray( result ).map( e => isString( e ) ? e.split( _dot ) : e ).flat();
+                    found = true;
+                    break;
+                }
             }
         }
 
         if ( found )
         {
-            return paths.join( _dot );
+            return paths;
         }
 
-        for( let child of children )
-        {
-            let key = child.key || child[0] || child;
-            let obj = child.value || child[1] || child;
-
-            const pathTo = tracePathTo( target, obj || child, paths.concat( key ), stack.concat( key ) );
-
-            if ( !isBlank( pathTo ) )
-            {
-                paths = (asArray( asString( pathTo ).split( _dot ) ));
-                found = true;
-                break;
-            }
-        }
-
-        return (found ? paths.join( _dot ) : null);
+        return (found ? paths : []);
     };
 
     const findNode = function( pRoot, ...pPaths )
     {
-        let root = pRoot || $scope();
-
         let paths = arrayUtils.toNonBlankStrings( ...pPaths );
 
-        if ( isPopulated( root ) || (null == paths || paths.length <= 0) )
+        let node = pRoot || $scope();
+
+        while ( isPopulated( node ) && paths.length )
         {
-            let node = root;
-
-            while ( paths.length && !isNull( node ) )
-            {
-                node = node?.[paths.shift()];
-            }
-
-            if ( paths.length <= 0 )
-            {
-                return node;
-            }
+            node = node?.[paths.shift()];
         }
 
-        return null;
+        return (paths.length <= 0) ? node : null;
     };
 
     let findRoot = function( pScope, pCurrent, ...pPath )
@@ -1292,9 +1372,7 @@ const $scope = constants?.$scope || function()
         {
             const pathTo = tracePathTo( pCurrent, scope );
 
-            const strings = asString( pathTo, true ).split( _dot );
-
-            path = asArray( strings );
+            path = asArray( pathTo );
         }
 
         if ( null == path || (path?.length || 0) <= 0 )
@@ -1383,6 +1461,9 @@ const $scope = constants?.$scope || function()
         // convert anything that could have been passed as a property name into something we can process
         let prop = (asString( _str === typeof pPropertyName ? pPropertyName : (isValidObject( pPropertyName ) ? (Array.isArray( pPropertyName ) ? pPropertyName.join( _dot ) : _mt_str) : _mt_str) )).trim();
 
+        // convert any private property names into the name of their potential accessor
+        prop = asString( prop, true ).replace( /^#+/, _mt_str );
+
         // if there is missing or blank property name,
         // anonymous properties either do not exist or are not supported
         if ( isBlank( prop ) )
@@ -1429,11 +1510,11 @@ const $scope = constants?.$scope || function()
 
         if ( isArray( obj ) && (/^\d+$/.test( prop ) || ["length"].includes( prop )) )
         {
-            return obj[stringUtils.asInt( prop )];
+            return obj[stringUtils.asInt( prop )] || obj[prop];
         }
 
         // trim the property name again...
-        let propertyName = prop.trim();
+        let propertyName = asString( prop.trim() );
 
         // the regular expression is used to convert array bracket access into dot property access
         const rx = /\[\d+]/g;
@@ -1463,7 +1544,7 @@ const $scope = constants?.$scope || function()
 
         if ( !propertyName.includes( _dot ) )
         {
-            let propertyDescriptor = Object.getOwnPropertyDescriptor( obj, propertyName );
+            let propertyDescriptor = Object.getOwnPropertyDescriptor( obj, propertyName ) || Object.getOwnPropertyDescriptor( obj, ("#" + propertyName) );
 
             let accessorMethod = (_ud !== typeof propertyDescriptor && null != propertyDescriptor) ? propertyDescriptor?.get : null;
 
@@ -1475,7 +1556,7 @@ const $scope = constants?.$scope || function()
                 {
                     let value = accessorMethod.call( obj ) || propertyValue;
 
-                    if ( value || (([_num, _big].includes( typeof value ) || isNumber( value )) && 0 === value) || (isString( value )) )
+                    if ( value || (([_num, _big, _bool].includes( typeof value ) || isNumber( value )) && 0 === value) || (isString( value )) || false === value )
                     {
                         propertyValue = value;
                         found = true;
@@ -1718,9 +1799,10 @@ const $scope = constants?.$scope || function()
      * @param {any} pSecond the other object
      * @param pStrict boolean to indicate whether both objects have to have the same type or class, defaults to false
      * @param pClass (optional) the type or class both arguments must be to be considered the same if pStrict is true
+     * @param pCaseSensitive (optional) if false, strings encountered are compared without regard to uppercase or lowercase characters
      * @returns true if the 2 arguments represent the same object graph or the same number or other data type
      */
-    const same = function( pFirst, pSecond, pStrict = false, pClass = null )
+    const same = function( pFirst, pSecond, pStrict = false, pClass = null, pCaseSensitive = true )
     {
         if ( pFirst === pSecond || (isNull( pFirst ) && isNull( pSecond )) )
         {
@@ -1742,31 +1824,33 @@ const $scope = constants?.$scope || function()
         {
             if ( pStrict )
             {
-                return pFirst === pSecond;
+                return pFirst === pSecond || (false === pCaseSensitive && ucase( asString( pFirst ) ) === ucase( asString( pSecond ) ));
             }
 
-            return asString( pFirst, true ) === asString( pSecond, true );
+            const options = false === pCaseSensitive ? { transformations: [function( s ) { return ucase( s ); }] } : {};
+
+            return asString( pFirst, true, options ) === asString( pSecond, true, options );
         }
 
-        if ( _obj === typeof pFirst )
+        if ( isNonNullObject( pFirst ) )
         {
             if ( Array.isArray( pFirst ) )
             {
-                if ( _obj === typeof pSecond && Array.isArray( pSecond ) )
+                if ( isNonNullObject( pSecond ) && Array.isArray( pSecond ) )
                 {
                     if ( (pFirst?.length || 0) !== (pSecond?.length || 0) )
                     {
                         return false;
                     }
 
-                    const first = [].concat( pFirst || [] ).sort();
-                    const second = [].concat( pSecond || [] ).sort();
+                    const first = [].concat( ...(pFirst || []) ).sort();
+                    const second = [].concat( ...(pSecond || []) ).sort();
 
                     let result = true;
 
                     for( let i = first.length; i--; )
                     {
-                        if ( !same( first[i], second[i] ) )
+                        if ( !same( first[i], second[i], pStrict, null, pCaseSensitive ) )
                         {
                             result = false;
                             break;
@@ -1781,11 +1865,11 @@ const $scope = constants?.$scope || function()
                 }
             }
 
-            if ( _obj === typeof pSecond )
+            if ( isNonNullObject( pSecond ) )
             {
                 for( let p in pFirst )
                 {
-                    if ( !same( getProperty( pFirst, p ), getProperty( pSecond, p ) ) )
+                    if ( !same( getProperty( pFirst, p ), getProperty( pSecond, p ), pStrict, null, pCaseSensitive ) )
                     {
                         return false;
                     }
@@ -1793,29 +1877,29 @@ const $scope = constants?.$scope || function()
 
                 for( let p in pSecond )
                 {
-                    if ( !same( getProperty( pSecond, p ), getProperty( pFirst, p ) ) )
+                    if ( !same( getProperty( pSecond, p ), getProperty( pFirst, p ), pStrict, null, pCaseSensitive ) )
                     {
                         return false;
                     }
                 }
 
-                return (pStrict) ? (pClass) ? (pFirst instanceof pClass && pSecond instanceof pClass) : (pFirst.constructor === pSecond.constructor) : true;
+                return !!pStrict || (((pClass) ? (pFirst instanceof pClass && pSecond instanceof pClass) : ((null === pFirst.constructor && null === pSecond.constructor) || (pFirst.constructor === pSecond.constructor))));
             }
 
             return false;
         }
 
-        if ( _fun === typeof pFirst )
+        if ( isFunction( pFirst ) )
         {
-            return (_fun === typeof pSecond) && asString( pFirst.toString(), true ) === asString( pSecond.toString(), true );
+            return (isFunction( pSecond )) && asString( pFirst.toString(), true ) === asString( pSecond.toString(), true );
         }
 
         try
         {
-            const jsonFirst = JSON.stringify( pFirst );
-            const jsonSecond = JSON.stringify( pSecond );
+            const jsonFirst = asString( pFirst );
+            const jsonSecond = asString( pSecond );
 
-            if ( same( jsonFirst, jsonSecond, pStrict, String ) )
+            if ( same( jsonFirst, jsonSecond, pStrict, String, pCaseSensitive ) )
             {
                 return true;
             }
@@ -3075,6 +3159,7 @@ const $scope = constants?.$scope || function()
     const mod =
         {
             dependencies,
+            guidUtils,
             classes: { IterationCap, ObjectEntry },
             ALWAYS_EXCLUDED,
             no_op,
