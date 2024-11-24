@@ -133,6 +133,7 @@ const $scope = constants?.$scope || function()
     let firstValidObject = objectUtils.firstValidObject;
     let detectCycles = objectUtils.detectCycles;
     let ObjectEntry = objectUtils.ObjectEntry;
+    let IterationCap = objectUtils.IterationCap;
 
     /**
      * This statement makes all the values exposed by the imported modules local variables in the current scope.
@@ -143,9 +144,9 @@ const $scope = constants?.$scope || function()
 
     const PRIOR_NODE = "../";
 
-    const DEFAULT_EXCLUSIONS = Object.freeze( ["constructor", "prototype", "toJson", "toObject", "global", "this"] );
+    const DEFAULT_EXCLUSIONS = Object.freeze( ["constructor", "prototype", "toJson", "toObject", "global", "this", "arguments", "_arguments"] );
 
-    const MAX_RUN_TIME = 9_999_999_999; //5_000;
+    const MAX_RUN_TIME = 5_000;
 
     const MAX_RECURSION = 32;
 
@@ -226,7 +227,7 @@ const $scope = constants?.$scope || function()
 
     const DEFAULT_NULL_HANDLER = function( pValue, pOptions )
     {
-        return _ud === typeof pValue ? _dblqt + _dblqt : (null === pValue ? null : asJson( pValue, pOptions ));
+        return _ud === typeof pValue ? _dblqt + _dblqt : (null === pValue ? null : asJson( pValue, DEFAULT_REPLACER, pOptions?.space, pOptions ));
     };
 
     const DEFAULT_OPTIONS_FOR_JSON =
@@ -330,6 +331,8 @@ const $scope = constants?.$scope || function()
 
         return "${(@" + type + ";@base:" + base + "):" + (paths.length > 0 ? paths.join( _dot ) : "^") + "}";
     };
+
+    const ROOT_PATH_EXPRESSION = "${(@path;@base:root):^}";
 
     class ResolvedValue
     {
@@ -613,6 +616,16 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    function _resolveReplacer( pReplacer, pOptions )
+    {
+        const typeCriteria = function( e )
+        {
+            return isFunction( e ) && e.length >= 2;
+        };
+
+        return typeUtils.firstMatchingType( typeCriteria, pReplacer, pOptions?.replacer, DEFAULT_REPLACER );
+    }
+
     function _resolveReviver( pReviver, pOptions )
     {
         const candidates = [pReviver, pOptions?.reviver, DEFAULT_REVIVER].filter( e => isFunction( e ) && e.length >= 2 );
@@ -665,6 +678,8 @@ const $scope = constants?.$scope || function()
 
         return i0 > i1 ? 1 : i0 < i1 ? -1 : 0;
     };
+
+    Segment.ROOT_PATH_EXPRESSION = ROOT_PATH_EXPRESSION;
 
     /**
      * This class represents and interprets the values
@@ -812,9 +827,9 @@ const $scope = constants?.$scope || function()
 
             let value = null;
 
-            resolvedValue = resolved.get( this.key ) || new ResolvedValue( this.key, root, current, value, resolvedValue?.json );
+            resolvedValue = resolved.get( this.key ) || new ResolvedValue( this.key, root, current, value, resolvedValue?.json || this.key, ...paths );
 
-            paths = this.variable.split( /\.\//g ) || [this.variable];
+            paths = asArray( this.variable.split( /[.\/]/g ) || [this.variable] ).map( e => isString( e ) ? e.split( _dot ) : e ).flat();
 
             switch ( this.type )
             {
@@ -865,6 +880,7 @@ const $scope = constants?.$scope || function()
 
     InterpolationEntry.parseKey = parseKey;
     InterpolationEntry.buildPathExpression = buildPathExpression;
+    InterpolationEntry.ROOT_PATH_EXPRESSION = ROOT_PATH_EXPRESSION;
 
     class InterpolatableValue
     {
@@ -975,6 +991,8 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    InterpolatableValue.ROOT_PATH_EXPRESSION = ROOT_PATH_EXPRESSION;
+
     class Interpolator
     {
         #scope;
@@ -1032,7 +1050,7 @@ const $scope = constants?.$scope || function()
         {
             const interpolator = this;
 
-            const options = this.#options || DEFAULT_OPTIONS_FOR_JSON;
+            const options = Object.assign( {}, firstValidObject( this.#options, DEFAULT_OPTIONS_FOR_JSON ) );
 
             const scope = firstValidObject( pScope, this.scope, $scope() );
 
@@ -1043,77 +1061,68 @@ const $scope = constants?.$scope || function()
 
             const resolved = _resolveResolvedMap( pResolved || this.resolved );
 
-            let paths = [].concat( ...asArray( pPaths || [] ) );
+            let paths = [].concat( ...asArray( pPaths || [] ) ).filter( arrayUtils.Filters.NON_BLANK );
+
+            const propertyKey = asString( pKey, true ).replace( "^", _mt_str );
+
+            paths.push( propertyKey );
 
             if ( detectCycles( paths, 5, 5 ) )
             {
                 return pValue;
             }
 
-            const propertyKey = asString( pKey, true ).replace( "^", _mt_str );
-
             let result = pValue;
 
-            switch ( typeof pValue )
+            try
             {
-                case _str:
+                switch ( typeof pValue )
+                {
+                    case _str:
 
-                    let s = _mt_str;
+                        let s = asString( pValue );
 
-                    if ( (new RegExp( RX_CONTAINS_INTERPOLATION_KEY, "dgi" ).test( asString( pValue, true ) )) )
-                    {
-                        const interpolatableValue = new InterpolatableValue( pValue, this.currentNode, propertyKey );
+                        const iterationCap = new IterationCap( 10 );
 
-                        s = interpolatableValue.resolve( scope, root, current, resolved, paths );
-                    }
-                    else
-                    {
-                        s = asString( pValue, options?.trimStrings );
-                    }
+                        while ( isString( s ) && (new RegExp( RX_CONTAINS_INTERPOLATION_KEY, "dgi" ).test( asString( s, true ) )) && !iterationCap.reached )
+                        {
+                            const interpolatableValue = new InterpolatableValue( s, this.currentNode, propertyKey );
 
-                    if ( isString( s ) && (new RegExp( RX_CONTAINS_INTERPOLATION_KEY, "dgi" ).test( asString( s, true ) )) )
-                    {
-                        const interpolatableValue = new InterpolatableValue( s, this.currentNode, propertyKey );
+                            s = interpolatableValue.resolve( scope, root, current, resolved, paths );
+                        }
 
-                        s = interpolatableValue.resolve( scope, root, current, resolved, paths );
-                    }
-                    else
-                    {
-                        s = asString( s, options?.trimStrings );
-                    }
+                        result = isString( s ) ? asString( s, options?.trimStrings ) : s;
 
-                    result = s;
+                        break;
 
-                    break;
-
-                case _ud:
-                    return null;
-
-                case _obj:
-
-                    if ( isNull( pValue ) )
-                    {
+                    case _ud:
                         return null;
-                    }
 
-                    paths.push( propertyKey );
+                    case _obj:
 
-                    try
-                    {
+                        if ( isNull( pValue ) )
+                        {
+                            return null;
+                        }
+
                         if ( isArray( pValue ) )
                         {
-                            function resolve( e )
+                            function resolve( e, i, a )
                             {
-                                return interpolator.interpolate( e, scope, root, current, resolved, paths, propertyKey );
+                                return interpolator.interpolate( e, scope, root, current, resolved, paths, (propertyKey + "[" + i + "]") );
                             }
 
                             result = [].concat( ...(asArray( pValue )) ).map( resolve );
                         }
                         else
                         {
-                            if ( objectUtils.instanceOfAny( pValue, Date, Number, Boolean, String, Symbol ) )
+                            if ( objectUtils.instanceOfAny( pValue, Date, Number, Boolean, Symbol ) )
                             {
                                 result = pValue;
+                            }
+                            else if ( pValue instanceof String )
+                            {
+                                return interpolator.interpolate( asString( pValue.valueOf() ), scope, root, current, resolved, paths, propertyKey );
                             }
                             else
                             {
@@ -1132,29 +1141,32 @@ const $scope = constants?.$scope || function()
 
                                     result = interpolator.interpolate( value, scope, root, pValue, resolved, paths, key );
 
-                                    pValue[key] = result || value;
+                                    pValue[key] = isNonNullValue( result ) ? result : value;
                                 }
+
+                                result = pValue;
                             }
                         }
-                    }
-                    finally
-                    {
-                        paths.pop();
-                    }
+                        break;
 
-                    break;
+                    default:
+                        result = pValue;
+                        break;
 
-                default:
-                    result = pValue;
-                    break;
-
+                }
+            }
+            finally
+            {
+                paths.pop();
             }
 
-            return result;
+            return isNonNullValue( result ) ? result : pValue;
         }
     }
 
-    const canUseToJson = function( pObj, pToJsonMethod )
+    Interpolator.ROOT_PATH_EXPRESSION = ROOT_PATH_EXPRESSION;
+
+    const _canUseToJson = function( pObj, pToJsonMethod )
     {
         let func = ((_fun === typeof pToJsonMethod) ? pToJsonMethod : pObj?.toJson);
 
@@ -1162,7 +1174,7 @@ const $scope = constants?.$scope || function()
         {
             const source = asString( Function.prototype.toString.call( func, func ), true );
 
-            if ( source && !(source.includes( "jsonUtils.jsonify" ) || source.includes( "jsonInterpolationUtils.asJson" )) )
+            if ( source && !(source.includes( "asJson" )) )
             {
                 return true;
             }
@@ -1223,9 +1235,11 @@ const $scope = constants?.$scope || function()
         return (isFunction( options.handleNull ) && options.handleNull.length >= 1) ? options.handleNull : DEFAULT_NULL_HANDLER;
     }
 
-    function _resolveRoot( pRoot, pOptions, pObject )
+    function _resolveRoot( ...pCandidates )
     {
-        return isNonNullObject( pRoot ) ? pRoot : ((isNonNullObject( pOptions.root ) ? pOptions.root : null) || (isObject( pObject ) ? pObject : null));
+        const candidates = asArray( pCandidates || [] ).filter( e => isNonNullObject( e ) );
+
+        return firstValidObject( ...candidates );
     }
 
     function _resolveInclusions( pOptions )
@@ -1278,13 +1292,13 @@ const $scope = constants?.$scope || function()
         {
             jsonString += JSON.stringify( _dateTimeFormatter.format( pDate ) );
         }
-        else if ( pOptions?.replacer )
+        else if ( options?.replacer )
         {
-            jsonString += JSON.stringify( pDate, pOptions.replacer );
+            jsonString += JSON.stringify( pDate, options.replacer );
         }
         else
         {
-            jsonString += asJson( (isFunction( pDate.getTime ) ? pDate.getTime() : asInt( pDate )), options );
+            jsonString += asJson( (isFunction( pDate.getTime ) ? pDate.getTime() : asInt( pDate )), options?.replacer, options?.space, options );
         }
 
         return jsonString;
@@ -1379,12 +1393,58 @@ const $scope = constants?.$scope || function()
         return entries.filter( e => !transient.includes( asString( e.key || e[0], true ) ) );
     }
 
+    const containsInterpolatableContent = function( pJson )
+    {
+        return isString( pJson ) && new RegExp( RX_CONTAINS_INTERPOLATION_KEY, "dgi" ).test( asString( pJson, true ) );
+    };
+
+    const pendingInterpolation = function( pObject, pDepth )
+    {
+        if ( isString( pObject ) )
+        {
+            return containsInterpolatableContent( asString( pObject, true ) );
+        }
+
+        let depth = asInt( pDepth );
+
+        if ( depth >= 24 )
+        {
+            return false;
+        }
+
+        let pending = false;
+
+        if ( isPopulated( pObject ) )
+        {
+            const entries = objectUtils.getEntries( pObject );
+
+            if ( (entries?.length || 0) > 0 )
+            {
+                depth += 1;
+
+                for( let entry of entries )
+                {
+                    pending = pendingInterpolation( entry.value, depth );
+
+                    if ( pending )
+                    {
+                        break;
+                    }
+                }
+            }
+        }
+
+        return pending;
+    };
+
     const asJson = function( pObject,
+                             pReplacer = DEFAULT_REPLACER,
+                             pSpace = null,
                              pOptions = DEFAULT_OPTIONS_FOR_JSON,
                              pVisited = new VisitedSet(),
                              pResolved = new ResolvedMap(),
                              pPaths = [],
-                             pRoot,
+                             pRoot = null,
                              pDepth = 0 )
     {
         const options = Object.assign( Object.assign( {}, DEFAULT_OPTIONS_FOR_JSON ), pOptions || DEFAULT_OPTIONS_FOR_JSON );
@@ -1393,8 +1453,11 @@ const $scope = constants?.$scope || function()
 
         const onError = isFunction( options.onError ) ? options.onError : log.Warning;
 
-        const replacer = isFunction( options.replacer ) && options.replacer.length >= 2 ? options.replacer : DEFAULT_REPLACER;
-        options.replacer = replacer;
+        const replacer = _resolveReplacer( pReplacer, options ) || DEFAULT_REPLACER;
+        options.replacer = replacer || DEFAULT_REPLACER;
+
+        const space = [_num, _str].includes( typeof pSpace ) ? pSpace : options.space;
+        options.space = [_num, _str].includes( typeof space ) ? space : null;
 
         let obj = (isNonNullValue( pObject ) ? pObject : options.object);
 
@@ -1403,13 +1466,13 @@ const $scope = constants?.$scope || function()
             return handleNull( obj, options );
         }
 
-        const root = _resolveRoot( pRoot, options, obj );
+        const root = _resolveRoot( pRoot, options?.root, obj );
         options.root = root;
 
         const current = isObject( obj ) ? obj : options.current;
         options.current = current;
 
-        if ( !(false === options?.useToJson) && canUseToJson( obj, obj?.toJson ) )
+        if ( !(false === options?.useToJson) && _canUseToJson( obj, obj?.toJson ) )
         {
             const json = _toJson( obj );
             if ( json )
@@ -1451,6 +1514,9 @@ const $scope = constants?.$scope || function()
 
         const omitFunctions = options?.omitFunctions;
 
+        const newline = ([_str, _num].includes( typeof space ) ? "\n" : "");
+        const tab = isNumber( space ) ? (" ".repeat( space * depth ).slice( 0, 10 )) : isString( space ) ? space.repeat( depth + 1 ) : "";
+
         let jsonString = _mt_str;
 
         switch ( typeof obj )
@@ -1460,7 +1526,7 @@ const $scope = constants?.$scope || function()
                 break;
 
             case _str:
-                jsonString = JSON.stringify( obj, replacer );
+                jsonString = JSON.stringify( obj, replacer, tab );
                 break;
 
             case _bool:
@@ -1513,11 +1579,10 @@ const $scope = constants?.$scope || function()
                         break;
                     }
                 }
-                // else
-            {
+
                 visited.add( object );
 
-                let s = isArr ? "[" : "{";
+                let s = isArr ? "[" : ("{" + newline);
 
                 let entries = _getPersistentEntries( object, _exclude, _include );
 
@@ -1536,7 +1601,7 @@ const $scope = constants?.$scope || function()
 
                     if ( prependComma )
                     {
-                        s += ",";
+                        s += "," + newline;
                     }
 
                     if ( !isArr )
@@ -1544,7 +1609,7 @@ const $scope = constants?.$scope || function()
                         s += (_dblqt + key + _dblqt + _colon);
                     }
 
-                    s += asJson( value, options, visited, resolved, [...paths].concat( ...[key] ), root, (depth + 1) );
+                    s += asJson( value, replacer, space, options, visited, resolved, [...paths].concat( ...[key] ), root, (depth + 1) );
 
                     prependComma = true;
                 }
@@ -1558,7 +1623,6 @@ const $scope = constants?.$scope || function()
                     asResolved.json = jsonString;
                     resolved.set( asResolved?.key, asResolved );
                 }
-            }
 
                 break;
         }
@@ -1579,7 +1643,6 @@ const $scope = constants?.$scope || function()
         }
 
         return asString( json, true );
-
     };
 
     const parseJson = function( pJson,
@@ -1615,11 +1678,11 @@ const $scope = constants?.$scope || function()
 
         try
         {
-            const reviver = _resolveReviver( pReviver, options );
+            const reviver = _resolveReviver( pReviver, options?.reviver );
 
             obj = JSON.parse( json, reviver );
 
-            root = _resolveRoot( root, options, obj );
+            root = _resolveRoot( obj, root, options?.root, scp );
 
             options.root = root;
         }
@@ -1630,11 +1693,13 @@ const $scope = constants?.$scope || function()
 
         if ( options.interpolate || (new RegExp( RX_CONTAINS_INTERPOLATION_KEY, "dgi" ).test( json )) )
         {
-            resolved.set( "^", new ResolvedValue( "^", root, obj, root, json ) );
+            resolved.set( "^", new ResolvedValue( "^", root, obj, root, json, ...paths ) );
 
-            const interpolator = new Interpolator( scp, root || obj, obj, resolved );
+            resolved.set( ROOT_PATH_EXPRESSION, new ResolvedValue( ROOT_PATH_EXPRESSION, root, obj, root, json, ...paths ) );
 
-            obj = interpolator.interpolate( obj, scp, root || obj, obj ) || obj;
+            const interpolator = new Interpolator( scp, (root || obj), obj, options, resolved );
+
+            obj = interpolator.interpolate( obj, scp, root || obj, obj, resolved ) || obj;
         }
 
         return obj;
@@ -1643,8 +1708,27 @@ const $scope = constants?.$scope || function()
     const mod =
         {
             dependencies,
+            classes:
+                {
+                    Interpolator,
+                    Segment,
+                    InterpolationEntry,
+                    InterpolatableValue,
+                    ResolvedValue,
+                    ResolvedMap,
+                    VisitedSet
+                },
             asJson,
-            parseJson
+            parseJson,
+            DEFAULT_REPLACER,
+            DEFAULT_REVIVER,
+            DEFAULT_OPTIONS_FOR_JSON,
+            DEFAULT_EXCLUSIONS,
+            DEFAULT_MAX_RUNTIME: MAX_RUN_TIME,
+            DEFAULT_MAX_DEPTH: MAX_RECURSION,
+            containsInterpolatableContent,
+            pendingInterpolation,
+            buildPathExpression
         };
 
     if ( _ud !== typeof module )
@@ -1655,6 +1739,19 @@ const $scope = constants?.$scope || function()
     if ( $scope() )
     {
         $scope()[INTERNAL_NAME] = Object.freeze( mod );
+    }
+
+    // add this functionality to the StringUtils.asString function, if it exists
+    try
+    {
+        if ( stringUtils && stringUtils.asString )
+        {
+            stringUtils.asString.stringify = asJson;
+        }
+    }
+    catch( ex )
+    {
+        // never mind
     }
 
     return Object.freeze( mod );

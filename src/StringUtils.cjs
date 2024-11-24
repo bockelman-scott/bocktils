@@ -426,9 +426,13 @@ const $scope = constants?.$scope || function()
 
                         if ( "[object object]" === lcase( s ) || "Object" === s || isBlank( s ) )
                         {
+                            // this is a bit of a hack, but if the JsonUtils are also loaded,
+                            // we want to use the asJson function, which can handle circular references
+                            let stringify = typeUtils.firstMatchingType( _fun, me.stringify, ($scope()["__BOCK_JSON_UTILS__"] || $scope()["__BOCK_JSON_INTERPOLATION__"])?.asJson, $scope().asJson, JSON.stringify );
+
                             try
                             {
-                                s = isFunction( input?.toJson ) ? (input.toJson() || JSON.stringify( input )) : JSON.stringify( input );
+                                s = isFunction( input?.toJson ) ? (input.toJson() || (stringify || JSON.stringify)( input )) : (stringify || JSON.stringify)( input );
                             }
                             catch( ex )
                             {
@@ -439,6 +443,10 @@ const $scope = constants?.$scope || function()
                                     const entries = [...(Object.entries( input ) || [])];
 
                                     s = entries.map( entry => asString( entry[0] ) + ":" + asString( entry[1] ) ).join( _comma );
+                                }
+                                else if ( lcase( asString( ex.message ) ).includes( "circular" ) )
+                                {
+                                    s = asString( ex.message );
                                 }
                             }
                         }

@@ -67,7 +67,7 @@ describe( "JSON", () =>
               expect( json ).toEqual( "{\"a\":{\"b\":{\"c\":{\"d\":4}}},\"e\":\"${(@path;@base:root):a}\",\"f\":\"${(@path;@base:root):a.b}\",\"g\":\"${(@path;@base:root):a.b.c}\",\"h\":4,\"i\":4}" );
 
               let objParsed = jsonUtils.parseJson( json );
-              // expect( objParsed ).toEqual( obj );
+              expect( objParsed ).toEqual( obj );
 
               let obj2 = {};
               json = jsonUtils.asJson( obj2 );
@@ -81,7 +81,9 @@ describe( "JSON", () =>
               expect( json ).toEqual( "{\"child\":\"${(@path;@base:root):^}\"}" );
 
               objParsed = jsonUtils.parseJson( json );
-              // expect( objectUtils.same( objParsed, obj2 ) ).toBe( true );
+              expect( objectUtils.same( objParsed, obj2 ) ).toBe( false );
+
+              expect( jsonUtils.asJson( objParsed ) ).toEqual( json );
 
               /*let json = jsonUtils.asJson( objA );
 

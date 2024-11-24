@@ -1271,9 +1271,9 @@ const $scope = constants?.$scope || function()
 
         let paths = isString( pPath ) ? [...(pPath.split( _dot ).flat())] : isArray( pPath ) ? pPath || [] : [];
 
-        let target = isNull( pNode ) ? (isNull( pRoot ) ? null : pRoot) : pNode;
+        let target = isNull( pNode ) ? (_mt_str === pNode ? pNode : (isNull( pRoot ) ? null : pRoot)) : pNode;
 
-        let root = isNull( pRoot ) ? $scope : (isPopulated( pRoot ) || isFunction( pRoot )) ? pRoot : $scope();
+        let root = isNull( pRoot ) ? $scope() : (isPopulated( pRoot ) || isFunction( pRoot )) ? pRoot : $scope();
 
         if ( isNull( target ) || root === target )
         {
@@ -1350,7 +1350,14 @@ const $scope = constants?.$scope || function()
 
         while ( isPopulated( node ) && paths.length )
         {
-            node = node?.[paths.shift()];
+            const property = paths.shift();
+
+            if ( isBlank( property ) )
+            {
+                continue;
+            }
+
+            node = node?.[property];
         }
 
         return (paths.length <= 0) ? node : null;
@@ -1779,6 +1786,52 @@ const $scope = constants?.$scope || function()
         return pObject?.[prop];
     };
 
+    const canCompareObject = function( pObject, pStrict, pClass )
+    {
+        return !isNull( pObject ) && ( !(pStrict && pClass) || pObject instanceof pClass);
+    };
+
+    const canCompare = function( pValueA, pValueB, ...pTypes )
+    {
+        if ( isNonNullValue( pValueA ) && pValueA === pValueB )
+        {
+            return true;
+        }
+
+        const types = asArray( ...(pTypes || ([typeof pValueA, typeof pValueB].filter( e => typeUtils.VALID_TYPES.includes( e ) ))) );
+
+        const sameType = typeUtils.areSameType( pValueA, pValueB ) || ([_num, _big, _str].includes( typeof pValueA ) && [_num, _big, _str].includes( typeof pValueB ));
+
+        if ( sameType )
+        {
+            let can = types.length <= 0;
+
+            if ( types.length )
+            {
+                for( let type of types )
+                {
+                    if ( typeUtils.VALID_TYPES.includes( type ) )
+                    {
+                        if ( type === typeof pValueA )
+                        {
+                            can = true;
+                            break;
+                        }
+                    }
+                    else if ( isClass( type ) && pValueA instanceof type && pValueB instanceof type )
+                    {
+                        can = true;
+                        break;
+                    }
+                }
+            }
+
+            return can;
+        }
+
+        return false;
+    };
+
     /**
      * Returns true if the objects are actually the exact same object
      *
@@ -1800,24 +1853,44 @@ const $scope = constants?.$scope || function()
      * @param pStrict boolean to indicate whether both objects have to have the same type or class, defaults to false
      * @param pClass (optional) the type or class both arguments must be to be considered the same if pStrict is true
      * @param pCaseSensitive (optional) if false, strings encountered are compared without regard to uppercase or lowercase characters
+     * @param pStack USED INTERNALLY WHEN CALLING RECURSIVELY -- do not pass a value
      * @returns true if the 2 arguments represent the same object graph or the same number or other data type
      */
-    const same = function( pFirst, pSecond, pStrict = false, pClass = null, pCaseSensitive = true )
+    const same = function( pFirst, pSecond, pStrict = false, pClass = null, pCaseSensitive = true, pStack = [] )
     {
         if ( pFirst === pSecond || (isNull( pFirst ) && isNull( pSecond )) )
         {
             return true;
         }
 
-        if ( [_num, _big].includes( typeof pFirst ) || [_num, _big].includes( typeof pSecond ) )
+        if ( !canCompare( pFirst, pSecond ) )
         {
-            const first = parseFloat( pFirst );
+            return false;
+        }
 
-            const second = parseFloat( pSecond );
+        if ( isNumeric( pFirst ) )
+        {
+            if ( isNumeric( pSecond ) )
+            {
+                try
+                {
+                    const first = parseFloat( pFirst );
 
-            const diff = Math.abs( first - second );
+                    const second = parseFloat( pSecond );
 
-            return (first === second) || ( !isNaN( diff ) && diff < 0.000000001);
+                    const diff = Math.abs( first - second );
+
+                    return (first === second) || ( !isNaN( diff ) && diff < 0.000000001);
+                }
+                catch( ex )
+                {
+                    konsole.warn( ex );
+                }
+
+                return false;
+            }
+
+            return false;
         }
 
         if ( isString( pFirst ) && isString( pSecond ) )
@@ -1830,6 +1903,26 @@ const $scope = constants?.$scope || function()
             const options = false === pCaseSensitive ? { transformations: [function( s ) { return ucase( s ); }] } : {};
 
             return asString( pFirst, true, options ) === asString( pSecond, true, options );
+        }
+
+        if ( isBoolean( pFirst ) && isBoolean( pSecond ) )
+        {
+            return pFirst === pSecond;
+        }
+
+        if ( isFunction( pFirst ) )
+        {
+            return (isFunction( pSecond )) && asString( pFirst.toString(), true ) === asString( pSecond.toString(), true );
+        }
+
+        const stack = asArray( pStack || [] );
+
+        // console.log( "stack:", stack.join( _dot ) );
+
+        if ( detectCycles( stack, 5, 5 ) )
+        {
+            konsole.error( "Entered an infinite loop at", stack.join( _dot ) );
+            return false;
         }
 
         if ( isNonNullObject( pFirst ) )
@@ -1850,7 +1943,7 @@ const $scope = constants?.$scope || function()
 
                     for( let i = first.length; i--; )
                     {
-                        if ( !same( first[i], second[i], pStrict, null, pCaseSensitive ) )
+                        if ( !same( first[i], second[i], pStrict, null, pCaseSensitive, stack.concat( asString( i ) ) ) )
                         {
                             result = false;
                             break;
@@ -1869,7 +1962,7 @@ const $scope = constants?.$scope || function()
             {
                 for( let p in pFirst )
                 {
-                    if ( !same( getProperty( pFirst, p ), getProperty( pSecond, p ), pStrict, null, pCaseSensitive ) )
+                    if ( !same( getProperty( pFirst, p ), getProperty( pSecond, p ), pStrict, null, pCaseSensitive, stack.concat( p ) ) )
                     {
                         return false;
                     }
@@ -1877,7 +1970,7 @@ const $scope = constants?.$scope || function()
 
                 for( let p in pSecond )
                 {
-                    if ( !same( getProperty( pSecond, p ), getProperty( pFirst, p ), pStrict, null, pCaseSensitive ) )
+                    if ( !same( getProperty( pSecond, p ), getProperty( pFirst, p ), pStrict, null, pCaseSensitive, stack.concat( p ) ) )
                     {
                         return false;
                     }
@@ -1889,17 +1982,12 @@ const $scope = constants?.$scope || function()
             return false;
         }
 
-        if ( isFunction( pFirst ) )
-        {
-            return (isFunction( pSecond )) && asString( pFirst.toString(), true ) === asString( pSecond.toString(), true );
-        }
-
         try
         {
             const jsonFirst = asString( pFirst );
             const jsonSecond = asString( pSecond );
 
-            if ( same( jsonFirst, jsonSecond, pStrict, String, pCaseSensitive ) )
+            if ( same( jsonFirst, jsonSecond, pStrict, String, pCaseSensitive, stack ) )
             {
                 return true;
             }
@@ -1912,14 +2000,9 @@ const $scope = constants?.$scope || function()
         return false;
     };
 
-    const canCompare = function( pObject, pStrict, pClass )
-    {
-        return !isNull( pObject ) && ( !(pStrict && pClass) || pObject instanceof pClass);
-    };
-
     Object.prototype.isIdenticalTo = function( pOther, pStrict, pClass )
     {
-        return canCompare( pOther, pStrict, pClass ) && (identical( this, pOther ));
+        return canCompareObject( pOther, pStrict, pClass ) && (identical( this, pOther ));
     };
 
     Object.prototype.equals = function( pObject )

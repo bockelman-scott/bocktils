@@ -712,6 +712,11 @@
         {
             return (this.#iterations++ >= this.#maxIterations);
         }
+
+        canContinue()
+        {
+            return !this.reached;
+        }
     }
 
     IterationCap.MAX_CAP = MAX_ITERATIONS;

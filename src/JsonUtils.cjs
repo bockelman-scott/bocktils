@@ -35,6 +35,7 @@ const $scope = constants?.$scope || function()
     let ucase = stringUtils.ucase || function( s ) { return asString( s ).toUpperCase(); };
     let asInt = stringUtils.asInt || function( s ) { return parseInt( s ); };
     let asFloat = stringUtils.asFloat || function( s ) { return parseFloat( s ); };
+    let toBool = stringUtils.toBool;
 
     let isArray = objectUtils.isArray || function( pArr ) { return Array.isArray( pArr ); };
 
@@ -64,63 +65,7 @@ const $scope = constants?.$scope || function()
 
     const MAX_DEPTH = 17;
 
-    const DEFAULT_EXCLUSIONS = ["arguments", "_arguments"];
-
-    const replacer = function( key, value )
-    {
-        if ( isBlank( key ) || DEFAULT_EXCLUSIONS.includes( key ) || isFunction( value ) )
-        {
-            return "\"\"";
-        }
-
-        if ( value instanceof Map )
-        {
-            return { ...value.entries() };
-        }
-
-        if ( value instanceof Set )
-        {
-            return [...value.values()];
-        }
-
-        return value;
-    };
-
-    const buildReplacer = function( pExclusions, ...pNameValuePairs )
-    {
-        let exclusions = unique( pruneArray( asArray( pExclusions || DEFAULT_EXCLUSIONS ).filter( arrayUtils.Filters.NON_BLANK ) ) );
-        exclusions = (exclusions?.length || 0) <= 0 ? DEFAULT_EXCLUSIONS : exclusions;
-
-        const nvPairs = asArray( pNameValuePairs || [] ).filter( e => Array.isArray( e ) && 2 === (e?.length || 0) );
-
-        return function( pKey, pValue )
-        {
-            if ( isBlank( pKey ) || exclusions.includes( pKey ) || isFunction( pValue ) || isSymbol( pValue ) )
-            {
-                return "\"\"";
-            }
-
-            let value = pValue;
-
-            if ( (nvPairs?.length || 0) > 0 )
-            {
-                for( let i = nvPairs.length; i--; )
-                {
-                    const nvPair = nvPairs[i];
-                    const k = nvPair.length > 0 ? nvPair[0] : _mt_str;
-                    const v = nvPair.length > 1 ? nvPair[1] : k;
-
-                    if ( !isBlank( k ) && ucase( asString( k, true ) ) === ucase( asString( pKey, true ) ) )
-                    {
-                        value = v;
-                        break;
-                    }
-                }
-            }
-
-            return value;
-        };
-    };
+    const replacer = jsonInterpolationUtils.DEFAULT_REPLACER;
 
     const scrub = function( pObj, pOptions, pStack, pDepth )
     {
@@ -237,13 +182,6 @@ const $scope = constants?.$scope || function()
         }
 
         return should;
-    };
-
-    const jsonify = function( pObject, pOptions = {} )
-    {
-        const options = Object.assign( {}, pOptions || {} );
-
-        return jsonInterpolationUtils.asJson( pObject, options );
     };
 
     const DEFAULT_OBJECT_LITERAL_OPTIONS =
@@ -610,16 +548,14 @@ const $scope = constants?.$scope || function()
 
     const mod =
         {
-            scrub,
-            jsonify,
-            toObjectLiteral,
-            bruteForceJson,
             asJson: jsonInterpolationUtils.asJson,
             parseJson: jsonInterpolationUtils.parseJson,
-            parse: jsonInterpolationUtils.parseJson,
             stringify: jsonInterpolationUtils.asJson,
-            buildReplacer,
-            defaultReplacer: replacer
+            parse: jsonInterpolationUtils.parseJson,
+            DEFAULT_REPLACER: replacer,
+            scrub,
+            toObjectLiteral,
+            bruteForceJson
         };
 
     if ( _ud !== typeof module )

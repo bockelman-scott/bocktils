@@ -169,7 +169,7 @@ const $scope = constants?.$scope || function()
         {
             return pObj;
         }
-        return (0 === pObj || "0" === pObj) ? "0" : (_mt_str + String( pObj ) + _mt_str).trim();
+        return (0 === pObj || "0" === pObj || false === pObj) ? "0" : (_mt_str + String( pObj ) + _mt_str).trim();
     }
 
     const isNumber = function( pObj )
@@ -223,6 +223,11 @@ const $scope = constants?.$scope || function()
         if ( isNumber( pObj ) || "0" === pObj )
         {
             return true;
+        }
+
+        if ( !([_num, _big, _str].includes( typeof pObj ) || (pObj instanceof Number || pObj instanceof String)) )
+        {
+            return false;
         }
 
         let value = (_mt_str + _toString( pObj )).replace( /n+$/, _mt_str );
@@ -439,6 +444,38 @@ const $scope = constants?.$scope || function()
         }
 
         return false;
+    };
+
+    const areSameType = function( ...pValues )
+    {
+        let areSame = true;
+
+        if ( !isNull( pValues ) )
+        {
+            const values = isLikeArray( pValues ) ? [...pValues] : [pValues || _mt_str];
+
+            let first = values[0];
+
+            let types = [typeof first];
+
+            if ( [_num, _big].includes( typeof first ) )
+            {
+                types.push( _num, _big );
+            }
+
+            for( let i = 1, n = values.length; i < n; i++ )
+            {
+                let value = values[i];
+
+                if ( !types.includes( typeof value ) )
+                {
+                    areSame = false;
+                    break;
+                }
+            }
+        }
+
+        return areSame;
     };
 
     const isMap = function( pObject, pStrict = true )
@@ -697,6 +734,36 @@ const $scope = constants?.$scope || function()
         return instanceOfAny( pObject, ...pListedClasses );
     };
 
+    const firstMatchingType = function( pType, ...pCandidates )
+    {
+        let arr = !isNull( pCandidates ) ? [...pCandidates] : [];
+
+        if ( _str === typeof pType )
+        {
+            const type = pType.toLowerCase();
+
+            if ( VALID_TYPES.includes( type ) )
+            {
+                arr = arr.filter( e => pType === typeof e );
+                return arr.length > 0 ? arr[0] : null;
+            }
+        }
+        else if ( isClass( pType ) )
+        {
+            arr = arr.filter( e => e instanceof pType );
+            return arr.length > 0 ? arr[0] : null;
+        }
+        else if ( isFunction( pType ) )
+        {
+            const scope = $scope();
+
+            arr = arr.filter( e => pType.call( scope, e ) );
+
+            return arr.length > 0 ? arr[0] : null;
+        }
+
+        return null;
+    };
 
     /**
      * Returns the name of the class of which the specified object is an instance
@@ -1259,12 +1326,14 @@ const $scope = constants?.$scope || function()
             isInstanceOfListedClass,
             isSymbol,
             isType,
+            areSameType,
             instanceOfAny,
             getClassName,
             getClass,
             defaultFor,
             castTo,
             toIterator,
+            firstMatchingType,
             isReadOnly,
             classes: { TriState, Option, TypedOption, StringOption, NumericOption, BooleanOption, Result },
             TriState,

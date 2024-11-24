@@ -703,6 +703,32 @@ const $scope = constants?.$scope || function()
                 };
             },
 
+            /**
+             * Returns a filter that matches if none of the predicates/filters specified return true
+             * Similar to MATCHES_NONE
+             * @param pPredicates
+             * @returns {(function(*, *, *): (boolean))|*}
+             * @constructor
+             */
+            NOT: function( ...pPredicates )
+            {
+                const filters = asArray( pPredicates ).filter( Predicates.IS_PREDICATE );
+
+                return function( e, i, a )
+                {
+                    for( let f of filters )
+                    {
+                        const meets = f( e, i, a );
+                        if ( meets )
+                        {
+                            return false;
+                        }
+                    }
+
+                    return true;
+                };
+            },
+
             /** a filter to return the elements of an array that are not elements of the specified array **/
             NOT_IN: function( ...pArr )
             {
