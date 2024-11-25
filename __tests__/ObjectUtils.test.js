@@ -1139,6 +1139,42 @@ describe( "Cloning", () =>
               expect( clone.composite === obj.composite ).toBe( false );
 
           } );
+
+    test( "clone returns an object with its methods intact",
+          () =>
+          {
+              const source =
+                  {
+                      a: 2,
+                      b: { c: { d: 4 } },
+                      c: function( pA, pB )
+                      {
+                          return ((pA + pB) * this.a) - this.b.c.d;
+                      }
+                  };
+
+              const copy = objectUtils.clone( source, { omitFunctions: false, freeze: true } );
+
+              // it's a copy
+              expect( copy === source ).toBe( false );
+
+              // it is frozen
+              expect( Object.isFrozen( copy ) ).toBe( true );
+
+              // it has the expected values
+              expect( copy.a ).toEqual( 2 );
+              expect( copy.b.c.d ).toEqual( 4 );
+
+              // it's methods still return the expected values
+              expect( copy.c( 10, 20 ) ).toEqual( 56 );
+
+              expect( Object.isFrozen( copy.a ) ).toBe( true );
+              expect( Object.isFrozen( copy.b ) ).toBe( true );
+              expect( Object.isFrozen( copy.b.c ) ).toBe( true );
+              expect( Object.isFrozen( copy.b.c.d ) ).toBe( true );
+
+
+          } );
 } );
 
 describe( "ingest and augment", () =>
@@ -1412,7 +1448,7 @@ describe( "ingest and augment", () =>
           } );
 
 
-    test( "augment with appendToArrays option with equal length array - returns expected object",
+    test( "augment with appendToArrays option - returns object with the superset of the arrays",
           () =>
           {
               const obj =
@@ -1434,7 +1470,7 @@ describe( "ingest and augment", () =>
               expect( augmented ).toEqual( {
                                                a: 1,
                                                b: 2,
-                                               c: [1, 2, 3]
+                                               c: [1, 2, 3, 4, 5, 6]
                                            } );
           } );
 
@@ -1460,7 +1496,7 @@ describe( "ingest and augment", () =>
               expect( augmented ).toEqual( {
                                                a: 1,
                                                b: 2,
-                                               c: [1, 2, 3, 7, 8, 9]
+                                               c: [1, 2, 3, 4, 5, 6, 7, 8, 9]
                                            } );
           } );
 

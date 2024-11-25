@@ -798,7 +798,7 @@ const $scope = constants?.$scope || function()
      * or the class itself if the specified value *is* a class (function)
      * @param pObject an instance of some class or a function that is a class
      * @param pOptions an object to pass options to the isClass method of TypeUtils
-     * @returns {string} the class of which the object is an instance or the class itself if the object is a class function
+     * @returns {function} the class of which the object is an instance or the class itself if the object is a class function
      */
     const getClass = function( pObject, pOptions = { strict: true } )
     {

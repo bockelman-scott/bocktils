@@ -1,10 +1,16 @@
 /**
  * Defines several useful constants and utility functions common to JavaScript applications.
+ * Using constants for string literals reduces bugs caused by typos,
+ * allows better minification,
+ * and _may_ reduce memory consumption in _some_ interpreters
  */
 
 (function exposeModule()
 {
-    // The typeof a variable that does not exist or has been declared without a default value
+    /** This is the typeof a variable that does not exist or has been declared without a default value
+     *
+     * @type {string}
+     */
     const _ud = "undefined";
 
     /**
@@ -15,24 +21,62 @@
         return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
     };
 
+    /**
+     * This is a (hopefully) unique string we can use to cache this module.
+     * @type {string}
+     */
     const INTERNAL_NAME = "__BOCK__CONSTANTS__";
 
+    /**
+     * We cache the module
+     * so we do not need to execute this IIFE every time
+     * it is required or imported
+     */
     if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
     {
         return $scope()[INTERNAL_NAME];
     }
 
+    /**
+     * An alias for the console to reduce lint-ing alerts for any reasonable use of console.log
+     * @type {console | Console}
+     */
+    const konsole = console;
+
+    /**
+     * Returns true if this code is being executed by Node.js (or Deno)
+     * or technically any environment that defines 'global' and 'process' and does not define 'self' or 'window'
+     * @returns {boolean} true if this code is being executed by Node.js (or Deno)
+     */
     const isNodeJs = function()
     {
-        return (_ud === typeof self) && (null != global) && (_ud !== typeof process);
+        return (_ud === typeof self) && (_ud === typeof window) && (null != global) && (_ud !== typeof process);
     };
 
+    /**
+     * Should return the working directory as returned from the process if running on a server-side platform.
+     * Return . for other environments
+     * @type {string|string}
+     */
     const currentDirectory = (_ud !== typeof process) ? process.cwd() : ((_ud !== typeof __dirname) ? __dirname : ".");
 
+    /**
+     * This is the default limit for iterations that should be capped.
+     * @see IterationCap
+     * @type {number} the default limit for iterations that should be capped
+     */
     const DEFAULT_MAX_ITERATIONS = 1_000;
 
+    /**
+     * This is the default limit for recursive functions that cannot have a base-case to escape infinite execution
+     * @type {number} the default limit for recursive functions that cannot have a base-case
+     */
     const DEFAULT_MAX_STACK_DEPTH = 12;
 
+    /**
+     * We use a single variable declaration
+     * to define the many constants we will export as members of the module object
+     */
     let
         {
             _obj = "object",
@@ -49,6 +93,7 @@
             _worker = "Worker",
             _browser = "Browser",
             _nodejs = "NodeJs",
+            _deno = "Deno",
             _unknown = "Unknown",
 
             _mt_str = "",
@@ -73,6 +118,11 @@
             _sglqtRightFancy = String.fromCharCode( 8217 ),
             _semicolon = ";",
             _colon = ":",
+
+            _ALPHABET_ENGLISH_UCASE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+            _ALPHABET_ENGLISH_LCASE = _ALPHABET_ENGLISH_UCASE.toLowerCase(),
+            _LETTERS_ENGLISH_UCASE = _ALPHABET_ENGLISH_UCASE.split( _mt_chr ),
+            _LETTERS_ENGLISH_LCASE = _ALPHABET_ENGLISH_LCASE.split( _mt_chr ),
 
             _rxLiteral = "/",
             _solidus = "/",
@@ -104,6 +154,10 @@
             _rxTrailingWhitespace = /\s+$/,
 
             _rxVariableToken = /\$\{\s*(\w+)\s*}/,
+
+            _defaultLocaleString = "en-US",
+            _defaultLocale = new Intl.Locale( _defaultLocaleString ),
+            _defaultCurrency = "USD",
 
             S_FALSE = "false",
             S_TRUE = "true",
@@ -200,18 +254,257 @@
                  "with"] )
         } = ($scope() || {});
 
+    function isArray( pObject )
+    {
+        return (_fun === typeof Array.isArray && Array.isArray( pObject )) || {}.toString.call( pObject ) === "[object Array]";
+    }
+
+    /**
+     * These are the default options used with the immutableCopy function.
+     *
+     * nullToEmptyObject {boolean} pass true for this property if you want null values to be returned as EMPTY_OBJECT
+     * nullToEmptyArray {boolean}  pass true for this property if you want null values to be returned as EMPTY_ARRAY
+     *
+     * undefinedToNull {boolean} pass true for this property if you want undefined values to be returned as null
+     * undefinedToEmptyObject {boolean} pass true for this property if you want undefined values to be returned as EMPTY_OBJECT
+     *
+     * depth {number} pass a number greater than zero to make immutable copies
+     * of an object's entries (or an array's elements) to the depth desired
+     *
+     * @type {{nullToEmptyObject: boolean, undefinedToEmptyObject: boolean, depth: number, nullToEmptyArray: boolean, undefinedToNull: boolean}}
+     */
+    const DEFAULT_COPY_OPTIONS =
+        {
+            nullToEmptyObject: false,
+            nullToEmptyArray: false,
+            undefinedToNull: false,
+            undefinedToEmptyObject: false,
+            undefinedToEmptyArray: false,
+            depth: 0,
+        };
+
+    const MAX_STACK_SIZE = 32;
+
+    function populateOptions( pOptions, pDefaults )
+    {
+        return Object.assign( Object.assign( {}, pDefaults || {} ), (pOptions || pDefaults || {}) );
+    }
+
+    function _localCopyOptions( pOptions )
+    {
+        return populateOptions( pOptions, DEFAULT_COPY_OPTIONS );
+    }
+
+    function _getDepth( pOptions )
+    {
+        const options = populateOptions( pOptions, DEFAULT_COPY_OPTIONS );
+        return Math.max( 0, _num === typeof options.depth ? options.depth : 0 );
+    }
+
+    /**
+     * Returns a local (mutable) copy of the value specified.
+     *
+     * @param pObject {any} the value to copy
+     *
+     * @param pOptions {object} an object specifying how to handle undefined and null values
+     * as well as whether and how deep to copy an object or array value
+     *
+     * @param pStack {[any]} USED INTERNALLY TO PREVENT INFINITE RECURSION, DO NOT SPECIFY A VALUE FROM CLIENT CODE
+     *
+     * @returns {bigint|number|string|null|{}|undefined|{}|*[]|Readonly<{}>|*|Function|boolean} an immutable copy of the value specified
+     */
+    const localCopy = function( pObject, pOptions, pStack = [] )
+    {
+        const options = _localCopyOptions( pOptions );
+
+        const depth = _getDepth( options );
+
+        options.depth = depth;
+
+        let clone = pObject;
+
+        const stack = [].concat( pStack || [] );
+
+        if ( stack.length > MAX_STACK_SIZE )
+        {
+            return clone;
+        }
+
+        if ( null == pObject || _ud === typeof pObject )
+        {
+            return options?.nullToEmptyObject || options?.undefinedToEmptyObject ? {} : options?.nullToEmptyArray || options?.undefinedToEmptyArray ? [] : null;
+        }
+
+        if ( _obj === typeof pObject )
+        {
+            if ( isArray( pObject ) )
+            {
+                clone = [].concat( pObject );
+
+                if ( depth > 0 )
+                {
+                    options.depth = depth - 1;
+
+                    stack.push( clone );
+
+                    clone = clone.map( e => localCopy( e, options, stack ) );
+                }
+            }
+            else
+            {
+                clone = Object.assign( {}, pObject || {} );
+
+                if ( depth > 0 )
+                {
+                    options.depth = depth - 1;
+
+                    stack.push( clone );
+
+                    const entries = Object.entries( pObject );
+
+                    for( let entry of entries )
+                    {
+                        const key = entry[0];
+                        const value = entry[1];
+
+                        clone[key] = localCopy( value, options, stack );
+                    }
+                }
+            }
+        }
+
+        return clone;
+    };
+
+    /**
+     * Returns an immutable copy of the value specified.
+     *
+     * @param pObject {any} the value to copy
+     * @param pOptions {object} an object specifying how to handle undefined and null values
+     * as well as whether and how deep to copy an object or array value
+     * @param pStack {[any]} USED INTERNALLY TO PREVENT INFINITE RECURSION, DO NOT SPECIFY A VALUE FROM CLIENT CODE
+     * @returns {bigint|number|string|null|{}|undefined|{}|*[]|Readonly<{}>|*|Function|boolean} an immutable copy of the value specified
+     */
+    const immutableCopy = function( pObject, pOptions = DEFAULT_COPY_OPTIONS, pStack = [] )
+    {
+        const options = populateOptions( pOptions, DEFAULT_COPY_OPTIONS );
+
+        const depth = _getDepth( options );
+
+        options.depth = depth;
+
+        let clone = pObject;
+
+        const stack = [].concat( pStack || [] );
+
+        if ( stack.length > MAX_STACK_SIZE )
+        {
+            return clone;
+        }
+
+        switch ( typeof pObject )
+        {
+            case _ud:
+                return options?.undefinedToNull ? null : options?.undefinedToEmptyObject ? EMPTY_OBJECT : options?.undefinedToEmptyArray ? EMPTY_ARRAY : undefined;
+
+            case _str:
+                return (_mt_str + pObject);
+
+            case _num:
+                return parseFloat( pObject );
+
+            case _big:
+                return BigInt( pObject );
+
+            case _bool:
+                return Boolean( pObject );
+
+            case _fun:
+                return Object.freeze( pObject );
+
+            case _symbol:
+                return pObject;
+
+            case _obj:
+                if ( null == pObject )
+                {
+                    return options?.nullToEmptyObject ? {} : options?.nullToEmptyArray ? [] : null;
+                }
+
+                if ( isArray( pObject ) )
+                {
+                    clone = [].concat( pObject );
+
+                    if ( depth > 0 )
+                    {
+                        options.depth = depth - 1;
+
+                        stack.push( clone );
+
+                        clone = clone.map( e => immutableCopy( e, options, stack ) );
+                    }
+                }
+                else
+                {
+                    clone = Object.assign( {}, pObject || {} );
+
+                    if ( depth > 0 )
+                    {
+                        options.depth = depth - 1;
+
+                        stack.push( clone );
+
+                        const entries = Object.entries( pObject );
+
+                        for( let entry of entries )
+                        {
+                            const key = entry[0];
+                            const value = entry[1];
+
+                            clone[key] = immutableCopy( value, options, stack );
+                        }
+                    }
+                }
+        }
+
+        return Object.freeze( clone );
+    };
+
+    /**
+     * This is a regular expression that matches a single dot character anywhere in a string
+     * @type {RegExp}  a regular expression that matches a single dot character anywhere in a string
+     */
     const REG_EXP_DOT = /\./;
 
+    /**
+     * This is a regular expression that matches a single dot character at the start of a string
+     * @type {RegExp}  a regular expression that matches a single dot character at the beginning of a string
+     */
     const REG_EXP_LEADING_DOT = /^\./;
 
+    /**
+     * This is a regular expression that matches a single dot character at the end of a string
+     * @type {RegExp}  a regular expression that matches a single dot character at the end of a string
+     */
     const REG_EXP_TRAILING_DOT = /\.$/;
 
+    /**
+     * This is an object that encapsulates useful regular expressions defined above
+     */
     const REG_EXP =
         {
             DOT: REG_EXP_DOT,
             LEADING_DOT: REG_EXP_LEADING_DOT,
             TRAILING_DOT: REG_EXP_TRAILING_DOT,
-
+            BLOCK_COMMENT: _rxHeaderComment,
+            VALID_JSON: _rxValidJson,
+            NULL_TERMINATOR: _xZ,
+            TERMINAL_SEMICOLON: _rxTerminalSemicolon,
+            TRAILING_NEWLINE: _rxTrailingNewline,
+            LEADING_NEWLINE: _rxLeadingNewline,
+            LEADING_WHITESPACE: _rxLeadingWhitespace,
+            TRAILING_WHITESPACE: _rxTrailingWhitespace,
+            VARIABLE_TOKEN: _rxVariableToken
         };
 
     /**
@@ -225,15 +518,31 @@
             currency_symbol: /\$|USD/
         } );
 
+    /**
+     * Returns an object with the following properties,
+     * describing what symbols are used to format numbers for the specified Locale:
+     *
+     * {
+     decimal_point: <the character(s) that separate the whole number part from the fractional part of a floating point value>,
+     grouping_separator: <the character(s) that separate whole number digits for human-readability>,
+     currency_symbol: <the symbol or 3-letter code used for the specified currency in the specified Locale>
+     * }
+     *
+     * @param pLocale {string|Intl.Locale} the Locale for which to calculate the symbols
+     * @param pCurrency {string} the currency for which to calculate the symbol used when formatting numbers as currency
+     * @returns {Readonly<{readonly decimal_point: string, readonly currency_symbol: RegExp, readonly grouping_separator: string}>|Readonly<{decimal_point: string, currency_symbol: RegExp, grouping_separator: string}>}
+     */
     const calculateNumberFormattingSymbols = function( pLocale, pCurrency )
     {
-        let locale = (pLocale instanceof Intl.Locale) ? (pLocale?.baseName || "en_US") : (null == pLocale) || (_mt_str === pLocale) ? (_mt_str + ((((new Intl.NumberFormat()).resolvedOptions())?.locale)?.baseName) || "en-US") : (_mt_str + pLocale);
+        let localeString = (pLocale instanceof Intl.Locale) ? (pLocale?.baseName || _defaultLocaleString) : (null == pLocale) || (_mt_str === pLocale) ? (_mt_str + ((((new Intl.NumberFormat()).resolvedOptions())?.locale)?.baseName) || _defaultLocaleString) : (_mt_str + pLocale);
 
-        let currency = (null == pCurrency) || (_mt_str === pCurrency) ? "USD" : (_mt_str + (pCurrency || "USD"));
+        let currency = (null == pCurrency) || (_mt_str === pCurrency) ? _defaultCurrency : (_mt_str + (pCurrency || _defaultCurrency));
 
-        const numberFormatter = new Intl.NumberFormat( (_mt_str + (locale) || "en-US"),
+        let sCurrency = "currency";
+
+        const numberFormatter = new Intl.NumberFormat( ((_mt_str + (localeString)) || _defaultLocaleString),
                                                        {
-                                                           style: "currency",
+                                                           style: sCurrency,
                                                            currency: currency
                                                        } );
 
@@ -248,7 +557,7 @@
 
                            switch ( type )
                            {
-                               case "currency":
+                               case sCurrency:
                                    symbols.currency_symbol = val || DEFAULT_NUMBER_FORMATTING_SYMBOLS.currency_symbol;
                                    break;
 
@@ -263,21 +572,30 @@
                                default:
                                    break;
                            }
-
                        } );
 
         return Object.freeze( symbols ) || DEFAULT_NUMBER_FORMATTING_SYMBOLS;
     };
 
+    /**
+     * This subclass of Error is useful when validating function arguments.
+     * The message property is overwritten to include the prefix 'IllegalArgumentException: ',
+     * so that if only the message is logged, the type of error is not obscured
+     */
     class IllegalArgumentError extends Error
     {
-        constructor( pMessage, pOptions, pLineNumber )
+        #options;
+
+        constructor( pMessage, pOptions )
         {
-            super( pMessage, pOptions, pLineNumber );
+            super( pMessage );
 
-            const options = _obj === typeof pOptions ? Object.assign( {}, pOptions || {} ) : { options: pOptions || __filename };
+            this.#options = Object.freeze( immutableCopy( pOptions || {} ) );
+        }
 
-            this._options = Object.freeze( options );
+        get options()
+        {
+            return immutableCopy( this.#options || {} );
         }
 
         get type()
@@ -285,9 +603,31 @@
             return "IllegalArgumentException";
         }
 
+        get prefix()
+        {
+            return this.type + ": ";
+        }
+
         get message()
         {
-            return this.type + ": " + super.message;
+            return this.prefix + (super.message.replace( this.prefix, _mt_str ));
+        }
+
+        logTo( pLogger, pLevel )
+        {
+            const logger = pLogger || konsole;
+
+            const level = _str === typeof pLevel ? pLevel.toLowerCase() : _num === typeof pLevel && pLevel >= 0 && pLevel <= 6 ? ["none", "info", "warn", "error", "debug", "trace", "log"][pLevel] : "error";
+
+            if ( _fun === typeof logger[level] )
+            {
+                logger[level]( this.message, this.options );
+            }
+        }
+
+        static from( pError )
+        {
+            return new IllegalArgumentError( pError.message, { cause: pError } );
         }
     }
 
@@ -305,13 +645,13 @@
     {
         let scope = pScope || $scope();
 
-        let obj = { ...scope };
-
-        obj = Object.assign( {}, scope );
+        let obj = Object.assign( { ...scope }, scope );
 
         const entries = Object.entries( obj );
 
         let variables = {};
+
+        const keysToExclude = ["global", "self", "window", "this", "me"];
 
         entries.forEach( entry =>
                          {
@@ -319,15 +659,15 @@
 
                              let value = (entry?.length || 0) > 1 ? entry[1] : key;
 
-                             if ( !(_ud === typeof value || null === value || _fun === typeof value || _symbol === typeof value) )
+                             if ( !(_ud === typeof value || null === value || _symbol === typeof value) )
                              {
-                                 if ( _str === typeof key && !(["global", "self", "window", "this", "me"].includes( key )) )
+                                 if ( _str === typeof key && !(keysToExclude.includes( key )) )
                                  {
                                      variables[key] = value;
 
                                      if ( _fun === typeof value )
                                      {
-                                         value.bind( obj );
+                                         value.bind( variables );
                                      }
                                  }
                              }
@@ -340,14 +680,12 @@
     {
         const scope = pScope || $scope();
 
-        const utils = ([].concat( (pUtils || []) ));
+        const utils = immutableCopy( pUtils || [], { nullToEmptyArray: true, undefinedToEmptyArray: true, depth: 2 } );
 
         let obj = {};
 
-        for( let i = 0, n = utils?.length; i < n; i++ )
+        for( let util of utils )
         {
-            const util = utils[i];
-
             try
             {
                 obj = Object.assign( scope, (util || {}) );
@@ -358,7 +696,7 @@
             }
         }
 
-        return obj;
+        return scope;
     };
 
     /**
@@ -372,6 +710,11 @@
             // this module has no dependencies
         };
 
+    /**
+     * These are default options for the ComparatorFactory class.
+     *
+     * @type {{caseSensitive: boolean, trimStrings: boolean, nullsFirst: boolean, strict: boolean, reverse: boolean}}
+     */
     const DEFAULT_COMPARATOR_OPTIONS =
         {
             strict: true,
@@ -382,6 +725,15 @@
         };
 
     /* abstract*/
+    /**
+     * This class can be used to create generic comparators.
+     * The options (and their corresponding properties) can be used to control the following rules for the comparisons:
+     * strict {boolean} if true, values compared must be of the same type and no type coercion will be used
+     * nullsFirst {boolean} pass true if null values should be considered less than other values, false if they should be considered greater than other values
+     * reverse {boolean} pass true to order values in reverse order (i.e., descending versus ascending)
+     * caseSensitive {boolean} [DEFAULTS TO TRUE] pass false if you want string comparisons to ignore case
+     * trimStrings {boolean} pass true if strings should be trimmed before comparison
+     */
     class ComparatorFactory
     {
         #type;
@@ -397,7 +749,7 @@
         {
             this.#type = pType || _obj;
 
-            this.#options = Object.assign( Object.assign( {}, DEFAULT_COMPARATOR_OPTIONS ), pOptions || {} );
+            this.#options = populateOptions( pOptions, DEFAULT_COMPARATOR_OPTIONS );
 
             const options = this.#options;
 
@@ -420,7 +772,7 @@
 
         get options()
         {
-            return Object.assign( {}, this.#options );
+            return populateOptions( {}, this.#options || DEFAULT_COPY_OPTIONS );
         }
 
         get strict()
@@ -475,7 +827,7 @@
 
         _compare( pA, pB, pOptions )
         {
-            const options = Object.assign( Object.assign( {}, DEFAULT_COMPARATOR_OPTIONS ), pOptions || {} );
+            const options = populateOptions( pOptions, this.options || DEFAULT_COMPARATOR_OPTIONS );
 
             let strict = (true === options?.strict) || this.strict;
 
@@ -656,7 +1008,7 @@
                     trimStrings: this.trimStrings,
                     reverse: this.reverse
                 };
-            return new ComparatorFactory( this.type, options );
+            return new ComparatorFactory( this.type, options ).comparator();
         }
 
         caseInsensitiveComparator()
@@ -670,7 +1022,7 @@
                     trimStrings: this.trimStrings,
                     reverse: this.reverse
                 };
-            return new ComparatorFactory( this.type, options );
+            return new ComparatorFactory( this.type, options ).comparator();
         }
 
         reverseComparator()
@@ -684,13 +1036,33 @@
                     trimStrings: this.trimStrings,
                     reverse: true
                 };
-            return new ComparatorFactory( this.type, options );
+            return new ComparatorFactory( this.type, options ).comparator();
         }
-
     }
 
+    /**
+     * This is the maximum allowed value for instances of the IterationCap class
+     * @type {number} the maximum allowed value for instances of the IterationCap class
+     */
     const MAX_ITERATIONS = 10_000;
 
+    /**
+     * This class allows us to easily cap an iteration, such as a 'for' loop or a 'while' loop.
+     * If there is any chance that an iteration might never complete,
+     * use an instance of IterationCap to limit the iteration to a finite number of executions
+     *
+     * Example:
+     *
+     const iterationCap = new IterationCap( 10 );
+
+     while ( someConditionIsTrue() && !iterationCap.reached )
+     {
+     possiblyChangeCondition();
+     }
+
+     In this example, the condition _might_ never become false, however...
+     The loop will exit after 10 attempts to change the condition
+     */
     class IterationCap
     {
         #maxIterations = MAX_ITERATIONS;
@@ -721,6 +1093,18 @@
 
     IterationCap.MAX_CAP = MAX_ITERATIONS;
 
+    /**
+     * Returns true if the specified value is immutable.
+     *
+     * Examples of immutable values include:
+     * - Objects that are frozen or sealed
+     * - Properties of Objects that are defined as writable:false
+     * - Strings, Numbers, Booleans, and Symbols
+     * - null values, undefined values
+     *
+     * @param pObject
+     * @returns {boolean|boolean}
+     */
     const isReadOnly = function( pObject )
     {
         if ( _obj === typeof pObject )
@@ -748,33 +1132,76 @@
         return true;
     };
 
-    const deepFreeze = function( pObject )
+    /**
+     * Returns a read-only copy of an object,
+     * whose properties are also read-only copies of properties of the specified object
+     * @param pObject {object} the object to freeze
+     * @param pStack {[any]} USED INTERNALLY TO PREVENT INFINITE RECURSION, DO NOT SPECIFY A VALUE FROM CLIENT CODE
+     *
+     * @returns {object} a new object that is a frozen copy of the specified object
+     * whose properties are also frozen copies of the specified object's properties
+     */
+    const deepFreeze = function( pObject, pStack = [] )
     {
+        // this an array that holds the keys traversed by any recursive calls to this function
+        const stack = localCopy( pStack || [], { undefinedToEmptyArray: true, nullToEmptyArray: true } );
+
+        if ( stack.length >= MAX_STACK_SIZE )
+        {
+            return (null == pObject || _ud === typeof pObject) ? null : Object.freeze( pObject );
+        }
+
+        if ( null == pObject || _ud === typeof pObject )
+        {
+            return null;
+        }
+
         let obj = pObject;
 
-        if ( _obj === typeof pObject && null !== pObject )
+        if ( _obj === typeof pObject )
         {
-            if ( BUILTIN_TYPES.map( e => _fun === typeof e && pObject instanceof e ).some( e => true === e ) )
-            {
-                return pObject;
-            }
+            const isArr = isArray( pObject );
 
-            obj = isReadOnly( pObject ) ? Object.assign( {}, pObject ) : pObject;
+            obj = (isArr ? [...pObject] : Object.assign( {}, pObject ));
 
             const entries = Object.entries( obj );
 
             for( let entry of entries )
             {
-                const key = entry[0];
+                const key = isArr ? parseInt( entry[0] ) : String( entry[0] );
                 const value = entry[1];
+
+                stack.push( key );
 
                 try
                 {
                     obj[key] = deepFreeze( value );
+
+                    if ( _fun === typeof value )
+                    {
+                        value.bind( obj );
+                    }
                 }
                 catch( ex )
                 {
-                    // ignored when properties are read-only
+                    // occurs when properties are read-only
+                    try
+                    {
+                        obj[key] = obj[key] || value;
+
+                        if ( _fun === typeof value )
+                        {
+                            value.bind( obj );
+                        }
+                    }
+                    catch( ex2 )
+                    {
+                        // ignore it
+                    }
+                }
+                finally
+                {
+                    stack.pop();
                 }
             }
         }
@@ -799,6 +1226,12 @@
             _mt_chr,
             _dblqt,
             _sglqt,
+            _apos,
+            _aposFancy,
+            _dblqtLeftFancy,
+            _dblqtRightFancy,
+            _sglqtLeftFancy,
+            _sglqtRightFancy,
             _rxLiteral,
             _solidus,
             _slash,
@@ -816,9 +1249,14 @@
             _lf,
             _crlf,
             _nbsp: " ",
+            _ALPHABET_ENGLISH_UCASE,
+            _ALPHABET_ENGLISH_LCASE,
+            _LETTERS_ENGLISH_UCASE,
+            _LETTERS_ENGLISH_LCASE,
             _browser,
             _worker,
             _nodejs,
+            _deno,
             _unknown,
             _pathSep,
             _thisDir,
@@ -826,6 +1264,9 @@
             _unixPathSep,
             _unixThisDir,
             _unixPrevDir,
+            _defaultLocaleString,
+            _defaultLocale,
+            _defaultCurrency,
             S_FALSE,
             S_TRUE,
             S_NO,
@@ -871,9 +1312,12 @@
             BUILTIN_TYPES,
             BUILTIN_TYPE_NAMES,
             IllegalArgumentError,
+            populateOptions,
             copyScope,
             deepFreeze,
             isReadOnly,
+            localCopy,
+            immutableCopy,
             _fileOptions: { encoding: "utf-8" },
             ignore,
             _rxHeaderComment,
@@ -887,8 +1331,8 @@
             _rxVariableToken,
             _currentDirectory: currentDirectory,
             _cwd: currentDirectory,
-            MAX_ITERATIONS: DEFAULT_MAX_ITERATIONS,
-            MAX_STACK_DEPTH: DEFAULT_MAX_STACK_DEPTH,
+            DEFAULT_MAX_ITERATIONS: MAX_ITERATIONS,
+            DEFAULT_MAX_STACK_DEPTH,
             catchHandler: function( pErr )
             {
                 return true;
@@ -913,14 +1357,14 @@
 
     if ( _ud !== typeof module )
     {
-        module.exports = deepFreeze( mod );
+        module.exports = Object.freeze( mod );
     }
 
     if ( $scope() )
     {
-        $scope()[INTERNAL_NAME] = deepFreeze( mod );
+        $scope()[INTERNAL_NAME] = Object.freeze( mod );
     }
 
-    return deepFreeze( mod );
+    return Object.freeze( mod );
 
 }());

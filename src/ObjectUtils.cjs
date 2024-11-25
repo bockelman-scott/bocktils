@@ -67,6 +67,8 @@ const $scope = constants?.$scope || function()
             EMPTY_ARRAY = Object.freeze( [] ),
             EMPTY_OBJECT = Object.freeze( {} ),
 
+            populateOptions = constants?.populateOptions
+
         } = constants || {};
 
     // explicitly define several variables that are imported from the dependencies
@@ -102,7 +104,8 @@ const $scope = constants?.$scope || function()
             isType = typeUtils.isType,
             instanceOfAny = typeUtils.instanceOfAny,
             getClassName = typeUtils.getClassName,
-            getClass = typeUtils.getClass
+            getClass = typeUtils.getClass,
+            isReadOnly = typeUtils.isReadOnly
 
         } = typeUtils || {};
 
@@ -620,7 +623,7 @@ const $scope = constants?.$scope || function()
     /**
      * This class wraps the 2-element arrays returned from Object.entries,
      * so we can treat them like objects with a key and a value property instead of an array.
-     * This class extends Array, so it retains all of the functionality normally available for Object entries
+     * This class extends Array, so it retains all the functionality normally available for Object entries
      */
     class ObjectEntry extends Array
     {
@@ -771,9 +774,23 @@ const $scope = constants?.$scope || function()
     {
         let properties = [];
 
+        if ( isNull( pObject ) )
+        {
+            return properties;
+        }
+
         let clazz = getClass( pObject );
 
-        let source = isClass( clazz ) ? Function.prototype.toString.call( clazz || {} ) : (isFunction( (pObject || (function() {})).toString ) ? (pObject || (function() {})).toString() : _mt_str);
+        let source = _mt_str;
+
+        try
+        {
+            source = isClass( clazz ) ? Function.prototype.toString.call( clazz || {} ) : (isFunction( pObject.toString ) ? (pObject).toString() : _mt_str);
+        }
+        catch( ex )
+        {
+            // attempts to call toString on *some* built-in classes throw an exception instead of just returning "function() { [native code] }"
+        }
 
         let rx = /(get +(\w+)\( *\))|(#(\w)[;\r\n,])/;
 
@@ -1517,7 +1534,7 @@ const $scope = constants?.$scope || function()
 
         if ( isArray( obj ) && (/^\d+$/.test( prop ) || ["length"].includes( prop )) )
         {
-            return obj[stringUtils.asInt( prop )] || obj[prop];
+            return obj[prop] || obj[stringUtils.asInt( prop )];
         }
 
         // trim the property name again...
@@ -2243,31 +2260,47 @@ const $scope = constants?.$scope || function()
         }
     };
 
+    const DEFAULT_CLONE_OPTIONS =
+        {
+            omitFunctions: false,
+            freeze: false
+        };
+
     /**
      * Returns a new object that is a deep copy of the specified argument
-     * @param pObject an object to clone
-     * @param pOmitFunctions boolean indicating whether to return an object with or without its methods preserved
-     * @param pStack the paths previously traversed to detect an infinite cycle; used internally
+     *
+     * @param pObject {object|[any]} an object or array to clone
+     * @param pOptions {object} an object specifying how to handle null values, undefined values and whether to return a mutable or immutable copy
+     *
+     * boolean indicating whether to return an object with or without its methods preserved
+     *
+     * @param pStack the paths previously traversed to detect an infinite cycle; used internally (DO NOT PASS A VALUE FROM CLIENT CODE)
+     *
      * @returns {object} a new object that is a deep copy of the specified argument
      */
-    const clone = function( pObject, pOmitFunctions = false, pStack = [] )
+    const clone = function( pObject, pOptions = DEFAULT_CLONE_OPTIONS, pStack = [] )
     {
+        const options = populateOptions( pOptions, DEFAULT_CLONE_OPTIONS );
+
+        const omitFunctions = true === options?.omitFunctions;
+        const freeze = true === options?.freeze;
+
         if ( !isObject( pObject ) )
         {
-            return pObject;
+            return (_ud === typeof pObject || null == pObject) ? null : (freeze ? Object.freeze( pObject ) : pObject);
         }
 
         const stack = asArray( pStack || [] );
 
 
-        let obj = isObject( pObject ) ? isArray( pObject ) ? [].concat( pObject ).map( e => clone( e, pOmitFunctions, stack ) ) : Object.assign( {}, pObject || {} ) : pObject;
+        let obj = isArray( pObject ) ? [].concat( pObject ).map( e => clone( e, options, stack ) ) : Object.assign( {}, pObject || {} );
 
-        let twin = isObject( obj ) ? isArray( obj ) ? [].concat( obj ).map( e => clone( e, pOmitFunctions, stack ) ) : Object.assign( {}, obj || {} ) : obj;
+        let twin = isArray( obj ) ? [].concat( obj ).map( e => clone( e, options, stack ) ) : Object.assign( {}, obj || {} );
 
 
         if ( stack.length > MAX_CLONE_DEPTH || detectCycles( stack, 3, 3 ) )
         {
-            return Object.assign( {}, twin );
+            return isArray( twin ) ? [...twin] : Object.assign( {}, twin );
         }
 
         const entries = getEntries( obj );
@@ -2280,15 +2313,17 @@ const $scope = constants?.$scope || function()
 
             const value = entry.value || entry[1];
 
-            switch ( typeof value )
+            let copy = value || obj[propertyName];
+
+            switch ( typeof copy )
             {
                 case _fun:
                     try
                     {
-                        if ( !isClass( value ) )
+                        if ( !isClass( copy ) )
                         {
                             value.bind( methods );
-                            methods[propertyName] = value;
+                            methods[propertyName] = copy;
 
                             twin[propertyName] = null;
                             delete twin[propertyName];
@@ -2306,13 +2341,22 @@ const $scope = constants?.$scope || function()
 
                     try
                     {
-                        twin[propertyName] = (_fun === typeof value?.clone) ?
-                                             value.clone() :
-                                             clone( value, pOmitFunctions, stack );
+                        copy = (_fun === typeof copy?.clone) ?
+                               copy.clone() :
+                               clone( copy, options, stack );
+
+                        twin[propertyName] = freeze ? Object.freeze( copy ) : copy;
                     }
                     catch( ex )
                     {
-                        twin[propertyName] = Object.assign( (twin[propertyName] || {}), (value || {}) );
+                        try
+                        {
+                            twin[propertyName] = Object.assign( (twin[propertyName] || {}), ((freeze ? Object.freeze( value ) : value) || {}) );
+                        }
+                        catch( ex2 )
+                        {
+                            konsole.error( ex2, ex );
+                        }
                     }
                     finally
                     {
@@ -2322,28 +2366,16 @@ const $scope = constants?.$scope || function()
                     break;
 
                 default:
-                    twin[propertyName] = value;
+                    twin[propertyName] = freeze ? Object.freeze( copy ) : copy;
                     break;
             }
         }
 
-        try
+        if ( omitFunctions )
         {
-            twin = structuredClone( Object.assign( {}, twin ) );
-        }
-        catch( ex )
-        {
-            const msg = asString( ex.message );
+            const returnValue = twin || Object.assign( {}, obj );
 
-            if ( !msg.includes( "could not be cloned" ) )
-            {
-                konsole.warn( msg );
-            }
-        }
-
-        if ( pOmitFunctions )
-        {
-            return twin || Object.assign( {}, obj );
+            return freeze ? Object.freeze( returnValue ) : returnValue;
         }
 
         for( let entry of getEntries( methods ) )
@@ -2356,8 +2388,8 @@ const $scope = constants?.$scope || function()
 
                 try
                 {
-                    value.bind( twin );
                     twin[propertyName] = value;
+                    value.bind( twin );
                 }
                 catch( ex )
                 {
@@ -2366,7 +2398,9 @@ const $scope = constants?.$scope || function()
             }
         }
 
-        return twin || Object.assign( {}, obj );
+        const returnValue = twin || Object.assign( {}, obj );
+
+        return freeze ? Object.freeze( returnValue ) : returnValue;
     };
 
     /**
@@ -2379,7 +2413,7 @@ const $scope = constants?.$scope || function()
     {
         let options = Object.assign( {}, (pOptions || { freeze: false, omitFunctions: true }) );
 
-        let obj = clone( pObject, options?.omitFunctions );
+        let obj = clone( pObject, options );
 
         let toTransfer = [].concat( ...(options?.transfer || []) );
 
@@ -2417,6 +2451,127 @@ const $scope = constants?.$scope || function()
             mergeUnmatchedClasses: false
         };
 
+    function _accessor( pObject, pKey, pDefault )
+    {
+        let obj = isObject( pObject ) && !isNull( pObject ) ? pObject : {};
+
+        let key = asString( pKey );
+
+        let value = null;
+
+        try
+        {
+            value = getProperty( obj, key ) || obj[key];
+        }
+        catch( ex )
+        {
+            konsole.warn( constants.S_ERR_PREFIX, "accessing", key, ex );
+        }
+
+        if ( _ud === typeof value || null == value )
+        {
+            try
+            {
+                obj[key] = pDefault;
+
+                value = pDefault;
+            }
+            catch( ex )
+            {
+                konsole.warn( constants.S_ERR_PREFIX, "modifying:", key, ex );
+            }
+        }
+
+        if ( isArray( obj[key] ) )
+        {
+            try
+            {
+                obj[key] = [].concat( obj[key] );
+            }
+            catch( ex )
+            {
+                konsole.warn( constants.S_ERR_PREFIX, "modifying array:", key, ex );
+            }
+        }
+
+        return value;
+    }
+
+    const addMissingEntries = function( pTarget, pSource, pOptions = { copy: false, freeze: false } )
+    {
+        if ( !isMap( pTarget ) || !isMap( pSource ) )
+        {
+            return pTarget;
+        }
+
+        const options = populateOptions( pOptions, { copy: false } );
+
+        let target = true === options.copy ? clone( pTarget ) : pTarget;
+
+        if ( isReadOnly( target ) )
+        {
+            return target;
+        }
+
+        pSource.forEach( ( val, key ) =>
+                         {
+                             if ( !(target.has( key )) )
+                             {
+                                 try
+                                 {
+                                     target.set( key, val );
+                                 }
+                                 catch( ex )
+                                 {
+                                     konsole.warn( constants.S_ERR_PREFIX, "modifying map entry", key, ex );
+                                 }
+                             }
+                         } );
+
+        return target;
+    };
+
+
+    const addMissingElements = function( pTarget, pSource, pOptions = { copy: false, freeze: false } )
+    {
+        if ( !isSet( pTarget ) || !isSet( pSource ) )
+        {
+            return pTarget;
+        }
+
+        const options = populateOptions( pOptions, { copy: false } );
+
+        let target = true === options.copy ? clone( pTarget ) : pTarget;
+
+        if ( isReadOnly( target ) )
+        {
+            return target;
+        }
+
+        if ( isFunction( target.union ) )
+        {
+            target = target.union( pSource );
+            return target;
+        }
+
+        pSource.forEach( ( val ) =>
+                         {
+                             if ( !target.has( val ) )
+                             {
+                                 try
+                                 {
+                                     target.add( val );
+                                 }
+                                 catch( ex )
+                                 {
+                                     konsole.warn( constants.S_ERR_PREFIX, "modifying set, attempting to add", val, ex );
+                                 }
+                             }
+                         } );
+
+        return target;
+    };
+
     /**
      * Returns a new object with any properties of the second object
      * copied to the first object, without overwriting existing properties
@@ -2430,12 +2585,12 @@ const $scope = constants?.$scope || function()
      */
     const augment = function( pObject, pObjectB, pOptions = DEFAULT_AUGMENT_OPTIONS, pStack = [] )
     {
-        const options = Object.assign( {}, pOptions || {} );
+        const options = populateOptions( pOptions, DEFAULT_AUGMENT_OPTIONS );
 
         const _stack = pStack || [];
 
         // start by creating a shallow copy of each object
-        let objA = Object.assign( {}, pObject || pObject || {} );
+        let objA = Object.assign( {}, pObject || pObjectB || {} );
 
         const objB = Object.freeze( Object.assign( {}, pObjectB || pObject || {} ) );
 
@@ -2450,148 +2605,55 @@ const $scope = constants?.$scope || function()
         {
             const entry = entries[i];
 
-            const key = asString( entry?.key || entry[0] );
+            const key = asString( entry?.key || entry[0] ) || "~!~";
+            const value = entry?.value || entry[1] || getProperty( objB, key );
 
-            if ( isBlank( key ) || EXCLUDED_PROPERTIES.includes( key ) )
+            if ( isBlank( key ) || EXCLUDED_PROPERTIES.includes( key ) || isNull( value ) )
             {
                 continue;
             }
 
             _stack.push( key );
 
-            let value = entry?.value || entry[1];
+            let valueA = _accessor( objA, key, value );
 
-            if ( !isBlank( key ) && !(_ud === typeof value || null === value) )
+            if ( isArray( valueA ) && isArray( value ) )
             {
-                let valueA = null;
-
-                try
-                {
-                    valueA = objA[key];
-                }
-                catch( ex )
-                {
-                    konsole.warn( constants.S_ERR_PREFIX, "accessing", key, ex );
-                }
-
-                if ( _ud === typeof valueA || null == valueA )
+                if ( options.appendToArrays )
                 {
                     try
                     {
-                        objA[key] = value;
+                        objA[key] = unique( [].concat( valueA ).concat( value ) );
                     }
                     catch( ex )
                     {
                         konsole.warn( constants.S_ERR_PREFIX, "modifying", key, ex );
                     }
                 }
-                else if ( isArray( valueA ) && isArray( value ) )
+            }
+            else if ( (valueA instanceof Map) && (value instanceof Map) && options.addMissingMapEntries )
+            {
+                objA[key] = addMissingEntries( valueA, value );
+            }
+            else if ( (valueA instanceof Set) && (value instanceof Set) && (options.appendToSets || options.unionOfSets) )
+            {
+                objA[key] = addMissingElements( valueA, value );
+            }
+            else if ( (isObject( valueA ) && isObject( value )) && (false !== options.recursive) && !isDate( valueA ) )
+            {
+                const classA = getClass( valueA );
+
+                const classB = getClass( value );
+
+                const classesAreCompatible = ((classA === classB) || (valueA instanceof classB) || (value instanceof classA));
+
+                if ( classesAreCompatible || true === options.mergeUnmatchedClasses )
                 {
-                    try
-                    {
-                        objA[key] = [].concat( valueA || [] );
-                    }
-                    catch( ex )
-                    {
-                        konsole.warn( constants.S_ERR_PREFIX, "modifying", key, ex );
-                    }
+                    _stack.push( key );
 
-                    let arrB = [].concat( value || [] );
+                    objA[key] = augment( objA[key], (value), options, _stack );
 
-                    try
-                    {
-                        valueA = objA[key] || [];
-                    }
-                    catch( ex )
-                    {
-                        konsole.warn( constants.S_ERR_PREFIX, "accessing", key, ex );
-                    }
-
-                    value = arrB || [];
-
-                    if ( value.length > valueA.length && options.appendToArrays )
-                    {
-                        for( let i = valueA.length, n = value.length; i < n; i++ )
-                        {
-                            if ( i >= valueA.length )
-                            {
-                                valueA.push( (value[i]) );
-                            }
-                        }
-                    }
-
-                    try
-                    {
-                        objA[key] = [].concat( valueA );
-                    }
-                    catch( ex )
-                    {
-                        konsole.warn( constants.S_ERR_PREFIX, "modifying", key, ex );
-                    }
-                }
-                else if ( (valueA instanceof Map) && (value instanceof Map) && options.addMissingMapEntries )
-                {
-                    if ( !Object.isFrozen( valueA ) )
-                    {
-                        value.forEach( ( val, key ) =>
-                                       {
-                                           if ( !(valueA.has( key )) )
-                                           {
-                                               try
-                                               {
-                                                   valueA.set( key, val );
-                                               }
-                                               catch( ex )
-                                               {
-                                                   konsole.warn( constants.S_ERR_PREFIX, "modifying map entry", key, ex );
-                                               }
-                                           }
-                                       } );
-                    }
-                }
-                else if ( (valueA instanceof Set) && (value instanceof Set) && (options.appendToSets || options.unionOfSets) )
-                {
-                    if ( !Object.isFrozen( valueA ) )
-                    {
-                        if ( _fun === typeof valueA.union )
-                        {
-                            objA[key] = valueA.union( value );
-                        }
-                        else
-                        {
-                            value.forEach( ( val ) =>
-                                           {
-                                               if ( !(valueA.has( val )) )
-                                               {
-                                                   try
-                                                   {
-                                                       valueA.add( (val) );
-                                                   }
-                                                   catch( ex )
-                                                   {
-                                                       konsole.warn( constants.S_ERR_PREFIX, "modifying", key, ex );
-                                                   }
-                                               }
-                                           } );
-                        }
-                    }
-                }
-                else if ( (_obj === typeof valueA && _obj === typeof value) && (false !== options.recursive) && !isDate( valueA ) )
-                {
-                    const classA = getClass( valueA );
-
-                    const classB = getClass( value );
-
-                    const classesAreCompatible = ((classA === classB) || (valueA instanceof classB) || (value instanceof classA));
-
-                    if ( classesAreCompatible || true === options.mergeUnmatchedClasses )
-                    {
-                        _stack.push( key );
-
-                        objA[key] = augment( objA[key], (value), options, _stack );
-
-                        _stack.pop();
-                    }
+                    _stack.pop();
                 }
             }
         }

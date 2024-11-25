@@ -55,9 +55,9 @@ const $scope = constants?.$scope || function()
         } = constants || {};
 
     // These statements make the functions and properties of the imported modules local variables and functions.
-    Object.assign( this || me, constants );
-    Object.assign( this || me, typeUtils );
-    Object.assign( this || me, stringUtils );
+    Object.assign( me || this, constants );
+    Object.assign( me || this, typeUtils );
+    Object.assign( me || this, stringUtils );
 
     /**
      * An array of this module's dependencies
@@ -2211,7 +2211,7 @@ const $scope = constants?.$scope || function()
         {
             Set.prototype.union = function( pArr )
             {
-                return union( this, pArr );
+                return new Set( union( this, pArr ) );
             };
         }
         catch( ex )
