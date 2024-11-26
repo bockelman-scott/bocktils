@@ -105,7 +105,9 @@ const $scope = constants?.$scope || function()
             instanceOfAny = typeUtils.instanceOfAny,
             getClassName = typeUtils.getClassName,
             getClass = typeUtils.getClass,
-            isReadOnly = typeUtils.isReadOnly
+            isReadOnly = typeUtils.isReadOnly,
+            JS_TYPES = typeUtils.JS_TYPES,
+            VALID_TYPES = typeUtils.VALID_TYPES
 
         } = typeUtils || {};
 
@@ -248,9 +250,10 @@ const $scope = constants?.$scope || function()
      * @param {Array<string>} pStack an array of operations or paths representing a sequence of function calls or elements processed
      * @param {Number} pRunLength the number of contiguous elements to consider a sequence
      * @param {Number} pMaxRepetitions the maximum number of times a sequence of run-length operations can appear before being considered a repeating/infinite loop
+     * @param pOnDetected {function} (optional) function to call when a cycle has been detected, defaults to a no-op
      * @returns true if cycling
      */
-    const detectCycles = function( pStack, pRunLength = 5, pMaxRepetitions = 3 )
+    const detectCycles = function( pStack, pRunLength = 5, pMaxRepetitions = 3, pOnDetected = no_op )
     {
         /**
          * The list of operations to evaluate
@@ -320,6 +323,17 @@ const $scope = constants?.$scope || function()
 
                 if ( repetitions >= maxRepeats )
                 {
+                    if ( isFunction( pOnDetected ) )
+                    {
+                        try
+                        {
+                            pOnDetected( _stack, runs, repetitions, runLength, maxRepeats );
+                        }
+                        catch( ex )
+                        {
+                            konsole.error();
+                        }
+                    }
                     return true;
                 }
 
@@ -1780,6 +1794,18 @@ const $scope = constants?.$scope || function()
                             konsole.warn( constants.S_ERR_PREFIX, "setting", "_" + nm, e );
                         }
                     }
+
+                    if ( isFunction( pValue ) )
+                    {
+                        try
+                        {
+                            pValue.bind( obj );
+                        }
+                        catch( ex )
+                        {
+                            konsole.warn( "Could not bind", nm, "to object", ex );
+                        }
+                    }
                 }
 
                 break;
@@ -2108,8 +2134,8 @@ const $scope = constants?.$scope || function()
 
     /**
      * Returns the first candidate object that has a method named pFunctionName
-     * @param pFunctionName the name of the method the object must implement to be returned
-     * @param pCandidates one or more objects that might implement the specified method
+     * @param pFunctionName {string|[string]} the name of the method the object must implement to be returned
+     * @param pCandidates {...object} one or more objects that might implement the specified method
      * @returns {object} the leftmost object that implements the specified method
      */
     const findImplementor = function( pFunctionName, ...pCandidates )
@@ -2143,8 +2169,8 @@ const $scope = constants?.$scope || function()
 
     /**
      * Returns an array of objects that implement one or more of the method(s) specified
-     * @param pMethodNames an array of strings that are method names (or a string that is a method name)
-     * @param pCandidates one or more objects, the subset of which to return if the object implements one or more of the specified methid(s)
+     * @param pMethodNames {string|[string]} an array of strings that are method names (or a string that is a method name)
+     * @param pCandidates {...object} one or more objects, the subset of which to return if the object implements one or more of the specified methid(s)
      * @returns {*[]}  an array of objects that implement one or more of the method(s) specified
      */
     const collectImplementors = function( pMethodNames, ...pCandidates )
@@ -2176,26 +2202,30 @@ const $scope = constants?.$scope || function()
         return implementors;
     };
 
+    function getTypeHint( pTypeHint, pValue )
+    {
+        let type = lcase( asString( pTypeHint || typeof pValue ) );
+        return JS_TYPES.includes( type ) ? type : typeof pValue;
+    }
+
     /**
      * Returns an object with the same structure or type with all values replaced with the default for that type.
      * For primitive types, returns the default value for that type (examples: 0, false, "")
-     * For arrays, returns an array of the same length, filled with nulls
-     * For an object, returns a new object with the same structure with all values populated with an emptyClone of that value
-     * @param pAny an object or primitive for which to return an empty clone or default value
-     * @param pTypeHint a string describing the type of the first argument
-     * @param pThis an object to which to bind any functions being empty-cloned
+     * For arrays, returns an array with each element mapped to an emptyClone
+     * For an object, returns a new object with the same structure
+     * with all values populated with an emptyClone of that value
+     * @param pAny {any} an object or primitive for which to return an empty clone or default value
+     * @param pTypeHint {string} a string describing the type of the first argument
+     * @param pThis {object} an object to which to bind any functions being cloned
+     *
+     * @param pStack {[string]} USED INTERNALLY TO PREVENT INFINITE RECURSION; DO NOT PASS A VALUE FROM CLIENT CODE
      * @returns {{}|undefined|number|string|*[]|unknown|(function(...[*]): *)|boolean} an object with the same structure or type with all values replaced with the default for that type
      */
-    const emptyClone = function( pAny, pTypeHint, pThis = null )
+    const emptyClone = function( pAny, pTypeHint, pThis = null, pStack = [] )
     {
-        let typeHint = (pTypeHint ? (_str === typeof pTypeHint ? pTypeHint : typeof pTypeHint) : _ud);
+        const stack = asArray( pStack || [] );
 
-        let type = asString( pAny ? typeof pAny || typeHint : typeHint ).toLowerCase();
-
-        if ( _ud === type )
-        {
-            type = typeHint || _ud;
-        }
+        let type = getTypeHint( pTypeHint, pAny );
 
         switch ( type )
         {
@@ -2213,24 +2243,63 @@ const $scope = constants?.$scope || function()
                 return false;
 
             case _obj:
+
                 if ( isArray( pAny ) )
                 {
-                    return [].fill( null, 0, (pAny?.length || 0) );
+                    if ( detectCycles( stack, 3, 3 ) )
+                    {
+                        let arr = [].fill( null, 0, pAny.length );
+                        pAny.forEach( ( e, i ) =>
+                                      {
+                                          arr[i] = typeUtils.defaultFor( typeof e );
+                                      } );
+                        return arr;
+                    }
+
+                    return [].concat( asArray( pAny ).map( (( e, i ) => emptyClone( e, typeof e, pAny, stack.concat( ("array[" + i + "]") ) )) ) );
                 }
 
                 let obj = {};
 
                 let entries = getEntries( pAny );
 
-                for( let entry of entries )
+                if ( detectCycles( stack, 3, 3 ) )
                 {
-                    if ( entry )
-                    {
-                        let key = entry.key || entry[0];
-                        let value = entry.value || entry[1];
+                    entries.forEach( entry =>
+                                     {
+                                         obj[entry.key || entry[0]] = typeUtils.defaultFor( typeof (entry.value || entry[1]) );
+                                     } );
 
-                        obj[key] = emptyClone( value, typeof value, obj );
+                    return obj;
+                }
+
+                stack.push( pAny );
+
+                try
+                {
+                    for( let entry of entries )
+                    {
+                        if ( entry )
+                        {
+                            let key = entry.key || entry[0];
+                            let value = entry.value || entry[1];
+
+                            stack.push( key );
+
+                            try
+                            {
+                                obj[key] = emptyClone( value, typeof value, obj, stack );
+                            }
+                            finally
+                            {
+                                stack.pop();
+                            }
+                        }
                     }
+                }
+                finally
+                {
+                    stack.pop();
                 }
 
                 return Object.assign( {}, obj );
@@ -2909,9 +2978,14 @@ const $scope = constants?.$scope || function()
      */
     const toLiteral = function( pObject, pOptions = DEFAULT_LITERAL_OPTIONS, pStack = [] )
     {
-        const options = ingest( {}, DEFAULT_LITERAL_OPTIONS, pOptions || {} );
+        const options = populateOptions( pOptions, DEFAULT_LITERAL_OPTIONS );
 
         let literal = {};
+
+        if ( isFunction( pObject ) )
+        {
+            return (options.removeFunctions ? undefined : pObject);
+        }
 
         if ( isNullOrEmpty( pObject ) )
         {
@@ -2935,7 +3009,7 @@ const $scope = constants?.$scope || function()
 
                 stack.push( key );
 
-                _map[key] = toLiteral( entry[1], pOptions, stack );
+                _map[key] = toLiteral( entry[1], options, stack );
 
                 stack.pop();
             }
@@ -2944,7 +3018,7 @@ const $scope = constants?.$scope || function()
         }
         else if ( pObject instanceof Set )
         {
-            literal = [].concat( [...pObject] ).map( e => toLiteral( e, pOptions, stack ) );
+            literal = [].concat( [...pObject] ).map( ( e, i ) => toLiteral( e, options, stack.concat( i ) ) );
         }
         else
         {
@@ -2979,12 +3053,7 @@ const $scope = constants?.$scope || function()
                 case _obj:
                     if ( isArray( pObject ) )
                     {
-                        literal = [];
-
-                        for( let element of pObject )
-                        {
-                            literal.push( toLiteral( element, pOptions, stack ) );
-                        }
+                        literal = [...pObject].map( ( e, i ) => toLiteral( e, options, stack.concat( i ) ) );
                     }
                     else
                     {
@@ -3001,27 +3070,32 @@ const $scope = constants?.$scope || function()
                             {
                                 stack.push( key );
 
-                                let literalValue = toLiteral( value, pOptions, stack );
-
-                                let remove = false;
-
-                                if ( !options.prune || !isEmptyValue( literalValue ) )
+                                try
                                 {
-                                    if ( !options.removeFunctions || !(isFunction( literalValue )) )
+                                    let literalValue = toLiteral( value, options, stack );
+
+                                    let remove = _ud === typeof literalValue;
+
+                                    if ( !options.prune || !isEmptyValue( literalValue ) )
                                     {
-                                        setProperty( literal, key, literalValue );
+                                        if ( !options.removeFunctions || !(isFunction( literalValue )) )
+                                        {
+                                            setProperty( literal, key, literalValue );
+                                        }
+                                        else
+                                        {
+                                            remove = true;
+                                        }
                                     }
-                                    else
+
+                                    if ( remove )
                                     {
-                                        remove = true;
+                                        removeProperty( literal, key );
                                     }
                                 }
-
-                                stack.pop();
-
-                                if ( remove )
+                                finally
                                 {
-                                    removeProperty( literal, key );
+                                    stack.pop();
                                 }
                             }
                         }
@@ -3057,7 +3131,7 @@ const $scope = constants?.$scope || function()
 
             if ( options.prune )
             {
-                literal = pruneObject( literal, pOptions );
+                literal = pruneObject( literal, options );
             }
         }
 

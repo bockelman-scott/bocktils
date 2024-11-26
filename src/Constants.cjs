@@ -61,13 +61,6 @@
     const currentDirectory = (_ud !== typeof process) ? process.cwd() : ((_ud !== typeof __dirname) ? __dirname : ".");
 
     /**
-     * This is the default limit for iterations that should be capped.
-     * @see IterationCap
-     * @type {number} the default limit for iterations that should be capped
-     */
-    const DEFAULT_MAX_ITERATIONS = 1_000;
-
-    /**
      * This is the default limit for recursive functions that cannot have a base-case to escape infinite execution
      * @type {number} the default limit for recursive functions that cannot have a base-case
      */
@@ -280,7 +273,7 @@
             undefinedToNull: false,
             undefinedToEmptyObject: false,
             undefinedToEmptyArray: false,
-            depth: 0,
+            depth: 99,
         };
 
     const MAX_STACK_SIZE = 32;
@@ -339,7 +332,7 @@
         {
             if ( isArray( pObject ) )
             {
-                clone = [].concat( pObject );
+                clone = [...pObject];
 
                 if ( depth > 0 )
                 {
@@ -347,7 +340,14 @@
 
                     stack.push( clone );
 
-                    clone = clone.map( e => localCopy( e, options, stack ) );
+                    try
+                    {
+                        clone = clone.map( e => localCopy( e, options, stack ) );
+                    }
+                    finally
+                    {
+                        stack.pop();
+                    }
                 }
             }
             else
@@ -360,14 +360,21 @@
 
                     stack.push( clone );
 
-                    const entries = Object.entries( pObject );
-
-                    for( let entry of entries )
+                    try
                     {
-                        const key = entry[0];
-                        const value = entry[1];
+                        const entries = Object.entries( pObject );
 
-                        clone[key] = localCopy( value, options, stack );
+                        for( let entry of entries )
+                        {
+                            const key = entry[0];
+                            const value = entry[1];
+
+                            clone[key] = localCopy( value, options, stack.concat( key ) );
+                        }
+                    }
+                    finally
+                    {
+                        stack.pop();
                     }
                 }
             }
@@ -433,7 +440,7 @@
 
                 if ( isArray( pObject ) )
                 {
-                    clone = [].concat( pObject );
+                    clone = [...pObject];
 
                     if ( depth > 0 )
                     {
@@ -441,7 +448,14 @@
 
                         stack.push( clone );
 
-                        clone = clone.map( e => immutableCopy( e, options, stack ) );
+                        try
+                        {
+                            clone = clone.map( e => immutableCopy( e, options, stack ) );
+                        }
+                        finally
+                        {
+                            stack.pop();
+                        }
                     }
                 }
                 else
@@ -454,14 +468,21 @@
 
                         stack.push( clone );
 
-                        const entries = Object.entries( pObject );
-
-                        for( let entry of entries )
+                        try
                         {
-                            const key = entry[0];
-                            const value = entry[1];
+                            const entries = Object.entries( pObject );
 
-                            clone[key] = immutableCopy( value, options, stack );
+                            for( let entry of entries )
+                            {
+                                const key = entry[0];
+                                const value = entry[1];
+
+                                clone[key] = immutableCopy( value, options, stack.concat( key ) );
+                            }
+                        }
+                        finally
+                        {
+                            stack.pop();
                         }
                     }
                 }
@@ -578,24 +599,227 @@
     };
 
     /**
-     * This subclass of Error is useful when validating function arguments.
-     * The message property is overwritten to include the prefix 'IllegalArgumentException: ',
-     * so that if only the message is logged, the type of error is not obscured
+     * Returns a string compatible with the StackTrace parseFrame method
+     *
+     * @param pError {Error}
+     *
+     * @returns {string} a string compatible with the StackTrace parseFrame method
      */
-    class IllegalArgumentError extends Error
+    function generateStack( pError )
+    {
+        if ( !(pError instanceof Error) )
+        {
+            return _mt_str;
+        }
+
+        let stack = pError?.stack;
+
+        if ( _ud === typeof stack || null == stack || _str !== typeof stack )
+        {
+            stack = pError?.toString() || (pError?.name + _colon + _spc + pError?.message) + "\n";
+
+            stack += "at (" + (pError?.fileName || _unknown) + _colon + (pError?.lineNumber || _unknown) + _colon + (pError?.columnNumber || _unknown) + ")\n";
+        }
+
+        return stack;
+    }
+
+    /**
+     * This class provides cross-environment functionality related to an error's stack (trace)
+     * For more robust functionality, consider https://github.com/stacktracejs/stacktrace.js
+     */
+    class StackTrace
+    {
+        #stack;
+        #err;
+
+        #parts;
+
+        #methodName;
+        #fileName;
+        #lineNumber;
+        #columnNumber;
+
+        constructor( pStack, pError )
+        {
+            this.#err = pError instanceof Error ? pError : pStack instanceof Error ? pStack : new Error();
+
+            this.#stack = (pStack instanceof String ? pStack : pStack instanceof Error ? (pStack?.stack || generateStack( pStack )) : _mt_str) || pError?.stack || generateStack( pError ) || generateStack( pStack );
+        }
+
+        get err()
+        {
+            return this.#err;
+        }
+
+        get stack()
+        {
+            return this.#stack || generateStack( this.#err );
+        }
+
+        get frames()
+        {
+            let arr = [].concat( this.stack.split( /(\r\n)|\n/ ) );
+            return arr.filter( e => e.includes( /(at)|@/ ) );
+        }
+
+        parseFrame( pFrame )
+        {
+            let frame = _num === pFrame ? this.frames[pFrame] : pFrame;
+
+            let rx = /((([^@(]\s*)*)([@(])([^)\n]+)([)\n]|$))/;
+
+            let matches = rx.exec( frame );
+
+            let parsed = {};
+
+            if ( matches && matches.length )
+            {
+                parsed.methodName = matches?.length > 2 ? matches[2] : _unknown;
+
+                const parts = matches?.length > 5 ? (matches[5]).split( _colon ) : _unknown;
+
+                parsed.fileName = parts?.length > 0 ? parts[0] : _unknown;
+                parsed.lineNumber = parts?.length > 1 ? parts[1] : 0;
+                parsed.columnNumber = parts?.length > 2 ? parts[2] : 0;
+            }
+
+            return parsed;
+        }
+
+        get parts()
+        {
+            this.#parts = this.#parts || this.parseFrame( 0 );
+            return immutableCopy( this.#parts );
+        }
+
+        get methodName()
+        {
+            this.#methodName = this.#methodName || this.parts?.methodName;
+            return this.#methodName;
+        }
+
+        get fileName()
+        {
+            let nm = this.#fileName || (_mt_str + (this.err?.fileName || _mt_str));
+            this.#fileName = this.#fileName || nm || this.parts?.fileName;
+            return this.#fileName || nm || this.parts?.fileName;
+        }
+
+        get lineNumber()
+        {
+            this.#lineNumber = this.#lineNumber || this.err?.lineNumber || this.parts?.lineNumber;
+            return this.#lineNumber || this.parts?.lineNumber;
+        }
+
+        get columnNumber()
+        {
+            this.#columnNumber = this.#columnNumber || this.err?.columnNumber || this.parts?.columnNumber;
+            return this.#columnNumber || this.parts?.columnNumber;
+        }
+    }
+
+    /**
+     * This class provides for custom Errors to be defined.
+     * This class and its subclasses also should be able to provide a stack trace
+     * regardless of browser or environment
+     */
+    class __Error extends Error
     {
         #options;
 
         constructor( pMessage, pOptions )
         {
-            super( pMessage );
+            super( pMessage, pOptions );
 
-            this.#options = Object.freeze( immutableCopy( pOptions || {} ) );
+            if ( Error.captureStackTrace )
+            {
+                Error.captureStackTrace( this, this.constructor );
+            }
+
+            this.#options = immutableCopy( pOptions || {} );
         }
 
         get options()
         {
             return immutableCopy( this.#options || {} );
+        }
+
+        get type()
+        {
+            return "__Error";
+        }
+
+        get prefix()
+        {
+            return this.type + ": ";
+        }
+
+        get message()
+        {
+            return this.prefix + (super.message.replace( this.prefix, _mt_str ));
+        }
+
+        toString()
+        {
+            return this.message;
+        }
+
+        get cause()
+        {
+            return (this.#options?.cause instanceof Error ? this.#options?.cause : super.cause) || super.cause;
+        }
+
+        get stackTrace()
+        {
+            return new StackTrace( this.stack || super.stack || this.cause?.stack || super.cause?.stack || generateStack( this ), this );
+        }
+
+        get fileName()
+        {
+            return super.fileName || this.stackTrace?.fileName;
+        }
+
+        get lineNumber()
+        {
+            return super.lineNumber || this.stackTrace?.lineNumber;
+        }
+
+        get columnNumber()
+        {
+            return super.columnNumber || this.stackTrace?.columnNumber;
+        }
+
+        logTo( pLogger, pLevel )
+        {
+            const logger = pLogger || konsole;
+
+            const level = _str === typeof pLevel ? pLevel.toLowerCase() : _num === typeof pLevel && pLevel >= 0 && pLevel <= 6 ? ["none", "info", "warn", "error", "debug", "trace", "log"][pLevel] : "error";
+
+            if ( _fun === typeof logger[level] )
+            {
+                logger[level]( this.message, this.options );
+            }
+        }
+    }
+
+    __Error.prototype.name = "__Error";
+
+    /**
+     * This subclass of Error is useful when validating function arguments.
+     * The message property is overwritten to include the prefix 'IllegalArgumentException: ',
+     * so that if only the message is logged, the type of error is not obscured
+     */
+    class IllegalArgumentError extends __Error
+    {
+        constructor( pMessage, pOptions )
+        {
+            super( pMessage, pOptions );
+
+            if ( Error.captureStackTrace )
+            {
+                Error.captureStackTrace( this, this.constructor );
+            }
         }
 
         get type()
@@ -613,16 +837,14 @@
             return this.prefix + (super.message.replace( this.prefix, _mt_str ));
         }
 
-        logTo( pLogger, pLevel )
+        toString()
         {
-            const logger = pLogger || konsole;
+            return this.message;
+        }
 
-            const level = _str === typeof pLevel ? pLevel.toLowerCase() : _num === typeof pLevel && pLevel >= 0 && pLevel <= 6 ? ["none", "info", "warn", "error", "debug", "trace", "log"][pLevel] : "error";
-
-            if ( _fun === typeof logger[level] )
-            {
-                logger[level]( this.message, this.options );
-            }
+        get stackTrace()
+        {
+            return new StackTrace( this.stack || super.stack || this.cause?.stack || super.cause?.stack || generateStack( this ), this );
         }
 
         static from( pError )
@@ -630,6 +852,8 @@
             return new IllegalArgumentError( pError.message, { cause: pError } );
         }
     }
+
+    IllegalArgumentError.prototype.name = "IllegalArgumentError";
 
     /**
      * Returns a new Object whose properties and functions match those of the Object specified.
@@ -1339,7 +1563,7 @@
             },
             dependencies,
             importUtilities,
-            classes: { IterationCap, ComparatorFactory, IllegalArgumentError },
+            classes: { IterationCap, ComparatorFactory, StackTrace, __Error, IllegalArgumentError },
             ComparatorFactory,
             IterationCap,
             REG_EXP,
