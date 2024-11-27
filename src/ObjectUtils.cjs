@@ -635,7 +635,7 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * This class wraps the 2-element arrays returned from Object.entries,
+     * This class wraps the 2-element arrays returned from Object::entries,
      * so we can treat them like objects with a key and a value property instead of an array.
      * This class extends Array, so it retains all the functionality normally available for Object entries
      */
@@ -660,6 +660,7 @@ const $scope = constants?.$scope || function()
 
                 this.#key = (args?.length || 0) > 0 ? args[0] : this[0] || _mt_str;
                 this.#value = (args?.length || 0) > 1 ? args[1] || this[1] : this[1];
+                this.#parent = (args?.length || 0) > 2 ? args[2] || this[2] : this[2];
             }
 
             this.#type = typeof this.#value;
@@ -981,7 +982,7 @@ const $scope = constants?.$scope || function()
 
                     if ( _ud !== typeof value && null !== value )
                     {
-                        entries.push( [property, value] );
+                        entries.push( [property, value, object] );
                     }
                 }
             }
