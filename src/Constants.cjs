@@ -46,7 +46,7 @@
     /**
      * Returns true if this code is being executed by Node.js (or Deno)
      * or technically any environment that defines 'global' and 'process' and does not define 'self' or 'window'
-     * @returns {boolean} true if this code is being executed by Node.js (or Deno)
+     * @returns {boolean} true if this code is (probably) being executed by Node.js (or Deno)
      */
     const isNodeJs = function()
     {
@@ -173,8 +173,8 @@
             S_SYMBOL = _symbol,
             S_Z = _z,
 
-            S_TYPES = _types,
-            S_VALID_TYPES = _validTypes,
+            S_TYPES = _types.join( _comma ),
+            S_VALID_TYPES = _validTypes.join( _comma ),
 
             S_ERR_PREFIX = "An error occurred while",
             S_DEFAULT_OPERATION = "executing script",
@@ -253,6 +253,28 @@
     }
 
     /**
+     * Returns true if the specified value is immutable.
+     *
+     * Examples of immutable values include:
+     * - Objects that are frozen or sealed
+     * - Properties of Objects that are defined as writable:false
+     * - Strings, Numbers, Booleans, and Symbols
+     * - null values, undefined values
+     *
+     * @param pObject
+     * @returns {boolean|boolean}
+     */
+    const isReadOnly = function( pObject )
+    {
+        if ( _obj === typeof pObject )
+        {
+            return (null === pObject) || Object.isFrozen( pObject ) || Object.isSealed( pObject );
+        }
+
+        return true;
+    };
+
+    /**
      * These are the default options used with the immutableCopy function.
      *
      * nullToEmptyObject {boolean} pass true for this property if you want null values to be returned as EMPTY_OBJECT
@@ -266,7 +288,7 @@
      *
      * @type {{nullToEmptyObject: boolean, undefinedToEmptyObject: boolean, depth: number, nullToEmptyArray: boolean, undefinedToNull: boolean}}
      */
-    const DEFAULT_COPY_OPTIONS =
+    const DEFAULT_COPY_OPTIONS = Object.freeze(
         {
             nullToEmptyObject: false,
             nullToEmptyArray: false,
@@ -274,18 +296,26 @@
             undefinedToEmptyObject: false,
             undefinedToEmptyArray: false,
             depth: 99,
-        };
+            freeze: false
+        } );
+
+    const IMMUTABLE_COPY_OPTIONS = { ...DEFAULT_COPY_OPTIONS };
+    IMMUTABLE_COPY_OPTIONS.freeze = true;
 
     const MAX_STACK_SIZE = 32;
 
+    /**
+     * Returns an object corresponding to a set of default options with one or more properties
+     * overridden or added by the properties of the specified pOptions
+     *
+     * @param pOptions {object} an object whose properties should be used
+     * @param pDefaults {object} an object holding defaults for the properties to be used
+     * @returns {object} an object combining the defaults with the specified options
+     */
     function populateOptions( pOptions, pDefaults )
     {
-        return Object.assign( Object.assign( {}, pDefaults || {} ), (pOptions || pDefaults || {}) );
-    }
-
-    function _localCopyOptions( pOptions )
-    {
-        return populateOptions( pOptions, DEFAULT_COPY_OPTIONS );
+        const defaults = _obj === typeof pDefaults ? { ...pDefaults } : {};
+        return Object.assign( (defaults || {}), (pOptions || pDefaults || {}) );
     }
 
     function _getDepth( pOptions )
@@ -295,7 +325,9 @@
     }
 
     /**
-     * Returns a local (mutable) copy of the value specified.
+     * Returns a deep copy of the value specified.
+     * Used by localCopy and immutableCopy functions.
+     * This function should not be exported.
      *
      * @param pObject {any} the value to copy
      *
@@ -305,100 +337,17 @@
      * @param pStack {[any]} USED INTERNALLY TO PREVENT INFINITE RECURSION, DO NOT SPECIFY A VALUE FROM CLIENT CODE
      *
      * @returns {bigint|number|string|null|{}|undefined|{}|*[]|Readonly<{}>|*|Function|boolean} an immutable copy of the value specified
-     */
-    const localCopy = function( pObject, pOptions, pStack = [] )
-    {
-        const options = _localCopyOptions( pOptions );
-
-        const depth = _getDepth( options );
-
-        options.depth = depth;
-
-        let clone = pObject;
-
-        const stack = [].concat( pStack || [] );
-
-        if ( stack.length > MAX_STACK_SIZE )
-        {
-            return clone;
-        }
-
-        if ( null == pObject || _ud === typeof pObject )
-        {
-            return options?.nullToEmptyObject || options?.undefinedToEmptyObject ? {} : options?.nullToEmptyArray || options?.undefinedToEmptyArray ? [] : null;
-        }
-
-        if ( _obj === typeof pObject )
-        {
-            if ( isArray( pObject ) )
-            {
-                clone = [...pObject];
-
-                if ( depth > 0 )
-                {
-                    options.depth = depth - 1;
-
-                    stack.push( clone );
-
-                    try
-                    {
-                        clone = clone.map( e => localCopy( e, options, stack ) );
-                    }
-                    finally
-                    {
-                        stack.pop();
-                    }
-                }
-            }
-            else
-            {
-                clone = Object.assign( {}, pObject || {} );
-
-                if ( depth > 0 )
-                {
-                    options.depth = depth - 1;
-
-                    stack.push( clone );
-
-                    try
-                    {
-                        const entries = Object.entries( pObject );
-
-                        for( let entry of entries )
-                        {
-                            const key = entry[0];
-                            const value = entry[1];
-
-                            clone[key] = localCopy( value, options, stack.concat( key ) );
-                        }
-                    }
-                    finally
-                    {
-                        stack.pop();
-                    }
-                }
-            }
-        }
-
-        return clone;
-    };
-
-    /**
-     * Returns an immutable copy of the value specified.
      *
-     * @param pObject {any} the value to copy
-     * @param pOptions {object} an object specifying how to handle undefined and null values
-     * as well as whether and how deep to copy an object or array value
-     * @param pStack {[any]} USED INTERNALLY TO PREVENT INFINITE RECURSION, DO NOT SPECIFY A VALUE FROM CLIENT CODE
-     * @returns {bigint|number|string|null|{}|undefined|{}|*[]|Readonly<{}>|*|Function|boolean} an immutable copy of the value specified
+     * @private
      */
-    const immutableCopy = function( pObject, pOptions = DEFAULT_COPY_OPTIONS, pStack = [] )
+    const _copy = function( pObject, pOptions = DEFAULT_COPY_OPTIONS, pStack = [] )
     {
         const options = populateOptions( pOptions, DEFAULT_COPY_OPTIONS );
 
         const depth = _getDepth( options );
-
         options.depth = depth;
+
+        const freeze = (true === options.freeze);
 
         let clone = pObject;
 
@@ -406,13 +355,13 @@
 
         if ( stack.length > MAX_STACK_SIZE )
         {
-            return clone;
+            return freeze ? Object.freeze( clone ) : clone;
         }
 
         switch ( typeof pObject )
         {
             case _ud:
-                return options?.undefinedToNull ? null : options?.undefinedToEmptyObject ? EMPTY_OBJECT : options?.undefinedToEmptyArray ? EMPTY_ARRAY : undefined;
+                return options?.undefinedToNull ? null : (options?.undefinedToEmptyObject ? (freeze ? EMPTY_OBJECT : {}) : options?.undefinedToEmptyArray ? (freeze ? EMPTY_ARRAY : []) : undefined);
 
             case _str:
                 return (_mt_str + pObject);
@@ -427,7 +376,7 @@
                 return Boolean( pObject );
 
             case _fun:
-                return Object.freeze( pObject );
+                return (freeze ? Object.freeze( pObject ) : pObject);
 
             case _symbol:
                 return pObject;
@@ -435,10 +384,18 @@
             case _obj:
                 if ( null == pObject )
                 {
-                    return options?.nullToEmptyObject ? {} : options?.nullToEmptyArray ? [] : null;
+                    return options?.nullToEmptyObject ? (freeze ? EMPTY_OBJECT : {}) : options?.nullToEmptyArray ? (freeze ? EMPTY_ARRAY : []) : null;
                 }
 
-                if ( isArray( pObject ) )
+                if ( pObject instanceof Date )
+                {
+                    clone = new Date( pObject.getTime() );
+                }
+                else if ( pObject instanceof RegExp )
+                {
+                    clone = new RegExp( pObject, (pObject.flags || _mt_str) );
+                }
+                else if ( isArray( pObject ) )
                 {
                     clone = [...pObject];
 
@@ -450,7 +407,7 @@
 
                         try
                         {
-                            clone = clone.map( e => immutableCopy( e, options, stack ) );
+                            clone = clone.map( ( e, i ) => _copy( e, options, stack.concat( i ) ) );
                         }
                         finally
                         {
@@ -460,7 +417,7 @@
                 }
                 else
                 {
-                    clone = Object.assign( {}, pObject || {} );
+                    clone = Object.assign( {}, pObject );
 
                     if ( depth > 0 )
                     {
@@ -477,7 +434,19 @@
                                 const key = entry[0];
                                 const value = entry[1];
 
-                                clone[key] = immutableCopy( value, options, stack.concat( key ) );
+                                clone[key] = _copy( value, options, stack.concat( key ) );
+
+                                if ( _fun === typeof clone[key] )
+                                {
+                                    try
+                                    {
+                                        clone[key].bind( clone );
+                                    }
+                                    catch( ex )
+                                    {
+                                        konsole.warn( key, "could not be bound to the clone", ex );
+                                    }
+                                }
                             }
                         }
                         finally
@@ -488,7 +457,40 @@
                 }
         }
 
-        return Object.freeze( clone );
+        return freeze ? Object.freeze( clone ) : clone;
+    };
+
+    /**
+     * Returns a local (mutable) copy of the value specified.
+     *
+     * @param pObject {any} the value to copy
+     *
+     * @param pOptions {object} an object specifying how to handle undefined and null values
+     * as well as whether and how deep to copy an object or array value
+     *
+     * @param pStack {[any]} USED INTERNALLY TO PREVENT INFINITE RECURSION, DO NOT SPECIFY A VALUE FROM CLIENT CODE
+     *
+     * @returns {bigint|number|string|null|{}|undefined|{}|*[]|Readonly<{}>|*|Function|boolean} an immutable copy of the value specified
+     */
+    const localCopy = function( pObject, pOptions = DEFAULT_COPY_OPTIONS, pStack = [] )
+    {
+        return _copy( pObject, pOptions, pStack );
+    };
+
+    /**
+     * Returns an immutable copy of the value specified.
+     *
+     * @param pObject {any} the value to copy
+     * @param pOptions {object} an object specifying how to handle undefined and null values
+     * as well as whether and how deep to copy an object or array value
+     * @param pStack {[any]} USED INTERNALLY TO PREVENT INFINITE RECURSION, DO NOT SPECIFY A VALUE FROM CLIENT CODE
+     * @returns {bigint|number|string|null|{}|undefined|{}|*[]|Readonly<{}>|*|Function|boolean} an immutable copy of the value specified
+     */
+    const immutableCopy = function( pObject, pOptions = IMMUTABLE_COPY_OPTIONS, pStack = [] )
+    {
+        const options = populateOptions( pOptions, IMMUTABLE_COPY_OPTIONS );
+        options.freeze = true;
+        return _copy( pObject, options, pStack );
     };
 
     /**
@@ -616,7 +618,7 @@
 
         if ( _ud === typeof stack || null == stack || _str !== typeof stack )
         {
-            stack = pError?.toString() || (pError?.name + _colon + _spc + pError?.message) + "\n";
+            stack = pError?.toString() || (pError?.name + _colon + _spc + (_mt_str + pError?.message).replace( (pError?.name || "~!~"), _mt_str )) + "\n";
 
             stack += "at (" + (pError?.fileName || _unknown) + _colon + (pError?.lineNumber || _unknown) + _colon + (pError?.columnNumber || _unknown) + ")\n";
         }
@@ -631,8 +633,7 @@
     class StackTrace
     {
         #stack;
-        #err;
-
+        #frames;
         #parts;
 
         #methodName;
@@ -642,32 +643,48 @@
 
         constructor( pStack, pError )
         {
-            this.#err = pError instanceof Error ? pError : pStack instanceof Error ? pStack : new Error();
+            this.#stack = (pStack instanceof String ?
+                           pStack :
+                           pStack instanceof Error ?
+                           (pStack?.stack || generateStack( pStack ))
+                                                   : _mt_str)
+                          || pError?.stack
+                          || generateStack( pError )
+                          || generateStack( pStack );
 
-            this.#stack = (pStack instanceof String ? pStack : pStack instanceof Error ? (pStack?.stack || generateStack( pStack )) : _mt_str) || pError?.stack || generateStack( pError ) || generateStack( pStack );
-        }
+            this.#frames = this.parseFrames();
 
-        get err()
-        {
-            return this.#err;
+            this.#parts = this.parseFrame( Math.min( 1, this.#frames?.length - 1 ) );
+
+            this.#methodName = this.#parts.methodName;
+            this.#fileName = this.#parts.fileName;
+            this.#lineNumber = this.#parts.lineNumber;
+            this.#columnNumber = this.#parts.columnNumber;
         }
 
         get stack()
         {
-            return this.#stack || generateStack( this.#err );
+            return this.#stack;
         }
 
         get frames()
         {
+            this.#frames = this.#frames?.length ? this.#frames : this.parseFrames();
+            return this.#frames;
+        }
+
+        parseFrames()
+        {
             let arr = [].concat( this.stack.split( /(\r\n)|\n/ ) );
-            return arr.filter( e => e.includes( /(at)|@/ ) );
+            arr = arr.filter( e => (/(at)|@/).test( e ) ).map( e => e.replace( /at /, "@" ).trim() );
+            return arr.map( e => e.replaceAll( /[A-Z]:\\/g, _mt_str ).trim() );
         }
 
         parseFrame( pFrame )
         {
-            let frame = _num === pFrame ? this.frames[pFrame] : pFrame;
+            let frame = _num === typeof pFrame ? this.frames[pFrame] : pFrame;
 
-            let rx = /((([^@(]\s*)*)([@(])([^)\n]+)([)\n]|$))/;
+            let rx = /((([^@(]\s*)*)([@(])([^)\n]+)([)\n]|$))/;   //// TODO
 
             let matches = rx.exec( frame );
 
@@ -689,7 +706,7 @@
 
         get parts()
         {
-            this.#parts = this.#parts || this.parseFrame( 0 );
+            this.#parts = (this.#parts && Object.keys( this.#parts ).length > 0) ? this.#parts || this.parseFrame( 0 ) : this.parseFrame( 0 );
             return immutableCopy( this.#parts );
         }
 
@@ -701,20 +718,19 @@
 
         get fileName()
         {
-            let nm = this.#fileName || (_mt_str + (this.err?.fileName || _mt_str));
-            this.#fileName = this.#fileName || nm || this.parts?.fileName;
-            return this.#fileName || nm || this.parts?.fileName;
+            this.#fileName = this.#fileName || this.parts?.fileName;
+            return this.#fileName || this.parts?.fileName;
         }
 
         get lineNumber()
         {
-            this.#lineNumber = this.#lineNumber || this.err?.lineNumber || this.parts?.lineNumber;
+            this.#lineNumber = this.#lineNumber || this.parts?.lineNumber;
             return this.#lineNumber || this.parts?.lineNumber;
         }
 
         get columnNumber()
         {
-            this.#columnNumber = this.#columnNumber || this.err?.columnNumber || this.parts?.columnNumber;
+            this.#columnNumber = this.#columnNumber || this.parts?.columnNumber;
             return this.#columnNumber || this.parts?.columnNumber;
         }
     }
@@ -726,7 +742,10 @@
      */
     class __Error extends Error
     {
+        #msg;
         #options;
+
+        #trace;
 
         constructor( pMessage, pOptions )
         {
@@ -736,6 +755,8 @@
             {
                 Error.captureStackTrace( this, this.constructor );
             }
+
+            this.#msg = pMessage || super.message;
 
             this.#options = immutableCopy( pOptions || {} );
         }
@@ -757,12 +778,12 @@
 
         get message()
         {
-            return this.prefix + (super.message.replace( this.prefix, _mt_str ));
+            return this.prefix + ((this.#msg || super.message).replace( this.prefix, _mt_str ));
         }
 
         toString()
         {
-            return this.message;
+            return this.prefix + ((this.#msg || super.message).replace( this.prefix, _mt_str ));
         }
 
         get cause()
@@ -772,7 +793,8 @@
 
         get stackTrace()
         {
-            return new StackTrace( this.stack || super.stack || this.cause?.stack || super.cause?.stack || generateStack( this ), this );
+            this.#trace = this.#trace || new StackTrace( this.stack || this.cause?.stack || generateStack( this ), this );
+            return this.#trace;
         }
 
         get fileName()
@@ -798,7 +820,7 @@
 
             if ( _fun === typeof logger[level] )
             {
-                logger[level]( this.message, this.options );
+                logger[level]( this.toString(), this.options );
             }
         }
     }
@@ -812,6 +834,8 @@
      */
     class IllegalArgumentError extends __Error
     {
+        #mess;
+
         constructor( pMessage, pOptions )
         {
             super( pMessage, pOptions );
@@ -820,6 +844,8 @@
             {
                 Error.captureStackTrace( this, this.constructor );
             }
+
+            this.#mess = pMessage || super.message;
         }
 
         get type()
@@ -834,17 +860,12 @@
 
         get message()
         {
-            return this.prefix + (super.message.replace( this.prefix, _mt_str ));
+            return this.prefix + ((this.#mess || super.message).replace( this.prefix, _mt_str ));
         }
 
         toString()
         {
-            return this.message;
-        }
-
-        get stackTrace()
-        {
-            return new StackTrace( this.stack || super.stack || this.cause?.stack || super.cause?.stack || generateStack( this ), this );
+            return this.prefix + ((this.#mess || super.message).replace( this.prefix, _mt_str ));
         }
 
         static from( pError )
@@ -856,55 +877,25 @@
     IllegalArgumentError.prototype.name = "IllegalArgumentError";
 
     /**
-     * Returns a new Object whose properties and functions match those of the Object specified.
-     * Use this to create a copy of some scope, such as global, self, or the current closure.
-     * THIS FUNCTION WILL BIND FUNCTIONS TO THE NEW OBJECT
-     * IF YOU WANT TO COPY THE FUNCTIONS INSTEAD. USE FunctionUtils.cjs copyScope INSTEAD
+     * Makes all the properties and functions
+     * found in the utilities specified
+     * local variables of the scope specified.
      *
-     * @param pScope the object (or scope) whose properties and functions should be copied to the new object to be returned.
-     *
-     * @returns {Readonly<{}>} a new object with the same properties and functions defined in the specified scope
+     * @param pScope {object|function} a scope into which to import the properties and functions of the specified utilities.
+     *                                 this can be a closure, the global scope, or any object to which properties and functions can be copied
+     * @param pUtils {...object} one or more utilities or modules whose properties and functions you want to treat as local to the scope
+     * @returns {object} the scope into which the utilities have been imported, often ignored
      */
-    const copyScope = function( pScope )
-    {
-        let scope = pScope || $scope();
-
-        let obj = Object.assign( { ...scope }, scope );
-
-        const entries = Object.entries( obj );
-
-        let variables = {};
-
-        const keysToExclude = ["global", "self", "window", "this", "me"];
-
-        entries.forEach( entry =>
-                         {
-                             let key = (entry?.length || 0) > 0 ? entry[0] : _mt_str;
-
-                             let value = (entry?.length || 0) > 1 ? entry[1] : key;
-
-                             if ( !(_ud === typeof value || null === value || _symbol === typeof value) )
-                             {
-                                 if ( _str === typeof key && !(keysToExclude.includes( key )) )
-                                 {
-                                     variables[key] = value;
-
-                                     if ( _fun === typeof value )
-                                     {
-                                         value.bind( variables );
-                                     }
-                                 }
-                             }
-                         } );
-
-        return Object.freeze( variables );
-    };
-
     const importUtilities = function( pScope, ...pUtils )
     {
         const scope = pScope || $scope();
 
-        const utils = immutableCopy( pUtils || [], { nullToEmptyArray: true, undefinedToEmptyArray: true, depth: 2 } );
+        const utils = immutableCopy( (pUtils || []),
+                                     {
+                                         nullToEmptyArray: true,
+                                         undefinedToEmptyArray: true,
+                                         depth: 2
+                                     } );
 
         let obj = {};
 
@@ -920,7 +911,7 @@
             }
         }
 
-        return scope;
+        return scope || obj;
     };
 
     /**
@@ -934,6 +925,68 @@
             // this module has no dependencies
         };
 
+    const _coerce = function( pValue, pType )
+    {
+        let a = (_ud === typeof pValue || null === pValue) ? null : pValue;
+
+        let type = pType || typeof a;
+
+        type = (_validTypes.includes( type ) || _fun === typeof type) ? type : typeof a;
+
+        if ( type === typeof a || (_fun === typeof type && a instanceof type) )
+        {
+            return a;
+        }
+
+        switch ( type )
+        {
+            case _str:
+                return _mt_str + (null === a ? _mt_str : a);
+
+            case _num:
+                return parseFloat( _mt_str + (null === a ? _mt_str : a) );
+
+            case _big:
+                return BigInt( (_mt_str + (null === a ? _mt_str : a)).replace( /n$/, _mt_str ) );
+
+            case _bool:
+                return Boolean( a );
+
+            case _fun:
+                return _fun === typeof a ? a : function() { return a; };
+
+            case _symbol:
+                return Symbol.for( (_mt_str + _coerce( a, _str )) );
+
+            case _obj:
+                return [(_mt_str + _coerce( a, _str ))];
+
+            default:
+                if ( type === Date || typeof type === Date )
+                {
+                    return new Date( _coerce( a, _num ) );
+                }
+
+                if ( type === RegExp || typeof type === RegExp )
+                {
+                    let regExp = _coerce( a, _str );
+
+                    try
+                    {
+                        regExp = new RegExp( regExp );
+                    }
+                    catch( ex )
+                    {
+
+                    }
+
+                    return regExp;
+                }
+
+                return _coerce( a, typeof type );
+        }
+    };
+
     /**
      * These are default options for the ComparatorFactory class.
      *
@@ -941,11 +994,13 @@
      */
     const DEFAULT_COMPARATOR_OPTIONS =
         {
+            type: "*",
             strict: true,
             nullsFirst: true,
             caseSensitive: true,
             trimStrings: false,
-            reverse: false
+            reverse: false,
+            coerce: false
         };
 
     /* abstract*/
@@ -966,47 +1021,74 @@
         #reverse = false;
         #caseSensitive = true;
         #trimStrings = false;
+        #coerce = false;
 
         #options = DEFAULT_COMPARATOR_OPTIONS;
 
         constructor( pType, pOptions = DEFAULT_COMPARATOR_OPTIONS )
         {
-            this.#type = pType || _obj;
-
             this.#options = populateOptions( pOptions, DEFAULT_COMPARATOR_OPTIONS );
+
+            this.#type = pType || this.#options?.type || _obj;
 
             const options = this.#options;
 
-            this.#strict = false !== options?.strict;
+            this.#strict = false !== options?.strict && ("*" !== this.#type);
             this.#nullsFirst = false !== options?.nullsFirst;
             this.#caseSensitive = false !== options?.caseSensitive;
             this.#trimStrings = false !== options?.trimStrings;
             this.#reverse = true === options?.reverse;
+            this.#coerce = true === options?.coerce;
         }
 
         get type()
         {
-            return this.#type;
+            return this.#type || "*";
         }
 
-        set type( value )
+        set type( pType )
         {
-            this.#type = !!value;
+            this.#type = pType || this.#type;
+        }
+
+        _copyOptions( pOverrides )
+        {
+            const overrides = populateOptions( pOverrides, this.#options || DEFAULT_COMPARATOR_OPTIONS );
+
+            return {
+                type: overrides?.type || this.type || "*",
+                strict: (false === overrides?.strict ? false : overrides?.strict || this.strict),
+                nullsFirst: (false === overrides?.nullsFirst ? false : overrides?.nullsFirst || this.nullsFirst),
+                caseSensitive: (false === overrides?.caseSensitive ? false : overrides?.caseSensitive || this.caseSensitive),
+                trimStrings: (false === overrides?.trimStrings ? false : overrides?.trimStrings || this.trimStrings),
+                reverse: (false === overrides?.reverse ? false : overrides?.reverse || this.reverse),
+                coerce: (false === overrides?.coerce ? false : overrides?.coerce || this.coerce)
+            };
         }
 
         get options()
         {
-            return populateOptions( {}, this.#options || DEFAULT_COPY_OPTIONS );
+            return populateOptions( this._copyOptions(), (this.#options || DEFAULT_COMPARATOR_OPTIONS) );
         }
 
         get strict()
         {
-            return true === this.#strict;
+            return true === this.#strict && "*" !== this.type;
         }
 
-        set strict( value )
+        set strict( pStrict )
         {
-            this.#strict = !!value;
+            this.#strict = !!pStrict;
+        }
+
+        get coerce()
+        {
+            return this.#coerce;
+        }
+
+        set coerce( pCoerce )
+        {
+            this.#coerce = pCoerce;
         }
 
         get nullsFirst()
@@ -1014,9 +1096,9 @@
             return this.#nullsFirst;
         }
 
-        set nullsFirst( value )
+        set nullsFirst( pNullsFirst )
         {
-            this.#nullsFirst = !!value;
+            this.#nullsFirst = !!pNullsFirst;
         }
 
         get caseSensitive()
@@ -1024,9 +1106,9 @@
             return this.#caseSensitive;
         }
 
-        set caseSensitive( value )
+        set caseSensitive( pCaseSensitive )
         {
-            this.#caseSensitive = !!value;
+            this.#caseSensitive = !!pCaseSensitive;
         }
 
         get trimStrings()
@@ -1034,9 +1116,9 @@
             return this.#trimStrings;
         }
 
-        set trimStrings( value )
+        set trimStrings( pTrimStrings )
         {
-            this.#trimStrings = !!value;
+            this.#trimStrings = !!pTrimStrings;
         }
 
         get reverse()
@@ -1044,9 +1126,9 @@
             return this.#reverse;
         }
 
-        set reverse( value )
+        set reverse( pReverse )
         {
-            this.#reverse = !!value;
+            this.#reverse = !!pReverse;
         }
 
         _compare( pA, pB, pOptions )
@@ -1055,138 +1137,186 @@
 
             let strict = (true === options?.strict) || this.strict;
 
-            let isExpectedType = this.matchesType( pA, pB );
+            let coerce = (true === options?.coerce) || this.coerce;
+
+            let a = pA;
+            let b = pB;
+
+            a = _symbol === typeof a ? Symbol.keyFor( a ) : a;
+            b = _symbol === typeof b ? Symbol.keyFor( b ) : b;
+
+            a = a || (0 === a ? 0 : false === a ? false : _mt_str === a ? a : null);
+            b = b || (0 === b ? 0 : false === b ? false : _mt_str === b ? b : null);
+
+            let type = (_ud === typeof a || null === a) ? ((_ud === typeof b || null === b) ? _ud : typeof b) : typeof a;
+
+            if ( coerce )
+            {
+                type = ("*" !== this.type && _ud !== this.type && _ud !== typeof this.type) ? this.type : _str;
+
+                a = _coerce( a, type );
+                b = _coerce( b, type );
+            }
+
+            let isExpectedType = this.matchesType( a, b );
 
             if ( strict && !isExpectedType )
             {
                 return 0;
             }
 
-            let a = pA;
-            let b = pB;
-
             let comp = 0;
 
-            if ( isExpectedType )
+            switch ( (type || this.type) )
             {
-                switch ( this.type )
-                {
-                    case _ud:
-                        return 0;
+                case _ud:
+                    return this.nullsFirst ? -1 : 1;
 
-                    case _str:
+                case _str:
 
-                        a = this.trimStrings ? (_mt_str + pA).trim() : pA;
-                        b = this.trimStrings ? (_mt_str + pB).trim() : pB;
+                    a = (null === a) ? _mt_str : a;
+                    b = (null === b) ? _mt_str : b;
 
-                        if ( !this.caseSensitive )
+                    a = _mt_str + (this.trimStrings ? (_mt_str + a).trim() : a);
+                    b = _mt_str + (this.trimStrings ? (_mt_str + b).trim() : b);
+
+                    if ( !this.caseSensitive )
+                    {
+                        a = (_mt_str + a).toUpperCase();
+                        b = (_mt_str + b).toUpperCase();
+                    }
+
+                    comp = a > b ? 1 : a < b ? -1 : 0;
+
+                    break;
+
+                case _num:
+                case _big:
+
+                    a = null === a ? NaN : parseFloat( a );
+                    b = null === b ? NaN : parseFloat( b );
+
+                    if ( isNaN( a ) || null === a )
+                    {
+                        if ( isNaN( b ) || null === b )
                         {
-                            a = (_mt_str + a).toUpperCase();
-                            b = (_mt_str + b).toUpperCase();
+                            return 0;
                         }
+                        return (this.nullsFirst ? -1 : 1);
+                    }
+                    else if ( isNaN( b ) || null === b )
+                    {
+                        return (this.nullsFirst ? 1 : -1);
+                    }
 
-                        comp = a > b ? 1 : a < b ? -1 : 0;
+                    comp = a > b ? 1 : a < b ? -1 : 0;
 
+                    break;
+
+                case _bool:
+                    a = (a ? 1 : -1);
+                    b = (b ? 1 : -1);
+
+                    comp = a > b ? 1 : a < b ? -1 : 0;
+
+                    break;
+
+                case _fun:
+                    return 0;
+
+                case _symbol:
+                    return 0;
+
+                case _obj:
+
+                    if ( null === a )
+                    {
+                        if ( null === b )
+                        {
+                            return 0;
+                        }
+                        return (this.nullsFirst ? -1 : 1);
+                    }
+                    else if ( null === b )
+                    {
+                        return (this.nullsFirst ? 1 : -1);
+                    }
+
+                    if ( _fun === typeof a?.compareTo )
+                    {
+                        comp = a.compareTo( b ) || 0;
                         break;
+                    }
 
-                    case _num:
-                    case _big:
-
-                        if ( isNaN( pA ) )
+                    if ( isArray( a ) )
+                    {
+                        if ( isArray( b ) )
                         {
-                            if ( isNaN( pB ) )
-                            {
-                                return 0;
-                            }
-                            return (this.nullsFirst ? -1 : 1);
-                        }
-                        else if ( isNaN( pB ) )
-                        {
-                            return (this.nullsFirst ? 1 : -1);
-                        }
-
-                        comp = pA > pB ? 1 : pA < pB ? -1 : 0;
-
-                        break;
-
-                    case _bool:
-                        a = (pA ? 1 : -1);
-                        b = (pB ? 1 : -1);
-
-                        comp = a > b ? 1 : a < b ? -1 : 0;
-
-                        break;
-
-                    case _fun:
-                        return 0;
-
-                    case _symbol:
-                        return 0;
-
-                    case _obj:
-
-                        if ( null === pA )
-                        {
-                            if ( null === pB )
-                            {
-                                return 0;
-                            }
-                            return (this.nullsFirst ? -1 : 1);
-                        }
-                        else if ( null === pB )
-                        {
-                            return (this.nullsFirst ? 1 : -1);
-                        }
-
-                        if ( _fun === typeof pA?.compareTo )
-                        {
-                            comp = pA.compareTo( pB ) || 0;
-                            break;
-                        }
-
-                        if ( Array.isArray( pA ) && Array.isArray( pB ) )
-                        {
-                            let comp = pA.length > pB.length ? -1 : pA.length < pB.length ? 1 : 0;
+                            let comp = a.length > b.length ? 1 : a.length < b.length ? -1 : 0;
 
                             if ( 0 === comp )
                             {
-                                for( let i = 0, n = pA.length; i < n && 0 === comp; i++ )
+                                for( let i = 0, n = a.length; i < n && 0 === comp; i++ )
                                 {
-                                    comp = this._compare( pA[i], pB[i] );
+                                    comp = this._compare( a[i], b[i] );
                                 }
                             }
-                            break;
                         }
 
-                        if ( pA instanceof Date && pB instanceof Date )
-                        {
-                            comp = pA > pB ? 1 : pA < pB ? -1 : 0;
-                            break;
-                        }
-
-                        for( let prop in pA )
-                        {
-                            let propValue = pA[prop];
-                            let otherValue = pB[prop];
-
-                            comp = this._compare( propValue, otherValue, options );
-
-                            if ( 0 !== comp )
-                            {
-                                break;
-                            }
-                        }
+                        comp = a.length > 1 ? 1 : comp = a.length > 0 ? this._compare( a[0], b ) : _mt_str === (_mt_str + b) ? 0 : -1;
 
                         break;
+                    }
+                    else if ( isArray( b ) )
+                    {
+                        comp = b.length > 1 ? -1 : comp = b.length > 0 ? this._compare( a, b[0] ) : _mt_str === (_mt_str + a) ? 0 : 1;
+                        break;
+                    }
 
-                    default:
-                        comp = 0;
-                }
+                    if ( a instanceof Date || [_num, _big].includes( typeof a ) )
+                    {
+                        if ( b instanceof Date || [_num, _big].includes( typeof b ) )
+                        {
+                            comp = a > b ? 1 : a < b ? -1 : 0;
+                        }
+                        break;
+                    }
 
-                return this.reverse ? -comp : comp;
+                    if ( a instanceof RegExp || [_str].includes( typeof a ) )
+                    {
+                        let sa = a.toString();
+
+                        if ( b instanceof RegExp || [_str].includes( typeof b ) )
+                        {
+                            let sb = b.toString();
+
+                            const comparator = new ComparatorFactory( _str ).comparator();
+
+                            comp = comparator( sa, sb );
+                        }
+                        break;
+                    }
+
+                    for( let prop in a )
+                    {
+                        let propValue = a[prop];
+                        let otherValue = b[prop];
+
+                        comp = this._compare( propValue, otherValue, options );
+
+                        if ( 0 !== comp )
+                        {
+                            break;
+                        }
+                    }
+
+                    break;
+
+                default:
+                    comp = 0;
             }
 
-            return 0;
+            return this.reverse ? -comp : comp;
         }
 
         comparator()
@@ -1199,67 +1329,63 @@
             };
         }
 
-        matchesType( pA, pB )
+        matchesType( pA, pB, pType )
         {
-            let typeofA = typeof pA;
-            let typeofB = typeof pB;
+            let type = pType || this.type;
 
-            return (typeofA === typeofB) && (typeofA === this.type || pA instanceof this.type) && (typeofB === this.type || pB instanceof this.type);
+            const typeIsClass = _fun === typeof type;
+
+            if ( "*" === type )
+            {
+                return true;
+            }
+
+            let a = pA;
+            let b = pB;
+
+            if ( this.coerce )
+            {
+                a = _coerce( a, type );
+                b = _coerce( b, type );
+            }
+
+            if ( null === pA || _ud === typeof pA )
+            {
+                if ( null === pB || _ud === typeof pB )
+                {
+                    return true;
+                }
+                return (typeof b === type || (typeIsClass && pB instanceof type));
+            }
+            else if ( null === pB || _ud === typeof pB )
+            {
+                return (typeof a === type || (typeIsClass && pA instanceof type));
+            }
+
+            return (typeof a === typeof b) && (typeof a === type || (typeIsClass && a instanceof type)) && (typeof b === type || (typeIsClass && b instanceof type));
         }
 
         nullsFirstComparator()
         {
-            const options =
-                {
-                    type: this.type,
-                    strict: this.strict,
-                    nullsFirst: true,
-                    caseSensitive: this.caseSensitive,
-                    trimStrings: this.trimStrings,
-                    reverse: this.reverse
-                };
-            return new ComparatorFactory( this.type, options );
+            const options = this._copyOptions( { nullsFirst: true } );
+            return new ComparatorFactory( this.type, options ).comparator();
         }
 
         nullsLastComparator()
         {
-            const options =
-                {
-                    type: this.type,
-                    strict: this.strict,
-                    nullsFirst: false,
-                    caseSensitive: this.caseSensitive,
-                    trimStrings: this.trimStrings,
-                    reverse: this.reverse
-                };
+            const options = this._copyOptions( { nullsFirst: false } );
             return new ComparatorFactory( this.type, options ).comparator();
         }
 
         caseInsensitiveComparator()
         {
-            const options =
-                {
-                    type: this.type,
-                    strict: this.strict,
-                    nullsFirst: this.nullsFirst,
-                    caseSensitive: false,
-                    trimStrings: this.trimStrings,
-                    reverse: this.reverse
-                };
-            return new ComparatorFactory( this.type, options ).comparator();
+            const options = this._copyOptions( { caseSensitive: false, type: "string" } );
+            return new ComparatorFactory( options?.type || this.type, options ).comparator();
         }
 
         reverseComparator()
         {
-            const options =
-                {
-                    type: this.type,
-                    strict: this.strict,
-                    nullsFirst: this.nullsFirst,
-                    caseSensitive: this.caseSensitive,
-                    trimStrings: this.trimStrings,
-                    reverse: true
-                };
+            const options = this._copyOptions( { reverse: true } );
             return new ComparatorFactory( this.type, options ).comparator();
         }
     }
@@ -1308,129 +1434,23 @@
         {
             return (this.#iterations++ >= this.#maxIterations);
         }
-
-        canContinue()
-        {
-            return !this.reached;
-        }
     }
 
     IterationCap.MAX_CAP = MAX_ITERATIONS;
 
     /**
-     * Returns true if the specified value is immutable.
-     *
-     * Examples of immutable values include:
-     * - Objects that are frozen or sealed
-     * - Properties of Objects that are defined as writable:false
-     * - Strings, Numbers, Booleans, and Symbols
-     * - null values, undefined values
-     *
-     * @param pObject
-     * @returns {boolean|boolean}
-     */
-    const isReadOnly = function( pObject )
-    {
-        if ( _obj === typeof pObject )
-        {
-            return (null === pObject) || Object.isFrozen( pObject ) || Object.isSealed( pObject );
-        }
-
-        if ( [_num, _big].includes( typeof pObject ) )
-        {
-            const value = (0 + pObject);
-
-            try
-            {
-                let n = ++pObject;
-                n = --pObject;
-
-                return n !== value;
-            }
-            catch( ex )
-            {
-                return true;
-            }
-        }
-
-        return true;
-    };
-
-    /**
      * Returns a read-only copy of an object,
      * whose properties are also read-only copies of properties of the specified object
      * @param pObject {object} the object to freeze
-     * @param pStack {[any]} USED INTERNALLY TO PREVENT INFINITE RECURSION, DO NOT SPECIFY A VALUE FROM CLIENT CODE
+     * @param pStack {[any]} USED INTERNALLY TO PREVENT INFINITE RECURSION,
+     *                       DO NOT SPECIFY A VALUE FROM CLIENT CODE
      *
      * @returns {object} a new object that is a frozen copy of the specified object
      * whose properties are also frozen copies of the specified object's properties
      */
     const deepFreeze = function( pObject, pStack = [] )
     {
-        // this an array that holds the keys traversed by any recursive calls to this function
-        const stack = localCopy( pStack || [], { undefinedToEmptyArray: true, nullToEmptyArray: true } );
-
-        if ( stack.length >= MAX_STACK_SIZE )
-        {
-            return (null == pObject || _ud === typeof pObject) ? null : Object.freeze( pObject );
-        }
-
-        if ( null == pObject || _ud === typeof pObject )
-        {
-            return null;
-        }
-
-        let obj = pObject;
-
-        if ( _obj === typeof pObject )
-        {
-            const isArr = isArray( pObject );
-
-            obj = (isArr ? [...pObject] : Object.assign( {}, pObject ));
-
-            const entries = Object.entries( obj );
-
-            for( let entry of entries )
-            {
-                const key = isArr ? parseInt( entry[0] ) : String( entry[0] );
-                const value = entry[1];
-
-                stack.push( key );
-
-                try
-                {
-                    obj[key] = deepFreeze( value );
-
-                    if ( _fun === typeof value )
-                    {
-                        value.bind( obj );
-                    }
-                }
-                catch( ex )
-                {
-                    // occurs when properties are read-only
-                    try
-                    {
-                        obj[key] = obj[key] || value;
-
-                        if ( _fun === typeof value )
-                        {
-                            value.bind( obj );
-                        }
-                    }
-                    catch( ex2 )
-                    {
-                        // ignore it
-                    }
-                }
-                finally
-                {
-                    stack.pop();
-                }
-            }
-        }
-
-        return Object.freeze( obj );
+        return immutableCopy( pObject, IMMUTABLE_COPY_OPTIONS, pStack );
     };
 
     const mod =
@@ -1521,7 +1541,7 @@
             _blockCommentStart,
             _blockCommentEnd,
             _inlineCommentStart,
-            $scope,
+            _fileOptions: { encoding: "utf-8" },
             EMPTY_ARRAY,
             EMPTY_OBJECT,
             RESERVED_WORDS,
@@ -1535,15 +1555,6 @@
             GLOBAL_TYPE_NAMES,
             BUILTIN_TYPES,
             BUILTIN_TYPE_NAMES,
-            IllegalArgumentError,
-            populateOptions,
-            copyScope,
-            deepFreeze,
-            isReadOnly,
-            localCopy,
-            immutableCopy,
-            _fileOptions: { encoding: "utf-8" },
-            ignore,
             _rxHeaderComment,
             _rxValidJson,
             _xZ,
@@ -1557,20 +1568,28 @@
             _cwd: currentDirectory,
             DEFAULT_MAX_ITERATIONS: MAX_ITERATIONS,
             DEFAULT_MAX_STACK_DEPTH,
-            catchHandler: function( pErr )
-            {
-                return true;
-            },
-            dependencies,
-            importUtilities,
-            classes: { IterationCap, ComparatorFactory, StackTrace, __Error, IllegalArgumentError },
-            ComparatorFactory,
-            IterationCap,
             REG_EXP,
             REG_EXP_DOT,
             REG_EXP_LEADING_DOT,
             REG_EXP_TRAILING_DOT,
             DEFAULT_NUMBER_FORMATTING_SYMBOLS,
+            dependencies,
+            classes: { IterationCap, ComparatorFactory, StackTrace, __Error, IllegalArgumentError },
+            IterationCap,
+            IllegalArgumentError,
+            ComparatorFactory,
+            catchHandler: function( pErr )
+            {
+                return true;
+            },
+            $scope,
+            ignore,
+            importUtilities,
+            populateOptions,
+            isReadOnly,
+            localCopy,
+            immutableCopy,
+            deepFreeze,
             calculateNumberFormattingSymbols
         };
 

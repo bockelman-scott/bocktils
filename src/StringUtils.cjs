@@ -651,7 +651,8 @@ const $scope = constants?.$scope || function()
      * @param pStr a string potentially containing variable tokens, such as ${myVariableName}
      * @param pVariablesMap an object (or scope) defining the variables contained in the string
      *
-     * NOTE:  This is equivalent to using template strings `such as ${this}`, but allows the scope to be specified
+     * NOTE:  This is equivalent to using template strings `such as ${this}`,
+     * but allows the scope to be specified
      *
      * @returns {string} a string with variable tokens replaced by values in the specified map or scope
      */
@@ -663,7 +664,7 @@ const $scope = constants?.$scope || function()
         {
             let variables = {};
 
-            Object.assign( variables, constants.copyScope( $scope() ) );
+            Object.assign( variables, pVariablesMap || $scope() );
 
             let entries = (pVariablesMap instanceof Map) ? pVariablesMap.entries() : (_obj === typeof pVariablesMap) ? Object.entries( pVariablesMap ) : [["", ""]];
 

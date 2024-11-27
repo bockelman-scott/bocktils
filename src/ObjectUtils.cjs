@@ -645,6 +645,8 @@ const $scope = constants?.$scope || function()
         #value;
         #type;
 
+        #parent;
+
         constructor( ...pArgs )
         {
             super( ...pArgs );

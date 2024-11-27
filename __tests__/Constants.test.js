@@ -28,7 +28,6 @@ describe( "Affirmatives", () =>
     } );
 } );
 
-
 describe( "populateOptions", () =>
 {
     const defaults =
@@ -312,24 +311,600 @@ describe( "immutableCopy", () =>
 
 } );
 
-describe( "copyScope", () =>
+describe( "ignore", () =>
 {
-    function TestCopyScope( pScope )
+    function f()
     {
-        const me = pScope || TestCopyScope || this;
-
-        me.x = 1;
-        me.y = 2;
-        me.z = 3;
-
-        let obj = constants.copyScope( me );
-
-        return obj?.x === me.x && obj?.y === me.y && obj?.z === me.z;
+        throw new Error( "" );
     }
 
-    test( "copyScope returns variables", () =>
+    test( "ignore just consumes an error without further action", () =>
     {
-        expect( TestCopyScope() ).toBe( true );
+        try
+        {
+            f();
+        }
+        catch( ex )
+        {
+            constants.ignore( ex );
+        }
+
+        expect( true ).toBe( true );
+    } );
+
+} );
+
+describe( "importUtilities makes module properties local", () =>
+{
+    const mod =
+        {
+            xxxxx: "x",
+            f: function( pA, pB )
+            {
+                return pA + pB;
+            },
+            opts:
+                {
+                    someBool: false,
+                    someNumber: 5,
+                    someString: "foo"
+                },
+            arr: [7, 8, 9]
+        };
+
+    test( "properties and functions of mod can be treated as local variables", () =>
+    {
+        let scope = constants.$scope();
+
+        let updated = constants.importUtilities( scope, constants, mod );
+
+        expect( xxxxx ).toEqual( "x" );
+
+        expect( f( 23, 42 ) ).toEqual( 65 );
+
+        expect( typeof opts ).toEqual( _obj );
+
+        expect( opts?.someNumber ).toEqual( 5 );
+
+        expect( arr.length ).toEqual( 3 );
+
+        expect( S_COMMA ).toEqual( "," );
+
+    } );
+
+} );
+
+describe( "isReadOnly", () =>
+{
+    const isReadOnly = constants.isReadOnly;
+
+    test( "isReadOnly returns true for frozen or sealed objects", () =>
+    {
+        let obj = { a: 1, b: 2, letters: ["A", "B", "C"] };
+
+        let frozen = Object.freeze( { ...obj } );
+
+        let sealed = Object.seal( { ...obj } );
+
+        expect( isReadOnly( obj ) ).toEqual( false );
+
+        expect( isReadOnly( frozen ) ).toEqual( true );
+
+        expect( isReadOnly( sealed ) ).toEqual( true );
+    } );
+
+    test( "isReadOnly returns true for any of the built-in immutable types or null", () =>
+    {
+        let obj = null;
+
+        let num = 5;
+        let bool = false;
+        let symbol = Symbol.for( "TEST" );
+        let f = function() {};
+        let s = "some string";
+
+        expect( isReadOnly( obj ) ).toEqual( true );
+        expect( isReadOnly( num ) ).toEqual( true );
+        expect( isReadOnly( bool ) ).toEqual( true );
+        expect( isReadOnly( symbol ) ).toEqual( true );
+        expect( isReadOnly( f ) ).toEqual( true );
+        expect( isReadOnly( s ) ).toEqual( true );
     } );
 } );
 
+describe( "deepFreeze", () =>
+{
+    let arr = ["a", "b", "c", "d"];
+    let obj = { a: 1, b: 2, letters: arr };
+
+    function f( pObject, ...pArgs )
+    {
+        let localArray = constants.deepFreeze( pArgs );
+        try
+        {
+            localArray.push( "f", "g", "h" );
+        }
+        catch( ex )
+        {
+            // localArray should be immutable, so we expect this
+        }
+
+        let doubledArray = [...pArgs];
+        doubledArray.push( "w", "x", "y" );
+
+        let shadowedArray = pArgs;
+        shadowedArray.push( "z" );
+
+        let localObject = constants.deepFreeze( pObject );
+
+        try
+        {
+            localObject.a = 11;
+            localObject.c = 42;
+        }
+        catch( ex )
+        {
+            // localObject should be immutable, so we expect this
+        }
+
+        try
+        {
+            localObject.letters.push( "ZZ" );
+        }
+        catch( ex )
+        {
+            // localObject should be immutable, so we expect this
+        }
+
+        let shadowedObject = pObject;
+        shadowedObject.a = -1;
+        shadowedObject.b = -2;
+        shadowedObject.d = -4;
+
+        let objectDouble = { ...pObject };
+        objectDouble.a = 100;
+        objectDouble.b = 200;
+        objectDouble.d = 300;
+
+        return { localArray, shadowedArray, doubledArray, localObject, shadowedObject, objectDouble };
+    }
+
+    test( "deepFreeze makes a new read-only value that is not a reference to the source", () =>
+    {
+        // restore test data
+        arr = ["a", "b", "c", "d"];
+        obj = { a: 1, b: 2, letters: arr };
+        //
+
+        const alias = arr;
+
+        const copy = constants.deepFreeze( arr );
+
+        expect( copy ).toEqual( arr );
+        expect( Object.isFrozen( copy ) ).toBe( true );
+
+        expect( copy === arr ).toBe( false );
+        expect( alias === arr ).toBe( true );
+
+        let { localArray, shadowedArray, doubledArray, localObject, shadowedObject, objectDouble }
+            = f( obj, ...arr );
+
+        expect( arr ).toEqual( ["a", "b", "c", "d"] );
+
+        expect( localArray ).toEqual( ["a", "b", "c", "d"] );
+        expect( localArray === arr ).toBe( false );
+        expect( Object.isFrozen( localArray ) ).toBe( true );
+
+        expect( shadowedArray ).toEqual( ["a", "b", "c", "d", "z"] );
+        expect( doubledArray ).toEqual( ["a", "b", "c", "d", "w", "x", "y"] );
+        expect( doubledArray === arr ).toBe( false );
+
+        expect( localObject ).toEqual( { a: 1, b: 2, letters: arr } );
+        expect( localObject === obj ).toBe( false );
+        expect( Object.isFrozen( localObject ) ).toBe( true );
+        expect( Object.isFrozen( localObject.letters ) ).toBe( true );
+
+        expect( shadowedObject ).toEqual( { a: -1, b: -2, d: -4, letters: arr } );
+        expect( shadowedObject === obj ).toBe( true );
+
+        expect( objectDouble ).toEqual( { a: 100, b: 200, d: 300, letters: arr } );
+        expect( objectDouble === obj ).toBe( false );
+
+        expect( objectDouble.letters ).toEqual( arr );
+
+        // restore test data
+        arr = ["a", "b", "c", "d"];
+        obj = { a: 1, b: 2, letters: arr };
+        //
+    } );
+
+} );
+
+describe( "calculateNumberFormattingSymbols", () =>
+{
+    test( "Returns comma for grouping, dot for decimal, and $ for currency for en-US", () =>
+    {
+        const calculateNumberFormattingSymbols = constants.calculateNumberFormattingSymbols;
+
+        const symbols = calculateNumberFormattingSymbols( "en-US" );
+
+        expect( symbols.grouping_separator ).toEqual( constants._comma );
+        expect( symbols.decimal_point ).toEqual( constants._dot );
+        expect( symbols.currency_symbol ).toEqual( "$" );
+    } );
+
+    test( "Returns dot for grouping, comma for decimal, and € for currency for de, UER", () =>
+    {
+        const calculateNumberFormattingSymbols = constants.calculateNumberFormattingSymbols;
+
+        const symbols = calculateNumberFormattingSymbols( "de", "EUR" );
+
+        expect( symbols.grouping_separator ).toEqual( constants._dot );
+        expect( symbols.decimal_point ).toEqual( constants._comma );
+        expect( symbols.currency_symbol ).toEqual( "€" );
+    } );
+} );
+
+describe( "IterationCap", () =>
+{
+    test( "exits a loop when reached", () =>
+    {
+        let count = 0;
+
+        let IterationCap = constants.IterationCap;
+
+        const iterationCap = new IterationCap( 5 );
+
+        while ( !iterationCap.reached )
+        {
+            count += 1;
+        }
+
+        expect( count ).toEqual( 5 );
+    } );
+} );
+
+describe( "ComparatorFactory", () =>
+{
+    let ComparatorFactory = constants.ComparatorFactory;
+
+    test( "ComparatorFactory returns a comparator as per its options", () =>
+    {
+        let factory = new ComparatorFactory( constants._num );
+
+        let arr = [3, 6, 2, 4, 1, 0, 9];
+
+        arr = arr.sort( factory.comparator() );
+
+        expect( arr ).toEqual( [0, 1, 2, 3, 4, 6, 9] );
+
+        arr = arr.sort( factory.reverseComparator() );
+
+        expect( arr ).toEqual( [9, 6, 4, 3, 2, 1, 0] );
+
+        arr = [...arr].concat( null );
+
+        arr = arr.sort( factory.nullsFirstComparator() );
+
+        expect( arr ).toEqual( [null, 0, 1, 2, 3, 4, 6, 9] );
+
+        arr = arr.sort( factory.nullsLastComparator() );
+
+        expect( arr ).toEqual( [0, 1, 2, 3, 4, 6, 9, null] );
+
+        arr = ["A", "B", "C", "a", "b", "c"];
+
+        arr = arr.sort( factory.comparator() );
+
+        expect( arr ).toEqual( ["A", "B", "C", "a", "b", "c"] );
+
+        arr = arr.sort( factory.caseInsensitiveComparator() );
+
+        expect( arr ).toEqual( ["A", "a", "B", "b", "C", "c"] );
+    } );
+
+    test( "ComparatorFactory handles special cases", () =>
+    {
+        let factory = new ComparatorFactory();
+
+        function foo() {}
+
+        const regExp = /\//g;
+
+        const dateA = new Date( 2024, 10, 26, 19, 44, 0, 0 );
+        const dateB = new Date( 2024, 10, 26, 19, 42, 0, 0 );
+
+        const TEST = Symbol.for( "TEST" );
+        const TEST2 = Symbol.for( "TEST2" );
+
+        let arr =
+            [
+                "A",
+                1,
+                ["A", "B"],
+                { a: 2, b: 3 },
+                { a: 1, b: 2 },
+                ["a", "b"],
+                null,
+                false,
+                true,
+                TEST,
+                TEST2,
+                foo,
+                10n,
+                regExp,
+                dateA,
+                dateB
+            ];
+
+        arr = arr.sort( factory.comparator() );
+
+        expect( arr ).toEqual( [
+                                   null,
+                                   false,
+                                   "A",
+                                   1,
+                                   TEST,
+                                   TEST2,
+                                   {
+                                       "a": 1,
+                                       "b": 2
+                                   },
+                                   {
+                                       "a": 2,
+                                       "b": 3
+                                   },
+                                   [
+                                       "A",
+                                       "B"
+                                   ],
+                                   [
+                                       "a",
+                                       "b"
+                                   ],
+                                   true,
+                                   foo,
+                                   10n,
+                                   regExp,
+                                   dateB,
+                                   dateA
+                               ] );
+
+        arr = arr.sort( factory.reverseComparator() );
+
+        expect( arr ).toEqual( [
+                                   null,
+                                   [
+                                       "a",
+                                       "b",
+                                   ],
+                                   [
+                                       "A",
+                                       "B",
+                                   ],
+                                   {
+                                       "a": 1,
+                                       "b": 2,
+                                   },
+                                   {
+                                       "a": 2,
+                                       "b": 3,
+                                   },
+                                   true,
+                                   false,
+                                   TEST2,
+                                   TEST,
+                                   "A",
+                                   1,
+                                   foo,
+                                   10n,
+                                   regExp,
+                                   dateA,
+                                   dateB
+                               ] );
+
+
+        /*
+         arr = arr.sort( factory.reverseComparator() );
+
+         expect( arr ).toEqual( [9, 6, 4, 3, 2, 1, 0] );
+
+         arr = [...arr].concat( null );
+
+         arr = arr.sort( factory.nullsFirstComparator() );
+
+         expect( arr ).toEqual( [null, 0, 1, 2, 3, 4, 6, 9] );
+
+         arr = arr.sort( factory.nullsLastComparator() );
+
+         expect( arr ).toEqual( [0, 1, 2, 3, 4, 6, 9, null] );
+
+         arr = ["A", "B", "C", "a", "b", "c"];
+
+         arr = arr.sort( factory.comparator() );
+
+         expect( arr ).toEqual( ["A", "B", "C", "a", "b", "c"] );
+
+         arr = arr.sort( factory.caseInsensitiveComparator() );
+
+         expect( arr ).toEqual( ["A", "a", "B", "b", "C", "c"] );
+         */
+    } );
+
+    test( "ComparatorFactory sorts RegExp as strings", () =>
+    {
+        let factory = new ComparatorFactory( RegExp );
+
+        const regExp = /\//g;
+        const regExp2 = /\s*/g;
+        const regExp3 = /[\r\n]/g;
+        const regExp4 = /.+/g;
+        const regExp5 = /\d+/g;
+        const regExp6 = /\w+/g;
+
+        let arr = [regExp, regExp2, regExp3, regExp4, regExp5, regExp6];
+
+        let arr2 = arr.map( e => e.toString() );
+
+        expect( arr.sort( factory.comparator() ) ).toEqual( [regExp4, regExp3, regExp, regExp5, regExp2, regExp6] );
+
+        factory = new ComparatorFactory( "string" );
+
+        expect( arr2.sort( factory.comparator() ) ).toEqual( arr.map( e => e.toString() ) );
+    } );
+
+    test( "ComparatorFactory can be configured to coerce values to a specific type", () =>
+    {
+        let factory = new ComparatorFactory( "number" );
+
+        const input = Object.freeze( ["10", "1", "20", "21", "3", "30", "31", "4", "40", 400, 12, 11, 9, "8", "81"] );
+
+        let arr = [...input];
+
+        // without coercion, the values are sorted in alphabetical order
+        expect( arr.sort( factory.comparator() ) ).toEqual( ["10",
+                                                             "1",
+                                                             "20",
+                                                             "21",
+                                                             "3",
+                                                             "30",
+                                                             "31",
+                                                             "4",
+                                                             "40",
+                                                             9,
+                                                             11,
+                                                             12,
+                                                             400,
+                                                             "8",
+                                                             "81"] );
+
+        // set coerce to true to force elements to be compared as numbers
+        factory.coerce = true;
+
+        arr = [...input];
+
+        // with coercion, the values are ordered numerically
+        expect( arr.sort( factory.comparator() ) ).toEqual( ["1",
+                                                             "3",
+                                                             "4",
+                                                             "8",
+                                                             9,
+                                                             "10",
+                                                             11,
+                                                             12,
+                                                             "20",
+                                                             "21",
+                                                             "30",
+                                                             "31",
+                                                             "40",
+                                                             "81",
+                                                             400] );
+
+    } );
+} );
+
+describe( "Errors", () =>
+{
+    const IllegalArgumentError = constants.classes.IllegalArgumentError;
+
+    const loggedMessages = [];
+
+    const mockLogger =
+        {
+            warn: function( ...pArgs )
+            {
+                loggedMessages.push( ...pArgs );
+            }
+        };
+
+    function add( pA, pB )
+    {
+        if ( "number" !== typeof pA || "number" !== typeof pB )
+        {
+            throw new IllegalArgumentError( "Both arguments to add must be numbers", { "a": pA, "b": pB } );
+        }
+
+        return pA + pB;
+    }
+
+    function catcher( pA, pB )
+    {
+        let value = 0;
+
+        try
+        {
+            value = add( pA, pB );
+        }
+        catch( ex )
+        {
+            if ( ex instanceof IllegalArgumentError )
+            {
+                ex.logTo( mockLogger, "warn" );
+            }
+
+            console.log( ex.message, ex );
+        }
+
+        return value;
+    }
+
+    function stackTracer( pA, pB )
+    {
+        let value = 0;
+
+        let stackTrace = null;
+
+        let methodName = "";
+        let fileName = "";
+        let lineNumber = 0;
+        let columnNumber = 0;
+
+        try
+        {
+            value = add( pA, pB );
+        }
+        catch( ex )
+        {
+            stackTrace = ex.stackTrace;
+
+            methodName = ex.methodName;
+            fileName = ex.fileName;
+            lineNumber = ex.lineNumber;
+            columnNumber = ex.columnNumber;
+
+            return { stackTrace, methodName, fileName, lineNumber, columnNumber };
+        }
+
+        return value;
+    }
+
+    test( "Throwing an IllegalArgumentError", () =>
+    {
+        expect( () =>
+                {
+                    return add( "A", "B" );
+                } ).toThrow( IllegalArgumentError );
+
+        expect( add( 1, 2 ) ).toEqual( 3 );
+
+        expect( catcher( 1, 2 ) ).toEqual( 3 );
+
+        expect( catcher( "A", "B" ) ).toEqual( 0 );
+
+        expect( loggedMessages ).toEqual( [
+                                              "IllegalArgumentException: Both arguments to add must be numbers",
+                                              { "a": "A", "b": "B", }
+                                          ] );
+
+
+    } );
+
+    test( "Getting a stack trace", () =>
+    {
+        const trace = stackTracer( "A", "B" );
+
+        expect( typeof trace.stackTrace ).toBe( "object" );
+
+    } );
+
+} );

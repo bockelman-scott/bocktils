@@ -309,6 +309,19 @@ const $scope = constants?.$scope || function()
         return arr || [];
     };
 
+    const varargs = function( ...pArgs )
+    {
+        let arr = [...(asArray( pArgs || [] ))];
+        return (arr.length < 2) ? arr.flat() : arr;
+    };
+
+    const immutableVarArgs = function( ...pArgs )
+    {
+        let args = varargs( ...pArgs );
+
+        return args.map( e => constants.immutableCopy( e ) );
+    };
+
     /**
      * Returns either the number of elements in an array,
      * the number of characters in a string (or the number of characters in the string representation of a number),
@@ -732,7 +745,7 @@ const $scope = constants?.$scope || function()
             /** a filter to return the elements of an array that are not elements of the specified array **/
             NOT_IN: function( ...pArr )
             {
-                const arr = [].concat( ...(pArr || []) );
+                const arr = varargs( ...pArr );
 
                 return function( e )
                 {
@@ -775,7 +788,7 @@ const $scope = constants?.$scope || function()
             IN:
                 function( ...pArr )
                 {
-                    const arr = [].concat( ...(pArr || []) );
+                    const arr = varargs( ...pArr );
 
                     return function( e )
                     {
@@ -1207,7 +1220,8 @@ const $scope = constants?.$scope || function()
             },
 
             /** This function creates a chain of comparators
-             * applied in order until one of them returns a non-zero value **/
+             * applied in order until one of them returns a non-zero value
+             **/
             chain: function( ...pComparators )
             {
                 const comparators = [].concat( ...(pComparators || [Comparators.NONE]) ).filter( Filters.COMPARATORS );
@@ -1435,7 +1449,7 @@ const $scope = constants?.$scope || function()
         transform( pArr )
         {
             // make a new array, so the source array remains unmodified
-            let arr = [].concat( ...(asArray( pArr || [] )) );
+            let arr = constants.localCopy( pArr || [] );
 
             // iterate the transformers in this chain
             for( const transformer of this.transformers )
@@ -1747,7 +1761,7 @@ const $scope = constants?.$scope || function()
 
     function _createFilters( ...pArgs )
     {
-        let args = [].concat( ...(asArray( pArgs )) );
+        let args = varargs( ...pArgs );
 
         let filters = [];
 
@@ -1800,7 +1814,7 @@ const $scope = constants?.$scope || function()
     {
         let matcher = createExclusiveFilter( pMatcher );
 
-        let arr = [].concat( ...(asArray( pArr )) ).filter( matcher );
+        let arr = varargs( ...pArr ).filter( matcher );
 
         return (arr?.length || 0) > 0 ? arr[0] : null;
     };
@@ -1817,8 +1831,7 @@ const $scope = constants?.$scope || function()
      */
     const unique = function( ...pArr )
     {
-        let arr = [].concat( ...(asArray( pArr || [] )) );
-
+        let arr = varargs( ...pArr );
         return [...(new Set( arr ))];
     };
 
@@ -1921,7 +1934,7 @@ const $scope = constants?.$scope || function()
         // this is the array we will return, so we do not modify the input argument
         let pruned = [].concat( arr || [] ).filter( Predicates.IS_NOT_NULL );
 
-        const rejectedTypes = [].concat( ...(pRejectedTypes || []) );
+        const rejectedTypes = varargs( ...pRejectedTypes );
 
         if ( rejectedTypes && rejectedTypes.length )
         {
@@ -2504,7 +2517,7 @@ const $scope = constants?.$scope || function()
 
             return {
                 exceededBounds: exceeds,
-                evicted: ([].concat( (evicted) )),
+                evicted: ([].concat( evicted )),
                 size: this.size,
                 limit: this._limit,
                 next: this.peek()
@@ -2517,7 +2530,7 @@ const $scope = constants?.$scope || function()
 
             this._limit = Math.max( limit, this._limit );
 
-            let newElems = [].concat( (asArray( pElems )) );
+            let newElems = varargs( ...pElems );
 
             let numNewElems = newElems.length;
 
@@ -2725,25 +2738,25 @@ const $scope = constants?.$scope || function()
 
     const toNonEmptyStrings = function( ...pArr )
     {
-        let arr = [].concat( ...(asArray( pArr )) );
+        let arr = varargs( ...pArr );
         return TransformerChain.TO_NON_EMPTY_STRINGS.transform( arr );
     };
 
     const toNonBlankStrings = function( ...pArr )
     {
-        let arr = [].concat( ...(asArray( pArr || [] )) );
+        let arr = varargs( ...pArr );
         return TransformerChain.TO_NON_BLANK_STRINGS.transform( arr );
     };
 
     const toTrimmedNonEmptyStrings = function( ...pArr )
     {
-        let arr = [].concat( ...(asArray( pArr )) );
+        let arr = varargs( ...pArr );
         return TransformerChain.TRIMMED_NON_EMPTY_STRINGS.transform( arr );
     };
 
     const toTrimmedNonBlankStrings = function( ...pArr )
     {
-        let arr = [].concat( ...(asArray( pArr || [] )) );
+        let arr = varargs( ...pArr );
         return TransformerChain.TRIMMED_NON_BLANK_STRINGS.transform( arr );
     };
 
