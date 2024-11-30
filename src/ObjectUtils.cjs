@@ -29,8 +29,7 @@ const $scope = constants?.$scope || function()
  */
 (function exposeModule()
 {
-    const me = exposeModule;
-
+    /*+removable:start */
     // explicitly define several variables that are imported from the dependencies
     // this is done to help IDEs that cannot infer what is in scope otherwise
     let
@@ -67,6 +66,8 @@ const $scope = constants?.$scope || function()
             EMPTY_ARRAY = Object.freeze( [] ),
             EMPTY_OBJECT = Object.freeze( {} ),
 
+            // does nothing, on purpose
+            no_op = constants?.no_op || function() {},
             populateOptions = constants?.populateOptions
 
         } = constants || {};
@@ -132,8 +133,7 @@ const $scope = constants?.$scope || function()
      */
     let ARRAY_METHODS = arrayUtils.ARRAY_METHODS;
 
-    // Make the functions and properties of the imported modules local variables and functions.
-    constants.importUtilities( (me || this), constants, typeUtils, stringUtils, arrayUtils );
+    /*+removable:end */
 
     // defines a key we can use to store this module in global scope
     const INTERNAL_NAME = "__BOCK__OBJECT_UTILS__";
@@ -159,6 +159,44 @@ const $scope = constants?.$scope || function()
             guidUtils
         };
 
+    const me = exposeModule || this;
+
+    // Make the functions and properties of the imported modules local variables and functions.
+    constants.importUtilities( (me || this), ...(Object.values( dependencies )) );
+
+    const uniqueObjectId = Symbol.for( "__BOCK__UNIQUE_OBJECT_ID__" );
+
+    try
+    {
+        Object.defineProperty( Object.prototype,
+                               uniqueObjectId,
+                               {
+                                   get: function()
+                                   {
+                                       this.__unique_object_id__ = this.__unique_object_id__ || guidUtils.guid();
+                                       return this.__unique_object_id__;
+                                   }
+                               } );
+
+        Object.prototype.getUniqueId = function()
+        {
+            return this[uniqueObjectId];
+        };
+
+        Object.defineProperty( Object.prototype,
+                               "GUID",
+                               {
+                                   get: function()
+                                   {
+                                       return this[uniqueObjectId];
+                                   }
+                               } );
+    }
+    catch( ex )
+    {
+        // objects won't have a uniqueObjectId unless they already do
+    }
+
     /**
      * Defines the maximum length of a branch of an object graph that will be cloned when copying an object.
      * example:
@@ -182,34 +220,13 @@ const $scope = constants?.$scope || function()
      * An array of the names of the methods exposed by Object
      * @type {string[]}
      */
-    const OBJECT_METHODS =
-        [
-            "constructor",
-            "prototype",
-            "__proto__",
-            "hasOwnProperty",
-            "isPrototypeOf",
-            "propertyIsEnumerable",
-            "toString",
-            "valueOf",
-            "toLocaleString",
-            "__defineGetter__",
-            "__defineSetter__",
-            "__lookupGetter__",
-            "__lookupSetter__",
-            "isIdenticalTo",
-            "equals"
-        ];
+    const OBJECT_METHODS = Object.freeze( ["length", "isIdenticalTo", "equals", "GUID", "getUniqueId"].concat( [].concat( Object.getOwnPropertyNames( Object.prototype ).filter( e => "function" === typeof {}[e] ) ) ) );
 
     /**
      * An array of property names that are never included in calls to getProperties, getKeys, getValues, or getEntries
      * @type {Readonly<string[]>}
      */
-    const ALWAYS_EXCLUDED = Object.freeze( ["uniqueObjectId",
-                                            "instantiationTimestamp",
-                                            "_uniqueObjectId",
-                                            "_instantiationTimestamp",
-                                           ] );
+    const ALWAYS_EXCLUDED = Object.freeze( ["GUID", "getUniqueId"] );
 
 
     /**
@@ -217,9 +234,6 @@ const $scope = constants?.$scope || function()
      * @type {string[]}
      */
     const EXCLUDED_PROPERTIES = [].concat( OBJECT_METHODS ).concat( ARRAY_METHODS ).concat( ALWAYS_EXCLUDED );
-
-    // does nothing, on purpose
-    const no_op = function() {};
 
     // a filter to return only strings containing at least one non-whitespace character
     const NON_BLANK_STRINGS = e => (_str === typeof e && _mt_str !== e.trim());
@@ -587,54 +601,6 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * This function returns a unique identifier that can be assigned to an an object in its constructor.
-     * It is useful for debugging when an object is unintentionally aliased or copied.
-     * @param pObject the object to which to assign the uniqueId
-     * @param pClass the class of the object
-     * @param pTimestamp a number derived from a valid Date, defaults to NOW
-     * @returns {string} a unique string identifying the specific instance of the object
-     */
-    const generateUniqueObjectId = function( pObject, pClass, pTimestamp = new Date() )
-    {
-        let uniqueId = pObject?.uniqueObjectId || pObject?._uniqueObjectId;
-
-        if ( isBlank( asString( uniqueId, true ) ) )
-        {
-            const clazz = isClass( pClass ) ? pClass : getClass( pClass || pObject ) || getClass( pObject );
-
-            if ( pObject && isObject( pObject ) )
-            {
-                if ( clazz && isClass( clazz ) )
-                {
-                    if ( pTimestamp && pTimestamp > 0 )
-                    {
-                        const tsString = asString( pTimestamp, true );
-
-                        let newUid = _mt_str;
-
-                        const guid = guidUtils.guid();
-
-                        for( let i = 0, j = 0, n = guid?.length; i < n; i++, j++ )
-                        {
-                            const char = guid.charAt( i );
-
-                            newUid += (char + (tsString?.length > j ? tsString.charAt( j ) : guid.charAt( j - 1 )));
-                        }
-
-                        const alphas = "ZYXWVUTSRQPONMLKJIHGFEDCBA";
-
-                        newUid += ((asString( pClass?.name, true ) + alphas) || alphas).slice( asInt( tsString.charAt( tsString.length - 4 ) ), 1 );
-
-                        uniqueId = asString( newUid, true );
-                    }
-                }
-            }
-        }
-
-        return asString( uniqueId, true );
-    };
-
-    /**
      * This class wraps the 2-element arrays returned from Object::entries,
      * so we can treat them like objects with a key and a value property instead of an array.
      * This class extends Array, so it retains all the functionality normally available for Object entries
@@ -664,15 +630,6 @@ const $scope = constants?.$scope || function()
             }
 
             this.#type = typeof this.#value;
-
-            Object.defineProperty( this,
-                                   "uniqueObjectId",
-                                   {
-                                       configurable: false,
-                                       enumerable: false,
-                                       writable: false,
-                                       value: generateUniqueObjectId( this, this.constructor, new Date() )
-                                   } );
         }
 
         get key()
@@ -3424,7 +3381,6 @@ const $scope = constants?.$scope || function()
             prune: pruneObject,
             IterationCap,
             ObjectEntry,
-            generateUniqueObjectId,
             isValidObject,
             firstValidObject,
             firstPopulatedObject,

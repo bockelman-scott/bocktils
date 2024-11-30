@@ -31,11 +31,13 @@ const $scope = utils?.$scope || function()
             objectUtils
         };
 
+    let IllegalArgumentError = constants.IllegalArgumentError;
+
+    let Result = typeUtils.Result;
+
     let isDate = typeUtils.isDate;
     let isNumber = typeUtils.isNumber;
     let isFunction = typeUtils.isFunction;
-
-    let TriState = typeUtils.TriState;
 
     let asString = stringUtils.asString;
     let asInt = stringUtils.asInt;
@@ -66,7 +68,7 @@ const $scope = utils?.$scope || function()
             MONTH: 8,
             YEAR: 9,
             DECADE: 10,
-            DAY_OF_WEEK:11
+            DAY_OF_WEEK: 11
         } );
 
     const DateConstants = Object.freeze(
@@ -354,6 +356,11 @@ const $scope = utils?.$scope || function()
         return isDate( pDate ) || isNumber( pDate );
     };
 
+    const validateArguments = function( pDateA, pDateB )
+    {
+        return isValidDateArgument( pDateA ) && isValidDateArgument( pDateB );
+    };
+
     const toTimestamp = function( pDate, pDefault = Date.now() )
     {
         return isDate( pDate ) ? pDate.getTime() : isNumber( pDate ) ? Math.floor( pDate ) : pDefault || Date.now();
@@ -361,45 +368,23 @@ const $scope = utils?.$scope || function()
 
     const transform = function( pDate, pFunction )
     {
-        let result = { returnValue: pDate, exceptions: [] };
+        let errors = !isValidDateArgument( pDate ) ? [new IllegalArgumentError( "Cannot transform an invalid date" )] : [];
 
-        if ( isFunction( pFunction ) )
+        if ( !(isFunction( pFunction ) && pFunction?.length >= 1) )
         {
-            result = attempt( pFunction, pDate );
+            errors.push( new IllegalArgumentError( "The second argument to transform must be a function with at least one parameter" ) );
         }
 
-        return result?.exceptions?.length > 0 ? pDate : result.returnValue;
-    };
-
-    const _shortCircuit = function( pDateA, pDateB )
-    {
-        let state = new TriState();
-
-        const validA = isValidDateArgument( pDateA );
-
-        if ( !isValidDateArgument( pDateB ) )
-        {
-            state.returnValue = validA;
-            state.hasReturnValue = true;
-        }
-        else if ( !validA )
-        {
-            state.returnValue = false;
-            state.hasReturnValue = true;
-        }
-        else
-        {
-            state.returnValue = null;
-            state.hasReturnValue = false;
-        }
-
-        return state;
+        return (isFunction( pFunction ) ? attempt( pFunction, pDate ) : new Result( pDate, errors ));
     };
 
     const _compare = function( pDateA, pDateB, pTransformerFunction )
     {
-        const dateA = isValidDateArgument( pDateA ) ? transform( pDateA, pTransformerFunction ) : null;
-        const dateB = isValidDateArgument( pDateB ) ? transform( pDateB, pTransformerFunction ) : null;
+        const resultA = transform( pDateA, pTransformerFunction );
+        const resultB = transform( pDateB, pTransformerFunction );
+
+        const dateA = resultA.hasErrors() ? pDateA : resultA.returnValue;
+        const dateB = resultB.hasErrors() ? pDateB : resultB.returnValue;
 
         const tsA = toTimestamp( dateA, Number.MAX_VALUE );
         const tsB = toTimestamp( dateB, Number.MIN_VALUE );
@@ -460,11 +445,9 @@ const $scope = utils?.$scope || function()
      */
     const before = function( pDateA, pDateB, pTransformerFunction )
     {
-        const state = _shortCircuit( pDateA, pDateB );
-
-        if ( state.hasReturnValue )
+        if ( !validateArguments( pDateA, pDateB ) )
         {
-            return state.returnValue;
+            return false;
         }
 
         const comp = _compare( pDateA, pDateB, pTransformerFunction );
@@ -484,14 +467,10 @@ const $scope = utils?.$scope || function()
      */
     const after = function( pDateA, pDateB, pTransformerFunction )
     {
-        const state = _shortCircuit( pDateA, pDateB );
+        let dateA = isValidDateArgument( pDateA ) ? pDateA : new Date();
+        let dateB = isValidDateArgument( pDateB ) ? pDateB : new Date();
 
-        if ( state.hasReturnValue )
-        {
-            return state.returnValue;
-        }
-
-        const comp = _compare( pDateA, pDateB, pTransformerFunction );
+        const comp = _compare( dateA, dateB, pTransformerFunction );
 
         return comp > 0;
     };
@@ -510,11 +489,9 @@ const $scope = utils?.$scope || function()
      */
     const equal = function( pDateA, pDateB, pTransformerFunction )
     {
-        const state = _shortCircuit( pDateA, pDateB );
-
-        if ( state.hasReturnValue )
+        if ( !validateArguments( pDateA, pDateB ) )
         {
-            return state.returnValue;
+            return false;
         }
 
         const comp = _compare( pDateA, pDateB, pTransformerFunction );

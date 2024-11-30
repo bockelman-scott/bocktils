@@ -117,6 +117,11 @@
             _LETTERS_ENGLISH_UCASE = _ALPHABET_ENGLISH_UCASE.split( _mt_chr ),
             _LETTERS_ENGLISH_LCASE = _ALPHABET_ENGLISH_LCASE.split( _mt_chr ),
 
+            HEX_DIGITS = "0123456789ABCDEF".split( _mt_str ),
+            HEX_DIGITS_MAP = new Map( HEX_DIGITS.map( ( e, i ) => [e, i] ) ),
+            OCT_DIGITS = "01234567".split( _mt_str ),
+            OCT_DIGITS_MAP = new Map( OCT_DIGITS.map( ( e, i ) => [e, i] ) ),
+
             _rxLiteral = "/",
             _solidus = "/",
             _slash = "/",
@@ -188,7 +193,9 @@
 
             ERROR_TYPES = [Error, AggregateError, RangeError, ReferenceError, SyntaxError, URIError],
 
-            GLOBAL_TYPES = [Object, Function, String, Number, Boolean, Array, BigInt, Date, RegExp, Symbol, Math, JSON, Map, Set, Promise, ArrayBuffer, SharedArrayBuffer, DataView, WeakMap, WeakRef, WeakSet],
+            PRIMITIVE_WRAPPER_TYPES = [String, Number, Boolean, BigInt],
+
+            GLOBAL_TYPES = [Object, Array, Function, ...PRIMITIVE_WRAPPER_TYPES, Date, RegExp, Symbol, Math, JSON, Map, Set, Promise, ArrayBuffer, SharedArrayBuffer, DataView, WeakMap, WeakRef, WeakSet],
 
             BUILTIN_TYPES = [].concat( ...TYPED_ARRAYS ).concat( ...ERROR_TYPES ).concat( ...GLOBAL_TYPES ),
 
@@ -196,7 +203,7 @@
 
             ERROR_TYPE_NAMES = ["Error", "AggregateError", "RangeError", "ReferenceError", "SyntaxError", "URIError"],
 
-            GLOBAL_TYPE_NAMES = ["Object", "Function", "String", "Number", "Boolean", "Array", "BigInt", "Date", "RegExp", "Symbol", "Math", "JSON", "Map", "Set", "Promise", "ArrayBuffer", "SharedArrayBuffer", "DataView", "WeakMap", "WeakRef", "WeakSet"],
+            GLOBAL_TYPE_NAMES = ["Object", "Array", "Function", "String", "Number", "Boolean", "BigInt", "Date", "RegExp", "Symbol", "Math", "JSON", "Map", "Set", "Promise", "ArrayBuffer", "SharedArrayBuffer", "DataView", "WeakMap", "WeakRef", "WeakSet"],
 
             BUILTIN_TYPE_NAMES = [].concat( ...TYPED_ARRAY_NAMES ).concat( ...ERROR_TYPE_NAMES ).concat( ...GLOBAL_TYPE_NAMES ),
 
@@ -208,6 +215,9 @@
             _affirmatives = [].concat( ...([S_TRUE, "1", "on", S_ENABLED, "t", S_YES]) ),
 
             ignore = function() { },
+
+            // does nothing, on purpose
+            no_op = function() {},
 
             RESERVED_WORDS = Object.freeze(
                 ["break",
@@ -1497,6 +1507,10 @@
             _ALPHABET_ENGLISH_LCASE,
             _LETTERS_ENGLISH_UCASE,
             _LETTERS_ENGLISH_LCASE,
+            HEX_DIGITS,
+            HEX_DIGITS_MAP,
+            OCT_DIGITS,
+            OCT_DIGITS_MAP,
             _browser,
             _worker,
             _nodejs,
@@ -1550,6 +1564,7 @@
             TYPED_ARRAY_NAMES,
             ERROR_TYPES,
             ERROR_TYPE_NAMES,
+            PRIMITIVE_WRAPPER_TYPES,
             GLOBAL_TYPES,
             SERIALIZABLE_TYPES,
             GLOBAL_TYPE_NAMES,
@@ -1583,6 +1598,7 @@
                 return true;
             },
             $scope,
+            no_op,
             ignore,
             importUtilities,
             populateOptions,

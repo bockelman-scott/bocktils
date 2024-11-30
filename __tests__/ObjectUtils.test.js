@@ -332,17 +332,22 @@ describe( "isValidEntry", () =>
 
 describe( "Unique object ID", () =>
 {
-    test( "generateUniqueObjectId returns a value unique to the object",
+    test( "getUniqueId() returns a value unique to the object",
           () =>
           {
               let o = new ClassOne();
               let o2 = new ClassTwo();
+              let o3 = {};
 
-              let uniqueObjectId = objectUtils.generateUniqueObjectId( o, ClassOne );
+              const regExp = /^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$/i;
 
-              let uniqueObjectId2 = objectUtils.generateUniqueObjectId( o2 );
+              expect( regExp.test( o.getUniqueId() ) ).toBe( true );
+              expect( regExp.test( o2.getUniqueId() ) ).toBe( true );
+              expect( regExp.test( o3.getUniqueId() ) ).toBe( true );
 
-              expect( uniqueObjectId !== uniqueObjectId2 ).toBe( true );
+              expect( o.GUID ).toEqual( o.getUniqueId() );
+              expect( o2.GUID ).toEqual( o2.getUniqueId() );
+              expect( o3.GUID ).toEqual( o3.getUniqueId() );
           } );
 } );
 

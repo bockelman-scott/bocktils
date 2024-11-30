@@ -46,10 +46,10 @@ describe( "DateUtils.before", () =>
               expect( dateUtils.before( null, today ) ).toBe( false );
           } );
 
-    test( "DateUtils.before returns true for ( yesterday, undefined )",
+    test( "DateUtils.before returns false for ( yesterday, undefined )",
           () =>
           {
-              expect( dateUtils.before( yesterday ) ).toBe( true );
+              expect( dateUtils.before( yesterday ) ).toBe( false );
           } );
 } );
 
@@ -61,16 +61,16 @@ describe( "DateUtils.after", () =>
               expect( dateUtils.after( today, tomorrow ) ).toBe( false );
           } );
 
-    test( "DateUtils.after returns false for ( null, today )",
+    test( "DateUtils.after returns true for ( null, today )",
           () =>
           {
-              expect( dateUtils.after( null, today ) ).toBe( false );
+              expect( dateUtils.after( null, today ) ).toBe( true );
           } );
 
-    test( "DateUtils.after returns true for ( yesterday, undefined )",
+    test( "DateUtils.after returns false for ( yesterday, undefined )",
           () =>
           {
-              expect( dateUtils.after( yesterday ) ).toBe( true );
+              expect( dateUtils.after( yesterday ) ).toBe( false );
           } );
 } );
 
@@ -88,10 +88,10 @@ describe( "DateUtils.equal", () =>
               expect( dateUtils.equal( null, today ) ).toBe( false );
           } );
 
-    test( "DateUtils.equal returns true for ( yesterday, undefined )",
+    test( "DateUtils.equal returns false for ( yesterday, undefined )",
           () =>
           {
-              expect( dateUtils.equal( yesterday ) ).toBe( true );
+              expect( dateUtils.equal( yesterday ) ).toBe( false );
           } );
 
     test( "DateUtils.equal returns true for ( anHourAgo, anHourLater, toNoon )",

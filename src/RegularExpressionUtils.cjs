@@ -187,6 +187,11 @@ const $scope = constants?.$scope || function()
             REGEX: Object.freeze( /^\/.+\/[gidsmyu]*$/ ),
 
             /**
+             * Matches a Globally Unique Identifier (GUID)
+             */
+            GUID: Object.freeze( /^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$/i ),
+
+            /**
              * Matches a single literal 'dot'
              */
             DOT: Object.freeze( /\./ ),

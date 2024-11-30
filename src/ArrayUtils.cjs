@@ -19,8 +19,37 @@ const $scope = constants?.$scope || function()
 
 (function exposeModule()
 {
-    const me = exposeModule;
+    // defines a key we can use to store this module in global scope
+    const INTERNAL_NAME = "__BOCK__ARRAY_UTILS__";
 
+    // if we've already executed this code, just return the module
+    if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
+    {
+        return $scope()[INTERNAL_NAME];
+    }
+
+    /**
+     * Assigns a variable to the current closure scope
+     * so we can import dependencies and use their properties and functions as local variables
+     * @see constants.importUtilities
+     * @type {(function(): (*))|*}
+     */
+    const me = exposeModule || this;
+
+    /**
+     * An array of this module's dependencies
+     * which are re-exported with this module,
+     * so if you want to, you can just import the leaf module
+     * and then use the other utilities as properties of that module
+     */
+    const dependencies =
+        {
+            constants,
+            typeUtils,
+            stringUtils
+        };
+
+    /*+removable:start */
     /**
      * Create local variables for the imported values and functions we use.
      * This is technically unnecessary, but some IDEs cannot recognize the imported variables otherwise.
@@ -51,92 +80,34 @@ const $scope = constants?.$scope || function()
             isValidNumeric = stringUtils.isValidNumeric,
             AsyncFunction = (async function() {}).constructor,
             EMPTY_ARRAY = Object.freeze( [] ),
-            EMPTY_OBJECT = Object.freeze( {} ),
+            populateOptions = constants.populateOptions
         } = constants || {};
+    /*+removable:end */
 
-    // These statements make the functions and properties of the imported modules local variables and functions.
-    Object.assign( me || this, constants );
-    Object.assign( me || this, typeUtils );
-    Object.assign( me || this, stringUtils );
-
-    /**
-     * An array of this module's dependencies
-     * which are re-exported with this module,
-     * so if you want to, you can just import the leaf module
-     * and then use the other utilities as properties of that module
-     */
-    const dependencies =
-        {
-            constants,
-            typeUtils,
-            stringUtils
-        };
+    // This statement makes the functions and properties of the dependencies available as local variables and functions.
+    constants.importUtilities( me || this, ...(Object.values( dependencies )) );
 
     // poly-fill for isArray; probably obsolete with modern environments
     if ( _fun !== typeof Array.isArray )
     {
-        Array.isArray = function( pArg )
+        try
         {
-            if ( (_ud === typeof pArg) || (null == pArg) )
+            Array.isArray = function( pArg )
             {
-                return false;
-            }
-            return "[object Array]" === {}.toString.call( pArg );
-        };
-    }
-
-    // defines a key we can use to store this module in global scope
-    const INTERNAL_NAME = "__BOCK__ARRAY_UTILS__";
-
-    // if we've already executed this code, just return the module
-    if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
-    {
-        return $scope()[INTERNAL_NAME];
+                return !(_ud === typeof pArg || null == pArg) && "[object Array]" === {}.toString.call( pArg );
+            };
+        }
+        catch( ex )
+        {
+            // wrapped in a try/catch for any environment that does not permit extending the built-in objects/functions
+        }
     }
 
     /**
      * An array of the names of the methods exposed by Array
      * @type {string[]}
      */
-    const ARRAY_METHODS =
-        [
-            "length",
-            "constructor",
-            "concat",
-            "copyWithin",
-            "fill",
-            "find",
-            "findIndex",
-            "lastIndexOf",
-            "pop",
-            "push",
-            "reverse",
-            "shift",
-            "unshift",
-            "slice",
-            "sort",
-            "splice",
-            "includes",
-            "indexOf",
-            "join",
-            "keys",
-            "entries",
-            "values",
-            "forEach",
-            "filter",
-            "flat",
-            "flatMap",
-            "map",
-            "every",
-            "some",
-            "reduce",
-            "reduceRight",
-            "toLocaleString",
-            "toString",
-            "at",
-            "findLast",
-            "findLastIndex"
-        ];
+    const ARRAY_METHODS = ["length"].concat( [].concat( Object.getOwnPropertyNames( Array.prototype ).filter( e => "function" === typeof [][e] ) ) );
 
     /**
      * This object defines the default options for the asArray function.
@@ -185,19 +156,16 @@ const $scope = constants?.$scope || function()
      */
     const asArray = function( pMaybeAnArray, pOptions = DEFAULT_AS_ARRAY_OPTIONS )
     {
-        const options = Object.assign( Object.assign( {}, DEFAULT_AS_ARRAY_OPTIONS ), (pOptions || EMPTY_OBJECT) );
+        const options = populateOptions( pOptions, DEFAULT_AS_ARRAY_OPTIONS );
 
-        let arr = (_ud === typeof pMaybeAnArray ? EMPTY_ARRAY : (_str === typeof pMaybeAnArray && _mt_str === pMaybeAnArray) ? [pMaybeAnArray] : (pMaybeAnArray || EMPTY_ARRAY));
+        let arr = (_ud === typeof pMaybeAnArray ? [] : (_str === typeof pMaybeAnArray && _mt_str === pMaybeAnArray) ? [pMaybeAnArray] : (pMaybeAnArray || []));
 
         if ( !Array.isArray( arr ) )
         {
             switch ( typeof arr )
             {
                 case _obj:
-                    if ( !Array.isArray( arr ) )
-                    {
-                        arr = Object.values( arr );
-                    }
+                    arr = Object.values( arr );
                     break;
 
                 case _str:
@@ -220,11 +188,9 @@ const $scope = constants?.$scope || function()
 
                 case _fun:
 
-                    const isConstructor = function( pFunction ) { return _fun === typeof pFunction && /^class\s/.test( (_mt_str + Function.prototype.toString.call( pFunction, pFunction )).trim() ); };
-
                     try
                     {
-                        if ( isConstructor( arr ) )
+                        if ( typeUtils.isClass( arr ) )
                         {
                             const clazz = arr;
 

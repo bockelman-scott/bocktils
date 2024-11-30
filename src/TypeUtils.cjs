@@ -43,6 +43,14 @@ const $scope = constants?.$scope || function()
     }
 
     /**
+     * Assigns a variable to the current closure scope
+     * so we can import dependencies and use their properties and functions as local variables
+     * @see constants.importUtilities
+     * @type {(function(): (*))|*}
+     */
+    const me = exposeModule || this;
+
+    /**
      * An array of this module's dependencies
      * which are re-exported with this module,
      * so if you want to, you can just import the leaf module
@@ -53,6 +61,7 @@ const $scope = constants?.$scope || function()
             constants
         };
 
+    /*+removable:start */
     let _mt_str = constants._mt_str || "";
     let _dot = constants._dot || ".";
 
@@ -64,10 +73,43 @@ const $scope = constants?.$scope || function()
     let _obj = constants._obj || "object";
     let _symbol = constants._symbol || "symbol";
 
-    const VALID_TYPES = [_str, _num, _big, _symbol, _bool, _obj, _fun];
-    const JS_TYPES = [_ud].concat( VALID_TYPES );
+    let HEX_DIGITS = constants.HEX_DIGITS;
+    let HEX_DIGITS_MAP = constants.HEX_DIGITS_MAP;
+    let OCT_DIGITS = constants.OCT_DIGITS;
+    let OCT_DIGITS_MAP = constants.OCT_DIGITS_MAP;
 
-    const TYPE_DEFAULTS =
+    let S_ERR_PREFIX = constants.S_ERR_PREFIX;
+    let BUILTIN_TYPES = constants.BUILTIN_TYPES;
+    let BUILTIN_TYPE_NAMES = constants.BUILTIN_TYPE_NAMES;
+    let PRIMITIVE_WRAPPER_TYPES = constants.PRIMITIVE_WRAPPER_TYPES;
+
+    let AsyncFunction = constants.AsyncFunction;
+    let populateOptions = constants.populateOptions;
+    let no_op = constants.no_op;
+    /*+removable:end */
+
+    // This statement makes the functions and properties of the dependencies available as local variables and functions.
+    constants.importUtilities( me || this, ...(Object.values( dependencies )) );
+
+    /**
+     * This is an array of the 'valid' JavaScript primitive types.
+     * Note that 'undefined' is not considered to be a 'valid' type
+     * @type {Readonly<(string)[]>}
+     */
+    const VALID_TYPES = Object.freeze( [_str, _num, _big, _symbol, _bool, _obj, _fun] );
+
+    /**
+     * This is an array of all JavaScript primitive types.
+     * This includes all the 'valid' types AND 'undefined'
+     * @type {Readonly<(string)[]>}
+     */
+    const JS_TYPES = Object.freeze( [_ud].concat( VALID_TYPES ) );
+
+    /**
+     * This object is a dictionary of the default values for each primitive type
+     * @type {Readonly<{}>}
+     */
+    const TYPE_DEFAULTS = Object.freeze(
         {
             [_str]: _mt_str,
             [_big]: 0n,
@@ -77,43 +119,124 @@ const $scope = constants?.$scope || function()
             [_obj]: null,
             [_symbol]: null,
             [_ud]: undefined
-        };
+        } );
+
+    /**
+     * This oddly named function, so as not to collide with 'isArray',
+     * is used to polyfill Array for ancient browsers or non-spec execution environments
+     * @param pArg a value to evaluate
+     * @returns {boolean} true if the specified argument is an Array
+     * @private
+     */
+    function doesBeArray( pArg )
+    {
+        return !(_ud === typeof pArg || null == pArg) && "[object Array]" === {}.toString.call( pArg );
+    }
 
     // poly-fill for isArray; probably obsolete with modern environments
     if ( _fun !== typeof Array.isArray )
     {
         try
         {
-            Array.isArray = function( pArg )
-            {
-                if ( (_ud === typeof pArg) || (null == pArg) )
-                {
-                    return false;
-                }
-                return "[object Array]" === {}.toString.call( pArg );
-            };
+            Array.isArray = doesBeArray;
         }
         catch( ex )
         {
-            // if an environment does not allow extending the built-in object(s)
+            // wrapped in a try/catch for any environment that does not permit extending the built-in objects/functions
         }
     }
 
-    const isFunction = function( pObj )
+    /**
+     * Returns true if the specified value is undefined
+     * @param pObject a value to evaluate
+     * @returns {boolean} true if the specified value is undefined
+     */
+    const isUndefined = function( pObject )
     {
-        return null !== pObj && _fun === typeof pObj;
+        return (_ud === typeof pObject || undefined === pObject);
     };
 
+    /**
+     * Returns true if the specified value IS defined.
+     * This is just an inversion of isUndefined
+     * @param pObject a value to evaluate
+     * @returns {boolean} true if the specified value is defined
+     * @see isUndefined
+     */
+    const isDefined = function( pObject )
+    {
+        return !isUndefined( pObject );
+    };
+
+    /**
+     * Returns true if the specified value is null (or, when not strict, undefined or an empty string)
+     * The default is non-strict and will return true for any value that is null, undefined, or an empty string.
+     * @param pObject {any} a value to evaluate
+     * @param pStrict {boolean} specify true to treat any value that is not identical to null as not-null
+     * @returns {boolean} if the specified value is null (or, when not strict, undefined or an empty string)
+     */
+    const isNull = function( pObject, pStrict = false )
+    {
+        return pStrict ? (null === pObject) : (isUndefined( pObject ) || null == pObject || (_str === typeof pObject && _mt_str === String( pObject )));
+    };
+
+    /**
+     * Returns true if the specified value is NOT null (or, when not strict, NOT undefined and NOT an empty string)
+     * The default is non-strict and will return false for any value that is null, undefined, or an empty string.
+     * This is just an inversion of isNull
+     * @param pObject {any} a value to evaluate
+     * @param pStrict {boolean} specify true to treat any value that is not identical to null as not-null
+     * @returns {boolean} if the specified value is NOT null (or, when not strict, NOT undefined or an empty string)
+     * @see isNull
+     */
+    const isNotNull = function( pObject, pStrict = false )
+    {
+        return !isNull( pObject, pStrict );
+    };
+
+    /**
+     * Returns true if the specified value is a Function.
+     * Or, if invoked with false as the second argument, if the specified value is callable (via call() or apply())
+     * @param pObj {any} a value to evaluate
+     * @param pStrict {boolean} specify false to return true for objects that define call and apply methods
+     * @returns {boolean} true if the specified value is a Function (or when not invoked with strict, any object defining both a call and apply method)
+     */
+    const isFunction = function( pObj, pStrict = true )
+    {
+        return !isNull( pObj ) && (_fun === typeof pObj || ( !pStrict && (_fun === typeof pObj.call) && (_fun === typeof pObj.apply)));
+    };
+
+    /**
+     * Returns true if the specified value is an asynchronous Function
+     * @param pObject {any} a value to evaluate
+     * @returns {boolean} true if the specified value is an asynchronous Function
+     */
     const isAsyncFunction = function( pObject )
     {
-        return isFunction( pObject ) && (pObject.constructor === constants.AsyncFunction || pObject === constants.AsyncFunction);
+        return isFunction( pObject, true ) && (pObject.constructor === AsyncFunction || pObject === AsyncFunction);
     };
 
+    /**
+     * Returns true if the specified value is a function that creates a generator
+     * @param pObject a value to evaluate
+     * @returns {boolean} true if the specified value is a function that creates a generator
+     */
     function isGeneratorFunction( pObject )
     {
-        return isFunction( pObject ) && isDefined( pObject[Symbol.iterator] );
+        return (isFunction( pObject ) && "[object Generator]" === {}.toString.call( pObject.prototype, pObject.prototype ));
     }
 
+    /**
+     * This object defines the default options for the isObject function.
+     * - rejectPrimitiveWrappers {boolean} when true,
+     *   objects that are instances of String, Number, or Boolean,
+     *   are not consider objects (default: true)
+     *
+     * - rejectArrays {boolean} when true, arrays are not considered to be 'objects', (default: false)
+     *
+     * - rejectNull {boolean} when true, null, is not considered an 'object' (default: false)
+     * @type {{rejectArrays: boolean, rejectPrimitiveWrappers: boolean, rejectNull: boolean}}
+     */
     const DEFAULT_IS_OBJECT_OPTIONS =
         {
             rejectPrimitiveWrappers: true,
@@ -121,48 +244,72 @@ const $scope = constants?.$scope || function()
             rejectNull: false
         };
 
+    /**
+     * Returns true if the specified value is an instance of String, Number, or Boolean
+     * @param pObj a value to evaluate
+     * @returns {boolean} true if the specified value is an instance of String, Number, or Boolean
+     */
+    function isPrimitiveWrapper( pObj )
+    {
+        return !isNull( pObj ) && ([].concat( PRIMITIVE_WRAPPER_TYPES )).filter( e => pObj instanceof e ).length > 0; // (pObj instanceof String || pObj instanceof Number || pObj instanceof Boolean || pObj instanceof BigInt);
+    }
+
+    /**
+     * Returns true if the specified value is an object.
+     * Use the options to clarify how to treat primitive wrappers, arrays, and nulls
+     * @see DEFAULT_IS_OBJECT_OPTIONS
+     * @see isPrimitiveWrapper
+     * @param pObj {any} a value to evaluate
+     * @param pOptions {object} an object specifying how to handle arrays, null values, or primitive wrappers
+     * @returns {boolean} true if the specified value is an object
+     */
     const isObject = function( pObj, pOptions = DEFAULT_IS_OBJECT_OPTIONS )
     {
         if ( (_obj === typeof pObj) || pObj instanceof Object )
         {
-            const options = Object.assign( Object.assign( {}, DEFAULT_IS_OBJECT_OPTIONS ), pOptions || {} );
+            const options = populateOptions( pOptions, DEFAULT_IS_OBJECT_OPTIONS );
 
-            if ( options.rejectNull && null === pObj )
+            if ( options.rejectNull && isNull( pObj ) )
             {
                 return false;
             }
 
-            if ( options.rejectPrimitiveWrappers )
+            if ( options.rejectPrimitiveWrappers && isPrimitiveWrapper( pObj ) )
             {
-                if ( pObj instanceof String || pObj instanceof Number || pObj instanceof Boolean || pObj instanceof BigInt )
-                {
-                    return false;
-                }
+                return false;
             }
 
-            if ( options.rejectArrays )
-            {
-                if ( ((isFunction( Array.isArray )) ? Array.isArray( pObj ) : Object.prototype.toString.call( pObj ).toString() === "[object Array]") )
-                {
-                    return false;
-                }
-            }
-
-            return true;
+            return !(options.rejectArrays && doesBeArray( pObj ));
         }
         return false;
     };
 
+    /**
+     * Returns true if the specified value is an object that does not derive from the JavaScript Object type
+     * @param pObj {any} a value to evaluate
+     * @returns {boolean} true if the specified value is an object that does not derive from the JavaScript Object type
+     */
     const isCustomObject = function( pObj )
     {
         return isObject( pObj ) && pObj.prototype !== null && pObj.prototype !== Object && (pObj.constructor === null || pObj.constructor !== Object);
     };
 
+    /**
+     * Returns true if the specified value is a string or a String
+     * @param pObj {any} a value to evaluate
+     * @returns {boolean} true if the specified value is a string or a String
+     */
     const isString = function( pObj )
     {
         return (_str === typeof pObj) || pObj instanceof String;
     };
 
+    /**
+     * Attempts to convert a value to a string
+     * @param pObj {any}
+     * @returns {string}
+     * @private
+     */
     function _toString( pObj )
     {
         if ( isString( pObj ) )
@@ -172,52 +319,125 @@ const $scope = constants?.$scope || function()
         return (0 === pObj || "0" === pObj || false === pObj) ? "0" : (_mt_str + String( pObj ) + _mt_str).trim();
     }
 
+    /**
+     * Returns true if the specified value is a number or Number (and NOT a Date)
+     * @param pObj {any} a value to evaluate
+     * @returns {boolean} true if the specified value is a number or Number (and NOT a Date)
+     */
     const isNumber = function( pObj )
     {
-        return [_num, _big].includes( typeof pObj ) || pObj instanceof Number || pObj instanceof BigInt;
+        return ([_num, _big].includes( typeof pObj ) || pObj instanceof Number || pObj instanceof BigInt) && !(isObject( pObj ) && pObj instanceof Date);
     };
 
-    const isInteger = function( pObj )
+    /**
+     * Returns true if the specified value can be expressed as an integer (or zero).
+     * That is, the value is a natural number, a.k.a. "whole number" and contains no powers of the base less than 1
+     *
+     * @param pObj {number|string} a value to evaluate
+     * @param pStrict {boolean} if true, the specified value must be a number; strings will not be parsed
+     * @returns {boolean} true if the specified value can be expressed as an integer (or zero) without any loss of precision
+     */
+    const isInteger = function( pObj, pStrict = true )
     {
-        return isNumber( pObj ) && parseInt( pObj ) === pObj;
-    };
+        let is = 0 === pObj || (isNumber( pObj ) && parseInt( pObj ) === pObj);
 
-    const isFloat = function( pObj )
-    {
-        if ( isNumber( pObj ) )
+        if ( !is && !pStrict && isString( pObj ) && isNumeric( pObj ) )
         {
-            let s = _toString( pObj );
+            let n = parseFloat( pObj );
 
-            const parts = s.split( _dot );
+            if ( isInteger( n, true ) )
+            {
+                let s = _mt_str + String( n );
 
-            return parts?.length < 2 || /[1-9]/.test( (parts[1]).trim() );
+                return s === pObj;
+            }
         }
-        return false;
+
+        return is;
     };
 
-    const HEX_DIGITS = "0123456789ABCDEF".split( _mt_str );
-    const HEX_DIGITS_MAP = new Map( HEX_DIGITS.map( ( e, i ) => [e, i] ) );
-    const OCT_DIGITS = "01234567".split( _mt_str );
-    const OCT_DIGITS_MAP = new Map( OCT_DIGITS.map( ( e, i ) => [e, i] ) );
+    /**
+     * Returns true if the specified value cannot be expressed as an integer (or zero).
+     * That is, if isInteger( n ) would return true, this function would return false,
+     * unless the value is 0, which we treat as a special case and also consider to be a float.
+     *
+     * @param pObj {number|string} a value to evaluate
+     * @param pStrict {boolean} if true, the specified value must be a number; strings will not be parsed
+     * @returns {boolean} true if the specified value cannot be expressed as an integer (or zero)
+     */
+    const isFloat = function( pObj, pStrict = true )
+    {
+        if ( 0 === pObj )
+        {
+            return true;
+        }
 
+        let is = isNumber( pObj ) && (parseFloat( pObj ) !== parseInt( pObj ));
+
+        if ( !is && !pStrict && isString( pObj ) && isNumeric( pObj ) )
+        {
+            let n = parseFloat( pObj );
+
+            if ( isFloat( n, true ) )
+            {
+                let s = _mt_str + String( n );
+
+                return s === pObj;
+            }
+        }
+
+        return is;
+    };
+
+    /**
+     * Returns true if the specified value represents a hexadecimal number (base 16)
+     * @param pObj {string|number}
+     * @returns {boolean} true if the specified value represents a hexadecimal number
+     */
     function isHex( pObj )
     {
         const s = _toString( pObj );
         return ("0" !== s) && /^(-)?(0x)([\dA-Fa-f]+)(([.,])([\dA-Fa-f]+))?$/.test( s ) && !/[G-Wg-w\s]|[yzYZ]/.test( s );
     }
 
+    /**
+     * Returns true if the specified value represents an octal number (base 8)
+     * @param pObj {string|number}
+     * @returns {boolean} true if the specified value represents an octal number
+     */
     function isOctal( pObj )
     {
         const s = _toString( pObj );
         return ("0" !== s) && /^(-)?0(o)*([0-7]+)(([.,])([0-7]+))?$/.test( s ) && !/[A-Za-z\s]/.test( s );
     }
 
+    /**
+     * Returns true if the specified value represents a decimal number (base 10)
+     * @param pObj {string|number}
+     * @returns {boolean} true if the specified value represents a decimal number
+     */
     function isDecimal( pObj )
     {
         const s = _toString( pObj );
         return ("0" === s || "-0" === s || (/^0$|^(0?[1-9]*(\.\d+))$|^([1-9]+[0-9]*)$/.test( s ))) && !(isHex( s ) || isOctal( s ));
     }
 
+    /**
+     * Returns the base for the numeric value specified (i.e., 16 for hexadecimal values, 8 for octal values, or 10 for decimal values)
+     * @param pObj {string|number}
+     * @returns {number} the base for the numeric value specified (16, 8, or 10)
+     */
+    function calculateRadix( pObj )
+    {
+        return isHex( pObj ) ? 16 : isOctal( pObj ) ? 8 : isDecimal( pObj ) ? 10 : 0;
+    }
+
+    /**
+     * Returns true if the specified value is, or can be converted to, a number
+     * @param pObj {string|number} a value to evaluate
+     * @param pAllowLeadingZeroForBase10 specify true to allow decimal values with leading zeroes (default: false)
+     * @returns {boolean} true if the specified value is, or can be converted to, a number
+     */
     const isNumeric = function( pObj, pAllowLeadingZeroForBase10 = false )
     {
         if ( isNumber( pObj ) || "0" === pObj )
@@ -230,13 +450,13 @@ const $scope = constants?.$scope || function()
             return false;
         }
 
-        let value = (_mt_str + _toString( pObj )).replace( /n+$/, _mt_str );
+        let value = ((_mt_str + _toString( pObj )).replace( /n+$/, _mt_str )).trim();
 
         if ( "0" === pObj || isHex( value ) || isOctal( value ) || isDecimal( value ) )
         {
             if ( pAllowLeadingZeroForBase10 )
             {
-                if ( !isHex( value ) && !isOctal( value ) && isDecimal( value ) )
+                if ( !(isHex( value ) || isOctal( value )) && isDecimal( value ) )
                 {
                     while ( /^0/.test( value ) )
                     {
@@ -250,7 +470,7 @@ const $scope = constants?.$scope || function()
                 return false;
             }
 
-            let integer = parseInt( pObj, isHex( pObj ) ? 16 : isOctal( pObj ) ? 8 : isDecimal( pObj ) ? 10 : 0 );
+            let integer = parseInt( value, calculateRadix( pObj ) );
 
             return !(isNaN( integer ) && Number.isFinite( integer ));
         }
@@ -258,11 +478,25 @@ const $scope = constants?.$scope || function()
         return false;
     };
 
-    const isZero = function( pValue )
+    /**
+     * Returns true if the specified value === 0
+     *
+     * This can be useful if you might normally test for truthiness and you want 0 to be considered true.
+     *
+     * @param pValue {number|string} a value to evaluate
+     * @param pStrict specify false to accept numeric values (i.e., strings that represent numbers) (default: false)
+     * @returns {boolean} true if the specified value === 0
+     */
+    const isZero = function( pValue, pStrict = true )
     {
-        return isNumber( pValue ) && 0 === pValue;
+        return (pStrict ? isNumber( pValue ) : isNumeric( pValue )) && (0 === pValue || /0+/.test( _toString( pValue ) ));
     };
 
+    /**
+     * Returns the decimal representation of the specified value
+     * @param pObj {number|string} a value to convert to a decimal representation
+     * @returns {number} a decimal representation of the spcified value
+     */
     const toDecimal = function( pObj )
     {
         if ( !isNumeric( pObj ) )
@@ -332,6 +566,11 @@ const $scope = constants?.$scope || function()
         return value;
     };
 
+    /**
+     * Returns a string representation of the specified value as a hexadecimal number
+     * @param pObj {number|string} a value to convert to base 16 (hexadecimal)
+     * @returns {string} a string representation of the specified value as a hexadecimal (base 16) number
+     */
     const toHex = function( pObj )
     {
         let decimalValue = toDecimal( pObj );
@@ -341,6 +580,11 @@ const $scope = constants?.$scope || function()
         return (s.startsWith( "-" ) ? "-0x" : "0x") + s.replace( /^-/, _mt_str ).trim();
     };
 
+    /**
+     * Returns a string representation of the specified value as an octal number
+     * @param pObj {number|string} a value to convert to base 8 (octal)
+     * @returns {string} a string representation of the specified value as an octal (base 8) number
+     */
     const toOctal = function( pObj )
     {
         let decimalValue = toDecimal( pObj );
@@ -350,35 +594,24 @@ const $scope = constants?.$scope || function()
         return (s.startsWith( "-" ) ? "-0o" : "0o") + s.replace( /^-/, _mt_str ).trim();
     };
 
+    /**
+     * Returns true if the specified value is a boolean or Boolean
+     * @param pValue {any} a value to evaluate
+     * @returns {boolean} true if the specified value is a boolean or Boolean
+     */
     const isBoolean = function( pValue )
     {
         return ((_bool === typeof pValue) && ((false === pValue) || true === pValue)) || pValue instanceof Boolean;
     };
 
-    const isUndefined = function( pObject )
-    {
-        return (_ud === typeof pObject || undefined === pObject);
-    };
-
-    const isDefined = function( pObject )
-    {
-        return !isUndefined( pObject );
-    };
-
-    const isNull = function( pObject, pStrict = false )
-    {
-        if ( pStrict )
-        {
-            return null === pObject;
-        }
-        return (isUndefined( pObject ) || null == pObject || (_str === typeof pObject && _mt_str === String( pObject )));
-    };
-
-    const isNotNull = function( pObject, pStrict = false )
-    {
-        return !isNull( pObject, pStrict );
-    };
-
+    /**
+     * Returns true if the specified value is an object and is not null.
+     * Optionally, you can pass options to consider objects with no properties as 'null objects'
+     * @param pObject {any} a value to evaluate
+     * @param pStrict {boolean} specify true to treat any value that is not identical to null as not-null
+     * @param pOptions {object} an object to clarify how to handle objects that are not null, but have no properties, i.e., {}
+     * @returns {boolean} true if the specified value is an object and is not null
+     */
     const isNonNullObject = function( pObject, pStrict = false, pOptions = { allow_empty_object: true } )
     {
         if ( !isNull( pObject, pStrict ) && isObject( pObject ) )
@@ -390,17 +623,74 @@ const $scope = constants?.$scope || function()
         return false;
     };
 
+    /**
+     * Returns true if the specified value, which might otherwise evaluate to 'falsey',
+     * is actually a non-null value, such as 0, false, or an empty string
+     * @param pObject {any} a value to evaluate
+     * @returns {boolean} true if the specified value is actually a non-null value,
+     * even when it might otherwise evaluate to 'falsey', (such as 0, false, or an empty string)
+     */
     const isNonNullValue = function( pObject )
     {
         return (false === pObject || 0 === pObject || _mt_str === pObject || isNotNull( pObject, false ));
     };
 
+    /**
+     * Returns true if the specified value is an array
+     * @param pObj {any} a value to evaluate
+     * @returns {boolean} true if the specified value is an array
+     */
     const isArray = function( pObj )
     {
-        return isObject( pObj ) && ((isFunction( Array.isArray )) ? Array.isArray( pObj ) : Object.prototype.toString.call( pObj ).toString() === "[object Array]");
+        return isObject( pObj ) && ((isFunction( Array.isArray )) ? Array.isArray( pObj ) : doesBeArray( pObj ));
     };
 
-    const isLikeArray = function( pArg )
+    /**
+     * Returns true if the specified value is iterable.
+     * That is, the value can be used in a "for...of" loop
+     * @param pObj {any} a value to evaluate
+     * @returns {boolean} true if the specified value is iterable
+     */
+    const isIterable = function( pObj )
+    {
+        return !isNull( pObj ) && isFunction( pObj[Symbol.iterator] );
+    };
+
+    /**
+     * Returns true if the specified value is spreadable.
+     * That is, the value can be expanded by use of the ... operator
+     * @param pObj {any} a value to evaluate
+     * @param pMustBeIterable specify true to require that the value also be iterable
+     *                        this can distinguish between objects that can be copied via {...object}
+     *                        versus truly spreadable values
+     *                        (default: true)
+     * @returns {boolean} true if the specified value is spreadable
+     */
+    const isSpreadable = function( pObj, pMustBeIterable = true )
+    {
+        let is = !isNull( pObj ) && (isArray( pObj ) || isString( pObj ) || isNonNullObject( pObj ) || isDefined( pObj[Symbol.isConcatSpreadable] ));
+        return is && (pMustBeIterable ? isIterable( pObj ) : is);
+    };
+
+    /**
+     * Returns true if the specified value is asynchronously iterable.
+     * That is, the value can be used in a "for await ... of" loop
+     * @param pObj {any} a value to evaluate
+     * @returns {boolean} true if the specified value is asynchronously iterable
+     */
+    const isAsyncIterable = function( pObj )
+    {
+        return !isNull( pObj ) && isFunction( pObj[Symbol.asyncIterator] );
+    };
+
+    /**
+     * Returns true if the specified value is array-like
+     * (https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Indexed_collections#working_with_array-like_objects)
+     * @param pArg {any} a value to evaluate
+     * @param pMustBeIterable {boolean} specify true if the value must also define [Symbol.iterator] (default:false)
+     * @returns {boolean} true if the specified value is array-like (that is, has a length property and one or more numeric keys)
+     */
+    const isLikeArray = function( pArg, pMustBeIterable = false )
     {
         if ( isArray( pArg ) || isString( pArg ) )
         {
@@ -411,34 +701,53 @@ const $scope = constants?.$scope || function()
         {
             const keys = Object.keys( pArg );
 
-            return keys.some( key => isNumeric( key ) );
+            if ( keys.some( key => isNumeric( key ) ) )
+            {
+                return !pMustBeIterable || isIterable( pArg );
+            }
         }
 
         return false;
     };
 
+    /**
+     * Returns true of the specified value is a Symbol
+     * @param pValue {any} a value to evaluate
+     * @returns {boolean} true of the specified value is a Symbol
+     */
     const isSymbol = function( pValue )
     {
         return _symbol === typeof pValue || pValue instanceof Symbol;
     };
 
+    /**
+     * Returns true if the specified value cannot be modified.
+     * @see constants.isReadOnly
+     * @type {(function(*): boolean)|(function(*): *)}
+     */
     const isReadOnly = constants?.isReadOnly || function( pObject )
     {
         return isObject( pObject ) && (isNull( pObject ) || Object.isFrozen( pObject ) || Object.isSealed( pObject ));
     };
 
+    /**
+     * Returns true if the specified value is of the type specified (or is an instance of the class specified)
+     * @param pValue {any} a value to evaluate
+     * @param pType {string|Function} the type for which to compare the type of the specified value (or a class of which the specified value is an instance)
+     * @returns {boolean} true if the specified value is of the type specified (or is an instance of the class specified)
+     */
     const isType = function( pValue, pType )
     {
         const typeName = (isString( pType ) && JS_TYPES.includes( pType )) ?
                          (pType).trim().toLowerCase() :
                          typeof pType;
 
-        if ( JS_TYPES.includes( typeName ) )
+        if ( JS_TYPES.includes( typeName ) && (typeof pValue) === typeName )
         {
-            return (typeof pValue) === typeName;
+            return true;
         }
 
-        if ( isObject( pValue ) && isObject( pType ) )
+        if ( isObject( pValue ) && isFunction( pType ) )
         {
             return pValue instanceof pType;
         }
@@ -446,13 +755,18 @@ const $scope = constants?.$scope || function()
         return false;
     };
 
+    /**
+     * Returns true if the specified values are of the same type
+     * @param pValues {...any} two or more values to compare
+     * @returns {boolean} true if the specified values are of the same type
+     */
     const areSameType = function( ...pValues )
     {
         let areSame = true;
 
         if ( !isNull( pValues ) )
         {
-            const values = isLikeArray( pValues ) ? [...pValues] : [pValues || _mt_str];
+            const values = isLikeArray( pValues, true ) ? [...pValues] : [pValues || _mt_str];
 
             let first = values[0];
 
@@ -478,6 +792,13 @@ const $scope = constants?.$scope || function()
         return areSame;
     };
 
+    /**
+     * Returns true if the specified value is an instance of Map
+     * or, if not strict, returns true if the specified value is an object with only string keys
+     * @param pObject {any} a value to evaluate
+     * @param pStrict {boolean} specify false to consider string-keyed objects (a.k.a. 'dictionaries') to be Maps (default: true)
+     * @returns {boolean} true if the specified value is an instance of Map
+     */
     const isMap = function( pObject, pStrict = true )
     {
         if ( isUndefined( pObject ) || isNull( pObject ) || [_str, _num, _big, _bool, _symbol].includes( typeof pObject ) )
@@ -485,16 +806,9 @@ const $scope = constants?.$scope || function()
             return false;
         }
 
-        const isMapInstance = pObject instanceof Map;
-
-        if ( isMapInstance )
-        {
-            return true;
-        }
-
         if ( pStrict )
         {
-            return false;
+            return pObject instanceof Map;
         }
 
         if ( isObject( pObject ) )
@@ -514,6 +828,13 @@ const $scope = constants?.$scope || function()
         return false;
     };
 
+    /**
+     * Returns true if the specified value is an instance of Set
+     * or, if not strict, returns true if the specified value is an array-like object with unique values
+     * @param pObject {any} a value to evaluate
+     * @param pStrict {boolean} specify false to consider array-like objects that have unique values as if they are Sets (default: true)
+     * @returns {boolean} true if the specified value is an instance of Set
+     */
     const isSet = function( pObject, pStrict = true )
     {
         if ( isUndefined( pObject ) || isNull( pObject ) )
@@ -521,19 +842,12 @@ const $scope = constants?.$scope || function()
             return false;
         }
 
-        let isInstanceOfSet = pObject instanceof Set;
-
-        if ( isInstanceOfSet )
-        {
-            return true;
-        }
-
         if ( pStrict )
         {
-            return false;
+            return pObject instanceof Set;
         }
 
-        if ( isArray( pObject ) || pObject?.length >= 0 )
+        if ( isLikeArray( pObject, true ) || pObject?.length >= 0 )
         {
             const length = pObject.length;
             let set = new Set( [...pObject] );
@@ -543,32 +857,35 @@ const $scope = constants?.$scope || function()
         return false;
     };
 
-    const isDate = function( pObj, pStrict = true, pDateFormatter = (function( pStr ) {}) )
+    /**
+     * Returns true if the specified object is an instance of Date
+     * or if not strict, if the specified object can be converted into a Date
+     * @param pObj {any} a value to evaluate
+     * @param pStrict {boolean} specify false if you want to consider values that can be converted into a Date as Dates
+     * @param pDateParser {object|function} (optional) a parser to convert strings into Dates
+     * @returns {boolean} true if the specified object is an instance of Date
+     */
+    const isDate = function( pObj, pStrict = true, pDateParser = (function( pStr ) {}) )
     {
         if ( isUndefined( pObj ) || isNull( pObj ) )
         {
             return false;
         }
 
-        if ( (pObj instanceof Date) || ("[object Date]" === Object.prototype.toString.call( pObj ) || (pObj.constructor === Date) || (pObj.prototype === Date)) )
-        {
-            return true;
-        }
-
         if ( pStrict )
         {
-            return false;
+            return ((pObj instanceof Date) || ("[object Date]" === {}.toString.call( pObj ) || (pObj.constructor === Date) || (pObj.prototype === Date)));
         }
 
-        let date = isObject( pObj ) && pObj instanceof Number ? new Date( pObj.valueOf() ) : null;
+        let date = isObject( pObj ) && pObj instanceof Number ? new Date( pObj.valueOf() ) : (isNumber( pObj ) ? new Date( pObj ) : null);
 
         if ( isString( pObj ) || pObj instanceof String )
         {
-            if ( null == date && isFunction( pDateFormatter ) )
+            if ( null == date && (isFunction( pDateParser ) || isFunction( pDateParser?.parse || pDateParser?.parseDate )) )
             {
                 try
                 {
-                    date = pDateFormatter( pObj );
+                    date = (pDateParser.parse || pDateParser.parseDate || pDateParser).call( pDateParser, pObj );
                 }
                 catch( ex )
                 {
@@ -584,7 +901,7 @@ const $scope = constants?.$scope || function()
                 }
                 catch( ex )
                 {
-                    konsole.error( constants.S_ERR_PREFIX, "evaluating a value as a Date", ex );
+                    konsole.error( S_ERR_PREFIX, "evaluating a value as a Date", ex );
                 }
             }
         }
@@ -602,19 +919,7 @@ const $scope = constants?.$scope || function()
                     }
                     catch( ex )
                     {
-                        konsole.error( constants.S_ERR_PREFIX, "evaluating a value as a Date", ex );
-                    }
-
-                    if ( null == date && isFunction( pDateFormatter ) )
-                    {
-                        try
-                        {
-                            date = pDateFormatter( pObj );
-                        }
-                        catch( ex )
-                        {
-                            konsole.error( constants.S_ERR_PREFIX, "formatting a value as a Date", ex );
-                        }
+                        konsole.error( S_ERR_PREFIX, "evaluating a value as a Date", ex );
                     }
 
                     break;
@@ -624,6 +929,13 @@ const $scope = constants?.$scope || function()
         return (isDate( date, true ));
     };
 
+    /**
+     * Returns true if the specified value is an instance of RegExp
+     * or, if not strict, if the specified value is a string representation of a regular expression
+     * @param pObject {any} a value to evaluate
+     * @param pStrict specify false to consider a string representation of a regular expression as a RegExp
+     * @returns {boolean} true if the specified value is an instance of RegExp
+     */
     const isRegExp = function( pObject, pStrict = true )
     {
         if ( isUndefined( pObject ) || isNull( pObject ) )
@@ -636,18 +948,23 @@ const $scope = constants?.$scope || function()
             return pObject instanceof RegExp;
         }
 
-        const s = isString( pObject ) ? String( pObject ) : pObject.toString();
+        const s = _mt_str + (isString( pObject ) ? String( pObject ) : (isFunction( pObject.toString ) ? pObject.toString() : {}.toString.call( pObject, pObject )));
 
-        let pattern = s.replace( /\/[gimsuy]+$/, "/" );
+        let pattern = s.replace( /\/[gimsuy]+$/, "/" ).trim();
 
-        try
+        if ( /^\/.+\/$/.test( pattern ) )
         {
-            let regExp = new RegExp( pattern );
-            return isRegExp( regExp );
-        }
-        catch( ex )
-        {
-            // ignored
+            pattern = pattern.replace( /\/$/, _mt_str ).replace( /^\//, _mt_str );
+
+            try
+            {
+                let regExp = new RegExp( pattern );
+                return isRegExp( regExp );
+            }
+            catch( ex )
+            {
+                // ignored
+            }
         }
 
         return false;
@@ -657,30 +974,31 @@ const $scope = constants?.$scope || function()
      * Returns true if the value passed represents a JavaScript Class
      * JavaScript classes return "function" for the typeof operator,
      * so this function is necessary to determine the difference between a function and a class definition
-     * @param {function} pFunction
-     * @param pStrict
+     * @param {function} pFunction a function to evaluate
+     * @param pStrict {boolean} specify false to consider built-in types as classes (default: true)
      * @returns true if the function specified is a class definition
      */
     const isClass = function( pFunction, pStrict = true )
     {
-        if ( _fun === typeof pFunction || ( !pStrict && constants.BUILTIN_TYPE_NAMES.includes( pFunction?.name )) )
+        if ( isFunction( pFunction ) || ( !pStrict && BUILTIN_TYPE_NAMES.includes( pFunction.name )) )
         {
-            if ( /^class\s/.test( String( Function.prototype.toString.call( pFunction ) ).trim() ) )
+            if ( /^class\s/.test( (Function.prototype.toString.call( pFunction, pFunction )).trim() ) )
             {
                 return true;
             }
 
-            if ( pStrict )
-            {
-                return false;
-            }
-
-            return ( !pStrict && constants.BUILTIN_TYPE_NAMES.includes( pFunction?.name ));
+            return !pStrict && BUILTIN_TYPE_NAMES.includes( pFunction.name );
         }
 
         return false;
     };
 
+    /**
+     * Returns true if the specified object is an instance of one (or more) of the specified classes
+     * @param pObject {object} an object to evaluate
+     * @param pClasses {...function} one or more classes to which to compare the specified object's prototype
+     * @returns {boolean} true if the specified object is an instance of one (or more) of the specified classes
+     */
     const instanceOfAny = function( pObject, ...pClasses )
     {
         const classes = [].concat( ...(pClasses || []) ) || [];
@@ -689,108 +1007,98 @@ const $scope = constants?.$scope || function()
 
         while ( !is && classes?.length )
         {
-            try
+            const cls = classes.shift();
+
+            if ( isClass( cls, !BUILTIN_TYPE_NAMES.includes( cls?.name ) ) )
             {
-                const cls = classes.shift();
-                if ( isClass( cls ) )
+                try
                 {
-                    try
-                    {
-                        is = (pObject instanceof cls);
-                    }
-                    catch( e )
-                    {
-                        konsole.warn( "Attempt to call instanceof without a class or callable" );
-                    }
+                    is = (pObject instanceof cls) || pObject.prototype === cls;
                 }
-            }
-            catch( ex )
-            {
-                // continue
+                catch( e )
+                {
+                    konsole.warn( "Attempt to call instanceof without a class or callable" );
+                }
             }
         }
 
         return is;
     };
 
+    /**
+     * Returns true if the specified function is a class that is not a built-in JavaScript type
+     * @param pFunction {function} a function to evaluate
+     * @returns {boolean} true if the specified function is a class that is not a built-in JavaScript type
+     */
     const isUserDefinedClass = function( pFunction )
     {
         return isClass( pFunction );
     };
 
+    /**
+     * Returns true if the specified function is one or the specified classes
+     * @param pFunction {function} a function to evaluate
+     * @param pListedClasses {...function} one or more classes to which to compare the specified function
+     * @returns {boolean} true if the specified function is one or the specified classes
+     */
     const isListedClass = function( pFunction, ...pListedClasses )
     {
         return isClass( pFunction ) && instanceOfAny( new pFunction(), ...pListedClasses );
     };
 
+    /**
+     * Returns true if the specified function is a class that is not a built-in JavaScript type
+     * @param pObject {object} an object to evaluate
+     * @param pClass {function} specify a specific class to restrict the comparison to a specific user-defined class
+     * @returns {boolean} true if the specified object is an instance of a class that is not a built-in JavaScript type
+     */
     const isInstanceOfUserDefinedClass = function( pObject, pClass = null )
     {
         let clazz = isClass( pClass ) ? pClass || pObject?.constructor : pObject?.constructor || pObject?.prototype?.constructor || pObject?.prototype;
-        return isUserDefinedClass( clazz ) && instanceOfAny( pObject, clazz );
+        return isUserDefinedClass( clazz ) && (null === clazz || instanceOfAny( pObject, clazz ));
     };
 
+    /**
+     * Returns true if the specified object is an instance of one or more of the specified classes
+     * @param pObject {object} an object to evaluate
+     * @param pListedClasses {...function} one or more classes to which to compare the specified object's prototype
+     * @returns {boolean} true if the specified object is an instance of one or more of the specified classes
+     */
     const isInstanceOfListedClass = function( pObject, ...pListedClasses )
     {
         return instanceOfAny( pObject, ...pListedClasses );
     };
 
+    /**
+     * Returns the first of the candidates that is of the specified type (or null if no candidates meet the criterion)
+     * @param pType {string|function} the type an object must match to be returned
+     * @param pCandidates {...any} one or more candidates, the first of which that matches the specified type will be returned
+     * @returns {*|null} the first of the candidates that is of the specified type (or null if no candidates meet the criterion)
+     */
     const firstMatchingType = function( pType, ...pCandidates )
     {
-        let arr = !isNull( pCandidates ) ? [...pCandidates] : [];
+        let arr = !isNull( pCandidates ) ? (isArray( pCandidates ) ? [].concat( ...pCandidates ) : (isSpreadable( pCandidates ) ? [...pCandidates] : [])) : [];
 
-        if ( _str === typeof pType )
+        if ( isString( pType ) )
         {
-            const type = pType.toLowerCase();
-
-            if ( VALID_TYPES.includes( type ) )
-            {
-                arr = arr.filter( e => pType === typeof e );
-                return arr.length > 0 ? arr[0] : null;
-            }
+            const type = pType.trim().toLowerCase();
+            arr = VALID_TYPES.includes( type ) ? arr.filter( e => type === typeof e ) : [];
         }
-        else if ( isClass( pType ) )
+        else if ( isClass( pType, false ) )
         {
             arr = arr.filter( e => e instanceof pType );
-            return arr.length > 0 ? arr[0] : null;
         }
         else if ( isFunction( pType ) )
         {
             const scope = $scope();
-
             arr = arr.filter( e => pType.call( scope, e ) );
-
-            return arr.length > 0 ? arr[0] : null;
         }
-
-        return null;
-    };
-
-    /**
-     * Returns the name of the class of which the specified object is an instance
-     * or the name of the class if the specified value *is* a class (function)
-     * @param pObject {function} an instance of some class or a function that is a class
-     * @returns {string} the name of the class of which the object is an instance or the name of the class if the object is a class function
-     */
-    const getClassName = function( pObject )
-    {
-        const obj = pObject || function() {};
-
-        let name = _mt_str;
-
-        if ( obj )
+        else
         {
-            if ( isClass( obj ) )
-            {
-                name = String( obj.name || (obj.constructor) );
-            }
-
-            if ( (_mt_str === name.trim()) )
-            {
-                name = String( obj?.constructor?.name || obj?.prototype?.constructor?.name || obj?.prototype?.name );
-            }
+            arr = [];
         }
 
-        return name;
+        return arr.length > 0 ? arr[0] : null;
     };
 
     /**
@@ -802,25 +1110,32 @@ const $scope = constants?.$scope || function()
      */
     const getClass = function( pObject, pOptions = { strict: true } )
     {
-        const options = Object.assign( {}, pOptions || {} );
+        const options = Object.assign( { strict: true }, pOptions || {} );
 
-        const obj = pObject || function() {};
+        const obj = isObject( pObject, { rejectPrimitiveWrappers: false } ) || isFunction( pObject ) ? pObject || function() {} : null;
 
-        let clazz = isClass( obj, options ) ? obj : obj?.constructor || obj?.prototype?.constructor || obj?.prototype || obj?.__proto__;
+        if ( isNull( obj, true ) )
+        {
+            return null;
+        }
 
-        if ( isClass( clazz, options ) )
+        const strict = options?.strict;
+
+        let clazz = isClass( obj, strict ) ? obj : obj?.constructor || obj?.prototype?.constructor || obj?.prototype || obj?.__proto__;
+
+        if ( isClass( clazz, strict ) )
         {
             return clazz;
         }
 
         if ( obj )
         {
-            if ( isClass( obj, options?.strict ) )
+            if ( isClass( obj, strict ) )
             {
                 clazz = obj;
             }
 
-            if ( isClass( clazz, options?.strict ) )
+            if ( isClass( clazz, strict ) )
             {
                 return clazz;
             }
@@ -833,7 +1148,7 @@ const $scope = constants?.$scope || function()
             // the IterationCap object will return reached when iterations exceed the cap,
             // so ignore the linter warnings
             // noinspection LoopStatementThatDoesntLoopJS
-            while ( !isClass( _class, options?.strict ) && (iterations++ <= iterationLimit) )
+            while ( !isClass( _class, strict ) && (iterations++ <= iterationLimit) )
             {
                 switch ( iterations )
                 {
@@ -843,15 +1158,15 @@ const $scope = constants?.$scope || function()
                         break;
 
                     case 2:
-                        _class = (obj?.prototype?.constructor || isClass( obj?.prototype, options?.strict ) ? obj?.prototype : _class);
+                        _class = (obj?.prototype?.constructor || isClass( obj?.prototype, strict ) ? obj?.prototype : _class);
                         break;
 
                     case 3:
-                        _class = isClass( obj?.prototype, options?.strict ) ? obj?.prototype : _class;
+                        _class = isClass( obj?.prototype, strict ) ? obj?.prototype : _class;
                         break;
 
                     case 4:
-                        _class = isClass( obj?.__proto__, options?.strict ) ? obj?.__proto__ : _class;
+                        _class = isClass( obj?.__proto__, strict ) ? obj?.__proto__ : _class;
                         break;
 
                     default:
@@ -859,29 +1174,109 @@ const $scope = constants?.$scope || function()
                 }
             }
 
-            return (isClass( _class, options?.strict ) ? _class : (isClass( clazz, options?.strict ) ? clazz : (isClass( clazz ) ? clazz : Object))) || Object;
+            clazz = (isClass( _class, strict ) ? _class : (isClass( clazz, strict ) ? clazz : (isClass( clazz ) ? clazz : Object))) || Object;
+
+            if ( clazz && Object === clazz )
+            {
+                if ( obj instanceof Date )
+                {
+                    clazz = Date;
+                }
+                else if ( obj instanceof RegExp )
+                {
+                    clazz = RegExp;
+                }
+                else if ( obj instanceof Boolean )
+                {
+                    clazz = Boolean;
+                }
+                else if ( obj instanceof String )
+                {
+                    clazz = String;
+                }
+                else if ( obj instanceof Number )
+                {
+                    clazz = Number;
+                }
+            }
         }
 
         return clazz;
     };
 
+    /**
+     * Returns the name of the class of which the specified object is an instance
+     * or the name of the class if the specified value *is* a class (function)
+     * @param pObject {function} an instance of some class or a function that is a class
+     * @returns {string} the name of the class of which the object is an instance
+     * or the name of the class if the object is a class function
+     */
+    const getClassName = function( pObject )
+    {
+        const obj = isObject( pObject, { rejectPrimitiveWrappers: false } ) || isFunction( pObject ) ? pObject || function() {} : null;
+
+        if ( isNull( obj, true ) )
+        {
+            return _mt_str;
+        }
+
+        let name = _mt_str;
+
+        if ( obj )
+        {
+            if ( isClass( obj, false ) )
+            {
+                name = String( obj.name || (obj.constructor?.name) );
+            }
+            else if ( isObject( obj ) )
+            {
+                const clazz = getClass( obj, { strict: false } );
+                if ( clazz )
+                {
+                    name = getClassName( clazz );
+                }
+            }
+
+            if ( (_mt_str === name.trim()) )
+            {
+                name = String( obj?.constructor?.name || obj?.prototype?.constructor?.name || obj?.prototype?.name );
+            }
+        }
+
+        return name;
+    };
+
+    /**
+     * Returns the default value for the type specified
+     * @param pType {string} the type for which to return a default value
+     * @see TYPE_DEFAULTS
+     * @returns {*}
+     */
     const defaultFor = function( pType )
     {
-        let type = isString( pType ) ? (_mt_str + pType).toLowerCase() : typeof (pType);
+        let type = isString( pType ) ? (_mt_str + pType).trim().toLowerCase() : typeof (pType);
 
-        if ( isString( pType ) && JS_TYPES.includes( pType ) )
+        if ( isString( type ) && JS_TYPES.includes( type ) )
         {
             return TYPE_DEFAULTS[type];
         }
 
-        return defaultFor( typeof pType );
+        return defaultFor( typeof type );
     };
 
+    /**
+     * Returns a new value converted to the specified type, if possible
+     * @param pValue {any} a value to convert to the specified type
+     * @param pType {string} the type to which to convert the specified value, if possible
+     * @returns {*} a new value converted to the specified type, if possible
+     */
     const castTo = function( pValue, pType )
     {
-        const type = isString( pType ) && VALID_TYPES.includes( pType ) ? pType : _str;
+        let type = isString( pType ) ? (_mt_str + pType).trim().toLowerCase() : typeof (pType);
 
-        let value = pValue || null;
+        type = isString( type ) && VALID_TYPES.includes( type ) ? type : _str;
+
+        let value = !isNull( pValue, true ) ? pValue : pValue || null;
 
         switch ( type )
         {
@@ -938,7 +1333,12 @@ const $scope = constants?.$scope || function()
         return value;
     };
 
-    class _IterableIterator
+    /**
+     * Instances of this class are iterable.
+     * Can be used to construct an iterable from any non-null value.
+     * Unlike JavScript's built-in iterators, this iterator can be traversed in reverse and/or reset
+     */
+    class _Iterator
     {
         #iterable;
 
@@ -946,7 +1346,7 @@ const $scope = constants?.$scope || function()
 
         constructor( pIterable )
         {
-            this.#iterable = Object.hasOwn( pIterable, "length" ) ? pIterable : [pIterable];
+            this.#iterable = isIterable( pIterable ) ? pIterable : [pIterable];
             this.#iterable = isString( this.#iterable ) ? [].concat( this.#iterable.split( _mt_str ) ) : this.#iterable;
         }
 
@@ -983,9 +1383,19 @@ const $scope = constants?.$scope || function()
         {
             this.#index = 0;
         }
+
+        reverseIterator()
+        {
+            let newIterable = [...this.#iterable].reverse();
+
+            return new this.constructor( newIterable );
+        }
     }
 
-    class NullIterator extends _IterableIterator
+    /**
+     * This subclass of _Iterator just returns done immediately
+     */
+    class NullIterator extends _Iterator
     {
         constructor()
         {
@@ -1004,13 +1414,14 @@ const $scope = constants?.$scope || function()
     }
 
     /**
-     * Returns an IterableIterator for the specified value
+     * Returns an _Iterator for the specified value
      *
-     * @param pArrayLike almost any kind of value, but generally expected to be an "indexable" collection of values
+     * @param pArrayLike almost any kind of value,
+     *                   but generally expected to be an "indexable" collection of values
      *                   strings are converted into an array of characters,
      *                   scalar values are converted into a 1-element array containing the value
      *
-     * @returns {IterableIterator} an instance of _IterableIterator
+     * @returns {IterableIterator} an instance of _Iterator
      */
     const toIterator = function( pArrayLike )
     {
@@ -1020,12 +1431,12 @@ const $scope = constants?.$scope || function()
                 return new NullIterator();
 
             case _str:
-                return new _IterableIterator( pArrayLike.split( _mt_str ) );
+                return new _Iterator( pArrayLike.split( _mt_str ) );
 
             case _num:
             case _big:
             case _bool:
-                return new _IterableIterator( [pArrayLike] );
+                return new _Iterator( [pArrayLike] );
 
             case _fun:
                 if ( isGeneratorFunction( pArrayLike ) )
@@ -1033,27 +1444,27 @@ const $scope = constants?.$scope || function()
                     return pArrayLike;
                 }
 
-                return new _IterableIterator( [pArrayLike] );
+                return new _Iterator( [pArrayLike] );
 
             case _obj:
                 if ( isArray( pArrayLike ) )
                 {
-                    return new _IterableIterator( pArrayLike );
+                    return new _Iterator( pArrayLike );
                 }
 
                 if ( pArrayLike instanceof Map )
                 {
-                    return new _IterableIterator( [...pArrayLike.entries()] );
+                    return new _Iterator( [...pArrayLike.entries()] );
                 }
 
                 if ( pArrayLike instanceof Set )
                 {
-                    return new _IterableIterator( [...pArrayLike] );
+                    return new _Iterator( [...pArrayLike] );
                 }
 
                 if ( isDate( pArrayLike ) )
                 {
-                    return new _IterableIterator( [pArrayLike] );
+                    return new _Iterator( [pArrayLike] );
                 }
 
                 const newObject = {};
@@ -1069,46 +1480,18 @@ const $scope = constants?.$scope || function()
                     newObject[key] = toIterator( value );
                 }
 
-                return new _IterableIterator( Object.entries( newObject ) );
+                return new _Iterator( Object.entries( newObject ) );
 
             default:
                 return new NullIterator();
         }
     };
 
-    class TriState
-    {
-        #returnValue;
-        #hasReturnValue;
-
-        constructor( pReturnValue, pHasReturnValue )
-        {
-            this.#returnValue = pReturnValue;
-            this.#hasReturnValue = !!pHasReturnValue;
-        }
-
-        get returnValue()
-        {
-            return this.#returnValue;
-        }
-
-        set returnValue( value )
-        {
-            this.#returnValue = value;
-            this.#hasReturnValue |= (false === value || 0 === value || _mt_str === value || isNotNull( value, false ));
-        }
-
-        get hasReturnValue()
-        {
-            return true === this.#hasReturnValue;
-        }
-
-        set hasReturnValue( pHas )
-        {
-            this.#hasReturnValue = pHas;
-        }
-    }
-
+    /**
+     * This class represents the common, functional programming inspired, Option or Maybe type
+     * https://en.wikipedia.org/wiki/Option_type
+     *
+     */
     class Option
     {
         #value;
@@ -1120,7 +1503,7 @@ const $scope = constants?.$scope || function()
 
         get value()
         {
-            return Object.freeze( isObject( this.#value ) ? isArray( this.#value ) ? [].concat( this.#value ).map( e => new Option( e ).value ) : Object.assign( {}, this.#value ) : Object.freeze( this.#value ) );
+            return Object.freeze( this.#value );
         }
 
         static Some( pValue )
@@ -1157,10 +1540,13 @@ const $scope = constants?.$scope || function()
 
         getOrElse( pDefault )
         {
-            return this.isSome() ? this.#value : pDefault;
+            return this.isSome() ? this.value : pDefault;
         }
     }
 
+    /**
+     * This class extends Option and requires that the 'Some' value be of the type specified
+     */
     class TypedOption extends Option
     {
         #type;
@@ -1170,6 +1556,11 @@ const $scope = constants?.$scope || function()
             super( pValue );
 
             this.#type = pType;
+        }
+
+        get type()
+        {
+            return this.#type || _obj;
         }
 
         static Some( pValue, pType )
@@ -1184,17 +1575,17 @@ const $scope = constants?.$scope || function()
 
         isSome()
         {
-            return super.isSome() && isType( this.value, this.#type );
+            return super.isSome() && isType( this.value, this.type );
         }
 
         isNone()
         {
-            return super.isNone() || !isType( this.value, this.#type );
+            return super.isNone() || !isType( this.value, this.type );
         }
 
         map( pFunction )
         {
-            const type = this.#type;
+            const type = this.type;
 
             const func = isFunction( pFunction ) ? pFunction : ( e ) => castTo( e, type );
 
@@ -1203,7 +1594,7 @@ const $scope = constants?.$scope || function()
 
         flatMap( pFunction )
         {
-            const type = this.#type;
+            const type = this.type;
 
             const func = isFunction( pFunction ) ? pFunction : ( e ) => castTo( e, type );
 
@@ -1214,18 +1605,21 @@ const $scope = constants?.$scope || function()
         {
             const value = super.getOrElse( pDefault );
 
-            if ( this.#type === typeof (value) )
+            if ( this.type === typeof (value) )
             {
                 return value;
             }
 
-            if ( this.#type === typeof (pDefault) )
+            if ( this.type === typeof (pDefault) )
             {
                 return pDefault;
             }
         }
     }
 
+    /**
+     * This class extends Option and requires that the 'Some' value be a string
+     */
     class StringOption extends TypedOption
     {
         constructor( pValue )
@@ -1234,6 +1628,9 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    /**
+     * This class extends Option and requires that the 'Some' value be a number
+     */
     class NumericOption extends TypedOption
     {
         constructor( pValue )
@@ -1242,6 +1639,9 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    /**
+     * This class extends Option and requires that the 'Some' value be a boolean
+     */
     class BooleanOption extends TypedOption
     {
         constructor( pValue )
@@ -1250,6 +1650,16 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    /**
+     * This class represents the return value of a function that might return null or throw exceptions
+     * This class extends Option, so you can use getOrElse or check for isSome or isNone,
+     * as well as check for whether the function throw errors
+     * Functions that return a Result
+     * should catch errors and then add them to the Result before returning,
+     * rather than throw an Error
+     * This style of programming can reduce the effort of checking for null
+     * or of wrapping function calls in try/catch blocks
+     */
     class Result extends Option
     {
         #exceptions = [];
@@ -1283,17 +1693,22 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    /**
+     * This is the module itself, exported from this function
+     */
     const mod =
         {
             dependencies,
             getScope: $scope,
             JS_TYPES,
             VALID_TYPES,
+            TYPE_DEFAULTS,
             isUndefined,
             isDefined,
             isNull,
             isNotNull,
             isNonNullValue,
+            isPrimitiveWrapper,
             isObject,
             isCustomObject,
             isNonNullObject,
@@ -1314,7 +1729,10 @@ const $scope = constants?.$scope || function()
             toOctal,
             isBoolean,
             isArray,
+            isIterable,
+            isAsyncIterable,
             isLikeArray,
+            isSpreadable,
             isMap,
             isSet,
             isDate,
@@ -1328,15 +1746,14 @@ const $scope = constants?.$scope || function()
             isType,
             areSameType,
             instanceOfAny,
-            getClassName,
             getClass,
+            getClassName,
             defaultFor,
             castTo,
             toIterator,
             firstMatchingType,
             isReadOnly,
-            classes: { TriState, Option, TypedOption, StringOption, NumericOption, BooleanOption, Result },
-            TriState,
+            classes: { Option, TypedOption, StringOption, NumericOption, BooleanOption, Result },
             Option,
             TypedOption,
             StringOption,
@@ -1356,5 +1773,4 @@ const $scope = constants?.$scope || function()
     }
 
     return Object.freeze( mod );
-
 }());
