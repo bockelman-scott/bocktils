@@ -332,6 +332,7 @@ describe( "isValidEntry", () =>
 
 describe( "Unique object ID", () =>
 {
+    // ObjectUtils adds this property to the Object prototype
     test( "getUniqueId() returns a value unique to the object",
           () =>
           {
@@ -348,6 +349,14 @@ describe( "Unique object ID", () =>
               expect( o.GUID ).toEqual( o.getUniqueId() );
               expect( o2.GUID ).toEqual( o2.getUniqueId() );
               expect( o3.GUID ).toEqual( o3.getUniqueId() );
+
+              expect( regExp.test( [].GUID ) ).toBe( true );
+
+              expect( regExp.test( new Date().GUID ) ).toBe( true );
+
+              expect( regExp.test( "abc".GUID ) ).toBe( true );
+
+              expect( regExp.test( regExp.GUID ) ).toBe( true );
           } );
 } );
 

@@ -107,7 +107,7 @@ const $scope = constants?.$scope || function()
      * An array of the names of the methods exposed by Array
      * @type {string[]}
      */
-    const ARRAY_METHODS = ["length"].concat( [].concat( Object.getOwnPropertyNames( Array.prototype ).filter( e => "function" === typeof [][e] ) ) );
+    const ARRAY_METHODS = ["length", "GUID", "getUniqueId"].concat( [].concat( Object.getOwnPropertyNames( Array.prototype ).filter( e => "function" === typeof [][e] ) ) );
 
     /**
      * This object defines the default options for the asArray function.
