@@ -1202,7 +1202,7 @@ const $scope = constants?.$scope || function()
     {
         let object = null;
 
-        let objects = asArray( pObject || [] );
+        let objects = asArray( pObject || [] ).filter( isValidObject );
 
         if ( null == objects || (objects?.length || 0) <= 0 )
         {
@@ -1224,13 +1224,13 @@ const $scope = constants?.$scope || function()
      * @returns {object} the first object satisfying the criteria
      * @see isPopulated
      */
-    const firstPopulatedObject = function( pCriteria, ...pObject )
+    const firstPopulatedObject = function( pCriteria = DEFAULT_IS_POPULATED_OPTIONS, ...pObject )
     {
         const options = Object.assign( {}, pCriteria || {} );
 
         let object = null;
 
-        let objects = asArray( pObject || [] );
+        let objects = asArray( pObject || [] ).filter( e => isPopulated( e, options ) );
 
         if ( null == objects || (objects?.length || 0) <= 0 )
         {
@@ -1242,12 +1242,7 @@ const $scope = constants?.$scope || function()
             object = objects.shift();
         }
 
-        if ( null !== object && isPopulated( object, options ) )
-        {
-            return object;
-        }
-
-        return null;
+        return null !== object && isPopulated( object, options ) ? object : null;
     };
 
     const tracePathTo = function( pNode, pRoot, pPath = [], pStack = [], pVisited = [] )
@@ -1446,13 +1441,11 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * Returns the value of a property compensating for a naming convention
-     * by which class members are prefixed with an _ (underscore)
-     * and using the regular name for the setter/getter pair
-     * or for read-only properties
-     * @param {Object} pObject
-     * @param {String} pPropertyName
-     * @returns
+     * Returns the value of the property specified.
+     * Uses several techniques to find the property.
+     * @param {object} pObject the object from which to return the value of the specified property
+     * @param {string} pPropertyName the name of the property to retrieve
+     * @returns the value of the property specified, if at all possible
      */
     const getProperty = function( pObject, pPropertyName )
     {
@@ -1985,6 +1978,14 @@ const $scope = constants?.$scope || function()
             return false;
         }
 
+        const firstID = asString( pFirst?.getUniqueId() || pFirst?.GUID );
+        const secondID = asString( pSecond?.getUniqueId() || pSecond?.GUID );
+
+        if ( !(isBlank( firstID ) || isBlank( secondID )) && same( firstID, secondID, pStrict, String, true, stack ) )
+        {
+            return true;
+        }
+
         try
         {
             const jsonFirst = asString( pFirst );
@@ -2015,7 +2016,7 @@ const $scope = constants?.$scope || function()
 
     const arrayToObject = function( pArr, pKeyProperty )
     {
-        let arr = arrayUtils.asArray( pArr || [] ) || [];
+        let arr = asArray( pArr || [] ) || [];
 
         let keyProperty = asString( pKeyProperty, true );
 
@@ -2560,7 +2561,6 @@ const $scope = constants?.$scope || function()
         return target;
     };
 
-
     const addMissingElements = function( pTarget, pSource, pOptions = { copy: false, freeze: false } )
     {
         if ( !isSet( pTarget ) || !isSet( pSource ) )
@@ -2780,7 +2780,16 @@ const $scope = constants?.$scope || function()
      */
     const pruneObject = function( pObject, pOptions = DEFAULT_PRUNING_OPTIONS, pStack )
     {
-        const options = ingest( {}, DEFAULT_PRUNING_OPTIONS, pOptions || {} );
+        const options = populateOptions( pOptions, DEFAULT_PRUNING_OPTIONS || {} );
+
+
+        let stack = [].concat( asArray( pStack || [] ) );
+
+        if ( detectCycles( stack, 3, 3 ) )
+        {
+            return pObject;
+        }
+
 
         if ( !isObject( pObject ) )
         {
@@ -2813,13 +2822,6 @@ const $scope = constants?.$scope || function()
 
         let properties = unique( pruneArray( [].concat( keys ).concat( propertyNames ) ) );
         properties = properties.map( e => asString( e, true ) ).filter( arrayUtils.Filters.NON_BLANK );
-
-        let stack = [].concat( arrayUtils.asArray( pStack || [] ) );
-
-        if ( detectCycles( stack, 3, 3 ) )
-        {
-            return obj;
-        }
 
         for( let i = properties?.length || 0; i--; )
         {
@@ -2877,7 +2879,7 @@ const $scope = constants?.$scope || function()
                     {
                         if ( options.pruneArrays )
                         {
-                            value = arrayUtils.pruneArray( value );
+                            value = pruneArray( value );
                             setProperty( obj, propertyName, value );
                         }
 
@@ -2966,12 +2968,7 @@ const $scope = constants?.$scope || function()
             for( let entry of pObject.entries() )
             {
                 let key = entry[0];
-
-                stack.push( key );
-
-                _map[key] = toLiteral( entry[1], options, stack );
-
-                stack.pop();
+                _map[key] = toLiteral( entry[1], options, stack.concat( key ) );
             }
 
             literal = Object.assign( {}, _map );
@@ -3072,8 +3069,8 @@ const $scope = constants?.$scope || function()
         {
             try
             {
-                literal.prototype = null;
-                literal.__proto__ = null;
+                literal.prototype = Object.prototype;
+                literal.__proto__ = Object.prototype;
             }
             catch( ex )
             {
@@ -3224,12 +3221,7 @@ const $scope = constants?.$scope || function()
         let target = pTarget || {};
         let source = pSource || {};
 
-        if ( target === source )
-        {
-            return target;
-        }
-
-        if ( ![_obj].includes( typeof target ) )
+        if ( target === source || !isObject( target ) )
         {
             return target;
         }
@@ -3246,7 +3238,7 @@ const $scope = constants?.$scope || function()
             }
         }
 
-        pTarget = Object.assign( target, source );
+        pTarget = Object.assign( pTarget, Object.assign( target, source ) );
 
         const stack = pStack || [];
 
