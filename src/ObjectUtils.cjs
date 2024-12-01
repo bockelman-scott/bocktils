@@ -175,6 +175,10 @@ const $scope = constants?.$scope || function()
                                    {
                                        this.__unique_object_id__ = this.__unique_object_id__ || guidUtils.guid();
                                        return this.__unique_object_id__;
+                                   },
+                                   set: function()
+                                   {
+
                                    }
                                } );
 
@@ -189,6 +193,10 @@ const $scope = constants?.$scope || function()
                                    get: function()
                                    {
                                        return this[uniqueObjectId];
+                                   },
+                                   set: function()
+                                   {
+
                                    }
                                } );
     }

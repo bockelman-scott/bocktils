@@ -79,7 +79,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            konsole.warn( ex );
+            // konsole.warn( ex );
         }
 
         try
@@ -88,7 +88,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            konsole.warn( ex );
+            // konsole.warn( ex );
         }
     }
 

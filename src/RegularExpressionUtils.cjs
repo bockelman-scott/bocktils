@@ -551,14 +551,22 @@ const $scope = constants?.$scope || function()
              * that can be converted to an asynchronous function call.
              * Useful if parsing source code
              */
-            AWAIT_HINT: Object.freeze( /\/\*+\+[ ]*await[ ]*\*+\// ),
+            AWAIT_HINT: Object.freeze( /\/\*+\+ *await *\*+\// ),
 
             /**
              * Matches a special annotation indicating the start of a function
              * that can be converted to an asynchronous function.
              * Useful if parsing source code
              */
-            ASYNC_HINT: Object.freeze( /\/\*+\+[ ]*async[ ]*\*+\// ),
+            ASYNC_HINT: Object.freeze( /\/\*+\+ *async *\*+\// ),
+
+            // /*+removable:start */
+            REMOVABLE_BLOCK_START: Object.freeze( /\/\*+\+ *removable *: *start *\*+\//dgi ),
+
+            // /*+removable:end */
+            REMOVABLE_BLOCK_END: Object.freeze( /\/\*+\+ *removable *: *end *\*+\//dgi ),
+
+            REMOVABLE_BLOCK: Object.freeze( /\/\*+\+ *removable *: *start *\*+\/(.*)\/\*+\+ *removable *: *end *\*+\//dgis ),
 
             /**
              * Matches a statement defining a module's dependencies.

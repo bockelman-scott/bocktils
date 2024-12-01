@@ -22,6 +22,8 @@ const arrayUtils = utils?.arrayUtils || require( "../src/ArrayUtils.cjs" );
 const objectUtils = utils?.objectUtils || require( "../src/ObjectUtils.cjs" );
 const jsonUtils = utils?.jsonUtils || require( "../src/JsonUtils.cjs" );
 
+const rxUtils = require( "../src/RegularExpressionUtils.cjs" );
+
 const configUtils = require( "./build-utils/config.cjs" );
 const cleanUtils = require( "./build-utils/clean.cjs" );
 
@@ -33,7 +35,13 @@ const cleanUtils = require( "./build-utils/clean.cjs" );
 {
     "use strict";
 
-    const toUnixPath = stringUtils.toUnixPath;
+    const me = build || this;
+
+    let toUnixPath = stringUtils.toUnixPath;
+
+    constants.importUtilities( me || this, utils, constants, typeUtils, stringUtils, arrayUtils, objectUtils, jsonUtils, rxUtils );
+
+    const RX = rxUtils.REGULAR_EXPRESSIONS;
 
     // read build.config.json
     const config = await configUtils.getConfiguration( __dirname, "build.config.json" );
@@ -75,6 +83,35 @@ const cleanUtils = require( "./build-utils/clean.cjs" );
     }
 
     await copySourceToStaging();
+
+    // remove comments
+
+    // remove blocks marked for removal
+    async function removeMarkedBlocks()
+    {
+        let files = await fsAsync.readdir( toUnixPath( stagingDir ), { withFileTypes: true } );
+
+        if( files )
+        {
+            for( let file of files )
+            {
+                if ( file.isFile() )
+                {
+                    let filename = file.name;
+
+                    let fullpath = toUnixPath( stagingDir + "/" + filename );
+
+                    let contents = await fsAsync.readFile( fullpath, constants._fileOptions );
+
+                    contents = contents.replaceAll( new RegExp( RX.REMOVABLE_BLOCK, "dgis"), constants._mt_str );
+
+                    await fsAsync.writeFile( fullpath, contents );
+                }
+            }
+        }
+    }
+
+    removeMarkedBlocks();
 
     // transform and copy cjs to mjs versions
 
