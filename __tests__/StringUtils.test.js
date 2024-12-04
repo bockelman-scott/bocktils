@@ -408,6 +408,47 @@ describe( "Detecting Capitalization", () =>
     test( "isAllCaps(ABC0, {allowDigits: true}) is true", () => expect( stringUtils.isAllCaps( "ABC0", { allowDigits: true } ) ).toEqual( true ) );
 } );
 
+
+describe( "Changing Capitalization", () =>
+{
+    test( "capitalize( 'abc' ) === 'Abc'", () =>
+    {
+        expect( stringUtils.capitalize( "abc" ) ).toEqual( "Abc" );
+    } );
+
+    test( "capitalize( 'onError' ) === 'Onerror'", () =>
+    {
+        expect( stringUtils.capitalize( "onError" ) ).toEqual( "Onerror" );
+    } );
+
+    test( "capitalize( 'onError', true ) === 'OnError'", () =>
+    {
+        expect( stringUtils.capitalize( "onError", true ) ).toEqual( "OnError" );
+    } );
+
+    test( "capitalize( 123 ) === '123'", () =>
+    {
+        expect( stringUtils.capitalize( 123 ) ).toEqual( "123" );
+    } );
+
+    test( "capitalize( true ) === 'True'", () =>
+    {
+        expect( stringUtils.capitalize( true ) ).toEqual( "True" );
+    } );
+
+
+    test( "uncapitalize( 'Error' ) === 'error'", () =>
+    {
+        expect( stringUtils.uncapitalize( "Error" ) ).toEqual( "error" );
+    } );
+
+    test( "uncapitalize( 'OnError' ) === 'onError'", () =>
+    {
+        expect( stringUtils.uncapitalize( "OnError" ) ).toEqual( "onError" );
+    } );
+
+} );
+
 describe( "Numeric-related 'helpers'", () =>
 {
     test( "occurrencesOf('abcbc','c') === 2 ",

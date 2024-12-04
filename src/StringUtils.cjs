@@ -176,6 +176,7 @@ const $scope = constants?.$scope || function()
         {
             omitFunctions: true,
             executeFunctions: false,
+            returnFunctionSource: false,
             joinOn: _mt_chr,
             removeLeadingZeroes: true,
             assumeNumeric: false,
@@ -213,6 +214,15 @@ const $scope = constants?.$scope || function()
         }
 
         return s;
+    }
+
+    function getFunctionSource( pFunction )
+    {
+        if ( isFunction( pFunction ) )
+        {
+            return Function.prototype.toString.call( pFunction, pFunction );
+        }
+        return _mt_str;
     }
 
     /**
@@ -474,7 +484,7 @@ const $scope = constants?.$scope || function()
                         {
                             konsole.warn( constants.S_ERR_PREFIX, "while executing a function as input to asString", ex );
 
-                            s = input?.name || input?.constructor?.name || Function.prototype.toString.call( input, input );
+                            s = input?.name || input?.constructor?.name || (options.returnFunctionSource ? getFunctionSource( input ) : _mt_str);
                         }
                     }
 
@@ -482,11 +492,11 @@ const $scope = constants?.$scope || function()
                     {
                         try
                         {
-                            s = input?.name || input?.constructor?.name || (options.executeFunctions ? input.call( $scope() ) : Function.prototype.toString.call( input, input ));
+                            s = (options.returnFunctionSource ? getFunctionSource( input ) : _mt_str) || input?.name || input?.constructor?.name || _mt_str;
                         }
                         catch( ex )
                         {
-                            s = Function.prototype.toString.call( input, input );
+                            konsole.warn( ex );
                         }
                     }
 
@@ -2628,6 +2638,24 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    function toggleCaps( pStr, pFirstLetterCase, pRestCase )
+    {
+        let str = asString( pStr );
+        return (str?.length || 0) > 1 ? (pFirstLetterCase( str.slice( 0, 1 ) ) + pRestCase( str.slice( 1 ) )) : pFirstLetterCase( str );
+    }
+
+    function capitalize( pStr, pPreserve = false )
+    {
+        let str = asString( pStr );
+        return toggleCaps( str, ucase, (pPreserve ? asString : lcase) );
+    }
+
+    function uncapitalize( pStr )
+    {
+        let str = asString( pStr );
+        return toggleCaps( str, lcase, asString );
+    }
+
     const mod =
         {
             dependencies,
@@ -2682,7 +2710,8 @@ const $scope = constants?.$scope || function()
             toProperCase,
             copyString,
             reverseString,
-            capitalize: (( str ) => (((str?.length || 0) > 1) ? (str.slice( 0, 1 ).toUpperCase()) + (str.slice( 1 ).toLowerCase()) : asString( str, false ).toUpperCase())),
+            capitalize,
+            uncapitalize,
             toUnixPath,
             isRelativePath,
             toAbsolutePath,
@@ -2690,6 +2719,7 @@ const $scope = constants?.$scope || function()
             fromCString,
             formatMessage,
             interpolate,
+            getFunctionSource,
             classes: { StringComparatorFactory },
             StringComparatorFactory
         };

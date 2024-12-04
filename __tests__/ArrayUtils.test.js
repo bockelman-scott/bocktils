@@ -1,15 +1,14 @@
 // no need to require jest here... run this test from the console using 'npx jest'
 // let jester = require( "jest" );
 // jester.run( __filename );
-
-/** import the Constants.cjs we are testing */
-const constants = require( "../src/Constants.cjs" );
-
 const arrayUtils = require( "../src/ArrayUtils.cjs" );
+const constants = arrayUtils.dependencies.constants || require( "../src/Constants.cjs" );
 const typeUtils = arrayUtils.dependencies.typeUtils || require( "../src/TypeUtils.cjs" );
 const stringUtils = arrayUtils.dependencies.stringUtils || require( "../src/StringUtils.cjs" );
 
 Object.assign( this, constants );
+Object.assign( this, typeUtils );
+Object.assign( this, stringUtils );
 Object.assign( this, arrayUtils );
 
 const exampleArray = ["a", "b", "c", 1, 2, 3, 4, 5, {}, ["a", "b", "c", 1, 2, 3, 4, 5, {}], new Date(), true, false, null, undefined, function() {}, Object.create( null )];

@@ -181,7 +181,8 @@
             S_TYPES = _types.join( _comma ),
             S_VALID_TYPES = _validTypes.join( _comma ),
 
-            S_ERR_PREFIX = "An error occurred while",
+            S_ERROR = "error",
+            S_ERR_PREFIX = `An ${S_ERROR} occurred while`,
             S_DEFAULT_OPERATION = "executing script",
 
             S_CUSTOM_EVENT = "CustomEvent",
@@ -324,7 +325,7 @@
      */
     function populateOptions( pOptions, pDefaults )
     {
-        const defaults = _obj === typeof pDefaults ? { ...pDefaults } : {};
+        const defaults = Object.assign( {}, (_obj === typeof pDefaults && null != pDefaults) ? { ...pDefaults } : {} );
         return Object.assign( (defaults || {}), (pOptions || pDefaults || {}) );
     }
 
@@ -1544,6 +1545,7 @@
             S_Z,
             S_TYPES,
             S_VALID_TYPES,
+            S_ERROR,
             S_ERR_PREFIX,
             S_CUSTOM_EVENT,
             S_DEFAULT_OPERATION,

@@ -1082,7 +1082,7 @@ const $scope = constants?.$scope || function()
         if ( isString( pType ) )
         {
             const type = pType.trim().toLowerCase();
-            arr = VALID_TYPES.includes( type ) ? arr.filter( e => type === typeof e ) : [];
+            arr = VALID_TYPES.includes( type ) ? arr.filter( e => type === typeof e && !isNull( e ) ) : [];
         }
         else if ( isClass( pType, false ) )
         {
