@@ -68,7 +68,8 @@ const $scope = constants?.$scope || function()
 
             // does nothing, on purpose
             no_op = constants?.no_op || function() {},
-            populateOptions = constants?.populateOptions
+            populateOptions = constants?.populateOptions,
+            funcToString = constants?.funcToString || Function.prototype.toString
 
         } = constants || {};
 
@@ -372,7 +373,7 @@ const $scope = constants?.$scope || function()
 
     const extractFunctionBody = function( pFunction )
     {
-        let s = asString( isString( pFunction ) ? pFunction : Function.prototype.toString.call( pFunction, pFunction ), true );
+        let s = asString( isString( pFunction ) ? pFunction : funcToString.call( pFunction, pFunction ), true );
 
         let rx = new RegExp( rxFunctionSignature );
 

@@ -76,6 +76,8 @@ const $scope = constants?.$scope || function()
     let _comma = constants._comma || ",";
     let _underscore = constants._underscore || "_";
     let _ellipsis = constants._ellipsis || "...";
+    let _tab = constants._tab || "\t";
+
     let _z = constants._z || "\u0000";
 
     let _unixPathSep = constants._unixPathSep || "/";
@@ -100,6 +102,10 @@ const $scope = constants?.$scope || function()
     let _symbol = constants._symbol || "symbol";
 
     let ComparatorFactory = constants.ComparatorFactory || constants.classes?.ComparatorFactory;
+
+    let funcToString = constants.funcToString || Function.prototype.toString;
+
+    let populateOptions = constants.populateOptions;
 
     /**
      * This statement makes the functions in the constants module available as local functions.
@@ -218,11 +224,7 @@ const $scope = constants?.$scope || function()
 
     function getFunctionSource( pFunction )
     {
-        if ( isFunction( pFunction ) )
-        {
-            return Function.prototype.toString.call( pFunction, pFunction );
-        }
-        return _mt_str;
+        return isFunction( pFunction ) ? funcToString.call( pFunction, pFunction ) : isString( pFunction ) ? asString( pFunction, true ) : _mt_str;
     }
 
     /**
@@ -2487,7 +2489,7 @@ const $scope = constants?.$scope || function()
      * This function can be used as a sort of 'swiss army knife' for strings, based on the options passed,
      * especially the ability to pass one or more functions to transform the result
      *
-     * @param {string} s - the value to trim and return as a String
+     * @param {string} pString - the value to trim and return as a String
      * @param {object} pOptions - optional operations or transformations to perform on the string,
      *                            such as toLowerCase, toUpperCase, removeRedundantSpaces, replaceSpacesWithTabs, replaceTabsWithSpaces, etc.
      *                            It is also possible to pass one or more functions to apply to the string before it is returned.
@@ -2496,12 +2498,12 @@ const $scope = constants?.$scope || function()
      * of the value passed with whitespace removed
      * and any optional transformations applied
      */
-    const tidy = function( s, pOptions = DEFAULT_TIDY_OPTIONS )
+    const tidy = function( pString, pOptions = DEFAULT_TIDY_OPTIONS )
     {
-        if ( _ud === typeof s || null == s )
+        if ( _ud === typeof pString || null === pString )
         {
             // note that we code this in such a way that it can be bound to the String.prototype as a member function (a.k.a. method)
-            if ( (this instanceof String || String === this?.constructor) && _fun === typeof this.tidy )
+            if ( (this instanceof String || String === this?.constructor) && isFunction( this.tidy ) )
             {
                 return tidy( String( this ).valueOf() || asString( this, pOptions?.trim ), pOptions );
             }
@@ -2509,28 +2511,28 @@ const $scope = constants?.$scope || function()
             return _mt_str;
         }
 
-        const options = Object.assign( Object.assign( {}, DEFAULT_TIDY_OPTIONS ), pOptions || {} );
+        const options = populateOptions( pOptions, DEFAULT_TIDY_OPTIONS );
 
-        let str = asString( s, options?.trim );
+        let str = asString( pString, options?.trim );
 
         if ( options?.trim )
         {
-            str = str.replace( /[\r\n]/g, _mt_str ).trim();
+            str = str.replaceAll( /[\r\n]+/g, _spc ).trim();
         }
 
         if ( options.replaceTabsWithSpaces )
         {
-            str = str.replace( /\t/g, _spc.repeat( Math.max( 1, asInt( options?.spacesPerTab || 1 ) ) ) );
+            str = str.replaceAll( /\t/g, _spc.repeat( Math.max( 1, asInt( options?.spacesPerTab || 1 ) ) ) );
         }
 
         if ( options.replaceSpacesWithTabs )
         {
-            str = str.replace( new RegExp( _spc.repeat( Math.max( 1, asInt( options?.spacesPerTab || 1 ) ) ), "g" ), "\t" );
+            str = str.replaceAll( new RegExp( _spc.repeat( Math.max( 1, asInt( options?.spacesPerTab || 1 ) ) ), "g" ), _tab );
         }
 
         if ( options.removeRedundantSpaces )
         {
-            str = str.replace( / {2,}/g, _spc );
+            str = str.replaceAll( / {2,}/g, _spc );
         }
 
         let operations = [];

@@ -98,6 +98,7 @@
             _hyphen = "-",
             _tilde = "~",
             _ellipsis = "...",
+            _tab = "\t",
             _crlf = "\r\n",
             _lf = "\n",
             _z = "\u0000",
@@ -255,7 +256,8 @@
                  "var",
                  "void",
                  "while",
-                 "with"] )
+                 "with"] ),
+            funcToString = Function.prototype.toString
         } = ($scope() || {});
 
     function isArray( pObject )
@@ -1501,6 +1503,7 @@
             _spc,
             _dot,
             _ellipsis,
+            _tab,
             _lf,
             _crlf,
             _nbsp: " ",
@@ -1608,7 +1611,8 @@
             localCopy,
             immutableCopy,
             deepFreeze,
-            calculateNumberFormattingSymbols
+            calculateNumberFormattingSymbols,
+            funcToString
         };
 
     mod.clone = function()
