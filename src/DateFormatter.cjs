@@ -11,11 +11,11 @@ const tokenSetUtils = require( "./DateFormatTokenSet.cjs" );
 
 const dependencies = tokenSetUtils.dependencies;
 
-const constants = dependencies?.constants || utils.constants || require( "./Constants.cjs" );
-const typeUtils = dependencies?.typeUtils || utils.typeUtils || require( "./TypeUtils.cjs" );
-const stringUtils = dependencies?.stringUtils || utils.stringUtils || require( "./StringUtils.cjs" );
-const arrayUtils = dependencies?.arrayUtils || utils.arrayUtils || require( "./ArrayUtils.cjs" );
-const objectUtils = dependencies?.objectUtils || utils.objectUtils || require( "./ObjectUtils.cjs" );
+const constants = dependencies?.constants;
+const typeUtils = dependencies?.typeUtils;
+const stringUtils = dependencies?.stringUtils;
+const arrayUtils = dependencies?.arrayUtils;
+const objectUtils = dependencies?.objectUtils;
 
 const localeUtils = require( "./LocaleUtils.cjs" );
 
@@ -28,7 +28,12 @@ const $scope = utils?.$scope || function()
 
 (function exposeModule()
 {
-    const me = exposeModule;
+    const INTERNAL_NAME = "__BOCK__DATE_FORMATTER__";
+
+    if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
+    {
+        return $scope()[INTERNAL_NAME];
+    }
 
     const dependencies =
         {
@@ -42,25 +47,9 @@ const $scope = utils?.$scope || function()
 
     let _mt_str = constants._mt_str;
 
-    let isNull = typeUtils.isNull;
-    let isDate = typeUtils.isDate;
-    let isNumber = typeUtils.isNumber;
-    let isString = typeUtils.isString;
-    let isObject = typeUtils.isObject;
+    let { isNull, isDate, isNumber, isString, isObject } = typeUtils;
 
-    let asString = stringUtils.asString;
-    let isBlank = stringUtils.isBlank;
-
-    let asArray = arrayUtils.asArray;
-
-    constants.importUtilities( this, constants, typeUtils, stringUtils, arrayUtils, objectUtils );
-
-    const INTERNAL_NAME = "__BOCK__DATE_FORMATTER__";
-
-    if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
-    {
-        return $scope()[INTERNAL_NAME];
-    }
+    let { asString } = stringUtils;
 
     const TokenSet = tokenSetUtils.classes.TokenSet;
 

@@ -15,6 +15,13 @@ const $scope = constants?.$scope || function()
 
 (function exposeModule()
 {
+    const INTERNAL_NAME = "__BOCK_JSON_UTILS__";
+
+    if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
+    {
+        return $scope()[INTERNAL_NAME];
+    }
+
     let _mt_str = constants._mt_str || "";
 
     let _str = constants._str || "string";
@@ -26,13 +33,10 @@ const $scope = constants?.$scope || function()
     let _bool = constants._bool || "boolean";
 
     let isString = typeUtils.isString || function( s ) { return _str === typeof s; };
-    let isFunction = typeUtils.isFunction || function( s ) { return _fun === typeof s; };
-    let isSymbol = typeUtils.isSymbol || function( s ) { return _symbol === typeof s; };
 
     let asString = stringUtils.asString || function( s ) { return (_mt_str + s).trim(); };
     let isBlank = stringUtils.isBlank || function( s ) { return _mt_str === asString( s, true ).trim(); };
     let isJson = stringUtils.isJson || function( s ) { return (asString( s ).startsWith( "{" ) && asString( s ).endsWith( "}" )) || (asString( s ).startsWith( "[" ) && asString( s ).endsWith( "]" )); };
-    let ucase = stringUtils.ucase || function( s ) { return asString( s ).toUpperCase(); };
     let asInt = stringUtils.asInt || function( s ) { return parseInt( s ); };
     let asFloat = stringUtils.asFloat || function( s ) { return parseFloat( s ); };
     let toBool = stringUtils.toBool;
@@ -40,28 +44,18 @@ const $scope = constants?.$scope || function()
     let isArray = objectUtils.isArray || function( pArr ) { return Array.isArray( pArr ); };
 
     let asArray = arrayUtils.asArray || function( pArr ) { return Array.isArray( pArr ) ? pArr : [pArr]; };
+
     let pruneArray = arrayUtils.pruneArray || function( pArr )
     {
         const arr = asArray( pArr || [] );
         return arr.filter( e => (null !== e) && (_ud !== typeof e) && (_mt_str !== e) );
     };
+
     let unique = arrayUtils.unique || function( pArr )
     {
         const arr = asArray( pArr || [] );
         return [...(new Set( arr ))];
     };
-
-    /**
-     * This statement makes all the values exposed by the imported modules local variables in the current scope.
-     */
-    constants.importUtilities( this, constants, stringUtils, arrayUtils, objectUtils );
-
-    const INTERNAL_NAME = "__BOCK_JSON_UTILS__";
-
-    if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
-    {
-        return $scope()[INTERNAL_NAME];
-    }
 
     const MAX_DEPTH = 17;
 
@@ -529,22 +523,6 @@ const $scope = constants?.$scope || function()
 
         return out;
     };
-
-    if ( stringUtils )
-    {
-        stringUtils.asString.stringify = function( pObj )
-        {
-            return jsonify( pObj );
-        };
-    }
-
-    if ( asString )
-    {
-        asString.stringify = function( pObj )
-        {
-            return jsonify( pObj );
-        };
-    }
 
     const mod =
         {

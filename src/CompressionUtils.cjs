@@ -40,7 +40,6 @@ const objectUtils = utils?.objectUtils || require( "./ObjectUtils.cjs" );
 
 /**
  * Import adm-zip dependency
- * @type {(function(String, Object): {getZipComment: function(): String, toBufferPromise: function(): Promise<Buffer>, readAsTextAsync: function((exports|string), callback, string=): String, addLocalFolderPromise: function(string, {zipPath?: string, filter?: (RegExp|Function), namefix?: (Function|string)}): Promise<unknown>, toBuffer: function(*, *, *, *): Buffer, addLocalFile: function(string, string=, string=, string=): void, addZipEntryComment: function(exports, string): void, extractAllToAsync: function(string, boolean=, boolean=, Function): (Promise<unknown>|undefined), addLocalFolderAsync2: function(({localPath: string, zipPath?: string, filter?: (RegExp|Function), namefix?: (Function|string)}|string), doneCallback): void, writeZipPromise: function(string, {overwrite?: boolean, perm?: boolean}=): Promise<void>, addLocalFolderAsync: function(string, callback, string=, (RegExp|Function)=): void, addLocalFileAsync: function(({localPath: string, comment?: string, zipPath?: string, zipName?: string}|string), doneCallback): void, addZipComment: function(string): void, getEntry: function(string): exports, addLocalFolder: function(string, string=, (RegExp|Function)=): void, deleteFile: function((exports|string), boolean=): void, test: function(string=): (boolean), extractAllTo: function(string, boolean=, boolean=, (string|Buffer)=): void, forEach: function(*): *, getZipEntryComment: function(exports): String, readAsText: function((exports|string), string): String, childCount: function((exports|string)): integer, updateFile: function(exports, Buffer): void, writeZip: function(string, Function): void, getEntries: function(string=): Array, readFile: function((exports|string), (Buffer|string)=): *, deleteEntry: function((exports|string)): void, readFileAsync: function((exports|string), callback): void, getEntryCount: function(): *, extractEntryTo: function((string|exports), string, boolean=, boolean=, boolean=, string=): Boolean, addFile: function(string, (Buffer|string), string=, (number|Object)=): exports})|{}}
  */
 const admZip = require( "adm-zip" );
 
@@ -53,30 +52,18 @@ const $scope = constants?.$scope || function()
 
 (function exposeModule()
 {
-    let _mt_str = constants._mt_str;
-    let _str = constants._str;
-    let _num = constants._num;
-    let _big = constants._big;
-    let _bool = constants._bool;
-    let _obj = constants._obj;
-
-    let asString = stringUtils.asString;
-    let isBlank = stringUtils.isBlank;
-    let lcase = stringUtils.lcase;
-
-    let isFunction = typeUtils.isFunction;
-
-    /**
-     * This statement makes all the values exposed by the imported modules local variables in the current scope.
-     */
-    utils.importUtilities( this, constants, stringUtils, arrayUtils, objectUtils );
-
     const INTERNAL_NAME = "__BOCK__COMPRESSION_UTILS__";
 
     if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
     {
         return $scope()[INTERNAL_NAME];
     }
+
+    let { _mt_str, _str, _num, _big, _bool, _obj } = constants;
+
+    let { asString, isBlank, lcase } = stringUtils;
+
+    let isFunction = typeUtils.isFunction;
 
     /**
      * The actual number of bytes in a megabyte
@@ -416,7 +403,7 @@ const $scope = constants?.$scope || function()
 
     /**
      * Returns the number of entries in the archive
-     * @param pArchive a Buffer or a TypedArray of bytes represenring an archive
+     * @param pArchive a Buffer or a TypedArray of bytes representing an archive
      * @returns {number} the number of entries in the archive
      */
     const getEntryCount = function( pArchive )

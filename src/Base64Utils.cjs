@@ -24,27 +24,18 @@ const $scope = constants?.$scope || function()
 
 (function exposeModule()
 {
-    let _mt_str = constants._mt_str;
-
-    let asString = stringUtils.asString;
-
-    let lcase = stringUtils.lcase;
-
-    let asArray = arrayUtils.asArray;
-
-    let importUtilities = utils?.importUtilities || constants.importUtilities;
-
-    /**
-     * This statement makes all the values exposed by the imported modules local variables in the current scope.
-     */
-    importUtilities( this, constants, typeUtils, stringUtils, arrayUtils, objectUtils );
-
     const INTERNAL_NAME = "__BOCK__BASE64_UTILS__";
 
     if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
     {
         return $scope()[INTERNAL_NAME];
     }
+
+    let _mt_str = constants._mt_str;
+
+    let { asString, lcase } = stringUtils;
+
+    let asArray = arrayUtils.asArray;
 
     const base64 = "base64";
 

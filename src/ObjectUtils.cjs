@@ -29,9 +29,15 @@ const $scope = constants?.$scope || function()
  */
 (function exposeModule()
 {
-    /*+removable:start */
-    // explicitly define several variables that are imported from the dependencies
-    // this is done to help IDEs that cannot infer what is in scope otherwise
+    // defines a key we can use to store this module in global scope
+    const INTERNAL_NAME = "__BOCK__OBJECT_UTILS__";
+
+    // if we've already executed this code, just return the module
+    if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
+    {
+        return $scope()[INTERNAL_NAME];
+    }
+
     let
         {
             _mt_str = constants?._mt_str || "",
@@ -134,17 +140,6 @@ const $scope = constants?.$scope || function()
      */
     let ARRAY_METHODS = arrayUtils.ARRAY_METHODS;
 
-    /*+removable:end */
-
-    // defines a key we can use to store this module in global scope
-    const INTERNAL_NAME = "__BOCK__OBJECT_UTILS__";
-
-    // if we've already executed this code, just return the module
-    if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
-    {
-        return $scope()[INTERNAL_NAME];
-    }
-
     /**
      * An array of this module's dependencies
      * which are re-exported with this module,
@@ -161,9 +156,6 @@ const $scope = constants?.$scope || function()
         };
 
     const me = exposeModule || this;
-
-    // Make the functions and properties of the imported modules local variables and functions.
-    constants.importUtilities( (me || this), ...(Object.values( dependencies )) );
 
     const uniqueObjectId = Symbol.for( "__BOCK__UNIQUE_OBJECT_ID__" );
 
@@ -641,6 +633,11 @@ const $scope = constants?.$scope || function()
             this.#type = typeof this.#value;
         }
 
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
         get key()
         {
             return this.#key || (this.length > 0 ? this[0] : _mt_str);
@@ -654,6 +651,11 @@ const $scope = constants?.$scope || function()
         get type()
         {
             return this.#type;
+        }
+
+        get parent()
+        {
+            return this.#parent;
         }
 
         /**
@@ -672,6 +674,31 @@ const $scope = constants?.$scope || function()
         isValid()
         {
             return isString( this.key ) && !(_ud === typeof this.value || null === this.value);
+        }
+
+        /**
+         * Redefine the map function of the superclass, Array
+         * We only want to apply the function to the value AND we want to return a new ObjectEntry, not a raw array
+         * @param pFunction
+         */
+        map( pFunction )
+        {
+            if ( isFunction( pFunction ) )
+            {
+                const thiz = this.constructor[Symbol.species];
+                return new thiz( this.key, pFunction( this.value ), this.parent );
+            }
+            return this;
+        }
+
+        fold()
+        {
+            return this.value;
+        }
+
+        valueOf()
+        {
+            return this.value;
         }
     }
 
@@ -719,9 +746,9 @@ const $scope = constants?.$scope || function()
 
         for( let object of objects )
         {
-            let obj = isObject( object ) ? object : {};
+            let obj = (isObject( object ) || (object instanceof String)) ? object : {};
 
-            keys = (obj instanceof Map) ? keys.concat( ...(obj.keys()) ) : keys.concat( ...(Object.keys( obj || {} ) || []) );
+            keys = (obj instanceof Map) ? keys.concat( ...(obj.keys()) ) : (obj instanceof String) ? keys.concat( ...(arrayUtils.toKeys( obj.valueOf().split( _mt_str ), true )) ) : keys.concat( ...(Object.keys( obj || {} ) || []) );
 
             let proto = obj?.prototype;
 
@@ -2023,7 +2050,7 @@ const $scope = constants?.$scope || function()
         return same( this, pObject, true, getClass( this ) );
     };
 
-    const arrayToObject = function( pArr, pKeyProperty )
+    const arrayToObject = function( pArr, pKeyProperty = _mt_str )
     {
         let arr = asArray( pArr || [] ) || [];
 
@@ -2770,6 +2797,120 @@ const $scope = constants?.$scope || function()
         return objA;
     };
 
+
+    /**
+     * Removes the specified property and returns the modified object
+     *
+     * @param pObject the object to modify
+     * @param pPropertyName the property to delete, or remove
+     * @param pOptions
+     * @returns {*} the same object with the specified properties removed
+     */
+    const removeProperty = function( pObject, pPropertyName, pOptions = { assumeUnderscoresConvention: true } )
+    {
+        if ( !isObject( pObject ) || Object.isFrozen( pObject ) || Object.isSealed( pObject ) )
+        {
+            return pObject;
+        }
+
+        let propertyName = pPropertyName;
+
+        switch ( typeof pPropertyName )
+        {
+            case _ud:
+                return pObject;
+
+            case _num:
+            case _big:
+                if ( isArray( pObject ) )
+                {
+                    return pObject.splice( pPropertyName, 1 );
+                }
+                break;
+
+            case _str:
+                propertyName = asString( pPropertyName, true );
+                break;
+
+            default:
+                return pObject;
+        }
+
+        if ( isBlank( propertyName ) )
+        {
+            return pObject;
+        }
+
+        const options = Object.assign( {}, pOptions || { assumeUnderscoresConvention: true } );
+
+        let prefixes = [];
+
+        if ( options?.assumeUnderscoresConvention )
+        {
+            prefixes.push( _underscore );
+        }
+
+        for( let prefix of (options?.prefixes || []) )
+        {
+            prefixes.push( prefix );
+        }
+
+        try
+        {
+            delete pObject[propertyName];
+        }
+        catch( ex )
+        {
+            konsole.error( ex.message );
+        }
+
+        for( let prefix of prefixes )
+        {
+            try
+            {
+                delete pObject[prefix + propertyName];
+            }
+            catch( ex )
+            {
+                konsole.error( ex.message );
+            }
+        }
+
+        return pObject;
+    };
+
+    /**
+     * Removes the specified properties and returns the modified object
+     * @param pObject an object to modify (by removing the specified properties)
+     * @param pPropertyNames
+     * @returns {object} the modified object (without the specified properties)
+     */
+    const removeProperties = function( pObject, ...pPropertyNames )
+    {
+        let obj = pObject || {};
+
+        const propertyNames = unique( pruneArray( [].concat( asArray( pPropertyNames || [] ) ) ) );
+
+        for( let i = 0, n = propertyNames.length; i < n; i++ )
+        {
+            const propertyName = asString( propertyNames[i], true ).trim();
+
+            if ( !isBlank( propertyName ) )
+            {
+                try
+                {
+                    obj = removeProperty( obj, propertyName );
+                }
+                catch( ex )
+                {
+                    konsole.warn( ex.message );
+                }
+            }
+        }
+
+        return obj;
+    };
+
     const DEFAULT_PRUNING_OPTIONS =
         {
             removeEmptyObjects: true,
@@ -3105,119 +3246,6 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * Removes the specified property and returns the modified object
-     *
-     * @param pObject the object to modify
-     * @param pPropertyName the property to delete, or remove
-     * @param pOptions
-     * @returns {*} the same object with the specified properties removed
-     */
-    const removeProperty = function( pObject, pPropertyName, pOptions = { assumeUnderscoresConvention: true } )
-    {
-        if ( !isObject( pObject ) || Object.isFrozen( pObject ) || Object.isSealed( pObject ) )
-        {
-            return pObject;
-        }
-
-        let propertyName = pPropertyName;
-
-        switch ( typeof pPropertyName )
-        {
-            case _ud:
-                return pObject;
-
-            case _num:
-            case _big:
-                if ( isArray( pObject ) )
-                {
-                    return pObject.splice( pPropertyName, 1 );
-                }
-                break;
-
-            case _str:
-                propertyName = asString( pPropertyName, true );
-                break;
-
-            default:
-                return pObject;
-        }
-
-        if ( isBlank( propertyName ) )
-        {
-            return pObject;
-        }
-
-        const options = Object.assign( {}, pOptions || { assumeUnderscoresConvention: true } );
-
-        let prefixes = [];
-
-        if ( options?.assumeUnderscoresConvention )
-        {
-            prefixes.push( _underscore );
-        }
-
-        for( let prefix of (options?.prefixes || []) )
-        {
-            prefixes.push( prefix );
-        }
-
-        try
-        {
-            delete pObject[propertyName];
-        }
-        catch( ex )
-        {
-            konsole.error( ex.message );
-        }
-
-        for( let prefix of prefixes )
-        {
-            try
-            {
-                delete pObject[prefix + propertyName];
-            }
-            catch( ex )
-            {
-                konsole.error( ex.message );
-            }
-        }
-
-        return pObject;
-    };
-
-    /**
-     * Removes the specified properties and returns the modified object
-     * @param pObject an object to modify (by removing the specified properties)
-     * @param pPropertyNames
-     * @returns {object} the modified object (without the specified properties)
-     */
-    const removeProperties = function( pObject, ...pPropertyNames )
-    {
-        let obj = pObject || {};
-
-        const propertyNames = unique( pruneArray( [].concat( asArray( pPropertyNames || [] ) ) ) );
-
-        for( let i = 0, n = propertyNames.length; i < n; i++ )
-        {
-            const propertyName = asString( propertyNames[i], true ).trim();
-
-            if ( !isBlank( propertyName ) )
-            {
-                try
-                {
-                    obj = removeProperty( obj, propertyName );
-                }
-                catch( ex )
-                {
-                    konsole.warn( ex.message );
-                }
-            }
-        }
-
-        return obj;
-    };
-
-    /**
      * Performs a 'deep' Object.assign of the properties of the source to the target.
      * Returns the modified target unless the specified target is frozen, in which case, a new object is returned
      * @param pTarget the object to which to assign the properties of the source
@@ -3336,6 +3364,47 @@ const $scope = constants?.$scope || function()
         return obj;
     };
 
+    const lock = function( pObject )
+    {
+        if ( isUndefined( pObject ) || null === pObject )
+        {
+            return pObject;
+        }
+        return Object.freeze( pObject );
+    };
+
+    const deepFreeze = function( pObject )
+    {
+        if ( isUndefined( pObject ) || null === pObject )
+        {
+            return pObject;
+        }
+
+        if ( !isObject( pObject ) )
+        {
+            return lock( pObject );
+        }
+
+        let obj = pObject;
+
+        if ( Object.isFrozen( pObject ) )
+        {
+            obj = {};
+        }
+
+        const entries = getEntries( pObject );
+
+        for( let entry of entries )
+        {
+            const key = entry.key || entry[0];
+            const value = entry.value || entry[1];
+
+            obj[key] = deepFreeze( value );
+        }
+
+        return lock( obj );
+    };
+
     const mod =
         {
             dependencies,
@@ -3410,7 +3479,9 @@ const $scope = constants?.$scope || function()
             invertProperties,
             findNode,
             tracePathTo,
-            findRoot
+            findRoot,
+            lock,
+            deepFreeze
         };
 
     if ( _ud !== typeof module )

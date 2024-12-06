@@ -24,18 +24,11 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
-    const me = exposeModule;
-
     let _mt_str = constants._mt_str || "";
 
     let asString = stringUtils.asString || function( s ) { return (_mt_str + s).trim(); };
     let isBlank = stringUtils.isBlank || function( s ) { return _mt_str === asString( s, true ); };
     let asInt = stringUtils.asInt || function( s ) { return parseInt( asString( s, true ) ); };
-
-    /**
-     * This statement makes all the values exposed by the imported modules local variables in the current scope.
-     */
-    constants.importUtilities( me || this, constants, stringUtils, arrayUtils );
 
     /**
      * An array of this module's dependencies

@@ -64,10 +64,6 @@ const $scope = constants?.$scope || function()
             stringUtils
         };
 
-    const me = exposeModule || this;
-
-    constants.importUtilities( me || this, ...(Object.values( dependencies )) );
-
     const NO_HANDLER = function( pEvt, pData )
     {
         konsole.log( "No handler found for event,", pEvt.type, ", Fired on", pEvt.target, " with data: ", (pData || "~no data~") );

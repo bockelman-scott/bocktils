@@ -28,7 +28,12 @@ const $scope = utils?.$scope || function()
 
 (function exposeModule()
 {
-    const me = exposeModule;
+    const INTERNAL_NAME = "__BOCK__DATE_FORMAT_TOKEN_SET__";
+
+    if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
+    {
+        return $scope()[INTERNAL_NAME];
+    }
 
     const dependencies =
         {
@@ -46,8 +51,6 @@ const $scope = utils?.$scope || function()
     let isNull = typeUtils.isNull;
     let isDate = typeUtils.isDate;
     let isNumber = typeUtils.isNumber;
-    let isString = typeUtils.isString;
-    let isFunction = typeUtils.isFunction;
 
     let asString = stringUtils.asString;
     let asInt = stringUtils.asInt;
@@ -55,15 +58,6 @@ const $scope = utils?.$scope || function()
     let lcase = stringUtils.lcase;
 
     let asArray = arrayUtils.asArray;
-
-    constants.importUtilities( this, constants, typeUtils, stringUtils, arrayUtils, objectUtils );
-
-    const INTERNAL_NAME = "__BOCK__DATE_FORMAT_TOKEN_SET__";
-
-    if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
-    {
-        return $scope()[INTERNAL_NAME];
-    }
 
     const dateConstants = Object.freeze( dateUtils.DateConstants );
 

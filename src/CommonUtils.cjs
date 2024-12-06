@@ -24,31 +24,6 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
-    const importUtilities = constants?.importUtilities || function( pScope, ...pUtils )
-    {
-        const scope = pScope || $scope();
-
-        const utils = ([].concat( (pUtils || []) ));
-
-        let obj = {};
-
-        for( let i = 0, n = utils?.length; i < n; i++ )
-        {
-            const util = utils[i];
-
-            try
-            {
-                obj = Object.assign( scope, (util || {}) );
-            }
-            catch( ex )
-            {
-                console.error( "Could not import " + util?.name + " into scope", scope, ex.message );
-            }
-        }
-
-        return obj;
-    };
-
     let mod =
         {
             constants,
@@ -57,7 +32,6 @@ const $scope = constants?.$scope || function()
             arrayUtils,
             objectUtils,
             jsonUtils,
-            importUtilities,
             dependencies:
                 {
                     constants,

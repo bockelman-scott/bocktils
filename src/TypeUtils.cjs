@@ -5,7 +5,7 @@
  * DEPENDS ON Constants.cjs
  */
 
-/** import the Constants.cjs we depend upon using require for maximum compatibility with Node versions */
+/** import the Constants.cjs we depend upon, using require for maximum compatibility with Node versions */
 const constants = require( "./Constants.cjs" );
 
 /** Create an alias for the console **/
@@ -43,14 +43,6 @@ const $scope = constants?.$scope || function()
     }
 
     /**
-     * Assigns a variable to the current closure scope
-     * so we can import dependencies and use their properties and functions as local variables
-     * @see constants.importUtilities
-     * @type {(function(): (*))|*}
-     */
-    const me = exposeModule || this;
-
-    /**
      * An array of this module's dependencies
      * which are re-exported with this module,
      * so if you want to, you can just import the leaf module
@@ -61,7 +53,6 @@ const $scope = constants?.$scope || function()
             constants
         };
 
-    /*+removable:start */
     let _mt_str = constants._mt_str || "";
     let _dot = constants._dot || ".";
 
@@ -86,10 +77,6 @@ const $scope = constants?.$scope || function()
     let AsyncFunction = constants.AsyncFunction;
     let populateOptions = constants.populateOptions;
     let no_op = constants.no_op;
-    /*+removable:end */
-
-    // This statement makes the functions and properties of the dependencies available as local variables and functions.
-    constants.importUtilities( me || this, ...(Object.values( dependencies )) );
 
     /**
      * This is an array of the 'valid' JavaScript primitive types.
@@ -495,7 +482,7 @@ const $scope = constants?.$scope || function()
     /**
      * Returns the decimal representation of the specified value
      * @param pObj {number|string} a value to convert to a decimal representation
-     * @returns {number} a decimal representation of the spcified value
+     * @returns {number} a decimal representation of the specified value
      */
     const toDecimal = function( pObj )
     {

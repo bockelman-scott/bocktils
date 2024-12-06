@@ -27,7 +27,14 @@ const $scope = constants?.$scope || function()
 
 (function exposeModule()
 {
-    const me = exposeModule;
+    // defines a key we can use to store this module in global scope
+    const INTERNAL_NAME = "__BOCK__FUNCTION_UTILS__";
+
+    // if we've already executed this code, just return the module
+    if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
+    {
+        return $scope()[INTERNAL_NAME];
+    }
 
     /**
      * Create local variables for the imported values and functions we use.
@@ -54,18 +61,6 @@ const $scope = constants?.$scope || function()
     let op_identity = function( pArg ) { return pArg; };
 
     let Result = typeUtils.Result;
-
-    // import the dependencies
-    constants.importUtilities( this || me, constants, typeUtils, stringUtils, arrayUtils, objectUtils );
-
-    // defines a key we can use to store this module in global scope
-    const INTERNAL_NAME = "__BOCK__FUNCTION_UTILS__";
-
-    // if we've already executed this code, just return the module
-    if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
-    {
-        return $scope()[INTERNAL_NAME];
-    }
 
     /**
      * An array of this module's dependencies

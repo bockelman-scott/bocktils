@@ -465,11 +465,6 @@ const $scope = constants?.$scope || function()
                     }
                 }
 
-                if ( isBlank( s ) )
-                {
-                    s = input?.uniqueObjectId || input?._uniqueObjectId || input?.id;
-                }
-
                 break;
 
             case _fun:

@@ -385,6 +385,55 @@ describe( "getKeys", () =>
               expect( objectUtils.getKeys( a, b, c, d ) ).toEqual( [] );
 
           } );
+
+    test( "getKeys returns 0 for a Date",
+          () =>
+          {
+              const a = new Date();
+              const keys = objectUtils.getKeys( a );
+
+              expect( keys.length ).toEqual( 0 );
+          } );
+
+    test( "getKeys returns the length of the primitive valueOf for the String wrapper",
+          () =>
+          {
+              const a = new String( "abc" );
+              const keys = objectUtils.getKeys( a );
+
+              expect( keys.length ).toEqual( 3 );
+          } );
+
+    test( "getKeys returns 0 for any other Primitive Type Wrapper or non-object",
+          () =>
+          {
+              let a = new Boolean( true );
+              let keys = objectUtils.getKeys( a );
+
+              expect( keys.length ).toEqual( 0 );
+
+              a = new Number( 1 );
+              keys = objectUtils.getKeys( a );
+
+              expect( keys.length ).toEqual( 0 );
+
+              a = 12n;
+              keys = objectUtils.getKeys( a );
+              expect( keys.length ).toEqual( 0 );
+
+          } );
+
+    test( "getKeys returns the indices corresponding to the allocated size for any TypedArray Type",
+          () =>
+          {
+              for( let type of constants.TYPED_ARRAYS )
+              {
+                  let a = new type( 10 );
+                  let keys = objectUtils.getKeys( a );
+
+                  expect( keys.length ).toEqual( 10 );
+              }
+          } );
 } );
 
 describe( "getProperties", () =>

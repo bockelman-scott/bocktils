@@ -44,16 +44,6 @@
     const konsole = console;
 
     /**
-     * Returns true if this code is being executed by Node.js (or Deno)
-     * or technically any environment that defines 'global' and 'process' and does not define 'self' or 'window'
-     * @returns {boolean} true if this code is (probably) being executed by Node.js (or Deno)
-     */
-    const isNodeJs = function()
-    {
-        return (_ud === typeof self) && (_ud === typeof window) && (null != global) && (_ud !== typeof process);
-    };
-
-    /**
      * Should return the working directory as returned from the process if running on a server-side platform.
      * Return . for other environments
      * @type {string|string}
@@ -890,44 +880,6 @@
     IllegalArgumentError.prototype.name = "IllegalArgumentError";
 
     /**
-     * Makes all the properties and functions
-     * found in the utilities specified
-     * local variables of the scope specified.
-     *
-     * @param pScope {object|function} a scope into which to import the properties and functions of the specified utilities.
-     *                                 this can be a closure, the global scope, or any object to which properties and functions can be copied
-     * @param pUtils {...object} one or more utilities or modules whose properties and functions you want to treat as local to the scope
-     * @returns {object} the scope into which the utilities have been imported, often ignored
-     */
-    const importUtilities = function( pScope, ...pUtils )
-    {
-        const scope = pScope || $scope();
-
-        const utils = immutableCopy( (pUtils || []),
-                                     {
-                                         nullToEmptyArray: true,
-                                         undefinedToEmptyArray: true,
-                                         depth: 2
-                                     } );
-
-        let obj = {};
-
-        for( let util of utils )
-        {
-            try
-            {
-                obj = Object.assign( scope, (util || {}) );
-            }
-            catch( ex )
-            {
-                console.error( "Could not import " + util?.name + " into scope", scope, ex.message );
-            }
-        }
-
-        return scope || obj;
-    };
-
-    /**
      * An array of this module's dependencies
      * which are re-exported with this module,
      * so if you want to, you can just import the leaf module
@@ -1598,14 +1550,9 @@
             IterationCap,
             IllegalArgumentError,
             ComparatorFactory,
-            catchHandler: function( pErr )
-            {
-                return true;
-            },
             $scope,
             no_op,
             ignore,
-            importUtilities,
             populateOptions,
             isReadOnly,
             localCopy,

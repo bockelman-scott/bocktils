@@ -23,6 +23,16 @@ const $scope = utils?.$scope || function()
 
 (function exposeModule()
 {
+    // define a key under which we can cache this module in the global scope
+    const INTERNAL_NAME = "__BOCK__LOCALE_UTILS__";
+
+    // if this module has already been built and is available in the global scope,
+    // just return that instance of this module
+    if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
+    {
+        return $scope()[INTERNAL_NAME];
+    }
+
     // Capture the dependencies for re-export with this module
     const dependencies =
         {
@@ -49,18 +59,7 @@ const $scope = utils?.$scope || function()
     let calculateDecimalSymbols = stringUtils.calculateDecimalSymbols;
     let toCanonicalNumericFormat = stringUtils.toCanonicalNumericFormat;
 
-    // Make all functions imported from other modules locally available in this module
-    constants.importUtilities( this, constants, typeUtils, stringUtils, arrayUtils, objectUtils );
-
-    // define a key under which we can cache this module in the global scope
-    const INTERNAL_NAME = "__BOCK__LOCALE_UTILS__";
-
-    // if this module has already been built and is available in the global scope,
-    // just return that instance of this module
-    if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
-    {
-        return $scope()[INTERNAL_NAME];
-    }
+    let asArray = arrayUtils.asArray;
 
     // The locale assumed if no Locale is provided to this module's functions
     const DEFAULT_LOCALE_STRING = "en-US";
@@ -140,7 +139,7 @@ const $scope = utils?.$scope || function()
      */
     const resolveLocale = function( pLocale )
     {
-        let locale = DEFAULT_LOCALE;
+        let locale;
 
         try
         {

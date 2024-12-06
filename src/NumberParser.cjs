@@ -13,7 +13,12 @@ const $scope = function()
 
 (function exposeModule()
 {
-    const me = exposeModule;
+    const INTERNAL_NAME = "__BOCK__NUMBER_PARSER__";
+
+    if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
+    {
+        return $scope()[INTERNAL_NAME];
+    }
 
     const dependencies =
         {
@@ -36,15 +41,6 @@ const $scope = function()
 
     let lcase = stringUtils.lcase;
     let isBlank = stringUtils.isBlank;
-
-    constants.importUtilities( me || this, constants, typeUtils, stringUtils );
-
-    const INTERNAL_NAME = "__BOCK__NUMBER_PARSER__";
-
-    if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
-    {
-        return $scope()[INTERNAL_NAME];
-    }
 
     const getReForDec = function( pDecimalSeparator )
     {

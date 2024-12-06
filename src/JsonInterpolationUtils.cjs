@@ -78,8 +78,6 @@ const $scope = constants?.$scope || function()
         }
     }
 
-    const me = exposeModule;
-
     const dependencies =
         {
             constants,
@@ -134,11 +132,6 @@ const $scope = constants?.$scope || function()
     let detectCycles = objectUtils.detectCycles;
     let ObjectEntry = objectUtils.ObjectEntry;
     let IterationCap = objectUtils.IterationCap;
-
-    /**
-     * This statement makes all the values exposed by the imported modules local variables in the current scope.
-     */
-    constants.importUtilities( (me || this), constants, typeUtils, stringUtils, arrayUtils, objectUtils );
 
     const konsole = console;
 

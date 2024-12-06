@@ -334,46 +334,6 @@ describe( "ignore", () =>
 
 } );
 
-describe( "importUtilities makes module properties local", () =>
-{
-    const mod =
-        {
-            xxxxx: "x",
-            f: function( pA, pB )
-            {
-                return pA + pB;
-            },
-            opts:
-                {
-                    someBool: false,
-                    someNumber: 5,
-                    someString: "foo"
-                },
-            arr: [7, 8, 9]
-        };
-
-    test( "properties and functions of mod can be treated as local variables", () =>
-    {
-        let scope = constants.$scope();
-
-        let updated = constants.importUtilities( scope, constants, mod );
-
-        expect( xxxxx ).toEqual( "x" );
-
-        expect( f( 23, 42 ) ).toEqual( 65 );
-
-        expect( typeof opts ).toEqual( _obj );
-
-        expect( opts?.someNumber ).toEqual( 5 );
-
-        expect( arr.length ).toEqual( 3 );
-
-        expect( S_COMMA ).toEqual( "," );
-
-    } );
-
-} );
-
 describe( "isReadOnly", () =>
 {
     const isReadOnly = constants.isReadOnly;

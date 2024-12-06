@@ -29,14 +29,6 @@ const $scope = constants?.$scope || function()
     }
 
     /**
-     * Assigns a variable to the current closure scope
-     * so we can import dependencies and use their properties and functions as local variables
-     * @see constants.importUtilities
-     * @type {(function(): (*))|*}
-     */
-    const me = exposeModule || this;
-
-    /**
      * An array of this module's dependencies
      * which are re-exported with this module,
      * so if you want to, you can just import the leaf module
@@ -49,11 +41,8 @@ const $scope = constants?.$scope || function()
             stringUtils
         };
 
-    /*+removable:start */
     /**
      * Create local variables for the imported values and functions we use.
-     * This is technically unnecessary, but some IDEs cannot recognize the imported variables otherwise.
-     * IDEs that report unrecognized variables are more useful if we remove the false positives this way.
      */
     let
         {
@@ -82,10 +71,6 @@ const $scope = constants?.$scope || function()
             EMPTY_ARRAY = Object.freeze( [] ),
             populateOptions = constants.populateOptions
         } = constants || {};
-    /*+removable:end */
-
-    // This statement makes the functions and properties of the dependencies available as local variables and functions.
-    constants.importUtilities( me || this, ...(Object.values( dependencies )) );
 
     // poly-fill for isArray; probably obsolete with modern environments
     if ( _fun !== typeof Array.isArray )
@@ -2726,6 +2711,15 @@ const $scope = constants?.$scope || function()
         return TransformerChain.TRIMMED_NON_BLANK_STRINGS.transform( arr );
     };
 
+    const toKeys = function( pArr, pAsStrings = false )
+    {
+        let arr = asArray( pArr || [] ) || [];
+
+        arr = arr.map( ( e, i ) => i );
+
+        return !!pAsStrings ? arr.map( e => asString( _mt_str + e ) ) : arr;
+    };
+
     /**
      * This is the exported module.
      */
@@ -2733,6 +2727,8 @@ const $scope = constants?.$scope || function()
         {
             dependencies,
             ARRAY_METHODS,
+            varargs,
+            immutableVarArgs,
             asArray,
             unique,
             pruneArray,
@@ -2779,6 +2775,7 @@ const $scope = constants?.$scope || function()
             toNonBlankStrings,
             toTrimmedNonEmptyStrings,
             toTrimmedNonBlankStrings,
+            toKeys,
             createExclusiveFilter,
             createInclusiveFilter,
             firstMatchedValue,

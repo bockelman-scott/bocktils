@@ -20,7 +20,12 @@ const $scope = utils?.$scope || function()
 
 (function exposeModule()
 {
-    const me = exposeModule;
+    const INTERNAL_NAME = "__BOCK__DATE_UTILS__";
+
+    if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
+    {
+        return $scope()[INTERNAL_NAME];
+    }
 
     const dependencies =
         {
@@ -46,15 +51,6 @@ const $scope = utils?.$scope || function()
     let asArray = arrayUtils.asArray;
 
     let attempt = funcUtils.attempt;
-
-    constants.importUtilities( this, constants, typeUtils, stringUtils, arrayUtils, objectUtils );
-
-    const INTERNAL_NAME = "__BOCK__DATE_UTILS__";
-
-    if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
-    {
-        return $scope()[INTERNAL_NAME];
-    }
 
     const UNIT = Object.freeze(
         {

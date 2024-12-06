@@ -27,7 +27,12 @@ const $scope = function()
 
 (function exposeModule()
 {
-    const me = exposeModule;
+    const INTERNAL_NAME = "__BOCK__DATE_PARSER__";
+
+    if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
+    {
+        return $scope()[INTERNAL_NAME];
+    }
 
     const dependencies =
         {
@@ -49,7 +54,6 @@ const $scope = function()
     let isArray = typeUtils.isArray;
 
     let asInt = stringUtils.asInt;
-    let asFloat = stringUtils.asFloat;
     let asString = stringUtils.asString;
 
     let lcase = stringUtils.lcase;
@@ -57,14 +61,6 @@ const $scope = function()
 
     let asArray = arrayUtils.asArray;
 
-    constants.importUtilities( this, constants, typeUtils, stringUtils, localeUtils );
-
-    const INTERNAL_NAME = "__BOCK__DATE_PARSER__";
-
-    if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
-    {
-        return $scope()[INTERNAL_NAME];
-    }
 
     const TokenSet = tokenSetUtils.classes.TokenSet;
     const TokenLiteral = tokenSetUtils.classes.TokenLiteral;
