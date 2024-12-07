@@ -8,15 +8,15 @@
 
 const utils = require( "./CommonUtils.cjs" );
 
-const constants = utils?.constants || require( "./Constants.cjs" );
-const typeUtils = utils?.typeUtils || require( "./TypeUtils.cjs" );
-const stringUtils = utils?.stringUtils || require( "./StringUtils.cjs" );
-const arrayUtils = utils?.arrayUtils || require( "./ArrayUtils.cjs" );
-const objectUtils = utils?.objectUtils || require( "./ObjectUtils.cjs" );
+const constants = utils.constants;
+const typeUtils = utils.typeUtils;
+const stringUtils = utils.stringUtils;
+const arrayUtils = utils.arrayUtils;
+const objectUtils = utils.objectUtils;
 
 const _ud = constants?._ud || "undefined";
 
-const $scope = utils?.$scope || function()
+const $scope = utils.$scope || constants.$scope || function()
 {
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };
@@ -44,22 +44,22 @@ const $scope = utils?.$scope || function()
         };
 
     // Create local aliases for values imported from other modules
-    let _mt_str = constants._mt_str;
+    const { _mt_str, populateOptions, lock } = constants;
 
-    let isDefined = typeUtils.isDefined;
-    let isString = typeUtils.isString;
-    let isFunction = typeUtils.isFunction;
+    const { isDefined, isString, isFunction } = typeUtils;
 
-    let asString = stringUtils.asString;
-    let isBlank = stringUtils.isBlank;
-    let lcase = stringUtils.lcase;
+    const
+        {
+            asString,
+            isBlank,
+            lcase,
+            DEFAULT_NUMBER_SYMBOLS,
+            deriveDecimalSymbols,
+            calculateDecimalSymbols,
+            toCanonicalNumericFormat
+        } = stringUtils;
 
-    let DEFAULT_NUMBER_SYMBOLS = stringUtils.DEFAULT_NUMBER_SYMBOLS;
-    let deriveDecimalSymbols = stringUtils.deriveDecimalSymbols;
-    let calculateDecimalSymbols = stringUtils.calculateDecimalSymbols;
-    let toCanonicalNumericFormat = stringUtils.toCanonicalNumericFormat;
-
-    let asArray = arrayUtils.asArray;
+    const { asArray } = arrayUtils;
 
     // The locale assumed if no Locale is provided to this module's functions
     const DEFAULT_LOCALE_STRING = "en-US";
@@ -85,15 +85,15 @@ const $scope = utils?.$scope || function()
      * Defines the default values for date-related functionality.
      * Used when the locale is the default locale or no values are available for a specified locale
      */
-    const DEFAULTS = Object.freeze(
+    const DEFAULTS = lock(
         {
             LOCALE_STRING: DEFAULT_LOCALE_STRING,
-            MONTH_NAMES: Object.freeze( ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"] ),
-            MONTH_NAMES_SHORT: Object.freeze( ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] ),
-            MONTH_LETTERS: Object.freeze( ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"] ),
-            DAY_NAMES: Object.freeze( ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] ),
-            DAY_NAMES_SHORT: Object.freeze( ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] ),
-            DAY_LETTERS: Object.freeze( ["S", "M", "T", "W", "R", "F", "Sa"] ),
+            MONTH_NAMES: lock( ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"] ),
+            MONTH_NAMES_SHORT: lock( ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] ),
+            MONTH_LETTERS: lock( ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"] ),
+            DAY_NAMES: lock( ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] ),
+            DAY_NAMES_SHORT: lock( ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] ),
+            DAY_LETTERS: lock( ["S", "M", "T", "W", "R", "F", "Sa"] ),
             ERAS:
                 [
                     {
@@ -151,7 +151,7 @@ const $scope = utils?.$scope || function()
             locale = DEFAULT_LOCALE;
         }
 
-        return Object.freeze( locale || DEFAULT_LOCALE );
+        return lock( locale || DEFAULT_LOCALE );
     };
 
     /**
@@ -290,7 +290,7 @@ const $scope = utils?.$scope || function()
 
         for( let era of DEFAULTS.ERAS )
         {
-            eras.push( Object.freeze(
+            eras.push( lock(
                 {
                     start: era.start,
                     end: era.end,
@@ -299,7 +299,7 @@ const $scope = utils?.$scope || function()
                 } ) );
         }
 
-        return Object.freeze( eras );
+        return lock( eras );
     };
 
     const getAmPmStrings = function( pLocale )
@@ -308,7 +308,7 @@ const $scope = utils?.$scope || function()
 
         if ( isDefaultLocale( locale ) )
         {
-            return Object.freeze( ["AM", "PM"] );
+            return lock( ["AM", "PM"] );
         }
 
         const dateTimeFormat = new Intl.DateTimeFormat( locale.baseName || pLocale,
@@ -348,7 +348,7 @@ const $scope = utils?.$scope || function()
             weekData.weekend = asArray( weekData.weekend ).map( e => 7 === e ? 0 : e );
         }
 
-        return Object.freeze( weekData );
+        return lock( weekData );
     };
 
     const getFirstDayOfWeek = function( pLocale )
@@ -402,7 +402,7 @@ const $scope = utils?.$scope || function()
 
             arr = pExcludeWhitespace ? arr.filter( arrayUtils.Filters.NON_BLANK ) : arr;
 
-            return Object.freeze( arr );
+            return lock( arr );
         }
 
         let splitArg = "word" === pGranularity ? /\b/ : _mt_str;
@@ -413,7 +413,7 @@ const $scope = utils?.$scope || function()
 
         arr = pExcludePunctuation ? arr.filter( e => /[\w\s]+/.test( e ) ) : arr;
 
-        return Object.freeze( arr );
+        return lock( arr );
     };
 
     const mod =
@@ -466,14 +466,14 @@ const $scope = utils?.$scope || function()
 
     if ( _ud !== typeof module )
     {
-        module.exports = Object.freeze( mod );
+        module.exports = lock( mod );
     }
 
     if ( $scope() )
     {
-        $scope()[INTERNAL_NAME] = Object.freeze( mod );
+        $scope()[INTERNAL_NAME] = lock( mod );
     }
 
-    return Object.freeze( mod );
+    return lock( mod );
 
 }());

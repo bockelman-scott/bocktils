@@ -1,10 +1,10 @@
 const core = require( "./CoreUtils.cjs" );
 
-const constants = core.constants || require( "./Constants.cjs" );
-const typeUtils = core.typeUtils || require( "./TypeUtils.cjs" );
-const stringUtils = core.stringUtils || require( "./StringUtils.cjs" );
-const arrayUtils = core.arrayUtils || require( "./ArrayUtils.cjs" );
-const objectUtils = core.objectUtils || require( "./ObjectUtils.cjs" );
+const constants = core.constants;
+const typeUtils = core.typeUtils;
+const stringUtils = core.stringUtils;
+const arrayUtils = core.arrayUtils;
+const objectUtils = core.objectUtils;
 
 const jsonUtils = require( "./JsonUtils.cjs" );
 
@@ -49,18 +49,6 @@ const $scope = constants?.$scope || function()
     mod = Object.assign( mod, arrayUtils );
     mod = Object.assign( mod, objectUtils );
     mod = Object.assign( mod, jsonUtils );
-
-    Object.defineProperty( mod,
-                           "funcUtils",
-                           {
-                               configurable: false,
-                               enumerable: false,
-                               get: function()
-                               {
-                                   return require( "./FunctionUtils.cjs" );
-                               },
-                               set: function() {}
-                           } );
 
     if ( _ud !== typeof module )
     {

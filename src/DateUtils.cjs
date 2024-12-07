@@ -4,12 +4,13 @@ const utils = require( "./CommonUtils.cjs" );
  * Establish separate constants for each of the common utilities imported
  * @see ../src/CommonUtils.cjs
  */
-const constants = utils?.constants || require( "./Constants.cjs" );
-const typeUtils = utils?.typeUtils || require( "./TypeUtils.cjs" );
-const stringUtils = utils?.stringUtils || require( "./StringUtils.cjs" );
-const arrayUtils = utils?.arrayUtils || require( "./ArrayUtils.cjs" );
-const objectUtils = utils?.objectUtils || require( "./ObjectUtils.cjs" );
-const funcUtils = utils?.funcUtils || require( "./FunctionUtils.cjs" );
+const constants = utils?.constants;
+const typeUtils = utils?.typeUtils;
+const stringUtils = utils?.stringUtils;
+const arrayUtils = utils?.arrayUtils;
+const objectUtils = utils?.objectUtils;
+
+const funcUtils = require( "./FunctionUtils.cjs" );
 
 const _ud = constants?._ud || "undefined";
 
@@ -36,23 +37,17 @@ const $scope = utils?.$scope || function()
             objectUtils
         };
 
-    let IllegalArgumentError = constants.IllegalArgumentError;
+    const { lock, IllegalArgumentError } = constants;
 
-    let Result = typeUtils.Result;
+    const { Result, isDate, isNumber, isFunction } = typeUtils;
 
-    let isDate = typeUtils.isDate;
-    let isNumber = typeUtils.isNumber;
-    let isFunction = typeUtils.isFunction;
+    const { asString, asInt, toBool } = stringUtils;
 
-    let asString = stringUtils.asString;
-    let asInt = stringUtils.asInt;
-    let toBool = stringUtils.toBool;
+    const asArray = arrayUtils.asArray;
 
-    let asArray = arrayUtils.asArray;
+    const attempt = funcUtils.attempt;
 
-    let attempt = funcUtils.attempt;
-
-    const UNIT = Object.freeze(
+    const UNIT = lock(
         {
             MILLISECOND: 1,
             SECOND: 2,
@@ -67,9 +62,9 @@ const $scope = utils?.$scope || function()
             DAY_OF_WEEK: 11
         } );
 
-    const DateConstants = Object.freeze(
+    const DateConstants = lock(
         {
-            Months: Object.freeze(
+            Months: lock(
                 {
                     JANUARY: 0,
                     FEBRUARY: 1,
@@ -84,7 +79,7 @@ const $scope = utils?.$scope || function()
                     NOVEMBER: 10,
                     DECEMBER: 11
                 } ),
-            Days: Object.freeze(
+            Days: lock(
                 {
                     SUNDAY: 0,
                     MONDAY: 1,
@@ -94,7 +89,7 @@ const $scope = utils?.$scope || function()
                     FRIDAY: 5,
                     SATURDAY: 6
                 } ),
-            Occurrence: Object.freeze(
+            Occurrence: lock(
                 {
                     LAST: -1,
                     FIRST: 0,
@@ -108,12 +103,12 @@ const $scope = utils?.$scope || function()
                     NINTH: 8,
                     TENTH: 9
                 } ),
-            Direction: Object.freeze(
+            Direction: lock(
                 {
                     FUTURE: 0,
                     PAST: -1
                 } ),
-            Units: Object.freeze( UNIT ),
+            Units: lock( UNIT ),
             MILLISECONDS_PER_SECOND: 1_000,
             SECONDS_PER_MINUTE: 60,
             MINUTES_PER_HOUR: 60,
@@ -130,7 +125,7 @@ const $scope = utils?.$scope || function()
     const MILLIS_PER_WEEK = (DateConstants.DAYS_PER_WEEK * MILLIS_PER_DAY);
     const MILLIS_PER_YEAR = Math.floor( 365.25 * MILLIS_PER_DAY );
 
-    const MILLIS_PER = Object.freeze(
+    const MILLIS_PER = lock(
         {
             SECOND: MILLIS_PER_SECOND,
             MINUTE: MILLIS_PER_MINUTE,
@@ -183,7 +178,7 @@ const $scope = utils?.$scope || function()
                 {
                     let date = new Date( pDate );
                     date.setMinutes( date.getMinutes() + increment );
-                    return Object.freeze( date );
+                    return lock( date );
                 };
 
             case UNIT.HOUR:
@@ -191,7 +186,7 @@ const $scope = utils?.$scope || function()
                 {
                     let date = new Date( pDate );
                     date.setHours( date.getHours() + increment );
-                    return Object.freeze( date );
+                    return lock( date );
                 };
 
             case UNIT.DAY:
@@ -199,7 +194,7 @@ const $scope = utils?.$scope || function()
                 {
                     let date = new Date( pDate );
                     date.setDate( date.getDate() + increment );
-                    return Object.freeze( date );
+                    return lock( date );
                 };
 
             case UNIT.WEEK:
@@ -207,7 +202,7 @@ const $scope = utils?.$scope || function()
                 {
                     let date = new Date( pDate );
                     date.setDate( date.getDate() + (DateConstants.DAYS_PER_WEEK * increment) );
-                    return Object.freeze( date );
+                    return lock( date );
                 };
 
             case UNIT.YEAR:
@@ -215,7 +210,7 @@ const $scope = utils?.$scope || function()
                 {
                     let date = new Date( pDate );
                     date.setFullYear( date.getFullYear() + increment );
-                    return Object.freeze( date );
+                    return lock( date );
                 };
 
             case UNIT.MONTH:
@@ -223,7 +218,7 @@ const $scope = utils?.$scope || function()
                 {
                     let date = new Date( pDate );
                     date.setMonth( date.getMonth() + increment );
-                    return Object.freeze( date );
+                    return lock( date );
                 };
 
             case UNIT.DECADE:
@@ -235,14 +230,14 @@ const $scope = utils?.$scope || function()
                     {
                         date.setFullYear( date.getFullYear() + (2 * increment) );
                     }
-                    return Object.freeze( date );
+                    return lock( date );
                 };
 
         }
 
         return function( pDate )
         {
-            return Object.freeze( new Date( pDate.getTime() + millis ) );
+            return lock( new Date( pDate.getTime() + millis ) );
         };
     };
 
@@ -325,27 +320,27 @@ const $scope = utils?.$scope || function()
         {
             let month = new February( this.name, this.index );
             month.year = pYear;
-            return Object.freeze( month );
+            return lock( month );
         }
     }
 
-    const MONTHS_DATA = Object.freeze(
+    const MONTHS_DATA = lock(
         {
-            JANUARY: Object.freeze( new Month( "January", 0, 31 ) ),
-            FEBRUARY: Object.freeze( new February( "February", 1 ) ),
-            MARCH: Object.freeze( new Month( "March", 2, 31 ) ),
-            APRIL: Object.freeze( new Month( "April", 3, 30 ) ),
-            MAY: Object.freeze( new Month( "May", 4, 31 ) ),
-            JUNE: Object.freeze( new Month( "June", 5, 30 ) ),
-            JULY: Object.freeze( new Month( "July", 6, 31 ) ),
-            AUGUST: Object.freeze( new Month( "August", 7, 31 ) ),
-            SEPTEMBER: Object.freeze( new Month( "September", 8, 30 ) ),
-            OCTOBER: Object.freeze( new Month( "October", 9, 31 ) ),
-            NOVEMBER: Object.freeze( new Month( "November", 10, 30 ) ),
-            DECEMBER: Object.freeze( new Month( "December", 11, 31 ) )
+            JANUARY: lock( new Month( "January", 0, 31 ) ),
+            FEBRUARY: lock( new February( "February", 1 ) ),
+            MARCH: lock( new Month( "March", 2, 31 ) ),
+            APRIL: lock( new Month( "April", 3, 30 ) ),
+            MAY: lock( new Month( "May", 4, 31 ) ),
+            JUNE: lock( new Month( "June", 5, 30 ) ),
+            JULY: lock( new Month( "July", 6, 31 ) ),
+            AUGUST: lock( new Month( "August", 7, 31 ) ),
+            SEPTEMBER: lock( new Month( "September", 8, 30 ) ),
+            OCTOBER: lock( new Month( "October", 9, 31 ) ),
+            NOVEMBER: lock( new Month( "November", 10, 30 ) ),
+            DECEMBER: lock( new Month( "December", 11, 31 ) )
         } );
 
-    const months = Object.freeze( objectUtils.getEntries( MONTHS_DATA ) );
+    const months = lock( objectUtils.getEntries( MONTHS_DATA ) );
 
     const isValidDateArgument = function( pDate )
     {
@@ -411,7 +406,7 @@ const $scope = utils?.$scope || function()
             date.setSeconds( seconds );
             date.setMilliseconds( milliseconds );
 
-            return Object.freeze( date );
+            return lock( date );
         }
 
         return pDate;
@@ -499,14 +494,14 @@ const $scope = utils?.$scope || function()
     {
         const dates = sortDates( ...pDates );
 
-        return (dates?.length || 0) > 0 ? Object.freeze( new Date( dates[0] ) ) : null;
+        return (dates?.length || 0) > 0 ? lock( new Date( dates[0] ) ) : null;
     };
 
     const latest = function( ...pDates )
     {
         const dates = sortDates( ...pDates );
 
-        return (dates?.length || 0) > 0 ? Object.freeze( new Date( dates[dates.length - 1] ) ) : null;
+        return (dates?.length || 0) > 0 ? lock( new Date( dates[dates.length - 1] ) ) : null;
     };
 
     const numDaysInMonth = function( pMonth, pYear )
@@ -537,7 +532,7 @@ const $scope = utils?.$scope || function()
 
             date = _setFields( date, date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0, 0, 0 );
 
-            return Object.freeze( date );
+            return lock( date );
         }
 
         return pDate;
@@ -551,7 +546,7 @@ const $scope = utils?.$scope || function()
 
             date = _setFields( date, date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0, 0 );
 
-            return Object.freeze( date );
+            return lock( date );
         }
 
         return pDate;
@@ -565,7 +560,7 @@ const $scope = utils?.$scope || function()
 
             date = _setFields( date, date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999 );
 
-            return Object.freeze( date );
+            return lock( date );
         }
 
         return pDate;
@@ -633,7 +628,7 @@ const $scope = utils?.$scope || function()
                 date.setMilliseconds( 0 );
         }
 
-        return Object.freeze( new Date( date ) );
+        return lock( new Date( date ) );
     };
 
     const startOfWeek = function( pDate )
@@ -711,7 +706,7 @@ const $scope = utils?.$scope || function()
 
         date.setMilliseconds( date.getMilliseconds() - 1 );
 
-        return Object.freeze( new Date( date ) );
+        return lock( new Date( date ) );
     };
 
     const endOfWeek = function( pDate )
@@ -858,7 +853,7 @@ const $scope = utils?.$scope || function()
 
         occurrences = occurrences.filter( e => isDate( e ) && (e.getMonth() === month) );
 
-        return Object.freeze( occurrences.map( e => Object.freeze( e ) ) );
+        return lock( occurrences.map( e => lock( e ) ) );
     };
 
     const calculateNthOccurrenceOfDay = function( pYear, pMonth, pOccurrence, pDay )
@@ -911,7 +906,7 @@ const $scope = utils?.$scope || function()
         {
             if ( this.#exactDate )
             {
-                return Object.freeze( new Date( pYear, this.#month, this.#date ) );
+                return lock( new Date( pYear, this.#month, this.#date ) );
             }
 
             return calculateNthOccurrenceOfDay( pYear, this.#month, this.#occurrence, this.#weekday );
@@ -945,7 +940,7 @@ const $scope = utils?.$scope || function()
         constructor( pName, pDefinition, pMondayRule = function( pDate ) { return pDate; } )
         {
             this.#name = asString( pName );
-            this.#definition = Object.freeze( pDefinition );
+            this.#definition = lock( pDefinition );
             this.#mondayRule = pMondayRule;
         }
 
@@ -956,7 +951,7 @@ const $scope = utils?.$scope || function()
 
         get definition()
         {
-            return Object.freeze( this.#definition );
+            return lock( this.#definition );
         }
 
         _applyMondayRule( pDate )
@@ -975,7 +970,7 @@ const $scope = utils?.$scope || function()
                 }
             }
 
-            return Object.freeze( date || pDate );
+            return lock( date || pDate );
         }
 
         generate( pStartDate, pEndDate )
@@ -1008,7 +1003,7 @@ const $scope = utils?.$scope || function()
                 dates = dates.filter( date => isDate( date ) && (toTimestamp( date ) > toTimestamp( toMidnight( pStartDate ) )) && (toTimestamp( date ) <= toTimestamp( lastInstant( endDate ) )) );
             }
 
-            return dates.map( e => Object.freeze( e ) );
+            return dates.map( e => lock( e ) );
         }
     }
 
@@ -1098,20 +1093,20 @@ const $scope = utils?.$scope || function()
      * Christmas Day	December 25	A celebration of the birth of Christ
      */
 
-    const HOLIDAYS = Object.freeze(
+    const HOLIDAYS = lock(
         {
-            USA: Object.freeze(
+            USA: lock(
                 [
-                    Object.freeze( new Holiday( "New Year's Day", new HolidayExactDateDefinition( DateConstants.Months.JANUARY, 1 ), Holiday.MondayRules.DEFAULT ) ),
-                    Object.freeze( new Holiday( "Martin Luther King, Jr. Day", new HolidayRelativeDefinition( DateConstants.Months.JANUARY, DateConstants.Occurrence.THIRD, DateConstants.Days.MONDAY ), Holiday.MondayRules.DEFAULT ) ),
-                    Object.freeze( new Holiday( "President’s Day", new HolidayRelativeDefinition( DateConstants.Months.FEBRUARY, DateConstants.Occurrence.THIRD, DateConstants.Days.MONDAY ), Holiday.MondayRules.DEFAULT ) ),
-                    Object.freeze( new Holiday( "Memorial Day", new HolidayRelativeDefinition( DateConstants.Months.MAY, DateConstants.Occurrence.LAST, DateConstants.Days.MONDAY ), Holiday.MondayRules.DEFAULT ) ),
-                    Object.freeze( new Holiday( "Independence Day", new HolidayExactDateDefinition( DateConstants.Months.JULY, 4 ), Holiday.MondayRules.INDEPENDENCE_DAY ) ),
-                    Object.freeze( new Holiday( "Labor Day", new HolidayRelativeDefinition( DateConstants.Months.SEPTEMBER, DateConstants.Occurrence.FIRST, DateConstants.Days.MONDAY ), Holiday.MondayRules.DEFAULT ) ),
-                    Object.freeze( new Holiday( "Columbus Day", new HolidayRelativeDefinition( DateConstants.Months.OCTOBER, DateConstants.Occurrence.SECOND, DateConstants.Days.MONDAY ), Holiday.MondayRules.DEFAULT ) ),
-                    Object.freeze( new Holiday( "Veteran’s Day", new HolidayExactDateDefinition( DateConstants.Months.NOVEMBER, 11 ), Holiday.MondayRules.DEFAULT ) ),
-                    Object.freeze( new Holiday( "Thanksgiving", new HolidayRelativeDefinition( DateConstants.Months.NOVEMBER, DateConstants.Occurrence.FOURTH, DateConstants.Days.THURSDAY ), Holiday.MondayRules.NULL_RULE ) ),
-                    Object.freeze( new Holiday( "Christmas", new HolidayExactDateDefinition( DateConstants.Months.DECEMBER, 25 ), Holiday.MondayRules.NULL_RULE ) )
+                    lock( new Holiday( "New Year's Day", new HolidayExactDateDefinition( DateConstants.Months.JANUARY, 1 ), Holiday.MondayRules.DEFAULT ) ),
+                    lock( new Holiday( "Martin Luther King, Jr. Day", new HolidayRelativeDefinition( DateConstants.Months.JANUARY, DateConstants.Occurrence.THIRD, DateConstants.Days.MONDAY ), Holiday.MondayRules.DEFAULT ) ),
+                    lock( new Holiday( "President’s Day", new HolidayRelativeDefinition( DateConstants.Months.FEBRUARY, DateConstants.Occurrence.THIRD, DateConstants.Days.MONDAY ), Holiday.MondayRules.DEFAULT ) ),
+                    lock( new Holiday( "Memorial Day", new HolidayRelativeDefinition( DateConstants.Months.MAY, DateConstants.Occurrence.LAST, DateConstants.Days.MONDAY ), Holiday.MondayRules.DEFAULT ) ),
+                    lock( new Holiday( "Independence Day", new HolidayExactDateDefinition( DateConstants.Months.JULY, 4 ), Holiday.MondayRules.INDEPENDENCE_DAY ) ),
+                    lock( new Holiday( "Labor Day", new HolidayRelativeDefinition( DateConstants.Months.SEPTEMBER, DateConstants.Occurrence.FIRST, DateConstants.Days.MONDAY ), Holiday.MondayRules.DEFAULT ) ),
+                    lock( new Holiday( "Columbus Day", new HolidayRelativeDefinition( DateConstants.Months.OCTOBER, DateConstants.Occurrence.SECOND, DateConstants.Days.MONDAY ), Holiday.MondayRules.DEFAULT ) ),
+                    lock( new Holiday( "Veteran’s Day", new HolidayExactDateDefinition( DateConstants.Months.NOVEMBER, 11 ), Holiday.MondayRules.DEFAULT ) ),
+                    lock( new Holiday( "Thanksgiving", new HolidayRelativeDefinition( DateConstants.Months.NOVEMBER, DateConstants.Occurrence.FOURTH, DateConstants.Days.THURSDAY ), Holiday.MondayRules.NULL_RULE ) ),
+                    lock( new Holiday( "Christmas", new HolidayExactDateDefinition( DateConstants.Months.DECEMBER, 25 ), Holiday.MondayRules.NULL_RULE ) )
                 ] )
         } );
 
@@ -1244,7 +1239,7 @@ const $scope = utils?.$scope || function()
             // restore the hours, minutes, seconds, and milliseconds
             newDate = _setFields( newDate, newDate.getFullYear(), newDate.getMonth(), newDate.getDate(), hour, minute, second, millis );
 
-            return Object.freeze( newDate );
+            return lock( newDate );
         }
     };
 
@@ -1349,7 +1344,7 @@ const $scope = utils?.$scope || function()
 
             date = _setFields( date, date.getFullYear(), date.getMonth(), date.getDate(), hour, minute, second, millis );
 
-            return Object.freeze( date );
+            return lock( date );
         }
 
         return pDate;
@@ -1491,14 +1486,14 @@ const $scope = utils?.$scope || function()
 
     if ( _ud !== typeof module )
     {
-        module.exports = Object.freeze( mod );
+        module.exports = lock( mod );
     }
 
     if ( $scope() )
     {
-        $scope()[INTERNAL_NAME] = Object.freeze( mod );
+        $scope()[INTERNAL_NAME] = lock( mod );
     }
 
-    return Object.freeze( mod );
+    return lock( mod );
 
 }());

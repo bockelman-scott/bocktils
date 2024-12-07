@@ -49,11 +49,11 @@
  */
 const core = require( "./CoreUtils.cjs" );
 
-const constants = core.constants || require( "./Constants.cjs" );
-const typeUtils = core.typeUtils || require( "./TypeUtils.cjs" );
-const stringUtils = core.stringUtils || require( "./StringUtils.cjs" );
-const arrayUtils = core.arrayUtils || require( "./ArrayUtils.cjs" );
-const objectUtils = core.objectUtils || require( "./ObjectUtils.cjs" );
+const constants = core.constants;
+const typeUtils = core.typeUtils;
+const stringUtils = core.stringUtils;
+const arrayUtils = core.arrayUtils;
+const objectUtils = core.objectUtils;
 
 let _ud = constants._ud || "undefined";
 
@@ -87,57 +87,58 @@ const $scope = constants?.$scope || function()
             objectUtils
         };
 
-    let _mt_str = constants._mt_str;
-    let _dot = constants._dot;
-    let _colon = constants._colon;
-    let _semicolon = constants._semicolon;
-    let _dblqt = constants._dblqt;
+    const
+        {
+            _mt_str,
+            _dot,
+            _colon,
+            _semicolon,
+            _dblqt,
+            _str,
+            _obj,
+            _bool,
+            _num,
+            _big,
+            IterationCap,
+            populateOptions,
+            lock
+        } = constants;
 
-    let _str = constants._str;
-    let _obj = constants._obj;
-    let _bool = constants._bool;
-    let _num = constants._num;
-    let _big = constants._big;
+    const
+        {
+            isObject,
+            isArray,
+            isString,
+            isFunction,
+            isClass,
+            isDate,
+            isNumber,
+            isBoolean,
+            isMap,
+            isSet,
+            isNull,
+            isNonNullObject,
+            isNonNullValue,
+            toIterator
+        } = typeUtils;
 
-    let isObject = typeUtils.isObject;
-    let isArray = typeUtils.isArray;
-    let isString = typeUtils.isString;
-    let isFunction = typeUtils.isFunction;
-    let isClass = typeUtils.isClass;
-    let isDate = typeUtils.isDate;
-    let isNumber = typeUtils.isNumber;
-    let isBoolean = typeUtils.isBoolean;
-    let isMap = typeUtils.isMap;
-    let isSet = typeUtils.isSet;
+    const { asString, asInt, isBlank, isJson, lcase, rightOfLast } = stringUtils;
 
-    let isNull = typeUtils.isNull;
-    let isNonNullObject = typeUtils.isNonNullObject;
-    let isNonNullValue = typeUtils.isNonNullValue;
+    const { asArray, pruneArray, unique } = arrayUtils;
 
-    const toIterator = typeUtils.toIterator;
-
-    let asString = stringUtils.asString;
-    let asInt = stringUtils.asInt;
-    let isBlank = stringUtils.isBlank;
-    let isJson = stringUtils.isJson;
-    let lcase = stringUtils.lcase;
-    let rightOfLast = stringUtils.rightOfLast;
-
-    let asArray = arrayUtils.asArray;
-    let pruneArray = arrayUtils.pruneArray;
-    let unique = arrayUtils.unique;
-
-    let isPopulated = objectUtils.isPopulatedObject || objectUtils.isPopulated;
-    let firstValidObject = objectUtils.firstValidObject;
-    let detectCycles = objectUtils.detectCycles;
-    let ObjectEntry = objectUtils.ObjectEntry;
-    let IterationCap = objectUtils.IterationCap;
+    const
+        {
+            isPopulated = objectUtils.isPopulatedObject || objectUtils.isPopulated,
+            firstValidObject,
+            detectCycles,
+            ObjectEntry
+        } = objectUtils;
 
     const konsole = console;
 
     const PRIOR_NODE = "../";
 
-    const DEFAULT_EXCLUSIONS = Object.freeze( ["constructor", "prototype", "toJson", "toObject", "global", "this", "arguments", "_arguments"] );
+    const DEFAULT_EXCLUSIONS = lock( ["constructor", "prototype", "toJson", "toObject", "global", "this", "arguments", "_arguments"] );
 
     const MAX_RUN_TIME = 5_000;
 
@@ -155,7 +156,7 @@ const $scope = constants?.$scope || function()
         const len = asInt( pLength, paths?.length );
         const repeats = asInt( pRepetitions, paths?.length );
 
-        return `An infinite loop was detected at ${paths.join( "->" )}. Loops are detected when sequences of ${len} paths repeat ${repeats} times or more.`;
+        return `An infinite loop was detected at ${paths.join( "->" )}. \nLoops are detected when sequences of ${len} paths repeat ${repeats} times or more.`;
     };
 
     const log =
@@ -188,8 +189,8 @@ const $scope = constants?.$scope || function()
             key: NO_VARIABLE_DEFINED
         };
 
-    const RX_INTERPOLATION_TOKEN_START = Object.freeze( /^\$\{/ );
-    const RX_INTERPOLATION_TOKEN_END = Object.freeze( /}$/ );
+    const RX_INTERPOLATION_TOKEN_START = lock( /^\$\{/ );
+    const RX_INTERPOLATION_TOKEN_END = lock( /}$/ );
 
     const DEFAULT_REPLACER = function( key, val )
     {
@@ -234,7 +235,11 @@ const $scope = constants?.$scope || function()
             onError: log.Warning,
             trimStrings: false,
             reviver: DEFAULT_REVIVER,
-            replacer: DEFAULT_REPLACER
+            replacer: DEFAULT_REPLACER,
+            formatDates: false,
+            dateTimeFormatter: null,
+            "NaN": "NaN",
+            "Infinity": "Infinity"
         };
 
     const isValidKey = function( pString )
@@ -243,9 +248,9 @@ const $scope = constants?.$scope || function()
         return !( !RX_INTERPOLATION_TOKEN_START.test( key ) || !RX_INTERPOLATION_TOKEN_END.test( key ));
     };
 
-    const RX_CONTAINS_INTERPOLATION_KEY = Object.freeze( /\s*\.*\s*(\$\{(\(@?<?(path|var)>?;)@?base:@?<?(root|this|scope|global)>?\)\s*:\s*(.+)})\s*\.*\s*/dgi );
+    const RX_CONTAINS_INTERPOLATION_KEY = lock( /\s*\.*\s*(\$\{(\(@?<?(path|var)>?;)@?base:@?<?(root|this|scope|global)>?\)\s*:\s*(.+)})\s*\.*\s*/dgi );
 
-    const RX_INTERPOLATION_KEY = Object.freeze( /^\$\{(\(@?<?(path|var)>?;)@?base:@?<?(root|this|scope|global)>?\)\s*:\s*(.+)}$/dgi );
+    const RX_INTERPOLATION_KEY = lock( /^\$\{(\(@?<?(path|var)>?;)@?base:@?<?(root|this|scope|global)>?\)\s*:\s*(.+)}$/dgi );
 
     const getInterpolationRegularExpression = function()
     {
@@ -281,7 +286,7 @@ const $scope = constants?.$scope || function()
             arr.push( key, parts[0], type, base, variable );
         }
 
-        return Object.freeze( arr );
+        return lock( arr );
     };
 
     const _clean = function( pString )
@@ -402,7 +407,7 @@ const $scope = constants?.$scope || function()
 
         get parts()
         {
-            return Object.freeze( this.#parts || parseKey( this.key ) );
+            return lock( this.#parts || parseKey( this.key ) );
         }
 
         get type()
@@ -746,7 +751,7 @@ const $scope = constants?.$scope || function()
                 this.#base = asString( parsed.base || "root", true );
                 this.#variable = asString( parsed.variable || NO_VARIABLE_DEFINED, true );
 
-                this.#parts = Object.freeze( parsed );
+                this.#parts = lock( parsed );
             }
         }
 
@@ -762,7 +767,7 @@ const $scope = constants?.$scope || function()
                 return this.#parts;
             }
 
-            this.#parts = Object.freeze( parseKey( this.key ) );
+            this.#parts = lock( parseKey( this.key ) );
         }
 
         get type()
@@ -903,7 +908,7 @@ const $scope = constants?.$scope || function()
         {
             let arr = [].concat( ...(asArray( this.#segments || InterpolatableValue.parse( this.text ) || [] )) );
             arr = arr.sort( Segment.Comparator );
-            return Object.freeze( arr );
+            return lock( arr );
         }
 
         static parse( pText )
@@ -998,7 +1003,7 @@ const $scope = constants?.$scope || function()
 
         constructor( pScope, pRoot, pCurrent, pOptions = DEFAULT_OPTIONS_FOR_JSON, pResolved = new ResolvedMap() )
         {
-            this.#options = Object.assign( Object.assign( {}, DEFAULT_OPTIONS_FOR_JSON ), pOptions || {} );
+            this.#options = lock( populateOptions( pOptions, DEFAULT_OPTIONS_FOR_JSON ) );
 
             this.#scope = pScope || this.#options?.scope || $scope();
             this.#rootNode = isNonNullObject( pRoot ) ? pRoot : firstValidObject( this.#options?.root, pCurrent, this.#scope );
@@ -1207,10 +1212,16 @@ const $scope = constants?.$scope || function()
         return null;
     };
 
+    const TIME_LIMIT_OPTIONS =
+        {
+            startTime: null,
+            maxRunTime: MAX_RUN_TIME
+        };
+
     // never allow this function to run longer than 5 seconds
     const _exceededTimeLimit = function( pOptions, pMaxRunTime )
     {
-        const options = (isDate( pOptions ) ? { startTime: pOptions } : pOptions) || Object.assign( {}, pOptions || {} );
+        const options = populateOptions( (isDate( pOptions ) ? { startTime: pOptions } : pOptions ), TIME_LIMIT_OPTIONS );
 
         const now = new Date().getTime();
 
@@ -1251,7 +1262,7 @@ const $scope = constants?.$scope || function()
 
     function _funcToJson( pFunction, pOptions )
     {
-        const options = Object.assign( {}, pOptions || DEFAULT_OPTIONS_FOR_JSON );
+        const options = populateOptions( pOptions, DEFAULT_OPTIONS_FOR_JSON );
 
         if ( options?.omitFunctions )
         {
@@ -1273,7 +1284,7 @@ const $scope = constants?.$scope || function()
 
     function _dateToJson( pDate, pOptions )
     {
-        const options = Object.assign( {}, pOptions || {} );
+        const options = populateOptions( pOptions, DEFAULT_OPTIONS_FOR_JSON );
 
         const _formatDates = options.formatDates || false;
 
@@ -1299,9 +1310,9 @@ const $scope = constants?.$scope || function()
 
     function _boolToJson( pBoolean, pOptions )
     {
-        const options = Object.assign( {}, pOptions || DEFAULT_OPTIONS_FOR_JSON );
+        const options = populateOptions( pOptions, DEFAULT_OPTIONS_FOR_JSON );
 
-        let jsonString = JSON.stringify( pBoolean, pOptions?.replacer || DEFAULT_REPLACER );
+        let jsonString = JSON.stringify( pBoolean, options?.replacer || DEFAULT_REPLACER );
 
         if ( true === options?.quoteBooleans && !/"true"|"false"/.test( jsonString ) )
         {
@@ -1313,7 +1324,7 @@ const $scope = constants?.$scope || function()
 
     function _numToJson( pNum, pOptions )
     {
-        const options = Object.assign( {}, pOptions || DEFAULT_OPTIONS_FOR_JSON );
+        const options = populateOptions( pOptions, DEFAULT_OPTIONS_FOR_JSON );
 
         let jsonString = _mt_str;
 
@@ -1440,7 +1451,7 @@ const $scope = constants?.$scope || function()
                              pRoot = null,
                              pDepth = 0 )
     {
-        const options = Object.assign( Object.assign( {}, DEFAULT_OPTIONS_FOR_JSON ), pOptions || DEFAULT_OPTIONS_FOR_JSON );
+        const options = populateOptions( pOptions, DEFAULT_OPTIONS_FOR_JSON );
 
         const handleNull = _resolveNullHandler( options );
 
@@ -1650,14 +1661,14 @@ const $scope = constants?.$scope || function()
             return asArray( json );
         }
 
-        const options = Object.assign( Object.assign( {}, DEFAULT_OPTIONS_FOR_JSON ), pOptions || DEFAULT_OPTIONS_FOR_JSON );
+        const options = populateOptions( pOptions, DEFAULT_OPTIONS_FOR_JSON );
 
         const onError = isFunction( options?.onError ) ? options?.onError : log.Warning;
 
         let visited = _resolvedVisitedSet( options?.visited, options );
         options.visited = visited;
 
-        let resolved = _resolveResolvedMap( options.resolved, options );
+        let resolved = _resolveResolvedMap( options?.resolved, options );
         options.resolved = resolved;
 
         let paths = asArray( options.paths || [] );
@@ -1726,27 +1737,14 @@ const $scope = constants?.$scope || function()
 
     if ( _ud !== typeof module )
     {
-        module.exports = Object.freeze( mod );
+        module.exports = lock( mod );
     }
 
     if ( $scope() )
     {
-        $scope()[INTERNAL_NAME] = Object.freeze( mod );
+        $scope()[INTERNAL_NAME] = lock( mod );
     }
 
-    // add this functionality to the StringUtils.asString function, if it exists
-    try
-    {
-        if ( stringUtils && stringUtils.asString )
-        {
-            stringUtils.asString.stringify = asJson;
-        }
-    }
-    catch( ex )
-    {
-        // never mind
-    }
-
-    return Object.freeze( mod );
+    return lock( mod );
 
 }());

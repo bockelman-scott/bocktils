@@ -38,17 +38,21 @@
     }
 
     /**
+     * An array of this module's dependencies
+     * which are re-exported with this module,
+     * so if you want to, you can just import the leaf module
+     * and then use the other utilities as properties of that module
+     */
+    const dependencies =
+        {
+            // this module has no dependencies
+        };
+
+    /**
      * An alias for the console to reduce lint-ing alerts for any reasonable use of console.log
      * @type {console | Console}
      */
     const konsole = console;
-
-    /**
-     * Should return the working directory as returned from the process if running on a server-side platform.
-     * Return . for other environments
-     * @type {string|string}
-     */
-    const currentDirectory = (_ud !== typeof process) ? process.cwd() : ((_ud !== typeof __dirname) ? __dirname : ".");
 
     /**
      * This is the default limit for recursive functions that cannot have a base-case to escape infinite execution
@@ -328,6 +332,31 @@
     }
 
     /**
+     * Calls Object.freeze on any defined non-null value specified and returns the same value, now frozen
+     *
+     * @param pObject {any} an object or array (or any other value) you want to freeze
+     * @param pOptions {object} an object describing how to handle undefined and null values
+     *
+     * @returns {Function|Readonly<{}>|null|Readonly<*[]>|undefined}
+     */
+    const lock = function( pObject, pOptions = IMMUTABLE_COPY_OPTIONS )
+    {
+        const options = populateOptions( pOptions, IMMUTABLE_COPY_OPTIONS );
+
+        if ( _ud === typeof pObject )
+        {
+            return options?.undefinedToNull ? null : (options?.undefinedToEmptyObject ? EMPTY_OBJECT : options?.undefinedToEmptyArray ? EMPTY_ARRAY : undefined);
+        }
+
+        if ( null === pObject )
+        {
+            return options?.nullToEmptyObject ? EMPTY_OBJECT : (options.nullToEmptyArray ? EMPTY_OBJECT : null);
+        }
+
+        return Object.freeze( pObject );
+    };
+
+    /**
      * Returns a deep copy of the value specified.
      * Used by localCopy and immutableCopy functions.
      * This function should not be exported.
@@ -358,7 +387,7 @@
 
         if ( stack.length > MAX_STACK_SIZE )
         {
-            return freeze ? Object.freeze( clone ) : clone;
+            return freeze ? lock( clone ) : clone;
         }
 
         switch ( typeof pObject )
@@ -379,7 +408,7 @@
                 return Boolean( pObject );
 
             case _fun:
-                return (freeze ? Object.freeze( pObject ) : pObject);
+                return (freeze ? lock( pObject ) : pObject);
 
             case _symbol:
                 return pObject;
@@ -460,7 +489,7 @@
                 }
         }
 
-        return freeze ? Object.freeze( clone ) : clone;
+        return freeze ? lock( clone ) : clone;
     };
 
     /**
@@ -878,17 +907,6 @@
     }
 
     IllegalArgumentError.prototype.name = "IllegalArgumentError";
-
-    /**
-     * An array of this module's dependencies
-     * which are re-exported with this module,
-     * so if you want to, you can just import the leaf module
-     * and then use the other utilities as properties of that module
-     */
-    const dependencies =
-        {
-            // this module has no dependencies
-        };
 
     const _coerce = function( pValue, pType )
     {
@@ -1536,8 +1554,6 @@
             _rxLeadingWhitespace,
             _rxTrailingWhitespace,
             _rxVariableToken,
-            _currentDirectory: currentDirectory,
-            _cwd: currentDirectory,
             DEFAULT_MAX_ITERATIONS: MAX_ITERATIONS,
             DEFAULT_MAX_STACK_DEPTH,
             REG_EXP,
@@ -1557,6 +1573,7 @@
             isReadOnly,
             localCopy,
             immutableCopy,
+            lock,
             deepFreeze,
             calculateNumberFormattingSymbols,
             funcToString

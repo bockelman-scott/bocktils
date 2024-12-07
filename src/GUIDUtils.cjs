@@ -24,12 +24,6 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
-    let _mt_str = constants._mt_str || "";
-
-    let asString = stringUtils.asString || function( s ) { return (_mt_str + s).trim(); };
-    let isBlank = stringUtils.isBlank || function( s ) { return _mt_str === asString( s, true ); };
-    let asInt = stringUtils.asInt || function( s ) { return parseInt( asString( s, true ) ); };
-
     /**
      * An array of this module's dependencies
      * which are re-exported with this module,
@@ -45,49 +39,56 @@ const $scope = constants?.$scope || function()
             crypto
         };
 
+
+    const { _mt_str, populateOptions, lock } = constants;
+
+    const { asString, isBlank, asInt } = stringUtils;
+
     const MAX_CACHED_VALUES = 10_000;
     const DEFAULT_CACHED_VALUES = 1_000;
 
-    const RandomUUIDOptions = { disableEntropyCache: true };
+    const RandomUUIDOptions = { disableEntropyCache: true, preload: false, numPreload: 0 };
 
     // noinspection SpellCheckingInspection
     class GUIDMaker
     {
+        #options;
+        #cached;
+
         constructor( pOptions )
         {
-            this._options = Object.assign( {}, RandomUUIDOptions );
-            this._options = Object.assign( this._options, pOptions || {} );
+            this.#options = lock( populateOptions( pOptions, RandomUUIDOptions ) );
 
-            this._cached = [];
+            this.#cached = [];
 
-            if ( this._options.preload )
+            if ( this.#options.preload )
             {
-                let num = Math.max( 10, Math.min( MAX_CACHED_VALUES, asInt( this._options.numPreload, DEFAULT_CACHED_VALUES ) || DEFAULT_CACHED_VALUES ) );
+                let num = Math.max( 10, Math.min( MAX_CACHED_VALUES, asInt( this.#options.numPreload, DEFAULT_CACHED_VALUES ) || DEFAULT_CACHED_VALUES ) );
 
                 for( let i = num; i--; )
                 {
-                    this._cached.push( this._mytselplick() );
+                    this.#cached.push( asString( this.uuid(), true ) );
                 }
             }
         }
 
         get options()
         {
-            return Object.assign( {}, this._options || RandomUUIDOptions );
+            return Object.assign( {}, this.#options || RandomUUIDOptions );
         }
 
-        _mytselplick()
+        uuid()
         {
-            return asString( crypto.randomUUID( this.options ) );
+            return crypto.randomUUID( this.options );
         }
 
         guid()
         {
             let value = _mt_str;
 
-            if ( this._cached.length > 0 )
+            if ( this.#cached.length > 0 )
             {
-                value = asString( this._cached.shift(), true );
+                value = asString( this.#cached.shift(), true );
             }
 
             if ( !isBlank( value ) )
@@ -95,7 +96,7 @@ const $scope = constants?.$scope || function()
                 return asString( value, true );
             }
 
-            value = asString( this._mytselplick(), true );
+            value = asString( this.uuid(), true );
 
             if ( !isBlank( value ) )
             {
@@ -119,7 +120,7 @@ const $scope = constants?.$scope || function()
             },
             uuid: function()
             {
-                return asString( crypto.randomUUID( RandomUUIDOptions ) );
+                return crypto.randomUUID( RandomUUIDOptions );
             }
         };
 

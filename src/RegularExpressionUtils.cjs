@@ -61,35 +61,19 @@ const $scope = constants?.$scope || function()
 
     /**
      * The following variable declarations are used
-     * to help your IDE recognize shorthand usages of values imported into this scope
      */
-    let _mt_str = constants._mt_str || "";
-    let _mt_chr = constants._mt_chr || "";
+    const { _mt_str, _mt_chr, _str, _obj, _fun, populateOptions, lock } = constants;
 
-    let _str = constants._str || "string";
-    let _obj = constants._obj || "object";
-    let _fun = constants._fun || "function";
+    const { isString, isRegExp, isObject, isFunction } = typeUtils;
 
-    let isString = typeUtils.isString || function( s ) { return _str === typeof s; };
-    let isRegExp = typeUtils.isRegExp || function( s ) { return s instanceof RegExp; };
-    let isObject = typeUtils.isObject || function( s ) { return _obj === typeof s; };
-    let isFunction = typeUtils.isFunction || function( s ) { return _fun === typeof s; };
+    const { asString, asInt, isBlank, lcase, ucase } = stringUtils;
 
-    let asString = stringUtils.asString;
-    let asInt = stringUtils.asInt;
-
-    let isBlank = stringUtils.isBlank;
-
-    let lcase = stringUtils.lcase;
-    let ucase = stringUtils.ucase;
-
-    let asArray = arrayUtils.asArray;
-    let unique = arrayUtils.unique;
+    const { asArray, unique } = arrayUtils;
 
     /**
      * Constants for regular expression flags
      */
-    const FLAGS = Object.freeze(
+    const FLAGS = lock(
         {
             GLOBAL: "g",
             INSENSITIVE: "i",
@@ -104,7 +88,7 @@ const $scope = constants?.$scope || function()
      * An array of the valid Regular Expression flags
      * @type {(string)[]}
      */
-    const VALID_FLAGS = Object.freeze( [FLAGS.GLOBAL, FLAGS.INSENSITIVE, FLAGS.WITH_INDICES, FLAGS.DOTALL, FLAGS.MULTILINE, FLAGS.STICKY, FLAGS.UNICODE] );
+    const VALID_FLAGS = lock( [FLAGS.GLOBAL, FLAGS.INSENSITIVE, FLAGS.WITH_INDICES, FLAGS.DOTALL, FLAGS.MULTILINE, FLAGS.STICKY, FLAGS.UNICODE] );
 
     /**
      * Returns an array of only those strings which are valid RegExp flags
@@ -175,308 +159,308 @@ const $scope = constants?.$scope || function()
      * to receive a fresh and mutable instance of the RegExp.
      *
      */
-    const REGULAR_EXPRESSIONS = Object.freeze(
+    const REGULAR_EXPRESSIONS = lock(
         {
             /**
              * Matches a regular expression literal
              */
-            REGEX: Object.freeze( /^\/.+\/[gidsmyu]*$/ ),
+            REGEX: lock( /^\/.+\/[gidsmyu]*$/ ),
 
             /**
              * Matches a Globally Unique Identifier (GUID)
              */
-            GUID: Object.freeze( /^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$/i ),
+            GUID: lock( /^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$/i ),
 
             /**
              * Matches a single literal 'dot'
              */
-            DOT: Object.freeze( /\./ ),
+            DOT: lock( /\./ ),
 
             /**
              * Matches two repeated slash characters.
              * Useful for replacing duplicated slashes in a path for example.
              */
-            DOUBLE_SLASH: Object.freeze( /\/\// ),
+            DOUBLE_SLASH: lock( /\/\// ),
 
             /**
              * Matches one or more newline characters at the start of a character string
              */
-            LEADING_NEWLINE: Object.freeze( /^(\r\n)+|^\n+|^\r+/ ),
+            LEADING_NEWLINE: lock( /^(\r\n)+|^\n+|^\r+/ ),
 
             /**
              * Matches one or more newline characters at the end of a character string
              */
-            TRAILING_NEWLINE: Object.freeze( /(\r\n)+$|\n+$|\r+$/ ),
+            TRAILING_NEWLINE: lock( /(\r\n)+$|\n+$|\r+$/ ),
 
             /**
              * Matches one or more semicolons ';' at the end of a character string
              */
-            TRAILING_SEMICOLON: Object.freeze( /;+$|(;((\r\n)+|\n+)+)$/ ),
+            TRAILING_SEMICOLON: lock( /;+$|(;((\r\n)+|\n+)+)$/ ),
 
             /**
              * Matches all whitespace characters at the start of a character string
              */
-            LEADING_WHITESPACE: Object.freeze( /^\s+/ ),
+            LEADING_WHITESPACE: lock( /^\s+/ ),
 
             /**
              * Matches all whitespace characters at the end of a character string
              */
-            TRAILING_WHITESPACE: Object.freeze( /\s+$/ ),
+            TRAILING_WHITESPACE: lock( /\s+$/ ),
 
             /**
              * Matches the character string, '${', anywhere in a character string
              */
-            VARIABLE_TOKEN_START: Object.freeze( /\$\{/ ),
+            VARIABLE_TOKEN_START: lock( /\$\{/ ),
 
             /**
              * Matches the character string, '}', anywhere in a character string
              */
-            VARIABLE_TOKEN_END: Object.freeze( /}/ ),
+            VARIABLE_TOKEN_END: lock( /}/ ),
 
             /**
              * Matches an interpolated variable such as ${myValue}
              */
-            VARIABLE_TOKEN: Object.freeze( /\{[^}{]+}/ ),
+            VARIABLE_TOKEN: lock( /\{[^}{]+}/ ),
 
             /**
              * Matches a single slash, '/', character anywhere is a string
              */
-            SLASH: Object.freeze( /\// ),
+            SLASH: lock( /\// ),
 
             /**
              * Matches one or more slashes at the end of a character string.
              * Useful for trimming trailing slashes from paths or URLs
              */
-            LEADING_OR_TRAILING_SLASH: Object.freeze( /^\/+|\/+$/ ),
+            LEADING_OR_TRAILING_SLASH: lock( /^\/+|\/+$/ ),
 
             /**
              * Matches a single backslash, '\', character anywhere is a string
              */
-            BACKSLASH: Object.freeze( /\\/ ),
+            BACKSLASH: lock( /\\/ ),
 
             /**
              * Matches the literal dollar symbol, $, anywhere in a character string
              */
-            DOLLAR_SYMBOL: Object.freeze( /\$/ ),
+            DOLLAR_SYMBOL: lock( /\$/ ),
 
             /**
              * Matches the last sequence of characters starting with a dot, followed by alphanumeric characters.
              * Useful for extracting a file extension
              */
-            EXTENSION: Object.freeze( /\.\w+$/ ),
+            EXTENSION: lock( /\.\w+$/ ),
 
             /**
              * Matches either a colon or an equals sign.
              * Useful when parsing source code or json text
              */
-            ASSIGNMENT_OPERATOR: Object.freeze( /[=:]/ ),
+            ASSIGNMENT_OPERATOR: lock( /[=:]/ ),
 
             /**
              * Matches either a comma or a semicolon anywhere in a string.
              * Useful for splitting or joining values
              */
-            SEPARATOR: Object.freeze( /[,;]/ ),
+            SEPARATOR: lock( /[,;]/ ),
 
             /**
              * Matches the carriage return + newline sequence used as a newline in non-unix environments.
              */
-            WINDOWS_NEWLINE: Object.freeze( /\r\n/ ),
+            WINDOWS_NEWLINE: lock( /\r\n/ ),
 
             /**
              * Matches the '\n' character used as a newline in unix/linux environments
              */
-            NEWLINE: Object.freeze( /\n/ ),
+            NEWLINE: lock( /\n/ ),
 
             /**
              * Matches two or more repeated newlines.
              * Useful for removing extraneous whitespace
              */
-            REDUNDANT_NEWLINES: Object.freeze( /\n{2,}|(\r\n){2,}/ ),
+            REDUNDANT_NEWLINES: lock( /\n{2,}|(\r\n){2,}/ ),
 
             /**
              * Matches the source text corresponding to a function signature.
              * Useful for parsing source code
              */
-            SIMPLE_FUNCTION_SIGNATURE: Object.freeze( /(function)\s*([^(]*)*\(([^)]*)\)/ ),
+            SIMPLE_FUNCTION_SIGNATURE: lock( /(function)\s*([^(]*)*\(([^)]*)\)/ ),
 
             /**
              * Matches the source text corresponding to an asynchronous function signature.
              * Useful for parsing source code
              */
-            SIMPLE_ASYNC_FUNCTION_SIGNATURE: Object.freeze( /(async)\s*(function)\s*([^(]*)*\(([^)]*)\)/ ),
+            SIMPLE_ASYNC_FUNCTION_SIGNATURE: lock( /(async)\s*(function)\s*([^(]*)*\(([^)]*)\)/ ),
 
             /**
              * Matches the first integer portion of a string
              */
-            INTEGER: Object.freeze( /(-?\d+)/ ),
+            INTEGER: lock( /(-?\d+)/ ),
 
             /**
              * Matches only strings that represent a whole number value
              */
-            VALID_INTEGER: Object.freeze( /^(-?\d+)$/ ),
+            VALID_INTEGER: lock( /^(-?\d+)$/ ),
 
             /**
              * Matches the first floating point value portion of a string
              */
-            FLOAT: Object.freeze( /(-?\d+(\.\d+)?)/ ),
+            FLOAT: lock( /(-?\d+(\.\d+)?)/ ),
 
             /**
              * Matches only strings that represent a valid number
              */
-            VALID_FLOAT: Object.freeze( /^(-?\d+(\.\d+)?)$/ ),
+            VALID_FLOAT: lock( /^(-?\d+(\.\d+)?)$/ ),
 
             /**
              * Matches any character that is not in the set [0,1,2,3,4,5,6,7,8,9]
              */
-            NON_INTEGER_DIGIT: Object.freeze( /\D/ ),
+            NON_INTEGER_DIGIT: lock( /\D/ ),
 
             /**
              * Matches any character that is not a numeric digit or decimal point
              */
-            NON_DIGIT: Object.freeze( /[^\d.]/ ),
+            NON_DIGIT: lock( /[^\d.]/ ),
 
             /**
              * Matches a string that begins and ends with a double-quote character
              */
-            DOUBLE_QUOTED_STRING: Object.freeze( /^"([^"]|[\\"])*"$/ ),
+            DOUBLE_QUOTED_STRING: lock( /^"([^"]|[\\"])*"$/ ),
 
             /**
              * Matches a string that begins and ends with a single-quote character
              */
-            SINGLE_QUOTED_STRING: Object.freeze( /^'([^']|[\\'])*'$/ ),
+            SINGLE_QUOTED_STRING: lock( /^'([^']|[\\'])*'$/ ),
 
             /**
              * Matches a string that begins and ends with either a double-quote, single-quote, or back-tick character
              */
-            QUOTED_STRING: Object.freeze( /^(?<quote>['"`])([^\1]|[\\\1])*\1$/ ),
+            QUOTED_STRING: lock( /^(?<quote>['"`])([^\1]|[\\\1])*\1$/ ),
 
             /**
              * Matches spaces at the start of a character sequence
              */
-            LEFT_TRIM: Object.freeze( /^ +((\S+\s*)*)/ ),
+            LEFT_TRIM: lock( /^ +((\S+\s*)*)/ ),
 
             /**
              * Matches spaces at the end of a character sequence
              */
-            RIGHT_TRIM: Object.freeze( /((\s*\S+)*) +$/ ),
+            RIGHT_TRIM: lock( /((\s*\S+)*) +$/ ),
 
             /**
              * Matches all whitespace at the start of a character sequence
              */
-            LEFT_TRIM_WHITESPACE: Object.freeze( /^\s+((\S+\s*)*)/ ),
+            LEFT_TRIM_WHITESPACE: lock( /^\s+((\S+\s*)*)/ ),
 
             /**
              * Matches all whitespace at the end of a character sequence
              */
-            RIGHT_TRIM_WHITESPACE: Object.freeze( /((\s*\S+)*)\s+$/ ),
+            RIGHT_TRIM_WHITESPACE: lock( /((\s*\S+)*)\s+$/ ),
 
             /**
              * Matches repeated spaces anywhere in a character sequence
              */
-            REDUNDANT_SPACE: Object.freeze( / {2,}/ ),
+            REDUNDANT_SPACE: lock( / {2,}/ ),
 
             /**
              * Matches repeated whitespace anywhere in a character sequence
              */
-            REDUNDANT_WHITESPACE: Object.freeze( /[ \s]{2,}/ ),
+            REDUNDANT_WHITESPACE: lock( /[ \s]{2,}/ ),
 
             /**
              * Matches an opening parenthesis character anywhere in a string
              */
-            OPEN_PAREN: Object.freeze( /\(/ ),
+            OPEN_PAREN: lock( /\(/ ),
 
             /**
              * Matches a closing parenthesis character anywhere in a string
              */
-            CLOSE_PAREN: Object.freeze( /\)/ ),
+            CLOSE_PAREN: lock( /\)/ ),
 
             /**
              * Matches an opening parenthesis character at the start of a string
              */
-            START_OPEN_PAREN: Object.freeze( /^\(/ ),
+            START_OPEN_PAREN: lock( /^\(/ ),
 
             /**
              * Matches a closing parenthesis character at the end of a string
              */
-            END_CLOSE_PAREN: Object.freeze( /\)$/ ),
+            END_CLOSE_PAREN: lock( /\)$/ ),
 
             /**
              * Matches any of the characters that perform simple mathematics operations,
              * that is, addition, multiplication, division, or subtraction
              */
-            MATHS_OPERATORS: Object.freeze( /[+*/-]/ ),
+            MATHS_OPERATORS: lock( /[+*/-]/ ),
 
             /**
              * Matches a simple mathematics expression, such as '3 * 2' or ( 3 * 2 )
              */
-            MATHS_EXPRESSION: Object.freeze( /(\(\s*(-?\d+(\.?\d+)?)\s*([+*/-])\s*(-?\d+(\.?\d+)?)\s*\))|(\s*(-?\d+(\.?\d+)?)\s*([+*/-])\s*(-?\d+(\.?\d+)?)\s*)|\s*(-?\d+(\.?\d+)?)\s*/ ),
+            MATHS_EXPRESSION: lock( /(\(\s*(-?\d+(\.?\d+)?)\s*([+*/-])\s*(-?\d+(\.?\d+)?)\s*\))|(\s*(-?\d+(\.?\d+)?)\s*([+*/-])\s*(-?\d+(\.?\d+)?)\s*)|\s*(-?\d+(\.?\d+)?)\s*/ ),
 
             /**
              * Matches the literal question-mark character, '?' anywhere in a character string.
              * Useful for parsing URLs
              */
-            QUERY_STRING_SEPARATOR: Object.freeze( /\?/ ),
+            QUERY_STRING_SEPARATOR: lock( /\?/ ),
 
             /**
              * Matches the literal question-mark character, '?' anywhere in a character string.
              * Useful when using a '?' character could be ambiguous in a regular expression
              */
-            QUESTION_MARK: Object.freeze( /\?/ ),
+            QUESTION_MARK: lock( /\?/ ),
 
             /**
              * Matches the literal hash, or pound, character, '#' anywhere in a character string.
              * Useful for parsing URLs
              */
-            URL_LOCATION_HASH_SEPARATOR: Object.freeze( /#/ ),
+            URL_LOCATION_HASH_SEPARATOR: lock( /#/ ),
 
             /**
              * Matches the literal hash, or pound, character, '#' anywhere in a character string.
              * A shorter alias for URL_LOCATION_HASH_SEPARATOR
              */
-            HASH: Object.freeze( /#/ ),
+            HASH: lock( /#/ ),
 
             /**
              * Matches the literal hash, or pound, character, '#' at the start of a character string.
              * Useful for parsing hashtags
              */
-            LEADING_HASH: Object.freeze( /^#/ ),
+            LEADING_HASH: lock( /^#/ ),
 
             /**
              * Matches a leading dot (extension separator)
              */
-            LEADING_DOT: Object.freeze( /^\./ ),
+            LEADING_DOT: lock( /^\./ ),
 
             /**
              * Matches a trailing dot (an unexpected path suffix)
              */
-            TRAILING_DOT: Object.freeze( /\.$/ ),
+            TRAILING_DOT: lock( /\.$/ ),
 
             /**
              * Matches a leading slash (path separator)
              */
-            LEADING_SLASH: Object.freeze( /^\/+/ ),
+            LEADING_SLASH: lock( /^\/+/ ),
 
             /**
              * Matches a trailing slash (path separator)
              */
-            TRAILING_SLASH: Object.freeze( /\/+$/ ),
+            TRAILING_SLASH: lock( /\/+$/ ),
 
             /**
              * Matches text that may be produced from type coercion of undefined, null, or void types
              * Useful when parsing HTTP Requests in some environments
              */
-            ARTIFACTS: Object.freeze( /null|undefined|void/i ),
+            ARTIFACTS: lock( /null|undefined|void/i ),
 
             /**
              * Matches the file extension of a filename and captures it
              * More reliable than EXTENSION, but more complex to use
              */
-            EXTENSION_MATCH: Object.freeze( /((((?<!\.)\.(?!\.))[^.]+)+$)/ ),
+            EXTENSION_MATCH: lock( /((((?<!\.)\.(?!\.))[^.]+)+$)/ ),
 
             /**
              * Matches a comment that appears to be the source file copyright statement.
              */
-            COPYRIGHT_COMMENT: Object.freeze( /[^"'`]?(\/\s*[\s\S.]*?(@license)?[\s\S.]*(Copyright)+?[\s\S.]*(\d{4})+[\s\S.]*?(@ignore)?[\s\S.]*?\*\/)+[^"'`]?/s ),
+            COPYRIGHT_COMMENT: lock( /[^"'`]?(\/\s*[\s\S.]*?(@license)?[\s\S.]*(Copyright)+?[\s\S.]*(\d{4})+[\s\S.]*?(@ignore)?[\s\S.]*?\*\/)+[^"'`]?/s ),
 
             /**
              * Matches a function signature by
@@ -506,81 +490,81 @@ const $scope = constants?.$scope || function()
              * 7 - n: artifacts of the necessary groupings used to perform negative look-behind or otherwise enforce that only the last parameter can use the spread operator
              *
              */
-            FUNCTION_SIGNATURE: Object.freeze( /^(\(?\s*((async(\s+))?\s*function))\s*?([$_\w]+[$_\w\d]*)?\s*\((\s*(([$_\w]+[$_\w\d]*\s*,?)\s*)*(\.{3}([$_\w]+[$_\w\d]*\s*,?)*\s*)*)(?<!,\s*)\)/ ),
+            FUNCTION_SIGNATURE: lock( /^(\(?\s*((async(\s+))?\s*function))\s*?([$_\w]+[$_\w\d]*)?\s*\((\s*(([$_\w]+[$_\w\d]*\s*,?)\s*)*(\.{3}([$_\w]+[$_\w\d]*\s*,?)*\s*)*)(?<!,\s*)\)/ ),
 
             /**
              * Matches specifically an asynchronous function signature, using the same rules as FUNCTION_SIGNATURE.
              * @see FUNCTION_SIGNATURE
              */
-            ASYNC_FUNCTION_SIGNATURE: Object.freeze( /^(\(?\s*((async(\s+))\s*function))\s*?([$_\w]+[$_\w\d]*)?\s*\((\s*(([$_\w]+[$_\w\d]*\s*,?)\s*)*(\.{3}([$_\w]+[$_\w\d]*\s*,?)*\s*)*)(?<!,\s*)\)/ ),
+            ASYNC_FUNCTION_SIGNATURE: lock( /^(\(?\s*((async(\s+))\s*function))\s*?([$_\w]+[$_\w\d]*)?\s*\((\s*(([$_\w]+[$_\w\d]*\s*,?)\s*)*(\.{3}([$_\w]+[$_\w\d]*\s*,?)*\s*)*)(?<!,\s*)\)/ ),
 
             /**
              * Matches the start of a function signature, capturing the name of the function in the first group.
              */
-            FUNCTION_NAME: Object.freeze( /function\s*([^( ]*\s*)\(/ ),
+            FUNCTION_NAME: lock( /function\s*([^( ]*\s*)\(/ ),
 
             /**
              * Matches the start of a function signature, capturing the named parameters in the first group.
              */
-            FUNCTION_PARAMETERS: Object.freeze( /\(?\s*(async\s+)?\s*function\s*?([^(]*)\(([_ ),\w$]*)\)/ ),
+            FUNCTION_PARAMETERS: lock( /\(?\s*(async\s+)?\s*function\s*?([^(]*)\(([_ ),\w$]*)\)/ ),
 
             /**
              * Matches a special annotation indicating the start of a function body.
              * Useful if parsing source code
              */
-            FUNCTION_BODY_START_HINT: Object.freeze( /(\/\*\+\s*function_body\s*:\s*start\s*\*\/)+/ ),
+            FUNCTION_BODY_START_HINT: lock( /(\/\*\+\s*function_body\s*:\s*start\s*\*\/)+/ ),
 
             /**
              * Matches a special annotation indicating the end of a function body.
              * Useful if parsing source code
              */
-            FUNCTION_BODY_END_HINT: Object.freeze( /(\/\*\+\s*function_body\s*:\s*end\*\/)/ ),
+            FUNCTION_BODY_END_HINT: lock( /(\/\*\+\s*function_body\s*:\s*end\*\/)/ ),
 
             /**
              * Matches all text between the special annotations indicating the start and end of a function body.
              * Useful if parsing source code
              */
-            ANNOTATED_FUNCTION_BODY: Object.freeze( /\/\*\+\s*function_body\s*:\s*start\s*\*\/(.*?)\/\*\+\s*function_body\s*:\s*end\s*\*\//is ),
+            ANNOTATED_FUNCTION_BODY: lock( /\/\*\+\s*function_body\s*:\s*start\s*\*\/(.*?)\/\*\+\s*function_body\s*:\s*end\s*\*\//is ),
 
             /**
              * Matches a special annotation indicating the start of a statement
              * that can be converted to an asynchronous function call.
              * Useful if parsing source code
              */
-            AWAIT_HINT: Object.freeze( /\/\*+\+ *await *\*+\// ),
+            AWAIT_HINT: lock( /\/\*+\+ *await *\*+\// ),
 
             /**
              * Matches a special annotation indicating the start of a function
              * that can be converted to an asynchronous function.
              * Useful if parsing source code
              */
-            ASYNC_HINT: Object.freeze( /\/\*+\+ *async *\*+\// ),
+            ASYNC_HINT: lock( /\/\*+\+ *async *\*+\// ),
 
             // /*+removable:start */
-            REMOVABLE_BLOCK_START: Object.freeze( /\/\*+\+ *removable *: *start *\*+\//dgi ),
+            REMOVABLE_BLOCK_START: lock( /\/\*+\+ *removable *: *start *\*+\//dgi ),
 
             // /*+removable:end */
-            REMOVABLE_BLOCK_END: Object.freeze( /\/\*+\+ *removable *: *end *\*+\//dgi ),
+            REMOVABLE_BLOCK_END: lock( /\/\*+\+ *removable *: *end *\*+\//dgi ),
 
-            REMOVABLE_BLOCK: Object.freeze( /\/\*+\+ *removable *: *start *\*+\/(.*)\/\*+\+ *removable *: *end *\*+\//dgis ),
+            REMOVABLE_BLOCK: lock( /\/\*+\+ *removable *: *start *\*+\/(.*)\/\*+\+ *removable *: *end *\*+\//dgis ),
 
             /**
              * Matches a statement defining a module's dependencies.
              * Useful if parsing source code
              */
-            DEPENDENCIES_DECLARATION: Object.freeze( /(const|let|var)\s+(dependencies)\s*=\s*([{\[])?\s*(((["'`])?\s*([\w_$]+)\s*?(["'`,:])?(["'`])?\s*([\w_$]+)\s*?(["'`,])?)*)\s*([}\]])/ ),
+            DEPENDENCIES_DECLARATION: lock( /(const|let|var)\s+(dependencies)\s*=\s*([{\[])?\s*(((["'`])?\s*([\w_$]+)\s*?(["'`,:])?(["'`])?\s*([\w_$]+)\s*?(["'`,])?)*)\s*([}\]])/ ),
 
             /**
              * Matches the start of a function or async function declaration.
              * Useful if parsing source code
              */
-            FUNCTION_DECLARATION: Object.freeze( /^\(*\s*(async\s+)?\s*function([^(]*)\(/ ),
+            FUNCTION_DECLARATION: lock( /^\(*\s*(async\s+)?\s*function([^(]*)\(/ ),
 
             /**
              * Matches text corresponding to a variable declaration and assignment.
              * Useful if parsing source code, and injecting new variables
              */
-            VARIABLE_DECLARATION: Object.freeze( /((const|let|var) +)([a-zA-Z_$]+[a-zA-Z0-9_$]*)+([ \s\n]*=[ \s\n]*)([^;\n]+)+?([;\n,])+?/ ),
+            VARIABLE_DECLARATION: lock( /((const|let|var) +)([a-zA-Z_$]+[a-zA-Z0-9_$]*)+([ \s\n]*=[ \s\n]*)([^;\n]+)+?([;\n,])+?/ ),
 
             /**
              * Returns a string of flags ordered according to their position in the VALID_FLAGS array
@@ -899,14 +883,14 @@ const $scope = constants?.$scope || function()
 
     if ( _ud !== typeof module )
     {
-        module.exports = Object.freeze( mod );
+        module.exports = lock( mod );
     }
 
     if ( $scope() )
     {
-        $scope()[INTERNAL_NAME] = Object.freeze( mod );
+        $scope()[INTERNAL_NAME] = lock( mod );
     }
 
-    return Object.freeze( mod );
+    return lock( mod );
 
 }());

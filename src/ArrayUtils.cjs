@@ -44,33 +44,26 @@ const $scope = constants?.$scope || function()
     /**
      * Create local variables for the imported values and functions we use.
      */
-    let
-        {
-            _mt_str = constants._mt_str || "",
-            _comma = constants?._comma || ",",
-            _dot = constants?._dot || ".",
-            _str = constants._str || "string",
-            _fun = constants._fun || "function",
-            _obj = constants._obj || "object",
-            _num = constants._num || "number",
-            _big = constants._big || "bigint",
-            _bool = constants._bool || "boolean",
-            _symbol = constants._symbol || "symbol",
-            ignore = function( pErr ) {},
-            isNull = typeUtils.isNull,
-            isObject = typeUtils.isObject,
-            isBoolean = typeUtils.isBoolean,
-            isFunction = typeUtils.isFunction || function( f ) { return _fun === typeof f; },
-            asString = stringUtils.asString || function( s ) { return (_mt_str + s).trim(); },
-            isBlank = stringUtils.isBlank || function( s ) { return _mt_str === asString( s ).trim(); },
-            asInt = stringUtils.asInt || function( s ) { return parseInt( asString( s ).replace( /\..*/, _mt_str ).replace( /\D/g, _mt_str ) ); },
-            lcase = stringUtils.lcase,
-            isValidNumber = stringUtils.isValidNumber,
-            isValidNumeric = stringUtils.isValidNumeric,
-            AsyncFunction = (async function() {}).constructor,
-            EMPTY_ARRAY = Object.freeze( [] ),
-            populateOptions = constants.populateOptions
-        } = constants || {};
+    let {
+        _mt_str,
+        _comma,
+        _dot,
+        _str,
+        _fun,
+        _obj,
+        _num,
+        _big,
+        _bool,
+        _symbol,
+        ignore,
+        AsyncFunction,
+        EMPTY_ARRAY,
+        populateOptions
+    } = constants;
+
+    let { isNull, isObject, isBoolean, isFunction } = typeUtils;
+
+    let { asString, isBlank, asInt, lcase, isValidNumber, isValidNumeric } = stringUtils;
 
     // poly-fill for isArray; probably obsolete with modern environments
     if ( _fun !== typeof Array.isArray )

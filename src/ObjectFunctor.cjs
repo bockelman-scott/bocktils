@@ -44,7 +44,7 @@ const $scope = constants?.$scope || function()
             guidUtils
         };
 
-    let { _str, _fun, _num, _big, _bool, _symbol, _obj } = constants;
+    let { _str, _fun, _num, _big, _bool, _symbol, _obj, populateOptions, lock, deepFreeze } = constants;
 
     let { isNull, isString, isArray, isObject, isDate, isFunction } = typeUtils;
 
@@ -52,7 +52,7 @@ const $scope = constants?.$scope || function()
 
     let { asArray, Mappers } = arrayUtils;
 
-    let { detectCycles, deepFreeze, getKeys, getEntries } = objectUtils;
+    let { detectCycles, getKeys, getEntries } = objectUtils;
 
     class ObjectFunctor
     {
@@ -107,7 +107,7 @@ const $scope = constants?.$scope || function()
                     }
                     else if ( isArray( pObject ) )
                     {
-                        this.#value = Object.freeze( pObject.map( e => new ObjectFunctor( e ) ) );
+                        this.#value = lock( pObject.map( e => new ObjectFunctor( e ) ) );
                     }
                     else
                     {
@@ -288,15 +288,15 @@ const $scope = constants?.$scope || function()
 
     if ( _ud !== typeof module )
     {
-        module.exports = Object.freeze( mod );
+        module.exports = lock( mod );
     }
 
     if ( $scope() )
     {
-        $scope()[INTERNAL_NAME] = Object.freeze( mod );
+        $scope()[INTERNAL_NAME] = lock( mod );
     }
 
-    return Object.freeze( mod );
+    return lock( mod );
 
 
 }());

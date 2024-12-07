@@ -1,8 +1,10 @@
-const constants = require( "./Constants.cjs" );
-const typeUtils = require( "./TypeUtils.cjs" );
-const stringUtils = require( "./StringUtils.cjs" );
-const arrayUtils = require( "./ArrayUtils.cjs" );
-const objectUtils = require( "./ObjectUtils.cjs" );
+const core = require( "./CoreUtils.cjs" );
+
+const constants = core.constants;
+const typeUtils = core.typeUtils;
+const stringUtils = core.stringUtils;
+const arrayUtils = core.arrayUtils;
+const objectUtils = core.objectUtils;
 
 const jsonInterpolationUtils = require( "./JsonInterpolationUtils.cjs" );
 
@@ -22,40 +24,13 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
-    let _mt_str = constants._mt_str || "";
+    const { _mt_str, _str, _obj, _fun, _symbol, _num, _big, _bool, populateOptions, lock } = constants;
 
-    let _str = constants._str || "string";
-    let _obj = constants._obj || "object";
-    let _fun = constants._fun || "function";
-    let _symbol = constants._symbol || "symbol";
-    let _num = constants._num || "number";
-    let _big = constants._big || "bigint";
-    let _bool = constants._bool || "boolean";
+    const { isString, isArray } = typeUtils;
 
-    let isString = typeUtils.isString || function( s ) { return _str === typeof s; };
+    const { asString, isBlank, isJson, asInt, asFloat, toBool } = stringUtils;
 
-    let asString = stringUtils.asString || function( s ) { return (_mt_str + s).trim(); };
-    let isBlank = stringUtils.isBlank || function( s ) { return _mt_str === asString( s, true ).trim(); };
-    let isJson = stringUtils.isJson || function( s ) { return (asString( s ).startsWith( "{" ) && asString( s ).endsWith( "}" )) || (asString( s ).startsWith( "[" ) && asString( s ).endsWith( "]" )); };
-    let asInt = stringUtils.asInt || function( s ) { return parseInt( s ); };
-    let asFloat = stringUtils.asFloat || function( s ) { return parseFloat( s ); };
-    let toBool = stringUtils.toBool;
-
-    let isArray = objectUtils.isArray || function( pArr ) { return Array.isArray( pArr ); };
-
-    let asArray = arrayUtils.asArray || function( pArr ) { return Array.isArray( pArr ) ? pArr : [pArr]; };
-
-    let pruneArray = arrayUtils.pruneArray || function( pArr )
-    {
-        const arr = asArray( pArr || [] );
-        return arr.filter( e => (null !== e) && (_ud !== typeof e) && (_mt_str !== e) );
-    };
-
-    let unique = arrayUtils.unique || function( pArr )
-    {
-        const arr = asArray( pArr || [] );
-        return [...(new Set( arr ))];
-    };
+    const { asArray, pruneArray, unique } = arrayUtils;
 
     const MAX_DEPTH = 17;
 
@@ -538,14 +513,14 @@ const $scope = constants?.$scope || function()
 
     if ( _ud !== typeof module )
     {
-        module.exports = Object.freeze( mod );
+        module.exports = lock( mod );
     }
 
     if ( $scope() )
     {
-        $scope()[INTERNAL_NAME] = Object.freeze( mod );
+        $scope()[INTERNAL_NAME] = lock( mod );
     }
 
-    return Object.freeze( mod );
+    return lock( mod );
 
 }());

@@ -45,7 +45,7 @@ const $scope = utils?.$scope || function()
             localeUtils
         };
 
-    let _mt_str = constants._mt_str;
+    let { _mt_str, lock } = constants;
 
     let { isNull, isDate, isNumber, isString, isObject } = typeUtils;
 
@@ -55,9 +55,9 @@ const $scope = utils?.$scope || function()
 
     const Token = tokenSetUtils.classes.Token;
 
-    const DEFAULT_LOCALE = Object.freeze( new Intl.Locale( "en-US" ) );
+    const DEFAULT_LOCALE = lock( new Intl.Locale( "en-US" ) );
 
-    const DEFAULT_TOKEN_SET = Object.freeze( tokenSetUtils.getDefaultTokenSet() );
+    const DEFAULT_TOKEN_SET = lock( tokenSetUtils.getDefaultTokenSet() );
 
     const DEFAULT_FORMAT = "MM/dd/yyyy hh:mm:ss";
 
@@ -80,9 +80,9 @@ const $scope = utils?.$scope || function()
 
         constructor( pFormat = DEFAULT_FORMAT, pLocale = DEFAULT_LOCALE, pTokenSet = DEFAULT_TOKEN_SET )
         {
-            this.#locale = Object.freeze( resolveLocale( pLocale ) );
+            this.#locale = lock( resolveLocale( pLocale ) );
 
-            this.#tokenSet = Object.freeze( (pTokenSet instanceof TokenSet) ? pTokenSet : tokenSetUtils.getDefaultTokenSet( resolveLocale( pLocale ) ) );
+            this.#tokenSet = lock( (pTokenSet instanceof TokenSet) ? pTokenSet : tokenSetUtils.getDefaultTokenSet( resolveLocale( pLocale ) ) );
 
             this.#pattern = isString( pFormat ) ? asString( pFormat ) : isObject( pFormat ) ? null : DEFAULT_FORMAT;
 
@@ -97,12 +97,12 @@ const $scope = utils?.$scope || function()
          */
         get locale()
         {
-            return Object.freeze( resolveLocale( this.#locale ) );
+            return lock( resolveLocale( this.#locale ) );
         }
 
         get tokenSet()
         {
-            this.#tokenSet = Object.freeze( (this.#tokenSet instanceof TokenSet) ? this.#tokenSet : tokenSetUtils.getDefaultTokenSet( this.locale ) );
+            this.#tokenSet = lock( (this.#tokenSet instanceof TokenSet) ? this.#tokenSet : tokenSetUtils.getDefaultTokenSet( this.locale ) );
             if ( !localeUtils.isSameLocale( this.#tokenSet.locale, this.#locale ) )
             {
                 this.#tokenSet = new TokenSet( this.locale, this.#tokenSet.options );
@@ -148,7 +148,7 @@ const $scope = utils?.$scope || function()
                 obj = Object.assign( obj, option );
             }
 
-            return Object.freeze( obj );
+            return lock( obj );
         }
 
         get pattern()
@@ -166,14 +166,14 @@ const $scope = utils?.$scope || function()
             {
                 this.#options = this.convertPatternToOptions( this.#pattern, this.tokenSet );
             }
-            return Object.freeze( Object.assign( {}, this.#options ) );
+            return lock( Object.assign( {}, this.#options ) );
         }
 
         resolveTokenSet( pTokenSet )
         {
             if ( pTokenSet instanceof TokenSet )
             {
-                return Object.freeze( pTokenSet );
+                return lock( pTokenSet );
             }
             return this.tokenSet;
         }
@@ -255,15 +255,15 @@ const $scope = utils?.$scope || function()
 
     if ( _ud !== typeof module )
     {
-        module.exports = Object.freeze( mod );
+        module.exports = lock( mod );
     }
 
     if ( $scope() )
     {
-        $scope()[INTERNAL_NAME] = Object.freeze( mod );
+        $scope()[INTERNAL_NAME] = lock( mod );
     }
 
-    return Object.freeze( mod );
+    return lock( mod );
 
 }());
 

@@ -1,7 +1,6 @@
 const dateParserModule = require( "../src/DateParser.cjs" );
 
 const constants = require( "../src/Constants.cjs" );
-const dateUtils = require( "../src/DateUtils.cjs" );
 
 const DateParser = dateParserModule.DateParser;
 

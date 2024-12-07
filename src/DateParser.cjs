@@ -44,22 +44,13 @@ const $scope = function()
             dateFormatUtils
         };
 
-    let _mt_str = constants._mt_str;
+    const _mt_str = constants._mt_str;
 
-    let isString = typeUtils.isString;
-    let isDate = typeUtils.isDate;
-    let isNumber = typeUtils.isNumber;
-    let isObject = typeUtils.isObject;
-    let isNull = typeUtils.isNull;
-    let isArray = typeUtils.isArray;
+    const { isString, isDate, isNumber, isObject, isNull, isArray } = typeUtils;
 
-    let asInt = stringUtils.asInt;
-    let asString = stringUtils.asString;
+    const { asInt, asString, lcase, isBlank } = stringUtils;
 
-    let lcase = stringUtils.lcase;
-    let isBlank = stringUtils.isBlank;
-
-    let asArray = arrayUtils.asArray;
+    const asArray = arrayUtils.asArray;
 
 
     const TokenSet = tokenSetUtils.classes.TokenSet;
@@ -216,55 +207,56 @@ const $scope = function()
         {
             return (isNull( pNumberingSystem ) || isBlank( pNumberingSystem ) || "latn" === lcase( pNumberingSystem ));
         }
-/*
 
-        isPatternCompatibleWith( pString )
-        {
-            let s = _mt_str + asString( pString );
+        /*
 
-            let rx = /(\d+|[^ \\\/.,:;-]+)([ \\\/.,:;-]*?)+/;
+         isPatternCompatibleWith( pString )
+         {
+         let s = _mt_str + asString( pString );
 
-            let elements = [];
+         let rx = /(\d+|[^ \\\/.,:;-]+)([ \\\/.,:;-]*?)+/;
 
-            let matches = rx.exec( s );
+         let elements = [];
 
-            while ( null != matches && matches.length )
-            {
-                s = s.replace( new RegExp( "^" + matches[0] ), _mt_str );
+         let matches = rx.exec( s );
 
-                elements.push( ...(matches.slice( 1 )) );
+         while ( null != matches && matches.length )
+         {
+         s = s.replace( new RegExp( "^" + matches[0] ), _mt_str );
 
-                matches = rx.exec( s );
-            }
+         elements.push( ...(matches.slice( 1 )) );
 
-            elements = elements.flat();
+         matches = rx.exec( s );
+         }
 
-            let rxString = _mt_str;
+         elements = elements.flat();
 
-            for( let i = 0, n = elements.length; i < n; i++ )
-            {
-                const elem = elements[i];
+         let rxString = _mt_str;
 
-                if ( /[\d+]/.test( elem ) )
-                {
-                    rxString += "(y+|M{1,2}|L{1,2}|d+|D+|u+|h+|H+|k+|K+|m+|s+|S+)";
-                }
-                else if ( /[ \\\/.,:;-]+/.test( elem ) )
-                {
-                    rxString += "([ \\\\\\/.,:;-]+)";
-                }
-                else if ( /\w+/.test( elem ) )
-                {
-                    rxString += "(G+|E+|a+|M{3,}|L{3,})";
-                }
-            }
+         for( let i = 0, n = elements.length; i < n; i++ )
+         {
+         const elem = elements[i];
 
-            const regExp = new RegExp( rxString );
+         if ( /[\d+]/.test( elem ) )
+         {
+         rxString += "(y+|M{1,2}|L{1,2}|d+|D+|u+|h+|H+|k+|K+|m+|s+|S+)";
+         }
+         else if ( /[ \\\/.,:;-]+/.test( elem ) )
+         {
+         rxString += "([ \\\\\\/.,:;-]+)";
+         }
+         else if ( /\w+/.test( elem ) )
+         {
+         rxString += "(G+|E+|a+|M{3,}|L{3,})";
+         }
+         }
 
-            return (regExp.test( this.pattern ));
-        }
+         const regExp = new RegExp( rxString );
 
-*/
+         return (regExp.test( this.pattern ));
+         }
+
+         */
         getTokens( pPattern )
         {
             const format = isBlank( asString( pPattern ) ) ? this.pattern : asString( pPattern );
@@ -344,14 +336,14 @@ const $scope = function()
 
             const s = asString( pString );
 
-/*
-            let compatible = this.isPatternCompatibleWith( s );
+            /*
+             let compatible = this.isPatternCompatibleWith( s );
 
-            if ( !compatible )
-            {
-                console.warn( "Date String,", s, "does not seem to match specified format pattern:", this.pattern );
-            }
-*/
+             if ( !compatible )
+             {
+             console.warn( "Date String,", s, "does not seem to match specified format pattern:", this.pattern );
+             }
+             */
 
             const tokens = this.getTokens();
 

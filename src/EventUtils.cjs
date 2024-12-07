@@ -28,41 +28,21 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
-    let _mt_str = constants._mt_str;
-
-    let _fun = constants._fun;
-    let _obj = constants._obj;
-
-    let no_op = constants.no_op;
-    let ignore = constants.ignore || function() {};
-    let populateOptions = constants.populateOptions;
-
-    let isDefined = typeUtils.isDefined;
-    let isNull = typeUtils.isNull;
-    let isBoolean = typeUtils.isBoolean;
-    let isFunction = typeUtils.isFunction;
-    let isObject = typeUtils.isObject;
-    let getClassName = typeUtils.getClassName;
-
-    let firstMatchingType = typeUtils.firstMatchingType;
-
-    let asString = stringUtils.asString;
-    let capitalize = stringUtils.capitalize;
-    let lcase = stringUtils.lcase;
-    let ucase = stringUtils.ucase;
-
-    let S_ERROR = constants.S_ERROR || "error";
-
-    const S_ON = "on";
-    const S_ABORT = "abort";
-    const S_CUSTOM_EVENT = "CustomEvent";
-
     const dependencies =
         {
             constants,
             typeUtils,
             stringUtils
         };
+
+    const { _mt_str, _fun, _obj, no_op, ignore, populateOptions, lock, S_ERROR } = constants;
+
+    const { isNull, isBoolean, isFunction, isObject, getClassName, firstMatchingType } = typeUtils;
+
+    const { asString, capitalize, uncapitalize } = stringUtils;
+
+    const S_ON = "on";
+    const S_ABORT = "abort";
 
     const NO_HANDLER = function( pEvt, pData )
     {
@@ -78,7 +58,7 @@ const $scope = constants?.$scope || function()
 
         if ( pUncapitalize )
         {
-            evtName = stringUtils.uncapitalize( evtName );
+            evtName = uncapitalize( evtName );
         }
 
         return evtName;
@@ -596,14 +576,15 @@ const $scope = constants?.$scope || function()
     // when running in a Node.js environment, we assign the module to the global module.exports
     if ( _ud !== typeof module )
     {
-        module.exports = Object.freeze( mod );
+        module.exports = lock( mod );
     }
 
     // Cache the module in the global scope to avoid re-executing the logic in this IIFE
     if ( $scope() )
     {
-        $scope()[INTERNAL_NAME] = Object.freeze( mod );
+        $scope()[INTERNAL_NAME] = lock( mod );
     }
 
-    return Object.freeze( mod );
+    return lock( mod );
+
 }());

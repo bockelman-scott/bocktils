@@ -8,12 +8,11 @@ const utils = require( "./CommonUtils.cjs" );
  * Establish separate constants for each of the common utilities imported
  * @see ../src/CommonUtils.cjs
  */
-const constants = utils?.constants || require( "./Constants.cjs" );
-
-const typeUtils = utils?.typeUtils || require( "./TypeUtils.cjs" );
-const stringUtils = utils?.stringUtils || require( "./StringUtils.cjs" );
-const arrayUtils = utils?.arrayUtils || require( "./ArrayUtils.cjs" );
-const objectUtils = utils?.objectUtils || require( "./ObjectUtils.cjs" );
+const constants = utils?.constants;
+const typeUtils = utils?.typeUtils;
+const stringUtils = utils?.stringUtils;
+const arrayUtils = utils?.arrayUtils;
+const objectUtils = utils?.objectUtils;
 
 const _ud = constants?._ud || "undefined";
 

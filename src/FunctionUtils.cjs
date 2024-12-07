@@ -10,13 +10,13 @@
  *
  *
  */
+const core = require( "./CoreUtils.cjs" );
 
-
-const constants = require( "./Constants.cjs" );
-const typeUtils = require( "./TypeUtils.cjs" );
-const stringUtils = require( "./StringUtils.cjs" );
-const arrayUtils = require( "./ArrayUtils.cjs" );
-const objectUtils = require( "./ObjectUtils.cjs" );
+const constants = core.constants;
+const typeUtils = core.typeUtils;
+const stringUtils = core.stringUtils;
+const arrayUtils = core.arrayUtils;
+const objectUtils = core.objectUtils;
 
 const _ud = constants?._ud || "undefined";
 
@@ -37,32 +37,6 @@ const $scope = constants?.$scope || function()
     }
 
     /**
-     * Create local variables for the imported values and functions we use.
-     * This is technically unnecessary, but some IDEs cannot recognize the imported variables otherwise.
-     * IDEs that report unrecognized variables are more useful if we remove the false positives this way.
-     */
-
-    let asString = stringUtils.asString;
-    let asInt = stringUtils.asInt;
-    let asFloat = stringUtils.asFloat;
-
-    let asArray = arrayUtils.asArray;
-
-    let isString = typeUtils.isString;
-    let isObject = typeUtils.isObject;
-
-    let isFunction = typeUtils.isFunction;
-    let isAsyncFunction = typeUtils.isAsyncFunction;
-    let isClass = typeUtils.isClass;
-
-    let no_op = objectUtils.no_op || function() {};
-    let op_true = function() { return true; };
-    let op_false = function() { return false; };
-    let op_identity = function( pArg ) { return pArg; };
-
-    let Result = typeUtils.Result;
-
-    /**
      * An array of this module's dependencies
      * which are re-exported with this module,
      * so if you want to, you can just import the leaf module
@@ -76,6 +50,22 @@ const $scope = constants?.$scope || function()
             arrayUtils,
             objectUtils
         };
+
+    /**
+     * Create local variables for the imported values and functions we use.
+     */
+    const { no_op, lock } = constants;
+
+    const { asString, asInt, asFloat } = stringUtils;
+
+    const asArray = arrayUtils.asArray;
+
+    const { isString, isObject, isFunction, isAsyncFunction, isClass, Result } = typeUtils;
+
+    const op_true = function() { return true; };
+    const op_false = function() { return false; };
+
+    const op_identity = function( pArg ) { return pArg; };
 
     /**
      * Returns a suitable 'this' or scope for the execution of a method
@@ -562,27 +552,24 @@ const $scope = constants?.$scope || function()
             asAttempt,
             partial,
             asyncPartial,
-            catchHandler: function( pErr )
-            {
-                return true;
-            },
-            classes: { FunctionResult },
+            classes: { Result, FunctionResult },
+            Result,
             FunctionResult
         };
 
     // when running in a Node.js environment, we assign the module to the global module.exports
     if ( _ud !== typeof module )
     {
-        module.exports = Object.freeze( mod );
+        module.exports = lock( mod );
     }
 
     // Cache the module in the global scope to avoid re-executing the logic in this IIFE
     if ( $scope() )
     {
-        $scope()[INTERNAL_NAME] = Object.freeze( mod );
+        $scope()[INTERNAL_NAME] = lock( mod );
     }
 
     // return the module for environments expecting this function to return the module
-    return Object.freeze( mod );
+    return lock( mod );
 
 }());

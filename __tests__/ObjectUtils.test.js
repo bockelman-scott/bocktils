@@ -1,9 +1,22 @@
 const objectUtils = require( "../src/ObjectUtils.cjs" );
 
-const constants = objectUtils?.dependencies?.constants || require( "../src/Constants.cjs" );
-const typeUtils = objectUtils?.dependencies?.typeUtils || require( "../src/TypeUtils.cjs" );
-const stringUtils = objectUtils?.dependencies?.stringUtils || require( "../src/StringUtils.cjs" );
-const arrayUtils = objectUtils?.dependencies?.arrayUtils || require( "../src/ArrayUtils.cjs" );
+const constants = objectUtils?.dependencies?.constants;
+const typeUtils = objectUtils?.dependencies?.typeUtils;
+const stringUtils = objectUtils?.dependencies?.stringUtils;
+const arrayUtils = objectUtils?.dependencies?.arrayUtils;
+
+/**
+ * Defines a string to represent the type, undefined
+ */
+const _ud = constants?._ud || "undefined";
+
+/**
+ * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
+ */
+const $scope = constants?.$scope || function()
+{
+    return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
+};
 
 describe( "detectCycles prevents infinite recursion", () =>
 {

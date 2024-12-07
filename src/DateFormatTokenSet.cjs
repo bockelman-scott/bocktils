@@ -9,11 +9,11 @@ const utils = require( "./CommonUtils.cjs" );
  * Establish separate constants for each of the common utilities imported
  * @see ../src/CommonUtils.cjs
  */
-const constants = utils?.constants || require( "./Constants.cjs" );
-const typeUtils = utils?.typeUtils || require( "./TypeUtils.cjs" );
-const stringUtils = utils?.stringUtils || require( "./StringUtils.cjs" );
-const arrayUtils = utils?.arrayUtils || require( "./ArrayUtils.cjs" );
-const objectUtils = utils?.objectUtils || require( "./ObjectUtils.cjs" );
+const constants = utils?.constants;
+const typeUtils = utils?.typeUtils;
+const stringUtils = utils?.stringUtils;
+const arrayUtils = utils?.arrayUtils;
+const objectUtils = utils?.objectUtils;
 
 const localeUtils = require( "./LocaleUtils.cjs" );
 
@@ -46,28 +46,46 @@ const $scope = utils?.$scope || function()
             dateUtils
         };
 
-    let _mt_str = constants._mt_str;
+    const { _mt_str, lock } = constants;
 
-    let isNull = typeUtils.isNull;
-    let isDate = typeUtils.isDate;
-    let isNumber = typeUtils.isNumber;
+    const { isNull, isDate, isNumber } = typeUtils;
 
-    let asString = stringUtils.asString;
-    let asInt = stringUtils.asInt;
+    const { asString, asInt, lcase } = stringUtils;
 
-    let lcase = stringUtils.lcase;
+    const asArray = arrayUtils.asArray;
 
-    let asArray = arrayUtils.asArray;
+    const dateConstants = lock( dateUtils.DateConstants );
 
-    const dateConstants = Object.freeze( dateUtils.DateConstants );
+    const
+        {
+            calculateOccurrencesOf,
+            calculateNthOccurrenceOfDay,
+            subtractDays,
+            daysBetween,
+            startOfMonth,
+            toNoon
+    } = dateUtils;
 
     const MONTHS = dateConstants.Months;
     const DAYS = dateConstants.Days;
     const OCCURRENCE = dateConstants.Occurrence;
-
     const UNITS = dateConstants.Units;
 
-    const DEFAULT_LOCALE = new Intl.Locale( localeUtils.DEFAULT_LOCALE_STRING );
+    let
+        {
+            DEFAULT_LOCALE_STRING,
+            resolveLocale,
+            getMonthNames,
+            getMonthAbbreviations,
+            getDayNames,
+            getDayAbbreviations,
+            getDayLetters,
+
+        } = localeUtils;
+
+    const LOCALE_DEFAULTS = localeUtils.DEFAULTS;
+
+    const DEFAULT_LOCALE = new Intl.Locale( DEFAULT_LOCALE_STRING );
 
     const ERAS =
         [
@@ -80,19 +98,19 @@ const $scope = utils?.$scope || function()
             },
         ];
 
-    const MONTH_NAMES = Object.freeze( [].concat( localeUtils.DEFAULTS.MONTH_NAMES || localeUtils.getMonthNames( DEFAULT_LOCALE ) ) );
+    const MONTH_NAMES = lock( [].concat( LOCALE_DEFAULTS.MONTH_NAMES || localeUtils.getMonthNames( DEFAULT_LOCALE ) ) );
 
-    const MONTH_NAMES_SHORT = Object.freeze( [].concat( localeUtils.DEFAULTS.MONTH_NAMES_SHORT || localeUtils.getMonthAbbreviations( DEFAULT_LOCALE ) ) );
+    const MONTH_NAMES_SHORT = lock( [].concat( LOCALE_DEFAULTS.MONTH_NAMES_SHORT || localeUtils.getMonthAbbreviations( DEFAULT_LOCALE ) ) );
 
-    const DAY_NAMES = Object.freeze( [].concat( localeUtils.DEFAULTS.DAY_NAMES || localeUtils.getDayNames( DEFAULT_LOCALE ) ) );
+    const DAY_NAMES = lock( [].concat( LOCALE_DEFAULTS.DAY_NAMES || localeUtils.getDayNames( DEFAULT_LOCALE ) ) );
 
-    const DAY_NAMES_SHORT = Object.freeze( [].concat( localeUtils.DEFAULTS.DAY_NAMES_SHORT || localeUtils.getDayAbbreviations( DEFAULT_LOCALE ) ) );
+    const DAY_NAMES_SHORT = lock( [].concat( LOCALE_DEFAULTS.DAY_NAMES_SHORT || localeUtils.getDayAbbreviations( DEFAULT_LOCALE ) ) );
 
-    const DAY_LETTERS = Object.freeze( [].concat( localeUtils.DEFAULTS.DAY_LETTERS || localeUtils.getDayLetters( DEFAULT_LOCALE ) ) );
+    const DAY_LETTERS = lock( [].concat( LOCALE_DEFAULTS.DAY_LETTERS || localeUtils.getDayLetters( DEFAULT_LOCALE ) ) );
 
     const FORMATS = Object.assign( {}, localeUtils.FORMATS );
 
-    const REPETITION_RULES = Object.freeze(
+    const REPETITION_RULES = lock(
         {
             NONE: -32,
             PAD: 0,
@@ -100,7 +118,7 @@ const $scope = utils?.$scope || function()
             VARY_FORMAT: 4
         } );
 
-    const DEFINED_TOKENS = Object.freeze(
+    const DEFINED_TOKENS = lock(
         [
             { "G": "Era designator" },
             { "y": "Year" },
@@ -120,30 +138,30 @@ const $scope = utils?.$scope || function()
             { "S": "Millisecond" }
         ] );
 
-    const DEFINED_INTL_OPTIONS = Object.freeze(
+    const DEFINED_INTL_OPTIONS = lock(
         {
-            weekday: Object.freeze(
+            weekday: lock(
                 {
                     character: "E",
                     [FORMATS.LONG]: 4,
                     [FORMATS.SHORT]: 3,
                     [FORMATS.NARROW]: 1
                 } ),
-            era: Object.freeze(
+            era: lock(
                 {
                     character: "G",
                     [FORMATS.LONG]: 4,
                     [FORMATS.SHORT]: 3,
                     [FORMATS.NARROW]: 1
                 } ),
-            year: Object.freeze(
+            year: lock(
                 {
                     character: "y",
                     [FORMATS.LONG]: 4,
                     [FORMATS.NUMERIC]: 3,
                     [FORMATS.TWO_DIGIT]: 2
                 } ),
-            month: Object.freeze(
+            month: lock(
                 {
                     character: "M",
                     [FORMATS.NUMERIC]: 1,
@@ -152,7 +170,7 @@ const $scope = utils?.$scope || function()
                     [FORMATS.SHORT]: 3,
                     [FORMATS.NARROW]: 1
                 } ),
-            day: Object.freeze(
+            day: lock(
                 {
                     character: "d",
                     [FORMATS.NUMERIC]: 1,
@@ -161,7 +179,7 @@ const $scope = utils?.$scope || function()
                     [FORMATS.SHORT]: 3,
                     [FORMATS.NARROW]: 1
                 } ),
-            hour: Object.freeze(
+            hour: lock(
                 {
                     character: "h",
                     getCharacter: function( pHourCycle )
@@ -187,7 +205,7 @@ const $scope = utils?.$scope || function()
                     [FORMATS.SHORT]: 3,
                     [FORMATS.NARROW]: 1
                 } ),
-            minute: Object.freeze(
+            minute: lock(
                 {
                     character: "m",
                     [FORMATS.NUMERIC]: 1,
@@ -196,7 +214,7 @@ const $scope = utils?.$scope || function()
                     [FORMATS.SHORT]: 3,
                     [FORMATS.NARROW]: 1
                 } ),
-            second: Object.freeze(
+            second: lock(
                 {
                     character: "s",
                     [FORMATS.NUMERIC]: 1,
@@ -205,7 +223,7 @@ const $scope = utils?.$scope || function()
                     [FORMATS.SHORT]: 3,
                     [FORMATS.NARROW]: 1
                 } ),
-            fractionalSecondDigits: Object.freeze(
+            fractionalSecondDigits: lock(
                 {
                     character: "S",
                     [FORMATS.NUMERIC]: 1,
@@ -214,7 +232,7 @@ const $scope = utils?.$scope || function()
                     [FORMATS.SHORT]: 3,
                     [FORMATS.NARROW]: 1
                 } ),
-            dayPeriod: Object.freeze(
+            dayPeriod: lock(
                 {
                     character: "a",
                     [FORMATS.NUMERIC]: 1,
@@ -225,16 +243,14 @@ const $scope = utils?.$scope || function()
                 } )
         } );
 
-    const SUPPORTED_INTL_OPTIONS = Object.freeze( Object.keys( DEFINED_INTL_OPTIONS ) );
+    const SUPPORTED_INTL_OPTIONS = lock( Object.keys( DEFINED_INTL_OPTIONS ) );
 
-    const SUPPORTED_TOKENS = Object.freeze( [].concat( DEFINED_TOKENS ).map( e => Object.keys( e ).flat() ).flat() );
+    const SUPPORTED_TOKENS = lock( [].concat( DEFINED_TOKENS ).map( e => Object.keys( e ).flat() ).flat() );
 
     const resolveDate = function( pDate )
     {
         return isDate( pDate ) ? pDate : isNumber( pDate ) ? new Date( pDate ) : new Date();
     };
-
-    const resolveLocale = localeUtils.resolveLocale;
 
     /**
      * Common Week Numbering Systems:
@@ -261,11 +277,11 @@ const $scope = utils?.$scope || function()
             const date = resolveDate( pDate );
 
             // the first week of the year is the week that contains the first Thursday of the year
-            const firstThursday = dateUtils.calculateNthOccurrenceOfDay( date.getFullYear(), MONTHS.JANUARY, OCCURRENCE.FIRST, DAYS.THURSDAY );
+            const firstThursday = calculateNthOccurrenceOfDay( date.getFullYear(), MONTHS.JANUARY, OCCURRENCE.FIRST, DAYS.THURSDAY );
 
-            const startOfWeek = dateUtils.subtractDays( firstThursday, ((6 - DAYS.THURSDAY) + this.firstDayOfWeek) );
+            const startOfWeek = subtractDays( firstThursday, ((6 - DAYS.THURSDAY) + this.firstDayOfWeek) );
 
-            const days = dateUtils.daysBetween( startOfWeek, date ) + this.firstDayOfWeek;
+            const days = daysBetween( startOfWeek, date ) + this.firstDayOfWeek;
 
             return Math.floor( days / dateConstants.DAYS_PER_WEEK ) + 1;
         }
@@ -286,11 +302,11 @@ const $scope = utils?.$scope || function()
 
             const date = new Date( resolveDate( pDate ) );
 
-            const startOfMonth = dateUtils.startOfMonth( date );
+            const monthStart = startOfMonth( date );
 
-            const startOfWeek = dateUtils.subtractDays( startOfMonth, ((6 - startOfMonth.getDay()) + this.firstDayOfWeek) );
+            const startOfWeek = subtractDays( monthStart, ((6 - monthStart.getDay()) + this.firstDayOfWeek) );
 
-            const days = dateUtils.daysBetween( startOfWeek, date );
+            const days = daysBetween( startOfWeek, date );
 
             return Math.ceil( days / dateConstants.DAYS_PER_WEEK );
         }
@@ -517,7 +533,7 @@ const $scope = utils?.$scope || function()
                 opt.era = FORMATS.LONG;
             }
 
-            return Object.freeze( opt );
+            return lock( opt );
         }
 
         getValue( pDate, pLocale )
@@ -640,7 +656,7 @@ const $scope = utils?.$scope || function()
                     hourCycle: "h12"
                 };
 
-            return Object.freeze( opt );
+            return lock( opt );
         }
 
         getValue( pDate, pLocale )
@@ -680,7 +696,7 @@ const $scope = utils?.$scope || function()
                 opt.year = FORMATS.SHORT;
             }
 
-            return Object.freeze( opt );
+            return lock( opt );
         }
 
         getValue( pDate, pLocale )
@@ -756,7 +772,7 @@ const $scope = utils?.$scope || function()
                     break;
             }
 
-            return Object.freeze( opt );
+            return lock( opt );
         }
 
         getValue( pDate, pLocale )
@@ -860,7 +876,7 @@ const $scope = utils?.$scope || function()
                 opt.day = FORMATS.NUMERIC;
             }
 
-            return Object.freeze( opt );
+            return lock( opt );
         }
 
         getValue( pDate, pLocale )
@@ -911,7 +927,7 @@ const $scope = utils?.$scope || function()
 
             const first = new Date( year, 0, 0 );
 
-            return dateUtils.daysBetween( first, date );
+            return daysBetween( first, date );
         }
 
         format( pDate, pLocale )
@@ -946,13 +962,13 @@ const $scope = utils?.$scope || function()
 
         getValue( pDate, pLocale )
         {
-            const date = dateUtils.toNoon( this.resolveDate( pDate ) );
+            const date = toNoon( this.resolveDate( pDate ) );
 
             const dayNum = date.getDay();
 
-            let occurrences = dateUtils.calculateOccurrencesOf( date.getFullYear(), date.getMonth(), dayNum );
+            let occurrences = calculateOccurrencesOf( date.getFullYear(), date.getMonth(), dayNum );
 
-            occurrences = occurrences.map( e => dateUtils.toNoon( e ).getTime() );
+            occurrences = occurrences.map( e => toNoon( e ).getTime() );
 
             const index = occurrences.indexOf( date.getTime() );
 
@@ -1027,7 +1043,7 @@ const $scope = utils?.$scope || function()
                     break;
             }
 
-            return Object.freeze( opt );
+            return lock( opt );
         }
 
         getValue( pDate, pLocale )
@@ -1127,7 +1143,7 @@ const $scope = utils?.$scope || function()
                 opt.hour = FORMATS.NUMERIC;
             }
 
-            return Object.freeze( opt );
+            return lock( opt );
         }
 
         getValue( pDate, pLocale )
@@ -1176,7 +1192,7 @@ const $scope = utils?.$scope || function()
                 opt.minute = FORMATS.NUMERIC;
             }
 
-            return Object.freeze( opt );
+            return lock( opt );
         }
 
         getValue( pDate, pLocale )
@@ -1208,7 +1224,7 @@ const $scope = utils?.$scope || function()
                 opt.second = FORMATS.NUMERIC;
             }
 
-            return Object.freeze( opt );
+            return lock( opt );
         }
 
         getValue( pDate, pLocale )
@@ -1235,7 +1251,7 @@ const $scope = utils?.$scope || function()
         {
             const opt = { fractionalSecondDigits: this.characters.length };
 
-            return Object.freeze( opt );
+            return lock( opt );
         }
 
         getValue( pDate, pLocale )
@@ -1260,7 +1276,7 @@ const $scope = utils?.$scope || function()
 
             // TODO
 
-            return Object.freeze( opt );
+            return lock( opt );
         }
     }
 
@@ -1279,7 +1295,7 @@ const $scope = utils?.$scope || function()
 
     }
 
-    const DEFAULT_OPTIONS = Object.freeze(
+    const DEFAULT_OPTIONS = lock(
         {
             monthNames: MONTH_NAMES,
             monthAbbreviations: MONTH_NAMES_SHORT,
@@ -1356,12 +1372,12 @@ const $scope = utils?.$scope || function()
 
         get locale()
         {
-            return Object.freeze( resolveLocale( this.#locale ) || DEFAULT_LOCALE );
+            return lock( resolveLocale( this.#locale ) || DEFAULT_LOCALE );
         }
 
         get options()
         {
-            return Object.freeze( this.#options || DEFAULT_OPTIONS );
+            return lock( this.#options || DEFAULT_OPTIONS );
         }
 
         get monthNames()
@@ -1411,7 +1427,7 @@ const $scope = utils?.$scope || function()
 
         get weekNumberingSystem()
         {
-            return Object.freeze( this.#weekNumberingSystem || new ISO8601_WeekNumberingSystem( this.firstDayOfWeek ) );
+            return lock( this.#weekNumberingSystem || new ISO8601_WeekNumberingSystem( this.firstDayOfWeek ) );
         }
 
         get firstDayOfWeek()
@@ -1421,12 +1437,12 @@ const $scope = utils?.$scope || function()
 
         get tokenDefinitions()
         {
-            return Object.freeze( DEFINED_TOKENS );
+            return lock( DEFINED_TOKENS );
         }
 
         get supportedTokens()
         {
-            return Object.freeze( SUPPORTED_TOKENS );
+            return lock( SUPPORTED_TOKENS );
         }
 
         getIndexOf( pUnit, pValue )
@@ -1757,7 +1773,7 @@ const $scope = utils?.$scope || function()
 
             results.push( tokens[tokens.length - 1] );
 
-            return Object.freeze( results );
+            return lock( results );
         };
     }
 
@@ -1793,7 +1809,7 @@ const $scope = utils?.$scope || function()
                     TokenSet
                 },
             DEFAULT_LOCALE,
-            DEFAULT_OPTIONS: Object.freeze( Object.assign( {}, DEFAULT_OPTIONS ) ),
+            DEFAULT_OPTIONS: lock( Object.assign( {}, DEFAULT_OPTIONS ) ),
             DEFINED_TOKENS,
             SUPPORTED_TOKENS,
             DEFINED_INTL_OPTIONS,
@@ -1828,14 +1844,14 @@ const $scope = utils?.$scope || function()
 
     if ( _ud !== typeof module )
     {
-        module.exports = Object.freeze( mod );
+        module.exports = lock( mod );
     }
 
     if ( $scope() )
     {
-        $scope()[INTERNAL_NAME] = Object.freeze( mod );
+        $scope()[INTERNAL_NAME] = lock( mod );
     }
 
-    return Object.freeze( mod );
+    return lock( mod );
 
 }());

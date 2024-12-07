@@ -28,19 +28,11 @@ const $scope = function()
             localeUtils
         };
 
-    let _mt_str = constants._mt_str;
+    const { isString, isNumber, isObject, isNull } = typeUtils;
 
-    let isString = typeUtils.isString;
-    let isNumber = typeUtils.isNumber;
-    let isObject = typeUtils.isObject;
-    let isNull = typeUtils.isNull;
+    const { asInt, asFloat, asString, lcase, isBlank } = stringUtils;
 
-    let asInt = stringUtils.asInt;
-    let asFloat = stringUtils.asFloat;
-    let asString = stringUtils.asString;
-
-    let lcase = stringUtils.lcase;
-    let isBlank = stringUtils.isBlank;
+    const resolveLocale = localeUtils.resolveLocale;
 
     const getReForDec = function( pDecimalSeparator )
     {
@@ -88,13 +80,13 @@ const $scope = function()
         {
             if ( pLocale instanceof Intl.Locale || isString( pLocale ) )
             {
-                this.#locale = localeUtils.resolveLocale( pLocale );
+                this.#locale = resolveLocale( pLocale );
             }
             else if ( pLocale instanceof Intl.NumberFormat )
             {
                 this.#numberFormat = pLocale;
                 this.#options = Object.assign( {}, this.#numberFormat.resolvedOptions() || pOptions || {} );
-                this.#locale = localeUtils.resolveLocale( this.#options.locale );
+                this.#locale = resolveLocale( this.#options.locale );
             }
 
             if ( pOptions && isObject( pOptions ) )
@@ -103,7 +95,7 @@ const $scope = function()
                 {
                     this.#numberFormat = pOptions;
                     this.#options = Object.assign( {}, this.#numberFormat.resolvedOptions() || pOptions || {} );
-                    this.#locale = localeUtils.resolveLocale( this.#options.locale || pLocale ) || this.#locale;
+                    this.#locale = resolveLocale( this.#options.locale || pLocale ) || this.#locale;
                 }
                 else
                 {
@@ -119,7 +111,7 @@ const $scope = function()
 
         get locale()
         {
-            return localeUtils.resolveLocale( this.#locale );
+            return resolveLocale( this.#locale );
         }
 
         get options()

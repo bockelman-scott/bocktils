@@ -53,50 +53,49 @@ const $scope = constants?.$scope || function()
             constants
         };
 
-    let _mt_str = constants._mt_str || "";
-    let _dot = constants._dot || ".";
-
-    let _str = constants._str || "string";
-    let _fun = constants._fun || "function";
-    let _num = constants._num || "number";
-    let _big = constants._big || "bigint";
-    let _bool = constants._bool || "boolean";
-    let _obj = constants._obj || "object";
-    let _symbol = constants._symbol || "symbol";
-
-    let HEX_DIGITS = constants.HEX_DIGITS;
-    let HEX_DIGITS_MAP = constants.HEX_DIGITS_MAP;
-    let OCT_DIGITS = constants.OCT_DIGITS;
-    let OCT_DIGITS_MAP = constants.OCT_DIGITS_MAP;
-
-    let S_ERR_PREFIX = constants.S_ERR_PREFIX;
-    let BUILTIN_TYPES = constants.BUILTIN_TYPES;
-    let BUILTIN_TYPE_NAMES = constants.BUILTIN_TYPE_NAMES;
-    let PRIMITIVE_WRAPPER_TYPES = constants.PRIMITIVE_WRAPPER_TYPES;
-
-    let AsyncFunction = constants.AsyncFunction;
-    let populateOptions = constants.populateOptions;
-    let no_op = constants.no_op;
-
+    const
+        {
+            _mt_str,
+            _dot,
+            _str,
+            _fun,
+            _num,
+            _big,
+            _bool,
+            _obj,
+            _symbol,
+            HEX_DIGITS,
+            HEX_DIGITS_MAP,
+            OCT_DIGITS,
+            OCT_DIGITS_MAP,
+            S_ERR_PREFIX,
+            BUILTIN_TYPES,
+            BUILTIN_TYPE_NAMES,
+            PRIMITIVE_WRAPPER_TYPES,
+            AsyncFunction,
+            populateOptions,
+            no_op,
+            lock
+        } = constants;
     /**
      * This is an array of the 'valid' JavaScript primitive types.
      * Note that 'undefined' is not considered to be a 'valid' type
      * @type {Readonly<(string)[]>}
      */
-    const VALID_TYPES = Object.freeze( [_str, _num, _big, _symbol, _bool, _obj, _fun] );
+    const VALID_TYPES = lock( [_str, _num, _big, _symbol, _bool, _obj, _fun] );
 
     /**
      * This is an array of all JavaScript primitive types.
      * This includes all the 'valid' types AND 'undefined'
      * @type {Readonly<(string)[]>}
      */
-    const JS_TYPES = Object.freeze( [_ud].concat( VALID_TYPES ) );
+    const JS_TYPES = lock( [_ud].concat( VALID_TYPES ) );
 
     /**
      * This object is a dictionary of the default values for each primitive type
      * @type {Readonly<{}>}
      */
-    const TYPE_DEFAULTS = Object.freeze(
+    const TYPE_DEFAULTS = lock(
         {
             [_str]: _mt_str,
             [_big]: 0n,
@@ -1490,7 +1489,7 @@ const $scope = constants?.$scope || function()
 
         get value()
         {
-            return Object.freeze( this.#value );
+            return lock( this.#value );
         }
 
         static Some( pValue )
@@ -1751,13 +1750,13 @@ const $scope = constants?.$scope || function()
 
     if ( _ud !== typeof module )
     {
-        module.exports = Object.freeze( mod );
+        module.exports = lock( mod );
     }
 
     if ( $scope() )
     {
-        $scope()[INTERNAL_NAME] = Object.freeze( mod );
+        $scope()[INTERNAL_NAME] = lock( mod );
     }
 
-    return Object.freeze( mod );
+    return lock( mod );
 }());

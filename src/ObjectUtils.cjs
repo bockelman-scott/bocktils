@@ -40,105 +40,87 @@ const $scope = constants?.$scope || function()
 
     let
         {
-            _mt_str = constants?._mt_str || "",
-            _mt_chr = constants?._mt_chr || "",
-            _dblqt = constants?._dblqt || "\"",
-            _colon = constants?._colon || ":",
-            _dot = constants?._dot || ".",
-            _spc = constants?._spc || " ",
-            _str = constants?._str || "string",
-            _fun = constants?._fun || "function",
-            _obj = constants?._obj || "object",
-            _num = constants?._num || "number",
-            _big = constants?._big || "bigint",
-            _bool = constants?._bool || "boolean",
-            _symbol = constants?._symbol || "symbol",
-            _underscore = constants?._underscore || "_",
-            ignore = function() {},
-            IllegalArgumentError = constants?.IllegalArgumentError || Error,
-            IterationCap = constants?.IterationCap,
-            BUILTIN_TYPES = constants.BUILTIN_TYPES || [],
-            REG_EXP_DOT = constants?.REG_EXP_DOT || /\./,
-            REG_EXP_LEADING_DOT = constants?.REG_EXP_LEADING_DOT || /^\./,
-            REG_EXP_TRAILING_DOT = constants?.REG_EXP_TRAILING_DOT || /\.$/,
-
-            asArray = arrayUtils?.asArray || function( pArr ) { return Array.isArray( pArr ) ? pArr : [pArr]; },
-            pruneArray = arrayUtils?.pruneArray || function( pArr ) { return asArray( pArr ).filter( e => !(_ud === typeof e || null === e) ); },
-            unique = arrayUtils?.unique || function( pArr ) { return [...(new Set( asArray( pArr ) ))]; },
-            hasElementAt = arrayUtils?.hasElementAt || function( pArr, pIndex ) {return asArray( pArr )?.length > asInt( pIndex );},
-
-            AsyncFunction = ((async function() {}).constructor),
-
+            _mt_str,
+            _dot,
+            _str,
+            _fun,
+            _obj,
+            _num,
+            _big,
+            _bool,
+            _symbol,
+            _underscore,
+            ignore,
+            IllegalArgumentError,
+            IterationCap,
+            BUILTIN_TYPES,
+            REG_EXP_DOT,
+            REG_EXP_LEADING_DOT,
+            REG_EXP_TRAILING_DOT,
+            no_op,
+            populateOptions,
+            funcToString,
             EMPTY_ARRAY = Object.freeze( [] ),
             EMPTY_OBJECT = Object.freeze( {} ),
+            lock,
+            deepFreeze,
+            localCopy,
+            immutableCopy,
+        } = constants;
 
-            // does nothing, on purpose
-            no_op = constants?.no_op || function() {},
-            populateOptions = constants?.populateOptions,
-            funcToString = constants?.funcToString || Function.prototype.toString
-
-        } = constants || {};
+    let
+        {
+            isString,
+            isUndefined,
+            isDefined,
+            isNull,
+            isNotNull,
+            isNonNullValue,
+            isObject,
+            isCustomObject,
+            isNonNullObject,
+            isFunction,
+            isAsyncFunction,
+            isNumber,
+            isNumeric,
+            isZero,
+            isBoolean,
+            isArray,
+            isMap,
+            isSet,
+            isDate,
+            isRegExp,
+            isClass,
+            isUserDefinedClass,
+            isListedClass,
+            isInstanceOfUserDefinedClass,
+            isInstanceOfListedClass,
+            isSymbol,
+            isType,
+            instanceOfAny,
+            getClassName,
+            getClass,
+            isReadOnly,
+            JS_TYPES,
+            VALID_TYPES
+        } = typeUtils;
 
     // explicitly define several variables that are imported from the dependencies
     // this is done to help IDEs that cannot infer what is in scope otherwise
     let
         {
-            isString = typeUtils.isString,
-            isUndefined = typeUtils.isUndefined,
-            isDefined = typeUtils.isDefined,
-            isNull = typeUtils.isNull,
-            isNotNull = typeUtils.isNotNull,
-            isNonNullValue = typeUtils.isNonNullValue,
-            isObject = typeUtils.isObject,
-            isCustomObject = typeUtils.isCustomObject,
-            isNonNullObject = typeUtils.isNonNullObject,
-            isFunction = typeUtils.isFunction,
-            isAsyncFunction = typeUtils.isAsyncFunction,
-            isNumber = typeUtils.isNumber,
-            isNumeric = typeUtils.isNumeric,
-            isZero = typeUtils.isZero,
-            isBoolean = typeUtils.isBoolean,
-            isArray = typeUtils.isArray,
-            isMap = typeUtils.isMap,
-            isSet = typeUtils.isSet,
-            isDate = typeUtils.isDate,
-            isRegExp = typeUtils.isRegExp,
-            isClass = typeUtils.isClass,
-            isUserDefinedClass = typeUtils.isUserDefinedClass,
-            isListedClass = typeUtils.isListedClass,
-            isInstanceOfUserDefinedClass = typeUtils.isInstanceOfUserDefinedClass,
-            isInstanceOfListedClass = typeUtils.isInstanceOfListedClass,
-            isSymbol = typeUtils.isSymbol,
-            isType = typeUtils.isType,
-            instanceOfAny = typeUtils.instanceOfAny,
-            getClassName = typeUtils.getClassName,
-            getClass = typeUtils.getClass,
-            isReadOnly = typeUtils.isReadOnly,
-            JS_TYPES = typeUtils.JS_TYPES,
-            VALID_TYPES = typeUtils.VALID_TYPES
+            asString,
+            isBlank,
+            asKey,
+            lcase,
+            ucase,
+            isValidNumber,
+            asInt,
+            evaluateBoolean,
+            toBool
+        } = stringUtils;
 
-        } = typeUtils || {};
-
-    // explicitly define several variables that are imported from the dependencies
-    // this is done to help IDEs that cannot infer what is in scope otherwise
-    let
-        {
-            asString = stringUtils?.asString || function( s ) { return (_mt_str + s).trim(); },
-            isBlank = stringUtils?.isBlank || function( s ) { return _mt_str === asString( s ).trim(); },
-            asKey = stringUtils.asKey || function( s ) { return (constants._dblqt + asString( s, true ).trim() + constants._dblqt); },
-            lcase = stringUtils?.lcase || function( s ) { return asString( s ).toLowerCase(); },
-            ucase = stringUtils?.ucase || function( s ) { return asString( s ).toUpperCase(); },
-            isValidNumber = stringUtils?.isValidNumber || function( n ) { return !(/[^_\d.]+/.test( asString( n ) )); },
-            asInt = stringUtils?.asInt || function( s ) { return parseInt( asString( s ).replace( /\..*/, _mt_str ).replace( /\D/g, _mt_str ) ); },
-            evaluateBoolean = stringUtils.evaluateBoolean,
-            toBool = stringUtils.toBool
-        } = stringUtils || {};
-
-    /**
-     * An array of the names of the methods exposed by Array
-     * @type {string[]}
-     */
-    let ARRAY_METHODS = arrayUtils.ARRAY_METHODS;
+    let { ARRAY_METHODS, asArray, pruneArray, unique, varargs, immutableVarArgs } = arrayUtils;
 
     /**
      * An array of this module's dependencies
@@ -154,8 +136,6 @@ const $scope = constants?.$scope || function()
             arrayUtils,
             guidUtils
         };
-
-    const me = exposeModule || this;
 
     const uniqueObjectId = Symbol.for( "__BOCK__UNIQUE_OBJECT_ID__" );
 
@@ -395,6 +375,7 @@ const $scope = constants?.$scope || function()
     {
         #count;
         #limit;
+
         #f;
         #arguments;
 
@@ -472,7 +453,7 @@ const $scope = constants?.$scope || function()
 
                 try
                 {
-                    returnValue = this.executable.apply( me, args );
+                    returnValue = this.executable.apply( thisArg || this, args );
                 }
                 catch( ex )
                 {
@@ -495,7 +476,7 @@ const $scope = constants?.$scope || function()
 
                 try
                 {
-                    this.executable.call( me, ...args );
+                    this.executable.call( thisArg || this, ...args );
                 }
                 catch( ex )
                 {
@@ -508,12 +489,12 @@ const $scope = constants?.$scope || function()
 
         bind( thisArg, ...argArray )
         {
-            return super.bind( me, ...argArray );
+            return super.bind( thisArg || this, ...argArray );
         }
 
         toString()
         {
-            return super.toString();
+            return funcToString.call( this.executable, this.executable );
         }
     }
 
@@ -3362,47 +3343,6 @@ const $scope = constants?.$scope || function()
         }
 
         return obj;
-    };
-
-    const lock = function( pObject )
-    {
-        if ( isUndefined( pObject ) || null === pObject )
-        {
-            return pObject;
-        }
-        return Object.freeze( pObject );
-    };
-
-    const deepFreeze = function( pObject )
-    {
-        if ( isUndefined( pObject ) || null === pObject )
-        {
-            return pObject;
-        }
-
-        if ( !isObject( pObject ) )
-        {
-            return lock( pObject );
-        }
-
-        let obj = pObject;
-
-        if ( Object.isFrozen( pObject ) )
-        {
-            obj = {};
-        }
-
-        const entries = getEntries( pObject );
-
-        for( let entry of entries )
-        {
-            const key = entry.key || entry[0];
-            const value = entry.value || entry[1];
-
-            obj[key] = deepFreeze( value );
-        }
-
-        return lock( obj );
     };
 
     const mod =

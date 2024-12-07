@@ -4,7 +4,7 @@ const stringUtils = require( "./StringUtils.cjs" );
 const arrayUtils = require( "./ArrayUtils.cjs" );
 const objectUtils = require( "./ObjectUtils.cjs" );
 
-const guidUtils = objectUtils?.guidUtils || objectUtils?.dependencies?.guidUtils || require( "./GUIDUtils.cjs" );
+const guidUtils = objectUtils?.guidUtils || objectUtils?.dependencies?.guidUtils;
 
 let _ud = constants._ud || "undefined";
 
@@ -36,7 +36,8 @@ const $scope = constants?.$scope || function()
                     typeUtils,
                     stringUtils,
                     arrayUtils,
-                    objectUtils
+                    objectUtils,
+                    guidUtils
                 }
         };
 
