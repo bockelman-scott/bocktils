@@ -868,3 +868,50 @@ describe( "Errors", () =>
     } );
 
 } );
+
+describe( "ModulePrototype - Events", () =>
+{
+    const loggedMessages = [];
+
+    const mock = function( ...pArgs )
+    {
+        loggedMessages.push( ...pArgs );
+    };
+
+    const mockLogger =
+        {
+            log: mock,
+            info: mock,
+            error: mock,
+            debug: mock,
+            warn: mock
+        };
+
+    test( "Consumers can react to events emitted from modules", () =>
+    {
+        const mod = constants;
+
+        const ModEvent = CustomEvent || constants.ModuleEvent;
+
+        mod.addEventListener( "TEST", function( pEvt ) { expect( pEvt.detail ).toEqual( { a: 1, b: 2 } ); } );
+
+        mod.dispatchEvent( new ModEvent( "TEST", { a: 1, b: 2 } ) );
+    } );
+
+    test( "Consumers can assign a logger to any module", () =>
+    {
+        const mod = constants;
+
+        mod.logger = mockLogger;
+
+        expect( mod.logger ).toEqual( mockLogger );
+
+        loggedMessages.length = 0;
+
+        mod.testLogger( "some", "logged", "data", { foo: "bar" } );
+
+        expect( loggedMessages.length ).toEqual( 4 );
+        expect( loggedMessages ).toEqual( ["some", "logged", "data", { foo: "bar" }] );
+    } );
+
+} );

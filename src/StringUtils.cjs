@@ -79,7 +79,9 @@ const $scope = constants?.$scope || function()
             _crlf,
             S_TRUE,
             S_FALSE,
-            S_NULL,
+            S_ERROR = "error",
+            S_ERR_PREFIX = `An ${S_ERROR} occurred while`,
+            S_DEFAULT_OPERATION = "executing script",
             _affirmatives,
             _str,
             _fun,
@@ -93,6 +95,18 @@ const $scope = constants?.$scope || function()
             populateOptions,
             lock
         } = constants;
+
+    const classes = constants.classes;
+    const { ModuleEvent, ModulePrototype } = classes;
+
+    if ( _ud === typeof CustomEvent )
+    {
+        CustomEvent = ModuleEvent;
+    }
+
+    const isLogger = constants.isLogger || ModulePrototype.isLogger;
+
+    let modulePrototype = new ModulePrototype( "StringUtils", INTERNAL_NAME );
 
     const
         {
@@ -295,7 +309,19 @@ const $scope = constants?.$scope || function()
                 }
                 catch( ex )
                 {
-                    konsole.warn( constants.S_ERR_PREFIX, "removing non-numeric characters", ex );
+                    let msg = [S_ERR_PREFIX, "removing non-numeric characters", ex];
+
+                    if ( isLogger( modulePrototype.logger ) )
+                    {
+                        modulePrototype.logger.warn( ...msg );
+                    }
+
+                    modulePrototype.dispatchEvent( new CustomEvent( "error",
+                                                                    {
+                                                                        error: ex,
+                                                                        message: msg.filter( e => isString( e ) ).join( _spc ),
+                                                                        method: "asString"
+                                                                    } ) );
                 }
             }
 
@@ -2632,7 +2658,7 @@ const $scope = constants?.$scope || function()
         return toggleCaps( str, lcase, asString );
     }
 
-    const mod =
+    let mod =
         {
             dependencies,
             asString,
@@ -2696,9 +2722,11 @@ const $scope = constants?.$scope || function()
             formatMessage,
             interpolate,
             getFunctionSource,
-            classes: { StringComparatorFactory },
+            classes: { StringComparatorFactory, ModuleEvent, ModulePrototype, CustomEvent },
             StringComparatorFactory
         };
+
+    mod = Object.assign( modulePrototype, mod );
 
     if ( _ud !== typeof module )
     {
@@ -2709,6 +2737,8 @@ const $scope = constants?.$scope || function()
     {
         $scope()[INTERNAL_NAME] = lock( mod );
     }
+
+    mod.dispatchEvent( new CustomEvent( "load", mod ) );
 
     return lock( mod );
 

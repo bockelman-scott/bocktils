@@ -5,6 +5,8 @@
  * and _may_ reduce memory consumption in _some_ interpreters
  */
 
+const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
+
 (function exposeModule()
 {
     /** This is the typeof a variable that does not exist or has been declared without a default value
@@ -37,6 +39,16 @@
         return $scope()[INTERNAL_NAME];
     }
 
+    const ModuleEvent = bockModuleBootstrap.BockModuleEvent;
+    const ModulePrototype = bockModuleBootstrap.BockModulePrototype;
+
+    if ( _ud === typeof CustomEvent )
+    {
+        CustomEvent = ModuleEvent;
+    }
+
+    let modulePrototype = new ModulePrototype( "Constants", INTERNAL_NAME );
+
     /**
      * An array of this module's dependencies
      * which are re-exported with this module,
@@ -45,7 +57,7 @@
      */
     const dependencies =
         {
-            // this module has no dependencies
+            bockModuleBootstrap
         };
 
     /**
@@ -259,6 +271,7 @@
         return (_fun === typeof Array.isArray && Array.isArray( pObject )) || {}.toString.call( pObject ) === "[object Array]";
     }
 
+    const isLogger = ModulePrototype.isLogger;
     /**
      * Returns true if the specified value is immutable.
      *
@@ -476,7 +489,20 @@
                                     }
                                     catch( ex )
                                     {
-                                        konsole.warn( key, "could not be bound to the clone", ex );
+                                        const log = this.logger || modulePrototype.logger;
+
+                                        if ( isLogger( log ) )
+                                        {
+                                            log.warn( key, "could not be bound to the clone", ex );
+                                        }
+
+                                        let dispatchEvent = this.dispatchEvent || modulePrototype.dispatchEvent;
+
+                                        if ( _fun === typeof this.dispatchEvent )
+                                        {
+                                            const event = new (CustomEvent || ModuleEvent)( "error", ex );
+                                            dispatchEvent.call( modulePrototype, event );
+                                        }
                                     }
                                 }
                             }
@@ -1436,7 +1462,7 @@
         return immutableCopy( pObject, IMMUTABLE_COPY_OPTIONS, pStack );
     };
 
-    const mod =
+    let mod =
         {
             _ud,
             _obj,
@@ -1562,7 +1588,16 @@
             REG_EXP_TRAILING_DOT,
             DEFAULT_NUMBER_FORMATTING_SYMBOLS,
             dependencies,
-            classes: { IterationCap, ComparatorFactory, StackTrace, __Error, IllegalArgumentError },
+            classes: {
+                IterationCap,
+                ComparatorFactory,
+                StackTrace,
+                __Error,
+                IllegalArgumentError,
+                ModuleEvent,
+                ModulePrototype,
+                CustomEvent
+            },
             IterationCap,
             IllegalArgumentError,
             ComparatorFactory,
@@ -1576,24 +1611,28 @@
             lock,
             deepFreeze,
             calculateNumberFormattingSymbols,
-            funcToString
+            funcToString,
+            isLogger,
+            testLogger: function( ...pTestData )
+            {
+                this.logger.warn( ...pTestData );
+            }
         };
 
-    mod.clone = function()
-    {
-        return Object.assign( {}, mod );
-    };
+    mod = Object.assign( modulePrototype, mod );
 
     if ( _ud !== typeof module )
     {
-        module.exports = Object.freeze( mod );
+        module.exports = lock( mod );
     }
 
     if ( $scope() )
     {
-        $scope()[INTERNAL_NAME] = Object.freeze( mod );
+        $scope()[INTERNAL_NAME] = lock( mod );
     }
 
-    return Object.freeze( mod );
+    mod.dispatchEvent( new CustomEvent( "load", mod ) );
+
+    return lock( mod );
 
 }());
