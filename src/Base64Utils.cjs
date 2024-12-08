@@ -30,7 +30,7 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
-    let _mt_str = constants._mt_str;
+    let { _mt_str, lock } = constants;
 
     let { asString, lcase } = stringUtils;
 
@@ -42,9 +42,9 @@ const $scope = constants?.$scope || function()
 
     const DEFAULT_TEXT_ENCODING = utf8;
 
-    const validEncodings = Object.freeze( ["ascii", "utf8", utf8, "utf16le", "utf-16le", "ucs2", "ucs-2", base64, "base64url", "latin1", "binary", "hex"] );
+    const validEncodings = lock( ["ascii", "utf8", utf8, "utf16le", "utf-16le", "ucs2", "ucs-2", base64, "base64url", "latin1", "binary", "hex"] );
 
-    const DEFAULT_BASE64_OPTIONS = Object.freeze( { replacements: [[/ /g, "+"], [/ /, "+"]] } );
+    const DEFAULT_BASE64_OPTIONS = lock( { replacements: [[/ /g, "+"], [/ /, "+"]] } );
 
     /**
      * Returns a valid base64 encoded string by replacing spaces with '+'
@@ -120,7 +120,6 @@ const $scope = constants?.$scope || function()
     function toBytes( pStr, pOptions = DEFAULT_BASE64_OPTIONS )
     {
         const str = cleanBase64( asString( pStr, true ), pOptions );
-
         return Buffer.from( str, base64 );
     }
 
@@ -131,10 +130,7 @@ const $scope = constants?.$scope || function()
      */
     function toBase64( pBytes )
     {
-        let bytes = pBytes || [];
-
-        const buffer = Buffer.from( bytes );
-
+        const buffer = Buffer.from( pBytes || [] );
         return cleanBase64( buffer.toString( base64 ) );
     }
 
@@ -166,14 +162,14 @@ const $scope = constants?.$scope || function()
 
     if ( _ud !== typeof module )
     {
-        module.exports = Object.freeze( mod );
+        module.exports = lock( mod );
     }
 
     if ( $scope() )
     {
-        $scope()[INTERNAL_NAME] = Object.freeze( mod );
+        $scope()[INTERNAL_NAME] = lock( mod );
     }
 
-    return Object.freeze( mod );
+    return lock( mod );
 
 }());

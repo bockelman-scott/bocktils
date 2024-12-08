@@ -9,9 +9,6 @@ const constants = require( "./Constants.cjs" );
 /** import the TypeUtils we depend upon using require for maximum compatibility with Node versions */
 const typeUtils = require( "./TypeUtils.cjs" );
 
-/** create an alias for the console to avoid Lint warnings */
-const konsole = console || {};
-
 /**
  * Defines a string to represent the type, undefined
  */
@@ -82,6 +79,11 @@ const $scope = constants?.$scope || function()
             S_ERROR = "error",
             S_ERR_PREFIX = `An ${S_ERROR} occurred while`,
             S_DEFAULT_OPERATION = "executing script",
+            S_WARN = "warn",
+            S_LOG = "log",
+            S_DEBUG = "debug",
+            S_INFO = "info",
+            S_TRACE = "trace",
             _affirmatives,
             _str,
             _fun,
@@ -90,21 +92,20 @@ const $scope = constants?.$scope || function()
             _bool,
             _obj,
             _symbol,
+            IllegalArgumentError,
             ComparatorFactory,
             funcToString,
             populateOptions,
-            lock
+            lock,
+            classes
         } = constants;
 
-    const classes = constants.classes;
     const { ModuleEvent, ModulePrototype } = classes;
 
     if ( _ud === typeof CustomEvent )
     {
         CustomEvent = ModuleEvent;
     }
-
-    const isLogger = constants.isLogger || ModulePrototype.isLogger;
 
     let modulePrototype = new ModulePrototype( "StringUtils", INTERNAL_NAME );
 
@@ -117,8 +118,10 @@ const $scope = constants?.$scope || function()
             isNonNullObject,
             isString,
             isNumber,
+            isBigInt,
             isBoolean,
             isObject,
+            isArray,
             isFunction,
             isOctal,
             isHex
@@ -261,10 +264,12 @@ const $scope = constants?.$scope || function()
         // capture 'this' in a closure-scoped variable for use in the 'stringify' function below
         const me = asString || this;
 
+        const methodName = "asString";
+
         let s = _mt_str;
 
         // allow this function to be added as a method to String.prototype if desired
-        if ( isUndefined( pStr ) || isNull( pStr ) || arguments.length <= 0 )
+        if ( isUndefined( pStr ) || isNull( pStr, true ) || arguments.length <= 0 )
         {
             // note that we code this in such a way that it can be bound to the String.prototype as a member function (a.k.a. method)
             if ( (this instanceof String || String === this?.constructor) && isFunction( this.asString ) )
@@ -309,19 +314,7 @@ const $scope = constants?.$scope || function()
                 }
                 catch( ex )
                 {
-                    let msg = [S_ERR_PREFIX, "removing non-numeric characters", ex];
-
-                    if ( isLogger( modulePrototype.logger ) )
-                    {
-                        modulePrototype.logger.warn( ...msg );
-                    }
-
-                    modulePrototype.dispatchEvent( new CustomEvent( "error",
-                                                                    {
-                                                                        error: ex,
-                                                                        message: msg.filter( e => isString( e ) ).join( _spc ),
-                                                                        method: "asString"
-                                                                    } ) );
+                    modulePrototype.reportError( ex, "removing non-numeric characters", S_ERROR, methodName );
                 }
             }
 
@@ -348,12 +341,12 @@ const $scope = constants?.$scope || function()
             case _big:
                 try
                 {
-                    let n = isNaN( input ) || !isFinite( input ) ? 0 : parseFloat( input );
-                    s = isNaN( n ) || !isFinite( n ) ? "0" : (_mt_str + n);
+                    let n = isBigInt( input ) || !isNanOrInfinite( input ) ? parseFloat( input ) : 0;
+                    s = isNanOrInfinite( n ) ? "0" : (_mt_str + n);
                 }
                 catch( ex )
                 {
-                    konsole.warn( ex.message );
+                    modulePrototype.reportError( ex, "trying to interpret " + (_mt_str + input) + " as a number", S_WARN, methodName );
                 }
                 break;
 
@@ -397,7 +390,7 @@ const $scope = constants?.$scope || function()
                         }
                         catch( ex )
                         {
-                            konsole.warn( constants.S_ERR_PREFIX, "formatting a Date", input, ex );
+                            modulePrototype.reportError( ex, "formatting a Date", S_WARN, methodName );
                             s = input.toISOString();
                         }
                     }
@@ -437,7 +430,7 @@ const $scope = constants?.$scope || function()
                             }
                             catch( e )
                             {
-                                konsole.warn( constants?.S_ERR_PREFIX, "obtaining the name of a function", e );
+                                modulePrototype.reportError( e, "obtaining the name of a function", S_WARN, methodName );
                             }
                         }
 
@@ -453,7 +446,7 @@ const $scope = constants?.$scope || function()
                             }
                             catch( ex )
                             {
-                                konsole.warn( constants?.S_ERR_PREFIX, "while converting an object to JSON", ex );
+                                modulePrototype.reportError( ex, "while converting an object to JSON", S_WARN, methodName );
 
                                 if ( !isString( s ) || isBlank( s ) )
                                 {
@@ -484,7 +477,7 @@ const $scope = constants?.$scope || function()
                         }
                         catch( ex )
                         {
-                            konsole.warn( constants.S_ERR_PREFIX, "while executing a function as input to asString", ex );
+                            modulePrototype.reportError( ex, "while executing a function as input to asString", S_WARN, methodName );
 
                             s = input?.name || input?.constructor?.name || (options.returnFunctionSource ? getFunctionSource( input ) : _mt_str);
                         }
@@ -498,7 +491,7 @@ const $scope = constants?.$scope || function()
                         }
                         catch( ex )
                         {
-                            konsole.warn( ex );
+                            modulePrototype.reportError( ex, "getting a string representation of a function", S_WARN, methodName );
                         }
                     }
 
@@ -1369,16 +1362,18 @@ const $scope = constants?.$scope || function()
             return asInt( dflt, zero, options );
         }
 
-        function warnValueOutOfRange( pInput )
+        function warnValueOutOfRange( pInput, pSource = "asInt" )
         {
-            konsole.warn( "asInt cannot return values greater than", Number.MAX_SAFE_INTEGER, "or less than", Number.MIN_SAFE_INTEGER, _dot, _spc, (pInput || input || "the specified value"), "cannot be converted to an Integer" );
+            const msg = ["asInt cannot return values greater than", Number.MAX_SAFE_INTEGER, "or less than", Number.MIN_SAFE_INTEGER, _dot, _spc, (pInput || input || "the specified value"), "cannot be converted to an Integer"].join( _spc );
+
+            modulePrototype.reportError( new IllegalArgumentError( msg ), msg, S_WARN, pSource || "asInt" );
         }
 
         let radix = _calculateRadix( input );
 
         if ( [_num, _big].includes( type ) )
         {
-            if ( isNaN( input ) || !isFinite( input ) )
+            if ( isNanOrInfinite( input ) )
             {
                 return asInt( dflt, zero, options );
             }
@@ -1392,7 +1387,7 @@ const $scope = constants?.$scope || function()
 
             const val = parseInt( (input).toFixed( 0 ) );
 
-            if ( isNaN( val ) || !isFinite( val ) )
+            if ( isNanOrInfinite( val ) )
             {
                 return asInt( dflt, zero, options );
             }
@@ -1419,7 +1414,7 @@ const $scope = constants?.$scope || function()
         {
             val = parseInt( canonical, radix );
 
-            if ( isNaN( val ) || !isFinite( val ) )
+            if ( isNanOrInfinite( val ) )
             {
                 val = asInt( dflt, zero, options );
             }
@@ -1442,7 +1437,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            konsole.warn( (pValue || input), "cannot be interpreted as a number", ex.message );
+            modulePrototype.reportError( ex, "trying to interpret '" + asString( pValue || input ) + "' as a number", S_WARN, "asInt" );
         }
 
         return val || zero;
@@ -1496,7 +1491,7 @@ const $scope = constants?.$scope || function()
         {
             const val = parseFloat( canonical );
 
-            if ( isNaN( val ) || !isFinite( val ) )
+            if ( isNanOrInfinite( val ) )
             {
                 return asFloat( dflt, zero, options );
             }
@@ -1534,14 +1529,14 @@ const $scope = constants?.$scope || function()
                 }
             }
 
-            if ( isNaN( val ) || !isFinite( val ) )
+            if ( isNanOrInfinite( val ) )
             {
                 val = asFloat( dflt, zero, options );
             }
         }
         catch( ex )
         {
-            konsole.warn( pValue + " cannot be interpreted as a number", ex.message );
+            modulePrototype.reportError( ex, "trying to interpret '" + asString( pValue || input ) + "' as a number", S_WARN, "asInt" );
         }
 
         return val || zero;
@@ -1749,8 +1744,8 @@ const $scope = constants?.$scope || function()
             }
             catch( ex )
             {
-                konsole.error( "An error occurred while trying to determine the verity of " + (val?.name || val.toString()) + " with arguments ", ...pFunctionArgs );
-
+                const msg = "trying to determine the verity of '" + (val?.name || asString( val )) + "' with arguments " + (pFunctionArgs || []).join( _comma );
+                modulePrototype.reportError( ex, msg, S_ERROR, "evaluateBoolean" );
                 return false;
             }
         }
@@ -1972,7 +1967,7 @@ const $scope = constants?.$scope || function()
         {
             try
             {
-                return !pTest || typeUtils.isObject( JSON.parse( s ) );
+                return !pTest || isObject( JSON.parse( s ) );
             }
             catch( ex )
             {
@@ -2004,7 +1999,7 @@ const $scope = constants?.$scope || function()
         {
             try
             {
-                return !pTest || typeUtils.isArray( JSON.parse( s ) );
+                return !pTest || isArray( JSON.parse( s ) );
             }
             catch( ex )
             {
@@ -2091,6 +2086,16 @@ const $scope = constants?.$scope || function()
             ...DEFAULT_NUMBER_SYMBOLS
         } );
 
+    function isNanOrInfinite( pNum )
+    {
+        if ( ![_num, _big].includes( typeof pNum ) )
+        {
+            return true;
+        }
+        const num = parseFloat( pNum );
+        return isNaN( num ) || !isFinite( num );
+    }
+
     /**
      * Returns true if the argument is a number
      * (and optionally, if it is in the valid range defined in the pOptions argument)
@@ -2122,19 +2127,19 @@ const $scope = constants?.$scope || function()
         {
             num = parseFloat( asString( pNum, true ) );
 
-            if ( isNaN( num ) || !isFinite( num ) )
+            if ( isNanOrInfinite( num ) )
             {
                 return false;
             }
         }
         catch( ex )
         {
-            konsole.warn( ex.message );
+            modulePrototype.reportError( ex, "trying to interpret " + asString( pNum ) + " as a number", S_WARN, "isValidNumber" );
         }
 
         // create a local variable to control the rest of the logic
         // initialize it according to what we know so far
-        let valid = !((isNaN( pNum ) || !isFinite( pNum ) || isNaN( num ) || !isFinite( num )));
+        let valid = !((isNanOrInfinite( pNum ) || isNanOrInfinite( num )));
 
         // if the argument is a number, is it in the valid range specified
         if ( valid )
@@ -2163,12 +2168,7 @@ const $scope = constants?.$scope || function()
 
                 let num = parseFloat( s ) || Number( s );
 
-                if ( !(isNaN( num ) && Number.isFinite( num )) )
-                {
-                    return isValidNumber( num, options );
-                }
-
-                break;
+                return isValidNumber( num, options );
 
             case _obj:
                 if ( pStr instanceof Number || pStr instanceof BigInt )
@@ -2583,7 +2583,7 @@ const $scope = constants?.$scope || function()
                     }
                     catch( ex )
                     {
-                        konsole.error( ex.message );
+                        modulePrototype.reportError( ex, "trying to execute " + asString( func?.name || funcToString.call() ) + " as a number", S_WARN, "asInt" );
                     }
                 }
 
@@ -2726,20 +2726,8 @@ const $scope = constants?.$scope || function()
             StringComparatorFactory
         };
 
-    mod = Object.assign( modulePrototype, mod );
+    mod = modulePrototype.extend( mod );
 
-    if ( _ud !== typeof module )
-    {
-        module.exports = lock( mod );
-    }
-
-    if ( $scope() )
-    {
-        $scope()[INTERNAL_NAME] = lock( mod );
-    }
-
-    mod.dispatchEvent( new CustomEvent( "load", mod ) );
-
-    return lock( mod );
+    return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 
 }());

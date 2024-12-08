@@ -3,9 +3,6 @@ const constants = require( "./Constants.cjs" );
 const typeUtils = require( "./TypeUtils.cjs" );
 const stringUtils = require( "./StringUtils.cjs" );
 
-/** create an alias for console **/
-const konsole = console || {};
-
 /** define a variable for typeof undefined **/
 const _ud = constants?._ud || "undefined";
 
@@ -14,7 +11,7 @@ const _ud = constants?._ud || "undefined";
  */
 const $scope = constants?.$scope || function()
 {
-    return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
+    return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };
 
 (function exposeModule()
@@ -55,15 +52,50 @@ const $scope = constants?.$scope || function()
         _big,
         _bool,
         _symbol,
+        S_ERROR,
+        S_LOG,
+        S_INFO,
+        S_WARN,
+        S_DEBUG,
+        S_TRACE,
         ignore,
         AsyncFunction,
         EMPTY_ARRAY,
-        populateOptions
+        populateOptions,
+        localCopy,
+        immutableCopy,
+        lock,
+        classes
     } = constants;
 
-    let { isNull, isObject, isBoolean, isFunction } = typeUtils;
+    const { ModuleEvent, ModulePrototype } = classes;
 
-    let { asString, isBlank, asInt, lcase, isValidNumber, isValidNumeric } = stringUtils;
+    if ( _ud === typeof CustomEvent )
+    {
+        CustomEvent = ModuleEvent;
+    }
+
+    let modulePrototype = new ModulePrototype( "ArrayUtils", INTERNAL_NAME );
+
+    let {
+        VALID_TYPES,
+        isUndefined,
+        isNull,
+        isString,
+        isNumber,
+        isNumeric,
+        isInteger,
+        isFloat,
+        isObject,
+        isBoolean,
+        isFunction,
+        isDate,
+        isClass,
+        defaultFor,
+        castTo
+    } = typeUtils;
+
+    let { asString, isEmpty, isBlank, asInt, asFloat, lcase, isValidNumber, isValidNumeric, rightOfLast } = stringUtils;
 
     // poly-fill for isArray; probably obsolete with modern environments
     if ( _fun !== typeof Array.isArray )
@@ -77,7 +109,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            // wrapped in a try/catch for any environment that does not permit extending the built-in objects/functions
+            modulePrototype.reportError( ex, "extending the built-in Array class", S_WARN, "isArray" );
         }
     }
 
@@ -126,8 +158,8 @@ const $scope = constants?.$scope || function()
      * If it is a string, then, depending on the options optionally specified, that string is either split on a value and resulting array is returned,or...
      *                          the string is wrapped in an array literal and a one element array containing the string is returned.
      * if the input is a primitive value, a one element array containing that value is returned.
-     * if the input is a function, that function is executed with the options as its argument and the result is passed back into this function
-     * if the input is an object, a new array is created and populated with the "first-level" properties of the object and then returned
+     * if the input is a function, we execute that function with the options as its argument, passing the result back into this function
+     * if the input is an object, we create aa new array populated with the "first-level" properties of the object and then returned
      * @param {any} pMaybeAnArray
      * @param {object} pOptions
      * @returns
@@ -147,7 +179,7 @@ const $scope = constants?.$scope || function()
                     break;
 
                 case _str:
-                    if ( !typeUtils.isUndefined( options?.splitOn ) && typeUtils.isString( options?.splitOn ) )
+                    if ( !isUndefined( options?.splitOn ) && isString( options?.splitOn ) )
                     {
                         const sep = asString( options?.splitOn );
                         arr = arr.split( sep ) || [arr];
@@ -168,7 +200,7 @@ const $scope = constants?.$scope || function()
 
                     try
                     {
-                        if ( typeUtils.isClass( arr ) )
+                        if ( isClass( arr ) )
                         {
                             const clazz = arr;
 
@@ -183,7 +215,7 @@ const $scope = constants?.$scope || function()
                     }
                     catch( ex )
                     {
-                        konsole.error( "Could not execute " + (arr?.name || arr), ex );
+                        modulePrototype.reportError( ex, "trying to execute " + (arr?.name || arr), S_WARN, "asArray" );
                     }
                     break;
 
@@ -228,9 +260,9 @@ const $scope = constants?.$scope || function()
 
         arr = ((flatten && arr.flat) ? arr.flat( flattenLevel ) : arr) || eia;
 
-        arr = (options?.sanitize ? (arr || eia).filter( e => !(_ud === typeof e || null == e || stringUtils.isEmpty( e )) ) : (arr || eia)) || eia;
+        arr = (options?.sanitize ? (arr || eia).filter( e => !(_ud === typeof e || null == e || isEmpty( e )) ) : (arr || eia)) || eia;
 
-        arr = (options?.type ? (arr || eia).filter( e => (options?.type === typeof e || (typeUtils.isClass( options?.type ) && (e instanceof options?.type))) ) : (arr || eia)) || eia;
+        arr = (options?.type ? (arr || eia).filter( e => (options?.type === typeof e || (isClass( options?.type ) && (e instanceof options?.type))) ) : (arr || eia)) || eia;
 
         if ( _fun === typeof options?.filter && options?.filter?.length >= 1 && options?.filter?.length <= 3 )
         {
@@ -263,7 +295,7 @@ const $scope = constants?.$scope || function()
     {
         let args = varargs( ...pArgs );
 
-        return args.map( e => constants.immutableCopy( e ) );
+        return args.map( e => immutableCopy( e ) );
     };
 
     /**
@@ -359,10 +391,10 @@ const $scope = constants?.$scope || function()
             /** a filter to return the elements of an array that are numbers **/
             IS_NUMBER: e => [_num, _big].includes( (typeof e) ),
 
-            IS_NUMERIC: e => stringUtils.isValidNumeric( e ),
+            IS_NUMERIC: e => isValidNumeric( e ),
 
             /** a filter to return the elements of an array that are integers (whole numbers) **/
-            IS_INTEGER: e => Predicates.IS_NUMBER( e ) && (typeUtils.isInteger( e ) || Math.abs( e - Math.round( e ) ) < 0.0000000001),
+            IS_INTEGER: e => Predicates.IS_NUMBER( e ) && (isInteger( e ) || Math.abs( e - Math.round( e ) ) < 0.0000000001),
 
             /** a filter to return the elements of an array that are objects **/
             IS_OBJECT: e => _obj === typeof e,
@@ -380,7 +412,7 @@ const $scope = constants?.$scope || function()
 
             IS_REGEXP: e => (e instanceof RegExp || /\/[^/]\/[gidsmyu]+$/.test( asString( e, true ) )),
 
-            IS_DATE: e => typeUtils.isDate( e ),
+            IS_DATE: e => isDate( e ),
 
             /** a filter to returns the elements suitable as comparator functions for the Array 'sort' method */
             COMPARATORS: (e => Predicates.IS_FUNCTION( e ) && Predicates.IS_COMPARATOR( e )),
@@ -707,7 +739,7 @@ const $scope = constants?.$scope || function()
                             }
                         }
                     }
-                    else if ( typeUtils.isObject( e ) )
+                    else if ( isObject( e ) )
                     {
                         let filtered = arr.filter( Predicates.IS_OBJECT );
 
@@ -750,7 +782,7 @@ const $scope = constants?.$scope || function()
                                 }
                             }
                         }
-                        else if ( typeUtils.isObject( e ) )
+                        else if ( isObject( e ) )
                         {
                             let filtered = arr.filter( Predicates.IS_OBJECT );
 
@@ -908,7 +940,7 @@ const $scope = constants?.$scope || function()
             },
 
             /** This mapper is used to return an array with its elements converted to numbers **/
-            TO_NUMBER: e => [_num, _big].includes( typeof e ) ? e : stringUtils.asFloat( e ),
+            TO_NUMBER: e => [_num, _big].includes( typeof e ) ? e : asFloat( e ),
 
             /** This mapper is used to return an array with its elements converted to valid numbers or 0 **/
             TO_VALID_NUMBER: function( e )
@@ -1012,8 +1044,8 @@ const $scope = constants?.$scope || function()
                 {
                     let type = pType || typeof a;
 
-                    let aa = Predicates.IS_NOT_NULL( a ) ? typeUtils.castTo( a, type ) : typeUtils.defaultFor( type );
-                    let bb = Predicates.IS_NOT_NULL( b ) ? typeUtils.castTo( b, type ) : typeUtils.defaultFor( type );
+                    let aa = Predicates.IS_NOT_NULL( a ) ? castTo( a, type ) : defaultFor( type );
+                    let bb = Predicates.IS_NOT_NULL( b ) ? castTo( b, type ) : defaultFor( type );
 
                     return Comparators._compare( aa, bb );
                 };
@@ -1087,7 +1119,7 @@ const $scope = constants?.$scope || function()
                         }
                         catch( ex )
                         {
-                            konsole.warn( "Could not transform", pElem, ex );
+                            modulePrototype.reportError( ex, "trying to transform " + pElem, S_WARN );
                         }
                     }
 
@@ -1108,7 +1140,7 @@ const $scope = constants?.$scope || function()
                         }
                         catch( ex )
                         {
-                            konsole.warn( "Could not find position of ", pElem, "in array", arr, ex );
+                            modulePrototype.reportError( ex, "trying to find the position of " + pElem + " in array" + arr, S_WARN );
                         }
                     }
 
@@ -1270,7 +1302,7 @@ const $scope = constants?.$scope || function()
 
         get methodName()
         {
-            let funcName = asString( (typeUtils.isString( this.#methodName ) ? this.#methodName : asString( this.#methodName?.name )) ) || TRANSFORMATIONS.FILTER;
+            let funcName = asString( (isString( this.#methodName ) ? this.#methodName : asString( this.#methodName?.name )) ) || TRANSFORMATIONS.FILTER;
             return lcase( asString( Object.values( TRANSFORMATIONS ).includes( funcName ) ? funcName : TRANSFORMATIONS.FILTER, true ) );
         }
 
@@ -1393,7 +1425,7 @@ const $scope = constants?.$scope || function()
         transform( pArr )
         {
             // make a new array, so the source array remains unmodified
-            let arr = constants.localCopy( pArr || [] );
+            let arr = localCopy( pArr || [] );
 
             // iterate the transformers in this chain
             for( const transformer of this.transformers )
@@ -1407,7 +1439,7 @@ const $scope = constants?.$scope || function()
                     }
                     catch( ex )
                     {
-                        konsole.error( ex );
+                        modulePrototype.reportError( ex, "performing transformation", S_WARN, "TransformerChain::transform" );
                     }
                 }
                 else
@@ -1426,7 +1458,7 @@ const $scope = constants?.$scope || function()
                         }
                         catch( ex )
                         {
-                            konsole.error( ex );
+                            modulePrototype.reportError( ex, "performing transformation", S_WARN, "TransformerChain::transform" );
                         }
                     }
                 }
@@ -1657,7 +1689,7 @@ const $scope = constants?.$scope || function()
             return isIndexedObject && (minLength <= (arr?.length || 0));
         }
 
-        if ( true === pOptions?.acceptObjects && typeUtils.isObject( pArr ) )
+        if ( true === pOptions?.acceptObjects && isObject( pArr ) )
         {
             return (Object.keys( pArr )?.length || 0) >= minLength;
         }
@@ -1717,7 +1749,7 @@ const $scope = constants?.$scope || function()
             }
             else if ( Predicates.IS_REGEXP( arg ) )
             {
-                const rx = arg instanceof RegExp ? new RegExp( arg, asString( arg.flags ) ) : new RegExp( arg, stringUtils.rightOfLast( asString( arg ), "/" ).replaceAll( /[^gidsmyu]/g, _mt_str ) );
+                const rx = arg instanceof RegExp ? new RegExp( arg, asString( arg.flags ) ) : new RegExp( arg, rightOfLast( asString( arg ), "/" ).replaceAll( /[^gidsmyu]/g, _mt_str ) );
 
                 let f = function( e, i, a )
                 {
@@ -1726,7 +1758,7 @@ const $scope = constants?.$scope || function()
 
                 filters.push( f );
             }
-            else if ( [typeUtils.VALID_TYPES].includes( lcase( asString( arg ) ) ) )
+            else if ( [VALID_TYPES].includes( lcase( asString( arg ) ) ) )
             {
                 const type = lcase( asString( arg ) );
 
@@ -1857,7 +1889,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            konsole.warn( ex );
+            modulePrototype.reportError( ex, "sorting an array", S_WARN, "sortArray" );
         }
 
         return arr || pArr;
@@ -2008,21 +2040,21 @@ const $scope = constants?.$scope || function()
 
         try
         {
-            clone = structuredClone( arr );
+            clone = structuredClone( arr ) || clone;
         }
         catch( ex )
         {
             // functions cannot be cloned
-            clone = arr.filter( e => !typeUtils.isFunction( e ) );
+            clone = arr.filter( e => !isFunction( e ) );
 
             try
             {
-                clone = structuredClone( clone );
+                clone = structuredClone( clone ) || clone;
             }
             catch( ex2 )
             {
                 // functions cannot be cloned
-                clone = arr.filter( e => !typeUtils.isFunction( e ) );
+                clone = arr.filter( e => !isFunction( e ) );
             }
         }
 
@@ -2147,7 +2179,7 @@ const $scope = constants?.$scope || function()
         return superset( pArrA, pArrB, true );
     };
 
-    if ( typeUtils.isUndefined( Array.prototype.union ) || !typeUtils.isFunction( Array.prototype.union ) )
+    if ( isUndefined( Array.prototype.union ) || !isFunction( Array.prototype.union ) )
     {
         try
         {
@@ -2158,11 +2190,11 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            konsole.warn( constants.S_ERR_PREFIX, "extending the Array prototype", ex );
+            modulePrototype.reportError( ex, "extending the Array prototype", S_WARN, "ArrayUtils" );
         }
     }
 
-    if ( typeUtils.isUndefined( Set.prototype.union ) || !typeUtils.isFunction( Set.prototype.union ) )
+    if ( isUndefined( Set.prototype.union ) || !isFunction( Set.prototype.union ) )
     {
         try
         {
@@ -2173,7 +2205,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            konsole.warn( constants.S_ERR_PREFIX, "extending the Set prototype", ex );
+            modulePrototype.reportError( ex, "extending the Set prototype", S_WARN, "ArrayUtils" );
         }
     }
 
@@ -2190,8 +2222,8 @@ const $scope = constants?.$scope || function()
      */
     const intersection = function( pArrA, pArrB, pUnique = false )
     {
-        let arrA = Object.freeze( asArray( pArrA || [] ) );
-        let arrB = Object.freeze( asArray( pArrB || [] ) );
+        let arrA = lock( asArray( pArrA || [] ) );
+        let arrB = lock( asArray( pArrB || [] ) );
 
         let arr = arrA.concat( arrB );
 
@@ -2200,7 +2232,7 @@ const $scope = constants?.$scope || function()
         return (false !== pUnique) ? unique( arr ) : arr;
     };
 
-    if ( typeUtils.isUndefined( Array.prototype.intersection ) || !typeUtils.isFunction( Array.prototype.intersection ) )
+    if ( isUndefined( Array.prototype.intersection ) || !isFunction( Array.prototype.intersection ) )
     {
         try
         {
@@ -2211,7 +2243,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            konsole.warn( constants.S_ERR_PREFIX, "extending the Array prototype", ex );
+            modulePrototype.reportError( ex, "extending the Array prototype", S_WARN, "ArrayUtils" );
         }
     }
 
@@ -2227,8 +2259,8 @@ const $scope = constants?.$scope || function()
      */
     const disjunction = function( pArrA, pArrB, pUnique = false )
     {
-        let arrA = Object.freeze( asArray( pArrA || [] ) );
-        let arrB = Object.freeze( asArray( pArrB || [] ) );
+        let arrA = lock( asArray( pArrA || [] ) );
+        let arrB = lock( asArray( pArrB || [] ) );
 
         let arr = arrA.concat( arrB );
 
@@ -2242,7 +2274,7 @@ const $scope = constants?.$scope || function()
         return arr;
     };
 
-    if ( typeUtils.isUndefined( Array.prototype.disjunction ) || !typeUtils.isFunction( Array.prototype.disjunction ) )
+    if ( isUndefined( Array.prototype.disjunction ) || !isFunction( Array.prototype.disjunction ) )
     {
         try
         {
@@ -2253,7 +2285,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            konsole.warn( constants.S_ERR_PREFIX, "extending the Array prototype", ex );
+            modulePrototype.reportError( ex, "extending the Array prototype", S_WARN, "ArrayUtils" );
         }
     }
 
@@ -2261,7 +2293,7 @@ const $scope = constants?.$scope || function()
     {
         let arr = pArr || [];
 
-        const value = pElem || constants._mt_str;
+        const value = pElem || _mt_str;
 
         const limit = Math.min( Math.max( 1, asInt( pLimit, ((arr?.length || 2) - 1) ) ), 10_000 );
 
@@ -2320,6 +2352,11 @@ const $scope = constants?.$scope || function()
             }
         }
 
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
         enQueue( pElem )
         {
             let state = { exceededBounds: false, evicted: null, size: this._arr.length, limit: this._limit };
@@ -2339,7 +2376,7 @@ const $scope = constants?.$scope || function()
 
             state.size = this._arr.length;
 
-            return Object.freeze( state );
+            return lock( state );
         }
 
         push( pElem )
@@ -2526,6 +2563,11 @@ const $scope = constants?.$scope || function()
             super( pSize, pArr );
         }
 
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
         async enQueue( pElem )
         {
             return super.enQueue( pElem );
@@ -2591,7 +2633,7 @@ const $scope = constants?.$scope || function()
             }
             catch( ex )
             {
-                konsole.warn( "Queue exhausted", ex );
+                modulePrototype.reportError( ex, "attempting to take from an exhausted Queue", S_WARN, "AsyncBoundedQueue::take" );
             }
 
             return elem || null;
@@ -2716,7 +2758,7 @@ const $scope = constants?.$scope || function()
     /**
      * This is the exported module.
      */
-    const mod =
+    let mod =
         {
             dependencies,
             ARRAY_METHODS,
@@ -2748,11 +2790,11 @@ const $scope = constants?.$scope || function()
             arrLenGtEq,
             arrLenLt,
             arrLenLtEq,
-            TRANSFORMATIONS: Object.freeze( TRANSFORMATIONS ),
-            Predicates: Object.freeze( Predicates ),
-            Filters: Object.freeze( Filters ),
-            Mappers: Object.freeze( Mappers ),
-            Comparators: Object.freeze( Comparators ),
+            TRANSFORMATIONS: lock( TRANSFORMATIONS ),
+            Predicates: lock( Predicates ),
+            Filters: lock( Filters ),
+            Mappers: lock( Mappers ),
+            Comparators: lock( Comparators ),
             predicate,
             Transformer,
             TransformerChain,
@@ -2785,19 +2827,8 @@ const $scope = constants?.$scope || function()
                 }
         };
 
-    // when running in a Node.js environment, we assign the module to the global module.exports
-    if ( _ud !== typeof module )
-    {
-        module.exports = Object.freeze( mod );
-    }
+    mod = modulePrototype.extend( mod );
 
-    // Cache the module in the global scope to avoid re-executing the logic in this IIFE
-    if ( $scope() )
-    {
-        $scope()[INTERNAL_NAME] = Object.freeze( mod );
-    }
-
-    // return the module for environments expecting this function to return the module
-    return Object.freeze( mod );
+    return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 
 }());

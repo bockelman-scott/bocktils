@@ -32,11 +32,11 @@ const utils = require( "./CommonUtils.cjs" );
  * Establish separate constants for each of the common utilities imported
  * @see ../src/CommonUtils.cjs
  */
-const constants = utils?.constants || require( "./Constants.cjs" );
-const typeUtils = utils?.typeUtils || require( "./TypeUtils.cjs" );
-const stringUtils = utils?.stringUtils || require( "./StringUtils.cjs" );
-const arrayUtils = utils?.arrayUtils || require( "./ArrayUtils.cjs" );
-const objectUtils = utils?.objectUtils || require( "./ObjectUtils.cjs" );
+const constants = utils?.constants;
+const typeUtils = utils?.typeUtils;
+const stringUtils = utils?.stringUtils;
+const arrayUtils = utils?.arrayUtils;
+const objectUtils = utils?.objectUtils;
 
 /**
  * Import adm-zip dependency
@@ -59,11 +59,22 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
-    let { _mt_str, _str, _num, _big, _bool, _obj } = constants;
+    const { _mt_str, _str, _num, _big, _bool, _obj, S_ERROR, no_op, lock, classes } = constants;
 
-    let { asString, isBlank, lcase } = stringUtils;
+    const { ModuleEvent, ModulePrototype } = classes;
 
-    let isFunction = typeUtils.isFunction;
+    const { isString, isNumber, isNumeric, isObject, isFunction } = typeUtils;
+
+    const { asString, asInt, isBlank, lcase } = stringUtils;
+
+    if ( _ud === typeof CustomEvent )
+    {
+        CustomEvent = ModuleEvent;
+    }
+
+    const ZERO_LENGTH_BUFFER = lock( Buffer.alloc( 0 ) );
+
+    let modulePrototype = new ModulePrototype( "CompressionUtils", INTERNAL_NAME );
 
     /**
      * The actual number of bytes in a megabyte
@@ -251,7 +262,7 @@ const $scope = constants?.$scope || function()
                 return this.implementation.getCompressedData();
             }
 
-            return Buffer.alloc( 0 );
+            return ZERO_LENGTH_BUFFER;
         }
 
         /**
@@ -271,7 +282,7 @@ const $scope = constants?.$scope || function()
                 return await this.implementation.getCompressedDataAsync( pCallback );
             }
 
-            return Buffer.alloc( 0 );
+            return ZERO_LENGTH_BUFFER;
         }
 
         /**
@@ -300,7 +311,7 @@ const $scope = constants?.$scope || function()
                 return this.implementation.getData();
             }
 
-            return Buffer.alloc( 0 );
+            return ZERO_LENGTH_BUFFER;
         }
 
         /**
@@ -346,7 +357,7 @@ const $scope = constants?.$scope || function()
                         }
                         catch( ex )
                         {
-                            console.error( ex );
+                            modulePrototype.reportError( ex, "parsing JSON data", S_ERROR, "getDataAs" );
                         }
                     }
                     return obj || {};
@@ -372,7 +383,7 @@ const $scope = constants?.$scope || function()
                 return await this.implementation.getDataAsync( pCallback );
             }
 
-            return Buffer.alloc( 0 );
+            return ZERO_LENGTH_BUFFER;
         }
 
         toString()
@@ -420,7 +431,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            console.warn( ex.message );
+            modulePrototype.reportError( ex, "counting archive entries", S_ERROR, "getEntryCount" );
         }
 
         return count;
@@ -448,7 +459,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            console.warn( ex.message );
+            modulePrototype.reportError( ex, "getting the archive entries", S_ERROR, "getEntries" );
 
             let archive = repair( pArchive );
 
@@ -468,9 +479,9 @@ const $scope = constants?.$scope || function()
     {
         let archiver, entry, archiveEntry = null;
 
-        const name = typeUtils.isString( pName ) ? asString( pName ) : typeUtils.isNumeric( pName ) ? stringUtils.asInt( pName ) : 0;
+        const name = isString( pName ) ? asString( pName ) : isNumeric( pName ) ? asInt( pName ) : 0;
 
-        if ( typeUtils.isString( name ) )
+        if ( isString( name ) )
         {
             try
             {
@@ -479,7 +490,7 @@ const $scope = constants?.$scope || function()
             }
             catch( ex )
             {
-                console.error( ex.message );
+                modulePrototype.reportError( ex, "getting the archive entry, '" + name + "'", S_ERROR, "getEntry" );
             }
         }
         else
@@ -496,7 +507,7 @@ const $scope = constants?.$scope || function()
             }
             catch( ex )
             {
-                console.error( ex.message );
+                modulePrototype.reportError( ex, "getting the archive entry, '" + name + "'", S_ERROR, "getEntry" );
             }
         }
 
@@ -620,29 +631,37 @@ const $scope = constants?.$scope || function()
 
     class ZipListener
     {
+        #zip;
+        #onSuccess;
+        #onFailure;
+        
         constructor( pZip, pOnSuccessCallback, pOnFailCallback )
         {
-            this._zip = pZip;
-            this._onSuccess = pOnSuccessCallback || function() {};
-            this._onFailure = pOnFailCallback || function() {};
+            this.#zip = pZip;
+            this.#onSuccess = isFunction( pOnSuccessCallback ) ? pOnSuccessCallback || no_op : no_op;
+            this.#onFailure = isFunction( pOnFailCallback ) ? pOnFailCallback || no_op : no_op;
 
             this.unzip();
         }
 
         unzip( pZip )
         {
-            const zip = pZip || this._zip;
+            const zip = pZip || this.#zip;
 
             if ( zip )
             {
-                return zip.toBuffer( this._onSuccess, this._onFailure );
+                const buffer = zip.toBuffer( this.#onSuccess, this.#onFailure );
+
+                modulePrototype.dispatchEvent( new CustomEvent( "unzipped", buffer ) );
+
+                return buffer || ZERO_LENGTH_BUFFER;
             }
 
-            return Buffer.alloc( 0 );
+            return ZERO_LENGTH_BUFFER;
         }
     }
 
-    const mod =
+    let mod =
         {
             dependencies:
                 {
@@ -664,16 +683,18 @@ const $scope = constants?.$scope || function()
             getEntry
         };
 
+    mod = Object.assign( modulePrototype, mod );    
+
     if ( _ud !== typeof module )
     {
-        module.exports = Object.freeze( mod );
+        module.exports = lock( mod );
     }
 
     if ( $scope() )
     {
-        $scope()[INTERNAL_NAME] = Object.freeze( mod );
+        $scope()[INTERNAL_NAME] = lock( mod );
     }
 
-    return Object.freeze( mod );
+    return lock( mod );
 
 }());

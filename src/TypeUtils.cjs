@@ -8,9 +8,6 @@
 /** import the Constants.cjs we depend upon, using require for maximum compatibility with Node versions */
 const constants = require( "./Constants.cjs" );
 
-/** Create an alias for the console **/
-const konsole = console;
-
 /**
  * Defines a string to represent the type, undefined
  */
@@ -21,7 +18,7 @@ const _ud = constants?._ud || "undefined";
  */
 const $scope = constants?.$scope || function()
 {
-    return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
+    return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };
 
 (function exposeModule()
@@ -68,6 +65,8 @@ const $scope = constants?.$scope || function()
             HEX_DIGITS_MAP,
             OCT_DIGITS,
             OCT_DIGITS_MAP,
+            S_ERROR,
+            S_WARN,
             S_ERR_PREFIX,
             BUILTIN_TYPES,
             BUILTIN_TYPE_NAMES,
@@ -75,8 +74,14 @@ const $scope = constants?.$scope || function()
             AsyncFunction,
             populateOptions,
             no_op,
-            lock
+            lock,
+            classes
         } = constants;
+
+    const { ModuleEvent, ModulePrototype } = classes;
+
+    let modulePrototype = new ModulePrototype( "TypeUtils", INTERNAL_NAME );
+
     /**
      * This is an array of the 'valid' JavaScript primitive types.
      * Note that 'undefined' is not considered to be a 'valid' type
@@ -128,7 +133,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            // wrapped in a try/catch for any environment that does not permit extending the built-in objects/functions
+            modulePrototype.reportError( ex, "extending the built-in Array class", S_WARN, "isArray" );
         }
     }
 
@@ -313,6 +318,11 @@ const $scope = constants?.$scope || function()
     const isNumber = function( pObj )
     {
         return ([_num, _big].includes( typeof pObj ) || pObj instanceof Number || pObj instanceof BigInt) && !(isObject( pObj ) && pObj instanceof Date);
+    };
+
+    const isBigInt = function( pNum )
+    {
+        return isNumber( pNum ) && _big === typeof pNum;
     };
 
     /**
@@ -500,7 +510,7 @@ const $scope = constants?.$scope || function()
             }
             catch( ex )
             {
-                konsole.warn( "Cannot parse", _toString( pObj ), ex );
+                modulePrototype.reportError( ex, "paring " + _toString( pObj ), S_WARN, "toDecimal" );
                 value = 0;
             }
 
@@ -875,7 +885,7 @@ const $scope = constants?.$scope || function()
                 }
                 catch( ex )
                 {
-                    //ignore
+                    modulePrototype.reportError( ex, `formatting ${pObj} as a date`, S_WARN, "isDate" );
                 }
             }
 
@@ -887,7 +897,7 @@ const $scope = constants?.$scope || function()
                 }
                 catch( ex )
                 {
-                    konsole.error( S_ERR_PREFIX, "evaluating a value as a Date", ex );
+                    modulePrototype.reportError( ex, `evaluating ${pObj} as a Date`, S_ERROR, "isDate" );
                 }
             }
         }
@@ -905,7 +915,7 @@ const $scope = constants?.$scope || function()
                     }
                     catch( ex )
                     {
-                        konsole.error( S_ERR_PREFIX, "evaluating a value as a Date", ex );
+                        modulePrototype.reportError( ex, `evaluating ${pObj} as a Date`, S_ERROR, "isDate" );
                     }
 
                     break;
@@ -1001,9 +1011,9 @@ const $scope = constants?.$scope || function()
                 {
                     is = (pObject instanceof cls) || pObject.prototype === cls;
                 }
-                catch( e )
+                catch( ex )
                 {
-                    konsole.warn( "Attempt to call instanceof without a class or callable" );
+                    modulePrototype.reportError( ex, "attempting to call instanceof without a class or callable", S_WARN, "instanceOfAny" );
                 }
             }
         }
@@ -1267,18 +1277,18 @@ const $scope = constants?.$scope || function()
         switch ( type )
         {
             case _str:
-                value = (isFunction( pValue?.asString )) ? pValue.asString() : (_mt_str + value);
+                value = (isFunction( value?.asString )) ? value.asString() : (_mt_str + value);
                 break;
 
             case _num:
             case _big:
                 try
                 {
-                    value = (isFunction( pValue?.asFloat )) ? pValue.asFloat() : parseFloat( value );
+                    value = (isFunction( value?.asFloat )) ? value.asFloat() : parseFloat( value );
                 }
                 catch( ex )
                 {
-                    konsole.error( constants.S_ERR_PREFIX, "casting to a number", ex );
+                    modulePrototype.reportError( ex, `casting ${value} to number`, S_WARN, "castTo" );
                 }
                 break;
 
@@ -1682,7 +1692,7 @@ const $scope = constants?.$scope || function()
     /**
      * This is the module itself, exported from this function
      */
-    const mod =
+    let mod =
         {
             dependencies,
             getScope: $scope,
@@ -1705,6 +1715,7 @@ const $scope = constants?.$scope || function()
             isNumber,
             isInteger,
             isFloat,
+            isBigInt,
             isNumeric,
             isZero,
             isOctal,
@@ -1748,15 +1759,8 @@ const $scope = constants?.$scope || function()
             Result
         };
 
-    if ( _ud !== typeof module )
-    {
-        module.exports = lock( mod );
-    }
+    mod = modulePrototype.extend( mod );
 
-    if ( $scope() )
-    {
-        $scope()[INTERNAL_NAME] = lock( mod );
-    }
+    return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 
-    return lock( mod );
 }());

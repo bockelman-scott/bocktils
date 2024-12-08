@@ -188,11 +188,15 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             S_TYPES = _types.join( _comma ),
             S_VALID_TYPES = _validTypes.join( _comma ),
 
+            S_LOG = "log",
             S_ERROR = "error",
+            S_WARN = "warn",
+            S_DEBUG = "debug",
+            S_INFO = "info",
+            S_TRACE = "trace",
+
             S_ERR_PREFIX = `An ${S_ERROR} occurred while`,
             S_DEFAULT_OPERATION = "executing script",
-
-            S_CUSTOM_EVENT = "CustomEvent",
 
             EMPTY_ARRAY = Object.freeze( [] ),
             EMPTY_OBJECT = Object.freeze( {} ),
@@ -263,7 +267,11 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
                  "void",
                  "while",
                  "with"] ),
-            funcToString = Function.prototype.toString
+            funcToString = Function.prototype.toString,
+            funcAsString = function( pFunction )
+            {
+                return (_fun === typeof pFunction ? pFunction?.name || funcToString.call( pFunction, pFunction ) : (_mt_str + pFunction));
+            }
         } = ($scope() || {});
 
     function isArray( pObject )
@@ -489,20 +497,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
                                     }
                                     catch( ex )
                                     {
-                                        const log = this.logger || modulePrototype.logger;
-
-                                        if ( isLogger( log ) )
-                                        {
-                                            log.warn( key, "could not be bound to the clone", ex );
-                                        }
-
-                                        let dispatchEvent = this.dispatchEvent || modulePrototype.dispatchEvent;
-
-                                        if ( _fun === typeof this.dispatchEvent )
-                                        {
-                                            const event = new (CustomEvent || ModuleEvent)( "error", ex );
-                                            dispatchEvent.call( modulePrototype, event );
-                                        }
+                                        modulePrototype.reportError( ex, key + " could not be bound to the clone", S_WARN, this?.name );
                                     }
                                 }
                             }
@@ -1544,9 +1539,13 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             S_Z,
             S_TYPES,
             S_VALID_TYPES,
+            S_LOG,
+            S_INFO,
+            S_WARN,
+            S_DEBUG,
+            S_TRACE,
             S_ERROR,
             S_ERR_PREFIX,
-            S_CUSTOM_EVENT,
             S_DEFAULT_OPERATION,
             S_COMMA: _comma,
             S_TILDE: _tilde,
@@ -1612,6 +1611,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             deepFreeze,
             calculateNumberFormattingSymbols,
             funcToString,
+            funcAsString,
             isLogger,
             testLogger: function( ...pTestData )
             {
@@ -1619,20 +1619,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             }
         };
 
-    mod = Object.assign( modulePrototype, mod );
+    mod = modulePrototype.extend( mod );
 
-    if ( _ud !== typeof module )
-    {
-        module.exports = lock( mod );
-    }
-
-    if ( $scope() )
-    {
-        $scope()[INTERNAL_NAME] = lock( mod );
-    }
-
-    mod.dispatchEvent( new CustomEvent( "load", mod ) );
-
-    return lock( mod );
-
+    return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 }());

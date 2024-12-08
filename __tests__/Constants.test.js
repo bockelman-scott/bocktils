@@ -802,7 +802,7 @@ describe( "Errors", () =>
                 ex.logTo( mockLogger, "warn" );
             }
 
-            console.log( ex.message, ex );
+            // console.log( ex.message, ex );
         }
 
         return value;
