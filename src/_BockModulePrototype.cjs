@@ -23,23 +23,54 @@ const $scope = function()
         return $scope()[INTERNAL_NAME];
     }
 
+    const dependencies =
+        {
+            // this module has no dependencies
+        };
+
+    const
+        {
+            _obj = "object",
+            _fun = "function",
+            _str = "string",
+            _num = "number",
+            _big = "bigint",
+            _bool = "boolean",
+            _symbol = "symbol",
+
+            _types = [_ud, _obj, _fun, _str, _bool, _num, _big, _symbol],
+            _validTypes = [_obj, _fun, _str, _bool, _num, _big, _symbol],
+
+            _mt_str = "",
+            _mt_chr = "",
+            _spc = " ",
+            _dot = ".",
+            _comma = ",",
+            _underscore = "_",
+            _colon = ":",
+            _unknown = "Unknown",
+
+            S_LOG = "log",
+            S_ERROR = "error",
+            S_WARN = "warn",
+            S_DEBUG = "debug",
+            S_INFO = "info",
+            S_TRACE = "trace",
+
+            S_ERR_PREFIX = `An ${S_ERROR} occurred while`,
+            S_DEFAULT_OPERATION = "executing script",
+
+            EMPTY_OBJECT = Object.freeze( {} ),
+            EMPTY_ARRAY = Object.freeze( [] )
+
+        } = ($scope() || {});
+
+    function isArray( pObject )
+    {
+        return (_fun === typeof Array.isArray && Array.isArray( pObject )) || {}.toString.call( pObject ) === "[object Array]";
+    }
+
     const SCOPE_MODULE = (_ud !== typeof module) ? module : {};
-
-    const EMPTY_STRING = "";
-
-    const S_OBJECT = "object";
-    const S_FUNCTION = "function";
-    const S_STRING = "string";
-
-    const S_LOG = "log";
-    const S_ERROR = "error";
-    const S_WARN = "warn";
-    const S_DEBUG = "debug";
-    const S_INFO = "info";
-    const S_TRACE = "trace";
-
-    const S_ERR_PREFIX = `An ${S_ERROR} occurred while`;
-    const S_DEFAULT_OPERATION = "executing script";
 
     class BockModuleEvent extends Event
     {
@@ -51,7 +82,7 @@ const $scope = function()
             super( pEventName );
 
             this.#type = pEventName || "BockModuleEvent";
-            this.#detail = S_OBJECT === typeof pData ? pData || {} : {};
+            this.#detail = _obj === typeof pData ? pData || {} : {};
         }
 
         get type()
@@ -70,21 +101,403 @@ const $scope = function()
         CustomEvent = BockModuleEvent;
     }
 
+    function no_op()
+    {
+        // do nothing
+    }
+
+    const MockLogger =
+        {
+            log: no_op,
+            info: no_op,
+            warn: no_op,
+            debug: no_op,
+            error: no_op,
+            trace: no_op
+        };
+
+    /**
+     * Returns true if the specified value is immutable.
+     *
+     * Examples of immutable values include:
+     * - Objects that are frozen or sealed
+     * - Properties of Objects that are defined as writable:false
+     * - Strings, Numbers, Booleans, and Symbols
+     * - null values, undefined values
+     *
+     * @param pObject
+     * @returns {boolean|boolean}
+     */
+    const isReadOnly = function( pObject )
+    {
+        if ( _obj === typeof pObject )
+        {
+            return (null === pObject) || Object.isFrozen( pObject ) || Object.isSealed( pObject );
+        }
+
+        return true;
+    };
+
+
+    /**
+     * These are the default options used with the immutableCopy function.
+     *
+     * nullToEmptyObject {boolean} pass true for this property if you want null values to be returned as EMPTY_OBJECT
+     * nullToEmptyArray {boolean}  pass true for this property if you want null values to be returned as EMPTY_ARRAY
+     *
+     * undefinedToNull {boolean} pass true for this property if you want undefined values to be returned as null
+     * undefinedToEmptyObject {boolean} pass true for this property if you want undefined values to be returned as EMPTY_OBJECT
+     *
+     * depth {number} pass a number greater than zero to make immutable copies
+     * of an object's entries (or an array's elements) to the depth desired
+     *
+     * @type {{nullToEmptyObject: boolean, undefinedToEmptyObject: boolean, depth: number, nullToEmptyArray: boolean, undefinedToNull: boolean}}
+     */
+    const DEFAULT_COPY_OPTIONS = Object.freeze(
+        {
+            nullToEmptyObject: false,
+            nullToEmptyArray: false,
+            undefinedToNull: false,
+            undefinedToEmptyObject: false,
+            undefinedToEmptyArray: false,
+            depth: 99,
+            freeze: false
+        } );
+
+    const IMMUTABLE_COPY_OPTIONS = { ...DEFAULT_COPY_OPTIONS };
+    IMMUTABLE_COPY_OPTIONS.freeze = true;
+
+    const MAX_STACK_SIZE = 32;
+
+    /**
+     * Returns an object corresponding to a set of default options with one or more properties
+     * overridden or added by the properties of the specified pOptions
+     *
+     * @param pOptions {object} an object whose properties should be used
+     * @param pDefaults {object} an object holding defaults for the properties to be used
+     * @returns {object} an object combining the defaults with the specified options
+     */
+    function populateOptions( pOptions, pDefaults )
+    {
+        const defaults = Object.assign( {}, (_obj === typeof pDefaults && null != pDefaults) ? { ...pDefaults } : {} );
+        return Object.assign( (defaults || {}), (pOptions || pDefaults || {}) );
+    }
+
+    function _getDepth( pOptions )
+    {
+        const options = populateOptions( pOptions, DEFAULT_COPY_OPTIONS );
+        return Math.max( 0, _num === typeof options.depth ? options.depth : 0 );
+    }
+
+    /**
+     * Calls Object::freeze on any defined non-null value specified and returns the same value, now frozen
+     *
+     * @param pObject {any} an object or array (or any other value) you want to freeze
+     * @param pOptions {object} an object describing how to handle undefined and null values
+     *
+     * @returns {Function|Readonly<{}>|null|Readonly<*[]>|undefined}
+     */
+    const lock = function( pObject, pOptions = IMMUTABLE_COPY_OPTIONS )
+    {
+        const options = populateOptions( pOptions, IMMUTABLE_COPY_OPTIONS );
+
+        if ( _ud === typeof pObject )
+        {
+            return options?.undefinedToNull ? null : (options?.undefinedToEmptyObject ? EMPTY_OBJECT : options?.undefinedToEmptyArray ? EMPTY_ARRAY : undefined);
+        }
+
+        if ( null === pObject )
+        {
+            return options?.nullToEmptyObject ? EMPTY_OBJECT : (options.nullToEmptyArray ? EMPTY_OBJECT : null);
+        }
+
+        return Object.freeze( pObject );
+    };
+
+    /**
+     * Returns a string compatible with the StackTrace parseFrame method
+     *
+     * @param pError {Error}
+     *
+     * @returns {string} a string compatible with the StackTrace parseFrame method
+     */
+    function generateStack( pError )
+    {
+        let stack = pError instanceof Error ? pError?.stack : _str === typeof pError ? pError : _mt_str;
+
+        if ( _ud === typeof stack || null == stack || _str !== typeof stack )
+        {
+            stack = pError?.toString() || ((pError?.name || pError?.type) + _colon + _spc + (_mt_str + pError?.message).replace( (pError?.name || pError?.type || "~!~"), _mt_str )) + "\n";
+
+            stack += "at (" + (pError?.fileName || _unknown) + _colon + (pError?.lineNumber || _unknown) + _colon + (pError?.columnNumber || _unknown) + ")\n";
+        }
+
+        return stack;
+    }
+
+    /**
+     * This class provides cross-environment functionality related to an error's stack (trace)
+     * For more robust functionality, consider https://github.com/stacktracejs/stacktrace.js
+     */
+    class StackTrace
+    {
+        #stack;
+        #frames;
+        #parts;
+
+        #methodName;
+        #fileName;
+        #lineNumber;
+        #columnNumber;
+
+        constructor( pStack, pError )
+        {
+            this.#stack = (pStack instanceof String ?
+                           pStack :
+                           pStack instanceof Error ?
+                           (pStack?.stack || generateStack( pStack ))
+                                                   : _mt_str)
+                          || pError?.stack
+                          || generateStack( pError )
+                          || generateStack( pStack );
+
+            this.#frames = this.parseFrames();
+
+            this.#parts = this.parseFrame( Math.min( 1, this.#frames?.length - 1 ) );
+
+            this.#methodName = this.#parts.methodName;
+            this.#fileName = this.#parts.fileName;
+            this.#lineNumber = this.#parts.lineNumber;
+            this.#columnNumber = this.#parts.columnNumber;
+        }
+
+        get stack()
+        {
+            return this.#stack || _mt_str;
+        }
+
+        get frames()
+        {
+            this.#frames = this.#frames?.length ? this.#frames : this.parseFrames();
+            return this.#frames;
+        }
+
+        parseFrames()
+        {
+            let arr = [].concat( this.stack.split( /(\r\n)|\n/ ) );
+            arr = arr.filter( e => (/(at)|@/).test( e ) ).map( e => e.replace( /at\s+([^ (]+)\s*/, "$1@" ).trim() );
+            arr = arr.map( e => e.replaceAll( /[A-Z]:\\/g, _mt_str ).trim() );
+            return arr.map( e => e.replaceAll( /[)(]/g, _mt_str ) ).map( e => e.replace( /@$/, _mt_str ).trim() );
+        }
+
+        parseFrame( pFrame )
+        {
+            let frame = _num === typeof pFrame ? this.frames[pFrame] : pFrame;
+
+            let rx = /((\w*)@)?([^:]+):(\d+):(\d+)/;
+
+            let matches = rx.exec( frame );
+
+            let parsed = {};
+
+            if ( matches && matches.length )
+            {
+                function trimMatch( pMatch )
+                {
+                    return (pMatch || _mt_str).replace( /@$/, _mt_str ).replace( /^:/, _mt_str );
+                }
+
+                let methodName = trimMatch( matches.length > 2 ? matches[2] : _mt_str );
+                let fileName = trimMatch( matches.length > 3 ? matches[3] : _mt_str );
+                let lineNumber = trimMatch( matches.length > 4 ? matches[4] : _mt_str );
+                let columnNumber = trimMatch( matches.length > 5 ? matches[5] : _mt_str );
+
+                parsed = { methodName, fileName, lineNumber, columnNumber };
+            }
+
+            return parsed;
+        }
+
+        get parts()
+        {
+            this.#parts = (this.#parts && Object.keys( this.#parts ).length > 0) ? this.#parts || this.parseFrame( 0 ) : this.parseFrame( 0 );
+            return immutableCopy( this.#parts );
+        }
+
+        get methodName()
+        {
+            this.#methodName = this.#methodName || this.parts?.methodName;
+            return this.#methodName;
+        }
+
+        get fileName()
+        {
+            this.#fileName = this.#fileName || this.parts?.fileName;
+            return this.#fileName || this.parts?.fileName;
+        }
+
+        get lineNumber()
+        {
+            this.#lineNumber = this.#lineNumber || this.parts?.lineNumber;
+            return this.#lineNumber || this.parts?.lineNumber;
+        }
+
+        get columnNumber()
+        {
+            this.#columnNumber = this.#columnNumber || this.parts?.columnNumber;
+            return this.#columnNumber || this.parts?.columnNumber;
+        }
+    }
+
+    const DEFAULT_ERROR_MSG = [S_ERR_PREFIX, S_DEFAULT_OPERATION].join( _spc );
+
+    /**
+     * This class provides for custom Errors to be defined.
+     * This class and its subclasses also should be able to provide a stack trace
+     * regardless of browser or environment
+     */
+    class __Error extends Error
+    {
+        #msg;
+        #options;
+
+        #type;
+        #name;
+        #cause;
+
+        #trace;
+
+        constructor( pMessage, pOptions )
+        {
+            super( (_str === typeof pMessage ? (pMessage || DEFAULT_ERROR_MSG) : ((pMessage instanceof Error) ? (pMessage.message || pMessage.name || DEFAULT_ERROR_MSG) : DEFAULT_ERROR_MSG)) );
+
+            this.#type = (pMessage instanceof Error) ? pMessage.type || pMessage.name : this.constructor?.name;
+            this.#name = (pMessage instanceof Error) ? pMessage.name || pMessage.type : this.constructor?.name;
+
+            if ( Error.captureStackTrace )
+            {
+                Error.captureStackTrace( this, this.constructor );
+            }
+
+            this.#msg = (_str === typeof pMessage) ? (pMessage || super.message) : ((pMessage instanceof Error) ? pMessage.message || super.message : DEFAULT_ERROR_MSG);
+
+            this.#options = immutableCopy( pOptions || {} );
+
+            this.#cause = (this.#options?.cause instanceof Error ? this.#options?.cause : (pMessage instanceof Error ? pMessage : null) || (pMessage instanceof Error ? pMessage : null));
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
+        get options()
+        {
+            return immutableCopy( this.#options || {} );
+        }
+
+        get name()
+        {
+            return this.#name || super.name || this.constructor?.name;
+        }
+
+        get type()
+        {
+            return this.#type || this.name;
+        }
+
+        get prefix()
+        {
+            return this.name + ": ";
+        }
+
+        get message()
+        {
+            return this.prefix + ((this.#msg || super.message).replace( this.prefix, _mt_str ));
+        }
+
+        toString()
+        {
+            return this.prefix + ((this.message || super.message).replace( this.prefix, _mt_str ));
+        }
+
+        get cause()
+        {
+            this.#cause = this.#cause || (this.#options?.cause instanceof Error ? this.#options?.cause : super.cause) || super.cause;
+            return this.#cause;
+        }
+
+        get stackTrace()
+        {
+            this.#trace = this.#trace || new StackTrace( this.stack || this.cause?.stack || generateStack( this ), this );
+            return this.#trace;
+        }
+
+        get fileName()
+        {
+            return super.fileName || this.stackTrace?.fileName;
+        }
+
+        get lineNumber()
+        {
+            return super.lineNumber || this.stackTrace?.lineNumber;
+        }
+
+        get columnNumber()
+        {
+            return super.columnNumber || this.stackTrace?.columnNumber;
+        }
+
+        logTo( pLogger, pLevel )
+        {
+            const logger = pLogger || konsole;
+
+            const level = _str === typeof pLevel ? pLevel.toLowerCase() : _num === typeof pLevel && pLevel >= 0 && pLevel <= 6 ? ["none", "info", "warn", "error", "debug", "trace", "log"][pLevel] : "error";
+
+            if ( _fun === typeof logger[level] )
+            {
+                logger[level]( this.toString(), this.options );
+            }
+        }
+    }
+
+    /**
+     * This subclass of Error is useful when validating function arguments.
+     * The message property is overwritten to include the prefix 'IllegalArgumentException',
+     * so that if only the message is logged, the type of error is not obscured
+     */
+    class IllegalArgumentError extends __Error
+    {
+        constructor( pMessage, pOptions )
+        {
+            super( pMessage, pOptions );
+
+            if ( Error.captureStackTrace )
+            {
+                Error.captureStackTrace( this, this.constructor );
+            }
+        }
+    }
+
     class BockModulePrototype extends EventTarget
     {
         #moduleName;
         #cacheKey;
 
+        static #globalLogger = null;
         #logger;
+
+        static #globalLoggingEnabled = true;
+        #loggingEnabled = true;
 
         constructor( pModuleName, pCacheKey )
         {
             super();
 
-            this.#moduleName = (S_STRING === typeof pModuleName) ? pModuleName || "BockModulePrototype" : (S_OBJECT === typeof pModuleName ? pModuleName?.moduleName || pModuleName?.name : EMPTY_STRING) || "BockModulePrototype";
-            this.#cacheKey = (S_STRING === typeof pCacheKey) ? pCacheKey || INTERNAL_NAME : (S_OBJECT === typeof pModuleName ? pModuleName?.cacheKey || pModuleName?.name : EMPTY_STRING);
+            this.#moduleName = (_str === typeof pModuleName) ? pModuleName || "BockModulePrototype" : (_obj === typeof pModuleName ? pModuleName?.moduleName || pModuleName?.name : _mt_str) || "BockModulePrototype";
+            this.#cacheKey = (_str === typeof pCacheKey) ? pCacheKey || INTERNAL_NAME : (_obj === typeof pModuleName ? pModuleName?.cacheKey || pModuleName?.name : _mt_str);
 
-            if ( S_OBJECT === typeof pModuleName )
+            if ( _obj === typeof pModuleName )
             {
                 this.extend( pModuleName );
             }
@@ -107,7 +520,19 @@ const $scope = function()
 
         get logger()
         {
-            return this.#logger || konsole;
+            let logger;
+
+            if ( this.#loggingEnabled )
+            {
+                if ( BockModulePrototype.#globalLoggingEnabled )
+                {
+                    logger = BockModulePrototype.getGlobalLogger();
+                }
+
+                logger = logger || this.#logger || konsole;
+            }
+
+            return logger || MockLogger;
         }
 
         set logger( pLogger )
@@ -118,32 +543,66 @@ const $scope = function()
             }
         }
 
-        static isLogger( pLogger )
+        disableLogging()
         {
-            return (S_OBJECT === typeof pLogger
-                    && null !== pLogger
-                    && S_FUNCTION === typeof pLogger[S_LOG]
-                    && S_FUNCTION === typeof pLogger[S_INFO]
-                    && S_FUNCTION === typeof pLogger[S_WARN]
-                    && S_FUNCTION === typeof pLogger[S_DEBUG]
-                    && S_FUNCTION === typeof pLogger[S_ERROR]);
+            this.#loggingEnabled = false;
         }
 
-        reportError( pError, pMessage = S_DEFAULT_OPERATION, pLevel = S_ERROR, pSource = EMPTY_STRING )
+        enableLogging()
+        {
+            this.#loggingEnabled = true;
+        }
+
+        static isLogger( pLogger )
+        {
+            return (_obj === typeof pLogger
+                    && null !== pLogger
+                    && _fun === typeof pLogger[S_LOG]
+                    && _fun === typeof pLogger[S_INFO]
+                    && _fun === typeof pLogger[S_WARN]
+                    && _fun === typeof pLogger[S_DEBUG]
+                    && _fun === typeof pLogger[S_ERROR]);
+        }
+
+        static setGlobalLogger( pLogger )
+        {
+            if ( BockModulePrototype.isLogger( pLogger ) )
+            {
+                BockModulePrototype.#globalLogger = pLogger;
+            }
+        };
+
+        static getGlobalLogger()
+        {
+            return BockModulePrototype.#globalLogger;
+        }
+
+        static disableGlobalLogger()
+        {
+            BockModulePrototype.#globalLoggingEnabled = false;
+        }
+
+        static enableGlobalLogger()
+        {
+            BockModulePrototype.#globalLoggingEnabled = true;
+        }
+
+        reportError( pError, pMessage = S_DEFAULT_OPERATION, pLevel = S_ERROR, pSource = _mt_str )
         {
             try
             {
-                const s = EMPTY_STRING + (pMessage || S_DEFAULT_OPERATION);
+                const s = _mt_str + (pMessage || S_DEFAULT_OPERATION);
 
-                const err = pError || new Error( s );
+                const err = new __Error( pError || new Error( s ) );
 
                 let msg = [S_ERR_PREFIX, s, err];
 
+                let level = (_mt_str + pLevel).trim().toLowerCase();
+
+                level = [S_LOG, S_INFO, S_WARN, S_DEBUG, S_ERROR].includes( level || S_ERROR ) ? level : S_ERROR;
+
                 try
                 {
-                    let level = (EMPTY_STRING + pLevel).trim().toLowerCase();
-                    level = [S_LOG, S_INFO, S_WARN, S_DEBUG, S_ERROR].includes( level || S_ERROR ) ? level : S_ERROR;
-
                     if ( BockModulePrototype.isLogger( this.logger ) )
                     {
                         this.logger[level]( ...msg );
@@ -159,13 +618,14 @@ const $scope = function()
                     this.dispatchEvent( new CustomEvent( S_ERROR,
                                                          {
                                                              error: err,
-                                                             message: msg.filter( e => "string" === typeof e ).join( " " ),
-                                                             method: EMPTY_STRING + ((EMPTY_STRING + pSource) || this.moduleName || "BockModule"),
+                                                             message: msg.filter( e => _str === typeof e ).join( _spc ),
+                                                             level: level,
+                                                             method: _mt_str + ((_mt_str + pSource) || this.moduleName || "BockModule"),
                                                          } ) );
                 }
                 catch( ex2 )
                 {
-                    konsole.error( ex2 );
+                    konsole.error( ex2, ...msg );
                 }
             }
             catch( ex )
@@ -176,12 +636,12 @@ const $scope = function()
 
         get locked()
         {
-            return (Object.isFrozen( this ) || Object.isSealed( this ));
+            return isReadOnly( this );
         }
 
         extend( pObject )
         {
-            if ( null != pObject && S_OBJECT === typeof pObject )
+            if ( null != pObject && _obj === typeof pObject )
             {
                 if ( !this.locked )
                 {
@@ -200,7 +660,7 @@ const $scope = function()
         {
             let mod = pObject || this;
 
-            if ( null != mod && S_OBJECT === typeof mod && !(mod instanceof this.constructor) )
+            if ( null != mod && _obj === typeof mod && !(mod instanceof this.constructor) )
             {
                 mod = this.extend( mod );
             }
@@ -209,27 +669,29 @@ const $scope = function()
 
             if ( _ud !== typeof MODULE )
             {
-                MODULE.exports = Object.freeze( mod || this );
+                MODULE.exports = lock( mod || this );
             }
 
-            const key = S_STRING === typeof pCacheKey ? (EMPTY_STRING + pCacheKey).trim() : EMPTY_STRING;
+            const key = _str === typeof pCacheKey ? (_mt_str + pCacheKey).trim() : _mt_str;
 
-            if ( $scope() && EMPTY_STRING !== key.trim() )
+            if ( $scope() && _mt_str !== key.trim() )
             {
-                $scope()[key] = Object.freeze( mod || this );
+                $scope()[key] = lock( mod || this );
             }
 
             mod.dispatchEvent( new CustomEvent( "load", mod ) );
 
-            return Object.freeze( mod || this );
+            return lock( mod || this );
         }
     }
+
+    const GLOBAL_INSTANCE = new BockModulePrototype( "GLOBAL_INSTANCE", "__BOCK__MODULE_PROTOTYPE_GLOBAL_INSTANCE__" );
 
     function exportModule( pObject, pCacheKey )
     {
         let mod = pObject;
 
-        if ( null != mod && S_OBJECT === typeof mod && (mod instanceof this.constructor) )
+        if ( null != mod && _obj === typeof mod && (mod instanceof this.constructor) )
         {
             mod.expose( mod, pCacheKey );
         }
@@ -243,13 +705,721 @@ const $scope = function()
 
     BockModulePrototype.exportModule = exportModule;
 
+    /**
+     * Returns a deep copy of the value specified.
+     * Used by localCopy and immutableCopy functions.
+     * This function should not be exported.
+     *
+     * @param pObject {any} the value to copy
+     *
+     * @param pOptions {object} an object specifying how to handle undefined and null values
+     * as well as whether and how deep to copy an object or array value
+     *
+     * @param pStack {[any]} USED INTERNALLY TO PREVENT INFINITE RECURSION, DO NOT SPECIFY A VALUE FROM CLIENT CODE
+     *
+     * @returns {bigint|number|string|null|{}|undefined|{}|*[]|Readonly<{}>|*|Function|boolean} an immutable copy of the value specified
+     *
+     * @private
+     */
+    const _copy = function( pObject, pOptions = DEFAULT_COPY_OPTIONS, pStack = [] )
+    {
+        const options = populateOptions( pOptions, DEFAULT_COPY_OPTIONS );
+
+        const depth = _getDepth( options );
+        options.depth = depth;
+
+        const freeze = (true === options.freeze);
+
+        let clone = pObject;
+
+        const stack = [].concat( pStack || [] );
+
+        if ( stack.length > MAX_STACK_SIZE )
+        {
+            return freeze ? lock( clone ) : clone;
+        }
+
+        switch ( typeof pObject )
+        {
+            case _ud:
+                return options?.undefinedToNull ? null : (options?.undefinedToEmptyObject ? (freeze ? EMPTY_OBJECT : {}) : options?.undefinedToEmptyArray ? (freeze ? EMPTY_ARRAY : []) : undefined);
+
+            case _str:
+                return (_mt_str + pObject);
+
+            case _num:
+                return parseFloat( pObject );
+
+            case _big:
+                return BigInt( pObject );
+
+            case _bool:
+                return Boolean( pObject );
+
+            case _fun:
+                return (freeze ? lock( pObject ) : pObject);
+
+            case _symbol:
+                return pObject;
+
+            case _obj:
+                if ( null == pObject )
+                {
+                    return options?.nullToEmptyObject ? (freeze ? EMPTY_OBJECT : {}) : options?.nullToEmptyArray ? (freeze ? EMPTY_ARRAY : []) : null;
+                }
+
+                if ( pObject instanceof Date )
+                {
+                    clone = new Date( pObject.getTime() );
+                }
+                else if ( pObject instanceof RegExp )
+                {
+                    clone = new RegExp( pObject, (pObject.flags || _mt_str) );
+                }
+                else if ( isArray( pObject ) )
+                {
+                    clone = [...pObject];
+
+                    if ( depth > 0 )
+                    {
+                        options.depth = depth - 1;
+
+                        stack.push( clone );
+
+                        try
+                        {
+                            clone = clone.map( ( e, i ) => _copy( e, options, stack.concat( i ) ) );
+                        }
+                        finally
+                        {
+                            stack.pop();
+                        }
+                    }
+                }
+                else
+                {
+                    clone = Object.assign( {}, pObject );
+
+                    if ( depth > 0 )
+                    {
+                        options.depth = depth - 1;
+
+                        stack.push( clone );
+
+                        try
+                        {
+                            const entries = Object.entries( pObject );
+
+                            for( let entry of entries )
+                            {
+                                const key = entry[0];
+                                const value = entry[1];
+
+                                clone[key] = _copy( value, options, stack.concat( key ) );
+
+                                if ( _fun === typeof clone[key] )
+                                {
+                                    try
+                                    {
+                                        clone[key].bind( clone );
+                                    }
+                                    catch( ex )
+                                    {
+                                        GLOBAL_INSTANCE.reportError( ex, key + " could not be bound to the clone", S_WARN, this?.name );
+                                    }
+                                }
+                            }
+                        }
+                        finally
+                        {
+                            stack.pop();
+                        }
+                    }
+                }
+        }
+
+        return freeze ? lock( clone ) : clone;
+    };
+
+    /**
+     * Returns a local (mutable) copy of the value specified.
+     *
+     * @param pObject {any} the value to copy
+     *
+     * @param pOptions {object} an object specifying how to handle undefined and null values
+     * as well as whether and how deep to copy an object or array value
+     *
+     * @param pStack {[any]} USED INTERNALLY TO PREVENT INFINITE RECURSION, DO NOT SPECIFY A VALUE FROM CLIENT CODE
+     *
+     * @returns {bigint|number|string|null|{}|undefined|{}|*[]|Readonly<{}>|*|Function|boolean} an immutable copy of the value specified
+     */
+    const localCopy = function( pObject, pOptions = DEFAULT_COPY_OPTIONS, pStack = [] )
+    {
+        return _copy( pObject, pOptions, pStack );
+    };
+
+    /**
+     * Returns an immutable copy of the value specified.
+     *
+     * @param pObject {any} the value to copy
+     * @param pOptions {object} an object specifying how to handle undefined and null values
+     * as well as whether and how deep to copy an object or array value
+     * @param pStack {[any]} USED INTERNALLY TO PREVENT INFINITE RECURSION, DO NOT SPECIFY A VALUE FROM CLIENT CODE
+     * @returns {bigint|number|string|null|{}|undefined|{}|*[]|Readonly<{}>|*|Function|boolean} an immutable copy of the value specified
+     */
+    const immutableCopy = function( pObject, pOptions = IMMUTABLE_COPY_OPTIONS, pStack = [] )
+    {
+        const options = populateOptions( pOptions, IMMUTABLE_COPY_OPTIONS );
+        options.freeze = true;
+        return _copy( pObject, options, pStack );
+    };
+
+    /**
+     * Returns a read-only copy of an object,
+     * whose properties are also read-only copies of properties of the specified object
+     * @param pObject {object} the object to freeze
+     * @param pStack {[any]} USED INTERNALLY TO PREVENT INFINITE RECURSION,
+     *                       DO NOT SPECIFY A VALUE FROM CLIENT CODE
+     *
+     * @returns {object} a new object that is a frozen copy of the specified object
+     * whose properties are also frozen copies of the specified object's properties
+     */
+    const deepFreeze = function( pObject, pStack = [] )
+    {
+        return immutableCopy( pObject, IMMUTABLE_COPY_OPTIONS, pStack );
+    };
+
+    const _coerce = function( pValue, pType )
+    {
+        let a = (_ud === typeof pValue || null === pValue) ? null : pValue;
+
+        let type = pType || typeof a;
+
+        type = (_validTypes.includes( type ) || _fun === typeof type) ? type : typeof a;
+
+        if ( type === typeof a || (_fun === typeof type && a instanceof type) )
+        {
+            return a;
+        }
+
+        switch ( type )
+        {
+            case _str:
+                return _mt_str + (null === a ? _mt_str : a);
+
+            case _num:
+                return parseFloat( _mt_str + (null === a ? _mt_str : a) );
+
+            case _big:
+                return BigInt( (_mt_str + (null === a ? _mt_str : a)).replace( /n$/, _mt_str ) );
+
+            case _bool:
+                return Boolean( a );
+
+            case _fun:
+                return _fun === typeof a ? a : function() { return a; };
+
+            case _symbol:
+                return Symbol.for( (_mt_str + _coerce( a, _str )) );
+
+            case _obj:
+                return [(_mt_str + _coerce( a, _str ))];
+
+            default:
+                if ( type === Date || typeof type === Date )
+                {
+                    return new Date( _coerce( a, _num ) );
+                }
+
+                if ( type === RegExp || typeof type === RegExp )
+                {
+                    let regExp = _coerce( a, _str );
+
+                    try
+                    {
+                        regExp = new RegExp( regExp );
+                    }
+                    catch( ex )
+                    {
+
+                    }
+
+                    return regExp;
+                }
+
+                return _coerce( a, typeof type );
+        }
+    };
+
+    /**
+     * These are default options for the ComparatorFactory class.
+     *
+     * @type {{caseSensitive: boolean, trimStrings: boolean, nullsFirst: boolean, strict: boolean, reverse: boolean}}
+     */
+    const DEFAULT_COMPARATOR_OPTIONS =
+        {
+            type: "*",
+            strict: true,
+            nullsFirst: true,
+            caseSensitive: true,
+            trimStrings: false,
+            reverse: false,
+            coerce: false,
+            maxStackSize: MAX_STACK_SIZE
+        };
+
+    /* abstract*/
+    /**
+     * This class can be used to create generic comparators.
+     * The options (and their corresponding properties) can be used to control the following rules for the comparisons:
+     * strict {boolean} if true, values compared must be of the same type and no type coercion will be used
+     * nullsFirst {boolean} pass true if null values should be considered less than other values, false if they should be considered greater than other values
+     * reverse {boolean} pass true to order values in reverse order (i.e., descending versus ascending)
+     * caseSensitive {boolean} [DEFAULTS TO TRUE] pass false if you want string comparisons to ignore case
+     * trimStrings {boolean} pass true if strings should be trimmed before comparison
+     */
+    class ComparatorFactory
+    {
+        #type;
+        #strict = true;
+        #nullsFirst = true;
+        #reverse = false;
+        #caseSensitive = true;
+        #trimStrings = false;
+        #coerce = false;
+        #maxStackSize = MAX_STACK_SIZE;
+
+        #options = DEFAULT_COMPARATOR_OPTIONS;
+
+        constructor( pType, pOptions = DEFAULT_COMPARATOR_OPTIONS )
+        {
+            this.#options = populateOptions( pOptions, DEFAULT_COMPARATOR_OPTIONS );
+
+            this.#type = pType || this.#options?.type || _obj;
+
+            const options = this.#options;
+
+            this.#strict = false !== options?.strict && ("*" !== this.#type);
+            this.#nullsFirst = false !== options?.nullsFirst;
+            this.#caseSensitive = false !== options?.caseSensitive;
+            this.#trimStrings = false !== options?.trimStrings;
+            this.#reverse = true === options?.reverse;
+            this.#coerce = true === options?.coerce;
+            this.#maxStackSize = (_num === typeof options?.maxStackSize ? Math.max( 2, Math.min( options?.maxStackSize, MAX_STACK_SIZE ) ) : MAX_STACK_SIZE);
+        }
+
+        get type()
+        {
+            return this.#type || "*";
+        }
+
+        set type( pType )
+        {
+            this.#type = pType || this.#type;
+        }
+
+        get maxStackSize()
+        {
+            return (_num === typeof this.#maxStackSize ? Math.max( 2, Math.min( this.#maxStackSize, MAX_STACK_SIZE ) ) : MAX_STACK_SIZE);
+        }
+
+        _copyOptions( pOverrides )
+        {
+            const overrides = populateOptions( pOverrides, this.#options || DEFAULT_COMPARATOR_OPTIONS );
+
+            return {
+                type: overrides?.type || this.type || "*",
+                strict: (false === overrides?.strict ? false : overrides?.strict || this.strict),
+                nullsFirst: (false === overrides?.nullsFirst ? false : overrides?.nullsFirst || this.nullsFirst),
+                caseSensitive: (false === overrides?.caseSensitive ? false : overrides?.caseSensitive || this.caseSensitive),
+                trimStrings: (false === overrides?.trimStrings ? false : overrides?.trimStrings || this.trimStrings),
+                reverse: (false === overrides?.reverse ? false : overrides?.reverse || this.reverse),
+                coerce: (false === overrides?.coerce ? false : overrides?.coerce || this.coerce),
+                maxStackSize: Math.max( 2, Math.min( _num === typeof overrides?.maxStackSize ? overrides?.maxStackSize : this.maxStackSize, MAX_STACK_SIZE ) ),
+            };
+        }
+
+        get options()
+        {
+            return populateOptions( this._copyOptions(), (this.#options || DEFAULT_COMPARATOR_OPTIONS) );
+        }
+
+        get strict()
+        {
+            return true === this.#strict && "*" !== this.type;
+        }
+
+        set strict( pStrict )
+        {
+            this.#strict = !!pStrict;
+        }
+
+        get coerce()
+        {
+            return this.#coerce;
+        }
+
+        set coerce( pCoerce )
+        {
+            this.#coerce = pCoerce;
+        }
+
+        get nullsFirst()
+        {
+            return this.#nullsFirst;
+        }
+
+        set nullsFirst( pNullsFirst )
+        {
+            this.#nullsFirst = !!pNullsFirst;
+        }
+
+        get caseSensitive()
+        {
+            return this.#caseSensitive;
+        }
+
+        set caseSensitive( pCaseSensitive )
+        {
+            this.#caseSensitive = !!pCaseSensitive;
+        }
+
+        get trimStrings()
+        {
+            return this.#trimStrings;
+        }
+
+        set trimStrings( pTrimStrings )
+        {
+            this.#trimStrings = !!pTrimStrings;
+        }
+
+        get reverse()
+        {
+            return this.#reverse;
+        }
+
+        set reverse( pReverse )
+        {
+            this.#reverse = !!pReverse;
+        }
+
+        _compare( pA, pB, pOptions )
+        {
+            const options = populateOptions( pOptions, this.options || DEFAULT_COMPARATOR_OPTIONS );
+
+            let stack = options.stack || [];
+
+            let strict = (true === options?.strict) || this.strict;
+
+            let coerce = (true === options?.coerce) || this.coerce;
+
+            let a = pA;
+            let b = pB;
+
+            a = _symbol === typeof a ? Symbol.keyFor( a ) : a;
+            b = _symbol === typeof b ? Symbol.keyFor( b ) : b;
+
+            a = a || (0 === a ? 0 : false === a ? false : _mt_str === a ? a : null);
+            b = b || (0 === b ? 0 : false === b ? false : _mt_str === b ? b : null);
+
+            let type = (_ud === typeof a || null === a) ? ((_ud === typeof b || null === b) ? _ud : typeof b) : typeof a;
+
+            if ( coerce )
+            {
+                type = ("*" !== this.type && _ud !== this.type && _ud !== typeof this.type) ? this.type : _str;
+
+                a = _coerce( a, type );
+                b = _coerce( b, type );
+            }
+
+            let isExpectedType = this.matchesType( a, b );
+
+            if ( strict && !isExpectedType )
+            {
+                return 0;
+            }
+
+            let comp = 0;
+
+            switch ( (type || this.type) )
+            {
+                case _ud:
+                    return this.nullsFirst ? -1 : 1;
+
+                case _str:
+
+                    a = (null === a) ? _mt_str : a;
+                    b = (null === b) ? _mt_str : b;
+
+                    a = _mt_str + (this.trimStrings ? (_mt_str + a).trim() : a);
+                    b = _mt_str + (this.trimStrings ? (_mt_str + b).trim() : b);
+
+                    if ( !this.caseSensitive )
+                    {
+                        a = (_mt_str + a).toUpperCase();
+                        b = (_mt_str + b).toUpperCase();
+                    }
+
+                    comp = a > b ? 1 : a < b ? -1 : 0;
+
+                    break;
+
+                case _num:
+                case _big:
+
+                    a = null === a ? NaN : parseFloat( a );
+                    b = null === b ? NaN : parseFloat( b );
+
+                    if ( isNaN( a ) || null === a )
+                    {
+                        if ( isNaN( b ) || null === b )
+                        {
+                            return 0;
+                        }
+                        return (this.nullsFirst ? -1 : 1);
+                    }
+                    else if ( isNaN( b ) || null === b )
+                    {
+                        return (this.nullsFirst ? 1 : -1);
+                    }
+
+                    comp = a > b ? 1 : a < b ? -1 : 0;
+
+                    break;
+
+                case _bool:
+                    a = (a ? 1 : -1);
+                    b = (b ? 1 : -1);
+
+                    comp = a > b ? 1 : a < b ? -1 : 0;
+
+                    break;
+
+                case _fun:
+                    return 0;
+
+                case _symbol:
+                    return 0;
+
+                case _obj:
+
+                    if ( null === a )
+                    {
+                        if ( null === b )
+                        {
+                            return 0;
+                        }
+                        return (this.nullsFirst ? -1 : 1);
+                    }
+                    else if ( null === b )
+                    {
+                        return (this.nullsFirst ? 1 : -1);
+                    }
+
+                    if ( _fun === typeof a?.compareTo )
+                    {
+                        comp = a.compareTo( b ) || 0;
+                        break;
+                    }
+
+                    if ( isArray( a ) )
+                    {
+                        if ( isArray( b ) )
+                        {
+                            let comp = a.length > b.length ? 1 : a.length < b.length ? -1 : 0;
+
+                            if ( 0 === comp )
+                            {
+                                for( let i = 0, n = a.length; i < n && 0 === comp; i++ )
+                                {
+                                    comp = this._compare( a[i], b[i], { stack, ...options } );
+                                }
+                            }
+                        }
+
+                        comp = a.length > 1 ? 1 : comp = a.length > 0 ? this._compare( a[0], b, { stack, ...options } ) : _mt_str === (_mt_str + b) ? 0 : -1;
+
+                        break;
+                    }
+                    else if ( isArray( b ) )
+                    {
+                        comp = b.length > 1 ? -1 : comp = b.length > 0 ? this._compare( a, b[0], { stack, ...options } ) : _mt_str === (_mt_str + a) ? 0 : 1;
+                        break;
+                    }
+
+                    if ( a instanceof Date || [_num, _big].includes( typeof a ) )
+                    {
+                        if ( b instanceof Date || [_num, _big].includes( typeof b ) )
+                        {
+                            comp = a > b ? 1 : a < b ? -1 : 0;
+                        }
+                        break;
+                    }
+
+                    if ( a instanceof RegExp || [_str].includes( typeof a ) )
+                    {
+                        let sa = a.toString();
+
+                        if ( b instanceof RegExp || [_str].includes( typeof b ) )
+                        {
+                            let sb = b.toString();
+
+                            const comparator = new ComparatorFactory( _str ).comparator();
+
+                            comp = comparator( sa, sb );
+                        }
+                        break;
+                    }
+
+                    for( let prop in a )
+                    {
+                        let propValue = a[prop];
+                        let otherValue = b[prop];
+
+                        comp = this._compare( propValue, otherValue, { stack, ...options } );
+
+                        if ( 0 !== comp )
+                        {
+                            break;
+                        }
+                    }
+
+                    break;
+
+                default:
+                    comp = 0;
+            }
+
+            return this.reverse ? -comp : comp;
+        }
+
+        comparator()
+        {
+            const me = this;
+
+            return function( pA, pB )
+            {
+                return me._compare( pA, pB, me.options );
+            };
+        }
+
+        matchesType( pA, pB, pType )
+        {
+            let type = pType || this.type;
+
+            const typeIsClass = _fun === typeof type;
+
+            if ( "*" === type )
+            {
+                return true;
+            }
+
+            let a = pA;
+            let b = pB;
+
+            if ( this.coerce )
+            {
+                a = _coerce( a, type );
+                b = _coerce( b, type );
+            }
+
+            if ( null === pA || _ud === typeof pA )
+            {
+                if ( null === pB || _ud === typeof pB )
+                {
+                    return true;
+                }
+                return (typeof b === type || (typeIsClass && pB instanceof type));
+            }
+            else if ( null === pB || _ud === typeof pB )
+            {
+                return (typeof a === type || (typeIsClass && pA instanceof type));
+            }
+
+            return (typeof a === typeof b) && (typeof a === type || (typeIsClass && a instanceof type)) && (typeof b === type || (typeIsClass && b instanceof type));
+        }
+
+        nullsFirstComparator()
+        {
+            const options = this._copyOptions( { nullsFirst: true } );
+            return new ComparatorFactory( this.type, options ).comparator();
+        }
+
+        nullsLastComparator()
+        {
+            const options = this._copyOptions( { nullsFirst: false } );
+            return new ComparatorFactory( this.type, options ).comparator();
+        }
+
+        caseInsensitiveComparator()
+        {
+            const options = this._copyOptions( { caseSensitive: false, type: "string" } );
+            return new ComparatorFactory( options?.type || this.type, options ).comparator();
+        }
+
+        reverseComparator()
+        {
+            const options = this._copyOptions( { reverse: true } );
+            return new ComparatorFactory( this.type, options ).comparator();
+        }
+    }
+
+    /**
+     * This is the maximum allowed value for instances of the IterationCap class
+     * @type {number} the maximum allowed value for instances of the IterationCap class
+     */
+    const MAX_ITERATIONS = 10_000;
+
+    /**
+     * This class allows us to easily cap an iteration, such as a 'for' loop or a 'while' loop.
+     * If there is any chance that an iteration might never complete,
+     * use an instance of IterationCap to limit the iteration to a finite number of executions
+     *
+     * Example:
+     *
+     const iterationCap = new IterationCap( 10 );
+
+     while ( someConditionIsTrue() && !iterationCap.reached )
+     {
+     possiblyChangeCondition();
+     }
+
+     In this example, the condition _might_ never become false, however...
+     The loop will exit after 10 attempts to change the condition
+     */
+    class IterationCap
+    {
+        #maxIterations = MAX_ITERATIONS;
+        #iterations = 0;
+
+        constructor( pMaxIterations )
+        {
+            this.#maxIterations = Math.min( Math.max( 1, parseInt( pMaxIterations ) ), MAX_ITERATIONS );
+
+            this.#iterations = 0;
+        }
+
+        get iterations()
+        {
+            return this.#iterations;
+        }
+
+        get reached()
+        {
+            return (this.#iterations++ >= this.#maxIterations);
+        }
+    }
+
+    IterationCap.MAX_CAP = MAX_ITERATIONS;
+
     const mod =
         {
             BockModuleEvent,
             BockModulePrototype,
             CustomEvent,
             isLogger: BockModulePrototype.isLogger,
-            reportError: function( pThis, pError, pMessage = S_DEFAULT_OPERATION, pLevel = S_ERROR, pSource = EMPTY_STRING )
+            reportError: function( pThis, pError, pMessage = S_DEFAULT_OPERATION, pLevel = S_ERROR, pSource = _mt_str )
             {
                 if ( pThis instanceof BockModulePrototype )
                 {
@@ -258,7 +1428,62 @@ const $scope = function()
                 const modulePrototype = new BockModulePrototype( pThis?.name );
                 modulePrototype.reportError.call( pThis || modulePrototype, pError, pMessage, pLevel, pSource );
             },
-            exportModule
+            getGlobalLogger: function()
+            {
+                return BockModulePrototype.getGlobalLogger();
+            },
+            setGlobalLogger: function( pLogger )
+            {
+                BockModulePrototype.setGlobalLogger( pLogger );
+            },
+            exportModule,
+
+            _ud,
+            _obj,
+            _fun,
+            _str,
+            _num,
+            _big,
+            _bool,
+            _symbol,
+
+            _types,
+            _validTypes,
+
+            _mt_str,
+            _mt_chr,
+            _spc,
+            _dot,
+            _comma,
+            _underscore,
+            _colon,
+
+            _unknown,
+
+            S_LOG,
+            S_ERROR,
+            S_WARN,
+            S_DEBUG,
+            S_INFO,
+            S_TRACE,
+
+            S_ERR_PREFIX,
+            S_DEFAULT_OPERATION,
+
+            isReadOnly,
+            populateOptions,
+            lock,
+            deepFreeze,
+            DEFAULT_COPY_OPTIONS,
+            localCopy,
+            immutableCopy,
+
+            generateStack,
+            StackTrace,
+            __Error,
+            IllegalArgumentError,
+            IterationCap,
+            ComparatorFactory
         };
 
     return exportModule( mod, INTERNAL_NAME );

@@ -852,7 +852,7 @@ describe( "Errors", () =>
         expect( catcher( "A", "B" ) ).toEqual( 0 );
 
         expect( loggedMessages ).toEqual( [
-                                              "IllegalArgumentException: Both arguments to add must be numbers",
+                                              "IllegalArgumentError: Both arguments to add must be numbers",
                                               { "a": "A", "b": "B", }
                                           ] );
 
@@ -891,9 +891,14 @@ describe( "ModulePrototype - Events", () =>
     {
         const mod = constants;
 
+        expect( Object.isFrozen( mod ) ).toBe( true );
+
         const ModEvent = CustomEvent || constants.ModuleEvent;
 
-        mod.addEventListener( "TEST", function( pEvt ) { expect( pEvt.detail ).toEqual( { a: 1, b: 2 } ); } );
+        mod.addEventListener( "TEST", function( pEvt )
+        {
+            expect( pEvt.detail ).toEqual( { a: 1, b: 2 } );
+        } );
 
         mod.dispatchEvent( new ModEvent( "TEST", { a: 1, b: 2 } ) );
     } );
