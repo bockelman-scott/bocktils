@@ -5,10 +5,13 @@
  * This module exposes methods for parsing strings as Date objects.
  */
 
-const constants = require( "./Constants.cjs" );
-const typeUtils = require( "./TypeUtils.cjs" );
-const stringUtils = require( "./StringUtils.cjs" );
-const arrayUtils = require( "./ArrayUtils.cjs" );
+const utils = require( "./CoreUtils.cjs" );
+
+/**
+ * Establish separate constants for each of the common utilities imported
+ * @see ../src/CommonUtils.cjs
+ */
+const { constants, typeUtils, stringUtils, arrayUtils } = utils;
 
 const localeUtils = require( "./LocaleUtils.cjs" );
 
@@ -18,9 +21,9 @@ const tokenSetUtils = require( "./DateFormatTokenSet.cjs" );
 
 const dateFormatUtils = require( "./DateFormatter.cjs" );
 
-const _ud = constants?._ud || "undefined";
+const { _ud = "undefined" } = constants;
 
-const $scope = function()
+const $scope = utils?.$scope || constants?.$scope || function()
 {
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };
@@ -44,7 +47,14 @@ const $scope = function()
             dateFormatUtils
         };
 
-    const _mt_str = constants._mt_str;
+    const { _mt_str, classes } = constants;
+
+    const { ModuleEvent, ModulePrototype } = classes;
+
+    if ( _ud === typeof CustomEvent )
+    {
+        CustomEvent = ModuleEvent;
+    }
 
     const { isString, isDate, isNumber, isObject, isNull, isArray } = typeUtils;
 
@@ -52,11 +62,19 @@ const $scope = function()
 
     const asArray = arrayUtils.asArray;
 
+    const { resolveLocale, DEFAULT_LOCALE_STRING } = localeUtils;
 
-    const TokenSet = tokenSetUtils.classes.TokenSet;
-    const TokenLiteral = tokenSetUtils.classes.TokenLiteral;
+    const { calculateNthOccurrenceOfDay } = dateUtils;
 
-    const DateFormatter = dateFormatUtils.classes.DateFormatter;
+    const { classes: TokenSetClasses, getDefaultTokenSet } = tokenSetUtils;
+
+    const { TokenSet, TokenLiteral } = TokenSetClasses;
+
+    const { classes: DateFormatterClasses } = dateFormatUtils;
+
+    const DateFormatter = DateFormatterClasses.DateFormatter;
+
+    const modulePrototype = new ModulePrototype( "DateParser", INTERNAL_NAME );
 
     /**
      * Class to parse a string as a number, according to the Locale and Intl.NumberFormat Options specified
@@ -98,7 +116,7 @@ const $scope = function()
                 {
                     this.#dateFormatter = pFormat;
                     this.#options = Object.assign( {}, this.#dateFormatter.options || pOptions || {} );
-                    this.#locale = localeUtils.resolveLocale( this.#options?.locale || pLocale ) || this.#locale;
+                    this.#locale = resolveLocale( this.#options?.locale || pLocale ) || this.#locale;
                 }
                 else
                 {
@@ -108,13 +126,13 @@ const $scope = function()
 
             if ( pLocale instanceof Intl.Locale || isString( pLocale ) )
             {
-                this.#locale = localeUtils.resolveLocale( pLocale );
+                this.#locale = resolveLocale( pLocale );
             }
             else if ( pLocale instanceof DateFormatter )
             {
                 this.#dateFormatter = pLocale;
                 this.#options = Object.assign( {}, this.#dateFormatter.options || pOptions || {} );
-                this.#locale = localeUtils.resolveLocale( this.#options?.locale );
+                this.#locale = resolveLocale( this.#options?.locale );
             }
 
             if ( pOptions && isObject( pOptions ) )
@@ -123,7 +141,7 @@ const $scope = function()
                 {
                     this.#dateFormatter = pOptions;
                     this.#options = Object.assign( {}, this.#dateFormatter.options || pOptions || {} );
-                    this.#locale = localeUtils.resolveLocale( this.#options.locale || pLocale ) || this.#locale;
+                    this.#locale = resolveLocale( this.#options.locale || pLocale ) || this.#locale;
                 }
                 else
                 {
@@ -136,11 +154,11 @@ const $scope = function()
                 this.#dateFormatter = new DateFormatter( this.#locale, this.#options || {} );
             }
 
-            this.#locale = (this.#locale instanceof Intl.Locale) ? this.#locale : this.#dateFormatter?.locale || localeUtils.resolveLocale( localeUtils.DEFAULT_LOCALE_STRING );
+            this.#locale = (this.#locale instanceof Intl.Locale) ? this.#locale : this.#dateFormatter?.locale || resolveLocale( DEFAULT_LOCALE_STRING );
 
             this.#tokenSet = (pTokenSet instanceof TokenSet) ? pTokenSet : this.#dateFormatter?.tokenSet;
 
-            this.#tokenSet = (this.#tokenSet instanceof TokenSet) ? this.#tokenSet : tokenSetUtils.getDefaultTokenSet( this.#locale );
+            this.#tokenSet = (this.#tokenSet instanceof TokenSet) ? this.#tokenSet : getDefaultTokenSet( this.#locale );
 
             if ( isNull( this.#options ) || !isObject( this.#options ) || Object.keys( this.#options ).length <= 0 )
             {
@@ -148,9 +166,14 @@ const $scope = function()
             }
         }
 
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
         get locale()
         {
-            return localeUtils.resolveLocale( this.#locale || this.#dateFormatter?.locale );
+            return resolveLocale( this.#locale || this.#dateFormatter?.locale );
         }
 
         get options()
@@ -170,15 +193,15 @@ const $scope = function()
 
         get tokenSet()
         {
-            this.#tokenSet = (this.#tokenSet instanceof TokenSet) ? this.#tokenSet : this.#dateFormatter?.tokenSet || tokenSetUtils.getDefaultTokenSet( this.locale );
-            this.#tokenSet = this.#tokenSet || tokenSetUtils.getDefaultTokenSet( this.locale );
+            this.#tokenSet = (this.#tokenSet instanceof TokenSet) ? this.#tokenSet : this.#dateFormatter?.tokenSet || getDefaultTokenSet( this.locale );
+            this.#tokenSet = this.#tokenSet || getDefaultTokenSet( this.locale );
 
             if ( this.locale?.baseName !== this.#tokenSet?.locale?.baseName )
             {
                 this.#tokenSet = this.#tokenSet.cloneForLocale( this.locale );
             }
 
-            return this.#tokenSet || this.#dateFormatter?.tokenSet || tokenSetUtils.getDefaultTokenSet( this.locale );
+            return this.#tokenSet || this.#dateFormatter?.tokenSet || getDefaultTokenSet( this.locale );
         }
 
         get supportedTokens()
@@ -515,7 +538,7 @@ const $scope = function()
 
             year = year < 0 ? currentDate.getFullYear() : year;
             month = month < 0 ? currentDate.getMonth() : month;
-            dayOfMonth = dayOfMonth < 1 ? dateUtils.calculateNthOccurrenceOfDay( year, month, 0, (day < 0 ? currentDate.getDay() : day) ) : dayOfMonth;
+            dayOfMonth = dayOfMonth < 1 ? calculateNthOccurrenceOfDay( year, month, 0, (day < 0 ? currentDate.getDay() : day) ) : dayOfMonth;
 
             hours = Math.min( 23, Math.max( 0, hours ) );
             minutes = Math.min( 59, Math.max( 0, minutes ) );
@@ -545,7 +568,7 @@ const $scope = function()
         throw new Error( "DateParser.fromLocale requires an instance of Intl.Locale or a string representing a Locale" );
     };
 
-    const mod =
+    let mod =
         {
             dependencies,
             classes:
@@ -561,15 +584,7 @@ const $scope = function()
             }
         };
 
-    if ( _ud !== typeof module )
-    {
-        module.exports = Object.freeze( mod );
-    }
+    mod = modulePrototype.extend( mod );
 
-    if ( $scope() )
-    {
-        $scope()[INTERNAL_NAME] = Object.freeze( mod );
-    }
-
-    return Object.freeze( mod );
+    return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 }());

@@ -3,25 +3,21 @@
  * You can define your own token set to use in place of the default if desired.
  */
 
-const utils = require( "./CommonUtils.cjs" );
+const utils = require( "./CoreUtils.cjs" );
 
 /**
  * Establish separate constants for each of the common utilities imported
  * @see ../src/CommonUtils.cjs
  */
-const constants = utils?.constants;
-const typeUtils = utils?.typeUtils;
-const stringUtils = utils?.stringUtils;
-const arrayUtils = utils?.arrayUtils;
-const objectUtils = utils?.objectUtils;
+const { constants, typeUtils, stringUtils, arrayUtils, objectUtils } = utils;
 
 const localeUtils = require( "./LocaleUtils.cjs" );
 
 const dateUtils = require( "./DateUtils.cjs" );
 
-const _ud = constants?._ud || "undefined";
+const { _ud = "undefined" } = constants;
 
-const $scope = utils?.$scope || function()
+const $scope = utils?.$scope || constants?.$scope || function()
 {
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };
@@ -46,7 +42,7 @@ const $scope = utils?.$scope || function()
             dateUtils
         };
 
-    const { _mt_str, lock } = constants;
+    const { _mt_str, lock, classes } = constants;
 
     const { isNull, isDate, isNumber } = typeUtils;
 
@@ -54,36 +50,47 @@ const $scope = utils?.$scope || function()
 
     const asArray = arrayUtils.asArray;
 
-    const dateConstants = lock( dateUtils.DateConstants );
+    const {
+        DEFAULTS: LOCALE_DEFAULTS,
+        DEFAULT_LOCALE_STRING,
+        resolveLocale,
+        getMonthNames,
+        getMonthAbbreviations,
+        getDayNames,
+        getDayAbbreviations,
+        getDayLetters,
+        getEras,
+        getAmPmStrings,
+        getFirstDayOfWeek,
+        FORMATS,
+    } = localeUtils;
+
+    const { ModuleEvent, ModulePrototype } = classes;
+
+    if ( _ud === typeof CustomEvent )
+    {
+        CustomEvent = ModuleEvent;
+    }
+
+    const modulePrototype = new ModulePrototype( "DateFormatTokenSet", INTERNAL_NAME );
 
     const
         {
+            DateConstants,
             calculateOccurrencesOf,
             calculateNthOccurrenceOfDay,
             subtractDays,
             daysBetween,
             startOfMonth,
             toNoon
-    } = dateUtils;
+        } = dateUtils;
+
+    const dateConstants = lock( DateConstants );
 
     const MONTHS = dateConstants.Months;
     const DAYS = dateConstants.Days;
     const OCCURRENCE = dateConstants.Occurrence;
     const UNITS = dateConstants.Units;
-
-    let
-        {
-            DEFAULT_LOCALE_STRING,
-            resolveLocale,
-            getMonthNames,
-            getMonthAbbreviations,
-            getDayNames,
-            getDayAbbreviations,
-            getDayLetters,
-
-        } = localeUtils;
-
-    const LOCALE_DEFAULTS = localeUtils.DEFAULTS;
 
     const DEFAULT_LOCALE = new Intl.Locale( DEFAULT_LOCALE_STRING );
 
@@ -98,17 +105,15 @@ const $scope = utils?.$scope || function()
             },
         ];
 
-    const MONTH_NAMES = lock( [].concat( LOCALE_DEFAULTS.MONTH_NAMES || localeUtils.getMonthNames( DEFAULT_LOCALE ) ) );
+    const MONTH_NAMES = lock( [].concat( LOCALE_DEFAULTS.MONTH_NAMES || getMonthNames( DEFAULT_LOCALE ) ) );
 
-    const MONTH_NAMES_SHORT = lock( [].concat( LOCALE_DEFAULTS.MONTH_NAMES_SHORT || localeUtils.getMonthAbbreviations( DEFAULT_LOCALE ) ) );
+    const MONTH_NAMES_SHORT = lock( [].concat( LOCALE_DEFAULTS.MONTH_NAMES_SHORT || getMonthAbbreviations( DEFAULT_LOCALE ) ) );
 
-    const DAY_NAMES = lock( [].concat( LOCALE_DEFAULTS.DAY_NAMES || localeUtils.getDayNames( DEFAULT_LOCALE ) ) );
+    const DAY_NAMES = lock( [].concat( LOCALE_DEFAULTS.DAY_NAMES || getDayNames( DEFAULT_LOCALE ) ) );
 
-    const DAY_NAMES_SHORT = lock( [].concat( LOCALE_DEFAULTS.DAY_NAMES_SHORT || localeUtils.getDayAbbreviations( DEFAULT_LOCALE ) ) );
+    const DAY_NAMES_SHORT = lock( [].concat( LOCALE_DEFAULTS.DAY_NAMES_SHORT || getDayAbbreviations( DEFAULT_LOCALE ) ) );
 
-    const DAY_LETTERS = lock( [].concat( LOCALE_DEFAULTS.DAY_LETTERS || localeUtils.getDayLetters( DEFAULT_LOCALE ) ) );
-
-    const FORMATS = Object.assign( {}, localeUtils.FORMATS );
+    const DAY_LETTERS = lock( [].concat( LOCALE_DEFAULTS.DAY_LETTERS || getDayLetters( DEFAULT_LOCALE ) ) );
 
     const REPETITION_RULES = lock(
         {
@@ -272,6 +277,11 @@ const $scope = utils?.$scope || function()
             this.#firstDayOfWeek = pFirstDayOfWeek || DAYS.MONDAY;
         }
 
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
         calculateWeekInYear( pDate )
         {
             const date = resolveDate( pDate );
@@ -350,6 +360,11 @@ const $scope = utils?.$scope || function()
             this.#repetitionRule = pRepetitionRule;
         }
 
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
         get characters()
         {
             return asString( this.#characters );
@@ -421,6 +436,11 @@ const $scope = utils?.$scope || function()
             super( pCharacters, pRepetitionRule );
         }
 
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
         format( pDate, pLocale )
         {
             return asString( this.characters );
@@ -443,6 +463,11 @@ const $scope = utils?.$scope || function()
 
             this.#minValue = pMinValue;
             this.#maxValue = pMaxValue;
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
         }
 
         get minValue()
@@ -512,6 +537,11 @@ const $scope = utils?.$scope || function()
             super( pCharacters, REPETITION_RULES.NONE );
 
             this.#eras = [].concat( pEras || ERAS );
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
         }
 
         get eras()
@@ -643,6 +673,11 @@ const $scope = utils?.$scope || function()
             this.#pm = (asString( pPmString ) || "PM");
         }
 
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
         toPattern()
         {
             return super.toPattern();
@@ -680,6 +715,11 @@ const $scope = utils?.$scope || function()
         constructor( pCharacters, pRepetitionRule )
         {
             super( pCharacters, pRepetitionRule );
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
         }
 
         toPattern()
@@ -732,6 +772,11 @@ const $scope = utils?.$scope || function()
 
             this.#names = [].concat( asArray( pMonthNames || MONTH_NAMES ) );
             this.#abbreviations = [].concat( asArray( pMonthAbbreviations || this.#names.map( e => e.slice( 0, 3 ) ) || MONTH_NAMES_SHORT ) );
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
         }
 
         get names()
@@ -813,6 +858,11 @@ const $scope = utils?.$scope || function()
             this.#numberingScheme = pWeekNumberingSystem || new ISO8601_WeekNumberingSystem( pFirstDayOfWeek );
         }
 
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
         toPattern()
         {
             return asString( super.toPattern() ).slice( 0, 2 );
@@ -862,6 +912,11 @@ const $scope = utils?.$scope || function()
             super( pCharacters, pRepetitionRule );
         }
 
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
         toPattern()
         {
             return asString( super.toPattern() ).slice( 0, 2 );
@@ -909,6 +964,11 @@ const $scope = utils?.$scope || function()
             super( pCharacters, pRepetitionRule );
         }
 
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
         toPattern()
         {
             return super.toPattern();
@@ -948,6 +1008,11 @@ const $scope = utils?.$scope || function()
         constructor( pCharacters, pRepetitionRule = REPETITION_RULES.PAD )
         {
             super( pCharacters, pRepetitionRule );
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
         }
 
         toPattern()
@@ -1001,6 +1066,11 @@ const $scope = utils?.$scope || function()
             this.#dayNames = [].concat( pDayNames || DAY_NAMES );
             this.#dayAbbreviations = [].concat( pNameAbbreviations || DAY_NAMES_SHORT );
             this.#dayLetters = [].concat( pDayLetters || DAY_LETTERS );
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
         }
 
         get dayNames()
@@ -1085,6 +1155,11 @@ const $scope = utils?.$scope || function()
             super( pCharacters, 1, 7, pRepetitionRule );
         }
 
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
         toPattern()
         {
             return super.toPattern();
@@ -1127,6 +1202,11 @@ const $scope = utils?.$scope || function()
         constructor( pCharacters, pMinValue, pMaxValue, pRepetitionRule = REPETITION_RULES.PAD )
         {
             super( pCharacters, pMinValue, pMaxValue, pRepetitionRule );
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
         }
 
         toPattern()
@@ -1178,6 +1258,11 @@ const $scope = utils?.$scope || function()
             super( pCharacter, 0, 59 );
         }
 
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
         toPattern()
         {
             return asString( super.toPattern() ).slice( 0, 2 );
@@ -1208,6 +1293,11 @@ const $scope = utils?.$scope || function()
         constructor( pCharacter )
         {
             super( pCharacter );
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
         }
 
         toPattern()
@@ -1242,6 +1332,11 @@ const $scope = utils?.$scope || function()
             super( pCharacter, 0, 999 );
         }
 
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
         toPattern()
         {
             return asString( super.toPattern() ).slice( 0, 3 );
@@ -1264,6 +1359,15 @@ const $scope = utils?.$scope || function()
 
     class TokenTimeZone extends Token
     {
+        constructor( pCharacters, pRepetitionRule )
+        {
+            super( pCharacters, pRepetitionRule );
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
+        }
 
         toPattern()
         {
@@ -1282,17 +1386,41 @@ const $scope = utils?.$scope || function()
 
     class TokenGeneralTimeZone extends TokenTimeZone
     {
+        constructor( pCharacters, pRepetitionRule )
+        {
+            super( pCharacters, pRepetitionRule );
+        }
 
+        static get [Symbol.species]()
+        {
+            return this;
+        }
     }
 
     class TokenRfc822TimeZone extends TokenTimeZone
     {
+        constructor( pCharacters, pRepetitionRule )
+        {
+            super( pCharacters, pRepetitionRule );
+        }
 
+        static get [Symbol.species]()
+        {
+            return this;
+        }
     }
 
     class TokenIso8601TimeZone extends TokenTimeZone
     {
+        constructor( pCharacters, pRepetitionRule )
+        {
+            super( pCharacters, pRepetitionRule );
+        }
 
+        static get [Symbol.species]()
+        {
+            return this;
+        }
     }
 
     const DEFAULT_OPTIONS = lock(
@@ -1337,25 +1465,30 @@ const $scope = utils?.$scope || function()
 
             this.#options = Object.assign( {}, pOptions || {} );
 
-            this.#monthNames = [].concat( this.#options?.monthNames || localeUtils.getMonthNames( this.#locale ) || MONTH_NAMES );
-            this.#monthAbbreviations = [].concat( this.#options?.monthAbbreviations || localeUtils.getMonthAbbreviations( this.#locale ) || MONTH_NAMES_SHORT );
+            this.#monthNames = [].concat( this.#options?.monthNames || getMonthNames( this.#locale ) || MONTH_NAMES );
+            this.#monthAbbreviations = [].concat( this.#options?.monthAbbreviations || getMonthAbbreviations( this.#locale ) || MONTH_NAMES_SHORT );
 
-            this.#dayNames = [].concat( this.#options?.dayNames || localeUtils.getDayNames( this.#locale ) || DAY_NAMES );
-            this.#dayAbbreviations = [].concat( this.#options?.dayAbbreviations || localeUtils.getDayAbbreviations( this.#locale ) || DAY_NAMES_SHORT );
-            this.#dayLetters = [].concat( this.#options?.dayLetters || localeUtils.getDayLetters( this.#locale ) || DAY_LETTERS );
+            this.#dayNames = [].concat( this.#options?.dayNames || getDayNames( this.#locale ) || DAY_NAMES );
+            this.#dayAbbreviations = [].concat( this.#options?.dayAbbreviations || getDayAbbreviations( this.#locale ) || DAY_NAMES_SHORT );
+            this.#dayLetters = [].concat( this.#options?.dayLetters || getDayLetters( this.#locale ) || DAY_LETTERS );
 
-            this.#eras = [].concat( this.#options?.eras || localeUtils.getEras( this.#locale ) || ERAS );
+            this.#eras = [].concat( this.#options?.eras || getEras( this.#locale ) || ERAS );
 
-            this.#amString = this.#options?.amString || ((localeUtils.getAmPmStrings( this.#locale ) || [_mt_str])[0]) || "AM";
-            this.#pmString = this.#options?.pmString || ((localeUtils.getAmPmStrings( this.#locale ) || [_mt_str])[1]) || "PM";
+            this.#amString = this.#options?.amString || ((getAmPmStrings( this.#locale ) || [_mt_str])[0]) || "AM";
+            this.#pmString = this.#options?.pmString || ((getAmPmStrings( this.#locale ) || [_mt_str])[1]) || "PM";
 
             this.#weekNumberingSystem = this.#options?.weekNumberingSystem || new ISO8601_WeekNumberingSystem();
 
-            this.#firstDayOfWeek = (DAYS.SUNDAY === this.#options.firstDayOfWeek || 7 === this.#options.firstDayOfWeek ? DAYS.SUNDAY : (this.#options.firstDayOfWeek || localeUtils.getFirstDayOfWeek( this.#locale ) || DAYS.MONDAY));
+            this.#firstDayOfWeek = (DAYS.SUNDAY === this.#options.firstDayOfWeek || 7 === this.#options.firstDayOfWeek ? DAYS.SUNDAY : (this.#options.firstDayOfWeek || getFirstDayOfWeek( this.#locale ) || DAYS.MONDAY));
 
             this.#weekNumberingSystem.firstDayOfWeek = this.#firstDayOfWeek;
 
             this.#hourCycle = this.#locale?.hourCycle;
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
         }
 
         cloneForLocale( pLocale )
@@ -1382,32 +1515,32 @@ const $scope = utils?.$scope || function()
 
         get monthNames()
         {
-            return [].concat( this.#monthNames || localeUtils.getMonthNames( this.locale ) || MONTH_NAMES );
+            return [].concat( this.#monthNames || getMonthNames( this.locale ) || MONTH_NAMES );
         }
 
         get monthAbbreviations()
         {
-            return [].concat( this.#monthAbbreviations || localeUtils.getMonthAbbreviations( this.locale ) || MONTH_NAMES_SHORT );
+            return [].concat( this.#monthAbbreviations || getMonthAbbreviations( this.locale ) || MONTH_NAMES_SHORT );
         }
 
         get dayNames()
         {
-            return [].concat( this.#dayNames || localeUtils.getDayNames( this.locale ) || DAY_NAMES );
+            return [].concat( this.#dayNames || getDayNames( this.locale ) || DAY_NAMES );
         }
 
         get dayAbbreviations()
         {
-            return [].concat( this.#dayAbbreviations || localeUtils.getDayAbbreviations( this.locale ) || DAY_NAMES_SHORT );
+            return [].concat( this.#dayAbbreviations || getDayAbbreviations( this.locale ) || DAY_NAMES_SHORT );
         }
 
         get dayLetters()
         {
-            return [].concat( this.#dayLetters || localeUtils.getDayLetters( this.locale ) || DAY_LETTERS );
+            return [].concat( this.#dayLetters || getDayLetters( this.locale ) || DAY_LETTERS );
         }
 
         get eras()
         {
-            return [].concat( this.#eras || localeUtils.getEras( this.locale ) || ERAS );
+            return [].concat( this.#eras || getEras( this.locale ) || ERAS );
         }
 
         get hourCycle()
@@ -1417,12 +1550,12 @@ const $scope = utils?.$scope || function()
 
         get amString()
         {
-            return this.#amString || localeUtils.getAmPmStrings( this.locale )[0] || "AM";
+            return this.#amString || getAmPmStrings( this.locale )[0] || "AM";
         }
 
         get pmString()
         {
-            return this.#pmString || localeUtils.getAmPmStrings( this.locale )[1] || "PM";
+            return this.#pmString || getAmPmStrings( this.locale )[1] || "PM";
         }
 
         get weekNumberingSystem()
@@ -1777,7 +1910,7 @@ const $scope = utils?.$scope || function()
         };
     }
 
-    const mod =
+    let mod =
         {
             dependencies,
             classes:
@@ -1841,17 +1974,8 @@ const $scope = utils?.$scope || function()
             DateConstants: dateConstants
         };
 
+    mod = modulePrototype.extend( mod );
 
-    if ( _ud !== typeof module )
-    {
-        module.exports = lock( mod );
-    }
-
-    if ( $scope() )
-    {
-        $scope()[INTERNAL_NAME] = lock( mod );
-    }
-
-    return lock( mod );
+    return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 
 }());

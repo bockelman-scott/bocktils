@@ -6,7 +6,7 @@ const objectUtils = require( "./ObjectUtils.cjs" );
 
 const guidUtils = objectUtils?.guidUtils || objectUtils?.dependencies?.guidUtils;
 
-let _ud = constants._ud || "undefined";
+const { _ud = "undefined" } = constants;
 
 const $scope = constants?.$scope || function()
 {
@@ -21,6 +21,17 @@ const $scope = constants?.$scope || function()
     {
         return $scope()[INTERNAL_NAME];
     }
+
+    const { classes } = constants;
+
+    const { ModuleEvent, ModulePrototype } = classes;
+
+    if ( _ud === typeof CustomEvent )
+    {
+        CustomEvent = ModuleEvent;
+    }
+
+    const modulePrototype = new ModulePrototype( "CoreUtils", INTERNAL_NAME );
 
     let mod =
         {
@@ -41,24 +52,8 @@ const $scope = constants?.$scope || function()
                 }
         };
 
-    mod = Object.assign( mod, constants );
-    mod = Object.assign( mod, typeUtils );
-    mod = Object.assign( mod, stringUtils );
-    mod = Object.assign( mod, arrayUtils );
-    mod = Object.assign( mod, objectUtils );
+    mod = modulePrototype.extend( mod );
 
-    mod = Object.freeze( mod );
-
-    if ( _ud !== typeof module )
-    {
-        module.exports = Object.freeze( mod );
-    }
-
-    if ( $scope() )
-    {
-        $scope()[INTERNAL_NAME] = Object.freeze( mod );
-    }
-
-    return Object.freeze( mod );
+    return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 
 }());

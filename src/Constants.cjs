@@ -550,7 +550,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             isLogger,
             testLogger: function( ...pTestData )
             {
-                this.logger.warn( ...pTestData );
+                (this.logger || modulePrototype.logger).warn( ...pTestData );
             }
         };
 

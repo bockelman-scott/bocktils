@@ -7,7 +7,7 @@ const stringUtils = require( "./StringUtils.cjs" );
 const konsole = console || {};
 
 /** define a variable for typeof undefined **/
-const _ud = constants?._ud || "undefined";
+const { _ud = "undefined" } = constants;
 
 /**
  * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
@@ -35,18 +35,25 @@ const $scope = constants?.$scope || function()
             stringUtils
         };
 
-    const { _mt_str, _fun, _obj, no_op, ignore, populateOptions, lock, S_ERROR } = constants;
+    const { _mt_str, _fun, _obj, no_op, ignore, populateOptions, S_WARN, S_ERROR, classes } = constants;
 
     const { isNull, isBoolean, isFunction, isObject, getClassName, firstMatchingType } = typeUtils;
 
     const { asString, capitalize, uncapitalize } = stringUtils;
+
+    const { ModuleEvent, ModulePrototype } = classes;
+
+    const modulePrototype = new ModulePrototype( "EventUtils", INTERNAL_NAME );
 
     const S_ON = "on";
     const S_ABORT = "abort";
 
     const NO_HANDLER = function( pEvt, pData )
     {
-        konsole.log( "No handler found for event,", pEvt.type, ", Fired on", pEvt.target, " with data: ", (pData || "~no data~") );
+        const msg = "No handler found for event," + pEvt.type + ", Fired on" + pEvt.target;
+
+        modulePrototype.reportError( new Error( msg ), msg, S_WARN, "EventUtils::NO_HANDLER" );
+
         return false;
     };
 
@@ -70,10 +77,10 @@ const $scope = constants?.$scope || function()
 
         if ( evt instanceof Event )
         {
-            return evt;
+            return new ModuleEvent( evt );
         }
 
-        return new Event( asString( evt, true ) );
+        return new ModuleEvent( asString( evt, true ) );
     }
 
     function isHandlerFunction( pObject )
@@ -130,17 +137,22 @@ const $scope = constants?.$scope || function()
         return data || {};
     }
 
-    class BespokeEvent extends Event
+    class BespokeEvent extends ModuleEvent
     {
         #type;
         #detail;
 
         constructor( pEventName, pData )
         {
-            super( resolveEventName( pEventName ) );
+            super( resolveEventName( pEventName ), resolveEventData( resolveEventName( pEventName ), pData ) );
 
             this.#type = resolveEventName( pEventName );
             this.#detail = resolveEventData( this, pData );
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
         }
 
         get type()
@@ -356,7 +368,9 @@ const $scope = constants?.$scope || function()
             }
             catch( ex )
             {
-                konsole.error( "Could not replace event handler for event type,", asString( pEventName ), ", for target, ", (target?.name || typeof target), ex );
+                const msg = "Could not replace event handler for event type, " + asString( pEventName ) + ", for target, " + (target?.name || typeof target);
+
+                modulePrototype.reportError( ex, msg, S_ERROR, "EventUtils::replaceEventHandler" );
             }
         }
     };
@@ -385,6 +399,11 @@ const $scope = constants?.$scope || function()
                 Dispatcher.bindDispatcher( pObject, this, this.#options );
                 this.#delegate = pObject;
             }
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
         }
 
         get options()
@@ -553,7 +572,7 @@ const $scope = constants?.$scope || function()
         return obj;
     };
 
-    const mod =
+    let mod =
         {
             dependencies,
             classes: { Dispatcher, BespokeEvent, CustomEvent },
@@ -573,18 +592,8 @@ const $scope = constants?.$scope || function()
             killEvent
         };
 
-    // when running in a Node.js environment, we assign the module to the global module.exports
-    if ( _ud !== typeof module )
-    {
-        module.exports = lock( mod );
-    }
+    mod = modulePrototype.extend( mod );
 
-    // Cache the module in the global scope to avoid re-executing the logic in this IIFE
-    if ( $scope() )
-    {
-        $scope()[INTERNAL_NAME] = lock( mod );
-    }
-
-    return lock( mod );
+    return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 
 }());

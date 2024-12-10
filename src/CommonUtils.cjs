@@ -1,14 +1,10 @@
 const core = require( "./CoreUtils.cjs" );
 
-const constants = core.constants;
-const typeUtils = core.typeUtils;
-const stringUtils = core.stringUtils;
-const arrayUtils = core.arrayUtils;
-const objectUtils = core.objectUtils;
+const { constants, typeUtils, stringUtils, arrayUtils, objectUtils } = core;
 
 const jsonUtils = require( "./JsonUtils.cjs" );
 
-let _ud = constants._ud || "undefined";
+const { _ud = "undefined" } = constants;
 
 const $scope = constants?.$scope || function()
 {
@@ -23,6 +19,17 @@ const $scope = constants?.$scope || function()
     {
         return $scope()[INTERNAL_NAME];
     }
+
+    const { classes } = constants;
+
+    const { ModuleEvent, ModulePrototype } = classes;
+
+    if ( _ud === typeof CustomEvent )
+    {
+        CustomEvent = ModuleEvent;
+    }
+
+    const modulePrototype = new ModulePrototype( "CommonUtils", INTERNAL_NAME );
 
     let mod =
         {
@@ -43,23 +50,8 @@ const $scope = constants?.$scope || function()
                 }
         };
 
-    mod = Object.assign( mod, constants );
-    mod = Object.assign( mod, typeUtils );
-    mod = Object.assign( mod, stringUtils );
-    mod = Object.assign( mod, arrayUtils );
-    mod = Object.assign( mod, objectUtils );
-    mod = Object.assign( mod, jsonUtils );
+    mod = modulePrototype.extend( mod );
 
-    if ( _ud !== typeof module )
-    {
-        module.exports = Object.freeze( mod );
-    }
-
-    if ( $scope() )
-    {
-        $scope()[INTERNAL_NAME] = Object.freeze( mod );
-    }
-
-    return Object.freeze( mod );
+    return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 
 }());

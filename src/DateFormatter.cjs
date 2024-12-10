@@ -7,21 +7,15 @@
 
 const utils = require( "./CommonUtils.cjs" );
 
+const { constants, typeUtils, stringUtils, arrayUtils, objectUtils } = utils;
+
 const tokenSetUtils = require( "./DateFormatTokenSet.cjs" );
-
-const dependencies = tokenSetUtils.dependencies;
-
-const constants = dependencies?.constants;
-const typeUtils = dependencies?.typeUtils;
-const stringUtils = dependencies?.stringUtils;
-const arrayUtils = dependencies?.arrayUtils;
-const objectUtils = dependencies?.objectUtils;
 
 const localeUtils = require( "./LocaleUtils.cjs" );
 
-const _ud = constants?._ud || "undefined";
+const { _ud = "undefined" } = constants;
 
-const $scope = utils?.$scope || function()
+const $scope = utils?.$scope || constants?.$scope || function()
 {
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };
@@ -45,19 +39,30 @@ const $scope = utils?.$scope || function()
             localeUtils
         };
 
-    let { _mt_str, lock } = constants;
+    const { _mt_str, lock, classes } = constants;
 
-    let { isNull, isDate, isNumber, isString, isObject } = typeUtils;
+    const { ModuleEvent, ModulePrototype } = classes;
 
-    let { asString } = stringUtils;
+    if ( _ud === typeof CustomEvent )
+    {
+        CustomEvent = ModuleEvent;
+    }
 
-    const TokenSet = tokenSetUtils.classes.TokenSet;
+    const modulePrototype = new ModulePrototype( "DateFormatter", INTERNAL_NAME );
 
-    const Token = tokenSetUtils.classes.Token;
+    const { isNull, isDate, isNumber, isString, isObject } = typeUtils;
+
+    const { asString } = stringUtils;
+
+    const { classes: TokenSetClasses, getDefaultTokenSet, SUPPORTED_INTL_OPTIONS } = tokenSetUtils;
+
+    const { TokenSet, Token } = TokenSetClasses;
+
+    const { resolveLocale, isSameLocale } = localeUtils;
 
     const DEFAULT_LOCALE = lock( new Intl.Locale( "en-US" ) );
 
-    const DEFAULT_TOKEN_SET = lock( tokenSetUtils.getDefaultTokenSet() );
+    const DEFAULT_TOKEN_SET = lock( getDefaultTokenSet() );
 
     const DEFAULT_FORMAT = "MM/dd/yyyy hh:mm:ss";
 
@@ -65,8 +70,6 @@ const $scope = utils?.$scope || function()
     {
         return isDate( pDate ) ? pDate : isNumber( pDate ) ? new Date( pDate ) : new Date();
     };
-
-    const resolveLocale = localeUtils.resolveLocale;
 
     class DateFormatter
     {
@@ -82,13 +85,18 @@ const $scope = utils?.$scope || function()
         {
             this.#locale = lock( resolveLocale( pLocale ) );
 
-            this.#tokenSet = lock( (pTokenSet instanceof TokenSet) ? pTokenSet : tokenSetUtils.getDefaultTokenSet( resolveLocale( pLocale ) ) );
+            this.#tokenSet = lock( (pTokenSet instanceof TokenSet) ? pTokenSet : getDefaultTokenSet( resolveLocale( pLocale ) ) );
 
             this.#pattern = isString( pFormat ) ? asString( pFormat ) : isObject( pFormat ) ? null : DEFAULT_FORMAT;
 
             this.#options = isString( pFormat ) ? null : isObject( pFormat ) ? Object.assign( {}, pFormat ) : null;
 
-            this.#useIntlDateFormat = isObject( pFormat ) && (arrayUtils.includesAny( Object.keys( pFormat ), ["dateStyle", "timeStyle"] ) || arrayUtils.includesAny( Object.keys( pFormat ), tokenSetUtils.SUPPORTED_INTL_OPTIONS ));
+            this.#useIntlDateFormat = isObject( pFormat ) && (arrayUtils.includesAny( Object.keys( pFormat ), ["dateStyle", "timeStyle"] ) || arrayUtils.includesAny( Object.keys( pFormat ), SUPPORTED_INTL_OPTIONS ));
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
         }
 
         /**
@@ -102,12 +110,12 @@ const $scope = utils?.$scope || function()
 
         get tokenSet()
         {
-            this.#tokenSet = lock( (this.#tokenSet instanceof TokenSet) ? this.#tokenSet : tokenSetUtils.getDefaultTokenSet( this.locale ) );
-            if ( !localeUtils.isSameLocale( this.#tokenSet.locale, this.#locale ) )
+            this.#tokenSet = lock( (this.#tokenSet instanceof TokenSet) ? this.#tokenSet : getDefaultTokenSet( this.locale ) );
+            if ( !isSameLocale( this.#tokenSet.locale, this.#locale ) )
             {
                 this.#tokenSet = new TokenSet( this.locale, this.#tokenSet.options );
             }
-            return this.#tokenSet || tokenSetUtils.getDefaultTokenSet( this.locale );
+            return lock( this.#tokenSet || getDefaultTokenSet( this.locale ) );
         }
 
         get useIntlDateFormat()
@@ -241,7 +249,7 @@ const $scope = utils?.$scope || function()
         }
     }
 
-    const mod =
+    let mod =
         {
             dependencies,
             resolveDate,
@@ -253,17 +261,8 @@ const $scope = utils?.$scope || function()
             classes: { DateFormatter }
         };
 
-    if ( _ud !== typeof module )
-    {
-        module.exports = lock( mod );
-    }
+    mod = modulePrototype.extend( mod );
 
-    if ( $scope() )
-    {
-        $scope()[INTERNAL_NAME] = lock( mod );
-    }
-
-    return lock( mod );
+    return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 
 }());
-

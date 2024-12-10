@@ -1,14 +1,10 @@
 const core = require( "./CoreUtils.cjs" );
 
-const constants = core.constants;
-const typeUtils = core.typeUtils;
-const stringUtils = core.stringUtils;
-const arrayUtils = core.arrayUtils;
-const objectUtils = core.objectUtils;
-
 const jsonInterpolationUtils = require( "./JsonInterpolationUtils.cjs" );
 
-const _ud = constants._ud || "undefined";
+const { constants, typeUtils, stringUtils, arrayUtils, objectUtils } = core;
+
+const { _ud = "undefined" } = constants;
 
 const $scope = constants?.$scope || function()
 {
@@ -24,7 +20,20 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
-    const { _mt_str, _str, _obj, _fun, _symbol, _num, _big, _bool, populateOptions, lock } = constants;
+    const {
+        _mt_str,
+        _str,
+        _obj,
+        _fun,
+        _symbol,
+        _num,
+        _big,
+        _bool,
+        S_WARN,
+        S_ERROR,
+        populateOptions,
+        classes
+    } = constants;
 
     const { isString, isArray } = typeUtils;
 
@@ -32,9 +41,22 @@ const $scope = constants?.$scope || function()
 
     const { asArray, pruneArray, unique } = arrayUtils;
 
-    const MAX_DEPTH = 17;
+    const { detectCycles, getEntries } = objectUtils;
 
-    const replacer = jsonInterpolationUtils.DEFAULT_REPLACER;
+    const modName = "JsonUtils";
+
+    const { ModulePrototype } = classes;
+
+    const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
+
+    const calculateErrorSourceName = function( pModule = modName, pFunction )
+    {
+        return modulePrototype.calculateErrorSourceName( pModule, pFunction );
+    };
+
+    const MAX_DEPTH = 24;
+
+    const { DEFAULT_REPLACER: replacer, asJson, parseJson } = jsonInterpolationUtils;
 
     const scrub = function( pObj, pOptions, pStack, pDepth )
     {
@@ -54,23 +76,21 @@ const $scope = constants?.$scope || function()
 
         options.keysToExclude = [].concat( keysToRemove || [] );
 
-        let stack = pStack || [];
+        let stack = asArray( pStack || options.stack || [] );
         let depth = asInt( pDepth, 0 ) || 0;
 
-        if ( (depth > MAX_DEPTH) || objectUtils.detectCycles( stack, 3, 3 ) )
+        if ( (depth > MAX_DEPTH) || detectCycles( stack, 3, 3 ) )
         {
             return pObj;
         }
 
         let obj = pObj;
 
-        const entries = Object.entries( pObj );
+        const entries = getEntries( pObj );
 
-        for( let i = 0, n = (entries?.length || 0); i < n; i++ )
+        for( const entry of entries )
         {
-            let entry = entries[i];
-
-            let key = entry?.length ? entry[0] : _mt_str;
+            let key = entry.key || entry[0];
 
             if ( keysToRemove.includes( key ) || keysToRemove.includes( "_" + key ) )
             {
@@ -78,7 +98,7 @@ const $scope = constants?.$scope || function()
                 continue;
             }
 
-            let value = (entry?.length || 0) > 1 ? entry[1] : null;
+            let value = entry.value || entry[1] || null;
 
             if ( null === value )
             {
@@ -97,16 +117,7 @@ const $scope = constants?.$scope || function()
                 case _obj:
                     if ( depth <= 7 )
                     {
-                        stack.push( key );
-                        try
-                        {
-                            obj[key] = scrub( value, options, stack, depth + 1 );
-                        }
-                        catch( ex )
-                        {
-                            console.warn( ex );
-                        }
-                        stack.pop();
+                        obj[key] = scrub( value, options, stack.concat( key ), depth + 1 );
                     }
                     break;
 
@@ -159,13 +170,13 @@ const $scope = constants?.$scope || function()
             includeEmpty: true,
             includeEmptyProperties: true,
             trimStrings: false,
-            omitFunctions: false
+            omitFunctions: false,
+            transientProperties: []
         };
 
-    const toObjectLiteral = function( pObject, pOptions = DEFAULT_OBJECT_LITERAL_OPTIONS )
+    const toObjectLiteral = function( pObject, pOptions = DEFAULT_OBJECT_LITERAL_OPTIONS, pStack = [] )
     {
-        let options = Object.assign( {}, DEFAULT_OBJECT_LITERAL_OPTIONS );
-        options = Object.assign( (options || {}), pOptions || DEFAULT_OBJECT_LITERAL_OPTIONS || {} );
+        const options = populateOptions( pOptions, DEFAULT_OBJECT_LITERAL_OPTIONS );
 
         const _assumeUnderscoreConvention = options?.assumeUnderscoresConvention;
 
@@ -174,15 +185,16 @@ const $scope = constants?.$scope || function()
         if ( isString( obj ) )
         {
             let json = asString( obj, true );
+
             if ( isJson( json ) )
             {
                 try
                 {
-                    obj = jsonInterpolationUtils.parseJson( json, options );
+                    obj = parseJson( json, options );
                 }
                 catch( ex )
                 {
-                    console.warn( ex.message );
+                    modulePrototype.reportError( ex, ex?.message, S_ERROR, calculateErrorSourceName( modName, "toObjectLiteral->parseJson" ) );
                 }
             }
         }
@@ -218,23 +230,25 @@ const $scope = constants?.$scope || function()
                 break;
         }
 
-        if ( isArray( obj ) )
+        const stack = asArray( pStack || options.stack || [] );
+
+        if ( detectCycles( stack, 5, 3 ) )
         {
-            let newArr = [];
+            const msg = "Encountered infinite loop converted value to an object literal";
 
-            for( let i = 0, n = obj.length; i < n; i++ )
-            {
-                let elem = obj[i];
+            modulePrototype.reportError( new Error( msg ), msg, S_WARN, calculateErrorSourceName( modName, "toObjectLiteral" ), stack );
 
-                newArr.push( toObjectLiteral( elem, options ) );
-            }
-
-            return newArr;
+            return Object.assign( {}, obj );
         }
 
         if ( null === obj )
         {
             return null;
+        }
+
+        if ( isArray( obj ) )
+        {
+            return obj.map( ( e, i ) => toObjectLiteral( e, options, stack.concat( asString( i ) ) ) );
         }
 
         let isClassDerivedObject = (obj.constructor && Object !== obj.constructor) || (_ud !== typeof obj.prototype);
@@ -278,7 +292,7 @@ const $scope = constants?.$scope || function()
                 continue;
             }
 
-            newObj[propName] = toObjectLiteral( value, options );
+            newObj[propName] = toObjectLiteral( value, options, stack.concat( asString( propName ) ) );
         }
 
         return newObj;
@@ -305,15 +319,14 @@ const $scope = constants?.$scope || function()
 
     const bruteForceJson = function( pObject, pOptions = DEFAULT_REFLECTION_OPTIONS, pStack = [] )
     {
-        let stack = asArray( pStack || [] );
+        const options = populateOptions( pOptions, DEFAULT_REFLECTION_OPTIONS );
+
+        let stack = asArray( pStack || options?.stack || [] );
 
         if ( objectUtils.detectCycles( stack, 4, 4 ) )
         {
             return JSON.stringify( { "error": "circular-reference detected for " + stack.join( "->" ) } );
         }
-
-        let options = Object.assign( {}, DEFAULT_REFLECTION_OPTIONS );
-        options = Object.assign( options, pOptions || DEFAULT_REFLECTION_OPTIONS );
 
         const errorMessage = "An error occurred while converting an object to JSON using brute force";
 
@@ -353,7 +366,7 @@ const $scope = constants?.$scope || function()
                     }
                     catch( ex )
                     {
-                        console.warn( errorMessage, ex );
+                        modulePrototype.reportError( ex, errorMessage, S_WARN, calculateErrorSourceName( modName, "bruteForceJson->" + exclusion?.name ), stack );
                     }
                 }
 
@@ -401,7 +414,7 @@ const $scope = constants?.$scope || function()
                     let s = asString( Symbol.keyFor( obj ), true );
                     if ( _str === typeof s )
                     {
-                        out = bruteForceJson( s );
+                        out = bruteForceJson( s, options, stack.concat( s ) );
                     }
                 }
                 break;
@@ -412,13 +425,13 @@ const $scope = constants?.$scope || function()
                     let s = Function.prototype.toString.call( obj );
                     if ( _str === typeof s )
                     {
-                        out = bruteForceJson( s );
+                        out = bruteForceJson( s, options, stack.concat( s ) );
                     }
                 }
                 break;
 
             case _obj:
-                if ( null === typeof obj )
+                if ( null === obj )
                 {
                     return JSON.stringify( null );
                 }
@@ -441,7 +454,7 @@ const $scope = constants?.$scope || function()
 
                     for( let i = 0, n = obj?.length || 0; i < n; i++ )
                     {
-                        out += (prependComma ? ", " : "") + bruteForceJson( obj[i] );
+                        out += (prependComma ? ", " : "") + bruteForceJson( obj[i], options, stack.concat( asString( i ) ) );
                         prependComma = true;
                     }
 
@@ -449,7 +462,7 @@ const $scope = constants?.$scope || function()
                 }
                 else
                 {
-                    let entries = objectUtils.getEntries( obj );
+                    let entries = getEntries( obj );
                     entries = entries.filter( entry => !isExcluded( entry.key || entry[0] ) );
 
                     let prependComma = false;
@@ -463,22 +476,7 @@ const $scope = constants?.$scope || function()
                             continue;
                         }
 
-                        stack.push( key );
-
-                        let json = null;
-
-                        try
-                        {
-                            json = bruteForceJson( (entry.value || entry[1]), options, stack );
-                        }
-                        catch( ex )
-                        {
-                            console.warn( errorMessage, ex );
-                        }
-                        finally
-                        {
-                            stack.pop();
-                        }
+                        let json = bruteForceJson( (entry.value || entry[1]), options, stack.concat( key ) );
 
                         if ( json && stringUtils.isValidJson( json ) )
                         {
@@ -499,28 +497,20 @@ const $scope = constants?.$scope || function()
         return out;
     };
 
-    const mod =
+    let mod =
         {
-            asJson: jsonInterpolationUtils.asJson,
-            parseJson: jsonInterpolationUtils.parseJson,
-            stringify: jsonInterpolationUtils.asJson,
-            parse: jsonInterpolationUtils.parseJson,
+            asJson,
+            parseJson,
+            stringify: asJson,
+            parse: parseJson,
             DEFAULT_REPLACER: replacer,
             scrub,
             toObjectLiteral,
             bruteForceJson
         };
 
-    if ( _ud !== typeof module )
-    {
-        module.exports = lock( mod );
-    }
+    mod = modulePrototype.extend( mod );
 
-    if ( $scope() )
-    {
-        $scope()[INTERNAL_NAME] = lock( mod );
-    }
-
-    return lock( mod );
+    return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 
 }());

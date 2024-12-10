@@ -1,20 +1,16 @@
-const utils = require( "./CommonUtils.cjs" );
+const utils = require( "./CoreUtils.cjs" );
 
 /**
  * Establish separate constants for each of the common utilities imported
  * @see ../src/CommonUtils.cjs
  */
-const constants = utils?.constants;
-const typeUtils = utils?.typeUtils;
-const stringUtils = utils?.stringUtils;
-const arrayUtils = utils?.arrayUtils;
-const objectUtils = utils?.objectUtils;
+const { constants, typeUtils, stringUtils, arrayUtils, objectUtils } = utils;
 
 const funcUtils = require( "./FunctionUtils.cjs" );
 
-const _ud = constants?._ud || "undefined";
+const { _ud = "undefined" } = constants;
 
-const $scope = utils?.$scope || function()
+const $scope = utils?.$scope || constants?.$scope || function()
 {
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };
@@ -37,7 +33,7 @@ const $scope = utils?.$scope || function()
             objectUtils
         };
 
-    const { lock, IllegalArgumentError } = constants;
+    const { classes, lock, IllegalArgumentError } = constants;
 
     const { Result, isDate, isNumber, isFunction } = typeUtils;
 
@@ -45,7 +41,16 @@ const $scope = utils?.$scope || function()
 
     const asArray = arrayUtils.asArray;
 
-    const attempt = funcUtils.attempt;
+    const { attempt, op_true, op_false } = funcUtils;
+
+    const { ModuleEvent, ModulePrototype } = classes;
+
+    if ( _ud === typeof CustomEvent )
+    {
+        CustomEvent = ModuleEvent;
+    }
+
+    const modulePrototype = new ModulePrototype( "DateUtils", INTERNAL_NAME );
 
     const UNIT = lock(
         {
@@ -260,6 +265,11 @@ const $scope = utils?.$scope || function()
             this.#days = Math.max( 28, Math.min( 31, asInt( pDays ) ) );
         }
 
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
         get index()
         {
             return this.#index;
@@ -295,6 +305,11 @@ const $scope = utils?.$scope || function()
             super( pName, pIndex, 28 );
 
             this.#year = new Date().getFullYear();
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
         }
 
         get year()
@@ -777,7 +792,7 @@ const $scope = utils?.$scope || function()
                     };
                 }
 
-                return funcUtils.op_true;
+                return op_true;
             },
 
             earlierThan: function( pDate )
@@ -792,7 +807,7 @@ const $scope = utils?.$scope || function()
                     };
                 }
 
-                return funcUtils.op_true;
+                return op_true;
             },
 
             between: function( pStartDate, pEndDate )
@@ -808,7 +823,7 @@ const $scope = utils?.$scope || function()
                     };
                 }
 
-                return funcUtils.op_false;
+                return op_false;
             }
 
         };
@@ -902,6 +917,11 @@ const $scope = utils?.$scope || function()
             this.#weekday = asInt( pWeekday );
         }
 
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
         calculateDate( pYear )
         {
             if ( this.#exactDate )
@@ -919,6 +939,11 @@ const $scope = utils?.$scope || function()
         {
             super( true, pMonth, pDate, -1, -1 );
         }
+
+        static get [Symbol.species]()
+        {
+            return this;
+        }
     }
 
     class HolidayRelativeDefinition extends HolidayDefinition
@@ -927,8 +952,12 @@ const $scope = utils?.$scope || function()
         {
             super( false, pMonth, 0, pOccurrence, pWeekday );
         }
-    }
 
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+    }
 
     class Holiday
     {
@@ -942,6 +971,11 @@ const $scope = utils?.$scope || function()
             this.#name = asString( pName );
             this.#definition = lock( pDefinition );
             this.#mondayRule = pMondayRule;
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
         }
 
         get name()
@@ -1412,7 +1446,7 @@ const $scope = utils?.$scope || function()
         return 0;
     };
 
-    const mod =
+    let mod =
         {
             dependencies,
             DateConstants,
@@ -1484,16 +1518,8 @@ const $scope = utils?.$scope || function()
             workDaysBetween
         };
 
-    if ( _ud !== typeof module )
-    {
-        module.exports = lock( mod );
-    }
+    mod = modulePrototype.extend( mod );
 
-    if ( $scope() )
-    {
-        $scope()[INTERNAL_NAME] = lock( mod );
-    }
-
-    return lock( mod );
+    return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 
 }());

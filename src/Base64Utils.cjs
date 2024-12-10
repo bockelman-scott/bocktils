@@ -8,13 +8,9 @@ const utils = require( "./CommonUtils.cjs" );
  * Establish separate constants for each of the common utilities imported
  * @see ../src/CommonUtils.cjs
  */
-const constants = utils?.constants;
-const typeUtils = utils?.typeUtils;
-const stringUtils = utils?.stringUtils;
-const arrayUtils = utils?.arrayUtils;
-const objectUtils = utils?.objectUtils;
+const { constants, typeUtils, stringUtils, arrayUtils, objectUtils } = utils;
 
-const _ud = constants?._ud || "undefined";
+const { _ud = "undefined" } = constants;
 
 const $scope = constants?.$scope || function()
 {
@@ -30,11 +26,20 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
-    let { _mt_str, lock } = constants;
+    const { _mt_str, lock, classes } = constants;
 
-    let { asString, lcase } = stringUtils;
+    const { ModuleEvent, ModulePrototype } = classes;
 
-    let asArray = arrayUtils.asArray;
+    if ( _ud === typeof CustomEvent )
+    {
+        CustomEvent = ModuleEvent;
+    }
+
+    const modulePrototype = new ModulePrototype( "Base64Utils", INTERNAL_NAME );
+
+    const { asString, lcase } = stringUtils;
+
+    const asArray = arrayUtils.asArray;
 
     const base64 = "base64";
 
@@ -143,7 +148,7 @@ const $scope = constants?.$scope || function()
         return buffer.toString( resolveEncoding( pEncoding ) );
     }
 
-    const mod =
+    let mod =
         {
             dependencies:
                 {
@@ -160,16 +165,8 @@ const $scope = constants?.$scope || function()
             cleanBase64
         };
 
-    if ( _ud !== typeof module )
-    {
-        module.exports = lock( mod );
-    }
+    mod = modulePrototype.extend( mod );
 
-    if ( $scope() )
-    {
-        $scope()[INTERNAL_NAME] = lock( mod );
-    }
-
-    return lock( mod );
+    return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 
 }());

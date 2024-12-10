@@ -4,7 +4,7 @@ const typeUtils = require( "./TypeUtils.cjs" );
 const stringUtils = require( "./StringUtils.cjs" );
 
 /** define a variable for typeof undefined **/
-const _ud = constants?._ud || "undefined";
+const { _ud = "undefined" } = constants;
 
 /**
  * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
@@ -41,9 +41,8 @@ const $scope = constants?.$scope || function()
     /**
      * Create local variables for the imported values and functions we use.
      */
-    let {
+    const {
         _mt_str,
-        _comma,
         _dot,
         _str,
         _fun,
@@ -52,12 +51,7 @@ const $scope = constants?.$scope || function()
         _big,
         _bool,
         _symbol,
-        S_ERROR,
-        S_LOG,
-        S_INFO,
         S_WARN,
-        S_DEBUG,
-        S_TRACE,
         ignore,
         AsyncFunction,
         EMPTY_ARRAY,
@@ -75,17 +69,14 @@ const $scope = constants?.$scope || function()
         CustomEvent = ModuleEvent;
     }
 
-    let modulePrototype = new ModulePrototype( "ArrayUtils", INTERNAL_NAME );
+    const modulePrototype = new ModulePrototype( "ArrayUtils", INTERNAL_NAME );
 
-    let {
+    const {
         VALID_TYPES,
         isUndefined,
         isNull,
         isString,
-        isNumber,
-        isNumeric,
         isInteger,
-        isFloat,
         isObject,
         isBoolean,
         isFunction,
@@ -95,7 +86,17 @@ const $scope = constants?.$scope || function()
         castTo
     } = typeUtils;
 
-    let { asString, isEmpty, isBlank, asInt, asFloat, lcase, isValidNumber, isValidNumeric, rightOfLast } = stringUtils;
+    const {
+        asString,
+        isEmpty,
+        isBlank,
+        asInt,
+        asFloat,
+        lcase,
+        isValidNumber,
+        isValidNumeric,
+        rightOfLast
+    } = stringUtils;
 
     // poly-fill for isArray; probably obsolete with modern environments
     if ( _fun !== typeof Array.isArray )
@@ -122,10 +123,10 @@ const $scope = constants?.$scope || function()
     /**
      * This object defines the default options for the asArray function.
      * flatten: when truthy, any elements of the array that are also arrays
-     * are turned into individual elements of the returned array (@see Array.flat)
+     * are turned into individual elements of the returned array (@see Array::flat)
      *
      * flatten.level: if flatten is an object with a property named level,
-     * the integer value of level is used in the call to Array.flat
+     * the integer value of level is used in the call to Array::flat
      *
      * splitOn: a character or string to split a string if the argument to the function is a string.
      * For example, calling asArray("a.b.c") with splitOn:"." yields ["a","b","c"]
@@ -135,7 +136,7 @@ const $scope = constants?.$scope || function()
      * sanitize: if true, the resulting array will not contain any elements that are null, undefined, or an empty string
      *
      * type: string defining the typeof elements the resulting array should include --or-- a class for which each element must be an instance
-     *       type conversions are not performed; if necessary to convert types, omit this option and use Array.map on the returned value
+     *       type conversions are not performed; if necessary to convert types, omit this option and use Array::map on the returned value
      *
      * unique: when true, the resulting array will contain no duplicated values
      *
@@ -521,7 +522,7 @@ const $scope = constants?.$scope || function()
                     };
                 }
 
-                return function( e ) { return true; };
+                return function() { return true; };
             },
 
             /** a helper function that returns true if the specified value is a valid number or BigInt **/
@@ -1751,7 +1752,7 @@ const $scope = constants?.$scope || function()
             {
                 const rx = arg instanceof RegExp ? new RegExp( arg, asString( arg.flags ) ) : new RegExp( arg, rightOfLast( asString( arg ), "/" ).replaceAll( /[^gidsmyu]/g, _mt_str ) );
 
-                let f = function( e, i, a )
+                let f = function( e )
                 {
                     return rx.test( asString( e ) );
                 };
@@ -1762,10 +1763,12 @@ const $scope = constants?.$scope || function()
             {
                 const type = lcase( asString( arg ) );
 
-                let f = function( e, i, a )
+                let f = function( e )
                 {
                     return type === typeof e;
                 };
+
+                filters.push( f );
             }
         }
 
@@ -2330,7 +2333,7 @@ const $scope = constants?.$scope || function()
 
             const desiredLimit = Math.min( Math.max( 1, asInt( pSize, (pArr?.length || pArr?.size) ) ), 65_536 );
 
-            if ( null != pArr && (pArr instanceof this.constructor || pArr instanceof BoundedQueue) )
+            if ( null != pArr && (pArr instanceof this.constructor) )
             {
                 if ( desiredLimit > pArr.limit )
                 {

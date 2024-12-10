@@ -5,7 +5,7 @@ const arrayUtils = require( "./ArrayUtils.cjs" );
 
 const crypto = require( "crypto" );
 
-const _ud = constants?._ud || "undefined";
+const { _ud = "undefined" } = constants;
 
 /**
  * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
@@ -40,9 +40,13 @@ const $scope = constants?.$scope || function()
         };
 
 
-    const { _mt_str, populateOptions, lock } = constants;
+    const { _mt_str, populateOptions, lock, classes } = constants;
 
     const { asString, isBlank, asInt } = stringUtils;
+
+    const { ModuleEvent, ModulePrototype } = classes;
+
+    const modulePrototype = new ModulePrototype( "GUIDUtils", INTERNAL_NAME );
 
     const MAX_CACHED_VALUES = 10_000;
     const DEFAULT_CACHED_VALUES = 1_000;
@@ -70,6 +74,11 @@ const $scope = constants?.$scope || function()
                     this.#cached.push( asString( this.uuid(), true ) );
                 }
             }
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
         }
 
         get options()
@@ -109,7 +118,7 @@ const $scope = constants?.$scope || function()
 
     const INSTANCE = new GUIDMaker( RandomUUIDOptions );
 
-    const mod =
+    let mod =
         {
             dependencies,
             classes: { GUIDMaker },
@@ -124,16 +133,8 @@ const $scope = constants?.$scope || function()
             }
         };
 
-    if ( $scope() )
-    {
-        $scope()[INTERNAL_NAME] = Object.freeze( mod );
-    }
+    mod = modulePrototype.extend( mod );
 
-    if ( _ud !== typeof module )
-    {
-        module.exports = Object.freeze( mod );
-    }
-
-    return Object.freeze( mod );
+    return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 
 }());

@@ -62,13 +62,19 @@ const $scope = constants?.$scope || function()
     /**
      * The following variable declarations are used
      */
-    const { _mt_str, _mt_chr, _str, _obj, _fun, populateOptions, lock } = constants;
+    const { _mt_str, _mt_chr, _slash, _str, _obj, _fun, lock, classes, IllegalArgumentError } = constants;
 
     const { isString, isRegExp, isObject, isFunction } = typeUtils;
 
     const { asString, asInt, isBlank, lcase, ucase } = stringUtils;
 
     const { asArray, unique } = arrayUtils;
+
+    const modName = "RegularExpressionUtils";
+
+    const { ModulePrototype } = classes;
+
+    const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
 
     /**
      * Constants for regular expression flags
@@ -490,13 +496,13 @@ const $scope = constants?.$scope || function()
              * 7 - n: artifacts of the necessary groupings used to perform negative look-behind or otherwise enforce that only the last parameter can use the spread operator
              *
              */
-            FUNCTION_SIGNATURE: lock( /^(\(?\s*((async(\s+))?\s*function))\s*?([$_\w]+[$_\w\d]*)?\s*\((\s*(([$_\w]+[$_\w\d]*\s*,?)\s*)*(\.{3}([$_\w]+[$_\w\d]*\s*,?)*\s*)*)(?<!,\s*)\)/ ),
+            FUNCTION_SIGNATURE: lock( /^(\(?\s*((async(\s+))?\s*function))\s*?([$_\w]+[$_\w]*)?\s*\((\s*(([$_\w]+[$_\w]*\s*,?)\s*)*(\.{3}([$_\w]+[$_\w]*\s*,?)*\s*)*)(?<!,\s*)\)/ ),
 
             /**
              * Matches specifically an asynchronous function signature, using the same rules as FUNCTION_SIGNATURE.
              * @see FUNCTION_SIGNATURE
              */
-            ASYNC_FUNCTION_SIGNATURE: lock( /^(\(?\s*((async(\s+))\s*function))\s*?([$_\w]+[$_\w\d]*)?\s*\((\s*(([$_\w]+[$_\w\d]*\s*,?)\s*)*(\.{3}([$_\w]+[$_\w\d]*\s*,?)*\s*)*)(?<!,\s*)\)/ ),
+            ASYNC_FUNCTION_SIGNATURE: lock( /^(\(?\s*((async(\s+))\s*function))\s*?([$_\w]+[$_\w]*)?\s*\((\s*(([$_\w]+[$_\w]*\s*,?)\s*)*(\.{3}([$_\w]+[$_\w]*\s*,?)*\s*)*)(?<!,\s*)\)/ ),
 
             /**
              * Matches the start of a function signature, capturing the name of the function in the first group.
@@ -611,7 +617,7 @@ const $scope = constants?.$scope || function()
                 if ( isString( pRegEx ) )
                 {
                     const s = asString( pRegEx );
-                    const index = s.lastIndexOf( constants._slash );
+                    const index = s.lastIndexOf( _slash );
                     const arr = index >= 0 ? [].concat( asArray( s.slice( index + 1 ) || _mt_str ).map( e => asString( e ).split( _mt_chr ) ).flat() ).flat() : [];
                     return this.flags( ...arr );
                 }
@@ -637,7 +643,7 @@ const $scope = constants?.$scope || function()
 
                 if ( isString( pName ) )
                 {
-                    if ( this.REGEX.test( pName ) || this.REGEX.test( constants._slash + pName + constants._slash ) )
+                    if ( this.REGEX.test( pName ) || this.REGEX.test( _slash + pName + _slash ) )
                     {
                         let flags = this.extractFlags( pName );
 
@@ -695,7 +701,7 @@ const $scope = constants?.$scope || function()
                 switch ( typeof pRegExp )
                 {
                     case _str:
-                        rx = this.get( pRegExp, (pResetFlags ? "" : this.extractFlags( pRegExp )) );
+                        rx = this.get( pRegExp, (pResetFlags ? _mt_str : this.extractFlags( pRegExp )) );
                         break;
 
                     case _obj:
@@ -723,12 +729,12 @@ const $scope = constants?.$scope || function()
                         }
                         catch( ex )
                         {
-                            throw new Error( "Reset requires a valid string, regular expression, or a function that returns a string or regular expression\n" + ex.message );
+                            throw new IllegalArgumentError( "Reset requires a valid string, regular expression, or a function that returns a string or regular expression\n" + ex.message );
                         }
                         break;
 
                     default:
-                        throw new Error( "Reset requires a valid string, regular expression, or a function that returns a string or regular expression" );
+                        throw new IllegalArgumentError( "Reset requires a valid string, regular expression, or a function that returns a string or regular expression" );
                 }
 
                 if ( rx instanceof RegExp )
@@ -852,7 +858,7 @@ const $scope = constants?.$scope || function()
      */
     MatchesHelper.execute = function( pRegEx, pString, ...pFlags )
     {
-        const flags = [FLAGS.WITH_INDICES].concat( ...pFlags ).concat( typeUtils.isRegExp( pRegEx ) ? asString( pRegEx.flags, true ).split( _mt_chr ) : [] );
+        const flags = [FLAGS.WITH_INDICES].concat( ...pFlags ).concat( isRegExp( pRegEx ) ? asString( pRegEx.flags, true ).split( _mt_chr ) : [] );
 
         const rx = REGULAR_EXPRESSIONS.get( pRegEx, ...flags );
 
@@ -863,7 +869,7 @@ const $scope = constants?.$scope || function()
         return new MatchesHelper( matches );
     };
 
-    const mod =
+    let mod =
         {
             dependencies,
             FLAGS,
@@ -878,19 +884,12 @@ const $scope = constants?.$scope || function()
             classes:
                 {
                     MatchesHelper
-                }
+                },
+            MatchesHelper
         };
 
-    if ( _ud !== typeof module )
-    {
-        module.exports = lock( mod );
-    }
+    mod = modulePrototype.extend( mod );
 
-    if ( $scope() )
-    {
-        $scope()[INTERNAL_NAME] = lock( mod );
-    }
-
-    return lock( mod );
+    return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 
 }());

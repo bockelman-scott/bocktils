@@ -8,17 +8,15 @@
  *
  * { returnValue, exceptions }
  *
+ * @see Result
+ * @see FunctionResult
  *
  */
 const core = require( "./CoreUtils.cjs" );
 
-const constants = core.constants;
-const typeUtils = core.typeUtils;
-const stringUtils = core.stringUtils;
-const arrayUtils = core.arrayUtils;
-const objectUtils = core.objectUtils;
+const { constants, typeUtils, stringUtils, arrayUtils, objectUtils } = core;
 
-const _ud = constants?._ud || "undefined";
+const { _ud = "undefined" } = constants;
 
 const $scope = constants?.$scope || function()
 {
@@ -54,7 +52,7 @@ const $scope = constants?.$scope || function()
     /**
      * Create local variables for the imported values and functions we use.
      */
-    const { no_op, lock } = constants;
+    const { no_op, S_WARN, S_ERROR, lock, classes } = constants;
 
     const { asString, asInt, asFloat } = stringUtils;
 
@@ -66,6 +64,22 @@ const $scope = constants?.$scope || function()
     const op_false = function() { return false; };
 
     const op_identity = function( pArg ) { return pArg; };
+
+    const { ModuleEvent, ModulePrototype } = classes;
+
+    const modName = "FunctionUtils";
+
+    const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
+
+    const calculateErrorSourceName = function( pModule = modName, pFunction )
+    {
+        return modulePrototype.calculateErrorSourceName( pModule, pFunction );
+    };
+
+    if ( _ud === typeof CustomEvent )
+    {
+        CustomEvent = ModuleEvent;
+    }
 
     /**
      * Returns a suitable 'this' or scope for the execution of a method
@@ -172,12 +186,28 @@ const $scope = constants?.$scope || function()
                 catch( ex2 )
                 {
                     exceptions.push( ex2 );
+
+                    modulePrototype.dispatchEvent( new CustomEvent( S_ERROR,
+                                                                    {
+                                                                        error: ex2,
+                                                                        message: ex2.message,
+                                                                        level: S_ERROR,
+                                                                        method: calculateErrorSourceName( modName, "attemptAsync( " + pOperation?.name + " )" )
+                                                                    } ) );
                 }
             }
         }
         catch( ex )
         {
             exceptions.push( ex );
+
+            modulePrototype.dispatchEvent( new CustomEvent( S_ERROR,
+                                                            {
+                                                                error: ex,
+                                                                message: ex.message,
+                                                                level: S_ERROR,
+                                                                method: calculateErrorSourceName( modName, "attemptAsync( " + pOperation?.name + " )" )
+                                                            } ) );
         }
 
         return new FunctionResult( returnValue, exceptions, ...pArgs );
@@ -227,6 +257,14 @@ const $scope = constants?.$scope || function()
                     catch( ex2 )
                     {
                         exceptions.push( ex2 );
+
+                        modulePrototype.dispatchEvent( new CustomEvent( S_ERROR,
+                                                                        {
+                                                                            error: ex2,
+                                                                            message: ex2.message,
+                                                                            level: S_ERROR,
+                                                                            method: calculateErrorSourceName( modName, "attempt( " + pOperation?.name + " )" )
+                                                                        } ) );
                     }
                 }
             }
@@ -234,6 +272,14 @@ const $scope = constants?.$scope || function()
         catch( ex )
         {
             exceptions.push( ex );
+
+            modulePrototype.dispatchEvent( new CustomEvent( S_ERROR,
+                                                            {
+                                                                error: ex,
+                                                                message: ex.message,
+                                                                level: S_ERROR,
+                                                                method: calculateErrorSourceName( modName, "attempt( " + pOperation?.name + " )" )
+                                                            } ) );
         }
 
         return new FunctionResult( returnValue, exceptions, ...pArgs );
@@ -296,12 +342,28 @@ const $scope = constants?.$scope || function()
                 catch( ex2 )
                 {
                     exceptions.push( ex2 );
+
+                    modulePrototype.dispatchEvent( new CustomEvent( S_ERROR,
+                                                                    {
+                                                                        error: ex2,
+                                                                        message: ex2.message,
+                                                                        level: S_ERROR,
+                                                                        method: calculateErrorSourceName( modName, "attemptAsyncMethod( " + method?.name + " )" )
+                                                                    } ) );
                 }
             }
         }
         catch( ex )
         {
             exceptions.push( ex );
+
+            modulePrototype.dispatchEvent( new CustomEvent( S_ERROR,
+                                                            {
+                                                                error: ex,
+                                                                message: ex.message,
+                                                                level: S_ERROR,
+                                                                method: calculateErrorSourceName( modName, "attemptAsyncMethod( " + asString( pMethod?.name || pMethod ) + " )" )
+                                                            } ) );
         }
 
         return new FunctionResult( returnValue, exceptions, ...pArgs );
@@ -356,6 +418,14 @@ const $scope = constants?.$scope || function()
                     catch( ex2 )
                     {
                         exceptions.push( ex2 );
+
+                        modulePrototype.dispatchEvent( new CustomEvent( S_ERROR,
+                                                                        {
+                                                                            error: ex2,
+                                                                            message: ex2.message,
+                                                                            level: S_ERROR,
+                                                                            method: calculateErrorSourceName( modName, "attemptMethod( " + method?.name + " )" )
+                                                                        } ) );
                     }
                 }
             }
@@ -363,6 +433,14 @@ const $scope = constants?.$scope || function()
         catch( ex )
         {
             exceptions.push( ex );
+
+            modulePrototype.dispatchEvent( new CustomEvent( S_ERROR,
+                                                            {
+                                                                error: ex,
+                                                                message: ex.message,
+                                                                level: S_ERROR,
+                                                                method: calculateErrorSourceName( modName, "attemptMethod( " + asString( pMethod?.name || pMethod ) + " )" )
+                                                            } ) );
         }
 
         return new FunctionResult( returnValue, exceptions, ...pArgs );
@@ -525,14 +603,14 @@ const $scope = constants?.$scope || function()
 
     const sum = function( ...pArgs )
     {
-        const arr = asArray( pArgs );
+        const arr = asArray( pArgs || [] );
         return arr.flat().map( asFloat ).reduce( ( a, c ) => a + c, 0 );
     };
 
     /**
      * This is the exported module.
      */
-    const mod =
+    let mod =
         {
             dependencies,
             isFunction,
@@ -557,19 +635,8 @@ const $scope = constants?.$scope || function()
             FunctionResult
         };
 
-    // when running in a Node.js environment, we assign the module to the global module.exports
-    if ( _ud !== typeof module )
-    {
-        module.exports = lock( mod );
-    }
+    mod = modulePrototype.extend( mod );
 
-    // Cache the module in the global scope to avoid re-executing the logic in this IIFE
-    if ( $scope() )
-    {
-        $scope()[INTERNAL_NAME] = lock( mod );
-    }
-
-    // return the module for environments expecting this function to return the module
-    return lock( mod );
+    return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 
 }());

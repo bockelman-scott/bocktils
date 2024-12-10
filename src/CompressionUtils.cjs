@@ -32,18 +32,14 @@ const utils = require( "./CommonUtils.cjs" );
  * Establish separate constants for each of the common utilities imported
  * @see ../src/CommonUtils.cjs
  */
-const constants = utils?.constants;
-const typeUtils = utils?.typeUtils;
-const stringUtils = utils?.stringUtils;
-const arrayUtils = utils?.arrayUtils;
-const objectUtils = utils?.objectUtils;
+const { constants, typeUtils, stringUtils, arrayUtils, objectUtils } = utils;
 
 /**
  * Import adm-zip dependency
  */
 const admZip = require( "adm-zip" );
 
-const _ud = constants?._ud || "undefined";
+const { _ud = "undefined" } = constants;
 
 const $scope = constants?.$scope || function()
 {
@@ -72,9 +68,9 @@ const $scope = constants?.$scope || function()
         CustomEvent = ModuleEvent;
     }
 
-    const ZERO_LENGTH_BUFFER = lock( Buffer.alloc( 0 ) );
+    const modulePrototype = new ModulePrototype( "CompressionUtils", INTERNAL_NAME );
 
-    let modulePrototype = new ModulePrototype( "CompressionUtils", INTERNAL_NAME );
+    const ZERO_LENGTH_BUFFER = lock( Buffer.alloc( 0 ) );
 
     /**
      * The actual number of bytes in a megabyte
@@ -634,7 +630,7 @@ const $scope = constants?.$scope || function()
         #zip;
         #onSuccess;
         #onFailure;
-        
+
         constructor( pZip, pOnSuccessCallback, pOnFailCallback )
         {
             this.#zip = pZip;
@@ -683,18 +679,8 @@ const $scope = constants?.$scope || function()
             getEntry
         };
 
-    mod = Object.assign( modulePrototype, mod );    
+    mod = modulePrototype.extend( mod );
 
-    if ( _ud !== typeof module )
-    {
-        module.exports = lock( mod );
-    }
-
-    if ( $scope() )
-    {
-        $scope()[INTERNAL_NAME] = lock( mod );
-    }
-
-    return lock( mod );
+    return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 
 }());

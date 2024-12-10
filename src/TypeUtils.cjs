@@ -11,7 +11,7 @@ const constants = require( "./Constants.cjs" );
 /**
  * Defines a string to represent the type, undefined
  */
-const _ud = constants?._ud || "undefined";
+const { _ud = "undefined" } = constants;
 
 /**
  * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
@@ -78,7 +78,7 @@ const $scope = constants?.$scope || function()
             classes
         } = constants;
 
-    const { ModuleEvent, ModulePrototype } = classes;
+    const { ModulePrototype } = classes;
 
     let modulePrototype = new ModulePrototype( "TypeUtils", INTERNAL_NAME );
 
@@ -133,7 +133,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            modulePrototype.reportError( ex, "extending the built-in Array class", S_WARN, "isArray" );
+            modulePrototype.reportError( ex, "extending the built-in Array class", S_WARN, "Array::isArray" );
         }
     }
 

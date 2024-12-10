@@ -1,12 +1,12 @@
-const constants = require( "./Constants.cjs" );
-const typeUtils = require( "./TypeUtils.cjs" );
-const stringUtils = require( "./StringUtils.cjs" );
+const core = require( "./CoreUtils.cjs" );
 
 const localeUtils = require( "./LocaleUtils.cjs" );
 
-const _ud = constants?._ud || "undefined";
+const { constants, typeUtils, stringUtils } = core || localeUtils?.dependencies;
 
-const $scope = function()
+const { _ud = "undefined" } = constants;
+
+const $scope = constants?.$scope || function()
 {
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };
@@ -28,11 +28,24 @@ const $scope = function()
             localeUtils
         };
 
-    const { isString, isNumber, isObject, isNull } = typeUtils;
+    const { _mt_str, _spc, _dot, _comma, _hyphen, _latin = "latn", S_ERROR, lock, classes } = constants;
 
-    const { asInt, asFloat, asString, lcase, isBlank } = stringUtils;
+    const { isString, isNumber, isObject, isNull, isHex, isOctal, isDecimal } = typeUtils;
 
-    const resolveLocale = localeUtils.resolveLocale;
+    const { asString, lcase, isBlank } = stringUtils;
+
+    const { resolveLocale } = localeUtils;
+
+    const modName = "NumberParser";
+
+    const { ModulePrototype } = classes;
+
+    const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
+
+    const calculateErrorSourceName = function( pModule = modName, pFunction )
+    {
+        return modulePrototype.calculateErrorSourceName( pModule, pFunction );
+    };
 
     const getReForDec = function( pDecimalSeparator )
     {
@@ -41,21 +54,9 @@ const $scope = function()
         if ( decimalSeparator.charCodeAt( 0 ) > 127 )
         {
             // substitute a space for now...
-            return " ";
+            return _spc;
         }
-        return ("." === decimalSeparator ? "\\." : decimalSeparator);
-    };
-
-    const getReForGrp = function( pGroupingSeparator )
-    {
-        const groupingSeparator = asString( pGroupingSeparator );
-
-        if ( groupingSeparator.charCodeAt( 0 ) > 127 )
-        {
-            // substitute a space for now...
-            return " ";
-        }
-        return ("." === groupingSeparator ? "\\." : groupingSeparator);
+        return (_dot === decimalSeparator ? "\\." : decimalSeparator);
     };
 
     /**
@@ -109,6 +110,11 @@ const $scope = function()
             }
         }
 
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
         get locale()
         {
             return resolveLocale( this.#locale );
@@ -128,14 +134,14 @@ const $scope = function()
 
         isSupportedNumberingSystem( pNumberingSystem )
         {
-            return (isNull( pNumberingSystem ) || isBlank( pNumberingSystem ) || "latn" === lcase( pNumberingSystem ));
+            return (isNull( pNumberingSystem ) || isBlank( pNumberingSystem ) || _latin === lcase( pNumberingSystem ));
         }
 
         get separators()
         {
             if ( this._separators && Object.keys( this._separators ).length )
             {
-                return Object.freeze( this._separators );
+                return lock( this._separators );
             }
 
             const num = -123456.789;
@@ -165,8 +171,8 @@ const $scope = function()
 
             if ( minusSign === grpSeparator )
             {
-                minusSign = "-" === minusSign ? minusSign : "";
-                grpSeparator = "-" === grpSeparator ? "" : grpSeparator;
+                minusSign = _hyphen === minusSign ? minusSign : _mt_str;
+                grpSeparator = _hyphen === grpSeparator ? _mt_str : grpSeparator;
             }
 
             this._separators =
@@ -176,22 +182,22 @@ const $scope = function()
                     negativeSign: minusSign
                 };
 
-            return Object.freeze( this._separators );
+            return lock( this._separators );
         }
 
         get decimalSeparator()
         {
-            return asString( this.separators?.decimalSeparator, true ) || ".";
+            return asString( this.separators?.decimalSeparator, true ) || _dot;
         }
 
         get groupingSeparator()
         {
-            return asString( this.separators?.groupingSeparator, true ) || "";
+            return asString( this.separators?.groupingSeparator, true ) || _comma;
         }
 
         get negativeSign()
         {
-            return asString( this.separators?.negativeSign, true ) || "-";
+            return asString( this.separators?.negativeSign, true ) || _hyphen;
         }
 
         parse( pString )
@@ -204,28 +210,58 @@ const $scope = function()
                 return this.parse( asString( formatted ) );
             }
 
-            const numberingSystem = numberFormatter.numberingSystem;
+            let s = asString( pString, true );
+
+            const numberingSystem = numberFormatter.numberingSystem || _latin;
 
             if ( !this.isSupportedNumberingSystem( numberingSystem ) )
             {
-                throw new Error( "NumberParser does not support numbering systems other than 'latn'" );
+                const msg = `NumberParser does not support numbering systems other than '${_latin}'`;
+
+                modulePrototype.reportError( new Error( msg ), msg, S_ERROR, calculateErrorSourceName( modName, "parse" ), pString );
+
+                let n = 0;
+
+                try
+                {
+                    n = parseFloat( pString );
+                }
+                catch( ex )
+                {
+                    // ignore this one, since we just reported the root cause
+                }
+
+                return n;
             }
 
-            let s = asString( pString, true );
+            // remove leading zeroes, unless the value appears to be a hexadecimal or octal value
+            if ( !(isHex( s ) || isOctal( s )) )
+            {
+                s = s.replace( /^0+/, _mt_str );
+            }
 
-            s = s.replace( /^0+/, "" );
+            const rxDecimalPoint = getReForDec( this.decimalSeparator );
 
-            const re = new RegExp( "[^E\\d" + getReForDec( this.decimalSeparator ) + this.negativeSign + "]", "g" );
+            // remove any character that is not a digit, the decimal separator or a minus sign (or if hex, x, or octal, o)
+            const re = new RegExp( "[^E\\d" + (isHex( s ) ? "x" : _mt_str) + (isOctal( s ) ? "o" : _mt_str) + rxDecimalPoint + this.negativeSign + "]", "g" );
 
-            s = s.replace( re, "" );
+            s = s.replace( re, _mt_str );
 
-            // temporarily switch to the internal numeric format expected by parseFloat
+            // switch to the internal numeric format expected by parseFloat
+            const re2 = new RegExp( rxDecimalPoint, "g" );
 
-            const re2 = new RegExp( getReForDec( this.decimalSeparator ), "g" );
+            s = s.replace( re2, _dot );
 
-            s = s.replace( re2, "." );
+            let num = 0;
 
-            let num = parseFloat( asString( s, true ) );
+            try
+            {
+                num = parseFloat( asString( s, true ) );
+            }
+            catch( ex )
+            {
+                modulePrototype.reportError( new Error( ex ), ex.message, S_ERROR, calculateErrorSourceName( modName, "parse->parseFloat" ), pString, s );
+            }
 
             if ( isNaN( num ) )
             {
@@ -254,7 +290,7 @@ const $scope = function()
         throw new Error( "NumberParser.fromLocale requires an instance of Intl.Locale or a string representing a Locale" );
     };
 
-    const mod =
+    let mod =
         {
             dependencies,
             classes:
@@ -265,20 +301,12 @@ const $scope = function()
             parse: function( pString, pLocale, pOptions )
             {
                 const parser = new NumberParser( pLocale, pOptions );
-
                 return parser.parse( pString );
             }
         };
 
-    if ( _ud !== typeof module )
-    {
-        module.exports = Object.freeze( mod );
-    }
+    mod = modulePrototype.extend( mod );
 
-    if ( $scope() )
-    {
-        $scope()[INTERNAL_NAME] = Object.freeze( mod );
-    }
+    return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 
-    return Object.freeze( mod );
 }());

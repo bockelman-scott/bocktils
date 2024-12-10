@@ -2,7 +2,7 @@ const dateParserModule = require( "../src/DateParser.cjs" );
 
 const constants = require( "../src/Constants.cjs" );
 
-const DateParser = dateParserModule.DateParser;
+const { DateParser } = dateParserModule;
 
 describe( "DateParser", () =>
 {

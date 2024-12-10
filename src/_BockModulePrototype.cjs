@@ -16,6 +16,7 @@
  * @see BockModulePrototype
  * @see BockModuleEvent
  * @see __Error,
+ * @see IllegalArgumentError
  * @see StackTrace
  * @see IterationCap
  * @see ComparatorFactory
@@ -136,10 +137,15 @@ const $scope = function()
 
         constructor( pEventName, pData )
         {
-            super( pEventName );
+            super( (pEventName instanceof Event) ? (pEventName.type || pEventName.name) : pEventName );
 
-            this.#type = pEventName || "BockModuleEvent";
-            this.#detail = _obj === typeof pData ? pData || {} : {};
+            this.#type = ((pEventName instanceof Event) ? (pEventName.type || pEventName.name) : pEventName) || "BockModuleEvent";
+            this.#detail = _obj === typeof pData ? (pData || ((pEventName instanceof Event) ? (pEventName.detail || {}) : pData || {})) : !(_ud === typeof pData || null == pData) ? { pData } : {};
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
         }
 
         get type()
@@ -365,6 +371,11 @@ const $scope = function()
             this.#columnNumber = this.#parts.columnNumber;
         }
 
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
         get stack()
         {
             return this.#stack || _mt_str;
@@ -469,8 +480,8 @@ const $scope = function()
         {
             super( (_str === typeof pMessage ? (pMessage || DEFAULT_ERROR_MSG) : ((pMessage instanceof Error) ? (pMessage.message || pMessage.name || DEFAULT_ERROR_MSG) : DEFAULT_ERROR_MSG)) );
 
-            this.#type = (pMessage instanceof Error) ? pMessage.type || pMessage.name : this.constructor?.name;
-            this.#name = (pMessage instanceof Error) ? pMessage.name || pMessage.type : this.constructor?.name;
+            this.#type = ((pMessage instanceof Error) ? pMessage.type || pMessage.name : (this.constructor?.name)).replace( /^__/, _mt_str );
+            this.#name = ((pMessage instanceof Error) ? pMessage.name || pMessage.type : (this.constructor?.name)).replace( /^__/, _mt_str );
 
             if ( Error.captureStackTrace )
             {
@@ -575,7 +586,20 @@ const $scope = function()
                 Error.captureStackTrace( this, this.constructor );
             }
         }
+
+        static get [Symbol.species]()
+        {
+            return this;
+        }
     }
+
+    const calculateErrorSourceName = function( pModule, pFunction )
+    {
+        const modName = _obj === typeof pModule ? (pModule?.moduleName || pModule?.name) : _str === typeof pModule ? pModule : _unknown;
+        const funName = _fun === typeof pFunction ? (pFunction?.name) : _str === typeof pFunction ? pFunction : _unknown;
+
+        return (modName || pModule) + _colon + _colon + (funName || pFunction);
+    };
 
     /**
      * This is the base class for all the ToolBocks modules.
@@ -630,6 +654,11 @@ const $scope = function()
             }
         }
 
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
         /**
          * Returns the global scope (globalThis) in which this code is executing
          * @returns {{}}
@@ -655,6 +684,11 @@ const $scope = function()
         get cacheKey()
         {
             return this.#cacheKey || this.#moduleName;
+        }
+
+        calculateErrorSourceName( pModuleName, pFunction )
+        {
+            return calculateErrorSourceName( (pModuleName || this.moduleName), pFunction );
         }
 
         /**
@@ -787,16 +821,17 @@ const $scope = function()
          * @param pMessage {string} a specific error message relevant to the occurrence
          * @param pLevel {string} the log level suggested for the error, such as "warn" or "error"
          * @param pSource {string} a description of the source of the error, such as the module and function where the error occurred
+         * @param pExtra {...any} one or more extra values to log or include in the dispatched event
          */
-        reportError( pError, pMessage = S_DEFAULT_OPERATION, pLevel = S_ERROR, pSource = _mt_str )
+        reportError( pError, pMessage = pError?.message || S_DEFAULT_OPERATION, pLevel = S_ERROR, pSource = _mt_str, ...pExtra )
         {
             try
             {
-                const s = _mt_str + (pMessage || S_DEFAULT_OPERATION);
+                const s = _mt_str + (pMessage || pError?.message || S_DEFAULT_OPERATION);
 
                 const err = new __Error( pError || new Error( s ) );
 
-                let msg = [S_ERR_PREFIX, s, err];
+                let msg = [S_ERR_PREFIX, s, err, ...pExtra];
 
                 let level = (_mt_str + pLevel).trim().toLowerCase();
 
@@ -822,6 +857,7 @@ const $scope = function()
                                                              message: msg.filter( e => _str === typeof e ).join( _spc ),
                                                              level: level,
                                                              method: _mt_str + ((_mt_str + pSource) || this.moduleName || "BockModule"),
+                                                             extra: [...pExtra]
                                                          } ) );
                 }
                 catch( ex2 )
@@ -1260,6 +1296,11 @@ const $scope = function()
             this.#maxStackSize = (_num === typeof options?.maxStackSize ? Math.max( 2, Math.min( options?.maxStackSize, MAX_STACK_SIZE ) ) : MAX_STACK_SIZE);
         }
 
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
         get type()
         {
             return this.#type || "*";
@@ -1652,6 +1693,11 @@ const $scope = function()
             this.#iterations = 0;
         }
 
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
         get iterations()
         {
             return this.#iterations;
@@ -1660,6 +1706,11 @@ const $scope = function()
         get reached()
         {
             return (this.#iterations++ >= this.#maxIterations);
+        }
+
+        reset()
+        {
+            this.#iterations = 0;
         }
     }
 
@@ -1675,11 +1726,12 @@ const $scope = function()
             BockModulePrototype,
             CustomEvent,
             isLogger: BockModulePrototype.isLogger,
-            reportError: function( pThis, pError, pMessage = S_DEFAULT_OPERATION, pLevel = S_ERROR, pSource = _mt_str )
+            calculateErrorSourceName,
+            reportError: function( pThis, pError, pMessage = pError?.message || S_DEFAULT_OPERATION, pLevel = S_ERROR, pSource = _mt_str, ...pExtra )
             {
                 if ( pThis instanceof BockModulePrototype )
                 {
-                    pThis.reportError( pError, pMessage, pLevel, pSource );
+                    pThis.reportError( pError, pMessage, pLevel, pSource, ...pExtra );
                 }
                 const modulePrototype = new BockModulePrototype( pThis?.name );
                 modulePrototype.reportError.call( pThis || modulePrototype, pError, pMessage, pLevel, pSource );

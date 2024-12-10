@@ -6,17 +6,13 @@
  * specific to a particular Locale
  */
 
-const utils = require( "./CommonUtils.cjs" );
+const core = require( "./CoreUtils.cjs" );
 
-const constants = utils.constants;
-const typeUtils = utils.typeUtils;
-const stringUtils = utils.stringUtils;
-const arrayUtils = utils.arrayUtils;
-const objectUtils = utils.objectUtils;
+const { constants, typeUtils, stringUtils, arrayUtils, objectUtils } = core;
 
-const _ud = constants?._ud || "undefined";
+const { _ud = "undefined" } = constants;
 
-const $scope = utils.$scope || constants.$scope || function()
+const $scope = constants.$scope || function()
 {
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };
@@ -44,7 +40,7 @@ const $scope = utils.$scope || constants.$scope || function()
         };
 
     // Create local aliases for values imported from other modules
-    const { _mt_str, populateOptions, lock } = constants;
+    const { _mt_str, S_WARN, S_ERROR, lock, classes } = constants;
 
     const { isDefined, isString, isFunction } = typeUtils;
 
@@ -60,6 +56,17 @@ const $scope = utils.$scope || constants.$scope || function()
         } = stringUtils;
 
     const { asArray } = arrayUtils;
+
+    const modName = "LocaleUtils";
+
+    const { ModulePrototype } = classes;
+
+    const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
+
+    const calculateErrorSourceName = function( pModule = modName, pFunction )
+    {
+        return modulePrototype.calculateErrorSourceName( pModule, pFunction );
+    };
 
     // The locale assumed if no Locale is provided to this module's functions
     const DEFAULT_LOCALE_STRING = "en-US";
@@ -147,7 +154,8 @@ const $scope = utils.$scope || constants.$scope || function()
         }
         catch( ex )
         {
-            console.error( pLocale, "is not a supported locale specifier", ex );
+            modulePrototype.reportError( ex, (pLocale + " is not a supported locale specifier"), S_WARN, calculateErrorSourceName( modName, "resolveLocale" ), pLocale );
+
             locale = DEFAULT_LOCALE;
         }
 
@@ -339,7 +347,7 @@ const $scope = utils.$scope || constants.$scope || function()
         }
         catch( ex )
         {
-            console.error( ex );
+            modulePrototype.reportError( ex, ex.message, S_ERROR, calculateErrorSourceName( modName, "getWeekData" ), locale );
         }
 
         if ( weekData )
@@ -388,13 +396,11 @@ const $scope = utils.$scope || constants.$scope || function()
 
             if ( pExcludeWhitespace )
             {
-                //  /["'`,.:;?/\\{}\[\]=+()*&^%$#@!~_。-]/
                 arr = arr.filter( e => e.isWordLike || !/\s+/.test( e.segment ) );
             }
 
             if ( pExcludePunctuation )
             {
-                //  /["'`,.:;?/\\{}\[\]=+()*&^%$#@!~_。-]/
                 arr = arr.filter( e => e.isWordLike || /\s+/.test( e.segment ) );
             }
 
@@ -416,7 +422,7 @@ const $scope = utils.$scope || constants.$scope || function()
         return lock( arr );
     };
 
-    const mod =
+    let mod =
         {
             dependencies,
             DEFAULT_LOCALE_STRING,
@@ -463,17 +469,8 @@ const $scope = utils.$scope || constants.$scope || function()
             toCanonicalNumericFormat
         };
 
+    mod = modulePrototype.extend( mod );
 
-    if ( _ud !== typeof module )
-    {
-        module.exports = lock( mod );
-    }
-
-    if ( $scope() )
-    {
-        $scope()[INTERNAL_NAME] = lock( mod );
-    }
-
-    return lock( mod );
+    return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 
 }());

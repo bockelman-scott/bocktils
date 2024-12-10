@@ -49,13 +49,9 @@
  */
 const core = require( "./CoreUtils.cjs" );
 
-const constants = core.constants;
-const typeUtils = core.typeUtils;
-const stringUtils = core.stringUtils;
-const arrayUtils = core.arrayUtils;
-const objectUtils = core.objectUtils;
+const { constants, typeUtils, stringUtils, arrayUtils, objectUtils } = core;
 
-let _ud = constants._ud || "undefined";
+const { _ud = "undefined" } = constants;
 
 const $scope = constants?.$scope || function()
 {
@@ -64,7 +60,7 @@ const $scope = constants?.$scope || function()
 
 (function exposeModule()
 {
-    let _fun = constants._fun;
+    const _fun = constants._fun;
 
     const INTERNAL_NAME = "__BOCK_JSON_INTERPOLATION__";
 
@@ -99,9 +95,13 @@ const $scope = constants?.$scope || function()
             _bool,
             _num,
             _big,
+            S_WARN,
+            S_ERROR,
             IterationCap,
             populateOptions,
-            lock
+            ignore,
+            lock,
+            classes
         } = constants;
 
     const
@@ -134,7 +134,16 @@ const $scope = constants?.$scope || function()
             ObjectEntry
         } = objectUtils;
 
-    const konsole = console;
+    const modName = "JsonInterpolationUtils";
+
+    const { ModulePrototype } = classes;
+
+    const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
+
+    const calculateErrorSourceName = function( pModule = modName, pFunction )
+    {
+        return modulePrototype.calculateErrorSourceName( pModule, pFunction );
+    };
 
     const PRIOR_NODE = "../";
 
@@ -158,28 +167,6 @@ const $scope = constants?.$scope || function()
 
         return `An infinite loop was detected at ${paths.join( "->" )}. \nLoops are detected when sequences of ${len} paths repeat ${repeats} times or more.`;
     };
-
-    const log =
-        {
-            Warning: function logWarning( pError, ...pArgs )
-            {
-                konsole.warn( pError, ...pArgs );
-
-                return false;
-            },
-            Error: function logError( pError, ...pArgs )
-            {
-                konsole.warn( pError, ...pArgs );
-
-                return false;
-            },
-            Fatal: function logFatal( pError, ...pArgs )
-            {
-                konsole.error( pError, ...pArgs );
-
-                return true;
-            }
-        };
 
     const INVALID_INTERPOLATION_KEY =
         {
@@ -232,7 +219,7 @@ const $scope = constants?.$scope || function()
             useToJson: true,
             quoteBooleans: false,
             quoteNumbers: false,
-            onError: log.Warning,
+            onError: ignore,
             trimStrings: false,
             reviver: DEFAULT_REVIVER,
             replacer: DEFAULT_REPLACER,
@@ -360,6 +347,11 @@ const $scope = constants?.$scope || function()
             this.#path = asArray( pPath || asString( this.#parts?.variable, true )?.split( _dot ) || [] );
         }
 
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
         get expression()
         {
             return asString( this.#expression, true );
@@ -472,6 +464,11 @@ const $scope = constants?.$scope || function()
             const me = this;
 
             me.forEach( ( [k, v] ) => ((me || this) || (this || me)).set( k, ((v instanceof ResolvedValue) ? v : new ResolvedValue( k, pRoot, null, v )) ) );
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
         }
 
         get root()
@@ -597,6 +594,11 @@ const $scope = constants?.$scope || function()
             super( pValues );
         }
 
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
         has( pValue )
         {
             if ( super.has( pValue ) )
@@ -644,6 +646,29 @@ const $scope = constants?.$scope || function()
         return (visited instanceof VisitedSet) ? visited : new VisitedSet();
     }
 
+    function _handleCaughtException( pOnError, pError, pSource, pLevel, pJson, pOptions, pVisited, pResolved, pPaths, pRoot )
+    {
+        if ( isFunction( pOnError ) )
+        {
+            let shouldThrow = false;
+
+            try
+            {
+                shouldThrow = pOnError( pError, pSource, pJson, pOptions, pVisited, pResolved, pPaths, pRoot );
+            }
+            catch( ex )
+            {
+                modulePrototype.reportError( ex, ex?.message, pLevel || S_ERROR, calculateErrorSourceName( modName, "_handleCaughtException -> onError" ), pJson, pOptions, pVisited, pResolved, pPaths, pRoot );
+            }
+
+            if ( shouldThrow )
+            {
+                throw new Error( pError?.message || pError );
+            }
+        }
+        modulePrototype.reportError( pError, pError?.message, pLevel || S_ERROR, pSource, pJson, pOptions, pVisited, pResolved, pPaths, pRoot );
+    }
+
     class Segment
     {
         #text;
@@ -653,6 +678,11 @@ const $scope = constants?.$scope || function()
         {
             this.#text = asString( pString );
             this.#index = asInt( pIndex );
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
         }
 
         get index()
@@ -753,6 +783,11 @@ const $scope = constants?.$scope || function()
 
                 this.#parts = lock( parsed );
             }
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
         }
 
         get key()
@@ -899,6 +934,11 @@ const $scope = constants?.$scope || function()
             this.#segments = InterpolatableValue.parse( this.#text );
         }
 
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
         get text()
         {
             return this.#text;
@@ -1011,6 +1051,11 @@ const $scope = constants?.$scope || function()
             this.#currentNode = isNonNullObject( pCurrent ) ? pCurrent : firstValidObject( this.#options?.current, this.#options?.object, this.#rootNode );
 
             this.#resolved = _resolveResolvedMap( pResolved );
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
         }
 
         get options()
@@ -1181,7 +1226,7 @@ const $scope = constants?.$scope || function()
         return false;
     };
 
-    const _toJson = function( obj, pOnError = log.Error )
+    const _toJson = function( obj, pOnError = ignore )
     {
         let json = null;
 
@@ -1191,17 +1236,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            if ( isFunction( pOnError ) )
-            {
-                if ( pOnError( ex, "_toJson" ) )
-                {
-                    throw new Error( ex );
-                }
-            }
-            else
-            {
-                log.Error( ex, "_toJson" );
-            }
+            _handleCaughtException( pOnError, ex, calculateErrorSourceName( modName, this?.name ), S_WARN );
         }
 
         if ( json && stringUtils.isValidJson( json ) )
@@ -1221,7 +1256,7 @@ const $scope = constants?.$scope || function()
     // never allow this function to run longer than 5 seconds
     const _exceededTimeLimit = function( pOptions, pMaxRunTime )
     {
-        const options = populateOptions( (isDate( pOptions ) ? { startTime: pOptions } : pOptions ), TIME_LIMIT_OPTIONS );
+        const options = populateOptions( (isDate( pOptions ) ? { startTime: pOptions } : pOptions), TIME_LIMIT_OPTIONS );
 
         const now = new Date().getTime();
 
@@ -1368,21 +1403,6 @@ const $scope = constants?.$scope || function()
         return {};
     }
 
-    function _handleCaughtException( pOnError, pError, pSource, pLevel, pJson, pOptions, pVisited, pResolved, pPaths, pRoot )
-    {
-        if ( isFunction( pOnError ) )
-        {
-            if ( pOnError( pError, pSource, pJson, pOptions, pVisited, pResolved, pPaths, pRoot ) )
-            {
-                throw new Error( pError );
-            }
-        }
-        else
-        {
-            log[pLevel]( pError, pSource, pJson, pOptions, pVisited, pResolved, pPaths, pRoot );
-        }
-    }
-
     function _getPersistentEntries( pObject, pExcluded, pIncluded )
     {
         let obj = isNonNullObject( pObject ) ? pObject : {};
@@ -1455,7 +1475,7 @@ const $scope = constants?.$scope || function()
 
         const handleNull = _resolveNullHandler( options );
 
-        const onError = isFunction( options.onError ) ? options.onError : log.Warning;
+        const onError = isFunction( options.onError ) ? options.onError : ignore;
 
         const replacer = _resolveReplacer( pReplacer, options ) || DEFAULT_REPLACER;
         options.replacer = replacer || DEFAULT_REPLACER;
@@ -1663,7 +1683,7 @@ const $scope = constants?.$scope || function()
 
         const options = populateOptions( pOptions, DEFAULT_OPTIONS_FOR_JSON );
 
-        const onError = isFunction( options?.onError ) ? options?.onError : log.Warning;
+        const onError = isFunction( options?.onError ) ? options?.onError : ignore;
 
         let visited = _resolvedVisitedSet( options?.visited, options );
         options.visited = visited;
@@ -1692,7 +1712,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            _handleCaughtException( onError, ex, "parseJson", "Warning", json, options, visited, resolved, paths, root, scp, depth );
+            _handleCaughtException( onError, ex, calculateErrorSourceName( modName, "parseJson" ), S_WARN, json, options, visited, resolved, paths, root );
         }
 
         if ( options.interpolate || (new RegExp( RX_CONTAINS_INTERPOLATION_KEY, "dgi" ).test( json )) )
@@ -1709,7 +1729,7 @@ const $scope = constants?.$scope || function()
         return obj;
     };
 
-    const mod =
+    let mod =
         {
             dependencies,
             classes:
@@ -1735,16 +1755,8 @@ const $scope = constants?.$scope || function()
             buildPathExpression
         };
 
-    if ( _ud !== typeof module )
-    {
-        module.exports = lock( mod );
-    }
+    mod = modulePrototype.extend( mod );
 
-    if ( $scope() )
-    {
-        $scope()[INTERNAL_NAME] = lock( mod );
-    }
-
-    return lock( mod );
+    return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 
 }());
