@@ -124,7 +124,8 @@ const $scope = constants?.$scope || function()
             isArray,
             isFunction,
             isOctal,
-            isHex
+            isHex,
+            isNanOrInfinite
         } = typeUtils;
 
     /**
@@ -942,134 +943,101 @@ const $scope = constants?.$scope || function()
         return arr.length - 1;
     };
 
+    function reconcileTheString( pString )
+    {
+        return asString( asString( pString, false ) || ((this instanceof String) ? this.valueOf() : _mt_str) || _resolveInput.call( this, pString ) );
+    }
+
     /**
      * Returns the text to the left of the FIRST occurrence of pOf (or if pOf is a number, the index specified by pOf)
      * @param pString a string from which to extract text from the left
      * @param pOf a string or number specifying the position after which to discard the rest of the string
-     * @param pIncludeEllipsis boolean indicating whether to concatenate an ellipsis to the returned string
-     * if the string was longer than the returned string
-     * @param pMaxLength if this is > 0, then any returned value will be <= pMaxLength
+
      * @returns the text to the left of the FIRST occurrence of pOf
      * (or if pOf is a number, the index specified by pOf)
      * If pOf is not included in the specified string, returns the original string
      */
-    const leftOf = function( pString, pOf, pIncludeEllipsis = false, pMaxLength = -1 )
+    const leftOf = function( pString, pOf )
     {
-        const theString = asString( asString( pString, false ) || this.valueOf() || _mt_str );
-
-        let s = (_mt_str + theString);
+        let s = reconcileTheString.call( this, pString );
 
         const typeOf = typeof pOf;
 
-        const pos = (_str === typeOf) ? theString.indexOf( pOf ) : asInt( pOf, theString?.length );
+        const pos = (_str === typeOf) ? s.indexOf( pOf ) : asInt( pOf, s?.length );
 
         if ( 0 <= pos )
         {
-            s = theString.substring( 0, pos );
-
-            if ( pIncludeEllipsis )
-            {
-                s = appendEllipsis( s, pMaxLength, _ellipsis );
-            }
+            s = s.substring( 0, pos );
         }
 
-        return truncate( s, pMaxLength );
+        return s;
     };
-
 
     /**
      * Returns the text to the right of the FIRST occurrence of pOf (or if pOf is a number, the index specified by pOf)
      * @param pString a string from which to extract text from the right
      * @param pOf a string or number specifying the position prior to which to discard a portion of the string
-     * @param pIncludeEllipsis boolean indicating whether to prepend ellipsis if the returned string is shorter than the original string
-     * @param pMaxLength
      * @returns the text to the right of the FIRST occurrence of pOf (or if pOf is a number, the index specified by pOf)
      */
-    const rightOf = function( pString, pOf, pIncludeEllipsis = false, pMaxLength = -1 )
+    const rightOf = function( pString, pOf )
     {
-        const theString = asString( asString( pString, false ) || this.valueOf() || _mt_str );
-
-        let s = asString( _mt_str + theString );
+        let s = reconcileTheString.call( this, pString );
 
         const typeOf = typeof pOf;
 
-        const pos = (_str === typeOf) ? theString.indexOf( pOf ) : asInt( pOf, theString?.length );
+        const pos = (_str === typeOf) ? s.indexOf( pOf ) : asInt( pOf, s?.length );
 
         if ( 0 <= pos )
         {
-            s = theString.slice( pos + ((_str === typeOf) ? pOf.length : 1), theString.length );
+            s = s.slice( pos + ((_str === typeOf) ? pOf.length : 1), s.length );
         }
 
-        if ( pIncludeEllipsis && ((theString?.length || 0) > (s?.length || 0)) )
-        {
-            s = prependEllipsis( s, pMaxLength, _ellipsis );
-        }
-
-        return truncate( s, pMaxLength );
+        return s;
     };
 
     /**
      * Returns the text to the left of the LAST occurrence of pOf (or if pOf is a number, the index specified by pOf)
      * @param pString a string from which to extract text from the left
      * @param pOf a string or number specifying the position after which to discard the rest of the string
-     * @param pIncludeEllipsis boolean indicating whether to concatenate an ellipsis to the returned string if the string was longer than the returned string
-     * @param pMaxLength
      * @returns the text to the left of the LAST occurrence of pOf (or if pOf is a number, the index specified by pOf)
      */
-    const leftOfLast = function( pString, pOf, pIncludeEllipsis = false, pMaxLength = -1 )
+    const leftOfLast = function( pString, pOf )
     {
-        const theString = asString( asString( pString, false ) || this.valueOf() || _mt_str );
-
-        let s = asString( _mt_str + theString );
+        let s = reconcileTheString.call( this, pString );
 
         const typeOf = typeof pOf;
 
-        const pos = (_str === typeOf) ? theString.lastIndexOf( pOf ) : asInt( pOf, theString?.length );
+        const pos = (_str === typeOf) ? s.lastIndexOf( pOf ) : asInt( pOf, s?.length );
 
         if ( 0 <= pos )
         {
-            s = theString.substring( 0, pos );
-
-            if ( pIncludeEllipsis )
-            {
-                s = appendEllipsis( s, pMaxLength, _ellipsis );
-            }
+            s = s.substring( 0, pos );
         }
 
-        return truncate( s, pMaxLength );
+        return s;
     };
 
     /**
      * Returns the text to the right of the LAST occurrence of pOf (or if pOf is a number, the index specified by pOf)
      * @param pString a string from which to extract text from the right
      * @param pOf a string or number specifying the position prior to the string to return
-     * @param pIncludeEllipsis boolean indicating whether to concatenate an ellipsis to the returned string if the string was longer than the returned string
-     * @param pMaxLength
      * @returns the text to the right of the LAST occurrence of pOf (or if pOf is a number, the index specified by pOf)
      */
-    const rightOfLast = function( pString, pOf, pIncludeEllipsis = false, pMaxLength = -1 )
+    const rightOfLast = function( pString, pOf )
     {
-        const theString = asString( asString( pString, false ) || this.valueOf() || _mt_str );
-
-        let s = asString( _mt_str + theString );
+        let s = reconcileTheString.call( this, pString );
 
         const typeOf = typeof pOf;
 
-        const pos = (_str === typeOf) ? theString.lastIndexOf( pOf ) : asInt( pOf, theString?.length );
+        const pos = (_str === typeOf) ? s.lastIndexOf( pOf ) : asInt( pOf, s?.length );
 
         if ( 0 <= pos )
         {
-            s = theString.slice( pos + ((_str === typeOf) ? pOf.length : 1), theString.length );
+            s = s.slice( pos + ((_str === typeOf) ? pOf.length : 1), s.length );
         }
 
-        if ( pIncludeEllipsis && ((theString?.length || 0) > (s?.length || 0)) )
-        {
-            s = prependEllipsis( s, pMaxLength, _ellipsis );
-        }
-
-        return truncate( s, pMaxLength );
+        return s;
     };
-
 
     const isJson = function( pStr )
     {
@@ -1080,7 +1048,7 @@ const $scope = constants?.$scope || function()
 
         const str = tidy( asString( pStr, true ) ).trim().replace( /^[ \n\r]+/, _mt_str ).replace( /[ \n\r]+$/, _mt_str );
 
-        const chars = (str.split( constants._mt_chr ));
+        const chars = (str.split( _mt_chr ));
 
         if ( chars.length > 1 )
         {
@@ -2085,16 +2053,6 @@ const $scope = constants?.$scope || function()
             maximumValue: Number.MAX_VALUE,
             ...DEFAULT_NUMBER_SYMBOLS
         } );
-
-    function isNanOrInfinite( pNum )
-    {
-        if ( ![_num, _big].includes( typeof pNum ) )
-        {
-            return true;
-        }
-        const num = parseFloat( pNum );
-        return isNaN( num ) || !isFinite( num );
-    }
 
     /**
      * Returns true if the argument is a number

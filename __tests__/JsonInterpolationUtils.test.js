@@ -3,6 +3,8 @@ const jsonUtils = require( "../src/JsonInterpolationUtils.cjs" );
 
 const objectUtils = jsonUtils.dependencies.objectUtils;
 
+objectUtils.disableLogging();
+
 const objA =
     {
         node_0:
@@ -85,22 +87,5 @@ describe( "JSON", () =>
 
               expect( jsonUtils.asJson( objParsed ) ).toEqual( json );
 
-              /*let json = jsonUtils.asJson( objA );
-
-               let obj = jsonUtils.parseJson( json );
-
-               let json2 = jsonUtils.asJson( obj );
-
-               let obj2 = jsonUtils.parseJson( json2 );
-
-               let json3 = jsonUtils.asJson( obj2 );
-
-               let obj3 = jsonUtils.parseJson( json3 );
-
-               expect( objectUtils.same( obj, obj2 ) ).toBe( true );
-
-               expect( objectUtils.same( obj2, obj3 ) ).toBe( true );
-
-               expect( json2 ).toEqual( json3 );*/
           } );
 } );

@@ -128,6 +128,7 @@ const $scope = constants?.$scope || function()
 
     const
         {
+
             isPopulated = objectUtils.isPopulatedObject || objectUtils.isPopulated,
             firstValidObject,
             detectCycles,
@@ -1590,7 +1591,7 @@ const $scope = constants?.$scope || function()
 
                 let resolvedValue = resolved.find( object, root, current );
 
-                let asResolved = resolvedValue || new ResolvedValue( buildPathExpression( "path", "root", objectUtils.tracePathTo( obj, root ) ), root, current, object );
+                let asResolved = resolvedValue || new ResolvedValue( buildPathExpression( "path", "root", objectUtils.tracePathTo( object, root ) ), root, current, object );
 
                 resolved.set( asResolved?.key, asResolved );
 

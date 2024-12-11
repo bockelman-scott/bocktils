@@ -553,21 +553,12 @@ describe( "leftOf", () =>
           }
     );
 
-    test( "leftOf('abcdef','c', true) === 'ab...' ",
+    test( "leftOf('abcdef','c') === 'ab' ",
           () =>
           {
               let s = "abcdef";
-              let lo = stringUtils.leftOf( s, "c", true );
-              expect( lo ).toEqual( "ab..." );
-          }
-    );
-
-    test( "leftOf('abcdef','c', true, 4) === 'ab' ",
-          () =>
-          {
-              let s = "abcdef";
-              let lo = stringUtils.leftOf( s, "c", true, 4 );
-              expect( lo ).toEqual( "a..." );
+              let lo = stringUtils.leftOf( s, "c" );
+              expect( lo ).toEqual( "ab" );
           }
     );
 
@@ -592,42 +583,6 @@ describe( "leftOfLast", () =>
           }
     );
 
-    test( "leftOfLast('abcabcab','c', true) === 'abcab...' ",
-          () =>
-          {
-              let s = "abcabcab";
-              let lo = stringUtils.leftOfLast( s, "c", true );
-              expect( lo ).toEqual( "abcab..." );
-          }
-    );
-
-    test( "leftOfLast('abcabcab','c', true, 4) === 'a...' ",
-          () =>
-          {
-              let s = "abcabcab";
-              let lo = stringUtils.leftOf( s, "c", true, 4 );
-              expect( lo ).toEqual( "a..." );
-          }
-    );
-
-    test( "leftOfLast('abcabcab','c', true, 8) === 'abcab...' ",
-          () =>
-          {
-              let s = "abcabcab";
-              let lo = stringUtils.leftOfLast( s, "c", true, 8 );
-              expect( lo ).toEqual( "abcab..." );
-          }
-    );
-
-    test( "leftOfLast('abcabcab','c', true, 6) === 'ab' ",
-          () =>
-          {
-              let s = "abcabcab";
-              let lo = stringUtils.leftOfLast( s, "c", true, 6 );
-              expect( lo ).toEqual( "abc..." );
-          }
-    );
-
     test( "leftOfLast('abcdef','a') === '' ",
           () =>
           {
@@ -648,33 +603,6 @@ describe( "rightOf", () =>
               expect( ro ).toEqual( "def" );
           }
     );
-
-    test( "rightOf('abcdef','c', true, 8) === 'def'",
-          () =>
-          {
-              let s = "abcdef";
-              let ro = stringUtils.rightOf( s, "c", true, 8 );
-              expect( ro ).toEqual( "...def" );
-          }
-    );
-
-    test( "rightOf('abcdef','c', true, 4) === 'def'",
-          () =>
-          {
-              let s = "abcdef";
-              let ro = stringUtils.rightOf( s, "c", true, 4 );
-              expect( ro ).toEqual( "...d" );
-          }
-    );
-
-    test( "rightOf('abcdef','c', true) === 'def'",
-          () =>
-          {
-              let s = "abcdef";
-              let ro = stringUtils.rightOf( s, "c", true );
-              expect( ro ).toEqual( "...def" );
-          }
-    );
 } );
 
 describe( "rightOfLast", () =>
@@ -688,30 +616,12 @@ describe( "rightOfLast", () =>
           }
     );
 
-    test( "rightOfLast('abcdefabcxyz','c', true) === '...xyz'",
+    test( "rightOfLast('abcdefabcxyz','c') === 'xyz'",
           () =>
           {
               let s = "abcdefabcxyz";
-              let ro = stringUtils.rightOfLast( s, "c", true );
-              expect( ro ).toEqual( "...xyz" );
-          }
-    );
-
-    test( "rightOfLast('abcdefabcxyz','c', true, 4) === '...xyz'",
-          () =>
-          {
-              let s = "abcdefabcxyz";
-              let ro = stringUtils.rightOfLast( s, "c", true, 4 );
-              expect( ro ).toEqual( "...x" );
-          }
-    );
-
-    test( "rightOfLast('abcdefabcxyz','c', false, 2) === 'xy'",
-          () =>
-          {
-              let s = "abcdefabcxyz";
-              let ro = stringUtils.rightOfLast( s, "c", false, 2 );
-              expect( ro ).toEqual( "xy" );
+              let ro = stringUtils.rightOfLast( s, "c" );
+              expect( ro ).toEqual( "xyz" );
           }
     );
 } );

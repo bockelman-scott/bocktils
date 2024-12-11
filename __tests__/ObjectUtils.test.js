@@ -1,8 +1,6 @@
 const objectUtils = require( "../src/ObjectUtils.cjs" );
 
 const constants = objectUtils?.dependencies?.constants;
-const typeUtils = objectUtils?.dependencies?.typeUtils;
-const stringUtils = objectUtils?.dependencies?.stringUtils;
 const arrayUtils = objectUtils?.dependencies?.arrayUtils;
 
 /**
@@ -17,6 +15,8 @@ const $scope = constants?.$scope || function()
 {
     return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
 };
+
+objectUtils.disableLogging();
 
 describe( "detectCycles prevents infinite recursion", () =>
 {
@@ -44,6 +44,77 @@ describe( "detectCycles prevents infinite recursion", () =>
               results = !objectUtils.detectCycles( arr3, 6, 3 );
 
               expect( results ).toBe( true );
+          } );
+} );
+
+describe( "extractFunctionData returns an object with the function body and an array its parameters", () =>
+{
+    const { extractFunctionData, extractFunctionBody, extractFunctionParameters } = objectUtils;
+
+    function TestFunction( pArgA, pArgB )
+    {
+        let { x, y, z } = {};
+
+        return pArgA + pArgB;
+    }
+
+    function TestNoArgs()
+    {
+        return 2 + 3;
+    }
+
+    test( "extractFunctionData for TestFunction",
+          () =>
+          {
+              const data = extractFunctionData( TestFunction );
+
+              expect( data.body ).toEqual( extractFunctionBody( TestFunction ) );
+
+              const body = (data.body).replaceAll( /\s*/g, "" ).replace( /return/, "return " ).trim();
+
+              expect( body ).toEqual( `let{x,y,z}={};return pArgA+pArgB;` );
+
+              const params = data.params;
+
+              expect( params ).toEqual( ["pArgA", "pArgB"] );
+
+              expect( params ).toEqual( extractFunctionParameters( TestFunction ) );
+          } );
+
+    test( "extractFunctionData for TestNoArgs",
+          () =>
+          {
+              const data = extractFunctionData( TestNoArgs );
+
+              expect( data.body ).toEqual( extractFunctionBody( TestNoArgs ) );
+
+              const body = (data.body).replaceAll( /\s*/g, "" ).replace( /return/, "return " ).trim();
+
+              expect( body ).toEqual( `return 2+3;` );
+
+              const params = data.params;
+
+              expect( params ).toEqual( [] );
+
+              expect( params ).toEqual( extractFunctionParameters( TestNoArgs ) );
+          } );
+
+    test( "extractFunctionData for Non-Function",
+          () =>
+          {
+              const anObject = { a: 1, b: 2 };
+
+              const data = extractFunctionData( anObject );
+
+              expect( data.body ).toEqual( extractFunctionBody( anObject ) );
+
+              expect( data.body ).toEqual( `` );
+
+              const params = data.params;
+
+              expect( params ).toEqual( [] );
+
+              expect( params ).toEqual( extractFunctionParameters( anObject ) );
           } );
 } );
 

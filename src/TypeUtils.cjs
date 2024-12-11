@@ -325,6 +325,16 @@ const $scope = constants?.$scope || function()
         return isNumber( pNum ) && _big === typeof pNum;
     };
 
+    const isNanOrInfinite = function( pNum )
+    {
+        if ( ![_num, _big].includes( typeof pNum ) )
+        {
+            return true;
+        }
+        const num = parseFloat( pNum );
+        return isNaN( num ) || !isFinite( num );
+    }
+
     /**
      * Returns true if the specified value can be expressed as an integer (or zero).
      * That is, the value is a natural number, a.k.a. "whole number" and contains no powers of the base less than 1
@@ -468,7 +478,7 @@ const $scope = constants?.$scope || function()
 
             let integer = parseInt( value, calculateRadix( pObj ) );
 
-            return !(isNaN( integer ) && Number.isFinite( integer ));
+            return !isNaN( integer ) && Number.isFinite( integer );
         }
 
         return false;
@@ -1721,6 +1731,7 @@ const $scope = constants?.$scope || function()
             isOctal,
             isHex,
             isDecimal,
+            isNanOrInfinite,
             toDecimal,
             toHex,
             toOctal,
