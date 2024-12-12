@@ -3,9 +3,6 @@ const constants = require( "./Constants.cjs" );
 const typeUtils = require( "./TypeUtils.cjs" );
 const stringUtils = require( "./StringUtils.cjs" );
 
-/** create an alias for console **/
-const konsole = console || {};
-
 /** define a variable for typeof undefined **/
 const { _ud = "undefined" } = constants;
 

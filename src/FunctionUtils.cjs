@@ -14,7 +14,9 @@
  */
 const core = require( "./CoreUtils.cjs" );
 
-const { constants, typeUtils, stringUtils, arrayUtils, objectUtils } = core;
+const objectUtils = require( "./ObjectUtils.cjs" );
+
+const { constants, typeUtils, stringUtils, arrayUtils } = core;
 
 const { _ud = "undefined" } = constants;
 
@@ -52,7 +54,7 @@ const $scope = constants?.$scope || function()
     /**
      * Create local variables for the imported values and functions we use.
      */
-    const { no_op, S_WARN, S_ERROR, lock, classes } = constants;
+    const { IterationCap, no_op, S_WARN, S_ERROR, lock, classes } = constants;
 
     const { asString, asInt, asFloat } = stringUtils;
 
@@ -533,7 +535,7 @@ const $scope = constants?.$scope || function()
 
             const maxInheritance = Math.max( 1, Math.min( 100, asInt( options?.maxInheritance, 10 ) ) );
 
-            const iterationCap = new objectUtils.IterationCap( maxInheritance );
+            const iterationCap = new IterationCap( maxInheritance );
 
             while ( !result && (null != proto) && !iterationCap.reached )
             {

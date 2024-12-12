@@ -1,8 +1,10 @@
 const core = require( "./CoreUtils.cjs" );
 
-const { constants, typeUtils, stringUtils, arrayUtils, objectUtils } = core;
+const objectUtils = require( "./ObjectUtils.cjs" );
 
 const jsonUtils = require( "./JsonUtils.cjs" );
+
+const { constants, typeUtils, stringUtils, arrayUtils } = core;
 
 const { _ud = "undefined" } = constants;
 

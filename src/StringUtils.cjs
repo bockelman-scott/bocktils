@@ -85,6 +85,7 @@ const $scope = constants?.$scope || function()
             S_DEBUG = "debug",
             S_INFO = "info",
             S_TRACE = "trace",
+            RESERVED_WORDS,
             _affirmatives,
             _str,
             _fun,
@@ -128,7 +129,8 @@ const $scope = constants?.$scope || function()
             isFunction,
             isOctal,
             isHex,
-            isNanOrInfinite
+            isNanOrInfinite,
+            firstMatchingType
         } = typeUtils;
 
     /**
@@ -444,7 +446,7 @@ const $scope = constants?.$scope || function()
                         {
                             // this is a bit of a hack, but if the JsonUtils are also loaded,
                             // we want to use the asJson function, which can handle circular references
-                            let stringify = typeUtils.firstMatchingType( _fun, me.stringify, ($scope()["__BOCK_JSON_UTILS__"] || $scope()["__BOCK_JSON_INTERPOLATION__"])?.asJson, $scope().asJson, JSON.stringify );
+                            let stringify = firstMatchingType( _fun, me.stringify, ($scope()["__BOCK_JSON_UTILS__"] || $scope()["__BOCK_JSON_INTERPOLATION__"])?.asJson, $scope().asJson, JSON.stringify );
 
                             try
                             {
@@ -737,7 +739,7 @@ const $scope = constants?.$scope || function()
 
         s = s.replaceAll( /[^A-Za-z$_]/g, _mt_str );
 
-        if ( isBlank( s ) || constants.RESERVED_WORDS.includes( s ) )
+        if ( isBlank( s ) || RESERVED_WORDS.includes( s ) )
         {
             return options?.defaultIdentifier || _underscore;
         }
@@ -745,23 +747,23 @@ const $scope = constants?.$scope || function()
         return asString( s, true );
     };
 
+    const DEFAULT_AS_KEY_OPTIONS = { supportDotNotation: false, defaultIdentifier: _underscore };
+
     /**
      * Returns a string that can be used as a key in a map or map-like structure, such as an object literal
      * Note that just about any string can be a key and that integers can be used as keys (that is in fact, part of how Array is implemented)
      * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Grammar_and_Types#object_literals
      *
      * @param {*} pStr
-     * @param {boolean} pOptions
+     * @param {object} pOptions
      */
-    const asKey = function( pStr, pOptions = { supportDotNotation: false, defaultIdentifier: _underscore } )
+    const asKey = function( pStr, pOptions = DEFAULT_AS_KEY_OPTIONS )
     {
-        const options = Object.assign( {}, pOptions || {} );
-
-        const type = typeof pStr;
+        const options = populateOptions( pOptions, DEFAULT_AS_KEY_OPTIONS );
 
         let s = asString( pStr, true );
 
-        if ( isBlank( s ) || constants.RESERVED_WORDS.includes( s ) )
+        if ( isBlank( s ) || RESERVED_WORDS.includes( s ) )
         {
             return options?.defaultIdentifier || _underscore;
         }
@@ -1258,7 +1260,7 @@ const $scope = constants?.$scope || function()
      */
     function toCanonicalNumericFormat( pInput, pOptions = calculateDecimalSymbols() )
     {
-        const options = Object.assign( {}, pOptions || DEFAULT_NUMBER_SYMBOLS );
+        const options = populateOptions( pOptions, DEFAULT_NUMBER_SYMBOLS );
 
         let s = asString( pInput );
 
@@ -2256,7 +2258,7 @@ const $scope = constants?.$scope || function()
      */
     const toProperCase = function( pStr, pOptions = DEFAULT_PROPERCASE_OPTIONS )
     {
-        const options = Object.assign( Object.assign( {}, DEFAULT_PROPERCASE_OPTIONS ), pOptions || {} );
+        const options = populateOptions( pOptions, DEFAULT_PROPERCASE_OPTIONS );
 
         let s = asString( pStr, false ) || _mt_str;
 
@@ -2284,7 +2286,7 @@ const $scope = constants?.$scope || function()
             if ( temp.indexOf( "'" ) >= 0 )
             {
                 //handle O'Leary
-                temp = "'" + toProperCase( temp, { separator: "'" } );
+                temp = "'" + toProperCase( temp, Object.assign( { ...DEFAULT_PROPERCASE_OPTIONS }, { separator: "'" } ) );
             }
 
             let pos = temp.indexOf( "-" );
@@ -2378,7 +2380,7 @@ const $scope = constants?.$scope || function()
      */
     const isUnpopulated = function( pStr )
     {
-        return (_ud === typeof pStr || null == pStr || ( !typeUtils.isString( pStr ) || isBlank( pStr )));
+        return (_ud === typeof pStr || null == pStr || ( !isString( pStr ) || isBlank( pStr )));
     };
 
     const reverseString = function( pStr )
@@ -2412,7 +2414,7 @@ const $scope = constants?.$scope || function()
 
             case _obj:
 
-                if ( typeUtils.isArray( pStr ) )
+                if ( isArray( pStr ) )
                 {
                     arr = [].concat( pStr );
                 }
@@ -2527,7 +2529,7 @@ const $scope = constants?.$scope || function()
         }
         else if ( options?.properCase || options?.toProperCase )
         {
-            str = toProperCase( str, Object.assign( {}, options || {} ) );
+            str = toProperCase( str, Object.assign( { ...DEFAULT_PROPERCASE_OPTIONS }, options || {} ) );
         }
 
         let temp = (_mt_str + asString( str ));

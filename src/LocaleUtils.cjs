@@ -8,7 +8,7 @@
 
 const core = require( "./CoreUtils.cjs" );
 
-const { constants, typeUtils, stringUtils, arrayUtils, objectUtils } = core;
+const { constants, typeUtils, stringUtils, arrayUtils } = core;
 
 const { _ud = "undefined" } = constants;
 
@@ -35,8 +35,7 @@ const $scope = constants.$scope || function()
             constants,
             typeUtils,
             stringUtils,
-            arrayUtils,
-            objectUtils
+            arrayUtils
         };
 
     // Create local aliases for values imported from other modules

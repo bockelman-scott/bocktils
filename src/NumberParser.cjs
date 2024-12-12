@@ -30,7 +30,7 @@ const $scope = constants?.$scope || function()
 
     const { _mt_str, _spc, _dot, _comma, _hyphen, _latin = "latn", S_ERROR, lock, classes } = constants;
 
-    const { isString, isNumber, isObject, isNull, isHex, isOctal, isDecimal } = typeUtils;
+    const { isString, isNumber, isObject, isNull, isHex, isOctal } = typeUtils;
 
     const { asString, lcase, isBlank } = stringUtils;
 
@@ -276,7 +276,7 @@ const $scope = constants?.$scope || function()
     {
         if ( pNumberFormat instanceof Intl.NumberFormat )
         {
-            return new NumberParser( pNumberFormat );
+            return new NumberParser( pNumberFormat, pNumberFormat.resolvedOptions() );
         }
         throw new Error( "NumberParser.fromNumberFormat requires an instance of Intl.NumberFormat" );
     };

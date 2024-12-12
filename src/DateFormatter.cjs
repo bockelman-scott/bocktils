@@ -5,9 +5,9 @@
  * This module exposes methods for formatting Date objects as strings.
  */
 
-const utils = require( "./CommonUtils.cjs" );
+const utils = require( "./CoreUtils.cjs" );
 
-const { constants, typeUtils, stringUtils, arrayUtils, objectUtils } = utils;
+const { constants, typeUtils, stringUtils, arrayUtils } = utils;
 
 const tokenSetUtils = require( "./DateFormatTokenSet.cjs" );
 
@@ -35,7 +35,6 @@ const $scope = utils?.$scope || constants?.$scope || function()
             typeUtils,
             stringUtils,
             arrayUtils,
-            objectUtils,
             localeUtils
         };
 

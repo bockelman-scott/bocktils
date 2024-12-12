@@ -23,16 +23,16 @@
  */
 
 /**
- * This statement imports the common utils modules:
- * Constants, TypeUtils, StringUtils, ArrayUtils, ObjectUtils, and JsonUtils
+ * This statement imports the core utils modules:
+ * Constants, TypeUtils, StringUtils, and ArrayUtils
  */
-const utils = require( "./CommonUtils.cjs" );
+const utils = require( "./CoreUtils.cjs" );
 
 /**
  * Establish separate constants for each of the common utilities imported
  * @see ../src/CommonUtils.cjs
  */
-const { constants, typeUtils, stringUtils, arrayUtils, objectUtils } = utils;
+const { constants, typeUtils, stringUtils, arrayUtils } = utils;
 
 /**
  * Import adm-zip dependency
@@ -667,7 +667,6 @@ const $scope = constants?.$scope || function()
                     typeUtils,
                     stringUtils,
                     arrayUtils,
-                    objectUtils,
                     admZip
                 },
             isEmptyArchive,

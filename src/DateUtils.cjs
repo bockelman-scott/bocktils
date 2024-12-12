@@ -1,16 +1,17 @@
-const utils = require( "./CoreUtils.cjs" );
+const core = require( "./CoreUtils.cjs" );
 
+const objectUtils = require( "./ObjectUtils.cjs" );
 /**
  * Establish separate constants for each of the common utilities imported
  * @see ../src/CommonUtils.cjs
  */
-const { constants, typeUtils, stringUtils, arrayUtils, objectUtils } = utils;
+const { constants, typeUtils, stringUtils, arrayUtils } = core;
 
 const funcUtils = require( "./FunctionUtils.cjs" );
 
 const { _ud = "undefined" } = constants;
 
-const $scope = utils?.$scope || constants?.$scope || function()
+const $scope = core?.$scope || constants?.$scope || function()
 {
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };
@@ -33,7 +34,7 @@ const $scope = utils?.$scope || constants?.$scope || function()
             objectUtils
         };
 
-    const { classes, lock, IllegalArgumentError } = constants;
+    const { classes, lock, IterationCap, IllegalArgumentError } = constants;
 
     const { Result, isDate, isNumber, isFunction } = typeUtils;
 
@@ -1366,7 +1367,7 @@ const $scope = utils?.$scope || constants?.$scope || function()
             {
                 let holidays = _processHolidays( pHolidays, startDate, date );
 
-                const loopCap = new objectUtils.IterationCap( Math.max( numWeeks, 12 ) );
+                const loopCap = new IterationCap( Math.max( numWeeks, 12 ) );
 
                 while ( holidays?.length > 0 && !loopCap.reached )
                 {

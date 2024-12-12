@@ -1,14 +1,14 @@
 /**
- * This statement imports the common utils modules:
- * Constants, TypeUtils, StringUtils, ArrayUtils, ObjectUtils, and JsonUtils
+ * This statement imports the core utils modules:
+ * Constants, TypeUtils, StringUtils, and ArrayUtils
  */
-const utils = require( "./CommonUtils.cjs" );
+const utils = require( "./CoreUtils.cjs" );
 
 /**
  * Establish separate constants for each of the common utilities imported
  * @see ../src/CommonUtils.cjs
  */
-const { constants, typeUtils, stringUtils, arrayUtils, objectUtils } = utils;
+const { constants, typeUtils, stringUtils, arrayUtils } = utils;
 
 const { _ud = "undefined" } = constants;
 
@@ -26,7 +26,7 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
-    const { _mt_str, lock, classes } = constants;
+    const { _mt_str, IterationCap, lock, classes } = constants;
 
     const { ModuleEvent, ModulePrototype } = classes;
 
@@ -82,7 +82,7 @@ const $scope = constants?.$scope || function()
             str = str.replace( searchExpression, replaceString );
         }
 
-        let loopCap = new objectUtils.IterationCap( 8 );
+        let loopCap = new IterationCap( 8 );
 
         while ( str.length % 4 !== 0 && str.endsWith( "=" ) && !loopCap.reached )
         {
@@ -154,8 +154,7 @@ const $scope = constants?.$scope || function()
                 {
                     constants,
                     stringUtils,
-                    arrayUtils,
-                    objectUtils
+                    arrayUtils
                 },
             validEncodings,
             toBase64,

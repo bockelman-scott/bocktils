@@ -9,7 +9,7 @@ const utils = require( "./CoreUtils.cjs" );
  * Establish separate constants for each of the common utilities imported
  * @see ../src/CommonUtils.cjs
  */
-const { constants, typeUtils, stringUtils, arrayUtils, objectUtils } = utils;
+const { constants, typeUtils, stringUtils, arrayUtils } = utils;
 
 const localeUtils = require( "./LocaleUtils.cjs" );
 
@@ -37,12 +37,11 @@ const $scope = utils?.$scope || constants?.$scope || function()
             typeUtils,
             stringUtils,
             arrayUtils,
-            objectUtils,
             localeUtils,
             dateUtils
         };
 
-    const { _mt_str, lock, classes } = constants;
+    const { _mt_str, populateOptions, lock, classes } = constants;
 
     const { isNull, isDate, isNumber } = typeUtils;
 
@@ -1840,11 +1839,11 @@ const $scope = utils?.$scope || constants?.$scope || function()
          */
         fromOptions( pOptions )
         {
-            const options = Object.assign( {}, pOptions || {} );
+            const options = populateOptions( pOptions );
 
             const tokens = [];
 
-            const entries = objectUtils.getEntries( options );
+            const entries = Object.entries( options );
 
             for( let entry of entries )
             {

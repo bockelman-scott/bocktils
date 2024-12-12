@@ -13,7 +13,7 @@ const arrayUtils = require( "./ArrayUtils.cjs" );
 /**
  * Defines a string to represent the type, undefined
  */
-const _ud = constants?._ud || "undefined";
+const { _ud = "undefined" } = constants;
 
 /**
  * This function returns the host environment scope (Browser window, Node.js global, or Worker self)

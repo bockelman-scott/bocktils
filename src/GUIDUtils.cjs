@@ -1,7 +1,6 @@
 const constants = require( "./Constants.cjs" );
 const typeUtils = require( "./TypeUtils.cjs" );
 const stringUtils = require( "./StringUtils.cjs" );
-const arrayUtils = require( "./ArrayUtils.cjs" );
 
 const crypto = require( "crypto" );
 
@@ -35,7 +34,6 @@ const $scope = constants?.$scope || function()
             constants,
             typeUtils,
             stringUtils,
-            arrayUtils,
             crypto
         };
 
@@ -44,7 +42,7 @@ const $scope = constants?.$scope || function()
 
     const { asString, isBlank, asInt } = stringUtils;
 
-    const { ModuleEvent, ModulePrototype } = classes;
+    const { ModulePrototype } = classes;
 
     const modName = "GUIDUtils";
 

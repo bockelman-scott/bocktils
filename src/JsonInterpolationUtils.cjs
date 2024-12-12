@@ -49,7 +49,9 @@
  */
 const core = require( "./CoreUtils.cjs" );
 
-const { constants, typeUtils, stringUtils, arrayUtils, objectUtils } = core;
+const objectUtils = require( "./ObjectUtils.cjs" );
+
+const { constants, typeUtils, stringUtils, arrayUtils } = core;
 
 const { _ud = "undefined" } = constants;
 
@@ -87,6 +89,7 @@ const $scope = constants?.$scope || function()
         {
             _mt_str,
             _dot,
+            _comma,
             _colon,
             _semicolon,
             _dblqt,
@@ -113,7 +116,6 @@ const $scope = constants?.$scope || function()
             isClass,
             isDate,
             isNumber,
-            isBoolean,
             isMap,
             isSet,
             isNull,
@@ -128,7 +130,6 @@ const $scope = constants?.$scope || function()
 
     const
         {
-
             isPopulated = objectUtils.isPopulatedObject || objectUtils.isPopulated,
             firstValidObject,
             detectCycles,
@@ -146,6 +147,9 @@ const $scope = constants?.$scope || function()
         return modulePrototype.calculateErrorSourceName( pModule, pFunction );
     };
 
+    const S_PATH = "path";
+    const S_ROOT = "root";
+
     const PRIOR_NODE = "../";
 
     const DEFAULT_EXCLUSIONS = lock( ["constructor", "prototype", "toJson", "toObject", "global", "this", "arguments", "_arguments"] );
@@ -155,6 +159,8 @@ const $scope = constants?.$scope || function()
     const MAX_RECURSION = 32;
 
     const MAX_RECURSION_ERROR = `Maximum Recursion, ${MAX_RECURSION}, Exceeded`;
+
+    const TIMEOUT_ERROR = `Exceeded Maximum Allowed Runtime`;
 
     const INVALID_KEY = "INVALID_KEY";
 
@@ -266,8 +272,8 @@ const $scope = constants?.$scope || function()
         {
             const preamble = parts[0].split( _semicolon ); // 0: ${(@<type>,  1: @base
 
-            let type = lcase( asString( preamble[0] || "path", true ).replaceAll( /[${(@><;]+/g, _mt_str ).trim() );
-            let base = lcase( asString( preamble[1] || "root", true ).replaceAll( /[${(@><;]+/g, _mt_str ).trim() );
+            let type = lcase( asString( preamble[0] || S_PATH, true ).replaceAll( /[${(@><;]+/g, _mt_str ).trim() );
+            let base = lcase( asString( preamble[1] || S_ROOT, true ).replaceAll( /[${(@><;]+/g, _mt_str ).trim() );
 
             let variable = asString( parts[2], true ) || rightOfLast( key, _colon );
 
@@ -298,9 +304,9 @@ const $scope = constants?.$scope || function()
 
         const matches = matchInterpolationKey( key ) || [];
 
-        const type = _clean( asString( matches[2] || "path", true ) );
+        const type = _clean( asString( matches[2] || S_PATH, true ) );
 
-        const base = _clean( asString( matches[3] || ("path" === type) ? "root" : "global" ) );
+        const base = _clean( asString( matches[3] || (S_PATH === type) ? S_ROOT : "global" ) );
 
         const variable = _clean( asString( matches[4] || asString( rightOfLast( key, _colon ), true ), true ) );
 
@@ -311,9 +317,9 @@ const $scope = constants?.$scope || function()
     {
         let paths = arrayUtils.toNonBlankStrings( ...(asArray( pPaths || [] ).map( e => isString( e ) ? e.split( _dot ) : e )).flat() ).flat();
 
-        let type = _clean( asString( pType, true ) || "path" );
+        let type = _clean( asString( pType, true ) || S_PATH );
 
-        let base = _clean( asString( pBase, true ) || "root" );
+        let base = _clean( asString( pBase, true ) || S_ROOT );
 
         return "${(@" + type + ";@base:" + base + "):" + (paths.length > 0 ? paths.join( _dot ) : "^") + "}";
     };
@@ -405,12 +411,12 @@ const $scope = constants?.$scope || function()
 
         get type()
         {
-            return asString( this.parts?.type ) || "path";
+            return asString( this.parts?.type ) || S_PATH;
         }
 
         get base()
         {
-            return asString( this.parts?.base ) || ("path" === this.type ? "root" : "global");
+            return asString( this.parts?.base ) || (S_PATH === this.type ? S_ROOT : "global");
         }
 
         get variable()
@@ -761,8 +767,8 @@ const $scope = constants?.$scope || function()
     {
         #key; // should be something in the form, ${(@<type>;@base:<relative_to>):<path_or_variable_name>}
 
-        #type = "path";
-        #base = "root";
+        #type = S_PATH;
+        #base = S_ROOT;
 
         #variable;
 
@@ -778,8 +784,8 @@ const $scope = constants?.$scope || function()
             {
                 const parsed = parseKey( this.#key );
 
-                this.#type = asString( parsed.type || "path", true );
-                this.#base = asString( parsed.base || "root", true );
+                this.#type = asString( parsed.type || S_PATH, true );
+                this.#base = asString( parsed.base || S_ROOT, true );
                 this.#variable = asString( parsed.variable || NO_VARIABLE_DEFINED, true );
 
                 this.#parts = lock( parsed );
@@ -808,12 +814,12 @@ const $scope = constants?.$scope || function()
 
         get type()
         {
-            return lcase( asString( this.#type, true ) || asString( this.parts?.type, true ) || "path" );
+            return lcase( asString( this.#type, true ) || asString( this.parts?.type, true ) || S_PATH );
         }
 
         get base()
         {
-            return lcase( asString( this.#base, true ) || asString( this.parts?.base, true ) || ("path" === this.type ? "root" : "global") );
+            return lcase( asString( this.#base, true ) || asString( this.parts?.base, true ) || (S_PATH === this.type ? S_ROOT : "global") );
         }
 
         get variable()
@@ -872,7 +878,7 @@ const $scope = constants?.$scope || function()
                     switch ( this.base )
                     {
                         case "global":
-                        case "root":
+                        case S_ROOT:
 
                             break;
 
@@ -884,18 +890,17 @@ const $scope = constants?.$scope || function()
 
                     break;
 
-                case "path":
+                case S_PATH:
 
                     switch ( this.base )
                     {
-                        case "root":
+                        case S_ROOT:
                         case "global":
                             value = objectUtils.findNode( root, ...paths );
                             break;
 
                         case "this":
                         case "scope":
-                            // paths = objectUtils.tracePathTo( current, root );
                             value = objectUtils.findNode( current, ...paths );
                             break;
                     }
@@ -1151,7 +1156,7 @@ const $scope = constants?.$scope || function()
 
                         if ( isArray( pValue ) )
                         {
-                            function resolve( e, i, a )
+                            function resolve( e, i )
                             {
                                 return interpolator.interpolate( e, scope, root, current, resolved, paths, (propertyKey + "[" + i + "]") );
                             }
@@ -1514,6 +1519,8 @@ const $scope = constants?.$scope || function()
         // never allow this function to run longer than 5 seconds or to exceed a maximum recursion depth
         if ( _exceededTimeLimit( options ) || depth > MAX_RECURSION )
         {
+            _handleCaughtException( onError, new Error( TIMEOUT_ERROR ), calculateErrorSourceName( modName, "asJson" ), S_ERROR, _mt_str, options, pVisited, pResolved, pPaths, pRoot  );
+
             return (depth > MAX_RECURSION ? JSON.stringify( MAX_RECURSION_ERROR ) : (isFunction( obj?.toString ) ? obj.toString() : JSON.stringify( obj?.name || obj?.source || obj?.value )));
         }
 
@@ -1522,7 +1529,11 @@ const $scope = constants?.$scope || function()
 
         if ( detectCycles( paths, 5, 5 ) )
         {
-            return JSON.stringify( infiniteLoopMessage( paths, 5, 5 ) );
+            const errorMessage = infiniteLoopMessage( paths, 5, 5 );
+
+            _handleCaughtException( onError, new Error( errorMessage ), calculateErrorSourceName( modName, "asJson" ), S_ERROR, _mt_str, options, pVisited, pResolved, paths, pRoot  );
+
+            return JSON.stringify( errorMessage );
         }
 
         const _include = _resolveInclusions( options );
@@ -1591,7 +1602,7 @@ const $scope = constants?.$scope || function()
 
                 let resolvedValue = resolved.find( object, root, current );
 
-                let asResolved = resolvedValue || new ResolvedValue( buildPathExpression( "path", "root", objectUtils.tracePathTo( object, root ) ), root, current, object );
+                let asResolved = resolvedValue || new ResolvedValue( buildPathExpression( S_PATH, S_ROOT, objectUtils.tracePathTo( object, root ) ), root, current, object );
 
                 resolved.set( asResolved?.key, asResolved );
 
@@ -1626,7 +1637,7 @@ const $scope = constants?.$scope || function()
 
                     if ( prependComma )
                     {
-                        s += "," + newline;
+                        s += _comma + newline;
                     }
 
                     if ( !isArr )
@@ -1656,7 +1667,7 @@ const $scope = constants?.$scope || function()
 
         if ( !isBlank( json ) )
         {
-            const expression = buildPathExpression( "path", "root", ...paths );
+            const expression = buildPathExpression( S_PATH, S_ROOT, ...paths );
 
             let resolvedValue = resolved.get( expression );
 

@@ -1,8 +1,10 @@
 const core = require( "./CoreUtils.cjs" );
 
+const objectUtils = require( "./ObjectUtils.cjs" );
+
 const jsonInterpolationUtils = require( "./JsonInterpolationUtils.cjs" );
 
-const { constants, typeUtils, stringUtils, arrayUtils, objectUtils } = core;
+const { constants, typeUtils, stringUtils, arrayUtils } = core;
 
 const { _ud = "undefined" } = constants;
 
@@ -41,7 +43,7 @@ const $scope = constants?.$scope || function()
 
     const { asArray, pruneArray, unique } = arrayUtils;
 
-    const { detectCycles, getEntries } = objectUtils;
+    const { detectCycles, getEntries, getProperty, removeProperty } = objectUtils;
 
     const modName = "JsonUtils";
 
@@ -94,7 +96,7 @@ const $scope = constants?.$scope || function()
 
             if ( keysToRemove.includes( key ) || keysToRemove.includes( "_" + key ) )
             {
-                obj = objectUtils.removeProperty( obj, key );
+                obj = removeProperty( obj, key );
                 continue;
             }
 
@@ -102,7 +104,7 @@ const $scope = constants?.$scope || function()
 
             if ( null === value )
             {
-                obj = objectUtils.removeProperty( obj, key );
+                obj = removeProperty( obj, key );
                 continue;
             }
 
@@ -111,7 +113,7 @@ const $scope = constants?.$scope || function()
                 case _ud:
                 case _symbol:
                 case _fun:
-                    obj = objectUtils.removeProperty( obj, key );
+                    obj = removeProperty( obj, key );
                     break;
 
                 case _obj:
@@ -285,7 +287,7 @@ const $scope = constants?.$scope || function()
 
             propName = propName.replaceAll( /[\r\n()\\/.]/g, _mt_str );
 
-            let value = objectUtils.getProperty( obj, propName ) || obj[propName];
+            let value = getProperty( obj, propName ) || obj[propName];
 
             if ( shouldSkip( value, propName, _includeEmptyProperties ) )
             {
@@ -297,8 +299,6 @@ const $scope = constants?.$scope || function()
 
         return newObj;
     };
-
-    // pExclusions, pIncludeSymbols, pIncludeFunctions, pIncludeUndefined
 
     const DEFAULT_REFLECTION_OPTIONS =
         {
@@ -323,7 +323,7 @@ const $scope = constants?.$scope || function()
 
         let stack = asArray( pStack || options?.stack || [] );
 
-        if ( objectUtils.detectCycles( stack, 4, 4 ) )
+        if ( detectCycles( stack, 4, 4 ) )
         {
             return JSON.stringify( { "error": "circular-reference detected for " + stack.join( "->" ) } );
         }
