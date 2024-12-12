@@ -200,12 +200,51 @@ describe( "asArray", () =>
           } );
 } );
 
+describe( "varargs", () =>
+{
+    const { varargs } = arrayUtils;
+
+    const f = function( ...pArgs )
+    {
+        return varargs( ...pArgs );
+    };
+
+    const g = function( ...pArgs )
+    {
+        return varargs( pArgs );
+    };
+
+    test( "varargs converts spread arguments into an array", () =>
+    {
+        expect( f( "a", "b", "c" ) ).toEqual( ["a", "b", "c"] );
+        expect( g( "a", "b", "c" ) ).toEqual( ["a", "b", "c"] );
+    } );
+
+    test( "varargs flattens spread arguments if it is a single array", () =>
+    {
+        expect( f( ["a", "b", "c"] ) ).toEqual( ["a", "b", "c"] );
+        expect( g( ["a", "b", "c"] ) ).toEqual( ["a", "b", "c"] );
+    } );
+
+    test( "varargs preserves array arguments if there are multiple arguments", () =>
+    {
+        expect( f( "a", "b", "c", ["a", "b", "c"] ) ).toEqual( ["a", "b", "c", ["a", "b", "c"]] );
+        expect( g( "a", "b", "c", ["a", "b", "c"] ) ).toEqual( ["a", "b", "c", ["a", "b", "c"]] );
+
+        expect( f( ["a", "b", "c"], "a", "b", "c" ) ).toEqual( [["a", "b", "c"], "a", "b", "c"] );
+        expect( g( ["a", "b", "c"], "a", "b", "c" ) ).toEqual( [["a", "b", "c"], "a", "b", "c"] );
+    } );
+
+} );
+
 describe( "unique", () =>
 {
+    const { unique } = arrayUtils;
+
     test( "unique array from varargs",
           () =>
           {
-              let actual = arrayUtils.unique( "a", "b", "a", "c", "d", "b", "c" );
+              let actual = unique( "a", "b", "a", "c", "d", "b", "c" );
 
               let expected = ["a", "b", "c", "d"];
 
@@ -215,7 +254,7 @@ describe( "unique", () =>
     test( "unique array from input",
           () =>
           {
-              let actual = arrayUtils.unique( ["a", "b", "a", "c", "d", "b", "c"] );
+              let actual = unique( ["a", "b", "a", "c", "d", "b", "c"] );
 
               let expected = ["a", "b", "c", "d"];
 

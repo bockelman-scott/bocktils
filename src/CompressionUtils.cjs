@@ -68,7 +68,9 @@ const $scope = constants?.$scope || function()
         CustomEvent = ModuleEvent;
     }
 
-    const modulePrototype = new ModulePrototype( "CompressionUtils", INTERNAL_NAME );
+    const modName = "CompressionUtils";
+
+    const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
 
     const ZERO_LENGTH_BUFFER = lock( Buffer.alloc( 0 ) );
 
@@ -353,7 +355,7 @@ const $scope = constants?.$scope || function()
                         }
                         catch( ex )
                         {
-                            modulePrototype.reportError( ex, "parsing JSON data", S_ERROR, "getDataAs" );
+                            modulePrototype.reportError( ex, "parsing JSON data", S_ERROR, modName + "::getDataAs" );
                         }
                     }
                     return obj || {};
@@ -427,7 +429,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            modulePrototype.reportError( ex, "counting archive entries", S_ERROR, "getEntryCount" );
+            modulePrototype.reportError( ex, "counting archive entries", S_ERROR, modName + "::getEntryCount" );
         }
 
         return count;
@@ -455,7 +457,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            modulePrototype.reportError( ex, "getting the archive entries", S_ERROR, "getEntries" );
+            modulePrototype.reportError( ex, "getting the archive entries", S_ERROR, modName + "::getEntries" );
 
             let archive = repair( pArchive );
 
@@ -486,7 +488,7 @@ const $scope = constants?.$scope || function()
             }
             catch( ex )
             {
-                modulePrototype.reportError( ex, "getting the archive entry, '" + name + "'", S_ERROR, "getEntry" );
+                modulePrototype.reportError( ex, "getting the archive entry, '" + name + "'", S_ERROR, modName + "::getEntry" );
             }
         }
         else
@@ -503,7 +505,7 @@ const $scope = constants?.$scope || function()
             }
             catch( ex )
             {
-                modulePrototype.reportError( ex, "getting the archive entry, '" + name + "'", S_ERROR, "getEntry" );
+                modulePrototype.reportError( ex, "getting the archive entry, '" + name + "'", S_ERROR, modName + "::getEntry" );
             }
         }
 

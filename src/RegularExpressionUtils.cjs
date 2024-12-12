@@ -68,7 +68,7 @@ const $scope = constants?.$scope || function()
 
     const { asString, asInt, isBlank, lcase, ucase } = stringUtils;
 
-    const { asArray, unique } = arrayUtils;
+    const { asArray, varargs, unique } = arrayUtils;
 
     const modName = "RegularExpressionUtils";
 
@@ -103,7 +103,7 @@ const $scope = constants?.$scope || function()
      */
     const getValidFlags = function( ...pFlags )
     {
-        let flags = [].concat( asArray( pFlags ) );
+        let flags = [].concat( varargs( ...pFlags ) );
 
         flags = flags.filter( e => isString( e ) );
         flags = unique( flags.map( e => lcase( e.trim() ).split( _mt_chr ) ).flat() );
@@ -755,7 +755,7 @@ const $scope = constants?.$scope || function()
     {
         let s = asString( pString );
 
-        const expressions = [].concat( asArray( pSearch ).filter( e => isString( e ) || isRegExp( e ) ) );
+        const expressions = [].concat( varargs( ...pSearch ).filter( e => isString( e ) || isRegExp( e ) ) );
 
         for( let expression of expressions )
         {

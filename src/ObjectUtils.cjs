@@ -285,7 +285,7 @@ const $scope = constants?.$scope || function()
         /**
          * The list of operations to evaluate
          */
-        const _stack = [].concat( pStack || [] );
+        const _stack = [].concat( asArray( pStack || [] ) );
 
         /**
          * The length of a single sequence
@@ -443,7 +443,7 @@ const $scope = constants?.$scope || function()
 
             this.#count = Math.max( 0, asInt( (pFunction instanceof this.constructor) ? pFunction?.count : asInt( pFunction?.callCount ), 0 ) );
 
-            this.#arguments = [].concat( ...(asArray( pArgs || [] )) );
+            this.#arguments = [].concat( ...(asArray( pArgs )) );
 
             this.#original = (pFunction instanceof this.constructor) ? pFunction?.original || this.#f : this.#f;
         }
@@ -765,7 +765,7 @@ const $scope = constants?.$scope || function()
     const getKeys = function( ...pObject )
     {
         // filter out empty objects and non-objects
-        let objects = [].concat( asArray( pObject ) || [] ).filter( Filters.IS_OBJECT );
+        let objects = [].concat( varargs( ...pObject ) ).filter( Filters.IS_OBJECT );
 
         // return an empty array if there are no objects left after applying the filter
         if ( null == objects || ((objects?.length || 0) <= 0) )
@@ -799,7 +799,7 @@ const $scope = constants?.$scope || function()
             keys = unique( pruneArray( keys ) ).filter( e => !EXCLUDED_PROPERTIES.includes( e ) );
         }
 
-        return lock( unique( pruneArray( keys || [] ) ) );
+        return lock( unique( pruneArray( keys ) ) );
     };
 
     /**
@@ -848,7 +848,7 @@ const $scope = constants?.$scope || function()
             matches = rx.exec( source );
         }
 
-        return [].concat( ...(properties || []).filter( e => !EXCLUDED_PROPERTIES.includes( e ) ) || [] );
+        return [].concat( ...(properties || []).filter( e => !EXCLUDED_PROPERTIES.includes( e ) ) );
     };
 
     /**
@@ -859,7 +859,7 @@ const $scope = constants?.$scope || function()
      */
     const getProperties = function( ...pObject )
     {
-        let objects = [].concat( asArray( pObject ) || [] ).filter( Filters.IS_OBJECT );
+        let objects = [].concat( varargs( ...pObject ) ).filter( Filters.IS_OBJECT );
 
         if ( null == objects || ((objects?.length || 0) <= 0) )
         {
@@ -902,7 +902,7 @@ const $scope = constants?.$scope || function()
      */
     const getValues = function( ...pObject )
     {
-        let objects = [].concat( asArray( pObject ) || [] ).filter( Filters.IS_OBJECT );
+        let objects = [].concat( varargs( ...pObject ) ).filter( Filters.IS_OBJECT );
 
         if ( null == objects || ((objects?.length || 0) <= 0) )
         {
@@ -944,7 +944,7 @@ const $scope = constants?.$scope || function()
             }
         }
 
-        return lock( unique( pruneArray( values || [] ) ) );
+        return lock( unique( pruneArray( values ) ) );
     };
 
 
@@ -959,7 +959,7 @@ const $scope = constants?.$scope || function()
      */
     const getEntries = function( ...pObject )
     {
-        let objects = [].concat( asArray( pObject ) || [] ).filter( Filters.IS_OBJECT );
+        let objects = [].concat( varargs( ...pObject ) ).filter( Filters.IS_OBJECT );
 
         if ( null == objects || ((objects?.length || 0) <= 0) )
         {
@@ -1208,7 +1208,7 @@ const $scope = constants?.$scope || function()
             case _obj:
                 if ( isArray( pObject ) )
                 {
-                    return opts?.acceptArrays && pruneArray( pObject || [] ).length >= minimumKeys;
+                    return opts?.acceptArrays && pruneArray( pObject )?.length >= minimumKeys;
                 }
 
                 if ( hasNoProperties( pObject ) )
@@ -1275,7 +1275,7 @@ const $scope = constants?.$scope || function()
     {
         let object = null;
 
-        let objects = asArray( pObject || [] ).filter( isValidObject );
+        let objects = (varargs( ...pObject )).filter( isValidObject );
 
         if ( null == objects || (objects?.length || 0) <= 0 )
         {
@@ -1299,11 +1299,11 @@ const $scope = constants?.$scope || function()
      */
     const firstPopulatedObject = function( pCriteria = DEFAULT_IS_POPULATED_OPTIONS, ...pObject )
     {
-        const options = asNew( pCriteria || {} );
+        const options = populateOptions( pCriteria, DEFAULT_IS_POPULATED_OPTIONS );
 
         let object = null;
 
-        let objects = asArray( pObject || [] ).filter( e => isPopulated( e, options ) );
+        let objects = (varargs( ...pObject )).filter( e => isPopulated( e, options ) );
 
         if ( null == objects || (objects?.length || 0) <= 0 )
         {
@@ -1330,14 +1330,14 @@ const $scope = constants?.$scope || function()
 
         let paths = isString( pPath ) ? [...(pPath.split( _dot ).flat())] : isArray( pPath ) ? pPath || [] : [];
 
-        if( identical( pNode, pRoot ) )
+        if ( identical( pNode, pRoot ) )
         {
             return paths;
         }
 
         let target = isNull( pNode ) ? (_mt_str === pNode ? pNode : (isNull( pRoot ) ? null : pRoot)) : pNode;
 
-        if( identical( target, pRoot ) )
+        if ( identical( target, pRoot ) )
         {
             return paths;
         }
@@ -1351,7 +1351,7 @@ const $scope = constants?.$scope || function()
 
         const scope = $scope();
 
-        const visited = asArray( pVisited || [] ) || [];
+        const visited = asArray( pVisited || [] );
 
         let found = false;
 
@@ -2093,13 +2093,13 @@ const $scope = constants?.$scope || function()
 
     const arrayToObject = function( pArr, pKeyProperty = _mt_str )
     {
-        let arr = asArray( pArr || [] ) || [];
+        let arr = asArray( pArr );
 
         let keyProperty = asString( pKeyProperty, true );
 
         let useKeyProperty = !isBlank( keyProperty );
 
-        if ( 1 === arr.length && (isObject( arr[0] ) && !isArray( arr[0] )) )
+        if ( 1 === arr?.length && (isObject( arr[0] ) && !isArray( arr[0] )) )
         {
             if ( useKeyProperty )
             {
@@ -2180,7 +2180,7 @@ const $scope = constants?.$scope || function()
     {
         let methodNames = asArray( pFunctionName || [] );
 
-        const candidates = asArray( [].concat( pCandidates || [] ) ).flat( Infinity );
+        const candidates = asArray( [].concat( varargs( ...pCandidates ) ) ).flat( Infinity );
 
         let implementor = null;
 
@@ -2215,7 +2215,7 @@ const $scope = constants?.$scope || function()
     {
         let methodNames = asArray( pMethodNames || [] );
 
-        const arr = (asArray( pCandidates || [] ) || []).filter( Filters.IS_OBJECT );
+        const arr = (varargs( ...pCandidates )).filter( Filters.IS_OBJECT );
 
         const implementors = [];
 
@@ -2522,7 +2522,7 @@ const $scope = constants?.$scope || function()
      */
     const ingest = function( pObject, ...pDefault )
     {
-        let defaults = [].concat( asArray( pDefault || [{}] ) || [{}] ).filter( Filters.IS_POPULATED_OBJECT );
+        let defaults = [].concat( varargs( pDefault ) ).filter( Filters.IS_POPULATED_OBJECT );
 
         pObject = isObject( pObject ) ? pObject || {} : {};
 
@@ -2667,7 +2667,7 @@ const $scope = constants?.$scope || function()
     {
         const options = populateOptions( pOptions, DEFAULT_AUGMENT_OPTIONS );
 
-        const _stack = pStack || [];
+        const _stack = asArray( pStack || [] );
 
         // start by creating a shallow copy of each object
         let objA = asNew( pObject || pObjectB || {} );
@@ -2750,7 +2750,7 @@ const $scope = constants?.$scope || function()
     {
         const visited = pVisited || new Set();
 
-        const path = asArray( pPath ) || [];
+        const path = asArray( pPath );
 
         // start by creating a shallow copy of each object
         let objA = asNew( pTarget || pSource || {} );
@@ -2898,7 +2898,7 @@ const $scope = constants?.$scope || function()
     {
         let obj = pObject || {};
 
-        const propertyNames = unique( pruneArray( [].concat( asArray( pPropertyNames || [] ) ) ) );
+        const propertyNames = unique( pruneArray( [].concat( varargs( ...pPropertyNames ) ) ) );
 
         for( let i = 0, n = propertyNames.length; i < n; i++ )
         {
@@ -2941,7 +2941,7 @@ const $scope = constants?.$scope || function()
     {
         const options = populateOptions( pOptions, DEFAULT_PRUNING_OPTIONS || {} );
 
-        let stack = [].concat( asArray( pStack || [] ) );
+        let stack = [].concat( asArray( pStack ) );
 
         if ( detectCycles( stack, 3, 3 ) )
         {
@@ -3105,7 +3105,7 @@ const $scope = constants?.$scope || function()
             return emptyClone( pObject, _obj );
         }
 
-        const stack = pStack || [];
+        const stack = asArray( pStack || [] );
 
         if ( detectCycles( stack, 3, 3 ) )
         {
@@ -3261,7 +3261,7 @@ const $scope = constants?.$scope || function()
         {
             if ( isArray( target ) )
             {
-                target = [].concat( asArray( target || pTarget || [] ) );
+                target = [].concat( asArray( target || pTarget ) );
             }
             else
             {
@@ -3271,7 +3271,7 @@ const $scope = constants?.$scope || function()
 
         pTarget = Object.assign( pTarget, Object.assign( target, source ) );
 
-        const stack = pStack || [];
+        const stack = asArray( pStack || [] );
 
         if ( stack.length > MAX_ASSIGN_DEPTH || detectCycles( stack, 4, 4 ) )
         {

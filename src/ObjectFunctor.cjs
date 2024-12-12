@@ -1,16 +1,14 @@
 const objectUtils = require( "./ObjectUtils.cjs" );
 
-const constants = objectUtils.dependencies.constants;
-const typeUtils = objectUtils.dependencies.typeUtils;
-const stringUtils = objectUtils.dependencies.stringUtils;
-const arrayUtils = objectUtils.dependencies.arrayUtils;
-const guidUtils = objectUtils.dependencies.guidUtils;
+const { dependencies } = objectUtils;
+
+const { constants, typeUtils, stringUtils, arrayUtils, guidUtils } = dependencies;
 
 /** create an alias for console **/
 const konsole = console || {};
 
 /** define a variable for typeof undefined **/
-const _ud = constants?._ud || "undefined";
+const { _ud = "undefined" } = constants;
 
 /**
  * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
@@ -44,15 +42,21 @@ const $scope = constants?.$scope || function()
             guidUtils
         };
 
-    let { _str, _fun, _num, _big, _bool, _symbol, _obj, populateOptions, lock, deepFreeze } = constants;
+    let { _str, _fun, _num, _big, _bool, _symbol, _obj, populateOptions, lock, deepFreeze, classes } = constants;
 
     let { isNull, isString, isArray, isObject, isDate, isFunction } = typeUtils;
 
-    let asString = stringUtils.asString;
+    let { asString } = stringUtils;
 
     let { asArray, Mappers } = arrayUtils;
 
     let { detectCycles, getKeys, getEntries } = objectUtils;
+
+    const modName = "ObjectFunctor";
+
+    const { ModulePrototype } = classes;
+
+    const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
 
     class ObjectFunctor
     {
@@ -279,24 +283,15 @@ const $scope = constants?.$scope || function()
         }
     }
 
-    const mod =
+    let mod =
         {
             dependencies,
             classes: { ObjectFunctor },
             ObjectFunctor
         };
 
-    if ( _ud !== typeof module )
-    {
-        module.exports = lock( mod );
-    }
+    mod = modulePrototype.extend( mod );
 
-    if ( $scope() )
-    {
-        $scope()[INTERNAL_NAME] = lock( mod );
-    }
-
-    return lock( mod );
-
+    return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 
 }());

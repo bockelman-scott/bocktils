@@ -69,7 +69,9 @@ const $scope = constants?.$scope || function()
         CustomEvent = ModuleEvent;
     }
 
-    const modulePrototype = new ModulePrototype( "ArrayUtils", INTERNAL_NAME );
+    const modName = "ArrayUtils";
+
+    const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
 
     const {
         VALID_TYPES,
@@ -78,6 +80,7 @@ const $scope = constants?.$scope || function()
         isString,
         isInteger,
         isObject,
+        isArray,
         isBoolean,
         isFunction,
         isDate,
@@ -110,7 +113,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            modulePrototype.reportError( ex, "extending the built-in Array class", S_WARN, "isArray" );
+            modulePrototype.reportError( ex, "extending the built-in Array class", S_WARN, modName + "::isArray" );
         }
     }
 
@@ -171,24 +174,17 @@ const $scope = constants?.$scope || function()
 
         let arr = (_ud === typeof pMaybeAnArray ? [] : (_str === typeof pMaybeAnArray && _mt_str === pMaybeAnArray) ? [pMaybeAnArray] : (pMaybeAnArray || []));
 
-        if ( !Array.isArray( arr ) )
+        if ( !isArray( arr ) )
         {
             switch ( typeof arr )
             {
                 case _obj:
-                    arr = Object.values( arr );
+                    arr = isNull( arr ) ? [] : Object.values( arr );
                     break;
 
                 case _str:
-                    if ( !isUndefined( options?.splitOn ) && isString( options?.splitOn ) )
-                    {
-                        const sep = asString( options?.splitOn );
-                        arr = arr.split( sep ) || [arr];
-                    }
-                    else
-                    {
-                        arr = [arr];
-                    }
+                    const sep = ( !isUndefined( options?.splitOn ) && isString( options?.splitOn )) ? asString( options?.splitOn ) : null;
+                    arr = (!isNull( sep ) ? arr.split( sep ) : [arr]) || [arr];
                     break;
 
                 case _num:
@@ -216,7 +212,7 @@ const $scope = constants?.$scope || function()
                     }
                     catch( ex )
                     {
-                        modulePrototype.reportError( ex, "trying to execute " + (arr?.name || arr), S_WARN, "asArray" );
+                        modulePrototype.reportError( ex, "trying to execute " + (arr?.name || arr), S_WARN, modName + "::asArray" );
                     }
                     break;
 
@@ -283,13 +279,13 @@ const $scope = constants?.$scope || function()
             arr = arr.sort( comparator );
         }
 
-        return arr || [];
+        return (isArray( arr ) ? (arr || []) : [arr]) || [];
     };
 
     const varargs = function( ...pArgs )
     {
-        let arr = [...(asArray( pArgs || [] ))];
-        return (arr.length < 2) ? arr.flat() : arr;
+        let arr = [...(asArray( pArgs || [] ) || [])];
+        return (arr.length < 2) ? (arr.length > 0 ? (isArray( arr[0] ) ? varargs( ...(arr[0]) ) : arr) : arr.flat()) : arr;
     };
 
     const immutableVarArgs = function( ...pArgs )
@@ -1120,7 +1116,7 @@ const $scope = constants?.$scope || function()
                         }
                         catch( ex )
                         {
-                            modulePrototype.reportError( ex, "trying to transform " + pElem, S_WARN );
+                            modulePrototype.reportError( ex, "trying to transform " + pElem, S_WARN, modName + "::Comparators.BY_POSITION" );
                         }
                     }
 
@@ -1141,7 +1137,7 @@ const $scope = constants?.$scope || function()
                         }
                         catch( ex )
                         {
-                            modulePrototype.reportError( ex, "trying to find the position of " + pElem + " in array" + arr, S_WARN );
+                            modulePrototype.reportError( ex, "trying to find the position of " + pElem + " in array" + arr, S_WARN, modName + "::Comparators.BY_POSITION.findPosition" );
                         }
                     }
 
@@ -1440,7 +1436,7 @@ const $scope = constants?.$scope || function()
                     }
                     catch( ex )
                     {
-                        modulePrototype.reportError( ex, "performing transformation", S_WARN, "TransformerChain::transform" );
+                        modulePrototype.reportError( ex, "performing transformation", S_WARN, modName + "::TransformerChain::transform" );
                     }
                 }
                 else
@@ -1459,7 +1455,7 @@ const $scope = constants?.$scope || function()
                         }
                         catch( ex )
                         {
-                            modulePrototype.reportError( ex, "performing transformation", S_WARN, "TransformerChain::transform" );
+                            modulePrototype.reportError( ex, "performing transformation", S_WARN, modName + "::TransformerChain::transform" );
                         }
                     }
                 }
@@ -1892,7 +1888,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            modulePrototype.reportError( ex, "sorting an array", S_WARN, "sortArray" );
+            modulePrototype.reportError( ex, "sorting an array", S_WARN, modName + "::sortArray" );
         }
 
         return arr || pArr;
@@ -1911,7 +1907,7 @@ const $scope = constants?.$scope || function()
         let arr = asArray( pArr, { "sanitize": true } );
 
         // this is the array we will return, so we do not modify the input argument
-        let pruned = [].concat( arr || [] ).filter( Predicates.IS_NOT_NULL );
+        let pruned = [].concat( arr ).filter( Predicates.IS_NOT_NULL );
 
         const rejectedTypes = varargs( ...pRejectedTypes );
 
@@ -2193,7 +2189,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            modulePrototype.reportError( ex, "extending the Array prototype", S_WARN, "ArrayUtils" );
+            modulePrototype.reportError( ex, "extending the Array prototype", S_WARN, modName );
         }
     }
 
@@ -2208,7 +2204,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            modulePrototype.reportError( ex, "extending the Set prototype", S_WARN, "ArrayUtils" );
+            modulePrototype.reportError( ex, "extending the Set prototype", S_WARN, modName );
         }
     }
 
@@ -2246,7 +2242,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            modulePrototype.reportError( ex, "extending the Array prototype", S_WARN, "ArrayUtils" );
+            modulePrototype.reportError( ex, "extending the Array prototype", S_WARN, modName );
         }
     }
 
@@ -2288,7 +2284,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            modulePrototype.reportError( ex, "extending the Array prototype", S_WARN, "ArrayUtils" );
+            modulePrototype.reportError( ex, "extending the Array prototype", S_WARN, modName );
         }
     }
 
@@ -2636,7 +2632,7 @@ const $scope = constants?.$scope || function()
             }
             catch( ex )
             {
-                modulePrototype.reportError( ex, "attempting to take from an exhausted Queue", S_WARN, "AsyncBoundedQueue::take" );
+                modulePrototype.reportError( ex, "attempting to take from an exhausted Queue", S_WARN, modName + "::AsyncBoundedQueue::take" );
             }
 
             return elem || null;

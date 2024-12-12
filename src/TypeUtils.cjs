@@ -80,7 +80,9 @@ const $scope = constants?.$scope || function()
 
     const { ModulePrototype } = classes;
 
-    let modulePrototype = new ModulePrototype( "TypeUtils", INTERNAL_NAME );
+    const modName = "TypeUtils";
+
+    let modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
 
     /**
      * This is an array of the 'valid' JavaScript primitive types.
@@ -133,7 +135,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            modulePrototype.reportError( ex, "extending the built-in Array class", S_WARN, "Array::isArray" );
+            modulePrototype.reportError( ex, "extending the built-in Array class", S_WARN, modName + "::Array::isArray" );
         }
     }
 
@@ -520,7 +522,7 @@ const $scope = constants?.$scope || function()
             }
             catch( ex )
             {
-                modulePrototype.reportError( ex, "paring " + _toString( pObj ), S_WARN, "toDecimal" );
+                modulePrototype.reportError( ex, "parsing " + _toString( pObj ), S_WARN, modName + "::toDecimal" );
                 value = 0;
             }
 
@@ -895,7 +897,7 @@ const $scope = constants?.$scope || function()
                 }
                 catch( ex )
                 {
-                    modulePrototype.reportError( ex, `formatting ${pObj} as a date`, S_WARN, "isDate" );
+                    modulePrototype.reportError( ex, `formatting ${pObj} as a date`, S_WARN, modName + "::isDate" );
                 }
             }
 
@@ -907,7 +909,7 @@ const $scope = constants?.$scope || function()
                 }
                 catch( ex )
                 {
-                    modulePrototype.reportError( ex, `evaluating ${pObj} as a Date`, S_ERROR, "isDate" );
+                    modulePrototype.reportError( ex, `evaluating ${pObj} as a Date`, S_ERROR, modName + "::isDate" );
                 }
             }
         }
@@ -925,7 +927,7 @@ const $scope = constants?.$scope || function()
                     }
                     catch( ex )
                     {
-                        modulePrototype.reportError( ex, `evaluating ${pObj} as a Date`, S_ERROR, "isDate" );
+                        modulePrototype.reportError( ex, `evaluating ${pObj} as a Date`, S_ERROR, modName + "::isDate" );
                     }
 
                     break;
@@ -1023,7 +1025,7 @@ const $scope = constants?.$scope || function()
                 }
                 catch( ex )
                 {
-                    modulePrototype.reportError( ex, "attempting to call instanceof without a class or callable", S_WARN, "instanceOfAny" );
+                    modulePrototype.reportError( ex, "attempting to call instanceof without a class or callable", S_WARN, modName + "::instanceOfAny" );
                 }
             }
         }
@@ -1298,7 +1300,7 @@ const $scope = constants?.$scope || function()
                 }
                 catch( ex )
                 {
-                    modulePrototype.reportError( ex, `casting ${value} to number`, S_WARN, "castTo" );
+                    modulePrototype.reportError( ex, `casting ${value} to number`, S_WARN, modName + "::castTo" );
                 }
                 break;
 

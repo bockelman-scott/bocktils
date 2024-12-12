@@ -43,7 +43,9 @@ const $scope = constants?.$scope || function()
 
     const { ModuleEvent, ModulePrototype } = classes;
 
-    const modulePrototype = new ModulePrototype( "EventUtils", INTERNAL_NAME );
+    const modName = "EventUtils";
+
+    const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
 
     const S_ON = "on";
     const S_ABORT = "abort";
@@ -52,7 +54,7 @@ const $scope = constants?.$scope || function()
     {
         const msg = "No handler found for event," + pEvt.type + ", Fired on" + pEvt.target;
 
-        modulePrototype.reportError( new Error( msg ), msg, S_WARN, "EventUtils::NO_HANDLER" );
+        modulePrototype.reportError( new Error( msg ), msg, S_WARN, modName + "::NO_HANDLER" );
 
         return false;
     };
@@ -370,7 +372,7 @@ const $scope = constants?.$scope || function()
             {
                 const msg = "Could not replace event handler for event type, " + asString( pEventName ) + ", for target, " + (target?.name || typeof target);
 
-                modulePrototype.reportError( ex, msg, S_ERROR, "EventUtils::replaceEventHandler" );
+                modulePrototype.reportError( ex, msg, S_ERROR, modName + "::replaceEventHandler" );
             }
         }
     };

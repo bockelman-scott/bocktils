@@ -12,7 +12,7 @@ const typeUtils = require( "./TypeUtils.cjs" );
 /**
  * Defines a string to represent the type, undefined
  */
-const _ud = constants?._ud || "undefined";
+const { _ud = "undefined" } = constants;
 
 /**
  * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
@@ -74,6 +74,7 @@ const $scope = constants?.$scope || function()
             _unixThisDir,
             _lf,
             _crlf,
+            _colon,
             S_TRUE,
             S_FALSE,
             S_ERROR = "error",
@@ -107,7 +108,9 @@ const $scope = constants?.$scope || function()
         CustomEvent = ModuleEvent;
     }
 
-    let modulePrototype = new ModulePrototype( "StringUtils", INTERNAL_NAME );
+    const modName = "StringUtils";
+
+    let modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
 
     const
         {
@@ -144,6 +147,8 @@ const $scope = constants?.$scope || function()
      * is a valid JSON object or array
      */
     const _rxValidJson = /^([{\[])(.*)*([}\]])$/s;
+
+    const AS_INT = "asInt";
 
     /**
      * When a function is added to a built-in object prototype,
@@ -315,7 +320,7 @@ const $scope = constants?.$scope || function()
                 }
                 catch( ex )
                 {
-                    modulePrototype.reportError( ex, "removing non-numeric characters", S_ERROR, methodName );
+                    modulePrototype.reportError( ex, "removing non-numeric characters", S_ERROR, (modName + _colon + _colon + methodName), s );
                 }
             }
 
@@ -347,7 +352,7 @@ const $scope = constants?.$scope || function()
                 }
                 catch( ex )
                 {
-                    modulePrototype.reportError( ex, "trying to interpret " + (_mt_str + input) + " as a number", S_WARN, methodName );
+                    modulePrototype.reportError( ex, "trying to interpret " + (_mt_str + input) + " as a number", S_WARN, (modName + _colon + _colon + methodName) );
                 }
                 break;
 
@@ -391,7 +396,7 @@ const $scope = constants?.$scope || function()
                         }
                         catch( ex )
                         {
-                            modulePrototype.reportError( ex, "formatting a Date", S_WARN, methodName );
+                            modulePrototype.reportError( ex, "formatting a Date", S_WARN, (modName + _colon + _colon + methodName) );
                             s = input.toISOString();
                         }
                     }
@@ -431,7 +436,7 @@ const $scope = constants?.$scope || function()
                             }
                             catch( e )
                             {
-                                modulePrototype.reportError( e, "obtaining the name of a function", S_WARN, methodName );
+                                modulePrototype.reportError( e, "obtaining the name of a function", S_WARN, (modName + _colon + _colon + methodName) );
                             }
                         }
 
@@ -447,7 +452,7 @@ const $scope = constants?.$scope || function()
                             }
                             catch( ex )
                             {
-                                modulePrototype.reportError( ex, "while converting an object to JSON", S_WARN, methodName );
+                                modulePrototype.reportError( ex, "while converting an object to JSON", S_WARN, (modName + _colon + _colon + methodName) );
 
                                 if ( !isString( s ) || isBlank( s ) )
                                 {
@@ -478,7 +483,7 @@ const $scope = constants?.$scope || function()
                         }
                         catch( ex )
                         {
-                            modulePrototype.reportError( ex, "while executing a function as input to asString", S_WARN, methodName );
+                            modulePrototype.reportError( ex, "while executing a function as input to asString", S_WARN, (modName + _colon + _colon + methodName) );
 
                             s = input?.name || input?.constructor?.name || (options.returnFunctionSource ? getFunctionSource( input ) : _mt_str);
                         }
@@ -492,7 +497,7 @@ const $scope = constants?.$scope || function()
                         }
                         catch( ex )
                         {
-                            modulePrototype.reportError( ex, "getting a string representation of a function", S_WARN, methodName );
+                            modulePrototype.reportError( ex, "getting a string representation of a function", S_WARN, (modName + _colon + _colon + methodName) );
                         }
                     }
 
@@ -1330,11 +1335,11 @@ const $scope = constants?.$scope || function()
             return asInt( dflt, zero, options );
         }
 
-        function warnValueOutOfRange( pInput, pSource = "asInt" )
+        function warnValueOutOfRange( pInput, pSource = AS_INT )
         {
             const msg = ["asInt cannot return values greater than", Number.MAX_SAFE_INTEGER, "or less than", Number.MIN_SAFE_INTEGER, _dot, _spc, (pInput || input || "the specified value"), "cannot be converted to an Integer"].join( _spc );
 
-            modulePrototype.reportError( new IllegalArgumentError( msg ), msg, S_WARN, pSource || "asInt" );
+            modulePrototype.reportError( new IllegalArgumentError( msg ), msg, S_WARN, (modName + _colon + _colon + (pSource || AS_INT)) );
         }
 
         let radix = _calculateRadix( input );
@@ -1405,7 +1410,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            modulePrototype.reportError( ex, "trying to interpret '" + asString( pValue || input ) + "' as a number", S_WARN, "asInt" );
+            modulePrototype.reportError( ex, "trying to interpret '" + asString( pValue || input ) + "' as a number", S_WARN, (modName + _colon + _colon + AS_INT) );
         }
 
         return val || zero;
@@ -1504,7 +1509,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            modulePrototype.reportError( ex, "trying to interpret '" + asString( pValue || input ) + "' as a number", S_WARN, "asInt" );
+            modulePrototype.reportError( ex, "trying to interpret '" + asString( pValue || input ) + "' as a number", S_WARN, (modName + _colon + _colon + AS_INT) );
         }
 
         return val || zero;
@@ -1713,7 +1718,7 @@ const $scope = constants?.$scope || function()
             catch( ex )
             {
                 const msg = "trying to determine the verity of '" + (val?.name || asString( val )) + "' with arguments " + (pFunctionArgs || []).join( _comma );
-                modulePrototype.reportError( ex, msg, S_ERROR, "evaluateBoolean" );
+                modulePrototype.reportError( ex, msg, S_ERROR, (modName + _colon + _colon + "evaluateBoolean") );
                 return false;
             }
         }
@@ -2092,7 +2097,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            modulePrototype.reportError( ex, "trying to interpret " + asString( pNum ) + " as a number", S_WARN, "isValidNumber" );
+            modulePrototype.reportError( ex, "trying to interpret " + asString( pNum ) + " as a number", S_WARN, (modName + _colon + _colon + "isValidNumber") );
         }
 
         // create a local variable to control the rest of the logic
@@ -2541,7 +2546,7 @@ const $scope = constants?.$scope || function()
                     }
                     catch( ex )
                     {
-                        modulePrototype.reportError( ex, "trying to execute " + asString( func?.name || funcToString.call() ) + " as a number", S_WARN, "asInt" );
+                        modulePrototype.reportError( ex, "trying to execute " + asString( func?.name || funcToString.call() ) + " as a number", S_WARN, (modName + _colon + _colon + "tidy") );
                     }
                 }
 

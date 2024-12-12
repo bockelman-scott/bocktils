@@ -124,6 +124,11 @@ const $scope = function()
      */
     const SCOPE_MODULE = (_ud !== typeof module) ? module : {};
 
+    const isNode = function()
+    {
+        return (_ud === typeof self && _ud === typeof window) && (_ud !== typeof module) && (_fun === typeof require);
+    };
+
     /**
      * This class defines a Custom Event other modules can use to communicate with interested consumers.
      * @see https://developer.mozilla.org/en-US/docs/Web/API/CustomEvent/CustomEvent
@@ -596,10 +601,13 @@ const $scope = function()
     const calculateErrorSourceName = function( pModule, pFunction )
     {
         const modName = _obj === typeof pModule ? (pModule?.moduleName || pModule?.name) : _str === typeof pModule ? pModule : _unknown;
-        const funName = _fun === typeof pFunction ? (pFunction?.name) : _str === typeof pFunction ? pFunction : _unknown;
+        const funName = _fun === typeof pFunction ? (pFunction?.name || "anonymous") : _str === typeof pFunction ? pFunction : _unknown;
 
         return (modName || pModule) + _colon + _colon + (funName || pFunction);
     };
+
+    const MODULE_CACHE =
+        {};
 
     /**
      * This is the base class for all the ToolBocks modules.
@@ -652,6 +660,9 @@ const $scope = function()
             {
                 this.extend( pModuleName );
             }
+
+            MODULE_CACHE[this.#moduleName] = this;
+            MODULE_CACHE[this.#cacheKey] = this;
         }
 
         static get [Symbol.species]()
@@ -891,6 +902,18 @@ const $scope = function()
             {
                 if ( !this.locked )
                 {
+                    if ( isArray( pObject ) )
+                    {
+                        let mod = this;
+
+                        for( const obj of pObject )
+                        {
+                            mod = this.extend( obj );
+                        }
+
+                        return mod || this;
+                    }
+
                     return Object.assign( this, pObject || {} );
                 }
 
@@ -942,6 +965,15 @@ const $scope = function()
 
             return lock( mod || this );
         }
+
+        async enhance( pObject )
+        {
+            const mod = this.extend( pObject );
+
+            dispatchEvent( new CustomEvent( "load", mod ) );
+
+            return mod;
+        }
     }
 
     /**
@@ -968,6 +1000,49 @@ const $scope = function()
     }
 
     BockModulePrototype.exportModule = exportModule;
+
+    async function requireModule( pModulePath )
+    {
+        let mod = MODULE_CACHE[pModulePath];
+
+        if ( null != mod && mod instanceof BockModulePrototype )
+        {
+            return mod;
+        }
+
+        if ( isNode() )
+        {
+            try
+            {
+                mod = require( pModulePath );
+            }
+            catch( ex )
+            {
+                GLOBAL_INSTANCE.reportError( ex, `requiring module ${pModulePath}`, S_ERROR, "Module::requireModule" );
+            }
+        }
+
+        if ( null == mod )
+        {
+            try
+            {
+                mod = await import(pModulePath);
+            }
+            catch( ex )
+            {
+                GLOBAL_INSTANCE.reportError( ex, `importing module ${pModulePath}`, S_ERROR, "Module::requireModule" );
+            }
+        }
+
+        if ( _obj === typeof mod && null != mod )
+        {
+            mod = new BockModulePrototype( mod );
+
+            GLOBAL_INSTANCE.dispatchEvent( new CustomEvent( "load", mod ) );
+        }
+
+        return mod;
+    }
 
     /**
      * Returns a deep copy of the value specified.
@@ -1745,6 +1820,8 @@ const $scope = function()
                 BockModulePrototype.setGlobalLogger( pLogger );
             },
             exportModule,
+            requireModule,
+            importModule: requireModule,
 
             _ud,
             _obj,

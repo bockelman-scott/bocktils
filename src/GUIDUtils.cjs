@@ -46,7 +46,9 @@ const $scope = constants?.$scope || function()
 
     const { ModuleEvent, ModulePrototype } = classes;
 
-    const modulePrototype = new ModulePrototype( "GUIDUtils", INTERNAL_NAME );
+    const modName = "GUIDUtils";
+
+    const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
 
     const MAX_CACHED_VALUES = 10_000;
     const DEFAULT_CACHED_VALUES = 1_000;

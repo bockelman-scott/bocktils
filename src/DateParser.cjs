@@ -74,7 +74,9 @@ const $scope = utils?.$scope || constants?.$scope || function()
 
     const DateFormatter = DateFormatterClasses.DateFormatter;
 
-    const modulePrototype = new ModulePrototype( "DateParser", INTERNAL_NAME );
+    const modName = "DateParser";
+
+    const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
 
     /**
      * Class to parse a string as a number, according to the Locale and Intl.NumberFormat Options specified

@@ -39,7 +39,7 @@ const $scope = utils?.$scope || constants?.$scope || function()
 
     const { asString, asInt, toBool } = stringUtils;
 
-    const asArray = arrayUtils.asArray;
+    const { asArray, varargs } = arrayUtils;
 
     const { attempt, op_true, op_false } = funcUtils;
 
@@ -50,7 +50,9 @@ const $scope = utils?.$scope || constants?.$scope || function()
         CustomEvent = ModuleEvent;
     }
 
-    const modulePrototype = new ModulePrototype( "DateUtils", INTERNAL_NAME );
+    const modName = "DateUtils";
+
+    const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
 
     const UNIT = lock(
         {
@@ -429,7 +431,7 @@ const $scope = utils?.$scope || constants?.$scope || function()
 
     const sortDates = function( ...pDates )
     {
-        let dates = [].concat( asArray( pDates || [] ) || [] );
+        let dates = [].concat( varargs( ...pDates ) );
 
         dates = dates.filter( isValidDateArgument ).map( ( date ) => toTimestamp( date, Number.MAX_VALUE ) );
 
@@ -1396,7 +1398,7 @@ const $scope = utils?.$scope || constants?.$scope || function()
      */
     function _processHolidays( pHolidays, pStartDate, pEndDate )
     {
-        let holidays = asArray( pHolidays || [] ) || [];
+        let holidays = asArray( pHolidays || [] );
 
         holidays = holidays.map( e => isDate( e ) ? e : e instanceof Holiday ? e.generate( pStartDate, pEndDate ) : null ).flat();
 

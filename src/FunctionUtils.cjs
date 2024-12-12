@@ -56,7 +56,7 @@ const $scope = constants?.$scope || function()
 
     const { asString, asInt, asFloat } = stringUtils;
 
-    const asArray = arrayUtils.asArray;
+    const { asArray, varargs } = arrayUtils;
 
     const { isString, isObject, isFunction, isAsyncFunction, isClass, Result } = typeUtils;
 
@@ -143,7 +143,7 @@ const $scope = constants?.$scope || function()
         {
             super( pValue, pErrors );
 
-            this.#args = [].concat( asArray( pArgs ) ).map( e => objectUtils.copy( e ) );
+            this.#args = [].concat( varargs( ...pArgs ) ).map( e => objectUtils.copy( e ) );
         }
 
         get arguments()
@@ -181,7 +181,7 @@ const $scope = constants?.$scope || function()
             {
                 try
                 {
-                    returnValue = await pOperation.apply( $scope(), asArray( pArgs ) );
+                    returnValue = await pOperation.apply( $scope(), varargs( ...pArgs ) );
                 }
                 catch( ex2 )
                 {
