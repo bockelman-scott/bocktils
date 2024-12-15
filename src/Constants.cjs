@@ -111,6 +111,10 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             _comma = ",",
             _underscore = "_",
             _hyphen = "-",
+            _asterisk = "*",
+            _multiply = _asterisk,
+            _minus = _hyphen,
+            _plus = "+",
             _tilde = "~",
             _ellipsis = "...",
             _tab = "\t",
@@ -133,16 +137,26 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             _LETTERS_ENGLISH_UCASE = _ALPHABET_ENGLISH_UCASE.split( _mt_chr ),
             _LETTERS_ENGLISH_LCASE = _ALPHABET_ENGLISH_LCASE.split( _mt_chr ),
 
-            HEX_DIGITS = "0123456789ABCDEF".split( _mt_str ),
+            _DIGIT_CHARACTERS = "0123456789",
+
+            DIGITS = _DIGIT_CHARACTERS.split( _mt_chr ),
+            DIGITS_MAP = new Map( DIGITS.map( ( e, i ) => [e, i] ) ),
+
+            HEX_DIGITS = (_DIGIT_CHARACTERS + _ALPHABET_ENGLISH_UCASE.slice( 0, 6 )).split( _mt_str ),
             HEX_DIGITS_MAP = new Map( HEX_DIGITS.map( ( e, i ) => [e, i] ) ),
-            OCT_DIGITS = "01234567".split( _mt_str ),
+
+            OCT_DIGITS = (_DIGIT_CHARACTERS.slice( 0, 8 )).split( _mt_str ),
             OCT_DIGITS_MAP = new Map( OCT_DIGITS.map( ( e, i ) => [e, i] ) ),
+
+            BIN_DIGITS = (_DIGIT_CHARACTERS.slice( 0, 2 )).split( _mt_str ),
+            BIN_DIGITS_MAP = new Map( BIN_DIGITS.map( ( e, i ) => [e, i] ) ),
 
             _rxLiteral = "/",
             _solidus = "/",
             _slash = "/",
             _reverse_solidus = "\\",
             _backslash = "\\",
+            _divide = _slash,
 
             _pathSep = ((_ud === typeof process) ? _backslash : _slash),
             _prevDir = (_dot + _dot + _pathSep),
@@ -160,6 +174,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             _rxValidJson = /^((([{\[])(.*)*([}\]]))|(\d+)|((\d*,?\d+)*\.?\d+)|("[^"]+")|('[^']+')|(true|false))$/s,
 
             _xZ = /\u0000/,
+            _rxNullTerminator = /\u0000$/,
 
             _rxTerminalSemicolon = /;+$/,
             _rxTrailingNewline = /\n+$/,
@@ -216,7 +231,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
 
             PRIMITIVE_WRAPPER_TYPES = [String, Number, Boolean, BigInt],
 
-            GLOBAL_TYPES = [Object, Array, Function, ...PRIMITIVE_WRAPPER_TYPES, Date, RegExp, Symbol, Math, JSON, Map, Set, Promise, ArrayBuffer, SharedArrayBuffer, DataView, WeakMap, WeakRef, WeakSet],
+            GLOBAL_TYPES = [Object, Array, Function, Date, RegExp, Symbol, Math, JSON, Map, Set, Promise, ArrayBuffer, SharedArrayBuffer, DataView, WeakMap, WeakRef, WeakSet].concat( ...PRIMITIVE_WRAPPER_TYPES ),
 
             BUILTIN_TYPES = [].concat( ...TYPED_ARRAYS ).concat( ...ERROR_TYPES ).concat( ...GLOBAL_TYPES ),
 
@@ -418,6 +433,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             _rxLiteral,
             _solidus,
             _slash,
+            _divide,
             _reverse_solidus,
             _backslash,
             _semicolon,
@@ -425,6 +441,10 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             _comma,
             _underscore,
             _hyphen,
+            _asterisk,
+            _multiply,
+            _minus,
+            _plus,
             _tilde,
             _spc,
             _dot,
@@ -437,10 +457,15 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             _ALPHABET_ENGLISH_LCASE,
             _LETTERS_ENGLISH_UCASE,
             _LETTERS_ENGLISH_LCASE,
+            _DIGIT_CHARACTERS,
+            DIGITS,
+            DIGITS_MAP,
             HEX_DIGITS,
             HEX_DIGITS_MAP,
             OCT_DIGITS,
             OCT_DIGITS_MAP,
+            BIN_DIGITS,
+            BIN_DIGITS_MAP,
             _browser,
             _worker,
             _nodejs,
@@ -508,6 +533,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             _rxHeaderComment,
             _rxValidJson,
             _xZ,
+            _rxNullTerminator,
             _rxTerminalSemicolon,
             _rxTrailingNewline,
             _rxLeadingNewline,

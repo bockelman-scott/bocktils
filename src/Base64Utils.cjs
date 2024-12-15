@@ -26,7 +26,21 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
-    const { _mt_str, IterationCap, lock, classes } = constants;
+    const {
+        _mt_str,
+        _rxNullTerminator,
+        _slash,
+        _underscore,
+        _comma,
+        S_ERROR,
+        _ALPHABET_ENGLISH_UCASE,
+        _ALPHABET_ENGLISH_LCASE,
+        _DIGIT_CHARACTERS,
+        IterationCap,
+        populateOptions,
+        lock,
+        classes
+    } = constants;
 
     const { ModuleEvent, ModulePrototype } = classes;
 
@@ -35,11 +49,28 @@ const $scope = constants?.$scope || function()
         CustomEvent = ModuleEvent;
     }
 
-    const modulePrototype = new ModulePrototype( "Base64Utils", INTERNAL_NAME );
+    const BufferDefined = (_ud !== typeof Buffer);
+    const TextEncoderDefined = (_ud !== typeof TextEncoder);
 
-    const { asString, lcase } = stringUtils;
+    const isBufferDefined = function()
+    {
+        return BufferDefined;
+    };
 
-    const asArray = arrayUtils.asArray;
+    const isTextEncoderDefined = function()
+    {
+        return TextEncoderDefined;
+    };
+
+    const modName = "Base64Utils";
+
+    const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
+
+    const { isNull, isString, isEmptyString, isNumber, isIterable } = typeUtils;
+
+    const { asString, asInt, ucase, lcase } = stringUtils;
+
+    const { asArray } = arrayUtils;
 
     const base64 = "base64";
 
@@ -49,7 +80,127 @@ const $scope = constants?.$scope || function()
 
     const validEncodings = lock( ["ascii", "utf8", utf8, "utf16le", "utf-16le", "ucs2", "ucs-2", base64, "base64url", "latin1", "binary", "hex"] );
 
-    const DEFAULT_BASE64_OPTIONS = lock( { replacements: [[/ /g, "+"], [/ /, "+"]] } );
+    const DEFAULT_CHAR_62 = "+";
+    const DEFAULT_CHAR_63 = "/";
+    const DEFAULT_PADDING_CHAR = "=";
+
+    const PADDING =
+        {
+            OPTIONAL: 0,
+            MANDATORY: 1,
+            NONE: 99
+        };
+
+    const DEFAULT_BASE64_OPTIONS = lock(
+        {
+            replacements: [[/ /g, DEFAULT_CHAR_62], [/ /, DEFAULT_CHAR_62]],
+            padding: PADDING.OPTIONAL,
+            paddingCharacter: DEFAULT_PADDING_CHAR
+        } );
+
+    const DEFAULT_BASE64_ALPHABET =
+        [
+            _ALPHABET_ENGLISH_UCASE,
+            _ALPHABET_ENGLISH_LCASE,
+            _DIGIT_CHARACTERS,
+            DEFAULT_CHAR_62,
+            DEFAULT_CHAR_63,
+            DEFAULT_PADDING_CHAR
+        ].join( _mt_str );
+
+    const SUPPORTED_VARIANTS = lock(
+        {
+            "4648": lock(
+                {
+                    alphabet: DEFAULT_BASE64_ALPHABET,
+                    padding: PADDING.OPTIONAL
+                } ),
+            "4648_URL": lock(
+                {
+                    alphabet: DEFAULT_BASE64_ALPHABET.replace( _slash, _underscore ),
+                    padding: PADDING.OPTIONAL
+                } ),
+            "1421": lock(
+                {
+                    alphabet: DEFAULT_BASE64_ALPHABET,
+                    padding: PADDING.MANDATORY
+                } ),
+            "2045": lock(
+                {
+                    alphabet: DEFAULT_BASE64_ALPHABET,
+                    padding: PADDING.MANDATORY
+                } ),
+            "2152": lock(
+                {
+                    alphabet: DEFAULT_BASE64_ALPHABET,
+                    padding: PADDING.NONE
+                } ),
+            "3501": lock(
+                {
+                    alphabet: DEFAULT_BASE64_ALPHABET.replace( _slash, _comma ),
+                    padding: PADDING.NONE
+                } ),
+            "4840": lock(
+                {
+                    alphabet: DEFAULT_BASE64_ALPHABET,
+                    padding: PADDING.MANDATORY,
+                    checksum: true
+                } ),
+            "UUENCODE": lock(
+                {
+                    alphabet: " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_",
+                    padding: PADDING.MANDATORY
+                } )
+        } );
+
+    const DEFAULT_VARIANT = "4648";
+
+    function getRfcVariantData( pRfcSpec )
+    {
+        const key = ucase( asString( pRfcSpec ).replace( /^RFC_/i, _mt_str ) );
+        return SUPPORTED_VARIANTS[key] || SUPPORTED_VARIANTS[DEFAULT_VARIANT];
+    }
+
+    function getBase64Alphabet( pRfcSpec )
+    {
+        const data = getRfcVariantData( pRfcSpec );
+        return data?.alphabet || DEFAULT_BASE64_ALPHABET;
+    }
+
+    function makeBlackList( pRfcSpec )
+    {
+        const data = getRfcVariantData( pRfcSpec );
+        const alpha = getBase64Alphabet( data );
+
+        return new RegExp( "[^" + alpha + "]" );
+    }
+
+    function requiresPadding( pRfcSpec )
+    {
+        const data = getRfcVariantData( pRfcSpec );
+        const padding = data?.padding || PADDING.OPTIONAL;
+        return PADDING.MANDATORY === padding;
+    }
+
+    /**
+     * Returns true if the specified string is valid base64 encoded content
+     * @param pString {string} a string to evaluate
+     * @param pRfcSpec
+     * @returns {boolean} true if the specified string is valid base64 encoded content
+     */
+    const isValidBase64 = function( pString, pRfcSpec = DEFAULT_VARIANT )
+    {
+        const str = asString( pString );
+
+        const rx = makeBlackList( pRfcSpec );
+
+        if ( !rx.test( str ) )
+        {
+            return (requiresPadding( pRfcSpec ) ? 0 === str?.length % 4 : !isEmptyString( str ));
+        }
+
+        return false;
+    };
 
     /**
      * Returns a valid base64 encoded string by replacing spaces with '+'
@@ -60,8 +211,7 @@ const $scope = constants?.$scope || function()
      */
     const cleanBase64 = function( pStr, pOptions = DEFAULT_BASE64_OPTIONS )
     {
-        let options = Object.assign( {}, DEFAULT_BASE64_OPTIONS );
-        options = Object.assign( options, pOptions || {} );
+        let options = populateOptions( pOptions, DEFAULT_BASE64_OPTIONS );
 
         let replacements = (asArray( options.replacements || [[/ /g, "+"], [/ /, "+"]] ) || [[/ /g, "+"], [/ /, "+"]]).filter( e => Array.isArray( e ) && 2 === e.length );
 
@@ -77,36 +227,29 @@ const $scope = constants?.$scope || function()
 
             const searchExpression = replacement[0] || / /g;
 
-            const replaceString = replacement[1] || "+";
+            const replaceString = replacement[1] || DEFAULT_CHAR_62;
 
             str = str.replace( searchExpression, replaceString );
         }
 
-        let loopCap = new IterationCap( 8 );
-
-        while ( str.length % 4 !== 0 && str.endsWith( "=" ) && !loopCap.reached )
+        if ( PADDING.MANDATORY === options.padding )
         {
-            str = str.slice( 0, str.length - 1 );
-        }
+            const paddingChar = options.paddingCharacter || "=";
 
-        while ( str.length % 4 !== 0 )
-        {
-            str += "=";
+            let loopCap = new IterationCap( 8 );
+
+            while ( str.length % 4 !== 0 && str.endsWith( paddingChar ) && !loopCap.reached )
+            {
+                str = str.slice( 0, str.length - 1 );
+            }
+
+            while ( str.length % 4 !== 0 )
+            {
+                str += paddingChar;
+            }
         }
 
         return str.trim();
-    };
-
-    /**
-     * Returns true if the specified string is valid base64 encoded content
-     * @param pStr {string} a string to evaluate
-     * @returns {boolean} true if the specified string is valid base64 encoded content
-     */
-    const isValidBase64 = function( pStr )
-    {
-        const str = asString( pStr );
-
-        return (0 === ((str?.length || 0) % 4)) && !(/[ \r\n]/.test( str ));
     };
 
     function resolveEncoding( pEncoding )
@@ -115,38 +258,148 @@ const $scope = constants?.$scope || function()
         return validEncodings.includes( encoding ) ? encoding : utf8;
     }
 
-    /**
-     * Returns a Buffer of bytes corresponding to the content encoded in base 64
-     * @param pStr {string} a base64 encoded value
-     * @param pOptions {object} (optional) an object specifying the options
-     * to use when cleaning/validating the base 64 string
-     * @returns {Buffer} a Buffer of bytes corresponding to the content encoded in base 64
-     */
-    function toBytes( pStr, pOptions = DEFAULT_BASE64_OPTIONS )
+    const bufferToTypedArray = function( pBuffer )
     {
-        const str = cleanBase64( asString( pStr, true ), pOptions );
-        return Buffer.from( str, base64 );
+        let typedArray = [];
+
+        try
+        {
+            typedArray = new Uint8Array( pBuffer );
+        }
+        catch( ex )
+        {
+            modulePrototype.reportError( ex, ex.message, S_ERROR, modName + "::bufferToTypedArray", pBuffer );
+
+            if ( pBuffer instanceof Uint8Array )
+            {
+                return pBuffer;
+            }
+
+            if ( isIterable( pBuffer ) )
+            {
+                typedArray = [...pBuffer];
+            }
+        }
+
+        return typedArray;
+    };
+
+    const typedArrayToBuffer = function( pArray )
+    {
+        if ( isBufferDefined() )
+        {
+            return Buffer.from( pArray );
+        }
+
+        throw new Error( "Buffer is undefined in this execution context" );
+    };
+
+    function toBytes( pData )
+    {
+        if ( isString( pData ) )
+        {
+            /*
+             if ( isBufferDefined() )
+             {
+             const str = cleanBase64( pData );
+
+             return Buffer.from( str, "base64" );
+             }
+             */
+
+            if ( isTextEncoderDefined() )
+            {
+                return new TextEncoder().encode( asString( pData ) );
+            }
+            else
+            {
+                return new Uint8Array( asArray( pData.split( _mt_str ) ).map( e => e.charCodeAt( 0 ) ) );
+            }
+        }
+        else if ( !isNull( pData ) )
+        {
+            return new Uint8Array( asArray( pData ) );
+        }
     }
 
-    /**
-     * Returns a base64 encoded string corresponding to the Array-like argument pBytes
-     * @param pBytes {Array|Buffer|ArrayBuffer|SharedArrayBuffer|string} an array-like value to encode
-     * @returns {string} a base64 encoded string corresponding to the Array-like argument pBytes
-     */
-    function toBase64( pBytes )
+    function encode( pData, pSpec = DEFAULT_VARIANT )
     {
-        const buffer = Buffer.from( pBytes || [] );
-        return cleanBase64( buffer.toString( base64 ) );
+        const data = toBytes( pData );
+
+        /*
+         if ( isBufferDefined() )
+         {
+         const buffer = Buffer.from( data || [] );
+         return cleanBase64( buffer.toString( base64 ) );
+         }
+         */
+        let s = _mt_str;
+
+        const lookup = getBase64Alphabet( pSpec ).split( _mt_str );
+
+        for( let i = 0, n = data.length; i < n; i += 3 )
+        {
+            let byte_block_1 = (data[i] << 16);
+            let byte_block_2 = (i < (n + 1)) ? (data[i + 1] << 8) : 0;
+            let byte_block_3 = (i < (n + 2)) ? (data[i + 2]) : 0;
+
+            byte_block_1 = Math.max( 0, !isNaN( byte_block_1 ) ? byte_block_1 || 0 : 0 );
+            byte_block_2 = Math.max( 0, !isNaN( byte_block_2 ) ? byte_block_2 || 0 : 0 );
+            byte_block_3 = Math.max( 0, !isNaN( byte_block_3 ) ? byte_block_3 || 0 : 0 );
+
+            let three_byte_block = (byte_block_1 + byte_block_2 + byte_block_3);
+
+            for( let k = 0; k < 4; k++ )
+            {
+                const key = (three_byte_block >> ((3 - k) * 6)) & 0x3F;
+
+                s += isNumber( key ) ? lookup[key] : lookup[0];
+            }
+        }
+
+        if ( requiresPadding( pSpec ) )
+        {
+            while ( s.length % 4 !== 0 )
+            {
+                s += DEFAULT_PADDING_CHAR;
+            }
+        }
+
+        return asString( s, true );
     }
 
-    function toString( pBase64Text, pEncoding = DEFAULT_TEXT_ENCODING )
+    function toText( pBase64, pEncoding = DEFAULT_TEXT_ENCODING )
     {
-        const str = typeUtils.isString( pBase64Text ) ? cleanBase64( asString( pBase64Text, true ) ) : toBase64( pBase64Text, pEncoding );
+        const str = isString( pBase64 ) ? cleanBase64( asString( pBase64, true ) ) : encode( pBase64 );
 
-        const buffer = Buffer.from( str, base64 );
+        const encoding = resolveEncoding( pEncoding );
 
-        return buffer.toString( resolveEncoding( pEncoding ) );
+        if ( isBufferDefined() )
+        {
+            const buffer = Buffer.from( str, base64 );
+
+            let result = buffer.toString( encoding );
+
+            while ( _rxNullTerminator.test( result ) )
+            {
+                result = result.replace( _rxNullTerminator, _mt_str );
+            }
+
+            return asString( result, true );
+        }
+
+        // TODO
     }
+
+    const toBinary = function( pBase64 )
+    {
+        if ( isString( pBase64 ) )
+        {
+            return toBytes( pBase64 );
+        }
+
+
+    };
 
     let mod =
         {
@@ -156,12 +409,13 @@ const $scope = constants?.$scope || function()
                     stringUtils,
                     arrayUtils
                 },
-            validEncodings,
-            toBase64,
-            toBytes,
-            toString,
             isValidBase64,
-            cleanBase64
+            cleanBase64,
+            encode,
+            toBytes,
+            toBase64: encode,
+            toText,
+            toBinary,
         };
 
     mod = modulePrototype.extend( mod );

@@ -61,17 +61,27 @@ const $scope = constants?.$scope || function()
             _bool,
             _obj,
             _symbol,
+            _minus,
+            DIGITS,
+            DIGITS_MAP,
             HEX_DIGITS,
             HEX_DIGITS_MAP,
             OCT_DIGITS,
             OCT_DIGITS_MAP,
+            BIN_DIGITS,
+            BIN_DIGITS_MAP,
             S_ERROR,
             S_WARN,
             S_ERR_PREFIX,
+            TYPED_ARRAYS,
+            ERROR_TYPES,
+            PRIMITIVE_WRAPPER_TYPES,
+            GLOBAL_TYPES,
             BUILTIN_TYPES,
             BUILTIN_TYPE_NAMES,
-            PRIMITIVE_WRAPPER_TYPES,
+            SERIALIZABLE_TYPES,
             AsyncFunction,
+            IllegalArgumentError,
             populateOptions,
             no_op,
             lock,
@@ -161,6 +171,11 @@ const $scope = constants?.$scope || function()
         return !isUndefined( pObject );
     };
 
+    const isEmptyString = function( pObject )
+    {
+        return _str === typeof (pObject) && (_mt_str === pObject || _str.length === 0);
+    };
+
     /**
      * Returns true if the specified value is null (or, when not strict, undefined or an empty string)
      * The default is non-strict and will return true for any value that is null, undefined, or an empty string.
@@ -170,7 +185,7 @@ const $scope = constants?.$scope || function()
      */
     const isNull = function( pObject, pStrict = false )
     {
-        return pStrict ? (null === pObject) : (isUndefined( pObject ) || null == pObject || (_str === typeof pObject && _mt_str === String( pObject )));
+        return pStrict ? (null === pObject) : (isUndefined( pObject ) || null == pObject || isEmptyString( pObject ));
     };
 
     /**
@@ -309,7 +324,7 @@ const $scope = constants?.$scope || function()
         {
             return pObj;
         }
-        return (0 === pObj || "0" === pObj || false === pObj) ? "0" : (_mt_str + String( pObj ) + _mt_str).trim();
+        return (0 === pObj || "0" === pObj || false === pObj) ? "0" : ((_mt_str + String( pObj ) + _mt_str).trim()).replaceAll( /[,_]/g, _mt_str ).trim();
     }
 
     /**
@@ -335,7 +350,7 @@ const $scope = constants?.$scope || function()
         }
         const num = parseFloat( pNum );
         return isNaN( num ) || !isFinite( num );
-    }
+    };
 
     /**
      * Returns true if the specified value can be expressed as an integer (or zero).
@@ -405,7 +420,7 @@ const $scope = constants?.$scope || function()
     function isHex( pObj )
     {
         const s = _toString( pObj );
-        return ("0" !== s) && /^(-)?(0x)([\dA-Fa-f]+)(([.,])([\dA-Fa-f]+))?$/.test( s ) && !/[G-Wg-w\s]|[yzYZ]/.test( s );
+        return ("0" !== s) && /^(-)?(0x)([\dA-Fa-f]+)?(([.,])([\dA-Fa-f]+))?$/i.test( s ) && !/[G-Wg-w\s]|[yzYZ]/.test( s );
     }
 
     /**
@@ -416,7 +431,13 @@ const $scope = constants?.$scope || function()
     function isOctal( pObj )
     {
         const s = _toString( pObj );
-        return ("0" !== s) && /^(-)?0(o)*([0-7]+)(([.,])([0-7]+))?$/.test( s ) && !/[A-Za-z\s]/.test( s );
+        return ("0" !== s) && /^(-)?(0o)([0-7]+)?(([.,])([0-7]+))?$/i.test( s ) && !/[A-Za-np-z\s]/.test( s );
+    }
+
+    function isBinary( pObj )
+    {
+        const s = _toString( pObj );
+        return ("0" !== s) && /^(-)?(0b)([0-1]+)?(([.,])([0-1]+))?$/i.test( s ) && !/[AC-Z]|[ac-z]|\s/.test( s );
     }
 
     /**
@@ -427,7 +448,7 @@ const $scope = constants?.$scope || function()
     function isDecimal( pObj )
     {
         const s = _toString( pObj );
-        return ("0" === s || "-0" === s || (/^0$|^(0?[1-9]*(\.\d+))$|^([1-9]+[0-9]*)$/.test( s ))) && !(isHex( s ) || isOctal( s ));
+        return ("0" === s || "-0" === s || ( !(isHex( s ) || isOctal( s ) || isBinary( s )) && !/[^\d.+-]/.test( s )));
     }
 
     /**
@@ -437,7 +458,7 @@ const $scope = constants?.$scope || function()
      */
     function calculateRadix( pObj )
     {
-        return isHex( pObj ) ? 16 : isOctal( pObj ) ? 8 : isDecimal( pObj ) ? 10 : 0;
+        return isDecimal( pObj ) ? 10 : isHex( pObj ) ? 16 : isOctal( pObj ) ? 8 : isBinary( pObj ) ? 2 : 0;
     }
 
     /**
@@ -460,16 +481,13 @@ const $scope = constants?.$scope || function()
 
         let value = ((_mt_str + _toString( pObj )).replace( /n+$/, _mt_str )).trim();
 
-        if ( "0" === pObj || isHex( value ) || isOctal( value ) || isDecimal( value ) )
+        if ( "0" === pObj || isDecimal( value ) || isHex( value ) || isOctal( value ) || isBinary( value ) )
         {
-            if ( pAllowLeadingZeroForBase10 )
+            if ( isDecimal( value ) && !!pAllowLeadingZeroForBase10 )
             {
-                if ( !(isHex( value ) || isOctal( value )) && isDecimal( value ) )
+                while ( /^0/.test( value ) )
                 {
-                    while ( /^0/.test( value ) )
-                    {
-                        value = value.slice( 1 );
-                    }
+                    value = value.slice( 1 );
                 }
             }
 
@@ -480,7 +498,7 @@ const $scope = constants?.$scope || function()
 
             let integer = parseInt( value, calculateRadix( pObj ) );
 
-            return !isNaN( integer ) && Number.isFinite( integer );
+            return !isNanOrInfinite( integer );
         }
 
         return false;
@@ -497,8 +515,40 @@ const $scope = constants?.$scope || function()
      */
     const isZero = function( pValue, pStrict = true )
     {
-        return (pStrict ? isNumber( pValue ) : isNumeric( pValue )) && (0 === pValue || /0+/.test( _toString( pValue ) ));
+        return (pStrict ? isNumber( pValue ) : isNumeric( pValue )) && (0 === pValue || /^0+$/.test( _toString( pValue ) ));
     };
+
+    function getDigitsMap( pBase )
+    {
+        let base = !isNull( pBase ) && (isNumber( pBase ) || isString( pBase )) ? parseInt( pBase ) : 10;
+
+        base = (isNanOrInfinite( base ) ? (isString( pBase ) ? ({
+                                                                    "hex": 16,
+                                                                    "octal": 8,
+                                                                    "binary": 2,
+                                                                    "decimal": 10
+                                                                }[(pBase.trim().toLowerCase())] || 10) : 10) : 10);
+
+        switch ( base )
+        {
+            case 0:
+            case 10:
+                return DIGITS_MAP;
+
+            case 2:
+                return BIN_DIGITS_MAP;
+
+            case 8:
+                return OCT_DIGITS_MAP;
+
+            case 16:
+                return HEX_DIGITS_MAP;
+
+            default:
+                const digits = DIGITS.slice( 0, pBase );
+                return new Map( digits.map( ( e, i ) => [e, i] ) );
+        }
+    }
 
     /**
      * Returns the decimal representation of the specified value
@@ -535,13 +585,17 @@ const $scope = constants?.$scope || function()
             return parseFloat( num.toString( 10 ) );
         }
 
-        const s = _toString( pObj ).trim();
+        let s = _toString( pObj ).trim();
 
-        let sign = s.startsWith( "-" ) ? -1 : 1;
+        let sign = s.startsWith( _minus ) ? -1 : 1;
 
-        let power = isHex( s ) ? 16 : isOctal( s ) ? 8 : 10;
+        let power = calculateRadix( s );
 
-        let parts = [].concat( ...(s.replace( /^-*[0x]+/, _mt_str ).split( _dot )) );
+        s = s.replace( _minus, _mt_str );
+
+        s = s.replace( /^0([box])/i, _mt_str );
+
+        let parts = s.split( _dot );
 
         let integer = (parts[0] || "0");
         let fraction = (parts[1] || "0");
@@ -551,7 +605,7 @@ const $scope = constants?.$scope || function()
             return parseInt( s, power ) * sign;
         }
 
-        let digits_values = 16 === power ? HEX_DIGITS_MAP : 8 === power ? OCT_DIGITS_MAP : new Map( ("0123456789".split( _mt_str ).map( ( e, i ) => [e, i] )) );
+        let digitsMap = getDigitsMap( power );
 
         let intDigits = [].concat( ...(integer.split( _mt_str ).reverse()) );
 
@@ -559,7 +613,7 @@ const $scope = constants?.$scope || function()
         {
             let digit = intDigits[i];
 
-            value += Math.pow( digits_values[digit], i );
+            value += Math.pow( digitsMap[digit], i );
         }
 
         let fractionDigits = fraction.split( _mt_str );
@@ -568,10 +622,10 @@ const $scope = constants?.$scope || function()
         {
             let digit = fractionDigits[i];
 
-            value += Math.pow( digits_values[digit], -(i + 1) );
+            value += Math.pow( digitsMap[digit], -(i + 1) );
         }
 
-        return value;
+        return value * sign;
     };
 
     /**
@@ -600,6 +654,38 @@ const $scope = constants?.$scope || function()
         const s = decimalValue.toString( 8 );
 
         return (s.startsWith( "-" ) ? "-0o" : "0o") + s.replace( /^-/, _mt_str ).trim();
+    };
+
+    /**
+     * Returns a string representation of the specified value as a binary number
+     *
+     * @param pValue {number|string} a value to convert to base 2 (binary)
+     * @param pPrecision {number} the number of decimal places to include
+     *                            if the value is not a whole number (integer) Defaults to 0
+     *
+     * @returns {string} a string representation of the specified value as a binary (base 2) number
+     */
+    const toBinary = function( pValue, pPrecision = 0 )
+    {
+        let decimalValue = toDecimal( pValue );
+
+        let s = decimalValue.toString( 2 );
+
+        if ( s.includes( _dot ) )
+        {
+            let maxPrecision = Math.max( 0, Math.min( 15, parseInt( _toString( pPrecision || _mt_str ), 10 ) ) );
+
+            if ( (isNanOrInfinite( maxPrecision ) || maxPrecision <= 0) && isNull( pPrecision ) )
+            {
+                const msg = `Non-Integer value passed to ${modName}::toBinary without specifying precision; value will be truncated`;
+
+                modulePrototype.reportError( new IllegalArgumentError( msg, { value: num } ), msg, S_WARN, modName + "::toBinary", { value: num } );
+
+                s = s.replace( /\.\d+$/, _mt_str );
+            }
+        }
+
+        return (s.startsWith( "-" ) ? "-0b" : "0b") + s.replace( /^-/, _mt_str ).trim();
     };
 
     /**
@@ -653,6 +739,11 @@ const $scope = constants?.$scope || function()
         return isObject( pObj ) && ((isFunction( Array.isArray )) ? Array.isArray( pObj ) : doesBeArray( pObj ));
     };
 
+    const isTypedArray = function( pObj )
+    {
+        return (([...TYPED_ARRAYS].filter( e => pObj instanceof e ))?.length || 0) > 0;
+    };
+
     /**
      * Returns true if the specified value is iterable.
      * That is, the value can be used in a "for...of" loop
@@ -661,7 +752,7 @@ const $scope = constants?.$scope || function()
      */
     const isIterable = function( pObj )
     {
-        return !isNull( pObj ) && isFunction( pObj[Symbol.iterator] );
+        return !isNull( pObj ) && (isFunction( pObj[Symbol.iterator] ) || isArray( pObj ) || isTypedArray( pObj ));
     };
 
     /**
@@ -700,7 +791,7 @@ const $scope = constants?.$scope || function()
      */
     const isLikeArray = function( pArg, pMustBeIterable = false )
     {
-        if ( isArray( pArg ) || isString( pArg ) )
+        if ( isArray( pArg ) || isString( pArg ) || isTypedArray( pArg ) )
         {
             return true;
         }
@@ -1724,12 +1815,14 @@ const $scope = constants?.$scope || function()
             isAsyncFunction,
             isGeneratorFunction,
             isString,
+            isEmptyString,
             isNumber,
             isInteger,
             isFloat,
             isBigInt,
             isNumeric,
             isZero,
+            isBinary,
             isOctal,
             isHex,
             isDecimal,
@@ -1737,8 +1830,10 @@ const $scope = constants?.$scope || function()
             toDecimal,
             toHex,
             toOctal,
+            toBinary,
             isBoolean,
             isArray,
+            isTypedArray,
             isIterable,
             isAsyncIterable,
             isLikeArray,

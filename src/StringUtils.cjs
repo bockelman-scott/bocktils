@@ -127,6 +127,7 @@ const $scope = constants?.$scope || function()
             isObject,
             isArray,
             isFunction,
+            isBinary,
             isOctal,
             isHex,
             isNanOrInfinite,
@@ -1291,9 +1292,11 @@ const $scope = constants?.$scope || function()
 
         s = asString( s.replace( /n+$/, _mt_str ).replace( currencySymbol, _mt_str ), true );
 
-        s = s.replaceAll( /\s*[^\dXxA-F.,+-]/gi, _mt_str );
+        s = s.replaceAll( /\s*[^\dXxOoA-F.,+-]/gi, _mt_str );
 
         s = startsWithAny( s, _dot, _comma ) ? ("0" + s) : s;
+
+        s = s.replace( /^0{2,}/, "0" );
 
         return asString( s, true );
     }
@@ -1302,9 +1305,9 @@ const $scope = constants?.$scope || function()
     {
         let input = asString( pNum, true );
 
-        if ( input.startsWith( "0" ) || lcase( input ).includes( "x" ) || /\D/.test( input ) )
+        if ( input.startsWith( "0" ) || includesAny( lcase( input ), "b", "o", "x" ) || /\D/.test( input ) )
         {
-            return (isHex( input ) ? 16 : ((isOctal( input ) ? 8 : 10)));
+            return (isHex( input ) ? 16 : ((isOctal( input ) ? 8 : (isBinary( input ) ? 2 : 10))));
         }
 
         return 10;
@@ -1332,7 +1335,7 @@ const $scope = constants?.$scope || function()
 
         const type = typeof input;
 
-        if ( _ud === type || null === input )
+        if ( isNull( input ) )
         {
             return asInt( dflt, zero, options );
         }
@@ -1387,7 +1390,7 @@ const $scope = constants?.$scope || function()
 
         try
         {
-            val = parseInt( canonical, radix );
+            val = parseInt( canonical.replace( /^0[box]/i, _mt_str ), radix );
 
             if ( isNanOrInfinite( val ) )
             {
@@ -1442,7 +1445,7 @@ const $scope = constants?.$scope || function()
 
         const type = typeof input;
 
-        if ( _ud === type || null === input )
+        if ( isNull( input ) )
         {
             return asFloat( dflt, zero, options );
         }
@@ -1629,7 +1632,7 @@ const $scope = constants?.$scope || function()
     /**
      * Returns true if the string contains any of the character sequences in the array
      * @param {string} pStr - a string to check for substrings (the caller is responsible for removing whitespace if desired)
-     * @param {[string]} pArr - one or more strings that the string might include
+     * @param {...string} pArr - one or more strings that the string might include
      * @returns true if the string includes any of the character sequences in the array
      */
     const includesAny = function( pStr, ...pArr )

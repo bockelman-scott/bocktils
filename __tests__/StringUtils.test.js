@@ -768,7 +768,7 @@ describe( "asInt", () =>
     test( "asInt (octal)",
           () =>
           {
-              let s = "012.34";
+              let s = "0o012.34";
               let n = stringUtils.asInt( s );
               expect( n ).toEqual( 10 ) && expect( typeof n ).toBe( "number" );
           }
@@ -912,7 +912,7 @@ describe( "asFloat", () =>
     test( "asFloat (octal)",
           () =>
           {
-              let s = "012.34";
+              let s = "0o012.34";
               let n = stringUtils.asFloat( s );
               expect( n ).toEqual( 10.4375 ) && expect( typeof n ).toBe( "number" );
           }

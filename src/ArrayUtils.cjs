@@ -78,9 +78,11 @@ const $scope = constants?.$scope || function()
         isUndefined,
         isNull,
         isString,
+        isEmptyString,
         isInteger,
         isObject,
         isArray,
+        isTypedArray,
         isBoolean,
         isFunction,
         isDate,
@@ -156,6 +158,48 @@ const $scope = constants?.$scope || function()
             comparator: null
         };
 
+    const processAsArrayOptions = function( pArr, pOptions )
+    {
+        const options = populateOptions( pOptions, DEFAULT_AS_ARRAY_OPTIONS );
+
+        let arr = pArr || [];
+
+        const flatten = !!options?.flatten;
+
+        let flattenLevel = (options?.flatten?.level);
+
+        if ( isNaN( flattenLevel ) || flattenLevel <= 0 )
+        {
+            flattenLevel = Infinity;
+        }
+
+        arr = ((flatten && arr.flat) ? arr.flat( flattenLevel ) : arr) || [];
+
+        arr = (options?.sanitize ? (arr || []).filter( e => !(_ud === typeof e || null == e || isEmpty( e )) ) : (arr || [])) || [];
+
+        arr = (options?.type ? (arr || []).filter( e => (options?.type === typeof e || (isClass( options?.type ) && (e instanceof options?.type))) ) : (arr || [])) || [];
+
+        if ( isFunction( options?.filter ) && options?.filter?.length >= 1 && options?.filter?.length <= 3 )
+        {
+            arr = arr.filter( options?.filter );
+        }
+
+        if ( options?.unique )
+        {
+            arr = [...(new Set( arr ))];
+        }
+
+        let comparator = options?.comparator;
+
+        if ( isFunction( comparator ) && comparator?.length === 2 )
+        {
+            arr = [].concat( (arr || []) );
+            arr = arr.sort( comparator );
+        }
+
+        return arr || [];
+    };
+
     /**
      * Returns an array based on its input.
      * If its input *is* an array, just returns it, unmodified, unaliased
@@ -166,15 +210,18 @@ const $scope = constants?.$scope || function()
      * if the input is an object, we create aa new array populated with the "first-level" properties of the object and then returned
      * @param {any} pMaybeAnArray
      * @param {object} pOptions
-     * @returns
+     * @param pRecursions USED INTERNALLY TO PREVENT INFINITE RECURSION; DO NOT PASS A VALUE
+     * @returns an Array, based on the input
      */
-    const asArray = function( pMaybeAnArray, pOptions = DEFAULT_AS_ARRAY_OPTIONS )
+    const asArray = function( pMaybeAnArray, pOptions = DEFAULT_AS_ARRAY_OPTIONS, pRecursions = 0 )
     {
         const options = populateOptions( pOptions, DEFAULT_AS_ARRAY_OPTIONS );
 
-        let arr = (_ud === typeof pMaybeAnArray ? [] : (_str === typeof pMaybeAnArray && _mt_str === pMaybeAnArray) ? [pMaybeAnArray] : (pMaybeAnArray || []));
+        let arr = (isEmptyString( pMaybeAnArray ) ? [pMaybeAnArray] : (isNull( pMaybeAnArray ) ? [] : pMaybeAnArray)) || [];
 
-        if ( !isArray( arr ) )
+        const recursions = Math.max( 0, asInt( pRecursions ) || 0 );
+
+        if ( !(isArray( arr ) || isTypedArray( arr )) )
         {
             switch ( typeof arr )
             {
@@ -195,24 +242,31 @@ const $scope = constants?.$scope || function()
 
                 case _fun:
 
-                    try
+                    if ( recursions < 3 )
                     {
-                        if ( isClass( arr ) )
+                        try
                         {
-                            const clazz = arr;
+                            if ( isClass( arr ) )
+                            {
+                                const clazz = arr;
 
-                            arr = asArray( new clazz( options ), options ) || [];
+                                arr = asArray( new clazz( options ), options, recursions + 1 ) || [];
+                            }
+                            else
+                            {
+                                const func = arr;
+
+                                arr = asArray( func( options ), options, recursions + 1 ) || [];
+                            }
                         }
-                        else
+                        catch( ex )
                         {
-                            const func = arr;
-
-                            arr = asArray( func( options ), options ) || [];
+                            modulePrototype.reportError( ex, "trying to execute " + (arr?.name || arr), S_WARN, modName + "::asArray" );
                         }
                     }
-                    catch( ex )
+                    else
                     {
-                        modulePrototype.reportError( ex, "trying to execute " + (arr?.name || arr), S_WARN, modName + "::asArray" );
+                        arr = [arr];
                     }
                     break;
 
@@ -239,45 +293,17 @@ const $scope = constants?.$scope || function()
                             }
                         }
 
-                        arr = asArray( returnValue, options ) || [];
+                        arr = (recursions < 5 ? asArray( returnValue, options, recursions + 1 ) : returnValue) || [];
                     }
             } // end switch
         } // end else
 
-        let eia = EMPTY_ARRAY;
-
-        const flatten = options?.flatten || false;
-
-        let flattenLevel = (options?.flatten?.level);
-
-        if ( isNaN( flattenLevel ) || flattenLevel <= 0 )
+        if ( isTypedArray( arr ) )
         {
-            flattenLevel = Infinity;
+            arr = [...arr];
         }
 
-        arr = ((flatten && arr.flat) ? arr.flat( flattenLevel ) : arr) || eia;
-
-        arr = (options?.sanitize ? (arr || eia).filter( e => !(_ud === typeof e || null == e || isEmpty( e )) ) : (arr || eia)) || eia;
-
-        arr = (options?.type ? (arr || eia).filter( e => (options?.type === typeof e || (isClass( options?.type ) && (e instanceof options?.type))) ) : (arr || eia)) || eia;
-
-        if ( _fun === typeof options?.filter && options?.filter?.length >= 1 && options?.filter?.length <= 3 )
-        {
-            arr = arr.filter( options?.filter );
-        }
-
-        if ( options?.unique )
-        {
-            arr = [...(new Set( arr ))];
-        }
-
-        let comparator = options?.comparator;
-
-        if ( _fun === typeof comparator && comparator?.length === 2 )
-        {
-            arr = [].concat( (arr || eia) );
-            arr = arr.sort( comparator );
-        }
+        arr = processAsArrayOptions( arr, options );
 
         return (isArray( arr ) ? (arr || []) : [arr]) || [];
     };

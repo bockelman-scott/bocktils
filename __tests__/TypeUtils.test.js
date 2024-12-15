@@ -724,9 +724,9 @@ describe( "Numeric functions", () =>
 
             let octString = value.toString( 8 );
 
-            if ( !(/^0/.test( octString ) || /^-0/.test( octString )) )
+            if ( !(/^0o/.test( octString ) || /^-0o/.test( octString )) )
             {
-                octString = (octString.startsWith( "-" ) ? "-0" : "0") + octString.replace( /^-/, "" );
+                octString = (octString.startsWith( "-" ) ? "-0o" : "0o") + octString.replace( /^-/, "" );
             }
 
             octalValues.push( octString );
@@ -850,7 +850,7 @@ describe( "Numeric functions", () =>
               let valid = [10, 34, 0.77, 77, 88.77].filter( e => typeUtils.isOctal( e ) );
               expect( valid.length ).toEqual( 0 );
 
-              valid = ["017", 10, 17, 34, 0.77, 77, 88.77, "xx", "0xx", "0xA", 0xF].filter( e => typeUtils.isOctal( e ) );
+              valid = ["0o17", 10, 17, 34, 0.77, 77, 88.77, "xx", "0xx", "0xA", 0xF].filter( e => typeUtils.isOctal( e ) );
               expect( valid.length ).toEqual( 1 );
           } );
 
@@ -887,10 +887,10 @@ describe( "Numeric functions", () =>
               const samples = ["017", "00.17", 0, 10, 100, 17, 34, 0.77, 77, 88.77, "xx", "0xx", "0xA", 0xF];
 
               let valid = samples.filter( e => typeUtils.isDecimal( e ) );
-              expect( valid.length ).toEqual( 9 );
+              expect( valid.length ).toEqual( 11 );
 
               valid = samples.map( e => ("" + (e) + "").trim() ).filter( e => typeUtils.isDecimal( e ) );
-              expect( valid.length ).toEqual( 9 );
+              expect( valid.length ).toEqual( 11 );
           } );
 
     test( "isInteger(0) === true",
@@ -913,48 +913,86 @@ describe( "toNumericBase",
               test( "toDecimal('0xFF') === 255",
                     () =>
                     {
+                        expect( typeUtils.toDecimal( "0xff" ) ).toEqual( 255 );
                         expect( typeUtils.toDecimal( 0xff ) ).toEqual( 255 );
                     } );
 
               test( "toDecimal('-0xFF') === -255",
                     () =>
                     {
+                        expect( typeUtils.toDecimal( "-0xff" ) ).toEqual( -255 );
                         expect( typeUtils.toDecimal( -0xff ) ).toEqual( -255 );
                     } );
 
               test( "toDecimal('111') === 111",
                     () =>
                     {
+                        expect( typeUtils.toDecimal( "111" ) ).toEqual( 111 );
                         expect( typeUtils.toDecimal( 111 ) ).toEqual( 111 );
                     } );
 
               test( "toDecimal('-111') === -111",
                     () =>
                     {
+                        expect( typeUtils.toDecimal( "-111" ) ).toEqual( -111 );
                         expect( typeUtils.toDecimal( -111 ) ).toEqual( -111 );
                     } );
 
-              test( "toDecimal('010') === 8",
+              test( "toDecimal('0o10') === 8",
                     () =>
                     {
+                        expect( typeUtils.toDecimal( "0o10" ) ).toEqual( 8 );
                         expect( typeUtils.toDecimal( 0o10 ) ).toEqual( 8 );
                     } );
 
-              test( "toDecimal('-010') === -8",
+              test( "toDecimal('-0o10') === -8",
                     () =>
                     {
+                        expect( typeUtils.toDecimal( "-0o10" ) ).toEqual( -8 );
                         expect( typeUtils.toDecimal( -0o10 ) ).toEqual( -8 );
                     } );
+
+              test( "toDecimal('0b100') === 4",
+                    () =>
+                    {
+                        expect( typeUtils.toDecimal( "0b100" ) ).toEqual( 4 );
+                        expect( typeUtils.toDecimal( 0b100 ) ).toEqual( 4 );
+                    } );
+
+              test( "toDecimal('-0b100') === -4",
+                    () =>
+                    {
+                        expect( typeUtils.toDecimal( "-0b100" ) ).toEqual( -4 );
+                        expect( typeUtils.toDecimal( -0b100 ) ).toEqual( -4 );
+                    } );
+
+
+              test( "toDecimal('0b10001') === 17",
+                    () =>
+                    {
+                        expect( typeUtils.toDecimal( "0b10001" ) ).toEqual( 17 );
+                        expect( typeUtils.toDecimal( 0b10001 ) ).toEqual( 17 );
+                    } );
+
+              test( "toDecimal('-0b10001') === -17",
+                    () =>
+                    {
+                        expect( typeUtils.toDecimal( "-0b10001" ) ).toEqual( -17 );
+                        expect( typeUtils.toDecimal( -0b10001 ) ).toEqual( -17 );
+                    } );
+
 
               test( "toOctal('0xFF') === 0o377",
                     () =>
                     {
+                        expect( typeUtils.toOctal( "0xff" ) ).toEqual( "0o377" );
                         expect( typeUtils.toOctal( 0xff ) ).toEqual( "0o377" );
                     } );
 
               test( "toOctal('-0xFF') === -0o377",
                     () =>
                     {
+                        expect( typeUtils.toOctal( "-0xff" ) ).toEqual( "-0o377" );
                         expect( typeUtils.toOctal( -0xff ) ).toEqual( "-0o377" );
                     } );
 
@@ -962,12 +1000,28 @@ describe( "toNumericBase",
                     () =>
                     {
                         expect( typeUtils.toHex( 255 ) ).toEqual( "0xff" );
+                        expect( typeUtils.toHex( "255" ) ).toEqual( "0xff" );
                     } );
 
               test( "toHex(-255) === -0xff",
                     () =>
                     {
                         expect( typeUtils.toHex( -255 ) ).toEqual( "-0xff" );
+                        expect( typeUtils.toHex( "-255" ) ).toEqual( "-0xff" );
+                    } );
+
+              test( "toBinary(255) === 0b11111111",
+                    () =>
+                    {
+                        expect( typeUtils.toBinary( 255 ) ).toEqual( "0b11111111" );
+                        expect( typeUtils.toBinary( "255" ) ).toEqual( "0b11111111" );
+                    } );
+
+              test( "toBinary(-255) === -0b11111111",
+                    () =>
+                    {
+                        expect( typeUtils.toBinary( -255 ) ).toEqual( "-0b11111111" );
+                        expect( typeUtils.toBinary( "-255" ) ).toEqual( "-0b11111111" );
                     } );
 
           } );
@@ -1182,6 +1236,33 @@ describe( "isArray", () =>
               }
 
               tested( 1 );
+          } );
+} );
+
+describe( "isTypedArray", () =>
+{
+    test( "isTypedArray([]) === false",
+          () =>
+          {
+              expect( typeUtils.isTypedArray( [] ) ).toBe( false );
+          } );
+
+    test( "isTypedArray({'0':0, '1':2, length:2}) === false",
+          () =>
+          {
+              expect( typeUtils.isTypedArray( { "0": 0, "1": 2, length: 2 } ) ).toBe( false );
+          } );
+
+    test( "isTypedArray(UInt8Array) === true",
+          () =>
+          {
+              expect( typeUtils.isTypedArray( new Uint8Array( 2 ) ) ).toBe( true );
+          } );
+
+    test( "isTypedArray(UInt8Array) === true",
+          () =>
+          {
+              expect( typeUtils.isTypedArray( new Int32Array( 2 ) ) ).toBe( true );
           } );
 } );
 

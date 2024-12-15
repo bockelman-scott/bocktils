@@ -1007,7 +1007,7 @@ describe( "Mappers", () =>
     test( "The Mappers.TO_NUMBER function returns a new array with each element converted to a number",
           () =>
           {
-              const arr = ["a", 1, true, "b", {}, ["a", "b"], function( a, b ) {}, "007", "3", "0xFFF", "017", NaN];
+              const arr = ["a", 1, true, "b", {}, ["a", "b"], function( a, b ) {}, "007", "3", "0xFFF", "0o17", NaN];
 
               const expected = [0, 1, 1, 0, 0, 0, 0, 7, 3, 4095, 15, NaN];
 
@@ -1020,7 +1020,7 @@ describe( "Mappers", () =>
     test( "The Mappers.TO_VALID_NUMBER function returns a new array with each element that can be converted to a number converted to a number",
           () =>
           {
-              const arr = ["a", 1, true, "b", {}, ["a", "b"], function( a, b ) {}, "007", "3", "0xFFF", "017", NaN];
+              const arr = ["a", 1, true, "b", {}, ["a", "b"], function( a, b ) {}, "007", "3", "0xFFF", "0o17", NaN];
 
               const expected = [0, 1, 1, 0, 0, 0, 0, 7, 3, 4095, 15, 0];
 
