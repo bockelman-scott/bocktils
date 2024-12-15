@@ -26,6 +26,8 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
+    const DEBUG = false;
+
     const {
         _mt_str,
         _rxNullTerminator,
@@ -49,24 +51,11 @@ const $scope = constants?.$scope || function()
         CustomEvent = ModuleEvent;
     }
 
-    const BufferDefined = (_ud !== typeof Buffer);
-    const TextEncoderDefined = (_ud !== typeof TextEncoder);
-
-    const isBufferDefined = function()
-    {
-        return BufferDefined;
-    };
-
-    const isTextEncoderDefined = function()
-    {
-        return TextEncoderDefined;
-    };
-
     const modName = "Base64Utils";
 
     const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
 
-    const { isNull, isString, isEmptyString, isNumber, isIterable } = typeUtils;
+    const { isNull, isString, isEmptyString, isNumber, isIterable, isFunction } = typeUtils;
 
     const { asString, asInt, ucase, lcase } = stringUtils;
 
@@ -181,6 +170,32 @@ const $scope = constants?.$scope || function()
         const padding = data?.padding || PADDING.OPTIONAL;
         return PADDING.MANDATORY === padding;
     }
+
+
+    const BufferDefined = (_ud !== typeof Buffer);
+    const TextEncoderDefined = (_ud !== typeof TextEncoder);
+    const BTOA_DEFINED = (_ud !== typeof btoa) && isFunction( btoa );
+    const ATOB_DEFINED = (_ud !== typeof atob) && isFunction( atob );
+
+    const isBufferDefined = function()
+    {
+        return !DEBUG && BufferDefined;
+    };
+
+    const isTextEncoderDefined = function()
+    {
+        return !DEBUG && TextEncoderDefined;
+    };
+
+    const isBToADefined = function()
+    {
+        return !DEBUG && BTOA_DEFINED;
+    };
+
+    const isAToBDefined = function()
+    {
+        return !DEBUG && ATOB_DEFINED;
+    };
 
     /**
      * Returns true if the specified string is valid base64 encoded content
@@ -302,7 +317,6 @@ const $scope = constants?.$scope || function()
              if ( isBufferDefined() )
              {
              const str = cleanBase64( pData );
-
              return Buffer.from( str, "base64" );
              }
              */
@@ -324,6 +338,11 @@ const $scope = constants?.$scope || function()
 
     function encode( pData, pSpec = DEFAULT_VARIANT )
     {
+        if ( isString( pData ) && isBToADefined() )
+        {
+            return cleanBase64( btoa( pData ) );
+        }
+
         const data = toBytes( pData );
 
         /*
@@ -334,6 +353,7 @@ const $scope = constants?.$scope || function()
          }
          */
         let s = _mt_str;
+
 
         const lookup = getBase64Alphabet( pSpec ).split( _mt_str );
 
@@ -368,9 +388,68 @@ const $scope = constants?.$scope || function()
         return asString( s, true );
     }
 
+
+    const toBinary = function( pBase64, pSpec = DEFAULT_VARIANT )
+    {
+        if ( isNull( pBase64 ) || !isValidBase64( asString( pBase64, true ) ) )
+        {
+            return [];
+        }
+
+        const alphabet = getBase64Alphabet( pSpec ).split( _mt_str );
+
+        const lookup = {};
+
+        alphabet.forEach( ( e, i ) => lookup[e] = i );
+
+        const input = cleanBase64( asString( pBase64, true ) );
+
+        const inputLength = input.length;
+
+        const matches = /(=+)$/.exec( input );
+
+        const numPaddingChars = (matches && matches.length) ? matches[1]?.length : 0;
+
+        let data = [];
+
+        for( let i = 0, n = inputLength; i < n; i += 4 )
+        {
+            const chr_1 = input[i];
+            const chr_2 = (i < (n + 1)) ? input[i + 1] : "A";
+            const chr_3 = (i < (n + 2)) ? input[i + 2] : "A";
+            const chr_4 = (i < (n + 3)) ? input[i + 3] : "A";
+
+            const idx_1 = Math.max( 0, asInt( lookup[chr_1] ) << 18 );
+            const idx_2 = Math.max( 0, asInt( lookup[chr_2] ) << 12 );
+            const idx_3 = Math.max( 0, asInt( lookup[chr_3] ) << 6 );
+            const idx_4 = Math.max( 0, asInt( lookup[chr_4] ) );
+
+            const block = idx_1 + idx_2 + idx_3 + idx_4;
+
+            for( let k = 0; k < 3; k++ )
+            {
+                data.push( (block >> ((2 - k) * 8)) & 0xFF );
+            }
+        }
+
+        return numPaddingChars > 0 ? data.slice( 0, data.length - numPaddingChars ) : data;
+    };
+
     function toText( pBase64, pEncoding = DEFAULT_TEXT_ENCODING )
     {
-        const str = isString( pBase64 ) ? cleanBase64( asString( pBase64, true ) ) : encode( pBase64 );
+        let input = pBase64;
+
+        if ( !isString( pBase64 ) )
+        {
+            input = encode( pBase64 );
+        }
+
+        if ( isNull( input ) || !isValidBase64( asString( input, true ) ) )
+        {
+            return _mt_str;
+        }
+
+        const str = isString( input ) ? cleanBase64( asString( input, true ) ) : encode( input );
 
         const encoding = resolveEncoding( pEncoding );
 
@@ -380,26 +459,20 @@ const $scope = constants?.$scope || function()
 
             let result = buffer.toString( encoding );
 
-            while ( _rxNullTerminator.test( result ) )
-            {
-                result = result.replace( _rxNullTerminator, _mt_str );
-            }
+            result = result.replace( _rxNullTerminator, _mt_str );
 
             return asString( result, true );
         }
-
-        // TODO
-    }
-
-    const toBinary = function( pBase64 )
-    {
-        if ( isString( pBase64 ) )
+        else if ( isAToBDefined() )
         {
-            return toBytes( pBase64 );
+            return atob( str );
         }
 
+        const data = toBinary( str );
 
-    };
+        return data.map( e => String.fromCharCode( e ) ).join( _mt_str ).replace( _rxNullTerminator, _mt_str );
+    }
+
 
     let mod =
         {
@@ -412,10 +485,9 @@ const $scope = constants?.$scope || function()
             isValidBase64,
             cleanBase64,
             encode,
-            toBytes,
             toBase64: encode,
             toText,
-            toBinary,
+            toBinary
         };
 
     mod = modulePrototype.extend( mod );

@@ -174,7 +174,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             _rxValidJson = /^((([{\[])(.*)*([}\]]))|(\d+)|((\d*,?\d+)*\.?\d+)|("[^"]+")|('[^']+')|(true|false))$/s,
 
             _xZ = /\u0000/,
-            _rxNullTerminator = /\u0000$/,
+            _rxNullTerminator = /\u0000+$/,
 
             _rxTerminalSemicolon = /;+$/,
             _rxTrailingNewline = /\n+$/,
