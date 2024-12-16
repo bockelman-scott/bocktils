@@ -1,10 +1,12 @@
 const core = require( "./CoreUtils.cjs" );
 
+const funcUtils = require( "./FunctionUtils.cjs" );
+
 const objectUtils = require( "./ObjectUtils.cjs" );
 
 const jsonUtils = require( "./JsonUtils.cjs" );
 
-const { constants, typeUtils, stringUtils, arrayUtils } = core;
+const { constants, typeUtils, stringUtils, arrayUtils, localeUtils, NumberParser, guidUtils } = core;
 
 const { _ud = "undefined" } = constants;
 
@@ -39,6 +41,10 @@ const $scope = constants?.$scope || function()
             typeUtils,
             stringUtils,
             arrayUtils,
+            localeUtils,
+            NumberParser,
+            guidUtils,
+            funcUtils,
             objectUtils,
             jsonUtils,
             dependencies:
@@ -47,6 +53,9 @@ const $scope = constants?.$scope || function()
                     typeUtils,
                     stringUtils,
                     arrayUtils,
+                    localeUtils,
+                    guidUtils,
+                    funcUtils,
                     objectUtils,
                     jsonUtils,
                 }

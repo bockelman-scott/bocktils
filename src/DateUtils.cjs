@@ -1,6 +1,5 @@
 const core = require( "./CoreUtils.cjs" );
 
-const objectUtils = require( "./ObjectUtils.cjs" );
 /**
  * Establish separate constants for each of the common utilities imported
  * @see ../src/CommonUtils.cjs
@@ -30,8 +29,7 @@ const $scope = core?.$scope || constants?.$scope || function()
             constants,
             typeUtils,
             stringUtils,
-            arrayUtils,
-            objectUtils
+            arrayUtils
         };
 
     const { classes, lock, IterationCap, IllegalArgumentError } = constants;
@@ -358,7 +356,7 @@ const $scope = core?.$scope || constants?.$scope || function()
             DECEMBER: lock( new Month( "December", 11, 31 ) )
         } );
 
-    const months = lock( objectUtils.getEntries( MONTHS_DATA ) );
+    const months = lock( Object.entries( MONTHS_DATA ) );
 
     const isValidDateArgument = function( pDate )
     {
@@ -526,7 +524,7 @@ const $scope = core?.$scope || constants?.$scope || function()
     {
         const year = isNumber( pYear ) ? asInt( pYear ) : new Date().getFullYear();
 
-        let arr = months.map( ( entry ) => entry.value );
+        let arr = months.map( ( entry ) => entry[1] );
 
         arr = arr.map( ( month ) => month.clone( year ) );
 

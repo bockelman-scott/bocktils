@@ -3,21 +3,19 @@
  * You can define your own token set to use in place of the default if desired.
  */
 
-const utils = require( "./CoreUtils.cjs" );
+const core = require( "./CoreUtils.cjs" );
 
 /**
  * Establish separate constants for each of the common utilities imported
- * @see ../src/CommonUtils.cjs
+ * @see ../src/CoreUtils.cjs
  */
-const { constants, typeUtils, stringUtils, arrayUtils } = utils;
-
-const localeUtils = require( "./LocaleUtils.cjs" );
+const { constants, typeUtils, stringUtils, arrayUtils, localeUtils } = core;
 
 const dateUtils = require( "./DateUtils.cjs" );
 
 const { _ud = "undefined" } = constants;
 
-const $scope = utils?.$scope || constants?.$scope || function()
+const $scope = core?.$scope || constants?.$scope || function()
 {
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };

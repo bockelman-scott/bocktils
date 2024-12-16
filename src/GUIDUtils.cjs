@@ -2,8 +2,6 @@ const constants = require( "./Constants.cjs" );
 const typeUtils = require( "./TypeUtils.cjs" );
 const stringUtils = require( "./StringUtils.cjs" );
 
-const crypto = require( "crypto" );
-
 const { _ud = "undefined" } = constants;
 
 /**
@@ -13,6 +11,8 @@ const $scope = constants?.$scope || function()
 {
     return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
 };
+
+const crypto = $scope().crypto || require( "crypto" );
 
 (function exposeModule()
 {
@@ -33,10 +33,8 @@ const $scope = constants?.$scope || function()
         {
             constants,
             typeUtils,
-            stringUtils,
-            crypto
+            stringUtils
         };
-
 
     const { _mt_str, populateOptions, lock, classes } = constants;
 

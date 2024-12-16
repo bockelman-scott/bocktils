@@ -5,17 +5,15 @@
  * This module exposes methods for formatting Date objects as strings.
  */
 
-const utils = require( "./CoreUtils.cjs" );
+const core = require( "./CoreUtils.cjs" );
 
-const { constants, typeUtils, stringUtils, arrayUtils } = utils;
+const { constants, typeUtils, stringUtils, arrayUtils, localeUtils } = core;
 
 const tokenSetUtils = require( "./DateFormatTokenSet.cjs" );
 
-const localeUtils = require( "./LocaleUtils.cjs" );
-
 const { _ud = "undefined" } = constants;
 
-const $scope = utils?.$scope || constants?.$scope || function()
+const $scope = core?.$scope || constants?.$scope || function()
 {
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };

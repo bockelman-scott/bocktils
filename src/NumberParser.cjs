@@ -1,8 +1,7 @@
-const core = require( "./CoreUtils.cjs" );
-
+const constants = require( "./Constants.cjs" );
+const typeUtils = require( "./TypeUtils.cjs" );
+const stringUtils = require( "./StringUtils.cjs" );
 const localeUtils = require( "./LocaleUtils.cjs" );
-
-const { constants, typeUtils, stringUtils } = core || localeUtils?.dependencies;
 
 const { _ud = "undefined" } = constants;
 
@@ -28,7 +27,7 @@ const $scope = constants?.$scope || function()
             localeUtils
         };
 
-    const { _mt_str, _spc, _dot, _comma, _hyphen, _latin = "latn", S_ERROR, lock, classes } = constants;
+    const { _mt_str, _spc, _dot, _comma, _minus, _latin = "latn", S_ERROR, lock, classes } = constants;
 
     const { isString, isNumber, isObject, isNull, isHex, isOctal } = typeUtils;
 
@@ -171,8 +170,8 @@ const $scope = constants?.$scope || function()
 
             if ( minusSign === grpSeparator )
             {
-                minusSign = _hyphen === minusSign ? minusSign : _mt_str;
-                grpSeparator = _hyphen === grpSeparator ? _mt_str : grpSeparator;
+                minusSign = _minus === minusSign ? minusSign : _mt_str;
+                grpSeparator = _minus === grpSeparator ? _mt_str : grpSeparator;
             }
 
             this._separators =
@@ -197,7 +196,7 @@ const $scope = constants?.$scope || function()
 
         get negativeSign()
         {
-            return asString( this.separators?.negativeSign, true ) || _hyphen;
+            return asString( this.separators?.negativeSign, true ) || _minus;
         }
 
         parse( pString )
@@ -297,12 +296,7 @@ const $scope = constants?.$scope || function()
                 {
                     NumberParser
                 },
-            NumberParser,
-            parse: function( pString, pLocale, pOptions )
-            {
-                const parser = new NumberParser( pLocale, pOptions );
-                return parser.parse( pString );
-            }
+            NumberParser
         };
 
     mod = modulePrototype.extend( mod );

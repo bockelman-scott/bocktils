@@ -63,6 +63,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             StackTrace,
             __Error,
             IllegalArgumentError,
+            resolveError,
             IterationCap,
             ComparatorFactory
         } = bockModuleBootstrap;
@@ -560,6 +561,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
                 },
             IterationCap,
             IllegalArgumentError,
+            resolveError,
             ComparatorFactory,
             $scope,
             no_op,

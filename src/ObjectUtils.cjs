@@ -5,9 +5,7 @@
  */
 const core = require( "./CoreUtils.cjs" );
 
-const { constants, typeUtils, stringUtils, arrayUtils } = core;
-
-const guidUtils = require( "./GUIDUtils.cjs" );
+const { constants, typeUtils, stringUtils, arrayUtils, guidUtils } = core;
 
 /** define a variable for typeof undefined **/
 const { _ud = "undefined" } = constants;

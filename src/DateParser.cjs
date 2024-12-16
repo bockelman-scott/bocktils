@@ -9,11 +9,9 @@ const utils = require( "./CoreUtils.cjs" );
 
 /**
  * Establish separate constants for each of the common utilities imported
- * @see ../src/CommonUtils.cjs
+ * @see ../src/CoreUtils.cjs
  */
-const { constants, typeUtils, stringUtils, arrayUtils } = utils;
-
-const localeUtils = require( "./LocaleUtils.cjs" );
+const { constants, typeUtils, stringUtils, arrayUtils, localeUtils } = utils;
 
 const dateUtils = require( "./DateUtils.cjs" );
 

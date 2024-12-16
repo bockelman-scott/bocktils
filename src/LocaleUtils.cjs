@@ -5,10 +5,10 @@
  * and other functionality
  * specific to a particular Locale
  */
-
-const core = require( "./CoreUtils.cjs" );
-
-const { constants, typeUtils, stringUtils, arrayUtils } = core;
+const constants = require( "./Constants.cjs" );
+const typeUtils = require( "./TypeUtils.cjs" );
+const stringUtils = require( "./StringUtils.cjs" );
+const arrayUtils = require( "./ArrayUtils.cjs" );
 
 const { _ud = "undefined" } = constants;
 

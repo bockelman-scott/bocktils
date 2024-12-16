@@ -2,6 +2,9 @@ const constants = require( "./Constants.cjs" );
 const typeUtils = require( "./TypeUtils.cjs" );
 const stringUtils = require( "./StringUtils.cjs" );
 const arrayUtils = require( "./ArrayUtils.cjs" );
+const localeUtils = require( "./LocaleUtils.cjs" );
+const numberParser = require( "./NumberParser.cjs" );
+const guidUtils = require( "./GUIDUtils.cjs" );
 
 const { _ud = "undefined" } = constants;
 
@@ -28,6 +31,8 @@ const $scope = constants?.$scope || function()
         CustomEvent = ModuleEvent;
     }
 
+    const { NumberParser } = numberParser;
+
     const modulePrototype = new ModulePrototype( "CoreUtils", INTERNAL_NAME );
 
     let mod =
@@ -36,12 +41,18 @@ const $scope = constants?.$scope || function()
             typeUtils,
             stringUtils,
             arrayUtils,
+            localeUtils,
+            NumberParser,
+            guidUtils,
             dependencies:
                 {
                     constants,
                     typeUtils,
                     stringUtils,
-                    arrayUtils
+                    arrayUtils,
+                    localeUtils,
+                    numberParser,
+                    guidUtils
                 }
         };
 

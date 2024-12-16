@@ -14,8 +14,6 @@
  */
 const core = require( "./CoreUtils.cjs" );
 
-const objectUtils = require( "./ObjectUtils.cjs" );
-
 const { constants, typeUtils, stringUtils, arrayUtils } = core;
 
 const { _ud = "undefined" } = constants;
@@ -47,18 +45,17 @@ const $scope = constants?.$scope || function()
             constants,
             typeUtils,
             stringUtils,
-            arrayUtils,
-            objectUtils
+            arrayUtils
         };
 
     /**
      * Create local variables for the imported values and functions we use.
      */
-    const { IterationCap, no_op, S_WARN, S_ERROR, lock, classes } = constants;
+    const { _mt_str, resolveError, immutableCopy, IterationCap, no_op, S_ERROR, classes } = constants;
 
     const { asString, asInt, asFloat } = stringUtils;
 
-    const { asArray, varargs } = arrayUtils;
+    const { asArray, varargs, Filters } = arrayUtils;
 
     const { isString, isObject, isFunction, isAsyncFunction, isClass, Result } = typeUtils;
 
@@ -98,6 +95,53 @@ const $scope = constants?.$scope || function()
         }
         return (isObject( pObject ) || isFunction( pObject )) ? pObject : (isString( pObject ) ? $scope()[asString( pObject, true )] || $scope() || {} : $scope() || {});
     }
+
+    /**
+     * Returns a function suitable for execution from either a function, method, or the name of the method.
+     *
+     * @param pMethod {function|string} the function or method itself
+     *                                  or the name of a method expected to be a member of the specified object
+     *
+     * @param pObject (optional) the object that implements the method or on which the method will be called.
+     *
+     * @returns {function} the specified function or a no-op function
+     */
+    function resolveMethod( pMethod, pObject )
+    {
+        return isFunction( pMethod ) ? pMethod : (isString( pMethod ) ? (resolveContext( pObject )[asString( pMethod, true )]) || no_op : no_op);
+    }
+
+    /**
+     * Returns a function suitable for execution in the global scope,
+     * from either a function the name of a function.
+     *
+     * @param pFunction {function|string} the function itself
+     *                                    or the name of a function expected to be found in the global scope
+     * @returns {function} the specified function or a no-op function
+     */
+    function resolveFunction( pFunction )
+    {
+        return resolveMethod( pFunction, $scope() );
+    }
+
+    const dispatch = function( pError, pMethodName, pDelegate, pScope )
+    {
+        const err = resolveError( pError );
+
+        const methodName = pMethodName || _mt_str;
+
+        const delegate = resolveMethod( pDelegate, pScope );
+
+        const source = methodName + (isFunction( delegate ) ? " ( " + delegate?.name || _mt_str + " ) " : isString( delegate ) ? delegate : _mt_str);
+
+        modulePrototype.dispatchEvent( new CustomEvent( S_ERROR,
+                                                        {
+                                                            error: err,
+                                                            message: err.message,
+                                                            level: S_ERROR,
+                                                            method: calculateErrorSourceName( modName, source )
+                                                        } ) );
+    };
 
     /**
      * Executes an asynchronous function without blocking and without any callbacks.
@@ -145,12 +189,12 @@ const $scope = constants?.$scope || function()
         {
             super( pValue, pErrors );
 
-            this.#args = [].concat( varargs( ...pArgs ) ).map( e => objectUtils.copy( e ) );
+            this.#args = [].concat( varargs( ...pArgs ) ).map( e => immutableCopy( e ) );
         }
 
         get arguments()
         {
-            return [].concat( asArray( this.#args ) ).map( e => objectUtils.copy( e ) );
+            return [].concat( asArray( this.#args ) ).map( e => immutableCopy( e ) );
         }
     }
 
@@ -173,6 +217,8 @@ const $scope = constants?.$scope || function()
      */
     const attemptAsync = async function( pOperation, ...pArgs )
     {
+        const methodName = "attemptAsync";
+
         let returnValue = null;
 
         let exceptions = [];
@@ -189,13 +235,7 @@ const $scope = constants?.$scope || function()
                 {
                     exceptions.push( ex2 );
 
-                    modulePrototype.dispatchEvent( new CustomEvent( S_ERROR,
-                                                                    {
-                                                                        error: ex2,
-                                                                        message: ex2.message,
-                                                                        level: S_ERROR,
-                                                                        method: calculateErrorSourceName( modName, "attemptAsync( " + pOperation?.name + " )" )
-                                                                    } ) );
+                    dispatch( ex2, methodName, pOperation, $scope() );
                 }
             }
         }
@@ -203,13 +243,7 @@ const $scope = constants?.$scope || function()
         {
             exceptions.push( ex );
 
-            modulePrototype.dispatchEvent( new CustomEvent( S_ERROR,
-                                                            {
-                                                                error: ex,
-                                                                message: ex.message,
-                                                                level: S_ERROR,
-                                                                method: calculateErrorSourceName( modName, "attemptAsync( " + pOperation?.name + " )" )
-                                                            } ) );
+            dispatch( ex, methodName, pOperation, $scope() );
         }
 
         return new FunctionResult( returnValue, exceptions, ...pArgs );
@@ -235,6 +269,8 @@ const $scope = constants?.$scope || function()
      */
     const attempt = function( pOperation, ...pArgs )
     {
+        const methodName = "attempt";
+
         let returnValue = null;
 
         let exceptions = [];
@@ -260,13 +296,7 @@ const $scope = constants?.$scope || function()
                     {
                         exceptions.push( ex2 );
 
-                        modulePrototype.dispatchEvent( new CustomEvent( S_ERROR,
-                                                                        {
-                                                                            error: ex2,
-                                                                            message: ex2.message,
-                                                                            level: S_ERROR,
-                                                                            method: calculateErrorSourceName( modName, "attempt( " + pOperation?.name + " )" )
-                                                                        } ) );
+                        dispatch( ex2, methodName, pOperation, $scope() );
                     }
                 }
             }
@@ -275,37 +305,11 @@ const $scope = constants?.$scope || function()
         {
             exceptions.push( ex );
 
-            modulePrototype.dispatchEvent( new CustomEvent( S_ERROR,
-                                                            {
-                                                                error: ex,
-                                                                message: ex.message,
-                                                                level: S_ERROR,
-                                                                method: calculateErrorSourceName( modName, "attempt( " + pOperation?.name + " )" )
-                                                            } ) );
+            dispatch( ex, methodName, pOperation, $scope() );
         }
 
         return new FunctionResult( returnValue, exceptions, ...pArgs );
     };
-
-    /**
-     * Returns a function suitable for execution from either a function, method, or the name of the method.
-     *
-     * @param pMethod {function|string} the function or method itself
-     *                                  or the name of a method expected to be a member of the specified object
-     *
-     * @param pObject (optional) the object that implements the method or on which the method will be called.
-     *
-     * @returns {function}
-     */
-    function resolveMethod( pMethod, pObject )
-    {
-        return isFunction( pMethod ) ? pMethod : (isString( pMethod ) ? (resolveContext( pObject )[asString( pMethod, true )]) || no_op : no_op);
-    }
-
-    function resolveFunction( pFunction )
-    {
-        return resolveMethod( pFunction, $scope() );
-    }
 
     /**
      * Returns a Promise of FunctionResult.
@@ -325,15 +329,18 @@ const $scope = constants?.$scope || function()
      */
     const attemptAsyncMethod = async function( pObject, pMethod, ...pArgs )
     {
+        const methodName = "attemptAsyncMethod";
+
         let returnValue = null;
 
         let exceptions = [];
 
+        const obj = resolveContext( pObject );
+
+        const method = resolveMethod( pMethod, obj );
+
         try
         {
-            const obj = resolveContext( pObject );
-
-            const method = resolveMethod( pMethod, obj );
 
             if ( isFunction( method ) )
             {
@@ -345,13 +352,7 @@ const $scope = constants?.$scope || function()
                 {
                     exceptions.push( ex2 );
 
-                    modulePrototype.dispatchEvent( new CustomEvent( S_ERROR,
-                                                                    {
-                                                                        error: ex2,
-                                                                        message: ex2.message,
-                                                                        level: S_ERROR,
-                                                                        method: calculateErrorSourceName( modName, "attemptAsyncMethod( " + method?.name + " )" )
-                                                                    } ) );
+                    dispatch( ex2, methodName, method, obj );
                 }
             }
         }
@@ -359,13 +360,7 @@ const $scope = constants?.$scope || function()
         {
             exceptions.push( ex );
 
-            modulePrototype.dispatchEvent( new CustomEvent( S_ERROR,
-                                                            {
-                                                                error: ex,
-                                                                message: ex.message,
-                                                                level: S_ERROR,
-                                                                method: calculateErrorSourceName( modName, "attemptAsyncMethod( " + asString( pMethod?.name || pMethod ) + " )" )
-                                                            } ) );
+            dispatch( ex, methodName, method, obj );
         }
 
         return new FunctionResult( returnValue, exceptions, ...pArgs );
@@ -392,16 +387,18 @@ const $scope = constants?.$scope || function()
      */
     const attemptMethod = function( pObject, pMethod, ...pArgs )
     {
+        const methodName = "attemptMethod";
+
         let returnValue = null;
 
         let exceptions = [];
 
+        const obj = resolveContext( pObject );
+
+        const method = resolveMethod( pMethod, obj );
+
         try
         {
-            const obj = resolveContext( pObject );
-
-            const method = resolveMethod( pMethod, obj );
-
             if ( isFunction( method ) )
             {
                 if ( isAsyncFunction( method ) )
@@ -421,13 +418,7 @@ const $scope = constants?.$scope || function()
                     {
                         exceptions.push( ex2 );
 
-                        modulePrototype.dispatchEvent( new CustomEvent( S_ERROR,
-                                                                        {
-                                                                            error: ex2,
-                                                                            message: ex2.message,
-                                                                            level: S_ERROR,
-                                                                            method: calculateErrorSourceName( modName, "attemptMethod( " + method?.name + " )" )
-                                                                        } ) );
+                        dispatch( ex2, methodName, method, $scope() );
                     }
                 }
             }
@@ -436,13 +427,7 @@ const $scope = constants?.$scope || function()
         {
             exceptions.push( ex );
 
-            modulePrototype.dispatchEvent( new CustomEvent( S_ERROR,
-                                                            {
-                                                                error: ex,
-                                                                message: ex.message,
-                                                                level: S_ERROR,
-                                                                method: calculateErrorSourceName( modName, "attemptMethod( " + asString( pMethod?.name || pMethod ) + " )" )
-                                                            } ) );
+            dispatch( ex, methodName, method, obj );
         }
 
         return new FunctionResult( returnValue, exceptions, ...pArgs );
@@ -486,11 +471,12 @@ const $scope = constants?.$scope || function()
         return function() { return new FunctionResult(); };
     };
 
-    const _DEFAULT_OPTIONS = {
-        minArgs: 0,
-        maxInheritance: 10,
-        includeStatic: false
-    };
+    const _DEFAULT_OPTIONS =
+        {
+            minArgs: 0,
+            maxInheritance: 10,
+            includeStatic: false
+        };
 
     /**
      * Returns true if the specified class (or one of its super classes) has a method named pMethodName.
@@ -559,13 +545,13 @@ const $scope = constants?.$scope || function()
      * Returns a new version of the specified function with one or more arguments captured
      * that now only requires passing the remaining arguments.
      *
-     * Google 'functional programming currying' for more information about currying
+     * Google 'functional programming currying' for more information about currying and partial application
      *
      * @param pFunction the function to partial
      *
      * @param pArgs one or more arguments whose values will be constants of the returned function
      *
-     * @returns {function(...[*]): any}
+     * @returns {function(...[*]): any} a new function that only requires the remaining arguments to be passed
      */
     const partial = function( pFunction, ...pArgs )
     {
@@ -583,13 +569,13 @@ const $scope = constants?.$scope || function()
      * Returns a new version of the specified asynchronous function with one or more arguments captured
      * that now only requires passing the remaining arguments.
      *
-     * Google 'functional programming currying' for more information about currying
+     * Google 'functional programming currying' for more information about currying and partial application
      *
      * @param pFunction the function to partial
      *
      * @param pArgs one or more arguments whose values will be constants of the returned function
      *
-     * @returns {function(...[*]): any}
+     * @returns {function(...[*]): any} a new asynchronous function that only requires the remaining arguments to be passed
      */
     const asyncPartial = function( pFunction, ...pArgs )
     {
@@ -606,7 +592,7 @@ const $scope = constants?.$scope || function()
     const sum = function( ...pArgs )
     {
         const arr = asArray( pArgs || [] );
-        return arr.flat().map( asFloat ).reduce( ( a, c ) => a + c, 0 );
+        return arr.flat( Infinity ).map( asFloat ).filter( Filters.IS_VALID_NUMBER ).reduce( ( a, c ) => a + c, 0 );
     };
 
     /**

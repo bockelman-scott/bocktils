@@ -220,6 +220,12 @@ const $scope = function()
     };
 
     /**
+     * Defines a value to use in recursive functions to bail out before causing a stack overflow
+     * @type {number}
+     */
+    const MAX_STACK_SIZE = 32;
+
+    /**
      * These are the default options used with the localCopy and immutableCopy functions.
      *
      * nullToEmptyObject {boolean} pass true for this property if you want null values to be returned as EMPTY_OBJECT
@@ -235,6 +241,7 @@ const $scope = function()
      */
     const DEFAULT_COPY_OPTIONS = Object.freeze(
         {
+            maxStackSize: MAX_STACK_SIZE,
             nullToEmptyObject: false,
             nullToEmptyArray: false,
             undefinedToNull: false,
@@ -263,12 +270,6 @@ const $scope = function()
     IMMUTABLE_COPY_OPTIONS.freeze = true;
 
     /**
-     * Defines a value to use in recursive functions to bail out before causing a stack overflow
-     * @type {number}
-     */
-    const MAX_STACK_SIZE = 32;
-
-    /**
      * Returns an object corresponding to a set of default options with one or more properties
      * overridden or added by the properties of the specified pOptions
      *
@@ -283,6 +284,21 @@ const $scope = function()
     }
 
     /**
+     * This is a 'helper' function for reading a numeric property of the localCopy or immutableCopy options
+     * @param pOptions {object} an object expected to have a property with the name specified
+     * @param pProperty {string} the name of the property
+     * @param pDefault {number} the default value to return if the named option is not present or not a numeric value
+     * @returns {number} an integer value representing the value of that property
+     * @private
+     */
+    function _getNumericOption( pOptions, pProperty, pDefault )
+    {
+        const options = populateOptions( pOptions, DEFAULT_COPY_OPTIONS );
+        const option = options[pProperty] || pDefault || 0;
+        return Math.max( 0, parseInt( (_num === typeof option) ? option : ((/^[\d.]$/.test( option )) ? option : (_num === typeof pDefault ? pDefault : 0)) ) );
+    }
+
+    /**
      * This is a 'helper' function for reading the depth property of the localCopy or immutableCopy options
      * @param pOptions {object} an object expected to have a property named, depth
      * @returns {number} an integer value representing the value of that property
@@ -290,8 +306,12 @@ const $scope = function()
      */
     function _getDepth( pOptions )
     {
-        const options = populateOptions( pOptions, DEFAULT_COPY_OPTIONS );
-        return parseInt( Math.max( 0, (_num === typeof options.depth) ? options.depth : ((/[\d.]/.test( options.depth )) ? options.depth : 0) ) );
+        return _getNumericOption( pOptions, "depth", 0 );
+    }
+
+    function _getMaxStackSize( pOptions )
+    {
+        return Math.min( MAX_STACK_SIZE, _getNumericOption( pOptions, "maxStackSize", MAX_STACK_SIZE ) );
     }
 
     /**
@@ -598,6 +618,16 @@ const $scope = function()
         }
     }
 
+    function resolveError( pError, pMessage = DEFAULT_ERROR_MSG )
+    {
+        if ( pError instanceof Error )
+        {
+            return new __Error( pError );
+        }
+
+        return new __Error( (pMessage || pError || DEFAULT_ERROR_MSG), { cause: _obj === typeof (pError) ? pError : _obj === typeof (pMessage) ? pMessage : null } );
+    }
+
     const calculateErrorSourceName = function( pModule, pFunction )
     {
         const modName = _obj === typeof pModule ? (pModule?.moduleName || pModule?.name) : _str === typeof pModule ? pModule : _unknown;
@@ -840,7 +870,7 @@ const $scope = function()
             {
                 const s = _mt_str + (pMessage || pError?.message || S_DEFAULT_OPERATION);
 
-                const err = new __Error( pError || new Error( s ) );
+                const err = resolveError( pError, s );
 
                 let msg = [S_ERR_PREFIX, s, err, ...pExtra];
 
@@ -1073,7 +1103,10 @@ const $scope = function()
 
         const stack = [].concat( pStack || [] );
 
-        if ( stack.length > MAX_STACK_SIZE )
+        const maxStackSize = _getMaxStackSize( options );
+        options.maxStackSize = maxStackSize;
+
+        if ( stack.length > maxStackSize )
         {
             return freeze ? lock( clone ) : clone;
         }
@@ -1368,7 +1401,7 @@ const $scope = function()
             this.#trimStrings = false !== options?.trimStrings;
             this.#reverse = true === options?.reverse;
             this.#coerce = true === options?.coerce;
-            this.#maxStackSize = (_num === typeof options?.maxStackSize ? Math.max( 2, Math.min( options?.maxStackSize, MAX_STACK_SIZE ) ) : MAX_STACK_SIZE);
+            this.#maxStackSize = Math.max( 2, _getMaxStackSize( options ) );
         }
 
         static get [Symbol.species]()
@@ -1854,6 +1887,8 @@ const $scope = function()
 
             S_ERR_PREFIX,
             S_DEFAULT_OPERATION,
+
+            resolveError,
 
             EMPTY_OBJECT,
             EMPTY_ARRAY,
