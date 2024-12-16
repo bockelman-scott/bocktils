@@ -218,6 +218,8 @@ const $scope = constants?.$scope || function()
                 default:
                     return deepFreeze( val );
             }
+
+            return deepFreeze( val );
         }
 
         get type()
@@ -229,7 +231,7 @@ const $scope = constants?.$scope || function()
         {
             let values = asArray( this.#value || [] );
 
-            if ( values?.length <= 0 )
+            if ( (values?.length || 0) <= 0 )
             {
                 return 0;
             }
@@ -269,17 +271,39 @@ const $scope = constants?.$scope || function()
             return len;
         }
 
-        map( pFunction )
+        map( pFunction, pStack = [] )
         {
+            const stack = asArray( pStack ) || [];
+
+            if ( stack.length > 16 || stack.includes( this ) )
+            {
+                return this;
+            }
+
             if ( isFunction( pFunction ) )
             {
-                const arr = asArray( this.#value ).map( pFunction );
+                const arr = asArray( this.#value ).map( e => e instanceof this.constructor ? e.map( pFunction, stack.concat( e ) ) : pFunction( e ) );
 
                 const thiz = this.constructor[Symbol.species];
 
                 return new thiz( arr );
             }
+
             return this;
+        }
+
+        flat( pDepth )
+        {
+            const arr = asArray( this.#value ).flat( pDepth );
+
+            const thiz = this.constructor[Symbol.species];
+
+            return new thiz( arr );
+        }
+
+        flatMap( pFunction )
+        {
+            return this.map( pFunction ).flat( 1 );
         }
     }
 

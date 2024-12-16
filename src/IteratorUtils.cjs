@@ -18,7 +18,7 @@ const $scope = constants?.$scope || function()
 (function exposeModule()
 {
     // defines a key we can use to store this module in global scope
-    const INTERNAL_NAME = "__BOCK__MATH_UTILS__";
+    const INTERNAL_NAME = "__BOCK__ITERATOR_UTILS__";
 
     // if we've already executed this code, just return the module
     if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
@@ -94,29 +94,13 @@ const $scope = constants?.$scope || function()
         CustomEvent = ModuleEvent;
     }
 
-    const modName = "MathUtils";
+    const modName = "IteratorUtils";
 
     const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
 
     let mod =
         {
-            dependencies,
-            isNumber,
-            isInteger,
-            isFloat,
-            isBigInt,
-            isNumeric,
-            isZero,
-            isOctal,
-            isHex,
-            isDecimal,
-            isNanOrInfinite,
-            toDecimal,
-            toHex,
-            toOctal,
-            toBinary,
-            asInt,
-            asFloat,
+            dependencies
         };
 
     mod = modulePrototype.extend( mod );

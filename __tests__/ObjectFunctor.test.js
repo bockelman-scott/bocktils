@@ -3,10 +3,9 @@
 // jester.run( __filename );
 const objectFunctorUtils = require( "../src/ObjectFunctor.cjs" );
 
-const arrayUtils = objectFunctorUtils.dependencies.arrayUtils;
-const objectUtils = objectFunctorUtils.dependencies.objectUtils;
+const { classes } = objectFunctorUtils;
 
-const ObjectFunctor = objectFunctorUtils.classes.ObjectFunctor;
+const { ObjectFunctor } = classes;
 
 describe( "ObjectFunctor", () =>
 {
@@ -47,24 +46,6 @@ describe( "ObjectFunctor", () =>
               const functor = new ObjectFunctor( obj );
 
               expect( functor.length ).toEqual( 10 );
-/*
-
-              expect( functor.valueOf()["a"] ).toEqual( new ObjectFunctor( obj.a ) );
-              expect( functor.valueOf()["b"] ).toEqual( new ObjectFunctor( obj.b ) );
-
-              const o = functor.valueOf();
-
-              const A = o["a"];
-
-              const AB = obj.a.b;
-
-              const functorAB = new ObjectFunctor( AB );
-
-              const oo = functorAB.valueOf();
-
-              expect( A["b"] ).toEqual( oo["b"] );
-*/
-
 
           } );
 } );

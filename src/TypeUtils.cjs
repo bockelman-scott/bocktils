@@ -1540,7 +1540,7 @@ const $scope = constants?.$scope || function()
             case _fun:
                 if ( isGeneratorFunction( pArrayLike ) )
                 {
-                    return pArrayLike;
+                    return pArrayLike();
                 }
 
                 return new _Iterator( [pArrayLike] );

@@ -3,10 +3,9 @@
  * This module exposes useful methods for working with objects, collections of objects, and classes.
  * Dependencies: Constants, TypeUtils, StringUtils, ArrayUtils, and GUIDUtils
  */
-const constants = require( "./Constants.cjs" );
-const typeUtils = require( "./TypeUtils.cjs" );
-const stringUtils = require( "./StringUtils.cjs" );
-const arrayUtils = require( "./ArrayUtils.cjs" );
+const core = require( "./CoreUtils.cjs" );
+
+const { constants, typeUtils, stringUtils, arrayUtils } = core;
 
 const guidUtils = require( "./GUIDUtils.cjs" );
 
@@ -263,7 +262,7 @@ const $scope = constants?.$scope || function()
 
     const asNew = function( pObject )
     {
-        return Object.assign( {}, pObject );
+        return Object.assign( {}, isNonNullObject( pObject ) ? pObject : isNonNullValue( pObject ) ? [pObject] : {} );
     };
 
     /**
@@ -2359,7 +2358,15 @@ const $scope = constants?.$scope || function()
     const DEFAULT_CLONE_OPTIONS =
         {
             omitFunctions: false,
-            freeze: false
+            freeze: false,
+            maxDepth: MAX_CLONE_DEPTH
+        };
+
+    const DEFAULT_ASSIGN_OPTIONS =
+        {
+            maxDepth: MAX_ASSIGN_DEPTH,
+            omitFunctions: DEFAULT_CLONE_OPTIONS.omitFunctions,
+            freeze: DEFAULT_CLONE_OPTIONS.freeze,
         };
 
     /**
@@ -2380,6 +2387,7 @@ const $scope = constants?.$scope || function()
 
         const omitFunctions = true === options?.omitFunctions;
         const freeze = true === options?.freeze;
+        const maxDepth = Math.max( 1, Math.min( 32, asInt( options?.maxDepth, MAX_CLONE_DEPTH ) ) );
 
         if ( !isObject( pObject ) )
         {
@@ -2394,7 +2402,7 @@ const $scope = constants?.$scope || function()
         let twin = isArray( obj ) ? [].concat( obj ).map( e => clone( e, options, stack ) ) : asNew( obj || {} );
 
 
-        if ( stack.length > MAX_CLONE_DEPTH || detectCycles( stack, 3, 3 ) )
+        if ( stack.length > maxDepth || detectCycles( stack, 3, 3 ) )
         {
             return isArray( twin ) ? [...twin] : asNew( twin );
         }
@@ -3244,20 +3252,27 @@ const $scope = constants?.$scope || function()
      * Returns the modified target unless the specified target is frozen, in which case, a new object is returned
      * @param pTarget the object to which to assign the properties of the source
      * @param pSource an object from which to assign properties to the target
+     * @param pOptions
      * @param pStack INTERNALLY USED TO PREVENT INFINITE LOOPS
      * @returns {object} an object (potentially the original target) with the source properties assigned
      */
-    const assign = function( pTarget, pSource, pStack = [] )
+    const assign = function( pTarget, pSource, pOptions = DEFAULT_ASSIGN_OPTIONS, pStack = [] )
     {
         let target = pTarget || {};
         let source = pSource || {};
 
+        const options = populateOptions( pOptions, DEFAULT_ASSIGN_OPTIONS );
+
+        const freeze = !!options?.freeze;
+        const omitFunctions = !!options?.omitFunctions;
+        const maxDepth = Math.max( 1, Math.min( 32, asInt( options?.maxDepth, MAX_ASSIGN_DEPTH ) ) );
+
         if ( target === source || !isObject( target ) )
         {
-            return target;
+            return freeze ? lock( target ) : target;
         }
 
-        if ( Object.isFrozen( target ) )
+        if ( isReadOnly( target ) )
         {
             if ( isArray( target ) )
             {
@@ -3269,42 +3284,65 @@ const $scope = constants?.$scope || function()
             }
         }
 
-        pTarget = Object.assign( pTarget, Object.assign( target, source ) );
+        if ( !isReadOnly( pTarget ) )
+        {
+            pTarget = Object.assign( pTarget, Object.assign( target, source ) );
+            target = pTarget;
+        }
 
         const stack = asArray( pStack || [] );
 
-        if ( stack.length > MAX_ASSIGN_DEPTH || detectCycles( stack, 4, 4 ) )
+        if ( stack.length > maxDepth || detectCycles( stack, 4, 4 ) )
         {
-            return clone( pTarget, false, stack );
+            return clone( target, options, stack );
         }
 
         const entries = getEntries( target );
 
-        entries.forEach( entry =>
-                         {
-                             let property = entry.key || entry[0];
-                             let value = entry.value || entry[1];
+        for( let entry of entries )
+        {
+            let property = entry.key || entry[0];
+            let value = entry.value || entry[1];
 
-                             if ( isObject( value ) )
-                             {
-                                 try
-                                 {
-                                     value = assign( (pTarget[property] || defaultFor( value ) || {}), (value || {}), stack.concat( property ) );
+            if ( isFunction( value ) && omitFunctions )
+            {
+                continue;
+            }
 
-                                     pTarget[property] = Object.assign( (pTarget[property] || defaultFor( value ) || {}), value || {} );
-                                 }
-                                 catch( ex )
-                                 {
-                                     pTarget[property] = Object.assign( defaultFor( value ) || {}, (value || {}) );
-                                 }
-                             }
-                             else
-                             {
-                                 pTarget[property] = value;
-                             }
-                         } );
+            if ( isObject( value ) )
+            {
+                try
+                {
+                    value = assign( (target[property] || defaultFor( value ) || {}), (value || {}), options, stack.concat( property ) );
 
-        return pTarget || target || source;
+                    value = freeze ? lock( value ) : value;
+
+                    if ( !isReadOnly( pTarget ) )
+                    {
+                        pTarget[property] = Object.assign( (pTarget[property] || defaultFor( value ) || {}), (value || {}) );
+                    }
+                }
+                catch( ex )
+                {
+                    modulePrototype.reportError( ex, ex.message, S_ERROR, modName + "::assign", target, source, property, value );
+                }
+            }
+            else
+            {
+                value = freeze ? lock( value ) : value;
+
+                target[property] = value;
+
+                if ( !isReadOnly( pTarget ) )
+                {
+                    pTarget[property] = value;
+                }
+            }
+        }
+
+        const result = (isReadOnly( pTarget ) ? target : pTarget) || target || pTarget || source;
+
+        return freeze ? lock( result ) : result;
     };
 
     /**
