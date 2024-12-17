@@ -47,7 +47,7 @@
  * This value specifies that the value for the property should be the value of a variable, foo,
  * found in the global scope
  */
-const core = require( "./CoreUtils.cjs" );
+const core = require( "../../core/src/CoreUtils.cjs" );
 
 const objectUtils = require( "./ObjectUtils.cjs" );
 

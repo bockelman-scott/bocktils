@@ -5,7 +5,7 @@
  * This module exposes methods for formatting Date objects as strings.
  */
 
-const core = require( "./CoreUtils.cjs" );
+const core = require( "../../core/src/CoreUtils.cjs" );
 
 const { constants, typeUtils, stringUtils, arrayUtils, localeUtils } = core;
 

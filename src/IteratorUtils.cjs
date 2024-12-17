@@ -1,6 +1,6 @@
 /** import dependencies **/
 
-const core = require( "./CoreUtils.cjs" );
+const core = require( "../packages/core/src/CoreUtils.cjs" );
 
 const { constants, typeUtils, stringUtils, arrayUtils } = core;
 

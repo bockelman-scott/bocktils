@@ -3,7 +3,7 @@
  * You can define your own token set to use in place of the default if desired.
  */
 
-const core = require( "./CoreUtils.cjs" );
+const core = require( "../../core/src/CoreUtils.cjs" );
 
 /**
  * Establish separate constants for each of the common utilities imported

@@ -1,4 +1,4 @@
-const core = require( "./CoreUtils.cjs" );
+const core = require( "../../core/src/CoreUtils.cjs" );
 
 const objectUtils = require( "./ObjectUtils.cjs" );
 

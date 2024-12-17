@@ -3,10 +3,10 @@
 // jester.run( __filename );
 
 /** import the dependencies **/
-const constants = require( "../src/Constants.cjs" );
+const constants = require( "../packages/core/src/Constants.cjs" );
 
 /** import the utilities we are testing */
-const stringUtils = require( "../src/StringUtils.cjs" );
+const stringUtils = require( "../packages/core/src/StringUtils.cjs" );
 
 Object.assign( this, constants );
 Object.assign( this, stringUtils );

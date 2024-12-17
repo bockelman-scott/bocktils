@@ -3,9 +3,9 @@
 // jester.run( __filename );
 const eventUtils = require( "../src/EventUtils.cjs" );
 
-const constants = eventUtils.dependencies.constants || require( "../src/Constants.cjs" );
-const typeUtils = eventUtils.dependencies.typeUtils || require( "../src/TypeUtils.cjs" );
-const stringUtils = eventUtils.dependencies.stringUtils || require( "../src/StringUtils.cjs" );
+const constants = eventUtils.dependencies.constants || require( "../packages/core/src/Constants.cjs" );
+const typeUtils = eventUtils.dependencies.typeUtils || require( "../packages/core/src/TypeUtils.cjs" );
+const stringUtils = eventUtils.dependencies.stringUtils || require( "../packages/core/src/StringUtils.cjs" );
 
 Object.assign( this, constants );
 Object.assign( this, typeUtils );

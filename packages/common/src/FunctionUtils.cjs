@@ -12,7 +12,7 @@
  * @see FunctionResult
  *
  */
-const core = require( "./CoreUtils.cjs" );
+const core = require( "../../core/src/CoreUtils.cjs" );
 
 const { constants, typeUtils, stringUtils, arrayUtils } = core;
 

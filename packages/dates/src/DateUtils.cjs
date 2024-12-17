@@ -1,4 +1,4 @@
-const core = require( "./CoreUtils.cjs" );
+const core = require( "../../core/src/CoreUtils.cjs" );
 
 /**
  * Establish separate constants for each of the common utilities imported
@@ -6,7 +6,7 @@ const core = require( "./CoreUtils.cjs" );
  */
 const { constants, typeUtils, stringUtils, arrayUtils } = core;
 
-const funcUtils = require( "./FunctionUtils.cjs" );
+const funcUtils = require( "../../common/src/FunctionUtils.cjs" );
 
 const { _ud = "undefined" } = constants;
 

@@ -1,5 +1,5 @@
 /** import the utilities to test **/
-const jsonUtils = require( "../src/JsonInterpolationUtils.cjs" );
+const jsonUtils = require( "../packages/common/src/JsonInterpolationUtils.cjs" );
 
 const objectUtils = jsonUtils.dependencies.objectUtils;
 

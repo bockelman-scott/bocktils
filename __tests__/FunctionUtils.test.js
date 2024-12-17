@@ -1,10 +1,10 @@
-const funcUtils = require( "../src/FunctionUtils.cjs" );
+const funcUtils = require( "../packages/common/src/FunctionUtils.cjs" );
 
-const constants = funcUtils?.dependencies?.constants || require( "../src/Constants.cjs" );
-const typeUtils = funcUtils?.dependencies?.typeUtils || require( "../src/TypeUtils.cjs" );
-const stringUtils = funcUtils?.dependencies?.stringUtils || require( "../src/StringUtils.cjs" );
-const arrayUtils = funcUtils?.dependencies?.arrayUtils || require( "../src/ArrayUtils.cjs" );
-const objectUtils = funcUtils?.dependencies?.objectUtils || require( "../src/ObjectUtils.cjs" );
+const constants = funcUtils?.dependencies?.constants || require( "../packages/core/src/Constants.cjs" );
+const typeUtils = funcUtils?.dependencies?.typeUtils || require( "../packages/core/src/TypeUtils.cjs" );
+const stringUtils = funcUtils?.dependencies?.stringUtils || require( "../packages/core/src/StringUtils.cjs" );
+const arrayUtils = funcUtils?.dependencies?.arrayUtils || require( "../packages/core/src/ArrayUtils.cjs" );
+const objectUtils = funcUtils?.dependencies?.objectUtils || require( "../packages/common/src/ObjectUtils.cjs" );
 
 class A
 {

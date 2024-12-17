@@ -1,10 +1,10 @@
-const tokenSet = require( "../src/DateFormatTokenSet.cjs" );
+const tokenSet = require( "../packages/dates/src/DateFormatTokenSet.cjs" );
 
-const stringUtils = require( "../src/StringUtils.cjs" );
+const stringUtils = require( "../packages/core/src/StringUtils.cjs" );
 
-const objectUtils = require( "../src/ObjectUtils.cjs" );
+const objectUtils = require( "../packages/common/src/ObjectUtils.cjs" );
 
-const dateUtils = require( "../src/DateUtils.cjs" );
+const dateUtils = require( "../packages/dates/src/DateUtils.cjs" );
 
 const javaTokensData = require( "../__test_data__/JavaDateTokensTestData.json" );
 

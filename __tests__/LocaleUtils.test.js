@@ -1,5 +1,5 @@
 /** import the utilities to test **/
-const localeUtils = require( "../src/LocaleUtils.cjs" );
+const localeUtils = require( "../packages/core/src/LocaleUtils.cjs" );
 
 describe( "resolveLocale", () =>
 {

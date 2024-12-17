@@ -5,7 +5,7 @@
  * This module exposes methods for parsing strings as Date objects.
  */
 
-const utils = require( "./CoreUtils.cjs" );
+const utils = require( "../../core/src/CoreUtils.cjs" );
 
 /**
  * Establish separate constants for each of the common utilities imported

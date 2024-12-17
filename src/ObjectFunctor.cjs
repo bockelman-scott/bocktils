@@ -1,4 +1,4 @@
-const objectUtils = require( "./ObjectUtils.cjs" );
+const objectUtils = require( "../packages/common/src/ObjectUtils.cjs" );
 
 const { dependencies } = objectUtils;
 

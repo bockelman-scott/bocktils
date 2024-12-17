@@ -1,10 +1,10 @@
-const dateUtils = require( "../src/DateUtils.cjs" );
+const dateUtils = require( "../packages/dates/src/DateUtils.cjs" );
 
-const constants = dateUtils?.dependencies?.constants || require( "../src/Constants.cjs" );
-const typeUtils = dateUtils?.dependencies?.typeUtils || require( "../src/TypeUtils.cjs" );
-const stringUtils = dateUtils?.dependencies?.stringUtils || require( "../src/StringUtils.cjs" );
-const arrayUtils = dateUtils?.dependencies?.arrayUtils || require( "../src/ArrayUtils.cjs" );
-const objectUtils = dateUtils?.dependencies?.objectUtils || require( "../src/ObjectUtils.cjs" );
+const constants = dateUtils?.dependencies?.constants || require( "../packages/core/src/Constants.cjs" );
+const typeUtils = dateUtils?.dependencies?.typeUtils || require( "../packages/core/src/TypeUtils.cjs" );
+const stringUtils = dateUtils?.dependencies?.stringUtils || require( "../packages/core/src/StringUtils.cjs" );
+const arrayUtils = dateUtils?.dependencies?.arrayUtils || require( "../packages/core/src/ArrayUtils.cjs" );
+const objectUtils = dateUtils?.dependencies?.objectUtils || require( "../packages/common/src/ObjectUtils.cjs" );
 
 const today = new Date();
 const yesterday = new Date( today.getTime() - dateUtils.ONE_DAY );

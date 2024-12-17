@@ -3,7 +3,7 @@
  * This module exposes useful methods for working with objects, collections of objects, and classes.
  * Dependencies: Constants, TypeUtils, StringUtils, ArrayUtils, and GUIDUtils
  */
-const core = require( "./CoreUtils.cjs" );
+const core = require( "../../core/src/CoreUtils.cjs" );
 
 const { constants, typeUtils, stringUtils, arrayUtils, guidUtils } = core;
 

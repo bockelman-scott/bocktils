@@ -2,7 +2,7 @@
  * This statement imports the core utils modules:
  * Constants, TypeUtils, StringUtils, and ArrayUtils
  */
-const utils = require( "./CoreUtils.cjs" );
+const utils = require( "../../core/src/CoreUtils.cjs" );
 
 /**
  * Establish separate constants for each of the common utilities imported

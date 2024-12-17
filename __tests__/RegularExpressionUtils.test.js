@@ -1,4 +1,4 @@
-const rxUtils = require( "../src/RegularExpressionUtils.cjs" );
+const rxUtils = require( "../packages/regex/src/RegularExpressionUtils.cjs" );
 
 const RE = rxUtils.REGULAR_EXPRESSIONS;
 

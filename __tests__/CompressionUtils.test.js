@@ -5,8 +5,8 @@
 const fs = require( "fs" );
 
 /** import the module we are testing */
-const zipUtils = require( "../src/CompressionUtils.cjs" );
-const stringUtils = require( "../src/StringUtils.cjs" );
+const zipUtils = require( "../packages/compression/src/CompressionUtils.cjs" );
+const stringUtils = require( "../packages/core/src/StringUtils.cjs" );
 
 const utf8 = "utf-8";
 
