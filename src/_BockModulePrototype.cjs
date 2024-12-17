@@ -636,8 +636,7 @@ const $scope = function()
         return (modName || pModule) + _colon + _colon + (funName || pFunction);
     };
 
-    const MODULE_CACHE =
-        {};
+    const MODULE_CACHE = {};
 
     /**
      * This is the base class for all the ToolBocks modules.
@@ -1004,6 +1003,20 @@ const $scope = function()
 
             return mod;
         }
+
+        static create( pModuleName, pCacheKey, pObject )
+        {
+            let modulePrototype = (_str === typeof pModuleName) ? MODULE_CACHE[pModuleName] : null;
+            modulePrototype = modulePrototype || (_str === typeof pCacheKey ? MODULE_CACHE[pCacheKey] : new BockModulePrototype( pModuleName, pCacheKey ));
+            modulePrototype = modulePrototype || new BockModulePrototype( pModuleName, pCacheKey );
+
+            if ( null != pObject && _obj === typeof pObject )
+            {
+                modulePrototype.extend( pObject );
+            }
+
+            return modulePrototype;
+        }
     }
 
     /**
@@ -1013,13 +1026,16 @@ const $scope = function()
      */
     const GLOBAL_INSTANCE = new BockModulePrototype( "GLOBAL_INSTANCE", "__BOCK__MODULE_PROTOTYPE_GLOBAL_INSTANCE__" );
 
+    MODULE_CACHE["GLOBAL_INSTANCE"] = GLOBAL_INSTANCE;
+    MODULE_CACHE["__BOCK__MODULE_PROTOTYPE_GLOBAL_INSTANCE__"] = GLOBAL_INSTANCE;
+
     function exportModule( pObject, pCacheKey )
     {
         let mod = pObject;
 
         if ( null != mod && _obj === typeof mod && (mod instanceof BockModulePrototype) )
         {
-            mod.expose( mod, pCacheKey );
+            return mod.expose( mod, pCacheKey );
         }
 
         let modulePrototype = new BockModulePrototype( mod, pCacheKey );
