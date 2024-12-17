@@ -1,0 +1,17 @@
+{
+  "name": "@toolbocks/dates",
+  "version": "1.0.0",
+  "description": "Functions for parsing, formatting, manipulating, or comparing dates according to Locale",
+  "main": "index.js",
+  "dependencies": {
+    "@toolbocks/common": "^1.0.0",
+    "@toolbocks/core": "^1.0.0"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bockelman-scott/bocktils.git"
+  }
+}

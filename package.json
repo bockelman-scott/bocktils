@@ -1,11 +1,39 @@
 {
+  "name": "toolbocks",
+  "version": "1.0.0",
+  "author": "Scott Bockelman <scott.bockelman@gmail.com>",
+  "description": "JavaScript Utilities Library for handling dates, numbers, strings, arrays, objects, and json",
   "dependencies": {
     "adm-zip": "^0.5.16",
     "jest": "^29.7.0",
+    "lerna": "^8.1.9",
     "uglify-js": "^3.19.3"
   },
   "type": "module",
   "devDependencies": {
     "jest-ctrf-json-reporter": "^0.0.9"
-  }
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {},
+  "keywords": [
+    "JavaScript",
+    "Library",
+    "Utilities",
+    "JSON",
+    "Date Parsing",
+    "Date Formatting",
+    "Base64",
+    "Compression"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bockelman-scott/bocktils.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bockelman-scott/bocktils/issues"
+  },
+  "homepage": "https://github.com/bockelman-scott/bocktils"
 }

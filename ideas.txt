@@ -1,0 +1,31 @@
+MathUtils - distributions; advanced mathematics
+WorkerUtils
+ServiceWorkerUtils, caching strategies
+.valueOf Symbol [Symbol.toPrimitive]
+Symbol.species
+ObjectFunctor
+breadth-first iterators
+depth-first iterators
+functional programming constructs (birds?)
+Page.Scheduler port
+pending promises
+pending events / event interceptor
+table header nonscrolling
+NumberUtils, fractions, overflows
+asyncLoad modules
+Lerna to publish as separate packages or TurboRepo?
+
+JsDoc
+
+can I rename my repository?
+
+how to scope to @toolbocks?  or ToolBox?  module paths like toolbox/events?
+
+uglify
+parsers
+build
+base64 validation (reject executable files) -- apparently no one knows a sure way to do this and all rely on mime-types and file extensions
+lazy iterators
+short-circuit iterators
+
+base64 for browser - Buffer replacement

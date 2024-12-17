@@ -1,0 +1,17 @@
+{
+  "name": "@toolbocks/base64",
+  "version": "1.0.0",
+  "description": "Encode and Decode data to and from Base64. Compatible with any environment, as it includes a fallback implementation of the Base64 algorithms when native support is missing",
+  "main": "./src/Base64Utils.cjs",
+  "dependencies": {
+    "@toolbocks/core": "^1.0.0",
+    "jest": "^29.7.0"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bockelman-scott/bocktils.git"
+  }
+}
