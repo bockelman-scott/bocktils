@@ -49,7 +49,7 @@
  */
 const core = require( "../../core/src/CoreUtils.cjs" );
 
-const objectUtils = require( "./ObjectUtils.cjs" );
+const objectUtils = require( "../../common/src/ObjectUtils.cjs" );
 
 const { constants, typeUtils, stringUtils, arrayUtils } = core;
 

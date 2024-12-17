@@ -4,7 +4,7 @@ const funcUtils = require( "./FunctionUtils.cjs" );
 
 const objectUtils = require( "./ObjectUtils.cjs" );
 
-const jsonUtils = require( "./JsonUtils.cjs" );
+const jsonUtils = require( "../../json/src/JsonUtils.cjs" );
 
 const { constants, typeUtils, stringUtils, arrayUtils, localeUtils, NumberParser, guidUtils } = core;
 
