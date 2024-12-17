@@ -1,14 +1,17 @@
 /**
- * This module provides a library of commonly used Regular Expressions.
+ * This module provides a library of commonly used Regular Expressions
+ * and a few utility functions for working with regular expressions
  *
  * For more sophisticated use cases,
  * consider using Regex+ (https://www.npmjs.com/package/regex)
  */
+const core = require( "./CoreUtils.cjs" );
 
-const constants = require( "./Constants.cjs" );
-const typeUtils = require( "./TypeUtils.cjs" );
-const stringUtils = require( "./StringUtils.cjs" );
-const arrayUtils = require( "./ArrayUtils.cjs" );
+/**
+ * Establish separate constants for each of the common utilities imported
+ * @see ../src/CommonUtils.cjs
+ */
+const { constants, typeUtils, stringUtils, arrayUtils } = core;
 
 /**
  * Defines a string to represent the type, undefined
