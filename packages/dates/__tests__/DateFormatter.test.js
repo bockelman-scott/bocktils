@@ -1,7 +1,7 @@
-const dateFormatterModule = require( "../packages/dates/src/DateFormatter.cjs" );
+const dateFormatterModule = require( "../src/DateFormatter.cjs" );
 
-const constants = require( "../packages/core/src/Constants.cjs" );
-const dateUtils = require( "../packages/dates/src/DateUtils.cjs" );
+const constants = require( "@toolbocks/core/src/Constants.cjs" );
+const dateUtils = require( "../src/DateUtils.cjs" );
 
 const DateFormatter = dateFormatterModule.DateFormatter;
 

@@ -3,13 +3,15 @@
 // jester.run( __filename );
 
 /** import the dependencies **/
-const constants = require( "../packages/core/src/Constants.cjs" );
+const constants = require( "../src/Constants.cjs" );
 
 /** import the utilities we are testing */
-const stringUtils = require( "../packages/core/src/StringUtils.cjs" );
+const stringUtils = require( "../src/StringUtils.cjs" );
 
 Object.assign( this, constants );
 Object.assign( this, stringUtils );
+
+const repoName = "bocktils";
 
 function testAsString( pStr, pTrim, pOptions )
 {
@@ -1262,7 +1264,7 @@ describe( "Paths", () =>
           {
               let path = "../src/StringUtils.cjs";
               let absolutePath = stringUtils.toAbsolutePath( path, __dirname );
-              expect( absolutePath ).toEqual( "C:/Projects/bocktils/src/StringUtils.cjs" );
+              expect( absolutePath ).toEqual( `C:/Projects/${repoName}/packages/core/src/StringUtils.cjs` );
           } );
 } );
 

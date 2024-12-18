@@ -1,6 +1,6 @@
 /** import dependencies **/
 
-const core = require( "../packages/core/src/CoreUtils.cjs" );
+const core = require( "@toolbocks/core" );
 
 const { constants, typeUtils, stringUtils, arrayUtils } = core;
 

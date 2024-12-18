@@ -1,7 +1,7 @@
 /** import dependencies **/
-const constants = require( "../packages/core/src/Constants.cjs" );
-const typeUtils = require( "../packages/core/src/TypeUtils.cjs" );
-const stringUtils = require( "../packages/core/src/StringUtils.cjs" );
+const core = require( "@toolbocks/core" );
+
+const { constants, typeUtils, stringUtils } = core;
 
 /** define a variable for typeof undefined **/
 const { _ud = "undefined" } = constants;

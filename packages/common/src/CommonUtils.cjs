@@ -1,10 +1,10 @@
-const core = require( "../../core/src/CoreUtils.cjs" );
+const core = require( "@toolbocks/core" );
 
 const funcUtils = require( "./FunctionUtils.cjs" );
 
 const objectUtils = require( "./ObjectUtils.cjs" );
 
-const jsonUtils = require( "../../json/src/JsonUtils.cjs" );
+const jsonUtils = require( "@toolbocks/json" );
 
 const { constants, typeUtils, stringUtils, arrayUtils, localeUtils, NumberParser, guidUtils } = core;
 

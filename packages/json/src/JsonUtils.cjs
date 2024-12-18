@@ -1,4 +1,4 @@
-const core = require( "../../core/src/CoreUtils.cjs" );
+const core = require( "@toolbocks/core" );
 
 const objectUtils = require( "../../common/src/ObjectUtils.cjs" );
 

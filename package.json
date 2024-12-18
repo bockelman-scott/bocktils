@@ -9,14 +9,14 @@
     "lerna": "^8.1.9",
     "uglify-js": "^3.19.3"
   },
-  "type": "module",
+  "type": "commonjs",
   "devDependencies": {
     "jest-ctrf-json-reporter": "^0.0.9"
   },
-  "workspaces": [
-    "packages/*", "packages/json", "packages/regex"
-  ],
-  "scripts": {},
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "test": "jest"
+  },
   "keywords": [
     "JavaScript",
     "Library",

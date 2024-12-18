@@ -5,16 +5,20 @@
 const fs = require( "fs" );
 
 /** import the module we are testing */
-const zipUtils = require( "../packages/compression/src/CompressionUtils.cjs" );
-const stringUtils = require( "../packages/core/src/StringUtils.cjs" );
+const zipUtils = require( "../src/CompressionUtils.cjs" );
+const stringUtils = require( "@toolbocks/core/src/StringUtils.cjs" );
+
+const { toAbsolutePath } = stringUtils;
 
 const utf8 = "utf-8";
+
+const testDataDir = "../../../__test_data__";
 
 test( "empty.zip is an empty archive",
       () =>
       {
-          const zipFileName = "../__test_data__/zip_files/empty.zip";
-          const zipFilePath = stringUtils.toAbsolutePath( zipFileName, __dirname );
+          const zipFileName = `${testDataDir}/zip_files/empty.zip`;
+          const zipFilePath = toAbsolutePath( zipFileName, __dirname );
           const zipContents = fs.readFileSync( zipFilePath );
 
           expect( zipUtils.isEmptyArchive( zipContents ) ).toBe( true );
@@ -23,8 +27,8 @@ test( "empty.zip is an empty archive",
 test( "980.zip is not an empty archive",
       () =>
       {
-          const zipFileName = "../__test_data__/zip_files/980.zip";
-          const zipFilePath = stringUtils.toAbsolutePath( zipFileName, __dirname );
+          const zipFileName = `${testDataDir}/zip_files/980.zip`;
+          const zipFilePath = toAbsolutePath( zipFileName, __dirname );
           const zipContents = fs.readFileSync( zipFilePath );
 
           expect( zipUtils.isEmptyArchive( zipContents ) ).toBe( false );
@@ -33,8 +37,8 @@ test( "980.zip is not an empty archive",
 test( "980.zip is a safe archive",
       () =>
       {
-          const zipFileName = "../__test_data__/zip_files/980.zip";
-          const zipFilePath = stringUtils.toAbsolutePath( zipFileName, __dirname );
+          const zipFileName = `${testDataDir}/zip_files/980.zip`;
+          const zipFilePath = toAbsolutePath( zipFileName, __dirname );
           const zipContents = fs.readFileSync( zipFilePath );
 
           expect( zipUtils.isSafeArchive( zipContents ) ).toBe( true );
@@ -43,8 +47,8 @@ test( "980.zip is a safe archive",
 test( "980.zip has one zip entry",
       () =>
       {
-          const zipFileName = "../__test_data__/zip_files/980.zip";
-          const zipFilePath = stringUtils.toAbsolutePath( zipFileName, __dirname );
+          const zipFileName = `${testDataDir}/zip_files/980.zip`;
+          const zipFilePath = toAbsolutePath( zipFileName, __dirname );
           const zipContents = fs.readFileSync( zipFilePath );
 
           expect( zipUtils.getEntryCount( zipContents ) ).toEqual( 1 );
@@ -53,8 +57,8 @@ test( "980.zip has one zip entry",
 test( "1027.zip has 4 zip entries",
       () =>
       {
-          const zipFileName = "../__test_data__/zip_files/1027.zip";
-          const zipFilePath = stringUtils.toAbsolutePath( zipFileName, __dirname );
+          const zipFileName = `${testDataDir}/zip_files/1027.zip`;
+          const zipFilePath = toAbsolutePath( zipFileName, __dirname );
           const zipContents = fs.readFileSync( zipFilePath );
 
           expect( zipUtils.getEntryCount( zipContents ) ).toEqual( 4 );
@@ -63,8 +67,8 @@ test( "1027.zip has 4 zip entries",
 test( "1027.zip entries are the expected entries",
       () =>
       {
-          const zipFileName = "../__test_data__/zip_files/1027.zip";
-          const zipFilePath = stringUtils.toAbsolutePath( zipFileName, __dirname );
+          const zipFileName = `${testDataDir}/zip_files/1027.zip`;
+          const zipFilePath = toAbsolutePath( zipFileName, __dirname );
           const zipContents = fs.readFileSync( zipFilePath );
 
           const entries = zipUtils.getEntries( zipContents );
@@ -86,8 +90,8 @@ test( "1027.zip entries are the expected entries",
 test( "getEntry - by name - from 1027.zip returns the correct entry",
       () =>
       {
-          const zipFileName = "../__test_data__/zip_files/1027.zip";
-          const zipFilePath = stringUtils.toAbsolutePath( zipFileName, __dirname );
+          const zipFileName = `${testDataDir}/zip_files/1027.zip`;
+          const zipFilePath = toAbsolutePath( zipFileName, __dirname );
           const zipContents = fs.readFileSync( zipFilePath );
 
           const entry = zipUtils.getEntry( zipContents, "1015.edi" );
@@ -107,8 +111,8 @@ const edi_1011 = `ISA*00*          *00*          *ZZ*911446999      *ZZ*13305227
 test( "1011.zip decompresses to edi_1011",
       () =>
       {
-          const zipFileName = "../__test_data__/zip_files/1011.zip";
-          const zipFilePath = stringUtils.toAbsolutePath( zipFileName, __dirname );
+          const zipFileName = `${testDataDir}/zip_files/1011.zip`;
+          const zipFilePath = toAbsolutePath( zipFileName, __dirname );
           const zipContents = fs.readFileSync( zipFilePath );
 
           const entries = zipUtils.getEntries( zipContents );
@@ -126,8 +130,8 @@ test( "1011.zip decompresses to edi_1011",
 test( "1027.zip uncompressed total size is 5,152",
       () =>
       {
-          const zipFileName = "../__test_data__/zip_files/1027.zip";
-          const zipFilePath = stringUtils.toAbsolutePath( zipFileName, __dirname );
+          const zipFileName = `${testDataDir}/zip_files/1027.zip`;
+          const zipFilePath = toAbsolutePath( zipFileName, __dirname );
           const zipContents = fs.readFileSync( zipFilePath );
 
           const size = zipUtils.calculateTotalUncompressedSize( zipContents );

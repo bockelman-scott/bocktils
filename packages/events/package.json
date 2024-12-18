@@ -1,10 +1,11 @@
 {
-  "name": "@toolbocks/json",
+  "name": "@toolbocks/events",
   "version": "1.0.0",
-  "description": "Parse and Interpolate JSON (even if it contains circular-dependencies) and convert self-referential object to JSON",
-  "main": "src/JsonUtils.cjs",
+  "description": "Functions for working with Events and EventTarget",
+  "main": "index.js",
   "dependencies": {
-    "@toolbocks/core": "^1.0.0"
+    "@toolbocks/core": "^1.0.0",
+    "@toolbocks/common": "^1.0.0"
   },
   "devDependencies": {
     "jest": "^29.7.0"

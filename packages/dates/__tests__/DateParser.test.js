@@ -1,6 +1,6 @@
-const dateParserModule = require( "../packages/dates/src/DateParser.cjs" );
+const dateParserModule = require( "../src/DateParser.cjs" );
 
-const constants = require( "../packages/core/src/Constants.cjs" );
+const constants = require( "@toolbocks/core/src/Constants.cjs" );
 
 const { DateParser } = dateParserModule;
 

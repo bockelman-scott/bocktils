@@ -1,0 +1,28 @@
+{
+  "name": "@toolbocks/all",
+  "version": "1.0.0",
+  "description": "Contains all ToolBocks packages and modules in a single package",
+  "main": "index.js",
+  "dependencies": {
+    "@toolbocks/core": "^1.0.0",
+    "@toolbocks/common": "^1.0.0",
+    "@toolbocks/json": "^1.0.0",
+    "@toolbocks/base64" : "^1.0.0",
+    "@toolbocks/compression": "^1.0.0",
+    "@toolbocks/dates": "^1.0.0",
+    "@toolbocks/events": "^1.0.0",
+    "@toolbocks/functors": "^1.0.0",
+    "@toolbocks/math": "^1.0.0",
+    "@toolbocks/regex": "^1.0.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "scripts": {
+    "test": "jest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bockelman-scott/bocktils.git"
+  }
+}

@@ -576,7 +576,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             funcToString,
             funcAsString,
             isLogger,
-            testLogger: function( ...pTestData )
+            __testLogger: function( ...pTestData )
             {
                 (this.logger || modulePrototype.logger).warn( ...pTestData );
             }

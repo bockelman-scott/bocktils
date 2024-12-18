@@ -1,14 +1,14 @@
 /**
- * This statement imports the core utils modules:
+ * This statement imports the core modules:
  * Constants, TypeUtils, StringUtils, and ArrayUtils
  */
-const utils = require( "../../core/src/CoreUtils.cjs" );
+const core = require( "@toolbocks/core" );
 
 /**
  * Establish separate constants for each of the common utilities imported
  * @see ../src/CommonUtils.cjs
  */
-const { constants, typeUtils, stringUtils, arrayUtils } = utils;
+const { constants, typeUtils, stringUtils, arrayUtils } = core;
 
 const { _ud = "undefined" } = constants;
 

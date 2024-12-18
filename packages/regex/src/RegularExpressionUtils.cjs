@@ -5,7 +5,7 @@
  * For more sophisticated use cases,
  * consider using Regex+ (https://www.npmjs.com/package/regex)
  */
-const core = require( "../../core/src/CoreUtils.cjs" );
+const core = require( "@toolbocks/core" );
 
 /**
  * Establish separate constants for each of the common utilities imported

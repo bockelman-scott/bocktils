@@ -3,5 +3,8 @@
   "version": "1.0.0",
   "packages": [
     "packages/*"
-  ]
+  ],
+  "useNx": true,
+  "access": "public",
+  "npmClient": "npm"
 }

@@ -1,10 +1,10 @@
 // no need to require jest here... run this test from the console using 'npx jest'
 // let jester = require( "jest" );
 // jester.run( __filename );
-const arrayUtils = require( "../packages/core/src/ArrayUtils.cjs" );
-const constants = arrayUtils.dependencies.constants || require( "../packages/core/src/Constants.cjs" );
-const typeUtils = arrayUtils.dependencies.typeUtils || require( "../packages/core/src/TypeUtils.cjs" );
-const stringUtils = arrayUtils.dependencies.stringUtils || require( "../packages/core/src/StringUtils.cjs" );
+const arrayUtils = require( "../src/ArrayUtils.cjs" );
+const constants = arrayUtils.dependencies.constants || require( "../src/Constants.cjs" );
+const typeUtils = arrayUtils.dependencies.typeUtils || require( "../src/TypeUtils.cjs" );
+const stringUtils = arrayUtils.dependencies.stringUtils || require( "../src/StringUtils.cjs" );
 
 Object.assign( this, constants );
 Object.assign( this, typeUtils );

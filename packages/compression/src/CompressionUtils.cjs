@@ -26,13 +26,13 @@
  * This statement imports the core utils modules:
  * Constants, TypeUtils, StringUtils, and ArrayUtils
  */
-const utils = require( "../../core/src/CoreUtils.cjs" );
+const core = require( "@toolbocks/core" );
 
 /**
  * Establish separate constants for each of the common utilities imported
- * @see ../src/CommonUtils.cjs
+ * @see ../src/CoreUtils.cjs
  */
-const { constants, typeUtils, stringUtils, arrayUtils } = utils;
+const { constants, typeUtils, stringUtils, arrayUtils } = core;
 
 /**
  * Import adm-zip dependency

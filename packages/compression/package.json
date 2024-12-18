@@ -5,11 +5,13 @@
   "main": "src/CompressionUtils.cjs",
   "dependencies": {
     "@toolbocks/core": "^1.0.0",
-    "adm-zip": "^0.5.16",
+    "adm-zip": "^0.5.16"
+  },
+  "devDependencies": {
     "jest": "^29.7.0"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest"
   },
   "repository": {
     "type": "git",

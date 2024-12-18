@@ -1,8 +1,8 @@
 {
-  "name": "@toolbocks/json",
+  "name": "@toolbocks/math",
   "version": "1.0.0",
-  "description": "Parse and Interpolate JSON (even if it contains circular-dependencies) and convert self-referential object to JSON",
-  "main": "src/JsonUtils.cjs",
+  "description": "",
+  "main": "./src/MathUtils.cjs",
   "dependencies": {
     "@toolbocks/core": "^1.0.0"
   },

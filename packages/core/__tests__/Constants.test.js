@@ -3,7 +3,7 @@
 // jester.run( __filename );
 
 /** import the Constants.cjs we are testing */
-const constants = require( "../packages/core/src/Constants.cjs" );
+const constants = require( "../src/Constants.cjs" );
 
 describe( "Affirmatives", () =>
 {
@@ -913,7 +913,7 @@ describe( "ModulePrototype - Events", () =>
 
         loggedMessages.length = 0;
 
-        mod.testLogger( "some", "logged", "data", { foo: "bar" } );
+        mod.__testLogger( "some", "logged", "data", { foo: "bar" } );
 
         expect( loggedMessages.length ).toEqual( 4 );
         expect( loggedMessages ).toEqual( ["some", "logged", "data", { foo: "bar" }] );

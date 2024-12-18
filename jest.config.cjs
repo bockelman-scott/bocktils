@@ -1,6 +1,7 @@
 const config =
     {
-        "rootDir": (__dirname + "/__tests__/"),
+        rootDir: __dirname,
+        projects: ["<rootDir>/packages/**/__tests__/*.test.js"],
         reporters: [
             "default",
             ["jest-ctrf-json-reporter", {}],

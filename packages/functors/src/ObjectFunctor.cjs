@@ -1,11 +1,8 @@
-const objectUtils = require( "../packages/common/src/ObjectUtils.cjs" );
+const core = require( "@toolbocks/core" );
 
-const { dependencies } = objectUtils;
+const commonUtils = require( "@toolbocks/common" );
 
-const { constants, typeUtils, stringUtils, arrayUtils, guidUtils } = dependencies;
-
-/** create an alias for console **/
-const konsole = console || {};
+const { constants, typeUtils, stringUtils, arrayUtils, objectUtils } = commonUtils;
 
 /** define a variable for typeof undefined **/
 const { _ud = "undefined" } = constants;
@@ -38,8 +35,7 @@ const $scope = constants?.$scope || function()
             typeUtils,
             stringUtils,
             arrayUtils,
-            objectUtils,
-            guidUtils
+            objectUtils
         };
 
     let { _str, _fun, _num, _big, _bool, _symbol, _obj, populateOptions, lock, deepFreeze, classes } = constants;
@@ -87,7 +83,7 @@ const $scope = constants?.$scope || function()
                                        }
                                        catch( ex )
                                        {
-                                           konsole.error( ex );
+                                           // konsole.error( ex );
                                        }
                                    }];
                     break;

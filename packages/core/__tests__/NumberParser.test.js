@@ -1,4 +1,4 @@
-const numParserModule = require( "../packages/core/src/NumberParser.cjs" );
+const numParserModule = require( "../src/NumberParser.cjs" );
 
 const NumberParser = numParserModule.classes.NumberParser;
 
