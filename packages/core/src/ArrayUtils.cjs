@@ -54,6 +54,7 @@ const $scope = constants?.$scope || function()
         S_WARN,
         ignore,
         AsyncFunction,
+        IllegalArgumentError,
         EMPTY_ARRAY,
         populateOptions,
         localCopy,
@@ -79,6 +80,7 @@ const $scope = constants?.$scope || function()
         isNull,
         isString,
         isEmptyString,
+        isNumeric,
         isInteger,
         isObject,
         isArray,
@@ -87,8 +89,11 @@ const $scope = constants?.$scope || function()
         isFunction,
         isDate,
         isClass,
+        areSameType,
+        areCompatibleTypes,
         defaultFor,
-        castTo
+        castTo,
+        toDecimal
     } = typeUtils;
 
     const {
@@ -2145,6 +2150,143 @@ const $scope = constants?.$scope || function()
         return result;
     };
 
+    const _calculateIncrement = function( pNum )
+    {
+        let parts = asString( pNum, true ).split( _dot );
+        let dec = asString( parts.length > 1 ? parts[1].replace( /0+$/, _mt_str ) : _mt_str, true );
+        let power = isEmptyString( dec ) ? 0 : -(dec.length);
+        let increment = Math.pow( 10, power );
+
+        return { increment, power, dec, parts };
+    };
+
+    /**
+     * Returns an iterable that produces values from pFrom to pTo (exclusive).
+     * The iterable is "lazy",
+     * so you can generate extremely large collections of values
+     * without consuming the memory the entire collection would require.
+     *
+     * @param pFrom {number|string} the first value the iterable's iterator should return
+     * @param pTo {number|string} the value at which to stop returning values.  This value will never be returned.
+     * @returns {{[Symbol.iterator](): Generator<*, void, *>}|{[Symbol.iterator]: (function(): {done: boolean}), value}}
+     */
+    const range = function( pFrom, pTo )
+    {
+        let from = pFrom;
+        let to = pTo;
+
+        const types = [typeof from, typeof to];
+
+        if ( !(areCompatibleTypes( pFrom, pTo ) || includesAny( types, _num, _big, _str )) )
+        {
+            throw new IllegalArgumentError( "Both arguments must be the same (or compatible types)" );
+        }
+
+        let bounds = [from, to];
+
+        if ( includesAny( types, _num, _big ) && bounds.every( e => isNumeric( e ) ) )
+        {
+            bounds = bounds.map( toDecimal );
+
+            from = bounds[0];
+            to = bounds[1];
+
+            const sign = from > to ? -1 : 1;
+
+            const { increment: f, power: powerFrom } = _calculateIncrement( from );
+            const { increment: t, power: powerTo } = _calculateIncrement( to );
+
+            const increment = (Math.min( f, t ) * sign);
+
+            const roundTo = Math.max( -powerFrom, -powerTo );
+
+            const condition = function( pValue )
+            {
+                return sign > 0 ? (pValue < to) : (pValue > to);
+            };
+
+            const simpleRound = function( pNum )
+            {
+                if ( roundTo <= 0 )
+                {
+                    return Math.round( pNum );
+                }
+                const p = Math.pow( 10, roundTo );
+                const r = Math.round( pNum * p );
+                return (r / p);
+            };
+
+            return {
+                * [Symbol.iterator]()
+                {
+                    let value = from;
+                    while ( condition( value ) )
+                    {
+                        yield value;
+                        value += increment;
+                        value = simpleRound( value );
+                    }
+                }
+            };
+        }
+        else
+        {
+            function calculateCharacterSequenceData( pStr )
+            {
+                return pStr.split( _mt_str ).map( ( e, i, a ) =>
+                                                  {
+                                                      const hasPrevious = (i > 0);
+                                                      const hasNext = (i < (a.length - 1));
+
+                                                      const character = e;
+                                                      const nextCharacter = hasNext ? a[i + 1] : _mt_str;
+                                                      const prevCharacter = hasPrevious ? a[i - 1] : _mt_str;
+
+                                                      const repeated = character === nextCharacter;
+
+                                                      const code = e.charCodeAt( 0 );
+                                                      const nextCode = isEmptyString( nextCharacter ) ? code : nextCharacter.charCodeAt( 0 );
+
+                                                      const skip = (nextCode - code);
+
+                                                      const firstChar = !hasPrevious;
+                                                      const lastChar = !hasNext;
+
+                                                      return {
+                                                          character,
+                                                          code,
+                                                          skip,
+                                                          repeated,
+                                                          firstChar,
+                                                          lastChar,
+                                                          prevCharacter,
+                                                          nextCharacter
+                                                      };
+                                                  } );
+            }
+
+            bounds = bounds.map( asString );
+
+            from = bounds[0];
+            to = bounds[1];
+
+
+            return {
+                * [Symbol.iterator]()
+                {
+                    let value = from;
+
+                    yield value;
+
+                    let data = calculateCharacterSequenceData( value );
+
+                    // calculate next value
+
+                }
+            };
+        }
+    };
+
     /**
      * Returns true if either of the 2 arrays contains the other
      *
@@ -2840,6 +2982,7 @@ const $scope = constants?.$scope || function()
             createInclusiveFilter,
             firstMatchedValue,
             firstNumericValue,
+            range,
             classes:
                 {
                     Transformer,

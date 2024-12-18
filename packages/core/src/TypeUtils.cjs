@@ -891,6 +891,25 @@ const $scope = constants?.$scope || function()
         return areSame;
     };
 
+    const areCompatibleTypes = function( ...pValues )
+    {
+        if ( areSameType( ...pValues ) )
+        {
+            return true;
+        }
+
+        if ( !isNull( pValues ) )
+        {
+            const values = isLikeArray( pValues, true ) ? [...pValues] : [pValues || _mt_str];
+
+            const types = values.map( e => typeof e );
+
+            return (types.every( e => [_num, _big, _str].includes( typeof e ) ));
+        }
+
+        return false;
+    };
+
     /**
      * Returns true if the specified value is an instance of Map
      * or, if not strict, returns true if the specified value is an object with only string keys
@@ -1850,6 +1869,7 @@ const $scope = constants?.$scope || function()
             isSymbol,
             isType,
             areSameType,
+            areCompatibleTypes,
             instanceOfAny,
             getClass,
             getClassName,

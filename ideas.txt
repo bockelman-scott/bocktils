@@ -1,3 +1,29 @@
+range function to produce arbitrarily large iterables/iterators range( "abc", "xyz" ) = ? -- how to combine characters or should it be string-compliant
+mapping over an infinite set -
+        return a new iterator that applies the mapping function to each value before it yields
+
+        move tests and configure jest for monorepo
+
+        JSDoc, package.html
+
+        "Why?" - document the reasoning behind each function somewhere:
+        example: "string" === someVariable when I meant "string" === tyupeof someVariable
+        minifiers and quoted string literals?
+        memory usage of string literals?
+
+        look for an eliminate further redundancies
+
+        dispatch "trace" events from FunctionUtils (and some selected functions)
+
+LoggingUtils
+    SimpleLogger
+    AsyncLogger
+    EncryptingLogger
+    make them composable
+
+    use notion of "appenders" to handle writing to file, console, database, remote endpoint, or somewhere else
+
+
 MathUtils - distributions; advanced mathematics
 WorkerUtils
 ServiceWorkerUtils, caching strategies

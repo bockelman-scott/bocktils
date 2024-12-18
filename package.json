@@ -14,7 +14,7 @@
     "jest-ctrf-json-reporter": "^0.0.9"
   },
   "workspaces": [
-    "packages/*"
+    "packages/*", "packages/json", "packages/regex"
   ],
   "scripts": {},
   "keywords": [
