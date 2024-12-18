@@ -1,16 +1,25 @@
-// no need to require jest here... run this test from the console using 'npx jest'
-// let jester = require( "jest" );
-// jester.run( __filename );
+const core = require( "@toolbocks/core" );
+
+const { constants, typeUtils, stringUtils } = core;
+
 const eventUtils = require( "../src/EventUtils.cjs" );
 
-const constants = eventUtils.dependencies.constants || require( "@toolbocks/core/src/Constants.cjs" );
-const typeUtils = eventUtils.dependencies.typeUtils || require( "@toolbocks/core/src/TypeUtils.cjs" );
-const stringUtils = eventUtils.dependencies.stringUtils || require( "@toolbocks/core/src/StringUtils.cjs" );
-
-Object.assign( this, constants );
-Object.assign( this, typeUtils );
-Object.assign( this, stringUtils );
-Object.assign( this, eventUtils );
+const {
+    Dispatcher,
+    resolveEvent,
+    resolveEventName,
+    resolveEventData,
+    resolveHandler,
+    resolveOptions,
+    hasHandlerMethod,
+    canHandle,
+    buildHandler,
+    generateHandlerOptions,
+    generateAbortController,
+    generateCancelableHandlerOptions,
+    replaceEventHandler,
+    killEvent
+} = eventUtils;
 
 const obj =
     {
@@ -36,7 +45,7 @@ describe( "resolveEventName", () =>
     test( "resolveEventName( 'onError' ) === 'Error'",
           () =>
           {
-              const eventName = eventUtils.resolveEventName( "onError" );
+              const eventName = resolveEventName( "onError" );
 
               expect( eventName ).toEqual( "Error" );
           } );
@@ -44,7 +53,7 @@ describe( "resolveEventName", () =>
     test( "resolveEventName( 'error' ) === 'error'",
           () =>
           {
-              const eventName = eventUtils.resolveEventName( "error" );
+              const eventName = resolveEventName( "error" );
 
               expect( eventName ).toEqual( "error" );
           } );
@@ -52,7 +61,7 @@ describe( "resolveEventName", () =>
     test( "resolveEventName( 'onError', true ) === 'error'",
           () =>
           {
-              const eventName = eventUtils.resolveEventName( "onError", true );
+              const eventName = resolveEventName( "onError", true );
 
               expect( eventName ).toEqual( "error" );
           } );
@@ -60,7 +69,7 @@ describe( "resolveEventName", () =>
     test( "resolveEventName( '' ) === 'error'",
           () =>
           {
-              const eventName = eventUtils.resolveEventName( "" );
+              const eventName = resolveEventName( "" );
 
               expect( eventName ).toEqual( "error" );
           } );
@@ -68,7 +77,7 @@ describe( "resolveEventName", () =>
     test( "resolveEventName() === 'error'",
           () =>
           {
-              const eventName = eventUtils.resolveEventName();
+              const eventName = resolveEventName();
 
               expect( eventName ).toEqual( "error" );
           } );
@@ -79,7 +88,7 @@ describe( "resolveHandler", () =>
     test( "resolveHandler( object with method )",
           () =>
           {
-              const handler = eventUtils.resolveHandler( obj, "something" );
+              const handler = resolveHandler( obj, "something" );
 
               expect( handler ).toEqual( obj );
           } );
@@ -87,7 +96,7 @@ describe( "resolveHandler", () =>
     test( "resolveHandler( function )",
           () =>
           {
-              const handler = eventUtils.resolveHandler( func, "something" );
+              const handler = resolveHandler( func, "something" );
 
               expect( handler ).toEqual( func );
           } );
@@ -98,19 +107,19 @@ describe( "canHandler", () =>
     test( "canHandle( object with method )",
           () =>
           {
-              expect( eventUtils.canHandle( obj, "something" ) ).toBe( true );
+              expect( canHandle( obj, "something" ) ).toBe( true );
           } );
 
     test( "canHandle( function )",
           () =>
           {
-              expect( eventUtils.canHandle( func, "something" ) ).toBe( true );
+              expect( canHandle( func, "something" ) ).toBe( true );
           } );
 
     test( "canHandle( object without appropriate method )",
           () =>
           {
-              expect( eventUtils.canHandle( obj, "somethingElse" ) ).toBe( false );
+              expect( canHandle( obj, "somethingElse" ) ).toBe( false );
           } );
 
     // testing for a function is pointless, as any function taking at least one argument will be considered a valid handler
@@ -121,7 +130,7 @@ describe( "buildHandler", () =>
     test( "buildHandler( object with method )",
           () =>
           {
-              const handler = eventUtils.buildHandler( obj, "something" );
+              const handler = buildHandler( obj, "something" );
 
               expect( typeof handler ).toEqual( "function" );
               expect( handler?.length ).toEqual( 2 );
@@ -130,7 +139,7 @@ describe( "buildHandler", () =>
     test( "buildHandler( function )",
           () =>
           {
-              const handler = eventUtils.buildHandler( func, "something" );
+              const handler = buildHandler( func, "something" );
 
               expect( typeof handler ).toEqual( "function" );
               expect( handler?.length ).toEqual( 2 );
@@ -141,7 +150,7 @@ describe( "buildHandler", () =>
           {
               const nonHandler = {};
 
-              const handler = eventUtils.buildHandler( nonHandler, "something" );
+              const handler = buildHandler( nonHandler, "something" );
 
               expect( typeof handler ).toEqual( "function" );
               expect( handler?.length ).toEqual( 2 );
@@ -158,7 +167,7 @@ describe( "generateHandlerOptions", () =>
     test( "generateHandlerOptions (no overrides)",
           () =>
           {
-              const options = eventUtils.generateHandlerOptions();
+              const options = generateHandlerOptions();
 
               expect( options ).toEqual( {
                                              capture: false,
@@ -172,7 +181,7 @@ describe( "generateHandlerOptions", () =>
     test( "generateHandlerOptions (with capture)",
           () =>
           {
-              const options = eventUtils.generateHandlerOptions( true );
+              const options = generateHandlerOptions( true );
 
               expect( options ).toEqual( {
                                              capture: true,
@@ -186,7 +195,7 @@ describe( "generateHandlerOptions", () =>
     test( "generateHandlerOptions (for one-time handler)",
           () =>
           {
-              const options = eventUtils.generateHandlerOptions( false, true );
+              const options = generateHandlerOptions( false, true );
 
               expect( options ).toEqual( {
                                              capture: false,
@@ -200,10 +209,10 @@ describe( "generateHandlerOptions", () =>
     test( "generateHandlerOptions (with abort signal)",
           () =>
           {
-              const abortController = eventUtils.generateAbortController();
+              const abortController = generateAbortController();
               const abortSignal = abortController.signal;
 
-              const options = eventUtils.generateHandlerOptions( false, false, false, abortSignal );
+              const options = generateHandlerOptions( false, false, false, abortSignal );
 
               expect( options.signal ).toBe( abortSignal );
           } );
@@ -211,7 +220,7 @@ describe( "generateHandlerOptions", () =>
     test( "generateCancelableHandlerOptions",
           () =>
           {
-              const options = eventUtils.generateCancelableHandlerOptions();
+              const options = generateCancelableHandlerOptions();
 
               expect( options.signal instanceof AbortSignal ).toBe( true );
           } );
@@ -223,7 +232,7 @@ describe( "generateAbortController", () =>
     test( "generateAbortController without an onAbort function",
           () =>
           {
-              const { controller, signal } = eventUtils.generateAbortController();
+              const { controller, signal } = generateAbortController();
 
               expect( controller instanceof AbortController ).toBe( true );
               expect( signal instanceof AbortSignal ).toBe( true );
@@ -234,12 +243,12 @@ describe( "generateAbortController", () =>
           {
               let calledCount = 0;
 
-              const { controller, signal } = eventUtils.generateAbortController();
+              const { controller, signal } = generateAbortController();
 
               expect( controller instanceof AbortController ).toBe( true );
               expect( signal instanceof AbortSignal ).toBe( true );
 
-              const dispatcher = new eventUtils.Dispatcher();
+              const dispatcher = new Dispatcher();
 
               const abortingFunction = function( pEvt, pData )
               {
@@ -270,7 +279,7 @@ describe( "generateCancelableHandlerOptions", () =>
     test( "generateCancelableHandlerOptions without an onAbort function",
           () =>
           {
-              const options = eventUtils.generateCancelableHandlerOptions();
+              const options = generateCancelableHandlerOptions();
 
               const obj =
                   {
@@ -290,7 +299,7 @@ describe( "generateCancelableHandlerOptions", () =>
                       }
                   };
 
-              const dispatcher = new eventUtils.Dispatcher( options, obj );
+              const dispatcher = new Dispatcher( options, obj );
 
               obj.addEventListener( "something", obj.handleSomething, options );
 

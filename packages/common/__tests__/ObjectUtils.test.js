@@ -1,12 +1,13 @@
+const core = require( "@toolbocks/core" );
+
 const objectUtils = require( "../src/ObjectUtils.cjs" );
 
-const constants = objectUtils?.dependencies?.constants;
-const arrayUtils = objectUtils?.dependencies?.arrayUtils;
+const { constants = objectUtils?.dependencies?.constants, arrayUtils = objectUtils?.dependencies?.arrayUtils } = core;
 
 /**
  * Defines a string to represent the type, undefined
  */
-const _ud = constants?._ud || "undefined";
+const { _ud = "undefined" } = constants;
 
 /**
  * This function returns the host environment scope (Browser window, Node.js global, or Worker self)

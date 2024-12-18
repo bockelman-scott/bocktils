@@ -1,7 +1,11 @@
+const core = require( "@toolbocks/core" );
+
 /** import the utilities to test **/
 const jsonUtils = require( "../src/JsonInterpolationUtils.cjs" );
 
-const objectUtils = jsonUtils.dependencies.objectUtils;
+const { dependencies } = jsonUtils;
+
+const { objectUtils } = dependencies;
 
 objectUtils.disableLogging();
 

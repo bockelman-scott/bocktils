@@ -1,9 +1,10 @@
+const core = require( "@toolbocks/core" );
+
 const dateFormatterModule = require( "../src/DateFormatter.cjs" );
 
-const constants = require( "@toolbocks/core/src/Constants.cjs" );
-const dateUtils = require( "../src/DateUtils.cjs" );
+const { constants } = core;
 
-const DateFormatter = dateFormatterModule.DateFormatter;
+const { DateFormatter } = dateFormatterModule;
 
 describe( "DateFormatter", () =>
 {

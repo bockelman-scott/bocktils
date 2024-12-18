@@ -1,6 +1,4 @@
-// no need to require jest here... run this test from the console using 'npx jest'
-// let jester = require( "jest" );
-// jester.run( __filename );
+
 const objectFunctorUtils = require( "../src/ObjectFunctor.cjs" );
 
 const { classes } = objectFunctorUtils;

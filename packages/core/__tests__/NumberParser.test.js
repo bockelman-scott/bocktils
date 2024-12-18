@@ -1,6 +1,6 @@
 const numParserModule = require( "../src/NumberParser.cjs" );
 
-const NumberParser = numParserModule.classes.NumberParser;
+const { NumberParser } = numParserModule;
 
 describe( "NumberParser", () =>
 {
@@ -11,7 +11,7 @@ describe( "NumberParser", () =>
         expect( numberParser instanceof NumberParser ).toBe( true );
 
         expect( numberParser.locale.baseName ).toEqual( new Intl.Locale( "en-US" ).baseName );
-    });
+    } );
 
     test( "Can create a number parser from an Intl.NumberFormat", () =>
     {
@@ -22,7 +22,7 @@ describe( "NumberParser", () =>
         expect( numberParser instanceof NumberParser ).toBe( true );
 
         expect( numberParser.locale.baseName ).toEqual( new Intl.Locale( "en-US" ).baseName );
-    });
+    } );
 
     test( "NumberParser return the correct value for es", () =>
     {
@@ -35,7 +35,7 @@ describe( "NumberParser", () =>
         expect( numberParser.locale.baseName ).toEqual( new Intl.Locale( "es" ).baseName );
 
         expect( numberParser.parse( "1.000,32" ) ).toEqual( 1_000.32 );
-    });
+    } );
 
     test( "NumberParser return the correct value for de", () =>
     {
@@ -48,6 +48,6 @@ describe( "NumberParser", () =>
         expect( numberParser.locale.baseName ).toEqual( new Intl.Locale( "de" ).baseName );
 
         expect( numberParser.parse( "1.000,32" ) ).toEqual( 1_000.32 );
-    });
+    } );
 
-});
+} );

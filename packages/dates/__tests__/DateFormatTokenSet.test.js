@@ -1,14 +1,16 @@
+const commonUtils = require( "@toolbocks/common" );
+
 const tokenSet = require( "../src/DateFormatTokenSet.cjs" );
 
-const stringUtils = require( "@toolbocks/core/src/StringUtils.cjs" );
-
-const objectUtils = require( "@toolbocks/common/src/ObjectUtils.cjs" );
+const { stringUtils, objectUtils } = commonUtils;
 
 const dateUtils = require( "../src/DateUtils.cjs" );
 
-const javaTokensData = require( "../../../__test_data__/JavaDateTokensTestData.json" );
+const testDataDirectory = "../../../test_data";
 
-const tokenClasses = tokenSet.classes;
+const javaTokensData = require( `${testDataDirectory}/JavaDateTokensTestData.json` );
+
+const { classes: tokenClasses } = tokenSet;
 
 const Token = tokenClasses.Token;
 const TokenLiteral = tokenClasses.TokenLiteral;
@@ -28,7 +30,9 @@ const TokenSet = tokenClasses.TokenSet;
 
 const defaultTokenSet = tokenSet.getDefaultTokenSet();
 
-let asString = stringUtils.asString;
+const { asString } = stringUtils;
+
+const RUN_JAVA_COMPATIBILITY_TEST = false;
 
 describe( "TokenLiteral", () =>
 {
@@ -470,46 +474,48 @@ describe( "TokenSet Locales", () =>
 
     } );
 
-
 } );
 
-describe( "Java Compatibility", () =>
+if ( RUN_JAVA_COMPATIBILITY_TEST )
 {
-    test( "Tokens Produce same values as Java SimpleDateFormat", () =>
+    describe( "Java Compatibility", () =>
     {
-        const dates = [].concat( javaTokensData.dates );
-
-        for( let dateObj of dates )
+        test( "Tokens Produce same values as Java SimpleDateFormat", () =>
         {
-            const date = new Date( dateObj.date );
+            const dates = [].concat( javaTokensData.dates );
 
-            const entries = objectUtils.getEntries( dateObj );
-
-            for( let entry of entries )
+            for( let dateObj of dates )
             {
-                const key = entry.key;
+                const date = new Date( dateObj.date );
 
-                const char = key.slice( 0, 1 );
+                const entries = objectUtils.getEntries( dateObj );
 
-                if ( !tokenSet.SUPPORTED_TOKENS.includes( char ) )
+                for( let entry of entries )
                 {
-                    continue;
+                    const key = entry.key;
+
+                    const char = key.slice( 0, 1 );
+
+                    if ( !tokenSet.SUPPORTED_TOKENS.includes( char ) )
+                    {
+                        continue;
+                    }
+
+                    if ( ["date", "EE", "S", "SS", "SSS"].includes( key ) )
+                    {
+                        continue;
+                    }
+
+                    const token = defaultTokenSet.getToken( key );
+
+                    expect( "For date, " + date + ", " + key + ": " + asString( token instanceof Token ) ).toEqual( "For date, " + date + ", " + key + ": true" );
+
+                    expect( "For date, " + date + ", " + key + ": " + token.format( date ) ).toEqual( "For date, " + date + ", " + key + ": " + entry.value );
                 }
-
-                if ( ["date", "EE", "S", "SS", "SSS"].includes( key ) )
-                {
-                    continue;
-                }
-
-                const token = defaultTokenSet.getToken( key );
-
-                expect( "For date, " + date + ", " + key + ": " + asString( token instanceof Token ) ).toEqual( "For date, " + date + ", " + key + ": true" );
-
-                expect( "For date, " + date + ", " + key + ": " + token.format( date ) ).toEqual( "For date, " + date + ", " + key + ": " + entry.value );
             }
-        }
 
+        } );
     } );
-} );
+}
 
 

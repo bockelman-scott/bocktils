@@ -1,9 +1,9 @@
+const core = require( "@toolbocks/core" );
+
 const funcUtils = require( "../src/FunctionUtils.cjs" );
 
-const constants = funcUtils?.dependencies?.constants || require( "@toolbocks/core/src/Constants.cjs" );
-const typeUtils = funcUtils?.dependencies?.typeUtils || require( "@toolbocks/core/src/TypeUtils.cjs" );
-const stringUtils = funcUtils?.dependencies?.stringUtils || require( "@toolbocks/core/src/StringUtils.cjs" );
-const arrayUtils = funcUtils?.dependencies?.arrayUtils || require( "@toolbocks/core/src/ArrayUtils.cjs" );
+const { constants, typeUtils, stringUtils, arrayUtils } = core;
+
 const objectUtils = funcUtils?.dependencies?.objectUtils || require( "../src/ObjectUtils.cjs" );
 
 class A

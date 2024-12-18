@@ -2,17 +2,22 @@
 // let jester = require( "jest" );
 // jester.run( __filename );
 
+const core = require( "@toolbocks/core" );
+
+const { stringUtils } = core;
+
 const fs = require( "fs" );
 
 /** import the module we are testing */
 const zipUtils = require( "../src/CompressionUtils.cjs" );
-const stringUtils = require( "@toolbocks/core/src/StringUtils.cjs" );
 
 const { toAbsolutePath } = stringUtils;
 
+const { isEmptyArchive, isSafeArchive, getEntryCount, getEntries, getEntry, calculateTotalUncompressedSize } = zipUtils;
+
 const utf8 = "utf-8";
 
-const testDataDir = "../../../__test_data__";
+const testDataDir = "../../../test_data";
 
 test( "empty.zip is an empty archive",
       () =>
@@ -21,7 +26,7 @@ test( "empty.zip is an empty archive",
           const zipFilePath = toAbsolutePath( zipFileName, __dirname );
           const zipContents = fs.readFileSync( zipFilePath );
 
-          expect( zipUtils.isEmptyArchive( zipContents ) ).toBe( true );
+          expect( isEmptyArchive( zipContents ) ).toBe( true );
       } );
 
 test( "980.zip is not an empty archive",
@@ -31,7 +36,7 @@ test( "980.zip is not an empty archive",
           const zipFilePath = toAbsolutePath( zipFileName, __dirname );
           const zipContents = fs.readFileSync( zipFilePath );
 
-          expect( zipUtils.isEmptyArchive( zipContents ) ).toBe( false );
+          expect( isEmptyArchive( zipContents ) ).toBe( false );
       } );
 
 test( "980.zip is a safe archive",
@@ -41,7 +46,7 @@ test( "980.zip is a safe archive",
           const zipFilePath = toAbsolutePath( zipFileName, __dirname );
           const zipContents = fs.readFileSync( zipFilePath );
 
-          expect( zipUtils.isSafeArchive( zipContents ) ).toBe( true );
+          expect( isSafeArchive( zipContents ) ).toBe( true );
       } );
 
 test( "980.zip has one zip entry",
@@ -51,7 +56,7 @@ test( "980.zip has one zip entry",
           const zipFilePath = toAbsolutePath( zipFileName, __dirname );
           const zipContents = fs.readFileSync( zipFilePath );
 
-          expect( zipUtils.getEntryCount( zipContents ) ).toEqual( 1 );
+          expect( getEntryCount( zipContents ) ).toEqual( 1 );
       } );
 
 test( "1027.zip has 4 zip entries",
@@ -61,7 +66,7 @@ test( "1027.zip has 4 zip entries",
           const zipFilePath = toAbsolutePath( zipFileName, __dirname );
           const zipContents = fs.readFileSync( zipFilePath );
 
-          expect( zipUtils.getEntryCount( zipContents ) ).toEqual( 4 );
+          expect( getEntryCount( zipContents ) ).toEqual( 4 );
       } );
 
 test( "1027.zip entries are the expected entries",
@@ -71,7 +76,7 @@ test( "1027.zip entries are the expected entries",
           const zipFilePath = toAbsolutePath( zipFileName, __dirname );
           const zipContents = fs.readFileSync( zipFilePath );
 
-          const entries = zipUtils.getEntries( zipContents );
+          const entries = getEntries( zipContents );
 
           expect( entries?.length ).toEqual( 4 );
 
@@ -94,7 +99,7 @@ test( "getEntry - by name - from 1027.zip returns the correct entry",
           const zipFilePath = toAbsolutePath( zipFileName, __dirname );
           const zipContents = fs.readFileSync( zipFilePath );
 
-          const entry = zipUtils.getEntry( zipContents, "1015.edi" );
+          const entry = getEntry( zipContents, "1015.edi" );
 
           expect( entry?.name ).toEqual( "1015.edi" );
 
@@ -115,7 +120,7 @@ test( "1011.zip decompresses to edi_1011",
           const zipFilePath = toAbsolutePath( zipFileName, __dirname );
           const zipContents = fs.readFileSync( zipFilePath );
 
-          const entries = zipUtils.getEntries( zipContents );
+          const entries = getEntries( zipContents );
 
           const data = entries[0].getData();
 
@@ -134,7 +139,7 @@ test( "1027.zip uncompressed total size is 5,152",
           const zipFilePath = toAbsolutePath( zipFileName, __dirname );
           const zipContents = fs.readFileSync( zipFilePath );
 
-          const size = zipUtils.calculateTotalUncompressedSize( zipContents );
+          const size = calculateTotalUncompressedSize( zipContents );
 
           expect( size ).toEqual( 5_152 );
       } );

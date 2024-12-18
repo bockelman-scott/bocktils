@@ -1,13 +1,7 @@
-// no need to require jest here... run this test from the console using 'npx jest'
-// let jester = require( "jest" );
-// jester.run( __filename );
-
 /** import the utilities to test **/
 const typeUtils = require( "../src/TypeUtils.cjs" );
 
-let VALID_TYPES = typeUtils.VALID_TYPES;
-let JS_TYPES = typeUtils.JS_TYPES;
-let TYPE_DEFAULTS = typeUtils.TYPE_DEFAULTS;
+const { VALID_TYPES, JS_TYPES, TYPE_DEFAULTS } = typeUtils;
 
 const anAsyncFunction = async function()
 {

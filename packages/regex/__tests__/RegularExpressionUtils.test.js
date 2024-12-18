@@ -1,33 +1,33 @@
 const rxUtils = require( "../src/RegularExpressionUtils.cjs" );
 
-const RE = rxUtils.REGULAR_EXPRESSIONS;
+const { REGULAR_EXPRESSIONS: RE, FLAGS, VALID_FLAGS, cleanFlags, isQuotedString, classes } = rxUtils;
 
-const MatchesHelper = rxUtils.classes.MatchesHelper;
+const { MatchesHelper } = classes;
 
 describe( "FLAGS", () =>
 {
     test( "FLAGS matches valid/supported RegExp flags",
           () =>
           {
-              expect( Object.values( rxUtils.FLAGS ).join( "" ) ).toEqual( "gidsmyu" );
+              expect( Object.values( FLAGS ).join( "" ) ).toEqual( "gidsmyu" );
           } );
 
     test( "VALID_FLAGS returns an array of valid/supported RegExp flags",
           () =>
           {
-              expect( rxUtils.VALID_FLAGS ).toEqual( ["g", "i", "d", "s", "m", "y", "u"] );
+              expect( VALID_FLAGS ).toEqual( ["g", "i", "d", "s", "m", "y", "u"] );
           } );
 
     test( "cleanFlags returns only valid/supported RegExp flags as string",
           () =>
           {
-              expect( rxUtils.cleanFlags( "abcdefghijklmnop" ) ).toEqual( "gidm" );
+              expect( cleanFlags( "abcdefghijklmnop" ) ).toEqual( "gidm" );
           } );
 
     test( "cleanFlags returns only valid/supported RegExp flags as string",
           () =>
           {
-              expect( rxUtils.cleanFlags( ...(("abcdefghijklmnop").split( "" )) ) ).toEqual( "gidm" );
+              expect( cleanFlags( ...(("abcdefghijklmnop").split( "" )) ) ).toEqual( "gidm" );
           } );
 } );
 
@@ -698,8 +698,6 @@ describe( "REGULAR_EXPRESSIONS", () =>
               const templateWithoutBackTicks = `\`another template?`;
 
               expect( rx.test( templateWithoutBackTicks ) ).toBe( false );
-
-              const isQuotedString = rxUtils.isQuotedString;
 
               expect( isQuotedString( doubleQuotedString ) ).toBe( true );
               expect( isQuotedString( singleQuotedString ) ).toBe( true );

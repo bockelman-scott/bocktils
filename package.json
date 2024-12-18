@@ -4,6 +4,7 @@
   "author": "Scott Bockelman <scott.bockelman@gmail.com>",
   "description": "JavaScript Utilities Library for handling dates, numbers, strings, arrays, objects, and json",
   "dependencies": {
+    "@toolbocks/all": "file:packages",
     "adm-zip": "^0.5.16",
     "jest": "^29.7.0",
     "lerna": "^8.1.9",
@@ -13,7 +14,9 @@
   "devDependencies": {
     "jest-ctrf-json-reporter": "^0.0.9"
   },
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "test": "jest"
   },

@@ -1,15 +1,9 @@
-// no need to require jest here... run this test from the console using 'npx jest'
-// let jester = require( "jest" );
-// jester.run( __filename );
 
 /** import the dependencies **/
 const constants = require( "../src/Constants.cjs" );
 
 /** import the utilities we are testing */
 const stringUtils = require( "../src/StringUtils.cjs" );
-
-Object.assign( this, constants );
-Object.assign( this, stringUtils );
 
 const repoName = "bocktils";
 
