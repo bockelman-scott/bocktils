@@ -6,13 +6,15 @@
   "dependencies": {
     "@toolbocks/all": "file:packages",
     "adm-zip": "^0.5.16",
-    "jest": "^29.7.0",
-    "lerna": "^8.1.9",
-    "uglify-js": "^3.19.3"
+    "lerna": "^8.1.9"
   },
   "type": "commonjs",
   "devDependencies": {
-    "jest-ctrf-json-reporter": "^0.0.9"
+    "jest": "^29.7.0",
+    "jsdoc": "^4.0.4",
+    "@optimics/monorepodoc": "^0.2.7",
+    "jest-ctrf-json-reporter": "^0.0.9",
+    "uglify-js": "^3.19.3"
   },
   "workspaces": [
     "packages/*"
