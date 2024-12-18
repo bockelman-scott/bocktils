@@ -1,5 +1,8 @@
 /**
- * This module is the 'bootstrap' module for modules in the ToolBocks package.
+ * @fileoverview
+ * @name ModulePrototype
+ *
+ * This module is the 'bootstrap' module for modules in the ToolBocks packages.
  *
  * This module defines a base class that all the other modules extend
  * allowing their functions to report errors as events (instead of throwing),
@@ -7,10 +10,12 @@
  * and/or to set either a global logger or per-module loggers.
  *
  * Other useful functionality here includes:
- * ability to cap any iteration to a maximum number of loops
- * ability to create "deep" local and/or immutable copies of objects
- * ability to reliably process options passed to functions that have default options
- * and a factory for creating common comparison functions
+ * <ul>
+ * <li>ability to cap any iteration to a maximum number of loops</li>
+ * <li>ability to create "deep" local and/or immutable copies of objects</li>
+ * <li>ability to reliably process options passed to functions that have default options</li>
+ * <li>and a factory for creating common comparison functions</li>
+ * </ul>
  *
  *
  * @see BockModulePrototype
@@ -20,16 +25,20 @@
  * @see StackTrace
  * @see IterationCap
  * @see ComparatorFactory
+ *
+ * @author Scott Bockelman
+ * @license MIT
  */
 
-/** create an alias for console **/
+/* create an alias for console */
 const konsole = console || {};
 
-/** define a variable for typeof undefined **/
+/* define a variable for typeof undefined */
 const _ud = "undefined";
 
 /**
  * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
+ * @return the global scope, a.k.a. globalThis for the current execution environment
  */
 const $scope = function()
 {
@@ -39,6 +48,7 @@ const $scope = function()
 /**
  * This is the Immediately Invoked Function Expression (IIFE) that defines this module.
  * see: https://developer.mozilla.org/en-US/docs/Glossary/IIFE for more information on this design pattern
+ * @emits event::load
  */
 (function exposeModule()
 {
@@ -109,8 +119,8 @@ const $scope = function()
      * Returns true if the specified argument is an array.
      * Some ancient environments did not define an isArray method on the built-in Array class,
      * so we define our own for safety.
-     * @param pObject
-     * @returns {boolean}
+     * @param pObject {any}
+     * @returns {boolean} true if the specified argument is an array
      */
     function isArray( pObject )
     {
@@ -124,6 +134,12 @@ const $scope = function()
      */
     const SCOPE_MODULE = (_ud !== typeof module) ? module : {};
 
+    /**
+     * Returns true if the execution context is most likely Node.js
+     * by checking for the existence of a global 'module' property, a global function named 'require'
+     * and the absence of globally defined symbols for 'self' and 'window'
+     * @returns {boolean} true if the execution context is most likely Node.js
+     */
     const isNode = function()
     {
         return (_ud === typeof self && _ud === typeof window) && (_ud !== typeof module) && (_fun === typeof require);
@@ -134,6 +150,7 @@ const $scope = function()
      * @see https://developer.mozilla.org/en-US/docs/Web/API/CustomEvent/CustomEvent
      *
      * Use the 'detail' property to share data with event handlers
+     * @class
      */
     class BockModuleEvent extends Event
     {
@@ -170,6 +187,7 @@ const $scope = function()
     if ( _ud === typeof CustomEvent )
     {
         CustomEvent = BockModuleEvent;
+        $scope()["CustomEvent"] = CustomEvent;
     }
 
     /**
@@ -206,8 +224,8 @@ const $scope = function()
      * - Strings, Numbers, Booleans, and Symbols
      * - null values, undefined values
      *
-     * @param pObject
-     * @returns {boolean|boolean}
+     * @param pObject {any} any object or value that might be immutable
+     * @returns {boolean}
      */
     const isReadOnly = function( pObject )
     {
@@ -220,8 +238,10 @@ const $scope = function()
     };
 
     /**
-     * Defines a value to use in recursive functions to bail out before causing a stack overflow
+     * Defines the default value to use in recursive functions to bail out before causing a stack overflow.
+     * Most functions that use recursion accept an options object that allows you to provide a different value for maxStackSize
      * @type {number}
+     * @const
      */
     const MAX_STACK_SIZE = 32;
 
@@ -309,6 +329,12 @@ const $scope = function()
         return _getNumericOption( pOptions, "depth", 0 );
     }
 
+    /**
+     * This is a 'helper' function for reading the maxStackSize property of the localCopy or immutableCopy options
+     * @param pOptions {object} an object expected to have a property named, maxStackSize
+     * @returns {number} an integer value representing the value of that property
+     * @private
+     */
     function _getMaxStackSize( pOptions )
     {
         return Math.min( MAX_STACK_SIZE, _getNumericOption( pOptions, "maxStackSize", MAX_STACK_SIZE ) );
@@ -342,7 +368,7 @@ const $scope = function()
     /**
      * Returns a string compatible with the StackTrace parseFrame method
      *
-     * @param pError {Error}
+     * @param pError {Error} an Error or a string representing a stack trace
      *
      * @returns {string} a string compatible with the StackTrace parseFrame method
      */
@@ -363,6 +389,7 @@ const $scope = function()
     /**
      * This class provides cross-environment functionality related to an error's stack (trace)
      * For more robust functionality, consider https://github.com/stacktracejs/stacktrace.js
+     * @class
      */
     class StackTrace
     {
@@ -482,12 +509,15 @@ const $scope = function()
     /**
      * Defines a default error message to use if there is no message available for an error
      * @type {string}
+     * @const
      */
     const DEFAULT_ERROR_MSG = [S_ERR_PREFIX, S_DEFAULT_OPERATION].join( _spc );
 
     /**
      * This class allows custom Errors to be defined.
      * This class and its subclasses also provide a stack trace regardless of browser or environment
+     * @class
+     * @extends Error
      * @see StackTrace
      */
     class __Error extends Error
@@ -599,6 +629,8 @@ const $scope = function()
      * This subclass of Error is useful when validating function arguments.
      * The message property is overwritten to include the prefix 'IllegalArgumentException',
      * so that if only the message is logged, the type of error is not obscured
+     * @class
+     * @extends __Error
      */
     class IllegalArgumentError extends __Error
     {
@@ -618,6 +650,16 @@ const $scope = function()
         }
     }
 
+    /**
+     * Returns an instance of the custom __Error class from the arguments specified.
+     * If the first argument is already an instance of __Error, just returns that instance.
+     * If the first argument is an instance of Error, constructs a new __Error,
+     * using the provided error's name and setting this instance's cause to the specified error.
+     * If a string is specified for the second argument, that string is used as the message for the returned Error
+     * @param pError {Error|string} perhaps an Error or a string with which to create a new Error
+     * @param pMessage {string|Error} a string to use as the message property of the returned Error or an Error whose message will be used instead
+     * @returns {__Error} an Error (actually an instance of __Error, which provides an environment-agnostic stack trace)
+     */
     function resolveError( pError, pMessage = DEFAULT_ERROR_MSG )
     {
         if ( pError instanceof Error )
@@ -625,9 +667,18 @@ const $scope = function()
             return new __Error( pError );
         }
 
-        return new __Error( (pMessage || pError || DEFAULT_ERROR_MSG), { cause: _obj === typeof (pError) ? pError : _obj === typeof (pMessage) ? pMessage : null } );
+        let cause = pError instanceof Error ? pError : pMessage instanceof Error ? pMessage : null;
+
+        return new __Error( (pMessage || pError || DEFAULT_ERROR_MSG), { cause } );
     }
 
+    /**
+     * Returns a string used when emitting the error event from a function or method.
+     * Constructs a string of the form {ModuleName}::{FunctionName}
+     * @param pModule {string} the name of the module in which the error occurred
+     * @param pFunction {string|function} the name of the function (or the function itself) in which the error occurred
+     * @returns {string} a string used when emitting the error event from a function or method
+     */
     const calculateErrorSourceName = function( pModule, pFunction )
     {
         const modName = _obj === typeof pModule ? (pModule?.moduleName || pModule?.name) : _str === typeof pModule ? pModule : _unknown;
@@ -636,6 +687,12 @@ const $scope = function()
         return (modName || pModule) + _colon + _colon + (funName || pFunction);
     };
 
+    /**
+     * An internal cache of constructed and loaded modules
+     * @type {object}
+     * @dict
+     * @private
+     */
     const MODULE_CACHE = {};
 
     /**
@@ -643,9 +700,9 @@ const $scope = function()
      * It extends EventTarget to allow module functions to emit events when errors occur
      * or when other 'interesting' events occur.
      *
-     * Consuming code can then add event listeners to react appropriately.
+     * Consuming code can add event listeners to react appropriately.
      * An example would be to use event handlers to log errors,
-     * allowing the consumer code to use whatever mechanism desired for logging,
+     * allowing the consumer code to use whatever mechanism is desired for logging,
      * rather than this library spewing unnecessarily to the console.
      *
      * Module documentation will list all the events (other than "error") for which a consumer might listen.
@@ -701,7 +758,7 @@ const $scope = function()
 
         /**
          * Returns the global scope (globalThis) in which this code is executing
-         * @returns {{}}
+         * @returns {object}
          */
         get globalScope()
         {
@@ -710,7 +767,7 @@ const $scope = function()
 
         /**
          * Returns the name of this module
-         * @returns {string}
+         * @returns {string} the name of this module
          */
         get moduleName()
         {
@@ -719,13 +776,21 @@ const $scope = function()
 
         /**
          * Returns the key under which this module may be cached in the global scope
-         * @returns {*}
+         * @returns {string} the key under which this module may be cached in the global scope
          */
         get cacheKey()
         {
             return this.#cacheKey || this.#moduleName;
         }
 
+        /**
+         * Returns a string used when emitting the error event from a function or method.
+         * Constructs a string of the form {ModuleName}::{FunctionName}
+         * @param pModuleName {string} the name of the module in which the error occurred
+         * @default the name of this module
+         * @param pFunction {string|function} the name of the function (or the function itself) in which the error occurred
+         * @returns {string} a string used when emitting the error event from a function or method
+         */
         calculateErrorSourceName( pModuleName, pFunction )
         {
             return calculateErrorSourceName( (pModuleName || this.moduleName), pFunction );
@@ -736,7 +801,7 @@ const $scope = function()
          * or the global logger, if no instance-specific logger is defined.
          *
          * If logging is disabled, this property returns a Mock logger.
-         * If logging is enabled, but neither an instance-specific nor a global logger is specified, the Console object is returned
+         * If logging is enabled, but neither an instance-specific nor a global logger is specified, returns the Console object
          *
          * @returns {object|MockLogger} an object with the following methods: log, info, warn, debug, error, and trace
          */
@@ -852,16 +917,19 @@ const $scope = function()
          * Also, optionally, writes to the logger defined, if logging is enabled
          *
          * The event object passed to the event handlers includes a detail property with...
-         * the Error object
-         * a message
-         * the log level (for example, error, info, warn, etc)
-         * and the 'source' of the error (often a string description of the module and function where the error occurred)
+         * the Error object,
+         * a message,
+         * the log level (for example, error, info, warn, etc.),
+         * and the 'source' of the error (a string description of the module and function where the error occurred)
          *
          * @param pError {Error} the error encountered
          * @param pMessage {string} a specific error message relevant to the occurrence
          * @param pLevel {string} the log level suggested for the error, such as "warn" or "error"
          * @param pSource {string} a description of the source of the error, such as the module and function where the error occurred
          * @param pExtra {...any} one or more extra values to log or include in the dispatched event
+         * @see resolveError
+         * @see calculateErrorSourceName
+         *
          */
         reportError( pError, pMessage = pError?.message || S_DEFAULT_OPERATION, pLevel = S_ERROR, pSource = _mt_str, ...pExtra )
         {
@@ -922,7 +990,7 @@ const $scope = function()
 
         /**
          * Adds the properties and functions of the object to this instance, or module
-         * @param pObject an object defining one or more properties or methods to add to this module
+         * @param pObject {object} an object defining one or more properties or methods to add to this module
          * @returns {BockModulePrototype} this instance, now augmented with the properties and methods of the specified object
          */
         extend( pObject )
@@ -966,6 +1034,7 @@ const $scope = function()
          * @returns {BockModulePrototype} this instance, potentially extended with properties and functions from the specified object
          *
          * Emits a "load" event with this module as its detail data
+         * @emits event::load
          */
         expose( pObject, pCacheKey, pModuleScope = SCOPE_MODULE )
         {
@@ -995,6 +1064,11 @@ const $scope = function()
             return lock( mod || this );
         }
 
+        /**
+         * Asynchronously extend this module and emit the load event when complete
+         * @param pObject {object} another module or object whose properties and functions will be added to this instance
+         * @returns {Promise<BockModulePrototype>} a Promise that resolves to the updated module
+         */
         async enhance( pObject )
         {
             const mod = this.extend( pObject );
@@ -1004,6 +1078,13 @@ const $scope = function()
             return mod;
         }
 
+        /**
+         * This is a static factory method to construct new instance of the ModulePrototype
+         * @param pModuleName {string} the name of the module to construct
+         * @param pCacheKey {string} a key that may be used to cache the module in the global scope
+         * @param pObject {object} (optional) another module or object whose properties and functions will be added to the new instance
+         * @returns {BockModulePrototype} a newly constructed Module with the specified name
+         */
         static create( pModuleName, pCacheKey, pObject )
         {
             let modulePrototype = (_str === typeof pModuleName) ? MODULE_CACHE[pModuleName] : null;
@@ -1020,7 +1101,8 @@ const $scope = function()
     }
 
     /**
-     * Defines a private instance of the ModulePrototype to be used in functions that are not defined as methods
+     * Defines a private instance of the ModulePrototype
+     * to be used in functions that are not defined as methods
      * @see _copy
      * @type {BockModulePrototype}
      */
@@ -1029,6 +1111,12 @@ const $scope = function()
     MODULE_CACHE["GLOBAL_INSTANCE"] = GLOBAL_INSTANCE;
     MODULE_CACHE["__BOCK__MODULE_PROTOTYPE_GLOBAL_INSTANCE__"] = GLOBAL_INSTANCE;
 
+    /**
+     * Makes the specified object available as module that can be imported or required by other code
+     * @param pObject {object|BockModulePrototype} the object or module to export
+     * @param pCacheKey {string} a key under which the exported module may be cached
+     * @returns {BockModulePrototype} the exported module
+     */
     function exportModule( pObject, pCacheKey )
     {
         let mod = pObject;
@@ -1047,6 +1135,11 @@ const $scope = function()
 
     BockModulePrototype.exportModule = exportModule;
 
+    /**
+     * Asynchronously import a module into the current scope
+     * @param pModulePath {string} the name of, or filepath to, the required module
+     * @returns {Promise<BockModulePrototype>} a Promise that resolves to the requested module
+     */
     async function requireModule( pModulePath )
     {
         let mod = MODULE_CACHE[pModulePath];
@@ -1278,7 +1371,7 @@ const $scope = function()
     };
 
     /**
-     * Attempts to coerce, or cast the specified value to the specified type
+     * Attempts to coerce, or cast, the specified value to the specified type
      * @param pValue {any} a value to convert to another type, if possible
      * @param pType {string|function} the type or class to which to convert the specified value
      * @param pStack USED INTERNALLY TO PREVENT INFINITE RECURSION
@@ -1358,7 +1451,7 @@ const $scope = function()
 
     /**
      * These are default options for the ComparatorFactory class.
-     *
+     * @const
      * @type {{caseSensitive: boolean, trimStrings: boolean, nullsFirst: boolean, strict: boolean, reverse: boolean}}
      */
     const DEFAULT_COMPARATOR_OPTIONS =
@@ -1711,6 +1804,10 @@ const $scope = function()
             return this.reverse ? -comp : comp;
         }
 
+        /**
+         * Returns a function that can be passed to the 'sort' method of an order-able object, such as Array
+         * @returns {function(*, *): number} a function that can be passed to the 'sort' method of an order-able object, such as Array
+         */
         comparator()
         {
             const me = this;
@@ -1757,24 +1854,48 @@ const $scope = function()
             return (typeof a === typeof b) && (typeof a === type || (typeIsClass && a instanceof type)) && (typeof b === type || (typeIsClass && b instanceof type));
         }
 
+        /**
+         * Returns a function to sort elements or properties of an order-able object, such as an array
+         * that treats null values as less than any other values
+         * @see ComparatorFactory#comparator
+         * @returns {function(*, *): number}
+         */
         nullsFirstComparator()
         {
             const options = this._copyOptions( { nullsFirst: true } );
             return new ComparatorFactory( this.type, options ).comparator();
         }
 
+        /**
+         * Returns a function to sort elements or properties of an order-able object, such as an array
+         * that treats null values as greater than any other values
+         * @see ComparatorFactory#comparator
+         * @returns {function(*, *): number}
+         */
         nullsLastComparator()
         {
             const options = this._copyOptions( { nullsFirst: false } );
             return new ComparatorFactory( this.type, options ).comparator();
         }
 
+        /**
+         * Returns a function to sort elements or properties of an order-able object, such as an array
+         * that compares string values without regard to case
+         * @see ComparatorFactory#comparator
+         * @returns {function(*, *): number}
+         */
         caseInsensitiveComparator()
         {
             const options = this._copyOptions( { caseSensitive: false, type: "string" } );
             return new ComparatorFactory( options?.type || this.type, options ).comparator();
         }
 
+        /**
+         * Returns a function to sort elements or properties of an order-able object, such as an array
+         * that will reverse the order ordinarily obtained
+         * @see ComparatorFactory#comparator
+         * @returns {function(*, *): number}
+         */
         reverseComparator()
         {
             const options = this._copyOptions( { reverse: true } );
@@ -1785,6 +1906,7 @@ const $scope = function()
     /**
      * This is the maximum allowed value for instances of the IterationCap class
      * @type {number} the maximum allowed value for instances of the IterationCap class
+     * @const
      */
     const MAX_ITERATIONS = 10_000;
 
@@ -1793,6 +1915,7 @@ const $scope = function()
      * If there is any chance that an iteration might never complete,
      * use an instance of IterationCap to limit the iteration to a finite number of executions
      *
+     * @example
      * Example:
      *
      const iterationCap = new IterationCap( 10 );
@@ -1822,16 +1945,28 @@ const $scope = function()
             return this;
         }
 
+        /**
+         * The number of iteration performed thus far
+         * @type {number}
+         */
         get iterations()
         {
             return this.#iterations;
         }
 
+        /**
+         * @type {boolean}
+         *
+         * @returns {boolean} true when the number of iterations has reached the specified limit
+         */
         get reached()
         {
             return (this.#iterations++ >= this.#maxIterations);
         }
 
+        /**
+         * Sets iterations back to 0, allowing this instance to be reused
+         */
         reset()
         {
             this.#iterations = 0;
