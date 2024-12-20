@@ -552,11 +552,16 @@ const $scope = constants?.$scope || function()
 
     /**
      * Returns the decimal representation of the specified value
-     * @param pObj {number|string} a value to convert to a decimal representation
-     * @returns {number} a decimal representation of the specified value
+     * @param pObj {number|string|[number|string]} a value to convert to a decimal representation
+     * @returns {number|[number]} a decimal representation of the specified value
      */
     const toDecimal = function( pObj )
     {
+        if ( isArray( pObj ) )
+        {
+            return [...pObj].map( toDecimal );
+        }
+
         if ( !isNumeric( pObj ) )
         {
             return 0;
@@ -630,11 +635,16 @@ const $scope = constants?.$scope || function()
 
     /**
      * Returns a string representation of the specified value as a hexadecimal number
-     * @param pObj {number|string} a value to convert to base 16 (hexadecimal)
-     * @returns {string} a string representation of the specified value as a hexadecimal (base 16) number
+     * @param pObj {number|string|[number|string]} a value to convert to base 16 (hexadecimal)
+     * @returns {string|[string]} a string representation of the specified value as a hexadecimal (base 16) number
      */
     const toHex = function( pObj )
     {
+        if ( isArray( pObj ) )
+        {
+            return [...pObj].map( toHex );
+        }
+
         let decimalValue = toDecimal( pObj );
 
         const s = decimalValue.toString( 16 );
@@ -645,10 +655,15 @@ const $scope = constants?.$scope || function()
     /**
      * Returns a string representation of the specified value as an octal number
      * @param pObj {number|string} a value to convert to base 8 (octal)
-     * @returns {string} a string representation of the specified value as an octal (base 8) number
+     * @returns {string|string[]} a string representation of the specified value as an octal (base 8) number
      */
     const toOctal = function( pObj )
     {
+        if ( isArray( pObj ) )
+        {
+            return [...pObj].map( toOctal );
+        }
+
         let decimalValue = toDecimal( pObj );
 
         const s = decimalValue.toString( 8 );
@@ -659,14 +674,19 @@ const $scope = constants?.$scope || function()
     /**
      * Returns a string representation of the specified value as a binary number
      *
-     * @param pValue {number|string} a value to convert to base 2 (binary)
+     * @param pValue {number|string|[number|string]} a value to convert to base 2 (binary)
      * @param pPrecision {number} the number of decimal places to include
      *                            if the value is not a whole number (integer) Defaults to 0
      *
-     * @returns {string} a string representation of the specified value as a binary (base 2) number
+     * @returns {string|string[]} a string representation of the specified value as a binary (base 2) number
      */
     const toBinary = function( pValue, pPrecision = 0 )
     {
+        if( isArray( pValue ) )
+        {
+            return [...pValue].map( toBinary );
+        }
+
         let decimalValue = toDecimal( pValue );
 
         let s = decimalValue.toString( 2 );

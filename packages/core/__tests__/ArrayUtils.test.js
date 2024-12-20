@@ -1,10 +1,18 @@
 const arrayUtils = require( "../src/ArrayUtils.cjs" );
 
-const { dependencies } = arrayUtils;
+const {
+    dependencies,
+    RANGE_INCREMENT_OPTIONS,
+    DEFAULT_RANGE_OPTIONS,
+    DEFAULT_NUMERIC_RANGE_OPTIONS,
+    DEFAULT_CHARACTER_RANGE_OPTIONS
+} = arrayUtils;
 
-const { stringUtils } = dependencies;
+const { constants, stringUtils } = dependencies;
 
 const exampleArray = ["a", "b", "c", 1, 2, 3, 4, 5, {}, ["a", "b", "c", 1, 2, 3, 4, 5, {}], new Date(), true, false, null, undefined, function() {}, Object.create( null )];
+
+const { _LETTERS_ENGLISH_LCASE } = constants;
 
 describe( "asArray", () =>
 {
@@ -499,17 +507,17 @@ describe( "Filters/Predicates", () =>
               expect( filtered?.length ).toEqual( 3 );
           } );
 
-    test( "The MATCHES_TYPE Predicate FUNCTION returns a filter to retain only elements of a specific type",
+    test( "The makeTypeFilter Predicate FUNCTION returns a filter to retain only elements of a specific type",
           () =>
           {
               const arr = ["a", 1, true, "b", {}, ["a", "b"]];
 
-              const filtered = arr.filter( arrayUtils.Predicates.MATCHES_TYPE( "string", "boolean" ) );
+              const filtered = arr.filter( arrayUtils.Predicates.makeTypeFilter( "string", "boolean" ) );
 
               expect( filtered ).toEqual( ["a", true, "b"] );
           } );
 
-    test( "The MATCHES_ALL Predicate FUNCTION returns a filter to retain only elements that match all of the filters specified",
+    test( "The makeMatchesAllFilter Predicate FUNCTION returns a filter to retain only elements that match all of the filters specified",
           () =>
           {
               const arr = ["a", 1, true, "b", {}, ["a", "b"]];
@@ -517,12 +525,12 @@ describe( "Filters/Predicates", () =>
               const filter1 = e => "string" === typeof e;
               const filter2 = e => e > "a";
 
-              const filtered = arr.filter( arrayUtils.Predicates.MATCHES_ALL( filter1, filter2 ) );
+              const filtered = arr.filter( arrayUtils.Predicates.makeMatchesAllFilter( filter1, filter2 ) );
 
               expect( filtered ).toEqual( ["b"] );
           } );
 
-    test( "The MATCHES_ANY Predicate FUNCTION returns a filter to retain elements that match ANY of the filters specified",
+    test( "The makeMatchesAnyFilter Predicate FUNCTION returns a filter to retain elements that match ANY of the filters specified",
           () =>
           {
               const arr = ["a", 1, true, "b", {}, ["a", "b"]];
@@ -530,12 +538,12 @@ describe( "Filters/Predicates", () =>
               const filter1 = e => "string" === typeof e;
               const filter2 = e => "object" === typeof e;
 
-              const filtered = arr.filter( arrayUtils.Predicates.MATCHES_ANY( filter1, filter2 ) );
+              const filtered = arr.filter( arrayUtils.Predicates.makeMatchesAnyFilter( filter1, filter2 ) );
 
               expect( filtered ).toEqual( ["a", "b", {}, ["a", "b"]] );
           } );
 
-    test( "The MATCHES_NONE Predicate FUNCTION returns a filter to retain only elements that DO NOT match ANY of the filters specified",
+    test( "The makeMatchesNoneFilter Predicate FUNCTION returns a filter to retain only elements that DO NOT match ANY of the filters specified",
           () =>
           {
               const arr = ["a", "b", "c", 1, 2, 3, {}, [1, 2, 3]];
@@ -543,12 +551,12 @@ describe( "Filters/Predicates", () =>
               const filter1 = e => "number" === typeof e;
               const filter2 = e => Array.isArray( e );
 
-              const filtered = arr.filter( arrayUtils.Predicates.MATCHES_NONE( filter1, filter2 ) );
+              const filtered = arr.filter( arrayUtils.Predicates.makeMatchesNoneFilter( filter1, filter2 ) );
 
               expect( filtered ).toEqual( ["a", "b", "c", {}] );
           } );
 
-    test( "The MATCHES_N_OR_MORE Predicate FUNCTION returns a filter to retain only elements that match the specified number of the filters specified or more",
+    test( "The makeMatchesNPlusFilter Predicate FUNCTION returns a filter to retain only elements that match the specified number of the filters specified or more",
           () =>
           {
               const arr = ["a", "ab", "abc", "b", "bc", "c", 1, 2, 3, 11, 22, 33, {}, ["a", "ab", "abc", "b", "bc", "c", 1, 2, 3, 11, 22, 33, {}]];
@@ -558,12 +566,12 @@ describe( "Filters/Predicates", () =>
               const filter3 = e => "number" === typeof e;
               const filter4 = e => e > 10;
 
-              const filtered = arr.filter( arrayUtils.Predicates.MATCHES_N_OR_MORE( 2, filter1, filter2, filter3, filter4 ) );
+              const filtered = arr.filter( arrayUtils.Predicates.makeMatchesNPlusFilter( 2, filter1, filter2, filter3, filter4 ) );
 
               expect( filtered ).toEqual( ["ab", "abc", "bc", 11, 22, 33] );
           } );
 
-    test( "The MATCHES_ONLY_N Predicate FUNCTION returns a filter to retain only elements that match exactly the specified number of the filters specified",
+    test( "The makeMatchesExactlyNFilter Predicate FUNCTION returns a filter to retain only elements that match exactly the specified number of the filters specified",
           () =>
           {
               const arr = ["a", "ab", "abc", "b", "bc", "c", 1, 2, 3, 11, 22, 33, {}, ["a", "ab", "abc", "b", "bc", "c", 1, 2, 3, 11, 22, 33, {}]];
@@ -574,12 +582,12 @@ describe( "Filters/Predicates", () =>
               const filter4 = e => e > 10;
               const filter5 = e => Array.isArray( e );
 
-              const filtered = arr.filter( arrayUtils.Predicates.MATCHES_ONLY_N( 1, filter1, filter2, filter3, filter4, filter5 ) );
+              const filtered = arr.filter( arrayUtils.Predicates.makeMatchesExactlyNFilter( 1, filter1, filter2, filter3, filter4, filter5 ) );
 
               expect( filtered ).toEqual( ["a", "b", "c", 1, 2, 3] );
           } );
 
-    test( "The MATCHES_LESS_THAN_N Predicate FUNCTION returns a filter to retain only elements that match less than the specified number of the filters specified",
+    test( "The makeMatchesLessThanNFilter Predicate FUNCTION returns a filter to retain only elements that match less than the specified number of the filters specified",
           () =>
           {
               const arr = ["a", "ab", "abc", "b", "bc", "c", 1, 2, 3, 11, 22, 33, {}, ["a", "ab", "abc", "b", "bc", "c", 1, 2, 3, 11, 22, 33, {}]];
@@ -589,7 +597,7 @@ describe( "Filters/Predicates", () =>
               const filter3 = e => "number" === typeof e;
               const filter4 = e => e > 10;
 
-              const filtered = arr.filter( arrayUtils.Predicates.MATCHES_LESS_THAN_N( 2, filter1, filter2, filter3, filter4 ) );
+              const filtered = arr.filter( arrayUtils.Predicates.makeMatchesLessThanNFilter( 2, filter1, filter2, filter3, filter4 ) );
 
               expect( filtered ).toEqual( ["a", "b", "c", 1, 2, 3, {}, ["a", "ab", "abc", "b", "bc", "c", 1, 2, 3, 11, 22, 33, {}]] );
           } );
@@ -698,22 +706,22 @@ describe( "Filters/Predicates", () =>
               expect( arr.filter( arrayUtils.Predicates.NON_BLANK ) ).toEqual( ["abc"] );
           } );
 
-    test( "The MATCHES_REGEXP Predicate FUNCTION returns a filter to retain only elements that satisfy the regular expression",
+    test( "The makeMatchesRexExpFilter Predicate FUNCTION returns a filter to retain only elements that satisfy the regular expression",
           () =>
           {
               const arr = ["abc", "def", "ghi", 2, true, ["abc"], { a: "abc" }, "ABC"];
 
-              const filtered = arr.filter( arrayUtils.Predicates.MATCHES_REGEXP( /[A-Z]/ ) );
+              const filtered = arr.filter( arrayUtils.Predicates.makeMatchesRexExpFilter( /[A-Z]/ ) );
 
               expect( filtered ).toEqual( ["ABC"] );
           } );
 
-    test( "The MATCHES_REGEXP Predicate FUNCTION returns a filter to retain only elements that satisfy the regular expression",
+    test( "The makeMatchesRexExpFilter Predicate FUNCTION returns a filter to retain only elements that satisfy the regular expression",
           () =>
           {
               const arr = ["abc", "def", "ghi", 2, true, ["abc"], { a: "abc" }, "ABC"];
 
-              const filtered = arr.filter( arrayUtils.Predicates.MATCHES_REGEXP( /\w/ ) );
+              const filtered = arr.filter( arrayUtils.Predicates.makeMatchesRexExpFilter( /\w/ ) );
 
               expect( filtered ).toEqual( ["abc", "def", "ghi", "ABC"] );
           } );
@@ -1843,6 +1851,21 @@ describe( "range", () =>
               expect( collector ).toEqual( [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] );
           } );
 
+    test( "ArrayUtils::range returns an iterable from the start to the end (inclusive)",
+          () =>
+          {
+              const iterable = range( 0, 10, { inclusive: true } );
+
+              const collector = [];
+
+              for( let value of iterable )
+              {
+                  collector.push( value );
+              }
+
+              expect( collector ).toEqual( [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10] );
+          } );
+
     test( "ArrayUtils::range returns an iterable in either direction",
           () =>
           {
@@ -1856,6 +1879,21 @@ describe( "range", () =>
               }
 
               expect( collector ).toEqual( [10, 9, 8, 7, 6, 5, 4, 3, 2, 1] );
+          } );
+
+    test( "ArrayUtils::range returns an iterable in either direction (inclusive)",
+          () =>
+          {
+              const iterable = range( 10, 0, { inclusive: true } );
+
+              const collector = [];
+
+              for( let value of iterable )
+              {
+                  collector.push( value );
+              }
+
+              expect( collector ).toEqual( [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0] );
           } );
 
     test( "ArrayUtils::range determines the next value according to the smallest power of ten of its arguments",
@@ -1997,5 +2035,162 @@ describe( "range", () =>
               }
 
               expect( collector ).toEqual( [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] );
+          } );
+
+    test( "ArrayUtils::range can generate character sequences:: a-z",
+          () =>
+          {
+              const iterable = range( "a", "z", { inclusive: true } );
+
+              const collector = [];
+
+              for( let value of iterable )
+              {
+                  collector.push( value );
+              }
+
+              expect( collector ).toEqual( ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"] );
+          } );
+
+    test( "ArrayUtils::range can generate character sequences:: abc-xyz",
+          () =>
+          {
+              const iterable = range( "abc", "xyz", true );
+
+              const collector = [];
+
+              for( let value of iterable )
+              {
+                  collector.push( value );
+              }
+
+              expect( collector ).toEqual( ["abc", "def", "ghi", "jkl", "mno", "pqr", "stu", "vwx", "yz"] );
+          } );
+
+    test( "ArrayUtils::range can generate strange character sequences:: ace-z",
+          () =>
+          {
+              const iterable = range( "ace", "z",
+                                      {
+                                          inclusive: true,
+                                          increment_rule: RANGE_INCREMENT_OPTIONS.SEQUENCE_PLUS_LAST_SKIP
+                                      } );
+
+              const collector = [];
+
+              for( let value of iterable )
+              {
+                  collector.push( value );
+              }
+
+              expect( collector ).toEqual( ["ace", "gik", "moq", "suw", "y"] );
+          } );
+
+    test( "ArrayUtils::range edge cases -  1",
+          () =>
+          {
+              const iterable = range( "aaa", "z", { inclusive: true } );
+
+              const collector = [];
+
+              for( let value of iterable )
+              {
+                  collector.push( value );
+              }
+
+              expect( collector ).toEqual( _LETTERS_ENGLISH_LCASE.map( e => e.repeat( 3 ) ) );
+          } );
+
+    test( "ArrayUtils::range edge cases -  2",
+          () =>
+          {
+              const iterable = range( "ace", "z", { inclusive: true } );
+
+              const collector = [];
+
+              for( let value of iterable )
+              {
+                  collector.push( value );
+              }
+
+              expect( collector ).toEqual( ["ace", "dfh", "gik", "jln", "moq", "prt", "suw", "vxz"] );
+          } );
+
+    test( "ArrayUtils::range edge cases -  3",
+          () =>
+          {
+              const iterable = range( "ace", "z",
+                                      {
+                                          inclusive: true,
+                                          increment_rule: RANGE_INCREMENT_OPTIONS.INCREMENT
+                                      } );
+
+              const collector = [];
+
+              for( let value of iterable )
+              {
+                  collector.push( value );
+              }
+
+              expect( collector ).toEqual( ["ace", "bdf", "ceg", "dfh", "egi", "fhj", "gik",
+                                            "hjl", "ikm", "jln", "kmo", "lnp", "moq", "npr",
+                                            "oqs", "prt", "qsu", "rtv", "suw", "tvx", "uwy",
+                                            "vxz"] );
+          } );
+
+    test( "ArrayUtils::range edge cases -  4",
+          () =>
+          {
+              const iterable = range( "aabbcc", "n",
+                                      {
+                                          inclusive: true,
+                                          increment_rule: RANGE_INCREMENT_OPTIONS.INCREMENT
+                                      } );
+
+              const collector = [];
+
+              for( let value of iterable )
+              {
+                  collector.push( value );
+              }
+
+              expect( collector ).toEqual( [
+                                               "aabbcc",
+                                               "bbccdd",
+                                               "ccddee",
+                                               "ddeeff",
+                                               "eeffgg",
+                                               "ffgghh",
+                                               "gghhii",
+                                               "hhiijj",
+                                               "iijjkk",
+                                               "jjkkll",
+                                               "kkllmm",
+                                               "llmmnn"
+                                           ] );
+          } );
+
+    test( "ArrayUtils::range edge cases -  5",
+          () =>
+          {
+              const iterable = range( "aabbcc", "n", {
+                  inclusive: true,
+                  increment_rule: RANGE_INCREMENT_OPTIONS.SEQUENCE_LENGTH
+              } );
+
+              const collector = [];
+
+              for( let value of iterable )
+              {
+                  collector.push( value );
+              }
+
+              expect( collector ).toEqual( [
+                                               "aabbcc",
+                                               "ddeeff",
+                                               "gghhii",
+                                               "jjkkll",
+                                               "mmnn"
+                                           ] );
           } );
 } );
