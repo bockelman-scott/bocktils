@@ -1,10 +1,14 @@
 node_modules
+jsdoc-templates
 
 package-lock.json
 
 .idea
 .idea/*
 *.iml
+
+**/out
+**/out/*
 
 build/staging
 build/dist
@@ -14,5 +18,3 @@ staging
 dist
 ctrf
 
-
-reflect_files.js
