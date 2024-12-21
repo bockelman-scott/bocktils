@@ -756,7 +756,7 @@ const $scope = constants?.$scope || function()
      * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Grammar_and_Types#object_literals
      *
      * @param {*} pStr
-     * @param {object} pOptions
+     * @param {Object} pOptions
      */
     const asKey = function( pStr, pOptions = DEFAULT_AS_KEY_OPTIONS )
     {
@@ -1253,7 +1253,7 @@ const $scope = constants?.$scope || function()
      * and the decimal symbol replaced with a dot (.)
      *
      * @param pInput {string|number} the string (or number) to clean
-     * @param pOptions {object} (optional) an object identifying the characters used for the grouping separator, decimal point, and currency
+     * @param pOptions {Object} (optional) an object identifying the characters used for the grouping separator, decimal point, and currency
      * @returns {string} a string representing a numeric value with the grouping separator(s) removed,
      * currency symbol removed,
      * the bigint literal 'n' removed
@@ -1570,7 +1570,7 @@ const $scope = constants?.$scope || function()
      *                                                               (such as an Array or String)
      * @param {number} pIndex - candidate value to return
      * @param {*} pIndexed - an object with a length property that represents an ability to address its properties via a numeric value for which pIndex will be used
-     * @param {object} pOptions - a set of options to control subtle behaviors of the function, such as whether 0 or the last valid index is returned when the provided index is invalid
+     * @param {Object} pOptions - a set of options to control subtle behaviors of the function, such as whether 0 or the last valid index is returned when the provided index is invalid
      * @returns {number} a number between 0 and one less than the length of the indexed object (i.e., Array or String)
      */
     const safeIndex = function( pIndex, pIndexed, pOptions = { defaultToEnd: false } )
@@ -2070,7 +2070,7 @@ const $scope = constants?.$scope || function()
      *
      * @param {number} pNum a value to check for numeric validity
      *
-     * @param {object} pOptions (optional) an object defining the minimum and maximum valid values accepted
+     * @param {Object} pOptions (optional) an object defining the minimum and maximum valid values accepted
      *
      * @returns true if the argument is a number (and optionally, if it is in the valid range defined in the pOptions argument)
      */
@@ -2458,7 +2458,7 @@ const $scope = constants?.$scope || function()
      * especially the ability to pass one or more functions to transform the result
      *
      * @param {string} pString - the value to trim and return as a String
-     * @param {object} pOptions - optional operations or transformations to perform on the string,
+     * @param {Object} pOptions - optional operations or transformations to perform on the string,
      *                            such as toLowerCase, toUpperCase, removeRedundantSpaces, replaceSpacesWithTabs, replaceTabsWithSpaces, etc.
      *                            It is also possible to pass one or more functions to apply to the string before it is returned.
      *

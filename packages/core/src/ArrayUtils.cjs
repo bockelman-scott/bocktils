@@ -193,9 +193,9 @@ const $scope = constants?.$scope || function()
      * This is an internal function
      * that performs post-processing on arrays before they are returned from the asArray function;
      *
-     * @param pArr {[any]}
-     * @param pOptions {object} the object whose properties define the post-processing operations
-     * @returns {*[]}
+     * @param pArr {[]}
+     * @param pOptions {Object} the object whose properties define the post-processing operations
+     * @returns {[]}
      */
     const processAsArrayOptions = function( pArr, pOptions )
     {
@@ -248,7 +248,7 @@ const $scope = constants?.$scope || function()
      * if the input is a function, we execute that function with the options as its argument, passing the result back into this function
      * if the input is an object, we create aa new array populated with the "first-level" properties of the object and then returned
      * @param {any} pValue
-     * @param {object} pOptions
+     * @param {Object} pOptions
      * @param pRecursions {number} USED INTERNALLY TO PREVENT INFINITE RECURSION; DO NOT PASS A VALUE
      * @returns an Array, based on the input
      */
@@ -1080,7 +1080,7 @@ const $scope = constants?.$scope || function()
 
             /**
              * This function returns a mapper to convert elements into strings according to the options specified
-             * @param pOptions {object}
+             * @param pOptions {Object}
              * @returns {function(*): *}
              *
              * @see stringUtils#asString
@@ -2396,7 +2396,7 @@ const $scope = constants?.$scope || function()
     /**
      * Calculates the increment used to map the current value to the next value to return
      * @param pValue {number|string} the number or string from which to calculate the increment used by the range function
-     * @param pOptions {object} an object defining the options for the range function, such as inclusive versus exclusive and how to calculate the increment
+     * @param pOptions {Object} an object defining the options for the range function, such as inclusive versus exclusive and how to calculate the increment
      * @returns {{increment: (number|number), power: (number|number)}|{increment: *, power: (number|number)}|{increment: number, power: (number|number)}}
      * @private
      */
@@ -2479,7 +2479,7 @@ const $scope = constants?.$scope || function()
      *
      * @param pFrom {number|string} the first value the iterable's iterator should return
      * @param pTo {number|string} the value at which to stop returning values.
-     * @param pOptions {object} an object to specify whether the range is inclusive or exclusive of the 'to' value
+     * @param pOptions {Object} an object to specify whether the range is inclusive or exclusive of the 'to' value
      *                          and to define how to increment value to produce the next value in the sequence
      * @returns {{[Symbol.iterator](): Generator<*, void, *>}|{[Symbol.iterator]: (function(): {done: boolean}), value}}
      * @throws IllegalArgumentError if the from and to arguments are not the same type or compatible types (such as number and string, for example)

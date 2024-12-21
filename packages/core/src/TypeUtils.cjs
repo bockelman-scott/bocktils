@@ -268,7 +268,7 @@ const $scope = constants?.$scope || function()
      * @see DEFAULT_IS_OBJECT_OPTIONS
      * @see isPrimitiveWrapper
      * @param pObj {any} a value to evaluate
-     * @param pOptions {object} an object specifying how to handle arrays, null values, or primitive wrappers
+     * @param pOptions {Object} an object specifying how to handle arrays, null values, or primitive wrappers
      * @returns {boolean} true if the specified value is an object
      */
     const isObject = function( pObj, pOptions = DEFAULT_IS_OBJECT_OPTIONS )
@@ -723,7 +723,7 @@ const $scope = constants?.$scope || function()
      * Optionally, you can pass options to consider objects with no properties as 'null objects'
      * @param pObject {any} a value to evaluate
      * @param pStrict {boolean} specify true to treat any value that is not identical to null as not-null
-     * @param pOptions {object} an object to clarify how to handle objects that are not null, but have no properties, i.e., {}
+     * @param pOptions {Object} an object to clarify how to handle objects that are not null, but have no properties, i.e., {}
      * @returns {boolean} true if the specified value is an object and is not null
      */
     const isNonNullObject = function( pObject, pStrict = false, pOptions = { allow_empty_object: true } )
@@ -1133,7 +1133,7 @@ const $scope = constants?.$scope || function()
 
     /**
      * Returns true if the specified object is an instance of one (or more) of the specified classes
-     * @param pObject {object} an object to evaluate
+     * @param pObject {Object} an object to evaluate
      * @param pClasses {...function} one or more classes to which to compare the specified object's prototype
      * @returns {boolean} true if the specified object is an instance of one (or more) of the specified classes
      */
@@ -1186,7 +1186,7 @@ const $scope = constants?.$scope || function()
 
     /**
      * Returns true if the specified function is a class that is not a built-in JavaScript type
-     * @param pObject {object} an object to evaluate
+     * @param pObject {Object} an object to evaluate
      * @param pClass {function} specify a specific class to restrict the comparison to a specific user-defined class
      * @returns {boolean} true if the specified object is an instance of a class that is not a built-in JavaScript type
      */
@@ -1198,7 +1198,7 @@ const $scope = constants?.$scope || function()
 
     /**
      * Returns true if the specified object is an instance of one or more of the specified classes
-     * @param pObject {object} an object to evaluate
+     * @param pObject {Object} an object to evaluate
      * @param pListedClasses {...function} one or more classes to which to compare the specified object's prototype
      * @returns {boolean} true if the specified object is an instance of one or more of the specified classes
      */
