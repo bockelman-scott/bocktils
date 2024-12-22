@@ -515,7 +515,9 @@ const $scope = constants?.$scope || function()
      */
     const isZero = function( pValue, pStrict = true )
     {
-        return (pStrict ? isNumber( pValue ) : isNumeric( pValue )) && (0 === pValue || /^0+$/.test( _toString( pValue ) ));
+        const valid = pStrict ? isNumber( pValue ) : isNumeric( pValue );
+
+        return valid && ((0 === pValue || /^0+$/.test( _toString( pValue ) )) || (Math.round( parseFloat( pValue ) ) === 0 && Math.abs( parseFloat( pValue ) ) < 0.000000000000001));
     };
 
     function getDigitsMap( pBase )
@@ -682,7 +684,7 @@ const $scope = constants?.$scope || function()
      */
     const toBinary = function( pValue, pPrecision = 0 )
     {
-        if( isArray( pValue ) )
+        if ( isArray( pValue ) )
         {
             return [...pValue].map( toBinary );
         }
