@@ -18,6 +18,8 @@ const sum = function( ...pArgs )
 
 const
     {
+        classes,
+
         DateConstants,
 
         US_HOLIDAYS,
@@ -69,10 +71,18 @@ const
         endOfWeek,
         endOfDay,
         endOfHour,
-        endOfMinute
+        endOfMinute,
+
+        getWeekdays,
+        getBusinessDays,
+
+        isDate,
+        isWeekend,
+        isHoliday
 
     } = dateUtils;
 
+const { DatesIterable } = classes;
 
 const today = new Date();
 const yesterday = new Date( today.getTime() - ONE_DAY );
@@ -1010,3 +1020,99 @@ describe( "Work Day / Business Days functionality", () =>
 
           } );
 } );
+
+
+// uncomment to test DatesIterable; IN their present state, these tests take almost 10 minutes to run, so...
+/*
+ describe( "getWeekdays", () =>
+ {
+ test( "weekdays starting with October 3rd, 1967 and ending on April 4th, 1999",
+ () =>
+ {
+ const startDate = new Date( 1967, 9, 3 );
+ const endDate = new Date( 1999, 3, 4 );
+
+ const weekdays = getWeekdays( startDate, endDate );
+
+ let count = 0;
+
+ for( let weekday of weekdays )
+ {
+ count += isDate( weekday ) ? 1 : 0;
+ }
+
+ expect( count ).toEqual( 8_219 );
+ } );
+
+ test( "Mondays starting with October 3rd, 1967 and ending on April 4th, 1999",
+ () =>
+ {
+ const startDate = new Date( 1967, 9, 3 );
+ const endDate = new Date( 1999, 3, 4 );
+
+ let count = 0;
+
+ const iterable = new DatesIterable( startDate, endDate );
+
+ iterable.map( toNoon );
+
+ iterable.filter( ( date ) => null != date && date.getDay() === 1 );
+
+ for( let monday of iterable )
+ {
+ expect( monday.getHours() ).toEqual( 12 );
+ expect( monday.getDay() ).toEqual( 1 );
+
+ count += isDate( monday ) ? 1 : 0;
+ }
+
+ expect( count ).toEqual( 1_643 );
+ } );
+ } );
+
+ describe( "getWorkdays", () =>
+ {
+ test( "business days starting with October 3rd, 1967 and ending on April 4th, 1999",
+ () =>
+ {
+ const startDate = new Date( 1967, 9, 3 );
+ const endDate = new Date( 1999, 3, 4 );
+
+ const weekdays = getBusinessDays( startDate, endDate );
+
+ let count = 0;
+
+ for( let weekday of weekdays )
+ {
+ count += isDate( weekday ) ? 1 : 0;
+ }
+
+ expect( count ).toEqual( 8_219 );
+ } );
+
+ test( "Working Mondays starting with October 3rd, 1967 and ending on April 4th, 1999",
+ () =>
+ {
+ const startDate = new Date( 1967, 9, 3 );
+ const endDate = new Date( 1999, 3, 4 );
+
+ let count = 0;
+
+ const iterable = new DatesIterable( startDate, endDate );
+
+ iterable.map( toNoon );
+
+ iterable.filter( ( date ) => null != date && date.getDay() === 1 && !isHoliday( date ) );
+
+ for( let monday of iterable )
+ {
+ expect( monday.getHours() ).toEqual( 12 );
+ expect( monday.getDay() ).toEqual( 1 );
+
+ count += isDate( monday ) ? 1 : 0;
+ }
+
+ expect( count ).toEqual( 1_643 );
+ } );
+ } );
+ */

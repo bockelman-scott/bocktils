@@ -32,13 +32,13 @@ const $scope = core?.$scope || constants?.$scope || function()
             arrayUtils
         };
 
-    const { classes, lock, IterationCap, IllegalArgumentError } = constants;
+    const { classes, lock, populateOptions, IterationCap, IllegalArgumentError } = constants;
 
     const { Result, isDate, isNumber, isFunction } = typeUtils;
 
     const { asString, asInt, toBool } = stringUtils;
 
-    const { asArray, varargs } = arrayUtils;
+    const { asArray, varargs, Filters } = arrayUtils;
 
     const { attempt, op_true, op_false } = funcUtils;
 
@@ -964,14 +964,16 @@ const $scope = core?.$scope || constants?.$scope || function()
     {
         #name;
         #definition;
-
         #mondayRule;
+
+        #cache;
 
         constructor( pName, pDefinition, pMondayRule = function( pDate ) { return pDate; } )
         {
             this.#name = asString( pName );
             this.#definition = lock( pDefinition );
             this.#mondayRule = pMondayRule;
+            this.#cache = new Map();
         }
 
         static get [Symbol.species]()
@@ -1010,6 +1012,8 @@ const $scope = core?.$scope || constants?.$scope || function()
 
         generate( pStartDate, pEndDate )
         {
+            let cache = this.#cache || new Map();
+
             let dates = [];
 
             let startDate;
@@ -1028,11 +1032,13 @@ const $scope = core?.$scope || constants?.$scope || function()
 
                 for( let year = startYear, stopYear = endDate.getFullYear(); year <= stopYear; year++ )
                 {
-                    let date = this.#definition.calculateDate( year );
+                    let date = cache.get( year ) || this.#definition.calculateDate( year );
 
                     date = this._applyMondayRule( date );
 
                     dates.push( date );
+
+                    cache.set( year, date );
                 }
 
                 dates = dates.filter( date => isDate( date ) && (toTimestamp( date ) > toTimestamp( toMidnight( pStartDate ) )) && (toTimestamp( date ) <= toTimestamp( lastInstant( endDate ) )) );
@@ -1266,7 +1272,7 @@ const $scope = core?.$scope || constants?.$scope || function()
             const millis = newDate.getMilliseconds();
 
             // convert as noon to avoid some potential DST side effects
-            newDate = new Date( toNoon( newDate ) );
+            newDate = toNoon( newDate );
 
             // add the days
             newDate.setDate( newDate.getDate() + numDays );
@@ -1306,6 +1312,11 @@ const $scope = core?.$scope || constants?.$scope || function()
         return addWeeks( pDate, -(numWeeks) );
     };
 
+    const isWeekend = function( pDate )
+    {
+        return isValidDateArgument( pDate ) && [DateConstants.Days.SATURDAY, DateConstants.Days.SUNDAY].includes( pDate.getDay() );
+    };
+
     const avoidWeekend = function( pDate, pDirection = DateConstants.Direction.FUTURE )
     {
         if ( isValidDateArgument( pDate ) )
@@ -1342,7 +1353,6 @@ const $scope = core?.$scope || constants?.$scope || function()
 
             const sign = numDays < 0 ? -1 : 1;
 
-            // const startDate = avoidWeekend( pDate, sign );
             let startDate = new Date( pDate );
             const startDay = startDate.getDay();
 
@@ -1387,7 +1397,7 @@ const $scope = core?.$scope || constants?.$scope || function()
 
     /**
      * Returns an array of dates representing holidays that fall on a weekday
-     * given array of holidays and/or dates.
+     * given an array of holidays and/or dates.
      *
      * @param pHolidays {Array<Holiday|Date>} an array of elements that are with Dates or Holidays
      * @param pStartDate the first potential date to return in the calculated holidays
@@ -1405,6 +1415,22 @@ const $scope = core?.$scope || constants?.$scope || function()
 
         return holidays.filter( DateFilters.WEEKDAYS ).filter( DateFilters.between( toMidnight( pStartDate ), lastInstant( pEndDate ) ) );
     }
+
+    const isHoliday = function( pDate, pHolidays = HOLIDAYS.USA )
+    {
+        if ( isValidDateArgument( pDate ) )
+        {
+            let holidays = asArray( pHolidays || HOLIDAYS.USA );
+
+            holidays = holidays.map( e => isDate( e ) ? e : e instanceof Holiday ? e.generate( pDate, addDays( pDate, 366 ) ) : null ).flat();
+
+            holidays = arrayUtils.pruneArray( holidays ).map( toNoon );
+
+            return holidays.includes( toNoon( pDate ) );
+        }
+
+        return false;
+    };
 
     /**
      * Returns the number of working days (excludes weekends and any defined holidays)
@@ -1447,6 +1473,232 @@ const $scope = core?.$scope || constants?.$scope || function()
         return 0;
     };
 
+    const DATES_ITERABLE_OPTIONS =
+        {
+            interval: 1,
+            includeWeekends: false,
+            includeHolidays: true,
+            maxDates: 10_000,
+            exitCriteria: function( pDate, pEndDate, pIterations )
+            {
+                return pIterations >= this.maxDates || isValidDateArgument( pEndDate ) && pDate >= pEndDate;
+            },
+            holidays: HOLIDAYS.USA
+        };
+
+    const DATES_ITERABLE_WORKDAY_OPTIONS =
+        {
+            ...DATES_ITERABLE_OPTIONS,
+        };
+    DATES_ITERABLE_WORKDAY_OPTIONS.includeHolidays = false;
+
+    class DatesIterable
+    {
+        #startDate;
+        #endDate;
+
+        #options;
+
+        #interval = 1;
+        #maxDates = 10_000;
+
+        #includeWeekends = false;
+        #includeHolidays = false;
+
+        #holidays = [];
+
+        #iterations = 0;
+
+        #mappers = [];
+        #filters = [];
+
+        #exitCriteria = ( pDate, pEndDate, pIterations, pMaxIterations ) =>
+        {
+            return asInt( pIterations ) >= asInt( pMaxIterations ) || (isValidDateArgument( pEndDate ) && pDate >= pEndDate);
+        };
+
+        constructor( pStartDate, pEndDate, pOptions = DATES_ITERABLE_OPTIONS )
+        {
+            this.#startDate = lock( isValidDateArgument( pStartDate ) ? new Date( pStartDate ) : new Date() );
+            this.#endDate = isValidDateArgument( pEndDate ) ? lock( new Date( pEndDate ) ) : null;
+
+            this.#options = lock( populateOptions( pOptions, DATES_ITERABLE_OPTIONS ) );
+
+            this.#interval = Math.max( 1, asInt( this.#options.interval ) );
+            this.#maxDates = Math.min( 32_000, asInt( this.#options.maxDates ) || this.#maxDates );
+
+            this.#includeWeekends = !!this.#options.includeWeekends;
+            this.#includeHolidays = !!this.#options.includeHolidays;
+
+            this.#holidays = asArray( this.#options.holidays || HOLIDAYS.USA );
+
+            this.#exitCriteria = isFunction( this.#options.exitCriteria ) ? this.#options.exitCriteria || this.#exitCriteria : this.#exitCriteria;
+
+            this.#iterations = 0;
+        }
+
+        get startDate()
+        {
+            return isValidDateArgument( this.#startDate ) ? this.#startDate : new Date();
+        }
+
+        get endDate()
+        {
+            return isValidDateArgument( this.#endDate ) ? this.#endDate : null;
+        }
+
+        get iterations()
+        {
+            return this.#iterations;
+        }
+
+        get options()
+        {
+            return this.#options;
+        }
+
+        get maxDates()
+        {
+            return asInt( this.#maxDates ) || asInt( DATES_ITERABLE_OPTIONS.maxDates );
+        }
+
+        get interval()
+        {
+            return Math.max( asInt( this.#interval ), 1 );
+        }
+
+        get includeWeekends()
+        {
+            return true === this.#includeWeekends;
+        }
+
+        get includeHolidays()
+        {
+            return true === this.#includeHolidays;
+        }
+
+        get holidays()
+        {
+            return asArray( this.#holidays || HOLIDAYS.USA );
+        }
+
+        get exitCriteria()
+        {
+            return isFunction( this.#exitCriteria ) ? this.#exitCriteria : ( pDate, pEndDate, pIterations, pMaxIterations ) =>
+            {
+                return pIterations >= pMaxIterations || (isValidDateArgument( pEndDate ) && pDate >= pEndDate);
+            };
+        }
+
+        map( ...pFunctions )
+        {
+            this.#mappers = asArray( varargs( ...pFunctions ) ).filter( Filters.IS_FUNCTION ) || [];
+        }
+
+        filter( ...pFunctions )
+        {
+            this.#filters = asArray( varargs( ...pFunctions ) ).filter( Filters.IS_FUNCTION ) || [];
+        }
+
+        get mappers()
+        {
+            return asArray( this.#mappers ).filter( Filters.IS_FUNCTION ) || [];
+        }
+
+        get filters()
+        {
+            return asArray( this.#filters ).filter( Filters.IS_FUNCTION ) || [];
+        }
+
+        * [Symbol.iterator]()
+        {
+            const iterable = this;
+
+            const start = this.startDate;
+            const end = this.endDate;
+
+            const interval = asInt( this.interval );
+            const maxDates = this.maxDates;
+
+            const includeWeekends = this.includeWeekends;
+            const includeHolidays = this.includeHolidays;
+            const holidays = this.holidays;
+
+            const mappers = asArray( this.mappers ) || [];
+            const filters = asArray( this.filters ) || [];
+
+            const exitCriteria = this.exitCriteria;
+
+            let date = new Date( start );
+
+            function generateNextDate( pCurrentDate, pInterval = interval )
+            {
+                date = (iterable.iterations <= 0) ? start || pCurrentDate : addDays( pCurrentDate, pInterval );
+
+                if ( !includeWeekends && isWeekend( date ) )
+                {
+                    date = avoidWeekend( date );
+                }
+
+                if ( !includeHolidays )
+                {
+                    while ( isHoliday( date, holidays ) )
+                    {
+                        date = !includeWeekends ? avoidWeekend( addDays( date, 1 ) ) : addDays( date, 1 );
+                    }
+                }
+
+                for( const mapper of mappers )
+                {
+                    date = mapper( date );
+                }
+
+                return isValidDateArgument( end ) ? ((null != date && date <= end) ? date : null) : date;
+            }
+
+            while ( !exitCriteria( date, end, this.iterations, maxDates ) )
+            {
+                date = generateNextDate( date );
+
+                this.#iterations += (null === date) ? 0 : 1;
+
+                const iterations = this.iterations;
+
+                if ( null != date && iterations < 32_000 )
+                {
+                    for( const filter of filters )
+                    {
+                        while ( null != date && !filter( date ) && !exitCriteria( date, end, iterations, maxDates ) )
+                        {
+                            date = generateNextDate( date, 1 );
+                        }
+                    }
+
+                    if ( null === date )
+                    {
+                        break;
+                    }
+
+                    yield date;
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+    }
+
+    const getWeekdays = function( pStartDate, pEndDate, pOptions = DATES_ITERABLE_OPTIONS )
+    {
+        return new DatesIterable( pStartDate, pEndDate, pOptions );
+    };
+
+    const getBusinessDays = function( pStartDate, pEndDate, pOptions = DATES_ITERABLE_WORKDAY_OPTIONS )
+    {
+        return new DatesIterable( pStartDate, pEndDate, pOptions );
+    };
+
     let mod =
         {
             dependencies,
@@ -1458,7 +1710,8 @@ const $scope = core?.$scope || constants?.$scope || function()
                     HolidayExactDateDefinition,
                     HolidayRelativeDefinition,
                     Month,
-                    February
+                    February,
+                    DatesIterable
                 },
             DateFilters,
             MILLIS_PER,
@@ -1478,8 +1731,11 @@ const $scope = core?.$scope || constants?.$scope || function()
             UNIT,
             HOLIDAYS,
             US_HOLIDAYS: HOLIDAYS.USA,
+            isDate,
             isValidDateArgument,
             isLeapYear,
+            isWeekend,
+            isHoliday,
             numDaysInMonth,
             numDaysInYear,
             calculateOccurrencesOf,
@@ -1516,7 +1772,9 @@ const $scope = core?.$scope || constants?.$scope || function()
             earliest,
             latest,
             daysBetween,
-            workDaysBetween
+            workDaysBetween,
+            getWeekdays,
+            getBusinessDays
         };
 
     mod = modulePrototype.extend( mod );
