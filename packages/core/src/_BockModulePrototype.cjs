@@ -3,7 +3,35 @@
  * @name ModulePrototype
  * @author Scott Bockelman
  * @license MIT
+ *
+ * <p>This module is the 'bootstrap' module for all modules in the ToolBocks&trade; packages.</p>
+ * <p>This module defines a base class that all the other modules extend<br>
+ * allowing their functions to report errors as events (instead of throwing),<br>
+ * allowing consumer code to add event listeners for error and other 'interesting' events,<br>
+ * and/or to set either a global logger or per-module loggers.</p>
+ * <br>
+ *
+ * <p>Other useful functionality defined in this module includes:<br>
+ * <ul>
+ * <li>the ability to cap any iteration to a maximum number of loops</li>
+ * <li>the ability to create "deep" local and/or immutable copies of objects</li>
+ * <li>the ability to reliably process options passed to functions that have default options</li>
+ * <li>and a factory for creating common comparison functions</li>
+ * </ul>
+ * <br>
+ * </p>
+ *
+ * @see BockModulePrototype
+ * @see BockModuleEvent
+ * @see {@link __Error},
+ * @see IllegalArgumentError
+ * @see StackTrace
+ * @see IterationCap
+ * @see {@link ComparatorFactory}
+ *
+ * <br>
  */
+
 /**
  * An alias for the console object available in most environments.<br>
  * We create an alias for console to reduce lint complaints.<br>
@@ -47,6 +75,8 @@ const $scope = function()
      * <br><br>
      * This is the only module that has NO DEPENDENCIES
      * <br>
+     * @dict
+     * @type {Object}
      */
     const dependencies =
         {
@@ -322,7 +352,7 @@ const $scope = function()
     function populateOptions( pOptions, pDefaults )
     {
         const defaults = Object.assign( {}, (_obj === typeof pDefaults && null != pDefaults) ? { ...pDefaults } : {} );
-        return Object.assign( resolveObject( defaults || {} ), resolveObject( pOptions || pDefaults || {} ) );
+        return Object.assign( resolveObject( defaults || {}, true ), resolveObject( pOptions || pDefaults || {}, true ) );
     }
 
     /**
@@ -2158,35 +2188,6 @@ const $scope = function()
 
     IterationCap.MAX_CAP = MAX_ITERATIONS;
 
-    /**
-     * <p>This module is the 'bootstrap' module for all modules in the ToolBocks&trade; packages.</p>
-     * <p>This module defines a base class that all the other modules extend<br>
-     * allowing their functions to report errors as events (instead of throwing),<br>
-     * allowing consumer code to add event listeners for error and other 'interesting' events,<br>
-     * and/or to set either a global logger or per-module loggers.</p>
-     * <br>
-     *
-     * <p>Other useful functionality defined in this module includes:<br>
-     * <ul>
-     * <li>the ability to cap any iteration to a maximum number of loops</li>
-     * <li>the ability to create "deep" local and/or immutable copies of objects</li>
-     * <li>the ability to reliably process options passed to functions that have default options</li>
-     * <li>and a factory for creating common comparison functions</li>
-     * </ul>
-     * <br>
-     * </p>
-     *
-     * @see BockModulePrototype
-     * @see BockModuleEvent
-     * @see {@link __Error},
-     * @see IllegalArgumentError
-     * @see StackTrace
-     * @see IterationCap
-     * @see {@link ComparatorFactory}
-     *
-     * <br>
-     * @module ModulePrototype
-     */
     const mod =
         {
             BockModuleEvent,
