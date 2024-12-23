@@ -84,10 +84,11 @@ const $scope = constants?.$scope || function()
         toDecimal,
         toHex,
         toOctal,
-        toBinary
+        toBinary,
+        isClass
     } = typeUtils;
 
-    const { asInt, asFloat } = stringUtils;
+    const { asString, asInt, asFloat } = stringUtils;
 
     const { ModuleEvent, ModulePrototype } = classes;
 
@@ -157,7 +158,7 @@ const $scope = constants?.$scope || function()
             return resolveNullOrNaN( pDefault, 0 );
         }
 
-        const num = isNaN( pNum ) || !isFinite( pNum ) ? NaN : asFloat( pNum );
+        const num = isNanOrInfinite( pNum ) ? NaN : asFloat( pNum );
 
         if ( !isNanOrInfinite( num ) )
         {
@@ -258,10 +259,330 @@ const $scope = constants?.$scope || function()
         return resolveNullOrNaN( dividend / divisor, resolveNullOrNaN( options.defaultQuotient ) );
     };
 
+    class RoundingMode
+    {
+        #input;
+        #sign;
+        #precision;
 
+        factor;
+        raised;
+
+        #precalculated = null;
+
+        constructor( pNum, pPrecision )
+        {
+            this.#input = resolveNullOrNaN( pNum );
+
+            if ( 0 === this.#input )
+            {
+                // rounding 0 to any precision is just 0;
+                this.#precalculated = 0;
+                this.#sign = 1;
+            }
+            else
+            {
+                this.#sign = Math.sign( this.#input );
+
+                this.#precision = resolveNullOrNaN( asInt( pPrecision ) );
+
+                if ( 0 === this.#precision && isInteger( this.input ) )
+                {
+                    this.#precalculated = parseInt( this.input );
+                }
+
+                this.factor = 10 ** this.precision;
+                this.raised = this.applyFactor();
+            }
+        }
+
+        get input()
+        {
+            return this.#input;
+        }
+
+        get sign()
+        {
+            return this.#sign || Math.sign( this.input );
+        }
+
+        get precision()
+        {
+            return this.#precision;
+        }
+
+        applyFactor()
+        {
+            const input = this.input;
+
+            if ( isNanOrInfinite( input ) )
+            {
+                return input;
+            }
+
+            return input * this.factor;
+        }
+
+        removeFactor( pValue )
+        {
+            return quotient( pValue, this.factor );
+        }
+
+        get precalculated()
+        {
+            return this.#precalculated;
+        }
+
+        _round( pValue )
+        {
+            return Math.round( pValue );
+        }
+
+        round()
+        {
+            if ( null !== this.#precalculated )
+            {
+                return this.#precalculated;
+            }
+            return this.removeFactor( this._round( this.raised ) );
+        }
+    }
+
+    class Trunc extends RoundingMode
+    {
+        constructor( pNum, pPrecision )
+        {
+            super( pNum, pPrecision );
+        }
+
+        _round( pValue )
+        {
+            const num = resolveNullOrNaN( pValue );
+            return Math.trunc( num );
+        }
+    }
+
+    class HalfUp extends RoundingMode
+    {
+        constructor( pNum, pPrecision )
+        {
+            super( pNum, pPrecision );
+        }
+
+        _round( pValue )
+        {
+            // half up is the default JavaScript behavior
+            return super._round( pValue );
+        }
+    }
+
+    class HalfDown extends RoundingMode
+    {
+        constructor( pNum, pPrecision )
+        {
+            super( pNum, pPrecision );
+        }
+
+        _round( pValue )
+        {
+            const num = Math.abs( resolveNullOrNaN( pValue ) );
+            return this.sign * Math.floor( num );
+        }
+    }
+
+    class ExtendedRoundingMode extends RoundingMode
+    {
+        factor;
+        #scale_down;
+
+        raised;
+        #intForm = null;
+
+        constructor( pNum, pPrecision )
+        {
+            super( pNum, pPrecision );
+
+            if ( null === this.precalculated )
+            {
+                this.factor = (10 ** (this.precision + 1));
+
+                this.raised = this.applyFactor();
+
+                this.#scale_down = (10 ** (this.precision - 1));
+
+                this.#intForm = this.intForm;
+            }
+        }
+
+        applyFactor()
+        {
+            const input = this.input;
+
+            if ( isNanOrInfinite( input ) )
+            {
+                return input;
+            }
+
+            return input * this.factor;
+        }
+
+        get scaleDown()
+        {
+            return this.#scale_down;
+        }
+
+        get intForm()
+        {
+            if ( null === this.#intForm )
+            {
+                let scale = this.scaleDown;
+
+                let raised = Math.abs( this.raised );
+
+                if ( scale < 1 )
+                {
+                    const s = asString( raised );
+                    const parts = s.split( _dot );
+                    let dec = parts.length > 1 ? parts[1] : _mt_str;
+                    dec = dec.replace( /0+$/, _mt_str );
+                    scale = 10 ** dec.length;
+                }
+                scale = asInt( scale );
+                this.#intForm = this.sign * (raised - (raised % scale) / scale);
+            }
+            return this.#intForm;
+        }
+
+        isHalfway()
+        {
+            const n = Math.abs( this.intForm );
+            return n % 5 === 0 && n % 10 !== 0;
+        }
+
+        isNextPowerEven()
+        {
+            const n = Math.abs( this.intForm );
+            return (((n - 5) / 10) % 2) === 0;
+        }
+
+    }
+
+    class HalfEven extends ExtendedRoundingMode
+    {
+        constructor( pNum, pPrecision )
+        {
+            super( pNum, pPrecision );
+        }
+
+        _round( pValue )
+        {
+            let value = Math.abs( resolveNullOrNaN( pValue ) );
+            if ( this.isHalfway() )
+            {
+                value = (this.isNextPowerEven() ? value - 5 : value + 5);
+            }
+            return this.sign * value;
+        }
+    }
+
+    class HalfEvenTowardsInfinity extends HalfEven
+    {
+        constructor( pNum, pPrecision )
+        {
+            super( pNum, pPrecision );
+        }
+
+        _round( pValue )
+        {
+            let value = resolveNullOrNaN( pValue );
+            if ( this.isHalfway() )
+            {
+                value = (this.isNextPowerEven() ? value - 5 : value + 5);
+            }
+            return value;
+        }
+    }
+
+    class HalfTowardsInfinity extends ExtendedRoundingMode
+    {
+        constructor( pNum, pPrecision )
+        {
+            super( pNum, pPrecision );
+        }
+
+        _round( pValue )
+        {
+            let value = resolveNullOrNaN( pValue );
+            if ( this.isHalfway() )
+            {
+                value += 5;
+            }
+            return value;
+        }
+    }
+
+    class HalfAwayFromZero extends ExtendedRoundingMode
+    {
+        constructor( pNum, pPrecision )
+        {
+            super( pNum, pPrecision );
+        }
+
+        _round( pValue )
+        {
+            let value = Math.abs( resolveNullOrNaN( pValue ) );
+            if ( this.isHalfway() )
+            {
+                value += 5;
+            }
+            return this.sign * value;
+        }
+    }
+
+    class HalfOdd extends ExtendedRoundingMode
+    {
+        constructor( pNum, pPrecision )
+        {
+            super( pNum, pPrecision );
+        }
+
+        _round( pValue )
+        {
+            let value = Math.abs( resolveNullOrNaN( pValue ) );
+            if ( this.isHalfway() )
+            {
+                value = (!this.isNextPowerEven() ? value - 5 : value + 5);
+            }
+            return this.sign * value;
+        }
+    }
+
+
+    const ROUNDING_MODE =
+        {
+            HALF_UP: HalfUp,
+            HALF_DOWN: HalfDown,
+            HALF_EVEN: HalfEven,
+            HALF_EVEN_TOWARDS_INFINITY: HalfEvenTowardsInfinity,
+            HALF_AWAY_FROM_ZERO: HalfAwayFromZero,
+            HALF_TOWARDS_INFINITY: HalfTowardsInfinity,
+            HALF_ODD: HalfOdd,
+            TRUNC: Trunc
+        };
+
+    const round = function( pNum, pDecimalPlaces, pRoundingMode )
+    {
+        const roundingMode = isClass( pRoundingMode ) ? pRoundingMode : HalfUp;
+        const mode = new roundingMode( pNum, pDecimalPlaces, pRoundingMode );
+        return mode.round();
+    };
 
     let mod =
         {
+            classes:
+                {
+                    RoundingMode
+                },
             dependencies,
             isNumber,
             isInteger,
@@ -282,7 +603,8 @@ const $scope = constants?.$scope || function()
             resolveNullOrNaN,
             isBetween,
             quotient,
-
+            ROUNDING_MODE,
+            round
         };
 
     mod = modulePrototype.extend( mod );

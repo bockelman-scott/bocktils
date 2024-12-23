@@ -344,7 +344,7 @@ const $scope = constants?.$scope || function()
 
     const isNanOrInfinite = function( pNum )
     {
-        if ( ![_num, _big].includes( typeof pNum ) )
+        if ( !([_num, _big, _str].includes( typeof pNum ) || pNum instanceof Number) )
         {
             return true;
         }
