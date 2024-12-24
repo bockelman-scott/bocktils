@@ -52,8 +52,8 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
 
     const
         {
-            BockModuleEvent: ModuleEvent,
-            BockModulePrototype: ModulePrototype,
+            ModuleEvent,
+            ModulePrototype,
             isReadOnly,
             populateOptions,
             lock,
@@ -550,13 +550,13 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             dependencies,
             classes:
                 {
+                    ModuleEvent,
+                    ModulePrototype,
+                    __Error,
+                    IllegalArgumentError,
                     IterationCap,
                     ComparatorFactory,
                     StackTrace,
-                    __Error,
-                    IllegalArgumentError,
-                    ModuleEvent,
-                    ModulePrototype,
                     CustomEvent
                 },
             IterationCap,

@@ -46,10 +46,7 @@ const _ud = "undefined";
  * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
  * @return {Object} The global scope, a.k.a. globalThis, for the current execution environment
  */
-const $scope = function()
-{
-    return (_ud === typeof self ? ((_ud === typeof global) ? (_ud === typeof globalThis ? {} : globalThis || {}) : (global || (_ud === typeof globalThis ? {} : globalThis || {}) || {})) : (self || (_ud === typeof globalThis ? {} : globalThis || {})));
-};
+const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === typeof globalThis ? {} : globalThis || {}) : (global || (_ud === typeof globalThis ? this || {} : globalThis || this || {}) || this || {})) : (self || (_ud === typeof globalThis ? this || {} : globalThis || this || {})));
 
 /**
  * This module is constructed by an Immediately Invoked Function Expression (IIFE).
@@ -124,6 +121,8 @@ const $scope = function()
             EMPTY_ARRAY = Object.freeze( [] )
 
         } = (dependencies || {});
+
+    const modName = "BockModulePrototype";
 
     /**
      * Returns true if the specified argument is an array.<br>
@@ -490,6 +489,10 @@ const $scope = function()
             this.#columnNumber = this.#parts.columnNumber;
         }
 
+        /**
+         * Returns a constructor for this class.
+         * @returns {StackTrace}
+         */
         static get [Symbol.species]()
         {
             return this;
@@ -654,6 +657,10 @@ const $scope = function()
             this.#cause = (this.#options?.cause instanceof Error ? this.#options?.cause : (pMessage instanceof Error ? pMessage : null) || (pMessage instanceof Error ? pMessage : null));
         }
 
+        /**
+         * Returns a constructor for this class.
+         * @returns {__Error}
+         */
         static get [Symbol.species]()
         {
             return this;
@@ -760,6 +767,10 @@ const $scope = function()
             }
         }
 
+        /**
+         * Returns a constructor for this class.
+         * @returns {IllegalArgumentError}
+         */
         static get [Symbol.species]()
         {
             return this;
@@ -873,7 +884,7 @@ const $scope = function()
          * <br>
          * @constructor
          *
-         * @param {string|BockModulePrototype} pModuleName The name of this instance, or another instance<br>
+         * @param {string|BockModulePrototype|Object} pModuleName The name of this instance, or another instance<br>
          *                                                 from which to inherit the name and other properties
          * @param {string} pCacheKey A unique key to use to cache this module in global scope to improve performance
          */
@@ -881,7 +892,7 @@ const $scope = function()
         {
             super();
 
-            this.#moduleName = (_str === typeof pModuleName) ? pModuleName || "BockModulePrototype" : (_obj === typeof pModuleName ? pModuleName?.moduleName || pModuleName?.name : _mt_str) || "BockModulePrototype";
+            this.#moduleName = (_str === typeof pModuleName) ? pModuleName || modName : (_obj === typeof pModuleName ? pModuleName?.moduleName || pModuleName?.name : _mt_str) || modName;
             this.#cacheKey = (_str === typeof pCacheKey) ? pCacheKey || INTERNAL_NAME : (_obj === typeof pModuleName ? pModuleName?.cacheKey || pModuleName?.name : _mt_str);
 
             // if the constructor is called with an object, instead of a string,
@@ -896,6 +907,10 @@ const $scope = function()
             MODULE_CACHE[this.#cacheKey] = this;
         }
 
+        /**
+         * Returns a constructor for this class.
+         * @returns {BockModulePrototype}
+         */
         static get [Symbol.species]()
         {
             return this;
@@ -1086,6 +1101,9 @@ const $scope = function()
          * @param {string} pLevel The log level suggested for the error, such as "warn" or "error"
          * @param {string} pSource A description of the source of the error, such as the module and function where the error occurred
          * @param {...*} pExtra  One or more extra values to log or include in the dispatched event
+         *
+         * @type {function}
+         *
          * @see resolveError
          * @see calculateErrorSourceName
          * @see ErrorDetail
@@ -1707,6 +1725,10 @@ const $scope = function()
             this.#maxStackSize = Math.max( 2, _getMaxStackSize( options ) );
         }
 
+        /**
+         * Returns a constructor for this class.
+         * @returns {ComparatorFactory}
+         */
         static get [Symbol.species]()
         {
             return this;
@@ -2153,6 +2175,10 @@ const $scope = function()
             this.#iterations = 0;
         }
 
+        /**
+         * Returns a constructor for this class.
+         * @returns {IterationCap}
+         */
         static get [Symbol.species]()
         {
             return this;
@@ -2190,8 +2216,8 @@ const $scope = function()
 
     const mod =
         {
-            BockModuleEvent,
-            BockModulePrototype,
+            ModuleEvent: BockModuleEvent,
+            ModulePrototype: BockModulePrototype,
             CustomEvent,
             isLogger: BockModulePrototype.isLogger,
             calculateErrorSourceName,
@@ -2202,7 +2228,7 @@ const $scope = function()
                     pThis.reportError( pError, pMessage, pLevel, pSource, ...pExtra );
                 }
                 const modulePrototype = new BockModulePrototype( pThis?.name );
-                modulePrototype.reportError.call( pThis || modulePrototype, pError, pMessage, pLevel, pSource );
+                modulePrototype.reportError.call( pThis || modulePrototype, pError, pMessage, pLevel, pSource, ...pExtra );
             },
             getGlobalLogger: function()
             {

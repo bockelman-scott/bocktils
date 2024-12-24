@@ -5,7 +5,9 @@ const {
     RANGE_INCREMENT_OPTIONS,
     DEFAULT_RANGE_OPTIONS,
     DEFAULT_NUMERIC_RANGE_OPTIONS,
-    DEFAULT_CHARACTER_RANGE_OPTIONS
+    DEFAULT_CHARACTER_RANGE_OPTIONS,
+    asArray,
+    arraysEqual
 } = arrayUtils;
 
 const { constants, stringUtils } = dependencies;
@@ -14,31 +16,33 @@ const exampleArray = ["a", "b", "c", 1, 2, 3, 4, 5, {}, ["a", "b", "c", 1, 2, 3,
 
 const { _LETTERS_ENGLISH_LCASE } = constants;
 
+const { asString } = stringUtils;
+
 describe( "asArray", () =>
 {
     test( "asArray([1,2,3]) === [1,2,3]",
           () =>
           {
-              expect( arrayUtils.asArray( [1, 2, 3] ) ).toEqual( [1, 2, 3] );
+              expect( asArray( [1, 2, 3] ) ).toEqual( [1, 2, 3] );
           } );
 
     test( "asArray([1,2,3,4]) === [1,2,3,4] and is the SAME memory object",
           () =>
           {
               let arr1 = [1, 2, 3, 4];
-              let arr2 = arrayUtils.asArray( arr1 );
+              let arr2 = asArray( arr1 );
 
-              expect( arrayUtils.asArray( arr2 ) ).toEqual( [1, 2, 3, 4] );
+              expect( asArray( arr2 ) ).toEqual( [1, 2, 3, 4] );
 
               arr1.shift();
 
-              expect( arrayUtils.asArray( arr2 ) ).toEqual( arr1 );
+              expect( asArray( arr2 ) ).toEqual( arr1 );
           } );
 
     test( "asArray('abc') === ['abc']",
           () =>
           {
-              expect( arrayUtils.asArray( "abc" ) ).toEqual( ["abc"] );
+              expect( asArray( "abc" ) ).toEqual( ["abc"] );
           } );
 
     test( "asArray(...pArgs) === [...pArgs]",
@@ -46,7 +50,7 @@ describe( "asArray", () =>
           {
               const fn = function( ...pArgs )
               {
-                  return arrayUtils.asArray( pArgs );
+                  return asArray( pArgs );
               };
               expect( fn( 1, 2, 3 ) ).toEqual( [1, 2, 3] );
           } );
@@ -64,39 +68,39 @@ describe( "asArray", () =>
     test( "asArray([[1,2,3],[4,5,6]],{flatten:true}) === [1,2,3,4,5,6]",
           () =>
           {
-              expect( arrayUtils.asArray( [[1, 2, 3], [4, 5, 6]], { flatten: true } ) ).toEqual( [1, 2, 3, 4, 5, 6] );
+              expect( asArray( [[1, 2, 3], [4, 5, 6]], { flatten: true } ) ).toEqual( [1, 2, 3, 4, 5, 6] );
           } );
 
     test( "asArray([[[1,2,3],[4,5,6]]],{flatten:{level:1}}) === [[1,2,3],[4,5,6]]",
           () =>
           {
-              expect( arrayUtils.asArray( [[[1, 2, 3], [4, 5, 6]]], { flatten: { level: 1 } } ) ).toEqual( [[1, 2, 3], [4, 5, 6]] );
+              expect( asArray( [[[1, 2, 3], [4, 5, 6]]], { flatten: { level: 1 } } ) ).toEqual( [[1, 2, 3], [4, 5, 6]] );
           } );
 
     test( "asArray([[[1,2,3],[4,5,6]]],{flatten:{level:2}}) === [1,2,3,4,5,6]",
           () =>
           {
-              expect( arrayUtils.asArray( [[[1, 2, 3], [4, 5, 6]]], { flatten: { level: 2 } } ) ).toEqual( [1, 2, 3, 4, 5, 6] );
+              expect( asArray( [[[1, 2, 3], [4, 5, 6]]], { flatten: { level: 2 } } ) ).toEqual( [1, 2, 3, 4, 5, 6] );
           } );
 
     test( "asArray([[[[1,2,3],[4,5,6]]]],{flatten:true}) === [1,2,3,4,5,6]",
           () =>
           {
-              expect( arrayUtils.asArray( [[[[1, 2, 3], [4, 5, 6]]]], { flatten: true } ) ).toEqual( [1, 2, 3, 4, 5, 6] );
+              expect( asArray( [[[[1, 2, 3], [4, 5, 6]]]], { flatten: true } ) ).toEqual( [1, 2, 3, 4, 5, 6] );
           } );
 
     test( "asArray([1,2,3,4,5,6], {filter:fn) === [4,5,6]",
           () =>
           {
               const fn = ( e ) => e > 3;
-              expect( arrayUtils.asArray( [1, 2, 3, 4, 5, 6], { filter: fn } ) ).toEqual( [4, 5, 6] );
+              expect( asArray( [1, 2, 3, 4, 5, 6], { filter: fn } ) ).toEqual( [4, 5, 6] );
           } );
 
     test( "asArray([[[[1,2,3],[4,5,6]]]],{flatten:true, filter:fn}) === [4,5,6]",
           () =>
           {
               const fn = ( e ) => e > 3;
-              expect( arrayUtils.asArray( [[[[1, 2, 3], [4, 5, 6]]]], {
+              expect( asArray( [[[[1, 2, 3], [4, 5, 6]]]], {
                   flatten: true,
                   filter: fn
               } ) ).toEqual( [4, 5, 6] );
@@ -105,13 +109,13 @@ describe( "asArray", () =>
     test( "asArray('some,words,separated,by,commas',{splitOn:,) === ['some','words','separated','by','commas']",
           () =>
           {
-              expect( arrayUtils.asArray( "some,words,separated,by,commas", { splitOn: "," } ) ).toEqual( ["some", "words", "separated", "by", "commas"] );
+              expect( asArray( "some,words,separated,by,commas", { splitOn: "," } ) ).toEqual( ["some", "words", "separated", "by", "commas"] );
           } );
 
     test( "asArray('some,,words,,separated,,by,,commas',{splitOn:,) === ['some','','words','','separated','','by','','commas']",
           () =>
           {
-              expect( arrayUtils.asArray( "some,,words,,separated,,by,,commas", { splitOn: "," } ) ).toEqual( ["some", "", "words", "", "separated", "", "by", "", "commas"] );
+              expect( asArray( "some,,words,,separated,,by,,commas", { splitOn: "," } ) ).toEqual( ["some", "", "words", "", "separated", "", "by", "", "commas"] );
           } );
 
 
@@ -120,11 +124,11 @@ describe( "asArray", () =>
           {
               let expected = ["some", "words", "separated", "by", "commas"];
 
-              expect( arrayUtils.asArray( "some,,words,,separated,,by,,commas",
-                                          {
-                                              splitOn: ",",
-                                              sanitize: true
-                                          } ) ).toEqual( expected );
+              expect( asArray( "some,,words,,separated,,by,,commas",
+                               {
+                                   splitOn: ",",
+                                   sanitize: true
+                               } ) ).toEqual( expected );
           } );
 
     test( "asArray('some,,words,,separated,,by,,commas',{splitOn:,, sanitize:true, filter:fn) === ['some','separated']",
@@ -132,12 +136,12 @@ describe( "asArray", () =>
           {
               let expected = ["some", "separated"];
 
-              expect( arrayUtils.asArray( "some,,words,,separated,,by,,commas",
-                                          {
-                                              splitOn: ",",
-                                              sanitize: true,
-                                              filter: ( e ) => e.startsWith( "s" )
-                                          } ) ).toEqual( expected );
+              expect( asArray( "some,,words,,separated,,by,,commas",
+                               {
+                                   splitOn: ",",
+                                   sanitize: true,
+                                   filter: ( e ) => e.startsWith( "s" )
+                               } ) ).toEqual( expected );
           } );
 
     test( "asArray with an object and a type filter for numbers",
@@ -153,10 +157,10 @@ describe( "asArray", () =>
 
               let expected = [1, 3];
 
-              expect( arrayUtils.asArray( input,
-                                          {
-                                              type: "number"
-                                          } ) ).toEqual( expected );
+              expect( asArray( input,
+                               {
+                                   type: "number"
+                               } ) ).toEqual( expected );
           } );
 
     test( "asArray with an object and a type filter for strings",
@@ -172,10 +176,10 @@ describe( "asArray", () =>
 
               let expected = ["two"];
 
-              expect( arrayUtils.asArray( input,
-                                          {
-                                              type: "string"
-                                          } ) ).toEqual( expected );
+              expect( asArray( input,
+                               {
+                                   type: "string"
+                               } ) ).toEqual( expected );
           } );
 
     test( "asArray('abc,abc,def,ghi,abc,jk,def',{splitOn:,unique:true} === ['abc','def','ghi','jk']",
@@ -183,7 +187,7 @@ describe( "asArray", () =>
           {
               let expected = ["abc", "def", "ghi", "jk"];
 
-              let actual = arrayUtils.asArray( "abc,abc,def,ghi,abc,jk,def", { splitOn: ",", unique: true } );
+              let actual = asArray( "abc,abc,def,ghi,abc,jk,def", { splitOn: ",", unique: true } );
 
               expect( actual ).toEqual( expected );
           } );
@@ -195,7 +199,7 @@ describe( "asArray", () =>
 
               let input = "some,words,separated,by,commas";
               let expected = ["by", "commas", "separated", "some", "words"];
-              let actual = arrayUtils.asArray( input, { splitOn: ",", comparator } );
+              let actual = asArray( input, { splitOn: ",", comparator } );
 
               expect( actual ).toEqual( expected );
           } );
@@ -338,6 +342,80 @@ describe( "isPopulatedArray", () =>
                                                        acceptObjects: true,
                                                        acceptArrayLike: true
                                                    } ) ).toBe( false );
+          } );
+} );
+
+describe( "arraysEqual", () =>
+{
+    const arr1 = [1, 2, 3];
+    const arr2 = [1, 2, 3];
+
+    const arr3 = [1, 2, 3, 4];
+    const arr4 = [1, 2, 3, 4];
+
+    const arr5 = [1, "2", 3, 4, 5, null, undefined, "abc ", "xyz", "XYZ"];
+    const arr6 = ["abc", "xyz", "XYZ", 1, "2", 3, 4, 5, null, undefined,];
+    const arr6L = ["abc", "xyz", "xyz", 1, "2", 3, 4, 5, null, undefined,];
+
+    const arr7 = [1, {}, "2", 3, 4, 5, null, undefined, "abc ", "xyz", "XYZ"];
+    const arr8 = ["abc ", "xyz", "XYZ", 1, {}, "2", 3, 4, 5, null, undefined,];
+
+    const arr9 = [1, "2", 3, 4, 5, null, null, undefined, "abc ", "xyz", "XYZ"];
+    const arr10 = ["abc ", "xyz", "XYZ", "ABC", 1, {}, "2", 3, 4, 5, null, undefined, null];
+
+    const arr11 = [1, "2", 3, 4, 5, null, null, undefined, "abc ", "xyz", "XYZ", "ABC"];
+    const arr12 = ["abc ", "xyz", "XYZ", "ABC", 1, {}, "2", 3, 4, 5, null, undefined, null, "ABC"];
+
+    const arr13 = [15, 16, 17];
+    const arr14 = ["0xF", "0x10", "0o21"];
+
+    const arr15 = [17, 16, 15];
+    const arr16 = ["0xF", "0x10", "0o21"];
+
+    const arr17 = [15, 16, 17, 1 / 0];
+    const arr18 = ["0xF", "0x10", "0o21"];
+
+
+    test( "arraysEqual - 1",
+          () =>
+          {
+              expect( arraysEqual( arr1, arr2 ) ).toBe( true );
+              expect( arraysEqual( arr2, arr3 ) ).toBe( false );
+
+              expect( arraysEqual( arr1, arr2.reverse() ) ).toBe( false );
+              expect( arraysEqual( arr1, arr2.reverse(), { ignoreOrder: true } ) ).toBe( true );
+          } );
+
+    test( "arraysEqual - convertNumericStrings",
+          () =>
+          {
+              expect( arraysEqual( arr13, arr14, { convertNumericStrings: true } ) ).toBe( true );
+              expect( arraysEqual( arr15, arr16, { convertNumericStrings: true } ) ).toBe( false );
+              expect( arraysEqual( arr15, arr16, { ignoreOrder: true, convertNumericStrings: true } ) ).toBe( true );
+
+              expect( arraysEqual( arr17, arr18, { convertNumericStrings: true } ) ).toBe( false );
+              expect( arraysEqual( arr17, arr18, { convertNumericStrings: true, ignoreNaNs: true } ) ).toBe( true );
+          } );
+
+    test( "arraysEqual - 5/6",
+          () =>
+          {
+              expect( arraysEqual( arr5, arr6, { comparator: ( a, b ) => a > b ? 1 : a < b ? -1 : 0 } ) ).toBe( false );
+              expect( arraysEqual( arr5, arr6,
+                                   {
+                                       comparator: ( a, b ) => asString( a ) > asString( b ) ? 1 : asString( a ) < asString( b ) ? -1 : 0,
+                                       trim: true
+                                   } ) ).toBe( true );
+
+              expect( arraysEqual( arr6, arr6L ) ).toBe( false );
+              expect( arraysEqual( arr6, arr6L, { ignoreCase: true } ) ).toBe( true );
+          } );
+
+    test( "arraysEqual - 10/12",
+          () =>
+          {
+              expect( arraysEqual( arr10, arr12 ) ).toBe( false );
+              expect( arraysEqual( arr10, arr12, { ignoreDuplicates: true } ) ).toBe( true );
           } );
 } );
 
@@ -827,21 +905,6 @@ describe( "Filters/Predicates", () =>
               expect( filtered ).toEqual( ["abcd", "bcd", "ABCD"] );
           } );
 
-
-    test( "The buildPredicate Predicate FUNCTION returns a filter to retain only elements that match all of the filters specified",
-          () =>
-          {
-              const arr = ["a", 1, true, "b", {}, ["a", "b"]];
-
-              const filter1 = e => "string" === typeof e;
-              const filter2 = e => e > "a";
-
-              const filtered = arr.filter( arrayUtils.Predicates.buildPredicate( filter1, filter2 ) );
-
-              expect( filtered ).toEqual( ["b"] );
-          } );
-
-
     test( "The chain Predicate FUNCTION returns a filter to retain only elements that match all of the filters specified",
           () =>
           {
@@ -879,7 +942,7 @@ describe( "Mappers", () =>
 
               let expected = ["a", 1, true, "b", {}, ["a", "b"], function( a, b ) {}];
 
-              expect( arrayUtils.arraysEqual( expected, arr.map( arrayUtils.Mappers.IDENTITY ) ) ).toBe( true );
+              expect( arraysEqual( expected, arr.map( arrayUtils.Mappers.IDENTITY ) ) ).toBe( true );
           } );
 
     test( "The Mappers.TO_STRING function returns a new array with each element converted to a string",
@@ -891,7 +954,7 @@ describe( "Mappers", () =>
 
               const actual = arr.map( arrayUtils.Mappers.TO_STRING );
 
-              expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+              expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
 
     test( "The Mappers.TO_STRING_WITH_OPTIONS function returns a function that is used to return a new array with each element converted to a string",
@@ -915,7 +978,7 @@ describe( "Mappers", () =>
 
               const actual = arr.map( arrayUtils.Mappers.TO_STRING_WITH_OPTIONS( opts ) );
 
-              expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+              expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
 
 
@@ -940,7 +1003,7 @@ describe( "Mappers", () =>
 
               const actual = arr.map( arrayUtils.Mappers.TO_STRING_WITH_OPTIONS( opts ) );
 
-              expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+              expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
 
 
@@ -965,7 +1028,7 @@ describe( "Mappers", () =>
 
               const actual = arr.map( arrayUtils.Mappers.TO_STRING_WITH_OPTIONS( opts ) );
 
-              expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+              expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
 
 
@@ -1001,7 +1064,7 @@ describe( "Mappers", () =>
 
               const actual = arr.map( arrayUtils.Mappers.TO_STRING_WITH_OPTIONS( opts ) );
 
-              expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+              expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
 
 
@@ -1014,7 +1077,7 @@ describe( "Mappers", () =>
 
               const actual = arr.map( arrayUtils.Mappers.TO_NUMBER );
 
-              expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+              expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
 
 
@@ -1027,7 +1090,7 @@ describe( "Mappers", () =>
 
               const actual = arr.map( arrayUtils.Mappers.TO_VALID_NUMBER );
 
-              expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+              expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
 
     test( "The Mappers.TRIMMED function returns a new array with each element converted to a string without leading or trailing whitespace",
@@ -1039,7 +1102,7 @@ describe( "Mappers", () =>
 
               const actual = arr.map( arrayUtils.Mappers.TRIMMED );
 
-              expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+              expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
 
 
@@ -1052,7 +1115,7 @@ describe( "Mappers", () =>
 
               const actual = arr.map( arrayUtils.Mappers.APPEND( "foo" ) );
 
-              expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+              expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
 
     test( "The Mappers.PREPEND function returns a function to return a new array with each element converted to a string with the specified value prepended",
@@ -1064,7 +1127,7 @@ describe( "Mappers", () =>
 
               const actual = arr.map( arrayUtils.Mappers.PREPEND( "bar" ) );
 
-              expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+              expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
 
     test( "The Mappers.REPLACE function returns a function to return a new array with each element converted to a string with the specified value replaced",
@@ -1076,7 +1139,7 @@ describe( "Mappers", () =>
 
               const actual = arr.map( arrayUtils.Mappers.REPLACE( /a/g, "**" ) );
 
-              expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+              expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
 
 
@@ -1089,7 +1152,7 @@ describe( "Mappers", () =>
 
               const actual = arr.map( arrayUtils.Mappers.TO_LOWERCASE );
 
-              expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+              expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
 
 
@@ -1102,7 +1165,7 @@ describe( "Mappers", () =>
 
               const actual = arr.map( arrayUtils.Mappers.TO_LOWERCASE );
 
-              expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+              expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
 
 
@@ -1115,7 +1178,7 @@ describe( "Mappers", () =>
 
               const actual = arr.map( arrayUtils.Mappers.TO_UPPERCASE );
 
-              expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+              expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
 
 
@@ -1128,7 +1191,7 @@ describe( "Mappers", () =>
 
               const actual = arr.map( arrayUtils.Mappers.chain( arrayUtils.Mappers.TO_STRING, arrayUtils.Mappers.TRIMMED, arrayUtils.Mappers.TO_LOWERCASE ) );
 
-              expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+              expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
 } );
 
@@ -1144,7 +1207,7 @@ describe( "Comparators", () =>
 
               const actual = arr.sort( arrayUtils.Comparators._compare );
 
-              expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+              expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
 
     test( "The Comparator.NONE function is a comparison function that leaves the array in the same order",
@@ -1156,7 +1219,7 @@ describe( "Comparators", () =>
 
               const actual = arr.sort( arrayUtils.Comparators.NONE );
 
-              expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+              expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
 
     test( "The Comparator.CREATE_DEFAULT function returns a comparison function that orders the array elements according the specified type",
@@ -1168,7 +1231,7 @@ describe( "Comparators", () =>
 
               const actual = arr.sort( arrayUtils.Comparators.CREATE_DEFAULT( "number" ) );
 
-              expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+              expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
 
     test( "The Comparator.CREATE_DEFAULT function returns a comparison function that orders the array elements as strings",
@@ -1180,7 +1243,7 @@ describe( "Comparators", () =>
 
               const actual = arr.sort( arrayUtils.Comparators.CREATE_DEFAULT( "string" ) );
 
-              expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+              expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
 
     test( "The Comparator.BY_STRING_VALUE is a comparison function that converts elements to strings prior to ordering the array",
@@ -1192,7 +1255,7 @@ describe( "Comparators", () =>
 
               const actual = arr.sort( arrayUtils.Comparators.BY_STRING_VALUE );
 
-              expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+              expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
 
     test( "The Comparator.BY_LENGTH is a comparison function that orders the array elements according the length of their string representation",
@@ -1204,7 +1267,7 @@ describe( "Comparators", () =>
 
               const actual = arr.sort( arrayUtils.Comparators.BY_LENGTH );
 
-              expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+              expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
 
     test( "The Comparator.BY_POSITION is function that returns a comparison function that orders the array elements according their position in the reference array",
@@ -1218,7 +1281,7 @@ describe( "Comparators", () =>
 
               const actual = arr.sort( arrayUtils.Comparators.BY_POSITION( ref ) );
 
-              expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+              expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
 
 
@@ -1231,7 +1294,7 @@ describe( "Comparators", () =>
 
               const actual = arr.sort( arrayUtils.Comparators.chain( arrayUtils.Comparators.BY_LENGTH, arrayUtils.Comparators.BY_STRING_VALUE ) );
 
-              expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+              expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
 
     test( "Comparator.chain is a function that returns a comparison function composed of the specified comparators executed in order",
@@ -1243,7 +1306,7 @@ describe( "Comparators", () =>
 
               const actual = arr.sort( arrayUtils.Comparators.chain( arrayUtils.Comparators.BY_STRING_VALUE, arrayUtils.Comparators.BY_LENGTH ) );
 
-              expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+              expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
 
     test( "Comparator.descending is a function that wraps any comparison function to reverse the order",
@@ -1255,7 +1318,7 @@ describe( "Comparators", () =>
 
               const actual = arr.sort( arrayUtils.Comparators.descending( arrayUtils.Comparators.chain( arrayUtils.Comparators.BY_STRING_VALUE, arrayUtils.Comparators.BY_LENGTH ) ) );
 
-              expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+              expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
 
 
@@ -1268,7 +1331,7 @@ describe( "Comparators", () =>
 
               const actual = arr.sort( arrayUtils.Comparators.chain( arrayUtils.Comparators.descending( arrayUtils.Comparators.BY_STRING_VALUE ), arrayUtils.Comparators.descending( arrayUtils.Comparators.BY_LENGTH ) ) );
 
-              expect( arrayUtils.arraysEqual( expected, actual ) ).toBe( true );
+              expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
 
     test( "Comparator.isComparator returns true if the specified value is a function that takes 2 arguments",
@@ -1292,10 +1355,20 @@ describe( "Comparators", () =>
 
 describe( "Transformers", () =>
 {
+    const {
+        Transformer,
+        TRANSFORMATIONS,
+        TransformerChain,
+        toNonEmptyStrings,
+        toNonBlankStrings,
+        toTrimmedNonEmptyStrings,
+        toTrimmedNonBlankStrings
+    } = arrayUtils;
+
     test( "Transformers are objects that can be used to manipulate collections",
           () =>
           {
-              let transformer = new arrayUtils.Transformer( arrayUtils.TRANSFORMATIONS.MAP, e => stringUtils.asString( e, true ) );
+              let transformer = new Transformer( TRANSFORMATIONS.MAP, e => stringUtils.asString( e, true ) );
 
               const arr = [1, true, "abc ", " xyz"];
 
@@ -1307,15 +1380,15 @@ describe( "Transformers", () =>
     test( "Transformers can be chained",
           () =>
           {
-              let mapper = new arrayUtils.Transformer( arrayUtils.TRANSFORMATIONS.MAP, e => stringUtils.asString( e, true ) );
+              let mapper = new Transformer( TRANSFORMATIONS.MAP, e => stringUtils.asString( e, true ) );
 
-              let mapper2 = new arrayUtils.Transformer( arrayUtils.TRANSFORMATIONS.MAP, e => stringUtils.ucase( e ) );
+              let mapper2 = new Transformer( TRANSFORMATIONS.MAP, e => stringUtils.ucase( e ) );
 
-              let filter = new arrayUtils.Transformer( arrayUtils.TRANSFORMATIONS.FILTER, e => e?.length > 1 );
+              let filter = new Transformer( TRANSFORMATIONS.FILTER, e => e?.length > 1 );
 
-              let comparator = new arrayUtils.Transformer( arrayUtils.TRANSFORMATIONS.SORT, ( a, b ) => a > b ? 1 : a < b ? -1 : 0 );
+              let comparator = new Transformer( TRANSFORMATIONS.SORT, ( a, b ) => a > b ? 1 : a < b ? -1 : 0 );
 
-              let transformerChain = new arrayUtils.TransformerChain( mapper, mapper2, filter, comparator );
+              let transformerChain = new TransformerChain( mapper, mapper2, filter, comparator );
 
               const arr = [1, true, "abc ", " xyz"];
 
@@ -1329,7 +1402,7 @@ describe( "Transformers", () =>
           {
               let arr = [2, "", " ", "abc ", {}, null, false, 0xFF, /\s/g, function funk() {}, "def"];
 
-              let transformed = arrayUtils.toNonEmptyStrings( arr );
+              let transformed = toNonEmptyStrings( arr );
 
               expect( transformed?.length ).toEqual( 7 );
 
@@ -1337,7 +1410,7 @@ describe( "Transformers", () =>
 
               arr[4] = { a: 1 };
 
-              transformed = arrayUtils.toNonEmptyStrings( arr );
+              transformed = toNonEmptyStrings( arr );
 
               expect( transformed?.length ).toEqual( 8 );
 
@@ -1350,7 +1423,7 @@ describe( "Transformers", () =>
           {
               let arr = [2, "", " ", "abc ", {}, null, false, 0xFF, /\s/g, function funk() {}, "def"];
 
-              let transformed = arrayUtils.toNonBlankStrings( arr );
+              let transformed = toNonBlankStrings( arr );
 
               expect( transformed?.length ).toEqual( 6 );
 
@@ -1358,7 +1431,7 @@ describe( "Transformers", () =>
 
               arr[4] = { a: 1 };
 
-              transformed = arrayUtils.toNonBlankStrings( arr );
+              transformed = toNonBlankStrings( arr );
 
               expect( transformed?.length ).toEqual( 7 );
 
@@ -1371,7 +1444,7 @@ describe( "Transformers", () =>
           {
               let arr = [2, "", " ", "abc ", {}, null, false, 0xFF, /\s/g, function funk() {}, "def"];
 
-              let transformed = arrayUtils.toTrimmedNonEmptyStrings( arr );
+              let transformed = toTrimmedNonEmptyStrings( arr );
 
               expect( transformed?.length ).toEqual( 6 );
 
@@ -1379,7 +1452,7 @@ describe( "Transformers", () =>
 
               arr[4] = { a: 1 };
 
-              transformed = arrayUtils.toTrimmedNonEmptyStrings( arr );
+              transformed = toTrimmedNonEmptyStrings( arr );
 
               expect( transformed?.length ).toEqual( 7 );
 
@@ -1392,7 +1465,7 @@ describe( "Transformers", () =>
           {
               let arr = [2, "", " ", "abc ", {}, null, false, 0xFF, /\s/g, function funk() {}, "def"];
 
-              let transformed = arrayUtils.toTrimmedNonBlankStrings( arr );
+              let transformed = toTrimmedNonBlankStrings( arr );
 
               expect( transformed?.length ).toEqual( 6 );
 
@@ -1400,7 +1473,7 @@ describe( "Transformers", () =>
 
               arr[4] = { a: 1 };
 
-              transformed = arrayUtils.toTrimmedNonBlankStrings( arr );
+              transformed = toTrimmedNonBlankStrings( arr );
 
               expect( transformed?.length ).toEqual( 7 );
 
@@ -1413,7 +1486,7 @@ describe( "Transformers", () =>
           {
               let arr = ["a", "b.c", "d.e.f", "g", ["h.i", "j"]];
 
-              let transformed = arrayUtils.TransformerChain.SPLIT_ON_DOT.transform( arr );
+              let transformed = TransformerChain.SPLIT_ON_DOT.transform( arr );
 
               expect( transformed.length ).toEqual( 10 );
 
@@ -1727,13 +1800,13 @@ describe( "copyArray (deep clone)", () =>
 
               const clone = arrayUtils.copyArray( arr );
 
-              expect( arrayUtils.arraysEqual( arr, clone ) && arr !== clone ).toBe( true );
+              expect( arraysEqual( arr, clone ) && arr !== clone ).toBe( true );
           } );
 
     test( "copyArray cannot preserve functions",
           () =>
           {
-              const arr = ["abc", 2, {}, 3, true, function() {}];
+              const arr = ["abc", 2, {}, 3, true];
 
               const clone = arrayUtils.copyArray( arr );
 

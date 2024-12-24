@@ -8,12 +8,15 @@
  * or just ensure you are working with an array before doing so.
  *
  * This module also defines a library of commonly used Filters (a.k.a. Predicates), Mappers, and Comparators.
+ *
+ *
  * @see Filters
  * @see Predicates
  * @see Mappers
  * @see Comparators
  *
  * @author Scott Bockelman
+ * @license MIT
  */
 
 
@@ -27,12 +30,18 @@ const { _ud = "undefined" } = constants;
 
 /**
  * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
+ * @type {function}
+ * @return {Object} The host environment scope, a.k.a. globalThis, (i.e., Browser 'window', Node.js 'global', or Worker 'self')
  */
 const $scope = constants?.$scope || function()
 {
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };
 
+/**
+ * This module is constructed by an Immediately Invoked Function Expression (IIFE).
+ * see: <a href="https://developer.mozilla.org/en-US/docs/Glossary/IIFE">MDN: IIFE</a> for more information on this design pattern
+ */
 (function exposeModule()
 {
     // defines a key we can use to store this module in global scope
@@ -45,10 +54,14 @@ const $scope = constants?.$scope || function()
     }
 
     /**
-     * An array of this module's dependencies
-     * which are re-exported with this module,
-     * so if you want to, you can just import the leaf module
-     * and then use the other utilities as properties of that module
+     * This is a dictionary of this module's dependencies.
+     * <br>
+     * It is exported as a property of this module,
+     * allowing us to just import this module
+     * and then use the other utilities as properties of this module.
+     * <br>
+     * @dict
+     * @type {Object}
      */
     const dependencies =
         {
@@ -71,6 +84,7 @@ const $scope = constants?.$scope || function()
         _bool,
         _symbol,
         S_WARN,
+        S_TRUE,
         ignore,
         AsyncFunction,
         IllegalArgumentError,
@@ -84,14 +98,22 @@ const $scope = constants?.$scope || function()
 
     const { ModuleEvent, ModulePrototype } = classes;
 
+    /*
+     * If the environment does not define CustomEvent,<br>
+     * We define it as our custom ModuleEvent object,<br>
+     * Imported from the 'bootstrap' module.
+     */
     if ( _ud === typeof CustomEvent )
     {
         CustomEvent = ModuleEvent;
     }
 
+    /**
+     * Represents the name of the module.<br>
+     * This name is used when error events are emitted to indicate the source of the error.
+     * @type {string}
+     */
     const modName = "ArrayUtils";
-
-    const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
 
     const {
         VALID_TYPES,
@@ -121,6 +143,7 @@ const $scope = constants?.$scope || function()
     } = typeUtils;
 
     const {
+        DEFAULT_AS_STRING_OPTIONS,
         asString,
         isEmpty,
         isBlank,
@@ -133,6 +156,18 @@ const $scope = constants?.$scope || function()
         leftOfLast,
         rightOfLast
     } = stringUtils;
+
+    /**
+     * This is the object that is returned from this function.
+     * <br>
+     * This object is the ArrayUtils module.<br>
+     * <br>
+     * The functions defined in this file are added to the module before it is exported and returned.
+     * <br>
+     * @type {ModulePrototype}
+     * @module ArrayUtils
+     */
+    const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
 
     // poly-fill for isArray; probably obsolete with modern environments
     if ( _fun !== typeof Array.isArray )
@@ -151,32 +186,51 @@ const $scope = constants?.$scope || function()
     }
 
     /**
-     * An array of the names of the methods exposed by Array
-     * @type {string[]}
+     * This is an array of the names of the methods exposed by the built-in {@link Array} type.
+     * @const
+     * @type {Array.<string>}
      */
     const ARRAY_METHODS = ["length", "GUID", "getUniqueId"].concat( [].concat( Object.getOwnPropertyNames( Array.prototype ).filter( e => "function" === typeof [][e] ) ) );
 
+    const COMPARE_TO = "compareTo";
+
     /**
-     * This object defines the default options for the asArray function.
-     * flatten: when truthy, any elements of the array that are also arrays
-     * are turned into individual elements of the returned array (@see Array::flat)
+     * @typedef {Object} FlattenOptions
+     * @property {number} level The numeric argument to pass the {@link Array#flat} method<br>
+     * when passing options to a function that can also perform this transformation before returning an array.<br>
+     */
+
+    /**
+     * @typedef {Object} AsArrayOptions
      *
-     * flatten.level: if flatten is an object with a property named level,
-     * the integer value of level is used in the call to Array::flat
+     * @property {boolean|FlattenOptions} [flatten=false] Set to true to convert any elements of the array<br>
+     * that are also arrays into individual elements of the returned array<br>
+     * (@see {@link Array#flat})<br>
      *
-     * splitOn: a character or string to split a string if the argument to the function is a string.
-     * For example, calling asArray("a.b.c") with splitOn:"." yields ["a","b","c"]
+     * @property {string|undefined|null} [splitOn=undefined] A character or string to split a string<br>
+     * if the argument to the function is a string.<br><br>
+     * For example, calling asArray("a.b.c") with splitOn:"." yields ["a","b","c"]<br>
      *
-     * filter: a function that can be used to filter the resulting array
+     * @property {function|undefined|null} [filter=null] A function that will be used to filter the resulting array<br>
      *
-     * sanitize: if true, the resulting array will not contain any elements that are null, undefined, or an empty string
+     * @property {boolean} [sanitize=false] Set to true to filter the resulting array<br>
+     * so that it does not contain any elements that are null, undefined, or an empty string.<br>
      *
-     * type: string defining the typeof elements the resulting array should include --or-- a class for which each element must be an instance
-     *       type conversions are not performed; if necessary to convert types, omit this option and use Array::map on the returned value
+     * @property {string|undefined|null} [type=null] A string defining the typeof elements the resulting array should include<br>
+     * --or--<br>
+     * A class of which each element must be an instance.<br>
+     * Type conversions are not performed.<br>
+     * If necessary to convert types, omit this option and use {@link Array#map} over the returned value.<br>
      *
-     * unique: when true, the resulting array will contain no duplicated values
+     * @property {boolean} [unique=false] Set to true to remove duplicated values before returning the array.<br>
      *
-     * comparator: a function to use to determine the order of the elements in the resulting array
+     * @property {function(*,*)|undefined|null} [comparator=null] A function to use to determine the order of the elements in the resulting array.<br>
+     */
+
+    /**
+     * This object defines the default options for the {@link #asArray} function.<br>
+     * @const
+     * @type AsArrayOptions
      */
     const DEFAULT_AS_ARRAY_OPTIONS =
         {
@@ -190,12 +244,20 @@ const $scope = constants?.$scope || function()
         };
 
     /**
-     * This is an internal function
-     * that performs post-processing on arrays before they are returned from the asArray function;
+     * This is an internal function<br>
+     * that performs post-processing on an array<br>
+     * before it is returned from the {@link #asArray} function
      *
-     * @param pArr {[]}
-     * @param pOptions {Object} the object whose properties define the post-processing operations
-     * @returns {[]}
+     * @param {Array.<*>} pArr The array to process
+     * @param {AsArrayOptions} pOptions The object whose properties define the post-processing behavior and operations
+     *
+     * @returns {Array.<*>}
+     *
+     * @see {@link #asArray}
+     *
+     * @type {function(Array.<*>,AsArrayOptions)}
+     *
+     * @private
      */
     const processAsArrayOptions = function( pArr, pOptions )
     {
@@ -240,17 +302,32 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * Returns an array based on its input.
-     * If its input *is* an array, just returns it, unmodified, unaliased
-     * If it is a string, then, depending on the options optionally specified, that string is either split on a value and resulting array is returned,or...
-     *                          the string is wrapped in an array literal and a one element array containing the string is returned.
-     * if the input is a primitive value, a one element array containing that value is returned.
-     * if the input is a function, we execute that function with the options as its argument, passing the result back into this function
-     * if the input is an object, we create aa new array populated with the "first-level" properties of the object and then returned
-     * @param {any} pValue
-     * @param {Object} pOptions
-     * @param pRecursions {number} USED INTERNALLY TO PREVENT INFINITE RECURSION; DO NOT PASS A VALUE
-     * @returns an Array, based on the input
+     * Returns an array based on its input and the {@link AsArrayOptions} specified.<br>
+     * <br>
+     * If its input <i>is</i> an array, that array is returned,<br>
+     * modified as per the options specified.<br>
+     * <br>
+     * If its input is a string, depending on the options specified,<br>
+     * that string is either split on a value<br>
+     * and the resulting array is returned, <i>or</i>...<br>
+     * a one element array containing the string is returned.<br>
+     * <br>
+     * If the input is a primitive value, a one element array containing that value is returned.<br>
+     * <br>
+     * If the input is a function, the function is executed with the {@link AsArrayOptions} as its argument,<br>
+     * and {@link #asArray} is called again with the result<br>
+     * <br>
+     * If the input is an object, this function populates and returns a new array with its "first-level" properties<br>
+     * <br>
+     * @param {*} pValue Any object or value to convert to an array and/or process as per the {@link AsArrayOptions}
+     * @param {AsArrayOptions} pOptions An object to define how input values are evaluated<br>
+     * and how the resulting array is processed before being returned.
+     * @param {number} pRecursions <b>USED INTERNALLY TO PREVENT INFINITE RECURSION.<br>
+     * DO NOT PASS A VALUE FROM CALLING CODE.</b>
+     *
+     * @returns {Array.<*>} an Array, based on the input and the options specified
+     *
+     * @type {function}
      */
     const asArray = function( pValue, pOptions = DEFAULT_AS_ARRAY_OPTIONS, pRecursions = 0 )
     {
@@ -348,14 +425,15 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * This function converts 'rest' arguments into an array,
-     * performing a one-level flat() if the only argument passed was an array.
-     * This behavior is exactly like that of the Array concat method.
+     * This function converts 'rest' arguments into an array,<br>
+     * performing a one-level spread if the only argument passed was a one-element array.<br>
+     * This behavior is exactly like that of the {@link Array#concat} method.<br>
      *
-     * This function makes a copy of the arguments passed.
+     * @param {...*} pArgs The 'rest' argument(s) passed into a function
      *
-     * @param pArgs {...any}
-     * @returns {*|*[]|FlatArray<*[], 1>[]}
+     * @returns {Array.<*>} An array of the arguments
+     *
+     * @type {function(...*)}
      */
     const varargs = function( ...pArgs )
     {
@@ -364,29 +442,37 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * This function converts 'rest' arguments into an immutable array,
-     * performing a one-level flat() if the only argument passed was an array.
-     * This behavior is exactly like that of the Array concat method.
+     * This function converts 'rest' arguments into an <i>immutable</i> array.<br>
+     * It is identical to {@link #varargs} function<br>
+     * except that the returned array is populated with immutable copies of its elements and is itself immutable.<br>
      *
-     * this function makes an immutable copy of the arguments.
+     * @param {...*} pArgs The 'rest' argument(s) passed into a function
      *
-     * @param pArgs {...any}
-     * @returns {*|*[]|FlatArray<*[], 1>[]}
+     * @returns {Array} An immutable array of the arguments
+     *
+     * @type {function(...*)}
+     *
      */
     const immutableVarArgs = function( ...pArgs )
     {
         let args = varargs( ...pArgs );
-        return args.map( e => immutableCopy( e ) );
+        return lock( args.map( e => immutableCopy( e ) ) );
     };
 
     /**
-     * Returns either the number of elements in an array,
-     * the number of characters in a string (or the number of characters in the string representation of a number),
+     * Returns either the number of elements in an array,<br>
+     * the number of characters in a string,<br>
+     * the number of characters in the string representation of a number,<br>
+     * or the number of keys in an object.<br>
+     *
+     * @param {Array.<*>|string|number|object} pObject An array, string, number, or object whose "length" should be returned
+     *
+     * @returns {number} the number of elements in an array,<br>
+     * the number of characters in a string,<br>
+     * the number of characters in the string representation of a number,<br>
      * or the number of keys in an object
-     * @param pObject {*[]|string|number|object} an array, string, number, or object whose "length" should be returned
-     * @returns {number} the number of elements in an array,
-     * the number of characters in a string (or the number of characters in the string representation of a number),
-     * or the number of keys in an object
+     *
+     * @type {function(Array.<*>|string|number|object)}
      */
     const calculateLength = function( pObject )
     {
@@ -433,79 +519,188 @@ const $scope = constants?.$scope || function()
         return len;
     };
 
+
     /**
-     * This is a collection of functions that can be used as filters or functions that return a filter.
-     * These can be chained or combined using other features of this module
+     * Reports an error when the number of filters to match exceeds the number of filters specified.<br>
+     * <br>
+     * This function indirectly fires the "error" event.<br>
+     *
+     * @param {number} pNumMatches - The number of filters to match.
+     * @param {number} pNumFilters - The number of filters specified.
+     * @param {string} pFunctionName - The name of the function where the error occurred.
+     * @return {void} This function does not return a value.
+     * @private
      */
-    const Predicates =
+    function reportIllegalArguments( pNumMatches, pNumFilters, pFunctionName )
+    {
+        const msg = "The number of filters to match is greater than the number of filters specified";
+        const advice = "The returned filter will always return an empty array";
+
+        const error = new IllegalArgumentError( msg );
+
+        modulePrototype.reportError( error, advice, S_WARN, modulePrototype.calculateErrorSourceName( modName, pFunctionName ),
+                                     {
+                                         "pNumMatches": pNumMatches,
+                                         "numFilters": pNumFilters
+                                     } );
+    }
+
+    /**
+     * An alias for the {@link #Predicates} object, providing a more familiar name.
+     */
+    let Filters;
+
+    /**
+     * This is a collection of functions that can be used as filters
+     * <i>and functions that return a filter</i>.<br>
+     * <br>
+     * These can be chained or combined using other features of this module.<br>
+     *
+     * @see {@link #Filters}
+     *
+     * @const
+     */
+    const Predicates = Filters =
         {
-            /** A filter that returns the same array elements of the source array */
+            /** A filter that returns the same array elements of the source array
+             * @type {function(*)}
+             * */
             IDENTITY: e => true,
 
-            /** a filter to return the elements of an array that are filter functions */
-            IS_PREDICATE: e => _fun === typeof e && e?.length > 0 && e?.length <= 3,
+            /** a filter to return the elements of an array that are filter functions
+             * @type {function(*)}
+             */
+            IS_PREDICATE: e => isFunction( e ) && e?.length > 0 && e?.length <= 3,
 
-            /** a filter to return the elements of an array that are comparator functions */
-            IS_COMPARATOR: e => _fun === typeof e && e?.length === 2,
+            /**
+             * A filter to return the elements of an array that are comparator functions
+             * @type {function(*)}
+             */
+            IS_COMPARATOR: e => isFunction( e ) && e?.length === 2,
 
-            /** a filter to return the elements of an array that are not undefined */
+            /**
+             * A filter to return the elements of an array that are not undefined
+             * @type {function(*)}
+             */
             IS_DEFINED: e => _ud !== typeof e,
 
-            /** a filter to return the elements of an array that are not null or undefined */
+            /**
+             * A filter to return the elements of an array that are not null or undefined
+             * @type {function(*)}
+             */
             IS_NOT_NULL: e => Predicates.IS_DEFINED( e ) && null !== e,
 
-            /** a filter to return the elements of an array that are strings */
-            IS_STRING: e => _str === typeof e,
+            /**
+             * A filter to return the elements of an array that are strings
+             * @type {function(*)}
+             */
+            IS_STRING: e => isString( e ),
 
-            /** a filter to return the elements of an array that are empty strings */
+            /**
+             * A filter to return the elements of an array that are empty strings
+             * @type {function(*)}
+             */
             IS_EMPTY_STRING: e => Predicates.IS_STRING( e ) && _mt_str === e,
 
-            /** a filter to return the elements of an array that are composed of whitespace characters only */
-            IS_WHITESPACE: e => Predicates.IS_STRING( e ) && _mt_str === e.trim().replace( /\s+/g, _mt_str ),
+            /**
+             * A filter to return the elements of an array that are composed of whitespace characters only
+             * @type {function(*)}
+             */
+            IS_WHITESPACE: e => Predicates.IS_STRING( e ) && (_mt_str === (e.trim().replace( /\s+/g, _mt_str ))),
 
-            /** a filter to return the elements of an array that are non-empty strings */
+            /**
+             * A filter to return the elements of an array that are non-empty strings
+             * @type {function(*)}
+             */
             IS_POPULATED_STRING: e => Predicates.IS_STRING( e ) && !(Predicates.IS_EMPTY_STRING( e )),
 
-            /** a filter to return the elements of an array that are non-blank strings */
+            /**
+             * A filter to return the elements of an array that are non-blank strings
+             * @type {function(*)}
+             * */
             IS_NON_WHITESPACE: e => Predicates.IS_STRING( e ) && !Predicates.IS_WHITESPACE( e ),
 
-            /** a filter to return the elements of an array that are numbers */
-            IS_NUMBER: e => [_num, _big].includes( (typeof e) ),
+            /**
+             * A filter to return the elements of an array that are numbers
+             * @type {function(*)}
+             * */
+            IS_NUMBER: e => isNumber( e ),
 
+            /**
+             * A filter to return the elements of an array that are valid numeric values
+             * @type {function(*)}
+             * */
             IS_NUMERIC: e => isValidNumeric( e ),
 
-            /** a filter to return the elements of an array that are integers (whole numbers) */
+            /**
+             * A filter to return the elements of an array that are integers (whole numbers)
+             * @type {function(*)}
+             * */
             IS_INTEGER: e => Predicates.IS_NUMBER( e ) && (isInteger( e ) || Math.abs( e - Math.round( e ) ) < 0.0000000001),
 
-            /** a filter to return the elements of an array that are objects */
+            /**
+             * A filter to return the elements of an array that are objects
+             * @type {function(*)}
+             * */
             IS_OBJECT: e => _obj === typeof e,
 
-            /** a filter to return the elements of an array that are also arrays */
+            /**
+             * A filter to return the elements of an array that are also arrays
+             * @type {function(*)}
+             * */
             IS_ARRAY: e => Predicates.IS_OBJECT( e ) && isArray( e ),
 
-            /** a filter to return the elements of an array that are functions */
-            IS_FUNCTION: e => _fun === typeof e,
+            /**
+             * Aa filter to return the elements of an array that are functions
+             * @type {function(*)}
+             * */
+            IS_FUNCTION: e => isFunction( e ),
 
-            /** a filter to return the elements of an array that are asynchronous functions */
+            /**
+             * A filter to return the elements of an array that are asynchronous functions
+             * @type {function(*)}
+             * */
             IS_ASYNC_FUNCTION: e => Predicates.IS_FUNCTION( e ) && e instanceof AsyncFunction,
 
+            /**
+             * A filter to return the elements of an array that are boolean values
+             * @type {function(*)}
+             * */
             IS_BOOLEAN: e => isBoolean( e ),
 
+            /**
+             * A filter to return the elements of an array that are regular expressions
+             * @type {function(*)}
+             * */
             IS_REGEXP: e => (e instanceof RegExp || /\/[^/]\/[gidsmyu]+$/.test( asString( e, true ) )),
 
+            /**
+             * A filter to return the elements of an array that are Dates
+             * @type {function(*)}
+             * */
             IS_DATE: e => isDate( e ),
 
-            /** a filter to returns the elements suitable as comparator functions for the Array 'sort' method */
+            /** A filter to return the elements of an array suitable as comparator functions for the {@link Array#sort} method
+             * @type {function(*)}
+             * */
             COMPARATORS: (e => Predicates.IS_FUNCTION( e ) && Predicates.IS_COMPARATOR( e )),
 
-            /** a function to return an array of filter functions from varargs */
+            /**
+             * A <b>function<b> to return an array of filter functions from varargs
+             * @param {...function} pPredicates One or more filter functions to include in the returned array
+             * @return An array of filter functions
+             * @type {function(...*)}
+             * */
             _copyPredicateArguments: function( ...pPredicates )
             {
                 return ([].concat( ...asArray( (pPredicates || [Predicates.IDENTITY]) ) )).filter( Predicates.IS_PREDICATE );
             },
 
-            /** a function that returns a filter
-             * that returns the elements of an array that match one of the specified types
+            /**
+             * A <i><b>function</b> that returns a filter</i>
+             * that returns the elements of an array that match one or more of the specified types
+             * @param {...string} pType One or more types the returned filter will accept
+             * @return {function(*)} A filter that returns the elements of an array that match one or more of the specified types
              */
             makeTypeFilter: function( ...pType )
             {
@@ -528,8 +723,12 @@ const $scope = constants?.$scope || function()
                 };
             },
 
-            /** a function that returns a filter
-             * that returns an array whose elements satisfy ALL specified filters
+            /**
+             * A <i><b>function</b> that returns a filter</i>
+             * that returns an array whose elements satisfy <b>ALL</b> specified filters
+             * @param {...function} pPredicates One or more filter functions
+             * @return {function(*)} A filter that returns the elements of an array that match all the specified criteria
+             * @type {function(...function)}
              */
             makeMatchesAllFilter: function( ...pPredicates )
             {
@@ -562,9 +761,13 @@ const $scope = constants?.$scope || function()
                 };
             },
 
-            /** a function that returns a filter
-             * that returns an array whose elements satisfy ANY of the specified filters
-             */
+            /**
+             * A <i><b>function</b> that returns a filter</i>
+             * that returns an array whose elements satisfy <i><b>ANY</b></i> of the specified filters
+             * @param {...function} pPredicates One or more filter functions
+             * @return {function(*)} A filter that returns the elements of an array that match any the specified criteria
+             * @type {function(...function)}
+             * */
             makeMatchesAnyFilter: function( ...pPredicates )
             {
                 const predicates = Predicates._copyPredicateArguments( ...pPredicates );
@@ -593,9 +796,13 @@ const $scope = constants?.$scope || function()
                 };
             },
 
-            /** a function that returns a filter
-             * that returns an array whose elements satisfy NONE of the specified filters
-             */
+            /**
+             * A <i><b>function</b> that returns a filter</i>
+             * that returns an array whose elements satisfy <i><b><u>NONE</u></b></i> of the specified filters
+             * @param {...function} pPredicates One or more filter functions
+             * @return {function(*)} A filter that returns the elements of an array that match none the specified criteria
+             * @type {function(...function)}
+             * */
             makeMatchesNoneFilter: function( ...pPredicates )
             {
                 const predicates = [].concat( ...(pPredicates || []) ).filter( Predicates.IS_PREDICATE );
@@ -613,22 +820,35 @@ const $scope = constants?.$scope || function()
                 return function() { return true; };
             },
 
-            /** a helper function that returns true if the specified value is a valid number or BigInt */
+            /**
+             * A helper function that returns a number
+             * @type {function(*)}
+             * */
             _numExpected: function( pNum )
             {
-                let num = [_num, _big].includes( typeof pNum ) ? parseInt( Number( pNum ).toFixed( 0 ) ) : _str === typeof pNum ? parseInt( pNum ) : 1;
+                let num = isNumber( pNum ) ? parseInt( Number( pNum ).toFixed( 0 ) ) : isString( pNum ) ? parseInt( pNum ) : 1;
 
-                return [_num, _big].includes( typeof num ) && !isNaN( num ) && isFinite( num ) ? num : 1;
+                return isNumber( num ) && !isNaN( num ) && isFinite( num ) ? num : 1;
             },
 
-            /** a function that returns a filter
-             * that returns an array whose elements satisfy AT LEAST n of the specified filters
+            /**
+             * A <i><b>function</b> that returns a filter</i>
+             * that returns an array whose elements satisfy <b>AT LEAST <i>n</i></b> of the specified filters
+             * @param {number} pNumMatches The minium number of filters an element must match
+             * @param pPredicates <i>n</i> or more filter functions
+             * @return {function(*)} A filter that returns an array whose elements satisfy AT LEAST <i>n</i> of the specified filters
+             * @type {function(number,...function)}
              */
             makeMatchesNPlusFilter: function( pNumMatches, ...pPredicates )
             {
                 const predicates = Predicates._copyPredicateArguments( ...pPredicates );
 
                 const numExpected = Predicates._numExpected( pNumMatches );
+
+                if ( numExpected > predicates.length )
+                {
+                    reportIllegalArguments( pNumMatches, predicates.length, "makeMatchesNPlusFilter" );
+                }
 
                 return function( e )
                 {
@@ -655,14 +875,24 @@ const $scope = constants?.$scope || function()
                 };
             },
 
-            /** a function that returns a filter
-             * that returns an array whose elements satisfy EXACTLY n of the specified filters
+            /**
+             * A <i><b>function</b> that returns a filter</i>
+             * that returns an array whose elements satisfy <b>EXACTLY <i>n</i></b> of the specified filters
+             * @param {number} pNumMatches The exact number of filters an element must match
+             * @param pPredicates <i>n</i> or more filter functions
+             * @return {function(*)} A filter that returns an array whose elements satisfy EXACTLY <i>n</i> of the specified filters
+             * @type {function(number,...function)}
              */
             makeMatchesExactlyNFilter: function( pNumMatches, ...pPredicates )
             {
                 const predicates = [].concat( ...(pPredicates || []) ).filter( Predicates.IS_PREDICATE );
 
                 let numExpected = Predicates._numExpected( pNumMatches );
+
+                if ( numExpected > predicates.length )
+                {
+                    reportIllegalArguments( pNumMatches, predicates.length, "makeMatchesExactlyNFilter" );
+                }
 
                 return function( e )
                 {
@@ -687,8 +917,13 @@ const $scope = constants?.$scope || function()
                 };
             },
 
-            /** a function that returns a filter
-             * that returns an array whose elements satisfy LESS THAN n of the specified filters
+            /**
+             * A <i><b>function</b> that returns a filter</i>
+             * that returns an array whose elements satisfy <b>LESS THAN <i>n</i></b> of the specified filters
+             * @param {number} pNumAllowed The maximum number of filters an element can match
+             * @param pPredicates <i>n</i> or more filter functions
+             * @return {function(*)} A filter that returns an array whose elements satisfy less than <i>n</i> of the specified filters
+             * @type {function(number,...function)}
              */
             makeMatchesLessThanNFilter: function( pNumAllowed, ...pPredicates )
             {
@@ -713,42 +948,60 @@ const $scope = constants?.$scope || function()
                             numMatches = Infinity;
                             break;
                         }
+
+                        if ( numMatches >= numAllowed )
+                        {
+                            break;
+                        }
                     }
 
                     return (numMatches < numAllowed);
                 };
             },
 
-            /** a filter to return the elements of an array that are also arrays with at least one non-null/non-empty element */
+            /**
+             * A filter to return the elements of an array
+             * that are also arrays with at least one non-null/non-empty element
+             * @type {function(*)}
+             * */
             IS_POPULATED_ARRAY: function( e )
             {
                 const filter = Predicates.makeMatchesAllFilter( Predicates.IS_OBJECT, Predicates.IS_NOT_NULL, Predicates.IS_ARRAY, e => e?.length > 0 );
                 return filter( e );
             },
 
-            /** a filter to return the elements of an array that are objects (or arrays) with at least one property */
+            /**
+             * A filter to return the elements of an array that are objects (or arrays) with at least one property
+             * @type {function(*)}
+             * */
             IS_POPULATED_OBJECT: function( e )
             {
                 const filter = Predicates.makeMatchesAllFilter( Predicates.IS_OBJECT, Predicates.IS_NOT_NULL, e => Predicates.IS_ARRAY( e ) ? ((e?.length || 0) > 0) : (Object.keys( e )?.length || 0) > 0 );
                 return filter( e );
             },
 
-            /** a filter to return the elements of an array that are objects that are not arrays with at least one non-null/non-empty property */
+            /**
+             * A filter to return the elements of an array that are objects that are not arrays with at least one non-null/non-empty property
+             * @type {function(*)}
+             * */
             IS_POPULATED_NON_ARRAY_OBJECT: function( e )
             {
                 const filter = Predicates.makeMatchesAllFilter( Predicates.IS_OBJECT( e ), Predicates.IS_NOT_NULL, e => ( !Predicates.IS_ARRAY( e ) && Object.keys( e ).length > 0) );
                 return filter( e );
             },
 
-            /** a filter to return the elements of an array that are valid numbers */
+            /** A filter to return the elements of an array that are valid numbers
+             * @type {function(*)}
+             * */
             IS_VALID_NUMBER: e => Predicates.IS_NUMBER( e ) && !isNaN( e ) && isFinite( e ),
 
             /**
-             * a filter to return the elements of an array
+             * A filter to return the elements of an array
              * that are either non-empty strings,
              * objects with at least one property,
              * arrays with at least one element,
              * or valid numbers
+             * @type {function(*)}
              */
             NON_EMPTY: function( e )
             {
@@ -761,7 +1014,7 @@ const $scope = constants?.$scope || function()
             },
 
             /**
-             * a filter to return the elements of an array
+             * A filter to return the elements of an array
              * that are either non-empty strings,
              * objects with at least one property,
              * arrays with at least one element,
@@ -769,6 +1022,7 @@ const $scope = constants?.$scope || function()
              * Dates,
              * RegExp objects,
              * or valid numbers
+             * @type {function(*)}
              */
             IS_POPULATED: function( e )
             {
@@ -787,14 +1041,18 @@ const $scope = constants?.$scope || function()
             },
 
             /**
-             * a filter to return the elements of an array
+             * A filter to return the elements of an array
              * that are strings with at least one non-whitespace character
+             * @type {function(*)}
              */
             NON_BLANK: e => Predicates.IS_POPULATED_STRING( e ) && _mt_str !== e.trim() && !Predicates.IS_WHITESPACE( e ),
 
             /**
-             * a function that returns a filter
-             * that returns an array whose elements match the specified regular expression
+             * A <i><b>function</b> that returns a filter</i>
+             * that returns an array whose elements are strings that match the specified regular expression
+             *
+             * @param {RegExp|string} pRx - A regular expression or a string that represents a regular expression pattern
+             * @return {function(*)} An array whose elements are strings matching the specified regular expression
              */
             makeMatchesRexExpFilter: function( pRx )
             {
@@ -802,7 +1060,7 @@ const $scope = constants?.$scope || function()
 
                 return function( e )
                 {
-                    if ( !(_str === typeof e) )
+                    if ( !isString( e ) )
                     {
                         return false;
                     }
@@ -814,10 +1072,13 @@ const $scope = constants?.$scope || function()
             },
 
             /**
-             * Returns a filter that matches if none of the predicates/filters specified return true
-             * Similar to makeMatchesNoneFilter
-             * @param pPredicates
-             * @returns {(function(*, *, *): (boolean))|*}
+             * A <i><b>function</b> that returns a filter</i>
+             * that matches elements if none of the predicates/filters specified return true<br>
+             * <br>
+             * @see (@link #makeMatchesNoneFilter}
+             * @param {...function} pPredicates - One or more filter functions
+             * @returns {function(*, number, Array.<*>)}
+             * @type {function(...function)}
              */
             NOT: function( ...pPredicates )
             {
@@ -839,10 +1100,15 @@ const $scope = constants?.$scope || function()
             },
 
             /**
-             * Returns a filter to return the elements of an array
-             * that are not elements of the specified array
+             * A <i><b>function</b> that returns a filter</i>
+             * that returns an array whose elements are not elements of the specified array<br>
              *
-             * @return {function}
+             * @param {...*} pArr - An array or one or more values or arrays<br>
+             * whose elements should not be included in the array returned when the filter is applied
+             *
+             * @return {function(*)} A filter to return an array with only elements that are not in the specified array
+             *
+             * @type {function(...*)}
              */
             NOT_IN: function( ...pArr )
             {
@@ -886,10 +1152,16 @@ const $scope = constants?.$scope || function()
             },
 
             /**
-             * Returns a filter to return the elements of an array
+             * A <i><b>function</b> that returns a filter</i>
+             * to return the elements of an array
              * that are also elements of the specified array
              *
-             * @return {function}
+             * @param {...*} pArr - An array or one or more values or arrays<br>
+             * whose elements should be included in the array returned when the filter is applied
+             *
+             * @return {function(*)} A filter to return an array with only elements that are also in the specified array
+             *
+             * @type {function(...*)}
              */
             IN:
                 function( ...pArr )
@@ -934,12 +1206,18 @@ const $scope = constants?.$scope || function()
                 },
 
             /**
-             * Returns a function that returns a filter
+             * A <i><b>function</b> that returns a filter</i>
              * that returns an array whose elements each start with
              * one or more of the strings in the specified array
              *
-             * @return {function}
-             * */
+             * @param {...string} pArr - One or more strings or arrays of strings<br>
+             * with which elements of an array to which the returned filter is applied must start.<br>
+             *
+             * @return {function(*, number, Array.<*>)} A filter that, when applied,
+             * returns an array including only those elements that are strings starting with one or more of the values specified.
+             *
+             * @type {function(...string)}
+             */
             STARTS_WITH: function( ...pArr )
             {
                 const arr = [].concat( ...(pArr || []) ).flat().map( e => asString( e ) );
@@ -961,9 +1239,17 @@ const $scope = constants?.$scope || function()
             },
 
             /**
-             * a function that returns a filter
+             * A <i><b>function</b> that returns a filter</i>
              * that returns an array whose elements each end with
              * one or more of the strings in the specified array
+             *
+             * @param {...string} pArr - One or more strings or arrays of strings<br>
+             * with which elements of an array to which the returned filter is applied must end.<br>
+             *
+             * @return {function(*, number, Array.<*>)} A filter that, when applied,
+             * returns an array including only those elements that are strings ending with one or more of the values specified.
+             *
+             * @type {function(...string)}
              */
             ENDS_WITH: function( ...pArr )
             {
@@ -987,39 +1273,12 @@ const $scope = constants?.$scope || function()
             },
 
             /**
-             * a function that returns a filter
+             * A <i><b>function</b> that returns a filter</i>
              * that is composed of the filters specified
-             */
-            buildPredicate: function( ...pFunctions )
-            {
-                const functions = [].concat( ...(pFunctions || [Predicates.IDENTITY]) ).filter( Predicates.IS_PREDICATE );
-
-                return function( pElem, pIndex, pArray )
-                {
-                    for( const func of functions )
-                    {
-                        try
-                        {
-                            if ( true !== func( pElem, pIndex, pArray ) )
-                            {
-                                return false;
-                            }
-                        }
-                        catch( ex )
-                        {
-                            ignore( ex );
-
-                            return false;
-                        }
-                    }
-
-                    return true;
-                };
-            },
-
-            /**
-             * a function that returns a filter
-             * that is composed of the filters specified
+             *
+             * @param {...function} pFilters - One or more filter functions
+             *
+             * @return {function(*, number, Array.<*>)} A filter composed of the specified filters
              */
             chain: function( ...pFilters )
             {
@@ -1044,13 +1303,12 @@ const $scope = constants?.$scope || function()
         };
 
     /**
-     * This is a top-level function that returns a filter
-     * that returns an array whose elements
-     * match all the filter functions specified.
+     * This is a top-level function that returns a filter<br>
+     * to return an array whose elements match <b>all</b> the filter functions specified.
      *
      * @see Predicates.makeMatchesAllFilter
      *
-     * @param pFunction {...function} one or more filter functions to combine
+     * @param {...function} pFunction - One or more filter functions to combine
      *
      * @returns {function(*): boolean}
      */
@@ -1060,53 +1318,100 @@ const $scope = constants?.$scope || function()
         return Predicates.makeMatchesAllFilter( ...(functions || [Predicates.IDENTITY]) );
     };
 
-    /**
-     * This object is used to export the Predicates collection under a more familiar name
-     * @type {{_numExpected: (function(*): number|number), IS_NOT_NULL: (function(*): *), makeMatchesNoneFilter: ((function(...[*]): (function(*): *))|*), IS_POPULATED_STRING: (function(*): *), buildPredicate: (function(...[*]): function(*, *, *): (boolean)), makeMatchesNPlusFilter: (function(*, ...[*]): function(*): boolean), IS_DEFINED: (function(*): boolean), IS_POPULATED_OBJECT: (function(*): *), IS_WHITESPACE: (function(*): *), IS_PREDICATE: (function(*): *), makeTypeFilter: (function(...[*]): function(*): boolean), makeMatchesExactlyNFilter: (function(*, ...[*]): function(*): boolean), IS_NON_WHITESPACE: (function(*): *), IS_POPULATED_ARRAY: (function(*): *), NON_EMPTY: (function(*): *), IS_EMPTY_STRING: (function(*): *), IS_ARRAY: (function(*): *), IS_VALID_NUMBER: (function(*): *), ENDS_WITH: (function(...[*]): function(*, *, *): boolean), makeMatchesAllFilter: (function(...[*]): function(*): boolean), IS_STRING: (function(*): boolean), IS_NUMBER: (function(*): boolean), _copyPredicateArguments: (function(...[*]): *[]), chain: (function(...[*]): function(*, *, *): boolean), STARTS_WITH: (function(...[*]): function(*, *, *): boolean), IN: (function(...[*]): function(*): *), IS_ASYNC_FUNCTION: (function(*): *), NOT_IN: (function(...[*]): function(*): *), IS_FUNCTION: (function(*): boolean), IS_COMPARATOR: (function(*): *), makeMatchesAnyFilter: (function(...[*]): function(*): boolean), IDENTITY: (function(*): boolean), makeMatchesRexExpFilter: (function(*): function(*): (boolean|boolean)), IS_INTEGER: (function(*): *), IS_POPULATED_NON_ARRAY_OBJECT: (function(*): *), makeMatchesLessThanNFilter: (function(*, ...[*]): function(*): boolean), IS_OBJECT: (function(*): boolean), NON_BLANK: (function(*): *)}}
-     */
-    let Filters = Object.assign( {}, Predicates );
+    // let Filters = lock( Predicates );
 
     /**
-     * This is a collection of functions to map an array of elements to an array of modified elements.
-     * @type {{IDENTITY: (function(*): *), TO_NUMBER: (function(*): *|number), chain: (function(...[*]): function(*, *, *): *), TO_LOWERCASE: (function(*): string), TO_UPPERCASE: (function(*): string), TO_VALID_NUMBER: ((function(*): (number|number))|*), TRIMMED: (function(*): string), TO_STRING: (function(*): *|string), REPLACE: (function(*, *): function(*): string), APPEND: (function(*): function(*): *), PREPEND: (function(*): function(*): *)}}
+     * This is a collection of functions
+     * <i>and functions that return a function</i>
+     * that can be used to map an array of elements
+     * to another array of elements
+     *
+     * These can be chained or combined using other features of this module.<br>
+     *
+     * @see {@link Array#map}
+     *
+     * @const
      */
     const Mappers =
         {
-            /** This mapper simply returns an array with the same elements as the source array */
+            /**
+             * A mapper that simply returns an array with the same elements as array to which it is applied
+             * @type {function(*)}
+             * */
             IDENTITY: e => e,
 
-            /** This mapper is used to return an array with its elements converted to strings */
+            /**
+             * A mapper that returns an array
+             * with the elements of the array to which it is applied
+             * converted to strings
+             * @type {function(*)}
+             * */
             TO_STRING: e => isString( e ) ? e : asString( e ),
 
             /**
-             * This function returns a mapper to convert elements into strings according to the options specified
-             * @param pOptions {Object}
-             * @returns {function(*): *}
+             * A <i><b>function</b> that returns a mapper</i>
+             * that returns an array with the elements of the array to which it is applied
+             * converted into strings according to the options specified
+             * @param {AsStringOptions} pOptions - The options to pass to the {@link stringUtils#asString} function
+             *
+             * @returns {function(*)}
+             *
+             * @type {function(Object)}
              *
              * @see stringUtils#asString
              */
-            TO_STRING_WITH_OPTIONS: function( pOptions )
+            TO_STRING_WITH_OPTIONS: function( pOptions = DEFAULT_AS_STRING_OPTIONS )
             {
-                const options = Object.assign( {}, pOptions || {} );
+                const options = populateOptions( pOptions, DEFAULT_AS_STRING_OPTIONS );
                 return e => asString( e, options.trim, options );
             },
 
-            /** This mapper is used to return an array with its elements converted to numbers */
+            /**
+             * A mapper that returns an array
+             * with the elements of the array to which it is applied
+             * converted to numbers
+             * @type {function(*)}
+             * */
             TO_NUMBER: e => isNumber( e ) ? e : asFloat( e ),
 
-            /** This mapper is used to return an array with its elements converted to base-10 numbers */
+            /**
+             * A mapper that returns an array
+             * with the elements of the array to which it is applied
+             * converted to base-10 numbers (or NaN, if the source element cannot be converted)
+             * @type {function(*)}
+             * */
             TO_DECIMAL: e => isNumeric( e ) ? toDecimal( e ) : asFloat( e ),
 
-            /** This mapper is used to return an array with its elements converted to base-16 representations */
+            /**
+             * A mapper that returns an array
+             * with the elements of the array to which it is applied
+             * converted to base-16 string representations (or 0x0, if the source element is not numeric)
+             * @type {function(*)}
+             * */
             TO_HEXADECIMAL: e => isNumeric( e ) ? toHex( e ) : "0x0",
 
-            /** This mapper is used to return an array with its elements converted to base-8 representations */
+            /**
+             * A mapper that returns an array
+             * with the elements of the array to which it is applied
+             * converted to base-8 string representations (or 0o0, if the source element is not numeric)
+             * @type {function(*)}
+             * */
             TO_OCTAL: e => isNumeric( e ) ? toOctal( e ) : "0o0",
 
-            /** This mapper is used to return an array with its elements converted to base-2 representations */
+            /**
+             * A mapper that returns an array
+             * with the elements of the array to which it is applied
+             * converted to base-2 string representations (or 0b0, if the source element is not numeric)
+             * @type {function(*)}
+             * */
             TO_BINARY: e => isNumeric( e ) ? toBinary( e ) : "0b0",
 
-            /** This mapper is used to return an array with its elements converted to valid numbers or 0 */
+            /**
+             * A mapper that returns an array
+             * with the elements of the array to which it is applied
+             * converted to valid numbers (or 0, if the source element is not numeric)
+             * @type {function(*)}
+             * */
             TO_VALID_NUMBER: function( e )
             {
                 let n = Mappers.TO_NUMBER( e );
@@ -1119,52 +1424,102 @@ const $scope = constants?.$scope || function()
                 return 0;
             },
 
-            /** This mapper is used to return an array with its elements converted to strings with leading and trailing whitespace removed */
+            /**
+             * A mapper that returns an array
+             * with the elements of the array to which it is applied
+             * converted to strings with leading and trailing whitespace removed
+             * @type {function(*)}
+             * */
             TRIMMED: e => asString( e, true ).trim(),
 
-            /** This function returns a mapper
-             * that is used to return an array with each of its elements converted to strings
-             * that are then appended with the specified string */
+            /**
+             * A <i><b>function</b> that returns a mapper</i>
+             * that returns an array with each of the elements of the array to which it is applied
+             * converted to strings appended with the specified string
+             *
+             * @param {string} pStr - a string to append to each element of the source array in the returned array
+             *
+             * @return {function(*)} A mapper that returns an array with each of the elements of the array to which it is applied
+             * converted to strings appended with the specified string
+             *
+             * @type {function(string)}
+             * */
             APPEND: function( pStr )
             {
                 return e => asString( e ) + (asString( pStr ) || _mt_str);
             },
 
-            /** This function returns a mapper
-             * that is used to return an array with each of its elements converted to strings
-             * that are prefixed with the specified string */
+
+            /**
+             * A <i><b>function</b> that returns a mapper</i>
+             * that returns an array with each of the elements of the array to which it is applied
+             * converted to strings prefixed with the specified string
+             *
+             * @param {string} pStr - a string to prepend to each element of the source array in the returned array
+             *
+             * @return {function(*)} A mapper that returns an array with each of the elements of the array to which it is applied
+             * converted to strings prefixed with the specified string
+             *
+             * @type {function(string)}
+             * */
             PREPEND: function( pStr )
             {
                 return e => (asString( pStr ) || _mt_str) + asString( e );
             },
 
-            /** This function returns a mapper
-             * that is used to return an array with each of its elements converted to strings
-             * modified by replacing the search string or RegExp with the replacement string */
+
+            /**
+             * A <i><b>function</b> that returns a mapper</i>
+             * that returns an array with each of the elements of the array to which it is applied
+             * converted to strings with the search string (or RegExp) replaced with the specified replacement.
+             *
+             * @param {string|RegExp} pSearchStr - A string or regular expression to replace with the specified replacement
+             * @param {string} pReplacement - A string to replace the search string or matched regular expression
+             *
+             * @return {function(*)} A mapper that returns an array with each of the elements of the array to which it is applied
+             * converted to strings with the search string (or RegExp) replaced with the specified replacement
+             *
+             * @type {function(string|RegExp,string)}
+             * */
             REPLACE: function( pSearchStr, pReplacement )
             {
                 return e => asString( e ).replace( pSearchStr, (asString( pReplacement || _mt_str ) || _mt_str) );
             },
 
-            /** This mapper is used to return an array with its elements converted to strings and then converted to lowercase */
+            /**
+             * A mapper that returns an array
+             * with the elements of the array to which it is applied
+             * converted to lowercase strings
+             * @type {function(*)}
+             * */
             TO_LOWERCASE: function( e )
             {
                 return lcase( asString( e ) );
             },
 
-            /** This mapper is used to return an array with its elements converted to strings and then converted to UPPERCASE */
+            /**
+             * A mapper that returns an array
+             * with the elements of the array to which it is applied
+             * converted to uppercase strings
+             * @type {function(*)}
+             * */
             TO_UPPERCASE: function( e )
             {
                 return ucase( asString( e ) );
             },
 
             /**
-             * This function returns a mapper function
-             * that returns an array with all specified mappers applied
+             * A <i><b>function</b> that returns a mapper</i>
+             * that applies each of the mapper functions specified
+             * in the order specified<br>
              *
-             * @param pMappers {...function}
-             * @returns {function(*, *, *): *}
-             */
+             * @param {...function} pMappers - One or more mapping functions to apply successively
+             *
+             * @return {function(*, number, Array.<*>)} A mapper that applies each of the mapper functions specified
+             * in the order specified<br>
+             *
+             * @type {function(...function)}
+             * */
             chain: function( ...pMappers )
             {
                 const mappers = [].concat( ...(pMappers || [Mappers.IDENTITY]) );
@@ -1184,31 +1539,61 @@ const $scope = constants?.$scope || function()
         };
 
     /**
-     * This is a collection of functions that can be used as arguments to the Array sort method
+     * @typedef {function(*,*)} Comparator
+     */
+
+    /**
+     * Returns an array of valid comparator functions
+     *
+     * @param {...Comparator} pComparators - The comparators to be resolved and filtered.<br>
+     * If none are provided, an array containing a default comparator is returned
+     *
+     * @return {Array.<Comparator>} A filtered array of valid comparator functions
+     *
+     * @type {function(...Comparator)}
+     */
+    function resolveComparators( ...pComparators )
+    {
+        return [].concat( varargs( ...(pComparators || [Comparators.NONE]) ) ).filter( Filters.COMPARATORS );
+    }
+
+    /**
+     * This is a collection of comparators (functions that can be used as arguments to the {@link Array#sort} method)
      * and functions that create comparators
+     * @const
      */
     const Comparators =
         {
-            /** This is the basic comparison of 2 values
+            /**
+             * The basic, generic, comparison of 2 values
              * that can be considered greater than or less than one another
+             *
+             * @param {*} a - The first value or comparable object
+             * @param {*} b - The other value or comparable object
+             *
+             * @return {number} -1 if the first value should occur before the other value, 1 if the first value should occur after the other object, or 0 if the values are equal or have no preferred order
              */
             _compare: function( a, b )
             {
                 return (a < b ? -1 : a > b ? 1 : 0);
             },
 
-            /** This is a no op function that will leave a collection in the same order */
+            /**
+             * A no op function that will leave a collection in the same order
+             * @type {function(*,*)}
+             * */
             NONE: function( a, b )
             {
                 return 0;
             },
 
             /**
-             * This function returns a default comparator
-             * that treats null values as the default value for the specified type.
+             * A <i><b>function</b> that returns a default comparator</i>
+             * that treats null values as the default value for the specified type
              *
-             * @param pType
-             * @returns {function}
+             * @param {string} pType - The type of values to be compared
+             * @returns {function(*,*)} a default comparator
+             * that treats null values as the default value for the specified type
              */
             CREATE_DEFAULT: function( pType )
             {
@@ -1223,11 +1608,14 @@ const $scope = constants?.$scope || function()
                 };
             },
 
-            /** This comparison function converts each element to a string before comparison */
+            /**
+             * A comparator function that converts each element to a string before comparison
+             * @type {function(*,*)}
+             * */
             BY_STRING_VALUE: function( a, b )
             {
-                let sA = asString( a ) || (_fun === typeof a?.toString ? a.toString() : _mt_str);
-                let sB = asString( b ) || (_fun === typeof b?.toString ? b.toString() : _mt_str);
+                let sA = asString( a ) || (isFunction( a?.toString ) ? a.toString() : _mt_str);
+                let sB = asString( b ) || (isFunction( b?.toString ) ? b.toString() : _mt_str);
 
                 if ( isBlank( sA ) && _str !== typeof a )
                 {
@@ -1241,7 +1629,7 @@ const $scope = constants?.$scope || function()
                     }
                 }
 
-                if ( isBlank( sB ) && _str !== typeof b )
+                if ( isBlank( sB ) && !isString( b ) )
                 {
                     try
                     {
@@ -1257,13 +1645,16 @@ const $scope = constants?.$scope || function()
 
                 if ( 0 === comp )
                 {
-                    comp = Comparators.CREATE_DEFAULT( "string" )( sA, sB );
+                    comp = Comparators.CREATE_DEFAULT( _str )( sA, sB );
                 }
 
                 return comp;
             },
 
-            /** This comparator is used to order an array by the length of its elements */
+            /**
+             * A comparator function that orders an array by the length of its elements
+             * @type {function(*,*)}
+             * */
             BY_LENGTH: function( a, b )
             {
                 let lenA = calculateLength( a ) || a?.length;
@@ -1273,18 +1664,34 @@ const $scope = constants?.$scope || function()
             },
 
             /**
-             * This function returns a comparison function
+             * A <i><b>function</b> that returns a comparator</i>
              * that orders one array by the position of elements in another array
+             *
+             * @param {Array.<*>} pReference - An array of values in the order desired
+             * @param {function(*, Array.<*>)|null} [pPositionFunction=null] A optional function to calculate the desired position.
+             * @param {function(*,Array.<*>)|null} [pTransformation=null] An optional function to transform the values prior to finding the desired position
+             *
+             * @return {function(*,*)} A comparator that orders an array by the position of elements in another array
+             *
+             * @type {function(Array.<*>,function(*,Array.<*>),function(*,Array.<*>))}
              */
             BY_POSITION: function( pReference, pPositionFunction, pTransformation )
             {
                 const ref = [].concat( ...(pReference || []) );
 
+                /**
+                 * Transforms a given element using the provided transformation function, if defined.
+                 *
+                 * @param {*} pElem - The element to be transformed
+                 *
+                 * @returns {*} The transformed value if the transformation function is successfully applied,
+                 * or the original element if the transformation could not be performed
+                 */
                 const transform = function( pElem )
                 {
                     let value = pElem;
 
-                    if ( _fun === typeof pTransformation )
+                    if ( isFunction( pTransformation ) )
                     {
                         try
                         {
@@ -1299,13 +1706,22 @@ const $scope = constants?.$scope || function()
                     return value;
                 };
 
+                /**
+                 * Finds the position of a given element (`pElem`) within a reference array (`pReference`).
+                 * If the reference array is not provided or is invalid, it will use the array defined outside the function definition (`ref`).
+                 * An optional custom position function (`pPositionFunction`) can be specified to determine the position.
+                 *
+                 * @param {*} pElem - The element whose position is to be found
+                 * @param {Array} [pReference] - The array to search within
+                 * @returns {number} - The position (index) of the element in the array, or -1 if not found
+                 */
                 const findPosition = function( pElem, pReference )
                 {
                     let arr = ((pReference && isArray( pReference )) ? pReference : ref) || [];
 
                     let position = arr.indexOf( pElem );
 
-                    if ( _fun === typeof pPositionFunction )
+                    if ( isFunction( pPositionFunction ) )
                     {
                         try
                         {
@@ -1369,12 +1785,16 @@ const $scope = constants?.$scope || function()
             },
 
             /**
-             * This function creates a chain of comparators
-             * applied in order until one of them returns a non-zero value
+             * A <i><b>function</b> that returns a comparator</i>
+             * that applies the specified comparators in order until one of them returns a non-zero value.
+             *
+             * @param {...function(*,*)} pComparators - One or more comparators to apply in order until one of them return s a non-zero value
+             *
+             * @return {function(*,*)} A comparator that applies the specified comparators in order until one of them returns a non-zero value.
              */
             chain: function( ...pComparators )
             {
-                const comparators = [].concat( ...(pComparators || [Comparators.NONE]) ).filter( Filters.COMPARATORS );
+                const comparators = resolveComparators( ...pComparators );
 
                 return function( a, b )
                 {
@@ -1394,13 +1814,17 @@ const $scope = constants?.$scope || function()
             },
 
             /**
-             * This function creates a chain of comparators
-             * applied in order until one of them returns a non-zero value
+             * A <i><b>function</b> that returns a comparator</i>
+             * that applies the specified comparators in order until one of them returns a non-zero value,
              * and then reverses that comparison to return an array sorted in reverse order
+             *
+             * @param {...function(*,*)} pComparators - One or more comparators to apply in order until one of them return s a non-zero value
+             *
+             * @return {function(*,*)} A comparator that applies the specified comparators in order until one of them returns a non-zero value.
              */
             descending: function( ...pComparators )
             {
-                const comparators = [].concat( ...(pComparators || [Comparators.NONE]) ).filter( Filters.COMPARATORS );
+                const comparators = resolveComparators( ...pComparators );
 
                 return function( a, b )
                 {
@@ -1419,19 +1843,20 @@ const $scope = constants?.$scope || function()
                 };
             },
 
-            /** This function returns true if the specified value is (probably) a comparator */
+            /**
+             * Returns true if the specified value is (probably) a comparator
+             * @param {*} pCandidate - any value that might be a {@link Comparator}
+             * @return {boolean} true if the specified value is a Comparator, that is, a function that takes 2 arguments.
+             * */
             isComparator: function( pCandidate )
             {
-                if ( _ud === typeof pCandidate || null == pCandidate )
-                {
-                    return false;
-                }
-
                 return isFunction( pCandidate ) && 2 === pCandidate?.length;
             }
         };
 
     /**
+     * @readonly
+     * @enum {string}
      * This is a map of the methods that can be called on an array
      * to transform its contents (or return a new array with the modified content)
      * @type {{FILTER: string, SORT: string, MAP: string, FLAT: string}}
@@ -1458,9 +1883,9 @@ const $scope = constants?.$scope || function()
 
         /**
          * Constructs a Transformer which can map, filter, or sort an array
-         * @param pMethodName {string} the method to call on the collection
-         * @param pFunction {function} the function to pass to the method
-         * @param pArgs {...any} one or more arguments to pass to the function being passed to the method
+         * @param {string} pMethodName the method to call on the collection (must be one of 'filter', 'map', 'sort', or 'flat')
+         * @param {function|number} pFunction the function to pass to the method (or the number of levels to pass to the {@link Array#flat} method)
+         * @param pArgs {...*} one or more arguments to pass to the function being passed to the method
          */
         constructor( pMethodName, pFunction, ...pArgs )
         {
@@ -1471,15 +1896,26 @@ const $scope = constants?.$scope || function()
             this.#arguments = [].concat( ...(asArray( pArgs || [] ) || []) );
 
             // should be a function suitable as an argument to the specified method
-            this.#methodArgument = isFunction( pFunction ) ? pFunction : isFunction( this.#arguments[0] ) ? this.#arguments[0] : null;
+            this.#methodArgument = isFunction( pFunction ) ? pFunction : (isNumber( pFunction ) ? pFunction : (isFunction( this.#arguments[0] ) ? this.#arguments[0] : null));
         }
 
+
+        /**
+         * Returns the name of the method to call on an array
+         *
+         * @return {string} The name of the method to call on an array
+         */
         get methodName()
         {
             let funcName = asString( (isString( this.#methodName ) ? this.#methodName : asString( this.#methodName?.name )) ) || TRANSFORMATIONS.FILTER;
             return lcase( asString( Object.values( TRANSFORMATIONS ).includes( funcName ) ? funcName : TRANSFORMATIONS.FILTER, true ) );
         }
 
+        /**
+         * Returns a default function or value to pass to the {@link Array} method indicated by {@link #methodName}<br>
+         * This is used if this instance does not have a valid argument for the method to be called
+         * @returns {function|number} A default function or value to pass to the Array method indicated by methodName
+         */
         get defaultArgument()
         {
             switch ( this.methodName )
@@ -1500,11 +1936,15 @@ const $scope = constants?.$scope || function()
             return ( e, o ) => (_ud === typeof o) ? e : 0;
         }
 
+        /**
+         * Returns the function or value to pass to the {@link Array} method indicated by {@link #methodName}<br>
+         * @returns {function|number} The function or value to pass to the Array method indicated by methodName
+         */
         get methodArgument()
         {
             let func = this.#methodArgument;
 
-            func = (_fun === typeof func) ? func : (TRANSFORMATIONS.FLAT === this.methodName) ? firstNumericValue( this.#arguments ) : this.defaultArgument;
+            func = isFunction( func ) ? func : (TRANSFORMATIONS.FLAT === this.methodName) ? firstNumericValue( this.#arguments ) : this.defaultArgument;
 
             if ( this.#arguments.length > 0 )
             {
@@ -1541,17 +1981,26 @@ const $scope = constants?.$scope || function()
             return func;
         }
 
+        /**
+         * Calls the transformation on the specified array
+         * and returns a new array as the result of the applied transformation
+         *
+         * @param {Array.<*>} pArr - The array to which to apply the transformation<br>
+         * If no valid array is specified, uses an empty array
+         *
+         * @return {Array.<*>} A new array that is the result of performing the transformation
+         * */
         transform( pArr )
         {
             let arr = [].concat( ...(pArr || []) );
 
-            if ( _str === typeof this.methodName )
+            if ( isString( this.methodName ) )
             {
                 const operation = arr[this.methodName];
 
-                if ( _fun === typeof operation )
+                if ( isFunction( operation ) )
                 {
-                    if ( _fun === typeof this.methodArgument && this.methodArgument?.length >= 1 )
+                    if ( isFunction( this.methodArgument ) && this.methodArgument?.length >= 1 )
                     {
                         arr = arr[this.methodName]( this.methodArgument );
                     }
@@ -1574,27 +2023,42 @@ const $scope = constants?.$scope || function()
     }
 
     /**
-     * This class encapsulates one or more transformations to perform on an array.
-     * Allows you to combine filtering, mapping, and sorting in a pipeline-like operation
+     * This class encapsulates one or more transformations to perform on an array.<br>
+     * Allows you to combine filtering, mapping, and sorting in a pipeline-like operation.<br>
+     * @see {@link Transformer}
      */
     class TransformerChain
     {
         #transformers = [];
 
+        /**
+         * Returns a new instance of a TransformerChain<br>
+         *
+         * @constructor
+         * @param {...(Transformer|TransformerChain)} pTransformers One or more instances of the {@link Transformer} class to apply in sequence
+         * @return {TransformerChain} An object that can be used to apply several transformations on an Array
+         * @see {@link Array#map}, {@link Array#filter}, {@link Array#sort}, and {@link Array#flat}
+         */
         constructor( ...pTransformers )
         {
             this.#transformers = [].concat( ...(pTransformers || []) );
         }
 
+        /**
+         * Returns the array of Transformers in this chain
+         *
+         * @returns {Array.<Transformer>} The array of Transformers in this chain
+         */
         get transformers()
         {
             return [].concat( ...asArray( this.#transformers || [] ) );
         }
 
         /**
-         * Performs the specific transformation (filter, map, or sort) on the specified array
-         * @param pArr an array to transform
-         * @returns {*[]} a new array resulting from the one or more transformations specified
+         * Performs the transformations in sequence on the specified array and returns
+         * a new array resulting from the transformations applied
+         * @param {Array.<*>} pArr - An array to transform
+         * @returns {*[]} A new array resulting from the one or more transformations specified
          */
         transform( pArr )
         {
@@ -1650,10 +2114,11 @@ const $scope = constants?.$scope || function()
 
         /**
          * Returns true if the specified transformation can be performed
-         * @param pArr {*[]} the array or array-like object to transform
-         * @param pMethodName {string} the name of the method to call on the array
-         * @param pMethodArgument {number|function} a value to pass to the transformation method, such a filter, mapper, comparator, or the depth for flat()
-         * @returns {boolean}
+         * @param {Array.<*>} pArr - The array to transform
+         * @param {string} pMethodName - The name of the method to call on the array
+         * @param {number|function} pMethodArgument A value to pass to the transformation method,
+         * such as a filter, mapper, comparator, or the depth for flat
+         * @returns {boolean} true if the specified transformation can be performed
          */
         canExecute( pArr, pMethodName, pMethodArgument )
         {
@@ -1669,6 +2134,12 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    /**
+     * A {@link TransformerChain} that will transform an array into an array whose elements
+     * are exclusively non-empty strings
+     *
+     * @type {TransformerChain}
+     */
     TransformerChain.TO_NON_EMPTY_STRINGS =
         new TransformerChain(
             new Transformer( TRANSFORMATIONS.FILTER, Filters.IS_POPULATED ),
@@ -1676,6 +2147,12 @@ const $scope = constants?.$scope || function()
             new Transformer( TRANSFORMATIONS.FILTER, Filters.NON_EMPTY )
         );
 
+    /**
+     * A {@link TransformerChain} that will transform an array into an array whose elements
+     * are exclusively strings containing at least one non-whitespace character
+     *
+     * @type {TransformerChain}
+     */
     TransformerChain.TO_NON_BLANK_STRINGS =
         new TransformerChain(
             new Transformer( TRANSFORMATIONS.FILTER, Filters.IS_POPULATED ),
@@ -1683,6 +2160,12 @@ const $scope = constants?.$scope || function()
             new Transformer( TRANSFORMATIONS.FILTER, Filters.NON_BLANK )
         );
 
+    /**
+     * A {@link TransformerChain} that will transform an array into an array whose elements
+     * are exclusively non-empty strings with leading and trailing whitespace removed
+     *
+     * @type {TransformerChain}
+     */
     TransformerChain.TRIMMED_NON_EMPTY_STRINGS =
         new TransformerChain(
             new Transformer( TRANSFORMATIONS.FILTER, Filters.IS_POPULATED ),
@@ -1690,6 +2173,12 @@ const $scope = constants?.$scope || function()
             new Transformer( TRANSFORMATIONS.FILTER, Filters.NON_EMPTY )
         );
 
+    /**
+     * A {@link TransformerChain} that will transform an array into an array whose elements
+     * are exclusively strings with at least one non-whitespace character and with leading and trailing whitespace removed
+     *
+     * @type {TransformerChain}
+     */
     TransformerChain.TRIMMED_NON_BLANK_STRINGS =
         new TransformerChain(
             new Transformer( TRANSFORMATIONS.FILTER, Filters.IS_POPULATED ),
@@ -1697,22 +2186,38 @@ const $scope = constants?.$scope || function()
             new Transformer( TRANSFORMATIONS.FILTER, Filters.NON_BLANK )
         );
 
+
+    /**
+     * A {@link TransformerChain} that will transform an array into an array whose elements
+     * are exclusively non-empty strings, then split those elements on the '.' character
+     * and then flatten the resulting array and remove any strings consisting of only whitespace
+     * and remove leading and trailing whitespace from each remaining element
+     *
+     * @type {TransformerChain}
+     */
     TransformerChain.SPLIT_ON_DOT =
         new TransformerChain(
             TransformerChain.TRIMMED_NON_BLANK_STRINGS,
             new Transformer( TRANSFORMATIONS.MAP, e => e.split( _dot ) ),
-            new Transformer( TRANSFORMATIONS.FLAT )
+            new Transformer( TRANSFORMATIONS.FLAT, 1 ),
+            TransformerChain.TRIMMED_NON_BLANK_STRINGS
         );
 
     /**
-     * This subclass of TransformerChain encapsulates the application of one or more filters.
+     * This subclass of TransformerChain encapsulates the application of one or more filters.<br>
      * 'applyFilters' is a synonym for the transform method
      */
     class FilterChain extends TransformerChain
     {
+        /**
+         * Returns a new FilterChain to apply the specified filters in sequence
+         * @constructor
+         * @param {...function} pFilters One or more filter functions to apply in sequence
+         * @return A new FilterChain to apply the specified filters in sequence
+         */
         constructor( ...pFilters )
         {
-            super( ([].concat( ...(pFilters || [Filters.IDENTITY]) )).map( e => new Transformer( TRANSFORMATIONS.FILTER, e ) ) );
+            super( ([].concat( varargs( ...(pFilters || [Filters.IDENTITY]) ) ).map( e => new Transformer( TRANSFORMATIONS.FILTER, e ) )) );
         }
 
         applyFilters( pArr )
@@ -1721,21 +2226,33 @@ const $scope = constants?.$scope || function()
         }
     }
 
-    /** A filter chain to return strings that are not undefined, null, or empty */
+    /**
+     * A filter chain to return strings that are not undefined, null, or empty
+     * @type {FilterChain}
+     * */
     FilterChain.NON_EMPTY_STRINGS = new FilterChain( Filters.IS_DEFINED, Filters.IS_NOT_NULL, Filters.makeTypeFilter( _str ), Filters.NON_EMPTY );
 
-    /** A filter chain to return strings that are not undefined, null, or composed entirely of whitespace */
+    /**
+     * A filter chain to return strings that are not undefined, null, or composed entirely of whitespace
+     * @type {FilterChain}
+     * */
     FilterChain.NON_BLANK_STRINGS = new FilterChain( Filters.IS_DEFINED, Filters.IS_NOT_NULL, Filters.makeTypeFilter( _str ), Filters.NON_BLANK );
 
     /**
-     * This subclass of TransformerChain encapsulates the application of one or more mappers.
+     * This subclass of TransformerChain encapsulates the application of one or more mappers.<br>
      * 'applyMappers' is a synonym for the transform method
      */
     class MapperChain extends TransformerChain
     {
+        /**
+         * Returns a new MapperChain to apply the specified mapping functions in sequence
+         * @constructor
+         * @param {...function} pMappers One or more mapping functions to apply in sequence
+         * @return A new MapperChain to apply the specified mapping functions in sequence
+         */
         constructor( ...pMappers )
         {
-            super( ([].concat( ...(pMappers || [Mappers.IDENTITY]) )).map( e => new Transformer( TRANSFORMATIONS.MAP, e ) ) );
+            super( ([].concat( varargs( ...(pMappers || [Mappers.IDENTITY]) ) )).map( e => new Transformer( TRANSFORMATIONS.MAP, e ) ) );
         }
 
         applyMappers( pArr )
@@ -1744,7 +2261,10 @@ const $scope = constants?.$scope || function()
         }
     }
 
-    /** A mapper/filter combination that returns an array with each element converted to a string and empty strings removed */
+    /**
+     * A mapper/filter combination that returns an array
+     * with each element converted to a string and empty strings removed
+     * */
     MapperChain.NON_EMPTY_STRINGS = new TransformerChain( new Transformer( TRANSFORMATIONS.MAP, Mappers.TO_STRING ), FilterChain.NON_EMPTY_STRINGS );
 
     /**
@@ -1753,29 +2273,39 @@ const $scope = constants?.$scope || function()
      */
     class ComparatorChain extends TransformerChain
     {
+        #comparators;
+
+        /**
+         * Returns a new ComparatorChain to apply the specified comparators in sequence until one of them returns a non-zero value
+         * @constructor
+         * @param {...Comparator} pComparators
+         * @return A new ComparatorChain to apply the specified comparators in sequence until one of them returns a non-zero value
+         */
         constructor( ...pComparators )
         {
-            super( [].concat( (pComparators || [Comparators.NONE]) ).filter( Filters.COMPARATORS ).map( e => new Transformer( TRANSFORMATIONS.SORT, e ) ) );
+            super( [].concat( varargs( ...(pComparators || [Comparators.NONE]) ) ).filter( Filters.COMPARATORS ).map( e => new Transformer( TRANSFORMATIONS.SORT, e ) ) );
 
-            this._comparators = ([].concat( ...(pComparators || [Comparators.NONE]) )).filter( Filters.COMPARATORS );
+            this.#comparators = ([].concat( ...(pComparators || [Comparators.NONE]) )).filter( Filters.COMPARATORS );
         }
 
         transform( pArr )
         {
-            let arr = [].concat( ...(pArr || []) );
-
-            arr = this.sort( arr );
-
-            return arr;
+            return this.sort( asArray( pArr ) );
         }
 
+        /**
+         * Returns the {@link Comparator} that is composed of the functions specified when this instance was constructed
+         * @returns {function(*, *): number}
+         */
         get comparator()
         {
+            const comparators = this.#comparators;
+
             return function( a, b )
             {
                 let comp = 0;
 
-                for( const func of this._comparators )
+                for( const func of comparators )
                 {
                     comp = func( a, b );
 
@@ -1791,25 +2321,25 @@ const $scope = constants?.$scope || function()
 
         sort( pArr )
         {
-            let arr = [].concat( ...(pArr || []) );
+            let arr = asArray( pArr );
 
             const checksum = arr.length;
 
             arr = arr.sort( this.comparator );
 
-            return checksum === arr?.length ? arr || pArr : pArr;
+            return checksum === arr?.length ? (arr || pArr) : pArr;
         }
     }
 
     /**
      * Returns an array with all specified filters applied
-     * @param pArr an array to filter
-     * @param pFilters one or more functions that return true if the element should be included in the resulting array
-     * @returns {*[]} a new array with the specified filters applied
+     * @param {Array.<*>} pArr The array to filter
+     * @param {...function} pFilters One or more functions that return true if the element should be included in the resulting array
+     * @returns {Array.<*>} A new array with the specified filters applied
      */
     const chainFilters = function( pArr, ...pFilters )
     {
-        let arr = [].concat( ...(pArr || []) );
+        let arr = [].concat( asArray( pArr ) || [] );
 
         let filters = [].concat( ...(pFilters || [Filters.IDENTITY]) );
 
@@ -1827,14 +2357,14 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * Returns an array transformed by each of the specified mapping functions
-     * @param pArr an array to map as per the specified functions
-     * @param pMappers one or more functions that return a new element to be included in the resulting array
-     * @returns {*[]} a new array with the specified mappings applied
+     * Returns an array that results from applying each of the specified mapping functions
+     * @param {Array.<*>} pArr The array to map as per the specified functions
+     * @param {...function} pMappers One or more functions that return a new element to be included in the resulting array
+     * @returns {Array.<*>} A new array as the result of sequentially applying the specified functions
      */
     const chainMappers = function( pArr, ...pMappers )
     {
-        let arr = [].concat( ...(pArr || []) );
+        let arr = [].concat( asArray( pArr ) || [] );
 
         let mappers = [].concat( ...(pMappers || [Mappers.IDENTITY]) );
 
@@ -1846,32 +2376,49 @@ const $scope = constants?.$scope || function()
         return arr;
     };
 
+    /**
+     * @typedef {Object} PopulatedArrayOptions
+     *
+     * @property {number} [minimumLength=1] The minimum number of elements an array must have to be considered 'populated',
+     * @property {boolean} [acceptArrayLike=false] Set this to true to consider objects that are not instances of Array, but are ArrayLike
+     * @property {boolean} [acceptObjects=false] Set this to true to consider objects that are neither instances of Array, nor ArrayLike
+     *
+     */
+
+    /**
+     * These are the defaults fot the {@link #isPopulatedArray} function.
+     * @see {@link PopulatedArrayOptions}
+     * @type {PopulatedArrayOptions}
+     */
     const DEFAULT_POPULATED_ARRAY_OPTIONS =
         {
             minimumLength: 1,
             acceptArrayLike: false,
             acceptObjects: false
         };
+
     /**
      * Returns true if the specified object is an array and has at least one element
-     * @param pArr (array or indexed object -- that is, something with a length property and the ability to address members via an integer key)
-     * @param pOptions
-     * @returns {boolean}
+     * @param {Array.<*>} pArr An array or ArrayLike object
+     * @param {PopulatedArrayOptions} pOptions An object to define the criteria for determining whether the specified value is a 'populated array'
+     * @returns {boolean} true if the specified object is an array and has at least one element
      */
     const isPopulatedArray = function( pArr, pOptions = DEFAULT_POPULATED_ARRAY_OPTIONS )
     {
-        const minLength = Math.max( 1, asInt( asString( pOptions?.minimumLength, true ) || 1 ) );
+        const options = populateOptions( pOptions, DEFAULT_POPULATED_ARRAY_OPTIONS );
+
+        const minLength = Math.max( 1, asInt( asString( options?.minimumLength, true ) || 1 ) );
 
         const arr = !((_ud === typeof pArr) || (null === pArr)) ? (pArr || []) : [];
 
-        if ( true === pOptions?.acceptArrayLike )
+        if ( !!options?.acceptArrayLike )
         {
             const isIndexedObject = (isArray( pArr )) || Object.hasOwn( arr, "length" );
 
             return isIndexedObject && (minLength <= (arr?.length || 0));
         }
 
-        if ( true === pOptions?.acceptObjects && isObject( pArr ) )
+        if ( !!options?.acceptObjects && isObject( pArr ) )
         {
             return (Object.keys( pArr )?.length || 0) >= minLength;
         }
@@ -1883,9 +2430,9 @@ const $scope = constants?.$scope || function()
      * Returns the first array specified that has a length > 0
      * or a zero-length array if none of the candidates are arrays with a length > 0
      *
-     * @param{Array<Array|any>} pCandidates an array of values, each expected to be an Array
+     * @param {...Array.<*>} pCandidates One or more values, each expected to be an Array
      *
-     * @returns {Array} the first array specified that has a length > 0
+     * @returns {Array.<*>} the first array specified that has a length > 0
      * or a zero-length array if none of the candidates are arrays with a length > 0
      */
     const firstPopulatedArray = function( ...pCandidates )
@@ -1902,9 +2449,9 @@ const $scope = constants?.$scope || function()
      * Returns the last array specified that has a length > 0
      * or a zero-length array if none of the candidates are arrays with a length > 0
      *
-     * @param{Array<Array|any>} pCandidates an array of values, each expected to be an Array
+     * @param {Array.<*>} pCandidates One or more values, each expected to be an Array
      *
-     * @returns {Array} the last array specified that has a length > 0
+     * @returns {Array.<*>} the last array specified that has a length > 0
      * or a zero-length array if none of the candidates are arrays with a length > 0
      */
     const lastPopulatedArray = function( ...pCandidates )
@@ -1917,6 +2464,20 @@ const $scope = constants?.$scope || function()
         return isPopulatedArray( candidates ) ? candidates[candidates.length - 1] : [];
     };
 
+    /**
+     * Returns an array of Filter functions from the specified arguments.
+     * Arguments can be functions,
+     * regular expressions,
+     * strings describing types,
+     * or arrays of one or more of these types of values
+     * @param {...(function|RegExp|string|Array.<function|RegExp|string|Array.<function|RegExp|string>>)} pArgs One or more
+     * values that are either functions,
+     * regular expressions,
+     * strings describing types,
+     * or arrays of one or more of these types of values
+     * @returns {Array.<function>} An array of Filter functions
+     * @private
+     */
     function _createFilters( ...pArgs )
     {
         let args = varargs( ...pArgs );
@@ -1951,34 +2512,106 @@ const $scope = constants?.$scope || function()
 
                 filters.push( f );
             }
+            else if ( isArray( arg ) )
+            {
+                filters.push( _createFilters( ...arg ) );
+            }
         }
 
-        return filters.filter( Predicates.IS_FUNCTION );
+        return filters.filter( Predicates.IS_PREDICATE );
     }
 
+    /**
+     * Returns a Filter function from the specified arguments<br>
+     * that will return true if an element satisfies all the filters created from the arguments<br>
+     * <br>
+     * Arguments can be functions,
+     * regular expressions,
+     * strings describing types,
+     * or arrays of one or more of these types of values
+     *
+     * @param {...(function|RegExp|string|Array.<function|RegExp|string|Array.<function|RegExp|string>>)} pArgs One or more
+     * values that are either functions,
+     * regular expressions,
+     * strings describing types,
+     * or arrays of one or more of these types of values
+     *
+     * @returns {function} a Filter function that will include elements only if they satisfy all the filters created from the arguments
+     */
     const createExclusiveFilter = function( ...pArgs )
     {
         const filters = _createFilters( ...pArgs );
 
-        return Predicates.makeMatchesAllFilter( filters );
+        return Predicates.makeMatchesAllFilter( ...filters );
     };
 
+    /**
+     * Returns a Filter function from the specified arguments<br>
+     * that will return true if an element satisfies any the filters created from the arguments<br>
+     * <br>
+     * Arguments can be functions,
+     * regular expressions,
+     * strings describing types,
+     * or arrays of one or more of these types of values
+     *
+     * @param {...(function|RegExp|string|Array.<function|RegExp|string|Array.<function|RegExp|string>>)} pArgs One or more
+     * values that are either functions,
+     * regular expressions,
+     * strings describing types,
+     * or arrays of one or more of these types of values
+     *
+     * @returns {function} a Filter function that will include elements if they satisfy any of the filters created from the arguments
+     */
     const createInclusiveFilter = function( ...pArgs )
     {
         const filters = _createFilters( ...pArgs );
 
-        return Predicates.makeMatchesAnyFilter( filters );
+        return Predicates.makeMatchesAnyFilter( ...filters );
     };
 
+    /**
+     * Returns the first element in the specified array (or list of values)
+     * that satisfies the provided filter<br>
+     *
+     * @param {function} pMatcher A filter function an element must satisfy to be returned
+     * @param {...*} pArr An array or list of values as candidates
+     *
+     * @returns {*|null} The first element in the specified array (or list of values)
+     * that satisfies the provided filter<br>
+     *
+     * @type {function(function,...*)}
+     */
     const firstMatchedValue = function( pMatcher, ...pArr )
     {
         let matcher = createExclusiveFilter( pMatcher );
 
-        let arr = varargs( ...pArr ).filter( matcher );
+        let arr = varargs( ...pArr );
 
-        return (arr?.length || 0) > 0 ? arr[0] : null;
+        let result = null;
+
+        for( let i = 0, n = arr.length; i < n; i++ )
+        {
+            if ( matcher( arr[i] ) )
+            {
+                result = arr[i];
+                break;
+            }
+        }
+
+        return result;
     };
 
+    /**
+     * Returns the first element in the specified array (or list of values)
+     * that is numeric
+     *
+     * @param {...*} pArr An array or list of values as candidates for being numeric
+     *
+     * @returns {*|null} The first element in the specified array (or list of values)
+     * that is numeric
+     *
+     * @type {function(function,...*)}
+     */
     const firstNumericValue = function( ...pArr )
     {
         return firstMatchedValue( Predicates.IS_NUMERIC, ...pArr );
@@ -1986,57 +2619,56 @@ const $scope = constants?.$scope || function()
 
     /**
      * Returns a copy of an array with duplicate elements removed
-     * @param pArr {...any} an array or one or more values to treat as an array
-     * @returns {Array} a copy of the array with duplicates removed
+     * @param {...*} pArr An array or one or more values to treat as an array
+     * @returns {Array.<*>} A copy of the array with duplicates removed
      */
     const unique = function( ...pArr )
     {
-        let arr = varargs( ...pArr );
-        return [...(new Set( arr ))];
+        return [...(new Set( varargs( ...pArr ) ))];
     };
 
     /**
-     * This function returns an array ordered according to either the comparator specified --
-     * -- OR --
+     * This function returns an array ordered according to either the comparator specified --<br>
+     * -- OR --<br>
      * If the second argument is a string,
      * the array elements are assumed to be objects
      * that will ordered by the value of the property of the specified name
      *
-     * @param pArr
-     * @param pComparator
-     * @returns {*[]}
+     * @param {Array.<*>} pArr An array to order according to the supplied {@link Comparator}
+     * @param {Comparator} pComparator A function to determine the ordering of the elements of the array
+     * @returns {Array.<*>} A new array containing the same elements as the specified Array in the order determined by the supplied Comparator
      */
     const sortArray = function( pArr, pComparator )
     {
         let arr = [].concat( ...(pArr || []) );
 
-        let opts = { comparator: pComparator || "compareTo" };
+        let opts = { comparator: pComparator || COMPARE_TO };
 
-        if ( _fun === typeof pComparator )
+        if ( isFunction( pComparator ) )
         {
             opts.comparator = pComparator;
         }
 
-        if ( _str === typeof opts?.comparator && "true" === opts?.comparator )
+        if ( isString( opts?.comparator ) && S_TRUE === opts?.comparator )
         {
             opts.comparator = true;
         }
 
-        if ( _bool === typeof opts?.comparator )
+        if ( isBoolean( opts?.comparator ) )
         {
-            opts.comparator = opts.comparator ? "compareTo" : "toString";
+            opts.comparator = opts.comparator ? COMPARE_TO : "toString";
         }
 
-        const comparator = ((_fun === typeof opts?.comparator) ? opts?.comparator : function( pElemA, pElemB, pProperty )
+        const comparator = ((isFunction( opts?.comparator )) ? opts?.comparator : function( pElemA, pElemB, pProperty )
         {
-            let property = asString( asString( pProperty ) || asString( opts?.comparator ) || "compareTo" );
+            let property = asString( asString( pProperty ) || asString( opts?.comparator ) || COMPARE_TO );
 
             if ( property )
             {
                 let a = pElemA?.[pProperty] || pElemB?.[pProperty] || pElemA?.compareTo;
                 let b = pElemB?.[pProperty] || pElemA?.[pProperty] || pElemB?.compareTo;
 
-                if ( _fun === typeof a )
+                if ( isFunction( a ) )
                 {
                     a = a.apply( pElemA || pElemB || $scope(), [pElemB, opts] );
                 }
@@ -2045,7 +2677,7 @@ const $scope = constants?.$scope || function()
                     a = pElemA;
                 }
 
-                if ( _fun === typeof b )
+                if ( isFunction( b ) )
                 {
                     b = b.apply( pElemB || pElemA || $scope(), [pElemA, opts] );
                 }
@@ -2081,10 +2713,10 @@ const $scope = constants?.$scope || function()
 
     /**
      * Returns an array with any elements that are null, undefined, or NaN removed
-     * @param {any} pArr - should be an array, but can be anything, as we will force it to be an array before pruning
-     * @param {boolean} pRejectNaN - (optional) when specified as true, numeric array elements that are NaN or not finite are also removed
-     * @param {...string} pRejectedTypes one or more types to exclude from the returned array
-     * @returns {Array} an array with no null or undefined elements, potentially an empty array
+     * @param {*} pArr - Should be an array, but can be anything, as the value will be coerced to an array before pruning
+     * @param {boolean} [pRejectNaN=true] - Determines whether numeric elements that are NaN or not finite are also removed
+     * @param {...string} [pRejectedTypes=undefined] One or more types to exclude from the returned array
+     * @returns {Array.<*>} An array with no null or undefined elements, potentially an empty array
      */
     const pruneArray = function( pArr, pRejectNaN = true, ...pRejectedTypes )
     {
@@ -2103,7 +2735,7 @@ const $scope = constants?.$scope || function()
 
         if ( pRejectNaN && !(rejectedTypes.includes( _num ) && rejectedTypes.includes( _big )) )
         {
-            pruned = pruned.filter( e => !([_num, _big].includes( typeof e )) || !(isNaN( e ) || !isFinite( e )) );
+            pruned = pruned.filter( e => !(isNumber( e )) || !(isNaN( e ) || !isFinite( e )) );
         }
 
         // always return an array to avoid null-pointer exceptions
@@ -2112,9 +2744,9 @@ const $scope = constants?.$scope || function()
 
     /**
      * Returns true if the specified array has at least the specified number of elements (default=1)
-     * @param pArr {*[]} an array
-     * @param pMinimum {number} @default 1
-     * @returns {boolean}
+     * @param {Array.<*>} pArr An array
+     * @param {number} [pMinimum=1] The minimum number of elements the array must have to be considered to have elements.
+     * @returns {boolean} true if the specified array has at least the specified number of elements
      */
     const hasElements = function( pArr, pMinimum )
     {
@@ -2123,9 +2755,9 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * Returns true if the specified array is empty or null or undefined
-     * @param pArr
-     * @returns {boolean}
+     * Returns true if the specified value is an array and is empty
+     * @param {*} pArr The value to evaluate
+     * @returns {boolean} true if the specified value is an array with 0 elements
      */
     const isEmptyArray = function( pArr )
     {
@@ -2133,15 +2765,16 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * Returns the length of the specified array (or string if the second argument is true)
-     * If the specified array is null or undefined, returns 0
-     * @param pArr an array (or string if the second argument is true) whose length is to be returned
-     * @param pAllowStringArg if true, the first argument can be a string whose length will be returned
-     * @returns {number} the length of the array (or string, when the second argument is true)
+     * Returns the length of the specified array (or string if the second argument is true)<br>
+     * <br>
+     * If the specified array is null or undefined, returns 0<br>
+     * @param {Array.<*>|string} pArr An array (or string if the second argument is true) whose length is to be returned
+     * @param {boolean} [pAllowStringArg=false] If true, the first argument can be a string whose length will be returned
+     * @returns {number} The length of the array (or string, when the second argument is true)
      */
     const arrLength = function( pArr, pAllowStringArg = false )
     {
-        if ( isArray( pArr ) || pAllowStringArg )
+        if ( isArray( pArr ) || (pAllowStringArg && isString( pArr )) )
         {
             return asInt( (pArr?.length || 0), 0 );
         }
@@ -2150,7 +2783,9 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * Returns true if the length of the specified array (or string, if the third argument is true) is greater than the specified minimum
+     * Returns true if the length of the specified array
+     * (or string, if the third argument is true)
+     * is greater than the specified minimum
      * @param pArr
      * @param pMinLength
      * @param pAllowStringArg
@@ -2166,7 +2801,9 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * Returns true if the length of the specified array (or string, if the third argument is true) is greater than or equal to the specified minimum
+     * Returns true if the length of the specified array
+     * (or string, if the third argument is true)
+     * is greater than or equal to the specified minimum
      * @param pArr
      * @param pMinLength
      * @param pAllowStringArg
@@ -2180,7 +2817,9 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * Returns true if the length of the specified array (or string, if the third argument is true) is less than the specified value
+     * Returns true if the length of the specified array
+     * (or string, if the third argument is true)
+     * is less than the specified value
      * @param pArr
      * @param pMaxLength
      * @param pAllowStringArg
@@ -2196,7 +2835,9 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * Returns true if the length of the specified array (or string, if the third argument is true) is less than or equal to the specified value
+     * Returns true if the length of the specified array
+     * (or string, if the third argument is true)
+     * is less than or equal to the specified value
      * @param pArr
      * @param pMaxLength
      * @param pAllowStringArg
@@ -2210,25 +2851,28 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * Returns a deep clone of the specified array.
-     * Note that this uses structuredClone, so functions will be omitted
-     * @param pArr {*[]} an array to deep-clone
-     * @returns {*[]} a new array populated with copies of the elements of the original array
+     * Returns a deep clone of the specified array<br>
+     * <br>
+     * Note that this uses {@link #structuredClone}, so functions are not cloned, but are included as-is
+     * @param {...*} pArr an array (or list of values to treat as an array) to deep-clone
+     * @returns {*[]} A new array populated with copies of the elements of the original array
      */
-    const copyArray = function( pArr )
+    const copyArray = function( ...pArr )
     {
-        let arr = asArray( pArr || [] );
+        let arr = asArray( varargs( pArr || [] ) );
 
-        let clone = [].concat( ...arr );
+        let functions = [...arr].map( ( e, i ) => (isFunction( e ) ? { [i]: e } : null) ).filter( e => !isNull( e ) );
+
+        let clone = [...arr].filter( e => !isFunction( e ) );
 
         try
         {
-            clone = structuredClone( arr ) || clone;
+            clone = structuredClone( clone );
         }
         catch( ex )
         {
             // functions cannot be cloned
-            clone = arr.filter( e => !isFunction( e ) );
+            clone = [...arr].filter( e => !isFunction( e ) );
 
             try
             {
@@ -2237,57 +2881,157 @@ const $scope = constants?.$scope || function()
             catch( ex2 )
             {
                 // functions cannot be cloned
-                clone = arr.filter( e => !isFunction( e ) );
+                clone = clone.filter( e => !isFunction( e ) );
             }
         }
 
-        return [].concat( ...clone );
+        // restore the functions
+        for( let i = 0, n = functions.length; i < n; i++ )
+        {
+            let obj = functions[i];
+            let idx = Object.keys( obj )[0];
+            let func = obj[idx];
+
+            clone.splice( asInt( idx ), 0, func );
+        }
+
+        return [...clone];
     };
 
     /**
-     * Returns true if the two arrays contain the same elements in the same order
+     * @typedef {Object} EqualityOptions
      *
-     * @param pArrA the first array
-     * @param pArrB the second array
+     * @property {boolean} [trim=true] Whether to ignore whitespace in string elements
+     * @property {boolean} [ignoreCase=false] Whether to compare strings without regard to case
+     * @property {Comparator|null} [comparator=null] A Comparator to use to sort both arrays prior to comparison
+     * @property {boolean} [ignoreNulls=false] Whether to remove elements that are null or undefined prior to comparison
+     * @property {boolean} [ignoreNaNs=false] Whether to remove values that are NaN or not Finite prior to comparison
+     * @property {boolean} [ignoreDuplicates=false] Whether to compare only unique values
+     * @property {boolean} [ignoreOrder=false] Whether to compare without regard to order (warning: this is quite a bit slower than comparing sorted arrays)
+     * @property {boolean} [convertNumericStrings=false] Whether to convert strings representing numbers to decimal values prior to comparison
      *
-     * @param pTrim (optional) argument to control whether to trim strings prior to comparison
-     *              if true, elements of each array that are of type 'string' are compared without regard to leading or trailing whitespace
-     *              otherwise, elements of type 'string' are compared for exact match
-     *              THE DEFAULT IS TRUE. YOU MUST EXPLICITLY PASS false TO DISABLE THE BEHAVIOR
+     */
+
+    /**
+     * The default options for determining if two arrays are equal
      *
-     * @param pComparator if a valid comparison function is supplied, both arrays will be sorted before checking for equality
+     * @type {EqualityOptions}
+     */
+    const DEFAULT_EQUALITY_OPTIONS =
+        {
+            trim: true,
+            ignoreCase: false,
+            comparator: null,
+            ignoreNulls: false,
+            ignoreNaNs: false,
+            ignoreDuplicates: false,
+            ignoreOrder: false,
+            convertNumericStrings: false
+        };
+
+    /**
+     *
+     * @param pArr
+     * @param pOptions
+     * @private
+     */
+    const preprocessArray = function( pArr, pOptions = DEFAULT_EQUALITY_OPTIONS )
+    {
+        const options = populateOptions( pOptions, DEFAULT_EQUALITY_OPTIONS );
+
+        let arr = [...(asArray( pArr ))];
+
+        if ( options.trim )
+        {
+            arr = arr.map( e => (isString( e ) ? e.trim() : e) );
+        }
+
+        if ( options.ignoreCase )
+        {
+            arr = arr.map( e => (isString( e ) ? ucase( e ) : e) );
+        }
+
+        if ( options.ignoreNulls )
+        {
+            arr = arr.filter( e => !isNull( e ) );
+        }
+
+        if ( options.ignoreNaNs )
+        {
+            arr = arr.filter( e => !isNumber( e ) || !(isNaN( e ) || !isFinite( e )) );
+        }
+
+        if ( options.ignoreDuplicates )
+        {
+            arr = unique( arr );
+        }
+
+        if ( options.convertNumericStrings )
+        {
+            arr = arr.map( e => isNumeric( e ) ? toDecimal( e ) : e );
+        }
+
+        const comparator = Predicates.IS_COMPARATOR( options.comparator ) ? options.comparator : null;
+
+        if ( Predicates.IS_COMPARATOR( comparator ) )
+        {
+            arr = arr.sort( comparator );
+        }
+
+        return [...arr];
+    };
+
+    /**
+     * Returns true if the two arrays are 'equal' as per the {@link EqualityOptions} specified<br>
+     * <br>
+     * By default, arrays are considered equal only if they contain the same elements in the same order<br>
+     * <br>
+     *
+     * @param {Array.<*>} pArrA The first array
+     * @param {Array.<*>} pArrB The other array
+     *
+     * @param {EqualityOptions} pOptions an object defining how to compare the 2 arrays for 'equality'
+     *
      * @returns {boolean} if the 2 arrays contain the same elements in the same order (before or after a potential sort)
      */
-    const arraysEqual = function( pArrA, pArrB, pTrim = true, pComparator = null )
+    const arraysEqual = function( pArrA, pArrB, pOptions = DEFAULT_EQUALITY_OPTIONS )
     {
-        let strip = (false !== pTrim);
+        const options = populateOptions( pOptions, DEFAULT_EQUALITY_OPTIONS );
 
-        let arrA = asArray( pArrA || [] );
-        let arrB = asArray( pArrB || [] );
+        let arrA = preprocessArray( [...(asArray( pArrA || [] ))], options );
+        let arrB = preprocessArray( [...(asArray( pArrB || [] ))], options );
 
-        if ( !arrA.length === arrB.length )
+        if ( arrA.length !== arrB.length )
         {
             return false;
         }
 
-        let comparator = Predicates.IS_COMPARATOR( pTrim ) ? pTrim : Predicates.IS_COMPARATOR( pComparator ) ? pComparator : null;
-
-        if ( Predicates.IS_COMPARATOR( comparator ) )
+        if ( options.ignoreOrder )
         {
-            arrA = arrA.sort( comparator );
-            arrB = arrB.sort( comparator );
+            let arr = arrB.filter( e => arrA.includes( e ) );
+
+            if ( arr.length !== arrB.length )
+            {
+                return false;
+            }
+
+            arr = arrA.filter( e => arrB.includes( e ) );
+
+            return arr.length === arrA.length;
         }
+        else
+        {
+            const strA = arrA.map( e => asString( e ).replace( /\//g, "_slash_" ) ).join( "/" );
+            const strB = arrB.map( e => asString( e ).replace( /\//g, "_slash_" ) ).join( "/" );
 
-        const strA = arrA.map( e => asString( e, strip ).replace( /\//g, "_slash_" ) ).join( "/" );
-        const strB = arrB.map( e => asString( e, strip ).replace( /\//g, "_slash_" ) ).join( "/" );
-
-        return strA === strB && ((arrA?.length || 0) === (arrB?.length || 0));
+            return strA === strB && ((arrA?.length || 0) === (arrB?.length || 0));
+        }
     };
 
     /**
      * Returns true if the array includes any of the values specified
-     * @param pArr {*[]} an array to search
-     * @param pSearchFor {...any} one or more values for which to search
+     * @param {Array.<*>} pArr An array to search
+     * @param {...*} pSearchFor One or more values for which to search
      * @returns {boolean} true if the array includes any of the specified values
      */
     const includesAny = function( pArr, ...pSearchFor )
@@ -2311,14 +3055,14 @@ const $scope = constants?.$scope || function()
 
     /**
      * Returns the first (or last) non-array/non-object value found in the specified array
-     * @param pArr {any} a value from which to extract a scalar value
-     * @param pFromEnd {boolean} specify true to search from the end of the value
-     * @param pDepth {number} USED INTERNALLY TO PREVENT INFINITE RECURSION OR STACK OVERFLOW; DO NOT PASS THIS VALUE FROM CONSUMER CODE
-     * @returns {*} a scalar value (that is, a number, string, or boolean value) if one can be found within 6 levels of recursion
+     * @param {Array.<*>|Object|string} pArr An array, object, or string from which to extract a scalar value
+     * @param {boolean} pFromEnd Specify true to search from the end of the value
+     * @param {number} pDepth USED INTERNALLY TO PREVENT INFINITE RECURSION OR STACK OVERFLOW; DO NOT PASS THIS VALUE FROM CONSUMER CODE
+     * @returns {*} A scalar value (that is, a number, string, or boolean value) if one can be found within 6 levels of recursion
      */
     const extractScalar = function( pArr, pFromEnd = false, pDepth = 0 )
     {
-        let arr = isArray( pArr ) ? asArray( pArr ) : (isObject( pArr ) && !isNull( pArr ) ? Object.values( pArr ) : (isEmptyString( pArr ) ? [pArr] : (isNonNullValue( pArr ) ? [pArr] : [])));
+        let arr = isArray( pArr ) ? asArray( pArr ) : (isObject( pArr ) && !isNull( pArr ) ? Object.values( pArr ) : (isEmptyString( pArr ) || isNonNullValue( pArr ) ? [pArr] : []));
 
         while ( isArray( arr ) && arr.length > 1 )
         {
@@ -2365,8 +3109,8 @@ const $scope = constants?.$scope || function()
     /**
      * This is a helper function to calculate the power of 10 required to produce the specified value.
      * Yes, this is basically, log10, but... explicitly coded
-     * @param pNum
-     * @returns {number}
+     * @param {number} pNum The number to calculate the power of 10 required to produce it.
+     * @returns {number} the power of 10 required to produce the specified value
      * @private
      */
     const _findExponent = function( pNum )
@@ -2384,8 +3128,8 @@ const $scope = constants?.$scope || function()
 
     /**
      * Returns the smallest power of 10 derived from the numbers specified
-     * @param pNums {...number}
-     * @returns {number}
+     * @param {...number} pNums One or numbers from which to find the smallest power of 10
+     * @returns {number} The smallest power of 10 derived from the numbers specified
      * @private
      */
     const _findSmallestExponent = function( ...pNums )
@@ -2394,10 +3138,32 @@ const $scope = constants?.$scope || function()
     };
 
     /**
+     * @typedef {Object} RangeOptions
+     *
+     * @property [inclusive=false] Whether the range includes both the starting value AND the ending value
+     * @property [increment_rule=RANGE_INCREMENT_OPTIONS.INCREMENT] The rule to determine how to generate the next value in the range
+     */
+
+    /**
+     * This object defines the default options for the range function
+     * @type {RangeOptions}
+     */
+    const DEFAULT_RANGE_OPTIONS =
+        {
+            inclusive: false,
+            increment_rule: RANGE_INCREMENT_OPTIONS.INCREMENT,
+        };
+
+    /**
+     * @typedef {Object} RangeIncrement
+     * @property {number} increment The amount to increment the current value to produce the next value
+     * @property {number} power The power of 10 being used
+     */
+    /**
      * Calculates the increment used to map the current value to the next value to return
-     * @param pValue {number|string} the number or string from which to calculate the increment used by the range function
-     * @param pOptions {Object} an object defining the options for the range function, such as inclusive versus exclusive and how to calculate the increment
-     * @returns {{increment: (number|number), power: (number|number)}|{increment: *, power: (number|number)}|{increment: number, power: (number|number)}}
+     * @param {number|string} pValue The number or string from which to calculate the increment used by the range function
+     * @param {Object} pOptions An object defining the options for the range function, such as inclusive versus exclusive and how to calculate the increment
+     * @returns {RangeIncrement}
      * @private
      */
     const _calculateIncrement = function( pValue, pOptions = DEFAULT_RANGE_OPTIONS )
@@ -2443,18 +3209,8 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * This object defines the default options for the range function
-     * @type {{inclusive: boolean, increment_rule: number}}
-     */
-    const DEFAULT_RANGE_OPTIONS =
-        {
-            inclusive: false,
-            increment_rule: RANGE_INCREMENT_OPTIONS.INCREMENT,
-        };
-
-    /**
      * This object defines the default options for the range function when it is used to produce a numeric sequence
-     * @type {{inclusive: boolean, increment_rule: number}}
+     * @type {RangeOptions}
      */
     const DEFAULT_NUMERIC_RANGE_OPTIONS =
         {
@@ -2463,7 +3219,7 @@ const $scope = constants?.$scope || function()
 
     /**
      * This object defines the default options for the range function when it is used to produce a character sequence
-     * @type {{inclusive: boolean, increment_rule: number}}
+     * @type {RangeOptions}
      */
     const DEFAULT_CHARACTER_RANGE_OPTIONS =
         {
@@ -2472,14 +3228,16 @@ const $scope = constants?.$scope || function()
         };
 
     /**
-     * Returns an iterable that produces values from pFrom to pTo (exclusive by default).
+     * Returns an iterable that produces values from pFrom to pTo (exclusive by default)<br>
+     * <br>
      * The iterable is "lazy",
      * so you can generate extremely large collections of values
      * without consuming the memory the entire collection would require.
+     * <br>
      *
-     * @param pFrom {number|string} the first value the iterable's iterator should return
-     * @param pTo {number|string} the value at which to stop returning values.
-     * @param pOptions {Object} an object to specify whether the range is inclusive or exclusive of the 'to' value
+     * @param {number|string} pFrom The first value the iterable's iterator should return
+     * @param {number|string} pTo The value at which to stop returning values
+     * @param pOptions {RangeOptions} An object to specify whether the range is inclusive or exclusive of the 'to' value
      *                          and to define how to increment value to produce the next value in the sequence
      * @returns {{[Symbol.iterator](): Generator<*, void, *>}|{[Symbol.iterator]: (function(): {done: boolean}), value}}
      * @throws IllegalArgumentError if the from and to arguments are not the same type or compatible types (such as number and string, for example)
@@ -2512,7 +3270,7 @@ const $scope = constants?.$scope || function()
 
         /**
          * Returns 1 for an ascending sequence, -1 for a descending sequence
-         * @param pBounds {[number|string]} an array composed of the from and to values
+         * @param {Array.<string|number>} pBounds  an array composed of the from and to values
          * @returns {number} 1 for an ascending sequence, -1 for a descending sequence
          * @private
          */
@@ -2661,15 +3419,17 @@ const $scope = constants?.$scope || function()
     /**
      * Returns true if either of the 2 arrays contains the other
      *
-     * @param pArrA the first array
-     * @param pArrB the second array
+     * @param {Array.<*>} pArrA The first array
+     * @param {Array.<*>} pArrB The other array
      *
-     * @param pTrim (optional) argument to control whether to trim strings prior to comparison
-     *              if true, elements of each array that are of type 'string' are compared without regard to leading or trailing whitespace
-     *              otherwise, elements of type 'string' are compared for exact match
+     * @param {boolean} [pTrim=true] Whether to trim strings prior to comparison<br><br>
+     *              If true, elements of each array that are of type 'string'
+     *              are compared without regard to leading or trailing whitespace<br>
+     *              <br>
+     *              Otherwise, elements of type 'string' are compared for exact match<br>
      *              THE DEFAULT IS TRUE. YOU MUST EXPLICITLY PASS false TO DISABLE THE BEHAVIOR
      *
-     * @returns {boolean}
+     * @returns {boolean} true if either of the 2 arrays contains the other
      */
     const areSubsets = function( pArrA, pArrB, pTrim = true )
     {
@@ -2792,10 +3552,10 @@ const $scope = constants?.$scope || function()
      * Returns an array containing only those elements unique to either of the arrays specified
      * This is the opposite of the intersection
      *
-     * @param pArrA {[any]} the first array
-     * @param pArrB {[any]} the second array
+     * @param pArrA the first array
+     * @param pArrB the second array
      *
-     * @param pUnique {boolean} specify true to remove duplicates from the returned collection
+     * @param {boolean} pUnique Specify true to remove duplicates from the returned collection
      * @returns {*}
      */
     const disjunction = function( pArrA, pArrB, pUnique = false )
@@ -2836,10 +3596,10 @@ const $scope = constants?.$scope || function()
      * potentially shifting existing elements off of the array
      * to prevent the length of the array from exceeding the specified limit.
      *
-     * @param pArr {*[]} an array to modify
-     * @param pElem {any} the element to push onto the array
-     * @param pLimit {number} the maximum length to which to allow the array to grow, defaults to 100
-     * @returns {*[]} the same array with the specified element added and a length that is less than or equal to the limit specified
+     * @param pArr An array to modify
+     * @param pElem the element to push onto the array
+     * @param  {number} pLimit the maximum length to which to allow the array to grow, defaults to 100
+     * @returns the same array with the specified element added and a length that is less than or equal to the limit specified
      *
      * @see BoundedQueue
      * @see AsyncBoundedQueue
@@ -2866,16 +3626,16 @@ const $scope = constants?.$scope || function()
     const MAX_QUEUE_SIZE = 32_768;
 
     /**
-     * This class provides a queue (a FIFO data structure) with a limited size.
-     *
-     * When an element is pushed into the queue (enqueued),
-     * the limit is enforced by evicting the oldest element.
-     *
-     * Do not use this class if every element MUST be processed,
-     * unless you can guarantee the size will not be exceeded.
-     *
-     * Common use cases might include writing messages to a remote log,
-     * where writing each message separately would impact performance.
+     * This class provides a queue (a FIFO data structure) with a limited size.<br>
+     * <br>
+     * When an element is pushed into the queue (enqueued),<br>
+     * the limit is enforced by evicting the oldest element.<br>
+     * <br>
+     * Do not use this class if every element MUST be processed,<br>
+     * unless you can guarantee the size will not be exceeded.<br>
+     * <br>
+     * Common use cases might include writing messages to a remote log,<br>
+     * where writing each message separately would impact performance.<br>
      */
     class BoundedQueue
     {
@@ -3109,7 +3869,7 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * This is an asynchronous implementation of BoundedQueue
+     * This is an asynchronous implementation of {@link BoundedQueue}
      */
     class AsyncBoundedQueue extends BoundedQueue
     {
@@ -3251,8 +4011,8 @@ const $scope = constants?.$scope || function()
 
     /**
      * Returns true if there is a non-null element at the specified index
-     * @param pArr the array to check for the element at the specified index
-     * @param pIndex the index at which to check for a non-null element
+     * @param pArr The array to check for the element at the specified index
+     * @param pIndex The index at which to check for a non-null element
      * @returns {boolean} true if there is a non-null element at the specified index
      */
     const hasEntry = function( pArr, pIndex )
@@ -3319,9 +4079,6 @@ const $scope = constants?.$scope || function()
         return !!pAsStrings ? arr.map( e => asString( _mt_str + e ) ) : arr;
     };
 
-    /**
-     * This is the exported module.
-     */
     let mod =
         {
             dependencies,

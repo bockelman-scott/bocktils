@@ -183,6 +183,26 @@ const $scope = constants?.$scope || function()
         return input || pValue;
     }
 
+    /**
+     * @typedef {Object} AsStringOptions
+     *
+     * @property {boolean} [omitFunctions=true]
+     * @property {boolean} [executeFunctions=false]
+     * @property {boolean} [returnFunctionSource=false]
+     * @property {string} [joinOn=""]
+     * @property {boolean} [removeLeadingZeroes=true]
+     * @property {boolean} [assumeNumeric=false]
+     * @property {boolean} [assumeAlphabetic=true]
+     * @property {Object|function|null} [dateFormatter=null],
+     * @property {Array.<function>} [transformations=[]]
+     *
+     */
+
+    /**
+     * These are the default options for the {@link #asString} function.
+     *
+     * @type {AsStringOptions}
+     */
     const DEFAULT_AS_STRING_OPTIONS =
         {
             omitFunctions: true,
@@ -233,22 +253,18 @@ const $scope = constants?.$scope || function()
     }
 
     /**
-     * Returns a string representation of the argument passed, optionally removing leading and trailing whitespace.
+     * Returns a string representation of the argument passed,<br>
+     * optionally removing leading and trailing whitespace<br>
+     * and performing other transformations as specified in the options.<br>
      *
-     * @param {any} pStr any valid type for which a string representation is desired
+     * @param {*} pStr - Any valid type for which a string representation is desired
      *
-     * @param {boolean} pTrim pass true to return a string with leading and trailing whitespace removed.<br />
-     *                        defaults to false
+     * @param {boolean} [pTrim=false] - Pass true to return a string with leading and trailing whitespace removed.<br />
      *
-     * @param pOptions object specifying how to handle special circumstances, such as functions, arrays, and objects.
-     * <br /> Defaults to:<br/>
-     * {
-     *             omitFunctions: true,
-     *             executeFunctions: false,
-     *             joinOn: _mt_chr
-     * }
+     * @param {AsStringOptions} pOptions An object specifying how to handle special circumstances,<br>
+     * such as functions, arrays, and objects, as well as additional transformations to perform (such as to lowercase, etc.)<br>
      *
-     * @returns {string} a string representation of the argument
+     * @returns {string} a string representation of the argument<br>
      *                   if the argument is already a string, returns a new copy of the string
      *                   if the argument is a number or big integer,
      *                                      attempts to parse the number as a float
@@ -2629,6 +2645,7 @@ const $scope = constants?.$scope || function()
     let mod =
         {
             dependencies,
+            DEFAULT_AS_STRING_OPTIONS,
             asString,
             isEmpty,
             isBlank,

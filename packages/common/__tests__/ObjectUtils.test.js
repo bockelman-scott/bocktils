@@ -663,7 +663,7 @@ describe( "getValues", () =>
 
               let comparator = arrayUtils.Comparators.BY_STRING_VALUE;
 
-              expect( arrayUtils.arraysEqual( values, [8, "888", "Eight", "One more than seven"], comparator ) ).toBe( true );
+              expect( arrayUtils.arraysEqual( values, [8, "888", "Eight", "One more than seven"], { comparator } ) ).toBe( true );
           } );
 } );
 
