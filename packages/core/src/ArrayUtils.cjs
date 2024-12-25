@@ -1,24 +1,25 @@
 /**
  * @fileOverview
- * This module provides several useful functions for working with arrays and array-like values.
- *
- * The most often used function is probably the <code>asArray<code> function,
- * which will return an array regardless of its arguments,
- * which is useful when you want to call array functionality
- * or just ensure you are working with an array before doing so.
- *
- * This module also defines a library of commonly used Filters (a.k.a. Predicates), Mappers, and Comparators.
- *
+ * This module provides several useful functions for working with arrays and array-like values.<br>
+ * <br>
+ * The most often used function is probably the <code>asArray<code> function,<br>
+ * which will return an array regardless of its arguments,<br>
+ * which is useful when you want to call array functionality<br>
+ * or just ensure you are working with an array before doing so.<br>
+ * <br>
+ * This module also defines a library of commonly used Filters (a.k.a. Predicates), Mappers, and Comparators.<br>
+ * <br>
  *
  * @see Filters
  * @see Predicates
  * @see Mappers
  * @see Comparators
  *
+ * @module ArrayUtils
+ *
  * @author Scott Bockelman
  * @license MIT
  */
-
 
 /* import dependencies */
 const constants = require( "./Constants.cjs" );
@@ -58,10 +59,11 @@ const $scope = constants?.$scope || function()
      * <br>
      * It is exported as a property of this module,
      * allowing us to just import this module
-     * and then use the other utilities as properties of this module.
+     * and then import the other utilities from this module.
      * <br>
      * @dict
      * @type {Object}
+     * @alias module:ArrayUtils#dependencies
      */
     const dependencies =
         {
@@ -165,7 +167,6 @@ const $scope = constants?.$scope || function()
      * The functions defined in this file are added to the module before it is exported and returned.
      * <br>
      * @type {ModulePrototype}
-     * @module ArrayUtils
      */
     const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
 
@@ -189,6 +190,7 @@ const $scope = constants?.$scope || function()
      * This is an array of the names of the methods exposed by the built-in {@link Array} type.
      * @const
      * @type {Array.<string>}
+     * @alias module:ArrayUtils#ARRAY_METHODS
      */
     const ARRAY_METHODS = ["length", "GUID", "getUniqueId"].concat( [].concat( Object.getOwnPropertyNames( Array.prototype ).filter( e => "function" === typeof [][e] ) ) );
 
@@ -205,7 +207,8 @@ const $scope = constants?.$scope || function()
      *
      * @property {boolean|FlattenOptions} [flatten=false] Set to true to convert any elements of the array<br>
      * that are also arrays into individual elements of the returned array<br>
-     * (@see {@link Array#flat})<br>
+     * @see {@link Array#flat}<br>
+     *
      *
      * @property {string|undefined|null} [splitOn=undefined] A character or string to split a string<br>
      * if the argument to the function is a string.<br><br>
@@ -225,12 +228,16 @@ const $scope = constants?.$scope || function()
      * @property {boolean} [unique=false] Set to true to remove duplicated values before returning the array.<br>
      *
      * @property {function(*,*)|undefined|null} [comparator=null] A function to use to determine the order of the elements in the resulting array.<br>
+     *
+     * @see {@link asArray}
      */
 
     /**
      * This object defines the default options for the {@link #asArray} function.<br>
      * @const
      * @type AsArrayOptions
+     * @alias module:ArrayUtils#DEFAULT_AS_ARRAY_OPTIONS
+     * @see {@link asArray}
      */
     const DEFAULT_AS_ARRAY_OPTIONS =
         {
@@ -328,6 +335,7 @@ const $scope = constants?.$scope || function()
      * @returns {Array.<*>} an Array, based on the input and the options specified
      *
      * @type {function}
+     * @alias module:ArrayUtils.asArray
      */
     const asArray = function( pValue, pOptions = DEFAULT_AS_ARRAY_OPTIONS, pRecursions = 0 )
     {
@@ -434,6 +442,7 @@ const $scope = constants?.$scope || function()
      * @returns {Array.<*>} An array of the arguments
      *
      * @type {function(...*)}
+     * @alias module:ArrayUtils.varargs
      */
     const varargs = function( ...pArgs )
     {
@@ -451,7 +460,7 @@ const $scope = constants?.$scope || function()
      * @returns {Array} An immutable array of the arguments
      *
      * @type {function(...*)}
-     *
+     * @alias module:ArrayUtils.immutableVarArgs
      */
     const immutableVarArgs = function( ...pArgs )
     {
@@ -472,7 +481,8 @@ const $scope = constants?.$scope || function()
      * the number of characters in the string representation of a number,<br>
      * or the number of keys in an object
      *
-     * @type {function(Array.<*>|string|number|object)}
+     * @type {function((Array<*>|string|number|object)): number}
+     * @alias module:ArrayUtils.calculateLength
      */
     const calculateLength = function( pObject )
     {
@@ -519,7 +529,6 @@ const $scope = constants?.$scope || function()
         return len;
     };
 
-
     /**
      * Reports an error when the number of filters to match exceeds the number of filters specified.<br>
      * <br>
@@ -547,6 +556,7 @@ const $scope = constants?.$scope || function()
 
     /**
      * An alias for the {@link #Predicates} object, providing a more familiar name.
+     * @alias module:ArrayUtils#Filters
      */
     let Filters;
 
@@ -559,6 +569,7 @@ const $scope = constants?.$scope || function()
      * @see {@link #Filters}
      *
      * @const
+     * @alias module:ArrayUtils#Predicates
      */
     const Predicates = Filters =
         {
@@ -1311,14 +1322,13 @@ const $scope = constants?.$scope || function()
      * @param {...function} pFunction - One or more filter functions to combine
      *
      * @returns {function(*): boolean}
+     * @alias module:ArrayUtils.predicate
      */
     const predicate = function( ...pFunction )
     {
         const functions = [].concat( ...(pFunction || [Predicates.IDENTITY]) ).filter( Predicates.IS_PREDICATE );
         return Predicates.makeMatchesAllFilter( ...(functions || [Predicates.IDENTITY]) );
     };
-
-    // let Filters = lock( Predicates );
 
     /**
      * This is a collection of functions
@@ -1331,6 +1341,7 @@ const $scope = constants?.$scope || function()
      * @see {@link Array#map}
      *
      * @const
+     * @alias module:ArrayUtils#Mappers
      */
     const Mappers =
         {
@@ -1539,7 +1550,14 @@ const $scope = constants?.$scope || function()
         };
 
     /**
-     * @typedef {function(*,*)} Comparator
+     * @typedef {function(*,*):number} Comparator
+     * @desc A function that takes 2 arguments and returns<br>
+     * 1 if the first argument is greater than the second argument<br>
+     * -1 if the first argument is less than the second argument<br>
+     * or<br>
+     * 0 if the arguments are equal.<br>
+     * <br>
+     * This is a function that could be passed to the {@link Array.sort} method, for example
      */
 
     /**
@@ -1558,9 +1576,10 @@ const $scope = constants?.$scope || function()
     }
 
     /**
-     * This is a collection of comparators (functions that can be used as arguments to the {@link Array#sort} method)
+     * This is a collection of {@link Comparator}s (that is, functions that can be used as arguments to the {@link Array.sort} method)
      * and functions that create comparators
      * @const
+     * @alias module:ArrayUtils#Comparators
      */
     const Comparators =
         {
@@ -1860,6 +1879,7 @@ const $scope = constants?.$scope || function()
      * This is a map of the methods that can be called on an array
      * to transform its contents (or return a new array with the modified content)
      * @type {{FILTER: string, SORT: string, MAP: string, FLAT: string}}
+     * @alias module:ArrayUtils#TRANSFORMATIONS
      */
     const TRANSFORMATIONS =
         {
@@ -1872,6 +1892,7 @@ const $scope = constants?.$scope || function()
     /**
      * This class encapsulates the sort, map, or filter method of an array into an object,
      * which can further be chained to perform multiple transformations on an array
+     * @alias module:ArrayUtils#classes#Transformer
      */
     class Transformer
     {
@@ -2026,6 +2047,7 @@ const $scope = constants?.$scope || function()
      * This class encapsulates one or more transformations to perform on an array.<br>
      * Allows you to combine filtering, mapping, and sorting in a pipeline-like operation.<br>
      * @see {@link Transformer}
+     * @alias module:ArrayUtils#classes#TransformerChain
      */
     class TransformerChain
     {
@@ -2058,7 +2080,7 @@ const $scope = constants?.$scope || function()
          * Performs the transformations in sequence on the specified array and returns
          * a new array resulting from the transformations applied
          * @param {Array.<*>} pArr - An array to transform
-         * @returns {*[]} A new array resulting from the one or more transformations specified
+         * @returns {Array.<*>} A new array resulting from the one or more transformations specified
          */
         transform( pArr )
         {
@@ -2206,6 +2228,7 @@ const $scope = constants?.$scope || function()
     /**
      * This subclass of TransformerChain encapsulates the application of one or more filters.<br>
      * 'applyFilters' is a synonym for the transform method
+     * @alias module:ArrayUtils#classes#FilterChain
      */
     class FilterChain extends TransformerChain
     {
@@ -2241,6 +2264,7 @@ const $scope = constants?.$scope || function()
     /**
      * This subclass of TransformerChain encapsulates the application of one or more mappers.<br>
      * 'applyMappers' is a synonym for the transform method
+     * @alias module:ArrayUtils#classes#MapperChain
      */
     class MapperChain extends TransformerChain
     {
@@ -2270,6 +2294,7 @@ const $scope = constants?.$scope || function()
     /**
      * This subclass of TransformerChain
      * encapsulates the application of one or more comparators to sort an array
+     * @alias module:ArrayUtils#classes#ComparatorChain
      */
     class ComparatorChain extends TransformerChain
     {
@@ -2336,6 +2361,7 @@ const $scope = constants?.$scope || function()
      * @param {Array.<*>} pArr The array to filter
      * @param {...function} pFilters One or more functions that return true if the element should be included in the resulting array
      * @returns {Array.<*>} A new array with the specified filters applied
+     * @alias module:ArrayUtils.chainFilters
      */
     const chainFilters = function( pArr, ...pFilters )
     {
@@ -2361,6 +2387,7 @@ const $scope = constants?.$scope || function()
      * @param {Array.<*>} pArr The array to map as per the specified functions
      * @param {...function} pMappers One or more functions that return a new element to be included in the resulting array
      * @returns {Array.<*>} A new array as the result of sequentially applying the specified functions
+     * @alias module:ArrayUtils.chainMappers
      */
     const chainMappers = function( pArr, ...pMappers )
     {
@@ -2383,12 +2410,14 @@ const $scope = constants?.$scope || function()
      * @property {boolean} [acceptArrayLike=false] Set this to true to consider objects that are not instances of Array, but are ArrayLike
      * @property {boolean} [acceptObjects=false] Set this to true to consider objects that are neither instances of Array, nor ArrayLike
      *
+     * @see {@link isPopulatedArray}
      */
 
     /**
      * These are the defaults fot the {@link #isPopulatedArray} function.
      * @see {@link PopulatedArrayOptions}
      * @type {PopulatedArrayOptions}
+     * @alias module:ArrayUtils#DEFAULT_POPULATED_ARRAY_OPTIONS
      */
     const DEFAULT_POPULATED_ARRAY_OPTIONS =
         {
@@ -2402,6 +2431,7 @@ const $scope = constants?.$scope || function()
      * @param {Array.<*>} pArr An array or ArrayLike object
      * @param {PopulatedArrayOptions} pOptions An object to define the criteria for determining whether the specified value is a 'populated array'
      * @returns {boolean} true if the specified object is an array and has at least one element
+     * @alias module:ArrayUtils.isPopulatedArray
      */
     const isPopulatedArray = function( pArr, pOptions = DEFAULT_POPULATED_ARRAY_OPTIONS )
     {
@@ -2434,6 +2464,8 @@ const $scope = constants?.$scope || function()
      *
      * @returns {Array.<*>} the first array specified that has a length > 0
      * or a zero-length array if none of the candidates are arrays with a length > 0
+     *
+     * @alias module:ArrayUtils.firstPopulatedArray
      */
     const firstPopulatedArray = function( ...pCandidates )
     {
@@ -2453,6 +2485,8 @@ const $scope = constants?.$scope || function()
      *
      * @returns {Array.<*>} the last array specified that has a length > 0
      * or a zero-length array if none of the candidates are arrays with a length > 0
+     *
+     * @alias module:ArrayUtils.lastPopulatedArray
      */
     const lastPopulatedArray = function( ...pCandidates )
     {
@@ -2537,6 +2571,8 @@ const $scope = constants?.$scope || function()
      * or arrays of one or more of these types of values
      *
      * @returns {function} a Filter function that will include elements only if they satisfy all the filters created from the arguments
+     *
+     * @alias module:ArrayUtils.createExclusiveFilter
      */
     const createExclusiveFilter = function( ...pArgs )
     {
@@ -2561,6 +2597,8 @@ const $scope = constants?.$scope || function()
      * or arrays of one or more of these types of values
      *
      * @returns {function} a Filter function that will include elements if they satisfy any of the filters created from the arguments
+     *
+     * @alias module:ArrayUtils.createInclusiveFilter
      */
     const createInclusiveFilter = function( ...pArgs )
     {
@@ -2580,6 +2618,8 @@ const $scope = constants?.$scope || function()
      * that satisfies the provided filter<br>
      *
      * @type {function(function,...*)}
+     *
+     * @alias module:ArrayUtils.firstMatchedValue
      */
     const firstMatchedValue = function( pMatcher, ...pArr )
     {
@@ -2611,6 +2651,8 @@ const $scope = constants?.$scope || function()
      * that is numeric
      *
      * @type {function(function,...*)}
+     *
+     * @alias module:ArrayUtils.firstNumericValue
      */
     const firstNumericValue = function( ...pArr )
     {
@@ -2621,6 +2663,8 @@ const $scope = constants?.$scope || function()
      * Returns a copy of an array with duplicate elements removed
      * @param {...*} pArr An array or one or more values to treat as an array
      * @returns {Array.<*>} A copy of the array with duplicates removed
+     *
+     * @alias module:ArrayUtils.unique
      */
     const unique = function( ...pArr )
     {
@@ -2628,7 +2672,8 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * This function returns an array ordered according to either the comparator specified --<br>
+     * Returns a new array ordered according to either the comparator specified<br>
+     * --<br>
      * -- OR --<br>
      * If the second argument is a string,
      * the array elements are assumed to be objects
@@ -2637,6 +2682,8 @@ const $scope = constants?.$scope || function()
      * @param {Array.<*>} pArr An array to order according to the supplied {@link Comparator}
      * @param {Comparator} pComparator A function to determine the ordering of the elements of the array
      * @returns {Array.<*>} A new array containing the same elements as the specified Array in the order determined by the supplied Comparator
+     *
+     * @alias module:ArrayUtils.sortArray
      */
     const sortArray = function( pArr, pComparator )
     {
@@ -2712,11 +2759,15 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * Returns an array with any elements that are null, undefined, or NaN removed
+     * Returns a new array with any elements that are null, undefined, or NaN removed
+     *
      * @param {*} pArr - Should be an array, but can be anything, as the value will be coerced to an array before pruning
      * @param {boolean} [pRejectNaN=true] - Determines whether numeric elements that are NaN or not finite are also removed
      * @param {...string} [pRejectedTypes=undefined] One or more types to exclude from the returned array
+     *
      * @returns {Array.<*>} An array with no null or undefined elements, potentially an empty array
+     *
+     * @alias module:ArrayUtils.pruneArray
      */
     const pruneArray = function( pArr, pRejectNaN = true, ...pRejectedTypes )
     {
@@ -2747,6 +2798,8 @@ const $scope = constants?.$scope || function()
      * @param {Array.<*>} pArr An array
      * @param {number} [pMinimum=1] The minimum number of elements the array must have to be considered to have elements.
      * @returns {boolean} true if the specified array has at least the specified number of elements
+     *
+     * @alias module:ArrayUtils.hasElements
      */
     const hasElements = function( pArr, pMinimum )
     {
@@ -2758,6 +2811,8 @@ const $scope = constants?.$scope || function()
      * Returns true if the specified value is an array and is empty
      * @param {*} pArr The value to evaluate
      * @returns {boolean} true if the specified value is an array with 0 elements
+     *
+     * @alias module:ArrayUtils.isEmptyArray
      */
     const isEmptyArray = function( pArr )
     {
@@ -2765,12 +2820,17 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * Returns the length of the specified array (or string if the second argument is true)<br>
+     * Returns the length of the specified array<br>
+     * (or string if the second argument is true)<br>
      * <br>
      * If the specified array is null or undefined, returns 0<br>
+     *
      * @param {Array.<*>|string} pArr An array (or string if the second argument is true) whose length is to be returned
      * @param {boolean} [pAllowStringArg=false] If true, the first argument can be a string whose length will be returned
+     *
      * @returns {number} The length of the array (or string, when the second argument is true)
+     *
+     * @alias module:ArrayUtils.arrLength
      */
     const arrLength = function( pArr, pAllowStringArg = false )
     {
@@ -2785,11 +2845,14 @@ const $scope = constants?.$scope || function()
     /**
      * Returns true if the length of the specified array
      * (or string, if the third argument is true)
-     * is greater than the specified minimum
-     * @param pArr
-     * @param pMinLength
-     * @param pAllowStringArg
+     * is greater than the specified minimum<br>
+     *
+     * @param {Array.<*>|string} pArr
+     * @param {number} pMinLength
+     * @param {boolean} pAllowStringArg
      * @returns {boolean}
+     *
+     * @alias module:ArrayUtils.arrLenGt
      */
     const arrLenGt = function( pArr, pMinLength, pAllowStringArg = false )
     {
@@ -2804,10 +2867,14 @@ const $scope = constants?.$scope || function()
      * Returns true if the length of the specified array
      * (or string, if the third argument is true)
      * is greater than or equal to the specified minimum
+     *
      * @param pArr
      * @param pMinLength
      * @param pAllowStringArg
+     *
      * @returns {boolean}
+     *
+     * @alias module:ArrayUtils.arrLenGtEq
      */
     const arrLenGtEq = function( pArr, pMinLength, pAllowStringArg = false )
     {
@@ -2820,10 +2887,14 @@ const $scope = constants?.$scope || function()
      * Returns true if the length of the specified array
      * (or string, if the third argument is true)
      * is less than the specified value
+     *
      * @param pArr
      * @param pMaxLength
      * @param pAllowStringArg
+     *
      * @returns {boolean}
+     *
+     * @alias module:ArrayUtils.arrLenLt
      */
     const arrLenLt = function( pArr, pMaxLength, pAllowStringArg = false )
     {
@@ -2838,10 +2909,14 @@ const $scope = constants?.$scope || function()
      * Returns true if the length of the specified array
      * (or string, if the third argument is true)
      * is less than or equal to the specified value
+     *
      * @param pArr
      * @param pMaxLength
      * @param pAllowStringArg
+     *
      * @returns {boolean}
+     *
+     * @alias module:ArrayUtils.arrLenLtEq
      */
     const arrLenLtEq = function( pArr, pMaxLength, pAllowStringArg = false )
     {
@@ -2855,7 +2930,10 @@ const $scope = constants?.$scope || function()
      * <br>
      * Note that this uses {@link #structuredClone}, so functions are not cloned, but are included as-is
      * @param {...*} pArr an array (or list of values to treat as an array) to deep-clone
-     * @returns {*[]} A new array populated with copies of the elements of the original array
+     *
+     * @returns {Array.<*>} A new array populated with copies of the elements of the original array
+     *
+     * @alias module:ArrayUtils.copyArray
      */
     const copyArray = function( ...pArr )
     {
@@ -2910,12 +2988,15 @@ const $scope = constants?.$scope || function()
      * @property {boolean} [ignoreOrder=false] Whether to compare without regard to order (warning: this is quite a bit slower than comparing sorted arrays)
      * @property {boolean} [convertNumericStrings=false] Whether to convert strings representing numbers to decimal values prior to comparison
      *
+     * @see {@link arraysEqual}
      */
 
     /**
      * The default options for determining if two arrays are equal
      *
      * @type {EqualityOptions}
+     *
+     * @alias module:ArrayUtils#DEFAULT_EQUALITY_OPTIONS
      */
     const DEFAULT_EQUALITY_OPTIONS =
         {
@@ -2993,6 +3074,8 @@ const $scope = constants?.$scope || function()
      * @param {EqualityOptions} pOptions an object defining how to compare the 2 arrays for 'equality'
      *
      * @returns {boolean} if the 2 arrays contain the same elements in the same order (before or after a potential sort)
+     *
+     * @alias module:ArrayUtils.arraysEqual
      */
     const arraysEqual = function( pArrA, pArrB, pOptions = DEFAULT_EQUALITY_OPTIONS )
     {
@@ -3030,9 +3113,13 @@ const $scope = constants?.$scope || function()
 
     /**
      * Returns true if the array includes any of the values specified
+     *
      * @param {Array.<*>} pArr An array to search
      * @param {...*} pSearchFor One or more values for which to search
+     *
      * @returns {boolean} true if the array includes any of the specified values
+     *
+     * @alias module:ArrayUtils.includesAny
      */
     const includesAny = function( pArr, ...pSearchFor )
     {
@@ -3059,6 +3146,8 @@ const $scope = constants?.$scope || function()
      * @param {boolean} pFromEnd Specify true to search from the end of the value
      * @param {number} pDepth USED INTERNALLY TO PREVENT INFINITE RECURSION OR STACK OVERFLOW; DO NOT PASS THIS VALUE FROM CONSUMER CODE
      * @returns {*} A scalar value (that is, a number, string, or boolean value) if one can be found within 6 levels of recursion
+     *
+     * @alias module:ArrayUtils.extractScalar
      */
     const extractScalar = function( pArr, pFromEnd = false, pDepth = 0 )
     {
@@ -3085,8 +3174,10 @@ const $scope = constants?.$scope || function()
      * @enum
      * This is the set of recognized values for the range function increment option
      * @type {{INCREMENT: number, SEQUENCE_PLUS_LAST_SKIP: number, DERIVE: number, SEQUENCE_LENGTH: number}}
+     *
+     * @alias module:ArrayUtils#RANGE_INCREMENT_OPTION
      */
-    const RANGE_INCREMENT_OPTIONS =
+    const RANGE_INCREMENT_OPTION =
         {
             /**
              * The next number or character will be the number or character found by adding the length of the 'from' value to the 'from' (or current) value
@@ -3140,18 +3231,20 @@ const $scope = constants?.$scope || function()
     /**
      * @typedef {Object} RangeOptions
      *
-     * @property [inclusive=false] Whether the range includes both the starting value AND the ending value
-     * @property [increment_rule=RANGE_INCREMENT_OPTIONS.INCREMENT] The rule to determine how to generate the next value in the range
+     * @property {boolean} [inclusive=false] Whether the range includes both the starting value AND the ending value
+     * @property {RANGE_INCREMENT_OPTION} [increment_rule=RANGE_INCREMENT_OPTION.INCREMENT] The rule to determine how to generate the next value in the range
      */
 
     /**
      * This object defines the default options for the range function
      * @type {RangeOptions}
+     *
+     * @alias module:ArrayUtils#DEFAULT_RANGE_OPTIONS
      */
     const DEFAULT_RANGE_OPTIONS =
         {
             inclusive: false,
-            increment_rule: RANGE_INCREMENT_OPTIONS.INCREMENT,
+            increment_rule: RANGE_INCREMENT_OPTION.INCREMENT,
         };
 
     /**
@@ -3159,6 +3252,7 @@ const $scope = constants?.$scope || function()
      * @property {number} increment The amount to increment the current value to produce the next value
      * @property {number} power The power of 10 being used
      */
+
     /**
      * Calculates the increment used to map the current value to the next value to return
      * @param {number|string} pValue The number or string from which to calculate the increment used by the range function
@@ -3170,7 +3264,7 @@ const $scope = constants?.$scope || function()
     {
         const options = populateOptions( pOptions, DEFAULT_RANGE_OPTIONS );
 
-        const rule = options.increment_rule || RANGE_INCREMENT_OPTIONS.DERIVE;
+        const rule = options.increment_rule || RANGE_INCREMENT_OPTION.DERIVE;
 
         const sequenceLength = isArray( pValue ) || (isString( pValue ) && !isNumeric( pValue )) ? unique( pValue.split( _mt_str ) ).length : 1;
 
@@ -3195,14 +3289,14 @@ const $scope = constants?.$scope || function()
 
         switch ( rule )
         {
-            case RANGE_INCREMENT_OPTIONS.SEQUENCE_LENGTH:
+            case RANGE_INCREMENT_OPTION.SEQUENCE_LENGTH:
                 return { increment: sequenceLength, power };
 
-            case RANGE_INCREMENT_OPTIONS.SEQUENCE_PLUS_LAST_SKIP:
+            case RANGE_INCREMENT_OPTION.SEQUENCE_PLUS_LAST_SKIP:
                 return { increment: sequenceLength + (sequenceLength > 1 ? _calculateLastSkip() : 0) + 1, power };
 
-            case RANGE_INCREMENT_OPTIONS.DERIVE:
-            case RANGE_INCREMENT_OPTIONS.INCREMENT:
+            case RANGE_INCREMENT_OPTION.DERIVE:
+            case RANGE_INCREMENT_OPTION.INCREMENT:
             default:
                 return { increment: Math.pow( 10, power ), power };
         }
@@ -3211,6 +3305,7 @@ const $scope = constants?.$scope || function()
     /**
      * This object defines the default options for the range function when it is used to produce a numeric sequence
      * @type {RangeOptions}
+     * @alias module:ArrayUtils#DEFAULT_NUMERIC_RANGE_OPTIONS
      */
     const DEFAULT_NUMERIC_RANGE_OPTIONS =
         {
@@ -3220,11 +3315,13 @@ const $scope = constants?.$scope || function()
     /**
      * This object defines the default options for the range function when it is used to produce a character sequence
      * @type {RangeOptions}
+     *
+     * @alias module:ArrayUtils#DEFAULT_CHARACTER_RANGE_OPTIONS
      */
     const DEFAULT_CHARACTER_RANGE_OPTIONS =
         {
             inclusive: true,
-            increment_rule: RANGE_INCREMENT_OPTIONS.SEQUENCE_LENGTH,
+            increment_rule: RANGE_INCREMENT_OPTION.SEQUENCE_LENGTH,
         };
 
     /**
@@ -3239,9 +3336,11 @@ const $scope = constants?.$scope || function()
      * @param {number|string} pTo The value at which to stop returning values
      * @param pOptions {RangeOptions} An object to specify whether the range is inclusive or exclusive of the 'to' value
      *                          and to define how to increment value to produce the next value in the sequence
-     * @returns {{[Symbol.iterator](): Generator<*, void, *>}|{[Symbol.iterator]: (function(): {done: boolean}), value}}
+     * @returns {Iterable<number|string>} An iterable that produces values from pFrom to pTo (exclusive by default)<br>
      * @throws IllegalArgumentError if the from and to arguments are not the same type or compatible types (such as number and string, for example)
      *                              or if the values cannot be coerced to the same type
+     *
+     * @alias module:ArrayUtils.range
      */
     const range = function( pFrom, pTo, pOptions = DEFAULT_RANGE_OPTIONS )
     {
@@ -3315,6 +3414,11 @@ const $scope = constants?.$scope || function()
                 return sign > 0 ? (inclusive ? (val <= limit) : (val < limit)) : (inclusive ? (val >= limit) : (val > limit));
             };
 
+            /**
+             * A naive implementation of rounding to a specific number of decimal places
+             * @param {number} pNum A number to be rounded to some precision
+             * @returns {number} The rounded value
+             */
             const simpleRound = function( pNum )
             {
                 if ( roundTo <= 0 )
@@ -3326,6 +3430,12 @@ const $scope = constants?.$scope || function()
                 return (r / p);
             };
 
+            /**
+             * Returns an iterable that will successively produce numbers
+             * from the start of the defined range until it has reached the stop value of the range<br>
+             * <br>
+             * This iterable produces values on-demand (a.k.a. "lazily") to reduce memory consumption
+             */
             return {
                 * [Symbol.iterator]()
                 {
@@ -3365,6 +3475,12 @@ const $scope = constants?.$scope || function()
                 return e.split( _mt_str ).map( calculateCharacter ).join( _mt_str );
             }
 
+            /**
+             * Returns an iterable that will successively produce strings
+             * from the start of the defined range until it has reached the stop value of the range<br>
+             * <br>
+             * This iterable produces values on-demand (a.k.a. "lazily") to reduce memory consumption
+             */
             return {
                 * [Symbol.iterator]()
                 {
@@ -3423,13 +3539,15 @@ const $scope = constants?.$scope || function()
      * @param {Array.<*>} pArrB The other array
      *
      * @param {boolean} [pTrim=true] Whether to trim strings prior to comparison<br><br>
-     *              If true, elements of each array that are of type 'string'
-     *              are compared without regard to leading or trailing whitespace<br>
-     *              <br>
-     *              Otherwise, elements of type 'string' are compared for exact match<br>
-     *              THE DEFAULT IS TRUE. YOU MUST EXPLICITLY PASS false TO DISABLE THE BEHAVIOR
+     *                               If true, elements of each array that are of type 'string'
+     *                               are compared without regard to leading or trailing whitespace<br>
+     *                               <br>
+     *                               Otherwise, elements of type 'string' are compared for exact match<br>
+     *                               THE DEFAULT IS TRUE. YOU MUST EXPLICITLY PASS false TO DISABLE THE BEHAVIOR
      *
      * @returns {boolean} true if either of the 2 arrays contains the other
+     *
+     * @alias module:ArrayUtils.areSubsets
      */
     const areSubsets = function( pArrA, pArrB, pTrim = true )
     {
@@ -3447,12 +3565,18 @@ const $scope = constants?.$scope || function()
     /**
      * Returns an array containing all the elements of the 2 arrays specified
      *
-     * @param pArrA the first array
-     * @param pArrB the second array
-     * @param pUnique (optional) parameter to control how to treat duplicated elements
-     *                if true, the returned array contains only the unique elements found in the 2 arrays
-     *                otherwise, the returned array contains all elements found in the 2 arrays, including any that are duplicated
-     * @returns {Array}
+     * @param {Array.<*>} pArrA the first array
+     * @param {Array.<*>} pArrB the other array
+     * @param {boolean} [pUnique=false] Controls how to treat duplicated elements<br>
+     *                                  If true, the returned array contains only the unique elements
+     *                                  found in the 2 arrays<br>
+     *                                  <br>
+     *                                  Otherwise, the returned array contains all elements
+     *                                  found in the 2 arrays, including any that are duplicated
+     *
+     * @returns {Array.<*>} An array containing all the elements of the 2 arrays specified
+     *
+     * @alias module:ArrayUtils.superset
      */
     const superset = function( pArrA, pArrB, pUnique )
     {
@@ -3466,11 +3590,15 @@ const $scope = constants?.$scope || function()
 
     /**
      * Returns an array containing all the unique elements of the 2 arrays specified
+     * This is the same as calling {@link #superset} with true as the third argument
+     *
+     * @param {Array.<*>} pArrA the first array
+     * @param {Array.<*>} pArrB the other array
+     *
+     * @returns {Array.<*>} An array containing all the unique elements of the 2 arrays specified<br>
      * This is the same as calling superset with true as the third argument
      *
-     * @param pArrA the first array
-     * @param pArrB the second array
-     * @returns {Array}
+     * @alias module:ArrayUtils.union
      */
     const union = function( pArrA, pArrB )
     {
@@ -3500,7 +3628,7 @@ const $scope = constants?.$scope || function()
         {
             Set.prototype.union = function( pArr )
             {
-                return new Set( union( this, pArr ) );
+                return new Set( union( [...this], pArr ) );
             };
         }
         catch( ex )
@@ -3512,13 +3640,19 @@ const $scope = constants?.$scope || function()
     /**
      * Returns an array containing only those elements common to both arrays specified
      *
-     * @param pArrA the first array
-     * @param pArrB the second array
-     * @param pUnique (optional) argument to control how to treat duplicates
-     *                if true, removes duplicates, returning an array containing only the unique values common to both arrays
-     *                otherwise, returned array may contain duplicates
+     * @param {Array.<*>} pArrA the first array
+     * @param {Array.<*>} pArrB the other array
      *
-     * @returns {*}
+     * @param {boolean} [pUnique=false] Controls how to treat duplicates<br>
+     *                                  If true, removes duplicates,
+     *                                  returning an array containing only the unique values
+     *                                  common to both arrays<br>
+     *                                  <br>
+     *                                  Otherwise, the returned array may contain duplicates
+     *
+     * @returns {Array.<*>} An array containing only those elements common to both arrays specified
+     *
+     * @alias module:ArrayUtils.intersection
      */
     const intersection = function( pArrA, pArrB, pUnique = false )
     {
@@ -3552,11 +3686,14 @@ const $scope = constants?.$scope || function()
      * Returns an array containing only those elements unique to either of the arrays specified
      * This is the opposite of the intersection
      *
-     * @param pArrA the first array
-     * @param pArrB the second array
+     * @param {Array.<*>} pArrA the first array
+     * @param {Array.<*>} pArrB the other array
      *
-     * @param {boolean} pUnique Specify true to remove duplicates from the returned collection
-     * @returns {*}
+     * @param {boolean} [pUnique=false] Specify true to remove duplicates from the returned collection
+     *
+     * @returns {Array.<*>} An array containing only those elements unique to either of the arrays specified
+     *
+     * @alias module:ArrayUtils.disjunction
      */
     const disjunction = function( pArrA, pArrB, pUnique = false )
     {
@@ -3595,14 +3732,19 @@ const $scope = constants?.$scope || function()
      * Push an element onto an array,
      * potentially shifting existing elements off of the array
      * to prevent the length of the array from exceeding the specified limit.
+     * <br>
      *
-     * @param pArr An array to modify
-     * @param pElem the element to push onto the array
-     * @param  {number} pLimit the maximum length to which to allow the array to grow, defaults to 100
-     * @returns the same array with the specified element added and a length that is less than or equal to the limit specified
+     * @param {Array.<*>} pArr An array to modify
+     * @param {*} pElem The element to push onto the array
+     * @param {number} [pLimit=100] The maximum length to which to allow the array to grow
      *
-     * @see BoundedQueue
-     * @see AsyncBoundedQueue
+     * @returns {Array.<*>} The <b>same</b> array with the specified element added<br>
+     * and a length that is less than or equal to the limit specified
+     *
+     * @alias module:ArrayUtils.enQueue
+     *
+     * @see {@link BoundedQueue}
+     * @see {@link AsyncBoundedQueue}
      */
     const enQueue = function( pArr, pElem, pLimit = 100 )
     {
@@ -3622,7 +3764,11 @@ const $scope = constants?.$scope || function()
         return arr;
     };
 
-    /** The maximum limit that can be specified for the size of a bounded queue */
+    /** The maximum limit that can be specified for the size of a bounded queue
+     * @const
+     * @type {number}
+     * @alias module:ArrayUtils#MAX_QUEUE_SIZE
+     * */
     const MAX_QUEUE_SIZE = 32_768;
 
     /**
@@ -3634,16 +3780,40 @@ const $scope = constants?.$scope || function()
      * Do not use this class if every element MUST be processed,<br>
      * unless you can guarantee the size will not be exceeded.<br>
      * <br>
-     * Common use cases might include writing messages to a remote log,<br>
+     * Common use cases might include writing messages to a remote log in batches,<br>
      * where writing each message separately would impact performance.<br>
+     * @class
+     *
+     * @alias module:ArrayUtils#classes#BoundedQueue
      */
     class BoundedQueue
     {
+        #limit;
+        #arr;
+
+        /**
+         * Constructs a new instance of BoundedQueue with the specified size and initial values.<br>
+         * <br>
+         * A BoundedQueue is a First-In/First-Out data structure with a limited size.
+         * <br>
+         * When an element is pushed into the queue (enqueued),<br>
+         * the limit is enforced by evicting the oldest element.
+         * <br>
+         *
+         * @constructor
+         * @param {number} pSize The maximum number of values to hold in the queue
+         * @param {Array.<*>|BoundedQueue} [pArr] An array of values to immediately place in the queue.<br>
+         * <br>
+         * <b>NOTE: </b>If an initial array of values is provided,<br>
+         * the size of the queue will be adjusted to be the maximum of the length of that array or the size specified.<br>
+         */
         constructor( pSize, pArr = [] )
         {
-            this._arr = [];
+            this.#arr = [];
 
-            const desiredLimit = Math.min( Math.max( 1, asInt( pSize, (pArr?.length || pArr?.size) ) ), 65_536 );
+            const initialSize = pArr?.length || pArr?.size;
+
+            const desiredLimit = Math.min( Math.max( 1, asInt( pSize, initialSize ), initialSize ), MAX_QUEUE_SIZE );
 
             if ( null != pArr && (pArr instanceof this.constructor) )
             {
@@ -3657,14 +3827,24 @@ const $scope = constants?.$scope || function()
                     pArr.shrink( desiredLimit );
                 }
 
-                this._arr = pArr._arr || [];
+                this.#arr = pArr.#arr || pArr;
             }
             else
             {
-                this._arr = [].concat( ...(asArray( pArr ) || []) ) || [];
+                this.#arr = [].concat( ...(asArray( pArr ) || []) ) || [];
 
-                this._limit = desiredLimit;
+                this.#limit = desiredLimit;
             }
+        }
+
+        get values()
+        {
+            return [...(asArray( this.#arr ))];
+        }
+
+        get limit()
+        {
+            return asInt( this.#limit );
         }
 
         static get [Symbol.species]()
@@ -3674,22 +3854,22 @@ const $scope = constants?.$scope || function()
 
         enQueue( pElem )
         {
-            let state = { exceededBounds: false, evicted: null, size: this._arr.length, limit: this._limit };
+            let state = { exceededBounds: false, evicted: null, size: this.size, limit: this.limit };
 
             if ( pElem )
             {
-                this._arr.push( pElem );
+                this.#arr.push( pElem );
 
-                if ( this._arr.length > this._limit )
+                if ( this.#arr.length > this.#limit )
                 {
-                    let evicted = this._arr.shift();
+                    let evicted = this.#arr.shift();
 
                     state.exceededBounds = true;
                     state.evicted = evicted;
                 }
             }
 
-            state.size = this._arr.length;
+            state.size = this.#arr.length;
 
             return lock( state );
         }
@@ -3703,17 +3883,12 @@ const $scope = constants?.$scope || function()
 
         get size()
         {
-            return this._arr.length;
-        }
-
-        get limit()
-        {
-            return this._limit;
+            return this.values.length;
         }
 
         isQueued( pElem )
         {
-            return this._arr.includes( pElem );
+            return this.#arr.includes( pElem );
         }
 
         includes( pElem )
@@ -3723,7 +3898,7 @@ const $scope = constants?.$scope || function()
 
         toArray()
         {
-            return [].concat( ...(this._arr || []) );
+            return [].concat( ...(this.#arr || []) );
         }
 
         canTake()
@@ -3740,7 +3915,7 @@ const $scope = constants?.$scope || function()
         {
             if ( this.size > 0 )
             {
-                return this._arr.shift();
+                return this.#arr.shift();
             }
             throw new Error( "The queue is empty" );
         }
@@ -3749,7 +3924,7 @@ const $scope = constants?.$scope || function()
         {
             if ( this.size > 0 )
             {
-                return this._arr[0];
+                return this.#arr[0];
             }
             return null;
         }
@@ -3759,8 +3934,8 @@ const $scope = constants?.$scope || function()
             return {
                 exceededBounds: (this.size > this.limit),
                 evicted: null,
-                size: this._arr.length,
-                limit: this._limit,
+                size: this.#arr.length,
+                limit: this.#limit,
                 next: this.peek()
             };
         }
@@ -3772,30 +3947,30 @@ const $scope = constants?.$scope || function()
 
         pop()
         {
-            return this._arr.pop();
+            return this.#arr.pop();
         }
 
         flush()
         {
             const arr = this.toArray();
 
-            this._arr.length = 0;
+            this.#arr.length = 0;
 
-            this._arr = [];
+            this.#arr = [];
 
             return arr;
         }
 
         clear()
         {
-            this._arr = [];
+            this.#arr = [];
         }
 
         shrink( pNewLimit, pEvictNewest )
         {
-            const limit = Math.min( Math.max( 1, asInt( pNewLimit, this._arr?.length ) ), 65_536 );
+            const limit = Math.min( Math.max( 1, asInt( pNewLimit, this.#arr?.length ) ), 65_536 );
 
-            if ( limit > this._limit )
+            if ( limit > this.#limit )
             {
                 this.extend( limit );
             }
@@ -3809,22 +3984,22 @@ const $scope = constants?.$scope || function()
                 evicted.push( pEvictNewest ? this.pop() : this.take() );
             }
 
-            this._limit = limit;
+            this.#limit = limit;
 
             return {
                 exceededBounds: exceeds,
                 evicted: ([].concat( evicted )),
                 size: this.size,
-                limit: this._limit,
+                limit: this.limit,
                 next: this.peek()
             };
         }
 
         extend( pNewLimit, ...pElems )
         {
-            const limit = Math.min( Math.max( 1, asInt( pNewLimit, this._arr?.length ) ), MAX_QUEUE_SIZE );
+            const limit = Math.min( Math.max( 1, asInt( pNewLimit, this.size ) ), MAX_QUEUE_SIZE );
 
-            this._limit = Math.max( limit, this._limit );
+            this.#limit = Math.max( limit, this.#limit );
 
             let newElems = varargs( ...pElems );
 
@@ -3870,6 +4045,7 @@ const $scope = constants?.$scope || function()
 
     /**
      * This is an asynchronous implementation of {@link BoundedQueue}
+     * @alias module:ArrayUtils#classes#AsyncBoundedQueue
      */
     class AsyncBoundedQueue extends BoundedQueue
     {
@@ -4011,29 +4187,37 @@ const $scope = constants?.$scope || function()
 
     /**
      * Returns true if there is a non-null element at the specified index
-     * @param pArr The array to check for the element at the specified index
-     * @param pIndex The index at which to check for a non-null element
+     * @param {Array.<*>}  pArr The array to check for the element at the specified index
+     * @param {number} pIndex The index at which to check for a non-null element
      * @returns {boolean} true if there is a non-null element at the specified index
+     *
+     * @alias module:ArrayUtils.hasEntry
      */
     const hasEntry = function( pArr, pIndex )
     {
         const arr = asArray( pArr || [] ) || [];
-        const index = [_num, _big].includes( typeof pIndex ) ? (0 + pIndex) : Number.MAX_SAFE_INTEGER;
+        const index = [_num, _big].includes( typeof pIndex ) ? asInt( pIndex ) : Number.MAX_SAFE_INTEGER;
 
         return (index >= 0) && (arr.length > index) && (_ud !== typeof arr[index]);
     };
 
+    /**
+     * @alias module:ArrayUtils.hasElementAt
+     */
     const hasElementAt = hasEntry;
 
     /**
      * Returns the element at the specified index
      * or the specified default value
      * if no element exists at the specified index
+     * or the specified array is null, undefined, or not an array or ArrayLike value
      *
-     * @param pArr
-     * @param pIdx
-     * @param pDefault
+     * @param {Array.<*>|Object} pArr The array or ArrayLike object from which to return the value
+     * @param {number} pIdx The index at which to find the value to return
+     * @param {*} pDefault A value to return if no value exists at the specified index or the specified array if not an array or ArrayLike object
      * @returns {*}
+     *
+     * @alias module:ArrayUtils.at
      */
     const at = function( pArr, pIdx, pDefault )
     {
@@ -4046,39 +4230,112 @@ const $scope = constants?.$scope || function()
         return ((arr?.length || 0) > idx) ? arr[idx] : dflt;
     };
 
+    /**
+     * Converts the provided arguments into an array of non-empty strings<br>
+     * <br>
+     * This function takes a variable number of arguments, processes them through
+     * a transformation pipeline to filter and convert them, and returns an array
+     * containing only non-empty strings<br>
+     * <br>
+     * Uses the {@link TransformerChain.TO_NON_EMPTY_STRINGS} to perform the transformation
+     *
+     * @function
+     * @param {...*} pArr - The values to be returned as an array of non-empty strings
+     *
+     * @returns {Array.<string>} - An array containing non-empty strings derived from the input arguments
+     *
+     * @alias module:ArrayUtils.toNonEmptyStrings
+     */
     const toNonEmptyStrings = function( ...pArr )
     {
         let arr = varargs( ...pArr );
         return TransformerChain.TO_NON_EMPTY_STRINGS.transform( arr );
     };
 
+    /**
+     * Converts the provided input parameters into an array of non-blank strings.<br>
+     * <br>
+     * The function accepts a variable number of arguments, processes them into an array,
+     * and applies a transformation to ensure that the resulting array only
+     * contains non-blank string values.<br>
+     * <br>
+     * Uses the {@link TransformerChain.TO_NON_BLANK_STRINGS} to perform the transformation
+     *
+     * @function
+     * @param {...*} pArr - The values to be converted into an array of non-blank strings
+     *
+     * @returns {Array.<string>} An array of strings, excluding any blank or invalid string entries
+     *
+     * @alias module:ArrayUtils.toNonBlankStrings
+     */
     const toNonBlankStrings = function( ...pArr )
     {
         let arr = varargs( ...pArr );
         return TransformerChain.TO_NON_BLANK_STRINGS.transform( arr );
     };
 
+    /**
+     * Converts the provided input parameters into an array of non-empty strings without leading or trailing whitespace.<br>
+     * <br>
+     * Uses the {@link TransformerChain.TRIMMED_NON_EMPTY_STRINGS} to perform
+     * the operation on the input values, treated as an array
+     *
+     * @function
+     * @param {...*} pArr - A variable number of arguments that will be processed as an array
+     *
+     * @returns {Array<string>} An array of trimmed non-empty strings after transformation
+     *
+     * @alias module:ArrayUtils.toTrimmedNonEmptyStrings
+     */
     const toTrimmedNonEmptyStrings = function( ...pArr )
     {
         let arr = varargs( ...pArr );
         return TransformerChain.TRIMMED_NON_EMPTY_STRINGS.transform( arr );
     };
 
+    /**
+     * Converts the provided input parameters into an array of non-blank strings without leading or trailing whitespace.<br>
+     * <br>
+     * Uses the {@link the TransformerChain.TRIMMED_NON_BLANK_STRINGS}
+     *
+     * @function
+     * @param {...*} pArr - A variable number of arguments that will be processed as an array
+     *
+     * @returns {Array<string>} An array of trimmed non-blank strings
+     *
+     * @alias module:ArrayUtils.toTrimmedNonBlankStrings
+     * */
     const toTrimmedNonBlankStrings = function( ...pArr )
     {
         let arr = varargs( ...pArr );
         return TransformerChain.TRIMMED_NON_BLANK_STRINGS.transform( arr );
     };
 
+    /**
+     * Returns an array of the indices <i>of the non-null elements</i> of the specified array<br>
+     * <br>
+     *
+     * @function
+     *
+     * @param {Array<*>} pArr - The array whose indices should be the elements of the returned array
+     *
+     * @param {boolean} [pAsStrings=false] - Controls whether the keys should be returned as strings,<br>
+     * rather than numbers
+     *
+     * @returns {Array<number|string>} An array of <i>the indices of the non-null elements</i> of the specified array<br>
+     *                                 If the second argument is true, returns the indices as strings
+     * @alias module:ArrayUtils.toKeys
+     */
     const toKeys = function( pArr, pAsStrings = false )
     {
         let arr = asArray( pArr || [] ) || [];
-
-        arr = arr.map( ( e, i ) => i );
-
-        return !!pAsStrings ? arr.map( e => asString( _mt_str + e ) ) : arr;
+        arr = arr.map( ( e, i ) => !isNull( e ) ? i : null ).filter( e => null !== e );
+        return !!pAsStrings ? arr.map( e => asString( e ) ) : arr;
     };
 
+    /**
+     * @type {Object}
+     */
     let mod =
         {
             dependencies,
@@ -4127,6 +4384,7 @@ const $scope = constants?.$scope || function()
             chainFilters,
             chainMappers,
             enQueue,
+            MAX_QUEUE_SIZE,
             toNonEmptyStrings,
             toNonBlankStrings,
             toTrimmedNonEmptyStrings,
@@ -4137,7 +4395,9 @@ const $scope = constants?.$scope || function()
             extractScalar,
             firstMatchedValue,
             firstNumericValue,
-            RANGE_INCREMENT_OPTIONS,
+            DEFAULT_EQUALITY_OPTIONS,
+            DEFAULT_POPULATED_ARRAY_OPTIONS,
+            RANGE_INCREMENT_OPTION,
             DEFAULT_RANGE_OPTIONS,
             DEFAULT_NUMERIC_RANGE_OPTIONS,
             DEFAULT_CHARACTER_RANGE_OPTIONS,
@@ -4154,8 +4414,10 @@ const $scope = constants?.$scope || function()
                 }
         };
 
+    // makes the properties of mod available as properties and methods of the modulePrototype
     mod = modulePrototype.extend( mod );
 
+    // Exports this module
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 
 }());

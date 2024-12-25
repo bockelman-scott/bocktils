@@ -2,7 +2,7 @@
   "plugins": [],
   "recurseDepth": 10,
   "source": {
-    "include": ["./src/_BockModulePrototype.cjs", "./package.json"],
+    "include": ["./src/_BockModulePrototype.cjs", "./src/ArrayUtils.cjs", "./package.json"],
     "exclude": ["/build/*", "/node_modules/*", "/test_data/*"],
     "includePattern": ".+\\.c?js(on|doc|x)?$",
     "excludePattern": ".+__tests__.+|\\.test\\.js"
