@@ -2,7 +2,10 @@ const arrayUtils = require( "../src/ArrayUtils.cjs" );
 
 const {
     dependencies,
-    RANGE_INCREMENT_OPTIONS,
+    Filters,
+    Mappers,
+    Comparators,
+    RANGE_INCREMENT_OPTION,
     DEFAULT_RANGE_OPTIONS,
     DEFAULT_NUMERIC_RANGE_OPTIONS,
     DEFAULT_CHARACTER_RANGE_OPTIONS,
@@ -479,14 +482,14 @@ describe( "calculatedLength", () =>
           } );
 } );
 
-describe( "Filters/Predicates", () =>
+describe( "Filters", () =>
 {
     test( "The IDENTITY Predicate returns a new array with the same elements",
           () =>
           {
               const arr = ["a", 2, true, "b", 3, 4];
 
-              const filtered = arr.filter( arrayUtils.Predicates.IDENTITY );
+              const filtered = arr.filter( Filters.IDENTITY );
 
               expect( filtered ).toEqual( arr );
 
@@ -495,7 +498,7 @@ describe( "Filters/Predicates", () =>
               expect( filtered ).not.toEqual( arr );
           } );
 
-    test( "The IS_PREDICATE Predicate returns an array of filter functions",
+    test( "The IS_FILTER Predicate returns an array of filter functions",
           () =>
           {
               const f1 = e => null != e;
@@ -509,7 +512,7 @@ describe( "Filters/Predicates", () =>
 
               const arr = [f1, f2, f3, 3, 4];
 
-              const filtered = arr.filter( arrayUtils.Predicates.IS_PREDICATE );
+              const filtered = arr.filter( Filters.IS_FILTER );
 
               expect( filtered ).toEqual( [f1, f2] );
           } );
@@ -529,7 +532,7 @@ describe( "Filters/Predicates", () =>
 
               const arr = [f1, f2, f3, 3, 4];
 
-              const filtered = arr.filter( arrayUtils.Predicates.IS_COMPARATOR );
+              const filtered = arr.filter( Filters.IS_COMPARATOR );
 
               expect( filtered ).toEqual( [f1, f2] );
           } );
@@ -543,7 +546,7 @@ describe( "Filters/Predicates", () =>
               arr[2] = "b";
               arr[4] = "c";
 
-              const filtered = arr.filter( arrayUtils.Predicates.IS_DEFINED );
+              const filtered = arr.filter( Filters.IS_DEFINED );
 
               expect( filtered ).toEqual( ["a", "b", "c"] );
 
@@ -560,7 +563,7 @@ describe( "Filters/Predicates", () =>
               arr[2] = "b";
               arr[4] = "c";
 
-              const filtered = arr.filter( arrayUtils.Predicates.IS_DEFINED );
+              const filtered = arr.filter( Filters.IS_DEFINED );
 
               expect( filtered ).toEqual( ["a", null, "b", "c"] );
 
@@ -578,7 +581,7 @@ describe( "Filters/Predicates", () =>
               arr[2] = "b";
               arr[4] = "c";
 
-              const filtered = arr.filter( arrayUtils.Predicates.IS_NOT_NULL );
+              const filtered = arr.filter( Filters.IS_NOT_NULL );
 
               expect( filtered ).toEqual( ["a", "b", "c"] );
 
@@ -590,7 +593,7 @@ describe( "Filters/Predicates", () =>
           {
               const arr = ["a", 1, true, "b", {}, ["a", "b"]];
 
-              const filtered = arr.filter( arrayUtils.Predicates.makeTypeFilter( "string", "boolean" ) );
+              const filtered = arr.filter( Filters.makeTypeFilter( "string", "boolean" ) );
 
               expect( filtered ).toEqual( ["a", true, "b"] );
           } );
@@ -603,7 +606,7 @@ describe( "Filters/Predicates", () =>
               const filter1 = e => "string" === typeof e;
               const filter2 = e => e > "a";
 
-              const filtered = arr.filter( arrayUtils.Predicates.makeMatchesAllFilter( filter1, filter2 ) );
+              const filtered = arr.filter( Filters.makeMatchesAllFilter( filter1, filter2 ) );
 
               expect( filtered ).toEqual( ["b"] );
           } );
@@ -616,7 +619,7 @@ describe( "Filters/Predicates", () =>
               const filter1 = e => "string" === typeof e;
               const filter2 = e => "object" === typeof e;
 
-              const filtered = arr.filter( arrayUtils.Predicates.makeMatchesAnyFilter( filter1, filter2 ) );
+              const filtered = arr.filter( Filters.makeMatchesAnyFilter( filter1, filter2 ) );
 
               expect( filtered ).toEqual( ["a", "b", {}, ["a", "b"]] );
           } );
@@ -629,7 +632,7 @@ describe( "Filters/Predicates", () =>
               const filter1 = e => "number" === typeof e;
               const filter2 = e => Array.isArray( e );
 
-              const filtered = arr.filter( arrayUtils.Predicates.makeMatchesNoneFilter( filter1, filter2 ) );
+              const filtered = arr.filter( Filters.makeMatchesNoneFilter( filter1, filter2 ) );
 
               expect( filtered ).toEqual( ["a", "b", "c", {}] );
           } );
@@ -644,7 +647,7 @@ describe( "Filters/Predicates", () =>
               const filter3 = e => "number" === typeof e;
               const filter4 = e => e > 10;
 
-              const filtered = arr.filter( arrayUtils.Predicates.makeMatchesNPlusFilter( 2, filter1, filter2, filter3, filter4 ) );
+              const filtered = arr.filter( Filters.makeMatchesNPlusFilter( 2, filter1, filter2, filter3, filter4 ) );
 
               expect( filtered ).toEqual( ["ab", "abc", "bc", 11, 22, 33] );
           } );
@@ -660,7 +663,7 @@ describe( "Filters/Predicates", () =>
               const filter4 = e => e > 10;
               const filter5 = e => Array.isArray( e );
 
-              const filtered = arr.filter( arrayUtils.Predicates.makeMatchesExactlyNFilter( 1, filter1, filter2, filter3, filter4, filter5 ) );
+              const filtered = arr.filter( Filters.makeMatchesExactlyNFilter( 1, filter1, filter2, filter3, filter4, filter5 ) );
 
               expect( filtered ).toEqual( ["a", "b", "c", 1, 2, 3] );
           } );
@@ -675,7 +678,7 @@ describe( "Filters/Predicates", () =>
               const filter3 = e => "number" === typeof e;
               const filter4 = e => e > 10;
 
-              const filtered = arr.filter( arrayUtils.Predicates.makeMatchesLessThanNFilter( 2, filter1, filter2, filter3, filter4 ) );
+              const filtered = arr.filter( Filters.makeMatchesLessThanNFilter( 2, filter1, filter2, filter3, filter4 ) );
 
               expect( filtered ).toEqual( ["a", "b", "c", 1, 2, 3, {}, ["a", "ab", "abc", "b", "bc", "c", 1, 2, 3, 11, 22, 33, {}]] );
           } );
@@ -684,7 +687,7 @@ describe( "Filters/Predicates", () =>
           () =>
           {
               const arr = [];
-              expect( arr.filter( arrayUtils.Predicates.IS_POPULATED_ARRAY ) ).toEqual( [] );
+              expect( arr.filter( Filters.IS_POPULATED_ARRAY ) ).toEqual( [] );
           } );
 
 
@@ -692,7 +695,7 @@ describe( "Filters/Predicates", () =>
           () =>
           {
               const arr = [{}, null, undefined];
-              expect( arr.filter( arrayUtils.Predicates.IS_POPULATED_ARRAY ) ).toEqual( [] );
+              expect( arr.filter( Filters.IS_POPULATED_ARRAY ) ).toEqual( [] );
           } );
 
 
@@ -700,21 +703,21 @@ describe( "Filters/Predicates", () =>
           () =>
           {
               const arr = [{}, [2], false];
-              expect( arr.filter( arrayUtils.Predicates.IS_POPULATED_ARRAY ) ).toEqual( [[2]] );
+              expect( arr.filter( Filters.IS_POPULATED_ARRAY ) ).toEqual( [[2]] );
           } );
 
     test( "The IS_POPULATED_OBJECT Predicate returns true if the specified value is an Object with at least 1 property",
           () =>
           {
               const arr = [{}];
-              expect( arr.filter( arrayUtils.Predicates.IS_POPULATED_OBJECT ) ).toEqual( [] );
+              expect( arr.filter( Filters.IS_POPULATED_OBJECT ) ).toEqual( [] );
           } );
 
     test( "The IS_POPULATED_OBJECT Predicate returns true if the specified value is an Object with at least 1 property",
           () =>
           {
               const arr = [{ a: "" }];
-              expect( arr.filter( arrayUtils.Predicates.IS_POPULATED_OBJECT ) ).toEqual( [{ a: "" }] );
+              expect( arr.filter( Filters.IS_POPULATED_OBJECT ) ).toEqual( [{ a: "" }] );
           } );
 
 
@@ -722,35 +725,35 @@ describe( "Filters/Predicates", () =>
           () =>
           {
               const arr = [[1]];
-              expect( arr.filter( arrayUtils.Predicates.IS_POPULATED_OBJECT ) ).toEqual( [[1]] );
+              expect( arr.filter( Filters.IS_POPULATED_OBJECT ) ).toEqual( [[1]] );
           } );
 
     test( "The IS_POPULATED_NON_ARRAY_OBJECT Predicate returns true if the specified value is an Object with at least 1 property",
           () =>
           {
               const arr = [{}];
-              expect( arr.filter( arrayUtils.Predicates.IS_POPULATED_NON_ARRAY_OBJECT ) ).toEqual( [] );
+              expect( arr.filter( Filters.IS_POPULATED_NON_ARRAY_OBJECT ) ).toEqual( [] );
           } );
 
     test( "The IS_POPULATED_NON_ARRAY_OBJECT Predicate returns true if the specified value is an Object with at least 1 property",
           () =>
           {
               const arr = [{ a: "" }];
-              expect( arr.filter( arrayUtils.Predicates.IS_POPULATED_NON_ARRAY_OBJECT ) ).toEqual( [{ a: "" }] );
+              expect( arr.filter( Filters.IS_POPULATED_NON_ARRAY_OBJECT ) ).toEqual( [{ a: "" }] );
           } );
 
     test( "The IS_POPULATED_NON_ARRAY_OBJECT Predicate returns true if the specified value is an Object with at least 1 property",
           () =>
           {
               const arr = [[1]];
-              expect( arr.filter( arrayUtils.Predicates.IS_POPULATED_NON_ARRAY_OBJECT ) ).toEqual( [] );
+              expect( arr.filter( Filters.IS_POPULATED_NON_ARRAY_OBJECT ) ).toEqual( [] );
           } );
 
     test( "The IS_VALID_NUMBER Predicate returns true if the specified value is a number that is not NaN and is finite",
           () =>
           {
               const arr = [1, 2];
-              expect( arr.filter( arrayUtils.Predicates.IS_VALID_NUMBER ) ).toEqual( [1, 2] );
+              expect( arr.filter( Filters.IS_VALID_NUMBER ) ).toEqual( [1, 2] );
           } );
 
 
@@ -758,7 +761,7 @@ describe( "Filters/Predicates", () =>
           () =>
           {
               const arr = [1, 2, "a", true];
-              expect( arr.filter( arrayUtils.Predicates.IS_VALID_NUMBER ) ).toEqual( [1, 2] );
+              expect( arr.filter( Filters.IS_VALID_NUMBER ) ).toEqual( [1, 2] );
           } );
 
 
@@ -766,7 +769,7 @@ describe( "Filters/Predicates", () =>
           () =>
           {
               const arr = [1, 2, 1 / 0];
-              expect( arr.filter( arrayUtils.Predicates.IS_VALID_NUMBER ) ).toEqual( [1, 2] );
+              expect( arr.filter( Filters.IS_VALID_NUMBER ) ).toEqual( [1, 2] );
           } );
 
 
@@ -774,14 +777,14 @@ describe( "Filters/Predicates", () =>
           () =>
           {
               const arr = [1, 2, {}, "abc", [], ""];
-              expect( arr.filter( arrayUtils.Predicates.NON_EMPTY ) ).toEqual( [1, 2, "abc"] );
+              expect( arr.filter( Filters.NON_EMPTY ) ).toEqual( [1, 2, "abc"] );
           } );
 
     test( "The NON_BLANK Predicate is used to return an array with only non-empty strings that are not composed entirely of whitespace",
           () =>
           {
               const arr = ["", "abc", "def".replace( /\w/g, "" ), " ", "\t"];
-              expect( arr.filter( arrayUtils.Predicates.NON_BLANK ) ).toEqual( ["abc"] );
+              expect( arr.filter( Filters.NON_BLANK ) ).toEqual( ["abc"] );
           } );
 
     test( "The makeMatchesRexExpFilter Predicate FUNCTION returns a filter to retain only elements that satisfy the regular expression",
@@ -789,7 +792,7 @@ describe( "Filters/Predicates", () =>
           {
               const arr = ["abc", "def", "ghi", 2, true, ["abc"], { a: "abc" }, "ABC"];
 
-              const filtered = arr.filter( arrayUtils.Predicates.makeMatchesRexExpFilter( /[A-Z]/ ) );
+              const filtered = arr.filter( Filters.makeMatchesRexExpFilter( /[A-Z]/ ) );
 
               expect( filtered ).toEqual( ["ABC"] );
           } );
@@ -799,7 +802,7 @@ describe( "Filters/Predicates", () =>
           {
               const arr = ["abc", "def", "ghi", 2, true, ["abc"], { a: "abc" }, "ABC"];
 
-              const filtered = arr.filter( arrayUtils.Predicates.makeMatchesRexExpFilter( /\w/ ) );
+              const filtered = arr.filter( Filters.makeMatchesRexExpFilter( /\w/ ) );
 
               expect( filtered ).toEqual( ["abc", "def", "ghi", "ABC"] );
           } );
@@ -810,7 +813,7 @@ describe( "Filters/Predicates", () =>
               const arr = ["abc", "def", "ghi", 2, true, ["abc"], { a: "abc" }, "ABC"];
               const arr2 = ["abc", "def", 2, true, ["abc"], { a: "abc" }, "ABC"];
 
-              const filtered = arr.filter( arrayUtils.Predicates.NOT_IN( arr2 ) );
+              const filtered = arr.filter( Filters.NOT_IN( arr2 ) );
 
               expect( filtered ).toEqual( ["ghi"] );
           } );
@@ -821,7 +824,7 @@ describe( "Filters/Predicates", () =>
               const arr = ["abc", "def", "ghi", 2, true, ["abc"], { a: "abc" }, "ABC"];
               const arr2 = ["abc", "def", 2, true, ["abc"], { a: "abcd" }, "ABC"];
 
-              const filtered = arr.filter( arrayUtils.Predicates.NOT_IN( arr2 ) );
+              const filtered = arr.filter( Filters.NOT_IN( arr2 ) );
 
               expect( filtered ).toEqual( ["ghi", { a: "abc" }] );
           } );
@@ -833,7 +836,7 @@ describe( "Filters/Predicates", () =>
               const arr = ["abc", "def", "ghi", 2, true, ["abc"], { a: "abc" }, "ABC"];
               const arr2 = ["abc", "def", 2, true, ["abc"], { a: "abc" }, "ABC", 7, {}];
 
-              const filtered = arr.filter( arrayUtils.Predicates.IN( arr2 ) );
+              const filtered = arr.filter( Filters.IN( arr2 ) );
 
               expect( filtered ).toEqual( ["abc", "def", 2, true, ["abc"], { a: "abc" }, "ABC"] );
           } );
@@ -844,7 +847,7 @@ describe( "Filters/Predicates", () =>
               const arr = ["abc", "def", "ghi", 2, true, ["abc"], { a: "abc" }, "ABC"];
               const arr2 = ["abc", "def", 2, true, ["abc"], { a: "abcd" }, "ABC"];
 
-              const filtered = arr.filter( arrayUtils.Predicates.IN( arr2 ) );
+              const filtered = arr.filter( Filters.IN( arr2 ) );
 
               expect( filtered ).toEqual( ["abc", "def", 2, true, ["abc"], "ABC"] );
           } );
@@ -856,7 +859,7 @@ describe( "Filters/Predicates", () =>
               const arr = ["abc", "def", "ghi", 2, true, ["abc"], { a: "abc" }, "ABC"];
               const arr2 = ["abc", "def", 2, true, ["abc"], { a: "abc" }, "ABC"];
 
-              const filtered = arr.filter( arrayUtils.Predicates.NOT_IN( arr2 ) );
+              const filtered = arr.filter( Filters.NOT_IN( arr2 ) );
 
               expect( filtered ).toEqual( ["ghi"] );
           } );
@@ -867,7 +870,7 @@ describe( "Filters/Predicates", () =>
               const arr = ["abc", "abcd", "bcd", 2, true, ["abc"], { a: "abc" }, "ABC"];
               const arr2 = ["ab"];
 
-              const filtered = arr.filter( arrayUtils.Predicates.STARTS_WITH( arr2 ) );
+              const filtered = arr.filter( Filters.STARTS_WITH( arr2 ) );
 
               expect( filtered ).toEqual( ["abc", "abcd", ["abc"]] );
           } );
@@ -878,7 +881,7 @@ describe( "Filters/Predicates", () =>
               const arr = ["abc", "abcd", "bcd", 2, true, ["abc"], { a: "abc" }, "ABC"];
               const arr2 = ["ab", "AB"];
 
-              const filtered = arr.filter( arrayUtils.Predicates.STARTS_WITH( arr2 ) );
+              const filtered = arr.filter( Filters.STARTS_WITH( arr2 ) );
 
               expect( filtered ).toEqual( ["abc", "abcd", ["abc"], "ABC"] );
           } );
@@ -889,7 +892,7 @@ describe( "Filters/Predicates", () =>
               const arr = ["abc", "abcd", "bcd", 2, true, ["abc"], { a: "abc" }, "ABCD"];
               const arr2 = ["cd"];
 
-              const filtered = arr.filter( arrayUtils.Predicates.ENDS_WITH( arr2 ) );
+              const filtered = arr.filter( Filters.ENDS_WITH( arr2 ) );
 
               expect( filtered ).toEqual( ["abcd", "bcd"] );
           } );
@@ -900,7 +903,7 @@ describe( "Filters/Predicates", () =>
               const arr = ["abc", "abcd", "bcd", 2, true, ["abc"], { a: "abc" }, "ABCD"];
               const arr2 = ["cd", "CD"];
 
-              const filtered = arr.filter( arrayUtils.Predicates.ENDS_WITH( arr2 ) );
+              const filtered = arr.filter( Filters.ENDS_WITH( arr2 ) );
 
               expect( filtered ).toEqual( ["abcd", "bcd", "ABCD"] );
           } );
@@ -913,7 +916,7 @@ describe( "Filters/Predicates", () =>
               const filter1 = e => "string" === typeof e;
               const filter2 = e => e > "a";
 
-              const filtered = arr.filter( arrayUtils.Predicates.chain( filter1, filter2 ) );
+              const filtered = arr.filter( Filters.chain( filter1, filter2 ) );
 
               expect( filtered ).toEqual( ["b"] );
           } );
@@ -1343,7 +1346,7 @@ describe( "Comparators", () =>
     test( "Comparator.isComparator returns false if the specified value is not a function that takes 2 arguments",
           () =>
           {
-              expect( arrayUtils.Comparators.isComparator( arrayUtils.Predicates.IS_OBJECT ) ).toBe( false );
+              expect( arrayUtils.Comparators.isComparator( Filters.IS_OBJECT ) ).toBe( false );
           } );
 
     test( "Comparator.isComparator returns false if the specified value is not a function",
@@ -2146,7 +2149,7 @@ describe( "range", () =>
               const iterable = range( "ace", "z",
                                       {
                                           inclusive: true,
-                                          increment_rule: RANGE_INCREMENT_OPTIONS.SEQUENCE_PLUS_LAST_SKIP
+                                          increment_rule: RANGE_INCREMENT_OPTION.SEQUENCE_PLUS_LAST_SKIP
                                       } );
 
               const collector = [];
@@ -2195,7 +2198,7 @@ describe( "range", () =>
               const iterable = range( "ace", "z",
                                       {
                                           inclusive: true,
-                                          increment_rule: RANGE_INCREMENT_OPTIONS.INCREMENT
+                                          increment_rule: RANGE_INCREMENT_OPTION.INCREMENT
                                       } );
 
               const collector = [];
@@ -2217,7 +2220,7 @@ describe( "range", () =>
               const iterable = range( "aabbcc", "n",
                                       {
                                           inclusive: true,
-                                          increment_rule: RANGE_INCREMENT_OPTIONS.INCREMENT
+                                          increment_rule: RANGE_INCREMENT_OPTION.INCREMENT
                                       } );
 
               const collector = [];
@@ -2248,7 +2251,7 @@ describe( "range", () =>
           {
               const iterable = range( "aabbcc", "n", {
                   inclusive: true,
-                  increment_rule: RANGE_INCREMENT_OPTIONS.SEQUENCE_LENGTH
+                  increment_rule: RANGE_INCREMENT_OPTION.SEQUENCE_LENGTH
               } );
 
               const collector = [];

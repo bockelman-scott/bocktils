@@ -123,14 +123,17 @@ const $scope = constants?.$scope || function()
             isString,
             isNumber,
             isBigInt,
+            isNumeric,
             isBoolean,
             isObject,
             isArray,
             isFunction,
+            isDecimal,
             isBinary,
             isOctal,
             isHex,
             isNanOrInfinite,
+            toDecimal,
             firstMatchingType
         } = typeUtils;
 
@@ -195,6 +198,7 @@ const $scope = constants?.$scope || function()
      * @property {boolean} [assumeAlphabetic=true]
      * @property {Object|function|null} [dateFormatter=null],
      * @property {Array.<function>} [transformations=[]]
+     * @property {boolean} [checkForByteArray=false]
      *
      */
 
@@ -213,7 +217,8 @@ const $scope = constants?.$scope || function()
             assumeNumeric: false,
             assumeAlphabetic: true,
             dateFormatter: null,
-            transformations: [function( s ) { return s;}]
+            transformations: [function( s ) { return s;}],
+            checkForByteArray: false
         };
 
     function _executeTransformations( pString, ...pTransformations )
@@ -250,6 +255,77 @@ const $scope = constants?.$scope || function()
     function getFunctionSource( pFunction )
     {
         return isFunction( pFunction ) ? funcToString.call( pFunction, pFunction ) : isString( pFunction ) ? asString( pFunction, true ) : _mt_str;
+    }
+
+    function asUtf8ByteArray( pStr )
+    {
+        const bytes = [];
+
+        for( let i = 0, n = pStr.length; i < n; i++ )
+        {
+            let code = pStr.charCodeAt( i );
+
+            if ( code < 0x80 )
+            {
+                bytes.push( code );
+            }
+            else if ( code < 0x800 )
+            {
+                bytes.push( (0xc0 | (code >> 6)), (0x80 | (code & 0x3f)) );
+            }
+            else if ( code < 0xd800 || code >= 0xe000 )
+            {
+                bytes.push( (0xe0 | (code >> 12)), (0x80 | ((code >> 6) & 0x3f)), (0x80 | (code & 0x3f)) );
+            }
+            else
+            {
+                i++;
+
+                // UTF-16 encodes these using two code units.
+                // The actual code point is calculated as follows:
+                // ((charCode - 0xD800) << 10 | str.charCodeAt(i) - 0xDC00) + 0x10000
+                code = 0x10000 + (((code & 0x3FF) << 10) | (pStr.charCodeAt( i ) & 0x3FF));
+                bytes.push( (0xf0 | (code >> 18)), (0x80 | ((code >> 12) & 0x3f)), (0x80 | ((code >> 6) & 0x3f)), (0x80 | (code & 0x3f)) );
+            }
+        }
+
+        return bytes;
+    }
+
+    function fromUtf8ByteArray( pBytes )
+    {
+        let s = _mt_str;
+
+        for( let i = 0, n = pBytes.length; i < n; i++ )
+        {
+            let byte = pBytes[i];
+
+            if ( (byte & 0x80) === 0x00 )
+            {
+                // 1-byte character
+                s += String.fromCharCode( byte );
+            }
+            else if ( (byte & 0xe0) === 0xc0 )
+            {
+                // 2-byte character
+                s += String.fromCharCode( ((byte & 0x1f) << 6) | (pBytes[++i] & 0x3f) );
+            }
+            else if ( (byte & 0xf0) === 0xe0 )
+            {
+                // 3-byte character
+                s += String.fromCharCode( ((byte & 0x0f) << 12) | ((pBytes[++i] & 0x3f) << 6) | (pBytes[++i] & 0x3f) );
+            }
+            else if ( (byte & 0xf8) === 0xf0 )
+            {
+                // 4-byte character (surrogate pair)
+                let codePoint = ((byte & 0x07) << 18) | ((pBytes[++i] & 0x3f) << 12) | ((pBytes[++i] & 0x3f) << 6) | (pBytes[++i] & 0x3f);
+                codePoint -= 0x10000;
+                s += String.fromCharCode( 0xD800 + (codePoint >> 10) );
+                s += String.fromCharCode( 0xDC00 + (codePoint & 0x3FF) );
+            }
+        }
+
+        return s;
     }
 
     /**
@@ -385,7 +461,14 @@ const $scope = constants?.$scope || function()
                 // if the argument is an array, recursively call this function on each element and join the results on the joinOn option or the empty character
                 if ( Array.isArray( input ) )
                 {
-                    s = [].concat( ...(input || []) ).map( e => asString( e, pTrim, options ) ).join( (asString( options.joinOn ) || _mt_chr) );
+                    if ( options.checkForByteArray && input.every( e => isNumeric( e ) && toDecimal( e ) ) <= 255 )
+                    {
+                        s = fromUtf8ByteArray( input.map( e => toDecimal( e ) ) );
+                    }
+                    else
+                    {
+                        s = [].concat( ...(input || []) ).map( e => asString( e, pTrim, options ) ).join( (asString( options.joinOn ) || _mt_chr) );
+                    }
                     break;
                 }
 
@@ -2707,6 +2790,8 @@ const $scope = constants?.$scope || function()
             formatMessage,
             interpolate,
             getFunctionSource,
+            asUtf8ByteArray,
+            fromUtf8ByteArray,
             classes: { StringComparatorFactory, ModuleEvent, ModulePrototype, CustomEvent },
             StringComparatorFactory
         };

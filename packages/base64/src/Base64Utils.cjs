@@ -313,13 +313,11 @@ const $scope = constants?.$scope || function()
     {
         if ( isString( pData ) )
         {
-            /*
-             if ( isBufferDefined() )
-             {
-             const str = cleanBase64( pData );
-             return Buffer.from( str, "base64" );
-             }
-             */
+            if ( isBufferDefined() )
+            {
+                const str = cleanBase64( pData );
+                return Buffer.from( str, "base64" );
+            }
 
             if ( isTextEncoderDefined() )
             {
@@ -345,13 +343,12 @@ const $scope = constants?.$scope || function()
 
         const data = toBytes( pData );
 
-        /*
-         if ( isBufferDefined() )
-         {
-         const buffer = Buffer.from( data || [] );
-         return cleanBase64( buffer.toString( base64 ) );
-         }
-         */
+        if ( isBufferDefined() )
+        {
+            const buffer = Buffer.from( data || [] );
+            return cleanBase64( buffer.toString( base64 ) );
+        }
+
         let s = _mt_str;
 
 
