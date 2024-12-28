@@ -2,11 +2,24 @@ const mathUtils = require( "../src/MathUtils.cjs" );
 
 const core = require( "@toolbocks/core" );
 
-const { stringUtils } = core;
+const { stringUtils, arrayUtils } = core;
 
 const { asInt } = stringUtils;
 
-const { resolveNullOrNaN, isBetween, quotient, ROUNDING_MODE, round } = mathUtils;
+const { range } = arrayUtils;
+
+const {
+    resolveNullOrNaN,
+    isBetween,
+    toSignificantDigits,
+    product,
+    quotient,
+    ROUNDING_MODE,
+    round,
+    classes
+} = mathUtils;
+
+const Rational = classes.Rational;
 
 mathUtils.disableLogging();
 
@@ -105,6 +118,16 @@ describe( "isBetween", () =>
           } );
 } );
 
+describe( "toSignificantDigits", () =>
+{
+    test( "significant digits - 1",
+          () =>
+          {
+              const n = toSignificantDigits( 4.0000000000000003e-7, 7 );
+              console.log( n );
+          } );
+} );
+
 describe( "quotient", () =>
 {
     test( "quotient (is a safe division)",
@@ -159,7 +182,98 @@ describe( "quotient", () =>
 
               expect( z ).toEqual( 12 / 23 );
 
+              expect( quotient( 0.1, 0.3 ) ).toEqual( 0.3333333333333333 );
+
+              expect( quotient( 0.01, 0.03 ) ).toEqual( 0.3333333333333333 );
+
+              expect( quotient( 0.2, 0.3 ) ).toEqual( 0.6666666666666666 );
+
+              expect( quotient( 0.02, 0.03 ) ).toEqual( 0.6666666666666666 );
+
+              expect( quotient( 10, 3 ) ).toEqual( 3.3333333333333333 );
+
+
           } );
+} );
+
+describe( "product", () =>
+{
+    test( "product (is a safe multiplication)",
+          () =>
+          {
+              expect( product( 0, 0 ) ).toEqual( 0 );
+
+              expect( product( 1, 0 ) ).toEqual( 0 );
+
+              expect( product( 0, 1 ) ).toEqual( 0 );
+
+              expect( product( 2, 3 ) ).toEqual( 6 );
+
+              expect( product( 2, 2, 2 ) ).toEqual( 8 );
+
+              expect( product( 2, 2, 2, 2 ) ).toEqual( 16 );
+
+              expect( product( 7, 6, 3 ) ).toEqual( 126 );
+
+              expect( product( 7, 6, 3, 7 ) ).toEqual( 882 );
+
+              expect( product( 7, 6, 3, 7, 2 ) ).toEqual( 1764 );
+
+              expect( product( 7, 6, 3, 7, 2, 11 ) ).toEqual( 19_404 );
+          } );
+
+    test( "product can multiply 'real' numbers",
+          () =>
+          {
+              // halves
+              expect( product( 0.5, 8 ) ).toEqual( 4 );
+
+              expect( product( 0.5, 0.8 ) ).toEqual( 0.4 );
+
+              expect( product( 0.5, 0.08 ) ).toEqual( 0.04 );
+
+              expect( product( 0.5, 0.0000008 ) ).toEqual( 0.0000004 );
+
+
+              expect( product( 0.5, 7 ) ).toEqual( 3.5 );
+
+              expect( product( 0.5, 0.7 ) ).toEqual( 0.35 );
+
+              expect( product( 0.5, 0.07 ) ).toEqual( 0.035 );
+
+              expect( product( 0.5, 0.007 ) ).toEqual( 0.0035 );
+
+              expect( product( 0.5, 0.0007 ) ).toEqual( 0.00035 );
+
+              expect( product( 0.5, 0.0000007 ) ).toEqual( 0.00000035 );
+
+
+              // eighths and three-eighths
+              expect( product( 0.125, 8 ) ).toEqual( 1 );
+
+              expect( product( 0.375, 8 ) ).toEqual( 3 );
+
+              expect( product( 0.375, 0.8 ) ).toEqual( 0.3 );
+
+              expect( product( 0.375, 0.08 ) ).toEqual( 0.03 );
+
+
+              // sixteenths
+              expect( product( 0.0625, 16 ) ).toEqual( 1 );
+
+              /*
+               expect( product( 0, 1 ) ).toEqual( 0 );
+
+               expect( product( 2, 3 ) ).toEqual( 6 );
+
+               expect( product( 2, 2, 2 ) ).toEqual( 8 );
+
+               expect( product( 2, 2, 2, 2 ) ).toEqual( 16 );
+
+               expect( product( 7, 6, 3 ) ).toEqual( 126 );
+               */
+          } );
+
 } );
 
 describe( "rounding", () =>
@@ -347,4 +461,30 @@ describe( "rounding", () =>
           {
           } );
 
+} );
+
+describe( "Rational Numbers", () =>
+{
+    test( "Rationals are reduced to common form",
+          () =>
+          {
+              const twoFourths = new Rational( 2, 4 );
+
+              expect( twoFourths.toString() ).toEqual( "1/2" );
+
+              const numerators = range( 1, 23 );
+              const denominators = range( 1, 23 );
+
+              let rationals = [];
+
+              for( let numerator of numerators )
+              {
+                  for( let denominator of denominators )
+                  {
+                      rationals.push( new Rational( numerator, denominator ) );
+                  }
+              }
+
+              console.log( rationals.map( r => r.toString() ) );
+          } );
 } );

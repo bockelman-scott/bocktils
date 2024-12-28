@@ -1430,7 +1430,7 @@ const $scope = constants?.$scope || function()
 
         const dflt = isNumber( pDefault ) || isString( pDefault ) ? pDefault : 0;
 
-        const options = Object.assign( {}, (isNonNullObject( pOptions ) ? pOptions : (isNonNullObject( pDefault ) ? pDefault : pOptions)) || calculateDecimalSymbols() );
+        const options = populateOptions( (isObject( pDefault ) ? pDefault : pOptions), DEFAULT_NUMBER_SYMBOLS );
 
         const type = typeof input;
 
@@ -2158,8 +2158,8 @@ const $scope = constants?.$scope || function()
 
     const DEFAULT_VALID_NUMBER_OPTIONS = lock(
         {
-            minimumValue: Number.MIN_VALUE,
-            maximumValue: Number.MAX_VALUE,
+            minimumValue: Number.NEGATIVE_INFINITY,
+            maximumValue: Number.POSITIVE_INFINITY,
             ...DEFAULT_NUMBER_SYMBOLS
         } );
 
@@ -2175,11 +2175,11 @@ const $scope = constants?.$scope || function()
      */
     const isValidNumber = function( pNum, pOptions = DEFAULT_VALID_NUMBER_OPTIONS )
     {
-        const options = Object.assign( Object.assign( {}, DEFAULT_VALID_NUMBER_OPTIONS ), pOptions || {} );
+        const options = populateOptions( pOptions, DEFAULT_VALID_NUMBER_OPTIONS );
 
-        const minValue = Math.max( Number.MIN_VALUE, (0 === pOptions?.minimumValue ? 0 : options.minimumValue) );
+        const minValue = Math.max( Number.NEGATIVE_INFINITY, (0 === pOptions?.minimumValue ? 0 : options.minimumValue) );
 
-        const maxValue = Math.min( Number.MAX_VALUE, (0 === pOptions?.maximumValue ? 0 : options.maximumValue) );
+        const maxValue = Math.min( Number.POSITIVE_INFINITY, (0 === pOptions?.maximumValue ? 0 : options.maximumValue) );
 
         // if the argument isn't defined, is null, or is not a numeric type or instance of Number, it is not valid, return false
         if ( _ud === typeof pNum || null == pNum || !([_num, _big].includes( typeof pNum ) || (_obj === typeof pNum && pNum instanceof Number)) )
