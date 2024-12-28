@@ -488,3 +488,66 @@ describe( "Rational Numbers", () =>
               console.log( rationals.map( r => r.toString() ) );
           } );
 } );
+
+describe( "Rational Addition", () =>
+{
+    test( "Rationals can be added",
+          () =>
+          {
+              expect( new Rational( 1, 2 ).add( new Rational( 1, 2 ) ).toString() ).toEqual( "1" );
+
+              expect( new Rational( 1, 2 ).add( new Rational( 1, 4 ) ).toString() ).toEqual( "3/4" );
+
+              expect( new Rational( 3, 16 ).add( new Rational( 1, 4 ) ).toString() ).toEqual( "7/16" );
+
+              expect( new Rational( 1, 2 ).add( new Rational( 1, 4 ).add( .25 ) ).toString() ).toEqual( "1" );
+
+          } );
+} );
+
+describe( "Rational Subtraction", () =>
+{
+    test( "Rationals can be subtracted",
+          () =>
+          {
+              expect( new Rational( 1, 2 ).subtract( new Rational( 1, 2 ) ).toString() ).toEqual( "0" );
+
+              expect( new Rational( 1, 2 ).subtract( new Rational( 1, 4 ) ).toString() ).toEqual( "1/4" );
+
+              expect( new Rational( 3, 16 ).subtract( new Rational( 1, 4 ) ).toString() ).toEqual( "-1/16" );
+
+              expect( (new Rational( 1, 4 ).subtract( 0.25 )).toString() ).toEqual( "0" );
+
+              expect( (new Rational( 1, 2 ).subtract( new Rational( 1, 4 ) )).subtract( .25 ).toString() ).toEqual( "0" );
+
+          } );
+} );
+
+
+describe( "Rational Multiplication", () =>
+{
+    test( "Rationals can be multiplied",
+          () =>
+          {
+              expect( new Rational( 1, 2 ).multiply( new Rational( 1, 2 ) ).toString() ).toEqual( "1/4" );
+
+              expect( new Rational( 1, 2 ).multiply( new Rational( 1, 4 ) ).toString() ).toEqual( "1/8" );
+
+              expect( new Rational( 3, 16 ).multiply( new Rational( 1, 4 ) ).toString() ).toEqual( "3/64" );
+
+              expect( new Rational( 3, 16 ).multiply( new Rational( 1, 2 ) ).toString() ).toEqual( "3/32" );
+
+              expect( new Rational( 3, 16 ).multiply( new Rational( 1, 3 ) ).toString() ).toEqual( "1/16" );
+
+              expect( new Rational( 3, 16 ).multiply( new Rational( 0 ) ).toString() ).toEqual( "0" );
+          } );
+} );
+
+describe( "Rational Division", () =>
+{
+    test( "Rationals can be divided",
+          () =>
+          {
+              expect( new Rational( 1, 2 ).divide( new Rational( 1, 2 ) ).toString() ).toEqual( "1" );
+          } );
+} );

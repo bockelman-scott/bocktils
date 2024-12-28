@@ -928,9 +928,9 @@ const $scope = constants?.$scope || function()
 
         #options;
 
-        constructor( pNumerator, pDenominator, pOptions = DEFAULT_RATIONAL_OPTIONS )
+        constructor( pNumerator, pDenominator = 1, pOptions = DEFAULT_RATIONAL_OPTIONS )
         {
-            super( quotient( pNumerator, pDenominator ) );
+            super( quotient( pNumerator, 0 === pDenominator ? 1 : pDenominator ) );
 
             this.#options = populateOptions( pOptions, DEFAULT_RATIONAL_OPTIONS );
 
@@ -972,6 +972,11 @@ const $scope = constants?.$scope || function()
 
         toString()
         {
+            if ( 1 === this.denominator || this.isZero() )
+            {
+                return asString( this.numerator );
+            }
+
             return asString( this.numerator ) + "/" + asString( this.denominator );
         }
 
@@ -990,6 +995,11 @@ const $scope = constants?.$scope || function()
             const me = Rational.fromDecimal;
 
             let num = toDecimal( resolveNullOrNaN( pDecimal ) );
+
+            if( isZero( num ) )
+            {
+                return new Rational( 0, 1 );
+            }
 
             if ( isNanOrInfinite( num ) )
             {
@@ -1060,6 +1070,11 @@ const $scope = constants?.$scope || function()
             return Rational.nearestRational( pNum, this );
         }
 
+        isZero()
+        {
+            return 0 === Math.abs( this.numerator );
+        }
+
         reciprocal()
         {
             return new Rational( this.denominator, this.numerator );
@@ -1067,9 +1082,32 @@ const $scope = constants?.$scope || function()
 
         add( pNum )
         {
-            const other = pNum instanceof this[Symbol.species] ? pNum : Rational.fromDecimal( toDecimal( pNum ) );
+            const other = pNum instanceof this.constructor ? pNum : Rational.fromDecimal( toDecimal( pNum ) );
 
-            smallestCommonFactor( this.denominator, other.denominator );
+            if ( this.denominator === other.denominator )
+            {
+                return new Rational( this.numerator + other.numerator, this.denominator );
+            }
+
+            if ( other.isZero() )
+            {
+                return this;
+            }
+
+            if ( this.isZero() )
+            {
+                return other;
+            }
+
+            const newDenominator = product( this.denominator, other.denominator );
+
+            const thisNumerator = product( this.numerator, quotient( newDenominator, this.denominator ) );
+            const otherNumerator = product( other.numerator, quotient( newDenominator, other.denominator ) );
+
+            const thisRational = new Rational( thisNumerator, newDenominator );
+            const otherRational = new Rational( otherNumerator, newDenominator );
+
+            return thisRational.add( otherRational );
         }
 
         subtract( pNum )
@@ -1079,7 +1117,7 @@ const $scope = constants?.$scope || function()
 
         multiply( pNum )
         {
-            const other = pNum instanceof this[Symbol.species] ? pNum : Rational.fromDecimal( toDecimal( pNum ) );
+            const other = pNum instanceof this.constructor ? pNum : Rational.fromDecimal( toDecimal( pNum ) );
 
             return new Rational( this.numerator * other.numerator, this.denominator * other.denominator );
         }
