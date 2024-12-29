@@ -3629,8 +3629,10 @@ const $scope = constants?.$scope || function()
             case RANGE_INCREMENT_OPTION.SEQUENCE_PLUS_LAST_SKIP:
                 return { increment: sequenceLength + (sequenceLength > 1 ? _calculateLastSkip() : 0) + 1, power };
 
-            case RANGE_INCREMENT_OPTION.DERIVE:
             case RANGE_INCREMENT_OPTION.INCREMENT:
+                return { increment: Math.min( 1, Math.pow( 10, power ) ), power };
+
+            case RANGE_INCREMENT_OPTION.DERIVE:
             default:
                 return { increment: Math.pow( 10, power ), power };
         }
