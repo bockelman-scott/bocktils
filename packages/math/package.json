@@ -1,8 +1,8 @@
 {
   "name": "@toolbocks/math",
   "version": "1.0.0",
-  "description": "",
-  "main": "./src/MathUtils.cjs",
+  "description": "This package exports modules providing the most useful basic mathematical operations<br>often necessary in applications handling financial data or engineering specifications.<br>",
+  "main": "./index.js",
   "dependencies": {
     "@toolbocks/core": "^1.0.0"
   },

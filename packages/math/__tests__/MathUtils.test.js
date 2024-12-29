@@ -260,18 +260,6 @@ describe( "product", () =>
 
               // sixteenths
               expect( product( 0.0625, 16 ) ).toEqual( 1 );
-
-              /*
-               expect( product( 0, 1 ) ).toEqual( 0 );
-
-               expect( product( 2, 3 ) ).toEqual( 6 );
-
-               expect( product( 2, 2, 2 ) ).toEqual( 8 );
-
-               expect( product( 2, 2, 2, 2 ) ).toEqual( 16 );
-
-               expect( product( 7, 6, 3 ) ).toEqual( 126 );
-               */
           } );
 
 } );
@@ -551,3 +539,35 @@ describe( "Rational Division", () =>
               expect( new Rational( 1, 2 ).divide( new Rational( 1, 2 ) ).toString() ).toEqual( "1" );
           } );
 } );
+
+
+describe( "sum", () =>
+{
+    const { sum } = mathUtils;
+
+    test( "sums are limited to the appropriate number of significant digits",
+          () =>
+          {
+              expect( 0.1 + 0.2 ).toEqual( 0.30000000000000004 );
+              expect( sum( 0.1, 0.2 ) ).toEqual( 0.3 );
+
+              expect( 0.1 + 0.2 + 0.07 ).toEqual(0.37000000000000005);
+              expect( sum( 0.1, 0.2, 0.07 ) ).toEqual( 0.37 );
+
+          } );
+});
+
+
+describe( "difference", () =>
+{
+    const { difference } = mathUtils;
+
+    test( "differences are limited to the appropriate number of significant digits",
+          () =>
+          {
+              expect( 0.3 - 0.2 ).toEqual( 0.09999999999999998 );
+              expect( difference( 0.3, 0.2 ) ).toEqual( 0.1 );
+
+
+          } );
+});
