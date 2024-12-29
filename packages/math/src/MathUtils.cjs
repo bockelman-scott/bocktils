@@ -27,14 +27,14 @@
  * <ul>
  *     <li>
  *         resolveNullOrNaN - a function that is guaranteed to return a numeric value<br>
- *         regardless of the type of or lack of input
+ *         regardless of the type of (or lack of) input
  *         <br>
  *     </li>
  *     <li>
  *         isBetween - a function that determines if a value falls between any two other values<br>
  *     </li>
  *     <li>
- *        calculatePower - a function that returns logN(x) where N can be any base<br>
+ *         calculatePower - a function that returns logN(x) where N can be any base<br>
  *     </li>
  *     <li>
  *         toSignificantDigits - a function that will round a value to the number of significant digits<br>
@@ -193,7 +193,10 @@ const $scope = constants?.$scope || function()
     const ERROR_MSG_DIVISION_BY_ZERO = "Division by Zero Detected.  Returning Default Quotient";
 
     /**
-     * The maximum value used to reduce inaccuracies in division, multiplication, addition, and subtraction of floating-point values
+     * The maximum value used to reduce inaccuracies<br>
+     * in division, multiplication, addition, and subtraction<br>
+     * of floating-point values
+     *
      * @type {number}
      * @private
      */
@@ -477,7 +480,12 @@ const $scope = constants?.$scope || function()
             s = asString( int, true ) + (dec.padEnd( exp, "0" ).slice( 0, exp ));
         }
 
-        return { int: parseInt( s ), exp, original: num };
+        return {
+            int: parseInt( s ),
+            exp,
+            original: num,
+            useBigInt: (s.length >= (asString( Number.MAX_SAFE_INTEGER ).length + 1) || parseInt( s ) >= (2 ** 53) - 1)
+        };
     }
 
     /**
@@ -519,9 +527,17 @@ const $scope = constants?.$scope || function()
      */
     const calculateSignificantDigits = function( ...pNum )
     {
+        const DEFAULT_EXPONENT = 0;
+
         const nums = asArray( pNum ).map( toDecimal ).filter( e => !isNanOrInfinite( e ) );
 
-        const info = nums.map( e => integerInfo( e )?.exp || 0 );
+        const getSignificantDigitsInfo = ( num ) =>
+        {
+            const info = integerInfo( num ) || { original: num, exp: DEFAULT_EXPONENT };
+            return (info.exp || DEFAULT_EXPONENT) + calculatePower( Math.ceil( info.original || 0 ) );
+        };
+
+        const info = nums.map( getSignificantDigitsInfo );
 
         return Math.abs( Math.max( ...info ) );
     };
@@ -600,7 +616,7 @@ const $scope = constants?.$scope || function()
         const integers = _integers( dividend, divisor );
 
         dividend = (integers[0]?.int || 0) * (isBigInt( (integers[0]?.int || 0) ) ? BigInt( MAX_FACTOR ) : MAX_FACTOR);
-        divisor = isBigInt( dividend ) ? (BigInt( (integers[1]?.int || 1) )) : (integers[1]?.int || 1);
+        divisor = isBigInt( dividend ) ? (BigInt( (integers[1]?.int || 1n) )) : (integers[1]?.int || 1);
 
         const maxFactor = (isBigInt( dividend ) || isBigInt( divisor )) ? BigInt( MAX_FACTOR ) : MAX_FACTOR;
 
@@ -705,7 +721,7 @@ const $scope = constants?.$scope || function()
         const significantDigits = calculateSignificantDigits( ...([...nums].concat( minuend )) );
 
         return toSignificantDigits( nums.reduce( ( a, b ) => a - b, minuend ), significantDigits );
-    }
+    };
 
     /**
      * Instances of this class represent and implement<br>
@@ -1558,9 +1574,12 @@ const $scope = constants?.$scope || function()
      *
      * @property {number} [defaultDenominator=1] The value to use as the denominator, when the specified value is 0, NaN, or Infinity
      * @property {number} [defaultNumerator=1] The value to use as the numerator, when the specified value is NaN or Infinity
-     * @property {number} [largestAllowedDenominator=1024] The largest value to allow for a denominator.<br>
-     *                                                     Instances that would require a larger denominator
-     *                                                     are coerced to the nearest 1/(this_value)
+     * @property {number} [largestAllowedDenominator=16384] The largest value to allow for a denominator.<br>
+     *                                                      Instances that would require a larger denominator<br>
+     *                                                      are coerced to the nearest 1/(this_value).<br><br>
+     *                                                      Adjusting this value facilitates a tradeoff between accuracy and performance.<br>
+     *                                                      The smaller the value, the less accurate some values can be represented.<br>
+     *                                                      The larger the value, improved accuracy comes at the cost of slightly higher computational time and costs.<br>
      */
 
     /**
@@ -1574,7 +1593,7 @@ const $scope = constants?.$scope || function()
         {
             defaultDenominator: 1,
             defaultNumerator: 1,
-            largestAllowedDenominator: 1024
+            largestAllowedDenominator: 16_384
         };
 
     /**
@@ -1591,6 +1610,9 @@ const $scope = constants?.$scope || function()
         #numerator;
         #denominator;
         #commonFactor;
+
+        #actualValue;
+        #sign;
 
         #options;
 
@@ -1620,11 +1642,16 @@ const $scope = constants?.$scope || function()
 
             this.#options = populateOptions( pOptions, DEFAULT_RATIONAL_OPTIONS );
 
+            const actual = super.valueOf();
+
+            this.#sign = Math.sign( actual );
+            this.#sign = 0 === this.#sign ? 1 : this.#sign;
+
             const integers = _integers( resolveNullOrNaN( pNumerator, this.#options.defaultNumerator ),
                                         resolveNullOrNaN( pDenominator, this.#options.defaultDenominator ) );
 
-            let numerator = integers[0].int;
-            let denominator = integers[1].int;
+            let numerator = Math.abs( integers[0].int );
+            let denominator = Math.abs( integers[1].int );
 
             if ( 0 === denominator )
             {
@@ -1640,16 +1667,79 @@ const $scope = constants?.$scope || function()
                 }
             }
 
-            this.#commonFactor = smallestCommonFactor( numerator, denominator );
-            this.#commonFactor = Math.min( this.#commonFactor, resolveNullOrNaN( this.#options.largestAllowedDenominator, DEFAULT_RATIONAL_OPTIONS.largestAllowedDenominator ) );
+            const largestAllowedDenominator = resolveNullOrNaN( this.#options.largestAllowedDenominator, DEFAULT_RATIONAL_OPTIONS.largestAllowedDenominator );
 
-            this.#numerator = Math.round( numerator / this.#commonFactor );
-            this.#denominator = Math.round( denominator / this.#commonFactor );
+            this.#commonFactor = gcd( numerator, denominator );
+            this.#commonFactor = Math.min( this.#commonFactor, largestAllowedDenominator );
+
+            while ( this.#commonFactor >= 2 && numerator > 1 && denominator > 1 && this.#commonFactor <= largestAllowedDenominator )
+            {
+                numerator = Math.abs( Math.round( numerator / this.#commonFactor ) );
+                denominator = Math.abs( Math.round( denominator / this.#commonFactor ) );
+
+                this.#commonFactor = gcd( numerator, denominator );
+                this.#commonFactor = Math.min( this.#commonFactor, largestAllowedDenominator );
+            }
+
+            numerator = Math.abs( Math.round( numerator / this.#commonFactor ) );
+            denominator = Math.abs( Math.round( denominator / this.#commonFactor ) );
+
+            while ( denominator > largestAllowedDenominator && denominator > 1 && numerator > 0 )
+            {
+                numerator = Math.round( numerator / 2 );
+                denominator = Math.round( denominator / 2 );
+
+                if ( 0 === denominator )
+                {
+                    throw new IllegalArgumentError( "Cannot reduce denominator below 1 while adjusting to the largest allowed denominator." );
+                }
+            }
+
+            this.#numerator = Math.abs( Math.round( numerator ) );
+            this.#denominator = Math.abs( Math.round( denominator ) );
+
+            if ( this.#numerator === this.#denominator )
+            {
+                this.#numerator = 1;
+                this.#denominator = 1;
+            }
+
+            this.#actualValue = resolveNullOrNaN( actual, this.#numerator / this.#denominator );
         }
 
+        /**
+         * Retrieves the options used to create this instance<br>
+         * @see {@link RationalOptions}
+         *
+         * @return {RationalOptions} The options object used to create this instance
+         */
         get options()
         {
             return populateOptions( this.#options, DEFAULT_RATIONAL_OPTIONS );
+        }
+
+        /**
+         * Returns -1 if this instance represents a value less than zero<br>
+         * or 1 if this rational represents a value greater than or equal to zero<br>
+         *
+         * @returns {number} -1 if this instance represents a value less than zero<br>
+         * or 1 if this rational represents a value greater than or equal to zero<br>
+         */
+        get sign()
+        {
+            return this.#sign;
+        }
+
+        /**
+         * Returns the absolute difference between the actual decimal value
+         * and the value represented by this instance.
+         *
+         * @return {number} The absolute value of the discrepancy<br>
+         * between the decimal value and the value represented by this instance
+         */
+        get discrepancy()
+        {
+            return Math.abs( this.#actualValue - quotient( this.numerator, this.denominator ) );
         }
 
         /**
@@ -1670,7 +1760,7 @@ const $scope = constants?.$scope || function()
          */
         get numerator()
         {
-            return asInt( this.#numerator );
+            return asInt( this.#numerator ) * this.sign;
         }
 
         /**
@@ -1680,7 +1770,7 @@ const $scope = constants?.$scope || function()
          */
         get denominator()
         {
-            return asInt( this.#denominator );
+            return Math.abs( asInt( this.#denominator ) );
         }
 
         /**
@@ -1694,7 +1784,7 @@ const $scope = constants?.$scope || function()
          */
         get commonFactor()
         {
-            return asInt( this.#commonFactor );
+            return Math.abs( asInt( this.#commonFactor ) );
         }
 
         /**
@@ -1707,7 +1797,7 @@ const $scope = constants?.$scope || function()
          */
         toString()
         {
-            if ( 1 === this.denominator || this.isZero() )
+            if ( 1 === this.denominator || this.isZero() || (Math.abs( this.numerator ) === Math.abs( this.denominator )) )
             {
                 return asString( this.numerator );
             }
@@ -1844,7 +1934,7 @@ const $scope = constants?.$scope || function()
             {
                 return Rational.ZERO;
             }
-            return new Rational( this.denominator, this.numerator, this.options );
+            return new Rational( Math.abs( this.denominator ) * this.sign, Math.abs( this.numerator ), this.options );
         }
 
         /**
@@ -1882,10 +1972,7 @@ const $scope = constants?.$scope || function()
             const thisNumerator = product( this.numerator, quotient( newDenominator, this.denominator ) );
             const otherNumerator = product( other.numerator, quotient( newDenominator, other.denominator ) );
 
-            const thisRational = new Rational( thisNumerator, newDenominator );
-            const otherRational = new Rational( otherNumerator, newDenominator );
-
-            return thisRational.add( otherRational );
+            return new Rational( (thisNumerator + otherNumerator), newDenominator );
         }
 
         /**
@@ -1900,30 +1987,63 @@ const $scope = constants?.$scope || function()
          */
         subtract( pNum )
         {
-            return this.add( -pNum );
+            const other = pNum instanceof this.constructor ? pNum : Rational.fromDecimal( toDecimal( pNum ) );
+
+            return this.add( other.negate() );
         }
 
         /**
-         * Returns a new Rational instance representing the product of this value and the specified value.<br>
+         *
+         * @returns {Rational}
+         */
+        negate()
+        {
+            return new Rational( -this.numerator, this.denominator, this.options );
+        }
+
+        /**
+         * Returns a new Rational instance representing the product of this value and the specified values.<br>
          * <br>
-         * The provided value can be another Rational instance or a number.<br>
+         * The provided values can be instances of Rational or numbers.<br>
          * <br>
-         * @param {number|Rational} pNum - The value to multiply by the current instance.<br>
-         * Can either be a number or an instance of the Rational class.<br>
+         * @param {...(number|Rational)} pNums - One or more values (or an array of values) to multiply by the current instance.<br>
+         * Each can be either a number or an instance of the Rational class.<br>
          *
          * @return {object} A new Rational instance representing the product of the current instance and the specified value.
          */
-        multiply( pNum )
+        multiply( ...pNums )
         {
-            const other = pNum instanceof this.constructor ? pNum : Rational.fromDecimal( toDecimal( pNum ) );
+            let nums = asArray( pNums ).flat( Infinity ).map( n => Rational.from( toDecimal( n ) ) );
 
-            return new Rational( this.numerator * other.numerator, this.denominator * other.denominator );
+            let other = Rational.ONE;
+
+            let result = this;
+
+            switch ( nums.length )
+            {
+                case 0:
+                    return result;
+
+                case 1:
+                    other = Rational.from( nums[0] );
+                    return new Rational( this.numerator * other.numerator, this.denominator * other.denominator );
+
+                default:
+                    other = Rational.from( nums.shift() );
+                    result = new Rational( this.numerator * other.numerator, this.denominator * other.denominator );
+                    return result.multiply( ...nums );
+            }
+        }
+
+        static from( pNum )
+        {
+            return pNum instanceof this.constructor ? pNum : Rational.fromDecimal( toDecimal( pNum ) );
         }
 
         /**
          * Returns a new Rational instance representing the result of dividing this value by the specified value.<br>
          * <br>
-         * This implementation multiplies the specified value by the reciprocal of this value.<br>
+         * This implementation multiplies the reciprocal of the specified value by this value.<br>
          * <br>
          *
          * @param {number|Rational} pNum - The number by which to divide the current value.
@@ -1932,7 +2052,9 @@ const $scope = constants?.$scope || function()
          */
         divide( pNum )
         {
-            return this.reciprocal().multiply( pNum );
+            const other = pNum instanceof this.constructor ? pNum : Rational.fromDecimal( toDecimal( pNum ) );
+
+            return this.multiply( other.reciprocal() );
         }
     }
 
@@ -2164,6 +2286,7 @@ const $scope = constants?.$scope || function()
             asFloat,
             resolveNullOrNaN,
             isBetween,
+            decimalExpansion,
             toSignificantDigits,
             product,
             quotient,

@@ -11,6 +11,8 @@ const { range } = arrayUtils;
 const {
     resolveNullOrNaN,
     isBetween,
+    gcd,
+    decimalExpansion,
     toSignificantDigits,
     product,
     quotient,
@@ -123,8 +125,11 @@ describe( "toSignificantDigits", () =>
     test( "significant digits - 1",
           () =>
           {
-              const n = toSignificantDigits( 4.0000000000000003e-7, 7 );
-              console.log( n );
+              let n = toSignificantDigits( 4.0000000000000003e-7, 7 );
+
+              expect( decimalExpansion( n ) ).toEqual( "0.0000004" );
+
+              expect( n ).toEqual( parseFloat( decimalExpansion( n ) ) );
           } );
 } );
 
@@ -453,6 +458,23 @@ describe( "rounding", () =>
 
 describe( "Rational Numbers", () =>
 {
+    function generateRationals( pNumerators, pDenominators, pOptions )
+    {
+        let options = pOptions || {};
+
+        let rationals = [];
+
+        for( let numerator of pNumerators )
+        {
+            for( let denominator of pDenominators )
+            {
+                rationals.push( new Rational( numerator, denominator, options ) );
+            }
+        }
+
+        return rationals;
+    }
+
     test( "Rationals are reduced to common form",
           () =>
           {
@@ -463,17 +485,67 @@ describe( "Rational Numbers", () =>
               const numerators = range( 1, 23 );
               const denominators = range( 1, 23 );
 
-              let rationals = [];
+              let rationals = generateRationals( numerators, denominators );
 
-              for( let numerator of numerators )
-              {
-                  for( let denominator of denominators )
+              expect( rationals.every( e => gcd( e.numerator, e.denominator ) < 2 ) ).toBe( true );
+          } );
+
+    test( "Rationals are approximated to the largest allowed denominator",
+          () =>
+          {
+              let numerators = range( 23, 33 );
+              let denominators = range( 2000, 2100 );
+
+              let options =
                   {
-                      rationals.push( new Rational( numerator, denominator ) );
-                  }
-              }
+                      defaultDenominator: 1,
+                      defaultNumerator: 1,
+                      largestAllowedDenominator: 2048
+                  };
 
-              console.log( rationals.map( r => r.toString() ) );
+              let rationals = generateRationals( numerators, denominators, options );
+
+              expect( rationals.every( e => e.denominator <= options.largestAllowedDenominator ) ).toBe( true );
+
+              expect( rationals.every( e => e.discrepancy <= 0.0005 ) ).toBe( true );
+
+          } );
+
+    test( "Rationals are approximated to greater accuracy when the largest allowed denominator is increased",
+          () =>
+          {
+              let powersOfTwo = [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
+
+              let maximumDiscrepancy = 1;
+              let lastDiscrepancy = maximumDiscrepancy;
+
+              for( let power of powersOfTwo )
+              {
+                  let numerators = range( 23, 33 );
+
+                  let denominators = range( 2 ** power - 10, 2 ** power + 10 );
+
+                  let options =
+                      {
+                          defaultDenominator: 1,
+                          defaultNumerator: 1,
+                          largestAllowedDenominator: 2 ** power
+                      };
+
+                  let rationals = generateRationals( numerators, denominators, options );
+
+                  expect( rationals.every( e => e.denominator <= options.largestAllowedDenominator ) ).toBe( true );
+
+                  rationals = rationals.map( e => e.discrepancy );
+
+                  maximumDiscrepancy = rationals.reduce( ( p, e ) => Math.max( p, e ), 0 );
+
+                  // console.log( maximumDiscrepancy, lastDiscrepancy, power, options.largestAllowedDenominator );
+
+                  expect( maximumDiscrepancy ).toBeLessThan( lastDiscrepancy );
+
+                  lastDiscrepancy = maximumDiscrepancy;
+              }
           } );
 } );
 
@@ -489,6 +561,7 @@ describe( "Rational Addition", () =>
               expect( new Rational( 3, 16 ).add( new Rational( 1, 4 ) ).toString() ).toEqual( "7/16" );
 
               expect( new Rational( 1, 2 ).add( new Rational( 1, 4 ).add( .25 ) ).toString() ).toEqual( "1" );
+
 
           } );
 } );
@@ -508,6 +581,19 @@ describe( "Rational Subtraction", () =>
 
               expect( (new Rational( 1, 2 ).subtract( new Rational( 1, 4 ) )).subtract( .25 ).toString() ).toEqual( "0" );
 
+
+              expect( new Rational( -1, 2 ).subtract( new Rational( 1, 2 ) ).toString() ).toEqual( "-1" );
+              expect( new Rational( -1, 2 ).subtract( new Rational( -1, 2 ) ).toString() ).toEqual( "0" );
+              expect( new Rational( -3, 4 ).subtract( new Rational( 1, 4 ) ).toString() ).toEqual( "-1" );
+              expect( new Rational( -5, 6 ).subtract( new Rational( 1, 3 ) ).toString() ).toEqual( "-7/6" );
+
+              expect( new Rational( 1, 3 ).subtract( new Rational( -2, 3 ) ).toString() ).toEqual( "1" );
+              expect( new Rational( 3, 4 ).subtract( new Rational( -1, 4 ) ).toString() ).toEqual( "1" );
+              expect( new Rational( -2, 7 ).subtract( new Rational( -3, 7 ) ).toString() ).toEqual( "1/7" );
+              expect( new Rational( 5, 12 ).subtract( new Rational( -7, 12 ) ).toString() ).toEqual( "1" );
+
+              expect( new Rational( -1, 8 ).subtract( 0.125 ).toString() ).toEqual( "-1/4" );
+              // expect( (new Rational( 2, 5 ).subtract( new Rational( -3, 10 ) )).subtract( -0.1 ).toString() ).toEqual( "1" );
           } );
 } );
 
@@ -528,6 +614,14 @@ describe( "Rational Multiplication", () =>
               expect( new Rational( 3, 16 ).multiply( new Rational( 1, 3 ) ).toString() ).toEqual( "1/16" );
 
               expect( new Rational( 3, 16 ).multiply( new Rational( 0 ) ).toString() ).toEqual( "0" );
+
+
+              expect( new Rational( 1, 2 ).multiply( new Rational( 1, 2 ), new Rational( 1, 2 ) ).toString() ).toEqual( "1/8" );
+              expect( new Rational( 1, 3 ).multiply( new Rational( 1, 4 ), new Rational( 2, 5 ) ).toString() ).toEqual( "1/30" );
+
+              expect( new Rational( 2, 7 ).multiply( new Rational( 1, 2 ), new Rational( 3, 4 ) ).toString() ).toEqual( "3/28" );
+
+              expect( new Rational( 5, 9 ).multiply( new Rational( 1, 3 ), new Rational( 2, 5 ), new Rational( 3, 7 ) ).toString() ).toEqual( "2/63" );
           } );
 } );
 
@@ -537,6 +631,24 @@ describe( "Rational Division", () =>
           () =>
           {
               expect( new Rational( 1, 2 ).divide( new Rational( 1, 2 ) ).toString() ).toEqual( "1" );
+
+
+              expect( new Rational( 1, 2 ).divide( new Rational( 1, 4 ) ).toString() ).toEqual( "2" );
+              expect( new Rational( 3, 4 ).divide( new Rational( 2, 3 ) ).toString() ).toEqual( "9/8" );
+
+              expect( new Rational( 5, 6 ).divide( new Rational( 2, 3 ) ).toString() ).toEqual( "5/4" );
+
+              expect( new Rational( 0, 1 ).divide( new Rational( 3, 5 ) ).toString() ).toEqual( "0" );
+
+              expect( new Rational( 5, 6 ).divide( new Rational( 1, 1 ) ).toString() ).toEqual( "5/6" );
+
+              expect( new Rational( -1, 2 ).divide( new Rational( 1, 3 ) ).toString() ).toEqual( "-3/2" );
+
+              expect( new Rational( 7, 8 ).divide( new Rational( -3, 4 ) ).toString() ).toEqual( "-7/6" );
+
+              const q = new Rational( 1, 3 ).divide( new Rational( 0, 1 ) );
+
+              expect( q.toString() ).toEqual( "0" );
           } );
 } );
 
@@ -551,11 +663,18 @@ describe( "sum", () =>
               expect( 0.1 + 0.2 ).toEqual( 0.30000000000000004 );
               expect( sum( 0.1, 0.2 ) ).toEqual( 0.3 );
 
-              expect( 0.1 + 0.2 + 0.07 ).toEqual(0.37000000000000005);
+              expect( 0.1 + 0.2 + 0.07 ).toEqual( 0.37000000000000005 );
               expect( sum( 0.1, 0.2, 0.07 ) ).toEqual( 0.37 );
 
+              expect( sum( 0.1234, 0.8766 ) ).toEqual( 1.0 );
+              expect( sum( 1.1, -1.1 ) ).toEqual( 0 );
+              expect( sum( -0.1, -0.2, -0.3 ) ).toEqual( -0.6 );
+              expect( sum( 1e3, 2e3, 3e3 ) ).toEqual( 6000 );
+              expect( sum( 0.0001, 0.0002 ).toFixed( 6 ) ).toEqual( "0.000300" );
+              expect( sum( Number.MAX_SAFE_INTEGER, 1 ) ).toEqual( Number.MAX_SAFE_INTEGER + 1 );
+
           } );
-});
+} );
 
 
 describe( "difference", () =>
@@ -568,6 +687,18 @@ describe( "difference", () =>
               expect( 0.3 - 0.2 ).toEqual( 0.09999999999999998 );
               expect( difference( 0.3, 0.2 ) ).toEqual( 0.1 );
 
+              expect( difference( 1.5, 0.5 ) ).toEqual( 1.0 );
+              expect( difference( 10, 7.8 ) ).toEqual( 2.2 );
+              expect( difference( -1, -0.5 ) ).toEqual( -0.5 );
+              expect( difference( 5.002, 2.001 ) ).toEqual( 3.001 );
+              expect( difference( 0.3, 0.3 ) ).toEqual( 0 );
+              expect( difference( 1000, 999.999 ) ).toEqual( 0.001 );
 
+              expect( difference( 3, 1, 1 ) ).toEqual( 1 );
+              expect( difference( 10, 2, 3 ) ).toEqual( 5 );
+              expect( difference( 100, 50, 25, 10 ) ).toEqual( 15 );
+              expect( difference( 5, 2, 1, 1 ) ).toEqual( 1 );
+              expect( difference( 1.5, 0.5, 0.5 ) ).toEqual( 0.5 );
+              expect( difference( 50, 20, 10, 5, 15 ) ).toEqual( 0 );
           } );
-});
+} );
