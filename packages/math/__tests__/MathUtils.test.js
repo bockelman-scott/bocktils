@@ -130,6 +130,41 @@ describe( "toSignificantDigits", () =>
               expect( decimalExpansion( n ) ).toEqual( "0.0000004" );
 
               expect( n ).toEqual( parseFloat( decimalExpansion( n ) ) );
+
+// Test with a smaller number
+              n = toSignificantDigits( 3.14159, 3 );
+
+              expect( decimalExpansion( n ) ).toEqual( "3.14" );
+
+              expect( n ).toEqual( parseFloat( decimalExpansion( n ) ) );
+
+// Test with a larger number
+              n = toSignificantDigits( 1234567890, 5 );
+
+              expect( decimalExpansion( n ) ).toEqual( "1234600000" );
+
+              expect( n ).toEqual( parseFloat( decimalExpansion( n ) ) );
+
+// Test rounding up
+              n = toSignificantDigits( 0.000456789, 3 );
+
+              expect( decimalExpansion( n ) ).toEqual( "0.000457" );
+
+              expect( n ).toEqual( parseFloat( decimalExpansion( n ) ) );
+
+// Verify when digits don't need truncation
+              n = toSignificantDigits( 1.23, 3 );
+
+              expect( decimalExpansion( n ) ).toEqual( "1.23" );
+
+              expect( n ).toEqual( parseFloat( decimalExpansion( n ) ) );
+
+// Test edge case with 0 value
+              n = toSignificantDigits( 0, 5 );
+
+              expect( decimalExpansion( n ) ).toEqual( "0" );
+
+              expect( n ).toEqual( parseFloat( decimalExpansion( n ) ) );
           } );
 } );
 

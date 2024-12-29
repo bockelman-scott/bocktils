@@ -418,7 +418,14 @@ const $scope = constants?.$scope || function()
     {
         const sNum = lcase( asString( pScientificNotation, true ) );
 
-        const parts = sNum.split( /[eE]/i );
+        const rx = /[eE]/i;
+
+        if ( !rx.test( sNum ) )
+        {
+            return asString( sNum );
+        }
+
+        const parts = sNum.split( rx );
 
         let coefficient = parseFloat( parts[0] );
 
