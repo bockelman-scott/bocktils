@@ -186,11 +186,11 @@ describe( "quotient", () =>
 
               z = quotient( x, y, { byZero: Infinity } );
 
-              expect( z ).toEqual( 0 );
+              expect( z ).toEqual( Infinity );
 
               z = quotient( x, y, { defaultQuotient: 23 } );
 
-              expect( z ).toEqual( 23 );
+              expect( z ).toEqual( 0 );
 
               z = quotient( 0, y );
 
@@ -232,7 +232,79 @@ describe( "quotient", () =>
 
               expect( quotient( 10, 3 ) ).toEqual( 3.3333333333333333 );
 
+              expect( quotient( 9, 3 ) ).toEqual( 3 );
+              expect( quotient( 8, 4 ) ).toEqual( 2 );
+              expect( quotient( -6, 2 ) ).toEqual( -3 );
+              expect( quotient( -8, -4 ) ).toEqual( 2 );
+              expect( quotient( 8, -4 ) ).toEqual( -2 );
+              expect( quotient( 0, 5 ) ).toEqual( 0 );
+              expect( quotient( 5, 0, { byZero: 42 } ) ).toEqual( 42 );
+              expect( quotient( 5, 0, { byZero: -7 } ) ).toEqual( -7 );
+              expect( quotient( 15, 0 ) ).toEqual( 0 );
+              expect( quotient( 0.45, 0.15 ) ).toEqual( 3 );
+              expect( quotient( -0.45, 0.15 ) ).toEqual( -3 );
+              expect( quotient( 0.45, -0.15 ) ).toEqual( -3 );
+              expect( quotient( 0.45, 0, { byZero: Infinity } ) ).toEqual( Infinity );
+              expect( quotient( 2.5, 0.5 ) ).toEqual( 5 );
+              expect( quotient( 2.5, 5 ) ).toEqual( 0.5 );
+          } );
 
+    test( "quotient is more accurate than the / operator",
+          () =>
+          {
+              expect( quotient( -0.123, -1.2 ) ).toEqual( 0.1025 );
+
+              expect( quotient( -0.00456, -0.12 ) ).toEqual( 0.038 );
+              expect( quotient( -0.000789, -0.01 ) ).toEqual( 0.0789 );
+
+              expect( quotient( -0.0000123, -0.001 ) ).toEqual( 0.0123 );
+
+              expect( quotient( -1.23, -0.12 ) ).toEqual( 10.25 );
+
+              expect( quotient( -0.12, -0.00456,
+                                {
+                                    limitToSignificantDigits: true,
+                                    significantDigits: 6,
+                                } ) ).toEqual( 26.315789 ); // 26.315789
+
+              expect( quotient( -0.01, -0.000789,
+                                {
+                                    limitToSignificantDigits: true
+                                } ) ).toEqual( 12.674271 );
+
+              expect( quotient( -0.001, -0.0000123,
+                                {
+                                    limitToSignificantDigits: true
+                                } ) ).toEqual( 81.300813 );
+
+              //Cases with more extreme differences in decimal precision:
+
+              /*
+               -0.000000123 / -0.1: 0.00000123
+               -1.23 / -0.0000001: 12300000
+               */
+
+              //Mixing repeating decimals (in base 10) with negative numbers:
+
+              /*
+               -1 / -3: 0.33333...
+               -1 / 3: -0.33333...
+               1 / -3: -0.33333...
+               -2 / -3: 0.66666...
+               -1.23 / -3: 0.41
+               -1 / -0.3: 3.33333...
+               -0.1 / -3: 0.033333...
+               */
+
+              //Combined Operations with Negative Numbers and Varying Precision:
+
+              //These are crucial for testing how your library handles chained calculations and the propagation of errors.
+
+              /*
+               (-0.123 / -1.2) * -2: -0.205
+               (-1.23 * -0.12) / -0.00456: -32.280701754385966 (more precision required here for accuracy).
+               -0.1 + (-1/3) / -0.1: 3.433333...
+               */
           } );
 } );
 

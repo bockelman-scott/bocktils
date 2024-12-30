@@ -531,6 +531,8 @@ const $scope = constants?.$scope || function()
      *
      * @returns {number} The maximum significant digits among the provided numbers,
      *                   or 0 if none are valid.
+     *
+     * @alias module:MathUtils.calculateSignificantDigits
      */
     const calculateSignificantDigits = function( ...pNum )
     {
@@ -551,10 +553,15 @@ const $scope = constants?.$scope || function()
 
     /**
      * @typedef DivisionOptions
-     * @property {number} byZero The value to return if the divisor is zero (0)
+     * @property {number} [byZero=0] The value to return if the divisor is zero (0)
      * @property {number} [defaultDividend=1] The value to use as the dividend, or numerator, when the specified value is NaN or Infinity
      * @property {number} [defaultDivisor=1] The value to use as the divisor, or denominator, when the specified value is NaN or Infinity
      * @property {number} [defaultQuotient=0] The value to return if the result is NaN or Infinity
+     * @property {boolean} [limitToSignificantDigits=false] Whether to limit the return value to some number of significant digits
+     * @property {number|null} [significantDigits=null] The number of significant digits to which to limit the returned value, if limitToSignificantDigits is true.<br>
+     *                                                  If limitToSignificantDigits is false, this property has no effect on the returned value.<br>
+     *                                                  If limitToSignificantDigits is true and this property is null or not-a-number,
+     *                                                  the number of significant digits are calculated from the dividend and divisor
      */
 
     /**
@@ -565,10 +572,12 @@ const $scope = constants?.$scope || function()
      */
     const DEFAULT_DIVISION_OPTIONS =
         {
-            byZero: Infinity,
+            byZero: 0,
             defaultDividend: 1,
             defaultDivisor: 1,
             defaultQuotient: 0,
+            limitToSignificantDigits: false,
+            significantDigits: null,
         };
 
     /**
@@ -612,7 +621,7 @@ const $scope = constants?.$scope || function()
         {
             modulePrototype.reportError( new IllegalArgumentError( ERROR_MSG_DIVISION_BY_ZERO ), ERROR_MSG_DIVISION_BY_ZERO, S_WARN, modulePrototype.calculateErrorSourceName( modName, me ), pDividend, pDivisor, pOptions );
 
-            return resolveNullOrNaN( options.byZero, resolveNullOrNaN( options.defaultQuotient, 0 ) );
+            return isNumber( options.byZero ) ? options.byZero : resolveNullOrNaN( options.byZero, resolveNullOrNaN( options.defaultQuotient, 0 ) );
         }
 
         if ( 1 === divisor )
@@ -620,14 +629,40 @@ const $scope = constants?.$scope || function()
             return resolveNullOrNaN( dividend, resolveNullOrNaN( options.defaultDividend ) );
         }
 
+        const limitToSignificantDigits = !!options.limitToSignificantDigits;
+
+        const isValidSignificantDigitsOption = !(isNull( options.significantDigits ) || isNaN( options.significantDigits ) || toDecimal( options.significantDigits ) < 0);
+
+        const significantDigits = limitToSignificantDigits && isValidSignificantDigitsOption ? asInt( options.significantDigits ) : resolveNullOrNaN( calculateSignificantDigits( dividend, divisor ) );
+
         const integers = _integers( dividend, divisor );
+
+        const power = integers.map( e => e.exp ).reduce( ( a, b ) => a - b );
 
         dividend = (integers[0]?.int || 0) * (isBigInt( (integers[0]?.int || 0) ) ? BigInt( MAX_FACTOR ) : MAX_FACTOR);
         divisor = isBigInt( dividend ) ? (BigInt( (integers[1]?.int || 1n) )) : (integers[1]?.int || 1);
 
         const maxFactor = (isBigInt( dividend ) || isBigInt( divisor )) ? BigInt( MAX_FACTOR ) : MAX_FACTOR;
 
-        return resolveNullOrNaN( (dividend / divisor) / maxFactor, resolveNullOrNaN( options.defaultQuotient ) );
+        let result = dividend / divisor;
+
+        if ( power > 0 )
+        {
+            result /= (10 ** power);
+        }
+        else if ( power < 0 )
+        {
+            result *= (10 ** -power);
+        }
+
+        result /= maxFactor;
+
+        if ( limitToSignificantDigits && significantDigits > 0 )
+        {
+            result = toSignificantDigits( result, significantDigits + calculatePower( Math.ceil( result ) ) );
+        }
+
+        return resolveNullOrNaN( result, resolveNullOrNaN( options.defaultQuotient ) );
     };
 
     /**
@@ -2294,6 +2329,7 @@ const $scope = constants?.$scope || function()
             resolveNullOrNaN,
             isBetween,
             decimalExpansion,
+            calculateSignificantDigits,
             toSignificantDigits,
             product,
             quotient,
