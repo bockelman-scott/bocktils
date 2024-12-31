@@ -397,28 +397,28 @@ describe( "isNonNullObject", () =>
               expect( typeUtils.isNonNullObject( {} ) ).toBe( true );
           } );
 
-    test( "isNonNullObject({},true,{ allow_empty_object: true }) === true",
+    test( "isNonNullObject({},true,{ allowEmptyObjects: true }) === true",
           () =>
           {
-              expect( typeUtils.isNonNullObject( {}, true, { allow_empty_object: true } ) ).toBe( true );
+              expect( typeUtils.isNonNullObject( {}, true, { allowEmptyObjects: true } ) ).toBe( true );
           } );
 
-    test( "isNonNullObject({},true,{ allow_empty_object: false }) === false",
+    test( "isNonNullObject({},true,{ allowEmptyObjects: false }) === false",
           () =>
           {
-              expect( typeUtils.isNonNullObject( {}, true, { allow_empty_object: false } ) ).toBe( false );
+              expect( typeUtils.isNonNullObject( {}, true, { allowEmptyObjects: false } ) ).toBe( false );
           } );
 
-    test( "isNonNullObject({'a':null},true,{ allow_empty_object: false }) === false",
+    test( "isNonNullObject({'a':null},true,{ allowEmptyObjects: false }) === false",
           () =>
           {
-              expect( typeUtils.isNonNullObject( { "a": null }, true, { allow_empty_object: false } ) ).toBe( false );
+              expect( typeUtils.isNonNullObject( { "a": null }, true, { allowEmptyObjects: false } ) ).toBe( false );
           } );
 
-    test( "isNonNullObject({'a':1},true,{ allow_empty_object: false }) === true",
+    test( "isNonNullObject({'a':1},true,{ allowEmptyObjects: false }) === true",
           () =>
           {
-              expect( typeUtils.isNonNullObject( { "a": 1 }, true, { allow_empty_object: false } ) ).toBe( true );
+              expect( typeUtils.isNonNullObject( { "a": 1 }, true, { allowEmptyObjects: false } ) ).toBe( true );
           } );
 } );
 

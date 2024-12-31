@@ -834,12 +834,210 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
      */
 
     /**
+     * @typedef {Object} IStatefulListener
+     * @property {function(Event,...*):void} handleEvent A method to handle an event
+     */
+
+    /**
+     * This is a base class that can be extended to implement IStatefulListener<br>
+     * <br>
+     * A stateful listener is any object that implements the IStatefulListener interface.<br>
+     * That is, it simply has to have a method named "handleEvent"<br>
+     * that accepts an Event (and optionally, one or more additional arguments)<br>
+     * <br>
+     * Stateful listeners can be useful<br>
+     * when the behavior of the handler depends on some state<br>
+     * that might be maintained by the listener.<br>
+     * <br>
+     * An example might be a listener that is notified<br>
+     * when fetch requests are made and when fetch requests complete<br>
+     * and keep track of the order in which the requests were made<br>
+     * in order to either process responses in a particular order<br>
+     * or to discard all but the most recent response.<br>
+     *
+     * @class
+     */
+    class StatefulListener
+    {
+        /**
+         * @type {number}
+         */
+        #id;
+
+        /**
+         * @type {string}
+         */
+        #name;
+
+        /**
+         * @type {Object}
+         */
+        #options;
+
+        /**
+         * Generates the next unique identifier for a StatefulListener.
+         *
+         * This function increments and returns the next numeric identifier
+         * by accessing the `NEXT_ID` static property of the `StatefulListener` class.
+         * <br>
+         * <br>
+         * Suitable for creating unique IDs for internal mechanisms
+         * where distinguishing between different instances of listeners
+         * or components is required.
+         * <br>
+         * @function
+         * @protected
+         * @returns {number} The next unique identifier.
+         */
+        static nextId = () => StatefulListener.NEXT_ID++;
+
+        constructor( pName, pOptions )
+        {
+            this.#id = StatefulListener.nextId();
+
+            this.#name = String( pName ) || ("StatefulListener_" + String( this.#id ));
+
+            this.#options = populateOptions( pOptions, {} );
+        }
+
+        /**
+         * Accessor property that specifies the constructor function to use when creating derived objects.<br>
+         * <br>
+         * This property is used to override the default constructor for certain methods that construct a new instance of the object.
+         *
+         * @return {Function} The constructor function to use for derived objects.
+         */
+        [Symbol.species]()
+        {
+            return this;
+        }
+
+        /**
+         * Handles an event.<br>
+         * This method is intended to be overridden in a subclass,<br>
+         * as it is not implemented in the base class.
+         * <br>
+         *
+         * @param {Event|BockModuleEvent} pEvent - The event object containing details about the event to handle.
+         * @param {...*} [pExtra] - Additional data or parameters that may be passed with the event.
+         */
+        handleEvent( pEvent, pExtra )
+        {
+            // not implemented in the base class
+        }
+
+        /**
+         * Retrieves the unique identifier of this instance.
+         * @return {number} The unique identifier for this instance.
+         */
+        get id()
+        {
+            return this.#id;
+        }
+
+        /**
+         * Retrieves the name of this instance.
+         *
+         * @return {string} The name associated with this object.
+         */
+        get name()
+        {
+            return this.#name;
+        }
+
+        /**
+         * Retrieves an immutable copy of the options used when this instance was constructed.
+         *
+         * @return {Object} An immutable copy of the options used when this instance was constructed.
+         */
+        get options()
+        {
+            return immutableCopy( this.#options );
+        }
+
+        /**
+         * Retrieves the name of the constructor function of the current object.
+         * This is typically used to identify the class of an instance.
+         *
+         * @return {string|undefined} The name of the constructor function that created this instance
+         */
+        get type()
+        {
+            return this.constructor?.name;
+        }
+
+        /**
+         * Compares the current object with another object to determine equality.<br>
+         * @param {Object} pOther The object to compare with the current object.
+         * @return {boolean} Returns true if the objects are equal, otherwise false.
+         */
+        equals( pOther )
+        {
+            if ( null == pOther )
+            {
+                return false;
+            }
+
+            if ( this === pOther )
+            {
+                return true;
+            }
+
+            if ( pOther instanceof this.constructor || _fun === typeof pOther?.handleEvent )
+            {
+                return (this.#id === pOther?.id);
+            }
+        }
+
+        /**
+         * Compares this object with the specified object for order.
+         *
+         * @param {Object} pOther - The object to compare with this instance.<br>
+         * It must be of the same type or an object with a compatible structure.<br>
+         * If null, undefined, or not of the expected type,<br>
+         * -1 is returned, indicated that this instance should be considered less than the other object<br>
+         * <br>
+         * @return {number} A negative integer, zero, or a positive integer if this object is considered
+         * less than, equal to, or greater than the specified object, respectively.<br>
+         */
+        compareTo( pOther )
+        {
+            if ( null == pOther || !(pOther instanceof this.constructor || _fun === typeof pOther?.handleEvent) )
+            {
+                return -1;
+            }
+
+            if ( this === pOther )
+            {
+                return 0;
+            }
+
+            return (this.#id - (pOther?.id || 1));
+        }
+    }
+
+    /**
+     * A static property that holds the next unique identifier to be used
+     * by StatefulListener instances. This property is used to ensure
+     * each StatefulListener instance receives a unique numeric ID.
+     *
+     * @type {number}
+     * @static
+     * @protected
+     */
+    StatefulListener.NEXT_ID = 1;
+
+    /**
      * This is an internal cache of constructed and loaded modules.<br>
      * @type {Object}
      * @dict
      * @private
      */
     const MODULE_CACHE = {};
+
+    const _asStr = e => _str === typeof e ? e : e?.type || e?.name || null;
+    const _validStr = e => _str === typeof e && _mt_str !== e.trim();
+    const _lcaseStr = e => e.trim().toLowerCase();
 
     /**
      * This is the base class for all the ToolBocks&trade; modules.
@@ -857,6 +1055,7 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
      * <br>
      * Module documentation will list all the events (other than "error") for which a consumer might listen.
      * <br>
+     * @extends EventTarget
      */
     class BockModulePrototype extends EventTarget
     {
@@ -877,6 +1076,9 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
 
         // a boolean to control whether this instance will write to a log
         #loggingEnabled = true;
+
+        // a map of stateful listeners by event (string)
+        #statefulListeners = {};
 
         /**
          * Constructs a new instance, or module, to expose functionality to consumers.
@@ -914,6 +1116,110 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
         static get [Symbol.species]()
         {
             return this;
+        }
+
+        addEventListener( type, callback, options )
+        {
+            super.addEventListener( type, callback, options );
+        }
+
+        addStatefulListener( pListener, ...pTypes )
+        {
+            if ( pListener instanceof StatefulListener )
+            {
+                if ( null != pTypes && pTypes.length > 0 )
+                {
+                    const types = [...pTypes].map( _asStr ).filter( _validStr ).map( _lcaseStr );
+
+                    for( let type of types )
+                    {
+                        const listeners = this.#statefulListeners[type];
+
+                        if ( null == listeners )
+                        {
+                            this.#statefulListeners[type] = [pListener];
+                        }
+                        else
+                        {
+                            listeners.push( pListener );
+                        }
+                    }
+                }
+
+                return true;
+            }
+            return false;
+        }
+
+        dispatchEvent( event )
+        {
+            const dispatched = super.dispatchEvent( event );
+
+            if ( dispatched )
+            {
+                const type = (String( event.type ) || _mt_str).toLowerCase();
+
+                const listeners = this.#statefulListeners[type];
+
+                if ( null != listeners )
+                {
+                    for( let listener of listeners )
+                    {
+                        try
+                        {
+                            listener.handleEvent( event, event?.detail );
+                        }
+                        catch( ex )
+                        {
+                            // ignore errors thrown by 'external' code
+                        }
+                    }
+                }
+            }
+        }
+
+        removeEventListener( type, callback, options )
+        {
+            super.removeEventListener( type, callback, options );
+
+            if ( callback instanceof StatefulListener )
+            {
+                this.removeStatefulListener( callback, type );
+            }
+        }
+
+        /**
+         * Removes the specified listener<br>
+         * or stops this module from notifying this listener of events of the type(s) specified in the second argument<br>
+         *
+         * @param {Object|number} pListener The listener to remove or the numeric ID of the listener to remove
+         * @param {...(string|Event)} pTypes The types for which the listener should no longer be notified.<br>
+         *                                   If this is null or an empty array or includes the value, "*",<br>
+         *                                   The listener will be removed entirely and no longer notified of <i>any</i> events.<br>
+         *
+         *
+         */
+        removeStatefulListener( pListener, ...pTypes )
+        {
+            let id = (pListener instanceof StatefulListener || (_num === typeof pListener?.id && pListener?.id > 0)) ? pListener?.id : (_num === typeof pListener) ? pListener : 0;
+
+            const forAllTypes = (null == pTypes || 0 === pTypes.length || pTypes.includes( "*" ));
+
+            let types = forAllTypes ? Object.keys( this.#statefulListeners ) : [...pTypes].map( _asStr ).filter( _validStr ).map( _lcaseStr );
+
+            for( let type of types )
+            {
+                const listeners = this.#statefulListeners[type];
+
+                const index = listeners.findIndex( l => l.id === id );
+
+                const removed = (index >= 0);
+
+                if ( removed )
+                {
+                    listeners.splice( index, 1 );
+                }
+            }
         }
 
         /**

@@ -2,13 +2,14 @@
  * @fileOverview
  * This module provides several useful functions for working with arrays and array-like values<br>
  * <br>
- * The most often used function is probably the <code>asArray<code> function,<br>
- * which will return an array regardless of its arguments,<br>
- * which is useful when you want to call array functionality<br>
- * or just ensure you are working with an array before doing so<br>
- * <br>
  * This module also defines a library of commonly used Filters, Mappers, and Comparators<br>
  * <br>
+ * Functions include:<br>
+ * <ul>
+ * <li>
+ *
+ * </li>
+ * </ul>
  *
  * @see {@link module:ArrayUtils#Filters}
  * @see {@link module:ArrayUtils#Mappers}
@@ -4736,6 +4737,7 @@ const $scope = constants?.$scope || function()
             DEFAULT_CHARACTER_RANGE_OPTIONS,
             range,
             /**
+             * @namespace
              * The classes this module defines and exposes
              * @const
              * @alias module:ArrayUtils#classes
