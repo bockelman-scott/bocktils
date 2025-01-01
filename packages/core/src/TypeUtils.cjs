@@ -74,7 +74,6 @@ const $scope = constants?.$scope || function()
      * and then import or use the other utilities<br>
      * as properties of this module.
      * <br>
-     * @namespace
      * @dict
      * @type {Object}
      * @alias module:TypeUtils#dependencies
@@ -1933,13 +1932,13 @@ const $scope = constants?.$scope || function()
      * Unlike JavScript's built-in iterators, this class's iterator can be traversed in reverse and/or reset
      * <br>
      *
-     * alias module:TypeUtils._Iterator
+     * alias module:TypeUtils._Iterable
      *
      * @class
      *
      * @protected
      */
-    class _Iterator
+    class _Iterable
     {
         #iterable;
 
@@ -1950,7 +1949,7 @@ const $scope = constants?.$scope || function()
          *
          * @param {*} pIterable Any value to be treated as an iterable
          *
-         * @return {_Iterator} A new iterable that can be used to iterate the value(s) with which it was constructed
+         * @return {_Iterable} A new iterable that can be used to iterate the value(s) with which it was constructed
          */
         constructor( pIterable )
         {
@@ -2006,9 +2005,9 @@ const $scope = constants?.$scope || function()
     }
 
     /**
-     * This subclass of _Iterator just returns done immediately
+     * This subclass of _Iterable just returns done immediately
      * @class
-     * @extends _Iterator
+     * @extends _Iterable
      *
      * alias module:TypeUtils.NullIterator
      *
@@ -2017,7 +2016,7 @@ const $scope = constants?.$scope || function()
      *
      *
      */
-    class NullIterator extends _Iterator
+    class NullIterator extends _Iterable
     {
         constructor()
         {
@@ -2036,16 +2035,16 @@ const $scope = constants?.$scope || function()
     }
 
     /**
-     * Returns an _Iterator for the specified value
+     * Returns an _Iterable for the specified value
      *
      * @param pArrayLike almost any kind of value,
      *                   but generally expected to be an "indexable" collection of values
      *                   strings are converted into an array of characters,
      *                   scalar values are converted into a 1-element array containing the value
      *
-     * @returns {_Iterator} an instance of _Iterator
+     * @returns {_Iterable} an instance of _Iterable
      */
-    const toIterator = function( pArrayLike )
+    const toIterable = function( pArrayLike )
     {
         switch ( typeof pArrayLike )
         {
@@ -2053,12 +2052,12 @@ const $scope = constants?.$scope || function()
                 return new NullIterator();
 
             case _str:
-                return new _Iterator( pArrayLike.split( _mt_str ) );
+                return new _Iterable( pArrayLike.split( _mt_str ) );
 
             case _num:
             case _big:
             case _bool:
-                return new _Iterator( [pArrayLike] );
+                return new _Iterable( [pArrayLike] );
 
             case _fun:
                 if ( isGeneratorFunction( pArrayLike ) )
@@ -2066,27 +2065,27 @@ const $scope = constants?.$scope || function()
                     return pArrayLike();
                 }
 
-                return new _Iterator( [pArrayLike] );
+                return new _Iterable( [pArrayLike] );
 
             case _obj:
                 if ( isArray( pArrayLike ) )
                 {
-                    return new _Iterator( pArrayLike );
+                    return new _Iterable( pArrayLike );
                 }
 
                 if ( pArrayLike instanceof Map )
                 {
-                    return new _Iterator( [...pArrayLike.entries()] );
+                    return new _Iterable( [...pArrayLike.entries()] );
                 }
 
                 if ( pArrayLike instanceof Set )
                 {
-                    return new _Iterator( [...pArrayLike] );
+                    return new _Iterable( [...pArrayLike] );
                 }
 
                 if ( isDate( pArrayLike ) )
                 {
-                    return new _Iterator( [pArrayLike] );
+                    return new _Iterable( [pArrayLike] );
                 }
 
                 const newObject = {};
@@ -2099,10 +2098,10 @@ const $scope = constants?.$scope || function()
 
                     const value = entry[1];
 
-                    newObject[key] = toIterator( value );
+                    newObject[key] = toIterable( value );
                 }
 
-                return new _Iterator( Object.entries( newObject ) );
+                return new _Iterable( Object.entries( newObject ) );
 
             default:
                 return new NullIterator();
@@ -2413,11 +2412,10 @@ const $scope = constants?.$scope || function()
             getClassName,
             defaultFor,
             castTo,
-            toIterator,
+            toIterable,
             firstMatchingType,
             isReadOnly,
             /**
-             * @namespace
              * The classes exported with this module.<br>
              * <br>
              * Classes:<br>

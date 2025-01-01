@@ -121,7 +121,7 @@ const $scope = constants?.$scope || function()
             isNull,
             isNonNullObject,
             isNonNullValue,
-            toIterator
+            toIterable
         } = typeUtils;
 
     const { asString, asInt, isBlank, isJson, lcase, rightOfLast } = stringUtils;
@@ -507,7 +507,7 @@ const $scope = constants?.$scope || function()
         entries()
         {
             const arr = asArray( super.entries() );
-            return toIterator( arr.map( e => new ObjectEntry( e ) ) );
+            return toIterable( arr.map( e => new ObjectEntry( e ) ) );
         }
 
         [Symbol.iterator]()

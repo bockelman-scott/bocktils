@@ -907,7 +907,11 @@ const $scope = constants?.$scope || function()
         {
             let value = resolveNullOrNaN( pValue );
             value = this.#useBigInt && isInteger( value ) ? BigInt( value ) : value;
-            return quotient( value, this.factor );
+            return quotient( value, this.factor,
+                             {
+                                 limitToSignificantDigits: true,
+                                 significantDigits: this.precision + 1
+                             } );
         }
 
         /**

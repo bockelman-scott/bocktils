@@ -70,7 +70,6 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
      * and then import or use the other utilities<br>
      * as properties of this module.
      * <br>
-     * @namespace
      * @dict
      * @type {Object}
      * @alias module:Constants#dependencies
@@ -84,6 +83,8 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
         {
             ModuleEvent,
             ModulePrototype,
+            calculateErrorSourceName,
+            reportError,
             isReadOnly,
             populateOptions,
             lock,
@@ -1898,6 +1899,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#funcAsString
              */
             funcAsString,
+            calculateErrorSourceName,
             isLogger,
             __testLogger: function( ...pTestData )
             {

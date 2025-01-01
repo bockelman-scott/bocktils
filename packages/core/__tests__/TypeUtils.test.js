@@ -1312,7 +1312,7 @@ describe( "isIterable",
                     () =>
                     {
                         let obj = { 0: 0, 1: 1, length: 2 };
-                        obj = typeUtils.toIterator( obj );
+                        obj = typeUtils.toIterable( obj );
                         expect( typeUtils.isIterable( obj ) ).toBe( true );
                     } );
 
@@ -1990,16 +1990,16 @@ describe( "getClassName", () =>
           } );
 } );
 
-describe( "toIterator", () =>
+describe( "toIterable", () =>
 {
-    const toIterator = typeUtils.toIterator;
+    const toIterable = typeUtils.toIterable;
 
-    test( "toIterator( array )",
+    test( "toIterable( array )",
           () =>
           {
               let arr = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
-              let iterator = toIterator( arr );
+              let iterator = toIterable( arr );
 
               let i = 0;
 
@@ -2031,12 +2031,12 @@ describe( "toIterator", () =>
               }
           } );
 
-    test( "toIterator( string )",
+    test( "toIterable( string )",
           () =>
           {
               let arr = "0123456789";
 
-              let iterator = toIterator( arr );
+              let iterator = toIterable( arr );
 
               let i = 0;
 
@@ -2068,12 +2068,12 @@ describe( "toIterator", () =>
               }
           } );
 
-    test( "toIterator( object )",
+    test( "toIterable( object )",
           () =>
           {
               let object = { a: 1, b: 2, c: { d: 4 } };
 
-              let iterator = toIterator( object );
+              let iterator = toIterable( object );
 
               let letters = ["a", "b", "c"];
 
