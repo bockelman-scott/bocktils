@@ -638,7 +638,7 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
          * @param {string|Error} pMessage The error message or an Error whose message should be used as the error message
          * @param {Object} pOptions An object that will be available as a property of this Error
          */
-        constructor( pMessage, pOptions )
+        constructor( pMessage, pOptions = {} )
         {
             super( (_str === typeof pMessage ? (pMessage || DEFAULT_ERROR_MSG) : ((pMessage instanceof Error) ? (pMessage.message || pMessage.name || DEFAULT_ERROR_MSG) : DEFAULT_ERROR_MSG)) );
 

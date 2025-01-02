@@ -10,7 +10,10 @@ const { sum, product, quotient } = mathUtils;
 
 const distributionUtils = require( "../src/DistributionUtils.cjs" );
 
-const { generateEvenDistribution, generateDistributionFromSegments, numKeysPerSegment } = distributionUtils;
+const { generateEvenDistribution, transformDistribution, numKeysPerSegment } = distributionUtils;
+
+distributionUtils.disableLogging();
+mathUtils.disableLogging();
 
 describe( "generateEvenDistribution", () =>
 {
@@ -35,9 +38,9 @@ describe( "generateEvenDistribution", () =>
               const distribution = generateEvenDistribution( 10, dates, 3 );
 
               expect( distribution.size ).toEqual( 3 );
-              expect( distribution.get( dates[0] ) ).toEqual( 3.33333 );
-              expect( distribution.get( dates[1] ) ).toEqual( 3.33333 );
-              expect( distribution.get( dates[2] ) ).toEqual( 3.33334 );
+              expect( distribution.get( dates[0] ) ).toEqual( 3.333333 );
+              expect( distribution.get( dates[1] ) ).toEqual( 3.333333 );
+              expect( distribution.get( dates[2] ) ).toEqual( 3.333334 );
           } );
 
     test( "distribute 100 things across 3 dates evenly",
@@ -48,9 +51,9 @@ describe( "generateEvenDistribution", () =>
               const distribution = generateEvenDistribution( 100, dates, 3 );
 
               expect( distribution.size ).toEqual( 3 );
-              expect( distribution.get( dates[0] ) ).toEqual( 33.33333 );
-              expect( distribution.get( dates[1] ) ).toEqual( 33.33333 );
-              expect( distribution.get( dates[2] ) ).toEqual( 33.33334 );
+              expect( distribution.get( dates[0] ) ).toEqual( 33.333333 );
+              expect( distribution.get( dates[1] ) ).toEqual( 33.333333 );
+              expect( distribution.get( dates[2] ) ).toEqual( 33.333334 );
           } );
 
     test( "distribute 111 things across 3 dates evenly",
@@ -74,9 +77,9 @@ describe( "generateEvenDistribution", () =>
               const distribution = generateEvenDistribution( 1111, dates, 3 );
 
               expect( distribution.size ).toEqual( 3 );
-              expect( distribution.get( dates[0] ) ).toEqual( 370.33333 );
-              expect( distribution.get( dates[1] ) ).toEqual( 370.33333 );
-              expect( distribution.get( dates[2] ) ).toEqual( 370.33334 );
+              expect( distribution.get( dates[0] ) ).toEqual( 370.333333 );
+              expect( distribution.get( dates[1] ) ).toEqual( 370.333333 );
+              expect( distribution.get( dates[2] ) ).toEqual( 370.333334 );
           } );
 
     test( "distribute 1117 things across 23 dates evenly",
@@ -93,7 +96,10 @@ describe( "generateEvenDistribution", () =>
                   }
               };
 
-              const distribution = generateEvenDistribution( 1117, dates(), 23,
+              const distribution = generateEvenDistribution( 1117,
+                                                             dates(),
+                                                             23,
+                                                             null,
                                                              {
                                                                  precision: 6,
                                                                  allowedRecursions: 3
@@ -105,15 +111,9 @@ describe( "generateEvenDistribution", () =>
 
               const summation = values.reduce( ( a, b ) => sum( a, b ), 0 );
 
-              console.log( summation );
+              // console.log( summation );
 
               expect( summation ).toEqual( 1117 );
-
-              /*
-               expect( distribution.get( dates[0] ) ).toEqual( 370.33333 );
-               expect( distribution.get( dates[1] ) ).toEqual( 370.33333 );
-               expect( distribution.get( dates[2] ) ).toEqual( 370.33334 );
-               */
           } );
 
 
@@ -132,7 +132,7 @@ describe( "numKeysPerSegment", () =>
           } );
 } );
 
-describe( "generateDistributionFromSegments", () =>
+describe( "transformDistribution", () =>
 {
     test( "distribute 100 things across 4 quartiles by date",
           () =>
@@ -140,10 +140,10 @@ describe( "generateDistributionFromSegments", () =>
               const total = 100;
               const quartiles = new Map();
 
-              quartiles.set( "Q1", 30 );
-              quartiles.set( "Q2", 20 );
-              quartiles.set( "Q3", 40 );
-              quartiles.set( "Q4", 10 );
+              quartiles.set( "Q1", 20 );
+              quartiles.set( "Q2", 40 );
+              quartiles.set( "Q3", 10 );
+              quartiles.set( "Q4", 30 );
 
               const dates = function* ()
               {
@@ -155,7 +155,7 @@ describe( "generateDistributionFromSegments", () =>
                   }
               };
 
-              const distribution = generateDistributionFromSegments( total, quartiles, dates(), 23 );
+              const distribution = transformDistribution( total, dates(), 23, quartiles );
 
               console.log( distribution );
           } );

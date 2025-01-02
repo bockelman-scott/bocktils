@@ -1482,6 +1482,33 @@ const $scope = constants?.$scope || function()
         return mode.round();
     };
 
+
+    /**
+     * Converts percentage values to decimal values.<br>
+     * <br>
+     * This function accepts one or more values expressed as a percent<br>
+     * and returns an array of their decimal equivalents.<br>
+     * <br>
+     * That is, if the sum of all provided percentage values exceeds 1,<br>
+     * the function adjusts the values by dividing each by 100.
+     * <br>
+     * @param {...*} pValues - One or more values that represent percentages.
+     * @returns {Array<number>} An array of decimal values corresponding to the input percentages.
+     */
+    const percentToDecimal = function( ...pValues )
+    {
+        let arr = asArray( pValues );
+
+        let totalPercentage = arr.reduce( ( accumulator, value ) => accumulator + asFloat( value ), 0 );
+
+        if ( totalPercentage > 1 )
+        {
+            arr = arr.map( e => quotient( asFloat( e ), 100 ) );
+        }
+
+        return arr;
+    };
+
     /**
      * Computes the greatest common divisor (GCD) of two numbers using the
      * Euclidean algorithm.<br>
@@ -2347,7 +2374,8 @@ const $scope = constants?.$scope || function()
             greatestCommonFactor,
             smallestCommonFactor,
             logN,
-            calculatePower
+            calculatePower,
+            percentToDecimal
 
         };
 
