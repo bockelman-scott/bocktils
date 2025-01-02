@@ -121,7 +121,8 @@ const $scope = constants?.$scope || function()
             isNull,
             isNonNullObject,
             isNonNullValue,
-            toIterable
+            toIterable,
+            VisitedSet
         } = typeUtils;
 
     const { asString, asInt, isBlank, isJson, lcase, rightOfLast } = stringUtils;
@@ -130,10 +131,11 @@ const $scope = constants?.$scope || function()
 
     const
         {
-            isPopulated = objectUtils.isPopulatedObject || objectUtils.isPopulated,
+            isPopulated = objectUtils?.isPopulatedObject || objectUtils?.isPopulated,
             firstValidObject,
             detectCycles,
-            ObjectEntry
+            ObjectEntry,
+            ExploredSet
         } = objectUtils;
 
     const modName = "JsonInterpolationUtils";
@@ -594,35 +596,6 @@ const $scope = constants?.$scope || function()
         return new ResolvedMap();
     };
 
-    class VisitedSet extends Set
-    {
-        constructor( ...pValues )
-        {
-            super( pValues );
-        }
-
-        static get [Symbol.species]()
-        {
-            return this;
-        }
-
-        has( pValue )
-        {
-            if ( super.has( pValue ) )
-            {
-                return true;
-            }
-
-            for( let v of this.values() )
-            {
-                if ( (isObject( v ) && objectUtils.same( pValue, v )) || v === pValue )
-                {
-                    return true;
-                }
-            }
-        }
-    }
-
     function _resolveReplacer( pReplacer, pOptions )
     {
         const typeCriteria = function( e )
@@ -649,8 +622,8 @@ const $scope = constants?.$scope || function()
 
     function _resolvedVisitedSet( pVisited, pOptions )
     {
-        let visited = firstValidObject( pVisited, pOptions?.visited ) || new VisitedSet();
-        return (visited instanceof VisitedSet) ? visited : new VisitedSet();
+        let visited = firstValidObject( pVisited, pOptions?.visited ) || new ExploredSet();
+        return (visited instanceof ExploredSet) ? visited : new ExploredSet();
     }
 
     function _handleCaughtException( pOnError, pError, pSource, pLevel, pJson, pOptions, pVisited, pResolved, pPaths, pRoot )
@@ -1471,7 +1444,7 @@ const $scope = constants?.$scope || function()
                              pReplacer = DEFAULT_REPLACER,
                              pSpace = null,
                              pOptions = DEFAULT_OPTIONS_FOR_JSON,
-                             pVisited = new VisitedSet(),
+                             pVisited = new ExploredSet(),
                              pResolved = new ResolvedMap(),
                              pPaths = [],
                              pRoot = null,
@@ -1519,7 +1492,7 @@ const $scope = constants?.$scope || function()
         // never allow this function to run longer than 5 seconds or to exceed a maximum recursion depth
         if ( _exceededTimeLimit( options ) || depth > MAX_RECURSION )
         {
-            _handleCaughtException( onError, new Error( TIMEOUT_ERROR ), calculateErrorSourceName( modName, "asJson" ), S_ERROR, _mt_str, options, pVisited, pResolved, pPaths, pRoot  );
+            _handleCaughtException( onError, new Error( TIMEOUT_ERROR ), calculateErrorSourceName( modName, "asJson" ), S_ERROR, _mt_str, options, pVisited, pResolved, pPaths, pRoot );
 
             return (depth > MAX_RECURSION ? JSON.stringify( MAX_RECURSION_ERROR ) : (isFunction( obj?.toString ) ? obj.toString() : JSON.stringify( obj?.name || obj?.source || obj?.value )));
         }
@@ -1531,7 +1504,7 @@ const $scope = constants?.$scope || function()
         {
             const errorMessage = infiniteLoopMessage( paths, 5, 5 );
 
-            _handleCaughtException( onError, new Error( errorMessage ), calculateErrorSourceName( modName, "asJson" ), S_ERROR, _mt_str, options, pVisited, pResolved, paths, pRoot  );
+            _handleCaughtException( onError, new Error( errorMessage ), calculateErrorSourceName( modName, "asJson" ), S_ERROR, _mt_str, options, pVisited, pResolved, paths, pRoot );
 
             return JSON.stringify( errorMessage );
         }
@@ -1545,7 +1518,7 @@ const $scope = constants?.$scope || function()
         let resolved = _resolveResolvedMap( pResolved || options.resolved, options );
         options.resolved = resolved;
 
-        let visited = pVisited || options.visited || new VisitedSet();
+        let visited = pVisited || options.visited || new ExploredSet();
         options.visited = visited;
 
         const omitFunctions = options?.omitFunctions;
@@ -1752,7 +1725,7 @@ const $scope = constants?.$scope || function()
                     InterpolatableValue,
                     ResolvedValue,
                     ResolvedMap,
-                    VisitedSet
+                    ExploredSet
                 },
             asJson,
             parseJson,

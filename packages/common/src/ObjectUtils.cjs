@@ -123,8 +123,11 @@ const $scope = constants?.$scope || function()
             isReadOnly,
             JS_TYPES,
             VALID_TYPES,
+            VisitedSet,
             defaultFor,
-            areSameType
+            areSameType,
+            estimateBytesForType,
+            BYTES_PER_TYPE
         } = typeUtils;
 
     let
@@ -262,6 +265,35 @@ const $scope = constants?.$scope || function()
     {
         return Object.assign( {}, isNonNullObject( pObject ) ? pObject : isNonNullValue( pObject ) ? [pObject] : {} );
     };
+
+    class ExploredSet extends VisitedSet
+    {
+        constructor( ...pValues )
+        {
+            super( pValues );
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
+        has( pValue )
+        {
+            if ( super.has( pValue ) )
+            {
+                return true;
+            }
+
+            for( let v of this.values() )
+            {
+                if ( (isObject( v ) && same( pValue, v )) || v === pValue )
+                {
+                    return true;
+                }
+            }
+        }
+    }
 
     /**
      * This function attempts to detect potential infinite loops.
@@ -3388,11 +3420,68 @@ const $scope = constants?.$scope || function()
         return obj;
     };
 
+    const estimateObjectSize = function( pObject, pStack = [] )
+    {
+        const explored = new ExploredSet(); // To prevent infinite recursion on circular objects
+
+        let obj = isNonNullObject( pObject ) ? pObject : {};
+
+        const objList = [obj];
+
+        const stack = asArray( pStack || [] );
+
+        let bytes = 0;
+
+        while ( objList.length )
+        {
+            const value = objList.pop();
+
+            if ( isNonNullObject( value ) )
+            {
+                if ( explored.has( value ) )
+                {
+                    continue;
+                }
+
+                explored.add( value );
+
+                const entries = getEntries( value );
+
+                for( let entry of entries )
+                {
+                    const key = entry.key || entry[0];
+
+                    stack.push( key );
+
+                    const value = entry.value || entry[1];
+
+                    objList.push( value );
+
+                    bytes += 8; // an extra 8 bytes for the object itself
+                }
+            }
+            else if ( [_symbol, _fun].includes( typeof value ) )
+            {
+                bytes += 8; // arbitrary guess for the size of a 'handle'
+            }
+            else
+            {
+                bytes += BYTES_PER_TYPE[typeof value];
+            }
+
+            if ( detectCycles( stack, 3, 3 ) )
+            {
+                break;
+            }
+        }
+        return bytes;
+    };
+
     let mod =
         {
             dependencies,
             guidUtils,
-            classes: { IterationCap, ObjectEntry },
+            classes: { IterationCap, ObjectEntry, ExploredSet },
             ALWAYS_EXCLUDED,
             no_op,
             instanceOfAny,
@@ -3432,6 +3521,7 @@ const $scope = constants?.$scope || function()
             isPopulatedObject: isPopulated,
             pruneObject,
             prune: pruneObject,
+            ExploredSet,
             IterationCap,
             ObjectEntry,
             isValidObject,
@@ -3467,7 +3557,8 @@ const $scope = constants?.$scope || function()
             tracePathTo,
             findRoot,
             lock,
-            deepFreeze
+            deepFreeze,
+            estimateObjectSize,
         };
 
     mod = modulePrototype.extend( mod );

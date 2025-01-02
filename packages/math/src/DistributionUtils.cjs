@@ -62,15 +62,17 @@ const $scope = constants?.$scope || function()
 
     const { ucase } = stringUtils;
 
-    const { asArray } = arrayUtils;
+    const { asArray, lastMatchedValue, firstMatchedValue } = arrayUtils;
 
     const {
         classes: MathUtilsClasses,
         ROUNDING_MODE,
+        resolveNullOrNaN,
         asInt,
         asFloat,
         isNanOrInfinite,
         isZero,
+        product,
         quotient,
         round
     } = mathUtils;
@@ -108,11 +110,14 @@ const $scope = constants?.$scope || function()
      * @typedef {Object} RedistributionOption Defines how to handle any unallocated amount due to rounding errors
      *
      * @property {string} name The name and identifier for this RedistributionOption
+     *
      * @property [ignore=false] When true, any amount that could not be distributed is ignored
+     *
      * @property [index=-1] The index of the distribution into which to allocate the undistributed amount<br>
      *                      If this value is less than 0, the other properties of this option will determine how to unallocated amount is spread<br>
      *                      If this value is greater than or equal to the number of entries in the distribution,<br>
      *                      the unallocated amount will be added to the last entry in the distribution
+     *
      * @property [byWeightedAverage=false] If true, any unallocated amount that has not been allocated as per the index property
      *                                     is allocated by spreading it across the distribution according to the relative percentages of each entry to the total,<br>
      *                                     Otherwise, the unallocated amount is spread evently across the distribution
@@ -191,6 +196,8 @@ const $scope = constants?.$scope || function()
      *                                                                 when rounding values that exceed the specified precision
      *
      * @property {RedistributionOption} [redistributionOption=DEFAULT_REDISTRIBUTION_OPTION] Defines how to allocate remaining values resulting from rounding errors
+     *
+     * @property {number} [allowedRecursions=3] The number of times the function can call itself to improve accuracy
      */
 
     /**
@@ -201,13 +208,77 @@ const $scope = constants?.$scope || function()
         {
             precision: 5,
             roundingMode: ROUNDING_MODE.HALF_EVEN,
-            redistributionOption: DEFAULT_REDISTRIBUTION_OPTION
+            redistributionOption: DEFAULT_REDISTRIBUTION_OPTION,
+            allowedRecursions: 3
         };
+
+    /**
+     * @typedef {Object} ErrorInfo
+     *
+     * @property {Array<*>} parameters An array of the arguments passed to the function reporting an error
+     *
+     * @property {Object|DistributionOptions} options The options passed to the function reporting an error
+     *
+     * @property {number} sum The currently calculated sum of the entries of a distribution
+     *
+     * @property {number} remainder The current value remaining to be allocated at the time error is encountered
+     *
+     * @property {number} preciseRemainder The current un-rounded value remaining to be allocated at the time the error is encountered
+     *
+     * @property {number} count The size of the distribution being generated at the time the error is encountered
+     *
+     */
+
+    function ErrorInfo( pParameters, pOptions, pSum, pRemainder, pPreciseRemainder, pCount )
+    {
+        return {
+            parameters: asArray( pParameters ),
+            options: Object.assign( {}, pOptions || {} ),
+            sum: resolveNullOrNaN( pSum ),
+            remainder: resolveNullOrNaN( pRemainder ),
+            preciseRemainder: resolveNullOrNaN( pPreciseRemainder ),
+            count: resolveNullOrNaN( pCount )
+        };
+    }
+
+    function updateErrorInfo( pErrorInfo, pNewValues )
+    {
+        const newValues = Object.assign( pNewValues || {} );
+        Object.entries( newValues ).forEach( ( [key, value] ) =>
+                                             {
+                                                 pErrorInfo[key] = value;
+                                             } );
+
+        return pErrorInfo;
+    }
+
+
+    function recalculateRemainder( pDistribution, pTotal, pOriginalTotal )
+    {
+        const distribution = pDistribution || new Map();
+
+        const summation = asArray( distribution.values() ).reduce( ( accumulator, value ) => accumulator + asFloat( value ), 0 );
+
+        const total = resolveNullOrNaN( pTotal, summation );
+
+        const originalTotal = resolveNullOrNaN( pOriginalTotal, total );
+
+        const remainder = summation - total;
+
+        const preciseRemainder = summation - originalTotal;
+
+        return {
+            summation: summation,
+            remainder: remainder,
+            preciseRemainder: preciseRemainder,
+        };
+    }
 
     /**
      *
      * @param {Map} pDistribution The Map of entries to adjust
-     * @param {Array<*>} pIndices An array of the keys of the map
+     * @param {Array<number>} pWeights An array of the percentage of the total <br>
+     *                                 allocated to the distribution entry at that index
      * @param {number} [pRemainder=0] The remainder to be distributed
      * @param {number} [pSign=1] The sign (-1 or +1) of the total
      * @param {DistributionOptions} pOptions The DistributionOptions defining
@@ -215,7 +286,7 @@ const $scope = constants?.$scope || function()
      *                                       and how to resolve unallocated amounts due
      *                                       to accumulated rounding errors
      */
-    const distributeRemainder = function( pDistribution, pIndices, pRemainder, pSign, pOptions = DEFAULT_DISTRIBUTION_OPTIONS )
+    const distributeRemainder = function( pDistribution, pWeights, pRemainder, pSign, pOptions = DEFAULT_DISTRIBUTION_OPTIONS )
     {
         const distribution = pDistribution || new Map();
 
@@ -226,7 +297,7 @@ const $scope = constants?.$scope || function()
             return distribution;
         }
 
-        const indices = asArray( pIndices || distribution.keys() );
+        const indices = asArray( distribution.keys() );
 
         let sign = isNumeric( pSign ) ? asInt( pSign ) : 1;
 
@@ -253,7 +324,7 @@ const $scope = constants?.$scope || function()
             return distribution;
         }
 
-        let key = "LAST_ENTRY" === distributionOption ? indices[indices.length - 1] : "FIRST_ENTRY" === distributionOption ? indices[0] : null;
+        let key = "LAST_ENTRY" === distributionOption ? lastMatchedValue( e => e !== 0, indices ) : "FIRST_ENTRY" === distributionOption ? firstMatchedValue( e => 0 !== e, indices ) : null;
 
         if ( key )
         {
@@ -268,21 +339,7 @@ const $scope = constants?.$scope || function()
             return distribution;
         }
 
-        let total = 0;
-
-        const entries = distribution.entries();
-
-        const weights = [];
-
-        for( const entry of entries )
-        {
-            total += asFloat( entry[1] );
-        }
-
-        for( const entry of entries )
-        {
-            weights.push( asFloat( entry[1] ) / total );
-        }
+        const weights = asArray( pWeights );
 
         const iterationCap = new IterationCap( distribution.size * 10 );
 
@@ -336,52 +393,44 @@ const $scope = constants?.$scope || function()
      */
     const generateEvenDistribution = function( pTotal, pIterable, pNumEntries, pOptions = DEFAULT_DISTRIBUTION_OPTIONS )
     {
-        const iterable = !isIterable( pIterable ) ? toIterable( pIterable || {} ) : pIterable || {};
-
-        const numEntries = isNumeric( pNumEntries ) ? asInt( pNumEntries ) : 0;
+        const options = populateOptions( pOptions, DEFAULT_DISTRIBUTION_OPTIONS );
 
         let total = isNumeric( pTotal ) ? asFloat( pTotal ) : 0;
 
-        const options = populateOptions( pOptions, DEFAULT_DISTRIBUTION_OPTIONS );
+        const iterable = !isIterable( pIterable ) ? toIterable( pIterable || {} ) : pIterable || {};
 
-        const distribution = new Map();
+        const numEntries = isNumeric( pNumEntries ) ? asInt( pNumEntries ) : 0;
 
         let canContinue = true;
 
         const errorSourceName = calculateErrorSourceName( modulePrototype, generateEvenDistribution );
 
-        const errorInfo =
-            {
-                parameters: [pTotal, pIterable, pNumEntries],
-                options: options,
-                sum: 0,
-                remainder: 0,
-                preciseRemainder: 0,
-                count: 0
-            };
+        const errorInfo = new ErrorInfo( [pTotal, pIterable, pNumEntries], options, 0, 0, 0, 0 );
 
         if ( isNanOrInfinite( total ) || isZero( total ) )
         {
             const error = new IllegalArgumentError( ERROR_INVALID_TOTAL );
 
-            reportError( modulePrototype, error, ERROR_INVALID_TOTAL, S_ERROR, errorSourceName, errorInfo );
+            reportError.call( modulePrototype, error, ERROR_INVALID_TOTAL, S_ERROR, errorSourceName, errorInfo );
 
             canContinue = false;
         }
 
         if ( isNanOrInfinite( numEntries ) || numEntries < 1 || !isInteger( numEntries ) )
         {
-            reportError( modulePrototype, new IllegalArgumentError( ERROR_INVALID_NUM_ENTRIES ), ERROR_INVALID_NUM_ENTRIES, S_ERROR, errorSourceName, errorInfo );
+            reportError.call( modulePrototype, new IllegalArgumentError( ERROR_INVALID_NUM_ENTRIES ), ERROR_INVALID_NUM_ENTRIES, S_ERROR, errorSourceName, errorInfo );
 
             canContinue = false;
         }
 
         if ( !isIterable( iterable ) )
         {
-            reportError( modulePrototype, new IllegalArgumentError( ERROR_INVALID_ITERABLE ), ERROR_INVALID_ITERABLE, S_ERROR, errorSourceName, errorInfo );
+            reportError.call( modulePrototype, new IllegalArgumentError( ERROR_INVALID_ITERABLE ), ERROR_INVALID_ITERABLE, S_ERROR, errorSourceName, errorInfo );
 
             canContinue = false;
         }
+
+        let distribution = new Map();
 
         if ( !canContinue )
         {
@@ -392,25 +441,28 @@ const $scope = constants?.$scope || function()
 
         const originalTotal = Math.abs( total );
 
-        total = round( Math.abs( total ), asInt( options.precision ), options.roundingMode );
+        const precision = asInt( options.precision );
+
+        const roundingMode = options.roundingMode;
+
+        total = round( originalTotal, precision, roundingMode );
 
         const roundingOptions =
             {
                 limitToSignificantDigits: true,
-                significantDigits: options.precision
+                significantDigits: precision
             };
 
         // Calculate the even distribution value for each entry
-        const value = round( quotient( total, numEntries, roundingOptions ), asInt( options.precision ), options.roundingMode );
+        const value = round( quotient( total, numEntries, roundingOptions ), precision, roundingMode );
 
-        let sum = 0;
+        let summation = 0;
         let count = 0;
 
         let remainder = total;
         let preciseRemainder = originalTotal;
 
-        let idx = 0;
-        let indexed = [];
+        let weights = [];
 
         for( const key of iterable )
         {
@@ -419,45 +471,330 @@ const $scope = constants?.$scope || function()
                 break; // Stop once the expected number of entries is processed
             }
 
-            indexed[idx++] = key;
-
             distribution.set( key, (sign * value) );
 
-            sum += value;
+            summation += value;
 
             remainder -= value;
             preciseRemainder -= value;
 
+            weights.push( quotient( value, total ) );
+
             count++;
         }
 
-        errorInfo.count = count;
-        errorInfo.sum = sum;
-        errorInfo.remainder = remainder;
-        errorInfo.preciseRemainder = preciseRemainder;
+        updateErrorInfo( errorInfo,
+                         {
+                             sum: summation,
+                             remainder: remainder,
+                             preciseRemainder: preciseRemainder,
+                             count: count
+                         } );
 
         if ( count < numEntries )
         {
-            reportError( modulePrototype, new IllegalArgumentError( WARNING_UNEXPECTED_NUMBER_OF_ENTRIES ), WARNING_UNEXPECTED_NUMBER_OF_ENTRIES, S_WARN, errorSourceName, errorInfo );
+            reportError.call( modulePrototype, new IllegalArgumentError( WARNING_UNEXPECTED_NUMBER_OF_ENTRIES ), WARNING_UNEXPECTED_NUMBER_OF_ENTRIES, S_WARN, errorSourceName, errorInfo );
         }
 
         if ( 0 - preciseRemainder > 0.00000000000005 )
         {
-            reportError( modulePrototype, new IllegalArgumentError( WARNING_UNALLOCATED_AMOUNT ), WARNING_UNALLOCATED_AMOUNT, S_WARN, errorSourceName, errorInfo );
+            reportError.call( modulePrototype, new IllegalArgumentError( WARNING_UNALLOCATED_AMOUNT ), WARNING_UNALLOCATED_AMOUNT, S_WARN, errorSourceName, errorInfo );
         }
 
-        if ( sum !== total || remainder !== 0 )
+        if ( (summation !== total || remainder !== 0) )
         {
-            const redistributionOption = options.redistrubitionOptions;
-
-            if ( redistributionOption === REDISTRIBUTION_OPTIONS.IGNORE )
+            function recalculate()
             {
-                reportError( modulePrototype, new IllegalArgumentError( WARNING_UNALLOCATED_AMOUNT ), WARNING_UNALLOCATED_AMOUNT, S_WARN, errorSourceName, errorInfo );
+                const newRemainder = recalculateRemainder( distribution, total, originalTotal );
 
-                return distribution;
+                remainder = newRemainder.remainder;
+                preciseRemainder = newRemainder.preciseRemainder;
+                summation = newRemainder.summation;
+
+                updateErrorInfo( errorInfo,
+                                 {
+                                     sum: summation,
+                                     remainder: remainder,
+                                     preciseRemainder: preciseRemainder
+                                 } );
             }
 
-            return distributeRemainder( distribution, indexed, remainder, sign, options );
+            const allowedRecursions = options.allowedRecursions;
+
+            let recursions = 0;
+
+            while ( (summation !== total || remainder !== 0) && recursions++ < allowedRecursions )
+            {
+                const redistributionOption = options.redistributionOption;
+
+                if ( redistributionOption === REDISTRIBUTION_OPTIONS.IGNORE )
+                {
+                    reportError.call( modulePrototype, new IllegalArgumentError( WARNING_UNALLOCATED_AMOUNT ), WARNING_UNALLOCATED_AMOUNT, S_WARN, errorSourceName, errorInfo );
+
+                    return distribution;
+                }
+
+                distribution = distributeRemainder( distribution, weights, remainder, sign, options );
+
+                recalculate();
+            }
+
+            recursions = 0;
+
+            while ( (summation !== total || remainder !== 0) && recursions++ < allowedRecursions )
+            {
+                const newOptions = Object.assign( {}, options );
+                newOptions.precision = asInt( precision ) + 1;
+                newOptions.allowedRecursions = asInt( allowedRecursions ) - 1;
+
+                distribution = generateEvenDistribution( total, distribution.keys(), numEntries, newOptions );
+
+                recalculate();
+            }
+        }
+
+        return distribution;
+    };
+
+    const generateEvenDistributionAsync = async function( pTotal, pIterable, pNumEntries, pOptions = DEFAULT_DISTRIBUTION_OPTIONS )
+    {
+        return generateEvenDistribution( pTotal, pIterable, pNumEntries, pOptions );
+    };
+
+    function numKeysPerSegment( pSegments, pNumEntries )
+    {
+        const numEntries = isNumeric( pNumEntries ) ? asInt( pNumEntries ) : 0;
+
+        const segments = asArray( pSegments?.values() || pSegments || [] );
+
+        const sortedSegments = segments.map( ( e, i ) => [e, i] ).sort( ( a, b ) => b[0] - a[0] );
+
+        const perSegment = quotient( numEntries, segments.length );
+
+        const mapped = segments.map( ( e, i ) => [i, e, perSegment] );
+
+        while ( mapped.some( e => !isInteger( e[2] ) ) && sortedSegments.length > 0 )
+        {
+            let idx = sortedSegments[0][1];
+
+            const integer = round( mapped[idx][2], 0, ROUNDING_MODE.TRUNC ) + 1;
+
+            mapped[idx][2] = integer;
+
+            let diff = integer - perSegment;
+
+            idx = sortedSegments[sortedSegments.length - 1][1];
+
+            const adjusted = mapped[idx][2] - diff;
+
+            mapped[idx][2] = adjusted;
+
+            if ( isInteger( adjusted ) )
+            {
+                sortedSegments.splice( idx, 1 );
+            }
+
+            sortedSegments.splice( 0, 1 );
+        }
+
+        return mapped.map( e => e[2] );
+    }
+
+    /**
+     * Given a total numeric value,
+     * a Map of Percentages by key,
+     * an iterable of keys,
+     * and a number of entries to generate,
+     * returns a Map by the keys of the iterable
+     * distributing the total according to the percentages of the segments.
+     *
+     * An example would be a distribution of subject enrollment by quartile, such as
+     * the enrollment of 100 subjects
+     * where 30% enroll in the first quartile,
+     * 20% enroll in the second quartile,
+     * 40% enroll in the third quartile,
+     * and 10% enroll in the fourth quartile
+     * distributing across dates representing the first day of the week for 23 weeks.
+     *
+     * @param {number} pTotal
+     * @param {Map<*,number>} pSegments
+     * @param {Iterable} pIterable
+     * @param {number} pNumEntries
+     * @param {DistributionOptions} pOptions
+     */
+    const generateDistributionFromSegments = function( pTotal, pSegments, pIterable, pNumEntries, pOptions = DEFAULT_DISTRIBUTION_OPTIONS )
+    {
+        const iterable = !isIterable( pIterable ) ? toIterable( pIterable || {} ) : pIterable || {};
+
+        const numEntries = isNumeric( pNumEntries ) ? asInt( pNumEntries ) : 0;
+
+        let total = isNumeric( pTotal ) ? asFloat( pTotal ) : 0;
+
+        const options = populateOptions( pOptions, DEFAULT_DISTRIBUTION_OPTIONS );
+
+        let distribution = new Map();
+
+        const errorSourceName = calculateErrorSourceName( modulePrototype, generateDistributionFromSegments );
+
+        const errorInfo = new ErrorInfo( [pTotal, pIterable, pNumEntries], options, 0, 0, 0, 0 );
+
+        if ( isNanOrInfinite( total ) || isZero( total ) )
+        {
+            reportError.call( modulePrototype, new IllegalArgumentError( ERROR_INVALID_TOTAL ), ERROR_INVALID_TOTAL, S_ERROR, errorSourceName, errorInfo );
+            return distribution;
+        }
+
+        if ( isNanOrInfinite( numEntries ) || numEntries < 1 || !isInteger( numEntries ) )
+        {
+            reportError.call( modulePrototype, new IllegalArgumentError( ERROR_INVALID_NUM_ENTRIES ), ERROR_INVALID_NUM_ENTRIES, S_ERROR, errorSourceName, errorInfo );
+            return distribution;
+        }
+
+        if ( !isIterable( iterable ) )
+        {
+            reportError.call( modulePrototype, new IllegalArgumentError( ERROR_INVALID_ITERABLE ), ERROR_INVALID_ITERABLE, S_ERROR, errorSourceName, errorInfo );
+            return distribution;
+        }
+
+        const sign = Math.sign( total );
+
+        const originalTotal = Math.abs( total );
+
+        const precision = asInt( options.precision );
+        const roundingMode = options.roundingMode;
+
+        total = round( originalTotal, precision, roundingMode );
+
+        const roundingOptions = {
+            limitToSignificantDigits: true,
+            significantDigits: precision
+        };
+
+        let segments = asArray( pSegments.values() );
+
+        const keysPerSegment = numKeysPerSegment( segments, numEntries );
+
+        let totalPercentage = asArray( segments ).reduce( ( accumulator, value ) => accumulator + asFloat( value ), 0 );
+
+        if ( totalPercentage > 1 )
+        {
+            segments = segments.map( e => quotient( asFloat( e ), 100, roundingOptions ) );
+        }
+
+        let summation = 0;
+
+        let remainder = total;
+        let preciseRemainder = originalTotal;
+
+        let weights = [];
+
+        let curSegment = 0;
+
+        let count = 0;
+
+        let segmentCount = 0;
+        let segmentBoundary = keysPerSegment[curSegment];
+        let segment = segments[curSegment];
+
+        for( const key of iterable )
+        {
+            if ( segmentCount > segmentBoundary )
+            {
+                curSegment++;
+                segmentBoundary = keysPerSegment[curSegment];
+                segment = segments[curSegment];
+                segmentCount = 0;
+            }
+
+            if ( curSegment >= segments.length || count >= numEntries )
+            {
+                break;
+            }
+
+            const percentage = quotient( segment, segmentBoundary, roundingOptions );
+
+            const value = product( total, percentage, roundingOptions );
+
+            distribution.set( key, (sign * value) );
+
+            summation += value;
+
+            remainder -= value;
+            preciseRemainder -= value;
+
+            weights.push( quotient( value, total ) );
+
+            count++;
+        }
+
+        updateErrorInfo( errorInfo,
+                         {
+                             sum: summation,
+                             remainder: remainder,
+                             preciseRemainder: preciseRemainder,
+                             count: count
+                         } );
+
+        if ( count < numEntries )
+        {
+            reportError.call( modulePrototype, new IllegalArgumentError( WARNING_UNEXPECTED_NUMBER_OF_ENTRIES ), WARNING_UNEXPECTED_NUMBER_OF_ENTRIES, S_WARN, errorSourceName, errorInfo );
+        }
+
+        if ( 0 - preciseRemainder > 0.00000000000005 )
+        {
+            reportError.call( modulePrototype, new IllegalArgumentError( WARNING_UNALLOCATED_AMOUNT ), WARNING_UNALLOCATED_AMOUNT, S_WARN, errorSourceName, errorInfo );
+        }
+
+        if ( (summation !== total || remainder !== 0) )
+        {
+            function recalculate()
+            {
+                const newRemainder = recalculateRemainder( distribution, total, originalTotal );
+
+                remainder = newRemainder.remainder;
+                preciseRemainder = newRemainder.preciseRemainder;
+                summation = newRemainder.summation;
+
+                updateErrorInfo( errorInfo,
+                                 {
+                                     sum: summation,
+                                     remainder: remainder,
+                                     preciseRemainder: preciseRemainder
+                                 } );
+            }
+
+            const allowedRecursions = options.allowedRecursions;
+
+            let recursions = 0;
+
+            while ( (summation !== total || remainder !== 0) && recursions++ < allowedRecursions )
+            {
+                const redistributionOption = options.redistributionOption;
+
+                if ( redistributionOption === REDISTRIBUTION_OPTIONS.IGNORE )
+                {
+                    reportError.call( modulePrototype, new IllegalArgumentError( WARNING_UNALLOCATED_AMOUNT ), WARNING_UNALLOCATED_AMOUNT, S_WARN, errorSourceName, errorInfo );
+
+                    return distribution;
+                }
+
+                distribution = distributeRemainder( distribution, weights, remainder, sign, options );
+
+                recalculate();
+            }
+
+            recursions = 0;
+
+            while ( (summation !== total || remainder !== 0) && recursions++ < allowedRecursions )
+            {
+                const newOptions = Object.assign( {}, options );
+                newOptions.precision = asInt( precision ) + 1;
+                newOptions.allowedRecursions = asInt( allowedRecursions ) - 1;
+
+                distribution = generateDistributionFromSegments( total, segments, distribution.keys(), numEntries, newOptions );
+
+                recalculate();
+            }
         }
 
         return distribution;
@@ -466,6 +803,12 @@ const $scope = constants?.$scope || function()
     let mod =
         {
             generateEvenDistribution,
+            generateEvenDistributionAsync,
+            generateDistributionFromSegments,
+            DEFAULT_DISTRIBUTION_OPTIONS,
+            REDISTRIBUTION_OPTIONS,
+            DEFAULT_REDISTRIBUTION_OPTION,
+            numKeysPerSegment
         };
 
     mod = modulePrototype.extend( mod );

@@ -131,6 +131,7 @@ const $scope = constants?.$scope || function()
         isObject,
         isArray,
         isTypedArray,
+        isIterable,
         isBoolean,
         isFunction,
         isDate,
@@ -160,6 +161,13 @@ const $scope = constants?.$scope || function()
         rightOfLast,
         asUtf8ByteArray,
     } = stringUtils;
+
+    /** The maximum limit that can be specified for the size of a bounded queue
+     * @const
+     * @type {number}
+     * @alias module:ArrayUtils#MAX_QUEUE_SIZE
+     * */
+    const MAX_QUEUE_SIZE = 32_768;
 
     /**
      * This is the object that is returned from this function.
@@ -231,6 +239,8 @@ const $scope = constants?.$scope || function()
      *
      * @property {function(*,*)|undefined|null} [comparator=null] A function to use to determine the order of the elements in the resulting array<br>
      *
+     * @property [iterableLimit=32768] The maximum number of elements to take from an iterable if the specified value is iterable, but not an Array or TypedArray
+     *
      * @see {@link module:ArrayUtils.asArray}
      */
 
@@ -249,7 +259,8 @@ const $scope = constants?.$scope || function()
             sanitize: false,
             type: null,
             unique: false,
-            comparator: null
+            comparator: null,
+            iterableLimit: MAX_QUEUE_SIZE,
         };
 
     /**
@@ -310,6 +321,34 @@ const $scope = constants?.$scope || function()
         return arr || [];
     };
 
+    function fromIterable( pIterable, pOptions = DEFAULT_AS_ARRAY_OPTIONS )
+    {
+        const options = populateOptions( pOptions, DEFAULT_AS_ARRAY_OPTIONS );
+
+        const limit = Math.min( Math.max( 1, asInt( options?.iterableLimit ) ), );
+
+        let arr = [];
+
+        let len = 0;
+
+        if ( isIterable( pIterable ) )
+        {
+            for( let elem of pIterable )
+            {
+                arr.push( elem );
+
+                if ( ++len >= limit )
+                {
+                    break;
+                }
+            }
+
+            return arr;
+        }
+
+        return pIterable;
+    }
+
     /**
      * Returns an array based on its input and the {@link AsArrayOptions} specified<br>
      * <br>
@@ -342,6 +381,11 @@ const $scope = constants?.$scope || function()
     {
         const options = populateOptions( pOptions, DEFAULT_AS_ARRAY_OPTIONS );
 
+        if ( isArray( pValue ) || isTypedArray( pValue ) )
+        {
+            return processAsArrayOptions( pValue, options );
+        }
+
         let arr = (isEmptyString( pValue ) || (isString( pValue ) && /^0+/.test( pValue )) || 0 === pValue || false === pValue ? [pValue] : (isNull( pValue ) ? [] : pValue)) || [];
 
         const recursions = Math.max( 0, asInt( pRecursions ) || 0 );
@@ -351,7 +395,7 @@ const $scope = constants?.$scope || function()
             switch ( typeof arr )
             {
                 case _obj:
-                    arr = isNull( arr ) ? [] : Object.values( arr );
+                    arr = (isNull( arr ) ? [] : isIterable( arr ) ? fromIterable( arr, options ) : Object.values( arr )) || [];
                     break;
 
                 case _str:
@@ -2976,6 +3020,25 @@ const $scope = constants?.$scope || function()
         return result;
     };
 
+    const lastMatchedValue = function( pMatcher, ...pArr )
+    {
+        let matcher = createExclusiveFilter( pMatcher );
+        let arr = varargs( ...pArr );
+
+        let result = null;
+
+        for( let i = arr.length - 1; i >= 0; i-- )
+        {
+            if ( matcher( arr[i] ) )
+            {
+                result = arr[i];
+                break;
+            }
+        }
+
+        return result;
+    };
+
     /**
      * Returns the first element in the specified array (or list of values)
      * that is numeric
@@ -4101,13 +4164,6 @@ const $scope = constants?.$scope || function()
         return arr;
     };
 
-    /** The maximum limit that can be specified for the size of a bounded queue
-     * @const
-     * @type {number}
-     * @alias module:ArrayUtils#MAX_QUEUE_SIZE
-     * */
-    const MAX_QUEUE_SIZE = 32_768;
-
     /**
      * This class provides a queue (a FIFO data structure) with a limited size<br>
      * <br>
@@ -4729,6 +4785,7 @@ const $scope = constants?.$scope || function()
             extractScalar,
             firstMatchedValue,
             firstNumericValue,
+            lastMatchedValue,
             DEFAULT_EQUALITY_OPTIONS,
             DEFAULT_POPULATED_ARRAY_OPTIONS,
             RANGE_INCREMENT_OPTION,

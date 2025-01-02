@@ -144,6 +144,7 @@ const $scope = constants?.$scope || function()
     /**
      * This is an array of the 'valid' JavaScript primitive types.<br>
      * Note that 'undefined' is not considered to be a 'valid' type<br>
+     * @namespace VALID_TYPES
      * @const
      * @readonly
      * @type {Array<string>}
@@ -154,6 +155,7 @@ const $scope = constants?.$scope || function()
     /**
      * This is an array of all JavaScript primitive types.<br>
      * This includes all the 'valid' types AND 'undefined'<br>
+     * @namespace JS_TYPES
      * @const
      * @readonly
      * @type {Array<string>}
@@ -163,7 +165,7 @@ const $scope = constants?.$scope || function()
 
     /**
      * This object is a dictionary of the default values for each primitive type<br>
-     * @namespace
+     * @namespace TYPE_DEFAULTS
      * @dict
      * @const
      * @readonly
@@ -181,6 +183,116 @@ const $scope = constants?.$scope || function()
             [_symbol]: null,
             [_ud]: undefined
         } );
+
+    class VisitedSet extends Set
+    {
+        constructor( ...pValues )
+        {
+            super( pValues );
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
+        has( pValue )
+        {
+            if ( super.has( pValue ) )
+            {
+                return true;
+            }
+
+            for( let v of this.values() )
+            {
+                if ( isObject( v ) && v === pValue )
+                {
+                    return true;
+                }
+            }
+        }
+    }
+
+    /**
+     * Returns the estimated number of bytes required to represent the specified data type.
+     * <br>
+     * <br>
+     * Note that these values are <i>estimates</i> only<br>
+     * and that the types, symbol, object, and function<br>
+     * cannot be estimated; they must be calculated at runtime.<br>
+     * <br>
+     * Finally, the estimated number of bytes for the string type is actually 'bytes per character'
+     * <br>
+     *
+     * @param {string} pType - The JavaScript data type to estimate memory usage for.
+     *
+     * @returns {number} - The estimated number of bytes for the given type.<br>
+     *                     <br>
+     *                     Returns:<br>
+     *                     2 (bytes per character) for strings (assuming UTF-16 encoding),<br>
+     *                     8 for numbers (IEEE 754 double-precision),<br>
+     *                     16 for big integers (an arbitrary assumption),<br>
+     *                     1 for booleans,<br>
+     *                     0 for symbols and functions (size indeterminable),<br>
+     *                     0 for objects (dynamic size, indeterminable),<br>
+     *                     and -1 for unsupported or unknown types.<br>
+     */
+    const estimateBytesForType = function( pType )
+    {
+        const type = (_mt_str + pType).toLowerCase();
+
+        if ( JS_TYPES.includes( pType ) )
+        {
+            switch ( type )
+            {
+                case _str:
+                    return 2; // Assumes string as UTF-16, 2 bytes per character
+                case _num:
+                    return 8; // Number (IEEE 754 double-precision floating point)
+                case _big:
+                    return 16; // Arbitrary assumption for BigInt size
+                case _bool:
+                    return 1; // Boolean (1 byte)
+                case _symbol:
+                    return 0; // Symbol size cannot be determined
+                case _fun:
+                    return 0; // Functions don't have a measurable byte size
+                case _obj:
+                    return 0; // Objects' sizes are dynamic and can't be determined simply
+                default:
+                    return -1; // For unsupported or unknown types
+            }
+        }
+    };
+
+    /**
+     * An object that maps data types to their estimated size in bytes.
+     * <br>
+     * Note that these values are estimates only<br>
+     * and that the types, symbol, object, and function<br>
+     * cannot be estimated; they must be calculated at runtime.<br>
+     * <br>
+     * Finally, the estimated number of bytes for the String type is actually 'bytes per character'<br>
+     * <br>
+     * @namespace BYTES_PER_TYPE
+     * @dict
+     * @const
+     * @readonly
+     * @type {Object}
+     * @alias module:TypeUtils#BYTES_PER_TYPE
+     */
+    const BYTES_PER_TYPE = lock(
+        {
+            [_str]: estimateBytesForType( _str ),
+            [_big]: estimateBytesForType( _big ),
+            [_num]: estimateBytesForType( _num ),
+            [_bool]: estimateBytesForType( _bool ),
+            [_fun]: estimateBytesForType( _fun ),
+            [_obj]: estimateBytesForType( _obj ),
+            [_symbol]: estimateBytesForType( _symbol ),
+            [_ud]: estimateBytesForType( _ud )
+        }
+    );
 
     /**
      * This oddly named function, so as not to collide with 'isArray',<br>
@@ -1941,8 +2053,11 @@ const $scope = constants?.$scope || function()
     class _Iterable
     {
         #iterable;
-
+        #arrayLike;
+        #iterator;
         #index = 0;
+
+        #iterated = [];
 
         /**
          * @constructor
@@ -1955,6 +2070,20 @@ const $scope = constants?.$scope || function()
         {
             this.#iterable = isIterable( pIterable ) ? pIterable : [pIterable];
             this.#iterable = isString( this.#iterable ) ? [].concat( this.#iterable.split( _mt_str ) ) : this.#iterable;
+
+            if ( isLikeArray( this.#iterable ) )
+            {
+                this.#arrayLike = [...this.#iterable];
+            }
+            else if ( isMap( this.#iterable ) || isSet( this.#iterable ) )
+            {
+                this.#arrayLike = [...this.#iterable.values()];
+            }
+
+            if ( isIterable( this.#iterable ) )
+            {
+                this.#iterator = this.#iterable[Symbol.iterator]();
+            }
         }
 
         [Symbol.species]()
@@ -1969,26 +2098,35 @@ const $scope = constants?.$scope || function()
 
         next()
         {
-            if ( this.#index >= this.#iterable.length )
+            if ( this.#arrayLike?.length )
             {
-                return { done: true };
+                if ( this.#index >= this.#iterable.length )
+                {
+                    return { done: true };
+                }
+
+                const value = this.#iterable[this.#index++];
+
+                this.#iterated.push( value );
+
+                return { value, done: false };
             }
 
-            const value = this.#iterable[this.#index++];
-
-            return { value, done: false };
+            return this.#iterator?.next();
         }
 
         previous()
         {
-            if ( this.#index < 1 )
+            if ( this.#index > 0 )
             {
-                return { done: true };
+                if ( this.#arrayLike?.length )
+                {
+                    const value = this.#iterable[--this.#index];
+                    return { value, done: false };
+                }
+                return this.#iterated[--this.#index];
             }
-
-            const value = this.#iterable[--this.#index];
-
-            return { value, done: false };
+            return { done: true };
         }
 
         reset()
@@ -1998,9 +2136,13 @@ const $scope = constants?.$scope || function()
 
         reverseIterator()
         {
-            let newIterable = [...this.#iterable].reverse();
-
-            return new this.constructor( newIterable );
+            if ( this.#arrayLike?.length )
+            {
+                let newIterable = [...this.#iterable].reverse();
+                return new this.constructor( newIterable );
+            }
+            modulePrototype.reportError( new Error( "cannot reverse this iterator" ), "attempting to reverse an iterator", S_ERROR, modName + "::_Iterable::reverseIterator" );
+            return this.#iterated.reverse();
         }
     }
 
@@ -2086,6 +2228,11 @@ const $scope = constants?.$scope || function()
                 if ( isDate( pArrayLike ) )
                 {
                     return new _Iterable( [pArrayLike] );
+                }
+
+                if ( isIterable( pArrayLike ) )
+                {
+                    return new _Iterable( pArrayLike );
                 }
 
                 const newObject = {};
@@ -2358,6 +2505,7 @@ const $scope = constants?.$scope || function()
             JS_TYPES,
             VALID_TYPES,
             TYPE_DEFAULTS,
+            BYTES_PER_TYPE,
             isUndefined,
             isDefined,
             isNull,
@@ -2414,6 +2562,7 @@ const $scope = constants?.$scope || function()
             castTo,
             toIterable,
             firstMatchingType,
+            estimateBytesForType,
             isReadOnly,
             /**
              * The classes exported with this module.<br>
@@ -2424,7 +2573,8 @@ const $scope = constants?.$scope || function()
              * </ul>
              * @alias module:TypeUtils#classes
              */
-            classes: { Option, TypedOption, StringOption, NumericOption, BooleanOption, Result },
+            classes: { VisitedSet, Option, TypedOption, StringOption, NumericOption, BooleanOption, Result },
+            VisitedSet,
             Option,
             TypedOption,
             StringOption,

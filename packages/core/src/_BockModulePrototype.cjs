@@ -2529,12 +2529,16 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
             calculateErrorSourceName,
             reportError: function( pThis, pError, pMessage = pError?.message || S_DEFAULT_OPERATION, pLevel = S_ERROR, pSource = _mt_str, ...pExtra )
             {
-                if ( pThis instanceof BockModulePrototype )
+                let thiz = pThis || this;
+
+                if ( thiz instanceof BockModulePrototype )
                 {
-                    pThis.reportError( pError, pMessage, pLevel, pSource, ...pExtra );
+                    thiz.reportError( pError, pMessage, pLevel, pSource, ...pExtra );
                 }
-                const modulePrototype = new BockModulePrototype( pThis?.name );
-                modulePrototype.reportError.call( pThis || modulePrototype, pError, pMessage, pLevel, pSource, ...pExtra );
+
+                const modulePrototype = new BockModulePrototype( thiz?.name || "TempModule" );
+
+                modulePrototype.reportError( pError, pMessage, pLevel, pSource, ...pExtra );
             },
             getGlobalLogger: function()
             {
