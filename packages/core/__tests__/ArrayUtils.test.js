@@ -10,7 +10,8 @@ const {
     DEFAULT_NUMERIC_RANGE_OPTIONS,
     DEFAULT_CHARACTER_RANGE_OPTIONS,
     asArray,
-    arraysEqual
+    arraysEqual,
+    toPercentages,
 } = arrayUtils;
 
 const { constants, stringUtils } = dependencies;
@@ -1791,6 +1792,61 @@ describe( "array length functions", () =>
               const arr = "abc";
 
               expect( arrayUtils.arrLenLtEq( arr, 3, true ) ).toBe( true );
+          } );
+} );
+
+
+describe( "toPercentages", () =>
+{
+    test( "toPercentages returns an array whose values are the percentage of the original array's total",
+          () =>
+          {
+              let arr = [10, 20, 30, 40];
+
+              /*
+               let total = arr.reduce( ( p, c ) => p + c, 0 );
+
+               let arr2 = arr.map( ( e ) => e / total );
+               */
+
+              expect( toPercentages( arr ) ).toEqual( [10, 20, 30, 40] );
+
+              expect( toPercentages( arr, { asDecimal: true } ) ).toEqual( [0.1, 0.2, 0.3, 0.4] );
+
+          } );
+
+    test( "toPercentages ignores non-numeric values",
+          () =>
+          {
+              let arr = [10, 20, "abc", 30, 40, 1 / 0];
+
+              expect( toPercentages( arr ) ).toEqual( [10, 20, 30, 40] );
+
+              expect( toPercentages( arr, { asDecimal: true } ) ).toEqual( [0.1, 0.2, 0.3, 0.4] );
+
+          } );
+
+    test( "toPercentages is idempotent",
+          () =>
+          {
+              let arr = [10, 20, "abc", 30, 40, 1 / 0];
+
+              arr = toPercentages( arr );
+              arr = toPercentages( arr );
+              arr = toPercentages( arr );
+              arr = toPercentages( arr );
+
+              expect( toPercentages( arr ) ).toEqual( [10, 20, 30, 40] );
+
+              arr = toPercentages( arr );
+              arr = toPercentages( arr );
+              arr = toPercentages( arr );
+              arr = toPercentages( arr );
+
+              expect( toPercentages( arr ) ).toEqual( [10, 20, 30, 40] );
+
+              expect( toPercentages( arr, { asDecimal: true } ) ).toEqual( [0.1, 0.2, 0.3, 0.4] );
+
           } );
 } );
 

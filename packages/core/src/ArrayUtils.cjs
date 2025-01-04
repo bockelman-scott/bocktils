@@ -129,6 +129,8 @@ const $scope = constants?.$scope || function()
         isNumber,
         isInteger,
         isObject,
+        isSet,
+        isMap,
         isArray,
         isTypedArray,
         isIterable,
@@ -261,6 +263,8 @@ const $scope = constants?.$scope || function()
             unique: false,
             comparator: null,
             iterableLimit: MAX_QUEUE_SIZE,
+            removeNaN: false,
+            removeInfinity: false,
         };
 
     /**
@@ -296,9 +300,13 @@ const $scope = constants?.$scope || function()
 
         arr = ((flatten && arr.flat) ? arr.flat( flattenLevel ) : arr) || [];
 
-        arr = (options?.sanitize ? (arr || []).filter( e => !(_ud === typeof e || null == e || isEmpty( e )) ) : (arr || [])) || [];
+        arr = (options?.sanitize ? (arr || []).filter( e => !(_ud === typeof e || null == e || (isString( e ) && isEmpty( e ))) ) : (arr || [])) || [];
 
         arr = (options?.type ? (arr || []).filter( e => (options?.type === typeof e || (isClass( options?.type ) && (e instanceof options?.type))) ) : (arr || [])) || [];
+
+        arr = (options.removeNaN ? (arr || []).filter( e => !isNumber( e ) || !isNaN( e ) ) : (arr || [])) || [];
+
+        arr = (options.removeInfinity ? (arr || []).filter( e => !isNumber( e ) || isFinite( e ) ) : (arr || [])) || [];
 
         if ( isFunction( options?.filter ) && options?.filter?.length >= 1 && options?.filter?.length <= 3 )
         {
@@ -325,7 +333,7 @@ const $scope = constants?.$scope || function()
     {
         const options = populateOptions( pOptions, DEFAULT_AS_ARRAY_OPTIONS );
 
-        const limit = Math.min( Math.max( 1, asInt( options?.iterableLimit ) ), );
+        const limit = Math.min( Math.max( asInt( pIterable?.size || pIterable?.length || 1, 1 ), asInt( options?.iterableLimit, (pIterable?.size || MAX_QUEUE_SIZE) ) ), MAX_QUEUE_SIZE );
 
         let arr = [];
 
@@ -371,7 +379,7 @@ const $scope = constants?.$scope || function()
      * @param {AsArrayOptions} pOptions An object to define how input values are evaluated<br>
      * and how the resulting array is processed before being returned.
      * @param {number} pRecursions <b>USED INTERNALLY TO PREVENT INFINITE RECURSION<br>
-     * DO NOT PASS A VALUE FROM CALLING CODE</b>
+     *                                DO NOT PASS A VALUE FROM CALLING CODE</b>
      *
      * @returns {Array<*>} an Array, based on the input and the options specified
      *
@@ -395,7 +403,22 @@ const $scope = constants?.$scope || function()
             switch ( typeof arr )
             {
                 case _obj:
-                    arr = (isNull( arr ) ? [] : isIterable( arr ) ? fromIterable( arr, options ) : Object.values( arr )) || [];
+                    if ( isNull( arr ) )
+                    {
+                        arr = [];
+                    }
+                    else if ( isSet( arr ) )
+                    {
+                        arr = [...arr.values()];
+                    }
+                    else if ( isMap( arr ) )
+                    {
+                        arr = fromIterable( arr.entries(), options );
+                    }
+                    else
+                    {
+                        arr = (isNull( arr ) ? [] : (isIterable( arr ) ? fromIterable( arr, options ) : Object.values( arr ))) || [];
+                    }
                     break;
 
                 case _str:
@@ -440,30 +463,12 @@ const $scope = constants?.$scope || function()
                     break;
 
                 default:
-                    if ( _ud !== (typeof arr[Symbol.iterator]) )
+                    if ( _fun === (typeof arr[Symbol.iterator]) )
                     {
-                        const returnValue = [];
-
-                        for( const value of arr )
-                        {
-                            if ( value )
-                            {
-                                if ( options && options.filter )
-                                {
-                                    if ( options.filter( value ) )
-                                    {
-                                        returnValue.push( value );
-                                    }
-                                }
-                                else
-                                {
-                                    returnValue.push( value );
-                                }
-                            }
-                        }
-
-                        arr = (recursions < 5 ? asArray( returnValue, options, recursions + 1 ) : returnValue) || [];
+                        arr = fromIterable( arr, options );
                     }
+                    break;
+
             } // end switch
         } // end else
 
@@ -2155,9 +2160,9 @@ const $scope = constants?.$scope || function()
              * <br>
              * USAGE: <code>const sorted = array.sort( Comparators.chain( compA, compB, ...compN ) );</code><br>
              *
-             * @param {...function(*,*):number} pComparators - One or more comparators to apply in order until one of them return s a non-zero value
+             * @param {...Comparator} pComparators - One or more comparators to apply in order until one of them return s a non-zero value
              *
-             * @return {function(*,*):number} A comparator that applies the specified comparators in order until one of them returns a non-zero value.
+             * @return {Comparator} A comparator that applies the specified comparators in order until one of them returns a non-zero value.
              *
              * @alias module:ArrayUtils#Comparators.chain
              */
@@ -4619,9 +4624,30 @@ const $scope = constants?.$scope || function()
 
         const idx = asInt( pIdx );
 
-        const dflt = (_ud === typeof pDefault) ? null : pDefault;
+        const dflt = (_ud === typeof pDefault || null == pDefault) ? null : isNonNullValue( pDefault ) ? pDefault : null;
 
-        return ((arr?.length || 0) > idx) ? arr[idx] : dflt;
+        return arr.at( idx ) || dflt;
+    };
+
+    const toPercentages = function( pArr, pOptions = DEFAULT_AS_ARRAY_OPTIONS )
+    {
+        let options = populateOptions( pOptions, DEFAULT_AS_ARRAY_OPTIONS );
+
+        options.removeNaN = true;
+        options.removeInfinity = true;
+        options.sanitize = true;
+
+        const asDecimal = !!options.asDecimal;
+
+        let arr = asArray( pArr, options ) || [];
+
+        arr = arr.filter( isNumeric ).map( asFloat ).filter( isValidNumber );
+
+        const total = arr.reduce( ( a, b ) => a + b, 0 );
+
+        arr = arr.map( e => (e / total) * (asDecimal ? 1 : 100) );
+
+        return asArray( arr );
     };
 
     /**
@@ -4731,6 +4757,7 @@ const $scope = constants?.$scope || function()
         {
             dependencies,
             ARRAY_METHODS,
+            fromIterable,
             varargs,
             immutableVarArgs,
             asArray,
@@ -4775,6 +4802,7 @@ const $scope = constants?.$scope || function()
             chainMappers,
             enQueue,
             MAX_QUEUE_SIZE,
+            toPercentages,
             toNonEmptyStrings,
             toNonBlankStrings,
             toTrimmedNonEmptyStrings,

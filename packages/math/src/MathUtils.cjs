@@ -458,11 +458,12 @@ const $scope = constants?.$scope || function()
 
         if ( isInteger( num, false ) )
         {
-            return { int: num, exp: 0, original: num };
+            return { int: num, exp: 0, original: num, numDecimals: 0 };
         }
 
         let dec = 0;
         let exp = 0;
+        let numDecimals = 0;
 
         const matches = (/(\.)|(e-?(\d+))/i).exec( s );
 
@@ -482,7 +483,9 @@ const $scope = constants?.$scope || function()
 
             dec = (parts.length > 1 ? parts[1] : (intParts.length > 1 ? intParts[1] : "0")) || "0";
 
-            exp = parseInt( matches[3] || dec.replace( /0+$/g, _mt_str ).length );
+            numDecimals = dec.replace( /0+$/g, _mt_str ).length;
+
+            exp = parseInt( matches[3] || numDecimals );
 
             s = asString( int, true ) + (dec.padEnd( exp, "0" ).slice( 0, exp ));
         }
@@ -491,6 +494,7 @@ const $scope = constants?.$scope || function()
             int: parseInt( s ),
             exp,
             original: num,
+            numDecimals: numDecimals || exp,
             useBigInt: (s.length >= (asString( Number.MAX_SAFE_INTEGER ).length + 1) || parseInt( s ) >= (2 ** 53) - 1)
         };
     }
@@ -1497,16 +1501,49 @@ const $scope = constants?.$scope || function()
      */
     const percentToDecimal = function( ...pValues )
     {
-        let arr = asArray( pValues );
+        let arr = asArray( varargs( ...pValues ) ).map( asFloat ).filter( e => isValidNumber( e ) );
 
-        let totalPercentage = arr.reduce( ( accumulator, value ) => accumulator + asFloat( value ), 0 );
-
-        if ( totalPercentage > 1 )
+        if ( arr.length > 1 )
         {
-            arr = arr.map( e => quotient( asFloat( e ), 100 ) );
+            let totalPercentage = arr.reduce( ( accumulator, value ) => accumulator + asFloat( value ), 0 );
+
+            if ( totalPercentage > 1 )
+            {
+                arr = arr.map( e => quotient( asFloat( e ), 100 ) );
+            }
+
+            return arr;
         }
 
-        return arr;
+        return arr.map( e => quotient( asFloat( e ), 100 ) );
+    };
+
+    const decimalToPercent = function( ...pValues )
+    {
+        let arr = asArray( varargs( ...pValues ) ).map( asFloat ).filter( e => isValidNumber( e ) );
+
+        if ( arr.length > 1 )
+        {
+            let totalPercentage = arr.reduce( ( accumulator, value ) => accumulator + asFloat( value ), 0 );
+
+            if ( totalPercentage <= 1 )
+            {
+                arr = arr.map( e => product( asFloat( e ), 100 ) );
+            }
+
+            return arr;
+        }
+
+        return arr.map( e => product( asFloat( e ), 100 ) );
+    };
+
+    const applyPercent = function( pPercent, ...pValues )
+    {
+        let arr = asArray( varargs( ...pValues ) ).map( asFloat ).filter( e => isValidNumber( e ) );
+
+        const pct = asArray( percentToDecimal( pPercent ) )[0];
+
+        return arr.map( e => round( product( e, pct ), calculateSignificantDigits( ...arr ), HalfEven ) );
     };
 
     /**
@@ -2375,8 +2412,9 @@ const $scope = constants?.$scope || function()
             smallestCommonFactor,
             logN,
             calculatePower,
-            percentToDecimal
-
+            percentToDecimal,
+            decimalToPercent,
+            applyPercent
         };
 
     mod = modulePrototype.extend( mod );

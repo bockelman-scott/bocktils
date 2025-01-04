@@ -10,7 +10,7 @@ const { sum, product, quotient } = mathUtils;
 
 const distributionUtils = require( "../src/DistributionUtils.cjs" );
 
-const { generateEvenDistribution, transformDistribution, numKeysPerSegment } = distributionUtils;
+const { generateEvenDistribution, transformDistribution, numKeysPerSegment, numSegmentsPerKey } = distributionUtils;
 
 distributionUtils.disableLogging();
 mathUtils.disableLogging();
@@ -131,6 +131,59 @@ describe( "numKeysPerSegment", () =>
               expect( perSegment ).toEqual( [6, 6, 5, 6] );
           } );
 } );
+/*
+
+ describe( "numSegmentsPerKey", () =>
+ {
+ test( "4 segments, 3 periods",
+ () =>
+ {
+ const segments = [20, 40, 10, 30];
+
+ const perSegment = numSegmentsPerKey( segments, 3 );
+
+ expect( perSegment.reduce( ( a, b ) => a + b, 0 ) ).toEqual( segments.length );
+
+ expect( perSegment ).toEqual( [1, 2, 1] );
+ } );
+
+ test( "7 segments, 3 periods",
+ () =>
+ {
+ const segments = [10, 20, 30, 5, 10, 5, 20];
+
+ const perSegment = numSegmentsPerKey( segments, 3 );
+
+ expect( perSegment.reduce( ( a, b ) => a + b, 0 ) ).toEqual( segments.length );
+
+ expect( perSegment ).toEqual( [2, 3, 2] );
+ } );
+
+ test( "10 segments, 5 periods",
+ () =>
+ {
+ const segments = [10, 10, 10, 10, 10, 10, 10, 10, 10, 10];
+
+ const perSegment = numSegmentsPerKey( segments, 5 );
+
+ expect( perSegment.reduce( ( a, b ) => a + b, 0 ) ).toEqual( segments.length );
+
+ expect( perSegment ).toEqual( [2, 2, 2, 2, 2] );
+ } );
+
+ test( "10 segments, 5 periods, non-uniform",
+ () =>
+ {
+ const segments = [1, 1, 1, 17, 10, 50, 5, 5, 5, 5];
+
+ const perSegment = numSegmentsPerKey( segments, 5 );
+
+ expect( perSegment.reduce( ( a, b ) => a + b, 0 ) ).toEqual( segments.length );
+
+ expect( perSegment ).toEqual( [2, 2, 2, 2, 2] );
+ } );
+ } );
+ */
 
 describe( "transformDistribution", () =>
 {
@@ -155,7 +208,21 @@ describe( "transformDistribution", () =>
                   }
               };
 
+              // pTotal, pIterable, pNumEntries, pModelDistribution, pOptions
               const distribution = transformDistribution( total, dates(), 23, quartiles );
+
+              expect( distribution.size ).toEqual( 23 );
+              expect( asArray( distribution.values() ).reduce( ( a, b ) => a + b, 0 ) ).toEqual( 100 );
+
+              const firstSegment = asArray( distribution.values() ).filter( ( e, i ) => i < 6 );
+              const secondSegment = asArray( distribution.values() ).filter( ( e, i ) => i >= 6 && i < 12 );
+              const thirdSegment = asArray( distribution.values() ).filter( ( e, i ) => i >= 12 && i < 17 );
+              const fourthSegment = asArray( distribution.values() ).filter( ( e, i ) => i >= 17 );
+
+              expect( Math.round( firstSegment.reduce( ( a, b ) => a + b, 0 ) ) ).toEqual( 20 );
+              expect( Math.round( secondSegment.reduce( ( a, b ) => a + b, 0 ) ) ).toEqual( 40 );
+              expect( Math.round( thirdSegment.reduce( ( a, b ) => a + b, 0 ) ) ).toEqual( 10 );
+              expect( Math.round( fourthSegment.reduce( ( a, b ) => a + b, 0 ) ) ).toEqual( 30 );
 
               console.log( distribution );
           } );

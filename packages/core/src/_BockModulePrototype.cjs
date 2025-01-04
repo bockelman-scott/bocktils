@@ -1415,7 +1415,11 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
          * @see ErrorDetail
          *
          */
-        reportError( pError, pMessage = pError?.message || S_DEFAULT_OPERATION, pLevel = S_ERROR, pSource = _mt_str, ...pExtra )
+        reportError( pError,
+                     pMessage = pError?.message || S_DEFAULT_OPERATION,
+                     pLevel = S_ERROR,
+                     pSource = _mt_str,
+                     ...pExtra )
         {
             try
             {

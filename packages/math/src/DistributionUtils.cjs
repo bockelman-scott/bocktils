@@ -51,7 +51,6 @@ const $scope = constants?.$scope || function()
         _mt_str,
         S_ERROR,
         S_WARN,
-        __Error,
         IllegalArgumentError,
         reportError,
         calculateErrorSourceName,
@@ -63,8 +62,11 @@ const $scope = constants?.$scope || function()
     const {
         isNull,
         isArray,
+        isLikeArray,
         isObject,
         isFunction,
+        isAsyncFunction,
+        isClass,
         isMap,
         isSet,
         isNumber,
@@ -72,13 +74,15 @@ const $scope = constants?.$scope || function()
         isInteger,
         isFloat,
         isIterable,
+        isSymbol,
         toIterable,
-        isNonNullObject
+        isNonNullObject,
+        getClass
     } = typeUtils;
 
-    const { ucase } = stringUtils;
+    const { ucase, lcase } = stringUtils;
 
-    const { asArray, lastMatchedValue, firstMatchedValue } = arrayUtils;
+    const { asArray, toPercentages, lastMatchedValue, firstMatchedValue, Mappers, Filters, Comparators } = arrayUtils;
 
     const {
         classes: MathUtilsClasses,
@@ -88,10 +92,14 @@ const $scope = constants?.$scope || function()
         asFloat,
         isNanOrInfinite,
         isZero,
+        sum,
+        difference,
         product,
         quotient,
         round,
         percentToDecimal,
+        decimalToPercent,
+        applyPercent,
     } = mathUtils;
 
     const { RoundingMode } = MathUtilsClasses;
@@ -116,9 +124,12 @@ const $scope = constants?.$scope || function()
      */
     const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
 
+    const MAX_TOLERANCE = 0.00000000000005;
+
     const ERROR_INVALID_TOTAL = "The value to distribute must be a number greater than or less than zero.";
     const ERROR_INVALID_ITERABLE = "The iterable object must be an iterable object.";
     const ERROR_INVALID_NUM_ENTRIES = "The number of entries must be a number greater than zero.";
+    const ERROR_INVALID_DISTRIBUTION = "The distribution must be a Map, Set, or Array.";
 
     const WARNING_UNEXPECTED_NUMBER_OF_ENTRIES = "The number of distribution entries is less than the number of entries expected.";
     const WARNING_UNALLOCATED_AMOUNT = "Unallocated amount due to rounding errors.";
@@ -230,7 +241,7 @@ const $scope = constants?.$scope || function()
      * @namespace DEFAULT_DISTRIBUTION_OPTIONS
      * @type {DistributionOptions}
      */
-    const DEFAULT_DISTRIBUTION_OPTIONS =
+    const DEFAULT_DISTRIBUTION_OPTIONS = lock(
         {
             precision: 6,
             roundingMode: ROUNDING_MODE.HALF_EVEN,
@@ -240,7 +251,11 @@ const $scope = constants?.$scope || function()
             iterable: null,
             modelDistribution: null,
             expectedEntries: 0,
-        };
+
+            iterableLimit: 32_768,
+            comparator: null,
+
+        } );
 
     /**
      * @typedef {Object} ErrorInfo
@@ -335,6 +350,40 @@ const $scope = constants?.$scope || function()
                               newValues.count || pErrorInfo.count || 0 );
     }
 
+    const emitEvent = function( pLevel, pErrorClass, pMsg, pErrorSourceName, pErrorInfo, ...pArgs )
+    {
+        let ErrorClass = getClass( pErrorClass );
+
+        ErrorClass = isClass( ErrorClass ) ? ErrorClass || Error : Error;
+
+        reportError.call( modulePrototype,
+                          new ErrorClass( pMsg ),
+                          pMsg,
+                          lcase( pLevel || S_WARN ),
+                          pErrorSourceName,
+                          [pErrorInfo, ...pArgs] );
+    };
+
+    const emitWarning = function( pErrorClass, pMsg, pErrorSourceName, pErrorInfo, ...pArgs )
+    {
+        emitEvent( S_WARN, pErrorClass, pMsg, pErrorSourceName, pErrorInfo, ...pArgs );
+    };
+
+    const emitIllegalArgumentWarning = function( pMsg, pErrorSourceName, pErrorInfo, ...pArgs )
+    {
+        emitWarning( IllegalArgumentError, pMsg, pErrorSourceName, pErrorInfo, ...pArgs );
+    };
+
+    const emitError = function( pErrorClass, pMsg, pErrorSourceName, pErrorInfo, ...pArgs )
+    {
+        emitEvent( S_ERROR, pErrorClass, pMsg, pErrorSourceName, pErrorInfo, ...pArgs );
+    };
+
+    const emitIllegalArgumentError = function( pMsg, pErrorSourceName, pErrorInfo, ...pArgs )
+    {
+        emitError( IllegalArgumentError, pMsg, pErrorSourceName, pErrorInfo, ...pArgs );
+    };
+
     /**
      * Resolves the sign of the provided value or deduces it from the sum of the distribution values.
      * <br>
@@ -413,7 +462,25 @@ const $scope = constants?.$scope || function()
         {
             if ( modelDistribution.size || modelDistribution.length || Object.keys( modelDistribution ).length )
             {
-                return modelDistribution;
+                if ( isMap( modelDistribution ) )
+                {
+                    return modelDistribution;
+                }
+                else if ( isArray( modelDistribution ) || isSet( modelDistribution ) )
+                {
+                    if ( asArray( modelDistribution ).every( ( value ) => isLikeArray( value ) && 2 === value?.length ) )
+                    {
+                        return new Distribution( modelDistribution, options );
+                    }
+                    else
+                    {
+                        return new Distribution( [...modelDistribution.entries()], options );
+                    }
+                }
+                else
+                {
+                    return new Distribution( Object.entries( modelDistribution ), options );
+                }
             }
         }
 
@@ -435,10 +502,7 @@ const $scope = constants?.$scope || function()
     {
         if ( isNanOrInfinite( pTotal ) || isZero( pTotal ) )
         {
-            const error = new IllegalArgumentError( ERROR_INVALID_TOTAL );
-
-            reportError.call( modulePrototype, error, ERROR_INVALID_TOTAL, S_ERROR, pSourceName, pErrorInfo );
-
+            emitIllegalArgumentError( ERROR_INVALID_TOTAL, pSourceName, pErrorInfo, pTotal );
             return false;
         }
         return true;
@@ -459,8 +523,7 @@ const $scope = constants?.$scope || function()
     {
         if ( isNanOrInfinite( pNumEntries ) || pNumEntries < 1 || !isInteger( pNumEntries ) )
         {
-            reportError.call( modulePrototype, new IllegalArgumentError( ERROR_INVALID_NUM_ENTRIES ), ERROR_INVALID_NUM_ENTRIES, S_ERROR, pErrorSourceName, pErrorInfo );
-
+            emitIllegalArgumentError( ERROR_INVALID_NUM_ENTRIES, pErrorSourceName, pErrorInfo, pNumEntries );
             return false;
         }
         return true;
@@ -480,12 +543,408 @@ const $scope = constants?.$scope || function()
     {
         if ( !isIterable( pIterable ) )
         {
-            reportError.call( modulePrototype, new IllegalArgumentError( ERROR_INVALID_ITERABLE ), ERROR_INVALID_ITERABLE, S_ERROR, pErrorSourceName, pErrorInfo );
-
+            emitIllegalArgumentError( ERROR_INVALID_ITERABLE, pErrorSourceName, pErrorInfo, pIterable );
             return false;
         }
         return true;
     }
+
+    const keyComparator = function( pKey1, pKey2 )
+    {
+        const keyA = isNull( pKey1 ) ? 0 : pKey1;
+        const keyB = isNull( pKey2 ) ? 0 : pKey2;
+
+        if ( isSymbol( keyA ) || isSymbol( keyB ) )
+        {
+            return 0;
+        }
+        return keyA < keyB ? -1 : keyA > keyB ? 1 : 0;
+    };
+
+    const valueComparator = function( pValue1, pValue2 )
+    {
+        const valueA = asFloat( pValue1 );
+        const valueB = asFloat( pValue2 );
+        return valueA < valueB ? -1 : valueA > valueB ? 1 : 0;
+    };
+
+    const safeIterable = function( pIterable, pOptions )
+    {
+        if ( isIterable( pIterable ) || isNonNullObject( pIterable,
+                                                         populateOptions( pOptions,
+                                                                          {
+                                                                              rejectPrimitiveWrappers: true,
+                                                                              rejectArrays: false,
+                                                                              rejectNull: true,
+                                                                              allowEmptyObjects: false
+                                                                          } ) ) )
+        {
+            const options = populateOptions( pOptions, DEFAULT_DISTRIBUTION_OPTIONS );
+
+            if ( isMap( pIterable ) )
+            {
+                return pIterable;
+            }
+            else if ( isArray( pIterable ) || isSet( pIterable ) )
+            {
+                if ( asArray( pIterable ).every( ( value ) => isLikeArray( value ) && 2 === value?.length ) )
+                {
+                    return pIterable;
+                }
+                else if ( isSet( pIterable ) || isFunction( pIterable.entries ) )
+                {
+                    return [...pIterable.entries()];
+                }
+            }
+            else if ( isIterable( pIterable ) )
+            {
+                const size = asInt( pIterable.size || pIterable.length || 0 );
+
+                const limit = Math.max( Math.min( asInt( options.iterableLimit || size, size || 0 ), 32_768 ), 1 );
+
+                let count = 0;
+
+                let entries = [];
+
+                for( let entry of pIterable )
+                {
+                    if ( ++count > limit )
+                    {
+                        break;
+                    }
+
+                    entries.push( isLikeArray( entry ) ? [entry[0] || entry, entry[1] || entry] : [entry, entry] );
+                }
+
+                return entries;
+            }
+            else
+            {
+                return Object.entries( pIterable );
+            }
+        }
+    };
+
+    class Distribution extends Map
+    {
+        #options;
+        #comparator;
+
+        constructor( pIterable, pOptions = DEFAULT_DISTRIBUTION_OPTIONS )
+        {
+            super( safeIterable( pIterable, pOptions ) );
+
+            this.#options = populateOptions( pOptions, DEFAULT_DISTRIBUTION_OPTIONS );
+
+            this.#comparator = this.#options?.comparator;
+            this.#comparator = Comparators.isComparator( this.#comparator ) ? this.#comparator : null;
+        }
+
+        get options()
+        {
+            return populateOptions( this.#options, DEFAULT_DISTRIBUTION_OPTIONS );
+        }
+
+        set options( pOptions )
+        {
+            this.#options = populateOptions( pOptions, DEFAULT_DISTRIBUTION_OPTIONS );
+        }
+
+        get comparator()
+        {
+            return this.#comparator;
+        }
+
+        map( pFunction )
+        {
+            const entrees = this.entries();
+
+            const distribution = new Distribution( entrees, this.options );
+
+            for( let entry of entrees )
+            {
+                const [key, value] = entry;
+                const newValue = pFunction( value, key, this );
+                distribution.set( key, newValue );
+            }
+
+            return distribution;
+        }
+
+        filter( pFunction )
+        {
+            const arr = asArray( this.entries() );
+            const func = Filters.IS_FILTER( pFunction ) ? pFunction : () => true;
+            return new Distribution( arr.filter( func ), this.options );
+        }
+
+        find( pFunction )
+        {
+            const arr = asArray( this.entries() );
+            const func = Filters.IS_FILTER( pFunction ) ? pFunction : () => true;
+            return arr.find( func );
+        }
+
+        async forEachAsync( pAsyncFunction )
+        {
+            const func = isAsyncFunction( pAsyncFunction ) ? pAsyncFunction : async( entry ) => Promise.resolve( pAsyncFunction( entry[1], entry[0], this ) );
+
+            const promises = [];
+
+            for( let [key, value] of this.entries() )
+            {
+                promises.push( func( value, key, this ) );
+            }
+
+            return Promise.all( promises );
+        }
+
+        entries()
+        {
+            let entrees = asArray( super.entries(), { iterableLimit: this.size } );
+
+            entrees = entrees.map( ( [key, value] ) => [key, asFloat( value )] ).filter( ( [key, value] ) => !isNanOrInfinite( value ) );
+
+            if ( Comparators.isComparator( this.comparator ) )
+            {
+                const ks = asArray( super.keys() ).sort( this.comparator );
+
+                const byPositionComparator = Comparators.BY_POSITION( ks );
+
+                entrees = entrees.sort( function( a, b ) { return byPositionComparator( a[0], b[0] ) || 0; } );
+            }
+
+            return toIterable( entrees );
+        }
+
+        keys()
+        {
+            let entrees = asArray( this.entries(), { iterableLimit: this.size } );
+
+            let arr = entrees.filter( ( [key, value] ) => !isNanOrInfinite( value ) ).map( ( [key, value] ) => key );
+
+            if ( Comparators.isComparator( this.comparator ) )
+            {
+                arr = arr.sort( this.comparator );
+            }
+
+            return toIterable( arr );
+        }
+
+        values()
+        {
+            let vals = asArray( super.values(), { iterableLimit: this.size } );
+
+            vals = vals.map( asFloat ).filter( ( value ) => !isNanOrInfinite( value ) );
+
+            if ( Comparators.isComparator( this.comparator ) )
+            {
+                vals = vals.sort( this.comparator );
+            }
+
+            return toIterable( vals );
+        }
+
+        get( key )
+        {
+            return asFloat( super.get( key ) );
+        }
+
+        set( key, value )
+        {
+            return super.set( key, asFloat( value ) );
+        }
+
+        toArray()
+        {
+            const arr = asArray( this.values(), { iterableLimit: this.size } ).map( asFloat ).filter( ( value ) => !isNanOrInfinite( value ) );
+
+            if ( Comparators.isComparator( this.comparator ) )
+            {
+                return arr.sort( this.comparator );
+            }
+
+            return arr;
+        }
+
+        get keysArray()
+        {
+            return asArray( this.keys(), { iterableLimit: this.size } );
+        }
+
+        get sum()
+        {
+            return (this.toArray()).reduce( ( accumulator, value ) => sum( accumulator, asFloat( value ) ), 0 );
+        }
+
+        reduce( pFunction, pInitialValue )
+        {
+            const arr = this.toArray();
+            return arr.reduce( pFunction, pInitialValue );
+        }
+
+        reduceRight( pFunction, pInitialValue )
+        {
+            const arr = this.toArray();
+            return arr.reduceRight( pFunction, pInitialValue );
+        }
+
+        some( pFunction )
+        {
+            const arr = this.toArray();
+            const func = Filters.IS_FILTER( pFunction ) ? pFunction : () => true;
+            return arr.some( func );
+        }
+
+        every( pFunction )
+        {
+            const arr = this.toArray();
+            const func = Filters.IS_FILTER( pFunction ) ? pFunction : () => true;
+            return arr.every( func );
+        }
+
+        get mean()
+        {
+            const arr = this.toArray();
+            return arr.reduce( ( accumulator, value ) => sum( accumulator, asFloat( value ) ), 0 ) / arr.length;
+        }
+
+        sort( ...pComparator )
+        {
+            const comparatorChain = Comparators.chain( [...pComparator, this.options?.comparator, keyComparator] );
+            const arr = this.toArray().sort( comparatorChain || keyComparator );
+            const opts = populateOptions( this.options, { comparator: comparatorChain } );
+            return new Distribution( arr, opts );
+        }
+
+        sortByValue( ...pComparator )
+        {
+            const comparatorChain = Comparators.chain( [...pComparator, valueComparator] );
+            const arr = this.toArray().sort( comparatorChain || valueComparator );
+            const opts = populateOptions( this.options, { comparator: comparatorChain } );
+            return new Distribution( arr, opts );
+        }
+
+        toPercentageDistribution( pAsDecimal = false, pOptions = DEFAULT_DISTRIBUTION_OPTIONS )
+        {
+            const asDecimal = !!pAsDecimal;
+
+            const opts = populateOptions( pOptions, this.options );
+
+            const precision = asInt( resolveNullOrNaN( opts.precision ) );
+
+            const roundingMode = opts.roundingMode;
+
+            const sum = round( this.sum, precision, roundingMode );
+
+            let arr = this.toArray();
+
+            if ( isZero( sum ) )
+            {
+                return new Distribution( arr.map( () => 0 ) );
+            }
+
+            if ( 100 === sum )
+            {
+                if ( asDecimal )
+                {
+                    let divisionOptions =
+                        {
+                            limitToSignificantDigits: true,
+                            significantDigits: precision,
+                        };
+
+                    arr = arr.map( ( value ) => quotient( value, 100, divisionOptions ) );
+                    return new Distribution( arr, opts );
+                }
+                return new Distribution( this, opts );
+            }
+            else if ( 1 === sum )
+            {
+                if ( !asDecimal )
+                {
+                    arr = arr.map( ( value ) => product( value, 100 ) );
+                    return new Distribution( arr, opts );
+                }
+                return new Distribution( this, opts );
+            }
+
+            let percentages = arr.map( ( value ) => quotient( value, sum, opts ) * (asDecimal ? 1 : 100) );
+
+            return new Distribution( percentages, opts );
+        }
+
+        apply( pTotal, pIterable, pNumEntries, pOptions = DEFAULT_DISTRIBUTION_OPTIONS )
+        {
+            const options = populateOptions( pOptions, this.options );
+
+            let iterable = resolveIterable( pIterable || this.keys(), options );
+
+            let numEntries = resolveExpectedEntries( pNumEntries, iterable, options );
+
+            let distribution = new Distribution( this, options );
+
+            let total = resolveNullOrNaN( isNumeric( pTotal ) ? asFloat( pTotal ) : 0 );
+
+            if ( numEntries < this.size )
+            {
+
+            }
+
+            if ( numEntries > this.size )
+            {
+
+            }
+
+            distribution = distribution.toPercentageDistribution( false, options );
+
+
+            return new Distribution( this, options );
+        }
+    }
+
+    if ( isFunction( Map.groupBy ) )
+    {
+        Distribution.groupBy = function( pItems, pCallback )
+        {
+            return new Distribution( Map.groupBy( pItems, pCallback ) );
+        };
+    }
+
+    Distribution.emitWarning = emitWarning;
+    Distribution.emitError = emitError;
+    Distribution.emitIllegalArgumentWarning = emitIllegalArgumentWarning;
+    Distribution.emitIllegalArgumentError = emitIllegalArgumentError;
+
+    const checkResults = function( pCount, pNumEntries, pSum, pRemainder, pPreciseRemainder, pErrorSourceName, pErrorInfo, pOptions )
+    {
+        const count = resolveNullOrNaN( pCount );
+        const numEntries = resolveNullOrNaN( pNumEntries );
+        const sum = resolveNullOrNaN( pSum );
+        const remainder = resolveNullOrNaN( pRemainder );
+        const preciseRemainder = resolveNullOrNaN( pPreciseRemainder );
+        const options = populateOptions( pOptions, DEFAULT_DISTRIBUTION_OPTIONS );
+
+        const errorSourceName = pErrorSourceName || _mt_str;
+        const errorInfo = updateErrorInfo( pErrorInfo,
+                                           {
+                                               sum: sum,
+                                               remainder: remainder,
+                                               preciseRemainder: preciseRemainder,
+                                               count: count
+                                           } );
+
+        if ( count < numEntries )
+        {
+            Distribution.emitIllegalArgumentWarning( WARNING_UNEXPECTED_NUMBER_OF_ENTRIES, errorSourceName, errorInfo, options );
+        }
+
+        if ( 0 - preciseRemainder > MAX_TOLERANCE )
+        {
+            Distribution.emitIllegalArgumentWarning( WARNING_UNALLOCATED_AMOUNT, errorSourceName, errorInfo, options );
+        }
+    };
+
 
     /**
      * Recalculates and returns the summation, remainder, and precise remainder for the specified distribution.
@@ -503,7 +962,7 @@ const $scope = constants?.$scope || function()
      */
     function recalculateRemainder( pDistribution, pTotal, pOriginalTotal )
     {
-        const distribution = pDistribution || new Map();
+        const distribution = pDistribution || new Distribution( pDistribution );
 
         const summation = asArray( distribution.values() ).reduce( ( accumulator, value ) => accumulator + asFloat( value ), 0 );
 
@@ -521,19 +980,6 @@ const $scope = constants?.$scope || function()
             preciseRemainder: preciseRemainder,
         };
     }
-
-    /*
-     if ( count < numEntries )
-     {
-     reportError.call( modulePrototype, new IllegalArgumentError( WARNING_UNEXPECTED_NUMBER_OF_ENTRIES ), WARNING_UNEXPECTED_NUMBER_OF_ENTRIES, S_WARN, errorSourceName, errorInfo );
-     }
-
-     if ( 0 - preciseRemainder > 0.00000000000005 )
-     {
-     reportError.call( modulePrototype, new IllegalArgumentError( WARNING_UNALLOCATED_AMOUNT ), WARNING_UNALLOCATED_AMOUNT, S_WARN, errorSourceName, errorInfo );
-     }
-
-     */
 
     /**
      * @typedef {Object} ReconciliationValues The values to pass to the reconciliation function
@@ -554,6 +1000,25 @@ const $scope = constants?.$scope || function()
      *
      */
 
+    /**
+     * Constructs and returns an object containing values needed for reconciliation processes.
+     *
+     * @param {Map} pDistribution - A map containing the pre-distribution values. If not provided, an empty map is initialized.
+     * @param {number} remainder - The remainder value. If not provided, it is calculated as the difference between total or summation and the distribution total.
+     * @param {number} sign - A value indicating the sign for the reconciliation process. If not provided, it is resolved based on the passed distribution.
+     * @param {Function} distributionFunction - The function used to determine how values should be distributed. Defaults to a fallback if not provided.
+     * @param {any} modelDistribution - A model used to guide the distribution process.
+     * @param {number} total - The predefined total value. If not provided, the distribution's total is used.
+     * @param {number} summation - A summation value. If not provided, the distribution's total is used.
+     * @param {Object} errorInfo - Error-related details or metadata. If not provided, it is generated.
+     * @param {number} count - The count of items in the distribution. If not provided, it is calculated from the distribution.
+     * @param {number} expectedEntries - The number of expected entries in the distribution. Defaults to the count or size of the distribution.
+     * @param {number} originalTotal - The original total before any reconciliation. Defaults to the total or the distribution total.
+     * @param {number} preciseRemainder - The precise remainder value for accuracy in reconciliation.
+     * @param {Array} weights - A list of weights applied to the distribution values. If not provided, defaults to an empty array.
+     * @return {Object} An object containing reconciled properties: distribution, remainder, sign, distributionFunction, modelDistribution, total, summation, errorInfo, count, originalTotal, expectedEntries, and weights.
+     * @private
+     */
     function buildReconciliationValues( pDistribution,
                                         remainder,
                                         sign,
@@ -568,9 +1033,9 @@ const $scope = constants?.$scope || function()
                                         preciseRemainder,
                                         weights )
     {
-        let distribution = pDistribution || new Map();
+        let distribution = pDistribution || new Distribution( pDistribution );
 
-        let distributionTotal = asArray( pDistribution.values() ).reduce( ( accumulator, value ) => accumulator + asFloat( value ), 0 );
+        let distributionTotal = distribution.sum;
 
         let errorSourceName = calculateErrorSourceName( modName, distributionFunction || reconcile );
 
@@ -596,15 +1061,15 @@ const $scope = constants?.$scope || function()
      * @param {DistributionOptions} pOptions
      * @returns {Map<*,number>}
      */
-    function reconcile( pReconciliationValues, pOptions )
+    function reconcile( pReconciliationValues, pOptions = DEFAULT_DISTRIBUTION_OPTIONS )
     {
         const options = populateOptions( pOptions, DEFAULT_DISTRIBUTION_OPTIONS );
 
         const reconciliationValues = Object.assign( {}, pReconciliationValues || {} );
 
-        let distribution = reconciliationValues.distribution || new Map();
+        let distribution = reconciliationValues.distribution || new Distribution( reconciliationValues.distribution, pOptions );
 
-        let distributionTotal = asArray( distribution.values() ).reduce( ( accumulator, value ) => accumulator + asFloat( value ), 0 );
+        let distributionTotal = distribution.sum;
 
         let total = reconciliationValues.total || distributionTotal;
         let originalTotal = reconciliationValues.originalTotal || total;
@@ -638,9 +1103,9 @@ const $scope = constants?.$scope || function()
         {
             function recalculate( pDistribution )
             {
-                const distribution = pDistribution || new Map();
+                const distro = pDistribution || new Distribution( distribution );
 
-                const newRemainder = recalculateRemainder( distribution, total, originalTotal );
+                const newRemainder = recalculateRemainder( distro, total, originalTotal );
 
                 remainder = newRemainder.remainder;
                 preciseRemainder = newRemainder.preciseRemainder;
@@ -663,7 +1128,7 @@ const $scope = constants?.$scope || function()
 
                 if ( redistributionOption === REDISTRIBUTION_OPTIONS.IGNORE )
                 {
-                    reportError.call( modulePrototype, new IllegalArgumentError( WARNING_UNALLOCATED_AMOUNT ), WARNING_UNALLOCATED_AMOUNT, S_WARN, errorSourceName, errorInfo );
+                    Distribution.warnIllegalArgument( WARNING_UNALLOCATED_AMOUNT, errorSourceName, errorInfo );
 
                     return distribution;
                 }
@@ -681,7 +1146,7 @@ const $scope = constants?.$scope || function()
                 newOptions.precision = asInt( precision ) + 1;
                 newOptions.allowedRecursions = asInt( allowedRecursions ) - 1;
 
-                distribution = distributionFunction.call( modulePrototype, total, distribution.keys(), numEntries, modelDistribution, newOptions );
+                distribution = distributionFunction.call( modulePrototype, total, distribution, numEntries, modelDistribution, newOptions );
 
                 recalculate( distribution );
             }
@@ -704,7 +1169,7 @@ const $scope = constants?.$scope || function()
      */
     const distributeRemainder = function( pDistribution, pWeights, pRemainder, pSign, pOptions = DEFAULT_DISTRIBUTION_OPTIONS )
     {
-        const distribution = pDistribution || new Map();
+        const distribution = pDistribution || new Distribution( pDistribution, pOptions );
 
         let remainder = isNumeric( pRemainder ) ? asFloat( pRemainder ) : 0;
 
@@ -831,7 +1296,7 @@ const $scope = constants?.$scope || function()
         canContinue &= isValidNumberOfEntries( numEntries, errorSourceName, errorInfo );
         canContinue &= isValidIterable( iterable, errorSourceName, errorInfo );
 
-        let distribution = new Map();
+        let distribution = new Distribution( new Map(), options );
 
         if ( !canContinue )
         {
@@ -884,25 +1349,7 @@ const $scope = constants?.$scope || function()
             count++;
         }
 
-        if ( count < numEntries )
-        {
-            reportError.call( modulePrototype, new IllegalArgumentError( WARNING_UNEXPECTED_NUMBER_OF_ENTRIES ), WARNING_UNEXPECTED_NUMBER_OF_ENTRIES, S_WARN, errorSourceName, errorInfo.update( {
-                                                                                                                                                                                                      sum: summation,
-                                                                                                                                                                                                      remainder: remainder,
-                                                                                                                                                                                                      preciseRemainder: preciseRemainder,
-                                                                                                                                                                                                      count: count
-                                                                                                                                                                                                  } ) );
-        }
-
-        if ( 0 - preciseRemainder > 0.00000000000005 )
-        {
-            reportError.call( modulePrototype, new IllegalArgumentError( WARNING_UNALLOCATED_AMOUNT ), WARNING_UNALLOCATED_AMOUNT, S_WARN, errorSourceName, errorInfo.update( {
-                                                                                                                                                                                  sum: summation,
-                                                                                                                                                                                  remainder: remainder,
-                                                                                                                                                                                  preciseRemainder: preciseRemainder,
-                                                                                                                                                                                  count: count
-                                                                                                                                                                              } ) );
-        }
+        checkResults( count, numEntries, summation, remainder, preciseRemainder, errorSourceName, errorInfo, options );
 
         if ( (summation !== total || remainder !== 0) )
         {
@@ -916,11 +1363,11 @@ const $scope = constants?.$scope || function()
         {
             try
             {
-                distribution = transformDistribution( total, distribution, modelDistribution, options );
+                distribution = transformDistribution( total, distribution.keys(), modelDistribution, options );
             }
             catch( ex )
             {
-                reportError.call( modulePrototype, new __Error( WARNING_CANNOT_TRANSFORM ), WARNING_CANNOT_TRANSFORM, S_WARN, errorSourceName, errorInfo );
+                emitError( Error, WARNING_CANNOT_TRANSFORM, errorSourceName, errorInfo, modelDistribution, ex );
             }
         }
 
@@ -932,11 +1379,134 @@ const $scope = constants?.$scope || function()
         return generateEvenDistribution( pTotal, pIterable, pNumEntries, pOptions );
     };
 
+
+    function numSegmentsPerKey( pSegments, pNumEntries )
+    {
+        const numEntries = isNumeric( pNumEntries ) ? asInt( pNumEntries ) : 0;
+
+        let segments = asArray( pSegments?.values() || pSegments || [] );
+
+        segments = toPercentages( segments );
+
+        const numSegments = segments.length;
+
+        let per = quotient( numSegments, numEntries );
+
+        let arr = new Array( numEntries ).fill( per ).map( asFloat );
+
+
+
+        let differenceRounding = 6;
+
+        let iterations = 0;
+
+        let switchIterations = asInt( (numEntries * numSegments) ** 2 );
+
+        let maxIterations = asInt( 2 * ((numEntries * numSegments) ** 2) );
+
+        let allocated = arr.reduce( ( a, b ) => a + b, 0 );
+
+        while ( (arr.some( e => !isInteger( e ) ) || arr.some( e => e < 1 )) || allocated < numSegments )
+        {
+            let segmentIndex = 0;
+
+            let diff = 0;
+
+            differenceRounding -= ((iterations + 1) / 10);
+
+            differenceRounding = Math.max( 0, asInt( Math.round( differenceRounding ) ) );
+
+            for( let i = 0, n = arr.length; i < n; i++ )
+            {
+                segmentIndex = Math.max( i, segmentIndex );
+
+                allocated = arr.reduce( ( a, b ) => a + b, 0 );
+
+                let value = asFloat( arr[i] );
+
+                if ( isInteger( value ) )
+                {
+                    segmentIndex += Math.max( i, value - 1 );
+                    continue;
+                }
+
+                let integer = Math.round( value );
+
+                let segmentCount = allocated > numSegments ? Math.max( 1, asInt( integer ) - 1 ) : asInt( integer );
+
+                if ( iterations > maxIterations )
+                {
+                    arr[i] = segmentCount;
+                }
+                else
+                {
+                    diff = round( difference( integer, value ), differenceRounding, ROUNDING_MODE.HALF_AWAY_FROM_ZERO );
+
+                    if ( 0 === diff )
+                    {
+                        segmentIndex += Math.max( i, integer - 1 );
+                        continue;
+                    }
+
+                    const pct = Math.max( 1, asArray( [...segments.slice( segmentIndex, (segmentIndex + segmentCount) )] ).reduce( ( a, b ) => a + b, 0 ) );
+
+                    let delta = Math.sign( diff ) * asFloat( (iterations >= switchIterations) ? diff : (applyPercent( pct, diff )) );
+
+                    arr[i] += delta;
+
+                    if ( iterations > 2 )
+                    {
+                        arr = arr.map( ( e, idx ) => idx > i ? e - delta : e );
+                    }
+
+                    allocated = arr.reduce( ( a, b ) => a + b, 0 );
+                }
+
+                segmentIndex += segmentCount;
+            }
+
+            if ( iterations > maxIterations || round( allocated, (differenceRounding + 3), ROUNDING_MODE.HALF_EVEN ) === numSegments )
+            {
+                break;
+            }
+
+            iterations++;
+        }
+
+        arr = arr.map( Math.round );
+
+        while ( arr.reduce( ( a, b ) => a + b, 0 ) > numSegments )
+        {
+            const idx = arr.indexOf( Math.max( ...arr ) );
+            arr[idx] -= 1;
+        }
+
+        while ( arr.reduce( ( a, b ) => a + b, 0 ) < numSegments )
+        {
+            const idx = arr.indexOf( Math.min( ...arr ) );
+            arr[idx] += 1;
+        }
+
+        return arr;
+    }
+
     function numKeysPerSegment( pSegments, pNumEntries )
     {
         const numEntries = isNumeric( pNumEntries ) ? asInt( pNumEntries ) : 0;
 
-        const segments = asArray( pSegments?.values() || pSegments || [] );
+        let segments = asArray( pSegments?.values() || pSegments || [] );
+
+        segments = toPercentages( segments );
+
+        if ( numEntries < segments.length )
+        {
+            return numSegmentsPerKey( segments, numEntries );
+        }
+
+        if ( numEntries === segments.length )
+        {
+            return segments.map( () => 1 );
+        }
 
         const sortedSegments = segments.map( ( e, i ) => [e, i] ).sort( ( a, b ) => b[0] - a[0] );
 
@@ -1054,7 +1624,7 @@ const $scope = constants?.$scope || function()
 
         let total = resolveNullOrNaN( isNumeric( pTotal ) ? asFloat( pTotal ) : 0 );
 
-        let distribution = new Map();
+        let distribution = new Distribution( new Map(), options );
 
         const errorSourceName = calculateErrorSourceName( modulePrototype, transformDistribution );
 
@@ -1083,7 +1653,9 @@ const $scope = constants?.$scope || function()
             significantDigits: precision
         };
 
-        let segments = distributionToArray( pModelDistribution );
+        let modelDistribution = new Distribution( pModelDistribution, options );
+
+        let segments = modelDistribution.toArray();
 
         const keysPerSegment = numKeysPerSegment( segments, numEntries );
 
@@ -1135,25 +1707,7 @@ const $scope = constants?.$scope || function()
             count++;
         }
 
-        if ( count < numEntries )
-        {
-            reportError.call( modulePrototype, new Error( WARNING_UNEXPECTED_NUMBER_OF_ENTRIES ), WARNING_UNEXPECTED_NUMBER_OF_ENTRIES, S_WARN, errorSourceName, errorInfo.update( {
-                                                                                                                                                                                       sum: summation,
-                                                                                                                                                                                       remainder: remainder,
-                                                                                                                                                                                       preciseRemainder: preciseRemainder,
-                                                                                                                                                                                       count: count
-                                                                                                                                                                                   } ) );
-        }
-
-        if ( 0 - preciseRemainder > 0.00000000000005 )
-        {
-            reportError.call( modulePrototype, new Error( WARNING_UNALLOCATED_AMOUNT ), WARNING_UNALLOCATED_AMOUNT, S_WARN, errorSourceName, errorInfo.update( {
-                                                                                                                                                                   sum: summation,
-                                                                                                                                                                   remainder: remainder,
-                                                                                                                                                                   preciseRemainder: preciseRemainder,
-                                                                                                                                                                   count: count
-                                                                                                                                                               } ) );
-        }
+        checkResults( count, numEntries, summation, remainder, preciseRemainder, errorSourceName, errorInfo, options );
 
         if ( (summation !== total || remainder !== 0) )
         {
@@ -1164,6 +1718,45 @@ const $scope = constants?.$scope || function()
         return distribution;
     };
 
+    const transformDistributionAsync = async function( pTotal, pIterable, pNumEntries, pModelDistribution, pOptions = DEFAULT_DISTRIBUTION_OPTIONS )
+    {
+        return transformDistribution( pTotal, pIterable, pNumEntries, pModelDistribution, pOptions );
+    };
+
+    function sumOfDistribution( pDistribution )
+    {
+        asArray( pDistribution ).reduce( ( a, b ) => a + b, 0 );
+    }
+
+    /**
+     * Returns a new distribution of values keyed by the iterable values
+     * where each value is the percentage of the total
+     * indicated by the corresponding value in the percent distribution specified.
+     *
+     * The percent distribution specified is assumed to represent 100% of the total,
+     * such that if the sum of its value is not either 1 or 100,
+     * each value is assumed to be the percentage of its sum instead.
+     *
+     *
+     * @param pTotal
+     * @param pIterable
+     * @param pNumEntries
+     * @param pPercentDistribution
+     * @param pOptions
+     */
+    const applyDistribution = function( pTotal, pIterable, pNumEntries, pPercentDistribution, pOptions = DEFAULT_DISTRIBUTION_OPTIONS )
+    {
+        const options = populateOptions( pOptions, DEFAULT_DISTRIBUTION_OPTIONS );
+
+        let iterable = resolveIterable( pIterable || pPercentDistribution, options );
+
+        const numEntries = resolveExpectedEntries( pNumEntries, iterable, options );
+
+        let total = resolveNullOrNaN( isNumeric( pTotal ) ? asFloat( pTotal ) : 0 );
+
+
+    };
+
     let mod =
         {
             generateEvenDistribution,
@@ -1172,7 +1765,8 @@ const $scope = constants?.$scope || function()
             DEFAULT_DISTRIBUTION_OPTIONS,
             REDISTRIBUTION_OPTIONS,
             DEFAULT_REDISTRIBUTION_OPTION,
-            numKeysPerSegment
+            numKeysPerSegment,
+            numSegmentsPerKey,
         };
 
     mod = modulePrototype.extend( mod );

@@ -1,19 +1,10 @@
-exactmath class with just add, subtract, multiply, and divide; separate package and module for extended functionality
+DistributionUtils
+Logger
 
+Documentation
 
-mapping over an infinite set -
-        return a new iterator that applies the mapping function to each value before it yields
-
-        JSDoc, package.html
-
-        "Why?" - document the reasoning behind each function somewhere:
-        example: "string" === someVariable when I meant "string" === tyupeof someVariable
-        minifiers and quoted string literals?
-        memory usage of string literals?
-
-        look for an eliminate further redundancies
-
-        dispatch "trace" events from FunctionUtils (and some selected functions)
+build
+preprocess files, including documentation
 
 LoggingUtils
     SimpleLogger
@@ -23,22 +14,27 @@ LoggingUtils
 
     use notion of "appenders" to handle writing to file, console, database, remote endpoint, or somewhere else
 
+ --ObjectFunctor ??
 
-MathUtils - distributions; advanced mathematics
-WorkerUtils
-ServiceWorkerUtils, caching strategies
-.valueOf Symbol [Symbol.toPrimitive]
-Symbol.species
-ObjectFunctor
 breadth-first iterators
 depth-first iterators
+lazy iterators
+short-circuit iterators
+
+Data Schedule, generic form of PatientVisitSchedule and DataAvailabilitySchedule
+
+
+WorkerUtils - threads?
+
+ServiceWorkerUtils, caching strategies
 functional programming constructs (birds?)
+
 Page.Scheduler port
 pending promises
 pending events / event interceptor
+
 table header nonscrolling
-NumberUtils, fractions, overflows
-asyncLoad modules
+
 Lerna to publish as separate packages or TurboRepo?
 
 JsDoc
@@ -48,5 +44,5 @@ can I rename my repository?
 uglify
 parsers
 build
-lazy iterators
-short-circuit iterators
+
+Apache port via IPC to Java
