@@ -1,0 +1,19 @@
+{
+  "name": "@toolbocks/logging",
+  "version": "1.0.0",
+  "description": "Extensible logging infrastructure for JavScript applications",
+  "main": "src/index.js",
+  "dependencies": {
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "scripts": {
+    "test": "jest",
+    "doc": "jsdoc -c ../../jsdoc.config.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bockelman-scott/bocktils.git"
+  }
+}
