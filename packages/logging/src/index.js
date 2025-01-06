@@ -43,24 +43,24 @@ const $scope = constants?.$scope || function()
     const {
         classes,
         _mt_str,
-        _str,
+        _spc,
+        _comma,
         _num,
         _obj,
         _fun,
+        _lf,
+        _crlf,
         lock,
         funcAsString,
         populateOptions,
         _defaultLocaleString = "en-US",
         S_ERROR = "error",
-        S_WARN = "warn",
-        S_INFO = "info",
-        S_DEBUG = "debug",
-        S_TRACE = "trace",
         no_op,
-        ignore
+        ignore,
+        resolveError
     } = constants;
 
-    const { ModuleEvent, ModulePrototype, resolveError, StatefulListener } = classes;
+    const { ModuleEvent, ModulePrototype, StatefulListener } = classes;
 
     if ( _ud === typeof CustomEvent )
     {
@@ -69,9 +69,9 @@ const $scope = constants?.$scope || function()
 
     const { isNull, isString, isNumeric, isNumber, isObject, isFunction, isDate } = typeUtils;
 
-    const { asString, asInt, lcase, ucase } = stringUtils;
+    const { asString, asInt, isBlank, lcase, ucase, trimLeadingCharacters } = stringUtils;
 
-    const { asArray, varargs, Filters } = arrayUtils;
+    const { asArray, varargs, Filters, concatenateConsecutiveStrings } = arrayUtils;
 
 
     const modulePrototype = new ModulePrototype( "LoggingUtils", INTERNAL_NAME );
@@ -81,18 +81,13 @@ const $scope = constants?.$scope || function()
         #id;
         #name;
 
-        static #CACHE =
-            {
-                // stores the defines levels by id and by name
-            };
-
         constructor( pId, pName )
         {
             this.#id = isNumeric( pId ) ? asInt( pId ) : 0;
             this.#name = lcase( asString( pName, true ) );
 
-            LogLevel.#CACHE[this.#id] = this;
-            LogLevel.#CACHE[this.#name] = this;
+            LogLevel.CACHE[this.#id] = this;
+            LogLevel.CACHE[this.#name] = this;
         }
 
         get id() { return this.#id; }
@@ -103,12 +98,7 @@ const $scope = constants?.$scope || function()
 
         [Symbol.toPrimitive]( hint )
         {
-            if ( "string" === hint )
-            {
-                return this.#name;
-            }
-
-            return this.#id;
+            return this.#name;
         }
 
         [Symbol.toStringTag]()
@@ -134,17 +124,27 @@ const $scope = constants?.$scope || function()
             }
         }
 
+        isLessThan( pLevel )
+        {
+            return this.compareTo( pLevel ) < 0;
+        }
+
+        isGreaterThan( pLevel )
+        {
+            return this.compareTo( pLevel ) > 0;
+        }
+
         compareTo( pLevel )
         {
-            const other = LogLevel.getLevel( pLevel ) || isNumeric( pLevel ) ? asInt( pLevel ) : pLevel;
+            const other = (pLevel instanceof this.constructor) ? pLevel : (LogLevel.getLevel( pLevel ) || isNumeric( pLevel ) ? asInt( pLevel ) : pLevel);
 
             if ( other instanceof this.constructor )
             {
-                return this.#id - other.id;
+                return this.#id < other.id ? -1 : (this.#id > other.id ? 1 : 0);
             }
             else if ( isNumber( other ) )
             {
-                return this.#id - other;
+                return this.#id < other ? -1 : (this.#id > other ? 1 : 0);
             }
 
             return 1;
@@ -154,12 +154,14 @@ const $scope = constants?.$scope || function()
         {
             return this.compareTo( pLevel ) <= 0;
         }
-
-        static getLevel( pIdOrName )
-        {
-            return (pIdOrName instanceof this.constructor) ? pIdOrName : (this.#CACHE[pIdOrName] || this.#CACHE[lcase( asString( pIdOrName, true ) )]);
-        }
     }
+
+    LogLevel.CACHE = {};
+
+    LogLevel.getLevel = function( pIdOrName )
+    {
+        return (pIdOrName instanceof LogLevel) ? pIdOrName : (LogLevel.CACHE[pIdOrName] || LogLevel.CACHE[lcase( asString( pIdOrName, true ) )]);
+    };
 
     LogLevel.ALL = lock( new LogLevel( Number.MAX_SAFE_INTEGER, "ALL" ) );
     LogLevel.ERROR = lock( new LogLevel( 200, "ERROR" ) );
@@ -217,7 +219,7 @@ const $scope = constants?.$scope || function()
         {
             this.#timestamp = new Date();
 
-            this.#level = LogLevel.getLevel( pLevel );
+            this.#level = pLevel instanceof LogLevel ? pLevel : LogLevel.getLevel( pLevel ) || LogLevel.INFO;
 
             this.#message = asString( pMessage );
 
@@ -235,6 +237,7 @@ const $scope = constants?.$scope || function()
 
         get level()
         {
+            this.#level = (this.#level instanceof LogLevel) ? this.#level : LogLevel.getLevel( this.#level ) || LogLevel.INFO;
             return this.#level;
         }
 
@@ -250,7 +253,26 @@ const $scope = constants?.$scope || function()
 
         get stackTrace()
         {
-            return this.#error?.stackTrace || this.#error?.stack || _mt_str;
+            return this.error?.stackTrace || this.error?.stack || null;
+        }
+
+        get stack()
+        {
+            let s = _mt_str;
+
+            if ( isObject( this.stackTrace ) && !isNull( this.stackTrace ) )
+            {
+                s = asString( this.stackTrace.stack || this.error?.stack || _mt_str );
+            }
+            else if ( isString( this.stackTrace ) )
+            {
+                s = asString( this.stackTrace );
+            }
+
+            s = s.replace( this.error?.message || _mt_str, _mt_str );
+            s = s.replace( /^Error:\s*/, _mt_str );
+
+            return trimLeadingCharacters( trimLeadingCharacters( s, _crlf, _mt_str ), _lf, _mt_str );
         }
 
         get message()
@@ -270,11 +292,34 @@ const $scope = constants?.$scope || function()
                 return pFormatter.format( this );
             }
 
-            return [this.timestamp, this.level, this.message, this.source, this.error, this.stackTrace, this.error?.message, ...this.data];
+            return [
+                this.timestamp,
+                (this.level?.name || this.level),
+                this.message,
+                this.source,
+                this.error,
+                (this.stack || this.error?.stack),
+                this.error?.message,
+                ...this.data];
+        }
+
+        toString()
+        {
+            return this.format( {} ).join( _lf );
+        }
+
+        [Symbol.toPrimitive]( pHint )
+        {
+            return this.toString();
+        }
+
+        [Symbol.toStringTag]()
+        {
+            return this.toString();
         }
     }
 
-    const DEFAULT_TEMPLATE = `[{level}] - [{timestamp}] - [{source}]:\n{message}`;
+    const DEFAULT_TEMPLATE = `[{level}] - [{timestamp}] - [{source}]: {message}`;
     const DEFAULT_ERROR_TEMPLATE = `{errorName}: {errorMessage}{stackTrace}`;
 
     /**
@@ -406,53 +451,132 @@ const $scope = constants?.$scope || function()
 
         _populateTemplate( pTimestamp, pLevel, pMessage, pSource )
         {
-            let timestamp = isDate( pTimestamp ) ? this.dateFormatter.format( pTimestamp ) : pTimestamp;
+            let timestamp = asString( isDate( pTimestamp ) ? this.dateFormatter.format( pTimestamp ) : pTimestamp, true );
 
-            let level = ucase( isString( pLevel ) ? asString( pLevel, true ) : pLevel.name || asString( pLevel, true ) );
+            let level = ucase( isString( pLevel ) ? asString( pLevel, true ) : pLevel?.name || asString( pLevel, true ) );
 
-            let message = asString( pMessage );
+            let message = asString( pMessage, true );
 
-            let source = asString( pSource );
+            let source = asString( pSource, true );
 
             let template = this.template.replaceAll( "{timestamp}", timestamp ).replaceAll( "{0}", timestamp );
 
-            template = template.replaceAll( "{level}", level ).replaceAll( "{1}", level );
-            template = template.replaceAll( "{message}", message ).replaceAll( "{2}", message );
-            template = template.replaceAll( "{source}", source ).replaceAll( "{3}", source );
+            if ( !isBlank( level ) )
+            {
+                template = template.replaceAll( "{level}", level ).replaceAll( "{1}", level );
+            }
+            else
+            {
+                template = template.replaceAll( /\[?\{level}]?/g, _mt_str ).replaceAll( /\[?\{1}]?/g, level );
+            }
+
+            if ( !isBlank( message ) )
+            {
+                template = template.replaceAll( "{message}", message ).replaceAll( "{2}", message );
+            }
+            else
+            {
+                template = template.replaceAll( /\[?\{message}]?/g, _mt_str ).replaceAll( /\[?\{2}]?/g, message );
+            }
+            if ( !isBlank( source ) )
+            {
+                template = template.replaceAll( "{source}", source ).replaceAll( "{3}", source );
+            }
+            else
+            {
+                template = template.replaceAll( /\[?\{source}]?/g, _mt_str ).replaceAll( /\[?\{3}]?/g, source );
+            }
+
+            template = trimLeadingCharacters( template.trim(), _spc, _mt_str ).replaceAll( /\n +/g, _lf ).replace( /^\s+/, _mt_str );
 
             return template;
         }
 
         _populateErrorTemplate( pError, pStackTrace, pErrorMessage )
         {
-            let errorName = asString( pError?.name || _mt_str );
-            let errorMessage = asString( pErrorMessage || pError?.message || _mt_str );
+            let errorName = asString( (pError?.name || pError?.type || _mt_str), true );
+            let errorMessage = asString( (pErrorMessage || pError?.message || _mt_str), true );
+            let stackTrace = asString( (this.includeStackTrace ? asString( pStackTrace || pError?.stack || _mt_str ) : _mt_str), true );
 
-            let stackTrace = this.includeStackTrace ? asString( pStackTrace || pError?.stack || _mt_str ) : _mt_str;
+            if ( isBlank( errorName + errorMessage + stackTrace ) )
+            {
+                return _mt_str;
+            }
 
-            let template = this.errorTemplate.replaceAll( "{errorName}", errorName ).replaceAll( "{0}", errorName );
-            template = template.replaceAll( "{errorMessage}", errorMessage ).replaceAll( "{1}", errorMessage );
-            template = template.replaceAll( "{stackTrace}", ("\n" + stackTrace) ).replaceAll( "{2}", ("\n" + stackTrace) );
+            let template = this.errorTemplate;
+
+            if ( !isBlank( errorName ) )
+            {
+                template = template.replaceAll( "{errorName}", errorName ).replaceAll( "{0}", errorName );
+            }
+            else
+            {
+                template = template.replaceAll( /\[?\{errorName}]?/g, _mt_str ).replaceAll( /\[?\{0}]?/g, _mt_str );
+            }
+
+            if ( !isBlank( errorMessage ) )
+            {
+                template = template.replaceAll( "{errorMessage}", errorMessage ).replaceAll( "{1}", errorMessage );
+            }
+            else
+            {
+                template = template.replaceAll( /\[?\{errorMessage}]?/g, _mt_str ).replaceAll( /\[?\{1}]?/g, _mt_str );
+            }
+
+            if ( !isBlank( stackTrace ) )
+            {
+                template = template.replaceAll( "{stackTrace}", (_lf + stackTrace) ).replaceAll( "{2}", (_lf + stackTrace) );
+            }
+            else
+            {
+                template = template.replaceAll( /\[?\{stackTrace}]?/g, _mt_str ).replaceAll( /\[?\{2}]?/g, _mt_str );
+            }
+
+            template = trimLeadingCharacters( template.trim() );
+
+            template = template.replaceAll( /\n +/g, _lf );
 
             return template;
         }
 
         format( pLogRecord )
         {
-            const { timestamp, level, source, message, error, stackTrace, data } = pLogRecord || {};
+            const logRecord = pLogRecord instanceof LogRecord ? pLogRecord : new LogRecord( pLogRecord );
 
-            const timestampString = isDate( timestamp ) ? this.dateFormatter.format( timestamp ) : timestamp;
+            const timestamp = logRecord.timestamp;
+            const level = logRecord.level;
+            const message = logRecord.message;
+            const source = logRecord.source;
+            const error = logRecord.error;
+            const stackTrace = logRecord.stack;
+            const data = asArray( logRecord.data );
+
+            const timestampString = asString( isDate( timestamp ) ? this.dateFormatter.format( timestamp ) : timestamp, true );
+
+            let arr = [];
 
             const msg = this._populateTemplate( timestampString, level, message, source );
 
-            const errorMsg = this._populateErrorTemplate( error, stackTrace, message );
-
-            let arr = [msg, errorMsg];
+            arr.push( msg );
 
             if ( data?.length > 0 )
             {
-                arr = arr.concat( ...data );
+
+                arr.push( "[DATA:" );
+                arr = arr.concat( ...(asArray( data ).map( ( e, i, a ) => _spc + ((i < (a.length - 1)) ? (e + _comma) : e + "]") )) );
             }
+
+            arr = concatenateConsecutiveStrings( _spc, arr );
+
+            const errorMsg = this._populateErrorTemplate( error, stackTrace, error?.message || message );
+
+            if ( !isBlank( errorMsg ) )
+            {
+                arr.push( _lf );
+                arr.push( trimLeadingCharacters( errorMsg, _spc, _mt_str ) );
+            }
+
+            arr.push( _lf, _lf, _lf );
 
             return lock( arr );
         }
@@ -857,6 +981,39 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    class ConsoleLogger extends Logger
+    {
+        constructor( pOptions = DEFAULT_LOGGER_OPTIONS )
+        {
+            super( pOptions );
+        }
+
+        info( ...pArgs )
+        {
+            konsole.info( ...pArgs );
+        }
+
+        warn( ...pArgs )
+        {
+            konsole.warn( ...pArgs );
+        }
+
+        error( ...pArgs )
+        {
+            konsole.error( ...pArgs );
+        }
+
+        debug( ...pArgs )
+        {
+            konsole.debug( ...pArgs );
+        }
+
+        trace( ...pArgs )
+        {
+            konsole.trace( ...pArgs );
+        }
+    }
+
     let mod =
         {
             dependencies,
@@ -871,6 +1028,7 @@ const $scope = constants?.$scope || function()
                     Logger,
                     AsyncLogger,
                     BufferedLogger,
+                    ConsoleLogger
                 },
             DEFAULT_TEMPLATE,
             DEFAULT_ERROR_TEMPLATE,
@@ -883,6 +1041,7 @@ const $scope = constants?.$scope || function()
             Logger,
             AsyncLogger,
             BufferedLogger,
+            ConsoleLogger,
             resolveError,
             resolveSource,
         };

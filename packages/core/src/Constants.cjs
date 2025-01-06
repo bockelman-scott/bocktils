@@ -96,7 +96,8 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             IllegalArgumentError,
             resolveError,
             IterationCap,
-            ComparatorFactory
+            ComparatorFactory,
+            StatefulListener
         } = bockModuleBootstrap;
 
     if ( _ud === typeof CustomEvent )
@@ -704,7 +705,8 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
                      * @alias module:Constants#classes#StackTrace
                      */
                     StackTrace,
-                    CustomEvent
+                    CustomEvent,
+                    StatefulListener
                 },
             _ud,
             /**

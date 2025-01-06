@@ -12,6 +12,8 @@ const {
     asArray,
     arraysEqual,
     toPercentages,
+    combineConsecutive,
+    concatenateConsecutiveStrings
 } = arrayUtils;
 
 const { constants, stringUtils } = dependencies;
@@ -1961,6 +1963,129 @@ describe( "Queues", () =>
 
               expect( arr ).toEqual( [2, 3, 4] );
           } );
+} );
+
+
+describe( "Combinators", () =>
+{
+    test( "combineConsecutive - numbers and strings",
+          () =>
+          {
+              let arr = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+              expect( combineConsecutive( { types: ["number"] }, arr ) ).toEqual( [55] );
+
+              arr = [1, "a", 2, "b", 3, 4, "c", 5, 6, "d", 7, 8, 9, "e", 10];
+
+              expect( combineConsecutive( { types: ["number"] }, arr ) ).toEqual( [1, "a", 2, "b", 7, "c", 11, "d", 24, "e", 10] );
+
+              expect( combineConsecutive( {
+                                              types: ["number"],
+                                              sortFirst: true
+                                          }, arr ) ).toEqual( [55, "a", "b", "c", "d", "e"] );
+
+              expect( combineConsecutive( {
+                                              types: ["number", "string"],
+                                              sortFirst: true
+                                          }, arr ) ).toEqual( [55, "a b c d e"] );
+
+              expect( combineConsecutive( {
+                                              types: ["number", "string"],
+                                              sortFirst: true,
+                                              separator: ""
+                                          }, arr ) ).toEqual( [55, "abcde"] );
+
+          } );
+
+    test( "combineConsecutive - functions and objects",
+          () =>
+          {
+              let arr = [{ a: 1, b: 2, c: 3 }, { a: 9, b: 10 }];
+
+              expect( combineConsecutive( { types: ["object"] }, arr ) ).toEqual( [{ a: 9, b: 10, c: 3 }] );
+
+              expect( combineConsecutive( { types: ["object"], operation: "-" }, arr ) ).toEqual( [{ c: 3 }] );
+
+              expect( combineConsecutive( { types: ["object"], operation: "*" }, arr ) ).toEqual( [{
+                  a: 9,
+                  b: 10,
+                  c: 3
+              }] );
+
+              expect( combineConsecutive( { types: ["object"], operation: "/" }, arr ) ).toEqual( [{ c: 3 }] );
+
+
+              arr = [[1, 2], [3, 4]];
+
+              expect( combineConsecutive( { types: ["object"] }, arr ) ).toEqual( [[1, 2, 3, 4]] );
+
+              expect( combineConsecutive( { types: ["object"], operation: "-" }, arr ) ).toEqual( [[1, 2]] );
+
+              expect( combineConsecutive( {
+                                              types: ["object"],
+                                              operation: "-"
+                                          }, [[1, 2, 3], [3, 4]] ) ).toEqual( [[1, 2]] );
+
+              expect( combineConsecutive( { types: ["object"], operation: "*" }, arr ) ).toEqual( [[3, 8]] );
+
+              expect( combineConsecutive( {
+                                              types: ["object"],
+                                              operation: "/"
+                                          }, [[8, 4], [2, 2]] ) ).toEqual( [[4, 2]] );
+
+
+              let f = function( a, b )
+              {
+                  return a + b;
+              };
+
+              let g = function( a, b )
+              {
+                  return a - b;
+              };
+
+              arr = [f, g];
+
+              let combined = combineConsecutive( { types: ["function"] }, arr );
+
+              let result = combined[0]( 1, 2 );
+
+              expect( result ).toEqual( 2 ); // (1 + 2) + (1 - 2)
+              expect( result ).toEqual( f( 1, 2 ) + g( 1, 2 ) ); // (1 + 2) + (1 - 2)
+
+              combined = combineConsecutive( { types: ["function"], operation: "-" }, arr );
+
+              result = combined[0]( 1, 2 );
+
+              expect( result ).toEqual( 4 ); // (1 + 2) - (1 - 2)
+              expect( result ).toEqual( f( 1, 2 ) - g( 1, 2 ) ); // (1 + 2) - (1 - 2)
+
+              combined = combineConsecutive( { types: ["function"], operation: "*" }, arr );
+
+              result = combined[0]( 1, 2 );
+
+              expect( result ).toEqual( -3 ); // (1 + 2) * (1 - 2)
+              expect( result ).toEqual( f( 1, 2 ) * g( 1, 2 ) ); // (1 + 2) - (1 - 2)
+
+              combined = combineConsecutive( { types: ["function"], operation: "/" }, arr );
+
+              result = combined[0]( 1, 2 );
+
+              // expect( result ).toEqual( -0.333333333333333 ); // (1 + 2) / (1 - 2)
+              expect( result ).toEqual( f( 1, 2 ) / g( 1, 2 ) ); // (1 + 2) - (1 - 2)
+
+              console.log( f( 1, 2 ) / g( 1, 2 ) );
+
+          } );
+
+    test( "concatenateConsecutiveStrings",
+          () =>
+          {
+              let arr = ["Hello"," world", 1, 2, "It's a nice ", "day"];
+
+              expect( concatenateConsecutiveStrings( " ", arr ) ).toEqual( ["Hello world", 1, 2, "It's a nice day"] );
+          });
+
 } );
 
 

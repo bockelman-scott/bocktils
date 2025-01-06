@@ -184,6 +184,47 @@ const $scope = constants?.$scope || function()
             [_ud]: undefined
         } );
 
+    /**
+     * A map of the JavaScript data types to their respective sort order.<br>
+     * <br>
+     * This object provides a standardized order for sorting or categorizing types.<br>
+     * Each key corresponds to a specific data type, with an associated
+     * numerical value indicating its order in comparison to others.<br>
+     * <br>
+     * <br>
+     * Keys/Values:<br>
+     * <ul>
+     *
+     *   <li>"number": The lowest sort order (0).</li>
+     *   <li>"bigint": The next lowest sort order (1)</li>
+     *   <li>"boolean": The next lowest sort order (2)</li>
+     *   <li>"string": The next lowest sort order (3)</li>
+     *   <li>"object": The next lowest sort order (4)</li>
+     *   <li>"function": The next lowest sort order (5)</li>
+     *   <li>"symbol": The next lowest sort order (6)</li>
+     *   <li>"undefined": The highest sort order (7)</li>
+     *
+     *  </ul>
+     *
+     * @namespace TYPE_SORT_ORDER
+     * @dict
+     * @const
+     * @readonly
+     * @type {Object}
+     * @alias module:TypeUtils#TYPE_SORT_ORDER
+     */
+    const TYPE_SORT_ORDER = lock(
+        {
+            [_num]: 0,
+            [_big]: 1,
+            [_bool]: 2,
+            [_str]: 3,
+            [_obj]: 4,
+            [_fun]: 5,
+            [_symbol]: 6,
+            [_ud]: 7
+        } );
+
     class VisitedSet extends Set
     {
         constructor( ...pValues )
@@ -2505,6 +2546,7 @@ const $scope = constants?.$scope || function()
             JS_TYPES,
             VALID_TYPES,
             TYPE_DEFAULTS,
+            TYPE_SORT_ORDER,
             BYTES_PER_TYPE,
             isUndefined,
             isDefined,

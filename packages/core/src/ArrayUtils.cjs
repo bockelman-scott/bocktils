@@ -78,6 +78,7 @@ const $scope = constants?.$scope || function()
      */
     const {
         _mt_str,
+        _spc,
         _dot,
         _str,
         _fun,
@@ -120,6 +121,7 @@ const $scope = constants?.$scope || function()
 
     const {
         VALID_TYPES,
+        TYPE_SORT_ORDER,
         isUndefined,
         isNull,
         isNonNullValue,
@@ -162,6 +164,7 @@ const $scope = constants?.$scope || function()
         leftOfLast,
         rightOfLast,
         asUtf8ByteArray,
+        cartesian,
     } = stringUtils;
 
     /** The maximum limit that can be specified for the size of a bounded queue
@@ -1997,6 +2000,24 @@ const $scope = constants?.$scope || function()
                 }
 
                 return comp;
+            },
+
+            /**
+             * A comparator function that orders an array by the type of its elements<br>
+             * <br>
+             * USAGE: <code>const sorted = array.sort( Comparators.BY_TYPE );</code><br>
+             * @type {function(*,*):number}
+             * @alias module:ArrayUtils#Comparators#BY_TYPE
+             * */
+            BY_TYPE: function( a, b )
+            {
+                const typeA = typeof a;
+                const typeB = typeof b;
+
+                const orderA = TYPE_SORT_ORDER[typeA];
+                const orderB = TYPE_SORT_ORDER[typeB];
+
+                return Comparators._compare( orderA, orderB );
             },
 
             /**
@@ -4753,6 +4774,218 @@ const $scope = constants?.$scope || function()
         return !!pAsStrings ? arr.map( e => asString( e ) ) : arr;
     };
 
+    const ArrayOperators =
+        {
+            "+":
+                {
+                    [_obj]: ( a, b ) => isArray( a ) && isArray( b ) ? a.concat( b ) : Object.assign( {}, a, b ),
+                    [_num]: ( a, b ) => a + b,
+                    [_big]: ( a, b ) => a + b,
+                    [_str]: ( a, b, sep ) => a + sep + b,
+                    [_bool]: ( a, b ) => a || b,
+                    [_fun]: ( a, b ) => function( ...pArgs )
+                    {
+                        return a( ...pArgs ) + b( ...pArgs );
+                    },
+                    [_symbol]: ( a, b ) => [a, b],
+                    [_ud]: ( a, b ) => null,
+                },
+            "-":
+                {
+                    [_obj]: function( a, b )
+                    {
+                        if ( isArray( a ) && isArray( b ) )
+                        {
+                            return a.filter( e => !b.includes( e ) );
+                        }
+
+                        let result = {};
+                        for( let key in a )
+                        {
+                            if ( !(key in b) )
+                            {
+                                result[key] = a[key];
+                            }
+                        }
+                        return result;
+                    },
+                    [_num]: ( a, b ) => a - b,
+                    [_big]: ( a, b ) => a - b,
+                    [_str]: ( a, b ) => a.replace( b, "" ),
+                    [_bool]: ( a, b ) => a && !b,
+                    [_fun]: ( a, b ) => function( ...pArgs )
+                    {
+                        return a( ...pArgs ) - b( ...pArgs );
+                    },
+                    [_symbol]: ( a, b ) => a.filter( e => e !== b ),
+                },
+            "*":
+                {
+                    [_obj]: ( a, b ) =>
+                    {
+                        const multiplyElements = ( aa, bb ) => aa.filter( isNumeric ).map( ( e, i ) => isNumeric( bb[i] ) ? asFloat( e ) * asFloat( bb[i] ) : 0 ).filter( e => !isNaN( e ) && isFinite( e ) );
+                        return isArray( a ) && isArray( b ) ? multiplyElements( a, b ) : Object.assign( {}, a, b );
+                    },
+                    [_num]: ( a, b ) => a * b,
+                    [_big]: ( a, b ) => a * b,
+                    [_str]: ( a, b ) => cartesian( a, b ),
+                    [_bool]: ( a, b ) => a && b,
+                    [_fun]: ( a, b ) => function( ...pArgs )
+                    {
+                        return a( ...pArgs ) * b( ...pArgs );
+                    }
+                },
+            "/":
+                {
+                    [_obj]: ( a, b ) =>
+                    {
+                        const divideElements = ( aa, bb ) => aa.filter( isNumeric ).map( ( e, i ) => isNumeric( bb[i] ) ? asFloat( e ) / asFloat( bb[i] ) : 0 ).filter( e => !isNaN( e ) && isFinite( e ) );
+                        if ( isArray( a ) && isArray( b ) )
+                        {
+                            return divideElements( a, b );
+                        }
+                        let result = {};
+                        for( let key in a )
+                        {
+                            if ( !(key in b) )
+                            {
+                                result[key] = a[key];
+                            }
+                        }
+                        return result;
+                    },
+                    [_num]: ( a, b ) => a / b,
+                    [_big]: ( a, b ) => a / b,
+                    [_str]: ( a, b ) => cartesian( a, b ),
+                    [_bool]: ( a, b ) => a && b,
+                    [_fun]: ( a, b ) => function( ...pArgs )
+                    {
+                        return a( ...pArgs ) / b( ...pArgs );
+                    }
+                }
+        };
+
+    const ArrayOperatorsByType = new Map();
+
+    Object.entries( ArrayOperators ).forEach( ( [operator, byType] ) =>
+                                              {
+                                                  Object.entries( byType ).forEach( ( [type, f] ) =>
+                                                                                    {
+                                                                                        let map = ArrayOperatorsByType.get( type ) || new Map();
+                                                                                        ArrayOperatorsByType.set( type, map );
+
+                                                                                        map.set( operator, f );
+                                                                                    } );
+                                              } );
+
+    /**
+     * @typedef {Object} CombinationOptions An object defining what and how to combine consecutive types
+     *
+     * @property {Array<string>} [types=[string]] An array of types to combine
+     *
+     * @property {Map<string,string|function>} [operators=ArrayOperatorsByType] A Map by type
+     *          defining the operations to perform
+     *          when combining elements of that type using that operator<br>
+     *          <br>
+     *          Acceptable values are one of the strings: <br>
+     *          +, -, *, \<br>
+     *          or a function that takes two elements of the type<br>
+     *
+     * @property {string} [operation=+] The operation to perform, which is used as a key into the operations specified.<br>
+     *
+     * @property {string} [separator] The separator to use if/when concatenating strings
+     *
+     * @property {boolean} [sortFirst=false] If true, the array of values will be sorted by type first.<br>
+     *                                       This will make all elements of a certain type consecutive.
+     *
+     * @property {boolean} [flatFirst=false] If true, the array of values will be flattened first.<br>
+     *
+     * @property {number} [flatLevel=1] If flatFirst is true, this value specifies the level to which to flatten the original array<br>
+     */
+
+    const DEFAULT_COMBINE_OPTIONS =
+        {
+            types: [_str],
+            operators: ArrayOperatorsByType,
+            operation: "+",
+            separator: _spc,
+            sortFirst: false,
+            flatFirst: false,
+            flatLevel: 1,
+        };
+
+    const combineConsecutive = function( pOptions = DEFAULT_COMBINE_OPTIONS, ...pArr )
+    {
+        const options = populateOptions( pOptions, DEFAULT_COMBINE_OPTIONS );
+
+        let arr = asArray( varargs( ...pArr ), { sanitize: true } );
+
+        const types = options.types || [_str];
+
+        const sep = asString( options.separator || _mt_str );
+
+        if ( options.flatFirst )
+        {
+            arr = arr.flat( asInt( options.flatLevel, 1 ) || 1 );
+        }
+
+        if ( options.sortFirst )
+        {
+            arr = arr.sort( Comparators.BY_TYPE );
+        }
+
+        const operators = options.operators;
+
+        const operation = options.operation;
+
+        const len = arr.length;
+
+        return arr.reduce( ( acc, current ) =>
+                           {
+                               if ( acc.length > 0 )
+                               {
+                                   let a = acc[acc.length - 1];
+                                   let b = current;
+
+                                   if ( types.includes( typeof a ) && types.includes( typeof b ) && areSameType( a, b ) )
+                                   {
+                                       const operations = operators.get( typeof a );
+                                       const op = operations.get( operation );
+
+                                       if ( isString( a ) )
+                                       {
+                                           a = asString( a, true );
+                                           if ( !isEmptyString( sep ) )
+                                           {
+                                               b = asString( b, true );
+                                           }
+                                       }
+
+                                       acc[acc.length - 1] = op( a, b, (acc.length < (len - 1) ? sep : _mt_str) );
+                                   }
+                                   else
+                                   {
+                                       acc.push( current );
+                                   }
+                               }
+                               else
+                               {
+                                   // just add other elements as-is
+                                   acc.push( current );
+                               }
+                               return acc;
+                           }, [] );
+    };
+
+    const concatenateConsecutiveStrings = function( pSeparator, ...pArr )
+    {
+        const arr = varargs( ...pArr );
+
+        const sep = asString( pSeparator ) || _spc;
+
+        return combineConsecutive( { types: [_str], separator: sep }, ...arr );
+    };
+
     let mod =
         {
             dependencies,
@@ -4821,6 +5054,8 @@ const $scope = constants?.$scope || function()
             DEFAULT_NUMERIC_RANGE_OPTIONS,
             DEFAULT_CHARACTER_RANGE_OPTIONS,
             range,
+            combineConsecutive,
+            concatenateConsecutiveStrings,
             /**
              * @namespace
              * The classes this module defines and exposes

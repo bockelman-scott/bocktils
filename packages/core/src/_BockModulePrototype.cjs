@@ -775,6 +775,15 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
         {
             return this;
         }
+
+        /**
+         * @inheritDoc
+         * @returns {string}
+         */
+        toString()
+        {
+            return this.prefix + ((this.message || super.message).replace( this.prefix, _mt_str ));
+        }
     }
 
     /**
@@ -2605,7 +2614,19 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
             __Error,
             IllegalArgumentError,
             IterationCap,
-            ComparatorFactory
+            ComparatorFactory,
+            StatefulListener,
+            classes:
+                {
+                    ModuleEvent: BockModuleEvent,
+                    ModulePrototype: BockModulePrototype,
+                    StackTrace,
+                    __Error,
+                    IllegalArgumentError,
+                    IterationCap,
+                    ComparatorFactory,
+                    StatefulListener
+                }
         };
 
     // adds the module to module.exports (if it exists) and then returns the module

@@ -2725,6 +2725,49 @@ const $scope = constants?.$scope || function()
         return toggleCaps( str, lcase, asString );
     }
 
+    function cartesian( pStrA, pStrB )
+    {
+        let a = asString( pStrA );
+        let b = asString( pStrB );
+
+        let s = _mt_str;
+
+        for( let i = 0, n = a.length; i < n; i++ )
+        {
+            for( let j = 0, m = b.length; j < m; j++ )
+            {
+                s += a.charAt( i ) + b.charAt( j );
+            }
+        }
+
+        return s;
+    }
+
+    function repeat( pStr, pCount )
+    {
+        if ( isNumber( pCount ) )
+        {
+            return asString( pStr ).repeat( pCount );
+        }
+        if ( isString( pCount ) )
+        {
+            return asString( pStr ).repeat( asString( pCount ).length );
+        }
+        if ( isFunction( pCount ) )
+        {
+            let s = pStr;
+            try
+            {
+                s = pCount.call( asString( pStr ) );
+            }
+            catch( ex )
+            {
+                modulePrototype.reportError( ex, ex.message, S_WARN, (modName + _colon + _colon + "repeat") );
+            }
+            return s;
+        }
+    }
+
     let mod =
         {
             dependencies,
@@ -2782,6 +2825,8 @@ const $scope = constants?.$scope || function()
             reverseString,
             capitalize,
             uncapitalize,
+            cartesian,
+            repeat,
             toUnixPath,
             isRelativePath,
             toAbsolutePath,
