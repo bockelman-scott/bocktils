@@ -85,3 +85,38 @@ describe( "LogFormatter", () =>
 
     } );
 } );
+
+describe( "LogFilter", () =>
+{
+    test( "LogFilter can discard messages", () =>
+    {
+        let filter = ( record ) => record.level.id <= 300;
+
+        expect( new LogFilter( filter ).isLoggable( logRecord ) ).toBe( false );
+    } );
+} );
+
+
+describe( "ConsoleLogger", () =>
+{
+    test( "ConsoleLogger logs to the console", () =>
+    {
+        jest.spyOn(console, 'log');
+
+        const consoleLogger = new ConsoleLogger();
+
+        // new Logger( {}, consoleLogger ).log( logRecord );
+
+        new Logger( { buffered: true }, consoleLogger ).error( logRecord );
+
+        const formatter = new LogFormatter();
+
+        const logMsg = formatter.format( logRecord );
+
+        setTimeout(() => {
+            expect(console.log).toHaveBeenCalledWith( logMsg );
+            console.log.mockRestore(); // Restore the original console.log
+            done(); // Signal test completion
+        }, 70_000);
+    } );
+} );

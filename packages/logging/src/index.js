@@ -633,7 +633,7 @@ const $scope = constants?.$scope || function()
             logFormatterOptions: DEFAULT_LOG_FORMATTER_OPTIONS,
             asynchronous: false,
             buffered: false,
-            bufferIntervalMs: 60_000,
+            bufferIntervalMs: 30_000,
         };
 
     class Logger extends StatefulListener
@@ -645,7 +645,7 @@ const $scope = constants?.$scope || function()
 
         #asynchronous = false;
         #buffered = false;
-        #bufferIntervalMs = 60_000;
+        #bufferIntervalMs = 30_000;
 
         #buffer = [];
         #bufferTimer;
@@ -665,7 +665,7 @@ const $scope = constants?.$scope || function()
 
             this.#asynchronous = this.#options?.asynchronous || false;
             this.#buffered = this.#options?.buffered || false;
-            this.#bufferIntervalMs = asInt( this.#options?.bufferIntervalMs || this.#bufferIntervalMs, 60_000 );
+            this.#bufferIntervalMs = asInt( this.#options?.bufferIntervalMs || this.#bufferIntervalMs, 30_000 );
 
             this.#level = LogLevel.getLevel( this.#options?.level || LogLevel.INFO ) || LogLevel.INFO;
             this.#logFormatterOptions = this.#options?.logFormatterOptions || DEFAULT_LOG_FORMATTER_OPTIONS;
@@ -680,6 +680,7 @@ const $scope = constants?.$scope || function()
         get level()
         {
             this.#level = (this.#level instanceof LogLevel ? this.#level : LogLevel.getLevel( this.#level )) || LogLevel.INFO;
+            return this.#level;
         }
 
         get logFormatterOptions()
@@ -722,7 +723,7 @@ const $scope = constants?.$scope || function()
 
         get bufferIntervalMs()
         {
-            return Math.max( 1_000, asInt( this.#bufferIntervalMs, 60_000 ) );
+            return Math.max( 1_000, asInt( this.#bufferIntervalMs, 30_000 ) );
         }
 
         get buffer()
