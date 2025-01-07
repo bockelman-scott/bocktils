@@ -76,6 +76,11 @@ const $scope = utils?.$scope || constants?.$scope || function()
 
     const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
 
+    const deriveFormat = function( pDateString, pLocale )
+    {
+
+    };
+
     /**
      * Class to parse a string as a number, according to the Locale and Intl.NumberFormat Options specified
      * Instances can be created with an existing Intl.NumberFormat

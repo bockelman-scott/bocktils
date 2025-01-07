@@ -45,6 +45,7 @@ const $scope = constants?.$scope || function()
         _mt_str,
         _spc,
         _comma,
+        _colon,
         _num,
         _obj,
         _fun,
@@ -60,7 +61,7 @@ const $scope = constants?.$scope || function()
         resolveError
     } = constants;
 
-    const { ModuleEvent, ModulePrototype, StatefulListener } = classes;
+    const { ModuleEvent, ModulePrototype, StatefulListener, StackTrace } = classes;
 
     if ( _ud === typeof CustomEvent )
     {
@@ -163,6 +164,11 @@ const $scope = constants?.$scope || function()
         return (pIdOrName instanceof LogLevel) ? pIdOrName : (LogLevel.CACHE[pIdOrName] || LogLevel.CACHE[lcase( asString( pIdOrName, true ) )]);
     };
 
+    LogLevel.resolveLevel = function( pLevel, pOptions )
+    {
+        return (pLevel instanceof LogLevel ? pLevel : LogLevel.getLevel( pLevel )) || LogLevel.DEFAULT;
+    };
+
     LogLevel.ALL = lock( new LogLevel( Number.MAX_SAFE_INTEGER, "ALL" ) );
     LogLevel.ERROR = lock( new LogLevel( 200, "ERROR" ) );
     LogLevel.WARN = lock( new LogLevel( 300, "WARN" ) );
@@ -172,14 +178,41 @@ const $scope = constants?.$scope || function()
     LogLevel.OFF = lock( new LogLevel( 0, "OFF" ) );
     LogLevel.NONE = lock( LogLevel.OFF );
 
-    function resolveSource( pSource )
+    LogLevel.DEFAULT = LogLevel.INFO;
+
+    function resolveSource( pSource, pError )
     {
         if ( isString( pSource ) )
         {
             return asString( pSource, true );
         }
 
-        switch ( typeof pSource )
+        let source = pSource || pError;
+
+        if ( source instanceof Error )
+        {
+            let stackTrace = new StackTrace( source );
+
+            const fileName = asString( stackTrace.fileName, true );
+            const methodName = asString( stackTrace.methodName, true );
+            const lineNumber = asString( stackTrace.lineNumber, true );
+            const columnNumber = asString( stackTrace.columnNumber, true );
+
+            if ( !(isBlank( fileName ) && isBlank( methodName ) && isBlank( lineNumber ) && isBlank( columnNumber )) )
+            {
+                let s = isBlank( fileName ) ? _mt_str : (fileName + _colon);
+                s += !isBlank( methodName ) ? (methodName + _colon) : _mt_str;
+                s += !isBlank( lineNumber ) ? (lineNumber + _colon) : _mt_str;
+                s += !isBlank( columnNumber ) ? (columnNumber) : _mt_str;
+
+                if ( !isBlank( s ) )
+                {
+                    return s;
+                }
+            }
+        }
+
+        switch ( typeof source )
         {
             case _obj:
                 if ( isNull( pSource ) )
@@ -198,16 +231,13 @@ const $scope = constants?.$scope || function()
             default:
                 return _mt_str;
         }
-
-
-        // : isNull( pSource ) ? _mt_str : pSource;
     }
 
     class LogRecord
     {
         #timestamp;
 
-        #level = LogLevel.INFO;
+        #level = LogLevel.DEFAULT;
 
         #source = _mt_str;
         #error = null;
@@ -215,17 +245,17 @@ const $scope = constants?.$scope || function()
 
         #data = [];
 
-        constructor( pLevel, pMessage, pError, pSource, ...pData )
+        constructor( pMessage, pLevel, pError, pSource, ...pData )
         {
             this.#timestamp = new Date();
 
-            this.#level = pLevel instanceof LogLevel ? pLevel : LogLevel.getLevel( pLevel ) || LogLevel.INFO;
+            this.#message = asString( pMessage || pError?.message ) || pError?.message || _mt_str;
 
-            this.#message = asString( pMessage );
+            this.#level = LogLevel.resolveLevel( pLevel, { level: LogLevel.DEFAULT } );
 
-            this.#error = resolveError( pError, this.#message );
+            this.#error = resolveError( pError || pMessage, pError?.message || this.#message );
 
-            this.#source = resolveSource( pSource );
+            this.#source = resolveSource( pSource, pError );
 
             this.#data = asArray( varargs( ...pData ) );
         }
@@ -237,13 +267,13 @@ const $scope = constants?.$scope || function()
 
         get level()
         {
-            this.#level = (this.#level instanceof LogLevel) ? this.#level : LogLevel.getLevel( this.#level ) || LogLevel.INFO;
+            this.#level = LogLevel.resolveLevel( this.#level, { level: LogLevel.DEFAULT } );
             return this.#level;
         }
 
         get source()
         {
-            return this.#source;
+            return resolveSource( this.#source, this.#error ) || this.#source || _mt_str;
         }
 
         get error()
@@ -305,7 +335,25 @@ const $scope = constants?.$scope || function()
 
         toString()
         {
-            return this.format( {} ).join( _lf );
+            const arr = this.format( {} );
+
+            let s = !isBlank( arr[1] ) ? "[" + arr[1] + "] " : _mt_str;
+            s += !isBlank( arr[3] ) ? " (" + arr[3] + ") " : _mt_str;
+            s += !isBlank( arr[2] ) ? arr[2] : _mt_str;
+
+            if ( !isNull( arr[4] ) )
+            {
+                s += _mt_str + _lf + _lf + (arr[4]?.name || arr[4]?.type || asString( arr[4] ));
+            }
+
+            if ( !isBlank( arr[6] ) )
+            {
+                s += _mt_str + asString( arr[6] );
+            }
+
+            s += _mt_str + _lf + _lf + _lf;
+
+            return s;
         }
 
         [Symbol.toPrimitive]( pHint )
@@ -539,7 +587,7 @@ const $scope = constants?.$scope || function()
             return template;
         }
 
-        format( pLogRecord )
+        format( pLogRecord, pAsString = false )
         {
             const logRecord = pLogRecord instanceof LogRecord ? pLogRecord : new LogRecord( pLogRecord );
 
@@ -578,9 +626,41 @@ const $scope = constants?.$scope || function()
 
             arr.push( _lf, _lf, _lf );
 
-            return lock( arr );
+            const output = !!pAsString ? arr.join( _mt_str ) : arr;
+
+            return lock( output || arr );
+        }
+
+        formatAsString( pLogRecord )
+        {
+            return this.format( pLogRecord, true );
+        }
+
+        formatForConsole( pLogRecord )
+        {
+            const logRecord = pLogRecord instanceof LogRecord ? pLogRecord : new LogRecord( pLogRecord );
+
+            const timestamp = logRecord.timestamp;
+            const level = logRecord.level;
+            const message = logRecord.message;
+            const source = logRecord.source;
+            const error = logRecord.error;
+            const data = asArray( logRecord.data );
+
+            return [timestamp, "[" + ucase( level ) + "]", message, source, error, ...data];
         }
     }
+
+    /**
+     * The default log formatter, initialized with the default formatter options.<br>
+     * <br>
+     *
+     * @type {LogFormatter}
+     * @constant {LogFormatter} DEFAULT_LOG_FORMATTER
+     */
+    const DEFAULT_LOG_FORMATTER = new LogFormatter( DEFAULT_LOG_FORMATTER_OPTIONS );
+
+    LogFormatter.DEFAULT = DEFAULT_LOG_FORMATTER;
 
     class LogFilter
     {
@@ -590,7 +670,7 @@ const $scope = constants?.$scope || function()
         {
             if ( pFunction instanceof this.constructor )
             {
-                this.#filterFunction = pFunction.filterFunction;
+                this.#filterFunction = Filters.IS_FILTER( pFunction.filterFunction ) ? pFunction.filterFunction : Filters.IDENTITY;
             }
             else
             {
@@ -598,20 +678,47 @@ const $scope = constants?.$scope || function()
             }
         }
 
-        isLoggable( pLogRecord )
-        {
-            return this.#filterFunction( pLogRecord || {} );
-        }
-
         get filterFunction()
         {
             return Filters.IS_FILTER( this.#filterFunction ) ? this.#filterFunction : Filters.IDENTITY;
         }
+
+        isLoggable( pLogRecord )
+        {
+            return this.filterFunction( pLogRecord || {} );
+        }
+    }
+
+    LogFilter.DEFAULT = new LogFilter( Filters.IDENTITY );
+
+    LogFilter.resolve = function( pFilter, pOptions )
+    {
+        if ( pFilter instanceof LogFilter )
+        {
+            return pFilter;
+        }
+        else if ( Filters.IS_FILTER( pFilter ) )
+        {
+            return new LogFilter( pFilter );
+        }
+
+        const options = populateOptions( pOptions | {}, {} );
+
+        return new LogFilter( options.filter || Filters.IDENTITY );
+    };
+
+    function resolveFilter( pFilter, pOptions )
+    {
+        return LogFilter.resolve( pFilter, pOptions );
     }
 
     /**
      * @typedef {Object} LoggerOptions An object specifying properties used
      *                                 to configure a Logger or a subclass of Logger<br>
+     *
+     * @property {LogFormatter|function} logFormatter An object with a format method or function<br>
+     *                                                that takes a LogRecord<br>
+     *                                                and returns a string or an array to be written to the log.<br>
      *
      * @property {LogFormatterOptions} [logFormatterOptions=DEFAULT_LOG_FORMATTER_OPTIONS] An object to provide global defaults for a Logger or subclass of Logger<br>
      *
@@ -626,15 +733,49 @@ const $scope = constants?.$scope || function()
      *                                              whose return value will determine
      *                                              whether a log message is written or discarded.
      *
+     * @property {LogLevel|string|number} level The finest-grained LogLevel this logger will log.<br>
+     *                                          <br>
+     *                                          For example, specifying LogLevel.WARN will allow this Logger
+     *                                          to log messages marked as warnings or errors,<br>
+     *                                          but messages marked as informational, debugging, or trace<br>
+     *                                          will be ignored
+     *
      */
 
     const DEFAULT_LOGGER_OPTIONS =
         {
-            logFormatterOptions: DEFAULT_LOG_FORMATTER_OPTIONS,
             asynchronous: false,
             buffered: false,
             bufferIntervalMs: 30_000,
+            filter: Filters.IDENTITY,
+            level: LogLevel.DEFAULT,
+            logFormatterOptions: DEFAULT_LOG_FORMATTER_OPTIONS,
+            logFormatter: DEFAULT_LOG_FORMATTER
         };
+
+    function resolveFormatter( pLogFormatter, pOptions = DEFAULT_LOG_FORMATTER_OPTIONS )
+    {
+        const options = populateOptions( pOptions, DEFAULT_LOG_FORMATTER_OPTIONS );
+
+        if ( isNull( pLogFormatter ) )
+        {
+            return new LogFormatter( options );
+        }
+
+        if ( pLogFormatter instanceof LogFormatter || (isObject( pLogFormatter ) && isFunction( pLogFormatter?.format )) )
+        {
+            return pLogFormatter;
+        }
+
+        if ( isFunction( pLogFormatter ) && pLogFormatter.length === 1 )
+        {
+            return {
+                format: pLogFormatter
+            };
+        }
+
+        return new LogFormatter( options );
+    }
 
     class Logger extends StatefulListener
     {
@@ -650,26 +791,32 @@ const $scope = constants?.$scope || function()
         #buffer = [];
         #bufferTimer;
 
-        #level = LogLevel.INFO;
+        #level = LogLevel.DEFAULT;
         #logFormatterOptions = DEFAULT_LOG_FORMATTER_OPTIONS;
-        #logFormatter;
+        #logFormatter = DEFAULT_LOG_FORMATTER;
+
+        #enabled = true;
 
         constructor( pOptions = DEFAULT_LOGGER_OPTIONS, ...pLoggers )
         {
             super();
 
-            this.#options = populateOptions( pOptions, DEFAULT_LOGGER_OPTIONS );
+            const options = populateOptions( pOptions, DEFAULT_LOGGER_OPTIONS );
+
+            this.#options = options;
+
             this.#loggers = asArray( varargs( ...pLoggers ) );
 
-            this.#filter = new LogFilter( this.#options?.filter || Filters.IDENTITY );
+            this.#filter = new LogFilter( options.filter || Filters.IDENTITY );
 
-            this.#asynchronous = this.#options?.asynchronous || false;
-            this.#buffered = this.#options?.buffered || false;
-            this.#bufferIntervalMs = asInt( this.#options?.bufferIntervalMs || this.#bufferIntervalMs, 30_000 );
+            this.#asynchronous = options.asynchronous || false;
+            this.#buffered = options.buffered || false;
+            this.#bufferIntervalMs = asInt( options.bufferIntervalMs || this.#bufferIntervalMs, 30_000 );
 
-            this.#level = LogLevel.getLevel( this.#options?.level || LogLevel.INFO ) || LogLevel.INFO;
-            this.#logFormatterOptions = this.#options?.logFormatterOptions || DEFAULT_LOG_FORMATTER_OPTIONS;
-            this.#logFormatter = new LogFormatter( this.#logFormatterOptions );
+            this.#level = LogLevel.resolveLevel( options.level || LogLevel.DEFAULT ) || LogLevel.DEFAULT;
+
+            this.#logFormatterOptions = populateOptions( options.logFormatterOptions || {}, DEFAULT_LOG_FORMATTER_OPTIONS );
+            this.#logFormatter = resolveFormatter( options.logFormatter || new LogFormatter( this.#logFormatterOptions ) ) || new LogFormatter( this.#logFormatterOptions );
         }
 
         get options()
@@ -679,7 +826,7 @@ const $scope = constants?.$scope || function()
 
         get level()
         {
-            this.#level = (this.#level instanceof LogLevel ? this.#level : LogLevel.getLevel( this.#level )) || LogLevel.INFO;
+            this.#level = LogLevel.resolveLevel( this.#level, this.options ) || LogLevel.DEFAULT;
             return this.#level;
         }
 
@@ -690,7 +837,13 @@ const $scope = constants?.$scope || function()
 
         get logFormatter()
         {
-            return !isNull( this.#logFormatter ) && isFunction( this.#logFormatter?.format ) ? this.#logFormatter : new LogFormatter( this.logFormatterOptions );
+            const formatterOptions = this.logFormatterOptions;
+            return resolveFormatter( this.#logFormatter, formatterOptions ) || new LogFormatter( formatterOptions );
+        }
+
+        resolveLogFormatter( pLogFormatter, pOptions )
+        {
+            return resolveFormatter( pLogFormatter, pOptions ) || new LogFormatter( pOptions );
         }
 
         get filter()
@@ -743,7 +896,7 @@ const $scope = constants?.$scope || function()
 
         log( pLogRecord )
         {
-            let logRecord = pLogRecord instanceof LogRecord ? pLogRecord || {} : new LogRecord( S_ERROR, asString( pLogRecord ) );
+            let logRecord = pLogRecord instanceof LogRecord ? pLogRecord || {} : new LogRecord( asString( pLogRecord ), S_ERROR );
 
             let level = LogLevel.getLevel( logRecord?.level || S_ERROR ) || this.level;
 
@@ -758,12 +911,26 @@ const $scope = constants?.$scope || function()
                         continue;
                     }
 
-                    const method = logger[methodName];
-
-                    if ( isFunction( method ) )
+                    if ( isFunction( logger?.["writeLogRecord"] ) )
                     {
-                        let args = asArray( isFunction( logRecord?.format ) ? logRecord.format( this.logFormatter ) : this.logFormatter?.format( logRecord ) );
-                        method.call( logger, ...args );
+                        try
+                        {
+                            logger.writeLogRecord( logRecord );
+                        }
+                        catch( ex )
+                        {
+                            konsole.error( ex );
+                        }
+                    }
+                    else
+                    {
+                        const method = logger[methodName];
+
+                        if ( isFunction( method ) )
+                        {
+                            let args = asArray( isFunction( logRecord?.format ) ? logRecord.format( this.logFormatter ) : this.logFormatter?.format( logRecord ) );
+                            method.call( logger, ...args );
+                        }
                     }
                 }
             }
@@ -876,10 +1043,7 @@ const $scope = constants?.$scope || function()
             }
             else
             {
-                logRecord = new LogRecord( type,
-                                           detail,
-                                           pEvent,
-                                           target?.name || asString( target ) );
+                logRecord = new LogRecord( detail, type, pEvent, target?.name || asString( target ) );
             }
 
             if ( !this.isLoggable( logRecord ) )
@@ -908,6 +1072,11 @@ const $scope = constants?.$scope || function()
 
         async handleEventAsync( pEvent )
         {
+            if ( !this.enabled )
+            {
+                return Promise.reject( new Error( "Logger is disabled" ) );
+            }
+
             const me = this;
             const event = pEvent || {};
 
@@ -921,13 +1090,16 @@ const $scope = constants?.$scope || function()
 
         handleEvent( pEvent )
         {
-            if ( this.asynchronous )
+            if ( this.enabled )
             {
-                this.handleEventAsync( pEvent ).then( no_op ).catch( ignore );
-            }
-            else
-            {
-                this.processEvent( pEvent );
+                if ( this.asynchronous )
+                {
+                    this.handleEventAsync( pEvent ).then( no_op ).catch( ignore );
+                }
+                else
+                {
+                    this.processEvent( pEvent );
+                }
             }
         }
 
@@ -953,6 +1125,21 @@ const $scope = constants?.$scope || function()
             {
                 this.handleEvent( new CustomEvent( S_ERROR, { detail } ) );
             }
+        }
+
+        disable()
+        {
+            this.#enabled = false;
+        }
+
+        enable()
+        {
+            this.#enabled = true;
+        }
+
+        get enabled()
+        {
+            return this.#enabled;
         }
     }
 
@@ -1045,6 +1232,8 @@ const $scope = constants?.$scope || function()
             ConsoleLogger,
             resolveError,
             resolveSource,
+            resolveFormatter,
+            resolveFilter,
         };
 
     // makes the properties of mod available as properties and methods of the modulePrototype

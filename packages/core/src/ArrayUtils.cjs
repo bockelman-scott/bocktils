@@ -4246,7 +4246,7 @@ const $scope = constants?.$scope || function()
                     pArr.shrink( desiredLimit );
                 }
 
-                this.#arr = pArr.#arr || pArr;
+                this.#arr = pArr.#arr || pArr || [];
             }
             else
             {
@@ -4451,6 +4451,23 @@ const $scope = constants?.$scope || function()
 
             return this.state;
         }
+
+        * [Symbol.iterator]()
+        {
+            while ( this.canTake() )
+            {
+                yield this.take();
+            }
+        }
+
+        async* [Symbol.asyncIterator]()
+        {
+            while ( this.canTake() )
+            {
+                await new Promise( resolve => setTimeout( resolve, 100 ) );
+                yield this.take();
+            }
+        }
     }
 
     BoundedQueue.create = function( pLimit = 100, ...pArr )
@@ -4501,7 +4518,7 @@ const $scope = constants?.$scope || function()
 
         get limit()
         {
-            return super.limit;
+            return Promise.resolve( super.limit );
         }
 
         async getLimit()
@@ -4511,27 +4528,27 @@ const $scope = constants?.$scope || function()
 
         async isQueued( pElem )
         {
-            return super.isQueued( pElem );
+            return Promise.resolve( super.isQueued( pElem ) );
         }
 
         async includes( pElem )
         {
-            return super.includes( pElem );
+            return Promise.resolve( super.includes( pElem ) );
         }
 
         async toArray()
         {
-            return super.toArray();
+            return Promise.resolve( super.toArray() );
         }
 
         async canTake()
         {
-            return super.canTake();
+            return Promise.resolve( super.canTake() );
         }
 
         async isEmpty()
         {
-            return super.isEmpty();
+            return Promise.resolve( super.isEmpty() );
         }
 
         async take()
@@ -4593,6 +4610,31 @@ const $scope = constants?.$scope || function()
         async extend( pNewLimit, ...pElems )
         {
             return super.extend( pNewLimit, ...pElems );
+        }
+
+        * [Symbol.iterator]()
+        {
+            while ( this.canTake() )
+            {
+                yield this.take();
+            }
+        }
+
+        async* [Symbol.asyncIterator]()
+        {
+            while ( true )
+            {
+                const can = await this.canTake();
+
+                if ( can )
+                {
+                    yield await this.take();
+                }
+                else
+                {
+                    break;
+                }
+            }
         }
     }
 

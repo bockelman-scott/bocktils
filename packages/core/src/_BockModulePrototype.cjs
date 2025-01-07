@@ -809,7 +809,7 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
 
         let cause = pError instanceof Error ? pError : pMessage instanceof Error ? pMessage : null;
 
-        return new __Error( (pMessage || pError || DEFAULT_ERROR_MSG), { cause } );
+        return new __Error( ( pError?.message || pMessage || pError || DEFAULT_ERROR_MSG), { cause } );
     }
 
     /**

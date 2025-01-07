@@ -4,7 +4,6 @@
   "packages": [
     "packages/*"
   ],
-  "useNx": true,
   "access": "public",
   "npmClient": "npm"
 }

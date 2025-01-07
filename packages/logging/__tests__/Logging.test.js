@@ -19,8 +19,8 @@ const {
     resolveSource
 } = logging;
 
-const logRecord = new LogRecord( "debug",
-                                 "This is a test",
+const logRecord = new LogRecord( "This is a test",
+                                 "debug",
                                  new Error( "This is an error" ),
                                  "Logging.test.js",
                                  "Data 1",

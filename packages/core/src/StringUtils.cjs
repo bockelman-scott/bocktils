@@ -1909,12 +1909,15 @@ const $scope = constants?.$scope || function()
         // replace any newline characters with a space character
         path = path.replace( /(\r\n)|(\n)/g, _spc );
 
-        // escape any spaces in the path name
-        path = path.replace( / /g, "\ " );
-
         // replace backslash with forward slash
         // and replace any duplicated path separators with a single separator
         path = path.replace( /[\\\/]/g, "/" ).replace( /\/\//g, "/" );
+
+        // escape any spaces in the path name
+        path = path.replace( / /g, "\ " );
+
+        // replace any duplicated path separators with a single separator
+        path = path.replace( /\/\//g, "/" );
 
         return path.trim();
     };
