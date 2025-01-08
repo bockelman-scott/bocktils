@@ -809,7 +809,7 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
 
         let cause = pError instanceof Error ? pError : pMessage instanceof Error ? pMessage : null;
 
-        return new __Error( ( pError?.message || pMessage || pError || DEFAULT_ERROR_MSG), { cause } );
+        return new __Error( (pError?.message || pMessage || pError || DEFAULT_ERROR_MSG), { cause } );
     }
 
     /**
@@ -819,6 +819,7 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
      * <br>
      * @param {string} pModule The name of the module in which the error occurred
      * @param {string|function} pFunction The name of the function (or the function itself) in which the error occurred
+     *
      * @returns {string} A string used when emitting the error event from a function or method
      */
     const calculateErrorSourceName = function( pModule, pFunction )
@@ -828,6 +829,75 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
 
         return (modName || pModule) + _colon + _colon + (funName || pFunction);
     };
+
+    /**
+     * Represents detailed information about a specific source code location.<br>
+     * <br>
+     * Useful in reporting errors.<br>
+     * @class
+     */
+    class SourceInfo
+    {
+        #fileName;
+        #lineNumber;
+        #columnNumber;
+
+        #module;
+        #method;
+        #source;
+
+        /**
+         * Constructs an instance with details about a specific error source.
+         *
+         * @param {string|Object} pModule - The module or the name of the module where the error occurred.
+         * @param {string|function} pMethod - The function or the name of the function where the error occurred.
+         * @param {string} pFileName - The name of the file where the error occurred.
+         * @param {number} pLineNumber - The line number in the file where the error occurred.
+         * @param {number} pColumnNumber - The column number in the line where the error occurred.
+         * @return {SourceInfo} A new instance containing information about the error source.
+         */
+        constructor( pModule, pMethod, pFileName, pLineNumber, pColumnNumber )
+        {
+            this.#fileName = pFileName || (_ud === typeof __filename ? _unknown : __filename);
+            this.#lineNumber = pLineNumber || -1;
+            this.#columnNumber = pColumnNumber || -1;
+
+            this.#module = pModule;
+            this.#method = pMethod;
+
+            this.#source = calculateErrorSourceName( pModule, pMethod );
+        }
+
+        get fileName()
+        {
+            return this.#fileName;
+        }
+
+        get lineNumber()
+        {
+            return this.#lineNumber;
+        }
+
+        get columnNumber()
+        {
+            return this.#columnNumber;
+        }
+
+        get module()
+        {
+            return this.#module;
+        }
+
+        get method()
+        {
+            return this.#method;
+        }
+
+        get source()
+        {
+            return this.#source;
+        }
+    }
 
     /**
      * @typedef {Object} ErrorDetail
@@ -2540,7 +2610,12 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
             CustomEvent,
             isLogger: BockModulePrototype.isLogger,
             calculateErrorSourceName,
-            reportError: function( pThis, pError, pMessage = pError?.message || S_DEFAULT_OPERATION, pLevel = S_ERROR, pSource = _mt_str, ...pExtra )
+            reportError: function( pThis,
+                                   pError,
+                                   pMessage = pError?.message || S_DEFAULT_OPERATION,
+                                   pLevel = S_ERROR,
+                                   pSource = _mt_str,
+                                   ...pExtra )
             {
                 let thiz = pThis || this;
 
@@ -2549,9 +2624,7 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
                     thiz.reportError( pError, pMessage, pLevel, pSource, ...pExtra );
                 }
 
-                const modulePrototype = new BockModulePrototype( thiz?.name || "TempModule" );
-
-                modulePrototype.reportError( pError, pMessage, pLevel, pSource, ...pExtra );
+                GLOBAL_INSTANCE.reportError( pError, pMessage, pLevel, pSource, ...pExtra );
             },
             getGlobalLogger: function()
             {
@@ -2610,6 +2683,7 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
             localCopy,
             immutableCopy,
 
+            SourceInfo,
             StackTrace,
             __Error,
             IllegalArgumentError,
@@ -2620,6 +2694,7 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
                 {
                     ModuleEvent: BockModuleEvent,
                     ModulePrototype: BockModulePrototype,
+                    SourceInfo,
                     StackTrace,
                     __Error,
                     IllegalArgumentError,

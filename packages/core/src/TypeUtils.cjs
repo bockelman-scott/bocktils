@@ -1819,7 +1819,15 @@ const $scope = constants?.$scope || function()
         else if ( isFunction( pType ) )
         {
             const scope = $scope();
-            arr = arr.filter( e => pType.call( scope, e ) );
+
+            try
+            {
+                arr = arr.filter( e => pType.call( scope, e ) );
+            }
+            catch( ex )
+            {
+                modulePrototype.reportError( ex, "attempting to call a function to filter an array", S_WARN, modName + "::firstMatchingType", pType?.name );
+            }
         }
         else
         {
