@@ -153,7 +153,7 @@ const $scope = constants?.$scope || function()
 
         isEnabled( pLevel )
         {
-            return this.compareTo( pLevel ) <= 0;
+            return this.compareTo( pLevel ) >= 0;
         }
     }
 
@@ -1038,7 +1038,7 @@ const $scope = constants?.$scope || function()
                                            detail.message || type,
                                            detail.error || pEvent,
                                            detail.source || target?.name || asString( target ),
-                                           ...detail.data );
+                                           ...(asArray( detail.data )) );
 
             }
             else

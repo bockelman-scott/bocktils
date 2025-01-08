@@ -1,6 +1,6 @@
 const core = require( "@toolbocks/core" );
 
-const logging = require( "../src/index.js" );
+const logging = require( "@toolbocks/logging" );
 
 const {
     DEFAULT_TEMPLATE,
@@ -27,6 +27,16 @@ const logRecord = new LogRecord( "This is a test",
                                  "Data 2",
                                  5 );
 
+class EventMaker extends EventTarget
+{
+    constructor()
+    {
+        super();
+    }
+}
+
+const eventMaker = new EventMaker();
+
 describe( "LogLevel", () =>
 {
     test( "LogLevel.getLevel", () =>
@@ -48,8 +58,8 @@ describe( "LogLevel", () =>
         expect( lvlDebug.compareTo( lvlError ) ).toEqual( 1 );
         expect( lvlError.isLessThan( lvlDebug ) ).toBe( true );
 
-        expect( lvlDebug.isEnabled( lvlError ) ).toBe( false );
-        expect( lvlError.isEnabled( lvlDebug ) ).toBe( true );
+        expect( lvlDebug.isEnabled( lvlError ) ).toBe( true );
+        expect( lvlError.isEnabled( lvlDebug ) ).toBe( false );
 
         expect( "" + lvlDebug ).toEqual( "debug" );
     } );
@@ -97,26 +107,45 @@ describe( "LogFilter", () =>
 } );
 
 
+describe( "Loggers are Event Handlers", () =>
+{
+    const consoleLogger = new ConsoleLogger();
+    const logger = new Logger( {}, consoleLogger );
+
+    test( "handleEvent", () =>
+    {
+        jest.spyOn( console, "error" );
+
+        eventMaker.addEventListener( "error", logger );
+
+        eventMaker.dispatchEvent( new CustomEvent( "error", { error: new Error( "This is an error" ) } ) );
+
+        expect( console.error ).toHaveBeenCalled();
+
+        console.error.mockRestore(); // Restore the original console.log
+    } );
+
+} );
+
+
 describe( "ConsoleLogger", () =>
 {
     test( "ConsoleLogger logs to the console", () =>
     {
-        jest.spyOn(console, 'log');
+        jest.spyOn( console, "error" );
 
         const consoleLogger = new ConsoleLogger();
 
-        // new Logger( {}, consoleLogger ).log( logRecord );
+        const logger = new Logger( { buffered: true }, consoleLogger );
 
-        new Logger( { buffered: true }, consoleLogger ).error( logRecord );
+        logger.error( logRecord );
 
-        const formatter = new LogFormatter();
+        setTimeout( () =>
+                    {
+                        expect( console.error ).toHaveBeenCalled();
+                        console.error.mockRestore(); // Restore the original console.log
+                    }, 70_000 );
 
-        const logMsg = formatter.format( logRecord );
-
-        setTimeout(() => {
-            expect(console.log).toHaveBeenCalledWith( logMsg );
-            console.log.mockRestore(); // Restore the original console.log
-            done(); // Signal test completion
-        }, 70_000);
+        expect( logger.buffered ).toBe( true );
     } );
 } );

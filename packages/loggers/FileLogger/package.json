@@ -1,7 +1,7 @@
 {
   "name": "@toolbocks/file_logger",
   "version": "1.0.0",
-  "description": "Extensible logging infrastructure for JavScript applications",
+  "description": "A logger that asynchronously writes to a file in response to events or calls to its methods, with a configurable file rotation policy based on file size or age, and a configurable file retention policy based on age or directory size",
   "main": "src/index.js",
   "dependencies": {
     "@toolbocks/core": "^1.0.0",

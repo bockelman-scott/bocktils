@@ -5,6 +5,8 @@ const fs = require( "fs" );
 const fsAsync = require( "fs/promises" );
 const path = require( "node:path" );
 
+const konsole = console;
+
 const { constants, typeUtils, stringUtils, arrayUtils } = core;
 
 const {
@@ -104,9 +106,11 @@ const $scope = constants?.$scope || function()
         };
 
     const DEFAULT_FILE_PATH = "./logs";
+
     const DEFAULT_FILE_NAME = "application";
     const DEFAULT_FILE_EXTENSION = (_dot + "log");
     const DEFAULT_SEPARATOR = _hyphen;
+    const DEFAULT_PREFIX = _mt_str;
 
     const MILLIS_PER_SECOND = 1000;
     const MILLIS_PER_MINUTE = 60 * MILLIS_PER_SECOND;
@@ -123,7 +127,10 @@ const $scope = constants?.$scope || function()
         #separator;
         #prefix;
 
-        constructor( pName, pExtension, pSeparator, pPrefix )
+        constructor( pName = DEFAULT_FILE_NAME,
+                     pExtension = DEFAULT_FILE_EXTENSION,
+                     pSeparator = DEFAULT_SEPARATOR,
+                     pPrefix = DEFAULT_PREFIX )
         {
             this.#name = asString( pName, true );
             this.#extension = asString( pExtension, true );
@@ -157,7 +164,7 @@ const $scope = constants?.$scope || function()
             const prefix = !isBlank( this.prefix ) ? (this.prefix + this.separator) : _mt_str;
             const name = this.name || DEFAULT_FILE_NAME;
             const extension = this.extension || DEFAULT_FILE_EXTENSION;
-            return prefix + name + (iteration > 0 ? (this.separator + iteration) : _mt_str) + extension;
+            return prefix + name + (iteration > 0 ? (this.separator + iteration) : _mt_str) + _dot + (extension.replace( /^\.+/, _mt_str ));
         }
 
         static fromString( pPattern )
@@ -166,9 +173,11 @@ const $scope = constants?.$scope || function()
 
             const parts = pattern.split( _dot );
 
-            let name = parts.length > 0 ? parts[0] : DEFAULT_FILE_NAME;
+            const reSuffix = /[\/\\\d_-]+$/;
 
-            let extension = parts.length > 1 ? parts.slice( 1 ).join( _dot ).replace( /[\/\\\d_-]+$/, _mt_str ) : DEFAULT_FILE_EXTENSION;
+            let name = asString( parts.length > 0 ? parts[0] : DEFAULT_FILE_NAME ).replace( reSuffix, _mt_str );
+
+            let extension = parts.length > 1 ? parts.slice( 1 ).join( _dot ).replace( reSuffix, _mt_str ) : DEFAULT_FILE_EXTENSION;
 
             const nameParts = name.split( /[\/\\\s.;:_-]+/g );
 
@@ -190,6 +199,26 @@ const $scope = constants?.$scope || function()
             }
 
             return new LogFilePattern( name, extension, separator, prefix );
+        }
+
+        toString()
+        {
+            return this.generateFileName( 0 );
+        }
+
+        [Symbol.species]()
+        {
+            return this;
+        }
+
+        [Symbol.toPrimitive]( pHint )
+        {
+            return this.toString();
+        }
+
+        [Symbol.toStringTag]()
+        {
+            return this.toString();
         }
     }
 
@@ -256,7 +285,7 @@ const $scope = constants?.$scope || function()
 
         get filepath()
         {
-            return asString( this.#filepath, true );
+            return path.resolve( asString( this.#filepath, true ) );
         }
 
         toString()
@@ -320,7 +349,8 @@ const $scope = constants?.$scope || function()
 
         async isExpired( pMaxAgeDays, pNow )
         {
-            const age = await this.calculateAge( pNow );
+            const now = pNow || new Date();
+            const age = await this.calculateAge( now );
             return age > asInt( pMaxAgeDays, age );
         }
 
@@ -391,15 +421,13 @@ const $scope = constants?.$scope || function()
             return comp;
         };
 
-        let results = [];
+        let results = await Promise.all( promises );
 
-        Promise.all( promises ).then( ( pResults ) =>
-                                      {
-                                          const sorted = pResults.sort( comparator );
-                                          sorted.forEach( pResult => results.push( pResult.fileInfo ) );
-                                      } );
+        let sorted = results.sort( comparator );
 
-        return results;
+        sorted = sorted.map( e => e.fileInfo );
+
+        return sorted;
     };
 
     FileInfo.sortDescending = async function( ...pFiles )
