@@ -168,6 +168,202 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
         return (_ud === typeof self && _ud === typeof window) && (_ud !== typeof module) && (_fun === typeof require);
     };
 
+    class ExecutionEnvironment
+    {
+        #globalScope;
+
+        #process;
+
+        #versions;
+        #version;
+
+        #console;
+
+        #document;
+        #window;
+        #navigator;
+        #userAgent;
+        #location;
+        #history;
+        #performance;
+        #customElements;
+
+        #fetch;
+
+        #DenoGlobal;
+
+        constructor( pGlobalScope )
+        {
+            this.#globalScope = pGlobalScope || $scope();
+
+            this.#DenoGlobal = _ud === typeof Deno && _ud === typeof this.#globalScope?.Deno ? null : (_ud === typeof Deno ? Deno : null) || this.#globalScope?.Deno;
+
+            this.#process = _ud !== typeof process ? process : this.#DenoGlobal || null;
+
+            this.#versions = this.#process?.versions || this.#DenoGlobal?.version || {};
+
+            this.#version = this.#versions?.node || this.#versions?.deno;
+
+            this.#console = (_ud !== typeof console && _fun === typeof console?.log) ? console : null;
+
+            this.#window = _ud !== typeof window ? window : null;
+
+            this.#document = _ud !== typeof document ? document : _ud === typeof window ? null : window.document;
+
+            this.#navigator = _ud !== typeof navigator ? navigator : null;
+
+            this.#userAgent = _ud !== typeof navigator ? navigator?.userAgent : _ud === typeof window ? null : window?.navigator?.userAgent;
+
+            this.#location = _ud !== typeof location ? location : null;
+
+            this.#history = _ud !== typeof history ? history : null;
+
+            this.#performance = _ud !== typeof performance ? performance : null;
+
+            this.#customElements = _ud !== typeof customElements ? customElements : null;
+
+            this.#fetch = _ud !== typeof fetch && _fun === typeof fetch ? fetch : null;
+        }
+
+        get globalScope()
+        {
+            return this.#globalScope || $scope();
+        }
+
+        get process()
+        {
+            return this.#process;
+        }
+
+        get versions()
+        {
+            return this.#versions || {};
+        }
+
+        get version()
+        {
+            return this.#version || this.versions?.node || this.versions?.deno || _unknown;
+        }
+
+        get console()
+        {
+            return this.#console;
+        }
+
+        get fetch()
+        {
+            return this.#fetch;
+        }
+
+        isNode()
+        {
+            return isNode() && (null != this.process) && (null == this.#DenoGlobal);
+        }
+
+        isDeno()
+        {
+            return !this.isNode() && (null != this.#DenoGlobal);
+        }
+
+        isBrowser()
+        {
+            return !(this.isNode() || this.isDeno()) && null != this.#window && null != this.#document && null != this.#navigator;
+        }
+
+        get navigator()
+        {
+            return this.#navigator;
+        }
+
+        get userAgent()
+        {
+            return (_mt_str + (this.#userAgent || _mt_str)).trim();
+        }
+
+        canUseFetch()
+        {
+            const func = (null != this.#fetch) || (null != this.globalScope?.fetch) ? this.#fetch || this.globalScope?.fetch : null;
+
+            return null != func && _fun === typeof func;
+        }
+
+        parseUserAgent( pUserAgent )
+        {
+            // Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36
+
+            const userAgent = (_mt_str + (pUserAgent || this.userAgent || _mt_str)).trim();
+
+            // TODO: improve when necessary
+
+            const rx = /^([\w\/.]*)\s*(\([^)]+\))\s*([\w\/.]*)*\s*(\([^)]+\))*\s*([\w\/.]*)*\s*([\w\/.]*)*\s*([\w\/.]*)*\s*/i;
+
+            const matches = rx.exec( userAgent );
+
+            let ua = _mt_str;
+            let browser = { name: _mt_str, version: _mt_str };
+            let engine = { name: _mt_str, version: _mt_str };
+            let os = { name: _mt_str, version: _mt_str };
+            let cpu = { architectures: [] };
+
+            if ( matches && matches.length > 0 )
+            {
+                ua = matches[0] || userAgent;
+
+                let sBrowserString = (matches.length > 5 ? matches[5] : matches[1]) || _mt_str;
+                const browserParts = sBrowserString.split( /\/\s*/ );
+
+                browser.name = browserParts[0] || _mt_str;
+                browser.version = browserParts[1] || _mt_str;
+
+                let osString = ((matches.length > 2 ? matches[2] : _mt_str) || _mt_str).replaceAll( /[)(]/g, _mt_str );
+                const osParts = osString.split( /;\s*/ ).map( e => e.trim() );
+                const nameParts = osParts[0].split( /\s+/ );
+                os.name = nameParts[0] + (nameParts.length > 1 ? " " + nameParts[1] : _mt_str);
+                os.version = osParts[0].replaceAll( /[^\d.]/g, _mt_str );
+
+                osParts.slice( 1 ).forEach( e =>
+                                            {
+                                                cpu.architectures.push( e.trim() );
+                                            } );
+
+                let sEngineString = (matches.length > 3 ? matches[3] : _mt_str) || _mt_str;
+                const engineParts = sEngineString.split( /\/\s*/ );
+
+                engine.name = engineParts[0] || _mt_str;
+                engine.version = engineParts[1] || _mt_str;
+            }
+
+            return {
+                ua,
+                browser,
+                engine,
+                os,
+                cpu
+            };
+        }
+
+        get operatingSystem()
+        {
+            const os = this.process?.platform || this.#DenoGlobal?.build?.os || this.parseUserAgent( this.userAgent ).os.name || _mt_str;
+            return (os || _unknown).toLowerCase();
+        }
+
+        isWindows()
+        {
+            const os = this.operatingSystem || this.process?.platform || this.#DenoGlobal?.build?.os || _unknown;
+
+            return ["windows", "win32", "win64"].includes( os.toLowerCase() );
+        }
+
+        isLinux()
+        {
+            const os = this.operatingSystem || this.process?.platform || this.#DenoGlobal?.build?.os || _unknown;
+
+            return ["linux", "ubuntu", "debian"].includes( os.toLowerCase() );
+        }
+
+    }
+
     /**
      * This class defines a Custom Event other modules can use to communicate with interested consumers.<br>
      * @see <a href="https://developer.mozilla.org/en-US/docs/Web/API/CustomEvent/CustomEvent">MDN: CustomEvent</a>
@@ -1159,6 +1355,8 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
         // a map of stateful listeners by event (string)
         #statefulListeners = {};
 
+        #executionEnvironment;
+
         /**
          * Constructs a new instance, or module, to expose functionality to consumers.
          * <br>
@@ -1671,6 +1869,15 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
             }
 
             return modulePrototype;
+        }
+
+        get executionEnvironment()
+        {
+            if ( null == this.#executionEnvironment )
+            {
+                this.#executionEnvironment = new ExecutionEnvironment( this.globalScope );
+            }
+            return this.#executionEnvironment;
         }
     }
 
@@ -2683,6 +2890,7 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
             localCopy,
             immutableCopy,
 
+            ExecutionEnvironment,
             SourceInfo,
             StackTrace,
             __Error,
@@ -2690,8 +2898,15 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
             IterationCap,
             ComparatorFactory,
             StatefulListener,
+
+            getExecutionEnvironment: function()
+            {
+                return new ExecutionEnvironment();
+            },
+
             classes:
                 {
+                    ExecutionEnvironment,
                     ModuleEvent: BockModuleEvent,
                     ModulePrototype: BockModulePrototype,
                     SourceInfo,

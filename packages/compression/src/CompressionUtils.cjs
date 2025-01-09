@@ -1,7 +1,7 @@
 /**
  * This module provides some convenience methods for working with compressed (zipped) data.
  *
- * The most common use case is probably to read a zip file from the file system or from a memory buffer.
+ * The most common use case is to read a zip file from the file system or from a memory buffer.
  *
  * Example - from File:
  *
@@ -39,6 +39,14 @@ const { constants, typeUtils, stringUtils, arrayUtils } = core;
  */
 const admZip = require( "adm-zip" );
 
+const { AdmZip } = admZip;
+
+const fs = require( "node:fs" );
+const fsAsync = require( "node:fs/promises" );
+const { pipeline } = require( "node:stream/promises" );
+const path = require( "node:path" );
+const zlib = require( "node:zlib" );
+
 const { _ud = "undefined" } = constants;
 
 const $scope = constants?.$scope || function()
@@ -55,13 +63,13 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
-    const { _mt_str, _str, _num, _big, _bool, _obj, S_ERROR, no_op, lock, classes } = constants;
+    const { _mt_str, _dot, _str, _num, _big, _bool, _obj, S_ERROR, populateOptions, no_op, lock, classes } = constants;
 
     const { ModuleEvent, ModulePrototype } = classes;
 
     const { isString, isNumber, isNumeric, isObject, isFunction } = typeUtils;
 
-    const { asString, asInt, isBlank, lcase } = stringUtils;
+    const { asString, asInt, isBlank, lcase, ucase } = stringUtils;
 
     if ( _ud === typeof CustomEvent )
     {
@@ -659,6 +667,322 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    async function compressFile( inputPath, outputPath )
+    {
+        try
+        {
+            const gzip = zlib.createGzip();
+            const source = fs.createReadStream( inputPath );
+            const destination = fs.createWriteStream( outputPath );
+
+            //Ensure output directory exists
+            const ensureDirectoryExistence = ( filePath ) =>
+            {
+                const dirname = path.dirname( filePath );
+                if ( fs.existsSync( dirname ) )
+                {
+                    return true;
+                }
+                fs.mkdirSync( dirname, { recursive: true } );
+                return true;
+            };
+            ensureDirectoryExistence( outputPath );
+
+            source.pipe( gzip ).pipe( destination );
+
+            return new Promise( ( resolve, reject ) =>
+                                {
+                                    destination.on( "finish", resolve );
+                                    destination.on( "error", reject );
+                                    source.on( "error", reject );
+                                    gzip.on( "error", reject );
+                                } );
+        }
+        catch( error )
+        {
+            console.error( "Error during compression:", error );
+            throw error; //Re-throw the error to be handled by the caller
+        }
+    }
+
+    /**
+     * @typdef {String} CompressionFormat
+     *
+     * Can be one of Zip, Gzip, Deflate/Inflate, or Brotli.
+     */
+
+    /**
+     *
+     * @const CompressionFormat
+     *
+     */
+    const COMPRESSION_FORMAT =
+        {
+            ZIP: "zip",
+            GZIP: "gzip",
+            DEFLATE_INFLATE: "deflate",
+            BROTLI: "brotli",
+        };
+
+    COMPRESSION_FORMAT.DEFAULT = COMPRESSION_FORMAT.GZIP;
+
+    class ArchiverOptions
+    {
+        #outputDirectory = _mt_str;
+        #compressionFormat = COMPRESSION_FORMAT.DEFAULT;
+        #compressionLevel = 6;
+
+        #onSuccess = no_op;
+        #onFailure = no_op;
+
+        #deleteSource = true;
+
+        constructor( pOutputDirectory, pCompressionFormat = COMPRESSION_FORMAT.DEFAULT, pCompressionLevel = 6, pOnSuccess = no_op, pOnFailure = no_op, pDeleteSource = true )
+        {
+            this.#outputDirectory = (_mt_str + (pOutputDirectory || _mt_str)).trim();
+
+            this.#compressionFormat = lcase( asString( pCompressionFormat, true ) ) || COMPRESSION_FORMAT.DEFAULT;
+            this.#compressionLevel = asInt( pCompressionLevel );
+            this.#onSuccess = pOnSuccess;
+            this.#onFailure = pOnFailure;
+            this.#deleteSource = !!pDeleteSource;
+        }
+
+        get outputDirectory()
+        {
+            return (this.#outputDirectory || _mt_str).trim();
+        }
+
+        get compressionFormat()
+        {
+            return lcase( asString( this.#compressionFormat, true ) || COMPRESSION_FORMAT.DEFAULT );
+        }
+
+        set compressionFormat( pString )
+        {
+            this.#compressionFormat = lcase( asString( pString, true ) || COMPRESSION_FORMAT.DEFAULT );
+        }
+
+        get compressionLevel()
+        {
+            return Math.min( Math.max( -1, asInt( this.#compressionLevel ) ), 9 );
+        }
+
+        set compressionLevel( pNumber )
+        {
+            this.#compressionLevel = Math.min( Math.max( -1, asInt( pNumber ) ), 9 );
+        }
+
+        get onSuccess()
+        {
+            return this.#onSuccess;
+        }
+
+        set onSuccess( pFunction )
+        {
+            this.#onSuccess = isFunction( pFunction ) ? pFunction : no_op;
+        }
+
+        get onFailure()
+        {
+            return this.#onFailure;
+        }
+
+        set onFailure( pFunction )
+        {
+            this.#onFailure = isFunction( pFunction ) ? pFunction : no_op;
+        }
+
+        get deleteSource()
+        {
+            return !!this.#deleteSource;
+        }
+
+        set deleteSource( pBool )
+        {
+            this.#deleteSource = !!pBool;
+        }
+    }
+
+    class Archiver
+    {
+        #outputDirectory;
+        #compressionFormat;
+        #compressionLevel;
+
+        #onSuccess;
+        #onFailure;
+
+        #options;
+
+        constructor( pOutputDirectory, pOptions = new ArchiverOptions() )
+        {
+            this.#options = populateOptions( pOptions, new ArchiverOptions( pOutputDirectory ) );
+
+            this.#outputDirectory = (_mt_str + (pOutputDirectory || _mt_str)).trim() || this.#options.outputDirectory;
+
+            this.#compressionFormat = Object.values( COMPRESSION_FORMAT ).includes( lcase( asString( this.#options.compressionFormat, true ) ) ) ? lcase( asString( pCompressionFormat, true ) ) : COMPRESSION_FORMAT.DEFAULT;
+            this.#compressionLevel = asInt( this.#options.compressionLevel );
+            this.#onSuccess = isFunction( this.#options.onSuccess ) ? this.#options.onSuccess || no_op : no_op;
+            this.#onFailure = isFunction( this.#options.onFailure ) ? this.#options.onFailure || no_op : no_op;
+        }
+
+        get options()
+        {
+            return Object.assign( {}, this.#options || {} );
+        }
+
+        get outputDirectory()
+        {
+            return (this.#outputDirectory || _mt_str).trim() || this.options.outputDirectory;
+        }
+
+        get compressionFormat()
+        {
+            return this.#compressionFormat || this.options.compressionFormat || COMPRESSION_FORMAT.DEFAULT;
+        }
+
+        get compressionLevel()
+        {
+            return Math.min( Math.max( -1, asInt( this.#compressionLevel || this.options.compressionLevel ) ), 9 );
+        }
+
+        get onSuccess()
+        {
+            return isFunction( this.#onSuccess ) ? this.#onSuccess : no_op;
+        }
+
+        get onFailure()
+        {
+            return isFunction( this.#onFailure ) ? this.#onFailure : no_op;
+        }
+
+        async checkFilePath( pFilepath )
+        {
+            let exists = await fsAsync.access( path.resolve( pFilepath ), fs.constants.W_OK | fs.constants.R_OK );
+
+            if ( !exists )
+            {
+                const msg = "The specified file path does not exist or cannot be read: " + pFilepath;
+                modulePrototype.reportError( new Error( msg ), msg, S_ERROR, modName + "::checkFilePath" );
+
+                if ( pFilepath.indexOf( _dot ) < 0 )
+                {
+                    exists = await this.createPath( pFilepath );
+                }
+            }
+
+            return exists;
+        }
+
+        async createPath( pPath )
+        {
+            let exists = await this.checkFilePath( pPath );
+
+            if ( !exists )
+            {
+                let dirname = path.resolve( pPath );
+                if ( !isBlank( dirname ) )
+                {
+                    exists = await this.checkFilePath( dirname );
+                    if ( !exists )
+                    {
+                        await fsAsync.mkdir( dirname, { recursive: true } );
+                        exists = await this.checkFilePath( dirname );
+                    }
+                }
+            }
+
+            return exists;
+        }
+
+        async archive( pFilepath )
+        {
+            const filepath = path.resolve( pFilepath );
+
+            const exists = await this.checkFilePath( filepath );
+
+            if ( !exists )
+            {
+                return false;
+            }
+
+            const directory = (this.#outputDirectory || path.dirname( filepath )).trim();
+
+            const filename = (path.basename( pFilepath ).replace( /(\.\w)*/, _mt_str )).trim();
+
+            let outputPath = (path.resolve( directory, filename )).trim();
+
+            let extension = ".gz";
+
+            let zipper = null;
+
+            switch ( this.compressionFormat )
+            {
+                case COMPRESSION_FORMAT.ZIP:
+                    extension = ".zip";
+                    const file = new AdmZip();
+                    file.addLocalFile( filepath );
+                    file.writeZip( outputPath + extension, async() => {await fsAsync.unlink( filepath );} );
+                    return true;
+
+                case COMPRESSION_FORMAT.GZIP:
+                    zipper = zlib.createGzip( this.options );
+                    extension = ".gz";
+                    break;
+
+                case COMPRESSION_FORMAT.DEFLATE_INFLATE:
+                    zlib.createDeflate( this.options );
+                    extension = ".z";
+                    break;
+
+                case COMPRESSION_FORMAT.BROTLI:
+                    zlib.createBrotliCompress( this.options );
+                    extension = ".br";
+                    break;
+
+                default:
+                    zipper = zlib.createGzip( this.options );
+                    extension = ".gz";
+                    break;
+            }
+
+            const source = fs.createReadStream( filepath );
+            const destination = fs.createWriteStream( outputPath + extension );
+
+            let safeToDelete = false;
+
+            try
+            {
+                await pipeline( source, zipper, destination );
+                safeToDelete = true;
+            }
+            catch( ex )
+            {
+                modulePrototype.reportError( ex, "archiving file", S_ERROR, modName + "::archive" );
+
+                if ( isBlank( this.onFailure ) )
+                {
+                    await this.onFailure( ex );
+                }
+
+                safeToDelete = false;
+            }
+
+            if ( safeToDelete )
+            {
+                await fsAsync.unlink( filepath );
+            }
+
+            if ( isFunction( this.onSuccess ) )
+            {
+                await this.onSuccess( outputPath );
+            }
+
+            return true;
+        }
+    }
+
     let mod =
         {
             dependencies:
@@ -667,7 +991,14 @@ const $scope = constants?.$scope || function()
                     typeUtils,
                     stringUtils,
                     arrayUtils,
-                    admZip
+                    admZip,
+                    zlib
+                },
+            classes:
+                {
+                    ArchiveEntry,
+                    Archiver,
+                    ArchiverOptions
                 },
             isEmptyArchive,
             isSafeArchive,
@@ -677,7 +1008,9 @@ const $scope = constants?.$scope || function()
             isPotentialZipBomb,
             getEntryCount,
             getEntries,
-            getEntry
+            getEntry,
+            ArchiverOptions,
+            Archiver
         };
 
     mod = modulePrototype.extend( mod );

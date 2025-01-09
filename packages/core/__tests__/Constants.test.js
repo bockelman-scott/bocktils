@@ -5,6 +5,10 @@
 /** import the Constants.cjs we are testing */
 const constants = require( "../src/Constants.cjs" );
 
+const { classes } = constants;
+
+const { ExecutionEnvironment } = classes;
+
 describe( "Affirmatives", () =>
 {
     function TestAffirmatives( pVal )
@@ -917,6 +921,26 @@ describe( "ModulePrototype - Events", () =>
 
         expect( loggedMessages.length ).toEqual( 4 );
         expect( loggedMessages ).toEqual( ["some", "logged", "data", { foo: "bar" }] );
+    } );
+
+} );
+
+describe( "ExecutionEnvironment", () =>
+{
+    const { getExecutionEnvironment } = constants;
+
+    test( "ExecutionEnvironment provides information about the context in which the code is running ", () =>
+    {
+        const executionEnvironment = new ExecutionEnvironment();
+
+        expect( executionEnvironment.isNode() ).toBe( true );
+
+        expect( executionEnvironment.isWindows() ).toBe( true );
+
+        const userAgentInfo = executionEnvironment.parseUserAgent( "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
+
+        console.log( userAgentInfo );
+
     } );
 
 } );

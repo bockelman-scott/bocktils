@@ -97,7 +97,8 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             resolveError,
             IterationCap,
             ComparatorFactory,
-            StatefulListener
+            StatefulListener,
+            ExecutionEnvironment,
         } = bockModuleBootstrap;
 
     if ( _ud === typeof CustomEvent )
@@ -706,7 +707,8 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
                      */
                     StackTrace,
                     CustomEvent,
-                    StatefulListener
+                    StatefulListener,
+                    ExecutionEnvironment
                 },
             _ud,
             /**
@@ -1902,6 +1904,10 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              */
             funcAsString,
             calculateErrorSourceName,
+            getExecutionEnvironment: function()
+            {
+                return new ExecutionEnvironment();
+            },
             isLogger,
             __testLogger: function( ...pTestData )
             {

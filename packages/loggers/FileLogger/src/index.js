@@ -288,6 +288,11 @@ const $scope = constants?.$scope || function()
             return path.resolve( asString( this.#filepath, true ) );
         }
 
+        get filename()
+        {
+            return path.basename( this.filepath );
+        }
+
         toString()
         {
             return this.filepath;
@@ -507,18 +512,6 @@ const $scope = constants?.$scope || function()
             catch( ex )
             {
                 konsole.error( "An error occurred while collecting log files from the directory:", directory, ex.message, ex );
-
-                if ( null !== dir )
-                {
-                    try
-                    {
-                        dir.close();
-                    }
-                    catch( ex2 )
-                    {
-                        no_op();
-                    }
-                }
             }
 
             files = files.length > 0 ? await FileInfo.sort( ...files ) : [];

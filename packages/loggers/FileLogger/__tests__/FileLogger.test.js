@@ -8,9 +8,15 @@ const logging = require( "@toolbocks/logging" );
 
 const fileLogger = require( "../src/index.js" );
 
-const { classes, LogFilePattern } = fileLogger;
+const { constants, typeUtils, stringUtils, arrayUtils } = core;
 
-const { LogRecord, FileInfo } = classes;
+const { isString } = typeUtils;
+
+const { asString } = stringUtils;
+
+const { classes: fileLoggerClasses, LogFilePattern, LogFileRetentionPolicy } = fileLogger;
+
+const { LogRecord, FileInfo } = fileLoggerClasses;
 
 const MILLIS_PER_SECOND = 1000;
 const MILLIS_PER_MINUTE = 60 * MILLIS_PER_SECOND;
@@ -134,7 +140,6 @@ describe( "FileInfo", () =>
         files = files.map( file => path.join( directoryPath, file ) );
 
 
-
         let sorted = await FileInfo.sort( ...files );
 
         sorted = sorted.map( e => (e.toString() + "\n") );
@@ -142,7 +147,6 @@ describe( "FileInfo", () =>
         expect( sorted.length ).toEqual( 12 );
 
         expect( sorted[11].replace( /\n+$/, "" ).endsWith( "all_bones_mp3_zip.data" ) ).toBe( true );
-
 
 
         sorted = await FileInfo.sortDescending( ...files );
@@ -154,5 +158,60 @@ describe( "FileInfo", () =>
         expect( sorted[0].replace( /\n+$/, "" ).endsWith( "all_bones_mp3_zip.data" ) ).toBe( true );
     } );
 
+} );
+
+
+describe( "LogFileRetentionPolicy", () =>
+{
+    test( "LogFileRetentionPolicy defines how long to keep log files", async() =>
+    {
+        // pMaximumDays, pMaximumFiles,
+        let retentionPolicy = new LogFileRetentionPolicy( 30, 10 );
+
+        expect( retentionPolicy.maxDays ).toEqual( 30 );
+        expect( retentionPolicy.maxFiles ).toEqual( 10 );
+
+        expect( retentionPolicy.operation ).toEqual( "delete" );
+        expect( retentionPolicy.archiver ).toBe( null );
+    } );
+
+    test( "LogFileRetentionPolicy has a method to collect a list of file information", async() =>
+    {
+        // pMaximumDays, pMaximumFiles,
+        let retentionPolicy = new LogFileRetentionPolicy( 30, 10 );
+
+        const files = await retentionPolicy.collectFiles( "../../../test_data/base64", e => asString( e.filename ).startsWith( "1" ) );
+
+        expect( files.length ).toEqual( 10 );
+
+        const strings = files.map( e => e.toString() );
+
+        expect( strings.length ).toEqual( 10 );
+
+        expect( path.basename( strings.sort()[0] ) ).toEqual( "1000.data" );
+    } );
+
+    test( "LogFileRetentionPolicy has a method to find expired files", async() =>
+    {
+        // pMaximumDays, pMaximumFiles,
+        let retentionPolicy = new LogFileRetentionPolicy( 30, 10 );
+
+        const files = await retentionPolicy.findExpiredFiles( "../../../test_data/base64", new Date() );
+
+        expect( files.length ).toEqual( 12 );
+
+        expect( files.every( e => isString(e) ) ).toBe( true );
+    } );
+
+
 
 } );
+
+describe( "FileRotationIntervalUnit", () =>
+{
+    test( "FileRotationIntervalUnit defines the available file rotation intervals", async() =>
+    {
+
+    } );
+});
+
