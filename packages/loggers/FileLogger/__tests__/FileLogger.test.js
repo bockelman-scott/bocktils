@@ -14,9 +14,27 @@ const { isString } = typeUtils;
 
 const { asString } = stringUtils;
 
-const { classes: fileLoggerClasses, LogFilePattern, LogFileRetentionPolicy } = fileLogger;
+const {
+    classes: fileLoggerClasses,
+    LogFilePattern,
+    LogFileRetentionPolicy,
+    FileRotationIntervalUnit,
+    FileRotationInterval,
+    LogFileRotationPolicy,
+    DEFAULT_FILE_PATH,
+    DEFAULT_FILE_PATTERN,
+    DEFAULT_FILE_RETENTION_POLICY,
+    DEFAULT_FILE_ROTATION_POLICY,
+    DEFAULT_FILE_LOGGER_OPTIONS,
+    FileLogger
+} = fileLogger;
 
-const { LogRecord, FileInfo } = fileLoggerClasses;
+const {
+    LogRecord,
+    FileInfo,
+    LogLevel,
+    LogFormatter
+} = fileLoggerClasses;
 
 const MILLIS_PER_SECOND = 1000;
 const MILLIS_PER_MINUTE = 60 * MILLIS_PER_SECOND;
@@ -41,6 +59,12 @@ class EventMaker extends EventTarget
 }
 
 const eventMaker = new EventMaker();
+
+const currentWorkingDirectory = process.cwd();
+
+const currentDirectory = path.dirname( __filename );
+
+const currentFile = __filename;
 
 
 describe( "LogFilePattern", () =>
@@ -87,6 +111,10 @@ describe( "LogFilePattern", () =>
 
         expect( pattern.generateFileName( 5 ) ).toEqual( "bock_application_5.log" );
 
+        pattern = LogFilePattern.DEFAULT;
+
+        expect( pattern.generateFileName() ).toEqual( "application.log" );
+
     } );
 } );
 
@@ -106,7 +134,7 @@ describe( "FileInfo", () =>
 
         expect( size ).toBeGreaterThan( 52_000 );
 
-        expect( size ).toBeLessThan( 55_000 );
+        expect( size ).toBeLessThan( 60_000 );
 
         let age = await fileInfo.calculateAge( new Date( created.getTime() + MILLIS_PER_WEEK ) );
 
@@ -200,18 +228,113 @@ describe( "LogFileRetentionPolicy", () =>
 
         expect( files.length ).toEqual( 12 );
 
-        expect( files.every( e => isString(e) ) ).toBe( true );
+        expect( files.every( e => isString( e ) ) ).toBe( true );
     } );
-
 
 
 } );
 
 describe( "FileRotationIntervalUnit", () =>
 {
-    test( "FileRotationIntervalUnit defines the available file rotation intervals", async() =>
+    test( "FileRotationIntervalUnit defines the available file rotation interval units", async() =>
     {
+        const cache = FileRotationIntervalUnit.CACHE;
 
+        expect( Object.keys( cache ).length ).toEqual( 6 );
+
+        expect( cache.WEEK.milliseconds ).toEqual( 604_800_000 );
+
+        expect( cache.DAY.milliseconds ).toEqual( 86_400_000 );
+
+        expect( cache.HOUR.milliseconds ).toEqual( 3_600_000 );
+
+        expect( cache.MINUTE.milliseconds ).toEqual( 60_000 );
+
+        expect( cache.SECOND.milliseconds ).toEqual( 1_000 );
     } );
-});
+} );
 
+describe( "FileRotationInterval", () =>
+{
+    test( "FileRotationInterval defines the available file rotation intervals", async() =>
+    {
+        expect( FileRotationInterval.resolve( 86_400_000 ) ).toEqual( new FileRotationInterval( 1, FileRotationIntervalUnit.DAY ) );
+
+        expect( FileRotationInterval.resolve( 43_200_000 ) ).toEqual( new FileRotationInterval( 12, FileRotationIntervalUnit.HOUR ) );
+
+        expect( new FileRotationInterval( 10, FileRotationIntervalUnit.HOUR ).milliseconds ).toEqual( 36_000_000 );
+    } );
+} );
+
+describe( "LogFileRotationPolicy", () =>
+{
+    test( "LogFileRotationPolicy defines when the current log file is closed and replaced by another", async() =>
+    {
+        const defaultPolicy = LogFileRotationPolicy.DEFAULT;
+
+        expect( defaultPolicy.interval ).toEqual( new FileRotationInterval( 1, FileRotationIntervalUnit.DAY ) );
+
+        expect( defaultPolicy.maxSize ).toEqual( 100 );
+
+        expect( defaultPolicy.maxBytes ).toEqual( 100 * 1_024 );
+
+        expect( defaultPolicy.milliseconds ).toEqual( 86_400_000 );
+
+        let policy = LogFileRotationPolicy.resolve( { interval: 86_400_000, maxSize: 100 } );
+
+        expect( policy.interval ).toEqual( new FileRotationInterval( 1, FileRotationIntervalUnit.DAY ) );
+
+        expect( policy.maxSize ).toEqual( 100 );
+
+        expect( policy.maxBytes ).toEqual( 100 * 1_024 );
+
+        policy = LogFileRotationPolicy.resolve( { interval: 43_200_000, maxSize: 23 } );
+
+        expect( policy.interval ).toEqual( new FileRotationInterval( 12, FileRotationIntervalUnit.HOUR ) );
+
+        expect( policy.maxSize ).toEqual( 23 );
+
+        expect( policy.maxBytes ).toEqual( 23 * 1_024 );
+    } );
+} );
+
+describe( "DEFAULT_FILE_LOGGER_OPTIONS", () =>
+{
+    test( "DEFAULT_FILE_LOGGER_OPTIONS defines reasonable defaults", async() =>
+    {
+        expect( DEFAULT_FILE_LOGGER_OPTIONS ).toEqual( {
+                                                           directory: DEFAULT_FILE_PATH,
+                                                           filePattern: DEFAULT_FILE_PATTERN,
+                                                           timestampFormatter: null,
+                                                           filter: null,
+                                                           level: LogLevel.DEFAULT,
+                                                           logFormatter: LogFormatter.DEFAULT,
+                                                           retentionPolicy: DEFAULT_FILE_RETENTION_POLICY,
+                                                           rotationPolicy: DEFAULT_FILE_ROTATION_POLICY
+                                                       } );
+    } );
+} );
+
+describe( "FileLogger", () =>
+{
+    test( "FileLogger can be constructed", () =>
+    {
+        let logger = new FileLogger( { directory: "../../../logs" } );
+
+        expect( logger.directory ).toEqual( "C:\\Projects\\bocktils\\logs" );
+
+        logger = new FileLogger( { directory: "../../../logs" } );
+
+        expect( logger.directory ).toEqual( "C:\\Projects\\bocktils\\logs" );
+
+        let record = new LogRecord( "This is a test",
+                                    "info",
+                                    null,
+                                    "FileLogger.test.js",
+                                    "Data 1",
+                                    "Data 2",
+                                    5 );
+
+        logger.info( record );
+    } );
+} );

@@ -75,7 +75,7 @@ const $scope = constants?.$scope || function()
 
     const { ModulePrototype } = classes;
 
-    const { asString, asInt, asFloat, isBlank, ucase, toUnixPath } = stringUtils;
+    const { asString, asInt, asFloat, isBlank, ucase, toUnixPath, toBool } = stringUtils;
 
     const { varargs, asArray, Filters, AsyncBoundedQueue } = arrayUtils;
 
@@ -164,7 +164,8 @@ const $scope = constants?.$scope || function()
             const prefix = !isBlank( this.prefix ) ? (this.prefix + this.separator) : _mt_str;
             const name = this.name || DEFAULT_FILE_NAME;
             const extension = this.extension || DEFAULT_FILE_EXTENSION;
-            return prefix + name + (iteration > 0 ? (this.separator + iteration) : _mt_str) + _dot + (extension.replace( /^\.+/, _mt_str ));
+            const filename = prefix + name + (iteration > 0 ? (this.separator + iteration) : _mt_str) + _dot + (extension.replace( /^\.+/, _mt_str ));
+            return filename.replace( /^[\W_.-]+/, _mt_str );
         }
 
         static fromString( pPattern )
@@ -868,7 +869,7 @@ const $scope = constants?.$scope || function()
         if ( isNumeric( pValue ) )
         {
             const unit = FileRotationIntervalUnit.resolve( pValue );
-            return new FileRotationInterval( asInt( pValue ), unit );
+            return new FileRotationInterval( 1, unit );
         }
 
         if ( isString( pValue ) )
@@ -908,17 +909,7 @@ const $scope = constants?.$scope || function()
 
         get maxBytes()
         {
-            return 1_204 * this.maxSize;
-        }
-
-        async isOlderThanInterval( pFile, pNow )
-        {
-            // stat( pFile );
-        }
-
-        async hasReachedMaxSize( pFile )
-        {
-            return false;
+            return 1_024 * this.maxSize;
         }
     }
 
@@ -958,7 +949,31 @@ const $scope = constants?.$scope || function()
     {
         const options = populateOptions( pOptions || {}, DEFAULT_FILE_LOGGER_OPTIONS );
 
-        if ( options.rotationPolicy instanceof LogFileRotationPolicy )
+        if ( options instanceof LogFileRotationPolicy )
+        {
+            return options.rotationPolicy;
+        }
+        else if ( isNonNullObject( options ) )
+        {
+            let fileRotationInterval = null;
+            let maxKb = 0;
+
+            if ( options.interval )
+            {
+                fileRotationInterval = FileRotationInterval.resolve( options.interval );
+            }
+
+            if ( isNumeric( options.maxSize ) )
+            {
+                maxKb = asInt( options.maxSize );
+            }
+
+            if ( isNonNullObject( fileRotationInterval ) && (isNumeric( maxKb ) && asInt( maxKb ) > 0) )
+            {
+                return new LogFileRotationPolicy( fileRotationInterval, maxKb );
+            }
+        }
+        else if ( isNonNullObject( options.rotationPolicy ) && options.rotationPolicy instanceof LogFileRotationPolicy )
         {
             return options.rotationPolicy;
         }
@@ -1065,7 +1080,7 @@ const $scope = constants?.$scope || function()
         let exists;
         try
         {
-            await fsAsync.access( pPath, fs.constants.W_OK );
+            await fsAsync.access( pPath, fs.constants.F_OK );
         }
         catch( ex )
         {
@@ -1143,7 +1158,9 @@ const $scope = constants?.$scope || function()
 
         #stream;
 
-        #queue = new AsyncBoundedQueue( 1_000 );
+        #suspended;
+
+        #queue;
 
         constructor( pFileLoggerOptions = DEFAULT_FILE_LOGGER_OPTIONS, pOtherOptions = DEFAULT_LOGGER_OPTIONS )
         {
@@ -1155,7 +1172,7 @@ const $scope = constants?.$scope || function()
             this.#options = lock( options );
             this.#otherOptions = lock( otherOptions );
 
-            this.#directory = path.resolve( toUnixPath( asString( options.directory, true ) ) );
+            this.#directory = path.resolve( asString( options.directory, true ) );
 
             this.#filePattern = LogFilePattern.resolve( options ) || LogFilePattern.DEFAULT;
 
@@ -1174,9 +1191,11 @@ const $scope = constants?.$scope || function()
 
             this.#rotationPolicy = LogFileRotationPolicy.resolve( options ) || LogFileRotationPolicy.DEFAULT;
 
+            this.#queue = new AsyncBoundedQueue( 1_000 );
+
             this._initializeDirectory();
 
-            let { filename, filePath } = this.calculateFilepath();
+            let { filename, filePath } = this.calculateFilePath();
 
             this._initializeLogFile( filename, filePath, 0 );
 
@@ -1231,7 +1250,7 @@ const $scope = constants?.$scope || function()
 
         get filepath()
         {
-            return asString( this.#currentFilePath, true ) || this.calculateFilepath().filePath;
+            return asString( this.#currentFilePath, true ) || this.calculateFilePath().filePath;
         }
 
         get timestampFormatter()
@@ -1274,6 +1293,16 @@ const $scope = constants?.$scope || function()
             return this.#rotationPolicy;
         }
 
+        get suspended()
+        {
+            return toBool( this.#suspended );
+        }
+
+        set suspended( pBool )
+        {
+            this.#suspended = toBool( pBool );
+        }
+
         _initializeDirectory()
         {
             let directoryExists = exists( this.#directory );
@@ -1302,15 +1331,14 @@ const $scope = constants?.$scope || function()
             }
         }
 
-        _initializeLogFile( pFilename, pFilepath, pRetries )
+        _initializeLogFile( pFileName, pFilePath, pRetries )
         {
             const retries = asInt( pRetries || 0 );
 
-            const { filename, filePath } =
-            {
-                filename: asString( pFilename, true ) || this.calculateFilepath().filename,
-                filepath: asString( pFilepath, true ) || this.calculateFilepath().filePath
-            } || this.calculateFilepath();
+            const {
+                filename = asString( pFileName, true ),
+                filePath = asString( pFilePath, true )
+            } = this.calculateFilePath();
 
             if ( retries > 2 )
             {
@@ -1320,41 +1348,74 @@ const $scope = constants?.$scope || function()
                 return false;
             }
 
-            let needsToBeCreated = true;
+            let needsToBeCreated = !exists( filePath );
 
-            if ( exists( filePath ) )
+            this.suspended = needsToBeCreated;
+
+            if ( !needsToBeCreated )
             {
                 const stats = fs.statSync( filePath );
 
-                if ( stats.isFile() && fs.accessSync( filePath, fs_constants.R_OK | fs_constants.W_OK ) )
+                if ( stats.isFile() )
                 {
-                    this.#currentFilename = filename;
-                    this.#currentFilePath = filePath;
+                    try
+                    {
+                        fs.accessSync( filePath, fs_constants.F_OK );
 
-                    needsToBeCreated = false;
+                        this.#currentFilename = filename;
+                        this.#currentFilePath = filePath;
 
-                    konsole.info( "Logging to", filePath, "is", this.enabled ? "enabled" : "disabled" );
+                        needsToBeCreated = false;
+
+                        konsole.info( "Logging to", filePath, "is", this.enabled ? "enabled" : "disabled" );
+                    }
+                    catch( ex )
+                    {
+                        needsToBeCreated = true;
+
+                        konsole.warn( "Unable to access log file", filePath, ex );
+                    }
+                }
+                else
+                {
+                    needsToBeCreated = true;
                 }
             }
 
             if ( needsToBeCreated )
             {
+                this.suspended = needsToBeCreated;
+
                 try
                 {
-                    fs.writeFileSync( filePath, _mt_str );
+                    fs.writeFileSync( filePath, "********** LOG FILE CREATED AT " + new Date().toLocaleString( this.locale ) + " **********\n\n" );
+
+                    fs.chmodSync( filePath, 0o660 );
+
+                    needsToBeCreated = !exists( filePath );
+
+                    if ( !needsToBeCreated )
+                    {
+                        this.#currentFilename = filename;
+                        this.#currentFilePath = filePath;
+
+                        konsole.info( "Logging to", filePath, "is", this.enabled ? "enabled" : "disabled" );
+                    }
                 }
                 catch( ex )
                 {
                     konsole.error( "Unable to create log file:", filePath, "Retrying...", ex );
-                }
 
-                this._initializeLogFile( filename, filePath, retries + 1 );
+                    this._initializeLogFile( filename, filePath, retries + 1 );
+                }
             }
+
+            this.suspended = needsToBeCreated;
 
             return !needsToBeCreated;
         }
 
-        calculateFilepath( pIteration )
+        calculateFilePath( pIteration )
         {
             const pattern = this.filePattern;
 
@@ -1367,12 +1428,12 @@ const $scope = constants?.$scope || function()
 
         isOpen()
         {
-            return null !== this.#stream;
+            return null !== this.#stream && this.#stream instanceof fs.WriteStream;
         }
 
         isClosed()
         {
-            return null === this.#stream;
+            return null === this.#stream || !(this.#stream instanceof fs.WriteStream);
         }
 
         async _open()
@@ -1384,35 +1445,52 @@ const $scope = constants?.$scope || function()
                 return true;
             }
 
-            this.#stream = fs.createWriteStream( this.filepath, { flags: "a" } ); // 'a' for append
+            this.suspended = true;
 
-            // Ensure the stream is closed on exit, SIGINT, and SIGTERM
-            if ( null != process )
+            try
             {
-                process.on( "exit", () => (me || this)._close() );
-                process.on( "SIGINT", () => (me || this)._close() );
-                process.on( "SIGTERM", () => (me || this)._close() );
+                this.#stream = fs.createWriteStream( this.filepath, { flags: "a" } ); // 'a' for append
+
+                // Ensure the stream is closed on exit, SIGINT, and SIGTERM
+                if ( null != process )
+                {
+                    process.on( "exit", () => (me || this)._close() );
+                    process.on( "SIGINT", () => (me || this)._close() );
+                    process.on( "SIGTERM", () => (me || this)._close() );
+                }
+
+                this.#stream.on( "error", ( err ) =>
+                {
+                    konsole.error( "An error occurred while writing to log file:", (me || this).filepath, err );
+                    (me || this)._close(); // Close the stream on error
+                } );
+            }
+            catch( ex )
+            {
+                konsole.error( "Unable to open log file:", (me || this).filepath, ex );
             }
 
-            this.#stream.on( "error", ( err ) =>
-            {
-                konsole.error( "An error occurred while writing to log file:", this.filepath, err );
-                (me || this)._close(); // Close the stream on error
-            } );
+            this.suspended = !this.isOpen();
 
             return this.isOpen();
         }
 
         _close()
         {
-            if ( this.#stream )
+            if ( this.isOpen() )
             {
+                const me = this;
+
+                this.flush().then( no_op ).catch( ex => konsole.error( ex ) );
+
                 this.#stream.end( () =>
                                   {
-                                      konsole.log( "Closed log file:", this.filepath );
+                                      konsole.log( "Closed log file:", (me || this).filepath );
                                   } );
 
                 this.#stream = null; // Prevent further writes
+
+                this.suspended = true;
             }
 
             return this.isClosed();
@@ -1434,7 +1512,7 @@ const $scope = constants?.$scope || function()
 
             let open = this.isOpen() || await this._open();
 
-            if ( open )
+            if ( open && !this.suspended )
             {
                 let msg = isString( pLogRecord ) ? pLogRecord : this.formatter.format( record );
                 this._writeToLog( msg ).then( no_op ).catch( ex => konsole.error( ex ) );
@@ -1449,24 +1527,34 @@ const $scope = constants?.$scope || function()
         {
             let open = this.isOpen() || await this._open();
 
-            if ( open )
+            const msg = isString( pString ) ? pString : asArray( pString ).join( _mt_str );
+
+            if ( open && !this.suspended )
             {
-                const msg = isString( pString ) ? pString : asArray( pString ).join( _mt_str );
+                const me = this;
 
                 this.#stream.write( (asString( msg ) + _lf), ( err ) =>
                 {
                     if ( err )
                     {
-                        konsole.error( "An error occurred while writing to the log file:", this.filepath, err );
-                        this._close();
+                        konsole.error( "An error occurred while writing to the log file:", (me || this).filepath, err );
+
+                        (me || this)._close();
+
+                        (me || this).#queue.enqueue( msg );
                     }
                 } );
             }
             else
             {
-                this.#queue.enqueue( pString );
+                this.#queue.enqueue( msg );
             }
 
+            this.checkAndRotateIfMaxSize().then( no_op ).catch( ex => konsole.error( ex ) );
+        }
+
+        async checkAndRotateIfMaxSize()
+        {
             const policy = this.rotationPolicy;
 
             const stats = await fsAsync.stat( this.filepath );
@@ -1475,14 +1563,26 @@ const $scope = constants?.$scope || function()
 
             if ( fileSize >= policy.maxBytes )
             {
+                this.suspended = true;
+
                 await this.rotateLogFile( this, false );
+
+                this.suspended = false;
             }
         }
 
         async _log( ...pData )
         {
             const arr = asArray( varargs( ...pData ) );
-            this._writeToLog( arr.join( _mt_str ) ).then( no_op ).catch( ex => konsole.error( ex ) );
+
+            if ( 1 === arr.length && arr[0] instanceof LogRecord )
+            {
+                this.writeLogRecord( arr[0] ).then( no_op ).catch( ex => konsole.error( ex ) );
+            }
+            else
+            {
+                this._writeToLog( arr.join( _mt_str ) ).then( no_op ).catch( ex => konsole.error( ex ) );
+            }
         }
 
         info( ...pData )
@@ -1527,11 +1627,21 @@ const $scope = constants?.$scope || function()
 
         async flush()
         {
-            if ( !this.#queue.isEmpty() )
+            const iterationCap = new IterationCap( this.#queue.size + 16 );
+
+            if ( !(await this.#queue.isEmpty()) )
             {
                 for await ( let entry of this.#queue )
                 {
-                    await this._writeToLog( entry );
+                    if ( entry )
+                    {
+                        await this._writeToLog( entry );
+                    }
+
+                    if ( iterationCap.reached )
+                    {
+                        break;
+                    }
                 }
             }
         }
@@ -1563,7 +1673,7 @@ const $scope = constants?.$scope || function()
                 iteration = parseInt( matches[1] );
             }
 
-            const newFilepath = me.calculateFilepath( iteration + 1 );
+            const newFilepath = me.calculateFilePath( iteration + 1 );
 
             konsole.info( "Rotating log file:", me.filepath, "replaced by:", newFilepath );
 

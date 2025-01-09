@@ -610,6 +610,17 @@ const $scope = constants?.$scope || function()
         return isObject( pObj ) && pObj.prototype !== null && pObj.prototype !== Object && (pObj.constructor === null || pObj.constructor !== Object);
     };
 
+    const isError = function( pObj )
+    {
+        return isObject( pObj ) && pObj instanceof Error;
+    };
+
+    const firstError = function( ...pObj )
+    {
+        let arr = !isNull( pObj ) ? isArray( pObj ) ? pObj : [pObj] : [];
+        return arr.filter( e => isError( e ) ).shift();
+    };
+
     /**
      * Returns true if the specified value is a string or a {@link String} object<br>
      *
@@ -2087,6 +2098,13 @@ const $scope = constants?.$scope || function()
         return value;
     };
 
+    const NVL = function( ...pValue )
+    {
+        let arr = [].concat( ...pValue );
+        arr = arr.filter( e => !isNull( e ) );
+        return arr.length > 0 ? arr[0] : null;
+    };
+
     /**
      * This class can be used to convert any non-null value into an iterable.
      * <br>
@@ -2565,6 +2583,8 @@ const $scope = constants?.$scope || function()
             isObject,
             isCustomObject,
             isNonNullObject,
+            isError,
+            firstError,
             isFunction,
             isAsyncFunction,
             isGeneratorFunction,
@@ -2613,6 +2633,7 @@ const $scope = constants?.$scope || function()
             toIterable,
             firstMatchingType,
             estimateBytesForType,
+            NVL,
             isReadOnly,
             /**
              * The classes exported with this module.<br>

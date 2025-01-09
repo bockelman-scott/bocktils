@@ -68,7 +68,7 @@ const $scope = constants?.$scope || function()
         CustomEvent = ModuleEvent;
     }
 
-    const { isNull, isString, isNumeric, isNumber, isObject, isFunction, isDate } = typeUtils;
+    const { isNull, isString, isNumeric, isNumber, isObject, isFunction, isDate, isError, firstError } = typeUtils;
 
     const { asString, asInt, isBlank, lcase, ucase, trimLeadingCharacters } = stringUtils;
 
@@ -253,7 +253,7 @@ const $scope = constants?.$scope || function()
 
             this.#level = LogLevel.resolveLevel( pLevel, { level: LogLevel.DEFAULT } );
 
-            this.#error = resolveError( pError || pMessage, pError?.message || this.#message );
+            this.#error = (isError( pError ) || isError( pMessage )) ? resolveError( firstError( pError, pMessage ), (pError?.message || pMessage?.message || this.#message) ) : null;
 
             this.#source = resolveSource( pSource, pError );
 
@@ -413,7 +413,20 @@ const $scope = constants?.$scope || function()
      *                                                               by calling the Date's #toLocaleString method.<br>
      *
      * @property {string|Intl.Locale} [locale=en-US] The Locale to use when formatting the timestamp.<br>
+     *
+     * @property {Object} dateFormattingOptions The options to specify for the Intl.DateFormatter that is used if dateFormatter is not specified
      */
+
+    const DEFAULT_DATE_FORMAT_OPTIONS =
+        {
+            month: "2-digit",
+            day: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            fractionalSecondDigits: 3
+        };
 
     const DEFAULT_LOG_FORMATTER_OPTIONS =
         {
@@ -421,7 +434,8 @@ const $scope = constants?.$scope || function()
             errorTemplate: DEFAULT_ERROR_TEMPLATE,
             includeStackTrace: true,
             dateFormatter: null,
-            locale: _defaultLocaleString
+            locale: _defaultLocaleString,
+            dateFormattingOptions: DEFAULT_DATE_FORMAT_OPTIONS
         };
 
     class LogFormatter
@@ -437,6 +451,8 @@ const $scope = constants?.$scope || function()
 
         #dateFormatter;
 
+        #dateFormattingOptions = DEFAULT_DATE_FORMAT_OPTIONS;
+
         constructor( pOptions = DEFAULT_LOG_FORMATTER_OPTIONS )
         {
             const options = populateOptions( pOptions, DEFAULT_LOG_FORMATTER_OPTIONS );
@@ -447,6 +463,7 @@ const $scope = constants?.$scope || function()
             this.#errorTemplate = options.errorTemplate || DEFAULT_ERROR_TEMPLATE;
             this.#includeStackTrace = !!options?.includeStackTrace;
             this.#dateFormatter = options?.dateFormatter;
+            this.#dateFormattingOptions = options?.dateFormattingOptions || DEFAULT_DATE_FORMAT_OPTIONS;
 
             this.#locale = options?.locale instanceof Intl.Locale ? options.locale : new Intl.Locale( options?.locale || _defaultLocaleString );
         }
@@ -478,9 +495,11 @@ const $scope = constants?.$scope || function()
 
         get dateFormatter()
         {
+            const me = this;
+
             this.#dateFormatter = (this.#dateFormatter ||
                 {
-                    format: ( pDate ) => pDate.toLocaleString( [this.locale] )
+                    format: ( pDate ) => new Intl.DateTimeFormat( [me.locale], (me.#dateFormattingOptions || DEFAULT_DATE_FORMAT_OPTIONS) ).format( pDate )
                 });
 
             if ( isFunction( this.#dateFormatter?.format ) )
@@ -493,7 +512,7 @@ const $scope = constants?.$scope || function()
             }
 
             return this.#dateFormatter || {
-                format: ( pDate ) => pDate.toLocaleString( [this.locale] )
+                format: ( pDate ) => new Intl.DateTimeFormat( [me.locale], (me.#dateFormattingOptions || DEFAULT_DATE_FORMAT_OPTIONS) ).format( pDate )
             };
         }
 
@@ -526,6 +545,7 @@ const $scope = constants?.$scope || function()
             {
                 template = template.replaceAll( /\[?\{message}]?/g, _mt_str ).replaceAll( /\[?\{2}]?/g, message );
             }
+
             if ( !isBlank( source ) )
             {
                 template = template.replaceAll( "{source}", source ).replaceAll( "{3}", source );
@@ -595,9 +615,10 @@ const $scope = constants?.$scope || function()
             const level = logRecord.level;
             const message = logRecord.message;
             const source = logRecord.source;
+            const data = asArray( logRecord.data );
+
             const error = logRecord.error;
             const stackTrace = logRecord.stack;
-            const data = asArray( logRecord.data );
 
             const timestampString = asString( isDate( timestamp ) ? this.dateFormatter.format( timestamp ) : timestamp, true );
 
@@ -605,26 +626,28 @@ const $scope = constants?.$scope || function()
 
             const msg = this._populateTemplate( timestampString, level, message, source );
 
-            arr.push( msg );
+            arr.push( _lf, msg );
 
             if ( data?.length > 0 )
             {
-
                 arr.push( "[DATA:" );
                 arr = arr.concat( ...(asArray( data ).map( ( e, i, a ) => _spc + ((i < (a.length - 1)) ? (e + _comma) : e + "]") )) );
             }
 
             arr = concatenateConsecutiveStrings( _spc, arr );
 
-            const errorMsg = this._populateErrorTemplate( error, stackTrace, error?.message || message );
-
-            if ( !isBlank( errorMsg ) )
+            if ( error instanceof Error || !isNull( stackTrace ) )
             {
-                arr.push( _lf );
-                arr.push( trimLeadingCharacters( errorMsg, _spc, _mt_str ) );
+                const errorMsg = this._populateErrorTemplate( error, stackTrace, error?.message || message );
+
+                if ( !isBlank( errorMsg ) )
+                {
+                    arr.push( _lf );
+                    arr.push( trimLeadingCharacters( errorMsg, _spc, _mt_str ) );
+                }
             }
 
-            arr.push( _lf, _lf, _lf );
+            arr.push( _lf, _lf );
 
             const output = !!pAsString ? arr.join( _mt_str ) : arr;
 

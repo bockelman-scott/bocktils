@@ -149,3 +149,23 @@ describe( "ConsoleLogger", () =>
         expect( logger.buffered ).toBe( true );
     } );
 } );
+
+describe( "AsyncLogger", () =>
+{
+    test( "AsyncLogger is a logger that writes to its destination asynchronously", () =>
+    {
+        const logger = new AsyncLogger( {}, new ConsoleLogger() );
+
+        expect( logger.asynchronous ).toBe( true );
+
+        jest.spyOn( console, "error" );
+
+        logger.error( logRecord );
+
+        setTimeout( () =>
+                    {
+                        expect( console.error ).toHaveBeenCalled();
+                        console.error.mockRestore(); // Restore the original console.log
+                    }, 20 );
+    } );
+} );

@@ -4230,7 +4230,7 @@ const $scope = constants?.$scope || function()
         {
             this.#arr = [];
 
-            const initialSize = pArr?.length || pArr?.size;
+            const initialSize = asInt( pArr?.length || pArr?.size || pSize );
 
             const desiredLimit = Math.min( Math.max( 1, asInt( pSize, initialSize ), initialSize ), MAX_QUEUE_SIZE );
 
@@ -4246,13 +4246,13 @@ const $scope = constants?.$scope || function()
                     pArr.shrink( desiredLimit );
                 }
 
-                this.#arr = pArr.#arr || pArr || [];
+                this.#arr = asArray( pArr.#arr || pArr || [] );
             }
             else
             {
                 this.#arr = [].concat( ...(asArray( pArr ) || []) ) || [];
 
-                this.#limit = desiredLimit;
+                this.#limit = asInt( desiredLimit );
             }
         }
 
@@ -4263,7 +4263,7 @@ const $scope = constants?.$scope || function()
 
         get limit()
         {
-            return asInt( this.#limit );
+            return asInt( this.#limit, this.size );
         }
 
         static get [Symbol.species]()
@@ -4302,7 +4302,7 @@ const $scope = constants?.$scope || function()
 
         get size()
         {
-            return this.values.length;
+            return asArray( this.values ).length;
         }
 
         isQueued( pElem )

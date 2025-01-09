@@ -931,15 +931,28 @@ describe( "ExecutionEnvironment", () =>
 
     test( "ExecutionEnvironment provides information about the context in which the code is running ", () =>
     {
-        const executionEnvironment = new ExecutionEnvironment();
+        let executionEnvironment = new ExecutionEnvironment();
 
         expect( executionEnvironment.isNode() ).toBe( true );
 
         expect( executionEnvironment.isWindows() ).toBe( true );
 
-        const userAgentInfo = executionEnvironment.parseUserAgent( "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
+        const userAgentInfo = executionEnvironment.parseUserAgent( "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36" );
 
-        console.log( userAgentInfo );
+        expect( userAgentInfo.browser.name ).toEqual( "Chrome" );
+        expect( userAgentInfo.browser.version ).toEqual( "131.0.0.0" );
+        expect( userAgentInfo.engine.name ).toEqual( "AppleWebKit" );
+        expect( userAgentInfo.engine.version ).toEqual( "537.36" );
+        expect( userAgentInfo.os.name ).toEqual( "Windows NT" );
+        expect( userAgentInfo.os.version ).toEqual( "10.0" );
+        expect( userAgentInfo.cpu.architectures[0] ).toEqual( "Win64" );
+        expect( userAgentInfo.cpu.architectures[1] ).toEqual( "x64" );
+
+        executionEnvironment = getExecutionEnvironment();
+
+        expect( executionEnvironment.isNode() ).toBe( true );
+
+        expect( executionEnvironment.isWindows() ).toBe( true );
 
     } );
 

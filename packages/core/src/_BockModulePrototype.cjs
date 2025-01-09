@@ -352,7 +352,7 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
         {
             const os = this.operatingSystem || this.process?.platform || this.#DenoGlobal?.build?.os || _unknown;
 
-            return ["windows", "win32", "win64"].includes( os.toLowerCase() );
+            return ["windows", "win32", "win64"].includes( os.toLowerCase() ) || os.toLowerCase().startsWith( "windows" );
         }
 
         isLinux()
@@ -996,16 +996,30 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
      * @param {string|Error} pMessage A string to use as the message property of the returned Error or an Error whose message will be used instead
      * @returns {__Error} an Error (actually an instance of __Error), which provides an environment-agnostic stack trace)
      */
-    function resolveError( pError, pMessage = DEFAULT_ERROR_MSG )
+    function resolveError( pError, pMessage )
     {
+        if ( !(pError instanceof Error || pMessage instanceof Error || (_str === typeof pMessage && !(_mt_str === pMessage.trim()))) )
+        {
+            return null;
+        }
+
         if ( pError instanceof Error )
         {
             return new __Error( pError );
         }
+        else if ( pMessage instanceof Error )
+        {
+            return new __Error( pMessage );
+        }
 
         let cause = pError instanceof Error ? pError : pMessage instanceof Error ? pMessage : null;
 
-        return new __Error( (pError?.message || pMessage || pError || DEFAULT_ERROR_MSG), { cause } );
+        if ( cause instanceof Error )
+        {
+            return new __Error( (pError?.message || pMessage || pError || DEFAULT_ERROR_MSG), { cause } );
+        }
+
+        return null;
     }
 
     /**
@@ -1170,7 +1184,7 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
         {
             this.#id = StatefulListener.nextId();
 
-            this.#name = String( pName ) || ("StatefulListener_" + String( this.#id ));
+            this.#name = (_str === typeof pName ? pName : _mt_str) || ("StatefulListener_" + String( this.#id ));
 
             this.#options = populateOptions( pOptions, {} );
         }
