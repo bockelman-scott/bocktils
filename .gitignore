@@ -1,5 +1,8 @@
 node_modules
 jsdoc-templates
+logs
+
+**/*.log
 
 package-lock.json
 
