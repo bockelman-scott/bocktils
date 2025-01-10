@@ -62,10 +62,19 @@ const eventMaker = new EventMaker();
 
 const currentWorkingDirectory = process.cwd();
 
-const currentDirectory = path.dirname( __filename );
-
 const currentFile = __filename;
 
+const currentDirectory = path.dirname( __filename );
+
+const srcDirectory = path.resolve( currentDirectory, "../src" );
+
+const projectRootDirectory = path.resolve( currentDirectory, "../../../../" );
+
+const testDirectory = path.resolve( projectRootDirectory, "test_data" );
+
+const testSubDirectory = path.resolve( testDirectory, "base64" );
+
+const logDir = path.resolve( projectRootDirectory, "logs" );
 
 describe( "LogFilePattern", () =>
 {
@@ -122,7 +131,7 @@ describe( "FileInfo", () =>
 {
     test( "FileInfo is a 'smart-wrapper' for files collected from directory", async() =>
     {
-        const fileInfo = new FileInfo( "../FileLogger/src/index.js" );
+        const fileInfo = new FileInfo( path.resolve( srcDirectory + "/index.js" ) );
 
         const created = await fileInfo.getCreatedDate();
 
@@ -161,7 +170,7 @@ describe( "FileInfo", () =>
 
     test( "FileInfo.sort is a static method to sort instances asynchronously", async() =>
     {
-        let directoryPath = "../../../test_data/base64";
+        let directoryPath = testSubDirectory;
 
         let files = await fsAsync.readdir( directoryPath );
 
@@ -208,7 +217,7 @@ describe( "LogFileRetentionPolicy", () =>
         // pMaximumDays, pMaximumFiles,
         let retentionPolicy = new LogFileRetentionPolicy( 30, 10 );
 
-        const files = await retentionPolicy.collectFiles( "../../../test_data/base64", e => asString( e.filename ).startsWith( "1" ) );
+        const files = await retentionPolicy.collectFiles( testSubDirectory, e => asString( e.filename ).startsWith( "1" ) );
 
         expect( files.length ).toEqual( 10 );
 
@@ -224,7 +233,7 @@ describe( "LogFileRetentionPolicy", () =>
         // pMaximumDays, pMaximumFiles,
         let retentionPolicy = new LogFileRetentionPolicy( 30, 10 );
 
-        const files = await retentionPolicy.findExpiredFiles( "../../../test_data/base64", new Date() );
+        const files = await retentionPolicy.findExpiredFiles( testSubDirectory, new Date() );
 
         expect( files.length ).toEqual( 12 );
 
@@ -319,11 +328,11 @@ describe( "FileLogger", () =>
 {
     test( "FileLogger can be constructed", () =>
     {
-        let logger = new FileLogger( { directory: "../../../logs" } );
+        let logger = new FileLogger( { directory: logDir } );
 
         expect( logger.directory ).toEqual( "C:\\Projects\\bocktils\\logs" );
 
-        logger = new FileLogger( { directory: "../../../logs" } );
+        logger = new FileLogger( { directory: logDir } );
 
         expect( logger.directory ).toEqual( "C:\\Projects\\bocktils\\logs" );
 

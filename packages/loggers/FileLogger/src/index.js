@@ -286,7 +286,8 @@ const $scope = constants?.$scope || function()
 
         get filepath()
         {
-            return path.resolve( asString( this.#filepath, true ) );
+            this.#filepath = path.resolve( asString( this.#filepath, true ) );
+            return this.#filepath;
         }
 
         get filename()
