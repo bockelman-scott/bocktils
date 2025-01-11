@@ -68,11 +68,24 @@ const $scope = constants?.$scope || function()
         CustomEvent = ModuleEvent;
     }
 
-    const { isNull, isString, isNumeric, isNumber, isObject, isFunction, isDate, isError, firstError } = typeUtils;
+    const {
+        isNull,
+        isString,
+        isNumeric,
+        isNumber,
+        isObject,
+        isFunction,
+        isAsyncFunction,
+        isDate,
+        isError,
+        firstError,
+        isEvent,
+        firstMatchingType
+    } = typeUtils;
 
     const { asString, asInt, isBlank, lcase, ucase, trimLeadingCharacters } = stringUtils;
 
-    const { asArray, varargs, Filters, concatenateConsecutiveStrings } = arrayUtils;
+    const { asArray, varargs, Filters, concatenateConsecutiveStrings, unique } = arrayUtils;
 
 
     const modulePrototype = new ModulePrototype( "LoggingUtils", INTERNAL_NAME );
@@ -187,7 +200,7 @@ const $scope = constants?.$scope || function()
             return asString( pSource, true );
         }
 
-        let source = pSource || pError;
+        let source = firstError( pSource, pError ) || pSource || pError || _mt_str;
 
         if ( source instanceof Error )
         {
@@ -215,18 +228,23 @@ const $scope = constants?.$scope || function()
         switch ( typeof source )
         {
             case _obj:
-                if ( isNull( pSource ) )
+                if ( isNull( source ) )
                 {
                     return _mt_str;
                 }
 
-                return {}.toString.call( pSource, pSource ) || asString( pSource, true );
+                if ( isEvent( source ) )
+                {
+                    return asString( source?.target || source?.name || source?.type || _mt_str );
+                }
+
+                return {}.toString.call( source, source ) || asString( source, true );
 
             case _fun:
-                return pSource?.name || funcAsString( pSource );
+                return source?.name || funcAsString( source );
 
             case _num:
-                return asString( pSource );
+                return asString( source );
 
             default:
                 return _mt_str;
@@ -249,15 +267,60 @@ const $scope = constants?.$scope || function()
         {
             this.#timestamp = new Date();
 
-            this.#message = asString( pMessage || pError?.message ) || pError?.message || _mt_str;
+            if ( pMessage instanceof this.constructor )
+            {
+                this.#copyFrom( pMessage, pLevel, pError, pSource, ...pData );
+            }
+            else if ( isError( pMessage ) )
+            {
+                this.#message = pMessage?.message || pMessage?.name || _mt_str;
+                this.#level = pLevel instanceof LogLevel || isNumeric( pLevel ) ? LogLevel.resolveLevel( pLevel, { level: LogLevel.ERROR } ) : LogLevel.ERROR;
+                this.#error = pMessage;
+                this.#source = resolveSource( pSource, pMessage );
+                this.#data = asArray( varargs( ...pData ) );
+            }
+            else if ( isEvent( pMessage ) || isEvent( pSource ) )
+            {
+                let evt = firstMatchingType( Event, pMessage || pSource, pMessage, pSource ) || pMessage || pSource;
 
-            this.#level = LogLevel.resolveLevel( pLevel, { level: LogLevel.DEFAULT } );
+                let type = evt?.type || evt?.name || S_ERROR;
+                let detail = evt?.detail || evt?.data || evt;
+                let target = evt?.target || evt;
 
-            this.#error = (isError( pError ) || isError( pMessage )) ? resolveError( firstError( pError, pMessage ), (pError?.message || pMessage?.message || this.#message) ) : null;
+                this.#message = asString( detail.message || (isString( evt ) ? asString( evt ) : type) ) || _mt_str;
+                this.#level = LogLevel.resolveLevel( detail.level || type || S_ERROR ) || S_ERROR;
+                this.#error = resolveError( (pError instanceof Error ? pError : null) || detail.error, (detail.message || pError?.message || _mt_str) );
+                this.#source = resolveSource( pSource || detail.source || target?.name, this.#error || pMessage || pSource );
+                this.#data = asArray( varargs( ...pData ) || asArray( detail.data ) );
+            }
+            else
+            {
+                this.#message = isString( pMessage ) ? asString( pMessage || pError?.message ) || pError?.message : pError?.message || _mt_str;
+                this.#level = LogLevel.resolveLevel( pLevel, { level: (isError( pError ) ? LogLevel.ERROR : LogLevel.DEFAULT) } );
+                this.#error = (isError( pError ) || isError( pMessage )) ? resolveError( firstError( pError, pMessage ), (pError?.message || pMessage?.message || this.#message) ) : null;
+                this.#source = resolveSource( pSource, pError );
+                this.#data = asArray( varargs( ...pData ) );
+            }
+        }
 
-            this.#source = resolveSource( pSource, pError );
+        [Symbol.species]()
+        {
+            return this;
+        }
 
-            this.#data = asArray( varargs( ...pData ) );
+        #copyFrom( pTarget, pLevel, pError, pSource, ...pData )
+        {
+            this.#timestamp = pTarget?.timestamp || new Date();
+
+            this.#message = asString( pTarget?.message || pTarget ) || _mt_str;
+
+            this.#level = LogLevel.resolveLevel( pLevel || pTarget?.level, { level: pTarget?.level || pLevel } );
+
+            this.#error = isError( pError ) ? pError || pTarget?.error : pTarget?.error || null;
+
+            this.#source = isString( pSource ) ? resolveSource( pSource || pTarget?.source, this.#error ) : resolveSource( pTarget?.source, pTarget?.error );
+
+            this.#data = unique( asArray( pTarget?.data || pData ).concat( asArray( varargs( ...pData ) ) ) );
         }
 
         get timestamp()
@@ -557,6 +620,15 @@ const $scope = constants?.$scope || function()
 
             template = trimLeadingCharacters( template.trim(), _spc, _mt_str ).replaceAll( /\n +/g, _lf ).replace( /^\s+/, _mt_str );
 
+            const rx = /^((\[\w+])?(\s*)*(-)?)/;
+
+            const matches = rx.exec( template );
+
+            if ( matches?.length > 2 )
+            {
+                template = template.replace( matches[2], asString( matches[2] ).padEnd( 8, _spc ) );
+            }
+
             return template;
         }
 
@@ -647,7 +719,7 @@ const $scope = constants?.$scope || function()
                 }
             }
 
-            arr.push( _lf, _lf );
+            arr.push( _lf );
 
             const output = !!pAsString ? arr.join( _mt_str ) : arr;
 
@@ -919,7 +991,7 @@ const $scope = constants?.$scope || function()
 
         log( pLogRecord )
         {
-            let logRecord = pLogRecord instanceof LogRecord ? pLogRecord || {} : new LogRecord( asString( pLogRecord ), S_ERROR );
+            let logRecord = pLogRecord instanceof LogRecord ? pLogRecord : new LogRecord( pLogRecord );
 
             let level = LogLevel.getLevel( logRecord?.level || S_ERROR ) || this.level;
 
@@ -927,9 +999,9 @@ const $scope = constants?.$scope || function()
 
             if ( this.isEnabledFor( level ) )
             {
-                for( let logger of this.loggers )
+                for( let logger of [...(this.loggers), this] )
                 {
-                    if ( this === logger || (isFunction( logger?.isEnabledFor ) && !logger.isEnabledFor( level )) )
+                    if ( (this === logger && this.loggers.length > 0) || (isFunction( logger?.isEnabledFor ) && !logger.isEnabledFor( level )) )
                     {
                         continue;
                     }
@@ -938,7 +1010,14 @@ const $scope = constants?.$scope || function()
                     {
                         try
                         {
-                            logger.writeLogRecord( logRecord );
+                            if ( isAsyncFunction( logger?.["writeLogRecord"] ) )
+                            {
+                                logger.writeLogRecord( logRecord ).then( noop ).catch( konsole.error );
+                            }
+                            else
+                            {
+                                logger.writeLogRecord( logRecord );
+                            }
                         }
                         catch( ex )
                         {
@@ -967,7 +1046,7 @@ const $scope = constants?.$scope || function()
             {
                 me.log( logRecord );
             };
-            setTimeout( func, 20 );
+            func.then( noop ).catch( konsole.error );
         }
 
         info( ...pArgs )
@@ -1049,25 +1128,7 @@ const $scope = constants?.$scope || function()
 
         processEvent( pEvent )
         {
-            let type = pEvent?.type || S_ERROR;
-            let detail = pEvent?.detail || pEvent;
-            let target = pEvent?.target || this;
-
-            let logRecord;
-
-            if ( !isNull( detail ) && isObject( detail ) )
-            {
-                logRecord = new LogRecord( detail.level || S_ERROR,
-                                           detail.message || type,
-                                           detail.error || pEvent,
-                                           detail.source || target?.name || asString( target ),
-                                           ...(asArray( detail.data )) );
-
-            }
-            else
-            {
-                logRecord = new LogRecord( detail, type, pEvent, target?.name || asString( target ) );
-            }
+            const logRecord = new LogRecord( pEvent );
 
             if ( !this.isLoggable( logRecord ) )
             {

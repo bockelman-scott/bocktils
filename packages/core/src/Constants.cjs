@@ -91,6 +91,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             deepFreeze,
             localCopy,
             immutableCopy,
+            sleep,
             StackTrace,
             __Error,
             IllegalArgumentError,
@@ -1873,6 +1874,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @returns {*} The value specified, now immutable
              */
             lock,
+
             /**
              * Returns a read-only copy of an object,
              * whose properties are also recursively copied and frozen
@@ -1886,7 +1888,22 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#deepFreeze
              */
             deepFreeze,
+
+            /**
+             * Suspends the execution of an asynchronous function for a specified number of milliseconds.
+             *
+             * @param {number} pMilliseconds - The number of milliseconds to pause execution.
+             *
+             * @return {Promise<void>} A promise that resolves after the specified delay.
+             *
+             * @type {function(number):Promise<void>}
+             *
+             * @alias module:Constants#sleep
+             */
+            sleep,
+
             calculateNumberFormattingSymbols,
+
             /**
              * Shorthand for Function.prototype.toString<br>
              * @type {function}

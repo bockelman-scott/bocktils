@@ -67,6 +67,53 @@ describe( "LogLevel", () =>
 
 describe( "LogRecord", () =>
 {
+    test( "LogRecord from Error", () =>
+    {
+        const error = new Error( "This is an error" );
+        const record = new LogRecord( error );
+
+        expect( record.message ).toEqual( "This is an error" );
+        expect( record.level.id ).toEqual( LogLevel.ERROR.id );
+        expect( record.error instanceof Error ).toBe( true );
+        expect( record.source ).toBeDefined();
+        expect( record.data ).toEqual( [] );
+    } );
+
+    test( "LogRecord from Event", () =>
+    {
+        const event = new CustomEvent( "custom_event", { message: "This is a custom event" } );
+
+        const record = new LogRecord( event );
+
+        expect( record.message ).toEqual( "This is a custom event" );
+        expect( record.level.id ).toEqual( LogLevel.DEFAULT.id );
+        expect( record.error instanceof Error ).toBe( false );
+        expect( record.source ).toEqual( "custom_event" );
+        expect( record.data ).toEqual( [] );
+    } );
+
+    test( "LogRecord from LogRecord", () =>
+    {
+        const record = new LogRecord( logRecord );
+
+        expect( record.message ).toEqual( "This is a test" );
+        expect( record.level.id ).toEqual( LogLevel.DEBUG.id );
+        expect( record.error instanceof Error ).toBe( true );
+        expect( record.source ).toEqual( "Logging.test.js" );
+        expect( record.data ).toEqual( ["Data 1", "Data 2", 5] );
+    } );
+
+    test( "LogRecord from LogRecord plus arguments", () =>
+    {
+        const record = new LogRecord( logRecord, "warn", new Error( "This error is new" ), "__Logging.test.js__", "Data 3", "Data 4", 6 );
+
+        expect( record.message ).toEqual( "This is a test" );
+        expect( record.level.id ).toEqual( LogLevel.WARN.id );
+        expect( record.error instanceof Error ).toBe( true );
+        expect( record.source ).toEqual( "__Logging.test.js__" );
+        expect( record.data ).toEqual( ["Data 1", "Data 2", 5, "Data 3", "Data 4", 6] );
+    } );
+
     test( "LogRecord construction", () =>
     {
         const msgData = logRecord.format( {} );

@@ -1,8 +1,9 @@
 const core = require( "@toolbocks/core" );
+
 const loggingUtils = require( "@toolbocks/logging" );
 
-const fs = require( "fs" );
-const fsAsync = require( "fs/promises" );
+const fs = require( "node:fs" );
+const fsAsync = require( "node:fs/promises" );
 const path = require( "node:path" );
 
 const konsole = console;
@@ -1534,7 +1535,7 @@ const $scope = constants?.$scope || function()
             {
                 const me = this;
 
-                this.#stream.write( (asString( msg ) + _lf), ( err ) =>
+                this.#stream.write( _lf + (asString( msg ) + _lf), ( err ) =>
                 {
                     if ( err )
                     {

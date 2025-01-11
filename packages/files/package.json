@@ -1,0 +1,20 @@
+{
+  "name": "@toolbocks/files",
+  "version": "1.0.0",
+  "description": "Useful functions for working with the file system",
+  "main": "src/index.js",
+  "dependencies": {
+    "@toolbocks/core": "^1.0.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "scripts": {
+    "test": "jest",
+    "doc": "jsdoc -c ../../jsdoc.config.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bockelman-scott/bocktils.git"
+  }
+}

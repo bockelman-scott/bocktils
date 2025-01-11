@@ -121,7 +121,7 @@ const $scope = constants?.$scope || function()
             classes
         } = constants;
 
-    const { ModulePrototype } = classes;
+    const { ModulePrototype, ModuleEvent } = classes;
 
     /**
      * Represents the name of the module<br>
@@ -613,6 +613,11 @@ const $scope = constants?.$scope || function()
     const isError = function( pObj )
     {
         return isObject( pObj ) && pObj instanceof Error;
+    };
+
+    const isEvent = function( pObj )
+    {
+        return isObject( pObj ) && (pObj instanceof Event || pObj instanceof CustomEvent || pObj instanceof ModuleEvent);
     };
 
     const firstError = function( ...pObj )
@@ -1827,6 +1832,10 @@ const $scope = constants?.$scope || function()
         {
             arr = arr.filter( e => e instanceof pType );
         }
+        else if ( isObject( pType ) )
+        {
+            arr = arr.filter( e => e instanceof getClass( pType ) );
+        }
         else if ( isFunction( pType ) )
         {
             const scope = $scope();
@@ -2584,6 +2593,7 @@ const $scope = constants?.$scope || function()
             isCustomObject,
             isNonNullObject,
             isError,
+            isEvent,
             firstError,
             isFunction,
             isAsyncFunction,

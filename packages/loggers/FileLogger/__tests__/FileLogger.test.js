@@ -10,6 +10,8 @@ const fileLogger = require( "../src/index.js" );
 
 const { constants, typeUtils, stringUtils, arrayUtils } = core;
 
+const { sleep } = constants;
+
 const { isString } = typeUtils;
 
 const { asString } = stringUtils;
@@ -166,6 +168,8 @@ describe( "FileInfo", () =>
         const comp = await fileInfo.compareTo( otherFileInfo );
 
         expect( comp ).toEqual( 1 ); // this file was created later
+
+        return Promise.resolve( true );
     } );
 
     test( "FileInfo.sort is a static method to sort instances asynchronously", async() =>
@@ -193,14 +197,16 @@ describe( "FileInfo", () =>
         expect( sorted.length ).toEqual( 12 );
 
         expect( sorted[0].replace( /\n+$/, "" ).endsWith( "all_bones_mp3_zip.data" ) ).toBe( true );
+
+
+        return Promise.resolve( true );
     } );
 
 } );
 
-
 describe( "LogFileRetentionPolicy", () =>
 {
-    test( "LogFileRetentionPolicy defines how long to keep log files", async() =>
+    test( "LogFileRetentionPolicy defines how long to keep log files", () =>
     {
         // pMaximumDays, pMaximumFiles,
         let retentionPolicy = new LogFileRetentionPolicy( 30, 10 );
@@ -226,11 +232,13 @@ describe( "LogFileRetentionPolicy", () =>
         expect( strings.length ).toEqual( 10 );
 
         expect( path.basename( strings.sort()[0] ) ).toEqual( "1000.data" );
+
+
+        return Promise.resolve( true );
     } );
 
     test( "LogFileRetentionPolicy has a method to find expired files", async() =>
     {
-        // pMaximumDays, pMaximumFiles,
         let retentionPolicy = new LogFileRetentionPolicy( 30, 10 );
 
         const files = await retentionPolicy.findExpiredFiles( testSubDirectory, new Date() );
@@ -238,14 +246,16 @@ describe( "LogFileRetentionPolicy", () =>
         expect( files.length ).toEqual( 12 );
 
         expect( files.every( e => isString( e ) ) ).toBe( true );
-    } );
 
+
+        return Promise.resolve( true );
+    } );
 
 } );
 
 describe( "FileRotationIntervalUnit", () =>
 {
-    test( "FileRotationIntervalUnit defines the available file rotation interval units", async() =>
+    test( "FileRotationIntervalUnit defines the available file rotation interval units", () =>
     {
         const cache = FileRotationIntervalUnit.CACHE;
 
@@ -265,7 +275,7 @@ describe( "FileRotationIntervalUnit", () =>
 
 describe( "FileRotationInterval", () =>
 {
-    test( "FileRotationInterval defines the available file rotation intervals", async() =>
+    test( "FileRotationInterval defines the available file rotation intervals", () =>
     {
         expect( FileRotationInterval.resolve( 86_400_000 ) ).toEqual( new FileRotationInterval( 1, FileRotationIntervalUnit.DAY ) );
 
@@ -277,7 +287,7 @@ describe( "FileRotationInterval", () =>
 
 describe( "LogFileRotationPolicy", () =>
 {
-    test( "LogFileRotationPolicy defines when the current log file is closed and replaced by another", async() =>
+    test( "LogFileRotationPolicy defines when the current log file is closed and replaced by another", () =>
     {
         const defaultPolicy = LogFileRotationPolicy.DEFAULT;
 
@@ -309,7 +319,7 @@ describe( "LogFileRotationPolicy", () =>
 
 describe( "DEFAULT_FILE_LOGGER_OPTIONS", () =>
 {
-    test( "DEFAULT_FILE_LOGGER_OPTIONS defines reasonable defaults", async() =>
+    test( "DEFAULT_FILE_LOGGER_OPTIONS defines reasonable defaults", () =>
     {
         expect( DEFAULT_FILE_LOGGER_OPTIONS ).toEqual( {
                                                            directory: DEFAULT_FILE_PATH,
@@ -336,14 +346,116 @@ describe( "FileLogger", () =>
 
         expect( logger.directory ).toEqual( "C:\\Projects\\bocktils\\logs" );
 
-        let record = new LogRecord( "This is a test",
+        let record = new LogRecord( "This is information",
                                     "info",
                                     null,
                                     "FileLogger.test.js",
-                                    "Data 1",
-                                    "Data 2",
-                                    5 );
+                                    "Info 1",
+                                    "Info 2",
+                                    23 );
 
         logger.info( record );
     } );
+
+    test( "FileLogger writes warnings to a file", () =>
+    {
+        let logger = new FileLogger( { directory: logDir } );
+
+        let record = new LogRecord( "This is a warning",
+                                    "warn",
+                                    null,
+                                    "FileLogger.test.js",
+                                    "Warning 1",
+                                    "Some other data",
+                                    777 );
+
+        logger.warn( record );
+    } );
+
+    test( "FileLogger writes errors to a file", () =>
+    {
+        let logger = new FileLogger( { directory: logDir } );
+
+        let record = new LogRecord( "This is an error",
+                                    "error",
+                                    null,
+                                    "FileLogger.test.js",
+                                    "Ack!",
+                                    "Nack!",
+                                    666 );
+
+        logger.error( record );
+    } );
+
+    test( "FileLogger ignores debugging messages as configured by default", () =>
+    {
+        let logger = new FileLogger( { directory: logDir } );
+
+        let record = new LogRecord( "This is ignored",
+                                    "debug",
+                                    null,
+                                    "FileLogger.test.js",
+                                    "a bunch of details",
+                                    "more details" );
+
+        logger.debug( record );
+
+        logger = new FileLogger( { directory: logDir, level: LogLevel.DEBUG } );
+
+        record = new LogRecord( "This is not ignored",
+                                "debug",
+                                null,
+                                "FileLogger.test.js",
+                                "configured to log debug messages",
+                                "more details" );
+
+        logger.debug( record );
+
+    } );
 } );
+
+describe( "FileLogger is an Event Handler", () =>
+{
+    let logger = new FileLogger( { directory: logDir } );
+
+    let eventDispatched = null;
+
+    test( "handleEvent", () =>
+    {
+        eventMaker.addEventListener( "error", logger );
+
+        eventMaker.addEventListener( "custom", logger );
+
+        let customEvent = new CustomEvent( "custom", { message: "This is a custom event" } );
+
+        eventMaker.dispatchEvent( customEvent );
+
+
+        customEvent = new CustomEvent( "error", { error: new Error( "This is an error event" ) } );
+
+        eventMaker.dispatchEvent( customEvent );
+
+        eventDispatched = customEvent;
+    } );
+
+    test( "eventHandled", async() =>
+    {
+        if ( eventDispatched )
+        {
+            sleep( 1000 );
+
+            const content = await fsAsync.readFile( path.resolve( logDir + "/application.log" ), "utf8" );
+
+            let lines = content.split( "\n" ).filter( line => line.trim().length > 0 );
+
+            lines = lines.filter( line => !line.trim().startsWith( "at" ) );
+
+            expect( lines[lines.length - 1].includes( "This is an error event" ) ).toBe( true );
+        }
+
+        return Promise.resolve( true );
+    } );
+
+} );
+
+jest.clearAllTimers();

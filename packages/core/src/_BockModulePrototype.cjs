@@ -443,6 +443,18 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
     }
 
     /**
+     * Suspends the execution of the asynchronous function for a specified number of milliseconds.
+     *
+     * @param {number} pMilliseconds - The number of milliseconds to pause execution.
+     *
+     * @return {Promise<void>} A promise that resolves after the specified delay.
+     */
+    function sleep( pMilliseconds )
+    {
+        return new Promise( resolve => setTimeout( resolve, pMilliseconds ) );
+    }
+
+    /**
      * @typedef {Object} ILogger
      * @property {function(...*)} log A function that takes one or more arguments and 'logs' them with log level, 'log'
      * @property {function(...*)} info A function that takes one or more arguments and 'logs' them with log level, 'info'
@@ -2858,6 +2870,7 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
             exportModule,
             requireModule,
             importModule: requireModule,
+            sleep,
 
             _ud,
             _obj,
