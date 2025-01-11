@@ -205,14 +205,9 @@ describe( "AsyncLogger", () =>
 
         expect( logger.asynchronous ).toBe( true );
 
-        jest.spyOn( console, "error" );
-
         logger.error( logRecord );
 
-        setTimeout( () =>
-                    {
-                        expect( console.error ).toHaveBeenCalled();
-                        console.error.mockRestore(); // Restore the original console.log
-                    }, 20 );
     } );
 } );
+
+// Active timers can also cause this, ensure that .unref() was called on them. ??

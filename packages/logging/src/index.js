@@ -1012,7 +1012,7 @@ const $scope = constants?.$scope || function()
                         {
                             if ( isAsyncFunction( logger?.["writeLogRecord"] ) )
                             {
-                                logger.writeLogRecord( logRecord ).then( noop ).catch( konsole.error );
+                                logger.writeLogRecord( logRecord ).then( no_op ).catch( konsole.error );
                             }
                             else
                             {

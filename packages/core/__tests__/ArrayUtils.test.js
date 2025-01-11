@@ -2074,17 +2074,17 @@ describe( "Combinators", () =>
               // expect( result ).toEqual( -0.333333333333333 ); // (1 + 2) / (1 - 2)
               expect( result ).toEqual( f( 1, 2 ) / g( 1, 2 ) ); // (1 + 2) - (1 - 2)
 
-              console.log( f( 1, 2 ) / g( 1, 2 ) );
+              expect( f( 1, 2 ) / g( 1, 2 ) ).toEqual( -3 );
 
           } );
 
     test( "concatenateConsecutiveStrings",
           () =>
           {
-              let arr = ["Hello"," world", 1, 2, "It's a nice ", "day"];
+              let arr = ["Hello", " world", 1, 2, "It's a nice ", "day"];
 
               expect( concatenateConsecutiveStrings( " ", arr ) ).toEqual( ["Hello world", 1, 2, "It's a nice day"] );
-          });
+          } );
 
 } );
 
