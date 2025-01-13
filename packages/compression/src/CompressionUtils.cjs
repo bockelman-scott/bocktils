@@ -34,6 +34,8 @@ const core = require( "@toolbocks/core" );
  */
 const { constants, typeUtils, stringUtils, arrayUtils } = core;
 
+const base64Utils = require( "@toolbocks/base64" );
+
 /**
  * Import adm-zip dependency
  */
@@ -44,6 +46,7 @@ const { AdmZip } = admZip;
 const fs = require( "node:fs" );
 const fsAsync = require( "node:fs/promises" );
 const { pipeline } = require( "node:stream/promises" );
+
 const path = require( "node:path" );
 const zlib = require( "node:zlib" );
 
@@ -63,11 +66,25 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
-    const { _mt_str, _dot, _str, _num, _big, _bool, _obj, S_ERROR, populateOptions, no_op, lock, classes } = constants;
+    const {
+        _mt_str,
+        _dot,
+        _str,
+        _num,
+        _big,
+        _bool,
+        _obj,
+        S_ERROR,
+        populateOptions,
+        no_op,
+        lock,
+        classes
+    } = constants;
 
     const { ModuleEvent, ModulePrototype } = classes;
 
     const {
+        isNull,
         isString,
         isNumber,
         isNumeric,
@@ -76,17 +93,21 @@ const $scope = constants?.$scope || function()
         isAsyncFunction,
         isArray,
         isTypedArray,
-        isError
+        isError,
+        toDecimal,
+        toBits
     } = typeUtils;
 
     const { asString, asInt, isBlank, lcase, ucase } = stringUtils;
 
-    const { asArray } = arrayUtils;
+    const { asArray, Filters } = arrayUtils;
 
     if ( _ud === typeof CustomEvent )
     {
         CustomEvent = ModuleEvent;
     }
+
+    const { encode, decode } = base64Utils;
 
     const modName = "CompressionUtils";
 
@@ -112,709 +133,1428 @@ const $scope = constants?.$scope || function()
      */
     const MAX_SIZE_ALLOWED = (25 * BYTES_PER_MEGABYTE);
 
+    /**
+     * Converts the input buffer or array-like object into an array.
+     *
+     * @param {Buffer|Array|TypedArray|any} pBuffer - The input data which can be a buffer, array, typed array, or any other object.
+     * @return {Array|any} An array representation of the input, or the input itself if it does not match the expected types.
+     */
     function arrayFromBuffer( pBuffer )
     {
         return asArray( pBuffer instanceof Buffer ? new Uint8Array( pBuffer ) : isArray( pBuffer ) || isTypedArray( pBuffer ) ? new Uint8Array( pBuffer ) : pBuffer );
     }
 
+    /**
+     * Creates a typed array from a given buffer or array-like object.
+     *
+     * @param {Buffer|Array|TypedArray} pBuffer - The input buffer, array, or typed array to transform into a typed array.
+     * @param {Function|*} [pArrayClass=Uint8Array] - The constructor for the target typed array class. Defaults to Uint8Array if not provided.
+     * @return {TypedArray} A new typed array instance created from the input buffer or array-like object.
+     */
+    function typedArrayFromBuffer( pBuffer, pArrayClass = Uint8Array )
+    {
+        const ArrayClass = pArrayClass || Uint8Array;
+        return (pBuffer instanceof Buffer ? new ArrayClass( pBuffer ) : isArray( pBuffer ) || isTypedArray( pBuffer ) ? new ArrayClass( pBuffer ) : new ArrayClass( asArray( pBuffer ) ));
+    }
+
+    /**
+     * Asynchronously checks if the given path is a file.
+     *
+     * @param {string} pPath - The path to check, provided as a string.
+     * @return {Promise<boolean>} A promise that resolves to `true` if the path is a file, `false` otherwise.
+     */
     async function isFile( pPath )
     {
-        const filepath = path.resolve( asString( pPath, true ) );
+        const filepath = path.normalize( path.resolve( asString( pPath, true ) ) );
 
-        return fsAsync.stat( filepath ).then( stat => stat.isFile() ).catch( ( ex ) => modulePrototype.reportError( ex, "checking if path is a file or directory", S_ERROR, modName + "::isFile", pPath ) );
+        try
+        {
+            const stats = await fsAsync.stat( filepath );
+            return stats?.isFile();
+        }
+        catch( ex )
+        {
+            modulePrototype.reportError( ex, "checking if path is a file or directory", S_ERROR, modName + "::isFile", pPath );
+        }
+        return false;
     }
 
+    /**
+     * Checks whether the specified path refers to a directory.
+     *
+     * @param {string} pPath - The path to check, normalized and resolved to an absolute path.
+     * @return {Promise<boolean>} A promise that resolves to true if the path is a directory, otherwise false.
+     */
     async function isDirectory( pPath )
     {
-        const filepath = path.resolve( asString( pPath, true ) );
+        const filepath = path.normalize( path.resolve( asString( pPath, true ) ) );
 
-        return fsAsync.stat( filepath ).then( stat => stat.isDirectory() ).catch( ( ex ) => modulePrototype.reportError( ex, "checking if path is a file or directory", S_ERROR, modName + "::isDirectory", pPath ) );
+        try
+        {
+            const stats = await fsAsync.stat( filepath );
+            return stats?.isDirectory();
+        }
+        catch( ex )
+        {
+            modulePrototype.reportError( ex, "checking if path is a file or directory", S_ERROR, modName + "::isDirectory", pPath );
+        }
+        return false;
     }
 
+    /**
+     * Removes the file extension from the given file path.
+     *
+     * @param {string} pPath - The file path from which the extension will be removed.
+     * @return {string} The file path without the extension.
+     */
     function removeExtension( pPath )
     {
         const filepath = path.resolve( asString( pPath, true ) );
         const ext = path.extname( filepath );
-        return filepath.replace( ext, _mt_str );
+        return filepath.replace( ext, _mt_str ).replace( /\/$/, _mt_str ).replace( /\\$/, _mt_str ).replace( ext, _mt_str );
     }
 
-
     /**
-     * This class represents the PkZip internal header for an archive
+     * Replaces the extension of a given file path with a new extension.
+     *
+     * @param {string} pPath - The file path whose extension needs to be replaced.
+     * @param {string} pNewExtension - The new extension to be applied to the file path.
+     * @return {string} The updated file path with the new extension.
      */
-    class ArchiveDataHeader
+    function replaceExtension( pPath, pNewExtension )
     {
-        constructor( pOptions, pImpl )
+        const filepath = path.resolve( asString( pPath, true ) );
+        const newExt = asString( pNewExtension, true ).replace( /^\.+/, _mt_str );
+        const newFilename = removeExtension( filepath );
+        return (newFilename + (_dot + newExt)).trim();
+    }
+
+    const PKZIP_CLASSES = (function()
+    {
+        /**
+         * This class represents the PkZip internal header for an archive
+         */
+        class ArchiveDataHeader
         {
-            const options = Object.assign( {}, pOptions || {} );
+            constructor( pOptions, pImpl )
+            {
+                const options = Object.assign( {}, pOptions || {} );
 
-            this.implementation = pImpl || options.dataHeader || options;
+                this.implementation = pImpl || options.dataHeader || options;
 
-            this.dataHeader = options.dataHeader || options;
+                this.dataHeader = options.dataHeader || options;
 
-            this.version = options.version || this.dataHeader?.version;
-            this.flags = options.flags || this.dataHeader?.flags;
-            this.method = options.method || this.dataHeader?.method;
-            this.time = options.time || this.dataHeader?.time;
-            this.crc = options.crc || this.dataHeader?.crc;
-            this.compressedSize = options.compressedSize || this.dataHeader?.compressedSize;
-            this.size = options.size || this.dataHeader?.size;
-            this.fnameLen = options.fnameLen || this.dataHeader?.fnameLen;
-            this.extraLen = options.extraLen || this.dataHeader?.extraLen;
+                this.version = options.version || this.dataHeader?.version;
+                this.flags = options.flags || this.dataHeader?.flags;
+                this.method = options.method || this.dataHeader?.method;
+                this.time = options.time || this.dataHeader?.time;
+                this.crc = options.crc || this.dataHeader?.crc;
+                this.compressedSize = options.compressedSize || this.dataHeader?.compressedSize;
+                this.size = options.size || this.dataHeader?.size;
+                this.fnameLen = options.fnameLen || this.dataHeader?.fnameLen;
+                this.extraLen = options.extraLen || this.dataHeader?.extraLen;
+            }
+        }
+
+        /**
+         * This static factory method returns a new instance of ArchiveDataHeader
+         * for the specified portion of the PkZip archive
+         * @param pHeader
+         * @returns {ArchiveDataHeader}
+         */
+        ArchiveDataHeader.fromDataHeader = function( pHeader )
+        {
+            return new ArchiveDataHeader( pHeader );
+        };
+
+        /**
+         * This class represents the PkZip internal header for an archive Entry
+         *
+         * @class
+         */
+        class ArchiveEntryHeader
+        {
+            constructor( pOptions, pImpl )
+            {
+                const options = Object.assign( {}, pOptions || {} );
+
+                this.implementation = pImpl || options.header || options;
+
+                this.header = options.header || options;
+
+                this.made = options.made || this.header?.made;
+                this.version = options.version || this.header?.version;
+                this.flags = options.flags || this.header?.flags;
+                this.method = options.method || this.header?.method;
+                this.time = options.time || this.header?.time;
+                this.crc = options.crc || this.header?.crc;
+                this.compressedSize = options.compressedSize || this.header?.compressedSize;
+                this.size = options.size || this.header?.size;
+                this.fileNameLength = options.fileNameLength || this.header?.fileNameLength;
+                this.extraLength = options.extraLength || this.header?.extraLength;
+                this.commentLength = options.commentLength || this.header?.commentLength;
+                this.diskNumStart = options.diskNumStart || this.header?.diskNumStart;
+                this.inAttr = options.inAttr || this.header?.inAttr;
+
+                this.attr = options.attr || this.header?.attr;
+                this.offset = options.offset || this.header?.offset;
+
+                this.encripted = options.encripted || options.encrypted || this.header?.encripted || this.header?.encrypted;
+                this.entryHeaderSize = options.entryHeaderSize || this.header?.entryHeaderSize;
+                this.realDataOffset = options.realDataOffset || this.header?.realDataOffset;
+
+                this.dataHeader = ArchiveDataHeader.fromDataHeader( options.dataHeader || this.header?.dataHeader );
+            }
+
+            loadDataHeaderFromBinary( pBuffer )
+            {
+                // TODO: if necessary or desired in a future release
+            }
+
+            loadFromBinary( pBuffer )
+            {
+                // TODO: if necessary or desired in a future release
+            }
+
+            dataHeaderToBinary()
+            {
+                // TODO: if necessary or desired in a future release
+            }
+
+            entryHeaderToBinary()
+            {
+                // TODO: if necessary or desired in a future release
+            }
+
+            toString()
+            {
+                // TODO: if necessary or desired in a future release
+            }
+
+        }
+
+        /**
+         * This static factory method returns a new instance of ArchiveEntryHeader
+         * for the specified portion of the PkZip archive
+         * @param pHeader
+         * @returns {ArchiveDataHeader}
+         */
+        ArchiveEntryHeader.fromHeader = function( pHeader )
+        {
+            return new ArchiveEntryHeader( pHeader );
+        };
+
+        class CentralDirectory
+        {
+            constructor( pOptions, pImpl )
+            {
+
+            }
+        }
+
+        CentralDirectory.from = function( pOptions, pImpl )
+        {
+
+        };
+
+        /**
+         * This is a wrapper around a zip entry,
+         * so that consumer code does not rely on a specific library's implementation.
+         * Note that even this module uses both AdmZip and zLib and could change in the future.
+         * Consumers of this module should not need to know what libraries are being used.
+         */
+        class ArchiveEntry
+        {
+            constructor( pOptions, pImpl )
+            {
+                const options = Object.assign( {}, pOptions || {} );
+
+                this.implementation = pImpl || options.zipEntry || options;
+
+                this.zipEntry = options.zipEntry || this.implementation || options;
+
+                this.name = asString( options.name || this.zipEntry?.name );
+
+                this.header = ArchiveEntryHeader.fromHeader( options?.header || options );
+
+                this.isDirectory = options.isDirectory || this.zipEntry.isDirectory;
+
+                this.comment = asString( options.comment || this.zipEntry.comment );
+
+                this.extra = options.extra || this.zipEntry.extra;
+            }
+
+            /**
+             * Returns a Buffer containing the bytes of the still-compressed data
+             * @returns {Buffer|Uint8Array}
+             */
+            getCompressedData()
+            {
+                if ( this.zipEntry && (isFunction( this.zipEntry.getCompressedData )) )
+                {
+                    return this.zipEntry.getCompressedData();
+                }
+
+                if ( this.implementation && (isFunction( this.implementation.getCompressedData )) )
+                {
+                    return this.implementation.getCompressedData();
+                }
+
+                return ZERO_LENGTH_BUFFER;
+            }
+
+            /**
+             * Returns a Promise for a Buffer containing the bytes of the still-compressed data
+             * @param pCallback
+             * @returns {Promise<Buffer|Uint8Array>}
+             */
+            async getCompressedDataAsync( pCallback )
+            {
+                if ( this.zipEntry && (isFunction( this.zipEntry.getCompressedDataAsync )) )
+                {
+                    return await this.zipEntry.getCompressedDataAsync( pCallback );
+                }
+
+                if ( this.implementation && (isFunction( this.implementation.getCompressedDataAsync )) )
+                {
+                    return await this.implementation.getCompressedDataAsync( pCallback );
+                }
+
+                return ZERO_LENGTH_BUFFER;
+            }
+
+            /**
+             * Returns either the specified encoding, if is valid or the default encoding, utf-8
+             * @param pEncoding the encoding to use for converting a buffer from one format to another
+             * @returns {BufferEncoding}
+             */
+            resolveEncoding( pEncoding )
+            {
+                return lcase( pEncoding || "utf-8" );
+            }
+
+            /**
+             * Returns a Buffer of the uncompressed bytes for this entry
+             * @returns {Buffer}
+             */
+            getData()
+            {
+                if ( this.zipEntry && (isFunction( this.zipEntry.getData )) )
+                {
+                    return this.zipEntry.getData();
+                }
+
+                if ( this.implementation && (isFunction( this.implementation.getData )) )
+                {
+                    return this.implementation.getData();
+                }
+
+                return ZERO_LENGTH_BUFFER;
+            }
+
+            /**
+             * Returns the uncompressed content of this entry as the specified data type, if possible.
+             * Particularly useful if unzipping text files,
+             * as you can specify "string" and the character encoding expected,
+             * and the method will return that string
+             *
+             * If called without arguments, returns a new Uint8Array of the uncompressed bytes
+             *
+             * @param pType {string} the data type to return
+             * @param pEncoding the character encoding to use if the specified type is "string"
+             * (or a scalar type that requires a temporary string: see implementation)
+             *
+             * @returns {Uint8Array|number|{}|{}|boolean|string}
+             */
+            getDataAs( pType, pEncoding = "utf-8" )
+            {
+                const buffer = this.getData();
+
+                switch ( lcase( pType ) )
+                {
+                    case _str:
+                        return buffer.toString( this.resolveEncoding( pEncoding ) || "utf-8" );
+
+                    case _num:
+                    case _big:
+                        return stringUtils.asFloat( this.getDataAs( _str, this.resolveEncoding( pEncoding ) ) );
+
+                    case _bool:
+                        return stringUtils.toBool( this.getDataAs( _str, this.resolveEncoding( pEncoding ) ) );
+
+                    case _obj:
+                        let obj = {};
+
+                        let json = this.getDataAs( _str, this.resolveEncoding( pEncoding ) );
+
+                        if ( stringUtils.isValidJson( json ) )
+                        {
+                            try
+                            {
+                                obj = JSON.parse( json );
+                            }
+                            catch( ex )
+                            {
+                                modulePrototype.reportError( ex, "parsing JSON data", S_ERROR, modName + "::getDataAs" );
+                            }
+                        }
+                        return obj || {};
+
+                    default:
+                        return new Uint8Array( buffer );
+                }
+            }
+
+            /**
+             * Returns a Promise for a Buffer of the uncompressed bytes for this entry
+             * @returns {Promise<Buffer>}
+             */
+            async getDataAsync( pCallback )
+            {
+                if ( this.zipEntry && (isFunction( this.zipEntry.getDataAsync )) )
+                {
+                    return await this.zipEntry.getDataAsync( pCallback );
+                }
+
+                if ( this.implementation && (isFunction( this.implementation.getDataAsync )) )
+                {
+                    return await this.implementation.getDataAsync( pCallback );
+                }
+
+                return ZERO_LENGTH_BUFFER;
+            }
+
+            toString()
+            {
+                if ( this.zipEntry && (isFunction( this.zipEntry.toString )) )
+                {
+                    return this.zipEntry.toString();
+                }
+
+                if ( this.implementation && (isFunction( this.implementation.toString )) )
+                {
+                    return this.implementation.toString();
+                }
+
+                return Object.toString.call( this.zipEntry || this );
+            }
+        }
+
+        /**
+         * Static factory method for creating an instance of ArchiveEntry
+         * @param pZipEntry
+         * @returns {ArchiveEntry}
+         */
+        ArchiveEntry.fromZipEntry = function( pZipEntry )
+        {
+            return new ArchiveEntry( pZipEntry, pZipEntry );
+        };
+
+        /**
+         * Returns the number of entries in the archive
+         * @param pArchive a Buffer or a TypedArray of bytes representing an archive
+         * @returns {number} the number of entries in the archive
+         */
+        const getEntryCount = function( pArchive )
+        {
+            let archiver;
+
+            let count = 0;
+
+            try
+            {
+                archiver = new admZip( pArchive );
+
+                count = archiver.getEntryCount() || 0;
+            }
+            catch( ex )
+            {
+                modulePrototype.reportError( ex, "counting archive entries", S_ERROR, modName + "::getEntryCount" );
+            }
+
+            return count;
+        };
+
+        /**
+         * Returns an array of ArchiveEntry objects found in the specified archive
+         * @param pArchive {Buffer|Array|string} a Buffer or an array of bytes representing an archive
+         * @param pPassword {string} (optional) password required to access the contents of the archive
+         * @returns {*[]} an array of ArchiveEntry objects found in the specified archive
+         */
+        const getEntries = function( pArchive, pPassword )
+        {
+            let archiver;
+
+            let entries = [];
+
+            try
+            {
+                archiver = new admZip( pArchive, { input: pArchive, password: pPassword } );
+
+                entries = [].concat( ((isBlank( asString( pPassword ) ) ? archiver.getEntries() : archiver.getEntries( pPassword )) || []) );
+
+                entries = entries.map( e => ArchiveEntry.fromZipEntry( e ) );
+            }
+            catch( ex )
+            {
+                modulePrototype.reportError( ex, "getting the archive entries", S_ERROR, modName + "::getEntries" );
+
+                let archive = repair( pArchive );
+
+            }
+
+            return entries;
+        };
+
+        /**
+         * Returns an instance of ArchiveEntry representing the named entry (or the entry at the specified index)
+         * @param pArchive {Buffer|Array} a Buffer or an array of bytes representing an archive
+         * @param pName {string|number} The file name of the entry to return or the index of the entry to return
+         * @param pPassword {string} (optional) password required to access the contents of the archive
+         * @returns {ArchiveEntry} an instance of ArchiveEntry representing the named entry (or the entry at the specified index)
+         */
+        const getEntry = function( pArchive, pName, pPassword = _mt_str )
+        {
+            let archiver, entry, archiveEntry = null;
+
+            const name = isString( pName ) ? asString( pName ) : isNumeric( pName ) ? asInt( pName ) : 0;
+
+            if ( isString( name ) )
+            {
+                try
+                {
+                    archiver = new admZip( pArchive, { input: pArchive, password: pPassword, name: name } );
+                    entry = archiver.getEntry( name );
+                }
+                catch( ex )
+                {
+                    modulePrototype.reportError( ex, "getting the archive entry, '" + name + "'", S_ERROR, modName + "::getEntry" );
+                }
+            }
+            else
+            {
+                const entries = getEntries( pArchive, pPassword );
+                entry = entries?.length > name ? entries[name] : null;
+            }
+
+            if ( entry )
+            {
+                try
+                {
+                    archiveEntry = ArchiveEntry.fromZipEntry( entry );
+                }
+                catch( ex )
+                {
+                    modulePrototype.reportError( ex, "getting the archive entry, '" + name + "'", S_ERROR, modName + "::getEntry" );
+                }
+            }
+
+            return archiveEntry || entry;
+        };
+
+        const repair = function( pArchive )
+        {
+
+        };
+
+        const forEach = function( pArchive, pPassword, pCallback )
+        {
+            let entries = getEntries( pArchive, pPassword );
+
+            if ( entries )
+            {
+                entries.forEach( pCallback );
+            }
+        };
+
+        const isEmptyArchive = function( pBuffer )
+        {
+            if ( _ud === typeof pBuffer || null === pBuffer || pBuffer?.length <= 22 )
+            {
+                return true;
+            }
+
+            const entryCount = getEntryCount( pBuffer );
+
+            return entryCount <= 0 || pBuffer?.length <= 22;
+        };
+
+        const exceedsMaxEntries = function( pBuffer )
+        {
+            if ( !isEmptyArchive( pBuffer ) )
+            {
+                const entryCount = getEntryCount( pBuffer );
+
+                return entryCount > MAX_ENTRIES_ALLOWED;
+            }
+
+            return false;
+        };
+
+        const calculateTotalUncompressedSize = function( pBuffer, pPassword )
+        {
+            let totalUncompressedSize = 0;
+
+            const entries = getEntries( pBuffer, pPassword );
+
+            if ( entries && entries.length )
+            {
+                for( let i = 0, n = entries.length; i < n; i++ )
+                {
+                    let entry = entries[i];
+
+                    if ( entry )
+                    {
+                        let hdr = entry?.header;
+
+                        if ( hdr )
+                        {
+                            let size = Math.max( stringUtils.asInt( hdr?.size, 0 ), 0 );
+
+                            totalUncompressedSize += size;
+                        }
+                    }
+                }
+            }
+
+            return totalUncompressedSize;
+        };
+
+        const exceedsMaxSize = function( pBuffer )
+        {
+            let totalUncompressedSize = calculateTotalUncompressedSize( pBuffer );
+
+            return totalUncompressedSize > MAX_SIZE_ALLOWED;
+        };
+
+        const isPotentialZipBomb = function( pBuffer )
+        {
+            if ( exceedsMaxSize( pBuffer ) )
+            {
+                return (calculateTotalUncompressedSize( pBuffer ) > (1_000 * BYTES_PER_MEGABYTE));
+            }
+
+            return false;
+        };
+
+        const isSafeArchive = function( pBuffer )
+        {
+            if ( isEmptyArchive( pBuffer ) )
+            {
+                throw new Error( "The archive is empty" );
+            }
+
+            if ( exceedsMaxEntries( pBuffer ) )
+            {
+                throw new Error( "The archive contains more than the maximum allowed entries (" + MAX_ENTRIES_ALLOWED + ")" );
+            }
+
+            if ( exceedsMaxSize( pBuffer ) )
+            {
+                throw new Error( "The total size of the uncompressed data exceeds the limit of " + MAX_SIZE_ALLOWED );
+            }
+
+            if ( isPotentialZipBomb( pBuffer ) )
+            {
+                throw new Error( "The buffer appears to contain a \"ZIP BOMB\", that is, the zip when inflated would be over 1,000 times the maximum allowed size of " + MAX_SIZE_ALLOWED + " bytes" );
+            }
+
+            return true;
+        };
+
+        return {
+            ArchiveEntry,
+            ArchiveEntryHeader,
+            ArchiveDataHeader,
+            CentralDirectory,
+            getEntryCount,
+            getEntries,
+            getEntry,
+            repair,
+            forEach,
+            isEmptyArchive,
+            exceedsMaxEntries,
+            calculateTotalUncompressedSize,
+            exceedsMaxSize,
+            isSafeArchive,
+            isPotentialZipBomb
+        };
+    }());
+
+    const {
+        ArchiveEntry,
+        ArchiveEntryHeader,
+        ArchiveDataHeader,
+        CentralDirectory,
+        getEntryCount,
+        getEntries,
+        getEntry,
+        repair,
+        forEach,
+        isEmptyArchive,
+        exceedsMaxEntries,
+        calculateTotalUncompressedSize,
+        exceedsMaxSize,
+        isSafeArchive,
+        isPotentialZipBomb
+    } = PKZIP_CLASSES;
+
+    function _resolveInputOutput( pInputPath, pOutputPath )
+    {
+        const inputPath = isString( pInputPath ) ? path.resolve( asString( pInputPath, true ) ) : asArray( pInputPath );
+        const outputPath = isString( pOutputPath ) ? path.resolve( asString( pOutputPath, true ) ) : asArray( pOutputPath );
+
+        return { inputPath, outputPath };
+    }
+
+    const CIPHER = "aes-256-cbc";
+    const KEY_LENGTH = 32;
+    const VECTOR_LENGTH = 16;
+    const DEFAULT_ENCODING = "utf-8";
+
+    class PasswordProtection
+    {
+        #encryptedPassword = null;
+        #initializationVector = null;
+        #salt = null;
+        #key = null;
+
+        #inputEncoding = "utf-8";
+        #outputEncoding = "utf-8";
+
+        constructor( encryptedPassword, initializationVector, salt, key, inputEncoding, outputEncoding )
+        {
+            this.#encryptedPassword = isString( encryptedPassword ) ? encryptedPassword : isArray( encryptedPassword ) ? new Uint8Array( encryptedPassword ) : new Uint8Array( 0 );
+            this.#initializationVector = isString( initializationVector ) ? initializationVector : isArray( initializationVector ) ? new Uint8Array( initializationVector ) : new Uint8Array( 0 );
+            this.#salt = isString( salt ) ? salt : isArray( salt ) ? new Uint8Array( salt ) : new Uint8Array( 0 );
+            this.#key = isString( key ) ? key : isArray( key ) ? new Uint8Array( key ) : new Uint8Array( 0 );
+
+            this.#inputEncoding = isString( encryptedPassword ) ? inputEncoding || DEFAULT_ENCODING : null;
+            this.#outputEncoding = isString( outputEncoding ) ? outputEncoding || DEFAULT_ENCODING : null;
+        }
+
+        #update( decipher )
+        {
+            if ( isString( this.#encryptedPassword ) )
+            {
+                return decipher.update( this.#encryptedPassword, this.#inputEncoding || DEFAULT_ENCODING );
+            }
+            else if ( isArray( this.#encryptedPassword ) )
+            {
+                return decipher.update( new Uint8Array( this.#encryptedPassword ) );
+            }
+            return decipher.update( this.#encryptedPassword );
+        }
+
+        /**
+         *
+         * @returns {string}
+         */
+        decrypt()
+        {
+            const decipher = crypto.createDecipheriv( CIPHER, this.#key, this.#initializationVector );
+            let decrypted = this.#update( decipher );
+            decrypted = Buffer.concat( [decrypted, decipher.final()] );
+            return decrypted.toString( "utf-8" );
+        }
+
+        static encrypt( password, salt, inputEncoding, outputEncoding )
+        {
+            const key = crypto.scryptSync( password, salt, KEY_LENGTH );
+            const iv = crypto.randomBytes( VECTOR_LENGTH ); // Generate a random IV for each encryption
+            const cipher = crypto.createCipheriv( CIPHER, key, iv );
+            let encrypted = cipher.update( Buffer.from( password, DEFAULT_ENCODING ) );
+            encrypted = Buffer.concat( [encrypted, cipher.final()] );
+
+            return new PasswordProtection( encrypted, iv, salt, key, inputEncoding, outputEncoding );
+        }
+
+        get storable()
+        {
+            const pwd = encode( this.#encryptedPassword );
+            const pwdLen = pwd.length;
+
+            const iv = encode( this.#initializationVector );
+            const ivLen = iv.length;
+
+            const salt = encode( this.#salt );
+            const saltLen = salt.length;
+
+            const key = encode( this.#key );
+            const keyLen = key.length;
+
+            const iptEnc = encode( this.#inputEncoding );
+            const iptEncLen = iptEnc.length;
+
+            const outEnc = encode( this.#outputEncoding );
+            const outEncLen = outEnc.length;
+
+            const preamble = encode( toBits( pwdLen, 16 ) +
+                                     toBits( ivLen, 16 ) +
+                                     toBits( saltLen, 16 ) +
+                                     toBits( keyLen, 16 ) +
+                                     toBits( iptEncLen, 8 ) +
+                                     toBits( outEncLen, 8 ) );
+
+            const s = preamble + pwd + iv + salt + key + iptEnc + outEnc;
+
+            return asString( s, true );
+        }
+
+        static fromStorable( storable )
+        {
+            const s = decode( storable );
+
+            const preamble = s.slice( 0, 80 );
+
+            const pwdLen = parseInt( asString( toBits( preamble.slice( 0, 16 ) ) ), 2 );
+            const ivLen = parseInt( asString( toBits( preamble.slice( 16, 32 ) ) ), 2 );
+            const saltLen = parseInt( asString( toBits( preamble.slice( 32, 48 ) ) ), 2 );
+            const keyLen = parseInt( asString( toBits( preamble.slice( 48, 64 ) ) ), 2 );
+
+            const iptEncLen = parseInt( asString( toBits( preamble.slice( 64, 72 ) ) ), 2 );
+            const outEncLen = parseInt( asString( toBits( preamble.slice( 72, 80 ) ) ), 2 );
+
+            const pwd = s.slice( 80, 80 + pwdLen );
+            const iv = s.slice( 80 + pwdLen, 80 + pwdLen + ivLen );
+            const salt = s.slice( 80 + pwdLen + ivLen, 80 + pwdLen + ivLen + saltLen );
+            const key = s.slice( 80 + pwdLen + ivLen + saltLen, 80 + pwdLen + ivLen + saltLen + keyLen );
+            const iptEnc = s.slice( 80 + pwdLen + ivLen + saltLen + keyLen, 80 + pwdLen + ivLen + saltLen + keyLen + iptEncLen );
+            const outEnc = s.slice( 80 + pwdLen + ivLen + saltLen + keyLen + iptEncLen, 80 + pwdLen + ivLen + saltLen + keyLen + iptEncLen + outEncLen );
+
+            return new PasswordProtection( pwd, iv, salt, key, iptEnc, outEnc );
         }
     }
 
     /**
-     * This static factory method returns a new instance of ArchiveDataHeader
-     * for the specified portion of the PkZip archive
-     * @param pHeader
-     * @returns {ArchiveDataHeader}
-     */
-    ArchiveDataHeader.fromDataHeader = function( pHeader )
-    {
-        return new ArchiveDataHeader( pHeader );
-    };
-
-    /**
-     * This class represents the PkZip internal header for an archive Entry
+     * Represents configuration options for a compression operation.
      *
      * @class
      */
-    class ArchiveEntryHeader
+    class CompressionOptions
     {
-        constructor( pOptions, pImpl )
+        #deleteSource = false;
+        #passwordProtection = null;
+        #encoding = DEFAULT_ENCODING;
+        #onError = null;
+        #onSuccess = null;
+
+        #formatSpecificOptions = {};
+
+        constructor( deleteSource, passwordProtection, encoding, onError, onSuccess, pFormatSpecificOptions )
         {
-            const options = Object.assign( {}, pOptions || {} );
+            this.#deleteSource = !!deleteSource;
+            this.#passwordProtection = passwordProtection instanceof PasswordProtection ? passwordProtection : null;
+            this.#encoding = encoding;
+            this.#onError = isFunction( onError ) ? onError : null;
+            this.#onSuccess = isFunction( onSuccess ) ? onSuccess : null;
 
-            this.implementation = pImpl || options.header || options;
-
-            this.header = options.header || options;
-
-            this.made = options.made || this.header?.made;
-            this.version = options.version || this.header?.version;
-            this.flags = options.flags || this.header?.flags;
-            this.method = options.method || this.header?.method;
-            this.time = options.time || this.header?.time;
-            this.crc = options.crc || this.header?.crc;
-            this.compressedSize = options.compressedSize || this.header?.compressedSize;
-            this.size = options.size || this.header?.size;
-            this.fileNameLength = options.fileNameLength || this.header?.fileNameLength;
-            this.extraLength = options.extraLength || this.header?.extraLength;
-            this.commentLength = options.commentLength || this.header?.commentLength;
-            this.diskNumStart = options.diskNumStart || this.header?.diskNumStart;
-            this.inAttr = options.inAttr || this.header?.inAttr;
-
-            this.attr = options.attr || this.header?.attr;
-            this.offset = options.offset || this.header?.offset;
-
-            this.encripted = options.encripted || options.encrypted || this.header?.encripted || this.header?.encrypted;
-            this.entryHeaderSize = options.entryHeaderSize || this.header?.entryHeaderSize;
-            this.realDataOffset = options.realDataOffset || this.header?.realDataOffset;
-
-            this.dataHeader = ArchiveDataHeader.fromDataHeader( options.dataHeader || this.header?.dataHeader );
+            this.#formatSpecificOptions = populateOptions( {}, pFormatSpecificOptions || {} );
         }
 
-        loadDataHeaderFromBinary( pBuffer )
+        get deleteSource()
         {
-            // TODO: if necessary or desired in a future release
+            return this.#deleteSource;
         }
 
-        loadFromBinary( pBuffer )
+        get passwordProtection()
         {
-            // TODO: if necessary or desired in a future release
+            return this.#passwordProtection instanceof PasswordProtection ? this.#passwordProtection : null;
         }
 
-        dataHeaderToBinary()
+        get encoding()
         {
-            // TODO: if necessary or desired in a future release
+            return this.#encoding;
         }
 
-        entryHeaderToBinary()
+        get onError()
         {
-            // TODO: if necessary or desired in a future release
+            return isFunction( this.#onError ) ? this.#onError : null;
         }
 
-        toString()
+        get onSuccess()
         {
-            // TODO: if necessary or desired in a future release
+            return isFunction( this.#onSuccess ) ? this.#onSuccess : null;
         }
 
-    }
-
-
-    /**
-     * This static factory method returns a new instance of ArchiveEntryHeader
-     * for the specified portion of the PkZip archive
-     * @param pHeader
-     * @returns {ArchiveDataHeader}
-     */
-    ArchiveEntryHeader.fromHeader = function( pHeader )
-    {
-        return new ArchiveEntryHeader( pHeader );
-    };
-
-    class CentralDirectory
-    {
-        constructor( pOptions, pImpl )
+        deleteFunction( pPath, pRecursive )
         {
+            const me = this;
+            const p = pPath;
+            const recurse = pRecursive;
 
-        }
-    }
-
-    CentralDirectory.from = function( pOptions, pImpl )
-    {
-
-    };
-
-    /**
-     * This is a wrapper around a zip entry,
-     * so that consumer code does not rely on a specific library's implementation.
-     * Note that even this module uses both AdmZip and zLib and could change in the future.
-     * Consumers of this module should not need to know what libraries are being used.
-     */
-    class ArchiveEntry
-    {
-        constructor( pOptions, pImpl )
-        {
-            const options = Object.assign( {}, pOptions || {} );
-
-            this.implementation = pImpl || options.zipEntry || options;
-
-            this.zipEntry = options.zipEntry || this.implementation || options;
-
-            this.name = asString( options.name || this.zipEntry?.name );
-
-            this.header = ArchiveEntryHeader.fromHeader( options?.header || options );
-
-            this.isDirectory = options.isDirectory || this.zipEntry.isDirectory;
-
-            this.comment = asString( options.comment || this.zipEntry.comment );
-
-            this.extra = options.extra || this.zipEntry.extra;
-        }
-
-        /**
-         * Returns a Buffer containing the bytes of the still-compressed data
-         * @returns {Buffer|Uint8Array}
-         */
-        getCompressedData()
-        {
-            if ( this.zipEntry && (isFunction( this.zipEntry.getCompressedData )) )
+            if ( me.deleteSource )
             {
-                return this.zipEntry.getCompressedData();
-            }
+                return async( pPath, pRecursive ) =>
+                {
+                    const target = pPath || p;
 
-            if ( this.implementation && (isFunction( this.implementation.getCompressedData )) )
-            {
-                return this.implementation.getCompressedData();
-            }
-
-            return ZERO_LENGTH_BUFFER;
-        }
-
-        /**
-         * Returns a Promise for a Buffer containing the bytes of the still-compressed data
-         * @param pCallback
-         * @returns {Promise<Buffer|Uint8Array>}
-         */
-        async getCompressedDataAsync( pCallback )
-        {
-            if ( this.zipEntry && (isFunction( this.zipEntry.getCompressedDataAsync )) )
-            {
-                return await this.zipEntry.getCompressedDataAsync( pCallback );
-            }
-
-            if ( this.implementation && (isFunction( this.implementation.getCompressedDataAsync )) )
-            {
-                return await this.implementation.getCompressedDataAsync( pCallback );
-            }
-
-            return ZERO_LENGTH_BUFFER;
-        }
-
-        /**
-         * Returns either the specified encoding, if is valid or the default encoding, utf-8
-         * @param pEncoding the encoding to use for converting a buffer from one format to another
-         * @returns {BufferEncoding}
-         */
-        resolveEncoding( pEncoding )
-        {
-            return lcase( pEncoding || "utf-8" );
-        }
-
-        /**
-         * Returns a Buffer of the uncompressed bytes for this entry
-         * @returns {Buffer}
-         */
-        getData()
-        {
-            if ( this.zipEntry && (isFunction( this.zipEntry.getData )) )
-            {
-                return this.zipEntry.getData();
-            }
-
-            if ( this.implementation && (isFunction( this.implementation.getData )) )
-            {
-                return this.implementation.getData();
-            }
-
-            return ZERO_LENGTH_BUFFER;
-        }
-
-        /**
-         * Returns the uncompressed content of this entry as the specified data type, if possible.
-         * Particularly useful if unzipping text files,
-         * as you can specify "string" and the character encoding expected,
-         * and the method will return that string
-         *
-         * If called without arguments, returns a new Uint8Array of the uncompressed bytes
-         *
-         * @param pType {string} the data type to return
-         * @param pEncoding the character encoding to use if the specified type is "string"
-         * (or a scalar type that requires a temporary string: see implementation)
-         *
-         * @returns {Uint8Array|number|{}|{}|boolean|string}
-         */
-        getDataAs( pType, pEncoding = "utf-8" )
-        {
-            const buffer = this.getData();
-
-            switch ( lcase( pType ) )
-            {
-                case _str:
-                    return buffer.toString( this.resolveEncoding( pEncoding ) || "utf-8" );
-
-                case _num:
-                case _big:
-                    return stringUtils.asFloat( this.getDataAs( _str, this.resolveEncoding( pEncoding ) ) );
-
-                case _bool:
-                    return stringUtils.toBool( this.getDataAs( _str, this.resolveEncoding( pEncoding ) ) );
-
-                case _obj:
-                    let obj = {};
-
-                    let json = this.getDataAs( _str, this.resolveEncoding( pEncoding ) );
-
-                    if ( stringUtils.isValidJson( json ) )
+                    if ( isString( target ) && !isBlank( target ) )
                     {
+                        const errorSource = modName + "CompressionOptions::deleteFunction";
+
+                        const stats = await fsAsync.lstat( target );
+
+                        if ( !isNull( stats ) )
+                        {
+                            if ( stats.isDirectory() )
+                            {
+                                return await fsAsync.rmdir( target, { recursive: pRecursive || recurse } ).catch( ex => modulePrototype.reportError( ex, "deleting directory", S_ERROR, errorSource, pPath, pRecursive ) );
+                            }
+                            else if ( stats.isSymbolicLink() )
+                            {
+                                try
+                                {
+                                    const realPath = await fsAsync.readlink( target, DEFAULT_ENCODING );
+                                    const absolutePath = path.normalize( path.resolve( realPath ) );
+                                    await fsAsync.unlink( absolutePath );
+                                }
+                                catch( ex )
+                                {
+                                    modulePrototype.reportError( ex, "deleting symbolic link", S_ERROR, errorSource, pPath, pRecursive );
+                                }
+                            }
+                        }
+
                         try
                         {
-                            obj = JSON.parse( json );
+                            return await fsAsync.unlink( target );
                         }
                         catch( ex )
                         {
-                            modulePrototype.reportError( ex, "parsing JSON data", S_ERROR, modName + "::getDataAs" );
+                            modulePrototype.reportError( ex, "deleting file", S_ERROR, errorSource, pPath, pRecursive );
                         }
                     }
-                    return obj || {};
-
-                default:
-                    return new Uint8Array( buffer );
+                };
             }
         }
 
-        /**
-         * Returns a Promise for a Buffer of the uncompressed bytes for this entry
-         * @returns {Promise<Buffer>}
-         */
-        async getDataAsync( pCallback )
+        successCallback( pPath, pRecursive )
         {
-            if ( this.zipEntry && (isFunction( this.zipEntry.getDataAsync )) )
+            const me = this;
+
+            const target = path.resolve( asString( pPath, true ) );
+
+            const recursive = pRecursive;
+
+            const delFunc = (me || this).deleteFunction( target );
+
+            return async( pPath, pRecursive ) =>
             {
-                return await this.zipEntry.getDataAsync( pCallback );
-            }
+                const errorSource = modName + "CompressionOptions::successCallback";
 
-            if ( this.implementation && (isFunction( this.implementation.getDataAsync )) )
-            {
-                return await this.implementation.getDataAsync( pCallback );
-            }
-
-            return ZERO_LENGTH_BUFFER;
-        }
-
-        toString()
-        {
-            if ( this.zipEntry && (isFunction( this.zipEntry.toString )) )
-            {
-                return this.zipEntry.toString();
-            }
-
-            if ( this.implementation && (isFunction( this.implementation.toString )) )
-            {
-                return this.implementation.toString();
-            }
-
-            return Object.toString.call( this.zipEntry || this );
-        }
-    }
-
-    /**
-     * Static factory method for creating an instance of ArchiveEntry
-     * @param pZipEntry
-     * @returns {ArchiveEntry}
-     */
-    ArchiveEntry.fromZipEntry = function( pZipEntry )
-    {
-        return new ArchiveEntry( pZipEntry, pZipEntry );
-    };
-
-    /**
-     * Returns the number of entries in the archive
-     * @param pArchive a Buffer or a TypedArray of bytes representing an archive
-     * @returns {number} the number of entries in the archive
-     */
-    const getEntryCount = function( pArchive )
-    {
-        let archiver;
-
-        let count = 0;
-
-        try
-        {
-            archiver = new admZip( pArchive );
-
-            count = archiver.getEntryCount() || 0;
-        }
-        catch( ex )
-        {
-            modulePrototype.reportError( ex, "counting archive entries", S_ERROR, modName + "::getEntryCount" );
-        }
-
-        return count;
-    };
-
-    /**
-     * Returns an array of ArchiveEntry objects found in the specified archive
-     * @param pArchive {Buffer|Array} a Buffer or an array of bytes representing an archive
-     * @param pPassword {string} (optional) password required to access the contents of the archive
-     * @returns {*[]} an array of ArchiveEntry objects found in the specified archive
-     */
-    const getEntries = function( pArchive, pPassword )
-    {
-        let archiver;
-
-        let entries = [];
-
-        try
-        {
-            archiver = new admZip( pArchive, { input: pArchive, password: pPassword } );
-
-            entries = [].concat( ((isBlank( asString( pPassword ) ) ? archiver.getEntries() : archiver.getEntries( pPassword )) || []) );
-
-            entries = entries.map( e => ArchiveEntry.fromZipEntry( e ) );
-        }
-        catch( ex )
-        {
-            modulePrototype.reportError( ex, "getting the archive entries", S_ERROR, modName + "::getEntries" );
-
-            let archive = repair( pArchive );
-
-        }
-
-        return entries;
-    };
-
-    /**
-     * Returns an instance of ArchiveEntry representing the named entry (or the entry at the specified index)
-     * @param pArchive {Buffer|Array} a Buffer or an array of bytes representing an archive
-     * @param pName {string|number} The file name of the entry to return or the index of the entry to return
-     * @param pPassword {string} (optional) password required to access the contents of the archive
-     * @returns {ArchiveEntry} an instance of ArchiveEntry representing the named entry (or the entry at the specified index)
-     */
-    const getEntry = function( pArchive, pName, pPassword = _mt_str )
-    {
-        let archiver, entry, archiveEntry = null;
-
-        const name = isString( pName ) ? asString( pName ) : isNumeric( pName ) ? asInt( pName ) : 0;
-
-        if ( isString( name ) )
-        {
-            try
-            {
-                archiver = new admZip( pArchive, { input: pArchive, password: pPassword, name: name } );
-                entry = archiver.getEntry( name );
-            }
-            catch( ex )
-            {
-                modulePrototype.reportError( ex, "getting the archive entry, '" + name + "'", S_ERROR, modName + "::getEntry" );
-            }
-        }
-        else
-        {
-            const entries = getEntries( pArchive, pPassword );
-            entry = entries?.length > name ? entries[name] : null;
-        }
-
-        if ( entry )
-        {
-            try
-            {
-                archiveEntry = ArchiveEntry.fromZipEntry( entry );
-            }
-            catch( ex )
-            {
-                modulePrototype.reportError( ex, "getting the archive entry, '" + name + "'", S_ERROR, modName + "::getEntry" );
-            }
-        }
-
-        return archiveEntry || entry;
-    };
-
-    const repair = function( pArchive )
-    {
-
-    };
-
-    const forEach = function( pArchive, pPassword, pCallback )
-    {
-        let entries = getEntries( pArchive, pPassword );
-
-        if ( entries )
-        {
-            entries.forEach( pCallback );
-        }
-    };
-
-    const isEmptyArchive = function( pBuffer )
-    {
-        if ( _ud === typeof pBuffer || null === pBuffer || pBuffer?.length <= 22 )
-        {
-            return true;
-        }
-
-        const entryCount = getEntryCount( pBuffer );
-
-        return entryCount <= 0 || pBuffer?.length <= 22;
-    };
-
-    const exceedsMaxEntries = function( pBuffer )
-    {
-        if ( !isEmptyArchive( pBuffer ) )
-        {
-            const entryCount = getEntryCount( pBuffer );
-
-            return entryCount > MAX_ENTRIES_ALLOWED;
-        }
-
-        return false;
-    };
-
-    const calculateTotalUncompressedSize = function( pBuffer, pPassword )
-    {
-        let totalUncompressedSize = 0;
-
-        const entries = getEntries( pBuffer, pPassword );
-
-        if ( entries && entries.length )
-        {
-            for( let i = 0, n = entries.length; i < n; i++ )
-            {
-                let entry = entries[i];
-
-                if ( entry )
+                if ( isFunction( me || this ).onSuccess )
                 {
-                    let hdr = entry?.header;
-
-                    if ( hdr )
+                    try
                     {
-                        let size = Math.max( stringUtils.asInt( hdr?.size, 0 ), 0 );
-
-                        totalUncompressedSize += size;
+                        await (me || this).onSuccess.call( (me || this), pPath || target, pRecursive || recursive );
+                    }
+                    catch( ex )
+                    {
+                        modulePrototype.reportError( ex, "executing error callback", S_ERROR, errorSource, ex, pPath || target, pRecursive || recursive );
                     }
                 }
-            }
+
+                await delFunc( pPath || target, pRecursive || recursive );
+            };
         }
 
-        return totalUncompressedSize;
-    };
-
-    const exceedsMaxSize = function( pBuffer )
-    {
-        let totalUncompressedSize = calculateTotalUncompressedSize( pBuffer );
-
-        return totalUncompressedSize > MAX_SIZE_ALLOWED;
-    };
-
-    const isPotentialZipBomb = function( pBuffer )
-    {
-        if ( exceedsMaxSize( pBuffer ) )
+        errorCallback( pError, pPath = null )
         {
-            return (calculateTotalUncompressedSize( pBuffer ) > (1_000 * BYTES_PER_MEGABYTE));
-        }
+            const me = this;
 
-        return false;
-    };
+            const error = pError;
 
-    const isSafeArchive = function( pBuffer )
-    {
-        if ( isEmptyArchive( pBuffer ) )
-        {
-            throw new Error( "The archive is empty" );
-        }
+            const target = path.resolve( asString( pPath, true ) );
 
-        if ( exceedsMaxEntries( pBuffer ) )
-        {
-            throw new Error( "The archive contains more than the maximum allowed entries (" + MAX_ENTRIES_ALLOWED + ")" );
-        }
-
-        if ( exceedsMaxSize( pBuffer ) )
-        {
-            throw new Error( "The total size of the uncompressed data exceeds the limit of " + MAX_SIZE_ALLOWED );
-        }
-
-        if ( isPotentialZipBomb( pBuffer ) )
-        {
-            throw new Error( "The buffer appears to contain a \"ZIP BOMB\", that is, the zip when inflated would be over 1,000 times the maximum allowed size of " + MAX_SIZE_ALLOWED + " bytes" );
-        }
-
-        return true;
-    };
-
-
-    function resolveCallback( pDeleteInputFiles, pCallback, pInputPath )
-    {
-        const inputPath = path.resolve( asString( pInputPath, true ) );
-
-        const deleteFile = !!pDeleteInputFiles ? async( pPath ) => {await fsAsync.unlink( pPath || inputPath );} : no_op;
-
-        let callback = pCallback;
-
-        if ( isFunction( pCallback ) )
-        {
-            return async( pError ) =>
+            return async( pError, pPath ) =>
             {
-                await pCallback( pError );
-                if ( !isError( pError ) )
+                if ( isFunction( me || this ).onError )
                 {
-                    await deleteFile( inputPath );
+                    const errorSource = modName + "CompressionOptions::errorCallback";
+
+                    try
+                    {
+                        await (me || this).onError.call( (me || this), pError || error, pPath || target );
+                    }
+                    catch( ex )
+                    {
+                        modulePrototype.reportError( ex, "executing error callback", S_ERROR, errorSource, pError || error, pPath || target );
+                    }
                 }
             };
         }
-        else
+
+        get formatSpecificOptions()
         {
-            return deleteFile;
+            return this.#formatSpecificOptions || {};
         }
     }
 
-    async function pkUnZip( pInputPath, pOutputPath, pPassword = _mt_str, pDeleteInputFile, pCallback )
-    {
-        let inputPath = isString( pInputPath ) ? path.resolve( asString( pInputPath, true ) ) : asArray( pInputPath );
-
-        let outputPath = isString( pOutputPath ) ? path.resolve( asString( pOutputPath, true ) ) : asArray( pOutputPath );
-
-        let password = isString( pPassword ) ? asString( pPassword ) : _mt_str;
-
-        const callback = resolveCallback( pDeleteInputFile, pCallback, inputPath );
-
-        if ( await isFile( inputPath ) )
+    const PKZIP_OPTIONS =
         {
-            if ( await isFile( outputPath ) )
+            archiver: AdmZip,
+            reviver: AdmZip,
+
+            overwrite: false,
+            keepOriginalPermission: false,
+
+            zipPath: null,
+            zipName: null,
+
+            filter: Filters.IDENTITY,
+
+            comment: null
+        };
+
+    const GZIP_OPTIONS =
+        {
+            archiver: zlib.createGzip,
+            reviver: zlib.createGunzip,
+            extension: ".gz"
+        };
+
+    const DEFLATE_OPTIONS =
+        {
+            archiver: zlib.createDeflate,
+            reviver: zlib.createInflate,
+            extension: ".z",
+        };
+
+    const INFLATE_OPTIONS =
+        {
+            archiver: zlib.createDeflate,
+            reviver: zlib.createInflate,
+            extension: ".z",
+        };
+
+    const BROTLI_OPTIONS =
+        {
+            archiver: zlib.createBrotliCompress,
+            reviver: zlib.createBrotliDecompress,
+            extension: ".br",
+        };
+
+    CompressionOptions.DEFAULT = new CompressionOptions( false, null, DEFAULT_ENCODING, null, null, PKZIP_OPTIONS );
+    CompressionOptions.PKZIP = new CompressionOptions( false, null, DEFAULT_ENCODING, null, null, PKZIP_OPTIONS );
+    CompressionOptions.GZIP = new CompressionOptions( false, null, DEFAULT_ENCODING, null, null, GZIP_OPTIONS );
+    CompressionOptions.DEFLATE = new CompressionOptions( false, null, DEFAULT_ENCODING, null, null, DEFLATE_OPTIONS );
+    CompressionOptions.INFLATE = new CompressionOptions( false, null, DEFAULT_ENCODING, null, null, INFLATE_OPTIONS );
+    CompressionOptions.BROTLI = new CompressionOptions( false, null, DEFAULT_ENCODING, null, null, BROTLI_OPTIONS );
+
+    const PIPE =
+        {
+            FILE: 1,
+            BUFFER: 2,
+            DIRECTORY: 3,
+        };
+
+    CompressionOptions.calculatePipe = async function( pInput, pOutput )
+    {
+        const { inputPath, outputPath } = _resolveInputOutput( pInput, pOutput );
+
+        let leftSide = 0;
+        let rightSide = 0;
+
+        if ( isString( inputPath ) )
+        {
+            leftSide = isArray( inputPath ) ? PIPE.BUFFER : await isFile( inputPath ) ? PIPE.FILE : await isDirectory( inputPath ) ? PIPE.DIRECTORY : 0;
+        }
+
+        if ( isString( outputPath ) )
+        {
+            rightSide = isArray( outputPath ) ? PIPE.BUFFER : await isDirectory( outputPath ) ? PIPE.DIRECTORY : await isFile( outputPath ) ? PIPE.FILE : 0;
+        }
+
+        return {
+            inputPath,
+            outputPath,
+            leftSide,
+            rightSide
+        };
+    };
+
+    /**
+     * @typedef {function((string|Uint8Array<number>), (string|Uint8Array<number>), (CompressionOptions)): (Uint8Array<number>|string|boolean|void)} CompressionFunction A function that can compress or decompress an archive
+     *
+     * @param {string|Uint8Array<number>} pInputPath The file path, directory path, or byte array to compress or decompress an archive, file, or directory
+     * @param {string|Uint8Array<number>} pOutputPath The file path, directory path, or byte array into which to compress or decompress an archive, file, or directory
+     * @param {CompressionOptions} pOptions An instance of the CompressionOptions class
+     *                                      (or an object with the same properties)
+     *                                      defining an optional password-protection mechanism,
+     *                                      whether to delete the source once compressed or decompressed,
+     *                                      and optional callback functions to execute on error or on success
+     *
+     * @return {Uint8Array<number>|string|boolean|void} May return any of the following types of response:
+     *                                                  The output array if provided,
+     *                                                  the file path of the resulting archive
+     *                                                  or resulting decompressed file(s),
+     *                                                  a boolean indicating failure or success,
+     *                                                  or void... no return type at all.
+     *                                                  This depends greatly on the format and capabilities of third-party libraries
+     *
+     */
+
+    /**
+     *
+     * @param pInputPath
+     * @param pOutputPath
+     * @param {CompressionOptions|Object} pOptions
+     * @param pErrorSource
+     */
+    async function initializeArguments( pInputPath, pOutputPath, pOptions, pErrorSource )
+    {
+        const options = populateOptions( pOptions, CompressionOptions.DEFAULT );
+
+        const errorSource = asString( pErrorSource || (modName + "::initializeArguments"), true );
+
+        function resolvePassword()
+        {
+            const passwordProtection = options.passwordProtection;
+            return (passwordProtection instanceof PasswordProtection) ? passwordProtection.decrypt() : _mt_str;
+        }
+
+        let {
+            inputPath,
+            outputPath,
+            leftSide,
+            rightSide
+        } = await CompressionOptions.calculatePipe( pInputPath, pOutputPath );
+
+        async function handleError( ex )
+        {
+            const errorCallback = options.errorCallback( ex, inputPath );
+
+            if ( isFunction( errorCallback ) )
             {
-                outputPath = path.dirname( outputPath );
-            }
-            else if ( isArray( outputPath ) || isTypedArray( outputPath ) )
-            {
-                const buffer = await fsAsync.readFile( inputPath );
-                outputPath = outputPath.concat( asArray( buffer ) );
-                return outputPath;
+                await errorCallback.call( options, ex, inputPath );
             }
 
-            try
+            modulePrototype.reportError( ex, "unzipping file", S_ERROR, errorSource, inputPath, outputPath );
+        }
+
+        async function handleSuccess( pRecursive )
+        {
+            const successCallback = options.successCallback( inputPath, pRecursive );
+
+            if ( isFunction( successCallback ) )
             {
+                await successCallback.call( options, inputPath, pRecursive );
+            }
+        }
+
+        return {
+            options,
+            inputPath,
+            outputPath,
+            leftSide,
+            rightSide,
+            resolvePassword,
+            handleError,
+            handleSuccess,
+            errorSource
+        };
+    }
+
+    /**
+     * Extracts the contents of a compressed PKZIP file from the input path
+     * and outputs the extracted files to the specified output path.<br>
+     * <br>
+     * Handles various input/output scenarios such as
+     * file-to-directory,
+     * file-to-file,
+     * file-to-buffer,
+     * buffer-to-directory,
+     * buffer-to-file,
+     * etc.<br>
+     * <br>
+     * @see {@link #PIPE}
+     * @see {@link CompressionOptions.calculatePipe}
+     *
+     * Supports password-protected ZIP files and custom callbacks for error and success handling.
+     *
+     * @param {string|Buffer} pInputPath - The path or buffer of the ZIP file to be extracted.<br>
+     *                                     It can be a file path, directory, or buffer.
+     *
+     * @param {string|Array} pOutputPath - The path or destination for the extracted contents.<br>
+     *                                     It can be a directory, file, a buffer, or typed array.<br>
+     *
+     * @param {CompressionOptions|Object} pOptions - Configuration options for the unzipping process.<br>
+     *                                               This includes properties for specifying
+     *                                               whether to delete the source after successful extraction,
+     *                                               an object that can handle an encrypted password for the archive,
+     *                                               and functions to run onSuccess or onError.<br>
+     *
+     * @return {Promise<string|Array|boolean>} A Promise that resolves to the output path (file, directory, or buffer).<br>
+     *                                         In some cases, the Promise does not resolve to a meaningful value<br>
+     *                                         even though the operation was successful.<br>
+     *
+     * @type {CompressionFunction}
+     */
+    async function pkUnZip( pInputPath, pOutputPath, pOptions )
+    {
+        const errorSource = modName + "::pkUnZip";
+
+        let {
+            options,
+            inputPath,
+            outputPath,
+            leftSide,
+            rightSide,
+            resolvePassword,
+            handleError,
+            handleSuccess
+        } = await initializeArguments( pInputPath, pOutputPath, pOptions, errorSource );
+
+        let formatSpecificOptions = populateOptions( {}, options?.formatSpecificOptions || {} );
+
+        const overwrite = formatSpecificOptions.overwrite;
+        const keepOriginalPermission = formatSpecificOptions.keepOriginalPermission;
+
+        let recursive = false;
+
+        switch ( leftSide )
+        {
+            case PIPE.FILE:
+
+                const format = await CompressionFormat.fromFile( inputPath );
+
+                if ( !CompressionFormat.SUPPORTED_FORMATS.PKZIP.equals( format ) )
+                {
+                    return false;
+                }
+
                 const zip = new AdmZip( inputPath );
 
-                if ( !isBlank( password ) )
+                switch ( rightSide )
                 {
-                    zip.extractAllTo( outputPath, true, true, password );
+                    case PIPE.FILE:
+                        outputPath = path.dirname( outputPath );
+                    // fallthrough
+
+                    case PIPE.DIRECTORY:
+                        try
+                        {
+                            const pwd = resolvePassword();
+
+                            if ( !isBlank( pwd ) )
+                            {
+                                zip.extractAllTo( outputPath, overwrite, keepOriginalPermission, pwd );
+                            }
+                            else
+                            {
+                                zip.extractAllTo( outputPath, overwrite, keepOriginalPermission );
+                            }
+                        }
+                        catch( ex )
+                        {
+                            await handleError( ex );
+                        }
+                        break;
+
+                    case PIPE.BUFFER:
+
+                        try
+                        {
+                            const buffer = await fsAsync.readFile( inputPath );
+
+                            const entries = getEntries( buffer, resolvePassword() );
+
+                            if ( entries && entries.length )
+                            {
+                                for( const entry of entries )
+                                {
+                                    outputPath.push( asArray( entry.getData() ) );
+                                }
+                                if ( 1 === entries.length )
+                                {
+                                    outputPath = outputPath[0];
+                                }
+                            }
+                        }
+                        catch( ex )
+                        {
+                            await handleError( ex );
+                        }
+
+                        break;
+
+                    default:
+                        break;
                 }
-                else
+                break;
+
+            case PIPE.DIRECTORY:
+
+                recursive = true;
+
+                const dir = fsAsync.opendir( inputPath );
+
+                if ( dir )
                 {
-                    zip.extractAllTo( outputPath, true );
+                    for await( const dirent of dir )
+                    {
+                        const ipt = path.resolve( dirent.path, dirent.name );
+
+                        await pkUnZip( ipt, outputPath, options );
+                    }
+                }
+                break;
+
+            case PIPE.BUFFER:
+
+                const entries = getEntries( inputPath, resolvePassword() );
+
+                if ( entries && entries.length )
+                {
+                    switch ( rightSide )
+                    {
+                        case PIPE.FILE:
+                            outputPath = path.dirname( outputPath );
+                        // fallthrough
+
+                        case PIPE.DIRECTORY:
+
+                            let n = 0;
+
+                            for( const entry of entries )
+                            {
+                                const name = entry.name || ("zipEntry" + ((n++ > 0) ? ("_" + n) : ""));
+                                const data = asArray( entry.getData() );
+                                const outPath = path.resolve( outputPath, name );
+                                await fsAsync.writeFile( outPath, data );
+                            }
+
+                            break;
+
+                        case PIPE.BUFFER:
+
+                            for( const entry of entries )
+                            {
+                                outputPath.push( asArray( entry.getData() ) );
+                            }
+                            if ( 1 === entries.length )
+                            {
+                                outputPath = outputPath[0];
+                            }
+
+                            break;
+                    }
                 }
 
-                try
-                {
-                    await callback( null, inputPath, outputPath );
-                }
-                catch( ex2 )
-                {
-                    modulePrototype.reportError( ex2, "executing callback after unzipping file", S_ERROR, modName + "::pkUnZip", pInputPath, pOutputPath, inputPath, outputPath, pCallback, callback );
-                }
-            }
-            catch( ex )
-            {
-                modulePrototype.reportError( ex, "unzipping file", S_ERROR, modName + "::pkUnZip", pInputPath, pOutputPath, inputPath, outputPath );
-            }
+                await handleSuccess( recursive );
+
+                break;
+
+            default:
+                break;
         }
-        else if ( await isDirectory( inputPath ) )
-        {
-            const dir = fsAsync.opendir( inputPath );
 
-            for await( const dirent of dir )
-            {
-                if ( await dirent.isFile() )
-                {
-                    outputPath = await pkUnZip( path.resolve( dirent.path, dirent.name ), outputPath, password, pDeleteInputFile, callback );
-                }
-            }
-
-            return outputPath;
-        }
-        else if ( isArray( pInputPath ) || isTypedArray( pInputPath ) )
-        {
-            const entries = getEntries( pInputPath, password );
-
-            for( let i = 0, n = entries.length; i < n; i++ )
-            {
-                const entry = entries[i];
-
-
-            }
-
-        }
-
+        return outputPath;
     }
 
-    async function pkZip( pInputPath, pOutputPath, pPassword = _mt_str, pDeleteInputFiles, pCallback )
+    /**
+     * Compresses files or directories into a zip archive.
+     *
+     * @param {string|Buffer} pInputPath - The input path or buffer to be compressed. It can be a file, directory, or a buffer.
+     * @param {string} pOutputPath - The output path where the resulting zip file should be saved.
+     * @param {CompressionOptions} pOptions - The options for configuration. Includes format-specific options and additional parameters such as:
+     *                             - `formatSpecificOptions.zipPath`: (string) Path within the zip archive where files should be placed.
+     *                             - `formatSpecificOptions.zipName`: (string) Custom name for the files inside the zip.
+     *                             - `formatSpecificOptions.filter`: (Filter) A filter to apply when processing files.
+     *                             - `formatSpecificOptions.comment`: (string) Comment to include in the zip file.
+     *                             - `formatSpecificOptions.keepOriginalPermission`: (boolean) Flag indicating whether to retain original file permissions.
+     *                             - Other options provided for custom configuration.
+     * @return {Promise<boolean|Buffer>} Returns a boolean indicating success or failure in case of file/directory output.
+     *                                   Returns a buffer if the right output pipe is set to BUFFER.
+     *
+     * @type {CompressionFunction}
+     */
+    async function pkZip( pInputPath, pOutputPath, pOptions )
     {
-        let extension = ".zip";
+        const errorSource = modName + "::pkZip";
 
-        let inputPath = path.resolve( asString( pInputPath, true ) );
-        let outputPath = path.resolve( asString( pOutputPath, true ) );
+        let {
+            options,
+            inputPath,
+            outputPath,
+            leftSide,
+            rightSide,
+            resolvePassword,
+            handleError,
+            handleSuccess
+        } = await initializeArguments( pInputPath, pOutputPath, pOptions, errorSource );
 
-        const file = new AdmZip();
+        let formatSpecificOptions = populateOptions( {}, options?.formatSpecificOptions || {} );
 
-        if ( await isFile( inputPath ) )
+        let zipPath = asString( formatSpecificOptions.zipPath, true );
+        zipPath = isBlank( zipPath ) ? null : zipPath;
+
+        let zipName = asString( formatSpecificOptions.zipName, true );
+        zipName = isBlank( zipName ) ? null : zipName;
+
+        const filter = Filters.IS_FILTER( formatSpecificOptions.filter ) ? formatSpecificOptions.filter : Filters.IDENTITY;
+
+        let comment = asString( formatSpecificOptions.comment, true );
+        comment = isBlank( comment ) ? null : comment;
+
+        let recursive = false;
+
+        let outputFilePath = isString( outputPath ) ? path.normalize( path.resolve( outputPath ) ) : outputPath;
+
+        const extension = ".zip";
+
+        let zipper = new AdmZip( undefined, { fs: fs } );
+
+        switch ( leftSide )
         {
-            file.addLocalFile( inputPath );
-        }
-        else if ( await isDirectory( inputPath ) )
-        {
-            file.addLocalFolder( inputPath );
-        }
-        else
-        {
-            modulePrototype.reportError( new IllegalArgumentError( "The specified input path is not a file or directory", { inputPath: pInputPath } ), S_ERROR, modName + "::pkZip", pInputPath );
-            return false;
+            case PIPE.FILE:
+                zipper.addLocalFile( inputPath, zipPath, zipName, comment );
+                break;
+
+            case PIPE.DIRECTORY:
+                zipper.addLocalFolder( inputPath, zipPath, filter );
+                recursive = true;
+                break;
+
+            case PIPE.BUFFER:
+                let buffer = isTypedArray( inputPath ) ? Buffer.copyBytesFrom( inputPath ) : Buffer.from( inputPath );
+
+                zipper = new AdmZip( buffer, { fs: fs } );
+
+                inputPath = zipPath || zipName || "FromBuffer";
+
+                break;
+
+            default:
+                break;
         }
 
-        if ( await isDirectory( outputPath ) )
+        switch ( rightSide )
         {
-            outputPath = path.join( outputPath, removeExtension( path.basename( inputPath ) ) + extension );
-        }
-        else if ( !(await isFile( outputPath )) )
-        {
-            await fsAsync.mkdir( path.dirname( outputPath ), { recursive: true } );
+            case PIPE.FILE:
+                outputFilePath = replaceExtension( outputFilePath, extension );
+                break;
 
-            outputPath = path.join( outputPath, removeExtension( path.basename( inputPath ) ) + extension );
-        }
+            case PIPE.DIRECTORY:
+                if ( !await isDirectory( outputFilePath ) )
+                {
+                    await fsAsync.mkdir( path.dirname( outputPath ), { recursive: true } );
+                }
+                outputFilePath = path.join( outputPath, replaceExtension( path.basename( inputPath ), extension ) );
+                break;
 
-        let callback = resolveCallback( pDeleteInputFiles, pCallback, inputPath );
+            case PIPE.BUFFER:
+                outputFilePath = zipper.toBuffer();
+                await handleSuccess( recursive );
+                return outputFilePath;
+        }
 
         try
         {
-            file.writeZip( outputPath, callback );
+            zipper.writeZip( outputFilePath, handleError );
+
+            await handleSuccess( recursive );
         }
         catch( ex )
         {
@@ -825,21 +1565,109 @@ const $scope = constants?.$scope || function()
         return true;
     }
 
+    /**
+     * Compresses a file from the specified input path and writes it to the specified output path.
+     * This method pipelines the input file through a compression tool and writes the compressed output.
+     *
+     * @param {string|Uint8Array<number>} pInputPath - The path to the input file that needs to be compressed.
+     * @param {string|Uint8Array<number>} pOutputPath - The path where the compressed file will be written.
+     * @param {CompressionOptions} pOptions - The options object containing additional configuration for compression.
+     * @return {Promise<boolean>} Returns a promise that resolves to `true` if the operation completes successfully.
+     *
+     * @type {CompressionFunction}
+     */
+    async function pipeToCompressedFile( pInputPath, pOutputPath, pOptions )
+    {
+        const errorSource = modName + "::pipeToCompressedFile";
+
+        let {
+            options,
+            inputPath,
+            outputPath,
+            leftSide,
+            rightSide,
+            resolvePassword,
+            handleError,
+            handleSuccess
+        } = await initializeArguments( pInputPath, pOutputPath, pOptions, errorSource );
+
+        let formatSpecificOptions = populateOptions( {}, options?.formatSpecificOptions || {} );
+
+        let zipper = formatSpecificOptions.archiver || null;
+
+        let extension = formatSpecificOptions.extension || ".zip";
+
+        const source = fs.createReadStream( inputPath );
+        const destination = fs.createWriteStream( replaceExtension( outputPath, extension ) );
+
+        let safeToDelete = false;
+
+        try
+        {
+            await pipeline( source, zipper, destination );
+            safeToDelete = true;
+        }
+        catch( ex )
+        {
+            await handleError( ex );
+            safeToDelete = false;
+        }
+
+        if ( safeToDelete )
+        {
+            await fsAsync.unlink( inputPath );
+        }
+
+        await handleSuccess();
+
+        return true;
+    }
+
+    async function pipeToUncompressedFile( pInputPath, pOutputPath, pOptions )
+    {
+
+    }
+
+    /**
+     * Represents a compression format, encapsulating its name, file signatures,
+     * compression and decompression functions, as well as related options.
+     */
     class CompressionFormat
     {
         #name;
         #signatures;
-        #decompress;
-        #compress;
+        #decompressionFunction;
+        #compressionFunction;
+
+        #compressionOptions;
 
         static #CACHE = new Map();
 
-        constructor( pName, pSignatures, pDecompress, pCompress )
+        /**
+         * Constructs an instance of the CompressionFormat class.
+         *
+         * @param {string} pName The name of the compression format.
+         * @param {Array} pSignatures An array of signatures associated with the compression format.
+         * @param {Function} pDecompressionFunction The function used for decompression. If not provided, a default is used.
+         * @param {Function} pCompressionFunction The function used for compression. If not provided, a default is used.
+         * @param {CompressionOptions|Object} [pOptions=CompressionOptions.DEFAULT] Optional settings for compression and decompression. Defaults to CompressionOptions.DEFAULT.
+         *
+         * @return {CompressionFormat} An instance of the CompressionFormat class.
+         */
+        constructor( pName, pSignatures, pDecompressionFunction, pCompressionFunction, pOptions = CompressionOptions.DEFAULT )
         {
+            const options = populateOptions( pOptions, CompressionOptions.DEFAULT );
+
+            this.#compressionOptions = options;
+
             this.#name = ucase( asString( pName, true ) );
             this.#signatures = asArray( pSignatures );
-            this.#decompress = isFunction( pDecompress ) ? pDecompress : no_op;
-            this.#compress = isFunction( pCompress ) ? pCompress : no_op;
+
+            const decompressionFunction = isFunction( pDecompressionFunction ) ? pDecompressionFunction : options.decompressionFunction;
+            const compressionFunction = isFunction( pCompressionFunction ) ? pCompressionFunction : options.compressionFunction;
+
+            this.#decompressionFunction = isFunction( decompressionFunction ) ? decompressionFunction.bind( this ) : no_op;
+            this.#compressionFunction = isFunction( compressionFunction ) ? compressionFunction.bind( this ) : no_op;
 
             CompressionFormat.#CACHE.set( ucase( asString( this.#name, true ) ), this );
         }
@@ -854,14 +1682,42 @@ const $scope = constants?.$scope || function()
             return asArray( this.#signatures );
         }
 
-        get decompress()
+        get compressionOptions()
         {
-            return this.#decompress;
+            return populateOptions( {}, this.#compressionOptions || CompressionOptions.DEFAULT );
         }
 
-        get compress()
+        get decompressionFunction()
         {
-            return this.#compress;
+            return this.#decompressionFunction;
+        }
+
+        decompress( pInputPath, pOutputPath, pOptions )
+        {
+            this.decompressionFunction.call( this, pInputPath, pOutputPath, populateOptions( (pOptions || this.compressionOptions), this.compressionOptions ) );
+        }
+
+        get compressionFunction()
+        {
+            return this.#compressionFunction;
+        }
+
+        compress( pInputPath, pOutputPath, pOptions )
+        {
+            this.compressionFunction.call( this, pInputPath, pOutputPath, populateOptions( (pOptions || this.compressionOptions), this.compressionOptions ) );
+        }
+
+        equals( pOther )
+        {
+            if ( pOther instanceof this.constructor )
+            {
+                return ucase( asString( this.name, true ) === ucase( asString( pOther.name, true ) ) );
+            }
+            else if ( isString( pOther ) )
+            {
+                return ucase( asString( this.name, true ) === ucase( asString( pOther, true ) ) );
+            }
+            return false;
         }
 
         static getInstance( pName )
@@ -891,26 +1747,37 @@ const $scope = constants?.$scope || function()
 
             return FORMAT_BY_SIGNATURE.get( signature ) || SUPPORTED_FORMATS.UNSUPPORTED;
         }
+
+        static async fromFile( pFilePath )
+        {
+            const buffer = await fsAsync.readFile( pFilePath );
+
+            return CompressionFormat.fromBuffer( buffer );
+        }
     }
 
     CompressionFormat.SUPPORTED_FORMATS =
         {
-            GZIP: new CompressionFormat( "GZIP", [[0x1F, 0x8B]] ),
-            PKZIP: new CompressionFormat( "PKZIP", [[0x50, 0x4B, 0x03, 0x04]] ),
-            ZLIB: new CompressionFormat( "ZLIB", [[0x78, 0x9C], [0x78, 0xDA], [0x78, 0x5E], [0x78, 0x01]] ),
-            DEFLATE: new CompressionFormat( "DEFLATE", [[0x78, 0x9C], [0x78, 0xDA], [0x78, 0x5E], [0x78, 0x01]] ),
-            BROTLI: new CompressionFormat( "BROTLI", [[0xEB, 0xAF, 0x28, 0xCF], [0x1F, 0x9D]] ),
+            GZIP: lock( new CompressionFormat( "GZIP", [[0x1F, 0x8B]], pipeToUncompressedFile, pipeToCompressedFile, CompressionOptions.GZIP ) ),
+            PKZIP: lock( new CompressionFormat( "PKZIP", [[0x50, 0x4B, 0x03, 0x04]], pkUnZip, pkZip, CompressionOptions.PKZIP ) ),
+            ZLIB: lock( new CompressionFormat( "ZLIB", [[0x78, 0x9C], [0x78, 0xDA], [0x78, 0x5E], [0x78, 0x01]], pipeToUncompressedFile, pipeToCompressedFile, CompressionOptions.DEFLATE ) ),
+            DEFLATE: lock( new CompressionFormat( "DEFLATE", [[0x78, 0x9C], [0x78, 0xDA], [0x78, 0x5E], [0x78, 0x01]], pipeToUncompressedFile, pipeToCompressedFile, CompressionOptions.DEFLATE ) ),
+            BROTLI: lock( new CompressionFormat( "BROTLI", [[0xEB, 0xAF, 0x28, 0xCF], [0x1F, 0x9D]], pipeToUncompressedFile, pipeToCompressedFile, CompressionOptions.BROTLI ) ),
             /*
              LZ4: new CompressionFormat( "LZ4", [[0x04, 0x22, 0x4D, 0x18]] ),
              LZ4HC: new CompressionFormat( "LZ4HC", [[0x04, 0x22, 0x4D, 0x18]] ),
              */
-            UNSUPPORTED: new CompressionFormat( "UNSUPPORTED", [], no_op, no_op )
+            UNSUPPORTED: lock( new CompressionFormat( "UNSUPPORTED", [], no_op, no_op, CompressionOptions.DEFAULT ) )
         };
+
+    Object.entries( CompressionFormat.SUPPORTED_FORMATS ).forEach( ( [name, format] ) =>
+                                                                   {
+                                                                       CompressionFormat[ucase( name )] = format;
+                                                                   } );
 
     CompressionFormat.DEFAULT = CompressionFormat.SUPPORTED_FORMATS.GZIP;
 
     const SUPPORTED_FORMATS = CompressionFormat.SUPPORTED_FORMATS;
-
     SUPPORTED_FORMATS.DEFAULT = CompressionFormat.DEFAULT;
 
     const FORMAT_BY_SIGNATURE = new Map();
@@ -919,23 +1786,6 @@ const $scope = constants?.$scope || function()
                                                  {
                                                      format.signatures.forEach( sig => FORMAT_BY_SIGNATURE.set( sig, format ) );
                                                  } );
-
-    const identifyFormat = function( pBuffer )
-    {
-        const buffer = arrayFromBuffer( pBuffer );
-
-        const signature = buffer.slice( 0, 4 );
-
-        if ( signature.length < 2 )
-        {
-            const msg = "The specified buffer is too small to be a valid archive";
-            modulePrototype.reportError( new IllegalArgumentError( msg, { buffer: pBuffer } ), S_ERROR, modName + "::identifyFormat" );
-
-            return SUPPORTED_FORMATS.UNSUPPORTED;
-        }
-
-        return FORMAT_BY_SIGNATURE.get( signature ) || SUPPORTED_FORMATS.UNSUPPORTED;
-    };
 
     CompressionFormat.resolve = function( pFormat )
     {
@@ -959,52 +1809,19 @@ const $scope = constants?.$scope || function()
         }
     };
 
-    // onSuccess(Buffer buffer);
-    // onFail(String error);
-    // onItemStart(String fileName);
-    // onItemEnd(String fileName);
+    CompressionFormat.addFormat = function( pName, pFormat )
+    {
+        const name = ucase( asString( pName, true ) || pFormat?.name );
 
-    /*
-
-     async function compressFile( inputPath, outputPath )
-     {
-     try
-     {
-     const gzip = zlib.createGzip();
-     const source = fs.createReadStream( inputPath );
-     const destination = fs.createWriteStream( outputPath );
-
-     //Ensure output directory exists
-     const ensureDirectoryExistence = ( filePath ) =>
-     {
-     const dirname = path.dirname( filePath );
-     if ( fs.existsSync( dirname ) )
-     {
-     return true;
-     }
-     fs.mkdirSync( dirname, { recursive: true } );
-     return true;
-     };
-     ensureDirectoryExistence( outputPath );
-
-     source.pipe( gzip ).pipe( destination );
-
-     return new Promise( ( resolve, reject ) =>
-     {
-     destination.on( "finish", resolve );
-     destination.on( "error", reject );
-     source.on( "error", reject );
-     gzip.on( "error", reject );
-     } );
-     }
-     catch( error )
-     {
-     console.error( "Error during compression:", error );
-     throw error; //Re-throw the error to be handled by the caller
-     }
-     }
-
-     */
+        if ( isBlank( name ) || name in CompressionFormat.SUPPORTED_FORMATS )
+        {
+            modulePrototype.reportError( new IllegalArgumentError( "The specified compression format name is invalid or already defined", { name: pName } ), S_ERROR, modName + "::CompressionFormat::addFormat", pName, pFormat );
+        }
+        else
+        {
+            CompressionFormat.SUPPORTED_FORMATS[name] = CompressionFormat.SUPPORTED_FORMATS[name] || new CompressionFormat( name, pFormat.signatures, pFormat.decompressionFunction, pFormat.compressionFunction );
+        }
+    };
 
     class ArchiverOptions
     {
@@ -1012,18 +1829,22 @@ const $scope = constants?.$scope || function()
         #compressionFormat = SUPPORTED_FORMATS.DEFAULT;
         #compressionLevel = 6;
 
+        #passwordProtection = null;
+
         #onSuccess = no_op;
         #onFailure = no_op;
 
         #deleteSource = true;
 
-        constructor( pOutputDirectory, pCompressionFormat = SUPPORTED_FORMATS.DEFAULT, pCompressionLevel = 6, pOnSuccess = no_op, pOnFailure = no_op, pDeleteSource = true )
+        constructor( pOutputDirectory, pCompressionFormat = SUPPORTED_FORMATS.DEFAULT, pCompressionLevel = 6, pPasswordProtection = null, pOnSuccess = no_op, pOnFailure = no_op, pDeleteSource = true )
         {
             this.#outputDirectory = (_mt_str + (pOutputDirectory || _mt_str)).trim();
 
             this.#compressionFormat = CompressionFormat.resolve( pCompressionFormat ) || CompressionFormat.DEFAULT;
 
             this.#compressionLevel = asInt( pCompressionLevel );
+
+            this.#passwordProtection = isObject( pPasswordProtection ) && (pPasswordProtection instanceof PasswordProtection) ? pPasswordProtection : null;
 
             this.#onSuccess = pOnSuccess;
             this.#onFailure = pOnFailure;
@@ -1085,20 +1906,32 @@ const $scope = constants?.$scope || function()
         {
             this.#deleteSource = !!pBool;
         }
+
+        get passwordProtection()
+        {
+            return this.#passwordProtection instanceof PasswordProtection ? this.#passwordProtection : null;
+        }
+
+        get compressionOptions()
+        {
+            return this.compressionFormat?.compressionOptions;
+        }
     }
 
     const DEFAULT_ARCHIVER_OPTIONS = new ArchiverOptions( _mt_str );
 
     class Archiver
     {
+        #options;
+
         #outputDirectory;
         #compressionFormat;
         #compressionLevel;
 
+        #passwordProtection = null;
+
         #onSuccess;
         #onFailure;
-
-        #options;
 
         constructor( pOutputDirectory, pOptions = DEFAULT_ARCHIVER_OPTIONS )
         {
@@ -1111,6 +1944,8 @@ const $scope = constants?.$scope || function()
             this.#compressionFormat = CompressionFormat.resolve( options.compressionFormat );
 
             this.#compressionLevel = asInt( options.compressionLevel );
+
+            this.#passwordProtection = isObject( options.passwordProtection ) && (options.passwordProtection instanceof PasswordProtection) ? options.passwordProtection : null;
 
             this.#onSuccess = isFunction( options.onSuccess ) ? options.onSuccess || no_op : no_op;
 
@@ -1147,6 +1982,11 @@ const $scope = constants?.$scope || function()
             return isFunction( this.#onFailure ) ? this.#onFailure : no_op;
         }
 
+        get passwordProtection()
+        {
+            return this.#passwordProtection instanceof PasswordProtection ? this.#passwordProtection : null;
+        }
+
         async checkFilePath( pFilepath )
         {
             let exists = await fsAsync.access( path.resolve( pFilepath ), fs.constants.W_OK | fs.constants.R_OK );
@@ -1154,7 +1994,7 @@ const $scope = constants?.$scope || function()
             if ( !exists )
             {
                 const msg = "The specified file path does not exist or cannot be read: " + pFilepath;
-                modulePrototype.reportError( new Error( msg ), msg, S_ERROR, modName + "::Archiver::checkFilePath" );
+                modulePrototype.reportError( new Error( msg ), msg, S_WARN, modName + "::Archiver::checkFilePath" );
 
                 if ( pFilepath.indexOf( _dot ) < 0 )
                 {
@@ -1186,11 +2026,11 @@ const $scope = constants?.$scope || function()
             return exists;
         }
 
-        async archive( pFilepath )
+        async archive( pFilepath, pOptions )
         {
-            const filepath = path.resolve( pFilepath );
+            let filepath = isString( pFilepath ) ? pFilepath : asArray( pFilepath );
 
-            const exists = await this.checkFilePath( filepath );
+            const exists = isString( filepath ) ? await this.checkFilePath( filepath ) : !isNull( filepath );
 
             if ( !exists )
             {
@@ -1203,96 +2043,15 @@ const $scope = constants?.$scope || function()
 
             let outputPath = (path.resolve( directory, filename )).trim();
 
-            let extension = ".gz";
+            const format = this.compressionFormat();
 
-            let zipper = null;
+            const options = populateOptions( (pOptions || {}), format.compressionOptions );
 
-            switch ( this.compressionFormat )
-            {
-                case COMPRESSION_FORMAT.ZIP:
-                    extension = ".zip";
-                    const file = new AdmZip();
-                    file.addLocalFile( filepath );
-                    file.writeZip( outputPath + extension, async() => {await fsAsync.unlink( filepath );} );
-                    return true;
-
-                case COMPRESSION_FORMAT.GZIP:
-                    zipper = zlib.createGzip( this.options );
-                    extension = ".gz";
-                    break;
-
-                case COMPRESSION_FORMAT.DEFLATE_INFLATE:
-                    zlib.createDeflate( this.options );
-                    extension = ".z";
-                    break;
-
-                case COMPRESSION_FORMAT.BROTLI:
-                    zlib.createBrotliCompress( this.options );
-                    extension = ".br";
-                    break;
-
-                default:
-                    zipper = zlib.createGzip( this.options );
-                    extension = ".gz";
-                    break;
-            }
-
-            const source = fs.createReadStream( filepath );
-            const destination = fs.createWriteStream( outputPath + extension );
-
-            let safeToDelete = false;
-
-            try
-            {
-                await pipeline( source, zipper, destination );
-                safeToDelete = true;
-            }
-            catch( ex )
-            {
-                modulePrototype.reportError( ex, "archiving file", S_ERROR, modName + "::archive" );
-
-                if ( isBlank( this.onFailure ) )
-                {
-                    await this.onFailure( ex );
-                }
-
-                safeToDelete = false;
-            }
-
-            if ( safeToDelete )
-            {
-                await fsAsync.unlink( filepath );
-            }
-
-            if ( isFunction( this.onSuccess ) )
-            {
-                await this.onSuccess( outputPath );
-            }
-
-            return true;
+            return await format.compress( filename, outputPath, populateOptions( options, this.options ) );
         }
 
-        async decompress( pFilepath )
+        async decompress( pFilepath, pOptions )
         {
-            let buffer = ZERO_LENGTH_BUFFER;
-            let uint8Array = new Uint8Array( buffer );
-
-            const filepath = path.resolve( pFilepath );
-
-            if ( await fsAsync.access( filepath, fs.constants.W_OK | fs.constants.R_OK ) )
-            {
-                buffer = await fsAsync.readFile( filepath );
-                uint8Array = new Uint8Array( buffer );
-            }
-
-            const format = identifyFormat( uint8Array );
-
-            if ( !(SIGNATURES.UNSUPPORTED === format || SIGNATURES.UNSUPPORTED.name === format?.name) )
-            {
-
-            }
-
-
         }
     }
 
@@ -1304,12 +2063,16 @@ const $scope = constants?.$scope || function()
                     typeUtils,
                     stringUtils,
                     arrayUtils,
+                    base64Utils,
                     admZip,
                     zlib
                 },
             classes:
                 {
                     ArchiveEntry,
+                    CompressionOptions,
+                    CompressionFormat,
+                    PasswordProtection,
                     Archiver,
                     ArchiverOptions
                 },
@@ -1322,8 +2085,29 @@ const $scope = constants?.$scope || function()
             getEntryCount,
             getEntries,
             getEntry,
+            arrayFromBuffer,
+            typedArrayFromBuffer,
+            isFile,
+            isDirectory,
+            removeExtension,
+            replaceExtension,
+            CompressionOptions,
+            CompressionFormat,
+            PasswordProtection,
             ArchiverOptions,
-            Archiver
+            Archiver,
+            PKZIP_OPTIONS,
+            GZIP_OPTIONS,
+            DEFLATE_OPTIONS,
+            INFLATE_OPTIONS,
+            BROTLI_OPTIONS,
+            DEFAULT_ARCHIVER_OPTIONS,
+            SUPPORTED_FORMATS,
+            FORMAT_BY_SIGNATURE,
+            pkUnZip,
+            pkZip,
+            pipeToCompressedFile,
+            pipeToUncompressedFile,
         };
 
     mod = modulePrototype.extend( mod );

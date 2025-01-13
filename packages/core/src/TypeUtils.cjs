@@ -1131,7 +1131,9 @@ const $scope = constants?.$scope || function()
     /**
      * Returns a string representation of the specified value as a binary number
      * <br>
-     * If the specified value is an array, a new array is returned with each element in the array mapped to a binary representation
+     * If the specified value is an array,
+     * a new array is returned with each element in the array mapped
+     * to a binary representation
      * <br>
      *
      * @param {number|string|Array<(number|string)>} pValue A value or an array of values to convert to base 2 (binary)
@@ -1169,6 +1171,21 @@ const $scope = constants?.$scope || function()
         }
 
         return (s.startsWith( "-" ) ? "-0b" : "0b") + s.replace( /^-/, _mt_str ).trim();
+    };
+
+    const toBits = function( pValue, pLength = 16 )
+    {
+        let s = String( toBinary( pValue ) ).trim().replaceAll( /(^-?0b)|\D/g, _mt_str ).trim();
+
+        let length = parseInt( isNumeric( pLength ) ? toDecimal( pLength ) : 16 );
+
+        // bitwise operator is intentional
+        while ( length < 8 || (length & (length - 1)) || length % 8 !== 0 )
+        {
+            length++;
+        }
+
+        return (_mt_str + s).padStart( length, "0" ).trim();
     };
 
     /**
@@ -2615,6 +2632,7 @@ const $scope = constants?.$scope || function()
             toHex,
             toOctal,
             toBinary,
+            toBits,
             isBoolean,
             isArray,
             isTypedArray,

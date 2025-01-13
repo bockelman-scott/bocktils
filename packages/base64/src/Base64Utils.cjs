@@ -386,7 +386,7 @@ const $scope = constants?.$scope || function()
     }
 
 
-    const toBinary = function( pBase64, pSpec = DEFAULT_VARIANT )
+    const decode = function( pBase64, pSpec = DEFAULT_VARIANT )
     {
         if ( isNull( pBase64 ) || !isValidBase64( asString( pBase64, true ) ) )
         {
@@ -465,7 +465,7 @@ const $scope = constants?.$scope || function()
             return atob( str );
         }
 
-        const data = toBinary( str );
+        const data = decode( str );
 
         return data.map( e => String.fromCharCode( e ) ).join( _mt_str ).replace( _rxNullTerminator, _mt_str );
     }
@@ -484,7 +484,8 @@ const $scope = constants?.$scope || function()
             encode,
             toBase64: encode,
             toText,
-            toBinary
+            decode,
+            toBinary: decode
         };
 
     mod = modulePrototype.extend( mod );
