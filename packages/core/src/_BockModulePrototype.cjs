@@ -504,6 +504,25 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
     };
 
     /**
+     * Converts the provided arguments into a single string.
+     *
+     * The function accepts any number of arguments, flattens them to a single-level array (if nested),
+     * converts each into a string, trims whitespace,
+     * and then concatenates all elements into a single string separated by a space.
+     *
+     * @function
+     * @param {...*} pArgs - One or more strings or values that can be coerced to strings<br>
+     *                       (or arrays of strings or values that can be coerced to strings)<br>
+     *                       to be concatenated into a single string, or <i>phrase</i>.<br>
+     *
+     * @returns {string} A concatenated string representation of the arguments.
+     */
+    const asPhrase = function( ...pArgs )
+    {
+        return [...pArgs].flat( Infinity ).map( e => (_mt_str + e).trim() ).join( _spc );
+    };
+
+    /**
      * Defines the default value to use in recursive functions to bail out before causing a stack overflow.<br>
      * <br>
      * Most functions that use recursion accept an options object that allows you to provide a different value for maxStackSize.<br>
@@ -2908,6 +2927,8 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
 
             EMPTY_OBJECT,
             EMPTY_ARRAY,
+
+            asPhrase,
 
             isReadOnly,
             populateOptions,

@@ -52,15 +52,23 @@ const $scope = constants?.$scope || function()
     const {
         classes,
         _mt_str,
+        _spc,
         _hyphen,
         _dot,
         _lf,
         _fun,
+        asPhrase,
         lock,
         populateOptions,
         no_op,
         IterationCap,
-        isLogger
+        isLogger,
+        S_ENABLED,
+        S_DISABLED,
+        S_ERROR,
+        S_WARN,
+        S_ERR_PREFIX,
+        MILLIS_PER
     } = constants;
 
     const {
@@ -76,13 +84,13 @@ const $scope = constants?.$scope || function()
 
     const { ModulePrototype } = classes;
 
-    const { asString, asInt, asFloat, isBlank, ucase, toUnixPath, toBool } = stringUtils;
+    const { asString, asInt, asFloat, isBlank, lcase, ucase, toUnixPath, toBool } = stringUtils;
 
     const { varargs, asArray, Filters, AsyncBoundedQueue } = arrayUtils;
 
     const { accessSync, statSync, mkdirSync, createWriteStream, writeFileSync, constants: fs_constants, } = fs;
 
-    const { access, readdir, opendir, stat, rm } = fsAsync;
+    const { access, readdir, opendir, stat, lstat, rm, rename } = fsAsync;
 
     /**
      * This is a dictionary of this module's dependencies.
@@ -106,18 +114,121 @@ const $scope = constants?.$scope || function()
             path
         };
 
-    const DEFAULT_FILE_PATH = "./logs";
+    const TIMESTAMP_RESOLUTION =
+        {
+            YEAR: 1,
+            MONTH: 2,
+            DAY: 3,
+            HOUR: 4,
+            MINUTE: 5,
+            SECOND: 6,
+            MILLISECOND: 7
+        };
 
-    const DEFAULT_FILE_NAME = "application";
-    const DEFAULT_FILE_EXTENSION = (_dot + "log");
-    const DEFAULT_SEPARATOR = _hyphen;
-    const DEFAULT_PREFIX = _mt_str;
+    const DEFAULTS =
+        {
+            FILE_PATH: "./logs",
+            FILE_NAME: "application",
+            FILE_EXTENSION: (_dot + "log"),
+            SEPARATOR: _hyphen,
+            PREFIX: _mt_str,
+            TIMESTAMP_RESOLUTION: TIMESTAMP_RESOLUTION.DAY
+        };
 
-    const MILLIS_PER_SECOND = 1000;
+    const MILLIS_PER_SECOND = MILLIS_PER.SECOND;
     const MILLIS_PER_MINUTE = 60 * MILLIS_PER_SECOND;
     const MILLIS_PER_HOUR = 60 * MILLIS_PER_MINUTE;
     const MILLIS_PER_DAY = 24 * MILLIS_PER_HOUR;
     const MILLIS_PER_WEEK = 7 * MILLIS_PER_DAY;
+
+    const ZERO = "0";
+
+    const WORDS =
+        {
+            ZERO,
+
+            AND: "and",
+            OR: "or",
+            THE: "the",
+            LOG: "log",
+            OF: "of",
+
+            RETRYING: "Retrying...",
+            AFTER: "after",
+            RETRIES: "retries",
+
+            CREATED: "Created",
+            ACCESSED: "Accessed",
+            OPENED: "Opened",
+            CLOSED: "Closed",
+            DELETED: "Deleted",
+            ARCHIVED: "Archived",
+            EXPIRED: "Expired",
+            ROTATED: "Rotated",
+
+            FILE: "file",
+            DIRECTORY: "directory",
+            SIZE: "size",
+            CREATION_DATE: "creation date",
+
+            NOT_EXISTS: "does not exist",
+            COULD_NOT_BE: "could not be",
+
+            CALCULATING: "calculating",
+            WRITING_TO: "writing to",
+
+            LOGGER_DISABLED: "This logger is " + S_DISABLED,
+
+            INVALID_ARCHIVER: "No valid archiver is defined for the log file retention policy",
+        };
+
+    const PHRASES =
+        {
+            THE_LOG: asPhrase( WORDS.THE, WORDS.LOG ),
+            THE_LOG_FILE: asPhrase( WORDS.THE, WORDS.LOG, WORDS.FILE ),
+            THE_LOG_DIRECTORY: asPhrase( WORDS.THE, WORDS.LOG, WORDS.DIRECTORY ),
+
+            CREATION_FAILED: asPhrase( WORDS.NOT_EXISTS, WORDS.AND, WORDS.COULD_NOT_BE, lcase( WORDS.CREATED ) ),
+            ACCESS_FAILED: asPhrase( WORDS.NOT_EXISTS, WORDS.OR, WORDS.COULD_NOT_BE, lcase( WORDS.ACCESSED ) ),
+
+            OPEN_FAILED: asPhrase( WORDS.COULD_NOT_BE, lcase( WORDS.OPENED ) ),
+            WRITE_FAILED: asPhrase( WORDS.WRITING_TO, [WORDS.THE, WORDS.LOG, WORDS.FILE] ),
+
+            DIR_CREATION_FAILED: asPhrase( [WORDS.THE, WORDS.LOG, WORDS.DIRECTORY], WORDS.COULD_NOT_BE, lcase( WORDS.CREATED ) ),
+        };
+
+    // "An error occurred while calculating the size of the log file"
+    // "An error occurred while calculating the creation date of the log file"
+    // "An error occurred while collecting log files from the directory:"
+    // "Deleted log file"
+    // "An error occurred while deleting log file"
+    // "Archived expired log file:"
+    // "An error occurred while archiving expired log file:"
+    //  "Trying default log file path"
+    // "Logging to", filePath, "is", this.enabled ? "enabled" : "disabled"
+    // "********** LOG FILE CREATED AT " + fileCreationDate + " **********\n\n"
+    // "Logging to", filePath, "is", this.enabled ? "enabled" : "disabled"
+    // "Unable to create log file:", filePath, "Retrying..."
+    // "An error occurred while writing to log file:"
+    //  "An error occurred while writing to the log file:",
+    // "Rotated log file due to maximum size reached:",
+    // "Rotated log file:", me.filepath, "copied to:", archivedPath
+    // "Invalid retention policy", policy, "for logger", me
+    // "Log file retention policy executed. Removed", removed.length, "files, moved", moved.length, "files.", removed, moved
+    //
+
+
+    const ERROR_MSGS =
+        {
+            INVALID_ARCHIVER: PHRASES.INVALID_ARCHIVER,
+            GET_CREATION_DATE: asPhrase( S_ERR_PREFIX, WORDS.CALCULATING, WORDS.THE, WORDS.CREATION_DATE, WORDS.OF, PHRASES.THE_LOG_FILE ),
+            GET_FILE_SIZE: asPhrase( S_ERR_PREFIX, WORDS.CALCULATING, WORDS.THE, WORDS.SIZE, WORDS.OF, PHRASES.THE_LOG_FILE ),
+        };
+
+    const MSGS =
+        {
+
+        };
 
     let modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
 
@@ -128,15 +239,19 @@ const $scope = constants?.$scope || function()
         #separator;
         #prefix;
 
-        constructor( pName = DEFAULT_FILE_NAME,
-                     pExtension = DEFAULT_FILE_EXTENSION,
-                     pSeparator = DEFAULT_SEPARATOR,
-                     pPrefix = DEFAULT_PREFIX )
+        #timestampResolution;
+
+        constructor( pName = DEFAULTS.FILE_NAME,
+                     pExtension = DEFAULTS.FILE_EXTENSION,
+                     pSeparator = DEFAULTS.SEPARATOR,
+                     pPrefix = DEFAULTS.PREFIX,
+                     pResolution = DEFAULTS.TIMESTAMP_RESOLUTION )
         {
             this.#name = asString( pName, true );
             this.#extension = asString( pExtension, true );
             this.#separator = asString( pSeparator, true );
             this.#prefix = asString( pPrefix, true );
+            this.#timestampResolution = Math.max( 1, asInt( pResolution, DEFAULTS.TIMESTAMP_RESOLUTION ) );
         }
 
         get name()
@@ -159,13 +274,44 @@ const $scope = constants?.$scope || function()
             return asString( this.#prefix, true );
         }
 
-        generateFileName( pIteration )
+        get timestampResolution()
         {
-            const iteration = asInt( pIteration, 0 );
+            return Math.min( Math.max( TIMESTAMP_RESOLUTION.YEAR, asInt( this.#timestampResolution, DEFAULTS.TIMESTAMP_RESOLUTION ) ), TIMESTAMP_RESOLUTION.MILLISECOND );
+        }
+
+        generateTimestamp( pDateOrFileInfo, pResolution = DEFAULTS.TIMESTAMP_RESOLUTION )
+        {
+            let date = isDate( pDateOrFileInfo ) ? pDateOrFileInfo : (pDateOrFileInfo instanceof FileInfo ? pDateOrFileInfo.created : null);
+
+            if ( !isNull( date ) && isDate( date ) )
+            {
+                const resolution = asInt( pResolution, 0 ) || this.timestampResolution;
+
+                const fullYear = resolution > 0 ? asString( date.getFullYear(), true ).padStart( 4, ZERO ) : _mt_str;
+                const month = resolution > 1 ? asString( date.getMonth() + 1, true ).padStart( 2, ZERO ) : _mt_str;
+                const day = resolution > 2 ? asString( date.getDate(), true ).padStart( 2, ZERO ) : _mt_str;
+                const hour = resolution > 3 ? asString( date.getHours(), true ).padStart( 2, ZERO ) : _mt_str;
+                const minute = resolution > 4 ? asString( date.getMinutes(), true ).padStart( 2, ZERO ) : _mt_str;
+                const second = resolution > 5 ? asString( date.getSeconds(), true ).padStart( 2, ZERO ) : _mt_str;
+                const millisecond = resolution > 6 ? asString( date.getMilliseconds(), true ).padStart( 3, ZERO ) : _mt_str;
+                return `${fullYear}${month}${day}${hour}${minute}${second}${millisecond}`;
+            }
+
+            return _mt_str;
+        }
+
+        generateFileName( pDateOrFileInfo = null, pResolution = DEFAULTS.TIMESTAMP_RESOLUTION )
+        {
             const prefix = !isBlank( this.prefix ) ? (this.prefix + this.separator) : _mt_str;
-            const name = this.name || DEFAULT_FILE_NAME;
-            const extension = this.extension || DEFAULT_FILE_EXTENSION;
-            const filename = prefix + name + (iteration > 0 ? (this.separator + iteration) : _mt_str) + _dot + (extension.replace( /^\.+/, _mt_str ));
+
+            const name = this.name || DEFAULTS.FILE_NAME;
+
+            const extension = this.extension || DEFAULTS.FILE_EXTENSION;
+
+            const timestamp = this.generateTimestamp( pDateOrFileInfo, asInt( pResolution || this.timestampResolution, this.timestampResolution ) ) || _mt_str;
+
+            const filename = prefix + name + (!isBlank( timestamp ) ? (this.separator + timestamp) : _mt_str) + _dot + (extension.replace( /^\.+/, _mt_str ));
+
             return filename.replace( /^[\W_.-]+/, _mt_str );
         }
 
@@ -177,15 +323,15 @@ const $scope = constants?.$scope || function()
 
             const reSuffix = /[\/\\\d_-]+$/;
 
-            let name = asString( parts.length > 0 ? parts[0] : DEFAULT_FILE_NAME ).replace( reSuffix, _mt_str );
+            let name = asString( parts.length > 0 ? parts[0] : DEFAULTS.FILE_NAME ).replace( reSuffix, _mt_str );
 
-            let extension = parts.length > 1 ? parts.slice( 1 ).join( _dot ).replace( reSuffix, _mt_str ) : DEFAULT_FILE_EXTENSION;
+            let extension = parts.length > 1 ? parts.slice( 1 ).join( _dot ).replace( reSuffix, _mt_str ) : DEFAULTS.FILE_EXTENSION;
 
             const nameParts = name.split( /[\/\\\s.;:_-]+/g );
 
             let prefix = _mt_str;
 
-            let separator = DEFAULT_SEPARATOR;
+            let separator = DEFAULTS.SEPARATOR;
 
             if ( nameParts.length > 1 )
             {
@@ -193,7 +339,7 @@ const $scope = constants?.$scope || function()
 
                 if ( matches && matches.length > 1 )
                 {
-                    separator = asString( matches[1] || DEFAULT_SEPARATOR, true );
+                    separator = asString( matches[1] || DEFAULTS.SEPARATOR, true );
                 }
 
                 prefix = nameParts[0];
@@ -205,7 +351,7 @@ const $scope = constants?.$scope || function()
 
         toString()
         {
-            return this.generateFileName( 0 );
+            return this.generateFileName();
         }
 
         [Symbol.species]()
@@ -224,13 +370,13 @@ const $scope = constants?.$scope || function()
         }
     }
 
-    const DEFAULT_FILE_PATTERN = lock( new LogFilePattern( DEFAULT_FILE_NAME, DEFAULT_FILE_EXTENSION, _mt_str, _hyphen ) );
+    DEFAULTS.FILE_PATTERN = lock( new LogFilePattern( DEFAULTS.FILE_NAME, DEFAULTS.FILE_EXTENSION, _mt_str, _hyphen ) );
 
-    LogFilePattern.DEFAULT = DEFAULT_FILE_PATTERN;
+    LogFilePattern.DEFAULT = DEFAULTS.FILE_PATTERN;
 
     LogFilePattern.resolve = function( pOptions )
     {
-        const options = populateOptions( pOptions || {}, DEFAULT_FILE_LOGGER_OPTIONS );
+        const options = populateOptions( pOptions || {}, DEFAULTS.FILE_LOGGER_OPTIONS );
 
         if ( options.filePattern instanceof LogFilePattern )
         {
@@ -280,20 +426,24 @@ const $scope = constants?.$scope || function()
 
         constructor( pFilepath, pCreatedDate = null, pSize = 0 )
         {
-            this.#filepath = asString( pFilepath, true );
-            this.#created = isDate( pCreatedDate ) ? pCreatedDate : null;
+            this.#filepath = path.resolve( asString( pFilepath, true ) );
+            this.#created = isDate( pCreatedDate ) ? pCreatedDate : isNumeric( pCreatedDate ) ? new Date( asInt( pCreatedDate ) ) : null;
             this.#size = asInt( pSize );
         }
 
         get filepath()
         {
-            this.#filepath = path.resolve( asString( this.#filepath, true ) );
             return this.#filepath;
         }
 
         get filename()
         {
             return path.basename( this.filepath );
+        }
+
+        get directory()
+        {
+            return path.dirname( this.filepath );
         }
 
         toString()
@@ -311,13 +461,37 @@ const $scope = constants?.$scope || function()
             return this.filepath;
         }
 
+        async getStats()
+        {
+            const stats = await stat( this.filepath );
+
+            this.#created = stats.birthtime;
+            this.#size = stats.size;
+
+            return stats;
+        }
+
+        async getLStats()
+        {
+            const stats = await lstat( this.filepath );
+
+            this.#created = stats.birthtime;
+            this.#size = stats.size;
+
+            this._isFile = stats.isFile();
+            this._isSymbolicLink = stats.isSymbolicLink();
+            this._isDirectory = stats.isDirectory();
+
+            return stats;
+        }
+
         async getSize()
         {
             if ( isNull( this.#size ) || !isNumeric( this.#size ) || this.#size <= 0 )
             {
                 try
                 {
-                    const stats = await stat( this.filepath );
+                    const stats = await this.getStats();
                     this.#size = stats.size;
                 }
                 catch( ex )
@@ -329,13 +503,18 @@ const $scope = constants?.$scope || function()
             return this.#size;
         }
 
+        get size()
+        {
+            return this.#size || fs.statSync( this.filepath ).size;
+        }
+
         async getCreatedDate()
         {
             if ( isNull( this.#created ) || !isDate( this.#created ) )
             {
                 try
                 {
-                    const stats = await stat( this.filepath );
+                    const stats = await this.getStats();
                     this.#created = stats.birthtime;
                 }
                 catch( ex )
@@ -344,6 +523,11 @@ const $scope = constants?.$scope || function()
                 }
             }
             return this.#created;
+        }
+
+        get created()
+        {
+            return this.#created || fs.statSync( this.filepath ).birthtime;
         }
 
         async calculateAge( pNow )
@@ -388,6 +572,48 @@ const $scope = constants?.$scope || function()
             }
 
             return comp;
+        }
+
+        async isFile()
+        {
+            if ( isNull( this._isFile ) )
+            {
+                const stats = await this.getLStats();
+
+                this._isFile = stats.isFile();
+                this._isSymbolicLink = stats.isSymbolicLink();
+                this._isDirectory = stats.isDirectory();
+            }
+
+            return this._isFile;
+        }
+
+        async isSymbolicLink()
+        {
+            if ( isNull( this._isSymbolicLink ) )
+            {
+                const stats = await this.getLStats();
+
+                this._isFile = stats.isFile();
+                this._isSymbolicLink = stats.isSymbolicLink();
+                this._isDirectory = stats.isDirectory();
+            }
+
+            return this._isSymbolicLink;
+        }
+
+        async isDirectory()
+        {
+            if ( isNull( this._isDirectory ) )
+            {
+                const stats = await this.getLStats();
+
+                this._isFile = stats.isFile();
+                this._isSymbolicLink = stats.isSymbolicLink();
+                this._isDirectory = stats.isDirectory();
+            }
+
+            return this._isDirectory;
         }
     }
 
@@ -442,6 +668,17 @@ const $scope = constants?.$scope || function()
     {
         let files = await FileInfo.sort( ...pFiles );
         return files.reverse();
+    };
+
+    FileInfo.from = function( pFilepath, pCreatedDate = null, pSize = 0 )
+    {
+        return new FileInfo( pFilepath, pCreatedDate, pSize );
+    };
+
+    FileInfo.fromAsync = async function( pFilepath )
+    {
+        const stats = await stat( pFilepath );
+        return new FileInfo( pFilepath, stats.birthtime, stats.size );
     };
 
     class LogFileRetentionPolicy
@@ -744,13 +981,13 @@ const $scope = constants?.$scope || function()
      * @constant
      * @readonly
      */
-    const DEFAULT_FILE_RETENTION_POLICY = lock( new LogFileRetentionPolicy( 30, 10 ) );
+    DEFAULTS.FILE_RETENTION_POLICY = lock( new LogFileRetentionPolicy( 30, 10 ) );
 
-    LogFileRetentionPolicy.DEFAULT = DEFAULT_FILE_RETENTION_POLICY;
+    LogFileRetentionPolicy.DEFAULT = DEFAULTS.FILE_RETENTION_POLICY;
 
     LogFileRetentionPolicy.resolve = function( pOptions )
     {
-        const options = populateOptions( pOptions || {}, DEFAULT_FILE_LOGGER_OPTIONS );
+        const options = populateOptions( pOptions || {}, DEFAULTS.FILE_LOGGER_OPTIONS );
 
         if ( options.retentionPolicy instanceof LogFileRetentionPolicy )
         {
@@ -943,13 +1180,13 @@ const $scope = constants?.$scope || function()
      * @constant
      * @readonly
      */
-    const DEFAULT_FILE_ROTATION_POLICY = lock( new LogFileRotationPolicy( DEFAULT_FILE_ROTATION_INTERVAL, 100 ) );
+    DEFAULTS.FILE_ROTATION_POLICY = lock( new LogFileRotationPolicy( DEFAULT_FILE_ROTATION_INTERVAL, 100 ) );
 
-    LogFileRotationPolicy.DEFAULT = DEFAULT_FILE_ROTATION_POLICY;
+    LogFileRotationPolicy.DEFAULT = DEFAULTS.FILE_ROTATION_POLICY;
 
     LogFileRotationPolicy.resolve = function( pOptions )
     {
-        const options = populateOptions( pOptions || {}, DEFAULT_FILE_LOGGER_OPTIONS );
+        const options = populateOptions( pOptions || {}, DEFAULTS.FILE_LOGGER_OPTIONS );
 
         if ( options instanceof LogFileRotationPolicy )
         {
@@ -1019,7 +1256,7 @@ const $scope = constants?.$scope || function()
 
     function resolveLevel( pOptions, pOtherOptions )
     {
-        const options = populateOptions( pOptions, DEFAULT_FILE_LOGGER_OPTIONS );
+        const options = populateOptions( pOptions, DEFAULTS.FILE_LOGGER_OPTIONS );
         const otherOptions = populateOptions( pOtherOptions, DEFAULT_LOGGER_OPTIONS );
 
         return LogLevel.resolveLevel( options.level || otherOptions.level ) ||
@@ -1047,17 +1284,17 @@ const $scope = constants?.$scope || function()
      *
      * @type {FileLoggerOptions}
      */
-    const DEFAULT_FILE_LOGGER_OPTIONS =
+    DEFAULTS.FILE_LOGGER_OPTIONS = lock(
         {
-            directory: DEFAULT_FILE_PATH,
-            filePattern: DEFAULT_FILE_PATTERN,
+            directory: DEFAULTS.FILE_PATH,
+            filePattern: DEFAULTS.FILE_PATTERN,
             timestampFormatter: null,
             filter: null,
             level: LogLevel.DEFAULT,
             logFormatter: LogFormatter.DEFAULT,
-            retentionPolicy: DEFAULT_FILE_RETENTION_POLICY,
-            rotationPolicy: DEFAULT_FILE_ROTATION_POLICY
-        };
+            retentionPolicy: DEFAULTS.FILE_RETENTION_POLICY,
+            rotationPolicy: DEFAULTS.FILE_ROTATION_POLICY
+        } );
 
     const exists = function( pPath )
     {
@@ -1107,7 +1344,7 @@ const $scope = constants?.$scope || function()
             }
             catch( ex )
             {
-                konsole.warn( logDir, "does not exists and could not be created", ex );
+                konsole.warn( logDir, "does not exist and could not be created", ex );
             }
         }
 
@@ -1130,7 +1367,7 @@ const $scope = constants?.$scope || function()
             }
             catch( ex )
             {
-                konsole.warn( logDir, "does not exists and could not be created", ex );
+                konsole.warn( logDir, "does not exist and could not be created", ex );
             }
         }
         return success;
@@ -1145,6 +1382,8 @@ const $scope = constants?.$scope || function()
     {
         #options;
         #otherOptions;
+
+        #created = new Date();
 
         #directory;
         #filePattern;
@@ -1164,11 +1403,11 @@ const $scope = constants?.$scope || function()
 
         #queue;
 
-        constructor( pFileLoggerOptions = DEFAULT_FILE_LOGGER_OPTIONS, pOtherOptions = DEFAULT_LOGGER_OPTIONS )
+        constructor( pFileLoggerOptions = DEFAULTS.FILE_LOGGER_OPTIONS, pOtherOptions = DEFAULT_LOGGER_OPTIONS )
         {
             super( pOtherOptions );
 
-            const options = populateOptions( this, pFileLoggerOptions, DEFAULT_FILE_LOGGER_OPTIONS );
+            const options = populateOptions( this, pFileLoggerOptions, DEFAULTS.FILE_LOGGER_OPTIONS );
             const otherOptions = populateOptions( this, pOtherOptions, DEFAULT_LOGGER_OPTIONS );
 
             this.#options = lock( options );
@@ -1201,7 +1440,7 @@ const $scope = constants?.$scope || function()
 
             this._initializeLogFile( filename, filePath, 0 );
 
-            const now = new Date();
+            const now = this.#created || new Date();
 
             this._initializeRotation( now );
 
@@ -1210,7 +1449,7 @@ const $scope = constants?.$scope || function()
 
         get options()
         {
-            return populateOptions( this.#options || {}, DEFAULT_FILE_LOGGER_OPTIONS );
+            return populateOptions( this.#options || {}, DEFAULTS.FILE_LOGGER_OPTIONS );
         }
 
         get otherOptions()
@@ -1225,7 +1464,7 @@ const $scope = constants?.$scope || function()
                 return pLevel;
             }
 
-            const options = populateOptions( pOptions || this.options, DEFAULT_FILE_LOGGER_OPTIONS );
+            const options = populateOptions( pOptions || this.options, DEFAULTS.FILE_LOGGER_OPTIONS );
             return resolveLevel( options, this.otherOptions );
         }
 
@@ -1242,7 +1481,7 @@ const $scope = constants?.$scope || function()
 
         get directory()
         {
-            return asString( this.#directory || DEFAULT_FILE_PATH, true );
+            return asString( this.#directory || DEFAULTS.FILE_PATH, true );
         }
 
         get filePattern()
@@ -1253,6 +1492,11 @@ const $scope = constants?.$scope || function()
         get filepath()
         {
             return asString( this.#currentFilePath, true ) || this.calculateFilePath().filePath;
+        }
+
+        get filename()
+        {
+            return asString( this.#currentFilename, true ) || this.calculateFilePath().filename;
         }
 
         get timestampFormatter()
@@ -1316,9 +1560,9 @@ const $scope = constants?.$scope || function()
 
             if ( !directoryExists )
             {
-                konsole.error( "Unable to create log directory", this.#directory, "Trying default log file path", DEFAULT_FILE_PATH );
+                konsole.error( "Unable to create log directory", this.#directory, "Trying default log file path", DEFAULTS.FILE_PATH );
 
-                this.#directory = DEFAULT_FILE_PATH;
+                this.#directory = DEFAULTS.FILE_PATH;
 
                 directoryExists = exists( this.#directory );
 
@@ -1338,8 +1582,8 @@ const $scope = constants?.$scope || function()
             const retries = asInt( pRetries || 0 );
 
             const {
-                filename = asString( pFileName, true ),
-                filePath = asString( pFilePath, true )
+                filename = asString( pFileName || this.#currentFilename, true ),
+                filePath = asString( pFilePath || this.#currentFilePath, true )
             } = this.calculateFilePath();
 
             if ( retries > 2 )
@@ -1390,7 +1634,9 @@ const $scope = constants?.$scope || function()
 
                 try
                 {
-                    fs.writeFileSync( filePath, "********** LOG FILE CREATED AT " + new Date().toLocaleString( this.locale ) + " **********\n\n" );
+                    const fileCreationDate = new Date().toLocaleString( this.locale );
+
+                    fs.writeFileSync( filePath, "********** LOG FILE CREATED AT " + fileCreationDate + " **********\n\n" );
 
                     fs.chmodSync( filePath, 0o660 );
 
@@ -1417,11 +1663,11 @@ const $scope = constants?.$scope || function()
             return !needsToBeCreated;
         }
 
-        calculateFilePath( pIteration )
+        calculateFilePath( pDateOrFileInfo = null, pResolution = DEFAULTS.TIMESTAMP_RESOLUTION )
         {
             const pattern = this.filePattern;
 
-            const filename = pattern.generateFileName( pIteration );
+            const filename = pattern.generateFileName( pDateOrFileInfo, pResolution );
 
             const filePath = path.resolve( path.join( this.directory, filename ) );
 
@@ -1456,34 +1702,39 @@ const $scope = constants?.$scope || function()
                 // Ensure the stream is closed on exit, SIGINT, and SIGTERM
                 if ( null != process )
                 {
-                    process.on( "exit", () => (me || this)._close() );
-                    process.on( "SIGINT", () => (me || this)._close() );
-                    process.on( "SIGTERM", () => (me || this)._close() );
+                    process.on( "beforeExit", async() => (me || this)._close().then( no_op ).catch( no_op ) );
+
+                    process.on( "exit", () => (me || this)._forceClose() );
+                    process.on( "SIGINT", () => (me || this)._forceClose() );
+                    process.on( "SIGTERM", () => (me || this)._forceClose() );
                 }
 
-                this.#stream.on( "error", ( err ) =>
+                if ( this.#stream )
                 {
-                    konsole.error( "An error occurred while writing to log file:", (me || this).filepath, err );
-                    (me || this)._close(); // Close the stream on error
-                } );
+                    this.#stream.on( "error", ( err ) =>
+                    {
+                        konsole.error( "An error occurred while writing to log file:", (me || this).filepath, err );
+                        (me || this)._forceClose(); // Close the stream on error
+                    } );
+                }
             }
             catch( ex )
             {
                 konsole.error( "Unable to open log file:", (me || this).filepath, ex );
             }
 
-            this.suspended = !this.isOpen();
+            (me || this).suspended = !(me || this).isOpen();
 
-            return this.isOpen();
+            return (me || this).isOpen();
         }
 
-        _close()
+        async _close()
         {
+            const me = this;
+
             if ( this.isOpen() )
             {
-                const me = this;
-
-                this.flush().then( no_op ).catch( ex => konsole.error( ex ) );
+                await this.flush().then( no_op ).catch( ex => konsole.error( ex ) );
 
                 this.#stream.end( () =>
                                   {
@@ -1496,6 +1747,25 @@ const $scope = constants?.$scope || function()
             }
 
             return this.isClosed();
+        }
+
+        _forceClose()
+        {
+            const me = this;
+
+            if ( this.isOpen() )
+            {
+                (me || this).flush().then( no_op ).catch( ex => konsole.error( ex ) );
+
+                (me || this).#stream.end( () =>
+                                          {
+                                              konsole.log( "Force closed the log file:", (me || this).filepath, "Some messages may have been lost", this.#queue );
+                                          } );
+
+                (me || this).#stream = null; // Prevent further writes
+
+                (me || this).suspended = true;
+            }
         }
 
         async writeLogRecord( pLogRecord )
@@ -1541,7 +1811,7 @@ const $scope = constants?.$scope || function()
                     {
                         konsole.error( "An error occurred while writing to the log file:", (me || this).filepath, err );
 
-                        (me || this)._close();
+                        (me || this)._close().then( no_op ).catch( ex => konsole.error( ex ) );
 
                         (me || this).#queue.enqueue( msg );
                     }
@@ -1557,9 +1827,11 @@ const $scope = constants?.$scope || function()
 
         async checkAndRotateIfMaxSize()
         {
-            const policy = this.rotationPolicy;
+            const me = this;
 
-            const stats = await fsAsync.stat( this.filepath );
+            const policy = (me || this).rotationPolicy;
+
+            const stats = await fsAsync.stat( (me || this).filepath );
 
             const fileSize = asInt( stats.size );
 
@@ -1567,7 +1839,9 @@ const $scope = constants?.$scope || function()
             {
                 this.suspended = true;
 
-                await this.rotateLogFile( this, false );
+                await (me || this).rotateLogFile( (me || this), TIMESTAMP_RESOLUTION.MILLISECOND, false );
+
+                konsole.log( "Rotated log file due to maximum size reached:", (me || this).filepath );
 
                 this.suspended = false;
             }
@@ -1648,40 +1922,31 @@ const $scope = constants?.$scope || function()
             }
         }
 
-        async rotateLogFile( pThis, pResetInterval = true )
+        async rotateLogFile( pThis, pTimestampResolution, pResetInterval = true )
         {
             const me = pThis || this;
-
-            me.flush().then( no_op ).catch( ex => konsole.error( ex ) );
 
             const filePattern = me.filePattern;
 
             const filepath = me.filepath;
 
-            const extension = filePattern.extension;
+            const filename = me.filename;
 
-            const separator = filePattern.separator;
+            const fileInfo = FileInfo.from( filepath );
 
-            let iteration = 0;
+            const archivedFilePath = me.calculateFilePath( fileInfo, asInt( pTimestampResolution, filePattern.timestampResolution ) );
 
-            const withoutExtension = asString( filepath.replace( new RegExp( "\\\.?" + extension + "$" ), _mt_str ), true );
+            const archivedPath = path.resolve( archivedFilePath.filePath );
 
-            const rx = new RegExp( separator + "(\\d+)$" );
+            await me.flush().then( no_op ).catch( ex => konsole.error( ex ) );
 
-            const matches = rx.exec( withoutExtension );
+            await me._close();
 
-            if ( matches && matches.length > 1 )
-            {
-                iteration = parseInt( matches[1] );
-            }
+            await fsAsync.rename( filepath, archivedPath );
 
-            const newFilepath = me.calculateFilePath( iteration + 1 );
+            konsole.info( "Rotating log file:", me.filepath, "copied to:", archivedPath );
 
-            konsole.info( "Rotating log file:", me.filepath, "replaced by:", newFilepath );
-
-            me._close();
-
-            me._initializeLogFile( newFilepath.filename, newFilepath.filePath, 0 );
+            await me._initializeLogFile( filename, filepath, 0 );
 
             await me._open();
 
@@ -1691,12 +1956,14 @@ const $scope = constants?.$scope || function()
             {
                 clearTimeout( me._rotationTimerId );
 
-                const policy = me.rotationPolicy || DEFAULT_FILE_ROTATION_POLICY;
+                const policy = me.rotationPolicy || DEFAULTS.FILE_ROTATION_POLICY;
 
                 me._rotationTimerId = setTimeout( rotationHandler, policy.milliseconds );
             }
 
             me.runRetentionPolicy( me.directory, me, new Date() ).then( no_op ).catch( ex => konsole.error( ex ) );
+
+            return archivedPath;
         }
 
         _initializeRotation( pNow )
@@ -1709,7 +1976,7 @@ const $scope = constants?.$scope || function()
 
             const me = this;
 
-            const rotationFunction = async function() { await (me || this).rotateLogFile.call( me, me, true ); };
+            const rotationFunction = async function() { await (me || this).rotateLogFile.call( me, me, DEFAULTS.TIMESTAMP_RESOLUTION, true ); };
 
             this._rotationTimerId = setTimeout( rotationFunction, firstInterval );
         }
@@ -1790,16 +2057,9 @@ const $scope = constants?.$scope || function()
                     LogFileRotationPolicy,
                     FileLogger
                 },
-            DEFAULT_FILE_PATH,
-            DEFAULT_FILE_NAME,
-            DEFAULT_FILE_EXTENSION,
-            DEFAULT_SEPARATOR,
-            DEFAULT_FILE_PATTERN,
-            DEFAULT_FILE_ROTATION_INTERVAL,
-            DEFAULT_FILE_ROTATION_POLICY,
+            TIMESTAMP_RESOLUTION,
+            DEFAULTS: lock( DEFAULTS ),
             RETENTION_OPERATION,
-            DEFAULT_FILE_RETENTION_POLICY,
-            DEFAULT_FILE_LOGGER_OPTIONS,
             resolveRetentionOperation,
             resolveArchiver,
             resolveError,

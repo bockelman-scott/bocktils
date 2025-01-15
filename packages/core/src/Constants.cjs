@@ -85,6 +85,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             ModulePrototype,
             calculateErrorSourceName,
             reportError,
+            asPhrase,
             isReadOnly,
             populateOptions,
             lock,
@@ -350,6 +351,49 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
                 return (_fun === typeof pFunction ? pFunction?.name || funcToString.call( pFunction, pFunction ) : (_mt_str + pFunction));
             }
         } = (bockModuleBootstrap || $scope() || {});
+
+    /**
+     * Represents a set of time durations in milliseconds.
+     * Provides constants for easily converting time units into milliseconds.
+     *
+     * Properties:
+     * - SECOND: The number of milliseconds in one second.
+     * - MINUTE: The number of milliseconds in one minute.
+     * - HOUR: The number of milliseconds in one hour.
+     * - DAY: The number of milliseconds in one day.
+     * - WEEK: The number of milliseconds in one week.
+     */
+    const MILLIS_PER =
+        {
+            SECOND: 1000,
+            MINUTE: 60 * 1000,
+            HOUR: 60 * 60 * 1000,
+            DAY: 24 * 60 * 60 * 1000,
+            WEEK: 7 * 24 * 60 * 60 * 1000
+        };
+
+    /**
+     * A constant object that defines the number of nanoseconds in various units of time.
+     *
+     * Properties:
+     * - MICROSECOND: The number of nanoseconds in one microsecond (1,000 nanoseconds).
+     * - MILLISECOND: The number of nanoseconds in one millisecond (1,000,000 nanoseconds).
+     * - SECOND: The number of nanoseconds in one second (1,000,000,000 nanoseconds).
+     * - MINUTE: The number of nanoseconds in one minute (60,000,000,000 nanoseconds).
+     * - HOUR: The number of nanoseconds in one hour (3,600,000,000,000 nanoseconds).
+     * - DAY: The number of nanoseconds in one day (86,400,000,000,000 nanoseconds).
+     * - WEEK: The number of nanoseconds in one week (604,800,000,000,000 nanoseconds).
+     */
+    const NANOS_PER =
+        {
+            MICROSECOND: 1000,
+            MILLISECOND: 1000 * 1000,
+            SECOND: 1000 * 1000 * 1000,
+            MINUTE: 60 * 1000 * 1000 * 1000,
+            HOUR: 60 * 60 * 1000 * 1000 * 1000,
+            DAY: 24 * 60 * 60 * 1000 * 1000 * 1000,
+            WEEK: 7 * 24 * 60 * 60 * 1000 * 1000 * 1000
+        };
 
     /**
      * Returns true if the specified object implements the ILogger interface.<br>
@@ -1150,6 +1194,19 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#BIN_DIGITS_MAP
              */
             BIN_DIGITS_MAP,
+
+            /**
+             * An object defining the number of milliseconds per
+             * SECOND, MINUTE, HOUR, DAY, and WEEK
+             */
+            MILLIS_PER,
+
+            /**
+             * An object defining the number of nanoseconds per
+             * MICROSECOND, MILLISECOND, SECOND, MINUTE, HOUR, DAY, and WEEK
+             */
+            NANOS_PER,
+
             /**
              * The word, "Browser"
              * @const
@@ -1755,6 +1812,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#IllegalArgumentError
              */
             IllegalArgumentError,
+
             /**
              * Returns an instance of the custom __Error class from the arguments specified.
              * <br><br>
@@ -1773,6 +1831,9 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#resolveError
              */
             resolveError,
+
+            asPhrase,
+
             /**
              * This class can be used to create generic comparators.
              * <br><br>

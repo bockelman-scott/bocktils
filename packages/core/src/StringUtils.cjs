@@ -75,6 +75,7 @@ const $scope = constants?.$scope || function()
             _lf,
             _crlf,
             _colon,
+            _slash,
             S_TRUE,
             S_FALSE,
             S_ERROR = "error",
@@ -1947,8 +1948,28 @@ const $scope = constants?.$scope || function()
     const toAbsolutePath = function( pPath, pRootPath )
     {
         let rootPath = toUnixPath( asString( pRootPath, true ) ) || __dirname;
-
         let filepath = toUnixPath( asString( pPath, true ) ) || __dirname;
+
+        let root = rootPath.split( _slash );
+        let path = filepath.split( _slash );
+
+        let filePathParts = [];
+
+        for( let i = path.length; i--; )
+        {
+            const s = path[i];
+
+            if ( !root.includes( s ) )
+            {
+                filePathParts.unshift( s );
+            }
+            else
+            {
+                filePathParts.unshift( _dot + _dot );
+            }
+        }
+
+        filepath = filePathParts.join( _slash );
 
         if ( filepath.startsWith( rootPath ) )
         {

@@ -127,6 +127,7 @@ const $scope = constants?.$scope || function()
         isNonNullValue,
         isString,
         isEmptyString,
+        isRegExp,
         isNumeric,
         isNumber,
         isInteger,
@@ -259,7 +260,7 @@ const $scope = constants?.$scope || function()
     const DEFAULT_AS_ARRAY_OPTIONS =
         {
             flatten: false,
-            splitOn: undefined,
+            splitOn: null,
             filter: null,
             sanitize: false,
             type: null,
@@ -397,7 +398,30 @@ const $scope = constants?.$scope || function()
             return processAsArrayOptions( pValue, options );
         }
 
-        let arr = (isEmptyString( pValue ) || (isString( pValue ) && /^0+/.test( pValue )) || 0 === pValue || false === pValue ? [pValue] : (isNull( pValue ) ? [] : pValue)) || [];
+        if ( isNull( pValue ) && !(false === pValue || 0 === pValue) )
+        {
+            return [];
+        }
+
+        let arr = pValue || [];
+
+        if ( isString( pValue ) )
+        {
+            if( isEmptyString( pValue ) )
+            {
+                return [];
+            }
+            if ( !isEmptyString( pValue ) )
+            {
+                const splitter = options?.splitOn || null;
+                const sep = (isString( splitter ) ? asString( splitter ) : (isRegExp( splitter ) ? new RegExp( splitter, splitter?.flags ) : null));
+                arr = (!isNull( sep ) ? pValue.split( sep ) : [pValue]) || [];
+            }
+        }
+        else
+        {
+            arr = [_num,_big,_bool,_symbol].includes( typeof pValue ) ? [pValue] : pValue;
+        }
 
         const recursions = Math.max( 0, asInt( pRecursions ) || 0 );
 
@@ -425,7 +449,8 @@ const $scope = constants?.$scope || function()
                     break;
 
                 case _str:
-                    const sep = ( !isUndefined( options?.splitOn ) && isString( options?.splitOn )) ? asString( options?.splitOn ) : null;
+                    const splitter = options?.splitOn || null;
+                    const sep = !isNull( splitter ) ? (isString( splitter ) ? asString( splitter ) : (isRegExp( splitter ) ? new RegExp( splitter, splitter?.flags ) : null)) : null;
                     arr = (!isNull( sep ) ? arr.split( sep ) : [arr]) || [arr];
                     break;
 

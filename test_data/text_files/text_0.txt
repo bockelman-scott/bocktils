@@ -1,0 +1,7 @@
+Inter Process Communication (IPC)
+
+The word Inter Process Communication itself suggests its meaning, i.e. it is the phenomenon of communicating among different processes. 
+IPC in Node.js is how different parts of a Node.js application talk to each other. 
+It involves exchanging messages or data between these parts 
+to make the application run efficiently, 
+taking advantage of Node.js’ non-blocking and asynchronous design for parallelism.

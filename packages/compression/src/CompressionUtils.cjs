@@ -49,6 +49,7 @@ const { pipeline } = require( "node:stream/promises" );
 
 const path = require( "node:path" );
 const zlib = require( "node:zlib" );
+const crypto = require( "node:crypto" );
 
 const { _ud = "undefined" } = constants;
 
@@ -74,6 +75,7 @@ const $scope = constants?.$scope || function()
         _big,
         _bool,
         _obj,
+        resolveError,
         S_ERROR,
         populateOptions,
         no_op,
@@ -98,9 +100,9 @@ const $scope = constants?.$scope || function()
         toBits
     } = typeUtils;
 
-    const { asString, asInt, isBlank, lcase, ucase } = stringUtils;
+    const { asString, asInt, isBlank, lcase, ucase, toAbsolutePath } = stringUtils;
 
-    const { asArray, Filters } = arrayUtils;
+    const { asArray, Filters, Mappers } = arrayUtils;
 
     if ( _ud === typeof CustomEvent )
     {
@@ -137,11 +139,12 @@ const $scope = constants?.$scope || function()
      * Converts the input buffer or array-like object into an array.
      *
      * @param {Buffer|Array|TypedArray|any} pBuffer - The input data which can be a buffer, array, typed array, or any other object.
-     * @return {Array|any} An array representation of the input, or the input itself if it does not match the expected types.
+     * @return {Uint8Array<number>} An byte array representation of the input, or the input itself if it does not match the expected types.
      */
     function arrayFromBuffer( pBuffer )
     {
-        return asArray( pBuffer instanceof Buffer ? new Uint8Array( pBuffer ) : isArray( pBuffer ) || isTypedArray( pBuffer ) ? new Uint8Array( pBuffer ) : pBuffer );
+        const arr = asArray( pBuffer, { splitOn: /[^\d.ABCDEFx ]/gi } ).map( Mappers.TRIMMED ).map( toDecimal );
+        return new Uint8Array( arr );
     }
 
     /**
@@ -154,7 +157,7 @@ const $scope = constants?.$scope || function()
     function typedArrayFromBuffer( pBuffer, pArrayClass = Uint8Array )
     {
         const ArrayClass = pArrayClass || Uint8Array;
-        return (pBuffer instanceof Buffer ? new ArrayClass( pBuffer ) : isArray( pBuffer ) || isTypedArray( pBuffer ) ? new ArrayClass( pBuffer ) : new ArrayClass( asArray( pBuffer ) ));
+        return (pBuffer instanceof Buffer ? new ArrayClass( pBuffer ) : isArray( pBuffer ) || isTypedArray( pBuffer ) ? new ArrayClass( pBuffer ) : new ArrayClass( arrayFromBuffer( pBuffer ) ));
     }
 
     /**
@@ -174,7 +177,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            modulePrototype.reportError( ex, "checking if path is a file or directory", S_ERROR, modName + "::isFile", pPath );
+            modulePrototype.reportError( ex, "checking if path is a file or directory", S_ERROR, modName + "::isFile", "pPath:", pPath, "filepath:", filepath );
         }
         return false;
     }
@@ -563,7 +566,7 @@ const $scope = constants?.$scope || function()
 
             try
             {
-                archiver = new admZip( pArchive );
+                archiver = new admZip( pArchive, { fs: fs } );
 
                 count = archiver.getEntryCount() || 0;
             }
@@ -589,7 +592,7 @@ const $scope = constants?.$scope || function()
 
             try
             {
-                archiver = new admZip( pArchive, { input: pArchive, password: pPassword } );
+                archiver = new admZip( pArchive, { input: pArchive, password: pPassword, fs: fs } );
 
                 entries = [].concat( ((isBlank( asString( pPassword ) ) ? archiver.getEntries() : archiver.getEntries( pPassword )) || []) );
 
@@ -623,7 +626,7 @@ const $scope = constants?.$scope || function()
             {
                 try
                 {
-                    archiver = new admZip( pArchive, { input: pArchive, password: pPassword, name: name } );
+                    archiver = new admZip( pArchive, { input: pArchive, password: pPassword, name: name, fs: fs } );
                     entry = archiver.getEntry( name );
                 }
                 catch( ex )
@@ -824,10 +827,10 @@ const $scope = constants?.$scope || function()
 
         constructor( encryptedPassword, initializationVector, salt, key, inputEncoding, outputEncoding )
         {
-            this.#encryptedPassword = isString( encryptedPassword ) ? encryptedPassword : isArray( encryptedPassword ) ? new Uint8Array( encryptedPassword ) : new Uint8Array( 0 );
-            this.#initializationVector = isString( initializationVector ) ? initializationVector : isArray( initializationVector ) ? new Uint8Array( initializationVector ) : new Uint8Array( 0 );
-            this.#salt = isString( salt ) ? salt : isArray( salt ) ? new Uint8Array( salt ) : new Uint8Array( 0 );
-            this.#key = isString( key ) ? key : isArray( key ) ? new Uint8Array( key ) : new Uint8Array( 0 );
+            this.#encryptedPassword = arrayFromBuffer( encryptedPassword );
+            this.#initializationVector = arrayFromBuffer( initializationVector );
+            this.#salt = arrayFromBuffer( salt );
+            this.#key = arrayFromBuffer( key );
 
             this.#inputEncoding = isString( encryptedPassword ) ? inputEncoding || DEFAULT_ENCODING : null;
             this.#outputEncoding = isString( outputEncoding ) ? outputEncoding || DEFAULT_ENCODING : null;
@@ -852,18 +855,32 @@ const $scope = constants?.$scope || function()
          */
         decrypt()
         {
-            const decipher = crypto.createDecipheriv( CIPHER, this.#key, this.#initializationVector );
+            const decipher = crypto.createDecipheriv( CIPHER, arrayFromBuffer( this.#key ), arrayFromBuffer( this.#initializationVector ) );
             let decrypted = this.#update( decipher );
             decrypted = Buffer.concat( [decrypted, decipher.final()] );
             return decrypted.toString( "utf-8" );
         }
 
-        static encrypt( password, salt, inputEncoding, outputEncoding )
+        static encrypt( pPassword, pSalt, inputEncoding, outputEncoding )
         {
-            const key = crypto.scryptSync( password, salt, KEY_LENGTH );
+            const pwd = Buffer.from( pPassword, inputEncoding );
+            const salt = Buffer.from( pSalt, inputEncoding );
+
+            const options =
+                {
+                    N: 2 ** 14,
+                    r: 8,
+                    p: 1
+                };
+
+            const key = crypto.scryptSync( pwd, salt, KEY_LENGTH, options );
+
             const iv = crypto.randomBytes( VECTOR_LENGTH ); // Generate a random IV for each encryption
+
             const cipher = crypto.createCipheriv( CIPHER, key, iv );
-            let encrypted = cipher.update( Buffer.from( password, DEFAULT_ENCODING ) );
+
+            let encrypted = cipher.update( pwd );
+
             encrypted = Buffer.concat( [encrypted, cipher.final()] );
 
             return new PasswordProtection( encrypted, iv, salt, key, inputEncoding, outputEncoding );
@@ -871,60 +888,140 @@ const $scope = constants?.$scope || function()
 
         get storable()
         {
-            const pwd = encode( this.#encryptedPassword );
+            const rx = /=+$/;
+
+            const pwd = encode( this.#encryptedPassword ).replace( rx, _mt_str );
             const pwdLen = pwd.length;
 
-            const iv = encode( this.#initializationVector );
+            const iv = encode( this.#initializationVector ).replace( rx, _mt_str );
             const ivLen = iv.length;
 
-            const salt = encode( this.#salt );
+            const salt = encode( this.#salt ).replace( rx, _mt_str );
             const saltLen = salt.length;
 
-            const key = encode( this.#key );
+            const key = encode( this.#key ).replace( rx, _mt_str );
             const keyLen = key.length;
 
-            const iptEnc = encode( this.#inputEncoding );
+            const iptEnc = encode( this.#inputEncoding ).replace( rx, _mt_str );
             const iptEncLen = iptEnc.length;
 
-            const outEnc = encode( this.#outputEncoding );
+            const outEnc = encode( this.#outputEncoding ).replace( rx, _mt_str );
             const outEncLen = outEnc.length;
 
-            const preamble = encode( toBits( pwdLen, 16 ) +
-                                     toBits( ivLen, 16 ) +
-                                     toBits( saltLen, 16 ) +
-                                     toBits( keyLen, 16 ) +
-                                     toBits( iptEncLen, 8 ) +
-                                     toBits( outEncLen, 8 ) );
+            const preamble = (toBits( pwdLen, 16 ) +
+                              toBits( ivLen, 16 ) +
+                              toBits( saltLen, 16 ) +
+                              toBits( keyLen, 16 ) +
+                              toBits( iptEncLen, 8 ) +
+                              toBits( outEncLen, 8 ));
 
-            const s = preamble + pwd + iv + salt + key + iptEnc + outEnc;
+            let encoded = (pwd + iv + salt + key + iptEnc + outEnc).trim();
+
+            while ( encoded.length % 4 !== 0 )
+            {
+                encoded += "=";
+            }
+
+            const s = preamble + encoded;
 
             return asString( s, true );
         }
 
         static fromStorable( storable )
         {
-            const s = decode( storable );
+            const s = storable;
 
             const preamble = s.slice( 0, 80 );
 
-            const pwdLen = parseInt( asString( toBits( preamble.slice( 0, 16 ) ) ), 2 );
-            const ivLen = parseInt( asString( toBits( preamble.slice( 16, 32 ) ) ), 2 );
-            const saltLen = parseInt( asString( toBits( preamble.slice( 32, 48 ) ) ), 2 );
-            const keyLen = parseInt( asString( toBits( preamble.slice( 48, 64 ) ) ), 2 );
+            const pwdLen = toDecimal( "0b" + preamble.slice( 0, 16 ) );
+            const ivLen = toDecimal( "0b" + preamble.slice( 16, 32 ) );
+            const saltLen = toDecimal( "0b" + preamble.slice( 32, 48 ) );
+            const keyLen = toDecimal( "0b" + preamble.slice( 48, 64 ) );
 
-            const iptEncLen = parseInt( asString( toBits( preamble.slice( 64, 72 ) ) ), 2 );
-            const outEncLen = parseInt( asString( toBits( preamble.slice( 72, 80 ) ) ), 2 );
+            const iptEncLen = toDecimal( "0b" + preamble.slice( 64, 72 ) );
+            const outEncLen = toDecimal( "0b" + preamble.slice( 72, 80 ) );
 
-            const pwd = s.slice( 80, 80 + pwdLen );
-            const iv = s.slice( 80 + pwdLen, 80 + pwdLen + ivLen );
-            const salt = s.slice( 80 + pwdLen + ivLen, 80 + pwdLen + ivLen + saltLen );
-            const key = s.slice( 80 + pwdLen + ivLen + saltLen, 80 + pwdLen + ivLen + saltLen + keyLen );
-            const iptEnc = s.slice( 80 + pwdLen + ivLen + saltLen + keyLen, 80 + pwdLen + ivLen + saltLen + keyLen + iptEncLen );
-            const outEnc = s.slice( 80 + pwdLen + ivLen + saltLen + keyLen + iptEncLen, 80 + pwdLen + ivLen + saltLen + keyLen + iptEncLen + outEncLen );
+            function decodeBase64( pStr )
+            {
+                let str = asString( pStr, true );
+
+                while ( str.length % 4 !== 0 )
+                {
+                    str += "=";
+                }
+
+                return decode( str );
+            }
+
+            const encoded = s.slice( 80, s.length );
+
+            let startIdx = 0;
+
+            const pwd = decodeBase64( encoded.slice( startIdx, startIdx + pwdLen ) );
+            startIdx += pwdLen;
+
+            const iv = decodeBase64( encoded.slice( startIdx, startIdx + ivLen ) );
+            startIdx += ivLen;
+
+            const salt = decodeBase64( encoded.slice( startIdx, startIdx + saltLen ) );
+            startIdx += saltLen;
+
+            const key = decodeBase64( encoded.slice( startIdx, startIdx + keyLen ) );
+            startIdx += keyLen;
+
+            const iptEnc = decodeBase64( encoded.slice( startIdx, startIdx + iptEncLen ) );
+            startIdx += iptEncLen;
+
+            const outEnc = decodeBase64( encoded.slice( startIdx, startIdx + outEncLen ) );
 
             return new PasswordProtection( pwd, iv, salt, key, iptEnc, outEnc );
         }
     }
+
+
+    const PKZIP_OPTIONS =
+        {
+            archiver: AdmZip,
+            reviver: AdmZip,
+
+            overwrite: false,
+            keepOriginalPermission: false,
+
+            zipPath: null,
+            zipName: null,
+
+            filter: Filters.IDENTITY,
+
+            comment: null
+        };
+
+    const GZIP_OPTIONS =
+        {
+            archiver: zlib.createGzip,
+            reviver: zlib.createGunzip,
+            extension: ".gz"
+        };
+
+    const DEFLATE_OPTIONS =
+        {
+            archiver: zlib.createDeflate,
+            reviver: zlib.createInflate,
+            extension: ".z",
+        };
+
+    const INFLATE_OPTIONS =
+        {
+            archiver: zlib.createDeflate,
+            reviver: zlib.createInflate,
+            extension: ".z",
+        };
+
+    const BROTLI_OPTIONS =
+        {
+            archiver: zlib.createBrotliCompress,
+            reviver: zlib.createBrotliDecompress,
+            extension: ".br",
+        };
 
     /**
      * Represents configuration options for a compression operation.
@@ -949,7 +1046,7 @@ const $scope = constants?.$scope || function()
             this.#onError = isFunction( onError ) ? onError : null;
             this.#onSuccess = isFunction( onSuccess ) ? onSuccess : null;
 
-            this.#formatSpecificOptions = populateOptions( {}, pFormatSpecificOptions || {} );
+            this.#formatSpecificOptions = populateOptions( pFormatSpecificOptions || {}, PKZIP_OPTIONS );
         }
 
         get deleteSource()
@@ -983,10 +1080,16 @@ const $scope = constants?.$scope || function()
             const p = pPath;
             const recurse = pRecursive;
 
-            if ( me.deleteSource )
+            const deleteIt = me.deleteSource;
+
+            if ( deleteIt )
             {
                 return async( pPath, pRecursive ) =>
                 {
+                    if ( !deleteIt )
+                    {
+                        return;
+                    }
                     const target = pPath || p;
 
                     if ( isString( target ) && !isBlank( target ) )
@@ -1063,23 +1166,28 @@ const $scope = constants?.$scope || function()
         {
             const me = this;
 
-            const error = pError;
+            const error = resolveError( pError );
 
             const target = path.resolve( asString( pPath, true ) );
 
             return async( pError, pPath ) =>
             {
-                if ( isFunction( me || this ).onError )
-                {
-                    const errorSource = modName + "CompressionOptions::errorCallback";
+                const err = resolveError( pError, error );
 
-                    try
+                if ( err instanceof Error )
+                {
+                    if ( isFunction( me || this ).onError )
                     {
-                        await (me || this).onError.call( (me || this), pError || error, pPath || target );
-                    }
-                    catch( ex )
-                    {
-                        modulePrototype.reportError( ex, "executing error callback", S_ERROR, errorSource, pError || error, pPath || target );
+                        const errorSource = modName + "CompressionOptions::errorCallback";
+
+                        try
+                        {
+                            await (me || this).onError.call( (me || this), (err || pError || error), pPath || target );
+                        }
+                        catch( ex )
+                        {
+                            modulePrototype.reportError( ex, "executing error callback", S_ERROR, errorSource, (err || pError || error), pPath || target );
+                        }
                     }
                 }
             };
@@ -1087,53 +1195,9 @@ const $scope = constants?.$scope || function()
 
         get formatSpecificOptions()
         {
-            return this.#formatSpecificOptions || {};
+            return populateOptions( this.#formatSpecificOptions || {}, PKZIP_OPTIONS );
         }
     }
-
-    const PKZIP_OPTIONS =
-        {
-            archiver: AdmZip,
-            reviver: AdmZip,
-
-            overwrite: false,
-            keepOriginalPermission: false,
-
-            zipPath: null,
-            zipName: null,
-
-            filter: Filters.IDENTITY,
-
-            comment: null
-        };
-
-    const GZIP_OPTIONS =
-        {
-            archiver: zlib.createGzip,
-            reviver: zlib.createGunzip,
-            extension: ".gz"
-        };
-
-    const DEFLATE_OPTIONS =
-        {
-            archiver: zlib.createDeflate,
-            reviver: zlib.createInflate,
-            extension: ".z",
-        };
-
-    const INFLATE_OPTIONS =
-        {
-            archiver: zlib.createDeflate,
-            reviver: zlib.createInflate,
-            extension: ".z",
-        };
-
-    const BROTLI_OPTIONS =
-        {
-            archiver: zlib.createBrotliCompress,
-            reviver: zlib.createBrotliDecompress,
-            extension: ".br",
-        };
 
     CompressionOptions.DEFAULT = new CompressionOptions( false, null, DEFAULT_ENCODING, null, null, PKZIP_OPTIONS );
     CompressionOptions.PKZIP = new CompressionOptions( false, null, DEFAULT_ENCODING, null, null, PKZIP_OPTIONS );
@@ -1223,23 +1287,30 @@ const $scope = constants?.$scope || function()
 
         async function handleError( ex )
         {
-            const errorCallback = options.errorCallback( ex, inputPath );
-
-            if ( isFunction( errorCallback ) )
+            if ( ex instanceof Error )
             {
-                await errorCallback.call( options, ex, inputPath );
-            }
+                const makeCallback = options?.errorCallback;
 
-            modulePrototype.reportError( ex, "unzipping file", S_ERROR, errorSource, inputPath, outputPath );
+                const errorCallback = isFunction( makeCallback ) ? makeCallback( ex, inputPath ) : null;
+
+                if ( isFunction( errorCallback ) )
+                {
+                    errorCallback.call( options, ex, inputPath ).then( no_op ).catch( ex => modulePrototype.reportError( ex, "executing error callback", S_ERROR, errorSource, ex, inputPath ) );
+                }
+
+                modulePrototype.reportError( ex, "unzipping file", S_ERROR, errorSource, inputPath, outputPath );
+            }
         }
 
         async function handleSuccess( pRecursive )
         {
-            const successCallback = options.successCallback( inputPath, pRecursive );
+            const makeCallback = options?.successCallback;
+
+            const successCallback = isFunction( makeCallback ) ? makeCallback( inputPath, pRecursive ) : null;
 
             if ( isFunction( successCallback ) )
             {
-                await successCallback.call( options, inputPath, pRecursive );
+                successCallback.call( options, inputPath, pRecursive ).then( no_op ).catch( ex => modulePrototype.reportError( ex, "executing success callback", S_ERROR, errorSource, ex, inputPath, pRecursive ) );
             }
         }
 
@@ -1254,6 +1325,24 @@ const $scope = constants?.$scope || function()
             handleSuccess,
             errorSource
         };
+    }
+
+    function getPkZipSpecificOptions( pFormatSpecificOptions )
+    {
+        const options = populateOptions( pFormatSpecificOptions || {}, PKZIP_OPTIONS );
+
+        let zipPath = asString( options.zipPath, true );
+        zipPath = isBlank( zipPath ) ? null : zipPath;
+
+        let zipName = asString( options.zipName, true );
+        zipName = isBlank( zipName ) ? null : zipName;
+
+        const filter = Filters.IS_FILTER( options.filter ) ? options.filter : Filters.IDENTITY;
+
+        let comment = asString( options.comment, true );
+        comment = isBlank( comment ) ? null : comment;
+
+        return { zipPath, zipName, filter, comment };
     }
 
     /**
@@ -1324,7 +1413,7 @@ const $scope = constants?.$scope || function()
                     return false;
                 }
 
-                const zip = new AdmZip( inputPath );
+                const zip = new admZip( inputPath, { fs: fs } );
 
                 switch ( rightSide )
                 {
@@ -1485,18 +1574,9 @@ const $scope = constants?.$scope || function()
             handleSuccess
         } = await initializeArguments( pInputPath, pOutputPath, pOptions, errorSource );
 
-        let formatSpecificOptions = populateOptions( {}, options?.formatSpecificOptions || {} );
+        let formatSpecificOptions = populateOptions( options?.formatSpecificOptions || {}, PKZIP_OPTIONS );
 
-        let zipPath = asString( formatSpecificOptions.zipPath, true );
-        zipPath = isBlank( zipPath ) ? null : zipPath;
-
-        let zipName = asString( formatSpecificOptions.zipName, true );
-        zipName = isBlank( zipName ) ? null : zipName;
-
-        const filter = Filters.IS_FILTER( formatSpecificOptions.filter ) ? formatSpecificOptions.filter : Filters.IDENTITY;
-
-        let comment = asString( formatSpecificOptions.comment, true );
-        comment = isBlank( comment ) ? null : comment;
+        let { zipPath, zipName, filter, comment } = getPkZipSpecificOptions( formatSpecificOptions );
 
         let recursive = false;
 
@@ -1504,7 +1584,7 @@ const $scope = constants?.$scope || function()
 
         const extension = ".zip";
 
-        let zipper = new AdmZip( undefined, { fs: fs } );
+        let zipper = new admZip( undefined, { fs: fs } );
 
         switch ( leftSide )
         {
@@ -1520,7 +1600,7 @@ const $scope = constants?.$scope || function()
             case PIPE.BUFFER:
                 let buffer = isTypedArray( inputPath ) ? Buffer.copyBytesFrom( inputPath ) : Buffer.from( inputPath );
 
-                zipper = new AdmZip( buffer, { fs: fs } );
+                zipper = new admZip( buffer, { fs: fs } );
 
                 inputPath = zipPath || zipName || "FromBuffer";
 
@@ -1541,7 +1621,7 @@ const $scope = constants?.$scope || function()
                 {
                     await fsAsync.mkdir( path.dirname( outputPath ), { recursive: true } );
                 }
-                outputFilePath = path.join( outputPath, replaceExtension( path.basename( inputPath ), extension ) );
+                outputFilePath = path.resolve( outputPath, path.basename( replaceExtension( path.basename( inputPath ), extension ) ) );
                 break;
 
             case PIPE.BUFFER:
@@ -1558,7 +1638,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            modulePrototype.reportError( ex, "writing zip file", S_ERROR, modName + "::pkZip", pInputPath, pOutputPath, inputPath, outputPath, outputPath, pDeleteInputFiles, pCallback );
+            modulePrototype.reportError( ex, "writing zip file", S_ERROR, modName + "::pkZip", pInputPath, pOutputPath, inputPath, outputPath );
             return false;
         }
 
@@ -1591,36 +1671,55 @@ const $scope = constants?.$scope || function()
             handleSuccess
         } = await initializeArguments( pInputPath, pOutputPath, pOptions, errorSource );
 
-        let formatSpecificOptions = populateOptions( {}, options?.formatSpecificOptions || {} );
-
-        let zipper = formatSpecificOptions.archiver || null;
+        let formatSpecificOptions = populateOptions( options?.formatSpecificOptions || {}, PKZIP_OPTIONS );
 
         let extension = formatSpecificOptions.extension || ".zip";
 
-        const source = fs.createReadStream( inputPath );
-        const destination = fs.createWriteStream( replaceExtension( outputPath, extension ) );
+        let zipper = formatSpecificOptions.archiver || null;
 
-        let safeToDelete = false;
-
-        try
+        if ( zipper )
         {
-            await pipeline( source, zipper, destination );
-            safeToDelete = true;
-        }
-        catch( ex )
-        {
-            await handleError( ex );
-            safeToDelete = false;
+            const source = fs.createReadStream( inputPath );
+            const destination = fs.createWriteStream( replaceExtension( outputPath, extension ) );
+
+            let safeToDelete = false;
+
+            try
+            {
+                await pipeline( source, zipper, destination );
+                safeToDelete = true;
+            }
+            catch( ex )
+            {
+                await handleError( ex );
+                return false;
+            }
+
+            if ( options?.deleteSource && safeToDelete )
+            {
+                try
+                {
+                    await fsAsync.unlink( inputPath );
+                }
+                catch( ex )
+                {
+                    modulePrototype.reportError( ex, "deleting source file(s)", S_ERROR, modName + "::pipeToCompressedFile", pInputPath, pOutputPath, inputPath, outputPath );
+                }
+            }
+
+            try
+            {
+                await handleSuccess();
+            }
+            catch( ex )
+            {
+                modulePrototype.reportError( ex, "executing onSuccess callback", S_ERROR, modName + "::pipeToCompressedFile", pInputPath, pOutputPath, inputPath, outputPath );
+            }
+
+            return true;
         }
 
-        if ( safeToDelete )
-        {
-            await fsAsync.unlink( inputPath );
-        }
-
-        await handleSuccess();
-
-        return true;
+        return false;
     }
 
     async function pipeToUncompressedFile( pInputPath, pOutputPath, pOptions )
@@ -1916,6 +2015,11 @@ const $scope = constants?.$scope || function()
         {
             return this.compressionFormat?.compressionOptions;
         }
+
+        get formatSpecificOptions()
+        {
+            return this.compressionOptions?.formatSpecificOptions || {};
+        }
     }
 
     const DEFAULT_ARCHIVER_OPTIONS = new ArchiverOptions( _mt_str );
@@ -1965,6 +2069,16 @@ const $scope = constants?.$scope || function()
         get compressionFormat()
         {
             return CompressionFormat.resolve( this.#compressionFormat || this.options.compressionFormat ) || CompressionFormat.DEFAULT;
+        }
+
+        get compressionOptions()
+        {
+            return this.compressionFormat?.compressionOptions;
+        }
+
+        get formatSpecificOptions()
+        {
+            return this.compressionOptions?.formatSpecificOptions || {};
         }
 
         get compressionLevel()
@@ -2043,7 +2157,7 @@ const $scope = constants?.$scope || function()
 
             let outputPath = (path.resolve( directory, filename )).trim();
 
-            const format = this.compressionFormat();
+            const format = this.compressionFormat;
 
             const options = populateOptions( (pOptions || {}), format.compressionOptions );
 
@@ -2069,6 +2183,7 @@ const $scope = constants?.$scope || function()
                 },
             classes:
                 {
+                    PKZIP_CLASSES,
                     ArchiveEntry,
                     CompressionOptions,
                     CompressionFormat,
