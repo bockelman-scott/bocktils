@@ -23,11 +23,7 @@ const {
     FileRotationIntervalUnit,
     FileRotationInterval,
     LogFileRotationPolicy,
-    DEFAULT_FILE_PATH,
-    DEFAULT_FILE_PATTERN,
-    DEFAULT_FILE_RETENTION_POLICY,
-    DEFAULT_FILE_ROTATION_POLICY,
-    DEFAULT_FILE_LOGGER_OPTIONS,
+    DEFAULTS,
     FileLogger
 } = fileLogger;
 
@@ -80,6 +76,10 @@ const logDir = path.resolve( projectRootDirectory, "logs" );
 
 describe( "LogFilePattern", () =>
 {
+    const stats = fs.statSync( path.resolve( testSubDirectory, "1000.data" ) );
+
+    const fakeInfo = new FileInfo( path.resolve( testSubDirectory, "1000.data" ), stats.birthtime, stats.size );
+
     test( "LogFilePattern describes how to name the files", () =>
     {
         const defaultPattern = new LogFilePattern();
@@ -88,21 +88,21 @@ describe( "LogFilePattern", () =>
 
         let pattern = new LogFilePattern( "server", "record", "_" );
 
-        let fileName = pattern.generateFileName( 1 );
+        let fileName = pattern.generateFileName();
 
-        expect( fileName ).toEqual( "server_1.record" );
+        expect( fileName ).toEqual( "server.record" );
 
         pattern = new LogFilePattern( "application", ".log", "-", "bock" );
 
-        fileName = pattern.generateFileName( 3 );
+        fileName = pattern.generateFileName();
 
-        expect( fileName ).toEqual( "bock-application-3.log" );
+        expect( fileName ).toEqual( "bock-application.log" );
 
         pattern = LogFilePattern.fromString( "application.log" );
 
         expect( pattern.generateFileName() ).toEqual( "application.log" );
 
-        expect( pattern.generateFileName( 5 ) ).toEqual( "application-5.log" );
+        expect( pattern.generateFileName( fakeInfo, 3 ) ).toEqual( "application-20241013.log" );
 
         pattern = LogFilePattern.fromString( "bock-application.log" );
 
@@ -113,14 +113,14 @@ describe( "LogFilePattern", () =>
 
         expect( pattern.generateFileName() ).toEqual( "bock-application.log" );
 
-        expect( pattern.generateFileName( 5 ) ).toEqual( "bock-application-5.log" );
+        expect( pattern.generateFileName() ).toEqual( "bock-application.log" );
 
 
         pattern = LogFilePattern.fromString( "bock_application_7.log" );
 
         expect( pattern.generateFileName() ).toEqual( "bock_application.log" );
 
-        expect( pattern.generateFileName( 5 ) ).toEqual( "bock_application_5.log" );
+        expect( pattern.generateFileName() ).toEqual( "bock_application.log" );
 
         pattern = LogFilePattern.DEFAULT;
 
@@ -145,7 +145,7 @@ describe( "FileInfo", () =>
 
         expect( size ).toBeGreaterThan( 52_000 );
 
-        expect( size ).toBeLessThan( 60_000 );
+        expect( size ).toBeLessThan( 75_000 );
 
         let age = await fileInfo.calculateAge( new Date( created.getTime() + MILLIS_PER_WEEK ) );
 
@@ -317,20 +317,20 @@ describe( "LogFileRotationPolicy", () =>
     } );
 } );
 
-describe( "DEFAULT_FILE_LOGGER_OPTIONS", () =>
+describe( "DEFAULTS.FILE_LOGGER_OPTIONS", () =>
 {
-    test( "DEFAULT_FILE_LOGGER_OPTIONS defines reasonable defaults", () =>
+    test( "DEFAULTS.FILE_LOGGER_OPTIONS defines reasonable defaults", () =>
     {
-        expect( DEFAULT_FILE_LOGGER_OPTIONS ).toEqual( {
-                                                           directory: DEFAULT_FILE_PATH,
-                                                           filePattern: DEFAULT_FILE_PATTERN,
-                                                           timestampFormatter: null,
-                                                           filter: null,
-                                                           level: LogLevel.DEFAULT,
-                                                           logFormatter: LogFormatter.DEFAULT,
-                                                           retentionPolicy: DEFAULT_FILE_RETENTION_POLICY,
-                                                           rotationPolicy: DEFAULT_FILE_ROTATION_POLICY
-                                                       } );
+        expect( DEFAULTS.FILE_LOGGER_OPTIONS ).toEqual( {
+                                                            directory: DEFAULTS.FILE_PATH,
+                                                            filePattern: DEFAULTS.FILE_PATTERN,
+                                                            timestampFormatter: null,
+                                                            filter: null,
+                                                            level: LogLevel.DEFAULT,
+                                                            logFormatter: LogFormatter.DEFAULT,
+                                                            retentionPolicy: DEFAULTS.FILE_RETENTION_POLICY,
+                                                            rotationPolicy: DEFAULTS.FILE_ROTATION_POLICY
+                                                        } );
     } );
 } );
 

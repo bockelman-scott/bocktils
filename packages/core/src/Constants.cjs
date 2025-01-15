@@ -88,6 +88,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             asPhrase,
             isReadOnly,
             populateOptions,
+            mergeOptions,
             lock,
             deepFreeze,
             localCopy,
@@ -1881,6 +1882,10 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#populateOptions
              */
             populateOptions,
+
+
+            mergeOptions,
+
             /**
              * Returns true if the specified value is immutable.<br>
              * <br>

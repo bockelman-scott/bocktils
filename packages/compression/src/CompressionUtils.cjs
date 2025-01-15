@@ -41,8 +41,6 @@ const base64Utils = require( "@toolbocks/base64" );
  */
 const admZip = require( "adm-zip" );
 
-const { AdmZip } = admZip;
-
 const fs = require( "node:fs" );
 const fsAsync = require( "node:fs/promises" );
 const { pipeline } = require( "node:stream/promises" );
@@ -77,7 +75,9 @@ const $scope = constants?.$scope || function()
         _obj,
         resolveError,
         S_ERROR,
+        S_WARN,
         populateOptions,
+        mergeOptions,
         no_op,
         lock,
         classes
@@ -981,8 +981,8 @@ const $scope = constants?.$scope || function()
 
     const PKZIP_OPTIONS =
         {
-            archiver: AdmZip,
-            reviver: AdmZip,
+            archiver: admZip,
+            reviver: admZip,
 
             overwrite: false,
             keepOriginalPermission: false,
@@ -999,7 +999,8 @@ const $scope = constants?.$scope || function()
         {
             archiver: zlib.createGzip,
             reviver: zlib.createGunzip,
-            extension: ".gz"
+            extension: ".gz",
+            writeMetaData: true,
         };
 
     const DEFLATE_OPTIONS =
@@ -1038,15 +1039,15 @@ const $scope = constants?.$scope || function()
 
         #formatSpecificOptions = {};
 
-        constructor( deleteSource, passwordProtection, encoding, onError, onSuccess, pFormatSpecificOptions )
+        constructor( pDeleteSource, pPasswordProtection, pEncoding, pOnError, pOnSuccess, pFormatSpecificOptions )
         {
-            this.#deleteSource = !!deleteSource;
-            this.#passwordProtection = passwordProtection instanceof PasswordProtection ? passwordProtection : null;
-            this.#encoding = encoding;
-            this.#onError = isFunction( onError ) ? onError : null;
-            this.#onSuccess = isFunction( onSuccess ) ? onSuccess : null;
+            this.#deleteSource = !!pDeleteSource;
+            this.#passwordProtection = pPasswordProtection instanceof PasswordProtection ? pPasswordProtection : null;
+            this.#encoding = pEncoding;
+            this.#onError = isFunction( pOnError ) ? pOnError : null;
+            this.#onSuccess = isFunction( pOnSuccess ) ? pOnSuccess : null;
 
-            this.#formatSpecificOptions = populateOptions( pFormatSpecificOptions || {}, PKZIP_OPTIONS );
+            this.#formatSpecificOptions = populateOptions( pFormatSpecificOptions || {}, GZIP_OPTIONS );
         }
 
         get deleteSource()
@@ -1197,9 +1198,14 @@ const $scope = constants?.$scope || function()
         {
             return populateOptions( this.#formatSpecificOptions || {}, PKZIP_OPTIONS );
         }
+
+        clone()
+        {
+            return new CompressionOptions( this.deleteSource, this.passwordProtection, this.encoding, this.onError, this.onSuccess, this.formatSpecificOptions );
+        }
     }
 
-    CompressionOptions.DEFAULT = new CompressionOptions( false, null, DEFAULT_ENCODING, null, null, PKZIP_OPTIONS );
+    CompressionOptions.DEFAULT = new CompressionOptions( false, null, DEFAULT_ENCODING, null, null, GZIP_OPTIONS );
     CompressionOptions.PKZIP = new CompressionOptions( false, null, DEFAULT_ENCODING, null, null, PKZIP_OPTIONS );
     CompressionOptions.GZIP = new CompressionOptions( false, null, DEFAULT_ENCODING, null, null, GZIP_OPTIONS );
     CompressionOptions.DEFLATE = new CompressionOptions( false, null, DEFAULT_ENCODING, null, null, DEFLATE_OPTIONS );
@@ -1268,7 +1274,7 @@ const $scope = constants?.$scope || function()
      */
     async function initializeArguments( pInputPath, pOutputPath, pOptions, pErrorSource )
     {
-        const options = populateOptions( pOptions, CompressionOptions.DEFAULT );
+        const options = mergeOptions( pOptions, CompressionOptions.DEFAULT );
 
         const errorSource = asString( pErrorSource || (modName + "::initializeArguments"), true );
 
@@ -1329,7 +1335,7 @@ const $scope = constants?.$scope || function()
 
     function getPkZipSpecificOptions( pFormatSpecificOptions )
     {
-        const options = populateOptions( pFormatSpecificOptions || {}, PKZIP_OPTIONS );
+        const options = mergeOptions( pFormatSpecificOptions || {}, PKZIP_OPTIONS );
 
         let zipPath = asString( options.zipPath, true );
         zipPath = isBlank( zipPath ) ? null : zipPath;
@@ -1671,16 +1677,39 @@ const $scope = constants?.$scope || function()
             handleSuccess
         } = await initializeArguments( pInputPath, pOutputPath, pOptions, errorSource );
 
-        let formatSpecificOptions = populateOptions( options?.formatSpecificOptions || {}, PKZIP_OPTIONS );
+        let formatSpecificOptions = mergeOptions( options?.formatSpecificOptions, options, CompressionOptions.DEFAULT );
 
-        let extension = formatSpecificOptions.extension || ".zip";
+        let extension = formatSpecificOptions.extension || options.extension || ".gz";
 
-        let zipper = formatSpecificOptions.archiver || null;
+        let zipper = formatSpecificOptions.archiver || options.archiver || null;
+
+        if ( zipper instanceof admZip || zipper === pkZip )
+        {
+            return pkZip( pInputPath, pOutputPath, options );
+        }
+
+        if ( isFunction( zipper ) )
+        {
+            zipper = zipper();
+        }
 
         if ( zipper )
         {
+            if ( PIPE.FILE === rightSide )
+            {
+                outputPath = replaceExtension( outputPath, extension );
+            }
+            else if ( PIPE.DIRECTORY === rightSide )
+            {
+                outputPath = path.resolve( outputPath, path.basename( replaceExtension( path.basename( inputPath ), extension ) ) );
+            }
+            else
+            {
+                outputPath = new Uint8Array( 0 );
+            }
+
             const source = fs.createReadStream( inputPath );
-            const destination = fs.createWriteStream( replaceExtension( outputPath, extension ) );
+            const destination = fs.createWriteStream( outputPath );
 
             let safeToDelete = false;
 
@@ -1692,7 +1721,7 @@ const $scope = constants?.$scope || function()
             catch( ex )
             {
                 await handleError( ex );
-                return false;
+                return null;
             }
 
             if ( options?.deleteSource && safeToDelete )
@@ -1703,7 +1732,7 @@ const $scope = constants?.$scope || function()
                 }
                 catch( ex )
                 {
-                    modulePrototype.reportError( ex, "deleting source file(s)", S_ERROR, modName + "::pipeToCompressedFile", pInputPath, pOutputPath, inputPath, outputPath );
+                    modulePrototype.reportError( ex, "deleting source file(s)", S_ERROR, errorSource, pInputPath, pOutputPath, inputPath, outputPath );
                 }
             }
 
@@ -1713,18 +1742,96 @@ const $scope = constants?.$scope || function()
             }
             catch( ex )
             {
-                modulePrototype.reportError( ex, "executing onSuccess callback", S_ERROR, modName + "::pipeToCompressedFile", pInputPath, pOutputPath, inputPath, outputPath );
+                modulePrototype.reportError( ex, "executing onSuccess callback", S_ERROR, errorSource, pInputPath, pOutputPath, inputPath, outputPath );
             }
 
-            return true;
+            return outputPath;
         }
 
-        return false;
+        return null;
     }
 
     async function pipeToUncompressedFile( pInputPath, pOutputPath, pOptions )
     {
+        const errorSource = modName + "::pipeToUncompressedFile";
 
+        let {
+            options,
+            inputPath,
+            outputPath,
+            leftSide,
+            rightSide,
+            resolvePassword,
+            handleError,
+            handleSuccess
+        } = await initializeArguments( pInputPath, pOutputPath, pOptions, errorSource );
+
+        let formatSpecificOptions = mergeOptions( options?.formatSpecificOptions, options, CompressionOptions.DEFAULT );
+
+        let unzipper = formatSpecificOptions.reviver || options.reviver || null;
+
+        if ( unzipper instanceof admZip || unzipper === pkUnZip )
+        {
+            return pkUnZip( pInputPath, pOutputPath, options );
+        }
+
+        if ( isFunction( unzipper ) )
+        {
+            unzipper = unzipper();
+        }
+
+        if ( unzipper )
+        {
+            if ( PIPE.DIRECTORY === rightSide )
+            {
+                outputPath = path.resolve( outputPath, path.basename( removeExtension( path.basename( inputPath ) ) ) );
+            }
+            else
+            {
+                outputPath = new Uint8Array( 0 );
+            }
+
+            const source = fs.createReadStream( inputPath );
+            const destination = fs.createWriteStream( outputPath );
+
+            let safeToDelete = false;
+
+            try
+            {
+                await pipeline( source, unzipper, destination );
+                safeToDelete = true;
+            }
+            catch( ex )
+            {
+                await handleError( ex );
+                return null;
+            }
+
+            if ( options?.deleteSource && safeToDelete )
+            {
+                try
+                {
+                    await fsAsync.unlink( inputPath );
+                }
+                catch( ex )
+                {
+                    modulePrototype.reportError( ex, "deleting source file(s)", S_ERROR, errorSource, pInputPath, pOutputPath, inputPath, outputPath );
+                }
+            }
+
+            try
+            {
+                await handleSuccess();
+            }
+            catch( ex )
+            {
+                modulePrototype.reportError( ex, "executing onSuccess callback", S_ERROR, errorSource, pInputPath, pOutputPath, inputPath, outputPath );
+            }
+
+            return outputPath;
+        }
+
+        return null;
     }
 
     /**
@@ -1755,7 +1862,7 @@ const $scope = constants?.$scope || function()
          */
         constructor( pName, pSignatures, pDecompressionFunction, pCompressionFunction, pOptions = CompressionOptions.DEFAULT )
         {
-            const options = populateOptions( pOptions, CompressionOptions.DEFAULT );
+            const options = mergeOptions( pOptions, CompressionOptions.DEFAULT );
 
             this.#compressionOptions = options;
 
@@ -1783,7 +1890,7 @@ const $scope = constants?.$scope || function()
 
         get compressionOptions()
         {
-            return populateOptions( {}, this.#compressionOptions || CompressionOptions.DEFAULT );
+            return mergeOptions( this.#compressionOptions || {}, CompressionOptions.DEFAULT );
         }
 
         get decompressionFunction()
@@ -1793,7 +1900,7 @@ const $scope = constants?.$scope || function()
 
         decompress( pInputPath, pOutputPath, pOptions )
         {
-            this.decompressionFunction.call( this, pInputPath, pOutputPath, populateOptions( (pOptions || this.compressionOptions), this.compressionOptions ) );
+            this.decompressionFunction.call( this, pInputPath, pOutputPath, mergeOptions( (pOptions || this.compressionOptions), this.compressionOptions ) );
         }
 
         get compressionFunction()
@@ -1803,7 +1910,7 @@ const $scope = constants?.$scope || function()
 
         compress( pInputPath, pOutputPath, pOptions )
         {
-            this.compressionFunction.call( this, pInputPath, pOutputPath, populateOptions( (pOptions || this.compressionOptions), this.compressionOptions ) );
+            this.compressionFunction.call( this, pInputPath, pOutputPath, mergeOptions( (pOptions || this.compressionOptions), this.compressionOptions ) );
         }
 
         equals( pOther )
@@ -1817,6 +1924,11 @@ const $scope = constants?.$scope || function()
                 return ucase( asString( this.name, true ) === ucase( asString( pOther, true ) ) );
             }
             return false;
+        }
+
+        clone()
+        {
+            return new this.constructor( this.name, this.signatures, this.decompressionFunction, this.compressionFunction, this.compressionOptions );
         }
 
         static getInstance( pName )
@@ -1935,7 +2047,7 @@ const $scope = constants?.$scope || function()
 
         #deleteSource = true;
 
-        constructor( pOutputDirectory, pCompressionFormat = SUPPORTED_FORMATS.DEFAULT, pCompressionLevel = 6, pPasswordProtection = null, pOnSuccess = no_op, pOnFailure = no_op, pDeleteSource = true )
+        constructor( pOutputDirectory, pCompressionFormat = CompressionFormat.DEFAULT, pCompressionLevel = 6, pPasswordProtection = null, pOnSuccess = no_op, pOnFailure = no_op, pDeleteSource = true )
         {
             this.#outputDirectory = (_mt_str + (pOutputDirectory || _mt_str)).trim();
 
@@ -2020,6 +2132,11 @@ const $scope = constants?.$scope || function()
         {
             return this.compressionOptions?.formatSpecificOptions || {};
         }
+
+        clone()
+        {
+            return new this.constructor( this.outputDirectory, this.compressionFormat, this.compressionLevel, this.passwordProtection, this.onSuccess, this.onFailure, this.deleteSource );
+        }
     }
 
     const DEFAULT_ARCHIVER_OPTIONS = new ArchiverOptions( _mt_str );
@@ -2039,7 +2156,7 @@ const $scope = constants?.$scope || function()
 
         constructor( pOutputDirectory, pOptions = DEFAULT_ARCHIVER_OPTIONS )
         {
-            const options = populateOptions( pOptions, new ArchiverOptions( pOutputDirectory ) );
+            const options = mergeOptions( pOptions || {}, new ArchiverOptions( pOutputDirectory ), DEFAULT_ARCHIVER_OPTIONS );
 
             this.#options = options;
 
@@ -2058,7 +2175,7 @@ const $scope = constants?.$scope || function()
 
         get options()
         {
-            return Object.assign( {}, this.#options || {} );
+            return mergeOptions( this.#options, DEFAULT_ARCHIVER_OPTIONS );
         }
 
         get outputDirectory()
@@ -2159,13 +2276,18 @@ const $scope = constants?.$scope || function()
 
             const format = this.compressionFormat;
 
-            const options = populateOptions( (pOptions || {}), format.compressionOptions );
+            const options = mergeOptions( (pOptions || {}), format.compressionOptions );
 
-            return await format.compress( filename, outputPath, populateOptions( options, this.options ) );
+            return await format.compress( filename, outputPath, mergeOptions( options, this.options ) );
         }
 
         async decompress( pFilepath, pOptions )
         {
+        }
+
+        clone()
+        {
+            return new this.constructor( this.outputDirectory, this.options );
         }
     }
 

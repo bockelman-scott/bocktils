@@ -225,6 +225,11 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
             this.#fetch = _ud !== typeof fetch && _fun === typeof fetch ? fetch : null;
         }
 
+        clone()
+        {
+            return new ExecutionEnvironment( this.globalScope );
+        }
+
         get globalScope()
         {
             return this.#globalScope || $scope();
@@ -399,6 +404,11 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
         static get [Symbol.species]()
         {
             return this;
+        }
+
+        clone()
+        {
+            return new BockModuleEvent( this.type, this.detail );
         }
 
         /**
@@ -714,6 +724,11 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
             this.#fileName = this.#parts.fileName;
             this.#lineNumber = this.#parts.lineNumber;
             this.#columnNumber = this.#parts.columnNumber;
+
+            this.clone = function()
+            {
+                return new this.constructor( this.#stack, pError );
+            };
         }
 
         /**
@@ -821,6 +836,7 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
             this.#columnNumber = this.#columnNumber || this.parts?.columnNumber;
             return this.#columnNumber || this.parts?.columnNumber;
         }
+
     }
 
     /**
@@ -966,6 +982,11 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
                 logger[level]( this.toString(), this.options );
             }
         }
+
+        clone()
+        {
+            return new this.constructor( this.message, this.options );
+        }
     }
 
     /**
@@ -1010,6 +1031,11 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
         toString()
         {
             return this.prefix + ((this.message || super.message).replace( this.prefix, _mt_str ));
+        }
+
+        clone()
+        {
+            return new this.constructor( this.message, this.options );
         }
     }
 
@@ -1138,6 +1164,11 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
         {
             return this.#source;
         }
+
+        clone()
+        {
+            return new this.constructor( this.module, this.method, this.fileName, this.lineNumber, this.columnNumber );
+        }
     }
 
     /**
@@ -1218,6 +1249,15 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
             this.#name = (_str === typeof pName ? pName : _mt_str) || ("StatefulListener_" + String( this.#id ));
 
             this.#options = populateOptions( pOptions, {} );
+
+            this.clone = function()
+            {
+                let copy = { ...this };
+                copy.id = this.id;
+                copy.prototype = this.constructor;
+                copy.constructor = this.constructor;
+                return copy;
+            };
         }
 
         /**
@@ -1334,6 +1374,7 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
 
             return (this.#id - (pOther?.id || 1));
         }
+
     }
 
     /**
@@ -1429,6 +1470,14 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
             // cache this module to avoid unnecessary reconstruction
             MODULE_CACHE[this.#moduleName] = this;
             MODULE_CACHE[this.#cacheKey] = this;
+        }
+
+        clone()
+        {
+            const copy = { ...this };
+            copy.prototype = this.constructor;
+            copy.constructor = this.constructor;
+            return copy;
         }
 
         /**
@@ -2015,6 +2064,11 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
         return mod;
     }
 
+    function isObjectLiteral( pObject )
+    {
+        return ( _obj === typeof pObject ) &&  (Object.prototype.toString.call( pObject ) === "[object Object]" || Object.getPrototypeOf( pObject ) === null);
+    }
+
     /**
      * Returns a deep copy of the value specified.
      * <br>
@@ -2115,7 +2169,7 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
                 }
                 else
                 {
-                    clone = Object.assign( {}, pObject );
+                    clone = (_fun === typeof pObject?.clone) ? pObject.clone() : !isObjectLiteral( pObject ) ? pObject : Object.assign( {}, pObject );
 
                     if ( depth > 0 )
                     {
@@ -2126,6 +2180,8 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
                         try
                         {
                             const entries = Object.entries( pObject );
+
+                            // Object.getOwnPropertyDescriptors( pObject );
 
                             for( let entry of entries )
                             {
@@ -2190,6 +2246,67 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
         options.freeze = true;
         return _copy( pObject, options, pStack );
     };
+
+
+    function mergeOptions( pOptions, ...pDefaults )
+    {
+        const maxMergeDepth = 12;
+
+        let obj = {};
+
+        let arr = [...(pDefaults || [])].filter( e => _obj === typeof e && null != e );
+
+        arr.unshift( localCopy( pOptions || {} ) );
+
+        arr = arr.filter( e => _obj === typeof e && null != e ).map( e => localCopy( e ) );
+
+        function merge( pDepth, pObj, pValue, pKey )
+        {
+            const kee = (_mt_str + (pKey || pObj || "value"));
+
+            const o = (_obj === typeof pObj) ? (pObj || { [kee]: pValue }) : { [kee]: pObj || {} };
+
+            const val = localCopy( (_obj === typeof pValue) ? (pValue || { [kee]: pValue }) : { [kee]: pValue } );
+
+            if ( pDepth > maxMergeDepth )
+            {
+                return val || o;
+            }
+
+            const kvPairs = Object.entries( val );
+
+            for( const [k, v] of kvPairs )
+            {
+                if ( null === v || _ud === typeof v )
+                {
+                    continue;
+                }
+                o[k] = ( !(k in o) || null === o[k]) ? v : ((_obj === typeof v) ? merge( ++pDepth, o[k], v, k ) : v);
+            }
+
+            return o;
+        }
+
+        for( let i = arr.length; i--; )
+        {
+            const entries = Object.entries( arr[i] || {} );
+
+            for( const [key, value] of entries )
+            {
+                let mergeDepth = 0;
+
+                if ( null === value || _ud === typeof value )
+                {
+                    continue;
+                }
+
+                obj[key] = ( !(key in obj) || null === obj[key] || _ud === typeof obj[key]) ? value : ((_obj === typeof value && _obj === typeof obj[key]) ? merge( ++mergeDepth, obj[key], value, key ) : (_obj === typeof obj[key] ? merge( ++mergeDepth, obj[key], { [key]: value }, key ) : value));
+            }
+        }
+
+        return obj;
+    }
+
 
     /**
      * Returns a read-only copy of an object,
@@ -2364,6 +2481,11 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
             this.#reverse = true === options?.reverse;
             this.#coerce = true === options?.coerce;
             this.#maxStackSize = Math.max( 2, _getMaxStackSize( options ) );
+        }
+
+        clone()
+        {
+            return new ComparatorFactory( this.type, this.options );
         }
 
         /**
@@ -2932,6 +3054,7 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
 
             isReadOnly,
             populateOptions,
+            mergeOptions,
             lock,
             deepFreeze,
             DEFAULT_COPY_OPTIONS,

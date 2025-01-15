@@ -22,12 +22,20 @@ const {
     replaceExtension,
     pkUnZip,
     pkZip,
+    pipeToCompressedFile,
+    pipeToUncompressedFile,
     isEmptyArchive,
     isSafeArchive,
     getEntryCount,
     getEntries,
     getEntry,
-    calculateTotalUncompressedSize
+    calculateTotalUncompressedSize,
+    CompressionOptions,
+    PKZIP_OPTIONS,
+    GZIP_OPTIONS,
+    DEFLATE_OPTIONS,
+    INFLATE_OPTIONS,
+    BROTLI_OPTIONS,
 } = zipUtils;
 
 const utf8 = "utf-8";
@@ -408,15 +416,89 @@ describe( "pkZip", () =>
           } );
 } );
 
-
 describe( "pipeToCompressedFile", () =>
 {
-    test( "pipe it",
+    test( "pipe it to GZIP",
           async() =>
           {
+              const zippedFileName = "text_1.gz";
+              const unzippedFileName = "text_1.txt";
 
+              const inputPath = path.resolve( textFilesDir, unzippedFileName );
+              const outputPath = path.resolve( zippedFilesDir );
+
+              const originalContents = await fsAsync.readFile( inputPath, { encoding: utf8 } );
+
+              let compressionOptions = CompressionOptions.DEFAULT;
+
+              let compressedFilePath = await pipeToCompressedFile( inputPath, outputPath, compressionOptions );
+
+              const entries = await fsAsync.readdir( outputPath, { withFileTypes: true } );
+
+              let found = false;
+
+              for( const entry of entries )
+              {
+                  if ( entry && entry.isFile() && entry.name === zippedFileName )
+                  {
+                      found = true;
+                      break;
+                  }
+              }
+
+              expect( found ).toBe( true );
+
+              let uncompressedFilePath = await pipeToUncompressedFile( compressedFilePath, unzippedFilesDir, compressionOptions );
+
+              const contents = await fsAsync.readFile( uncompressedFilePath, { encoding: utf8 } );
+
+              expect( contents ).toEqual( originalContents );
+
+              await fsAsync.unlink( compressedFilePath );
+              await fsAsync.unlink( uncompressedFilePath );
           } );
-});
+
+    test( "pipe it to DEFLATE",
+          async() =>
+          {
+              const zippedFileName = "text_1.z";
+              const unzippedFileName = "text_1.txt";
+
+              const inputPath = path.resolve( textFilesDir, unzippedFileName );
+              const outputPath = path.resolve( zippedFilesDir );
+
+              const originalContents = await fsAsync.readFile( inputPath, { encoding: utf8 } );
+
+              let compressionOptions = CompressionOptions.DEFLATE;
+
+              let compressedFilePath = await pipeToCompressedFile( inputPath, outputPath, compressionOptions );
+
+              const entries = await fsAsync.readdir( outputPath, { withFileTypes: true } );
+
+              let found = false;
+
+              for( const entry of entries )
+              {
+                  if ( entry && entry.isFile() && entry.name === zippedFileName )
+                  {
+                      found = true;
+                      break;
+                  }
+              }
+
+              expect( found ).toBe( true );
+
+              let uncompressedFilePath = await pipeToUncompressedFile( compressedFilePath, unzippedFilesDir, compressionOptions );
+
+              const contents = await fsAsync.readFile( uncompressedFilePath, { encoding: utf8 } );
+
+              expect( contents ).toEqual( originalContents );
+
+              await fsAsync.unlink( compressedFilePath );
+              await fsAsync.unlink( uncompressedFilePath );
+          } );
+
+} );
 
 
 describe( "Test Archive Files", () =>
