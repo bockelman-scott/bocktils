@@ -2066,7 +2066,13 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
 
     function isObjectLiteral( pObject )
     {
-        return ( _obj === typeof pObject ) &&  (Object.prototype.toString.call( pObject ) === "[object Object]" || Object.getPrototypeOf( pObject ) === null);
+        if ( _obj === typeof pObject && null != pObject )
+        {
+            let constructorFunction = pObject.constructor || Object.getPrototypeOf( pObject )?.constructor;
+
+            return (_fun !== typeof constructorFunction || ("Object" === constructorFunction.name || Object === constructorFunction));
+        }
+        return false;
     }
 
     /**
@@ -2169,43 +2175,60 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
                 }
                 else
                 {
-                    clone = (_fun === typeof pObject?.clone) ? pObject.clone() : !isObjectLiteral( pObject ) ? pObject : Object.assign( {}, pObject );
-
-                    if ( depth > 0 )
+                    if ( _fun === typeof pObject?.clone )
                     {
-                        options.depth = depth - 1;
+                        clone = pObject.clone();
+                    }
+                    else
+                    {
+                        clone = !isObjectLiteral( pObject ) ? pObject : Object.assign( {}, pObject );
 
-                        stack.push( clone );
-
-                        try
+                        if ( depth > 0 )
                         {
-                            const entries = Object.entries( pObject );
+                            options.depth = depth - 1;
 
-                            // Object.getOwnPropertyDescriptors( pObject );
+                            stack.push( clone );
 
-                            for( let entry of entries )
+                            try
                             {
-                                const key = entry[0];
-                                const value = entry[1];
+                                const entries = objectEntries( pObject );
 
-                                clone[key] = _copy( value, options, stack.concat( key ) );
-
-                                if ( _fun === typeof clone[key] )
+                                for( let entry of entries )
                                 {
+                                    if ( null == entry || entry?.length < 2 )
+                                    {
+                                        continue;
+                                    }
+
+                                    const key = entry[0];
+                                    const value = entry[1];
+
                                     try
                                     {
-                                        clone[key].bind( clone );
+                                        clone[key] = _copy( value, options, stack.concat( key ) );
                                     }
-                                    catch( ex )
+                                    catch( exSet )
                                     {
-                                        GLOBAL_INSTANCE.reportError( ex, key + " could not be bound to the clone", S_WARN, this?.name );
+                                        //ignore
+                                    }
+
+                                    if ( _fun === typeof clone[key] )
+                                    {
+                                        try
+                                        {
+                                            clone[key].bind( clone );
+                                        }
+                                        catch( ex )
+                                        {
+                                            GLOBAL_INSTANCE.reportError( ex, key + " could not be bound to the clone", S_WARN, this?.name );
+                                        }
                                     }
                                 }
                             }
-                        }
-                        finally
-                        {
-                            stack.pop();
+                            finally
+                            {
+                                stack.pop();
+                            }
                         }
                     }
                 }
@@ -2247,6 +2270,44 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
         return _copy( pObject, options, pStack );
     };
 
+    function objectEntries( pObject )
+    {
+        let entries = [];
+
+        if ( _obj === typeof pObject )
+        {
+            (Object.entries( pObject || {} )).forEach( e => entries.push( e ) );
+
+            if ( isObjectLiteral( pObject ) && entries.length > 0 )
+            {
+                return entries;
+            }
+
+            const propertyNames = [...Object.getOwnPropertyNames( pObject ), ...Object.getOwnPropertySymbols( pObject )];
+
+            propertyNames.forEach( ( key ) =>
+                                   {
+                                       const value = pObject[key];
+                                       if ( null != value )
+                                       {
+                                           entries.push( [key, value] );
+                                       }
+                                   } );
+
+            let source = _fun === typeof pObject?.constructor ? Function.prototype.toString.call( pObject.constructor ) : _str;
+            let rx = /(get +(\w+)\( *\))|(#(\w)[;\r\n,])/;
+            let matches = rx.exec( source );
+            while ( matches && matches?.length > 2 && source?.length > 4 )
+            {
+                let match = matches[2];
+                entries.push( [match, pObject[match]] );
+                source = source.slice( matches.index + match.length + 4 );
+                matches = rx.exec( source );
+            }
+        }
+
+        return [...new Set( entries )].filter( e => null != e[1] );
+    }
 
     function mergeOptions( pOptions, ...pDefaults )
     {
@@ -2256,7 +2317,7 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
 
         let arr = [...(pDefaults || [])].filter( e => _obj === typeof e && null != e );
 
-        arr.unshift( localCopy( pOptions || {} ) );
+        arr.unshift( pOptions || {} );
 
         arr = arr.filter( e => _obj === typeof e && null != e ).map( e => localCopy( e ) );
 
@@ -2273,7 +2334,7 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
                 return val || o;
             }
 
-            const kvPairs = Object.entries( val );
+            const kvPairs = objectEntries( val );
 
             for( const [k, v] of kvPairs )
             {
@@ -2289,7 +2350,7 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
 
         for( let i = arr.length; i--; )
         {
-            const entries = Object.entries( arr[i] || {} );
+            let entries = objectEntries( arr[i] );
 
             for( const [key, value] of entries )
             {

@@ -383,7 +383,10 @@ describe( "pkZip", () =>
     test( "zip text_01.txt",
           async() =>
           {
-              const inputPath = path.resolve( textFilesDir + "/text_1.txt" );
+              const txtFileName = "text_1.txt";
+              const zipFileName = "text_1.zip";
+
+              const inputPath = path.resolve( textFilesDir, txtFileName );
               const outputPath = path.resolve( zippedFilesDir );
 
               const originalContents = await fsAsync.readFile( inputPath, { encoding: utf8 } );
@@ -396,7 +399,7 @@ describe( "pkZip", () =>
 
               for( const entry of entries )
               {
-                  if ( entry && entry.isFile() && entry.name === "text_1.zip" )
+                  if ( entry && entry.isFile() && entry.name === zipFileName )
                   {
                       found = true;
                       break;
@@ -405,14 +408,14 @@ describe( "pkZip", () =>
 
               expect( found ).toBe( true );
 
-              await pkUnZip( path.resolve( outputPath + "/text_1.zip" ), unzippedFilesDir );
+              await pkUnZip( path.resolve( outputPath, zipFileName ), unzippedFilesDir );
 
-              const contents = await fsAsync.readFile( path.resolve( unzippedFilesDir + "/text_1.txt" ), { encoding: utf8 } );
+              const contents = await fsAsync.readFile( path.resolve( unzippedFilesDir,  txtFileName ), { encoding: utf8 } );
 
               expect( contents ).toEqual( originalContents );
 
-              await fsAsync.unlink( path.resolve( outputPath + "/text_1.zip" ) );
-              await fsAsync.unlink( path.resolve( unzippedFilesDir + "/text_1.txt" ) );
+              await fsAsync.unlink( path.resolve( outputPath, zipFileName ) );
+              await fsAsync.unlink( path.resolve( unzippedFilesDir, txtFileName ) );
           } );
 } );
 

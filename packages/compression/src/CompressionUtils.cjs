@@ -978,21 +978,22 @@ const $scope = constants?.$scope || function()
         }
     }
 
-
     const PKZIP_OPTIONS =
         {
             archiver: admZip,
             reviver: admZip,
 
+            extension: ".zip",
+
             overwrite: false,
             keepOriginalPermission: false,
 
-            zipPath: null,
-            zipName: null,
+            zipPath: _mt_str,
+            zipName: _mt_str,
 
             filter: Filters.IDENTITY,
 
-            comment: null
+            comment: _mt_str
         };
 
     const GZIP_OPTIONS =
@@ -1386,7 +1387,7 @@ const $scope = constants?.$scope || function()
      *
      * @type {CompressionFunction}
      */
-    async function pkUnZip( pInputPath, pOutputPath, pOptions )
+    async function pkUnZip( pInputPath, pOutputPath, pOptions = CompressionOptions.PKZIP )
     {
         const errorSource = modName + "::pkUnZip";
 
@@ -1401,7 +1402,7 @@ const $scope = constants?.$scope || function()
             handleSuccess
         } = await initializeArguments( pInputPath, pOutputPath, pOptions, errorSource );
 
-        let formatSpecificOptions = populateOptions( {}, options?.formatSpecificOptions || {} );
+        let formatSpecificOptions = populateOptions( options?.formatSpecificOptions || {}, PKZIP_OPTIONS );
 
         const overwrite = formatSpecificOptions.overwrite;
         const keepOriginalPermission = formatSpecificOptions.keepOriginalPermission;
@@ -1565,7 +1566,7 @@ const $scope = constants?.$scope || function()
      *
      * @type {CompressionFunction}
      */
-    async function pkZip( pInputPath, pOutputPath, pOptions )
+    async function pkZip( pInputPath, pOutputPath, pOptions = CompressionOptions.PKZIP )
     {
         const errorSource = modName + "::pkZip";
 
@@ -1662,7 +1663,7 @@ const $scope = constants?.$scope || function()
      *
      * @type {CompressionFunction}
      */
-    async function pipeToCompressedFile( pInputPath, pOutputPath, pOptions )
+    async function pipeToCompressedFile( pInputPath, pOutputPath, pOptions = CompressionOptions.DEFAULT )
     {
         const errorSource = modName + "::pipeToCompressedFile";
 
@@ -1751,7 +1752,7 @@ const $scope = constants?.$scope || function()
         return null;
     }
 
-    async function pipeToUncompressedFile( pInputPath, pOutputPath, pOptions )
+    async function pipeToUncompressedFile( pInputPath, pOutputPath, pOptions = CompressionOptions.DEFAULT )
     {
         const errorSource = modName + "::pipeToUncompressedFile";
 
