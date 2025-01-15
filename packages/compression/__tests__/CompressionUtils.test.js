@@ -36,6 +36,7 @@ const {
     DEFLATE_OPTIONS,
     INFLATE_OPTIONS,
     BROTLI_OPTIONS,
+    CompressionFormat
 } = zipUtils;
 
 const utf8 = "utf-8";
@@ -410,7 +411,7 @@ describe( "pkZip", () =>
 
               await pkUnZip( path.resolve( outputPath, zipFileName ), unzippedFilesDir );
 
-              const contents = await fsAsync.readFile( path.resolve( unzippedFilesDir,  txtFileName ), { encoding: utf8 } );
+              const contents = await fsAsync.readFile( path.resolve( unzippedFilesDir, txtFileName ), { encoding: utf8 } );
 
               expect( contents ).toEqual( originalContents );
 
@@ -501,6 +502,106 @@ describe( "pipeToCompressedFile", () =>
               await fsAsync.unlink( uncompressedFilePath );
           } );
 
+    test( "pipe it to BROTLI",
+          async() =>
+          {
+              const zippedFileName = "text_1.br";
+              const unzippedFileName = "text_1.txt";
+
+              const inputPath = path.resolve( textFilesDir, unzippedFileName );
+              const outputPath = path.resolve( zippedFilesDir );
+
+              const originalContents = await fsAsync.readFile( inputPath, { encoding: utf8 } );
+
+              let compressionOptions = CompressionOptions.BROTLI;
+
+              let compressedFilePath = await pipeToCompressedFile( inputPath, outputPath, compressionOptions );
+
+              const entries = await fsAsync.readdir( outputPath, { withFileTypes: true } );
+
+              let found = false;
+
+              for( const entry of entries )
+              {
+                  if ( entry && entry.isFile() && entry.name === zippedFileName )
+                  {
+                      found = true;
+                      break;
+                  }
+              }
+
+              expect( found ).toBe( true );
+
+              let uncompressedFilePath = await pipeToUncompressedFile( compressedFilePath, unzippedFilesDir, compressionOptions );
+
+              const contents = await fsAsync.readFile( uncompressedFilePath, { encoding: utf8 } );
+
+              expect( contents ).toEqual( originalContents );
+
+              await fsAsync.unlink( compressedFilePath );
+              await fsAsync.unlink( uncompressedFilePath );
+          } );
+} );
+
+
+describe( "CompressionFormat", () =>
+{
+    test( "Detect Format from File",
+          async() =>
+          {
+              const formats = CompressionFormat.getFormats( ( e ) => e.extension !== ".zip" );
+
+              let zippedFileName = "text_0";
+              const unzippedFileName = "text_0.txt";
+
+              const inputPath = path.resolve( textFilesDir, unzippedFileName );
+              const outputPath = path.resolve( zippedFilesDir );
+
+              const files = [];
+
+              const originalContents = await fsAsync.readFile( inputPath, { encoding: utf8 } );
+
+              for( const format of formats )
+              {
+                  let compressionOptions = format.compressionOptions;
+
+                  zippedFileName = "text_0" + (compressionOptions.extension || format.extension);
+
+                  files.push( zippedFileName );
+
+                  let compressedFilePath = await pipeToCompressedFile( inputPath, outputPath, compressionOptions );
+
+                  files.push( compressedFilePath );
+
+                  const entries = await fsAsync.readdir( outputPath, { withFileTypes: true } );
+
+                  let found = false;
+
+                  for( const entry of entries )
+                  {
+                      if ( entry && entry.isFile() && entry.name === zippedFileName )
+                      {
+                          found = true;
+                          break;
+                      }
+                  }
+
+                  expect( found ).toBe( true );
+
+                  let uncompressedFilePath = await pipeToUncompressedFile( compressedFilePath, unzippedFilesDir, compressionOptions );
+
+                  files.push( uncompressedFilePath );
+
+                  const contents = await fsAsync.readFile( uncompressedFilePath, { encoding: utf8 } );
+
+                  expect( contents ).toEqual( originalContents );
+
+                  await fsAsync.unlink( compressedFilePath );
+                  await fsAsync.unlink( uncompressedFilePath );
+              }
+
+              console.log( files );
+          } );
 } );
 
 

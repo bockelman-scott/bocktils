@@ -102,7 +102,7 @@ const $scope = constants?.$scope || function()
 
     const { asString, asInt, isBlank, lcase, ucase, toAbsolutePath } = stringUtils;
 
-    const { asArray, Filters, Mappers } = arrayUtils;
+    const { varargs, asArray, Filters, Mappers } = arrayUtils;
 
     if ( _ud === typeof CustomEvent )
     {
@@ -1001,7 +1001,8 @@ const $scope = constants?.$scope || function()
             archiver: zlib.createGzip,
             reviver: zlib.createGunzip,
             extension: ".gz",
-            writeMetaData: true,
+
+            filter: Filters.IDENTITY
         };
 
     const DEFLATE_OPTIONS =
@@ -1009,6 +1010,8 @@ const $scope = constants?.$scope || function()
             archiver: zlib.createDeflate,
             reviver: zlib.createInflate,
             extension: ".z",
+
+            filter: Filters.IDENTITY
         };
 
     const INFLATE_OPTIONS =
@@ -1016,6 +1019,8 @@ const $scope = constants?.$scope || function()
             archiver: zlib.createDeflate,
             reviver: zlib.createInflate,
             extension: ".z",
+
+            filter: Filters.IDENTITY
         };
 
     const BROTLI_OPTIONS =
@@ -1023,6 +1028,8 @@ const $scope = constants?.$scope || function()
             archiver: zlib.createBrotliCompress,
             reviver: zlib.createBrotliDecompress,
             extension: ".br",
+
+            filter: Filters.IDENTITY
         };
 
     /**
@@ -1197,7 +1204,22 @@ const $scope = constants?.$scope || function()
 
         get formatSpecificOptions()
         {
-            return populateOptions( this.#formatSpecificOptions || {}, PKZIP_OPTIONS );
+            return populateOptions( this.#formatSpecificOptions || {}, GZIP_OPTIONS );
+        }
+
+        get extension()
+        {
+            return this.formatSpecificOptions?.extension || _mt_str;
+        }
+
+        get archiver()
+        {
+            return this.formatSpecificOptions?.archiver || null;
+        }
+
+        get reviver()
+        {
+            return this.formatSpecificOptions?.reviver || null;
         }
 
         clone()
@@ -1220,6 +1242,11 @@ const $scope = constants?.$scope || function()
             DIRECTORY: 3,
         };
 
+    function isBuffer( pPath )
+    {
+        return isArray( pPath ) || isTypedArray( pPath ) || pPath instanceof Buffer;
+    }
+
     CompressionOptions.calculatePipe = async function( pInput, pOutput )
     {
         const { inputPath, outputPath } = _resolveInputOutput( pInput, pOutput );
@@ -1229,12 +1256,12 @@ const $scope = constants?.$scope || function()
 
         if ( isString( inputPath ) )
         {
-            leftSide = isArray( inputPath ) ? PIPE.BUFFER : await isFile( inputPath ) ? PIPE.FILE : await isDirectory( inputPath ) ? PIPE.DIRECTORY : 0;
+            leftSide = isBuffer( inputPath ) ? PIPE.BUFFER : await isFile( inputPath ) ? PIPE.FILE : await isDirectory( inputPath ) ? PIPE.DIRECTORY : 0;
         }
 
         if ( isString( outputPath ) )
         {
-            rightSide = isArray( outputPath ) ? PIPE.BUFFER : await isDirectory( outputPath ) ? PIPE.DIRECTORY : await isFile( outputPath ) ? PIPE.FILE : 0;
+            rightSide = isBuffer( outputPath ) ? PIPE.BUFFER : await isDirectory( outputPath ) ? PIPE.DIRECTORY : await isFile( outputPath ) ? PIPE.FILE : 0;
         }
 
         return {
@@ -1452,7 +1479,7 @@ const $scope = constants?.$scope || function()
 
                         try
                         {
-                            const buffer = await fsAsync.readFile( inputPath );
+                            const buffer = isBuffer( inputPath ) ? Buffer.from( inputPath ) : await fsAsync.readFile( inputPath );
 
                             const entries = getEntries( buffer, resolvePassword() );
 
@@ -1499,7 +1526,9 @@ const $scope = constants?.$scope || function()
 
             case PIPE.BUFFER:
 
-                const entries = getEntries( inputPath, resolvePassword() );
+                const buffer = isBuffer( inputPath ) ? Buffer.from( inputPath ) : await fsAsync.readFile( inputPath );
+
+                const entries = getEntries( buffer, resolvePassword() );
 
                 if ( entries && entries.length )
                 {
@@ -1524,6 +1553,8 @@ const $scope = constants?.$scope || function()
                             break;
 
                         case PIPE.BUFFER:
+
+                            outputPath = isBuffer( outputPath ) ? outputPath : await isDirectory( outputPath ) ? Buffer.from( new Uint8Array( 0 ) ) : await fsAsync.readFile( outputPath );
 
                             for( const entry of entries )
                             {
@@ -1649,7 +1680,7 @@ const $scope = constants?.$scope || function()
             return false;
         }
 
-        return true;
+        return outputFilePath;
     }
 
     /**
@@ -1706,7 +1737,7 @@ const $scope = constants?.$scope || function()
             }
             else
             {
-                outputPath = new Uint8Array( 0 );
+                outputPath = isBuffer( outputPath ) ? Buffer.from( outputPath ) : await fsAsync.readFile( outputPath );
             }
 
             const source = fs.createReadStream( inputPath );
@@ -1783,13 +1814,13 @@ const $scope = constants?.$scope || function()
 
         if ( unzipper )
         {
-            if ( PIPE.DIRECTORY === rightSide )
+            if ( PIPE.DIRECTORY === rightSide || PIPE.FILE === rightSide )
             {
-                outputPath = path.resolve( outputPath, path.basename( removeExtension( path.basename( inputPath ) ) ) );
+                outputPath = isString( inputPath ) ? path.resolve( outputPath, path.basename( removeExtension( path.basename( inputPath ) ) ) ) : outputPath;
             }
             else
             {
-                outputPath = new Uint8Array( 0 );
+                outputPath = isBuffer( outputPath ) ? Buffer.from( outputPath ) : await fsAsync.readFile( outputPath );
             }
 
             const source = fs.createReadStream( inputPath );
@@ -1892,6 +1923,16 @@ const $scope = constants?.$scope || function()
         get compressionOptions()
         {
             return mergeOptions( this.#compressionOptions || {}, CompressionOptions.DEFAULT );
+        }
+
+        get formatSpecificOptions()
+        {
+            return this.compressionOptions?.formatSpecificOptions || GZIP_OPTIONS;
+        }
+
+        get extension()
+        {
+            return this.formatSpecificOptions?.extension || this.compressionOptions?.extension || GZIP_OPTIONS.extension || _mt_str;
         }
 
         get decompressionFunction()
@@ -1999,11 +2040,34 @@ const $scope = constants?.$scope || function()
                                                      format.signatures.forEach( sig => FORMAT_BY_SIGNATURE.set( sig, format ) );
                                                  } );
 
-    CompressionFormat.resolve = function( pFormat )
+    CompressionFormat.resolve = function( pFormat, pExtension )
     {
         if ( isString( pFormat ) )
         {
-            return CompressionFormat.getInstance( ucase( asString( pFormat, true ) ) ) || SUPPORTED_FORMATS.DEFAULT;
+            let instance = CompressionFormat.getInstance( ucase( asString( pFormat, true ) ) );
+
+            if ( instance instanceof CompressionFormat )
+            {
+                return instance;
+            }
+
+            if ( isString( pExtension ) && !isBlank( pExtension ) )
+            {
+                const extension = asString( pExtension, true );
+
+                const formats = CompressionFormat.getFormats();
+
+                for( let format of formats )
+                {
+                    if ( format.extension === extension )
+                    {
+                        instance = format;
+                        break;
+                    }
+                }
+            }
+
+            return instance || SUPPORTED_FORMATS.DEFAULT;
         }
         else if ( isObject( pFormat ) )
         {
@@ -2033,6 +2097,20 @@ const $scope = constants?.$scope || function()
         {
             CompressionFormat.SUPPORTED_FORMATS[name] = CompressionFormat.SUPPORTED_FORMATS[name] || new CompressionFormat( name, pFormat.signatures, pFormat.decompressionFunction, pFormat.compressionFunction );
         }
+    };
+
+    CompressionFormat.getFormatNames = function()
+    {
+        return [...(new Set( Object.keys( CompressionFormat.SUPPORTED_FORMATS ) || [] ))].filter( name => !isBlank( name ) && name !== "DEFAULT" );
+    };
+
+    CompressionFormat.getFormats = function( ...pFilter )
+    {
+        let arr = [...(new Set( Object.values( CompressionFormat.SUPPORTED_FORMATS ) || [] ))].filter( format => format instanceof CompressionFormat && !["UNSUPPORTED", "DEFAULT"].includes( format.name ) );
+
+        asArray( varargs( ...pFilter ) ).forEach( filter => arr = arr.filter( filter ) );
+
+        return arr;
     };
 
     class ArchiverOptions

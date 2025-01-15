@@ -1,4 +1,0 @@
-This communication improves how Node.js applications use resources and scale effectively. 
-One process can communicate with another, use its function and resources and also allow the other process to load its resources and function, 
-which makes the work collaborative and easy.
-
