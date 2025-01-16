@@ -1818,9 +1818,9 @@ const $scope = constants?.$scope || function()
 
         let zipper = formatSpecificOptions.archiver || options.archiver || null;
 
-        if ( zipper instanceof admZip || zipper === pkZip )
+        if ( zipper instanceof admZip || zipper === pkZip || (CompressionFormat.SUPPORTED_FORMATS.PKZIP.equals( CompressionFormat.resolve( outputPath, extension ) )) )
         {
-            return pkZip( pInputPath, pOutputPath, options );
+            return pkZip( inputPath, outputPath, options );
         }
 
         if ( isFunction( zipper ) )
@@ -1870,9 +1870,9 @@ const $scope = constants?.$scope || function()
 
         let unzipper = formatSpecificOptions.reviver || options.reviver || null;
 
-        if ( unzipper instanceof admZip || unzipper === pkUnZip )
+        if ( unzipper instanceof admZip || unzipper === pkUnZip || (CompressionFormat.SUPPORTED_FORMATS.PKZIP.equals( CompressionFormat.resolve( inputPath, formatSpecificOptions.extension ) )) )
         {
-            return pkUnZip( pInputPath, pOutputPath, options );
+            return pkUnZip( inputPath, outputPath, options );
         }
 
         if ( isFunction( unzipper ) )
@@ -1992,11 +1992,11 @@ const $scope = constants?.$scope || function()
         {
             if ( pOther instanceof this.constructor )
             {
-                return ucase( asString( this.name, true ) === ucase( asString( pOther.name, true ) ) );
+                return ucase( asString( this.name, true ) ) === ucase( asString( pOther.name, true ) );
             }
             else if ( isString( pOther ) )
             {
-                return ucase( asString( this.name, true ) === ucase( asString( pOther, true ) ) );
+                return ucase( asString( this.name, true ) ) === ucase( asString( pOther, true ) );
             }
             return false;
         }
@@ -2018,7 +2018,7 @@ const $scope = constants?.$scope || function()
                 return CompressionFormat.getInstance( ucase( asString( pBuffer, true ) ) );
             }
 
-            const buffer = arrayFromBuffer( pBuffer );
+            const buffer = [...(asArray( arrayFromBuffer( pBuffer ) ))];
 
             const signature = buffer.slice( 0, 4 );
 
@@ -2031,7 +2031,7 @@ const $scope = constants?.$scope || function()
                 return SUPPORTED_FORMATS.UNSUPPORTED;
             }
 
-            return FORMAT_BY_SIGNATURE.get( signature ) || SUPPORTED_FORMATS.UNSUPPORTED;
+            return FORMAT_BY_SIGNATURE.get( JSON.stringify( signature ) ) || SUPPORTED_FORMATS.UNSUPPORTED;
         }
 
         static async fromFile( pFilePath )
@@ -2070,7 +2070,7 @@ const $scope = constants?.$scope || function()
 
     Object.entries( SUPPORTED_FORMATS ).forEach( ( [name, format] ) =>
                                                  {
-                                                     format.signatures.forEach( sig => FORMAT_BY_SIGNATURE.set( sig, format ) );
+                                                     format.signatures.forEach( sig => FORMAT_BY_SIGNATURE.set( JSON.stringify( sig ), format ) );
                                                  } );
 
     CompressionFormat.resolve = function( pFormat, pExtension )
@@ -2129,6 +2129,8 @@ const $scope = constants?.$scope || function()
         else
         {
             CompressionFormat.SUPPORTED_FORMATS[name] = CompressionFormat.SUPPORTED_FORMATS[name] || new CompressionFormat( name, pFormat.signatures, pFormat.decompressionFunction, pFormat.compressionFunction );
+
+            CompressionFormat.SUPPORTED_FORMATS[name].signatures.forEach( sig => FORMAT_BY_SIGNATURE.set( JSON.stringify( sig ), CompressionFormat.SUPPORTED_FORMATS[name] ) );
         }
     };
 

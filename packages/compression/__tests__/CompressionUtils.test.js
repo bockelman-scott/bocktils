@@ -419,6 +419,7 @@ describe( "pkZip", () =>
               await fsAsync.unlink( path.resolve( unzippedFilesDir, txtFileName ) );
           } );
 
+    /// THIS CURRENTLY DOES NOT WORK, BECAUSE ADMZIP DOES NOT ACTUALLY ENCODE A ZIP WITH A PWD
     test( "zip text_0.txt with a password",
           async() =>
           {
@@ -458,6 +459,7 @@ describe( "pkZip", () =>
 
               expect( found ).toBe( true );
 
+              // BUT THIS SHOULD WORK IF A PWD PROTECTED ZIP IS SPECIFIED
               await pkUnZip( path.resolve( outputPath, zipFileName ), unzippedFilesDir, options );
 
               const contents = await fsAsync.readFile( path.resolve( unzippedFilesDir, txtFileName ), { encoding: utf8 } );
@@ -599,7 +601,7 @@ describe( "CompressionFormat", () =>
     test( "Detect Format from File",
           async() =>
           {
-              const formats = CompressionFormat.getFormats( ( e ) => e.extension !== ".zip" );
+              const formats = CompressionFormat.getFormats();
 
               let zippedFileName = "text_0";
               const unzippedFileName = "text_0.txt";
@@ -608,6 +610,8 @@ describe( "CompressionFormat", () =>
               const outputPath = path.resolve( zippedFilesDir );
 
               const files = [];
+
+              const toDelete = [];
 
               const originalContents = await fsAsync.readFile( inputPath, { encoding: utf8 } );
 
@@ -623,16 +627,29 @@ describe( "CompressionFormat", () =>
 
                   files.push( compressedFilePath );
 
-                  const entries = await fsAsync.readdir( outputPath, { withFileTypes: true } );
-
                   let found = false;
 
-                  for( const entry of entries )
+                  let entries;
+
+                  if ( await isDirectory( compressedFilePath ) )
                   {
-                      if ( entry && entry.isFile() && entry.name === zippedFileName )
+                      entries = await fsAsync.readdir( compressedFilePath, { withFileTypes: true } );
+                  }
+                  else if ( await isFile( compressedFilePath ) )
+                  {
+                      entries = await fsAsync.readdir( path.dirname( compressedFilePath ), { withFileTypes: true } );
+                      toDelete.push( compressedFilePath );
+                  }
+
+                  if ( !found && entries )
+                  {
+                      for( const entry of entries )
                       {
-                          found = true;
-                          break;
+                          if ( entry && entry.isFile() && entry.name === zippedFileName )
+                          {
+                              found = true;
+                              break;
+                          }
                       }
                   }
 
@@ -642,12 +659,28 @@ describe( "CompressionFormat", () =>
 
                   files.push( uncompressedFilePath );
 
-                  const contents = await fsAsync.readFile( uncompressedFilePath, { encoding: utf8 } );
+                  let contents = uncompressedFilePath;
+
+                  if ( await isFile( uncompressedFilePath ) )
+                  {
+                      contents = await fsAsync.readFile( uncompressedFilePath, { encoding: utf8 } );
+                      toDelete.push( uncompressedFilePath );
+                  }
+                  else if ( await isDirectory( uncompressedFilePath ) )
+                  {
+                      contents = await fsAsync.readFile( path.resolve( uncompressedFilePath, unzippedFileName ), { encoding: utf8 } );
+                  }
+                  else
+                  {
+                      contents = Buffer.from( uncompressedFilePath ).toString( utf8 );
+                  }
 
                   expect( contents ).toEqual( originalContents );
 
-                  await fsAsync.unlink( compressedFilePath );
-                  await fsAsync.unlink( uncompressedFilePath );
+                  while ( toDelete.length > 0 )
+                  {
+                      await fsAsync.unlink( toDelete.shift() );
+                  }
               }
 
               console.log( files );
