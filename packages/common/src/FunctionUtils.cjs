@@ -284,7 +284,7 @@ const $scope = constants?.$scope || function()
                     return Promise.resolve( ((async function()
                     {
                         return await attemptAsync( pOperation, ...pArgs );
-                    })()) );
+                    })()) ).then( no_op ).catch( e => { dispatch( e, methodName, pOperation, $scope() ); } );
                 }
                 else
                 {
@@ -406,7 +406,7 @@ const $scope = constants?.$scope || function()
                     return Promise.resolve( ((async function()
                     {
                         return await attemptAsyncMethod( obj, method, ...pArgs );
-                    })()) );
+                    })()) ).then( no_op ).catch( e => { dispatch( e, methodName, method, obj ); } );
                 }
                 else
                 {

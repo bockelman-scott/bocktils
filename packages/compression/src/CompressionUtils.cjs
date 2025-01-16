@@ -44,6 +44,8 @@ const admZip = require( "adm-zip" );
 const fs = require( "node:fs" );
 const fsAsync = require( "node:fs/promises" );
 const { pipeline } = require( "node:stream/promises" );
+const { Readable } = require( "node:stream" );
+const nodeBuffer = require( "node:buffer" );
 
 const path = require( "node:path" );
 const zlib = require( "node:zlib" );
@@ -109,6 +111,10 @@ const $scope = constants?.$scope || function()
         CustomEvent = ModuleEvent;
     }
 
+    const { Dir, Dirent } = fs;
+
+    const { File } = nodeBuffer || $scope();
+
     const { encode, decode } = base64Utils;
 
     const modName = "CompressionUtils";
@@ -168,6 +174,16 @@ const $scope = constants?.$scope || function()
      */
     async function isFile( pPath )
     {
+        if ( !(isString( pPath ) || pPath instanceof File) )
+        {
+            return false;
+        }
+
+        if ( pPath instanceof File )
+        {
+            return true;
+        }
+
         const filepath = path.normalize( path.resolve( asString( pPath, true ) ) );
 
         try
@@ -190,6 +206,16 @@ const $scope = constants?.$scope || function()
      */
     async function isDirectory( pPath )
     {
+        if ( !(isString( pPath ) || pPath instanceof Dir) )
+        {
+            return false;
+        }
+
+        if ( pPath instanceof Dir )
+        {
+            return true;
+        }
+
         const filepath = path.normalize( path.resolve( asString( pPath, true ) ) );
 
         try
@@ -804,8 +830,8 @@ const $scope = constants?.$scope || function()
 
     function _resolveInputOutput( pInputPath, pOutputPath )
     {
-        const inputPath = isString( pInputPath ) ? path.resolve( asString( pInputPath, true ) ) : asArray( pInputPath );
-        const outputPath = isString( pOutputPath ) ? path.resolve( asString( pOutputPath, true ) ) : asArray( pOutputPath );
+        const inputPath = isString( pInputPath ) ? path.resolve( asString( pInputPath, true ) ) : isBuffer( pInputPath ) ? Buffer.from( pInputPath ) : asArray( pInputPath );
+        const outputPath = isString( pOutputPath ) ? path.resolve( asString( pOutputPath, true ) ) : isBuffer( pOutputPath ) ? Buffer.from( pOutputPath ) : asArray( pOutputPath );
 
         return { inputPath, outputPath };
     }
@@ -1099,6 +1125,7 @@ const $scope = constants?.$scope || function()
                     {
                         return;
                     }
+
                     const target = pPath || p;
 
                     if ( isString( target ) && !isBlank( target ) )
@@ -1332,7 +1359,7 @@ const $scope = constants?.$scope || function()
                     errorCallback.call( options, ex, inputPath ).then( no_op ).catch( ex => modulePrototype.reportError( ex, "executing error callback", S_ERROR, errorSource, ex, inputPath ) );
                 }
 
-                modulePrototype.reportError( ex, "unzipping file", S_ERROR, errorSource, inputPath, outputPath );
+                modulePrototype.reportError( ex, "decompressing file", S_ERROR, errorSource, inputPath, outputPath );
             }
         }
 
@@ -1511,17 +1538,25 @@ const $scope = constants?.$scope || function()
 
                 recursive = true;
 
-                const dir = fsAsync.opendir( inputPath );
-
-                if ( dir )
+                try
                 {
-                    for await( const dirent of dir )
-                    {
-                        const ipt = path.resolve( dirent.path, dirent.name );
+                    const dir = fsAsync.opendir( inputPath );
 
-                        await pkUnZip( ipt, outputPath, options );
+                    if ( dir )
+                    {
+                        for await( const dirent of dir )
+                        {
+                            const ipt = path.resolve( dirent.path, dirent.name );
+
+                            await pkUnZip( ipt, outputPath, options );
+                        }
                     }
                 }
+                catch( ex )
+                {
+                    await handleError( ex );
+                }
+
                 break;
 
             case PIPE.BUFFER:
@@ -1547,14 +1582,14 @@ const $scope = constants?.$scope || function()
                                 const name = entry.name || ("zipEntry" + ((n++ > 0) ? ("_" + n) : ""));
                                 const data = asArray( entry.getData() );
                                 const outPath = path.resolve( outputPath, name );
-                                await fsAsync.writeFile( outPath, data );
+                                await fsAsync.writeFile( outPath, data ).catch( ex => modulePrototype.reportError( ex, "writing file", S_ERROR, errorSource, outPath, data ) );
                             }
 
                             break;
 
                         case PIPE.BUFFER:
 
-                            outputPath = isBuffer( outputPath ) ? outputPath : await isDirectory( outputPath ) ? Buffer.from( new Uint8Array( 0 ) ) : await fsAsync.readFile( outputPath );
+                            outputPath = isBuffer( outputPath ) ? Buffer.from( outputPath ) : await isDirectory( outputPath ) ? Buffer.from( new Uint8Array( 0 ) ) : await fsAsync.readFile( outputPath );
 
                             for( const entry of entries )
                             {
@@ -1636,7 +1671,7 @@ const $scope = constants?.$scope || function()
                 break;
 
             case PIPE.BUFFER:
-                let buffer = isTypedArray( inputPath ) ? Buffer.copyBytesFrom( inputPath ) : Buffer.from( inputPath );
+                let buffer = isTypedArray( inputPath ) ? Buffer.copyBytesFrom( inputPath ) : isBuffer( inputPath ) ? Buffer.from( inputPath ) : await fsAsync.readFile( inputPath );
 
                 zipper = new admZip( buffer, { fs: fs } );
 
@@ -1683,6 +1718,58 @@ const $scope = constants?.$scope || function()
         return outputFilePath;
     }
 
+    async function streamToBuffer( pStream )
+    {
+        return new Promise( ( resolve, reject ) =>
+                            {
+                                const chunks = [];
+                                pStream.on( "data", ( chunk ) => chunks.push( chunk ) );
+                                pStream.on( "error", reject );
+                                pStream.on( "end", () => resolve( Buffer.concat( chunks ) ) );
+                            } );
+    }
+
+    async function handleZlibOperation( pInputPath, pOutputPath, pTransformer, pHandleError, pHandleSuccess, pRecursive )
+    {
+        // this is a fake destructuring, because argument is an array not a collection of key/value pairs
+        let {
+            inputPath = pInputPath,
+            outputPath = pOutputPath,
+            transformer = pTransformer,
+            handleError = pHandleError,
+            handleSuccess = pHandleSuccess,
+            recursive = pRecursive
+        } = arguments;
+
+        if ( isBuffer( outputPath ) )
+        {
+            inputPath = isString( inputPath ) ? path.normalize( path.resolve( inputPath ) ) : isBuffer( inputPath ) ? Buffer.from( inputPath ) : await fsAsync.readFile( inputPath );
+            inputPath = await isFile( inputPath ) ? await fsAsync.readFile( inputPath ) : inputPath;
+
+            const stream = Readable.from( inputPath );
+            await streamToBuffer( outputPath( stream ) );
+        }
+        else
+        {
+            const source = fs.createReadStream( inputPath );
+            const destination = fs.createWriteStream( outputPath );
+
+            try
+            {
+                await pipeline( source, transformer, destination );
+            }
+            catch( ex )
+            {
+                await handleError( ex );
+                return null;
+            }
+        }
+
+        await handleSuccess( recursive || pRecursive );
+
+        return outputPath;
+    }
+
     /**
      * Compresses a file from the specified input path and writes it to the specified output path.
      * This method pipelines the input file through a compression tool and writes the compressed output.
@@ -1727,6 +1814,8 @@ const $scope = constants?.$scope || function()
 
         if ( zipper )
         {
+            let recursive = PIPE.DIRECTORY === leftSide;
+
             if ( PIPE.FILE === rightSide )
             {
                 outputPath = replaceExtension( outputPath, extension );
@@ -1740,44 +1829,7 @@ const $scope = constants?.$scope || function()
                 outputPath = isBuffer( outputPath ) ? Buffer.from( outputPath ) : await fsAsync.readFile( outputPath );
             }
 
-            const source = fs.createReadStream( inputPath );
-            const destination = fs.createWriteStream( outputPath );
-
-            let safeToDelete = false;
-
-            try
-            {
-                await pipeline( source, zipper, destination );
-                safeToDelete = true;
-            }
-            catch( ex )
-            {
-                await handleError( ex );
-                return null;
-            }
-
-            if ( options?.deleteSource && safeToDelete )
-            {
-                try
-                {
-                    await fsAsync.unlink( inputPath );
-                }
-                catch( ex )
-                {
-                    modulePrototype.reportError( ex, "deleting source file(s)", S_ERROR, errorSource, pInputPath, pOutputPath, inputPath, outputPath );
-                }
-            }
-
-            try
-            {
-                await handleSuccess();
-            }
-            catch( ex )
-            {
-                modulePrototype.reportError( ex, "executing onSuccess callback", S_ERROR, errorSource, pInputPath, pOutputPath, inputPath, outputPath );
-            }
-
-            return outputPath;
+            return await handleZlibOperation( inputPath, outputPath, zipper, handleError, handleSuccess, recursive );
         }
 
         return null;
@@ -1814,6 +1866,8 @@ const $scope = constants?.$scope || function()
 
         if ( unzipper )
         {
+            let recursive = PIPE.DIRECTORY === leftSide;
+
             if ( PIPE.DIRECTORY === rightSide || PIPE.FILE === rightSide )
             {
                 outputPath = isString( inputPath ) ? path.resolve( outputPath, path.basename( removeExtension( path.basename( inputPath ) ) ) ) : outputPath;
@@ -1823,44 +1877,7 @@ const $scope = constants?.$scope || function()
                 outputPath = isBuffer( outputPath ) ? Buffer.from( outputPath ) : await fsAsync.readFile( outputPath );
             }
 
-            const source = fs.createReadStream( inputPath );
-            const destination = fs.createWriteStream( outputPath );
-
-            let safeToDelete = false;
-
-            try
-            {
-                await pipeline( source, unzipper, destination );
-                safeToDelete = true;
-            }
-            catch( ex )
-            {
-                await handleError( ex );
-                return null;
-            }
-
-            if ( options?.deleteSource && safeToDelete )
-            {
-                try
-                {
-                    await fsAsync.unlink( inputPath );
-                }
-                catch( ex )
-                {
-                    modulePrototype.reportError( ex, "deleting source file(s)", S_ERROR, errorSource, pInputPath, pOutputPath, inputPath, outputPath );
-                }
-            }
-
-            try
-            {
-                await handleSuccess();
-            }
-            catch( ex )
-            {
-                modulePrototype.reportError( ex, "executing onSuccess callback", S_ERROR, errorSource, pInputPath, pOutputPath, inputPath, outputPath );
-            }
-
-            return outputPath;
+            return await handleZlibOperation( inputPath, outputPath, unzipper, handleError, handleSuccess, recursive );
         }
 
         return null;

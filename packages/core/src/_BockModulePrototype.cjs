@@ -2274,25 +2274,47 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
     {
         let entries = [];
 
-        if ( _obj === typeof pObject )
+        const stringifyKeys = e => (_symbol !== typeof e[0]) ? [(_mt_str + (e[0])).trim(), e[1]] : [e[0], e[1]];
+
+        if ( _obj === typeof pObject && null != pObject )
         {
             (Object.entries( pObject || {} )).forEach( e => entries.push( e ) );
+
+            entries = entries.map( stringifyKeys );
 
             if ( isObjectLiteral( pObject ) && entries.length > 0 )
             {
                 return entries;
             }
 
-            const propertyNames = [...Object.getOwnPropertyNames( pObject ), ...Object.getOwnPropertySymbols( pObject )];
+            if ( pObject instanceof Map )
+            {
+                entries = (entries.concat( ...(pObject.entries()) ));
+            }
+            else if ( pObject instanceof Set || isArray( pObject ) )
+            {
+                entries = (entries.concat( ...([...(new Set( pObject ).entries())].map( stringifyKeys )) ));
+            }
 
-            propertyNames.forEach( ( key ) =>
-                                   {
-                                       const value = pObject[key];
-                                       if ( null != value )
+            try
+            {
+                const propertyNames = [...Object.getOwnPropertyNames( pObject ), ...Object.getOwnPropertySymbols( pObject )];
+
+                propertyNames.forEach( ( key ) =>
                                        {
-                                           entries.push( [key, value] );
-                                       }
-                                   } );
+                                           const value = pObject[key];
+                                           if ( null != value )
+                                           {
+                                               entries.push( [key, value] );
+                                           }
+                                       } );
+            }
+            catch( ex )
+            {
+                // ignored
+            }
+
+            entries = entries.map( stringifyKeys );
 
             let source = _fun === typeof pObject?.constructor ? Function.prototype.toString.call( pObject.constructor ) : _str;
             let rx = /(get +(\w+)\( *\))|(#(\w)[;\r\n,])/;
@@ -2306,7 +2328,7 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
             }
         }
 
-        return [...new Set( entries )].filter( e => null != e[1] );
+        return [...new Set( entries )].filter( e => null != e[1] ).map( stringifyKeys );
     }
 
     function mergeOptions( pOptions, ...pDefaults )
@@ -3114,6 +3136,7 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
             asPhrase,
 
             isReadOnly,
+            objectEntries,
             populateOptions,
             mergeOptions,
             lock,

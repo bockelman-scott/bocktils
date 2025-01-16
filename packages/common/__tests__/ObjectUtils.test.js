@@ -19,6 +19,48 @@ const $scope = constants?.$scope || function()
 
 objectUtils.disableLogging();
 
+const {
+    detectCycles,
+    getKeys,
+    getProperties,
+    getProperty,
+    hasProperty,
+    setProperty,
+    getValues,
+    getEntries,
+    ObjectEntry,
+    isEmptyObject,
+    isNullOrEmpty,
+    isNullOrNaN,
+    isMissing,
+    getClass,
+    getClassName,
+    convertToInstanceOf,
+    isValidEntry,
+    hasNoProperties,
+    isEmptyValue,
+    isPopulatedObject,
+    isValidObject,
+    firstValidObject,
+    firstPopulatedObject,
+    identical,
+    same,
+    arrayToObject,
+    findImplementor,
+    collectImplementors,
+    emptyClone,
+    clone,
+    ingest,
+    augment,
+    populateObject,
+    prune,
+    toLiteral,
+    findNode,
+    findRoot,
+    tracePathTo,
+    
+} = objectUtils;
+
 describe( "detectCycles prevents infinite recursion", () =>
 {
     test( "detectCycles relies on populating an array and passing it into any recursive calls",
@@ -30,19 +72,19 @@ describe( "detectCycles prevents infinite recursion", () =>
               let arr2 = ["1", "2", "3", "1", "2", "4", "1", "2", "5"];
               let arr3 = ["1", "2", "3", "4", "5", "1", "2", "3", "4", "5", "1", "2", "3", "4", "5", "6"];
 
-              results = objectUtils.detectCycles( arr, 3, 3 );
+              results = detectCycles( arr, 3, 3 );
 
               expect( results ).toBe( true );
 
-              results = !objectUtils.detectCycles( arr2, 3, 3 );
+              results = !detectCycles( arr2, 3, 3 );
 
               expect( results ).toBe( true );
 
-              results = objectUtils.detectCycles( arr3, 3, 3 );
+              results = detectCycles( arr3, 3, 3 );
 
               expect( results ).toBe( true );
 
-              results = !objectUtils.detectCycles( arr3, 6, 3 );
+              results = !detectCycles( arr3, 6, 3 );
 
               expect( results ).toBe( true );
           } );
@@ -124,25 +166,25 @@ describe( "isEmptyObject", () =>
     test( "isEmptyObject returns true for an object with no properties",
           () =>
           {
-              expect( objectUtils.isEmptyObject( {} ) ).toBe( true );
+              expect( isEmptyObject( {} ) ).toBe( true );
           } );
 
     test( "isEmptyObject returns false for null",
           () =>
           {
-              expect( objectUtils.isEmptyObject( null ) ).toBe( false );
+              expect( isEmptyObject( null ) ).toBe( false );
           } );
 
     test( "isEmptyObject returns false if the argument is not an object",
           () =>
           {
-              expect( objectUtils.isEmptyObject( "" ) ).toBe( false );
+              expect( isEmptyObject( "" ) ).toBe( false );
           } );
 
     test( "isEmptyObject returns true if the argument is an empty string and we allow strings",
           () =>
           {
-              expect( objectUtils.isEmptyObject( "", true ) ).toBe( true );
+              expect( isEmptyObject( "", true ) ).toBe( true );
           } );
 } );
 
@@ -151,25 +193,25 @@ describe( "isNullOrEmpty", () =>
     test( "isNullOrEmpty returns true for an object with no properties",
           () =>
           {
-              expect( objectUtils.isNullOrEmpty( {} ) ).toBe( true );
+              expect( isNullOrEmpty( {} ) ).toBe( true );
           } );
 
     test( "isNullOrEmpty returns true for null",
           () =>
           {
-              expect( objectUtils.isNullOrEmpty( null ) ).toBe( true );
+              expect( isNullOrEmpty( null ) ).toBe( true );
           } );
 
     test( "isNullOrEmpty returns false if the argument is not an object",
           () =>
           {
-              expect( objectUtils.isNullOrEmpty( "" ) ).toBe( false );
+              expect( isNullOrEmpty( "" ) ).toBe( false );
           } );
 
     test( "isNullOrEmpty returns true if the argument is an empty string and we allow strings",
           () =>
           {
-              expect( objectUtils.isNullOrEmpty( "", true ) ).toBe( true );
+              expect( isNullOrEmpty( "", true ) ).toBe( true );
           } );
 } );
 
@@ -178,37 +220,37 @@ describe( "isNullOrNaN", () =>
     test( "isNullOrNaN returns false for an object with no properties",
           () =>
           {
-              expect( objectUtils.isNullOrNaN( {} ) ).toBe( false );
+              expect( isNullOrNaN( {} ) ).toBe( false );
           } );
 
     test( "isNullOrNaN returns true for null",
           () =>
           {
-              expect( objectUtils.isNullOrNaN( null ) ).toBe( true );
+              expect( isNullOrNaN( null ) ).toBe( true );
           } );
 
     test( "isNullOrNaN returns false if the argument is not an object",
           () =>
           {
-              expect( objectUtils.isNullOrNaN( "" ) ).toBe( false );
+              expect( isNullOrNaN( "" ) ).toBe( false );
           } );
 
     test( "isNullOrNaN returns true if the argument is an empty string and we allow strings",
           () =>
           {
-              expect( objectUtils.isNullOrNaN( "", true ) ).toBe( true );
+              expect( isNullOrNaN( "", true ) ).toBe( true );
           } );
 
     test( "isNullOrNaN returns true if the argument is NaN or not finite",
           () =>
           {
-              expect( objectUtils.isNullOrNaN( 1 / 0 ) ).toBe( true );
+              expect( isNullOrNaN( 1 / 0 ) ).toBe( true );
           } );
 
     test( "isNullOrNaN returns true if the argument is NaN",
           () =>
           {
-              expect( objectUtils.isNullOrNaN( NaN ) ).toBe( true );
+              expect( isNullOrNaN( NaN ) ).toBe( true );
           } );
 } );
 
@@ -217,7 +259,7 @@ describe( "isMIssing", () =>
     test( "isMissing returns true for an object with no properties",
           () =>
           {
-              expect( objectUtils.isMissing( {} ) ).toBe( true );
+              expect( isMissing( {} ) ).toBe( true );
           } );
 
     test( "isMissing returns true for a property that is missing, null, or undefined",
@@ -225,7 +267,7 @@ describe( "isMIssing", () =>
           {
               const obj = { a: null, b: undefined };
 
-              expect( objectUtils.isMissing( obj?.a ) ).toBe( true );
+              expect( isMissing( obj?.a ) ).toBe( true );
           } );
 
     test( "isMissing returns false for a property that is an empty string or 0",
@@ -233,39 +275,39 @@ describe( "isMIssing", () =>
           {
               const obj = { a: null, b: undefined, c: "", d: 0 };
 
-              expect( objectUtils.isMissing( obj?.c ) ).toBe( false );
+              expect( isMissing( obj?.c ) ).toBe( false );
 
-              expect( objectUtils.isMissing( obj?.d ) ).toBe( false );
+              expect( isMissing( obj?.d ) ).toBe( false );
           } );
 
     test( "isMissing returns true for null",
           () =>
           {
-              expect( objectUtils.isMissing( null ) ).toBe( true );
+              expect( isMissing( null ) ).toBe( true );
           } );
 
     test( "isMissing returns false if the argument is not an object",
           () =>
           {
-              expect( objectUtils.isMissing( "" ) ).toBe( false );
+              expect( isMissing( "" ) ).toBe( false );
           } );
 
     test( "isMissing returns true if the argument is an empty string and we allow strings",
           () =>
           {
-              expect( objectUtils.isMissing( "", true ) ).toBe( true );
+              expect( isMissing( "", true ) ).toBe( true );
           } );
 
     test( "isMissing returns true if the argument is NaN or not finite",
           () =>
           {
-              expect( objectUtils.isMissing( 1 / 0 ) ).toBe( true );
+              expect( isMissing( 1 / 0 ) ).toBe( true );
           } );
 
     test( "isMissing returns true if the argument is NaN",
           () =>
           {
-              expect( objectUtils.isMissing( NaN ) ).toBe( true );
+              expect( isMissing( NaN ) ).toBe( true );
           } );
 } );
 
@@ -330,30 +372,30 @@ const obj6 = new ClassThree();
 const obj7 = ClassOne;
 const obj8 = ClassThree;
 
-let check1 = Object === objectUtils.getClass( obj );
-let check2 = Object === objectUtils.getClass( obj2 );
-let check3 = objectUtils.getClass( obj2 ) === objectUtils.getClass( obj );
+let check1 = Object === getClass( obj );
+let check2 = Object === getClass( obj2 );
+let check3 = getClass( obj2 ) === getClass( obj );
 
-let check4 = ClassThree === objectUtils.getClass( obj6 );
-let check5 = ClassTwo === objectUtils.getClass( obj5 );
+let check4 = ClassThree === getClass( obj6 );
+let check5 = ClassTwo === getClass( obj5 );
 
-let check6 = objectUtils.getClass( obj7 ) === objectUtils.getClass( obj7 );
-let check7 = objectUtils.getClass( obj3 ) === objectUtils.getClass( obj4 );
+let check6 = getClass( obj7 ) === getClass( obj7 );
+let check7 = getClass( obj3 ) === getClass( obj4 );
 
-let check8 = objectUtils.getClass( obj8 ) !== objectUtils.getClass( obj7 );
+let check8 = getClass( obj8 ) !== getClass( obj7 );
 
 describe( "getClassName", () =>
 {
     test( "getClassName returns 'Object' for object literals",
           () =>
           {
-              expect( objectUtils.getClassName( obj ) ).toEqual( "Object" );
+              expect( getClassName( obj ) ).toEqual( "Object" );
           } );
 
     test( "getClassName returns 'ClassThree' for objects constructed as ClassThree instances",
           () =>
           {
-              expect( objectUtils.getClassName( obj6 ) ).toEqual( "ClassThree" );
+              expect( getClassName( obj6 ) ).toEqual( "ClassThree" );
           } );
 
     test( "getClassName returns the class name for object literals that have been 'cast' to an instance of the class",
@@ -363,7 +405,7 @@ describe( "getClassName", () =>
 
               o.__proto__ = ClassOne.prototype;
 
-              expect( objectUtils.getClassName( o ) ).toEqual( "ClassOne" );
+              expect( getClassName( o ) ).toEqual( "ClassOne" );
           } );
 } );
 
@@ -384,7 +426,7 @@ describe( "convertToInstanceOf class", () =>
           {
               let o = {};
 
-              expect( objectUtils.convertToInstanceOf( o, ClassOne ).id ).toEqual( 666 );
+              expect( convertToInstanceOf( o, ClassOne ).id ).toEqual( 666 );
           } );
 
     test( "convertToInstanceOf turns an object of one class into an instance of another class",
@@ -392,7 +434,7 @@ describe( "convertToInstanceOf class", () =>
           {
               let o = new ClassOne();
 
-              expect( objectUtils.convertToInstanceOf( o, ClassTwo ).id ).toEqual( 777 );
+              expect( convertToInstanceOf( o, ClassTwo ).id ).toEqual( 777 );
           } );
 } );
 
@@ -403,7 +445,7 @@ describe( "isValidEntry", () =>
           {
               let o = {};
 
-              expect( objectUtils.isValidEntry( "a", "" ) ).toBe( true );
+              expect( isValidEntry( "a", "" ) ).toBe( true );
           } );
 
     test( "isValidEntry returns false if the value is undefined",
@@ -411,7 +453,7 @@ describe( "isValidEntry", () =>
           {
               let o = {};
 
-              expect( objectUtils.isValidEntry( "a" ) ).toBe( false );
+              expect( isValidEntry( "a" ) ).toBe( false );
           } );
 } );
 
@@ -455,7 +497,7 @@ describe( "getKeys", () =>
               let c = { "f": 6, "g": 7, "h": 8, "i": 9, "j": 10 };
               let d = { "f": 6, "gg": 7, "h": 8, "ii": 9, "j": 10 };
 
-              expect( objectUtils.getKeys( a, b, c, d ) ).toEqual( ["a", "b", "c", "d", "e", "aa", "cc", "ee", "f", "g", "h", "i", "j", "gg", "ii"] );
+              expect( getKeys( a, b, c, d ) ).toEqual( ["a", "b", "c", "d", "e", "aa", "cc", "ee", "f", "g", "h", "i", "j", "gg", "ii"] );
 
           } );
 
@@ -467,7 +509,7 @@ describe( "getKeys", () =>
               let c = null;
               let d = "a string";
 
-              expect( objectUtils.getKeys( a, b, c, d ) ).toEqual( [] );
+              expect( getKeys( a, b, c, d ) ).toEqual( [] );
 
           } );
 
@@ -475,7 +517,7 @@ describe( "getKeys", () =>
           () =>
           {
               const a = new Date();
-              const keys = objectUtils.getKeys( a );
+              const keys = getKeys( a );
 
               expect( keys.length ).toEqual( 0 );
           } );
@@ -484,7 +526,7 @@ describe( "getKeys", () =>
           () =>
           {
               const a = new String( "abc" );
-              const keys = objectUtils.getKeys( a );
+              const keys = getKeys( a );
 
               expect( keys.length ).toEqual( 3 );
           } );
@@ -493,17 +535,17 @@ describe( "getKeys", () =>
           () =>
           {
               let a = new Boolean( true );
-              let keys = objectUtils.getKeys( a );
+              let keys = getKeys( a );
 
               expect( keys.length ).toEqual( 0 );
 
               a = new Number( 1 );
-              keys = objectUtils.getKeys( a );
+              keys = getKeys( a );
 
               expect( keys.length ).toEqual( 0 );
 
               a = 12n;
-              keys = objectUtils.getKeys( a );
+              keys = getKeys( a );
               expect( keys.length ).toEqual( 0 );
 
           } );
@@ -514,7 +556,7 @@ describe( "getKeys", () =>
               for( let type of constants.TYPED_ARRAYS )
               {
                   let a = new type( 10 );
-                  let keys = objectUtils.getKeys( a );
+                  let keys = getKeys( a );
 
                   expect( keys.length ).toEqual( 10 );
               }
@@ -531,7 +573,7 @@ describe( "getProperties", () =>
               let c = { "f": 6, "g": 7, "h": 8, "i": 9, "j": 10 };
               let d = { "f": 6, "gg": 7, "h": 8, "ii": 9, "j": 10 };
 
-              expect( objectUtils.getProperties( a, b, c, d ) ).toEqual( ["a", "b", "c", "d", "e", "aa", "cc", "ee", "f", "g", "h", "i", "j", "gg", "ii"] );
+              expect( getProperties( a, b, c, d ) ).toEqual( ["a", "b", "c", "d", "e", "aa", "cc", "ee", "f", "g", "h", "i", "j", "gg", "ii"] );
 
           } );
 
@@ -543,7 +585,7 @@ describe( "getProperties", () =>
               let c = null;
               let d = "a string";
 
-              expect( objectUtils.getProperties( a, b, c, d ) ).toEqual( [] );
+              expect( getProperties( a, b, c, d ) ).toEqual( [] );
 
           } );
 
@@ -599,7 +641,7 @@ describe( "getProperties", () =>
               let a = new A( 7, "777" );
               let b = new B( 8, "888", "Eight", "One more than seven" );
 
-              let properties = objectUtils.getProperties( a, b );
+              let properties = getProperties( a, b );
 
               expect( properties ).toEqual( ["id", "code", "name", "description"] );
           } );
@@ -659,7 +701,7 @@ describe( "getValues", () =>
               let a = new A( 7, "777" );
               let b = new B( 8, "888", "Eight", "One more than seven" );
 
-              let values = [].concat( objectUtils.getValues( b ) );
+              let values = [].concat( getValues( b ) );
 
               let comparator = arrayUtils.Comparators.BY_STRING_VALUE;
 
@@ -678,13 +720,13 @@ describe( "getEntries - ObjectEntry", () =>
               let b = { a: "a", b: "b", c: "c", d: "d" };
               let c = { foo: "bar", baz: "baz", o: a };
 
-              let entries = objectUtils.getEntries( a, b, c );
+              let entries = getEntries( a, b, c );
 
               expect( entries?.length ).toEqual( 11 );
 
               for( let entry of entries )
               {
-                  expect( entry instanceof objectUtils.ObjectEntry ).toBe( true );
+                  expect( entry instanceof ObjectEntry ).toBe( true );
               }
           } );
 
@@ -697,7 +739,7 @@ describe( "getEntries - ObjectEntry", () =>
               let b = { a: "a", b: "b", c: "c", d: "d" };
               let c = { foo: "bar", baz: "baz", o: a };
 
-              let entries = objectUtils.getEntries( a, b, c, baz );
+              let entries = getEntries( a, b, c, baz );
 
               expect( entries?.length ).toEqual( 11 );
 
@@ -744,7 +786,7 @@ describe( "hasNoProperties", () =>
           {
               let a = { a: {}, b: { a: {} } };
 
-              expect( objectUtils.hasNoProperties( a ) ).toBe( true );
+              expect( hasNoProperties( a ) ).toBe( true );
 
           } );
 
@@ -753,7 +795,7 @@ describe( "hasNoProperties", () =>
           {
               let a = { a: {}, b: { a: {} } };
 
-              expect( objectUtils.hasNoProperties( a, { recursive: false } ) ).toBe( false );
+              expect( hasNoProperties( a, { recursive: false } ) ).toBe( false );
 
           } );
 } );
@@ -765,15 +807,15 @@ describe( "isEmptyValue", () =>
           {
               let s = "\n";
 
-              expect( objectUtils.isEmptyValue( s ) ).toBe( true );
+              expect( isEmptyValue( s ) ).toBe( true );
 
               s = "   \n   \t   ";
 
-              expect( objectUtils.isEmptyValue( s ) ).toBe( true );
+              expect( isEmptyValue( s ) ).toBe( true );
 
               s = " a ";
 
-              expect( objectUtils.isEmptyValue( s ) ).toBe( false );
+              expect( isEmptyValue( s ) ).toBe( false );
           } );
 
     test( "isEmptyValue returns true if the specified argument is an array of length 0",
@@ -781,7 +823,7 @@ describe( "isEmptyValue", () =>
           {
               let arr = [];
 
-              expect( objectUtils.isEmptyValue( arr ) ).toBe( true );
+              expect( isEmptyValue( arr ) ).toBe( true );
           } );
 
     test( "isEmptyValue returns true if the specified argument is an array whose elements are all 'empty values'",
@@ -789,7 +831,7 @@ describe( "isEmptyValue", () =>
           {
               let arr = [{}, [], ""];
 
-              expect( objectUtils.isEmptyValue( arr ) ).toBe( true );
+              expect( isEmptyValue( arr ) ).toBe( true );
           } );
 } );
 
@@ -800,7 +842,7 @@ describe( "isPopulatedObject", () =>
           {
               let obj = { a: 1 };
 
-              expect( objectUtils.isPopulatedObject( obj ) ).toBe( true );
+              expect( isPopulatedObject( obj ) ).toBe( true );
           } );
 
     test( "isPopulatedObject returns false if the specified argument is an object with less than 2 populated properties",
@@ -808,7 +850,7 @@ describe( "isPopulatedObject", () =>
           {
               let obj = { a: 1 };
 
-              expect( objectUtils.isPopulatedObject( obj, { minimumKeys: 2 } ) ).toBe( false );
+              expect( isPopulatedObject( obj, { minimumKeys: 2 } ) ).toBe( false );
           } );
 
     test( "isPopulatedObject returns true if the specified argument is an object with at least 2 populated properties",
@@ -816,7 +858,7 @@ describe( "isPopulatedObject", () =>
           {
               let obj = { a: 1, b: 1 };
 
-              expect( objectUtils.isPopulatedObject( obj, { minimumKeys: 2 } ) ).toBe( true );
+              expect( isPopulatedObject( obj, { minimumKeys: 2 } ) ).toBe( true );
           } );
 
     test( "isPopulatedObject returns false if the specified argument is an object that does not contain a mandatory key",
@@ -824,7 +866,7 @@ describe( "isPopulatedObject", () =>
           {
               let obj = { a: 1 };
 
-              expect( objectUtils.isPopulatedObject( obj, { manadatoryKeys: ["b", "c"] } ) ).toBe( false );
+              expect( isPopulatedObject( obj, { manadatoryKeys: ["b", "c"] } ) ).toBe( false );
           } );
 
     test( "isPopulatedObject returns false if the specified argument is an object that does not contain all mandatory keys",
@@ -832,7 +874,7 @@ describe( "isPopulatedObject", () =>
           {
               let obj = { a: 1, b: 1 };
 
-              expect( objectUtils.isPopulatedObject( obj, { manadatoryKeys: ["b", "c"] } ) ).toBe( false );
+              expect( isPopulatedObject( obj, { manadatoryKeys: ["b", "c"] } ) ).toBe( false );
           } );
 
     test( "isPopulatedObject returns true if the specified argument is an object that contains all mandatory keys",
@@ -840,7 +882,7 @@ describe( "isPopulatedObject", () =>
           {
               let obj = { a: 1, b: 1, c: 1 };
 
-              expect( objectUtils.isPopulatedObject( obj, { manadatoryKeys: ["b", "c"] } ) ).toBe( true );
+              expect( isPopulatedObject( obj, { manadatoryKeys: ["b", "c"] } ) ).toBe( true );
           } );
 
     test( "isPopulatedObject returns false if the specified argument is an object with no populated properties",
@@ -848,7 +890,7 @@ describe( "isPopulatedObject", () =>
           {
               let obj = { a: {} };
 
-              expect( objectUtils.isPopulatedObject( obj ) ).toBe( false );
+              expect( isPopulatedObject( obj ) ).toBe( false );
           } );
 
     test( "isPopulatedObject returns false if the specified argument is an object graph with no populated properties",
@@ -856,7 +898,7 @@ describe( "isPopulatedObject", () =>
           {
               let obj = { a: { b: { c: null } } };
 
-              expect( objectUtils.isPopulatedObject( obj ) ).toBe( false );
+              expect( isPopulatedObject( obj ) ).toBe( false );
           } );
 
     test( "isPopulatedObject returns true if the specified argument is an object graph with at least one populated properties",
@@ -864,7 +906,7 @@ describe( "isPopulatedObject", () =>
           {
               let obj = { a: { b: { c: 1 } } };
 
-              expect( objectUtils.isPopulatedObject( obj ) ).toBe( true );
+              expect( isPopulatedObject( obj ) ).toBe( true );
           } );
 
     test( "isPopulatedObject returns true if the specified argument is one of the valid types and is not considered 'empty'",
@@ -872,7 +914,7 @@ describe( "isPopulatedObject", () =>
           {
               let obj = "abc";
 
-              expect( objectUtils.isPopulatedObject( obj, { validTypes: ["string", "object"] } ) ).toBe( true );
+              expect( isPopulatedObject( obj, { validTypes: ["string", "object"] } ) ).toBe( true );
           } );
 
     test( "isPopulatedObject returns false if the specified argument is one of the valid types but is considered 'empty'",
@@ -880,7 +922,7 @@ describe( "isPopulatedObject", () =>
           {
               let obj = "";
 
-              expect( objectUtils.isPopulatedObject( obj, { validTypes: ["string", "object"] } ) ).toBe( false );
+              expect( isPopulatedObject( obj, { validTypes: ["string", "object"] } ) ).toBe( false );
           } );
 
     test( "isPopulatedObject returns false if the specified argument is an array (by default)",
@@ -888,7 +930,7 @@ describe( "isPopulatedObject", () =>
           {
               let obj = [1, 2, 3];
 
-              expect( objectUtils.isPopulatedObject( obj ) ).toBe( false );
+              expect( isPopulatedObject( obj ) ).toBe( false );
           } );
 
     test( "isPopulatedObject returns true for an array with at least one populated element, when option set",
@@ -896,7 +938,7 @@ describe( "isPopulatedObject", () =>
           {
               let obj = [1, 2, 3];
 
-              expect( objectUtils.isPopulatedObject( obj, { acceptArrays: true } ) ).toBe( true );
+              expect( isPopulatedObject( obj, { acceptArrays: true } ) ).toBe( true );
           } );
 
     test( "isPopulatedObject returns false for an array with no populated elements, even when option set",
@@ -904,7 +946,7 @@ describe( "isPopulatedObject", () =>
           {
               let obj = [null, undefined, null];
 
-              expect( objectUtils.isPopulatedObject( obj, { acceptArrays: true } ) ).toBe( false );
+              expect( isPopulatedObject( obj, { acceptArrays: true } ) ).toBe( false );
           } );
 } );
 
@@ -915,7 +957,7 @@ describe( "Valid Objects", () =>
           {
               let obj = { a: null };
 
-              expect( objectUtils.isValidObject( obj ) ).toBe( true );
+              expect( isValidObject( obj ) ).toBe( true );
           } );
 
     test( "firstValidObject returns the leftmost argument that satisfies the function, isValidObject",
@@ -923,7 +965,7 @@ describe( "Valid Objects", () =>
           {
               let obj = [{}, 1, true, null, undefined, "abc", { a: null }, [], {}];
 
-              expect( objectUtils.firstValidObject( ...obj ) ).toEqual( { a: null } );
+              expect( firstValidObject( ...obj ) ).toEqual( { a: null } );
           } );
 
     test( "firstPopulatedObject returns the leftmost argument that satisfies the function, isPopulated, or null",
@@ -931,7 +973,7 @@ describe( "Valid Objects", () =>
           {
               let obj = [{}, 1, true, null, undefined, "abc", { a: null }, {}, []];
 
-              expect( objectUtils.firstPopulatedObject( ...obj ) ).toEqual( null );
+              expect( firstPopulatedObject( ...obj ) ).toEqual( null );
           } );
 
     test( "firstPopulatedObject returns the leftmost argument that satisfies the function, isPopulated",
@@ -939,7 +981,7 @@ describe( "Valid Objects", () =>
           {
               let obj = [{}, 1, true, null, undefined, "abc", { a: 1 }, {}, []];
 
-              expect( objectUtils.firstPopulatedObject( ...obj ) ).toEqual( { a: 1 } );
+              expect( firstPopulatedObject( ...obj ) ).toEqual( { a: 1 } );
           } );
 } );
 
@@ -950,7 +992,7 @@ describe( "getProperty", () =>
           {
               let obj = new ClassTwo();
 
-              expect( objectUtils.getProperty( obj, "id" ) ).toEqual( 777 );
+              expect( getProperty( obj, "id" ) ).toEqual( 777 );
           } );
 
     test( "getProperty returns an empty string if the 'property' specified cannot be read",
@@ -958,7 +1000,7 @@ describe( "getProperty", () =>
           {
               let obj = new ClassTwo();
 
-              expect( objectUtils.getProperty( obj, "nope" ) ).toEqual( "" );
+              expect( getProperty( obj, "nope" ) ).toEqual( "" );
           } );
 
     test( "getProperty returns the value of the 'property path' specified",
@@ -966,7 +1008,7 @@ describe( "getProperty", () =>
           {
               let obj = { a: { b: { c: 666 } } };
 
-              expect( objectUtils.getProperty( obj, "a.b.c" ) ).toEqual( 666 );
+              expect( getProperty( obj, "a.b.c" ) ).toEqual( 666 );
           } );
 } );
 
@@ -977,7 +1019,7 @@ describe( "hasProperty", () =>
           {
               let obj = { a: { b: { c: 666 } } };
 
-              expect( objectUtils.hasProperty( obj, "a.b.c" ) ).toBe( true );
+              expect( hasProperty( obj, "a.b.c" ) ).toBe( true );
           } );
 
     test( "hasProperty returns true if the 'property' exists",
@@ -985,7 +1027,7 @@ describe( "hasProperty", () =>
           {
               let obj = { a: { b: { c: 666 } } };
 
-              expect( objectUtils.hasProperty( obj, "a" ) ).toBe( true );
+              expect( hasProperty( obj, "a" ) ).toBe( true );
           } );
 
     test( "hasProperty returns false if the 'property' does not exist",
@@ -993,7 +1035,7 @@ describe( "hasProperty", () =>
           {
               let obj = { a: { b: { c: 666 } } };
 
-              expect( objectUtils.hasProperty( obj, "d" ) ).toBe( false );
+              expect( hasProperty( obj, "d" ) ).toBe( false );
           } );
 
     test( "hasProperty returns false if the 'property path' does not exist",
@@ -1001,7 +1043,7 @@ describe( "hasProperty", () =>
           {
               let obj = { a: { b: { c: 666 } } };
 
-              expect( objectUtils.hasProperty( obj, "a.b.z" ) ).toBe( false );
+              expect( hasProperty( obj, "a.b.z" ) ).toBe( false );
           } );
 } );
 
@@ -1012,7 +1054,7 @@ describe( "setProperty", () =>
           {
               let obj = { a: 5 };
 
-              expect( objectUtils.setProperty( obj, "a", 7 ) ).toEqual( 7 );
+              expect( setProperty( obj, "a", 7 ) ).toEqual( 7 );
           } );
 
     test( "setProperty does not change the value of the specified property if the object is frozen",
@@ -1020,7 +1062,7 @@ describe( "setProperty", () =>
           {
               let obj = Object.freeze( { a: 5 } );
 
-              expect( objectUtils.setProperty( obj, "a", 7 ) ).toEqual( 5 );
+              expect( setProperty( obj, "a", 7 ) ).toEqual( 5 );
           } );
 
     test( "setProperty changes, if possible, the value of the specified property path and returns the value of the property",
@@ -1028,7 +1070,7 @@ describe( "setProperty", () =>
           {
               let obj = { a: { b: { c: 666 } } };
 
-              expect( objectUtils.setProperty( obj, "a.b.c", 888 ) ).toEqual( 888 );
+              expect( setProperty( obj, "a.b.c", 888 ) ).toEqual( 888 );
           } );
 } );
 
@@ -1040,7 +1082,7 @@ describe( "identical", () =>
               let objA = { a: { b: { c: 666 } } };
               let objB = { a: { b: { c: 666 } } };
 
-              expect( objectUtils.identical( objA, objB ) ).toBe( false );
+              expect( identical( objA, objB ) ).toBe( false );
           } );
 
     test( "identical returns true when the 2 objects are the exact same object",
@@ -1049,7 +1091,7 @@ describe( "identical", () =>
               let objA = { a: { b: { c: 666 } } };
               let objB = objA;
 
-              expect( objectUtils.identical( objA, objB ) ).toBe( true );
+              expect( identical( objA, objB ) ).toBe( true );
           } );
 } );
 
@@ -1061,7 +1103,7 @@ describe( "'same' tests objects for semantic equality", () =>
               let objA = { a: { b: { c: 666 } } };
               let objB = { a: { b: { c: 666 } } };
 
-              expect( objectUtils.same( objA, objB ) ).toBe( true );
+              expect( same( objA, objB ) ).toBe( true );
           } );
 
     test( "same also returns true if the 2 object are the exact same object",
@@ -1070,7 +1112,7 @@ describe( "'same' tests objects for semantic equality", () =>
               let objA = { a: { b: { c: 666 } } };
               let objB = objA;
 
-              expect( objectUtils.same( objA, objB ) ).toBe( true );
+              expect( same( objA, objB ) ).toBe( true );
           } );
 
     test( "same returns true for other types",
@@ -1079,7 +1121,7 @@ describe( "'same' tests objects for semantic equality", () =>
               let objA = 5;
               let objB = 5;
 
-              expect( objectUtils.same( objA, objB ) ).toBe( true );
+              expect( same( objA, objB ) ).toBe( true );
           } );
 
     test( "same returns true for strings ignoring whitespace",
@@ -1088,7 +1130,7 @@ describe( "'same' tests objects for semantic equality", () =>
               let objA = " abc";
               let objB = "abc";
 
-              expect( objectUtils.same( objA, objB ) ).toBe( true );
+              expect( same( objA, objB ) ).toBe( true );
           } );
 
     test( "same returns false for strings differing in whitespace if pStrict is true",
@@ -1097,7 +1139,7 @@ describe( "'same' tests objects for semantic equality", () =>
               let objA = " abc";
               let objB = "abc";
 
-              expect( objectUtils.same( objA, objB, true ) ).toBe( false );
+              expect( same( objA, objB, true ) ).toBe( false );
           } );
 } );
 
@@ -1149,7 +1191,7 @@ describe( "arrayToObject", () =>
           () =>
           {
               let arr = [1, 2, 3];
-              let obj = objectUtils.arrayToObject( arr );
+              let obj = arrayToObject( arr );
 
               expect( obj ).toEqual( { 0: 1, 1: 2, 2: 3 } );
           } );
@@ -1158,7 +1200,7 @@ describe( "arrayToObject", () =>
           () =>
           {
               let arr = [{ a: 1, b: 2 }];
-              let obj = objectUtils.arrayToObject( arr, "b" );
+              let obj = arrayToObject( arr, "b" );
 
               expect( obj ).toEqual( {
                                          "2": {
@@ -1175,7 +1217,7 @@ describe( "findImplementor", () =>
     test( "findImplementor returns the first object that implements the specified method",
           () =>
           {
-              let implementor = objectUtils.findImplementor( "doSomething", new ClassOne(), new ClassTwo(), new ClassThree(), { "doSomething": function() {} } );
+              let implementor = findImplementor( "doSomething", new ClassOne(), new ClassTwo(), new ClassThree(), { "doSomething": function() {} } );
 
               expect( implementor instanceof ClassThree ).toBe( true );
           } );
@@ -1183,7 +1225,7 @@ describe( "findImplementor", () =>
     test( "findImplementor returns null  if none of the objects implement the specified method",
           () =>
           {
-              let implementor = objectUtils.findImplementor( "doNothing", new ClassOne(), new ClassTwo(), new ClassThree(), { "doSomething": function() {} } );
+              let implementor = findImplementor( "doNothing", new ClassOne(), new ClassTwo(), new ClassThree(), { "doSomething": function() {} } );
 
               expect( implementor ).toBe( null );
           } );
@@ -1200,7 +1242,7 @@ describe( "collectImplementors", () =>
 
               let obj = { "doSomething": function() {} };
 
-              let implementors = objectUtils.collectImplementors( "doSomething", classOne, classTwo, classThree, obj );
+              let implementors = collectImplementors( "doSomething", classOne, classTwo, classThree, obj );
 
               expect( implementors ).toEqual( [classThree, obj] );
           } );
@@ -1208,7 +1250,7 @@ describe( "collectImplementors", () =>
     test( "collectImplementors returns an empty collection if none of the objects implement the specified method",
           () =>
           {
-              let implementors = objectUtils.collectImplementors( "doNothing", new ClassOne(), new ClassTwo(), new ClassThree(), { "doSomething": function() {} } );
+              let implementors = collectImplementors( "doNothing", new ClassOne(), new ClassTwo(), new ClassThree(), { "doSomething": function() {} } );
 
               expect( implementors ).toEqual( [] );
           } );
@@ -1220,7 +1262,7 @@ describe( "Cloning", () =>
           () =>
           {
               let obj = { a: "", b: { c: {} }, "foo": true, "bar": 7 };
-              let clone = objectUtils.emptyClone( obj );
+              let clone = emptyClone( obj );
 
               expect( clone ).toEqual( { a: "", b: { c: {} }, "foo": false, "bar": 0 } );
 
@@ -1238,15 +1280,15 @@ describe( "Cloning", () =>
 
               let obj = { composite: composite, a: a, b: b, c: c, d: d };
 
-              let clone = objectUtils.clone( obj );
+              let copy = clone( obj );
 
-              expect( clone ).toEqual( {
-                                           composite: { a: "a", b: { c: 3 }, c: { d: { e: 42 } }, d: { foo: "bar" } },
-                                           a: "a",
-                                           b: { c: 3 },
-                                           c: { d: { e: 42 } },
-                                           d: { foo: "bar" }
-                                       } );
+              expect( copy ).toEqual( {
+                                          composite: { a: "a", b: { c: 3 }, c: { d: { e: 42 } }, d: { foo: "bar" } },
+                                          a: "a",
+                                          b: { c: 3 },
+                                          c: { d: { e: 42 } },
+                                          d: { foo: "bar" }
+                                      } );
 
               a = "AY";
               b = { c: "three" };
@@ -1255,11 +1297,11 @@ describe( "Cloning", () =>
 
               composite = { a: a, b: b, c: c, d: d };
 
-              expect( a === clone.a ).toBe( false );
-              expect( b === clone.b ).toBe( false );
-              expect( c === clone.c ).toBe( false );
-              expect( d === clone.d ).toBe( false );
-              expect( composite === clone.composite ).toBe( false );
+              expect( a === copy.a ).toBe( false );
+              expect( b === copy.b ).toBe( false );
+              expect( c === copy.c ).toBe( false );
+              expect( d === copy.d ).toBe( false );
+              expect( composite === copy.composite ).toBe( false );
 
               obj.a = a;
               obj.b = b;
@@ -1268,11 +1310,11 @@ describe( "Cloning", () =>
 
               obj.composite = composite;
 
-              expect( a === clone.a ).toBe( false );
-              expect( b === clone.b ).toBe( false );
-              expect( c === clone.c ).toBe( false );
-              expect( d === clone.d ).toBe( false );
-              expect( composite === clone.composite ).toBe( false );
+              expect( a === copy.a ).toBe( false );
+              expect( b === copy.b ).toBe( false );
+              expect( c === copy.c ).toBe( false );
+              expect( d === copy.d ).toBe( false );
+              expect( composite === copy.composite ).toBe( false );
 
               expect( a === obj.a ).toBe( true );
               expect( b === obj.b ).toBe( true );
@@ -1280,11 +1322,11 @@ describe( "Cloning", () =>
               expect( d === obj.d ).toBe( true );
               expect( composite === obj.composite ).toBe( true );
 
-              expect( clone.a === obj.a ).toBe( false );
-              expect( clone.b === obj.b ).toBe( false );
-              expect( clone.c === obj.c ).toBe( false );
-              expect( clone.d === obj.d ).toBe( false );
-              expect( clone.composite === obj.composite ).toBe( false );
+              expect( copy.a === obj.a ).toBe( false );
+              expect( copy.b === obj.b ).toBe( false );
+              expect( copy.c === obj.c ).toBe( false );
+              expect( copy.d === obj.d ).toBe( false );
+              expect( copy.composite === obj.composite ).toBe( false );
 
           } );
 
@@ -1301,7 +1343,7 @@ describe( "Cloning", () =>
                       }
                   };
 
-              const copy = objectUtils.clone( source, { omitFunctions: false, freeze: true } );
+              const copy = clone( source, { omitFunctions: false, freeze: true } );
 
               // it's a copy
               expect( copy === source ).toBe( false );
@@ -1336,7 +1378,7 @@ describe( "ingest and augment", () =>
               let obj3 = { a: "ay", b: "bee", c: { d: { e: 777 } }, "foo": "bar" };
               let obj4 = { a: 1, b: "bee", c: { d: { e: 777 } }, "zzz": "xyz" };
 
-              let obj5 = objectUtils.ingest( obj, obj2, obj3, obj4 );
+              let obj5 = ingest( obj, obj2, obj3, obj4 );
 
               expect( obj5 ).toEqual( {
                                           a: 1,
@@ -1423,7 +1465,7 @@ describe( "ingest and augment", () =>
                           }
                   };
 
-              let augmented = objectUtils.augment( obj, obj2 );
+              let augmented = augment( obj, obj2 );
 
               expect( augmented === obj ).toBe( false );
               expect( augmented === obj2 ).toBe( false );
@@ -1549,7 +1591,7 @@ describe( "ingest and augment", () =>
                           }
                   };
 
-              let augmented = objectUtils.augment( obj, obj2, { recursive: false } );
+              let augmented = augment( obj, obj2, { recursive: false } );
 
               expect( augmented === obj ).toBe( false );
               expect( augmented === obj2 ).toBe( false );
@@ -1613,7 +1655,7 @@ describe( "ingest and augment", () =>
                       c: [4, 5, 6]
                   };
 
-              let augmented = objectUtils.augment( obj, obj2, { appendToArrays: true } );
+              let augmented = augment( obj, obj2, { appendToArrays: true } );
 
               expect( augmented ).toEqual( {
                                                a: 1,
@@ -1639,7 +1681,7 @@ describe( "ingest and augment", () =>
                       c: [4, 5, 6, 7, 8, 9]
                   };
 
-              let augmented = objectUtils.augment( obj, obj2, { appendToArrays: true } );
+              let augmented = augment( obj, obj2, { appendToArrays: true } );
 
               expect( augmented ).toEqual( {
                                                a: 1,
@@ -1675,7 +1717,7 @@ describe( "ingest and augment", () =>
                       c: mapB
                   };
 
-              let augmented = objectUtils.augment( obj, obj2, { addMissingMapEntries: true } );
+              let augmented = augment( obj, obj2, { addMissingMapEntries: true } );
 
               expect( augmented.c.get( "a" ) ).toEqual( 1 );
               expect( augmented.c.get( "b" ) ).toEqual( 2 );
@@ -1726,7 +1768,7 @@ describe( "populate", () =>
                   };
 
 
-              let populated = objectUtils.populateObject( obj, obj2 );
+              let populated = populateObject( obj, obj2 );
 
               expect( populated === obj ).toBe( false );
               expect( populated === obj2 ).toBe( false );
@@ -1770,7 +1812,7 @@ describe( "prune removes 'dead' or undesired properties", () =>
                       k: ["", ""]
                   };
 
-              expect( JSON.stringify( objectUtils.prune( obj ) ) ).toEqual( JSON.stringify( expected ) );
+              expect( JSON.stringify( prune( obj ) ) ).toEqual( JSON.stringify( expected ) );
           } );
 
     test( "prune with options to remove empty string returns expected object",
@@ -1801,7 +1843,7 @@ describe( "prune removes 'dead' or undesired properties", () =>
                       k: ["", ""]
                   };
 
-              let actual = objectUtils.prune( obj, { removeEmptyStrings: true } );
+              let actual = prune( obj, { removeEmptyStrings: true } );
 
               expect( JSON.stringify( actual ) ).toEqual( JSON.stringify( expected ) );
           } );
@@ -1835,7 +1877,7 @@ describe( "prune removes 'dead' or undesired properties", () =>
                       j: ""
                   };
 
-              expect( JSON.stringify( objectUtils.prune( obj, { pruneArrays: true } ) ) ).toEqual( JSON.stringify( expected ) );
+              expect( JSON.stringify( prune( obj, { pruneArrays: true } ) ) ).toEqual( JSON.stringify( expected ) );
           } );
 
     test( "prune with options to prune arrays, but not remove empty arrays, returns expected object",
@@ -1869,11 +1911,11 @@ describe( "prune removes 'dead' or undesired properties", () =>
                       k: []
                   };
 
-              expect( JSON.stringify( objectUtils.prune( obj,
-                                                         {
-                                                             pruneArrays: true,
-                                                             removeEmptyArrays: false
-                                                         } ) ) ).toEqual( JSON.stringify( expected ) );
+              expect( JSON.stringify( prune( obj,
+                                             {
+                                                 pruneArrays: true,
+                                                 removeEmptyArrays: false
+                                             } ) ) ).toEqual( JSON.stringify( expected ) );
           } );
 
     test( "prune with options to prune arrays and remove empty strings returns expected object",
@@ -1905,7 +1947,7 @@ describe( "prune removes 'dead' or undesired properties", () =>
 
               const options = { pruneArrays: true, removeEmptyStrings: true };
 
-              expect( JSON.stringify( objectUtils.prune( obj, options ) ) ).toEqual( JSON.stringify( expected ) );
+              expect( JSON.stringify( prune( obj, options ) ) ).toEqual( JSON.stringify( expected ) );
           } );
 
     test( "prune with most aggressive options returns expected object",
@@ -1943,7 +1985,7 @@ describe( "prune removes 'dead' or undesired properties", () =>
                       trimStrings: true
                   };
 
-              expect( JSON.stringify( objectUtils.prune( obj, options ) ) ).toEqual( JSON.stringify( expected ) );
+              expect( JSON.stringify( prune( obj, options ) ) ).toEqual( JSON.stringify( expected ) );
           } );
 } );
 
@@ -2036,7 +2078,7 @@ describe( "toLiteral erases class prototype", () =>
 
               house.lock();
 
-              let obj = objectUtils.toLiteral( house );
+              let obj = toLiteral( house );
 
               expect( obj === house ).toBe( false );
 
@@ -2141,7 +2183,7 @@ describe( "toLiteral erases class prototype", () =>
 
               house.lock();
 
-              let obj = objectUtils.toLiteral( house, { removeFunctions: false } );
+              let obj = toLiteral( house, { removeFunctions: false } );
 
               expect( obj === house ).toBe( false );
 
@@ -2192,33 +2234,33 @@ describe( "findNode / findRoot",
               test( "findNode",
                     () =>
                     {
-                        let node = objectUtils.findNode( obj, "a", "b" );
+                        let node = findNode( obj, "a", "b" );
                         expect( node ).toBe( obj.a.b );
 
-                        node = objectUtils.findNode( obj, "a", "a" );
+                        node = findNode( obj, "a", "a" );
                         expect( node ).toBe( undefined );
                     } );
 
               test( "findRoot",
                     () =>
                     {
-                        const dependencies = objectUtils.findNode( $scope(), "__BOCK__OBJECT_UTILS__", "dependencies" );
+                        const dependencies = findNode( $scope(), "__BOCK__OBJECT_UTILS__", "dependencies" );
 
                         expect( Object.keys( dependencies ).length ).toBe( 5 );
 
-                        const root = objectUtils.findRoot( obj, obj.a.b.c );
+                        const root = findRoot( obj, obj.a.b.c );
 
                         expect( root ).toEqual( obj );
 
-                        let pathTo = objectUtils.tracePathTo( obj.a.b.c, obj.a );
+                        let pathTo = tracePathTo( obj.a.b.c, obj.a );
 
                         expect( pathTo.join( "." ) ).toEqual( "b.c" );
 
-                        pathTo = objectUtils.tracePathTo( obj.a.b.c.d, obj.a );
+                        pathTo = tracePathTo( obj.a.b.c.d, obj.a );
 
                         expect( pathTo.join( "." ) ).toEqual( "b.c.d" );
 
-                        const found = objectUtils.findRoot( this, obj.a.b.c );
+                        const found = findRoot( this, obj.a.b.c );
 
                         expect( found ).toBe( null );
 

@@ -351,7 +351,7 @@ describe( "pkUnZip", () =>
     test( "unzip 1011.zip",
           async() =>
           {
-              const zipFilePath = path.resolve( zippedFilesDir + "/1011.zip" );
+              const zipFilePath = path.resolve( zippedFilesDir, "1011.zip" );
               const outputPath = path.resolve( unzippedFilesDir );
 
               await pkUnZip( zipFilePath, outputPath );
@@ -371,11 +371,11 @@ describe( "pkUnZip", () =>
 
               expect( found ).toBe( true );
 
-              let contents = await fsAsync.readFile( path.resolve( outputPath + "/1011.edi" ), { encoding: utf8 } );
+              let contents = await fsAsync.readFile( path.resolve( outputPath, "1011.edi" ), { encoding: utf8 } );
 
               expect( contents ).toEqual( edi_1011 );
 
-              await fsAsync.unlink( path.resolve( outputPath + "/1011.edi" ) );
+              await fsAsync.unlink( path.resolve( outputPath, "1011.edi" ) );
           } );
 } );
 

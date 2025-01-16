@@ -87,6 +87,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             reportError,
             asPhrase,
             isReadOnly,
+            objectEntries,
             populateOptions,
             mergeOptions,
             lock,
@@ -1903,6 +1904,9 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#isReadOnly
              */
             isReadOnly,
+
+            objectEntries,
+
             /**
              * Returns a local (mutable) copy of the value specified.
              *

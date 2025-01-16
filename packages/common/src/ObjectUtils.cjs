@@ -74,6 +74,7 @@ const $scope = constants?.$scope || function()
             funcToString,
             lock,
             deepFreeze,
+            objectEntries,
             localCopy,
             immutableCopy,
             classes,
@@ -976,6 +977,7 @@ const $scope = constants?.$scope || function()
         return lock( unique( pruneArray( values ) ) );
     };
 
+    //TODO: use objectEntries logic
 
     /**
      * Returns an array of the entries of the objects specified,
@@ -999,46 +1001,48 @@ const $scope = constants?.$scope || function()
 
         for( let object of objects )
         {
-            if ( object instanceof Map )
-            {
-                entries = (entries.concat( ...(object.entries()) ));
-            }
-            else if ( object instanceof Set || isArray( object ) )
-            {
-                entries = (entries.concat( getEntries( arrayToObject( [...object] ) ) ));
-            }
-            else
-            {
-                const properties = getProperties( object );
+            /*if ( object instanceof Map )
+             {
+             entries = (entries.concat( ...(object.entries()) ));
+             }
+             else if ( object instanceof Set || isArray( object ) )
+             {
+             entries = (entries.concat( getEntries( arrayToObject( [...object] ) ) ));
+             }
+             else
+             {
+             const properties = getProperties( object );
 
-                for( let property of properties )
-                {
-                    let value = null;
+             for( let property of properties )
+             {
+             let value = null;
 
-                    try
-                    {
-                        value = object[property] || getProperty( object, property );
-                    }
-                    catch( ex )
-                    {
-                        // this can occur if we try to read a private member variable,
-                        // but we make a second attempt
-                        try
-                        {
-                            value = getProperty( object, property ) || object[property];
-                        }
-                        catch( ex2 )
-                        {
-                            // this can occur if we try to read a private member variable
-                        }
-                    }
+             try
+             {
+             value = object[property] || getProperty( object, property );
+             }
+             catch( ex )
+             {
+             // this can occur if we try to read a private member variable,
+             // but we make a second attempt
+             try
+             {
+             value = getProperty( object, property ) || object[property];
+             }
+             catch( ex2 )
+             {
+             // this can occur if we try to read a private member variable
+             }
+             }
 
-                    if ( isNonNullValue( value ) )
-                    {
-                        entries.push( [property, value, object] );
-                    }
-                }
-            }
+             if ( isNonNullValue( value ) )
+             {
+             entries.push( [property, value, object] );
+             }
+             }
+             }*/
+
+            entries.push( ...(objectEntries( object )) );
         }
 
         entries = ((entries || []).filter( e => isArray( e ) && ((e?.length || 0) > 1) ));
@@ -1396,6 +1400,11 @@ const $scope = constants?.$scope || function()
                                        validTypes: [_obj, _num, _big, _str, _bool]
                                    } );
         };
+
+        if ( root === scope || root === target )
+        {
+            return paths;
+        }
 
         const entries = getEntries( root ).filter( predicate );
 
@@ -3156,7 +3165,7 @@ const $scope = constants?.$scope || function()
 
             for( let entry of pObject.entries() )
             {
-                let key = entry[0];
+                let key = asString( entry[0] );
                 _map[key] = toLiteral( entry[1], options, stack.concat( key ) );
             }
 
@@ -3205,7 +3214,16 @@ const $scope = constants?.$scope || function()
                     {
                         literal = emptyClone( pObject, _obj ) || {};
 
-                        let entries = getEntries( pObject );
+                        let entries = [...(getEntries( pObject ))];
+
+                        getProperties( pObject ).forEach( ( key, i ) =>
+                                                          {
+                                                              const properties = [key, toLiteral( pObject[key], options, stack.concat( i ) )];
+                                                              if ( properties && properties.length > 1 && isString( properties[0] ) && !isNull( properties[1] ) )
+                                                              {
+                                                                  entries.push( properties );
+                                                              }
+                                                          } );
 
                         for( let entry of entries )
                         {
