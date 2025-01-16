@@ -912,7 +912,7 @@ const $scope = constants?.$scope || function()
             return new PasswordProtection( encrypted, iv, salt, key, inputEncoding, outputEncoding );
         }
 
-        get storable()
+        serialize()
         {
             const rx = /=+$/;
 
@@ -953,9 +953,9 @@ const $scope = constants?.$scope || function()
             return asString( s, true );
         }
 
-        static fromStorable( storable )
+        static deserialize( pSerialized )
         {
-            const s = storable;
+            const s = pSerialized;
 
             const preamble = s.slice( 0, 80 );
 

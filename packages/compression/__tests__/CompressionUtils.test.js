@@ -310,9 +310,9 @@ describe( "PasswordProtection", () =>
 
               expect( decrypted ).toEqual( pwd );
 
-              const persisted = protectedPassword.storable;
+              const persisted = protectedPassword.serialize();
 
-              const retrieved = PasswordProtection.fromStorable( persisted );
+              const retrieved = PasswordProtection.deserialize( persisted );
 
               const rPwd = retrieved.decrypt();
 
@@ -335,9 +335,9 @@ describe( "PasswordProtection", () =>
 
               expect( decrypted ).toEqual( pwd );
 
-              const persisted = protectedPassword.storable;
+              const persisted = protectedPassword.serialize();
 
-              const retrieved = PasswordProtection.fromStorable( persisted );
+              const retrieved = PasswordProtection.deserialize( persisted );
 
               const rPwd = retrieved.decrypt();
 
