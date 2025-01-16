@@ -1253,6 +1253,22 @@ const $scope = constants?.$scope || function()
         {
             return new CompressionOptions( this.deleteSource, this.passwordProtection, this.encoding, this.onError, this.onSuccess, this.formatSpecificOptions );
         }
+
+        static fromOptions( pOptions, pDeleteSource, pPasswordProtection, pEncoding, pOnError, pOnSuccess, pFormatSpecificOptions )
+        {
+            const options = mergeOptions( pOptions,
+                                          {
+                                              deleteSource: pDeleteSource,
+                                              passwordProtection: pPasswordProtection,
+                                              encoding: pEncoding,
+                                              onError: pOnError,
+                                              onSuccess: pOnSuccess,
+                                              formatSpecificOptions: pFormatSpecificOptions
+                                          },
+                                          CompressionOptions.DEFAULT );
+
+            return new CompressionOptions( options?.deleteSource || pDeleteSource, options?.passwordProtection || pPasswordProtection, options?.encoding || pEncoding, options?.onError || pOnError, options?.onSuccess || pOnSuccess, options?.formatSpecificOptions || pFormatSpecificOptions );
+        }
     }
 
     CompressionOptions.DEFAULT = new CompressionOptions( false, null, DEFAULT_ENCODING, null, null, GZIP_OPTIONS );
@@ -1657,7 +1673,7 @@ const $scope = constants?.$scope || function()
 
         const extension = ".zip";
 
-        let zipper = new admZip( undefined, { fs: fs } );
+        let zipper = new admZip( undefined, { fs: fs, password: resolvePassword() } );
 
         switch ( leftSide )
         {
@@ -1705,7 +1721,7 @@ const $scope = constants?.$scope || function()
 
         try
         {
-            zipper.writeZip( outputFilePath, handleError );
+            zipper.writeZip( outputFilePath, handleError, { password: resolvePassword() } );
 
             await handleSuccess( recursive );
         }

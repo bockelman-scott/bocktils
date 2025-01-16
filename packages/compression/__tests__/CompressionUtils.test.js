@@ -381,7 +381,7 @@ describe( "pkUnZip", () =>
 
 describe( "pkZip", () =>
 {
-    test( "zip text_01.txt",
+    test( "zip text_1.txt",
           async() =>
           {
               const txtFileName = "text_1.txt";
@@ -418,6 +418,56 @@ describe( "pkZip", () =>
               await fsAsync.unlink( path.resolve( outputPath, zipFileName ) );
               await fsAsync.unlink( path.resolve( unzippedFilesDir, txtFileName ) );
           } );
+
+    test( "zip text_0.txt with a password",
+          async() =>
+          {
+              const { PasswordProtection } = zipUtils;
+
+              const txtFileName = "text_0.txt";
+              const zipFileName = "text_0.zip";
+
+              const inputPath = path.resolve( textFilesDir, txtFileName );
+              const outputPath = path.resolve( zippedFilesDir );
+
+              const originalContents = await fsAsync.readFile( inputPath, { encoding: utf8 } );
+
+              let pwd = "?6%2bMG5mS/LG&v_63k4ay6fpP.v-8W";
+              let salt = "2:pXcQarbfSfT2F$:!eRS6kB.nT.tJ5";
+
+              const passwordProtection = await PasswordProtection.encrypt( pwd, salt, utf8 );
+
+              const options = CompressionOptions.fromOptions( {
+                                                                  passwordProtection
+                                                              } );
+
+              await pkZip( inputPath, outputPath, options );
+
+              const entries = await fsAsync.readdir( outputPath, { withFileTypes: true } );
+
+              let found = false;
+
+              for( const entry of entries )
+              {
+                  if ( entry && entry.isFile() && entry.name === zipFileName )
+                  {
+                      found = true;
+                      break;
+                  }
+              }
+
+              expect( found ).toBe( true );
+
+              await pkUnZip( path.resolve( outputPath, zipFileName ), unzippedFilesDir, options );
+
+              const contents = await fsAsync.readFile( path.resolve( unzippedFilesDir, txtFileName ), { encoding: utf8 } );
+
+              expect( contents ).toEqual( originalContents );
+
+              await fsAsync.unlink( path.resolve( outputPath, zipFileName ) );
+              await fsAsync.unlink( path.resolve( unzippedFilesDir, txtFileName ) );
+          } );
+
 } );
 
 describe( "pipeToCompressedFile", () =>

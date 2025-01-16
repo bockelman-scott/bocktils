@@ -2360,11 +2360,25 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
 
             for( const [k, v] of kvPairs )
             {
-                if ( null === v || _ud === typeof v )
+                if ( null === v || _ud === typeof v || (_obj === typeof v && Object.keys( v || {} ).length === 0) )
                 {
                     continue;
                 }
-                o[k] = ( !(k in o) || null === o[k]) ? v : ((_obj === typeof v) ? merge( ++pDepth, o[k], v, k ) : v);
+
+                if ( !(k in o) || null === o[k] || _ud === typeof o[k] || (_obj === typeof o[k] && Object.keys( o[k] || {} ).length === 0) )
+                {
+                    o[k] = v;
+                }
+                else if ( _obj === typeof v && _obj === typeof o[k] )
+                {
+                    o[k] = merge( ++pDepth, o[k], v, k );
+                }
+                else
+                {
+                    o[k] = (_obj === typeof o[k] ? merge( ++pDepth, o[k], { [k]: v }, k ) : v);
+                }
+
+                // o[k] = ( !(k in o) || null === o[k]) ? v : ((_obj === typeof v) ? merge( ++pDepth, o[k], v, k ) : v);
             }
 
             return o;
@@ -2383,7 +2397,18 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
                     continue;
                 }
 
-                obj[key] = ( !(key in obj) || null === obj[key] || _ud === typeof obj[key]) ? value : ((_obj === typeof value && _obj === typeof obj[key]) ? merge( ++mergeDepth, obj[key], value, key ) : (_obj === typeof obj[key] ? merge( ++mergeDepth, obj[key], { [key]: value }, key ) : value));
+                if ( !(key in obj) || null === obj[key] || _ud === typeof obj[key] || Object.keys( obj[key] || {} ).length === 0 )
+                {
+                    obj[key] = value;
+                }
+                else if ( _obj === typeof value && _obj === typeof obj[key] )
+                {
+                    obj[key] = merge( ++mergeDepth, obj[key], value, key );
+                }
+                else
+                {
+                    obj[key] = (_obj === typeof obj[key] ? merge( ++mergeDepth, obj[key], { [key]: value }, key ) : value);
+                }
             }
         }
 
