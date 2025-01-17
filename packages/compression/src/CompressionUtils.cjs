@@ -102,7 +102,7 @@ const $scope = constants?.$scope || function()
         toBits
     } = typeUtils;
 
-    const { asString, asInt, isBlank, lcase, ucase, toAbsolutePath } = stringUtils;
+    const { asString, asInt, isBlank, lcase, ucase, toBool } = stringUtils;
 
     const { varargs, asArray, Filters, Mappers } = arrayUtils;
 
@@ -229,6 +229,40 @@ const $scope = constants?.$scope || function()
         }
         return false;
     }
+
+    const exists = function( pPath )
+    {
+        let exists;
+
+        try
+        {
+            fs.accessSync( pPath, fs.constants.W_OK );
+            exists = true;
+        }
+        catch( ex )
+        {
+            exists = false;
+        }
+
+        return exists;
+    };
+
+    const asyncExists = async function( pPath )
+    {
+        let exists;
+
+        try
+        {
+            await fsAsync.access( pPath, fs.constants.F_OK );
+            exists = true;
+        }
+        catch( ex )
+        {
+            exists = false;
+        }
+
+        return exists;
+    };
 
     /**
      * Removes the file extension from the given file path.
@@ -1955,7 +1989,7 @@ const $scope = constants?.$scope || function()
 
         get compressionOptions()
         {
-            return mergeOptions( this.#compressionOptions || {}, CompressionOptions.DEFAULT );
+            return CompressionOptions.fromOptions( mergeOptions( this.#compressionOptions || {}, CompressionOptions.DEFAULT ), CompressionOptions.DEFAULT );
         }
 
         get formatSpecificOptions()
@@ -1973,9 +2007,9 @@ const $scope = constants?.$scope || function()
             return this.#decompressionFunction;
         }
 
-        decompress( pInputPath, pOutputPath, pOptions )
+        async decompress( pInputPath, pOutputPath, pOptions )
         {
-            this.decompressionFunction.call( this, pInputPath, pOutputPath, mergeOptions( (pOptions || this.compressionOptions), this.compressionOptions ) );
+            return await this.decompressionFunction.call( this, pInputPath, pOutputPath, mergeOptions( (pOptions || this.compressionOptions), this.compressionOptions ) );
         }
 
         get compressionFunction()
@@ -1983,9 +2017,9 @@ const $scope = constants?.$scope || function()
             return this.#compressionFunction;
         }
 
-        compress( pInputPath, pOutputPath, pOptions )
+        async compress( pInputPath, pOutputPath, pOptions )
         {
-            this.compressionFunction.call( this, pInputPath, pOutputPath, mergeOptions( (pOptions || this.compressionOptions), this.compressionOptions ) );
+            return await this.compressionFunction.call( this, pInputPath, pOutputPath, mergeOptions( (pOptions || this.compressionOptions), this.compressionOptions ) );
         }
 
         equals( pOther )
@@ -2255,6 +2289,41 @@ const $scope = constants?.$scope || function()
 
     const DEFAULT_ARCHIVER_OPTIONS = new ArchiverOptions( _mt_str );
 
+    ArchiverOptions.from = function( pObject )
+    {
+        if ( pObject instanceof ArchiverOptions )
+        {
+            return pObject.clone();
+        }
+
+        if ( isObject( pObject ) && !isNull( pObject ) )
+        {
+            if ( isArray( pObject ) )
+            {
+                let arr = asArray( pObject || [] );
+                let i = 0;
+                let obj =
+                    {
+                        outputDirectory = arr[i++],
+                        compressionFormat = arr[i++],
+                        compressionLevel = arr[i++],
+                        passwordProtection = arr[i++],
+                        onSuccess = arr[i++],
+                        onFailure = arr[i++],
+                        deleteSource = arr[i++]
+                    } = {};
+
+                return ArchiverOptions.from( obj );
+            }
+
+            const options = mergeOptions( pObject, DEFAULT_ARCHIVER_OPTIONS );
+
+            return new ArchiverOptions( options?.outputDirectory, options?.compressionFormat, options?.compressionLevel, options?.passwordProtection, options?.onSuccess, options?.onFailure, options?.deleteSource );
+        }
+
+        return DEFAULT_ARCHIVER_OPTIONS;
+    };
+
     class Archiver
     {
         #options;
@@ -2307,6 +2376,11 @@ const $scope = constants?.$scope || function()
             return this.compressionFormat?.compressionOptions;
         }
 
+        get extension()
+        {
+            return this.compressionOptions?.extension || this.compressionFormat?.extension || CompressionOptions.DEFAULT.extension || _mt_str;
+        }
+
         get formatSpecificOptions()
         {
             return this.compressionOptions?.formatSpecificOptions || {};
@@ -2332,71 +2406,182 @@ const $scope = constants?.$scope || function()
             return this.#passwordProtection instanceof PasswordProtection ? this.#passwordProtection : null;
         }
 
-        async checkFilePath( pFilepath )
+        async checkFilePath( pFilePath )
         {
-            let exists = await fsAsync.access( path.resolve( pFilepath ), fs.constants.W_OK | fs.constants.R_OK );
-
-            if ( !exists )
+            try
             {
-                const msg = "The specified file path does not exist or cannot be read: " + pFilepath;
-                modulePrototype.reportError( new Error( msg ), msg, S_WARN, modName + "::Archiver::checkFilePath" );
+                let available = isString( pFilePath ) ? await exists( path.resolve( pFilePath ) ) : false;
 
-                if ( pFilepath.indexOf( _dot ) < 0 )
+                if ( !available && isString( pFilePath ) )
                 {
-                    exists = await this.createPath( pFilepath );
+                    const msg = "The specified file path does not exist or cannot be read: " + pFilePath;
+                    modulePrototype.reportError( new Error( msg ), msg, S_WARN, modName + "::Archiver::checkFilePath" );
+
+                    if ( pFilePath.indexOf( _dot ) < 0 )
+                    {
+                        available = await this.createPath( pFilePath );
+                    }
                 }
+
+                return toBool( available );
+            }
+            catch( ex )
+            {
+                const msg = "An error occurred while checking the existence of the specified file path: " + pFilePath;
+                modulePrototype.reportError( new Error( msg ), msg, S_WARN, modName + "::Archiver::checkFilePath" );
             }
 
-            return exists;
+            return false;
         }
 
         async createPath( pPath )
         {
-            let exists = await this.checkFilePath( pPath );
-
-            if ( !exists )
+            try
             {
-                let dirname = path.resolve( pPath );
-                if ( !isBlank( dirname ) )
+                let exists = isString( pPath ) ? await this.checkFilePath( pPath ) : false;
+
+                if ( !exists && isString( pPath ) )
                 {
-                    exists = await this.checkFilePath( dirname );
-                    if ( !exists )
+                    let dirname = path.resolve( pPath );
+                    if ( !isBlank( dirname ) )
                     {
-                        await fsAsync.mkdir( dirname, { recursive: true } );
                         exists = await this.checkFilePath( dirname );
+                        if ( !exists )
+                        {
+                            await fsAsync.mkdir( dirname, { recursive: true } );
+                            exists = await this.checkFilePath( dirname );
+                        }
                     }
                 }
+
+                return toBool( exists );
+            }
+            catch( ex )
+            {
+                const msg = "An error occurred while creating the specified path: " + pPath;
+                modulePrototype.reportError( new Error( msg ), msg, S_WARN, modName + "::Archiver::checkFilePath" );
             }
 
-            return exists;
+            return false;
         }
 
-        async archive( pFilepath, pOptions )
+        async resolveArguments( pFilePath, pDirectory, pOptions )
         {
-            let filepath = isString( pFilepath ) ? pFilepath : asArray( pFilepath );
+            let filepath = isString( pFilePath ) ? pFilePath : asArray( pFilePath );
 
-            const exists = isString( filepath ) ? await this.checkFilePath( filepath ) : !isNull( filepath );
+            let exists = isString( filepath ) ? await this.checkFilePath( filepath ) : !isNull( filepath );
 
-            if ( !exists )
+            let outputPath = pDirectory || this.outputDirectory || path.dirname( filepath );
+
+            if ( isString( outputPath ) )
             {
-                return false;
+                exists &= await this.checkFilePath( outputPath );
             }
-
-            const directory = (this.#outputDirectory || path.dirname( filepath )).trim();
-
-            const filename = (path.basename( pFilepath ).replace( /(\.\w)*/, _mt_str )).trim();
-
-            let outputPath = (path.resolve( directory, filename )).trim();
 
             const format = this.compressionFormat;
 
-            const options = mergeOptions( (pOptions || {}), format.compressionOptions );
+            const options = mergeOptions( (pOptions || {}), format.compressionOptions, CompressionOptions.DEFAULT );
 
-            return await format.compress( filename, outputPath, mergeOptions( options, this.options ) );
+            return { exists, filepath, outputPath, format, options };
         }
 
-        async decompress( pFilepath, pOptions )
+        async archive( pFilePath, pOptions )
         {
+            const directory = (this.#outputDirectory || (isString( pFilePath ) ? path.dirname( pFilePath ) : _mt_str)).trim();
+
+            const {
+                exists,
+                filepath,
+                outputPath,
+                format,
+                options
+            } = await this.resolveArguments( pFilePath, directory, pOptions );
+
+            if ( await isDirectory( filepath ) )
+            {
+                // archiving an entire directory is only supported with PkZip in this release
+                return pkZip( filepath, outputPath, options );
+            }
+
+            if ( isArray( filepath ) && asArray( filepath ).some( file => isString( file ) ) )
+            {
+                // we assume that if any of the elements of the source buffer are strings,
+                // it is an array of file paths, so we recursively call this method and return an array of the compressed file paths
+
+                let compressedFiles = [];
+
+                for( let file of asArray( filepath ) )
+                {
+                    try
+                    {
+                        const compressedFilePath = await this.archive( file, options );
+                        compressedFiles.push( compressedFilePath );
+                    }
+                    catch( ex )
+                    {
+                        modulePrototype.reportError( ex, `archiving ${asString( file )}`, S_ERROR, modName + "::Archiver::archive", file, options );
+                    }
+                }
+
+                return compressedFiles;
+            }
+
+            if ( exists )
+            {
+                return await format.compress( filepath, outputPath, mergeOptions( options, this.options ) );
+            }
+
+            return false;
+        }
+
+        async decompress( pCompressedFilePath, pOutputPath, pOptions )
+        {
+            let directory = pOutputPath || pOptions?.outputDirectory || pOptions?.outputPath || this.outputDirectory;
+
+            if ( isString( directory ) )
+            {
+                if ( await isFile( directory ) )
+                {
+                    directory = path.dirname( directory );
+                }
+            }
+
+            const {
+                exists,
+                filepath,
+                outputPath,
+                format,
+                options
+            } = await this.resolveArguments( pCompressedFilePath, directory, pOptions );
+
+            if ( isArray( filepath ) && asArray( filepath ).some( file => isString( file ) ) )
+            {
+                // we assume that if any of the elements of the source buffer are strings,
+                // it is an array of file paths, so we recursively call this method and return an array of the decompressed file paths
+
+                let decompressedFiles = [];
+
+                for( let file of asArray( filepath ) )
+                {
+                    try
+                    {
+                        const decompressedFilePath = await this.decompress( file, options );
+                        decompressedFiles.push( decompressedFilePath );
+                    }
+                    catch( ex )
+                    {
+                        modulePrototype.reportError( ex, `decompressing ${asString( file )}`, S_ERROR, modName + "::Archiver::archive", file, options );
+                    }
+                }
+
+                return decompressedFiles;
+            }
+
+            if ( exists )
+            {
+                return await format.decompress( filepath, outputPath, mergeOptions( options, this.options ) );
+            }
+            return false;
         }
 
         clone()

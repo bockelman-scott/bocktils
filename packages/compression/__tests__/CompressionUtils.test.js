@@ -20,6 +20,7 @@ const {
     isDirectory,
     removeExtension,
     replaceExtension,
+    PasswordProtection,
     pkUnZip,
     pkZip,
     pipeToCompressedFile,
@@ -36,7 +37,10 @@ const {
     DEFLATE_OPTIONS,
     INFLATE_OPTIONS,
     BROTLI_OPTIONS,
-    CompressionFormat
+    CompressionFormat,
+    ArchiverOptions,
+    DEFAULT_ARCHIVER_OPTIONS,
+    Archiver
 } = zipUtils;
 
 const utf8 = "utf-8";
@@ -345,6 +349,108 @@ describe( "PasswordProtection", () =>
           } );
 } );
 
+
+describe( "ArchiverOptions", () =>
+{
+    test( "ArchiverOptions construction",
+          () =>
+          {
+              let archiverOptions = new ArchiverOptions( testDataDir );
+
+              expect( archiverOptions.outputDirectory ).toEqual( testDataDir );
+              expect( archiverOptions.compressionLevel ).toEqual( DEFAULT_ARCHIVER_OPTIONS.compressionLevel );
+              expect( archiverOptions.compressionFormat ).toEqual( DEFAULT_ARCHIVER_OPTIONS.compressionFormat );
+              expect( archiverOptions.passwordProtection ).toEqual( DEFAULT_ARCHIVER_OPTIONS.passwordProtection );
+              expect( archiverOptions.onSuccess ).toEqual( DEFAULT_ARCHIVER_OPTIONS.onSuccess );
+              expect( archiverOptions.onFailure ).toEqual( DEFAULT_ARCHIVER_OPTIONS.onFailure );
+              expect( archiverOptions.deleteSource ).toEqual( DEFAULT_ARCHIVER_OPTIONS.deleteSource );
+
+              archiverOptions = ArchiverOptions.from( { outputDirectory: testDataDir } );
+
+              expect( archiverOptions.outputDirectory ).toEqual( testDataDir );
+              expect( archiverOptions.compressionLevel ).toEqual( DEFAULT_ARCHIVER_OPTIONS.compressionLevel );
+              expect( archiverOptions.compressionFormat ).toEqual( DEFAULT_ARCHIVER_OPTIONS.compressionFormat );
+              expect( archiverOptions.passwordProtection ).toEqual( DEFAULT_ARCHIVER_OPTIONS.passwordProtection );
+              expect( archiverOptions.onSuccess ).toEqual( DEFAULT_ARCHIVER_OPTIONS.onSuccess );
+              expect( archiverOptions.onFailure ).toEqual( DEFAULT_ARCHIVER_OPTIONS.onFailure );
+              expect( archiverOptions.deleteSource ).toEqual( DEFAULT_ARCHIVER_OPTIONS.deleteSource );
+
+              let pwd = "?6%2bMG5mS/LG&v_63k4ay6fpP.v-8W";
+              let salt = "2:pXcQarbfSfT2F$:!eRS6kB.nT.tJ5";
+              let encoding = "utf-8";
+
+              const protectedPassword = PasswordProtection.encrypt( pwd, salt, encoding );
+
+              archiverOptions = ArchiverOptions.from(
+                  {
+                      outputDirectory: zippedFilesDir,
+                      compressionLevel: 9,
+                      compressionFormat: CompressionFormat.BROTLI,
+                      passwordProtection: protectedPassword,
+                      deleteSource: true
+                  } );
+
+              expect( archiverOptions.outputDirectory ).toEqual( zippedFilesDir );
+              expect( archiverOptions.compressionLevel ).toEqual( 9 );
+              expect( archiverOptions.compressionFormat ).toEqual( CompressionFormat.BROTLI );
+              expect( archiverOptions.passwordProtection.decrypt() ).toEqual( pwd );
+              expect( archiverOptions.onSuccess ).toEqual( DEFAULT_ARCHIVER_OPTIONS.onSuccess );
+              expect( archiverOptions.onFailure ).toEqual( DEFAULT_ARCHIVER_OPTIONS.onFailure );
+              expect( archiverOptions.deleteSource ).toBe( true );
+
+          } );
+} );
+
+describe( "Archiver", () =>
+{
+    test( "Archiver construction",
+          () =>
+          {
+              const archiver = new Archiver( testDataDir );
+
+              expect( archiver.outputDirectory ).toEqual( testDataDir );
+              expect( archiver.compressionFormat ).toEqual( CompressionFormat.DEFAULT );
+              expect( archiver.compressionLevel ).toEqual( DEFAULT_ARCHIVER_OPTIONS.compressionLevel );
+              expect( archiver.passwordProtection ).toEqual( DEFAULT_ARCHIVER_OPTIONS.passwordProtection );
+              expect( archiver.onSuccess ).toEqual( DEFAULT_ARCHIVER_OPTIONS.onSuccess );
+              expect( archiver.onFailure ).toEqual( DEFAULT_ARCHIVER_OPTIONS.onFailure );
+
+              expect( archiver.compressionOptions ).toEqual( CompressionFormat.DEFAULT.compressionOptions );
+              expect( archiver.compressionOptions ).toEqual( CompressionOptions.DEFAULT );
+              expect( archiver.extension ).toEqual( CompressionFormat.DEFAULT.extension );
+          } );
+
+    test( "Archiver - archive a file",
+          async() =>
+          {
+              const sourceFileName = "text_1.txt";
+              const destinationFileName = "text_1.gz";
+
+              const sourceFilePath = path.resolve( textFilesDir, sourceFileName );
+              const destinationFilePath = path.resolve( zippedFilesDir, destinationFileName );
+              const decompressedFilePath = path.resolve( unzippedFilesDir, sourceFileName.replace( /(\.\w+)$/, "" ) );
+
+              const originalContents = await fsAsync.readFile( sourceFilePath, { encoding: utf8 } );
+
+              const archiver = new Archiver( zippedFilesDir );
+
+              const archived = await archiver.archive( sourceFilePath );
+
+              expect( archived ).toEqual( destinationFilePath );
+
+              const uncompressedFilePath = await archiver.decompress( destinationFilePath, unzippedFilesDir );
+
+              expect( uncompressedFilePath ).toEqual( decompressedFilePath );
+
+              const contents = await fsAsync.readFile( uncompressedFilePath, { encoding: utf8 } );
+
+              expect( contents ).toEqual( originalContents );
+
+              await fsAsync.unlink( destinationFilePath );
+              await fsAsync.unlink( uncompressedFilePath );
+
+          } );
+} );
 
 describe( "pkUnZip", () =>
 {
