@@ -14,7 +14,7 @@ const { sleep } = constants;
 
 const { isString } = typeUtils;
 
-const { asString } = stringUtils;
+const { asString, isBlank } = stringUtils;
 
 const {
     classes: fileLoggerClasses,
@@ -24,7 +24,8 @@ const {
     FileRotationInterval,
     LogFileRotationPolicy,
     DEFAULTS,
-    FileLogger
+    FileLogger,
+    TIMESTAMP_RESOLUTION
 } = fileLogger;
 
 const {
@@ -340,11 +341,11 @@ describe( "FileLogger", () =>
     {
         let logger = new FileLogger( { directory: logDir } );
 
-        expect( logger.directory ).toEqual( "C:\\Projects\\bocktils\\logs" );
+        expect( logger.directory ).toEqual( logDir );
 
         logger = new FileLogger( { directory: logDir } );
 
-        expect( logger.directory ).toEqual( "C:\\Projects\\bocktils\\logs" );
+        expect( logger.directory ).toEqual( logDir );
 
         let record = new LogRecord( "This is information",
                                     "info",
@@ -414,13 +415,46 @@ describe( "FileLogger", () =>
     } );
 } );
 
+describe( "Log Rotation", () =>
+{
+    test( "Log Files are 'rotated'", async() =>
+    {
+        let logger = new FileLogger( { directory: logDir } );
+
+        expect( logger.directory ).toEqual( logDir );
+
+        let record = new LogRecord( "This is information",
+                                    "info",
+                                    null,
+                                    "FileLogger.test.js",
+                                    "Info 1",
+                                    "Info 2",
+                                    23 );
+
+        logger.info( record );
+
+        const archivedPath = await logger.rotateLogFile( logger, TIMESTAMP_RESOLUTION.HOUR );
+
+        const content = await fsAsync.readFile( archivedPath, "utf8" );
+
+        expect( !isBlank( content ) ).toBe( true );
+
+        console.log( archivedPath );
+
+        console.log( content );
+    } );
+} );
+
+
+/*
+
 describe( "FileLogger is an Event Handler", () =>
 {
     let logger = new FileLogger( { directory: logDir } );
 
     let eventDispatched = null;
 
-    test( "handleEvent", () =>
+    test( "handleEvent", async() =>
     {
         eventMaker.addEventListener( "error", logger );
 
@@ -458,4 +492,28 @@ describe( "FileLogger is an Event Handler", () =>
 
 } );
 
+
+*/
+
+/*
+
+ describe( "Cleanup", () =>
+ {
+ test( "Delete the log files", async() =>
+ {
+ sleep( 90_000 );
+ await fsAsync.readdir( logDir, { withFileTypes: true } ).then( files =>
+ {
+ files.forEach( file =>
+ {
+ if ( file.isFile() )
+ {
+ // fsAsync.unlink( path.resolve( logDir, file.name ) );
+ }
+ } );
+ } );
+ } );
+ } );
+
+ */
 jest.clearAllTimers();

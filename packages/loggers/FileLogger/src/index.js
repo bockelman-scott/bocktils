@@ -226,9 +226,7 @@ const $scope = constants?.$scope || function()
         };
 
     const MSGS =
-        {
-
-        };
+        {};
 
     let modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
 
@@ -312,7 +310,7 @@ const $scope = constants?.$scope || function()
 
             const filename = prefix + name + (!isBlank( timestamp ) ? (this.separator + timestamp) : _mt_str) + _dot + (extension.replace( /^\.+/, _mt_str ));
 
-            return filename.replace( /^[\W_.-]+/, _mt_str );
+            return filename.replace( /^([\W_.-]+)/, _mt_str );
         }
 
         static fromString( pPattern )
@@ -370,7 +368,7 @@ const $scope = constants?.$scope || function()
         }
     }
 
-    DEFAULTS.FILE_PATTERN = lock( new LogFilePattern( DEFAULTS.FILE_NAME, DEFAULTS.FILE_EXTENSION, _mt_str, _hyphen ) );
+    DEFAULTS.FILE_PATTERN = lock( new LogFilePattern( DEFAULTS.FILE_NAME, DEFAULTS.FILE_EXTENSION, DEFAULTS.SEPARATOR, DEFAULTS.PREFIX, DEFAULTS.TIMESTAMP_RESOLUTION ) );
 
     LogFilePattern.DEFAULT = DEFAULTS.FILE_PATTERN;
 
@@ -424,9 +422,9 @@ const $scope = constants?.$scope || function()
         #created;
         #size;
 
-        constructor( pFilepath, pCreatedDate = null, pSize = 0 )
+        constructor( pFilePath, pCreatedDate = null, pSize = 0 )
         {
-            this.#filepath = path.resolve( asString( pFilepath, true ) );
+            this.#filepath = path.resolve( asString( pFilePath, true ) );
             this.#created = isDate( pCreatedDate ) ? pCreatedDate : isNumeric( pCreatedDate ) ? new Date( asInt( pCreatedDate ) ) : null;
             this.#size = asInt( pSize );
         }
@@ -670,15 +668,19 @@ const $scope = constants?.$scope || function()
         return files.reverse();
     };
 
-    FileInfo.from = function( pFilepath, pCreatedDate = null, pSize = 0 )
+    FileInfo.from = function( pFilePath, pCreatedDate = null, pSize = 0 )
     {
-        return new FileInfo( pFilepath, pCreatedDate, pSize );
+        if ( pFilePath instanceof FileInfo )
+        {
+            return pFilePath;
+        }
+        return new FileInfo( pFilePath, pCreatedDate, pSize );
     };
 
-    FileInfo.fromAsync = async function( pFilepath )
+    FileInfo.fromAsync = async function( pFilePath )
     {
-        const stats = await stat( pFilepath );
-        return new FileInfo( pFilepath, stats.birthtime, stats.size );
+        const stats = await stat( pFilePath );
+        return new FileInfo( pFilePath, stats.birthtime, stats.size );
     };
 
     class LogFileRetentionPolicy
@@ -724,7 +726,7 @@ const $scope = constants?.$scope || function()
 
             const directory = path.resolve( toUnixPath( pDirectory ) );
 
-            const filter = Filters.IS_FILTER( pFilter ) ? pFilter : isNonNullObject( pFilter ) && isFunction( pFilter.test ) ? pFilter?.test || pFilter : Filters.IDENTITY;
+            const filter = Filters.IS_FILTER( pFilter ) ? pFilter : isNonNullObject( pFilter ) && isFunction( pFilter.test ) ? pFilter?.test || pFilter : Filters.NONE;
 
             let dir = null;
 
@@ -765,16 +767,16 @@ const $scope = constants?.$scope || function()
 
             const maxDays = this.maxDays;
 
-            const filter = ( pFile ) => pFile.isExpired( maxDays, now );
+            const criteria = ( pFile ) => FileInfo.from( pFile ).isExpired( maxDays, now );
 
-            const fileInfos = await this.collectFiles( pDirectory, filter );
+            const fileInfos = await this.collectFiles( pDirectory, criteria );
 
             if ( fileInfos.length <= 0 )
             {
                 return [];
             }
 
-            return fileInfos.map( e => e.filepath );
+            return fileInfos.map( e => e.filepath ).filter( criteria );
         }
 
         async deleteExpiredFiles( pDirectory, pNow )
@@ -1403,7 +1405,8 @@ const $scope = constants?.$scope || function()
 
         #queue;
 
-        constructor( pFileLoggerOptions = DEFAULTS.FILE_LOGGER_OPTIONS, pOtherOptions = DEFAULT_LOGGER_OPTIONS )
+        constructor( pFileLoggerOptions = DEFAULTS.FILE_LOGGER_OPTIONS,
+                     pOtherOptions = DEFAULT_LOGGER_OPTIONS )
         {
             super( pOtherOptions );
 
@@ -1638,7 +1641,7 @@ const $scope = constants?.$scope || function()
 
                     fs.writeFileSync( filePath, "********** LOG FILE CREATED AT " + fileCreationDate + " **********\n\n" );
 
-                    fs.chmodSync( filePath, 0o660 );
+                    // fs.chmodSync( filePath, 0o660 );
 
                     needsToBeCreated = !exists( filePath );
 

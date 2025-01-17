@@ -407,7 +407,7 @@ const $scope = constants?.$scope || function()
 
         if ( isString( pValue ) )
         {
-            if( isEmptyString( pValue ) )
+            if ( isEmptyString( pValue ) )
             {
                 return [];
             }
@@ -420,7 +420,7 @@ const $scope = constants?.$scope || function()
         }
         else
         {
-            arr = [_num,_big,_bool,_symbol].includes( typeof pValue ) ? [pValue] : pValue;
+            arr = [_num, _big, _bool, _symbol].includes( typeof pValue ) ? [pValue] : pValue;
         }
 
         const recursions = Math.max( 0, asInt( pRecursions ) || 0 );
@@ -655,6 +655,14 @@ const $scope = constants?.$scope || function()
              * @alias module:ArrayUtils#Filters#IDENTITY
              * */
             IDENTITY: e => true,
+
+            /**
+             * A filter that returns the none of the elements of the source array.<br><br>
+             * USAGE: <code>const filtered = array.filter( Filters.NONE );</code><br>
+             * @type {function(*):boolean}
+             * @alias module:ArrayUtils#Filters#NONE
+             */
+            NONE: e => false,
 
             /**
              * A filter to return the elements of an array that are filter functions<br>
