@@ -84,9 +84,10 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             ModuleEvent,
             ModulePrototype,
             calculateErrorSourceName,
-            reportError,
+            notify,
             asPhrase,
             isReadOnly,
+            isObjectLiteral,
             objectEntries,
             populateOptions,
             mergeOptions,
@@ -102,7 +103,10 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             IterationCap,
             ComparatorFactory,
             StatefulListener,
+            ExecutionMode,
             ExecutionEnvironment,
+            CURRENT_MODE,
+            ARGUMENTS
         } = bockModuleBootstrap;
 
     if ( _ud === typeof CustomEvent )
@@ -755,7 +759,8 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
                     StackTrace,
                     CustomEvent,
                     StatefulListener,
-                    ExecutionEnvironment
+                    ExecutionEnvironment,
+                    ExecutionMode
                 },
             _ud,
             /**
@@ -1834,6 +1839,8 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              */
             resolveError,
 
+            notify,
+
             asPhrase,
 
             /**
@@ -1904,6 +1911,8 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#isReadOnly
              */
             isReadOnly,
+
+            isObjectLiteral,
 
             objectEntries,
 

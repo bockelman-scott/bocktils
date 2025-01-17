@@ -48,11 +48,15 @@ const _ud = "undefined";
  */
 const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === typeof globalThis ? {} : globalThis || {}) : (global || (_ud === typeof globalThis ? this || {} : globalThis || this || {}) || this || {})) : (self || (_ud === typeof globalThis ? this || {} : globalThis || this || {})));
 
+const ENV = (_ud !== typeof process ? process.env : ($scope() || {})["__BOCK_MODULE_ENVIRONMENT__"] || { "MODE": "DEV" });
+
+const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
+
 /**
  * This module is constructed by an Immediately Invoked Function Expression (IIFE).
  * see: <a href="https://developer.mozilla.org/en-US/docs/Glossary/IIFE">MDN: IIFE</a> for more information on this design pattern
  */
-(function exposeModule()
+(function exposeModule( pEnvironment = (ENV || {}), ...pArgs )
 {
     // defines a key we can use to store this module in global scope
     const INTERNAL_NAME = "__BOCK__MODULE_PROTOTYPE__";
@@ -148,6 +152,130 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
         return (_obj === typeof pObject && null != pObject) ? (!!pAcceptArray || !isArray( pObject ) ? pObject : {}) : {};
     }
 
+    class CmdLineArgs
+    {
+        #args = [];
+
+        #map = {};
+
+        constructor( ...pArgs )
+        {
+            if ( pArgs && isArray( pArgs ) && pArgs.length > 0 )
+            {
+                this.#args = [...pArgs];
+
+                const populateMap = e =>
+                {
+                    const parts = e.split( "=" );
+                    const key = (parts.length ? parts[0].trim() : _mt_str).trim();
+                    const value = parts.length > 1 ? parts[1]?.trim() : key;
+
+                    if ( key && value )
+                    {
+                        this.#map[key] = value;
+                        this.#map[key.toLowerCase()] = value;
+                        this.#map[key.toUpperCase()] = value;
+                    }
+                };
+
+                if ( this.#args.length > 0 )
+                {
+                    this.#args.filter( e => null != e && _str === typeof e ).forEach( populateMap );
+                }
+            }
+        }
+
+        get args()
+        {
+            return [...(this.#args || [])];
+        }
+
+        get map()
+        {
+            return new Map( Object.entries( this.#map ) );
+        }
+
+        get( pKey, pDefaultValue )
+        {
+            let keys = [pKey, pKey.toLowerCase(), pKey.toUpperCase()];
+            let values = keys.map( e => this.#map[e] );
+            let value = values.find( e => null != e );
+            return value || pDefaultValue;
+        }
+    }
+
+    const ARGUMENTS = new CmdLineArgs( CMD_LINE_ARGS || (_ud === typeof process ? process.argv : []) );
+
+    const ENVIRONMENT = resolveObject( pEnvironment || ENV, false );
+
+    class ExecutionMode
+    {
+        #name;
+        #traceEnabled;
+
+        constructor( pName, pTraceEnabled = false )
+        {
+            this.#name = (_mt_str + (pName || S_NONE)).trim().toUpperCase();
+            this.#traceEnabled = !!pTraceEnabled;
+        }
+
+        get name()
+        {
+            return (_mt_str + this.#name).trim().toUpperCase();
+        }
+
+        get traceEnabled()
+        {
+            return this.#traceEnabled;
+        }
+
+        trace( pMsg )
+        {
+            konsole.trace( pMsg, this );
+        }
+    }
+
+    ExecutionMode.MODES =
+        {
+            NONE: Object.freeze( new ExecutionMode( S_NONE, false ) ),
+            PROD: Object.freeze( new ExecutionMode( "PRODUCTION", false ) ),
+            DEV: Object.freeze( new ExecutionMode( "DEVELOPMENT", false ) ),
+            DEBUG: Object.freeze( new ExecutionMode( "DEBUG", true ) ),
+            TEST: Object.freeze( new ExecutionMode( "TEST", true ) ),
+            TRACE: Object.freeze( new ExecutionMode( "TRACE", true ) )
+        };
+
+    Object.entries( ExecutionMode.MODES ).forEach( ( [key, value] ) =>
+                                                   {
+                                                       ExecutionMode[key] = value;
+                                                   } );
+
+    ExecutionMode.MODES.DEFAULT = Object.freeze( ExecutionMode.MODES.DEV );
+    ExecutionMode.DEFAULT = Object.freeze( ExecutionMode.MODES.DEFAULT );
+
+    const CURRENT_MODE = Object.freeze( ExecutionMode.MODES[ENVIRONMENT.MODE] || ExecutionMode.MODES[ARGUMENTS.get( "mode" )] || ExecutionMode.DEFAULT );
+    ExecutionMode.CURRENT = Object.freeze( CURRENT_MODE );
+
+    ExecutionMode.defineMode = function( pName, pTraceEnabled = false )
+    {
+        if ( pName && pName.length > 0 )
+        {
+            const name = (_mt_str + (pName || S_NONE)).trim().toUpperCase();
+            const traceEnabled = !!pTraceEnabled;
+
+            if ( null == ExecutionMode[name] )
+            {
+                const executionMode = new ExecutionMode( name, traceEnabled );
+
+                ExecutionMode.MODES[name] = Object.freeze( executionMode );
+                ExecutionMode[name] = Object.freeze( executionMode );
+
+                return executionMode;
+            }
+        }
+        throw new Error( `Invalid or existing mode name: ${pName}` );
+    };
+
     /**
      * This is the object used by some environments to export functionality.<br>
      * In other environments, we just provide an empty object to avoid checking for the environment.<br>
@@ -192,6 +320,11 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
 
         #DenoGlobal;
 
+        #ENV = { ...ENVIRONMENT };
+        #ARGUMENTS = lock( ARGUMENTS );
+
+        #mode = CURRENT_MODE;
+
         constructor( pGlobalScope )
         {
             this.#globalScope = pGlobalScope || $scope();
@@ -223,6 +356,11 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
             this.#customElements = _ud !== typeof customElements ? customElements : null;
 
             this.#fetch = _ud !== typeof fetch && _fun === typeof fetch ? fetch : null;
+
+            this.#ENV = { ...ENVIRONMENT };
+            this.#ARGUMENTS = lock( ARGUMENTS );
+
+            this.#mode = CURRENT_MODE;
         }
 
         clone()
@@ -367,6 +505,20 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
             return ["linux", "ubuntu", "debian"].includes( os.toLowerCase() );
         }
 
+        get mode()
+        {
+            return this.#mode;
+        }
+
+        get ENV()
+        {
+            return lock( this.#ENV || {} );
+        }
+
+        get ARGUMENTS()
+        {
+            return this.#ARGUMENTS;
+        }
     }
 
     /**
@@ -381,20 +533,36 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
         #type;
         #detail;
 
+        #traceEnabled = CURRENT_MODE?.traceEnabled || false;
+
         /**
          *
          * @constructor
          * @param {string|Event} pEventName The name or type of Event to construct
          * @param {Object} pData The data to include in the event's detail property
+         *
+         * @param {Object} pOptions
+         *
          * @see BockModulePrototype#reportError
          * @see BockModulePrototype#dispatchEvent
          */
-        constructor( pEventName, pData )
+        constructor( pEventName, pData, pOptions )
         {
             super( (pEventName instanceof Event) ? (pEventName.type || pEventName.name) : pEventName );
 
             this.#type = ((pEventName instanceof Event) ? (pEventName.type || pEventName.name) : pEventName) || "BockModuleEvent";
             this.#detail = _obj === typeof pData ? (pData || ((pEventName instanceof Event) ? (pEventName.detail || {}) : pData || {})) : !(_ud === typeof pData || null == pData) ? { pData } : {};
+
+            const options = populateOptions( pOptions, { traceEnabled: false } );
+
+            this.#traceEnabled = !!options.traceEnabled;
+
+            this.id = "Event_" + (options?.id || ((new Date().getTime())));
+        }
+
+        get traceEnabled()
+        {
+            return this.#traceEnabled;
         }
 
         /**
@@ -408,7 +576,7 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
 
         clone()
         {
-            return new BockModuleEvent( this.type, this.detail );
+            return new BockModuleEvent( this.type, this.detail, this.traceEnabled );
         }
 
         /**
@@ -429,6 +597,11 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
         get detail()
         {
             return this.#detail || super.detail;
+        }
+
+        trace( pMsg )
+        {
+            konsole.trace( pMsg, this );
         }
     }
 
@@ -1226,6 +1399,12 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
         #options;
 
         /**
+         *
+         * @type ExecutionMode
+         */
+        #mode;
+
+        /**
          * Generates the next unique identifier for a StatefulListener.
          *
          * This function increments and returns the next numeric identifier
@@ -1246,9 +1425,16 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
         {
             this.#id = StatefulListener.nextId();
 
-            this.#name = (_str === typeof pName ? pName : _mt_str) || ("StatefulListener_" + String( this.#id ));
-
             this.#options = populateOptions( pOptions, {} );
+
+            this.#name = (_str === typeof pName ? pName : this.#options?.name) || ("StatefulListener_" + String( this.#id ));
+
+            this.#mode = this.#options?.mode instanceof ExecutionMode ? this.#options?.mode : CURRENT_MODE;
+
+            if ( ExecutionMode.MODES.TEST === this.#mode || this.#mode?.traceEnabled )
+            {
+                this.eventsHandled = [];
+            }
 
             this.clone = function()
             {
@@ -1281,9 +1467,13 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
          * @param {Event|BockModuleEvent} pEvent - The event object containing details about the event to handle.
          * @param {...*} [pExtra] - Additional data or parameters that may be passed with the event.
          */
-        handleEvent( pEvent, pExtra )
+        handleEvent( pEvent, ...pExtra )
         {
-            // not implemented in the base class
+            // the only thing implemented in the base class is for debugging and testing modes
+            if ( this.eventsHandled )
+            {
+                this.eventsHandled.push( { event: pEvent, extra: [...(pExtra || [])] } );
+            }
         }
 
         /**
@@ -1324,6 +1514,16 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
         get type()
         {
             return this.constructor?.name;
+        }
+
+        get mode()
+        {
+            return this.#mode || CURRENT_MODE;
+        }
+
+        get traceEnabled()
+        {
+            return this.mode?.traceEnabled || false;
         }
 
         /**
@@ -1443,6 +1643,8 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
 
         #executionEnvironment;
 
+        #traceEnabled = false;
+
         /**
          * Constructs a new instance, or module, to expose functionality to consumers.
          * <br>
@@ -1452,13 +1654,16 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
          * @param {string|BockModulePrototype|Object} pModuleName The name of this instance, or another instance<br>
          *                                                 from which to inherit the name and other properties
          * @param {string} pCacheKey A unique key to use to cache this module in global scope to improve performance
+         * @param {boolean} pTraceEnabled
          */
-        constructor( pModuleName, pCacheKey )
+        constructor( pModuleName, pCacheKey, pTraceEnabled = CURRENT_MODE?.traceEnabled || false )
         {
             super();
 
             this.#moduleName = (_str === typeof pModuleName) ? pModuleName || modName : (_obj === typeof pModuleName ? pModuleName?.moduleName || pModuleName?.name : _mt_str) || modName;
             this.#cacheKey = (_str === typeof pCacheKey) ? pCacheKey || INTERNAL_NAME : (_obj === typeof pModuleName ? pModuleName?.cacheKey || pModuleName?.name : _mt_str);
+
+            this.#traceEnabled = !!pTraceEnabled;
 
             // if the constructor is called with an object, instead of a string,
             // inherit its properties and functions
@@ -1489,9 +1694,27 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
             return this;
         }
 
+        get traceEnabled()
+        {
+            return this.#traceEnabled;
+        }
+
+        trace( pMessage, pOptions )
+        {
+            if ( this.traceEnabled )
+            {
+                konsole.trace( pMessage, pOptions || "Called without options" );
+            }
+        }
+
         addEventListener( type, callback, options )
         {
             super.addEventListener( type, callback, options );
+
+            if ( this.traceEnabled )
+            {
+                this.trace( "addEventListener", { moduleName: this.moduleName, type, callback, options } );
+            }
         }
 
         addStatefulListener( pListener, ...pTypes )
@@ -1514,6 +1737,11 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
                         {
                             listeners.push( pListener );
                         }
+                    }
+
+                    if ( this.traceEnabled )
+                    {
+                        this.trace( "addStatefulListener", { moduleName: this.moduleName, types, pListener } );
                     }
                 }
 
@@ -1546,6 +1774,11 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
                         }
                     }
                 }
+
+                if ( this.traceEnabled )
+                {
+                    this.trace( "dispatchEvent", { moduleName: this.moduleName, event, listeners } );
+                }
             }
         }
 
@@ -1556,6 +1789,11 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
             if ( callback instanceof StatefulListener )
             {
                 this.removeStatefulListener( callback, type );
+            }
+
+            if ( this.traceEnabled )
+            {
+                this.trace( "removeEventListener", { moduleName: this.moduleName, type, callback, options } );
             }
         }
 
@@ -1582,13 +1820,23 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
             {
                 const listeners = this.#statefulListeners[type];
 
-                const index = listeners.findIndex( l => l.id === id );
+                const index = null != listeners && listeners.length ? listeners.findIndex( l => l.id === id ) : -1;
 
-                const removed = (index >= 0);
+                const toRemove = (index >= 0);
 
-                if ( removed )
+                if ( toRemove )
                 {
                     listeners.splice( index, 1 );
+
+                    if ( this.traceEnabled )
+                    {
+                        this.trace( "removeStatefulListener", {
+                            moduleName: this.moduleName,
+                            type,
+                            toRemove,
+                            listeners
+                        } );
+                    }
                 }
             }
         }
@@ -1803,6 +2051,11 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
                 let level = (_mt_str + pLevel).trim().toLowerCase();
 
                 level = [S_LOG, S_INFO, S_WARN, S_DEBUG, S_ERROR].includes( level || S_ERROR ) ? level : S_ERROR;
+
+                if ( this.traceEnabled )
+                {
+                    this.trace( "reportError", { moduleName: this.moduleName, err, msg, level, source: pSource } );
+                }
 
                 try
                 {
@@ -3092,21 +3345,23 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
             CustomEvent,
             isLogger: BockModulePrototype.isLogger,
             calculateErrorSourceName,
-            reportError: function( pThis,
-                                   pError,
-                                   pMessage = pError?.message || S_DEFAULT_OPERATION,
-                                   pLevel = S_ERROR,
-                                   pSource = _mt_str,
-                                   ...pExtra )
+            notify: function( pFromModule,
+                              pError,
+                              pMessage = pError?.message || S_DEFAULT_OPERATION,
+                              pLevel = S_ERROR,
+                              pSource = _mt_str,
+                              ...pExtra )
             {
-                let thiz = pThis || this;
+                let thiz = pFromModule || this || GLOBAL_INSTANCE;
 
                 if ( thiz instanceof BockModulePrototype )
                 {
                     thiz.reportError( pError, pMessage, pLevel, pSource, ...pExtra );
                 }
-
-                GLOBAL_INSTANCE.reportError( pError, pMessage, pLevel, pSource, ...pExtra );
+                else
+                {
+                    GLOBAL_INSTANCE.reportError( pError, pMessage, pLevel, pSource, ...pExtra );
+                }
             },
             getGlobalLogger: function()
             {
@@ -3161,6 +3416,7 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
             asPhrase,
 
             isReadOnly,
+            isObjectLiteral,
             objectEntries,
             populateOptions,
             mergeOptions,
@@ -3170,6 +3426,7 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
             localCopy,
             immutableCopy,
 
+            ExecutionMode,
             ExecutionEnvironment,
             SourceInfo,
             StackTrace,
@@ -3179,6 +3436,9 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
             ComparatorFactory,
             StatefulListener,
 
+            CURRENT_MODE,
+            ARGUMENTS,
+
             getExecutionEnvironment: function()
             {
                 return new ExecutionEnvironment();
@@ -3186,6 +3446,8 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
 
             classes:
                 {
+                    CmdLineArgs,
+                    ExecutionMode,
                     ExecutionEnvironment,
                     ModuleEvent: BockModuleEvent,
                     ModulePrototype: BockModulePrototype,
@@ -3202,4 +3464,4 @@ const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === 
     // adds the module to module.exports (if it exists) and then returns the module
     return exportModule( mod, INTERNAL_NAME );
 
-}());
+}( ENV, ...CMD_LINE_ARGS ));

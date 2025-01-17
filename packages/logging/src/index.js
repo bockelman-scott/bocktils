@@ -61,7 +61,7 @@ const $scope = constants?.$scope || function()
         resolveError
     } = constants;
 
-    const { ModuleEvent, ModulePrototype, StatefulListener, StackTrace } = classes;
+    const { ModuleEvent, ModulePrototype, ExecutionMode, StatefulListener, StackTrace } = classes;
 
     if ( _ud === typeof CustomEvent )
     {
@@ -376,6 +376,12 @@ const $scope = constants?.$scope || function()
         get data()
         {
             return asArray( this.#data );
+        }
+
+        addData( ...pData )
+        {
+            this.#data = unique( asArray( this.#data ).concat( ...(asArray( varargs( ...pData ) )) ) );
+            return this;
         }
 
         format( pFormatter )
@@ -835,6 +841,8 @@ const $scope = constants?.$scope || function()
      *                                          but messages marked as informational, debugging, or trace<br>
      *                                          will be ignored
      *
+     * @property {ExecutionMode} [mode=ExecutionMode.CURRENT] The execution mode that determines debugging related behaviors<br>
+     *
      */
 
     const DEFAULT_LOGGER_OPTIONS =
@@ -845,7 +853,8 @@ const $scope = constants?.$scope || function()
             filter: Filters.IDENTITY,
             level: LogLevel.DEFAULT,
             logFormatterOptions: DEFAULT_LOG_FORMATTER_OPTIONS,
-            logFormatter: DEFAULT_LOG_FORMATTER
+            logFormatter: DEFAULT_LOG_FORMATTER,
+            mode: ExecutionMode.CURRENT || ExecutionMode.DEFAULT
         };
 
     function resolveFormatter( pLogFormatter, pOptions = DEFAULT_LOG_FORMATTER_OPTIONS )
@@ -894,7 +903,7 @@ const $scope = constants?.$scope || function()
 
         constructor( pOptions = DEFAULT_LOGGER_OPTIONS, ...pLoggers )
         {
-            super();
+            super( pOptions?.name, populateOptions( pOptions, DEFAULT_LOGGER_OPTIONS ) );
 
             const options = populateOptions( pOptions, DEFAULT_LOGGER_OPTIONS );
 
@@ -989,8 +998,20 @@ const $scope = constants?.$scope || function()
             return this.level.isEnabled( pLevel );
         }
 
-        log( pLogRecord )
+        log( pLogRecord, ...pExtra )
         {
+            try
+            {
+                if ( this.traceEnabled || this.mode?.traceEnabled )
+                {
+                    konsole.trace( "Logger::log", pLogRecord, ...pExtra );
+                }
+            }
+            catch( ex )
+            {
+                // ignore this
+            }
+
             let logRecord = pLogRecord instanceof LogRecord ? pLogRecord : new LogRecord( pLogRecord );
 
             let level = LogLevel.getLevel( logRecord?.level || S_ERROR ) || this.level;
@@ -999,6 +1020,12 @@ const $scope = constants?.$scope || function()
 
             if ( this.isEnabledFor( level ) )
             {
+                const extraData = asArray( varargs( ...pExtra ) );
+                if ( extraData?.length > 0 )
+                {
+                    logRecord.addData( ...extraData );
+                }
+
                 for( let logger of [...(this.loggers), this] )
                 {
                     if ( (this === logger && this.loggers.length > 0) || (isFunction( logger?.isEnabledFor ) && !logger.isEnabledFor( level )) )
@@ -1114,6 +1141,11 @@ const $scope = constants?.$scope || function()
 
         processBuffer()
         {
+            if ( this.traceEnabled || this.mode?.traceEnabled )
+            {
+                konsole.trace( "Logger::processBuffer", this.buffer );
+            }
+
             while ( this.buffer?.length > 0 )
             {
                 const logRecord = this.buffer.shift();
@@ -1126,8 +1158,13 @@ const $scope = constants?.$scope || function()
             this.#bufferTimer = null;
         }
 
-        processEvent( pEvent )
+        processEvent( pEvent, ...pArgs )
         {
+            if ( this.traceEnabled || this.mode?.traceEnabled || pEvent?.traceEnabled )
+            {
+                konsole.trace( "Logger::processEvent", pEvent, ...pArgs );
+            }
+
             const logRecord = new LogRecord( pEvent );
 
             if ( !this.isLoggable( logRecord ) )
@@ -1151,10 +1188,10 @@ const $scope = constants?.$scope || function()
                 return;
             }
 
-            this.log( logRecord );
+            this.log( logRecord, ...pArgs );
         }
 
-        async handleEventAsync( pEvent )
+        async handleEventAsync( pEvent, ...pArgs )
         {
             if ( !this.enabled )
             {
@@ -1163,31 +1200,41 @@ const $scope = constants?.$scope || function()
 
             const me = this;
             const event = pEvent || {};
+            const args = asArray( pArgs );
 
             const func = async() =>
             {
-                me.processEvent( event );
+                me.processEvent.call( me, event, ...args );
             };
 
             setTimeout( func, 20 );
         }
 
-        handleEvent( pEvent )
+        handleEvent( pEvent, ...pExtra )
         {
             if ( this.enabled )
             {
+                try
+                {
+                    super.handleEvent( pEvent, ...pExtra );
+                }
+                catch( ex )
+                {
+                    // ignored; but we don;t want a bug in a superclass to affect us.
+                }
+
                 if ( this.asynchronous )
                 {
-                    this.handleEventAsync( pEvent ).then( no_op ).catch( ignore );
+                    this.handleEventAsync( pEvent, ...pExtra ).then( no_op ).catch( ignore );
                 }
                 else
                 {
-                    this.processEvent( pEvent );
+                    this.processEvent( pEvent, ...pExtra );
                 }
             }
         }
 
-        onError( pError )
+        onError( pError, ...pArgs )
         {
             let detail = pError;
 
@@ -1197,17 +1244,18 @@ const $scope = constants?.$scope || function()
                     error: pError,
                     message: pError.message,
                     stackTrace: pError.stackTrace || pError.stack || _mt_str,
-                    level: S_ERROR
+                    level: S_ERROR,
+                    extra: pArgs
                 };
             }
 
             if ( pError instanceof Event )
             {
-                this.handleEvent( pError );
+                this.handleEvent( pError, ...pArgs );
             }
             else
             {
-                this.handleEvent( new CustomEvent( S_ERROR, { detail } ) );
+                this.handleEvent( new CustomEvent( S_ERROR, { detail } ), ...pArgs );
             }
         }
 

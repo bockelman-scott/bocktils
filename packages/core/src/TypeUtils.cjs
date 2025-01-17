@@ -115,6 +115,7 @@ const $scope = constants?.$scope || function()
             SERIALIZABLE_TYPES,
             AsyncFunction,
             IllegalArgumentError,
+            isObjectLiteral,
             populateOptions,
             no_op,
             lock,
@@ -1793,6 +1794,30 @@ const $scope = constants?.$scope || function()
         return isClass( pFunction ) && instanceOfAny( new pFunction(), ...pListedClasses );
     };
 
+    const getProto = function( pObject )
+    {
+        if ( isObject( pObject ) )
+        {
+            return Object.getPrototypeOf( pObject ) || pObject?.__proto__ || pObject?.constructor?.prototype || pObject?.prototype;
+        }
+        if ( isClass( pObject ) )
+        {
+            return pObject?.prototype || pObject;
+        }
+    };
+
+    const getConstructor = function( pObject )
+    {
+        if ( isFunction( pObject ) || isClass( pObject ) )
+        {
+            return pObject?.constructor || pObject?.prototype;
+        }
+
+        const proto = getProto( pObject );
+
+        return proto?.constructor || (isFunction( proto ) ? proto : null);
+    };
+
     /**
      * Returns true if the specified object is an instance of a class that is not a built-in JavaScript type<br>
      *
@@ -1805,7 +1830,8 @@ const $scope = constants?.$scope || function()
      */
     const isInstanceOfUserDefinedClass = function( pObject, pClass = null )
     {
-        let clazz = isClass( pClass ) ? pClass || pObject?.constructor : pObject?.constructor || pObject?.prototype?.constructor || pObject?.prototype;
+        let clazz = isClass( pClass ) ? (pClass || getConstructor( pObject ) || getProto( pObject )) : getConstructor( pObject ) || getProto( pObject)?.constructor || getProto( pObject);
+
         return isUserDefinedClass( clazz ) && (null === clazz || instanceOfAny( pObject, clazz ));
     };
 

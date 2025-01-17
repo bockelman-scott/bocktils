@@ -54,12 +54,14 @@ const $scope = constants?.$scope || function()
         _mt_str,
         _spc,
         _hyphen,
+        _underscore,
         _dot,
         _lf,
         _fun,
         asPhrase,
         lock,
         populateOptions,
+        mergeOptions,
         no_op,
         IterationCap,
         isLogger,
@@ -513,7 +515,7 @@ const $scope = constants?.$scope || function()
 
         get size()
         {
-            return this.#size || fs.statSync( this.filepath ).size;
+            return this.#size || statSync( this.filepath ).size;
         }
 
         async getCreatedDate()
@@ -535,7 +537,7 @@ const $scope = constants?.$scope || function()
 
         get created()
         {
-            return this.#created || fs.statSync( this.filepath ).birthtime;
+            return this.#created || statSync( this.filepath ).birthtime;
         }
 
         async calculateAge( pNow )
@@ -913,7 +915,7 @@ const $scope = constants?.$scope || function()
 
         async maxFilesExceededBy( pDirectory )
         {
-            const entries = await fsAsync.readdir( pDirectory, { withFileTypes: true } );
+            const entries = await readdir( pDirectory, { withFileTypes: true } );
             return (entries?.length || 0) - this.maxFiles;
         }
 
@@ -1318,8 +1320,7 @@ const $scope = constants?.$scope || function()
 
         try
         {
-            fs.accessSync( pPath, fs.constants.W_OK );
-
+            accessSync( pPath, fs.constants.F_OK );
             exists = true;
         }
         catch( ex )
@@ -1335,7 +1336,8 @@ const $scope = constants?.$scope || function()
         let exists;
         try
         {
-            await fsAsync.access( pPath, fs.constants.F_OK );
+            await access( pPath, fs.constants.F_OK );
+            exists = true;
         }
         catch( ex )
         {
@@ -1354,7 +1356,7 @@ const $scope = constants?.$scope || function()
         {
             try
             {
-                fs.mkdirSync( logDir, { recursive: true } );
+                mkdirSync( logDir, { recursive: true } );
 
                 success = exists( logDir );
             }
@@ -1414,10 +1416,16 @@ const $scope = constants?.$scope || function()
 
         #queue;
 
+        _rotationTimerId = null;
+        _retentionTimerId = null;
+
+        #lastRotationDate;
+        #lastRetentionPolicyRunDate;
+
         constructor( pFileLoggerOptions = DEFAULTS.FILE_LOGGER_OPTIONS,
                      pOtherOptions = DEFAULT_LOGGER_OPTIONS )
         {
-            super( pOtherOptions );
+            super( mergeOptions( pOtherOptions, pFileLoggerOptions, DEFAULTS.FILE_LOGGER_OPTIONS ) );
 
             const options = populateOptions( this, pFileLoggerOptions, DEFAULTS.FILE_LOGGER_OPTIONS );
             const otherOptions = populateOptions( this, pOtherOptions, DEFAULT_LOGGER_OPTIONS );
@@ -1457,6 +1465,9 @@ const $scope = constants?.$scope || function()
             this._initializeRotation( now );
 
             this._initializeRetention( now );
+
+            this.#lastRotationDate = null;
+            this.#lastRetentionPolicyRunDate = null;
         }
 
         get options()
@@ -1612,13 +1623,13 @@ const $scope = constants?.$scope || function()
 
             if ( !needsToBeCreated )
             {
-                const stats = fs.statSync( filePath );
+                const stats = statSync( filePath );
 
                 if ( stats.isFile() )
                 {
                     try
                     {
-                        fs.accessSync( filePath, fs_constants.F_OK );
+                        accessSync( filePath, fs_constants.F_OK );
 
                         this.#currentFilename = filename;
                         this.#currentFilePath = filePath;
@@ -1648,9 +1659,7 @@ const $scope = constants?.$scope || function()
                 {
                     const fileCreationDate = new Date().toLocaleString( this.locale );
 
-                    fs.writeFileSync( filePath, "********** LOG FILE CREATED AT " + fileCreationDate + " **********\n\n" );
-
-                    // fs.chmodSync( filePath, 0o660 );
+                    writeFileSync( filePath, "********** LOG FILE CREATED AT " + fileCreationDate + " **********\n\n" );
 
                     needsToBeCreated = !exists( filePath );
 
@@ -1686,6 +1695,16 @@ const $scope = constants?.$scope || function()
             return { filename, filePath };
         }
 
+        get lastRotationDate()
+        {
+            return this.#lastRotationDate;
+        }
+
+        get lastRetentionPolicyRunDate()
+        {
+            return this.#lastRetentionPolicyRunDate;
+        }
+
         isOpen()
         {
             return null !== this.#stream && this.#stream instanceof fs.WriteStream;
@@ -1709,16 +1728,18 @@ const $scope = constants?.$scope || function()
 
             try
             {
-                this.#stream = fs.createWriteStream( this.filepath, { flags: "a" } ); // 'a' for append
+                this.#stream = createWriteStream( this.filepath, { flags: "a" } ); // 'a' for append
 
                 // Ensure the stream is closed on exit, SIGINT, and SIGTERM
-                if ( null != process )
+                if ( null != process && (null === this.exitEventsHandled || false === this.exitEventsHandled) )
                 {
                     process.on( "beforeExit", async() => (me || this)._close().then( no_op ).catch( no_op ) );
 
                     process.on( "exit", () => (me || this)._forceClose() );
                     process.on( "SIGINT", () => (me || this)._forceClose() );
                     process.on( "SIGTERM", () => (me || this)._forceClose() );
+
+                    this.exitEventsHandled = true;
                 }
 
                 if ( this.#stream )
@@ -1752,6 +1773,8 @@ const $scope = constants?.$scope || function()
                                   {
                                       konsole.log( "Closed log file:", (me || this).filepath );
                                   } );
+
+                this.#stream.removeAllListeners();
 
                 this.#stream = null; // Prevent further writes
 
@@ -1843,7 +1866,7 @@ const $scope = constants?.$scope || function()
 
             const policy = (me || this).rotationPolicy;
 
-            const stats = await fsAsync.stat( (me || this).filepath );
+            const stats = await stat( (me || this).filepath );
 
             const fileSize = asInt( stats.size );
 
@@ -1948,13 +1971,32 @@ const $scope = constants?.$scope || function()
 
             const archivedFilePath = me.calculateFilePath( fileInfo, asInt( pTimestampResolution, filePattern.timestampResolution ) );
 
-            const archivedPath = path.resolve( archivedFilePath.filePath );
+            let archivedPath = path.resolve( archivedFilePath.filePath );
+
+            let fileExists = await exists( archivedPath );
+
+            let counter = 1;
+
+            while ( fileExists )
+            {
+                const sep = filePattern.separator || _underscore;
+
+                let extension = filePattern.extension || path.extname( archivedPath );
+
+                archivedPath = archivedPath.replace( new RegExp( ("\\." + extension.replace( /^\.+/, _mt_str ) + "$") ), _mt_str );
+
+                archivedPath = archivedPath.replace( new RegExp( sep + "\\d{1,3}$|" + sep + counter + "$" ), _mt_str );
+
+                archivedPath += sep + (asString( counter++ ).trim()) + (extension || ".log");
+
+                fileExists = await exists( archivedPath );
+            }
 
             await me.flush().then( no_op ).catch( ex => konsole.error( ex ) );
 
             await me._close();
 
-            await fsAsync.rename( filepath, archivedPath );
+            await rename( filepath, archivedPath );
 
             konsole.info( "Rotating log file:", me.filepath, "copied to:", archivedPath );
 
@@ -1973,7 +2015,16 @@ const $scope = constants?.$scope || function()
                 me._rotationTimerId = setTimeout( rotationHandler, policy.milliseconds );
             }
 
-            me.runRetentionPolicy( me.directory, me, new Date() ).then( no_op ).catch( ex => konsole.error( ex ) );
+            const now = new Date();
+
+            this.#lastRotationDate = now;
+
+            const runRetention = (isNull( me._retentionTimerId )) || (isDate( me.lastRetentionPolicyRunDate ) && (me.lastRetentionPolicyRunDate.getTime() - now.getTime()) > MILLIS_PER.DAY);
+
+            if ( runRetention )
+            {
+                await me.runRetentionPolicy( me.directory, me, now ).then( no_op ).catch( ex => konsole.error( ex ) );
+            }
 
             return archivedPath;
         }
@@ -2031,7 +2082,7 @@ const $scope = constants?.$scope || function()
 
             const { removed, moved } = await policy.run( directory, (me || this) );
 
-            const logMsg = ["Log file retention policy executed. Removed", removed.length, "files, moved", moved.length, "files.", removed, moved];
+            const logMsg = ["Log file retention policy executed. Removed ", removed.length, " files, moved ", moved.length, " files.", removed, moved];
 
             konsole.info( ...logMsg );
 
@@ -2047,6 +2098,13 @@ const $scope = constants?.$scope || function()
             const retentionFunction = async function() { await runPolicy.call( me, directory ); };
 
             const completedTime = new Date();
+
+            this.#lastRetentionPolicyRunDate = completedTime;
+
+            if ( !isNull( this._retentionTimerId ) )
+            {
+                clearTimeout( this._retentionTimerId );
+            }
 
             this._retentionTimerId = setTimeout( retentionFunction, (MILLIS_PER_DAY - (now - completedTime)) );
         }
