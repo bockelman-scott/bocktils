@@ -228,6 +228,16 @@ const $scope = constants?.$scope || function()
     const MSGS =
         {};
 
+    function getMidnight()
+    {
+        return new Date().setHours( 23, 59, 59, 999 );
+    }
+
+    function resolveMoment( pNow )
+    {
+        return isDate( pNow ) ? pNow || new Date() : new Date();
+    }
+
     let modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
 
     class LogFilePattern
@@ -530,17 +540,15 @@ const $scope = constants?.$scope || function()
 
         async calculateAge( pNow )
         {
-            const now = pNow || new Date();
-
+            const now = resolveMoment( pNow );
             const createdDate = await this.getCreatedDate();
-
             return isDate( createdDate ) ? Math.floor( (now.getTime() - createdDate.getTime()) / (MILLIS_PER_DAY) ) : 0;
         }
 
         async isExpired( pMaxAgeDays, pNow )
         {
-            const now = pNow || new Date();
-            const age = await this.calculateAge( now );
+            const now = resolveMoment( pNow );
+            const age = Math.min( Math.max( 0, await this.calculateAge( now ) ), 1_000 );
             return age > asInt( pMaxAgeDays, age );
         }
 
@@ -679,6 +687,10 @@ const $scope = constants?.$scope || function()
 
     FileInfo.fromAsync = async function( pFilePath )
     {
+        if ( pFilePath instanceof FileInfo )
+        {
+            return pFilePath;
+        }
         const stats = await stat( pFilePath );
         return new FileInfo( pFilePath, stats.birthtime, stats.size );
     };
@@ -763,7 +775,7 @@ const $scope = constants?.$scope || function()
 
         async findExpiredFiles( pDirectory, pNow )
         {
-            const now = isDate( pNow ) ? pNow : new Date();
+            const now = resolveMoment( pNow );
 
             const maxDays = this.maxDays;
 
@@ -776,19 +788,21 @@ const $scope = constants?.$scope || function()
                 return [];
             }
 
-            return fileInfos.map( e => e.filepath ).filter( criteria );
+            return fileInfos.filter( criteria ).map( e => e.filepath );
         }
 
         async deleteExpiredFiles( pDirectory, pNow )
         {
-            const now = pNow || new Date();
+            const now = resolveMoment( pNow );
 
-            const toDelete = await this.findExpiredFiles( pDirectory, now );
+            let toDelete = await this.findExpiredFiles( pDirectory, now );
 
             if ( toDelete.length <= 0 )
             {
                 return [];
             }
+
+            toDelete = toDelete.filter( pFile => FileInfo.from( pFile ).isExpired( this.maxDays, now ) );
 
             return await this.deleteFiles( ...toDelete );
         }
@@ -827,7 +841,7 @@ const $scope = constants?.$scope || function()
 
         async archiveExpiredFiles( pDirectory, pArchiver, pNow )
         {
-            const now = pNow || new Date();
+            const now = resolveMoment( pNow );
 
             const toArchive = await this.findExpiredFiles( pDirectory, now );
 
@@ -939,7 +953,7 @@ const $scope = constants?.$scope || function()
 
             let moved = [];
 
-            const now = new Date();
+            const now = resolveMoment( pNow );
 
             if ( RETENTION_OPERATION.DELETE === this.operation )
             {
@@ -1374,11 +1388,6 @@ const $scope = constants?.$scope || function()
         }
         return success;
     };
-
-    function getMidnight()
-    {
-        return new Date().setHours( 23, 59, 59, 999 );
-    }
 
     class FileLogger extends AsyncLogger
     {
@@ -1953,7 +1962,7 @@ const $scope = constants?.$scope || function()
 
             await me._open();
 
-            const rotationHandler = async function() { await me.rotateLogFile.call( me, me ); };
+            const rotationHandler = async function() { await me.rotateLogFile.call( me, me, pTimestampResolution, pResetInterval ); };
 
             if ( isNull( me._rotationTimerId ) || asInt( me._rotationTimerId ) === 0 || !!pResetInterval )
             {
@@ -1971,7 +1980,7 @@ const $scope = constants?.$scope || function()
 
         _initializeRotation( pNow )
         {
-            let now = pNow || new Date();
+            let now = resolveMoment( pNow );
 
             let midnight = getMidnight();
 
@@ -1986,7 +1995,7 @@ const $scope = constants?.$scope || function()
 
         _initializeRetention( pNow )
         {
-            let now = pNow || new Date();
+            let now = resolveMoment( pNow );
 
             let midnight = getMidnight();
 
@@ -2005,7 +2014,7 @@ const $scope = constants?.$scope || function()
                 konsole.error( "Invalid retention policy", policy, "for logger", me );
             }
 
-            const retentionFunction = async function() { await runPolicy.call( me, directory, me, now ); };
+            const retentionFunction = async function() { await runPolicy.call( me, directory, me ); };
 
             this._retentionTimerId = setTimeout( retentionFunction, firstInterval );
         }
@@ -2014,13 +2023,13 @@ const $scope = constants?.$scope || function()
         {
             const me = this || pLogger;
 
-            const now = pNow || new Date();
+            const now = resolveMoment( pNow );
 
-            const directory = asString( pDirectory || this.directory, true );
+            const directory = asString( pDirectory || (me || this).directory, true );
 
-            const policy = this.retentionPolicy;
+            const policy = (me || this).retentionPolicy;
 
-            const { removed, moved } = await policy.run( directory, this, now );
+            const { removed, moved } = await policy.run( directory, (me || this) );
 
             const logMsg = ["Log file retention policy executed. Removed", removed.length, "files, moved", moved.length, "files.", removed, moved];
 
@@ -2033,7 +2042,7 @@ const $scope = constants?.$scope || function()
                 logger.info( ...logMsg );
             }
 
-            const runPolicy = me.runRetentionPolicy || this.runRetentionPolicy || this;
+            const runPolicy = (me || this).runRetentionPolicy || this.runRetentionPolicy || this;
 
             const retentionFunction = async function() { await runPolicy.call( me, directory ); };
 

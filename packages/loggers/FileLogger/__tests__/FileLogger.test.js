@@ -442,6 +442,8 @@ describe( "Log Rotation", () =>
         console.log( archivedPath );
 
         console.log( content );
+
+
     } );
 } );
 
