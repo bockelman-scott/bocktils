@@ -39,9 +39,25 @@ const $scope = constants.$scope || function()
         };
 
     // Create local aliases for values imported from other modules
-    const { _mt_str, S_WARN, S_ERROR, lock, classes } = constants;
+    const {
+        _mt_str,
+        _dot,
+        _hyphen,
+        _underscore,
+        _str,
+        _num,
+        _big,
+        _bool,
+        _obj,
+        _fun,
+        _symbol,
+        S_WARN,
+        S_ERROR,
+        lock,
+        classes
+    } = constants;
 
-    const { isDefined, isString, isFunction } = typeUtils;
+    const { isDefined, isNull, isString, isObject, isArray, isFunction } = typeUtils;
 
     const
         {
@@ -54,7 +70,7 @@ const $scope = constants.$scope || function()
             toCanonicalNumericFormat
         } = stringUtils;
 
-    const { asArray } = arrayUtils;
+    const { varargs, asArray } = arrayUtils;
 
     const modName = "LocaleUtils";
 
@@ -421,9 +437,454 @@ const $scope = constants.$scope || function()
         return lock( arr );
     };
 
+    class ResourceKey
+    {
+        #components = [];
+
+        #mappingFunction;
+
+        constructor( ...pComponents )
+        {
+            const me = this;
+
+            const arr = asArray( varargs( ...pComponents ) ).flat();
+
+            this.#mappingFunction = function( e )
+            {
+                if ( isObject( e ) )
+                {
+                    if ( e instanceof me.constructor )
+                    {
+                        return e.components;
+                    }
+                    if ( isArray( e ) )
+                    {
+                        return e.map( me.#mappingFunction );
+                    }
+                }
+
+                if ( !isNull( e ) )
+                {
+                    switch ( typeof e )
+                    {
+                        case _str:
+                            return asString( e ).split( _dot ).map( e => asString( e ).trim() );
+
+                        case _num:
+                        case _big:
+                        case _bool:
+                            return asString( e );
+
+                        case _symbol:
+                            const s = e.toString().replace( /^Symbol\s*\(\s*/, _mt_str ).replace( /\s*\)$/, _mt_str );
+                            return asString( s ).split( _dot ).map( e => asString( e ).trim() );
+
+                        case _fun:
+                            return asString( e.name || e ).trim().split( _dot ).map( e => asString( e ).trim() );
+
+                        default:
+                            return asString( e ).split( _dot ).map( e => asString( e ).trim() );
+                    }
+                }
+                return "~~null_key~~";
+            };
+
+            this.#components = arr.map( this.#mappingFunction ).flat();
+        }
+
+        get components()
+        {
+            return [...asArray( this.#components )].map( this.#mappingFunction ).flat();
+        }
+
+        toString()
+        {
+            return this.components.join( _dot );
+        }
+
+        [Symbol.toStringTag]()
+        {
+            return this.toString();
+        }
+
+        [Symbol.toPrimitive]( pHint )
+        {
+            return this.toString();
+        }
+
+        equals( pKey )
+        {
+            if ( pKey instanceof this.constructor )
+            {
+                return this.toString() === pKey.toString();
+            }
+
+            if ( isString( pKey ) )
+            {
+                return this.toString() === asString( pKey, true ).toString();
+            }
+
+            if ( isArray( pKey ) )
+            {
+                return this.toString() === new this.constructor( ...pKey ).toString();
+            }
+
+            return false;
+        }
+    }
+
+    class Resource
+    {
+        #key;
+        #value;
+        #defaultValue;
+        #description;
+
+        constructor( pKey, pValue, pDefaultValue, pDescription )
+        {
+            this.#key = new ResourceKey( pKey );
+            this.#value = pValue || pDefaultValue;
+            this.#defaultValue = pDefaultValue || pValue;
+            this.#description = asString( pDescription || pDefaultValue || pValue );
+        }
+
+        get key()
+        {
+            return new ResourceKey( this.#key );
+        }
+
+        get value()
+        {
+            return this.#value || this.#defaultValue;
+        }
+
+        get defaultValue()
+        {
+            return this.#defaultValue || this.#value;
+        }
+
+        get description()
+        {
+            return this.#description || this.#defaultValue || this.#value;
+        }
+
+        toString()
+        {
+            return this.key.toString() + "=" + asString( this.value || this.defaultValue || this.description );
+        }
+
+        [Symbol.toStringTag]()
+        {
+            return this.toString();
+        }
+
+        [Symbol.toPrimitive]( pHint )
+        {
+            return asString( this.value || this.defaultValue || this.description );
+        }
+    }
+
+    Resource.from = function( pObject )
+    {
+        const elem = !isNull( pObject ) ? pObject : ["~~null_key~~", _mt_str, _mt_str, _mt_str];
+
+        if ( isArray( elem ) && elem.length >= 2 && elem.length <= 4 )
+        {
+            return new Resource( ...elem );
+        }
+        else if ( isString( elem ) )
+        {
+            return Resource.from( elem.split( "=" ) );
+        }
+        else if ( isObject( elem ) )
+        {
+            if ( elem instanceof Resource )
+            {
+                return elem;
+            }
+            const arr = [asString( elem.key ), elem.value, elem.defaultValue, asString( elem.description )];
+            return Resource.from( ...arr );
+        }
+        return null;
+    };
+
+    class ResourceMap
+    {
+        #locale;
+        #localeCode;
+
+        #resources = {};
+
+        constructor( pLocale, ...pResources )
+        {
+            this.#locale = resolveLocale( pLocale ) || DEFAULT_LOCALE;
+            this.#localeCode = this.#locale?.baseName || DEFAULT_LOCALE_STRING;
+
+            const me = this;
+
+            let arr = asArray( varargs( ...pResources ) );
+
+            arr = arr.filter( e => !isNull( e ) ).map( e => (isObject( e ) && (e instanceof me.constructor/* || e instanceof me*/)) ? e.resources : e );
+
+            for( let elem of arr )
+            {
+                if ( !isNull( elem ) )
+                {
+                    const rsrc = (elem instanceof Resource) ? elem : Resource.from( elem );
+
+                    if ( !isNull( rsrc ) && rsrc instanceof Resource )
+                    {
+                        const s = elem.key.toString();
+
+                        this.#resources[s] = elem;
+
+                        if ( s.includes( _dot ) )
+                        {
+                            let obj = this.#resources;
+
+                            const keys = s.split( _dot );
+
+                            while ( keys.length > 1 && null != obj )
+                            {
+                                let key = keys.shift();
+
+                                obj[key] = obj[key] || {};
+
+                                const remaining = keys.length > 0 ? keys.join( _dot ) : null;
+
+                                if ( remaining )
+                                {
+                                    obj[key][remaining] = obj[key][remaining] || elem;
+                                }
+
+                                obj = obj[key];
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        get locale()
+        {
+            return this.#locale || DEFAULT_LOCALE;
+        }
+
+        get localeCode()
+        {
+            return this.#localeCode || this.#locale?.baseName || DEFAULT_LOCALE_STRING;
+        }
+
+        get resources()
+        {
+            return lock( this.#resources );
+        }
+
+        get entries()
+        {
+            return lock( Object.entries( this.resources ) );
+        }
+
+        get keys()
+        {
+            return lock( Object.keys( this.resources ) );
+        }
+
+        getResource( pKey )
+        {
+            const key = new ResourceKey( pKey );
+
+            const s = key.toString();
+
+            let obj = this.resources[s];
+
+            if ( !isNull( obj ) && obj instanceof Resource )
+            {
+                return obj;
+            }
+
+            let keys = s.split( _dot );
+
+            obj = this.resources;
+
+            while ( keys.length > 0 && null != obj )
+            {
+                let key = keys.shift();
+
+                obj = obj[key];
+
+                if ( !isNull( obj ) && obj instanceof Resource )
+                {
+                    break;
+                }
+            }
+
+            return obj;
+        }
+
+        get( pKey )
+        {
+            let resource = this.getResource( pKey );
+
+            if ( !isNull( resource ) && resource instanceof Resource )
+            {
+                return resource.value || resource.defaultValue || resource;
+            }
+
+            const s = asString( pKey, true );
+
+            let keys = s.split( _dot );
+
+            let obj = this.resources;
+
+            while ( keys.length > 0 && null != obj )
+            {
+                let key = keys.shift();
+                obj = obj[key];
+            }
+
+            if ( isNull( obj ) )
+            {
+                return asString( pKey, true );
+            }
+
+            return obj?.value || obj?.defaultValue || obj;
+        }
+    }
+
+    class ResourceBundle
+    {
+        #resourceMaps = {};
+        #resources = {};
+
+        constructor( ...pResourceMaps )
+        {
+            let arr = asArray( varargs( ...pResourceMaps ) ).filter( e => !isNull( e ) ).map( e => (e instanceof ResourceMap) ? e : ((e instanceof Resource) ? new ResourceMap( DEFAULT_LOCALE, e ) : null) );
+
+            arr = arr.filter( e => !isNull( e ) && e instanceof ResourceMap );
+
+            for( let rsrcMap of arr )
+            {
+                if ( isNull( rsrcMap ) || !(rsrcMap instanceof ResourceMap) )
+                {
+                    continue;
+                }
+
+                const locale = resolveLocale( rsrcMap.locale );
+                const localeCode = rsrcMap.localeCode || locale?.baseName || DEFAULT_LOCALE_STRING;
+
+                // language ["-" script] ["-" region] *("-" variant)
+                const localeParts = localeCode.split( _hyphen );
+
+                const language = localeParts.length > 0 ? localeParts[0] : null;
+                const script = localeParts.length > 1 ? localeParts[1] : _mt_str;
+                const region = localeParts.length > 2 ? localeParts[2] : _mt_str;
+                const variant = localeParts.length > 3 ? localeParts[3] : _mt_str;
+
+                if ( isNull( language ) )
+                {
+                    continue;
+                }
+
+                let map = this.#resourceMaps[language] || [];
+                map.push( rsrcMap );
+
+                const resources = { ...(rsrcMap.resources || {}) };
+
+                let resourcesByLanguage = this.#resources[language] || resources;
+                resourcesByLanguage[language] = resources;
+
+                const langScriptKey = language + _hyphen + script;
+                const langRegionKey = language + _hyphen + region;
+                const langVariantKey = language + _hyphen + variant;
+
+                const langRegionVariantKey = language + _hyphen + region + _hyphen + variant;
+                const langScriptVariantKey = language + _hyphen + script + _hyphen + variant;
+                const langScriptRegionKey = language + _hyphen + script + _hyphen + region;
+                const langScriptRegionVariantKey = language + _hyphen + script + _hyphen + region + _hyphen + variant;
+
+                if ( !isBlank( variant ) )
+                {
+                    let resourcesByVariant = this.#resources[langVariantKey] || resources;
+                    resourcesByVariant[langVariantKey] = { ...resourcesByVariant, ...resources };
+                    this.#resources[langVariantKey] = resourcesByVariant;
+                }
+
+                if ( !isBlank( region ) )
+                {
+                    let resourcesByRegion = this.#resources[langRegionKey] || resources;
+                    resourcesByRegion[langRegionKey] = { ...resourcesByRegion, ...resources };
+                    this.#resources[langRegionKey] = resourcesByRegion;
+
+                    if ( !isBlank( variant ) )
+                    {
+                        let resourcesByRegionVariant = this.#resources[langRegionVariantKey] || resources;
+                        resourcesByRegionVariant[langRegionVariantKey] = { ...resourcesByRegionVariant, ...resources };
+                        this.#resources[langRegionVariantKey] = resourcesByRegionVariant;
+                    }
+                }
+
+                if ( !isBlank( script ) )
+                {
+                    let resourcesByScript = this.#resources[langScriptKey] || resources;
+                    resourcesByScript[langScriptKey] = { ...resourcesByScript, ...resources };
+                    this.#resources[langScriptKey] = resourcesByScript;
+
+                    if ( !isBlank( variant ) )
+                    {
+                        let resourcesByScriptVariant = this.#resources[langScriptVariantKey] || resources;
+                        resourcesByScriptVariant[langScriptVariantKey] = { ...resourcesByScriptVariant, ...resources };
+                        this.#resources[langScriptVariantKey] = resourcesByScriptVariant;
+                    }
+
+                    if ( !isBlank( region ) )
+                    {
+                        let resourcesByRegion = this.#resources[langScriptRegionKey] || resources;
+                        resourcesByRegion[langScriptRegionKey] = { ...resourcesByRegion, ...resources };
+                        this.#resources[langScriptRegionKey] = resourcesByRegion;
+
+                        if ( !isBlank( variant ) )
+                        {
+                            let resourcesByVariant = this.#resources[langScriptRegionVariantKey] || resources;
+                            resourcesByVariant[langScriptRegionVariantKey] = { ...resourcesByVariant, ...resources };
+                            this.#resources[langScriptRegionVariantKey] = resourcesByVariant;
+                        }
+                    }
+                }
+            }
+        }
+
+        get resourceMaps()
+        {
+            return { ...this.#resourceMaps };
+        }
+
+        get resources()
+        {
+            return { ...this.#resources };
+        }
+
+        getResource( pLocale, pKey )
+        {
+            const locale = resolveLocale( pLocale );
+        }
+
+        get( pLocale, pKey )
+        {
+
+        }
+    }
+
     let mod =
         {
             dependencies,
+            classes:
+                {
+                    ResourceKey,
+                    Resource,
+                    ResourceMap,
+                    ResourceBundle
+                },
             DEFAULT_LOCALE_STRING,
             DEFAULTS,
             FORMATS:

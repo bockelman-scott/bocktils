@@ -1,5 +1,15 @@
 /** import the utilities to test **/
+
 const localeUtils = require( "../src/LocaleUtils.cjs" );
+
+const { classes } = localeUtils;
+
+const {
+    ResourceKey,
+    Resource,
+    ResourceMap,
+    ResourceBundle
+} = classes;
 
 describe( "resolveLocale", () =>
 {
@@ -418,5 +428,114 @@ describe( "Other", () =>
               words = localeUtils.getWords( japanese, mexicanLocale );
 
               expect( words ).toEqual( japaneseWords );
+          } );
+} );
+
+
+describe( "ResourceKey", () =>
+{
+    test( "ResourceKey is a class that encapsulates a resource key",
+          () =>
+          {
+              const resourceKey = new ResourceKey( "words", "hello", "world" );
+
+              expect( resourceKey.toString() ).toEqual( "words.hello.world" );
+
+              const resourceKey2 = new ResourceKey( resourceKey );
+
+              expect( resourceKey2.toString() ).toEqual( "words.hello.world" );
+
+              const resourceKey3 = new ResourceKey( resourceKey2, resourceKey );
+
+              expect( resourceKey3.toString() ).toEqual( "words.hello.world.words.hello.world" );
+          } );
+} );
+
+describe( "Resource", () =>
+{
+    test( "Resource  is a class that encapsulates a key=value pair",
+          () =>
+          {
+              const key = new ResourceKey( "a", "b", "c" );
+
+
+              const resource = new Resource( key, "", "defaultValue", "a value" );
+
+              expect( resource.toString() ).toEqual( "a.b.c=defaultValue" );
+
+              expect( "" + resource ).toEqual( "defaultValue" );
+
+
+              const resource2 = new Resource( key, 7, 17, "seven" );
+
+              expect( resource2.toString() ).toEqual( "a.b.c=7" );
+
+              expect( "" + resource2 ).toEqual( "7" );
+
+
+              const resource3 = Resource.from( resource );
+
+              expect( resource3.toString() ).toEqual( "a.b.c=defaultValue" );
+
+              expect( "" + resource3 ).toEqual( "defaultValue" );
+
+
+              const resource4 = Resource.from( resource2 );
+
+              expect( resource4.toString() ).toEqual( "a.b.c=7" );
+
+              expect( "" + resource4 ).toEqual( "7" );
+
+
+              const resource5 = Resource.from( ["kee", "val", "def", "something"] );
+
+              expect( resource5.toString() ).toEqual( "kee=val" );
+
+              expect( "" + resource5 ).toEqual( "val" );
+
+          } );
+} );
+
+describe( "ResourceMap", () =>
+{
+    test( "ResourceMap is a class that encapsulates a collection of Resources",
+          () =>
+          {
+              const abc = new ResourceKey( "a", "b", "c" );
+              const abd = new ResourceKey( "a", "b", "d" );
+              const abe = new ResourceKey( "a", "b", "e" );
+
+              const resource1 = new Resource( abc, 1, 2, "one" );
+              const resource3 = new Resource( abd, 3, 4, "three" );
+              const resource5 = new Resource( abe, 5, 6, "five" );
+
+              const enResources = new ResourceMap( "en-US", resource1, resource3, resource5 );
+              const frResources = new ResourceMap( "fr-FR", resource1, resource3, resource5 );
+
+              const a = enResources.get( "a" );
+              const a_b = enResources.get( "a.b" );
+              const a_b_c = enResources.get( "a.b.c" );
+              const x_y_z = enResources.get( "x.y.z" );
+
+              expect( a_b_c ).toEqual( 1 );
+              expect( x_y_z ).toEqual( "x.y.z" );
+
+              const f_a = frResources.get( "a" );
+              const f_a_b = frResources.get( "a.b" );
+              const f_a_b_c = frResources.get( "a.b.c" );
+              const f_x_y_z = frResources.get( "x.y.z" );
+
+              expect( f_a_b_c ).toEqual( 1 );
+              expect( f_x_y_z ).toEqual( "x.y.z" );
+
+              expect( f_a ).toEqual( a );
+              expect( f_a_b ).toEqual( a_b );
+
+/*
+              console.log( "A:", a, "\n" );
+              console.log( "AB:", a_b, "\n" );
+              console.log( "ABC:", a_b_c, "\n" );
+              console.log( "XYZ:", x_y_z, "\n" );
+*/
           } );
 } );

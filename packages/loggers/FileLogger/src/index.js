@@ -116,6 +116,10 @@ const $scope = constants?.$scope || function()
             path
         };
 
+    const F_APPEND = "a";
+    const RX_EOS = "$";
+    const RX_TOKEN = /\{}/;
+
     const TIMESTAMP_RESOLUTION =
         {
             YEAR: 1,
@@ -144,91 +148,6 @@ const $scope = constants?.$scope || function()
     const MILLIS_PER_WEEK = 7 * MILLIS_PER_DAY;
 
     const ZERO = "0";
-
-    const WORDS =
-        {
-            ZERO,
-
-            AND: "and",
-            OR: "or",
-            THE: "the",
-            LOG: "log",
-            OF: "of",
-
-            RETRYING: "Retrying...",
-            AFTER: "after",
-            RETRIES: "retries",
-
-            CREATED: "Created",
-            ACCESSED: "Accessed",
-            OPENED: "Opened",
-            CLOSED: "Closed",
-            DELETED: "Deleted",
-            ARCHIVED: "Archived",
-            EXPIRED: "Expired",
-            ROTATED: "Rotated",
-
-            FILE: "file",
-            DIRECTORY: "directory",
-            SIZE: "size",
-            CREATION_DATE: "creation date",
-
-            NOT_EXISTS: "does not exist",
-            COULD_NOT_BE: "could not be",
-
-            CALCULATING: "calculating",
-            WRITING_TO: "writing to",
-
-            LOGGER_DISABLED: "This logger is " + S_DISABLED,
-
-            INVALID_ARCHIVER: "No valid archiver is defined for the log file retention policy",
-        };
-
-    const PHRASES =
-        {
-            THE_LOG: asPhrase( WORDS.THE, WORDS.LOG ),
-            THE_LOG_FILE: asPhrase( WORDS.THE, WORDS.LOG, WORDS.FILE ),
-            THE_LOG_DIRECTORY: asPhrase( WORDS.THE, WORDS.LOG, WORDS.DIRECTORY ),
-
-            CREATION_FAILED: asPhrase( WORDS.NOT_EXISTS, WORDS.AND, WORDS.COULD_NOT_BE, lcase( WORDS.CREATED ) ),
-            ACCESS_FAILED: asPhrase( WORDS.NOT_EXISTS, WORDS.OR, WORDS.COULD_NOT_BE, lcase( WORDS.ACCESSED ) ),
-
-            OPEN_FAILED: asPhrase( WORDS.COULD_NOT_BE, lcase( WORDS.OPENED ) ),
-            WRITE_FAILED: asPhrase( WORDS.WRITING_TO, [WORDS.THE, WORDS.LOG, WORDS.FILE] ),
-
-            DIR_CREATION_FAILED: asPhrase( [WORDS.THE, WORDS.LOG, WORDS.DIRECTORY], WORDS.COULD_NOT_BE, lcase( WORDS.CREATED ) ),
-        };
-
-    // "An error occurred while calculating the size of the log file"
-    // "An error occurred while calculating the creation date of the log file"
-    // "An error occurred while collecting log files from the directory:"
-    // "Deleted log file"
-    // "An error occurred while deleting log file"
-    // "Archived expired log file:"
-    // "An error occurred while archiving expired log file:"
-    //  "Trying default log file path"
-    // "Logging to", filePath, "is", this.enabled ? "enabled" : "disabled"
-    // "********** LOG FILE CREATED AT " + fileCreationDate + " **********\n\n"
-    // "Logging to", filePath, "is", this.enabled ? "enabled" : "disabled"
-    // "Unable to create log file:", filePath, "Retrying..."
-    // "An error occurred while writing to log file:"
-    //  "An error occurred while writing to the log file:",
-    // "Rotated log file due to maximum size reached:",
-    // "Rotated log file:", me.filepath, "copied to:", archivedPath
-    // "Invalid retention policy", policy, "for logger", me
-    // "Log file retention policy executed. Removed", removed.length, "files, moved", moved.length, "files.", removed, moved
-    //
-
-
-    const ERROR_MSGS =
-        {
-            INVALID_ARCHIVER: PHRASES.INVALID_ARCHIVER,
-            GET_CREATION_DATE: asPhrase( S_ERR_PREFIX, WORDS.CALCULATING, WORDS.THE, WORDS.CREATION_DATE, WORDS.OF, PHRASES.THE_LOG_FILE ),
-            GET_FILE_SIZE: asPhrase( S_ERR_PREFIX, WORDS.CALCULATING, WORDS.THE, WORDS.SIZE, WORDS.OF, PHRASES.THE_LOG_FILE ),
-        };
-
-    const MSGS =
-        {};
 
     function getMidnight()
     {
@@ -403,10 +322,13 @@ const $scope = constants?.$scope || function()
         return LogFilePattern.DEFAULT;
     };
 
+    const DEL = "delete";
+    const ARCH = "archive";
+
     const RETENTION_OPERATION =
         {
-            DELETE: "delete",
-            ARCHIVE: "archive"
+            DELETE: DEL,
+            ARCHIVE: ARCH
         };
 
     function resolveRetentionOperation( pOperation )
@@ -1728,7 +1650,7 @@ const $scope = constants?.$scope || function()
 
             try
             {
-                this.#stream = createWriteStream( this.filepath, { flags: "a" } ); // 'a' for append
+                this.#stream = createWriteStream( this.filepath, { flags: F_APPEND } ); // 'a' for append
 
                 // Ensure the stream is closed on exit, SIGINT, and SIGTERM
                 if ( null != process && (null === this.exitEventsHandled || false === this.exitEventsHandled) )
@@ -1983,9 +1905,9 @@ const $scope = constants?.$scope || function()
 
                 let extension = filePattern.extension || path.extname( archivedPath );
 
-                archivedPath = archivedPath.replace( new RegExp( ("\\." + extension.replace( /^\.+/, _mt_str ) + "$") ), _mt_str );
+                archivedPath = archivedPath.replace( new RegExp( ("\\." + extension.replace( /^\.+/, _mt_str ) + RX_EOS) ), _mt_str );
 
-                archivedPath = archivedPath.replace( new RegExp( sep + "\\d{1,3}$|" + sep + counter + "$" ), _mt_str );
+                archivedPath = archivedPath.replace( new RegExp( sep + "\\d{1,3}$|" + sep + counter + RX_EOS ), _mt_str );
 
                 archivedPath += sep + (asString( counter++ ).trim()) + (extension || ".log");
 
