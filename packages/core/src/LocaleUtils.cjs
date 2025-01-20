@@ -10,12 +10,13 @@ const typeUtils = require( "./TypeUtils.cjs" );
 const stringUtils = require( "./StringUtils.cjs" );
 const arrayUtils = require( "./ArrayUtils.cjs" );
 
-const { _ud = "undefined" } = constants;
-
-const $scope = constants.$scope || function()
-{
-    return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-};
+const {
+    _ud = "undefined",
+    $scope = function()
+    {
+        return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
+    }
+} = constants;
 
 (function exposeModule()
 {
@@ -43,7 +44,6 @@ const $scope = constants.$scope || function()
         _mt_str,
         _dot,
         _hyphen,
-        _underscore,
         _str,
         _num,
         _big,
@@ -57,11 +57,12 @@ const $scope = constants.$scope || function()
         classes
     } = constants;
 
-    const { isDefined, isNull, isString, isObject, isArray, isFunction } = typeUtils;
+    const { isDefined, isNull, isString, isNumeric, isObject, isArray, isFunction } = typeUtils;
 
     const
         {
             asString,
+            asFloat,
             isBlank,
             lcase,
             DEFAULT_NUMBER_SYMBOLS,
@@ -70,7 +71,7 @@ const $scope = constants.$scope || function()
             toCanonicalNumericFormat
         } = stringUtils;
 
-    const { varargs, asArray } = arrayUtils;
+    const { varargs, asArray, unique, Filters } = arrayUtils;
 
     const modName = "LocaleUtils";
 
@@ -226,7 +227,7 @@ const $scope = constants.$scope || function()
             return true;
         }
 
-        return asString( asString( localeA?.baseName ).split( constants._hyphen )[0] ) === asString( asString( localeB?.baseName ).split( constants._hyphen )[0] );
+        return asString( asString( localeA?.baseName ).split( _hyphen )[0] ) === asString( asString( localeB?.baseName ).split( _hyphen )[0] );
     }
 
     function isDefaultLanguage( pLocale )
@@ -421,7 +422,7 @@ const $scope = constants.$scope || function()
 
             arr = arr.map( ( e ) => asString( e?.segment ) );
 
-            arr = pExcludeWhitespace ? arr.filter( arrayUtils.Filters.NON_BLANK ) : arr;
+            arr = pExcludeWhitespace ? arr.filter( Filters.NON_BLANK ) : arr;
 
             return lock( arr );
         }
@@ -430,14 +431,132 @@ const $scope = constants.$scope || function()
 
         let arr = str.split( splitArg );
 
-        arr = pExcludeWhitespace ? arr.filter( arrayUtils.Filters.NON_BLANK ) : arr;
+        arr = pExcludeWhitespace ? arr.filter( Filters.NON_BLANK ) : arr;
 
         arr = pExcludePunctuation ? arr.filter( e => /[\w\s]+/.test( e ) ) : arr;
 
         return lock( arr );
     };
 
-    class ResourceKey
+    class LocaleResourcesBase
+    {
+        constructor()
+        {
+
+        }
+
+        parseLocale( pLocale )
+        {
+            const locale = resolveLocale( pLocale );
+            const localeCode = locale?.baseName || DEFAULT_LOCALE_STRING;
+
+            // language ["-" script] ["-" region] *("-" variant)
+            const localeParts = localeCode.split( _hyphen );
+
+            const language = localeParts.length > 0 ? localeParts[0] : null;
+            const script = localeParts.length > 1 ? localeParts[1] : _mt_str;
+            const region = localeParts.length > 2 ? localeParts[2] : _mt_str;
+            const variant = localeParts.length > 3 ? localeParts[3] : _mt_str;
+
+            return { locale, localeCode, language, script, region, variant };
+        }
+
+        buildLocaleKeyPermutations( pLocale )
+        {
+            const { localeCode, language, script, region, variant } = this.parseLocale( pLocale );
+
+            let keys = [localeCode];
+
+            if ( !isNull( language ) )
+            {
+                const langScriptKey = !isBlank( script ) ? language + _hyphen + script : _mt_str;
+                const langRegionKey = !isBlank( region ) ? language + _hyphen + region : _mt_str;
+                const langVariantKey = !isBlank( variant ) ? language + _hyphen + variant : _mt_str;
+
+                const langRegionVariantKey = !(isBlank( region ) || isBlank( variant )) ? language + _hyphen + region + _hyphen + variant : _mt_str;
+                const langScriptVariantKey = !(isBlank( script ) || isBlank( variant )) ? language + _hyphen + script + _hyphen + variant : _mt_str;
+                const langScriptRegionKey = !(isBlank( script ) || isBlank( region )) ? language + _hyphen + script + _hyphen + region : _mt_str;
+                const langScriptRegionVariantKey = !(isBlank( script ) || isBlank( region ) || isBlank( variant )) ? language + _hyphen + script + _hyphen + region + _hyphen + variant : _mt_str;
+
+                keys =
+                    [
+                        localeCode,
+                        langScriptRegionVariantKey,
+                        langRegionVariantKey,
+                        langRegionKey,
+                        langScriptRegionKey,
+                        langScriptVariantKey,
+                        langVariantKey,
+                        langScriptKey,
+                        language,
+                        region
+                    ];
+            }
+
+            return unique( keys.filter( e => isString( e ) && !isBlank( e ) ) );
+        }
+
+        initializeMap( pMap )
+        {
+            let property = isObject( pMap ) ? pMap || {} : isString( pMap ) ? this[pMap] || {} : {};
+            this[pMap] = this[pMap] || property;
+            return this[pMap];
+        }
+
+        initializeMapEntry( pMap, pMapKey, pInitialValue )
+        {
+            const map = isObject( pMap ) ? pMap || {} : isString( pMap ) ? this.initializeMap( pMap ) || {} : {};
+
+            if ( isString( pMapKey ) && !isBlank( pMapKey ) )
+            {
+                map[pMapKey] = map[pMapKey] || pInitialValue;
+                return map[pMapKey];
+            }
+        }
+
+        appendMapEntry( pMap, pMapKey, pValue )
+        {
+            const map = isObject( pMap ) ? pMap || {} : isString( pMap ) ? this.initializeMap( pMap ) || {} : {};
+
+            if ( !isString( pMapKey ) || isBlank( pMapKey ) )
+            {
+                return null;
+            }
+
+            map[pMapKey] = map[pMapKey] || pValue;
+
+            switch ( typeof (map[pMapKey] || pValue) )
+            {
+                case _num:
+                case _big:
+                case _str:
+                    map[pMapKey] = map[pMapKey] + ((isString( map[pMapKey] ) ? asString( pValue ) : isNumeric( pValue ) ? asFloat( pValue ) : 0));
+                    break;
+
+                case _bool:
+                case _fun:
+                    map[pMapKey] = map[pMapKey] || pValue;
+                    break;
+
+                case _obj:
+                    if ( !isNull( map[pMapKey] ) )
+                    {
+                        if ( isArray( map[pMapKey] ) )
+                        {
+                            map[pMapKey] = map[pMapKey].concat( pValue );
+                        }
+                        else
+                        {
+                            map[pMapKey] = { ...map[pMapKey], ...pValue };
+                        }
+                    }
+            }
+
+            return map[pMapKey];
+        }
+    }
+
+    class ResourceKey extends LocaleResourcesBase
     {
         #components = [];
 
@@ -445,6 +564,8 @@ const $scope = constants.$scope || function()
 
         constructor( ...pComponents )
         {
+            super();
+
             const me = this;
 
             const arr = asArray( varargs( ...pComponents ) ).flat();
@@ -507,7 +628,7 @@ const $scope = constants.$scope || function()
             return this.toString();
         }
 
-        [Symbol.toPrimitive]( pHint )
+        [Symbol.toPrimitive]()
         {
             return this.toString();
         }
@@ -533,7 +654,7 @@ const $scope = constants.$scope || function()
         }
     }
 
-    class Resource
+    class Resource extends LocaleResourcesBase
     {
         #key;
         #value;
@@ -542,6 +663,8 @@ const $scope = constants.$scope || function()
 
         constructor( pKey, pValue, pDefaultValue, pDescription )
         {
+            super();
+
             this.#key = new ResourceKey( pKey );
             this.#value = pValue || pDefaultValue;
             this.#defaultValue = pDefaultValue || pValue;
@@ -578,7 +701,7 @@ const $scope = constants.$scope || function()
             return this.toString();
         }
 
-        [Symbol.toPrimitive]( pHint )
+        [Symbol.toPrimitive]()
         {
             return asString( this.value || this.defaultValue || this.description );
         }
@@ -608,7 +731,7 @@ const $scope = constants.$scope || function()
         return null;
     };
 
-    class ResourceMap
+    class ResourceMap extends LocaleResourcesBase
     {
         #locale;
         #localeCode;
@@ -617,6 +740,8 @@ const $scope = constants.$scope || function()
 
         constructor( pLocale, ...pResources )
         {
+            super();
+
             this.#locale = resolveLocale( pLocale ) || DEFAULT_LOCALE;
             this.#localeCode = this.#locale?.baseName || DEFAULT_LOCALE_STRING;
 
@@ -624,7 +749,7 @@ const $scope = constants.$scope || function()
 
             let arr = asArray( varargs( ...pResources ) );
 
-            arr = arr.filter( e => !isNull( e ) ).map( e => (isObject( e ) && (e instanceof me.constructor/* || e instanceof me*/)) ? e.resources : e );
+            arr = arr.filter( e => !isNull( e ) ).map( e => (isObject( e ) && (e instanceof me.constructor)) ? e.resources : e );
 
             for( let elem of arr )
             {
@@ -670,11 +795,6 @@ const $scope = constants.$scope || function()
             return this.#locale || DEFAULT_LOCALE;
         }
 
-        get localeCode()
-        {
-            return this.#localeCode || this.#locale?.baseName || DEFAULT_LOCALE_STRING;
-        }
-
         get resources()
         {
             return lock( this.#resources );
@@ -710,7 +830,6 @@ const $scope = constants.$scope || function()
             while ( keys.length > 0 && null != obj )
             {
                 let key = keys.shift();
-
                 obj = obj[key];
 
                 if ( !isNull( obj ) && obj instanceof Resource )
@@ -752,111 +871,70 @@ const $scope = constants.$scope || function()
         }
     }
 
-    class ResourceBundle
+    class ResourceBundle extends LocaleResourcesBase
     {
         #resourceMaps = {};
         #resources = {};
 
         constructor( ...pResourceMaps )
         {
-            let arr = asArray( varargs( ...pResourceMaps ) ).filter( e => !isNull( e ) ).map( e => (e instanceof ResourceMap) ? e : ((e instanceof Resource) ? new ResourceMap( DEFAULT_LOCALE, e ) : null) );
+            super();
 
-            arr = arr.filter( e => !isNull( e ) && e instanceof ResourceMap );
+            let arrMaps = asArray( varargs( ...pResourceMaps ) ).filter( e => !isNull( e ) ).map( e => (e instanceof ResourceMap) ? e : ((e instanceof Resource) ? new ResourceMap( DEFAULT_LOCALE, e ) : null) );
 
-            for( let rsrcMap of arr )
+            arrMaps = arrMaps.filter( e => !isNull( e ) && e instanceof ResourceMap );
+
+            for( let rsrcMap of arrMaps )
             {
                 if ( isNull( rsrcMap ) || !(rsrcMap instanceof ResourceMap) )
                 {
                     continue;
                 }
 
-                const locale = resolveLocale( rsrcMap.locale );
-                const localeCode = rsrcMap.localeCode || locale?.baseName || DEFAULT_LOCALE_STRING;
+                const resources = { ...(rsrcMap.resources || {}) };
 
-                // language ["-" script] ["-" region] *("-" variant)
-                const localeParts = localeCode.split( _hyphen );
-
-                const language = localeParts.length > 0 ? localeParts[0] : null;
-                const script = localeParts.length > 1 ? localeParts[1] : _mt_str;
-                const region = localeParts.length > 2 ? localeParts[2] : _mt_str;
-                const variant = localeParts.length > 3 ? localeParts[3] : _mt_str;
-
-                if ( isNull( language ) )
+                if ( Object.keys( resources ).length <= 0 )
                 {
                     continue;
                 }
 
-                let map = this.#resourceMaps[language] || [];
-                map.push( rsrcMap );
+                const keys = this.buildLocaleKeyPermutations( rsrcMap.locale );
 
-                const resources = { ...(rsrcMap.resources || {}) };
-
-                let resourcesByLanguage = this.#resources[language] || resources;
-                resourcesByLanguage[language] = resources;
-
-                const langScriptKey = language + _hyphen + script;
-                const langRegionKey = language + _hyphen + region;
-                const langVariantKey = language + _hyphen + variant;
-
-                const langRegionVariantKey = language + _hyphen + region + _hyphen + variant;
-                const langScriptVariantKey = language + _hyphen + script + _hyphen + variant;
-                const langScriptRegionKey = language + _hyphen + script + _hyphen + region;
-                const langScriptRegionVariantKey = language + _hyphen + script + _hyphen + region + _hyphen + variant;
-
-                if ( !isBlank( variant ) )
+                for( let key of keys )
                 {
-                    let resourcesByVariant = this.#resources[langVariantKey] || resources;
-                    resourcesByVariant[langVariantKey] = { ...resourcesByVariant, ...resources };
-                    this.#resources[langVariantKey] = resourcesByVariant;
-                }
+                    let map = this.initializeMapEntry( this.#resourceMaps, key, [] );
+                    map.push( rsrcMap );
 
-                if ( !isBlank( region ) )
-                {
-                    let resourcesByRegion = this.#resources[langRegionKey] || resources;
-                    resourcesByRegion[langRegionKey] = { ...resourcesByRegion, ...resources };
-                    this.#resources[langRegionKey] = resourcesByRegion;
-
-                    if ( !isBlank( variant ) )
-                    {
-                        let resourcesByRegionVariant = this.#resources[langRegionVariantKey] || resources;
-                        resourcesByRegionVariant[langRegionVariantKey] = { ...resourcesByRegionVariant, ...resources };
-                        this.#resources[langRegionVariantKey] = resourcesByRegionVariant;
-                    }
-                }
-
-                if ( !isBlank( script ) )
-                {
-                    let resourcesByScript = this.#resources[langScriptKey] || resources;
-                    resourcesByScript[langScriptKey] = { ...resourcesByScript, ...resources };
-                    this.#resources[langScriptKey] = resourcesByScript;
-
-                    if ( !isBlank( variant ) )
-                    {
-                        let resourcesByScriptVariant = this.#resources[langScriptVariantKey] || resources;
-                        resourcesByScriptVariant[langScriptVariantKey] = { ...resourcesByScriptVariant, ...resources };
-                        this.#resources[langScriptVariantKey] = resourcesByScriptVariant;
-                    }
-
-                    if ( !isBlank( region ) )
-                    {
-                        let resourcesByRegion = this.#resources[langScriptRegionKey] || resources;
-                        resourcesByRegion[langScriptRegionKey] = { ...resourcesByRegion, ...resources };
-                        this.#resources[langScriptRegionKey] = resourcesByRegion;
-
-                        if ( !isBlank( variant ) )
-                        {
-                            let resourcesByVariant = this.#resources[langScriptRegionVariantKey] || resources;
-                            resourcesByVariant[langScriptRegionVariantKey] = { ...resourcesByVariant, ...resources };
-                            this.#resources[langScriptRegionVariantKey] = resourcesByVariant;
-                        }
-                    }
+                    this.appendMapEntry( this.#resources, key, resources );
                 }
             }
         }
 
         get resourceMaps()
         {
-            return { ...this.#resourceMaps };
+            return { ...(this.#resourceMaps || {}) };
+        }
+
+        getResourceMaps( pLocale )
+        {
+            const locale = resolveLocale( pLocale );
+
+            const keys = this.buildLocaleKeyPermutations( locale );
+
+            const maps = this.resourceMaps;
+
+            const arr = [];
+
+            for( let key of keys )
+            {
+                const a = maps[key];
+                if ( a && a.length > 0 )
+                {
+                    arr.push( a );
+                }
+            }
+
+            return arr.flat();
         }
 
         get resources()
@@ -867,11 +945,69 @@ const $scope = constants.$scope || function()
         getResource( pLocale, pKey )
         {
             const locale = resolveLocale( pLocale );
+
+            const maps = this.getResourceMaps( locale );
+
+            let resource = null;
+
+            for( let map of maps )
+            {
+                resource = map.getResource( pKey );
+                if ( !isNull( resource ) && resource instanceof Resource )
+                {
+                    break;
+                }
+            }
+
+            return resource;
         }
 
         get( pLocale, pKey )
         {
+            const locale = resolveLocale( pLocale );
 
+            let resource = this.getResource( locale, pKey );
+
+            if ( !isNull( resource ) && resource instanceof Resource )
+            {
+                return resource.value || resource.defaultValue || resource;
+            }
+
+            let value = null;
+
+            const s = asString( pKey, true );
+
+            const localeKeys = this.buildLocaleKeyPermutations( locale ) || [];
+
+            for( let localeKey of localeKeys )
+            {
+                let obj = this.resources[localeKey];
+
+                if ( isNull( obj ) )
+                {
+                    continue;
+                }
+
+                let resourceKeys = s.split( _dot );
+
+                while ( resourceKeys.length > 0 && null != obj )
+                {
+                    let key = resourceKeys.shift();
+                    obj = obj[key];
+                }
+
+                if ( !isNull( obj ) )
+                {
+                    value = obj?.value || obj?.defaultValue;
+                }
+
+                if ( _ud !== typeof value && null !== value )
+                {
+                    break;
+                }
+            }
+
+            return value || asString( pKey, true );
         }
     }
 

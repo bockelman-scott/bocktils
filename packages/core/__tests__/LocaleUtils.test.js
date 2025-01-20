@@ -531,11 +531,44 @@ describe( "ResourceMap", () =>
               expect( f_a ).toEqual( a );
               expect( f_a_b ).toEqual( a_b );
 
-/*
-              console.log( "A:", a, "\n" );
-              console.log( "AB:", a_b, "\n" );
-              console.log( "ABC:", a_b_c, "\n" );
-              console.log( "XYZ:", x_y_z, "\n" );
-*/
+              /*
+               console.log( "A:", a, "\n" );
+               console.log( "AB:", a_b, "\n" );
+               console.log( "ABC:", a_b_c, "\n" );
+               console.log( "XYZ:", x_y_z, "\n" );
+               */
+          } );
+} );
+
+
+describe( "ResourceBundle", () =>
+{
+    test( "ResourceBundle is a class that encapsulates a collection of ResourceMaps",
+          () =>
+          {
+              const abc = new ResourceKey( "a", "b", "c" );
+              const abd = new ResourceKey( "a", "b", "d" );
+              const abe = new ResourceKey( "a", "b", "e" );
+
+              const resource1 = new Resource( abc, 1, 2, "one" );
+              const resource3 = new Resource( abd, 3, 4, "three" );
+              const resource5 = new Resource( abe, 5, 6, "five" );
+
+              const enResources = new ResourceMap( "en-US", resource1, resource3, resource5 );
+              const frResources = new ResourceMap( "fr-FR", resource1, resource3, resource5 );
+
+              const resourceBundle = new ResourceBundle( enResources, frResources );
+
+              // console.log( resourceBundle );
+
+
+              const resourceMaps = resourceBundle.resourceMaps;
+
+              expect( Object.keys( resourceMaps ) ).toEqual( ["en-US", "en", `fr-FR`, "fr"] );
+
+              expect( Object.keys( resourceBundle.resources ) ).toEqual( ["en-US", "en", `fr-FR`, "fr"] );
+
+              expect( resourceBundle.get( new Intl.Locale( "fr-FR" ), "a.b.c" ) ).toEqual( 1 );
+
           } );
 } );
