@@ -1222,7 +1222,19 @@ const $scope = constants?.$scope || function()
 
         if ( !isNull( pObject, pStrict ) && isObject( pObject, options ) )
         {
-            return options.allowEmptyObjects || (Object.entries( pObject )?.length > 0 && !isNull( Object.entries( pObject )[0][1], pStrict ));
+            if ( options.allowEmptyObjects )
+            {
+                return true;
+            }
+
+            const entries = Object.entries( pObject );
+
+            if ( options.rejectNull )
+            {
+                return (entries?.length > 0 && !isNull( entries[0][1], pStrict ));
+            }
+
+            return (entries?.length > 0);
         }
         return false;
     };
@@ -1830,7 +1842,7 @@ const $scope = constants?.$scope || function()
      */
     const isInstanceOfUserDefinedClass = function( pObject, pClass = null )
     {
-        let clazz = isClass( pClass ) ? (pClass || getConstructor( pObject ) || getProto( pObject )) : getConstructor( pObject ) || getProto( pObject)?.constructor || getProto( pObject);
+        let clazz = isClass( pClass ) ? (pClass || getConstructor( pObject ) || getProto( pObject )) : getConstructor( pObject ) || getProto( pObject )?.constructor || getProto( pObject );
 
         return isUserDefinedClass( clazz ) && (null === clazz || instanceOfAny( pObject, clazz ));
     };

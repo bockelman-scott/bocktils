@@ -1,10 +1,10 @@
 const core = require( "@toolbocks/core" );
 
+const { constants, typeUtils, stringUtils, arrayUtils } = core;
+
 const objectUtils = require( "../../common/src/ObjectUtils.cjs" );
 
 const jsonInterpolationUtils = require( "./JsonInterpolationUtils.cjs" );
-
-const { constants, typeUtils, stringUtils, arrayUtils } = core;
 
 const { _ud = "undefined" } = constants;
 
@@ -22,8 +22,19 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
+    const dependencies =
+        {
+            constants,
+            typeUtils,
+            stringUtils,
+            arrayUtils,
+            objectUtils,
+            jsonInterpolationUtils
+        };
+
     const {
         _mt_str,
+        _dot,
         _str,
         _obj,
         _fun,
@@ -34,16 +45,39 @@ const $scope = constants?.$scope || function()
         S_WARN,
         S_ERROR,
         populateOptions,
+        mergeOptions,
         classes
     } = constants;
 
-    const { isString, isArray } = typeUtils;
+    const { isNull, isString, isObject, isArray, isFunction, isNonNullObject, isNonNullValue } = typeUtils;
 
     const { asString, isBlank, isJson, asInt, asFloat, toBool } = stringUtils;
 
-    const { asArray, pruneArray, unique } = arrayUtils;
+    const {
+        varargs,
+        asArray,
+        asArgs,
+        flatArgs,
+        filteredArgs,
+        flatFilteredArgs,
+        pruneArray,
+        unique,
+        Filters,
+        Mappers
+    } = arrayUtils;
 
-    const { detectCycles, getEntries, getProperty, removeProperty } = objectUtils;
+
+    const {
+        detectCycles,
+        isEmptyObject,
+        ObjectEntry,
+        ExploredSet,
+        getEntries,
+        foldEntries,
+        getProperty,
+        removeProperty,
+        prune,
+    } = objectUtils;
 
     const modName = "JsonUtils";
 
@@ -59,6 +93,11 @@ const $scope = constants?.$scope || function()
     const MAX_DEPTH = 24;
 
     const { DEFAULT_REPLACER: replacer, asJson, parseJson } = jsonInterpolationUtils;
+
+    function _isValidInput( pValue )
+    {
+        return !isNull( pValue ) && (isString( pValue ) || isObject( pValue ));
+    }
 
     const scrub = function( pObj, pOptions, pStack, pDepth )
     {
@@ -137,33 +176,11 @@ const $scope = constants?.$scope || function()
         return obj;
     };
 
-    const shouldSkip = function( pValue, pProperty, pIncludeEmptyProperties )
+    const shouldSkip = function( pValue, pIncludeEmpty )
     {
-        let should = false;
+        const includeEmpty = !!pIncludeEmpty;
 
-        let _includeEmptyProperties = !(false === pIncludeEmptyProperties);
-
-        switch ( typeof pValue )
-        {
-            case _ud:
-                if ( !_includeEmptyProperties )
-                {
-                    should = true;
-                }
-                break;
-
-            case _obj:
-                if ( null === pValue && !_includeEmptyProperties )
-                {
-                    should = true;
-                }
-                break;
-
-            default:
-                break;
-        }
-
-        return should;
+        return !includeEmpty && (_ud === typeof pValue || (_obj === typeof pValue && isNull( pValue )));
     };
 
     const DEFAULT_OBJECT_LITERAL_OPTIONS =
@@ -289,7 +306,7 @@ const $scope = constants?.$scope || function()
 
             let value = getProperty( obj, propName ) || obj[propName];
 
-            if ( shouldSkip( value, propName, _includeEmptyProperties ) )
+            if ( shouldSkip( value, _includeEmptyProperties ) )
             {
                 continue;
             }
@@ -497,8 +514,311 @@ const $scope = constants?.$scope || function()
         return out;
     };
 
+    const _toObject = function( pObject )
+    {
+        let obj = {};
+
+        switch ( typeof pObject )
+        {
+            case _ud:
+                return obj;
+
+            case _str:
+                obj = parseJson( isJson( pObject ) ? pObject : asJson( pObject ) );
+                break;
+
+            case _obj:
+                if ( isNull( pObject ) )
+                {
+                    return obj;
+                }
+                obj = { ...pObject };
+                break;
+
+            default:
+                break;
+        }
+
+        return obj;
+    };
+
+    const pruningOptions =
+        {
+            removeEmptyStrings: true,
+            removeFunctions: true,
+            pruneArrays: true,
+            trimStrings: true
+        };
+
+    const cherryPick = function( pObject, ...pPaths )
+    {
+        let result = {};
+
+        let obj = _toObject( pObject );
+
+        const paths = asArgs( ...pPaths );
+
+        let source = obj;
+        let destination = result;
+
+        for( let path of paths )
+        {
+            let pathParts = path.split( _dot );
+
+            for( let i = 0, n = pathParts.length; i < n; i++ )
+            {
+                let part = pathParts[i];
+
+                if ( isObject( source ) )
+                {
+                    const sourceNode = source[part];
+
+                    if ( isNonNullObject( sourceNode ) || isNonNullValue( sourceNode ) )
+                    {
+                        source = sourceNode;
+
+                        if ( isObject( destination ) )
+                        {
+                            destination[part] = destination[part] || (isObject( source ) ? (i === (n - 1) ? source : {}) : source);
+
+                            if ( 0 === i )
+                            {
+                                result[part] = destination[part];
+                            }
+
+                            destination = destination[part];
+                        }
+                    }
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            source = obj;
+            destination = result;
+        }
+
+        return prune( result, pruningOptions );
+    };
+
+    const mergeJson = function( ...pObjects )
+    {
+        const objects = filteredArgs( _isValidInput, ...pObjects ).map( _toObject ).filter( e => isNonNullObject( e ) );
+
+        if ( objects.length > 1 )
+        {
+            return mergeOptions( objects[0], ...objects.slice( 1 ) );
+        }
+
+        return objects[0] || {};
+    };
+
+    const JSON_MERGE_OPTIONS =
+        {
+            mappers: [],
+            filters: [],
+            pruneResult: true,
+            pruningOptions: pruningOptions,
+            returnJson: false
+        };
+
+    class JsonMerger
+    {
+        #options;
+        #mappers = [];
+        #filters = [];
+
+        #pruneResult = true;
+        #pruningOptions = pruningOptions;
+        #returnJson = false;
+
+        constructor( pFilters, pMappers, pOptions = JSON_MERGE_OPTIONS )
+        {
+            this.#options = { ...pOptions || {} };
+
+            this.#filters = this.initializeFilters( pFilters, asArray( this.#options.filters ) );
+            this.#mappers = this.initializeMappers( pMappers, asArray( this.#options.mappers ) );
+
+            this.#pruneResult = !!this.#options.pruneResult;
+            this.#pruningOptions = mergeOptions( this.#options.pruningOptions || {}, this.#pruningOptions, pruningOptions );
+            this.#returnJson = !!this.#options.returnJson;
+        }
+
+        get options()
+        {
+            return populateOptions( this.#options, {} );
+        }
+
+        get mappers()
+        {
+            return [...(asArray( this.#mappers ))];
+        }
+
+        get filters()
+        {
+            return [...(asArray( this.#filters ))];
+        }
+
+        initializeFilters( ...pFilters )
+        {
+            const filters = flatArgs( ...pFilters || [] );
+            return filters.filter( Filters.IS_FILTER );
+        }
+
+        addFilter( pFilter )
+        {
+            if ( isFunction( pFilter ) && Filters.IS_FILTER( pFilter ) )
+            {
+                this.#filters.push( pFilter );
+            }
+        }
+
+        initializeMappers( ...pMappers )
+        {
+            const mappers = flatArgs( ...pMappers || [] );
+            return mappers.filter( Filters.IS_MAPPER );
+        }
+
+        addMapper( pMapper )
+        {
+            if ( isFunction( pMapper ) && Filters.IS_MAPPER( pMapper ) )
+            {
+                this.#mappers.push( pMapper );
+            }
+        }
+
+        get pruneResult()
+        {
+            return !!this.#pruneResult;
+        }
+
+        get pruningOptions()
+        {
+            return populateOptions( this.#pruningOptions, pruningOptions );
+        }
+
+        get returnJson()
+        {
+            return !!this.#returnJson;
+        }
+
+        _skip( pObject, pStack )
+        {
+            return isNull( pObject ) || !isObject( pObject ) || isEmptyObject( pObject ) || detectCycles( asArray( pStack || [] ), 5, 3 );
+        }
+
+        _processEntries( pObject, pCallback, pVisited = new ExploredSet(), pStack = [] )
+        {
+            const visited = pVisited || new ExploredSet();
+
+            const stack = pStack || [];
+
+            let result = { ...pObject };
+
+            if ( this._skip( pObject, stack ) )
+            {
+                return result;
+            }
+
+            const callback = isFunction( pCallback ) ? pCallback : function( pEntry ) { return pEntry; };
+
+            const entries = getEntries( pObject );
+
+            for( const entry of entries )
+            {
+                let key = entry.key || entry[0];
+                let value = entry.value || entry[1];
+
+                try
+                {
+                    const updatedEntry = callback( entry, key, value );
+
+                    value = updatedEntry?.value || updatedEntry?.[1];
+
+                    key = updatedEntry?.key || updatedEntry?.[0] || key;
+
+                    result[key] = value;
+                }
+                catch( ex )
+                {
+                    modulePrototype.reportError( ex, "An error occurred while processing an object entry", S_ERROR, calculateErrorSourceName( modName, "_processEntries" ), stack );
+                    result[key] = value;
+                }
+
+                const child = result[key];
+
+                if ( isNonNullObject( child ) && (child instanceof ObjectEntry) && !visited.has( child ) )
+                {
+                    visited.add( child );
+                    stack.push( key );
+                    result[key] = this._processEntries( child, callback, visited, stack );
+                }
+            }
+
+            return foldEntries( result );
+        }
+
+        _filterEntries( pObject, pFilter, pVisited = new ExploredSet(), pStack = [] )
+        {
+            const filter = isFunction( pFilter ) && Filters.IS_FILTER( pFilter ) ? pFilter : Filters.IDENTITY;
+
+            const callback = ( entry ) =>
+            {
+                if ( entry instanceof ObjectEntry )
+                {
+                    return (entry.filter( filter ) ? entry : null);
+                }
+                return (filter( entry ) ? entry : null);
+            };
+
+            return this._processEntries( pObject, callback, pVisited, pStack );
+        }
+
+        _mapEntries( pObject, pMapper, pVisited = new ExploredSet(), pStack = [] )
+        {
+            const mapper = isFunction( pMapper ) && Filters.IS_MAPPER( pMapper ) ? pMapper : Mappers.IDENTITY;
+
+            const callback = ( entry ) =>
+            {
+                return entry instanceof ObjectEntry ? entry.map( mapper ) : mapper( entry );
+            };
+
+            return this._processEntries( pObject, callback, pVisited, pStack );
+        }
+
+        merge( ...pObjects )
+        {
+            const merged = mergeJson( ...pObjects );
+
+            let result = { ...merged };
+
+            for( const mapper of this.#mappers )
+            {
+                result = this._mapEntries( result, mapper );
+            }
+
+            for( const filter of this.#filters )
+            {
+                result = this._filterEntries( result, filter );
+            }
+
+            result = foldEntries( result );
+
+            result = this.pruneResult ? prune( result, this.pruningOptions ) : result;
+
+            return this.returnJson ? asJson( result ) : result;
+        }
+    }
+
     let mod =
         {
+            dependencies,
+            classes:
+                {
+                    JsonMerger
+                },
             asJson,
             parseJson,
             stringify: asJson,
@@ -506,7 +826,9 @@ const $scope = constants?.$scope || function()
             DEFAULT_REPLACER: replacer,
             scrub,
             toObjectLiteral,
-            bruteForceJson
+            bruteForceJson,
+            cherryPick,
+            mergeJson
         };
 
     mod = modulePrototype.extend( mod );

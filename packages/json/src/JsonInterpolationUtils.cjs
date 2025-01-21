@@ -235,7 +235,10 @@ const $scope = constants?.$scope || function()
             formatDates: false,
             dateTimeFormatter: null,
             "NaN": "NaN",
-            "Infinity": "Infinity"
+            "Infinity": "Infinity",
+            filters: [],
+            mappers: [],
+            reference: null,
         };
 
     const isValidKey = function( pString )

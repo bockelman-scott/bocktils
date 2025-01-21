@@ -152,10 +152,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
         return (_obj === typeof pObject && null != pObject) ? (!!pAcceptArray || !isArray( pObject ) ? pObject : {}) : {};
     }
 
-    class CmdLineArgs
+    class Args
     {
         #args = [];
-
         #map = {};
 
         constructor( ...pArgs )
@@ -203,6 +202,24 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
             return value || pDefaultValue;
         }
     }
+
+    class ModuleArgs extends Args
+    {
+        constructor( ...pArgs )
+        {
+            super( ...pArgs );
+        }
+    }
+
+    class CmdLineArgs extends Args
+    {
+        constructor( ...pArgs )
+        {
+            super( ...pArgs );
+        }
+    }
+
+    const MODULE_ARGUMENTS = new ModuleArgs( ...pArgs );
 
     const ARGUMENTS = new CmdLineArgs( CMD_LINE_ARGS || (_ud === typeof process ? process.argv : []) );
 
@@ -296,6 +313,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
         return (_ud === typeof self && _ud === typeof window) && (_ud !== typeof module) && (_fun === typeof require);
     };
 
+    const getMessagesLocale = function( pEnvironment = ENVIRONMENT )
+    {
+        const environment = resolveObject( pEnvironment || ENV, false );
+
+        let locale = environment?.LC_ALL || environment?.LC_MESSAGES || environment?.LANG || Intl.DateTimeFormat().resolvedOptions().locale;
+
+        return _mt_str + (_str === typeof locale ? locale : locale?.basename || Intl.DateTimeFormat().resolvedOptions().locale);
+    };
+
     class ExecutionEnvironment
     {
         #globalScope;
@@ -322,6 +348,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
 
         #ENV = { ...ENVIRONMENT };
         #ARGUMENTS = lock( ARGUMENTS );
+
+        #localeCode = getMessagesLocale( ENVIRONMENT );
 
         #mode = CURRENT_MODE;
 
@@ -359,6 +387,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
 
             this.#ENV = { ...ENVIRONMENT };
             this.#ARGUMENTS = lock( ARGUMENTS );
+
+            this.#localeCode = this.#navigator?.language || getMessagesLocale( this.#ENV ) || "en-US";
 
             this.#mode = CURRENT_MODE;
         }
@@ -416,6 +446,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
         get navigator()
         {
             return this.#navigator;
+        }
+
+        get localeCode()
+        {
+            return this.isBrowser() ? (this.navigator?.language || this.#localeCode || getMessagesLocale( this.ENV ) || "en-US") : this.#localeCode || getMessagesLocale( this.ENV ) || "en-US";
         }
 
         get userAgent()
@@ -1048,6 +1083,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
 
         #trace;
 
+        #code;
+        #referenceId;
+
         /**
          * Constructs an instance of the custom Error class, __Error.<br>
          * @constructor
@@ -1071,6 +1109,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
             this.#options = immutableCopy( pOptions || {} );
 
             this.#cause = (this.#options?.cause instanceof Error ? this.#options?.cause : (pMessage instanceof Error ? pMessage : null) || (pMessage instanceof Error ? pMessage : null));
+
+            this.#code = (this.#options?.code || _num === typeof pMessage ? pMessage : null);
+            this.#referenceId = this.#options?.referenceId || __Error.generateReferenceId( this, this.#code );
         }
 
         /**
@@ -1161,6 +1202,13 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
             return new this.constructor( this.message, this.options );
         }
     }
+
+    __Error.NEXT_REF_ID = 10000;
+
+    __Error.generateReferenceId = function( pError, pCode )
+    {
+        return "Reference ID:" + (pCode ? " (" + (_num === typeof pCode ? String( pCode ) : _asStr( pCode )) + "): " : _mt_str) + (++__Error.NEXT_REF_ID);
+    };
 
     /**
      * This subclass of Error is useful when validating function arguments.
@@ -1655,8 +1703,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
          *                                                 from which to inherit the name and other properties
          * @param {string} pCacheKey A unique key to use to cache this module in global scope to improve performance
          * @param {boolean} pTraceEnabled
+         * @param {ModuleArgs} [pModuleArguments=MODULE_ARGUMENTS]
          */
-        constructor( pModuleName, pCacheKey, pTraceEnabled = CURRENT_MODE?.traceEnabled || false )
+        constructor( pModuleName, pCacheKey, pTraceEnabled = CURRENT_MODE?.traceEnabled || false, pModuleArguments = MODULE_ARGUMENTS )
         {
             super();
 
@@ -1866,6 +1915,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
         get cacheKey()
         {
             return this.#cacheKey || this.#moduleName;
+        }
+
+        getMessagesLocale()
+        {
+            return this.executionEnvironment?.localeCode || getMessagesLocale();
         }
 
         /**
@@ -2630,8 +2684,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
                 {
                     o[k] = (_obj === typeof o[k] ? merge( ++pDepth, o[k], { [k]: v }, k ) : v);
                 }
-
-                // o[k] = ( !(k in o) || null === o[k]) ? v : ((_obj === typeof v) ? merge( ++pDepth, o[k], v, k ) : v);
             }
 
             return o;
@@ -3444,8 +3496,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
                 return new ExecutionEnvironment();
             },
 
+            getMessagesLocale,
+
             classes:
                 {
+                    Args,
+                    ModuleArgs,
                     CmdLineArgs,
                     ExecutionMode,
                     ExecutionEnvironment,

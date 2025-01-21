@@ -8,7 +8,7 @@ const path = require( "node:path" );
 
 const konsole = console;
 
-const { constants, typeUtils, stringUtils, arrayUtils } = core;
+const { constants, typeUtils, stringUtils, arrayUtils, localeUtils } = core;
 
 const {
     AsyncLogger,
@@ -70,7 +70,9 @@ const $scope = constants?.$scope || function()
         S_ERROR,
         S_WARN,
         S_ERR_PREFIX,
-        MILLIS_PER
+        MILLIS_PER,
+        MESSAGES_LOCALE,
+        getMessagesLocale
     } = constants;
 
     const {
@@ -110,6 +112,7 @@ const $scope = constants?.$scope || function()
             typeUtils,
             stringUtils,
             arrayUtils,
+            localeUtils,
             loggingUtils,
             fs,
             fsAsync,
@@ -160,6 +163,8 @@ const $scope = constants?.$scope || function()
     }
 
     let modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
+
+    const messagesLocale = MESSAGES_LOCALE || getMessagesLocale();
 
     class LogFilePattern
     {
@@ -2064,7 +2069,8 @@ const $scope = constants?.$scope || function()
             FileRotationIntervalUnit,
             FileRotationInterval,
             LogFileRotationPolicy,
-            FileLogger
+            FileLogger,
+            messagesLocale
         };
 
     mod = modulePrototype.extend( mod );

@@ -1,7 +1,61 @@
 /** import the utilities to test **/
 const typeUtils = require( "../src/TypeUtils.cjs" );
 
-const { VALID_TYPES, JS_TYPES, TYPE_DEFAULTS } = typeUtils;
+const {
+    VALID_TYPES,
+    JS_TYPES,
+    TYPE_DEFAULTS,
+    isUndefined,
+    isDefined,
+    isNull,
+    isNonNullObject,
+    isPrimitiveWrapper,
+    isGeneratorFunction,
+    isArray,
+    isTypedArray,
+    isLikeArray,
+    isType,
+    isObject,
+    isCustomObject,
+    isFunction,
+    isAsyncFunction,
+    isIterable,
+    toIterable,
+    isSpreadable,
+    isClass,
+    getClass,
+    getClassName,
+    isString,
+    isNumber,
+    isNumeric,
+    isZero,
+    isOctal,
+    isHex,
+    isBinary,
+    isDecimal,
+    isBigInt,
+    isInteger,
+    isFloat,
+    isBoolean,
+    isSymbol,
+    isDate,
+    isRegExp,
+    isError,
+    isMap,
+    isSet,
+    toDecimal,
+    toOctal,
+    toHex,
+    toBinary,
+    areSameType,
+    instanceOfAny,
+    isUserDefinedClass,
+    isListedClass,
+    isInstanceOfUserDefinedClass,
+    isInstanceOfListedClass,
+    defaultFor,
+    firstMatchingType,
+} = typeUtils;
 
 const anAsyncFunction = async function()
 {
@@ -109,13 +163,13 @@ describe( "isUndefined", () =>
     test( "isUndefined() === true",
           () =>
           {
-              expect( typeUtils.isUndefined() ).toBe( true );
+              expect( isUndefined() ).toBe( true );
           } );
 
     test( "isUndefined(undefined) === true",
           () =>
           {
-              expect( typeUtils.isUndefined( undefined ) ).toBe( true );
+              expect( isUndefined( undefined ) ).toBe( true );
           } );
 
     test( "isUndefined(x) === true",
@@ -123,7 +177,7 @@ describe( "isUndefined", () =>
           {
               function testUndefined()
               {
-                  return typeUtils.isUndefined( x );
+                  return isUndefined( x );
               }
 
               expect( testUndefined ).toThrow( ReferenceError );
@@ -138,7 +192,7 @@ describe( "isUndefined", () =>
                       "b": 2
                   };
 
-              expect( typeUtils.isUndefined( obj.c ) ).toBe( true );
+              expect( isUndefined( obj.c ) ).toBe( true );
           } );
 
     test( "isUndefined(null object.property) === false",
@@ -151,21 +205,21 @@ describe( "isUndefined", () =>
                       "c": null
                   };
 
-              expect( typeUtils.isUndefined( obj.c ) ).toBe( false );
+              expect( isUndefined( obj.c ) ).toBe( false );
           } );
 
     test( "isUndefined(uninitialized variable) === true",
           () =>
           {
               let xyz;
-              expect( typeUtils.isUndefined( xyz ) ).toBe( true );
+              expect( isUndefined( xyz ) ).toBe( true );
           } );
 
     // isDefined is just an inversion of isUndefined, so only one trivial test is provided
     test( "isDefined() === false",
           () =>
           {
-              expect( typeUtils.isDefined() ).toBe( false );
+              expect( isDefined() ).toBe( false );
           } );
 } );
 
@@ -174,31 +228,31 @@ describe( "isNull", () =>
     test( "isNull(undefined,true) === false",
           () =>
           {
-              expect( typeUtils.isNull( undefined, true ) ).toBe( false );
+              expect( isNull( undefined, true ) ).toBe( false );
           } );
 
     test( "isNull() === true",
           () =>
           {
-              expect( typeUtils.isNull() ).toBe( true );
+              expect( isNull() ).toBe( true );
           } );
 
     test( "isNull(null,true) === true",
           () =>
           {
-              expect( typeUtils.isNull( null, true ) ).toBe( true );
+              expect( isNull( null, true ) ).toBe( true );
           } );
 
     test( "isNull('',true) === false",
           () =>
           {
-              expect( typeUtils.isNull( "", true ) ).toBe( false );
+              expect( isNull( "", true ) ).toBe( false );
           } );
 
     test( "isNull('') === true",
           () =>
           {
-              expect( typeUtils.isNull( "" ) ).toBe( true );
+              expect( isNull( "" ) ).toBe( true );
           } );
 
 // isNotNull is just a negation of isNull, so no tests are provided
@@ -209,61 +263,61 @@ describe( "isPrimitiveWrapper", () =>
     test( "isPrimitiveWrapper string",
           () =>
           {
-              expect( typeUtils.isPrimitiveWrapper( "abc" ) ).toBe( false );
+              expect( isPrimitiveWrapper( "abc" ) ).toBe( false );
           } );
 
     test( "isPrimitiveWrapper String",
           () =>
           {
-              expect( typeUtils.isPrimitiveWrapper( new String( "abc" ) ) ).toBe( true );
+              expect( isPrimitiveWrapper( new String( "abc" ) ) ).toBe( true );
           } );
 
     test( "isPrimitiveWrapper number",
           () =>
           {
-              expect( typeUtils.isPrimitiveWrapper( 123 ) ).toBe( false );
+              expect( isPrimitiveWrapper( 123 ) ).toBe( false );
           } );
 
     test( "isPrimitiveWrapper Number",
           () =>
           {
-              expect( typeUtils.isPrimitiveWrapper( new Number( 123 ) ) ).toBe( true );
+              expect( isPrimitiveWrapper( new Number( 123 ) ) ).toBe( true );
           } );
 
     test( "isPrimitiveWrapper bigint",
           () =>
           {
-              expect( typeUtils.isPrimitiveWrapper( 10n ) ).toBe( false );
+              expect( isPrimitiveWrapper( 10n ) ).toBe( false );
           } );
 
     test( "isPrimitiveWrapper BigInt is still false, because BigInt is not a constructor",
           () =>
           {
-              expect( typeUtils.isPrimitiveWrapper( BigInt( 123 ) ) ).toBe( false );
+              expect( isPrimitiveWrapper( BigInt( 123 ) ) ).toBe( false );
           } );
 
     test( "isPrimitiveWrapper boolean",
           () =>
           {
-              expect( typeUtils.isPrimitiveWrapper( true ) ).toBe( false );
+              expect( isPrimitiveWrapper( true ) ).toBe( false );
           } );
 
     test( "isPrimitiveWrapper Boolean",
           () =>
           {
-              expect( typeUtils.isPrimitiveWrapper( new Boolean( false ) ) ).toBe( true );
+              expect( isPrimitiveWrapper( new Boolean( false ) ) ).toBe( true );
           } );
 
     test( "isPrimitiveWrapper function",
           () =>
           {
-              expect( typeUtils.isPrimitiveWrapper( anAsyncFunction ) ).toBe( false );
+              expect( isPrimitiveWrapper( anAsyncFunction ) ).toBe( false );
           } );
 
     test( "isPrimitiveWrapper Function",
           () =>
           {
-              expect( typeUtils.isPrimitiveWrapper( new Function( "a", "b", "return a + b" ) ) ).toBe( false );
+              expect( isPrimitiveWrapper( new Function( "a", "b", "return a + b" ) ) ).toBe( false );
           } );
 } );
 
@@ -281,14 +335,14 @@ describe( "isGeneratorFunction", () =>
                   }
               }
 
-              expect( typeUtils.isGeneratorFunction( generator ) ).toBe( true );
+              expect( isGeneratorFunction( generator ) ).toBe( true );
           } );
 
     test( "isGeneratorFunction with regular function",
           () =>
           {
               const f = function() {};
-              expect( typeUtils.isGeneratorFunction( f ) ).toBe( false );
+              expect( isGeneratorFunction( f ) ).toBe( false );
           } );
 
 } );
@@ -299,70 +353,70 @@ describe( "isObject", () =>
           () =>
           {
               let obj = null;
-              expect( typeUtils.isObject( obj ) ).toBe( true );
+              expect( isObject( obj ) ).toBe( true );
           } );
 
     test( "isObject(null,{rejectNull:true) === false",
           () =>
           {
               let obj = null;
-              expect( typeUtils.isObject( obj, { rejectNull: true } ) ).toBe( false );
+              expect( isObject( obj, { rejectNull: true } ) ).toBe( false );
           } );
 
     test( "isObject({}) === true",
           () =>
           {
               let obj = {};
-              expect( typeUtils.isObject( obj ) ).toBe( true );
+              expect( isObject( obj ) ).toBe( true );
           } );
 
     test( "isObject([]) === true",
           () =>
           {
               let obj = [];
-              expect( typeUtils.isObject( obj ) ).toBe( true );
+              expect( isObject( obj ) ).toBe( true );
           } );
 
     test( "isObject([], {rejectArrays:true}) === false",
           () =>
           {
               let obj = [];
-              expect( typeUtils.isObject( obj, { rejectArrays: true } ) ).toBe( false );
+              expect( isObject( obj, { rejectArrays: true } ) ).toBe( false );
           } );
 
     test( "isObject(new C()) === true",
           () =>
           {
               let obj = new C();
-              expect( typeUtils.isObject( obj ) ).toBe( true );
+              expect( isObject( obj ) ).toBe( true );
           } );
 
     test( "isObject('abc') === false",
           () =>
           {
               let obj = "abc";
-              expect( typeUtils.isObject( obj ) ).toBe( false );
+              expect( isObject( obj ) ).toBe( false );
           } );
 
     test( "isObject(new String('abc')) === false",
           () =>
           {
               let obj = new String( "abc" );
-              expect( typeUtils.isObject( obj ) ).toBe( false );
+              expect( isObject( obj ) ).toBe( false );
           } );
 
     test( "isObject(new String('abc'), {rejectPrimitiveWrappers:true}) === false",
           () =>
           {
               let obj = new String( "abc" );
-              expect( typeUtils.isObject( obj, { rejectPrimitiveWrappers: true } ) ).toBe( false );
+              expect( isObject( obj, { rejectPrimitiveWrappers: true } ) ).toBe( false );
           } );
 
     test( "isObject(new String('abc'), {rejectPrimitiveWrappers:false}) === true",
           () =>
           {
               let obj = new String( "abc" );
-              expect( typeUtils.isObject( obj, { rejectPrimitiveWrappers: false } ) ).toBe( true );
+              expect( isObject( obj, { rejectPrimitiveWrappers: false } ) ).toBe( true );
           } );
 } );
 
@@ -372,14 +426,14 @@ describe( "isCustomObject", () =>
           () =>
           {
               let obj = new C();
-              expect( typeUtils.isCustomObject( obj ) ).toBe( true );
+              expect( isCustomObject( obj ) ).toBe( true );
           } );
 
     test( "isCustomObject({}) === false",
           () =>
           {
               let obj = {};
-              expect( typeUtils.isCustomObject( obj ) ).toBe( false );
+              expect( isCustomObject( obj ) ).toBe( false );
           } );
 } );
 
@@ -388,37 +442,40 @@ describe( "isNonNullObject", () =>
     test( "isNonNullObject() === false",
           () =>
           {
-              expect( typeUtils.isNonNullObject() ).toBe( false );
+              expect( isNonNullObject() ).toBe( false );
           } );
 
     test( "isNonNullObject({}) === true",
           () =>
           {
-              expect( typeUtils.isNonNullObject( {} ) ).toBe( true );
+              expect( isNonNullObject( {} ) ).toBe( true );
           } );
 
     test( "isNonNullObject({},true,{ allowEmptyObjects: true }) === true",
           () =>
           {
-              expect( typeUtils.isNonNullObject( {}, true, { allowEmptyObjects: true } ) ).toBe( true );
+              expect( isNonNullObject( {}, true, { allowEmptyObjects: true } ) ).toBe( true );
           } );
 
     test( "isNonNullObject({},true,{ allowEmptyObjects: false }) === false",
           () =>
           {
-              expect( typeUtils.isNonNullObject( {}, true, { allowEmptyObjects: false } ) ).toBe( false );
+              expect( isNonNullObject( {}, true, { allowEmptyObjects: false } ) ).toBe( false );
           } );
 
-    test( "isNonNullObject({'a':null},true,{ allowEmptyObjects: false }) === false",
+    test( "isNonNullObject({'a':null},true,{ allowEmptyObjects: false, rejectNull:true }) === false",
           () =>
           {
-              expect( typeUtils.isNonNullObject( { "a": null }, true, { allowEmptyObjects: false } ) ).toBe( false );
+              expect( isNonNullObject( { "a": null }, true, {
+                  allowEmptyObjects: false,
+                  rejectNull: true
+              } ) ).toBe( false );
           } );
 
     test( "isNonNullObject({'a':1},true,{ allowEmptyObjects: false }) === true",
           () =>
           {
-              expect( typeUtils.isNonNullObject( { "a": 1 }, true, { allowEmptyObjects: false } ) ).toBe( true );
+              expect( isNonNullObject( { "a": 1 }, true, { allowEmptyObjects: false } ) ).toBe( true );
           } );
 } );
 
@@ -428,76 +485,76 @@ describe( "isFunction", () =>
           () =>
           {
               let obj = C;
-              expect( typeUtils.isFunction( obj ) ).toBe( true );
+              expect( isFunction( obj ) ).toBe( true );
           } );
 
     test( "isFunction(new C().doSomething) === true",
           () =>
           {
               let obj = new C().doSomething;
-              expect( typeUtils.isFunction( obj ) ).toBe( true );
+              expect( isFunction( obj ) ).toBe( true );
           } );
 
     test( "isFunction(new C().doSomething()) === false",
           () =>
           {
               let obj = new C().doSomething();
-              expect( typeUtils.isFunction( obj ) ).toBe( false );
+              expect( isFunction( obj ) ).toBe( false );
           } );
 
     test( "isFunction(C.doSomething) === false",
           () =>
           {
               let obj = C.doSomething;
-              expect( typeUtils.isFunction( obj ) ).toBe( false );
+              expect( isFunction( obj ) ).toBe( false );
           } );
 
     test( "isFunction(C.doNothing) === true",
           () =>
           {
               let obj = C.doNothing;
-              expect( typeUtils.isFunction( obj ) ).toBe( true );
+              expect( isFunction( obj ) ).toBe( true );
           } );
 
     test( "isFunction(C.doNothing()) === false",
           () =>
           {
               let obj = C.doNothing();
-              expect( typeUtils.isFunction( obj ) ).toBe( false );
+              expect( isFunction( obj ) ).toBe( false );
           } );
 
     test( "isFunction('abc') === false",
           () =>
           {
               let obj = "abc";
-              expect( typeUtils.isFunction( obj ) ).toBe( false );
+              expect( isFunction( obj ) ).toBe( false );
           } );
 
     test( "isFunction(new C().makeFunction) === true",
           () =>
           {
               let obj = new C().makeFunction;
-              expect( typeUtils.isFunction( obj ) ).toBe( true );
+              expect( isFunction( obj ) ).toBe( true );
           } );
 
     test( "isFunction(new C().makeFunction()) === true",
           () =>
           {
               let obj = new C().makeFunction();
-              expect( typeUtils.isFunction( obj ) ).toBe( true );
+              expect( isFunction( obj ) ).toBe( true );
           } );
 
     test( "isFunction(new C().makeFunction()()) === false",
           () =>
           {
               let obj = new C().makeFunction()();
-              expect( typeUtils.isFunction( obj ) ).toBe( false );
+              expect( isFunction( obj ) ).toBe( false );
           } );
 
     test( "isFunction(Array) === true",
           () =>
           {
-              expect( typeUtils.isFunction( Array ) ).toBe( true );
+              expect( isFunction( Array ) ).toBe( true );
           } );
 
     test( "isFunction('an object with call and apply methods') === false, when strict (default)",
@@ -509,7 +566,7 @@ describe( "isFunction", () =>
                       apply: function() {}
                   };
 
-              expect( typeUtils.isFunction( fakeFunction ) ).toBe( false );
+              expect( isFunction( fakeFunction ) ).toBe( false );
           } );
 
     test( "isFunction('an object with call and apply methods') === true, when not strict",
@@ -521,7 +578,7 @@ describe( "isFunction", () =>
                       apply: function() {}
                   };
 
-              expect( typeUtils.isFunction( fakeFunction, false ) ).toBe( true );
+              expect( isFunction( fakeFunction, false ) ).toBe( true );
           } );
 } );
 
@@ -530,31 +587,31 @@ describe( "isAsyncFunction", () =>
     test( "isAsyncFunction(anAsyncFunction) === true",
           () =>
           {
-              expect( typeUtils.isAsyncFunction( anAsyncFunction ) ).toBe( true );
+              expect( isAsyncFunction( anAsyncFunction ) ).toBe( true );
           } );
 
     test( "isAsyncFunction(anAsyncFunction()) === false",
           () =>
           {
-              expect( typeUtils.isAsyncFunction( anAsyncFunction() ) ).toBe( false );
+              expect( isAsyncFunction( anAsyncFunction() ) ).toBe( false );
           } );
 
     test( "isAsyncFunction(C) === false",
           () =>
           {
-              expect( typeUtils.isAsyncFunction( C ) ).toBe( false );
+              expect( isAsyncFunction( C ) ).toBe( false );
           } );
 
     test( "isAsyncFunction(new C().lazyLog) === true",
           () =>
           {
-              expect( typeUtils.isAsyncFunction( new C().lazyLog ) ).toBe( true );
+              expect( isAsyncFunction( new C().lazyLog ) ).toBe( true );
           } );
 
     test( "isAsyncFunction(new C().lazyLog()) === false",
           () =>
           {
-              expect( typeUtils.isAsyncFunction( new C().lazyLog() ) ).toBe( false );
+              expect( isAsyncFunction( new C().lazyLog() ) ).toBe( false );
           } );
 } );
 
@@ -564,19 +621,19 @@ describe( "isClass", () =>
           () =>
           {
               let obj = C;
-              expect( typeUtils.isClass( obj ) ).toBe( true );
+              expect( isClass( obj ) ).toBe( true );
           } );
 
     test( "isClass(Object) === false, when strict (default)",
           () =>
           {
-              expect( typeUtils.isClass( Object ) ).toBe( false );
+              expect( isClass( Object ) ).toBe( false );
           } );
 
     test( "isClass(Object) === true, when not strict",
           () =>
           {
-              expect( typeUtils.isClass( Object, false ) ).toBe( true );
+              expect( isClass( Object, false ) ).toBe( true );
           } );
 } );
 
@@ -585,43 +642,43 @@ describe( "isString", () =>
     test( "isString('abc') === true",
           () =>
           {
-              expect( typeUtils.isString( "abc" ) ).toBe( true );
+              expect( isString( "abc" ) ).toBe( true );
           } );
 
     test( "isString(new String('abc')) === true",
           () =>
           {
-              expect( typeUtils.isString( new String( "abc" ) ) ).toBe( true );
+              expect( isString( new String( "abc" ) ) ).toBe( true );
           } );
 
     test( "isString(0) === false",
           () =>
           {
-              expect( typeUtils.isString( 0 ) ).toBe( false );
+              expect( isString( 0 ) ).toBe( false );
           } );
 
     test( "isString(['abc']) === false",
           () =>
           {
-              expect( typeUtils.isString( ["abc"] ) ).toBe( false );
+              expect( isString( ["abc"] ) ).toBe( false );
           } );
 
     test( "isString() === false",
           () =>
           {
-              expect( typeUtils.isString() ).toBe( false );
+              expect( isString() ).toBe( false );
           } );
 
     test( "isString(null) === false",
           () =>
           {
-              expect( typeUtils.isString( null ) ).toBe( false );
+              expect( isString( null ) ).toBe( false );
           } );
 
     test( "isString(undefined) === false",
           () =>
           {
-              expect( typeUtils.isString( undefined ) ).toBe( false );
+              expect( isString( undefined ) ).toBe( false );
           } );
 } );
 
@@ -735,68 +792,68 @@ describe( "Numeric functions", () =>
     test( "isNumber(0) === true",
           () =>
           {
-              expect( typeUtils.isNumber( 0 ) ).toBe( true );
+              expect( isNumber( 0 ) ).toBe( true );
           } );
 
     test( "isNumber(20000000000000000000000000000000000000000000000000000000000000000000000n) === true",
           () =>
           {
-              expect( typeUtils.isNumber( 20000000000000000000000000000000000000000000000000000000000000000000000n ) ).toBe( true );
+              expect( isNumber( 20000000000000000000000000000000000000000000000000000000000000000000000n ) ).toBe( true );
           } );
 
     test( "isNumber('123') === false",
           () =>
           {
-              expect( typeUtils.isNumber( "123" ) ).toBe( false );
+              expect( isNumber( "123" ) ).toBe( false );
           } );
 
     test( "isNumber(new Number('123')) === true",
           () =>
           {
-              expect( typeUtils.isNumber( new Number( "123" ) ) ).toBe( true );
+              expect( isNumber( new Number( "123" ) ) ).toBe( true );
           } );
 
     test( "isNumber(MIN_VALUE) === true",
           () =>
           {
-              expect( typeUtils.isNumber( Number.MIN_VALUE ) ).toBe( true );
+              expect( isNumber( Number.MIN_VALUE ) ).toBe( true );
           } );
 
     test( "isNumber(MAX_VALUE) === true",
           () =>
           {
-              expect( typeUtils.isNumber( Number.MAX_VALUE ) ).toBe( true );
+              expect( isNumber( Number.MAX_VALUE ) ).toBe( true );
           } );
 
     test( "isNumeric('123') === true",
           () =>
           {
-              expect( typeUtils.isNumeric( "123" ) ).toBe( true );
+              expect( isNumeric( "123" ) ).toBe( true );
           } );
 
     test( "isNumeric('0123') === true",
           () =>
           {
-              expect( typeUtils.isNumeric( "0123" ) ).toBe( true );
+              expect( isNumeric( "0123" ) ).toBe( true );
           } );
 
     test( "isNumeric('000123') === true",
           () =>
           {
-              expect( typeUtils.isNumeric( "000123" ) ).toBe( true );
+              expect( isNumeric( "000123" ) ).toBe( true );
           } );
 
     test( "isNumeric('0z0123') === false",
           () =>
           {
-              expect( typeUtils.isNumeric( "0z0123" ) ).toBe( false );
+              expect( isNumeric( "0z0123" ) ).toBe( false );
           } );
 
     test( "isNumeric(hexadecimals) === true",
           () =>
           {
               const hexes = [].concat( hexadecimals );
-              const valid = hexadecimals.filter( e => typeUtils.isNumeric( e ) );
+              const valid = hexadecimals.filter( e => isNumeric( e ) );
               expect( valid.length ).toBe( hexes.length );
           } );
 
@@ -804,7 +861,7 @@ describe( "Numeric functions", () =>
           () =>
           {
               const octs = [].concat( octals );
-              const valid = octals.filter( e => typeUtils.isNumeric( e ) );
+              const valid = octals.filter( e => isNumeric( e ) );
               expect( valid.length ).toBe( octs.length );
           } );
 
@@ -812,7 +869,7 @@ describe( "Numeric functions", () =>
           () =>
           {
               const strings = generateStringValues( 25, 3, 64 );
-              const valid = strings.filter( e => typeUtils.isNumeric( e ) );
+              const valid = strings.filter( e => isNumeric( e ) );
               expect( valid.length ).toEqual( 0 );
           } );
 
@@ -820,31 +877,31 @@ describe( "Numeric functions", () =>
           () =>
           {
               const strings = octals.map( e => String( "" + e + "" ) );
-              const valid = strings.filter( e => typeUtils.isOctal( e ) );
+              const valid = strings.filter( e => isOctal( e ) );
               expect( valid.length ).toEqual( octals.length );
           } );
 
     test( "isOctal(values) === true",
           () =>
           {
-              const valid = octals.filter( e => typeUtils.isOctal( e ) );
+              const valid = octals.filter( e => isOctal( e ) );
               expect( valid.length ).toEqual( octals.length );
           } );
 
     test( "isOctal(hex values) === false",
           () =>
           {
-              const valid = hexadecimals.filter( e => typeUtils.isOctal( e ) );
+              const valid = hexadecimals.filter( e => isOctal( e ) );
               expect( valid.length ).toEqual( 0 );
           } );
 
     test( "isOctal(decimal values) === false",
           () =>
           {
-              let valid = [10, 34, 0.77, 77, 88.77].filter( e => typeUtils.isOctal( e ) );
+              let valid = [10, 34, 0.77, 77, 88.77].filter( e => isOctal( e ) );
               expect( valid.length ).toEqual( 0 );
 
-              valid = ["0o17", 10, 17, 34, 0.77, 77, 88.77, "xx", "0xx", "0xA", 0xF].filter( e => typeUtils.isOctal( e ) );
+              valid = ["0o17", 10, 17, 34, 0.77, 77, 88.77, "xx", "0xx", "0xA", 0xF].filter( e => isOctal( e ) );
               expect( valid.length ).toEqual( 1 );
           } );
 
@@ -852,14 +909,14 @@ describe( "Numeric functions", () =>
           () =>
           {
               const strings = hexadecimals.map( e => String( "" + e + "" ) );
-              const valid = strings.filter( e => typeUtils.isHex( e ) );
+              const valid = strings.filter( e => isHex( e ) );
               expect( valid.length ).toEqual( hexadecimals.length );
           } );
 
     test( "isHex(values) === false",
           () =>
           {
-              const valid = hexadecimals.filter( e => typeUtils.isHex( e ) );
+              const valid = hexadecimals.filter( e => isHex( e ) );
               expect( valid.length ).toEqual( hexadecimals.length );
           } );
 
@@ -867,10 +924,10 @@ describe( "Numeric functions", () =>
           () =>
           {
               // note that 0xF is interpreted as decimal value, 15, while the string "0xA" is fed directly to the method
-              let valid = ["017", 10, 17, 34, 0.77, 77, 88.77, "xx", "0xx", "0xA", 0xF].filter( e => typeUtils.isHex( e ) );
+              let valid = ["017", 10, 17, 34, 0.77, 77, 88.77, "xx", "0xx", "0xA", 0xF].filter( e => isHex( e ) );
               expect( valid.length ).toEqual( 1 );
 
-              valid = ["017", 10, 17, 34, 0.77, 77, 88.77, "xx", "0xx", "0xA", 0xF].map( e => ("" + (e) + "").trim() ).filter( e => typeUtils.isHex( e ) );
+              valid = ["017", 10, 17, 34, 0.77, 77, 88.77, "xx", "0xx", "0xA", 0xF].map( e => ("" + (e) + "").trim() ).filter( e => isHex( e ) );
               expect( valid.length ).toEqual( 1 );
           } );
 
@@ -880,24 +937,24 @@ describe( "Numeric functions", () =>
               // note that 0xF is interpreted as decimal value, 15, while the string "0xA" is fed directly to the method
               const samples = ["017", "00.17", 0, 10, 100, 17, 34, 0.77, 77, 88.77, "xx", "0xx", "0xA", 0xF];
 
-              let valid = samples.filter( e => typeUtils.isDecimal( e ) );
+              let valid = samples.filter( e => isDecimal( e ) );
               expect( valid.length ).toEqual( 11 );
 
-              valid = samples.map( e => ("" + (e) + "").trim() ).filter( e => typeUtils.isDecimal( e ) );
+              valid = samples.map( e => ("" + (e) + "").trim() ).filter( e => isDecimal( e ) );
               expect( valid.length ).toEqual( 11 );
           } );
 
     test( "isInteger(0) === true",
           () =>
           {
-              expect( typeUtils.isInteger( 0 ) ).toBe( true );
+              expect( isInteger( 0 ) ).toBe( true );
           } );
 
 
     test( "isFloat(0) === true",
           () =>
           {
-              expect( typeUtils.isFloat( 0 ) ).toBe( true );
+              expect( isFloat( 0 ) ).toBe( true );
           } );
 } );
 
@@ -907,115 +964,115 @@ describe( "toNumericBase",
               test( "toDecimal('0xFF') === 255",
                     () =>
                     {
-                        expect( typeUtils.toDecimal( "0xff" ) ).toEqual( 255 );
-                        expect( typeUtils.toDecimal( 0xff ) ).toEqual( 255 );
+                        expect( toDecimal( "0xff" ) ).toEqual( 255 );
+                        expect( toDecimal( 0xff ) ).toEqual( 255 );
                     } );
 
               test( "toDecimal('-0xFF') === -255",
                     () =>
                     {
-                        expect( typeUtils.toDecimal( "-0xff" ) ).toEqual( -255 );
-                        expect( typeUtils.toDecimal( -0xff ) ).toEqual( -255 );
+                        expect( toDecimal( "-0xff" ) ).toEqual( -255 );
+                        expect( toDecimal( -0xff ) ).toEqual( -255 );
                     } );
 
               test( "toDecimal('111') === 111",
                     () =>
                     {
-                        expect( typeUtils.toDecimal( "111" ) ).toEqual( 111 );
-                        expect( typeUtils.toDecimal( 111 ) ).toEqual( 111 );
+                        expect( toDecimal( "111" ) ).toEqual( 111 );
+                        expect( toDecimal( 111 ) ).toEqual( 111 );
                     } );
 
               test( "toDecimal('-111') === -111",
                     () =>
                     {
-                        expect( typeUtils.toDecimal( "-111" ) ).toEqual( -111 );
-                        expect( typeUtils.toDecimal( -111 ) ).toEqual( -111 );
+                        expect( toDecimal( "-111" ) ).toEqual( -111 );
+                        expect( toDecimal( -111 ) ).toEqual( -111 );
                     } );
 
               test( "toDecimal('0o10') === 8",
                     () =>
                     {
-                        expect( typeUtils.toDecimal( "0o10" ) ).toEqual( 8 );
-                        expect( typeUtils.toDecimal( 0o10 ) ).toEqual( 8 );
+                        expect( toDecimal( "0o10" ) ).toEqual( 8 );
+                        expect( toDecimal( 0o10 ) ).toEqual( 8 );
                     } );
 
               test( "toDecimal('-0o10') === -8",
                     () =>
                     {
-                        expect( typeUtils.toDecimal( "-0o10" ) ).toEqual( -8 );
-                        expect( typeUtils.toDecimal( -0o10 ) ).toEqual( -8 );
+                        expect( toDecimal( "-0o10" ) ).toEqual( -8 );
+                        expect( toDecimal( -0o10 ) ).toEqual( -8 );
                     } );
 
               test( "toDecimal('0b100') === 4",
                     () =>
                     {
-                        expect( typeUtils.toDecimal( "0b100" ) ).toEqual( 4 );
-                        expect( typeUtils.toDecimal( 0b100 ) ).toEqual( 4 );
+                        expect( toDecimal( "0b100" ) ).toEqual( 4 );
+                        expect( toDecimal( 0b100 ) ).toEqual( 4 );
                     } );
 
               test( "toDecimal('-0b100') === -4",
                     () =>
                     {
-                        expect( typeUtils.toDecimal( "-0b100" ) ).toEqual( -4 );
-                        expect( typeUtils.toDecimal( -0b100 ) ).toEqual( -4 );
+                        expect( toDecimal( "-0b100" ) ).toEqual( -4 );
+                        expect( toDecimal( -0b100 ) ).toEqual( -4 );
                     } );
 
 
               test( "toDecimal('0b10001') === 17",
                     () =>
                     {
-                        expect( typeUtils.toDecimal( "0b10001" ) ).toEqual( 17 );
-                        expect( typeUtils.toDecimal( 0b10001 ) ).toEqual( 17 );
+                        expect( toDecimal( "0b10001" ) ).toEqual( 17 );
+                        expect( toDecimal( 0b10001 ) ).toEqual( 17 );
                     } );
 
               test( "toDecimal('-0b10001') === -17",
                     () =>
                     {
-                        expect( typeUtils.toDecimal( "-0b10001" ) ).toEqual( -17 );
-                        expect( typeUtils.toDecimal( -0b10001 ) ).toEqual( -17 );
+                        expect( toDecimal( "-0b10001" ) ).toEqual( -17 );
+                        expect( toDecimal( -0b10001 ) ).toEqual( -17 );
                     } );
 
 
               test( "toOctal('0xFF') === 0o377",
                     () =>
                     {
-                        expect( typeUtils.toOctal( "0xff" ) ).toEqual( "0o377" );
-                        expect( typeUtils.toOctal( 0xff ) ).toEqual( "0o377" );
+                        expect( toOctal( "0xff" ) ).toEqual( "0o377" );
+                        expect( toOctal( 0xff ) ).toEqual( "0o377" );
                     } );
 
               test( "toOctal('-0xFF') === -0o377",
                     () =>
                     {
-                        expect( typeUtils.toOctal( "-0xff" ) ).toEqual( "-0o377" );
-                        expect( typeUtils.toOctal( -0xff ) ).toEqual( "-0o377" );
+                        expect( toOctal( "-0xff" ) ).toEqual( "-0o377" );
+                        expect( toOctal( -0xff ) ).toEqual( "-0o377" );
                     } );
 
               test( "toHex(255) === 0xff",
                     () =>
                     {
-                        expect( typeUtils.toHex( 255 ) ).toEqual( "0xff" );
-                        expect( typeUtils.toHex( "255" ) ).toEqual( "0xff" );
+                        expect( toHex( 255 ) ).toEqual( "0xff" );
+                        expect( toHex( "255" ) ).toEqual( "0xff" );
                     } );
 
               test( "toHex(-255) === -0xff",
                     () =>
                     {
-                        expect( typeUtils.toHex( -255 ) ).toEqual( "-0xff" );
-                        expect( typeUtils.toHex( "-255" ) ).toEqual( "-0xff" );
+                        expect( toHex( -255 ) ).toEqual( "-0xff" );
+                        expect( toHex( "-255" ) ).toEqual( "-0xff" );
                     } );
 
               test( "toBinary(255) === 0b11111111",
                     () =>
                     {
-                        expect( typeUtils.toBinary( 255 ) ).toEqual( "0b11111111" );
-                        expect( typeUtils.toBinary( "255" ) ).toEqual( "0b11111111" );
+                        expect( toBinary( 255 ) ).toEqual( "0b11111111" );
+                        expect( toBinary( "255" ) ).toEqual( "0b11111111" );
                     } );
 
               test( "toBinary(-255) === -0b11111111",
                     () =>
                     {
-                        expect( typeUtils.toBinary( -255 ) ).toEqual( "-0b11111111" );
-                        expect( typeUtils.toBinary( "-255" ) ).toEqual( "-0b11111111" );
+                        expect( toBinary( -255 ) ).toEqual( "-0b11111111" );
+                        expect( toBinary( "-255" ) ).toEqual( "-0b11111111" );
                     } );
 
           } );
@@ -1025,49 +1082,49 @@ describe( "isZero", () =>
     test( "isZero(1) === false",
           () =>
           {
-              expect( typeUtils.isZero( 1 ) ).toBe( false );
+              expect( isZero( 1 ) ).toBe( false );
           } );
 
     test( "isZero(1/0) === false",
           () =>
           {
-              expect( typeUtils.isZero( 1 / 0 ) ).toBe( false );
+              expect( isZero( 1 / 0 ) ).toBe( false );
           } );
 
     test( "isZero(POSITIVE_INFINITY) === false",
           () =>
           {
-              expect( typeUtils.isZero( Number.POSITIVE_INFINITY ) ).toBe( false );
+              expect( isZero( Number.POSITIVE_INFINITY ) ).toBe( false );
           } );
 
     test( "isZero(NEGATIVE_INFINITY) === false",
           () =>
           {
-              expect( typeUtils.isZero( Number.NEGATIVE_INFINITY ) ).toBe( false );
+              expect( isZero( Number.NEGATIVE_INFINITY ) ).toBe( false );
           } );
 
     test( "isZero('abc') === false",
           () =>
           {
-              expect( typeUtils.isZero( "abc" ) ).toBe( false );
+              expect( isZero( "abc" ) ).toBe( false );
           } );
 
     test( "isZero(0) === true",
           () =>
           {
-              expect( typeUtils.isZero( 0 ) ).toBe( true );
+              expect( isZero( 0 ) ).toBe( true );
           } );
 
     test( "isZero('0') === false",
           () =>
           {
-              expect( typeUtils.isZero( "0" ) ).toBe( false );
+              expect( isZero( "0" ) ).toBe( false );
           } );
 
     test( "isZero('0',false) === true",
           () =>
           {
-              expect( typeUtils.isZero( "0", false ) ).toBe( true );
+              expect( isZero( "0", false ) ).toBe( true );
           } );
 } );
 
@@ -1080,37 +1137,37 @@ describe( "isInteger", () =>
     test( "isInteger( 1 ) is true",
           () =>
           {
-              expect( typeUtils.isInteger( a ) ).toBe( true );
+              expect( isInteger( a ) ).toBe( true );
           } );
 
     test( "isInteger( 1.0 ) is true",
           () =>
           {
-              expect( typeUtils.isInteger( b ) ).toBe( true );
+              expect( isInteger( b ) ).toBe( true );
           } );
 
     test( "isInteger( 1.1 ) is false",
           () =>
           {
-              expect( typeUtils.isInteger( c ) ).toBe( false );
+              expect( isInteger( c ) ).toBe( false );
           } );
 
     test( "isInteger( '1' ) is false",
           () =>
           {
-              expect( typeUtils.isInteger( "1" ) ).toBe( false );
+              expect( isInteger( "1" ) ).toBe( false );
           } );
 
     test( "isInteger( '1', false ) is true (when not strict)",
           () =>
           {
-              expect( typeUtils.isInteger( "1", false ) ).toBe( true );
+              expect( isInteger( "1", false ) ).toBe( true );
           } );
 
     test( "isInteger( '1.1', false ) is still false (even when not strict)",
           () =>
           {
-              expect( typeUtils.isInteger( "1.1", false ) ).toBe( false );
+              expect( isInteger( "1.1", false ) ).toBe( false );
           } );
 } );
 
@@ -1123,43 +1180,43 @@ describe( "isFloat", () =>
     test( "isFloat( 0 ) is true",
           () =>
           {
-              expect( typeUtils.isFloat( 0 ) ).toBe( true );
+              expect( isFloat( 0 ) ).toBe( true );
           } );
 
     test( "isFloat( 1 ) is false",
           () =>
           {
-              expect( typeUtils.isFloat( a ) ).toBe( false );
+              expect( isFloat( a ) ).toBe( false );
           } );
 
     test( "isFloat( 1.0 ) is false",
           () =>
           {
-              expect( typeUtils.isFloat( b ) ).toBe( false );
+              expect( isFloat( b ) ).toBe( false );
           } );
 
     test( "isFloat( 1.1 ) is true",
           () =>
           {
-              expect( typeUtils.isFloat( c ) ).toBe( true );
+              expect( isFloat( c ) ).toBe( true );
           } );
 
     test( "isFloat( '1.1' ) is false",
           () =>
           {
-              expect( typeUtils.isFloat( "1.1" ) ).toBe( false );
+              expect( isFloat( "1.1" ) ).toBe( false );
           } );
 
     test( "isFloat( '1.1', false ) is true (when not strict)",
           () =>
           {
-              expect( typeUtils.isFloat( "1.1", false ) ).toBe( true );
+              expect( isFloat( "1.1", false ) ).toBe( true );
           } );
 
     test( "isFloat( '1.0', false ) is still false (even when not strict)",
           () =>
           {
-              expect( typeUtils.isFloat( "1.0", false ) ).toBe( false );
+              expect( isFloat( "1.0", false ) ).toBe( false );
           } );
 } );
 
@@ -1168,36 +1225,36 @@ describe( "isBoolean", () =>
     test( "isBoolean(false) === true",
           () =>
           {
-              expect( typeUtils.isBoolean( false ) ).toBe( true );
+              expect( isBoolean( false ) ).toBe( true );
           } );
 
     test( "isBoolean(true) === true",
           () =>
           {
-              expect( typeUtils.isBoolean( true ) ).toBe( true );
+              expect( isBoolean( true ) ).toBe( true );
           } );
     test( "isBoolean(new Boolean(false)) === true",
           () =>
           {
-              expect( typeUtils.isBoolean( new Boolean( false ) ) ).toBe( true );
+              expect( isBoolean( new Boolean( false ) ) ).toBe( true );
           } );
 
     test( "isBoolean( 1 === 1 ) === true",
           () =>
           {
-              expect( typeUtils.isBoolean( 1 === 1 ) ).toBe( true );
+              expect( isBoolean( 1 === 1 ) ).toBe( true );
           } );
 
     test( "isBoolean('abc') === false",
           () =>
           {
-              expect( typeUtils.isBoolean( "abc" ) ).toBe( false );
+              expect( isBoolean( "abc" ) ).toBe( false );
           } );
 
     test( "isBoolean('true') === false",
           () =>
           {
-              expect( typeUtils.isBoolean( "true" ) ).toBe( false );
+              expect( isBoolean( "true" ) ).toBe( false );
           } );
 } );
 
@@ -1206,19 +1263,19 @@ describe( "isArray", () =>
     test( "isArray([]) === true",
           () =>
           {
-              expect( typeUtils.isArray( [] ) ).toBe( true );
+              expect( isArray( [] ) ).toBe( true );
           } );
 
     test( "isArray('abc'.split(_mt_chr)) === true",
           () =>
           {
-              expect( typeUtils.isArray( "abc".split( "" ) ) ).toBe( true );
+              expect( isArray( "abc".split( "" ) ) ).toBe( true );
           } );
 
     test( "isArray({}) === false",
           () =>
           {
-              expect( typeUtils.isArray( {} ) ).toBe( false );
+              expect( isArray( {} ) ).toBe( false );
           } );
 
     test( "isArray(...pArgs) === true",
@@ -1226,7 +1283,7 @@ describe( "isArray", () =>
           {
               function tested( ...pArgs )
               {
-                  expect( typeUtils.isArray( pArgs ) ).toBe( true );
+                  expect( isArray( pArgs ) ).toBe( true );
               }
 
               tested( 1 );
@@ -1238,25 +1295,25 @@ describe( "isTypedArray", () =>
     test( "isTypedArray([]) === false",
           () =>
           {
-              expect( typeUtils.isTypedArray( [] ) ).toBe( false );
+              expect( isTypedArray( [] ) ).toBe( false );
           } );
 
     test( "isTypedArray({'0':0, '1':2, length:2}) === false",
           () =>
           {
-              expect( typeUtils.isTypedArray( { "0": 0, "1": 2, length: 2 } ) ).toBe( false );
+              expect( isTypedArray( { "0": 0, "1": 2, length: 2 } ) ).toBe( false );
           } );
 
     test( "isTypedArray(UInt8Array) === true",
           () =>
           {
-              expect( typeUtils.isTypedArray( new Uint8Array( 2 ) ) ).toBe( true );
+              expect( isTypedArray( new Uint8Array( 2 ) ) ).toBe( true );
           } );
 
     test( "isTypedArray(UInt8Array) === true",
           () =>
           {
-              expect( typeUtils.isTypedArray( new Int32Array( 2 ) ) ).toBe( true );
+              expect( isTypedArray( new Int32Array( 2 ) ) ).toBe( true );
           } );
 } );
 
@@ -1267,20 +1324,20 @@ describe( "isLikeArray",
                     () =>
                     {
                         let obj = { 0: 0, 1: 1, length: 2 };
-                        expect( typeUtils.isLikeArray( obj ) ).toBe( true );
+                        expect( isLikeArray( obj ) ).toBe( true );
                     } );
 
               test( "isLikeArray() === false if the object must be iterable",
                     () =>
                     {
                         let obj = { 0: 0, 1: 1, length: 2 };
-                        expect( typeUtils.isLikeArray( obj, true ) ).toBe( false );
+                        expect( isLikeArray( obj, true ) ).toBe( false );
                     } );
 
               test( "isFunction(Array.prototype[Symbol.iterator]) === true",
                     () =>
                     {
-                        expect( typeUtils.isFunction( Array.prototype[Symbol.iterator] ) ).toBe( true );
+                        expect( isFunction( Array.prototype[Symbol.iterator] ) ).toBe( true );
                     } );
           } );
 
@@ -1291,29 +1348,29 @@ describe( "isIterable",
                     () =>
                     {
                         let obj = [1, 2, 3];
-                        expect( typeUtils.isIterable( obj ) ).toBe( true );
+                        expect( isIterable( obj ) ).toBe( true );
                     } );
 
               test( "isIterable( string ) === true ",
                     () =>
                     {
                         let obj = "abc";
-                        expect( typeUtils.isIterable( obj ) ).toBe( true );
+                        expect( isIterable( obj ) ).toBe( true );
                     } );
 
               test( "isIterable( object ) === false",
                     () =>
                     {
                         let obj = { a: 1, b: 2 };
-                        expect( typeUtils.isIterable( obj ) ).toBe( false );
+                        expect( isIterable( obj ) ).toBe( false );
                     } );
 
               test( "isIterable( Iterator ) === true",
                     () =>
                     {
                         let obj = { 0: 0, 1: 1, length: 2 };
-                        obj = typeUtils.toIterable( obj );
-                        expect( typeUtils.isIterable( obj ) ).toBe( true );
+                        obj = toIterable( obj );
+                        expect( isIterable( obj ) ).toBe( true );
                     } );
 
           } );
@@ -1326,7 +1383,7 @@ describe( "isSpreadable",
                     {
                         let obj = [1, 2, 3];
 
-                        expect( typeUtils.isSpreadable( obj ) ).toBe( true );
+                        expect( isSpreadable( obj ) ).toBe( true );
 
                         let arr = [...obj];
 
@@ -1338,7 +1395,7 @@ describe( "isSpreadable",
                     {
                         let obj = "abc";
 
-                        expect( typeUtils.isSpreadable( obj ) ).toBe( true );
+                        expect( isSpreadable( obj ) ).toBe( true );
 
                         let arr = [...obj];
 
@@ -1350,7 +1407,7 @@ describe( "isSpreadable",
                     {
                         let obj = { a: 1, b: 2, c: 3 };
 
-                        expect( typeUtils.isSpreadable( obj ) ).toBe( false );
+                        expect( isSpreadable( obj ) ).toBe( false );
 
                         let obj2 = { ...obj };
 
@@ -1365,7 +1422,7 @@ describe( "isSpreadable",
                     {
                         let obj = { a: 1, b: 2, c: 3 };
 
-                        expect( typeUtils.isSpreadable( obj, true ) ).toBe( false );
+                        expect( isSpreadable( obj, true ) ).toBe( false );
 
                         let obj2 = { ...obj };
 
@@ -1381,13 +1438,13 @@ describe( "isSymbol", () =>
     test( "isSymbol(Symbol('a')) === true",
           () =>
           {
-              expect( typeUtils.isSymbol( Symbol( "a" ) ) ).toBe( true );
+              expect( isSymbol( Symbol( "a" ) ) ).toBe( true );
           } );
 
     test( "isSymbol(Symbol.iterator) === true",
           () =>
           {
-              expect( typeUtils.isSymbol( Symbol.iterator ) ).toBe( true );
+              expect( isSymbol( Symbol.iterator ) ).toBe( true );
           } );
 } );
 
@@ -1396,43 +1453,43 @@ describe( "isType", () =>
     test( "isType('abc','string') === true",
           () =>
           {
-              expect( typeUtils.isType( "abc", "string" ) ).toBe( true );
+              expect( isType( "abc", "string" ) ).toBe( true );
           } );
 
     test( "isType('123','number') === false",
           () =>
           {
-              expect( typeUtils.isType( "123", "number" ) ).toBe( false );
+              expect( isType( "123", "number" ) ).toBe( false );
           } );
 
     test( "isType('abc','xyz') === true",
           () =>
           {
-              expect( typeUtils.isType( "abc", "xyz" ) ).toBe( true );
+              expect( isType( "abc", "xyz" ) ).toBe( true );
           } );
 
     test( "isType('123',123) === false",
           () =>
           {
-              expect( typeUtils.isType( "123", 123 ) ).toBe( false );
+              expect( isType( "123", 123 ) ).toBe( false );
           } );
 
     test( "isType(123,789) === true",
           () =>
           {
-              expect( typeUtils.isType( 123, 789 ) ).toBe( true );
+              expect( isType( 123, 789 ) ).toBe( true );
           } );
 
     test( "isType([],Array]) === true",
           () =>
           {
-              expect( typeUtils.isType( [], Array ) ).toBe( true );
+              expect( isType( [], Array ) ).toBe( true );
           } );
 
     test( "isType({},Object) === true",
           () =>
           {
-              expect( typeUtils.isType( {}, Object ) ).toBe( true );
+              expect( isType( {}, Object ) ).toBe( true );
           } );
 } );
 
@@ -1442,49 +1499,49 @@ describe( "areSameType", () =>
           () =>
           {
               let strings = ["a", "abc", "123", "foo"];
-              expect( typeUtils.areSameType( ...strings ) ).toBe( true );
+              expect( areSameType( ...strings ) ).toBe( true );
           } );
 
     test( "areSameType( numbers )",
           () =>
           {
               let numbers = [0, 1, 2, 10n, BigInt( 12 )];
-              expect( typeUtils.areSameType( ...numbers ) ).toBe( true );
+              expect( areSameType( ...numbers ) ).toBe( true );
           } );
 
     test( "areSameType( booleans )",
           () =>
           {
               let booleans = [false, true, 1 === 1, 0 < 2];
-              expect( typeUtils.areSameType( ...booleans ) ).toBe( true );
+              expect( areSameType( ...booleans ) ).toBe( true );
           } );
 
     test( "areSameType( Dates )",
           () =>
           {
               let dates = [new Date(), new Date( 2024, 1, 1 )];
-              expect( typeUtils.areSameType( ...dates ) ).toBe( true );
+              expect( areSameType( ...dates ) ).toBe( true );
           } );
 
     test( "areSameType( objects )",
           () =>
           {
               let objects = [{}, { a: 1 }, Object.create( null )];
-              expect( typeUtils.areSameType( ...objects ) ).toBe( true );
+              expect( areSameType( ...objects ) ).toBe( true );
           } );
 
     test( "areSameType( mixed )",
           () =>
           {
               let strings = ["a", "abc", 123, "foo"];
-              expect( typeUtils.areSameType( ...strings ) ).toBe( false );
+              expect( areSameType( ...strings ) ).toBe( false );
           } );
 
     test( "areSameType( more mixed )",
           () =>
           {
               let numbers = [123, new Date()];
-              expect( typeUtils.areSameType( ...numbers ) ).toBe( false );
+              expect( areSameType( ...numbers ) ).toBe( false );
           } );
 } );
 
@@ -1493,19 +1550,19 @@ describe( "isMap", () =>
     test( "isMap( new Map() ) ) === true",
           () =>
           {
-              expect( typeUtils.isMap( new Map() ) ).toBe( true );
+              expect( isMap( new Map() ) ).toBe( true );
           } );
 
     test( "isMap( {'a':1,'b':2 } ) ) === false",
           () =>
           {
-              expect( typeUtils.isMap( { "a": 1, "b": 2 } ) ).toBe( false );
+              expect( isMap( { "a": 1, "b": 2 } ) ).toBe( false );
           } );
 
     test( "isMap( {'a':1,'b':2 }, false ) ) === true",
           () =>
           {
-              expect( typeUtils.isMap( { "a": 1, "b": 2 }, false ) ).toBe( true );
+              expect( isMap( { "a": 1, "b": 2 }, false ) ).toBe( true );
           } );
 
 // in non-strict mode, we still expect map keys to be strings
@@ -1513,7 +1570,7 @@ describe( "isMap", () =>
           () =>
           {
               const objKey = {};
-              expect( typeUtils.isMap( { [objKey]: 1 }, false ) ).toBe( false );
+              expect( isMap( { [objKey]: 1 }, false ) ).toBe( false );
           } );
 
 // any key other than an Object becomes a string when it defines a property of an Object
@@ -1521,7 +1578,7 @@ describe( "isMap", () =>
           () =>
           {
               const boolKey = true;
-              expect( typeUtils.isMap( { [boolKey]: 1 }, false ) ).toBe( true );
+              expect( isMap( { [boolKey]: 1 }, false ) ).toBe( true );
           } );
 
 } );
@@ -1532,60 +1589,60 @@ describe( "isSet", () =>
     test( "isSet( new Map() ) ) === false",
           () =>
           {
-              expect( typeUtils.isSet( new Map() ) ).toBe( false );
+              expect( isSet( new Map() ) ).toBe( false );
           } );
 
     test( "isSet( new Map(), false ) ) === false",
           () =>
           {
-              expect( typeUtils.isSet( new Map(), false ) ).toBe( false );
+              expect( isSet( new Map(), false ) ).toBe( false );
           } );
 
     test( "isSet( {'a':1,'b':2 } ) ) === false",
           () =>
           {
-              expect( typeUtils.isSet( { "a": 1, "b": 2 } ) ).toBe( false );
+              expect( isSet( { "a": 1, "b": 2 } ) ).toBe( false );
           } );
 
     test( "isSet( new Set() ) === true",
           () =>
           {
-              expect( typeUtils.isSet( new Set() ) ).toBe( true );
+              expect( isSet( new Set() ) ).toBe( true );
           } );
 
 // in strict mode, only instances of Set are considered a Set
     test( "isSet([1,2,3]) === false",
           () =>
           {
-              expect( typeUtils.isSet( [1, 2, 3] ) ).toBe( false );
+              expect( isSet( [1, 2, 3] ) ).toBe( false );
           } );
 
 // in lax mode, any Array-like object whose values are unique is a Set
     test( "isSet([1,2,3], false) === true",
           () =>
           {
-              expect( typeUtils.isSet( [1, 2, 3], false ) ).toBe( true );
+              expect( isSet( [1, 2, 3], false ) ).toBe( true );
           } );
 
 // elements have to be unique, though
     test( "isSet([1,2,3,2], false) === false",
           () =>
           {
-              expect( typeUtils.isSet( [1, 2, 3, 2], false ) ).toBe( false );
+              expect( isSet( [1, 2, 3, 2], false ) ).toBe( false );
           } );
 
 // even a String can be a 'set of characters' if the characters are unique
     test( "isSet('abc', false) === true",
           () =>
           {
-              expect( typeUtils.isSet( "abc", false ) ).toBe( true );
+              expect( isSet( "abc", false ) ).toBe( true );
           } );
 
 // a string is a set of characters if and only if the characters are unique
     test( "isSet('abcb', false) === false",
           () =>
           {
-              expect( typeUtils.isSet( "abcb", false ) ).toBe( false );
+              expect( isSet( "abcb", false ) ).toBe( false );
           } );
 } );
 
@@ -1594,20 +1651,20 @@ describe( "isDate", () =>
     test( "isDate('abc') === false",
           () =>
           {
-              expect( typeUtils.isDate( "abc" ) ).toBe( false );
+              expect( isDate( "abc" ) ).toBe( false );
           } );
 
     test( "isDate(new Date()) === true",
           () =>
           {
-              expect( typeUtils.isDate( new Date() ) ).toBe( true );
+              expect( isDate( new Date() ) ).toBe( true );
           } );
 
     test( "isDate(now, false) === true",
           () =>
           {
               let date = Date.now();
-              expect( typeUtils.isDate( date, false ) ).toBe( true );
+              expect( isDate( date, false ) ).toBe( true );
           } );
 
 // Date.now() returns a number; in strict mode, a number is NOT a date
@@ -1615,7 +1672,7 @@ describe( "isDate", () =>
           () =>
           {
               let date = Date.now();
-              expect( typeUtils.isDate( date ) ).toBe( false );
+              expect( isDate( date ) ).toBe( false );
           } );
 
 // strings that can be parsed as a date are Dates in lax mode
@@ -1623,7 +1680,7 @@ describe( "isDate", () =>
           () =>
           {
               let dateString = "09/12/2024";
-              expect( typeUtils.isDate( dateString, false ) ).toBe( true );
+              expect( isDate( dateString, false ) ).toBe( true );
           } );
 
 // but not in strict mode
@@ -1631,7 +1688,7 @@ describe( "isDate", () =>
           () =>
           {
               let dateString = "09/12/2024";
-              expect( typeUtils.isDate( dateString ) ).toBe( false );
+              expect( isDate( dateString ) ).toBe( false );
           } );
 } );
 
@@ -1642,7 +1699,7 @@ describe( "isRegExp", () =>
           () =>
           {
               let rx = /^a/g;
-              expect( typeUtils.isRegExp( rx ) ).toBe( true );
+              expect( isRegExp( rx ) ).toBe( true );
           } );
 
 // in strict mode, strings that may be RegExp patterns are stoll not considered to a RegExp
@@ -1650,7 +1707,7 @@ describe( "isRegExp", () =>
           () =>
           {
               let rx = "/^a/g";
-              expect( typeUtils.isRegExp( rx ) ).toBe( false );
+              expect( isRegExp( rx ) ).toBe( false );
           } );
 
 // in lax mode, a properly formed regular expression pattern is considered a RegExp
@@ -1658,7 +1715,7 @@ describe( "isRegExp", () =>
           () =>
           {
               let rx = "/^a/g";
-              expect( typeUtils.isRegExp( rx, false ) ).toBe( true );
+              expect( isRegExp( rx, false ) ).toBe( true );
           } );
 
 // but not strings that cannot be interpreted as a valid RegExp
@@ -1666,7 +1723,7 @@ describe( "isRegExp", () =>
           () =>
           {
               let rx = "/^a((/g";
-              expect( typeUtils.isRegExp( rx, false ) ).toBe( false );
+              expect( isRegExp( rx, false ) ).toBe( false );
           } );
 } );
 
@@ -1676,28 +1733,28 @@ describe( "isClass", () =>
           () =>
           {
               let obj = A;
-              expect( typeUtils.isClass( obj ) ).toBe( true );
+              expect( isClass( obj ) ).toBe( true );
           } );
 
     test( "isClass(new A()) === false",
           () =>
           {
               let obj = new A();
-              expect( typeUtils.isClass( obj ) ).toBe( false );
+              expect( isClass( obj ) ).toBe( false );
           } );
 
 // in strict mode, built-in 'classes' are NOT classes
     test( "isClass(Array) === false",
           () =>
           {
-              expect( typeUtils.isClass( Array ) ).toBe( false );
+              expect( isClass( Array ) ).toBe( false );
           } );
 
 // in lax mode, built-in 'classes' ARE classes
     test( "isClass(Array, false) === true",
           () =>
           {
-              expect( typeUtils.isClass( Array, false ) ).toBe( true );
+              expect( isClass( Array, false ) ).toBe( true );
           } );
 } );
 
@@ -1707,28 +1764,28 @@ describe( "instanceOfAny", () =>
           () =>
           {
               const a = new A();
-              expect( typeUtils.instanceOfAny( a, A ) ).toBe( true );
+              expect( instanceOfAny( a, A ) ).toBe( true );
           } );
 
     test( "instanceOfAny returns false if the object is an instance of the base class of the classes specified",
           () =>
           {
               const a = new A();
-              expect( typeUtils.instanceOfAny( a, B, C ) ).toBe( false );
+              expect( instanceOfAny( a, B, C ) ).toBe( false );
           } );
 
     test( "instanceOfAny returns true if the object is an instance of a subclass of one of the classes specified",
           () =>
           {
               const c = new C();
-              expect( typeUtils.instanceOfAny( c, A, B ) ).toBe( true );
+              expect( instanceOfAny( c, A, B ) ).toBe( true );
           } );
 
     test( "instanceOfAny returns true if the object is an instance of a built-in class",
           () =>
           {
               const obj = {};
-              expect( typeUtils.instanceOfAny( obj, Object, Function ) ).toBe( true );
+              expect( instanceOfAny( obj, Object, Function ) ).toBe( true );
           } );
 } );
 
@@ -1737,13 +1794,13 @@ describe( "isUserDefinedClass", () =>
     test( "isUserDefinedClass returns false if the object is a built-in class",
           () =>
           {
-              expect( typeUtils.isUserDefinedClass( Array ) ).toBe( false );
+              expect( isUserDefinedClass( Array ) ).toBe( false );
           } );
 
     test( "isUserDefinedClass returns true if the object a user-defined class",
           () =>
           {
-              expect( typeUtils.isUserDefinedClass( B ) ).toBe( true );
+              expect( isUserDefinedClass( B ) ).toBe( true );
           } );
 } );
 
@@ -1752,19 +1809,19 @@ describe( "isListedClass", () =>
     test( "isListedClass returns true if the object is one of the classes specified",
           () =>
           {
-              expect( typeUtils.isListedClass( C, C ) ).toBe( true );
+              expect( isListedClass( C, C ) ).toBe( true );
           } );
 
     test( "isListedClass returns true if the object is one of the classes specified or a subclass of one of the classes",
           () =>
           {
-              expect( typeUtils.isListedClass( C, A ) ).toBe( true );
+              expect( isListedClass( C, A ) ).toBe( true );
           } );
 
     test( "isListedClass returns false if the object is not one of the classes specified",
           () =>
           {
-              expect( typeUtils.isListedClass( Object, C, B, A ) ).toBe( false );
+              expect( isListedClass( Object, C, B, A ) ).toBe( false );
           } );
 } );
 
@@ -1774,28 +1831,28 @@ describe( "isInstanceOfUserDefinedClass", () =>
           () =>
           {
               const a = new A();
-              expect( typeUtils.isInstanceOfUserDefinedClass( a, A ) ).toBe( true );
+              expect( isInstanceOfUserDefinedClass( a, A ) ).toBe( true );
           } );
 
     test( "isInstanceOfUserDefinedClass returns true if the object is an instance of a subclass of one of the classes specified",
           () =>
           {
               const c = new C();
-              expect( typeUtils.isInstanceOfUserDefinedClass( c, A ) ).toBe( true );
+              expect( isInstanceOfUserDefinedClass( c, A ) ).toBe( true );
           } );
 
     test( "isInstanceOfUserDefinedClass returns false if the object is not an instance of a subclass of one of the classes specified",
           () =>
           {
               const a = new A();
-              expect( typeUtils.isInstanceOfUserDefinedClass( a, B ) ).toBe( false );
+              expect( isInstanceOfUserDefinedClass( a, B ) ).toBe( false );
           } );
 
     test( "isInstanceOfUserDefinedClass returns true if the object is an instance of a user defined class",
           () =>
           {
               const a = new A();
-              expect( typeUtils.isInstanceOfUserDefinedClass( a ) ).toBe( true );
+              expect( isInstanceOfUserDefinedClass( a ) ).toBe( true );
           } );
 } );
 
@@ -1804,19 +1861,19 @@ describe( "isInstanceOfListedClass", () =>
     test( "isInstanceOfListedClass returns true if the object is an instance of one of the classes specified",
           () =>
           {
-              expect( typeUtils.isInstanceOfListedClass( new C(), C ) ).toBe( true );
+              expect( isInstanceOfListedClass( new C(), C ) ).toBe( true );
           } );
 
     test( "isInstanceOfListedClass returns true if the object is an instance of one of the classes specified or a subclass of one of the classes",
           () =>
           {
-              expect( typeUtils.isInstanceOfListedClass( new C(), A ) ).toBe( true );
+              expect( isInstanceOfListedClass( new C(), A ) ).toBe( true );
           } );
 
     test( "isInstanceOfListedClass returns false if the object is not one of the classes specified",
           () =>
           {
-              expect( typeUtils.isInstanceOfListedClass( {}, C, B, A ) ).toBe( false );
+              expect( isInstanceOfListedClass( {}, C, B, A ) ).toBe( false );
           } );
 } );
 
@@ -1825,49 +1882,49 @@ describe( "defaultFor", () =>
     test( "defaultFor( \"string\" ) === '' ",
           () =>
           {
-              expect( typeUtils.defaultFor( "string" ) ).toEqual( "" );
+              expect( defaultFor( "string" ) ).toEqual( "" );
           } );
 
     test( "defaultFor( \"number\" ) === 0 ",
           () =>
           {
-              expect( typeUtils.defaultFor( "number" ) ).toEqual( 0 );
+              expect( defaultFor( "number" ) ).toEqual( 0 );
           } );
 
     test( "defaultFor( \"bigint\" ) === 0n ",
           () =>
           {
-              expect( typeUtils.defaultFor( "bigint" ) ).toEqual( 0n );
+              expect( defaultFor( "bigint" ) ).toEqual( 0n );
           } );
 
     test( "defaultFor( \"boolean\" ) === false ",
           () =>
           {
-              expect( typeUtils.defaultFor( "boolean" ) ).toEqual( false );
+              expect( defaultFor( "boolean" ) ).toEqual( false );
           } );
 
     test( "defaultFor( \"function\" ) === null ",
           () =>
           {
-              expect( typeUtils.defaultFor( "function" ) ).toEqual( null );
+              expect( defaultFor( "function" ) ).toEqual( null );
           } );
 
     test( "defaultFor( \"object\" ) === null ",
           () =>
           {
-              expect( typeUtils.defaultFor( "object" ) ).toEqual( null );
+              expect( defaultFor( "object" ) ).toEqual( null );
           } );
 
     test( "defaultFor( \"symbol\" ) === null ",
           () =>
           {
-              expect( typeUtils.defaultFor( "symbol" ) ).toEqual( null );
+              expect( defaultFor( "symbol" ) ).toEqual( null );
           } );
 
     test( "defaultFor( \"undefined\" ) === null ",
           () =>
           {
-              expect( typeUtils.defaultFor( "undefined" ) ).toEqual( undefined );
+              expect( defaultFor( "undefined" ) ).toEqual( undefined );
           } );
 } );
 
@@ -1877,56 +1934,56 @@ describe( "getClass", () =>
           () =>
           {
               let a = new A();
-              expect( typeUtils.getClass( a ) ).toBe( A );
+              expect( getClass( a ) ).toBe( A );
           } );
 
     test( "getClass( A )",
           () =>
           {
               let a = A;
-              expect( typeUtils.getClass( a ) ).toBe( A );
+              expect( getClass( a ) ).toBe( A );
           } );
 
     test( "getClass( new C() )",
           () =>
           {
               let c = new C();
-              expect( typeUtils.getClass( c ) ).toBe( C );
+              expect( getClass( c ) ).toBe( C );
           } );
 
     test( "getClass( {} )",
           () =>
           {
               let a = {};
-              expect( typeUtils.getClass( a ) ).toBe( Object );
+              expect( getClass( a ) ).toBe( Object );
           } );
 
     test( "getClass( new Date() )",
           () =>
           {
               let a = new Date();
-              expect( typeUtils.getClass( a ) ).toBe( Date );
+              expect( getClass( a ) ).toBe( Date );
           } );
 
     test( "getClass( /abc+/g )",
           () =>
           {
               let a = /abc+/g;
-              expect( typeUtils.getClass( a ) ).toBe( RegExp );
+              expect( getClass( a ) ).toBe( RegExp );
           } );
 
     test( "getClass( new String('a') )",
           () =>
           {
               let a = new String( "a" );
-              expect( typeUtils.getClass( a ) ).toBe( String );
+              expect( getClass( a ) ).toBe( String );
           } );
 
     test( "getClass( 'a' )",
           () =>
           {
               let a = "a";
-              expect( typeUtils.getClass( a ) ).toBe( null );
+              expect( getClass( a ) ).toBe( null );
           } );
 
 } );
@@ -1937,63 +1994,61 @@ describe( "getClassName", () =>
           () =>
           {
               let a = new A();
-              expect( typeUtils.getClassName( a ) ).toBe( "A" );
+              expect( getClassName( a ) ).toBe( "A" );
           } );
 
     test( "getClassName( A )",
           () =>
           {
               let a = A;
-              expect( typeUtils.getClassName( a ) ).toBe( "A" );
+              expect( getClassName( a ) ).toBe( "A" );
           } );
 
     test( "getClassName( new C() )",
           () =>
           {
               let c = new C();
-              expect( typeUtils.getClassName( c ) ).toBe( "C" );
+              expect( getClassName( c ) ).toBe( "C" );
           } );
 
     test( "getClassName( {} )",
           () =>
           {
               let a = {};
-              expect( typeUtils.getClassName( a ) ).toBe( "Object" );
+              expect( getClassName( a ) ).toBe( "Object" );
           } );
 
     test( "getClassName( new Date() )",
           () =>
           {
               let a = new Date();
-              expect( typeUtils.getClassName( a ) ).toBe( "Date" );
+              expect( getClassName( a ) ).toBe( "Date" );
           } );
 
     test( "getClassName( /abc+/g )",
           () =>
           {
               let a = /abc+/g;
-              expect( typeUtils.getClassName( a ) ).toBe( "RegExp" );
+              expect( getClassName( a ) ).toBe( "RegExp" );
           } );
 
     test( "getClassName( new String('a') )",
           () =>
           {
               let a = new String( "a" );
-              expect( typeUtils.getClassName( a ) ).toBe( "String" );
+              expect( getClassName( a ) ).toBe( "String" );
           } );
 
     test( "getClassName( 'a' )",
           () =>
           {
               let a = "a";
-              expect( typeUtils.getClassName( a ) ).toEqual( "" );
+              expect( getClassName( a ) ).toEqual( "" );
           } );
 } );
 
 describe( "toIterable", () =>
 {
-    const toIterable = typeUtils.toIterable;
-
     test( "toIterable( array )",
           () =>
           {
@@ -2085,7 +2140,7 @@ describe( "toIterable", () =>
 
                   for( let val of value[1] )
                   {
-                      if ( typeUtils.isIterable( val ) )
+                      if ( isIterable( val ) )
                       {
                           expect( val[0] ).toEqual( "d" );
                           expect( val[1].next() ).toEqual( { done: false, value: 4 } );
@@ -2104,8 +2159,6 @@ describe( "toIterable", () =>
 
 describe( "firstMatchingType", () =>
 {
-    const firstMatchingType = typeUtils.firstMatchingType;
-
     test( "firstMatchingType( string, ['a',2,false,'b'] )",
           () =>
           {

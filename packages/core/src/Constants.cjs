@@ -106,7 +106,8 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             ExecutionMode,
             ExecutionEnvironment,
             CURRENT_MODE,
-            ARGUMENTS
+            ARGUMENTS,
+            getMessagesLocale
         } = bockModuleBootstrap;
 
     if ( _ud === typeof CustomEvent )
@@ -355,7 +356,8 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             funcAsString = function( pFunction )
             {
                 return (_fun === typeof pFunction ? pFunction?.name || funcToString.call( pFunction, pFunction ) : (_mt_str + pFunction));
-            }
+            },
+            MESSAGES_LOCALE = getMessagesLocale()
         } = (bockModuleBootstrap || $scope() || {});
 
     /**
@@ -1221,6 +1223,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_browser
              */
             _browser,
+
             /**
              * The word, "Worker"
              * @const
@@ -1228,6 +1231,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_worker
              */
             _worker,
+
             /**
              * The word, "NodeJs"
              * @const
@@ -1235,6 +1239,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_nodejs
              */
             _nodejs,
+
             /**
              * The word, "Deno"
              * @const
@@ -1242,6 +1247,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_deno
              */
             _deno,
+
             /**
              * The word, "Unknown"
              * @const
@@ -1249,6 +1255,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_unknown
              */
             _unknown,
+
             /**
              * Either a backslash or a slash depending on the execution environment
              * @const
@@ -1256,6 +1263,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_pathSep
              */
             _pathSep,
+
             /**
              * The character sequence "./" (or .\) indicating the current directory
              * @const
@@ -1263,6 +1271,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_thisDir
              */
             _thisDir,
+
             /**
              * The character sequence "../" (or ..\) indicating the parent directory
              * @const
@@ -1270,6 +1279,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_prevDir
              */
             _prevDir,
+
             /**
              * The character used to separate filepath segments on unix-like operating systems
              * @const
@@ -1277,6 +1287,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_unixPathSep
              */
             _unixPathSep,
+
             /**
              * The character sequence "./" indicating the current directory (on unix-like operating systems)
              * @const
@@ -1284,6 +1295,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_unixThisDir
              */
             _unixThisDir,
+
             /**
              * The character sequence "../" indicating the parent directory (on unix-like operating systems)
              * @const
@@ -1291,6 +1303,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_unixPrevDir
              */
             _unixPrevDir,
+
             /**
              * The string used for the default locale, "en-US"
              * @const
@@ -1298,6 +1311,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_defaultLocaleString
              */
             _defaultLocaleString,
+
             /**
              * The default {@link Intl.Locale} object
              * @const
@@ -1305,6 +1319,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_defaultLocale
              */
             _defaultLocale,
+
             /**
              * The default currency string,"USD"
              * @const
@@ -1312,6 +1327,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_defaultCurrency
              */
             _defaultCurrency,
+
             /**
              * The word, "false"
              * @const
@@ -1319,6 +1335,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_FALSE
              */
             S_FALSE,
+
             /**
              * The word, "true"
              * @const
@@ -1326,6 +1343,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_TRUE
              */
             S_TRUE,
+
             /**
              * The word, "no"
              * @const
@@ -1333,6 +1351,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_NO
              */
             S_NO,
+
             /**
              * The word, "yes"
              * @const
@@ -1340,6 +1359,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_YES
              */
             S_YES,
+
             /**
              * The word, "disabled"
              * @const
@@ -1347,6 +1367,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_DISABLED
              */
             S_DISABLED,
+
             /**
              * The word, "enabled"
              * @const
@@ -1354,6 +1375,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_ENABLED
              */
             S_ENABLED,
+
             /**
              * The word, "undefined"
              * @const
@@ -1361,6 +1383,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_UNDEFINED
              */
             S_UNDEFINED,
+
             /**
              * The word, "null"
              * @const
@@ -1368,6 +1391,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_NULL
              */
             S_NULL,
+
             /**
              * The word, "void"
              * @const
@@ -1375,6 +1399,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_VOID
              */
             S_VOID,
+
             /**
              * The word, "object"
              * @const
@@ -1382,6 +1407,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_OBJECT
              */
             S_OBJECT,
+
             /**
              * The word, "function"
              * @const
@@ -1389,6 +1415,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_FUNCTION
              */
             S_FUNCTION,
+
             /**
              * The word, "string"
              * @const
@@ -1396,6 +1423,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_STRING
              */
             S_STRING,
+
             /**
              * The word, "boolean"
              * @const
@@ -1403,6 +1431,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_BOOLEAN
              */
             S_BOOLEAN,
+
             /**
              * The word, "number"
              * @const
@@ -1410,6 +1439,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_NUMBER
              */
             S_NUMBER,
+
             /**
              * The word, "bigint"
              * @const
@@ -1417,6 +1447,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_BIGINT
              */
             S_BIGINT,
+
             /**
              * The word, "symbol"
              * @const
@@ -1424,6 +1455,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_SYMBOL
              */
             S_SYMBOL,
+
             /**
              * The null-terminator character
              * @const
@@ -1431,6 +1463,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_Z
              */
             S_Z,
+
             /**
              * A comma separated list of the defined JavaScript types
              * @const
@@ -1438,6 +1471,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_TYPES
              */
             S_TYPES,
+
             /**
              * A comma separated list of the "valid" JavaScript types
              * @const
@@ -1445,6 +1479,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_VALID_TYPES
              */
             S_VALID_TYPES,
+
             /**
              * The word, "log", corresponding to the method name of a logger
              * @const
@@ -1452,6 +1487,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_LOG
              */
             S_LOG,
+
             /**
              * The word, "info", corresponding to the method name of a logger
              * @const
@@ -1459,6 +1495,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_INFO
              */
             S_INFO,
+
             /**
              * The word, "warn", corresponding to the method name of a logger
              * @const
@@ -1466,6 +1503,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_WARN
              */
             S_WARN,
+
             /**
              * The word, "debug", corresponding to the method name of a logger
              * @const
@@ -1473,6 +1511,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_DEBUG
              */
             S_DEBUG,
+
             /**
              * The word, "trace", corresponding to the method name of a logger
              * @const
@@ -1480,6 +1519,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_TRACE
              */
             S_TRACE,
+
             /**
              * The word, "error", corresponding to the method name of a logger
              * @const
@@ -1487,6 +1527,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_ERROR
              */
             S_ERROR,
+
             /**
              * The phrase, "An error occurred while", used when no other error message is available
              * @const
@@ -1494,6 +1535,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_ERR_PREFIX
              */
             S_ERR_PREFIX,
+
             /**
              * The phrase, "executing script", corresponding to the method name of a logger
              * @const
@@ -1501,6 +1543,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_DEFAULT_OPERATION
              */
             S_DEFAULT_OPERATION,
+
             /**
              * The comma character<br>
              * Value: , <br>
@@ -1509,6 +1552,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_COMMA
              */
             S_COMMA: _comma,
+
             /**
              * The tilde character<br>
              * Value: ~ <br>
@@ -1517,6 +1561,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_TILDE
              */
             S_TILDE: _tilde,
+
             /**
              * A single space character<br>
              * Value: " " <br>
@@ -1525,6 +1570,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_TILDE
              */
             S_SPACE: _spc,
+
             /**
              * A dot, or period
              * Value: . <br>
@@ -1533,6 +1579,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#S_SPACE
              */
             S_DOT: _dot,
+
             /**
              * An array of strings that are interpreted as 'true'<br>
              * when encountered in JSON or other configuration contexts
@@ -1542,6 +1589,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_affirmatives
              */
             _affirmatives,
+
             /**
              * The character sequence that indicates the beginning of block comment in source code<br>
              * @const
@@ -1549,6 +1597,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_blockCommentStart
              */
             _blockCommentStart,
+
             /**
              * The character sequence that indicates the end of block comment in source code<br>
              * @const
@@ -1556,6 +1605,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_blockCommentEnd
              */
             _blockCommentEnd,
+
             /**
              * The character sequence that indicates the start of an inline comment in source code<br>
              * @const
@@ -1563,6 +1613,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_inlineCommentStart
              */
             _inlineCommentStart,
+
             /**
              * An object defining the usual file options to use for file read/write operations.<br>
              * @const
@@ -1571,6 +1622,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_fileOptions
              */
             _fileOptions: lock( { encoding: "utf-8" } ),
+
             /**
              * An immutable array with no elements
              * @const
@@ -1579,6 +1631,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#EMPTY_ARRAY
              */
             EMPTY_ARRAY,
+
             /**
              * An immutable object with no properties
              * @const
@@ -1587,6 +1640,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#EMPTY_OBJECT
              */
             EMPTY_OBJECT,
+
             /**
              * An array of the JavaScript reserved words.
              * @const
@@ -1595,6 +1649,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#RESERVED_WORDS
              */
             RESERVED_WORDS,
+
             /**
              * The constructor, and <i>Type</i> for async functions.<br>
              * @const
@@ -1602,6 +1657,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#AsyncFunction
              */
             AsyncFunction: (async function() {}).constructor,
+
             /**
              * An array of all the currently defined/supported JavaScript TypedArray classes.<br>
              * @const
@@ -1610,6 +1666,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#TYPED_ARRAYS
              */
             TYPED_ARRAYS,
+
             /**
              * An array of strings corresponding to all the currently defined/supported JavaScript TypedArray classes.<br>
              * @const
@@ -1618,6 +1675,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#TYPED_ARRAY_NAMES
              */
             TYPED_ARRAY_NAMES,
+
             /**
              * An array of a subset of the currently defined/supported JavaScript Error classes.<br>
              * <br>
@@ -1628,6 +1686,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#ERROR_TYPES
              */
             ERROR_TYPES,
+
             /**
              * An array of strings corresponding to the subset of JavaScript Error classes included in {@link ERROR_TYPES}.<br>
              * <br>
@@ -1638,6 +1697,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#ERROR_TYPE_NAMES
              */
             ERROR_TYPE_NAMES,
+
             /**
              * An array of the currently defined/supported JavaScript Objects that correspond to JavScript primitives.<br>
              * <br>
@@ -1647,6 +1707,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#PRIMITIVE_WRAPPER_TYPES
              */
             PRIMITIVE_WRAPPER_TYPES,
+
             /**
              * An array of the currently defined/supported JavaScript classes, such as Date, RegExp, etc.<br>
              * @const
@@ -1655,6 +1716,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#GLOBAL_TYPES
              */
             GLOBAL_TYPES,
+
             /**
              * An array of the classes that can be serialized by structuredClone.<br>
              * @const
@@ -1663,6 +1725,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#SERIALIZABLE_TYPES
              */
             SERIALIZABLE_TYPES,
+
             /**
              * An array of strings corresponding to the subset of classes included in {@link GLOBAL_TYPES}.<br>
              * <br>
@@ -1673,6 +1736,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#GLOBAL_TYPE_NAMES
              */
             GLOBAL_TYPE_NAMES,
+
             /**
              * An array of all the elements of {@link TYPED_ARRAYS}, {@link ERROR_TYPES}, and {@link GLOBAL_TYPES}.<br>
              * @const
@@ -1681,6 +1745,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#BUILTIN_TYPES
              */
             BUILTIN_TYPES,
+
             /**
              * An array of strings corresponding to the elements in {@link BUILTIN_TYPES}.<br>
              * @const
@@ -1689,6 +1754,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#BUILTIN_TYPE_NAMES
              */
             BUILTIN_TYPE_NAMES,
+
             /**
              * A regular expression that matches a block comment.<br>
              * @const
@@ -1696,6 +1762,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_rxHeaderComment
              */
             _rxHeaderComment,
+
             /**
              * A regular expression that matches a valid JSON string.<br>
              * @const
@@ -1703,6 +1770,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_rxValidJson
              */
             _rxValidJson,
+
             /**
              * A regular expression that matches the null-terminator character.<br>
              * @const
@@ -1711,6 +1779,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_xZ
              */
             _xZ,
+
             /**
              * A regular expression that matches the null-terminator character at the end of a string.<br>
              * @const
@@ -1720,6 +1789,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_rxNullTerminator
              */
             _rxNullTerminator,
+
             /**
              * A regular expression that matches one or more semicolons at the end of a string.<br>
              * @const
@@ -1727,6 +1797,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_rxTerminalSemicolon
              */
             _rxTerminalSemicolon,
+
             /**
              * A regular expression that matches one or more newline characters at the end of a string.<br>
              * <br>
@@ -1737,6 +1808,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_rxTrailingNewline
              */
             _rxTrailingNewline,
+
             /**
              * A regular expression that matches one or more newline characters at the start of a string.<br>
              * <br>
@@ -1747,6 +1819,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_rxLeadingNewline
              */
             _rxLeadingNewline,
+
             /**
              * A regular expression that matches one or more whitespace characters at the start of a string.<br>
              * @const
@@ -1754,6 +1827,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_rxTrailingNewline
              */
             _rxLeadingWhitespace,
+
             /**
              * A regular expression that matches one or more whitespace characters at the end of a string.<br>
              * @const
@@ -1761,6 +1835,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_rxTrailingNewline
              */
             _rxTrailingWhitespace,
+
             /**
              * A regular expression that matches the character sequence often used as interpolation placeholders in template strings<br>
              * <br>
@@ -1770,6 +1845,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_rxVariableToken
              */
             _rxVariableToken,
+
             /**
              * This is the default limit for recursive functions
              * that cannot have a base-case to escape infinite execution
@@ -1785,6 +1861,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             REG_EXP_LEADING_DOT,
             REG_EXP_TRAILING_DOT,
             DEFAULT_NUMBER_FORMATTING_SYMBOLS,
+
             /**
              * This class allows us to easily cap an iteration,<br>
              * such as a 'for' loop or a 'while' loop.
@@ -1808,6 +1885,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#IterationCap
              */
             IterationCap,
+
             /**
              * This subclass of Error is useful when validating function arguments.
              * <br>
@@ -1856,6 +1934,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             ComparatorFactory,
 
             $scope,
+
             /**
              * A function that does nothing.<br>
              * Useful when you want to pass a function to a method<br>
@@ -1867,6 +1946,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#no_op
              */
             no_op,
+
             /**
              * A function used in a 'catch' clause that does nothing.<br>
              * Useful when your IDE or linter would otherwise complain<br>
@@ -1877,6 +1957,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#ignore
              */
             ignore,
+
             /**
              * Returns an object corresponding to a set of default options with one or more properties
              * overridden or added by the properties of the specified object, 'pOptions'
@@ -1930,6 +2011,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @returns {*} A copy of the value specified, mutable if the type is normally mutable
              */
             localCopy,
+
             /**
              * Returns an <i>immutable</i> copy of the value specified.
              *
@@ -1943,6 +2025,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#immutableCopy
              */
             immutableCopy,
+
             /**
              * Calls {@link Object.freeze} on any defined non-null value provided<br>
              * and returns the <b>same</b> object or value, now <i>frozen</i>
@@ -2004,6 +2087,8 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             {
                 return new ExecutionEnvironment();
             },
+            getMessagesLocale,
+            MESSAGES_LOCALE,
             isLogger,
             __testLogger: function( ...pTestData )
             {

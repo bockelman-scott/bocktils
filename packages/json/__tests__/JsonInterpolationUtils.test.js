@@ -1,11 +1,19 @@
 const core = require( "@toolbocks/core" );
 
 /** import the utilities to test **/
-const jsonUtils = require( "../src/JsonInterpolationUtils.cjs" );
+const jsonUtils = require( "../src/JsonUtils.cjs" );
 
-const { dependencies } = jsonUtils;
+const { dependencies, cherryPick, mergeJson, classes } = jsonUtils;
 
-const { objectUtils } = dependencies;
+const { typeUtils, stringUtils, objectUtils } = dependencies;
+
+const { isArray } = typeUtils;
+
+const { asInt } = stringUtils;
+
+const { ObjectEntry, getEntries } = objectUtils;
+
+const { JsonMerger } = classes;
 
 objectUtils.disableLogging();
 
@@ -57,6 +65,55 @@ const objC =
 
 objC.node_3 = objC;
 
+const addresses =
+    {
+        "Apex41":
+            {
+                "address": "2760 S Highland Av",
+                "city": "Lombard",
+                "state": "IL",
+                "zip": "60148"
+            },
+        "CityView":
+            {
+                "address": "1000 S Highland Av",
+                "city": "Lombard",
+                "state": "IL",
+                "zip": "60148"
+            },
+        "TheVinery":
+            {
+                "address": "365 Vine Street",
+                "city": "Glen Ellyn",
+                "state": "IL",
+                "zip": "60137"
+            }
+    };
+
+const people =
+    {
+        "Apex41":
+            {
+                "name": "Scott Bockelman",
+                "age": 32
+            },
+        "CityView":
+            {
+                "name": "Paul Davis",
+                "age": 23
+            },
+        "TheVinery":
+            {
+                "name": "Jeffrey Woodward",
+                "age": 25
+            },
+        "Prairie":
+            {
+                "name": "Cynthia Harris",
+                "age": 37
+            }
+    };
+
 describe( "JSON", () =>
 {
     test( "JSON",
@@ -91,5 +148,128 @@ describe( "JSON", () =>
 
               expect( jsonUtils.asJson( objParsed ) ).toEqual( json );
 
+          } );
+} );
+
+describe( "cherryPick", () =>
+{
+    test( "cherryPick lets you pick a subset of an object",
+          () =>
+          {
+              const picked = cherryPick( addresses, "Apex41.city", "TheVinery.address" );
+
+              expect( picked ).toEqual( {
+                                            "Apex41": { "city": "Lombard" },
+                                            "TheVinery": { "address": "365 Vine Street" }
+                                        } );
+
+              console.log( picked );
+          } );
+} );
+
+
+describe( "mergeJson", () =>
+{
+    test( "mergeJson lets you combine 2 objects",
+          () =>
+          {
+              let merged = mergeJson( addresses, people );
+
+              expect( Object.keys( addresses ).length ).toEqual( 3 );
+
+              expect( Object.keys( people ).length ).toEqual( 4 );
+
+              expect( Object.keys( merged ).length ).toEqual( 4 );
+
+              expect( merged.Apex41.age ).toEqual( 32 );
+          } );
+} );
+
+describe( "JsonMerger", () =>
+{
+    test( "JsonMerger is used to merge one or more JSON objects",
+          () =>
+          {
+              const noArgs = new JsonMerger();
+
+              let merged = noArgs.merge( addresses, people );
+
+              expect( Object.keys( addresses ).length ).toEqual( 3 );
+
+              expect( Object.keys( people ).length ).toEqual( 4 );
+
+              expect( Object.keys( merged ).length ).toEqual( 4 );
+
+              expect( merged.Apex41.age ).toEqual( 32 );
+          } );
+
+    test( "JsonMerger is used to filter the results of merging one or more JSON objects",
+          () =>
+          {
+              const filter = function( pEntry )
+              {
+                  const entry = pEntry instanceof ObjectEntry ? pEntry : isArray( pEntry ) ? new ObjectEntry( pEntry ) : pEntry;
+
+                  if ( "Lombard" === entry?.city && asInt( entry?.age ) > 25 )
+                  {
+                      return entry;
+                  }
+
+                  return null;
+              };
+
+              const filtering = new JsonMerger( [filter] );
+
+              const merged = filtering.merge( addresses, people );
+
+              console.log( merged );
+
+              expect( Object.keys( addresses ).length ).toEqual( 3 );
+
+              expect( Object.keys( people ).length ).toEqual( 4 );
+
+              expect( Object.keys( merged ).length ).toEqual( 1 );
+
+              expect( merged.Apex41.age ).toEqual( 32 );
+          } );
+
+    test( "JsonMerger is used to map the results of merging one or more JSON objects",
+          () =>
+          {
+              const mapper = function( pEntry )
+              {
+                  let entry = pEntry instanceof ObjectEntry ? pEntry : isArray( pEntry ) ? new ObjectEntry( pEntry ) : pEntry;
+
+                  if ( entry?.city )
+                  {
+                      entry.city = "Bloomington";
+                  }
+                  if ( entry?.state )
+                  {
+                      entry.state = "IN";
+                  }
+                  if ( entry?.zip )
+                  {
+                      entry.zip = "47405";
+                  }
+
+                  return entry;
+              };
+
+              const mapping = new JsonMerger( [], [mapper] );
+
+              const merged = mapping.merge( addresses, people );
+
+              console.log( merged );
+
+              expect( Object.keys( addresses ).length ).toEqual( 3 );
+
+              expect( Object.keys( people ).length ).toEqual( 4 );
+
+              expect( Object.keys( merged ).length ).toEqual( 4 );
+
+              expect( merged.Apex41.city ).toEqual( "Bloomington" );
+              expect( merged.Apex41.state ).toEqual( "IN" );
+              expect( merged.Apex41.zip ).toEqual( "47405" );
           } );
 } );

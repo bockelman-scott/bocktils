@@ -544,6 +544,26 @@ const $scope = constants?.$scope || function()
         return lock( args.map( e => immutableCopy( e ) ) );
     };
 
+    const asArgs = function( ...pArgs )
+    {
+        return asArray( varargs( ...pArgs ) );
+    };
+
+    const flatArgs = function( ...pArgs )
+    {
+        return asArgs( ...pArgs ).flat();
+    };
+
+    const filteredArgs = function( pFilter, ...pArgs )
+    {
+        return asArgs( ...pArgs ).filter( pFilter || Filters.IDENTITY );
+    };
+
+    const flatFilteredArgs = function( pFilter, ...pArgs )
+    {
+        return flatArgs( ...pArgs ).filter( pFilter || Filters.IDENTITY );
+    };
+
     /**
      * Returns either the number of elements in an array,<br>
      * the number of characters in a string,<br>
@@ -671,6 +691,14 @@ const $scope = constants?.$scope || function()
              * @alias module:ArrayUtils#Filters#IS_FILTER
              */
             IS_FILTER: e => isFunction( e ) && e?.length > 0 && e?.length <= 3,
+
+            /**
+             * A filter to return the elements of an array that are mapping functions<br>
+             * USAGE: <code>const filters = array.filter( Filters.IS_MAPPER );</code><br>
+             * @type {function(*):boolean}
+             * @alias module:ArrayUtils#Filters#IS_MAPPER
+             */
+            IS_MAPPER: e => isFunction( e ) && e?.length > 0 && e?.length <= 3,
 
             /**
              * A filter to return the elements of an array that are comparator functions<br>
@@ -5069,6 +5097,10 @@ const $scope = constants?.$scope || function()
             varargs,
             immutableVarArgs,
             asArray,
+            asArgs,
+            flatArgs,
+            filteredArgs,
+            flatFilteredArgs,
             unique,
             pruneArray,
             hasElements,

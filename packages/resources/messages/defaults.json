@@ -1,0 +1,534 @@
+{
+  "words": {
+    "a": "a",
+    "an": "an",
+    "the": "the",
+    "or": "or",
+    "and": "and",
+    "of": "of",
+    "in": "in",
+    "for": "for",
+    "from": "from",
+    "with": "with",
+    "without": "without",
+    "some": "some",
+    "few": "few",
+    "many": "many",
+    "before": "before",
+    "after": "after",
+    "minimum": "minimum",
+    "maximum": "maximum"
+  },
+  "nouns": {
+    "error": {
+      "singular": "error",
+      "plural": "errors",
+      "zero": "errors",
+      "one": "error",
+      "two": "errors",
+      "few": "errors",
+      "many": "errors",
+      "gerund": "failing"
+    },
+    "file": {
+      "singular": "file",
+      "plural": "files",
+      "zero": "files",
+      "one": "file",
+      "two": "files",
+      "few": "files",
+      "many": "files",
+      "gerund": "filing"
+    },
+    "directory": {
+      "singular": "directory",
+      "plural": "directories",
+      "zero": "directories",
+      "one": "directory",
+      "two": "directories",
+      "few": "directories",
+      "many": "directories",
+      "gerund": "listing"
+    },
+    "log": {
+      "singular": "log",
+      "plural": "logs",
+      "zero": "logs",
+      "one": "log",
+      "two": "logs",
+      "few": "logs",
+      "many": "logs",
+      "gerund": "logging"
+    },
+    "size": {
+      "singular": "size",
+      "plural": "sizes",
+      "zero": "sizes",
+      "one": "size",
+      "two": "sizes",
+      "few": "sizes",
+      "many": "sizes",
+      "gerund": "sizing"
+    },
+    "date": {
+      "singular": "date",
+      "plural": "dates",
+      "zero": "dates",
+      "one": "date",
+      "two": "dates",
+      "few": "dates",
+      "many": "dates",
+      "gerund": "dating"
+    },
+    "policy": {
+      "singular": "policy",
+      "plural": "policies",
+      "zero": "policies",
+      "one": "policy",
+      "two": "policies",
+      "few": "policies",
+      "many": "policies",
+      "gerund": "regulating"
+    },
+    "result": {
+      "singular": "result",
+      "plural": "results",
+      "zero": "results",
+      "one": "result",
+      "two": "results",
+      "few": "results",
+      "many": "results",
+      "gerund": "resulting"
+    },
+    "path": {
+      "singular": "path",
+      "plural": "paths",
+      "zero": "paths",
+      "one": "path",
+      "two": "paths",
+      "few": "paths",
+      "many": "paths",
+      "gerund": "navigating"
+    },
+    "default": {
+      "singular": "default",
+      "plural": "defaults",
+      "zero": "defaults",
+      "one": "default",
+      "two": "defaults",
+      "few": "defaults",
+      "many": "defaults",
+      "gerund": "defaulting"
+    },
+    "attempt": {
+      "singular": "attempt",
+      "plural": "attempts",
+      "zero": "attempts",
+      "one": "attempt",
+      "two": "attempts",
+      "few": "attempts",
+      "many": "attempts",
+      "gerund": "attempting"
+    },
+    "message": {
+      "singular": "message",
+      "plural": "messages",
+      "zero": "messages",
+      "one": "message",
+      "two": "messages",
+      "few": "messages",
+      "many": "messages",
+      "gerund": "massaging"
+    }
+  },
+  "adjectives": {
+    "valid": "valid",
+    "invalid": "invalid"
+  },
+  "verbs": {
+    "be": {
+      "infinitive": "to be",
+      "base_form": "be",
+      "base_form_plural": "are",
+      "present_tense": "is",
+      "present_tense_plural": "are",
+      "past_tense": "was",
+      "past_tense_plural": "were",
+      "nominalization": "existence",
+      "adj": "actual",
+      "adv": "actually"
+    },
+    "create": {
+      "infinitive": "to create",
+      "base_form": "create",
+      "base_form_plural": "creates",
+      "present_tense": "creating",
+      "past_tense": "created",
+      "nominalization": "creation",
+      "agent": "creator",
+      "adv": "creatively"
+    },
+    "delete": {
+      "infinitive": "to delete",
+      "base_form": "delete",
+      "base_form_plural": "deletes",
+      "present_tense": "deleting",
+      "past_tense": "deleted",
+      "nominalization": "deletion",
+      "agent": "deleter"
+    },
+    "archive": {
+      "infinitive": "to archive",
+      "base_form": "archive",
+      "base_form_plural": "archives",
+      "present_tense": "archiving",
+      "past_tense": "archived",
+      "nominalization": "archive",
+      "agent": "archiver"
+    },
+    "rotate": {
+      "infinitive": "to rotate",
+      "base_form": "rotate",
+      "base_form_plural": "rotates",
+      "present_tense": "rotating",
+      "past_tense": "rotated",
+      "nominalization": "rotation",
+      "agent": "rotator",
+      "adj": "rotated"
+    },
+    "reach": {
+      "infinitive": "to reach",
+      "base_form": "reach",
+      "base_form_plural": "reaches",
+      "present_tense": "reaching",
+      "past_tense": "reached",
+      "nominalization": "limit",
+      "adj": "reached"
+    },
+    "calculate": {
+      "infinitive": "to calculate",
+      "base_form": "calculate",
+      "base_form_plural": "calculates",
+      "present_tense": "calculating",
+      "past_tense": "calculated",
+      "nominalization": "calculation",
+      "agent": "calculator",
+      "adj": "calculated"
+    },
+    "disable": {
+      "infinitive": "to disable",
+      "base_form": "disable",
+      "base_form_plural": "disables",
+      "present_tense": "disabling",
+      "past_tense": "disabled",
+      "nominalization": "deactivation",
+      "adj": "disabled"
+    },
+    "enable": {
+      "infinitive": "to enable",
+      "base_form": "enable",
+      "base_form_plural": "enables",
+      "present_tense": "enabling",
+      "past_tense": "enabled",
+      "nominalization": "activation",
+      "agent": "enabler",
+      "adj": "enabled"
+    },
+    "log": {
+      "infinitive": "to log",
+      "base_form": "log",
+      "base_form_plural": "logs",
+      "present_tense": "logging",
+      "past_tense": "logged",
+      "nominalization": "log",
+      "agent": "logger",
+      "adj": "logged"
+    },
+    "define": {
+      "infinitive": "to define",
+      "base_form": "define",
+      "base_form_plural": "defines",
+      "present_tense": "defining",
+      "past_tense": "defined",
+      "nominalization": "definition",
+      "agent": "definer",
+      "adj": "definitive",
+      "adv": "definitely"
+    },
+    "retain": {
+      "infinitive": "to retain",
+      "base_form": "retain",
+      "base_form_plural": "retains",
+      "present_tense": "retaining",
+      "past_tense": "retained",
+      "nominalization": "retention",
+      "agent": "retainer"
+    },
+    "access": {
+      "infinitive": "to access",
+      "base_form": "access",
+      "base_form_plural": "accesses",
+      "present_tense": "accessing",
+      "past_tense": "accessed",
+      "nominalization": "access",
+      "agent": "accessor",
+      "adj": "accessed"
+    },
+    "open": {
+      "infinitive": "to open",
+      "base_form": "open",
+      "base_form_plural": "opens",
+      "present_tense": "opening",
+      "past_tense": "opened",
+      "nominalization": "opens",
+      "agent": "opener",
+      "adj": "opened"
+    },
+    "read": {
+      "infinitive": "to read",
+      "base_form": "read",
+      "base_form_plural": "reads",
+      "present_tense": "reading",
+      "past_tense": "read",
+      "nominalization": "reads",
+      "agent": "reader",
+      "adj": "read"
+    },
+    "write": {
+      "infinitive": "to write",
+      "base_form": "write",
+      "base_form_plural": "writes",
+      "present_tense": "writing",
+      "past_tense": "wrote",
+      "nominalization": "write",
+      "agent": "writer",
+      "adj": "written"
+    },
+    "copy": {
+      "infinitive": "to copy",
+      "base_form": "copy",
+      "base_form_plural": "copies",
+      "present_tense": "copying",
+      "past_tense": "copied",
+      "nominalization": "copies",
+      "agent": "copier",
+      "adj": "copied"
+    },
+    "move": {
+      "infinitive": "to move",
+      "base_form": "move",
+      "base_form_plural": "moves",
+      "present_tense": "moving",
+      "past_tense": "moved",
+      "nominalization": "moves",
+      "agent": "mover",
+      "adj": "moved"
+    },
+    "remove": {
+      "infinitive": "to remove",
+      "base_form": "remove",
+      "base_form_plural": "removes",
+      "present_tense": "removing",
+      "past_tense": "moved",
+      "nominalization": "moves",
+      "agent": "mover",
+      "adj": "moved"
+    },
+    "execute": {
+      "infinitive": "to execute",
+      "base_form": "execute",
+      "base_form_plural": "executes",
+      "present_tense": "executing",
+      "past_tense": "executed",
+      "nominalization": "execution",
+      "agent": "executor",
+      "adj": "executed"
+    },
+    "close": {
+      "infinitive": "to close",
+      "base_form": "close",
+      "base_form_plural": "closes",
+      "present_tense": "closing",
+      "past_tense": "closed",
+      "nominalization": "closures",
+      "agent": "closer",
+      "adj": "closed"
+    },
+    "validate": {
+      "infinitive": "to validate",
+      "base_form": "validate",
+      "base_form_plural": "validates",
+      "present_tense": "validating",
+      "past_tense": "validated",
+      "nominalization": "validation",
+      "agent": "validator",
+      "adj": "valid",
+      "adv": "validly",
+      "antonym": {
+        "infinitive": "to invalidate",
+        "base_form": "invalidate",
+        "base_form_plural": "invalidates",
+        "present_tense": "invalidating",
+        "past_tense": "invalidated",
+        "nominalization": "invalidation",
+        "agent": "validator",
+        "adj": "invalid",
+        "adv": "invalidly"
+      }
+    },
+    "try": {
+      "infinitive": "to try",
+      "base_form": "try",
+      "base_form_plural": "tries",
+      "present_tense": "trying",
+      "past_tense": "tried",
+      "nominalization": "tries",
+      "agent": "attempter",
+      "adj": "tried"
+    },
+    "retry": {
+      "infinitive": "to try again",
+      "base_form": "retry",
+      "base_form_plural": "retries",
+      "present_tense": "retrying",
+      "past_tense": "attempted",
+      "nominalization": "retries",
+      "agent": "attempter",
+      "adj": "tried"
+    },
+    "attempt": {
+      "infinitive": "to attempt",
+      "base_form": "attempt",
+      "base_form_plural": "attempts",
+      "present_tense": "attempting",
+      "past_tense": "attempted",
+      "nominalization": "attempts",
+      "agent": "attempter"
+    },
+    "succeed": {
+      "infinitive": "to succeed",
+      "base_form": "succeed",
+      "base_form_plural": "succeeds",
+      "present_tense": "succeeding",
+      "past_tense": "succeeded",
+      "nominalization": "success",
+      "agent": "attempter",
+      "adj": "successful",
+      "adv": "successfully",
+      "antonym": {
+        "fail": {
+          "infinitive": "to fail",
+          "base_form": "fail",
+          "base_form_plural": "fails",
+          "present_tense": "failing",
+          "past_tense": "failed",
+          "nominalization": "failure",
+          "agent": "attempter",
+          "adj": "unsuccessful",
+          "adv": "unsuccessfully"
+        }
+      }
+    },
+    "fail": {
+      "infinitive": "to fail",
+      "base_form": "fail",
+      "base_form_plural": "fails",
+      "present_tense": "failing",
+      "past_tense": "failed",
+      "nominalization": "failure",
+      "agent": "attempter",
+      "adj": "unsuccessful",
+      "adv": "unsuccessfully"
+    },
+    "expire": {
+      "infinitive": "to expire",
+      "base_form": "expire",
+      "base_form_plural": "expires",
+      "present_tense": "expiring",
+      "past_tense": "expired",
+      "nominalization": "expiration",
+      "agent": "time",
+      "adj": "expired"
+    },
+    "do": {
+      "infinitive": "to do",
+      "base_form": "do",
+      "base_form_plural": "does",
+      "present_tense": "doing",
+      "past_tense": "did",
+      "nominalization": "task",
+      "agent": "performer",
+      "adv": "well",
+      "adj": "done"
+    },
+    "did_not": {
+      "infinitive": "to fail",
+      "base_form": "do not",
+      "base_form_plural": "does not",
+      "present_tense": "failing",
+      "past_tense": "did not",
+      "nominalization": "failure",
+      "agent": "attempter",
+      "adj": "unsuccessful",
+      "adv": "unsuccessfully"
+    },
+    "exist": {
+      "infinitive": "to exist",
+      "base_form": "exist",
+      "base_form_plural": "exists",
+      "present_tense": "existing",
+      "past_tense": "existed",
+      "nominalization": "existence",
+      "adj": "existing"
+    },
+    "can": {
+      "infinitive": "to be able",
+      "base_form": "can",
+      "base_form_plural": "can",
+      "present_tense": "can",
+      "past_tense": "could",
+      "nominalization": "ability",
+      "adj": "possible",
+      "adv": "possibly"
+    },
+    "cannot": {
+      "infinitive": "to be unable",
+      "base_form": "can not",
+      "base_form_plural": "can not",
+      "present_tense": "can not",
+      "past_tense": "could not",
+      "nominalization": "inability",
+      "adj": "impossible"
+    },
+    "lose": {
+      "infinitive": "to lose",
+      "base_form": "lose",
+      "base_form_plural": "loses",
+      "present_tense": "losing",
+      "past_tense": "lost",
+      "nominalization": "losses",
+      "agent": "loser",
+      "adj": "lost"
+    }
+  },
+  "phrases": {
+    "err_prefix": "An ${(@path;@base:root):noun.error.one} occurred while",
+    "the_size": "${(@path;@base:root):words.the} ${(@path;@base:root):nouns.size.one}",
+    "the_file": "${(@path;@base:root):words.the} ${(@path;@base:root):nouns.file.one}",
+    "the_directory": "${(@path;@base:root):words.the} ${(@path;@base:root):nouns.directory.one}",
+    "the_log_file": "${(@path;@base:root):words.the} ${(@path;@base:root):noun.log.one} ${(@path;@base:root):noun.file.one}",
+    "does_not": "does not"
+  },
+  "messages": {
+    "errors": {
+      "size_calc_failed": "${(@path;@base:root):phrases.err_prefix} ${(@path;@base:root):verbs.calculate.present_tense} ${(@path;@base:root):phrases.the_size} ${(@path;@base:root):words.of} ${(@path;@base:root):phrases.the_file}",
+      "created_date_calc_failed": "${(@path;@base:root):phrases.err_prefix} ${(@path;@base:root):verbs.calculate.present_tense} ${(@path;@base:root):words.the} ${(@path;@base:root):words.creation_date} ${(@path;@base:root):words.of} ${(@path;@base:root):phrases.the_file}",
+      "dir_list_failed": "${(@path;@base:root):phrases.err_prefix} listing the ${(@path;@base:root):nouns.file.many} ${(@path;@base:root):words.of} ${(@path;@base:root):phrases.the_directory}",
+      "file_delete_failed": ""
+    },
+    "outcomes": {
+      "files_deleted": "",
+      "files_archived": ""
+    }
+  }
+}

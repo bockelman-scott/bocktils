@@ -749,7 +749,16 @@ const $scope = constants?.$scope || function()
             if ( isFunction( pFunction ) )
             {
                 const thiz = this.constructor[Symbol.species];
-                return new thiz( this.key, pFunction( this.value ), this.parent );
+                return new thiz( this.key, pFunction.call( this, this.value ), this.parent );
+            }
+            return this;
+        }
+
+        filter( pFunction )
+        {
+            if ( isFunction( pFunction ) )
+            {
+                return !!pFunction.call( this, this.value );
             }
             return this;
         }
@@ -977,8 +986,6 @@ const $scope = constants?.$scope || function()
         return lock( unique( pruneArray( values ) ) );
     };
 
-    //TODO: use objectEntries logic
-
     /**
      * Returns an array of the entries of the objects specified,
      * including those inherited from their prototype or superclass.
@@ -1001,47 +1008,6 @@ const $scope = constants?.$scope || function()
 
         for( let object of objects )
         {
-            /*if ( object instanceof Map )
-             {
-             entries = (entries.concat( ...(object.entries()) ));
-             }
-             else if ( object instanceof Set || isArray( object ) )
-             {
-             entries = (entries.concat( getEntries( arrayToObject( [...object] ) ) ));
-             }
-             else
-             {
-             const properties = getProperties( object );
-
-             for( let property of properties )
-             {
-             let value = null;
-
-             try
-             {
-             value = object[property] || getProperty( object, property );
-             }
-             catch( ex )
-             {
-             // this can occur if we try to read a private member variable,
-             // but we make a second attempt
-             try
-             {
-             value = getProperty( object, property ) || object[property];
-             }
-             catch( ex2 )
-             {
-             // this can occur if we try to read a private member variable
-             }
-             }
-
-             if ( isNonNullValue( value ) )
-             {
-             entries.push( [property, value, object] );
-             }
-             }
-             }*/
-
             entries.push( ...(objectEntries( object )) );
         }
 
@@ -1050,6 +1016,61 @@ const $scope = constants?.$scope || function()
         entries = entries.map( entry => new ObjectEntry( ...entry ) );
 
         return lock( entries );
+    };
+
+    const foldEntries = function( pObject, pVisited, pStack )
+    {
+        if ( !isObject( pObject ) || isNull( pObject ) )
+        {
+            return pObject;
+        }
+
+        let visited = pVisited || new ExploredSet();
+
+        let stack = pStack || [];
+
+        let result = { ...pObject };
+
+        if ( detectCycles( stack, 5, 5 ) || visited.has( pObject ) )
+        {
+            return result;
+        }
+
+        const entries = Object.entries( pObject );
+
+        for( let entry of entries )
+        {
+            if ( isNull( entry ) || !isArray( entry ) || ((entry?.length || 0) < 2) )
+            {
+                continue;
+            }
+
+            let key = entry[0];
+            let value = entry[1];
+
+            if ( entry instanceof ObjectEntry )
+            {
+                key = entry.key || key;
+                value = entry.value || value;
+            }
+
+            if ( value instanceof ObjectEntry )
+            {
+                visited.add( value );
+                stack.push( key );
+
+                value = foldEntries( value );
+            }
+
+            if ( isArray( pObject ) )
+            {
+                key = asInt( key );
+            }
+
+            result[key] = value;
+        }
+
+        return result;
     };
 
     /**
@@ -3019,6 +3040,11 @@ const $scope = constants?.$scope || function()
             }
         }
 
+        if ( isArray( pObject ) )
+        {
+            return options.pruneArrays ? pruneArray( pObject ) : pObject;
+        }
+
         let obj = assign( defaultFor( pObject ) || {}, pObject || {} );
 
         const keys = getKeys( obj );
@@ -3531,6 +3557,7 @@ const $scope = constants?.$scope || function()
             isValidEntry,
             getKeys,
             getEntries,
+            foldEntries,
             getValues,
             getProperties,
             isEmptyValue,

@@ -749,7 +749,9 @@ const {
 
             let arr = asArray( varargs( ...pResources ) );
 
-            arr = arr.filter( e => !isNull( e ) ).map( e => (isObject( e ) && (e instanceof me.constructor)) ? e.resources : e );
+            const mapper = e => (isObject( e ) && (e instanceof me.constructor)) ? e.resources : e;
+
+            arr = arr.filter( e => !isNull( e ) ).map( mapper ).flat();
 
             for( let elem of arr )
             {
@@ -868,6 +870,76 @@ const {
             }
 
             return obj?.value || obj?.defaultValue || obj;
+        }
+    }
+
+    class ResourceCollection extends ResourceMap
+    {
+        #defaultMap;
+
+        #defaultResources = {};
+
+        constructor( pLocale, pDefaultMap, ...pResources )
+        {
+            super( pLocale, ...pResources );
+
+            this.#defaultMap = pDefaultMap instanceof ResourceMap ? pDefaultMap : new ResourceMap( DEFAULT_LOCALE, ...pDefaultMap );
+
+            this.#defaultResources = this.#defaultMap?.resources || { ...pResources };
+        }
+
+        get defaultMap()
+        {
+            return this.#defaultMap || this;
+        }
+
+        get resources()
+        {
+            return { ...(this.#defaultResources || this.defaultMap.resources), ...super.resources };
+        }
+
+        get entries()
+        {
+            const defaultEntries = this.defaultMap.entries();
+            const superEntries = super.entries();
+
+            return unique( [
+                               ...defaultEntries,
+                               ...superEntries
+                           ].flat() );
+        }
+
+        get keys()
+        {
+            const defaultKeys = this.defaultMap.keys();
+            const superKeys = super.keys();
+
+            return unique( [
+                               ...defaultKeys,
+                               ...superKeys
+                           ].flat() );
+        }
+
+        getResource( pKey )
+        {
+            const resource = super.getResource( pKey );
+
+            if ( isNull( resource ) )
+            {
+                return this.defaultMap.getResource( pKey );
+            }
+
+            return resource;
+        }
+
+        get( pKey )
+        {
+            const resource = this.getResource( pKey );
+            if ( !isNull( resource ) && resource instanceof Resource )
+            {
+                return resource.value || resource.defaultValue || resource;
+            }
+            return resource?.value || resource?.defaultValue || resource || asString( pKey, true );
         }
     }
 
@@ -1019,6 +1091,7 @@ const {
                     ResourceKey,
                     Resource,
                     ResourceMap,
+                    ResourceCollection,
                     ResourceBundle
                 },
             DEFAULT_LOCALE_STRING,

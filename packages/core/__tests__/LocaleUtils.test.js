@@ -8,6 +8,7 @@ const {
     ResourceKey,
     Resource,
     ResourceMap,
+    ResourceCollection,
     ResourceBundle
 } = classes;
 
@@ -540,6 +541,32 @@ describe( "ResourceMap", () =>
           } );
 } );
 
+
+describe( "ResourceCollection", () =>
+{
+    test( "ResourceCollection is a subclass of ResourceMap that has a fallback ResourceMap",
+          () =>
+          {
+              const resourceKey1 = new ResourceKey( "a", "b", "c" );
+              const resourceKey2 = new ResourceKey( "x", "y", "z" );
+
+              const resource1 = new Resource( resourceKey1, "r1", "r1Dflt", "r1Description" );
+              const resource2 = new Resource( resourceKey2, "r2", "r2Dflt", "r2Description" );
+
+              const resourceMap1 = new ResourceMap( "en-US", resource1 );
+              const resourceMap2 = new ResourceMap( "en-US", resource1, resource2 );
+
+              let resourceCollection = new ResourceCollection( "en-US", resourceMap1, resource1 );
+
+              expect( resourceCollection.get( "a.b.c" ) ).toEqual( "r1" );
+              expect( resourceCollection.get( "x.y.z" ) ).toBe( "x.y.z" );
+
+              resourceCollection = new ResourceCollection( "en-US", resourceMap2, resource1 );
+
+              expect( resourceCollection.get( "a.b.c" ) ).toEqual( "r1" );
+              expect( resourceCollection.get( "x.y.z" ) ).toBe( "r2" );
+          } );
+} );
 
 describe( "ResourceBundle", () =>
 {
