@@ -142,8 +142,10 @@
     }
   },
   "adjectives": {
-    "valid": "valid",
-    "invalid": "invalid"
+    "valid": {
+      "positive": "valid",
+      "negative": "invalid"
+    }
   },
   "verbs": {
     "be": {

@@ -42,6 +42,7 @@ const {
     // Create local aliases for values imported from other modules
     const {
         _mt_str,
+        _spc,
         _dot,
         _hyphen,
         _str,
@@ -71,7 +72,7 @@ const {
             toCanonicalNumericFormat
         } = stringUtils;
 
-    const { varargs, asArray, unique, Filters } = arrayUtils;
+    const { varargs, asArray, flatArgs, unique, Filters } = arrayUtils;
 
     const modName = "LocaleUtils";
 
@@ -562,6 +563,8 @@ const {
 
         #mappingFunction;
 
+        #defaultValue = _mt_str;
+
         constructor( ...pComponents )
         {
             super();
@@ -618,6 +621,16 @@ const {
             return [...asArray( this.#components )].map( this.#mappingFunction ).flat();
         }
 
+        get defaultValue()
+        {
+            return asString( this.#defaultValue );
+        }
+
+        set defaultValue( pValue )
+        {
+            this.#defaultValue = asString( pValue );
+        }
+
         toString()
         {
             return this.components.join( _dot );
@@ -661,34 +674,40 @@ const {
         #defaultValue;
         #description;
 
+        #backedBy;
+
         constructor( pKey, pValue, pDefaultValue, pDescription )
         {
             super();
 
-            this.#key = new ResourceKey( pKey );
-            this.#value = pValue || pDefaultValue;
-            this.#defaultValue = pDefaultValue || pValue;
-            this.#description = asString( pDescription || pDefaultValue || pValue );
+            const isResourceKey = pKey instanceof this.constructor;
+
+            this.#key = isResourceKey ? pKey.key || new ResourceKey( pKey ) : new ResourceKey( pKey );
+            this.#value = pValue || (isResourceKey ? pKey.value || pValue : pValue) || pDefaultValue;
+            this.#defaultValue = pDefaultValue || (isResourceKey ? pKey.defaultValue || pDefaultValue : this.#key.defaultValue || pValue) || pValue;
+            this.#description = asString( pDescription || (isResourceKey ? pKey.description || pDescription : pDescription) || pDefaultValue || pValue );
+
+            this.#backedBy = isResourceKey ? pKey : null;
         }
 
         get key()
         {
-            return new ResourceKey( this.#key );
+            return new ResourceKey( this.#key || this.#backedBy?.key );
         }
 
         get value()
         {
-            return this.#value || this.#defaultValue;
+            return this.#value || this.#defaultValue || this.#backedBy?.value;
         }
 
         get defaultValue()
         {
-            return this.#defaultValue || this.#value;
+            return this.#defaultValue || this.#value || this.#backedBy?.defaultValue;
         }
 
         get description()
         {
-            return this.#description || this.#defaultValue || this.#value;
+            return this.#description || this.#backedBy?.description || this.#defaultValue || this.#value;
         }
 
         toString()
@@ -729,6 +748,263 @@ const {
             return Resource.from( ...arr );
         }
         return null;
+    };
+
+    const PARTS_OF_SPEECH =
+        {
+            NOUN: "noun",
+            VERB: "verb",
+            ADJECTIVE: "adjective",
+            ADVERB: "adverb",
+            PHRASE: "phrase",
+            MESSAGE: "message"
+        };
+
+    class GrammarResource extends Resource
+    {
+        #defaultResource;
+        #partOfSpeech;
+        #forms;
+
+        #antonym;
+
+        constructor( pKey, pValue, pDefaultValue, pDescription, pPartOfSpeech, pForms )
+        {
+            super( (pKey instanceof Resource ? pKey.key || pKey : pKey) || pKey,
+                   (pKey instanceof Resource ? pKey.value || pValue : pValue) || pValue,
+                   (pKey instanceof Resource ? pKey.defaultValue || pDefaultValue : pDefaultValue) || pDefaultValue,
+                   (pKey instanceof Resource ? pKey.description || pDescription : pDescription) || pDescription );
+
+            this.#defaultResource = (pKey instanceof Resource ? pKey : this) || this;
+
+            this.#partOfSpeech = pPartOfSpeech || "phrase";
+
+            this.#forms = pForms || {};
+        }
+
+        get partOfSpeech()
+        {
+            return this.#partOfSpeech || "phrase";
+        }
+
+        get forms()
+        {
+            return this.#forms;
+        }
+
+        get defaultForm()
+        {
+            switch ( this.partOfSpeech )
+            {
+                case PARTS_OF_SPEECH.NOUN:
+                    return "singular";
+
+                case PARTS_OF_SPEECH.VERB:
+                    return "base_form";
+
+                case PARTS_OF_SPEECH.ADJECTIVE:
+                    return "positive";
+
+                case PARTS_OF_SPEECH.ADVERB:
+                    return "positive";
+
+                case PARTS_OF_SPEECH.PHRASE:
+                    return "singular";
+
+                case PARTS_OF_SPEECH.MESSAGE:
+                    return "singular";
+
+                default:
+                    return "singular";
+            }
+        }
+
+        getForm( pForm )
+        {
+            const form = asString( pForm || this.defaultForm ).toLowerCase();
+            return this.forms[form] || this.value || this.#defaultResource.value;
+        }
+
+        getAntonym()
+        {
+            return this.#antonym;
+        }
+
+        setAntonym( pKey, pValue, pDefaultValue, pDescription, pPartOfSpeech, pForms )
+        {
+            this.#antonym = pKey instanceof Resource || pKey instanceof this.constructor ? pKey : new GrammarResource( pKey, pValue, pDefaultValue, pDescription, pPartOfSpeech, pForms );
+        }
+    }
+
+    class NounForms
+    {
+        singular;
+        plural;
+        zero;
+        one;
+        two;
+        few;
+        many;
+        gerund;
+
+        constructor( pSingular, pPlural, pZero, pOne, pTwo, pFew, pMany, pGerund )
+        {
+            this.singular = asString( pSingular || pOne, true );
+            this.plural = asString( pPlural || pMany, true );
+            this.zero = asString( pZero || this.plural, true );
+            this.one = asString( pOne || this.singular, true );
+            this.two = asString( pTwo || this.plural, true );
+            this.few = asString( pFew || this.plural, true );
+            this.many = asString( pMany || this.plural, true );
+            this.gerund = asString( pGerund || (this.singular + "ing"), true );
+        }
+    }
+
+    class NounResource extends GrammarResource
+    {
+        constructor( pKey, pValue, pDefaultValue, pDescription, pNounForms )
+        {
+            super( pKey, pValue, pDefaultValue, pDescription, PARTS_OF_SPEECH.NOUN, pNounForms );
+        }
+
+        get defaultForm()
+        {
+            return "singular";
+        }
+    }
+
+    class VerbForms
+    {
+        infinitive;
+        base_form;
+        base_form_plural;
+        present_tense;
+        past_tense;
+        nominalization;
+        agent;
+        adj;
+        adv;
+
+        constructor( pInfinitive, pBase, pBasePlural, pPresent, pPast, pNominalization, pAdjective, pAdverb, pAgent )
+        {
+            this.infinitive = asString( pInfinitive, true );
+            this.base_form = asString( pBase, true );
+            this.base_form_plural = asString( pBasePlural || this.base_form, true );
+            this.present_tense = asString( pPresent || this.base_form, true );
+            this.past_tense = asString( pPast || this.present_tense, true );
+            this.nominalization = asString( pNominalization, true );
+            this.agent = asString( pAgent || (this.nominalization + "er"), true );
+            this.adj = asString( pAdjective, true );
+            this.adv = asString( pAdverb, true );
+        }
+    }
+
+    class VerbResource extends GrammarResource
+    {
+        constructor( pKey, pValue, pDefaultValue, pDescription, pVerbForms )
+        {
+            super( pKey, pValue, pDefaultValue, pDescription, PARTS_OF_SPEECH.VERB, pVerbForms );
+        }
+
+        get defaultForm()
+        {
+            return "base_form";
+        }
+    }
+
+    class AdjectiveForms
+    {
+        positive;
+        negative;
+        comparative;
+        superlative;
+
+        constructor( pPositive, pNegative, pComparative, pSuperlative )
+        {
+            this.positive = asString( pPositive, true );
+            this.negative = asString( pNegative, true );
+            this.comparative = asString( pComparative || this.positive, true );
+            this.superlative = asString( pSuperlative || this.positive, true );
+        }
+    }
+
+    class AdjectiveResource extends GrammarResource
+    {
+        constructor( pKey, pValue, pDefaultValue, pDescription, pAdjectiveForms )
+        {
+            super( pKey, pValue, pDefaultValue, pDescription, PARTS_OF_SPEECH.ADJECTIVE, pAdjectiveForms );
+        }
+
+        get defaultForm()
+        {
+            return "positive";
+        }
+    }
+
+    class PhraseResource extends GrammarResource
+    {
+        #resources;
+
+        constructor( pKey, pValue, pDefaultValue, pDescription, ...pResources )
+        {
+            super( pKey, pValue, pDefaultValue, pDescription, PARTS_OF_SPEECH.PHRASE );
+
+            this.#resources = flatArgs( ...pResources );
+        }
+
+        get resources()
+        {
+            return asArray( this.#resources ).flat().filter( e => !isNull( e ) && e instanceof Resource );
+        }
+
+        getString( ...pForms )
+        {
+            const forms = flatArgs( ...pForms ).map( asString ).filter( e => !isBlank( e ) );
+
+            const resources = asArray( this.resources );
+
+            let phrase = _mt_str;
+
+            for( let i = 0, n = resources.length; i < n; i++ )
+            {
+                const part = asString( resources[i].getForm( forms[i] || forms[forms.length - 1] ), true );
+
+                phrase += (_spc + part);
+            }
+
+            return phrase;
+        }
+    }
+
+    PhraseResource.from = function( pKey, ...pResources )
+    {
+        const args = flatArgs( pResources ).filter( e => !isNull( e ) && e instanceof Resource || e instanceof GrammarResource );
+
+        let value = _mt_str;
+        let defaultValue = _mt_str;
+
+        for( let arg of args )
+        {
+            value += (_spc + asString( arg.value || arg.defaultValue, true ));
+            defaultValue += (_spc + asString( arg.defaultValue || arg.value, true ));
+        }
+
+        return new PhraseResource( pKey, value, defaultValue, _mt_str, ...args );
+    };
+
+    class MessageResource extends PhraseResource
+    {
+        constructor( pKey, pValue, pDefaultValue, pDescription, ...pResources )
+        {
+            super( pKey, pValue, pDefaultValue, pDescription, ...pResources );
+        }
+    }
+
+    MessageResource.from = function( pKey, ...pResources )
+    {
+        const pr = PhraseResource.from( pKey, ...pResources );
+
+        return new MessageResource( pr?.key || pKey, pr?.value, pr?.defaultValue, pr?.description, ...(flatArgs( ...pr.resources )) );
     };
 
     class ResourceMap extends LocaleResourcesBase
