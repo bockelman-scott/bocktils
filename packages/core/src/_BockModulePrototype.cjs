@@ -556,6 +556,61 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
         }
     }
 
+    const isFulfilled = function( pResult )
+    {
+        const result = resolveObject( pResult ) || pResult || {};
+        return "fulfilled" === (result?.status || result);
+    };
+
+    const isRejected = function( pResult )
+    {
+        const result = resolveObject( pResult ) || pResult || {};
+        return "rejected" === (result?.status || result);
+    };
+
+    class PromiseResult
+    {
+        #result;
+        #status;
+        #value;
+        #reason;
+
+        constructor( pResult, pStatus, pValue, pReason )
+        {
+            this.#result = pResult || { status: pStatus, value: pValue, reason: pReason };
+            this.#status = pResult?.status || pStatus || "pending";
+            this.#value = pResult?.value || pValue;
+            this.#reason = pResult?.reason || pReason;
+        }
+
+        get status()
+        {
+            return (_mt_str + this.#status).trim();
+        }
+
+        get value()
+        {
+            return this.#value;
+        }
+
+        get reason()
+        {
+            return this.#reason;
+        }
+
+        isFulfilled()
+        {
+            const result = resolveObject( this.#result );
+            return "fulfilled" === this.status || ("fulfilled" === (result?.status || result));
+        };
+
+        isRejected()
+        {
+            const result = resolveObject( this.#result );
+            return "rejected" === this.status || "rejected" === (result?.status || result);
+        };
+    }
+
     /**
      * This class defines a Custom Event other modules can use to communicate with interested consumers.<br>
      * @see <a href="https://developer.mozilla.org/en-US/docs/Web/API/CustomEvent/CustomEvent">MDN: CustomEvent</a>
@@ -3498,6 +3553,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
 
             getMessagesLocale,
 
+            isFulfilled,
+            isRejected,
+
             classes:
                 {
                     Args,
@@ -3505,6 +3563,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
                     CmdLineArgs,
                     ExecutionMode,
                     ExecutionEnvironment,
+                    PromiseResult,
                     ModuleEvent: BockModuleEvent,
                     ModulePrototype: BockModulePrototype,
                     SourceInfo,

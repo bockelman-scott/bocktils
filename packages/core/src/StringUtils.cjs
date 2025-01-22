@@ -1147,6 +1147,15 @@ const $scope = constants?.$scope || function()
         return s;
     };
 
+    function enclosedIn( pString, pLeft, pRight )
+    {
+        const left = asString( pLeft );
+        const right = asString( pRight || left ) || left;
+        const chars = asString( pString, true ).split( _mt_chr );
+
+        return (left === chars[0]) && (right === chars[chars.length - 1]);
+    }
+
     const isJson = function( pStr )
     {
         if ( !isString( pStr ) || isBlank( pStr ) )
@@ -1160,22 +1169,7 @@ const $scope = constants?.$scope || function()
 
         if ( chars.length > 1 )
         {
-            if ( ("[" === chars[0]) && ("]" === chars[chars.length - 1]) )
-            {
-                return true;
-            }
-
-            if ( ("{" === chars[0]) && ("}" === chars[chars.length - 1]) )
-            {
-                return true;
-            }
-
-            if ( _dblqt === chars[0] && _dblqt === chars[chars.length - 1] )
-            {
-                return true;
-            }
-
-            if ( _sglqt === chars[0] && _sglqt === chars[chars.length - 1] )
+            if ( enclosedIn( chars, "[", "]" ) || enclosedIn( chars, "{", "}" ) || enclosedIn( chars, _dblqt ) || enclosedIn( chars, _sglqt ) )
             {
                 return true;
             }
@@ -2833,6 +2827,7 @@ const $scope = constants?.$scope || function()
             toBool,
             toUnixLinebreaks,
             toWindowsLinebreaks,
+            enclosedIn,
             isValidString,
             isValidNumber,
             isValidNumeric,

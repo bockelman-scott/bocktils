@@ -2,7 +2,8 @@ const core = require( "@toolbocks/core" );
 const jsonModule = require( "@toolbocks/json" );
 
 let defaultPath;
-
+let defaultMessages;
+let defaultLocale;
 
 /*## environment-specific:node start ##*/
 let fs = require( "node:fs" );
@@ -10,7 +11,8 @@ let fsAsync = require( "node:fs/promises" );
 let path = require( "node:path" );
 const currentDirectory = path.dirname( __filename );
 const projectRootDirectory = path.resolve( currentDirectory, "../../../" );
-defaultPath = path.resolve( currentDirectory, "../messages/en/messages.json" );
+defaultPath = path.resolve( currentDirectory, "../messages/defaults.json" );
+// defaultMessages = require( defaultPath );
 /*## environment-specific:node end ##*/
 
 /*## environment-specific:browser start ##*/
@@ -19,7 +21,9 @@ const fsMock =
 
 const fsAsyncMock =
     {};
+
 /*## environment-specific:browser end ##*/
+
 
 const konsole = console;
 
@@ -76,7 +80,9 @@ const $scope = constants?.$scope || function()
         S_ERR_PREFIX,
         MILLIS_PER,
         MESSAGES_LOCALE,
-        getMessagesLocale
+        getMessagesLocale,
+        isFulfilled,
+        isRejected,
     } = constants;
 
     const {
@@ -96,7 +102,7 @@ const $scope = constants?.$scope || function()
 
     const { asString, asInt, asFloat, isBlank, lcase, ucase, toUnixPath, toBool } = stringUtils;
 
-    const { varargs, asArray, Filters, AsyncBoundedQueue } = arrayUtils;
+    const { varargs, flatArgs, asArray, Filters, AsyncBoundedQueue } = arrayUtils;
 
     const { resolveLocale, classes: localeClasses } = localeUtils;
 
@@ -136,15 +142,35 @@ const $scope = constants?.$scope || function()
 
     if ( isBrowser )
     {
-        defaultPath = path.resolve( "/messages/en/messages.json" );
+        defaultPath = path.resolve( "../messages/defaults.json" );
     }
 
+    const DEFAULT_OPTIONS =
+        {
+            resourceLoader: null,
+            paths: null,
+            locales: null
+        };
+
+    /**
+     * A utility class for loading resources such as text files, JSON, or properties files.<br>
+     * Works in diverse runtime environments like Node.js, Deno, and browsers.<br>
+     * @class
+     */
     class ResourceLoader
     {
         #paths;
         #locales;
         #options;
 
+        /**
+         * Constructs an instance of the ResourceLoader class
+         *
+         * @param {Array|string} pPaths - The paths to be processed. Can be a single string or an array of strings. Defaults to [defaultPath] if not provided.
+         * @param {Array<string|Intl.Locale>|string|Intl.Locale} pLocales - The locales to be used. Can be a single string or an array of strings. Defaults to [MESSAGES_LOCALE] if not provided.
+         * @param {Object} pOptions - Optional configuration options. Defaults to an empty object if not provided.
+         * @return {ResourceLoader} An instance of this class.
+         */
         constructor( pPaths, pLocales, pOptions )
         {
             this.#paths = asArray( pPaths || [defaultPath] ).flat();
@@ -152,17 +178,121 @@ const $scope = constants?.$scope || function()
             this.#options = populateOptions( pOptions, {} );
         }
 
-        loadFromJson( ...pPaths )
+
+        /**
+         * Returns a Promise of an array of strings<br>
+         * corresponding to the text contents<br>
+         * of one or more files or HTTP Responses<br>
+         * identified by the specified paths.<br>
+         * <br>
+         * Works in Node.js, Deno, or a Browser.<br>
+         * <br>
+         * @param {...string} pPaths - One or more paths to the files or resources to be fetched and read.
+         * @return {Promise<Array<string>>} A promise that resolves to an array of strings
+         *                                  containing the contents of the specified files or resources.
+         */
+        async fetch( ...pPaths )
+        {
+            const paths = flatArgs( ...pPaths );
+
+            const strings = [];
+
+            const promises = [];
+
+            for( path of paths )
+            {
+                if ( isNodeJs )
+                {
+                    promises.push( fsAsync.readFile( path.resolve( path ), "utf8" ) );
+                }
+                else if ( isDeno )
+                {
+                    promises.push( await Deno.readTextFile( path ) );
+                }
+                else if ( isBrowser )
+                {
+                    promises.push( fetch( path ).then( response => response.text() ) );
+                }
+            }
+
+            const results = await Promise.allSettled( promises );
+
+            for( const result of results )
+            {
+                if ( isFulfilled( result ) )
+                {
+                    strings.push( result.value );
+                }
+            }
+
+            return asArray( strings ).filter( e => !isBlank( e ) );
+        }
+
+        /**
+         * Returns promise resolving to a JSON object.<br>
+         * <br>
+         * Fetches JSON data from the specified paths, parses it,
+         * and merges multiple JSON strings into a single object.
+         *
+         * @param {...string} pPaths - Paths or URLs from which JSON data will be fetched.
+         * @return {Promise<Object>} A promise resolving to a JSON object.
+         *                           If multiple JSON strings are fetched, they are merged;
+         *                           if only one JSON string is fetched, it is parsed.
+         *                           Returns an empty object if no JSON strings are fetched.
+         */
+        async fetchJson( ...pPaths )
+        {
+            const jsonStrings = await this.fetch( ...pPaths );
+
+            if ( jsonStrings.length > 0 )
+            {
+                if ( jsonStrings.length > 1 )
+                {
+                    return jsonUtils.merge( ...jsonStrings );
+                }
+                else
+                {
+                    return jsonUtils.parse( jsonStrings[0] );
+                }
+            }
+
+            return {};
+        }
+
+        loadFromJson( pJson )
         {
 
         }
 
-        loadFromProperties(...pPaths )
+        async fetchProperties( ...pPaths )
+        {
+            const properties = await this.fetch( ...pPaths );
+
+            const obj = {};
+
+            for( const property of properties )
+            {
+                const lines = property.split( _lf );
+
+                for( const line of lines )
+                {
+                    const [key, value] = line.split( "=" ).map( e => e.trim() );
+
+                    obj[key] = value;
+                }
+            }
+
+            return obj;
+        }
+
+        loadFromProperties( pProperties )
         {
 
         }
 
     }
+
+    DEFAULT_OPTIONS.resourceLoader = new ResourceLoader( DEFAULT_OPTIONS.paths, DEFAULT_OPTIONS.locales, DEFAULT_OPTIONS );
 
     ResourceLoader.resolve = function( pResourceLoader, pOptions )
     {
@@ -183,9 +313,9 @@ const $scope = constants?.$scope || function()
 
     class HierarchicalKey extends Array
     {
-        constructor( ...args )
+        constructor( ...pArgs )
         {
-            super( ...args );
+            super( ...pArgs );
         }
     }
 
@@ -255,10 +385,10 @@ const $scope = constants?.$scope || function()
 
         #options;
 
-        constructor( pResourceLoader, pOptions )
+        constructor( pResourceLoader, pOptions = DEFAULT_OPTIONS )
         {
-            this.#resourceLoader = ResourceLoader.resolve( pResourceLoader, pOptions );
-            this.#options = populateOptions( pOptions, {} );
+            this.#options = populateOptions( pOptions, DEFAULT_OPTIONS );
+            this.#resourceLoader = ResourceLoader.resolve( pResourceLoader, this.#options );
         }
     }
 

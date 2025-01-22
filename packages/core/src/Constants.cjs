@@ -107,8 +107,12 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             ExecutionEnvironment,
             CURRENT_MODE,
             ARGUMENTS,
-            getMessagesLocale
+            getMessagesLocale,
+            isFulfilled,
+            isRejected,
         } = bockModuleBootstrap;
+
+    const { PromiseResult } = bockModuleBootstrap.classes || {};
 
     if ( _ud === typeof CustomEvent )
     {
@@ -667,6 +671,8 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              */
             classes:
                 {
+                    PromiseResult,
+
                     /**
                      * This class defines a Custom Event modules use to communicate with interested consumers.<br>
                      * @see <a href="https://developer.mozilla.org/en-US/docs/Web/API/CustomEvent/CustomEvent">MDN: CustomEvent</a>

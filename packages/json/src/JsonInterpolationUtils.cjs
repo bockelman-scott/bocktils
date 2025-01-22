@@ -232,6 +232,7 @@ const $scope = constants?.$scope || function()
             trimStrings: false,
             reviver: DEFAULT_REVIVER,
             replacer: DEFAULT_REPLACER,
+            space: null,
             formatDates: false,
             dateTimeFormatter: null,
             "NaN": "NaN",
@@ -1472,6 +1473,11 @@ const $scope = constants?.$scope || function()
             return handleNull( obj, options );
         }
 
+        if ( isJson( obj ) )
+        {
+            obj = isString( obj ) ? parseJson( obj, _resolveReviver( options?.reviver, options ) ) : obj;
+        }
+
         const root = _resolveRoot( pRoot, options?.root, obj );
         options.root = root;
 
@@ -1662,14 +1668,14 @@ const $scope = constants?.$scope || function()
                                 pOptions = DEFAULT_OPTIONS_FOR_JSON,
                                 pScope = $scope() )
     {
-        let json = asString( pJson, true );
+        const options = populateOptions( pOptions, DEFAULT_OPTIONS_FOR_JSON );
+
+        let json = isJson( pJson ) ? asString( pJson, true ) : asJson( pJson, options?.replacer, options.space, options, pScope || $scope() );
 
         if ( !isJson( json ) )
         {
             return asArray( json );
         }
-
-        const options = populateOptions( pOptions, DEFAULT_OPTIONS_FOR_JSON );
 
         const onError = isFunction( options?.onError ) ? options?.onError : ignore;
 
