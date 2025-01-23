@@ -921,10 +921,10 @@ const $scope = constants?.$scope || function()
             return decrypted.toString( "utf-8" );
         }
 
-        static encrypt( pPassword, pSalt, inputEncoding, outputEncoding )
+        static encrypt( pPassword, pSalt, pInputEncoding, pOutputEncoding )
         {
-            const pwd = Buffer.from( pPassword, inputEncoding );
-            const salt = Buffer.from( pSalt, inputEncoding );
+            const pwd = Buffer.from( pPassword, pInputEncoding );
+            const salt = Buffer.from( pSalt, pInputEncoding );
 
             const options =
                 {
@@ -943,7 +943,7 @@ const $scope = constants?.$scope || function()
 
             encrypted = Buffer.concat( [encrypted, cipher.final()] );
 
-            return new PasswordProtection( encrypted, iv, salt, key, inputEncoding, outputEncoding );
+            return new PasswordProtection( encrypted, iv, salt, key, pInputEncoding, pOutputEncoding );
         }
 
         serialize()
