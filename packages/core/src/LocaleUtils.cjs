@@ -55,6 +55,9 @@ const {
         S_WARN,
         S_ERROR,
         lock,
+        objectEntries,
+        objectValues,
+        objectKeys,
         classes
     } = constants;
 
@@ -446,6 +449,11 @@ const {
 
         }
 
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
         parseLocale( pLocale )
         {
             const locale = resolveLocale( pLocale );
@@ -515,860 +523,60 @@ const {
             }
         }
 
-        appendMapEntry( pMap, pMapKey, pValue )
+        appendMapEntry( pMap, pKey, pValue )
         {
-            const map = isObject( pMap ) ? pMap || {} : isString( pMap ) ? this.initializeMap( pMap ) || {} : {};
+            const initializeMap = ( map ) => isString( map ) ? this.initializeMap( map ) || {} : {};
 
-            if ( !isString( pMapKey ) || isBlank( pMapKey ) )
+            const mergeObjects = ( target, source ) => isArray( target ) ? target.concat( source ) : { ...target, ...source };
+
+            // Initialize the map
+            const map = isObject( pMap ) ? pMap : initializeMap( pMap );
+
+            // Validate key
+            if ( !isString( pKey ) || isBlank( pKey ) )
             {
                 return null;
             }
 
-            map[pMapKey] = map[pMapKey] || pValue;
+            // Set default entry if not present
+            map[pKey] = map[pKey] || pValue;
 
-            switch ( typeof (map[pMapKey] || pValue) )
+            // Process entry based on type
+            const entryType = typeof (map[pKey] || pValue);
+            switch ( entryType )
             {
                 case _num:
                 case _big:
                 case _str:
-                    map[pMapKey] = map[pMapKey] + ((isString( map[pMapKey] ) ? asString( pValue ) : isNumeric( pValue ) ? asFloat( pValue ) : 0));
+                    map[pKey] += isString( map[pKey] ) ? asString( pValue ) : isNumeric( pValue ) ? asFloat( pValue ) : 0;
                     break;
-
                 case _bool:
                 case _fun:
-                    map[pMapKey] = map[pMapKey] || pValue;
+                    map[pKey] = map[pKey] || pValue;
                     break;
-
                 case _obj:
-                    if ( !isNull( map[pMapKey] ) )
+                    if ( !isNull( map[pKey] ) )
                     {
-                        if ( isArray( map[pMapKey] ) )
-                        {
-                            map[pMapKey] = map[pMapKey].concat( pValue );
-                        }
-                        else
-                        {
-                            map[pMapKey] = { ...map[pMapKey], ...pValue };
-                        }
+                        map[pKey] = mergeObjects( map[pKey], pValue );
                     }
-            }
-
-            return map[pMapKey];
-        }
-    }
-
-    class ResourceKey extends LocaleResourcesBase
-    {
-        #components = [];
-
-        #mappingFunction;
-
-        #defaultValue = _mt_str;
-
-        constructor( ...pComponents )
-        {
-            super();
-
-            const me = this;
-
-            const arr = asArray( varargs( ...pComponents ) ).flat();
-
-            this.#mappingFunction = function( e )
-            {
-                if ( isObject( e ) )
-                {
-                    if ( e instanceof me.constructor )
-                    {
-                        return e.components;
-                    }
-                    if ( isArray( e ) )
-                    {
-                        return e.map( me.#mappingFunction );
-                    }
-                }
-
-                if ( !isNull( e ) )
-                {
-                    switch ( typeof e )
-                    {
-                        case _str:
-                            return asString( e ).split( _dot ).map( e => asString( e ).trim() );
-
-                        case _num:
-                        case _big:
-                        case _bool:
-                            return asString( e );
-
-                        case _symbol:
-                            const s = e.toString().replace( /^Symbol\s*\(\s*/, _mt_str ).replace( /\s*\)$/, _mt_str );
-                            return asString( s ).split( _dot ).map( e => asString( e ).trim() );
-
-                        case _fun:
-                            return asString( e.name || e ).trim().split( _dot ).map( e => asString( e ).trim() );
-
-                        default:
-                            return asString( e ).split( _dot ).map( e => asString( e ).trim() );
-                    }
-                }
-                return "~~null_key~~";
-            };
-
-            this.#components = arr.map( this.#mappingFunction ).flat();
-        }
-
-        get components()
-        {
-            return [...asArray( this.#components )].map( this.#mappingFunction ).flat();
-        }
-
-        get defaultValue()
-        {
-            return asString( this.#defaultValue );
-        }
-
-        set defaultValue( pValue )
-        {
-            this.#defaultValue = asString( pValue );
-        }
-
-        toString()
-        {
-            return this.components.join( _dot );
-        }
-
-        [Symbol.toStringTag]()
-        {
-            return this.toString();
-        }
-
-        [Symbol.toPrimitive]()
-        {
-            return this.toString();
-        }
-
-        equals( pKey )
-        {
-            if ( pKey instanceof this.constructor )
-            {
-                return this.toString() === pKey.toString();
-            }
-
-            if ( isString( pKey ) )
-            {
-                return this.toString() === asString( pKey, true ).toString();
-            }
-
-            if ( isArray( pKey ) )
-            {
-                return this.toString() === new this.constructor( ...pKey ).toString();
-            }
-
-            return false;
-        }
-    }
-
-    class Resource extends LocaleResourcesBase
-    {
-        #key;
-        #value;
-        #defaultValue;
-        #description;
-
-        #backedBy;
-
-        constructor( pKey, pValue, pDefaultValue, pDescription )
-        {
-            super();
-
-            const isResourceKey = pKey instanceof this.constructor;
-
-            this.#key = isResourceKey ? pKey.key || new ResourceKey( pKey ) : new ResourceKey( pKey );
-            this.#value = pValue || (isResourceKey ? pKey.value || pValue : pValue) || pDefaultValue;
-            this.#defaultValue = pDefaultValue || (isResourceKey ? pKey.defaultValue || pDefaultValue : this.#key.defaultValue || pValue) || pValue;
-            this.#description = asString( pDescription || (isResourceKey ? pKey.description || pDescription : pDescription) || pDefaultValue || pValue );
-
-            this.#backedBy = isResourceKey ? pKey : null;
-        }
-
-        get key()
-        {
-            return new ResourceKey( this.#key || this.#backedBy?.key );
-        }
-
-        get value()
-        {
-            return this.#value || this.#defaultValue || this.#backedBy?.value;
-        }
-
-        get defaultValue()
-        {
-            return this.#defaultValue || this.#value || this.#backedBy?.defaultValue;
-        }
-
-        get description()
-        {
-            return this.#description || this.#backedBy?.description || this.#defaultValue || this.#value;
-        }
-
-        toString()
-        {
-            return this.key.toString() + "=" + asString( this.value || this.defaultValue || this.description );
-        }
-
-        [Symbol.toStringTag]()
-        {
-            return this.toString();
-        }
-
-        [Symbol.toPrimitive]()
-        {
-            return asString( this.value || this.defaultValue || this.description );
-        }
-    }
-
-    Resource.from = function( pObject )
-    {
-        const elem = !isNull( pObject ) ? pObject : ["~~null_key~~", _mt_str, _mt_str, _mt_str];
-
-        if ( isArray( elem ) && elem.length >= 2 && elem.length <= 4 )
-        {
-            return new Resource( ...elem );
-        }
-        else if ( isString( elem ) )
-        {
-            return Resource.from( elem.split( "=" ) );
-        }
-        else if ( isObject( elem ) )
-        {
-            if ( elem instanceof Resource )
-            {
-                return elem;
-            }
-            const arr = [asString( elem.key ), elem.value, elem.defaultValue, asString( elem.description )];
-            return Resource.from( ...arr );
-        }
-        return null;
-    };
-
-    const PARTS_OF_SPEECH =
-        {
-            NOUN: "noun",
-            VERB: "verb",
-            ADJECTIVE: "adjective",
-            ADVERB: "adverb",
-            PHRASE: "phrase",
-            MESSAGE: "message"
-        };
-
-    class GrammarResource extends Resource
-    {
-        #defaultResource;
-        #partOfSpeech;
-        #forms;
-
-        #antonym;
-
-        constructor( pKey, pValue, pDefaultValue, pDescription, pPartOfSpeech, pForms )
-        {
-            super( (pKey instanceof Resource ? pKey.key || pKey : pKey) || pKey,
-                   (pKey instanceof Resource ? pKey.value || pValue : pValue) || pValue,
-                   (pKey instanceof Resource ? pKey.defaultValue || pDefaultValue : pDefaultValue) || pDefaultValue,
-                   (pKey instanceof Resource ? pKey.description || pDescription : pDescription) || pDescription );
-
-            this.#defaultResource = (pKey instanceof Resource ? pKey : this) || this;
-
-            this.#partOfSpeech = pPartOfSpeech || "phrase";
-
-            this.#forms = pForms || {};
-        }
-
-        get partOfSpeech()
-        {
-            return this.#partOfSpeech || "phrase";
-        }
-
-        get forms()
-        {
-            return this.#forms;
-        }
-
-        get defaultForm()
-        {
-            switch ( this.partOfSpeech )
-            {
-                case PARTS_OF_SPEECH.NOUN:
-                    return "singular";
-
-                case PARTS_OF_SPEECH.VERB:
-                    return "base_form";
-
-                case PARTS_OF_SPEECH.ADJECTIVE:
-                    return "positive";
-
-                case PARTS_OF_SPEECH.ADVERB:
-                    return "positive";
-
-                case PARTS_OF_SPEECH.PHRASE:
-                    return "singular";
-
-                case PARTS_OF_SPEECH.MESSAGE:
-                    return "singular";
-
-                default:
-                    return "singular";
-            }
-        }
-
-        getForm( pForm )
-        {
-            const form = asString( pForm || this.defaultForm ).toLowerCase();
-            return this.forms[form] || this.value || this.#defaultResource.value;
-        }
-
-        getAntonym()
-        {
-            return this.#antonym;
-        }
-
-        setAntonym( pKey, pValue, pDefaultValue, pDescription, pPartOfSpeech, pForms )
-        {
-            this.#antonym = pKey instanceof Resource || pKey instanceof this.constructor ? pKey : new GrammarResource( pKey, pValue, pDefaultValue, pDescription, pPartOfSpeech, pForms );
-        }
-    }
-
-    class NounForms
-    {
-        singular;
-        plural;
-        zero;
-        one;
-        two;
-        few;
-        many;
-        gerund;
-
-        constructor( pSingular, pPlural, pZero, pOne, pTwo, pFew, pMany, pGerund )
-        {
-            this.singular = asString( pSingular || pOne, true );
-            this.plural = asString( pPlural || pMany, true );
-            this.zero = asString( pZero || this.plural, true );
-            this.one = asString( pOne || this.singular, true );
-            this.two = asString( pTwo || this.plural, true );
-            this.few = asString( pFew || this.plural, true );
-            this.many = asString( pMany || this.plural, true );
-            this.gerund = asString( pGerund || (this.singular + "ing"), true );
-        }
-    }
-
-    class NounResource extends GrammarResource
-    {
-        constructor( pKey, pValue, pDefaultValue, pDescription, pNounForms )
-        {
-            super( pKey, pValue, pDefaultValue, pDescription, PARTS_OF_SPEECH.NOUN, pNounForms );
-        }
-
-        get defaultForm()
-        {
-            return "singular";
-        }
-    }
-
-    class VerbForms
-    {
-        infinitive;
-        base_form;
-        base_form_plural;
-        present_tense;
-        past_tense;
-        nominalization;
-        agent;
-        adj;
-        adv;
-
-        constructor( pInfinitive, pBase, pBasePlural, pPresent, pPast, pNominalization, pAdjective, pAdverb, pAgent )
-        {
-            this.infinitive = asString( pInfinitive, true );
-            this.base_form = asString( pBase, true );
-            this.base_form_plural = asString( pBasePlural || this.base_form, true );
-            this.present_tense = asString( pPresent || this.base_form, true );
-            this.past_tense = asString( pPast || this.present_tense, true );
-            this.nominalization = asString( pNominalization, true );
-            this.agent = asString( pAgent || (this.nominalization + "er"), true );
-            this.adj = asString( pAdjective, true );
-            this.adv = asString( pAdverb, true );
-        }
-    }
-
-    class VerbResource extends GrammarResource
-    {
-        constructor( pKey, pValue, pDefaultValue, pDescription, pVerbForms )
-        {
-            super( pKey, pValue, pDefaultValue, pDescription, PARTS_OF_SPEECH.VERB, pVerbForms );
-        }
-
-        get defaultForm()
-        {
-            return "base_form";
-        }
-    }
-
-    class AdjectiveForms
-    {
-        positive;
-        negative;
-        comparative;
-        superlative;
-
-        constructor( pPositive, pNegative, pComparative, pSuperlative )
-        {
-            this.positive = asString( pPositive, true );
-            this.negative = asString( pNegative, true );
-            this.comparative = asString( pComparative || this.positive, true );
-            this.superlative = asString( pSuperlative || this.positive, true );
-        }
-    }
-
-    class AdjectiveResource extends GrammarResource
-    {
-        constructor( pKey, pValue, pDefaultValue, pDescription, pAdjectiveForms )
-        {
-            super( pKey, pValue, pDefaultValue, pDescription, PARTS_OF_SPEECH.ADJECTIVE, pAdjectiveForms );
-        }
-
-        get defaultForm()
-        {
-            return "positive";
-        }
-    }
-
-    class PhraseResource extends GrammarResource
-    {
-        #resources;
-
-        constructor( pKey, pValue, pDefaultValue, pDescription, ...pResources )
-        {
-            super( pKey, pValue, pDefaultValue, pDescription, PARTS_OF_SPEECH.PHRASE );
-
-            this.#resources = flatArgs( ...pResources );
-        }
-
-        get resources()
-        {
-            return asArray( this.#resources ).flat().filter( e => !isNull( e ) && e instanceof Resource );
-        }
-
-        getString( ...pForms )
-        {
-            const forms = flatArgs( ...pForms ).map( asString ).filter( e => !isBlank( e ) );
-
-            const resources = asArray( this.resources );
-
-            let phrase = _mt_str;
-
-            for( let i = 0, n = resources.length; i < n; i++ )
-            {
-                const part = asString( resources[i].getForm( forms[i] || forms[forms.length - 1] ), true );
-
-                phrase += (_spc + part);
-            }
-
-            return phrase;
-        }
-    }
-
-    PhraseResource.from = function( pKey, ...pResources )
-    {
-        const args = flatArgs( pResources ).filter( e => !isNull( e ) && e instanceof Resource || e instanceof GrammarResource );
-
-        let value = _mt_str;
-        let defaultValue = _mt_str;
-
-        for( let arg of args )
-        {
-            value += (_spc + asString( arg.value || arg.defaultValue, true ));
-            defaultValue += (_spc + asString( arg.defaultValue || arg.value, true ));
-        }
-
-        return new PhraseResource( pKey, value, defaultValue, _mt_str, ...args );
-    };
-
-    class MessageResource extends PhraseResource
-    {
-        constructor( pKey, pValue, pDefaultValue, pDescription, ...pResources )
-        {
-            super( pKey, pValue, pDefaultValue, pDescription, ...pResources );
-        }
-    }
-
-    MessageResource.from = function( pKey, ...pResources )
-    {
-        const pr = PhraseResource.from( pKey, ...pResources );
-
-        return new MessageResource( pr?.key || pKey, pr?.value, pr?.defaultValue, pr?.description, ...(flatArgs( ...pr.resources )) );
-    };
-
-    class ResourceMap extends LocaleResourcesBase
-    {
-        #locale;
-        #localeCode;
-
-        #resources = {};
-
-        constructor( pLocale, ...pResources )
-        {
-            super();
-
-            this.#locale = resolveLocale( pLocale ) || DEFAULT_LOCALE;
-            this.#localeCode = this.#locale?.baseName || DEFAULT_LOCALE_STRING;
-
-            const me = this;
-
-            let arr = asArray( varargs( ...pResources ) );
-
-            const mapper = e => (isObject( e ) && (e instanceof me.constructor)) ? e.resources : e;
-
-            arr = arr.filter( e => !isNull( e ) ).map( mapper ).flat();
-
-            for( let elem of arr )
-            {
-                if ( !isNull( elem ) )
-                {
-                    const rsrc = (elem instanceof Resource) ? elem : Resource.from( elem );
-
-                    if ( !isNull( rsrc ) && rsrc instanceof Resource )
-                    {
-                        const s = elem.key.toString();
-
-                        this.#resources[s] = elem;
-
-                        if ( s.includes( _dot ) )
-                        {
-                            let obj = this.#resources;
-
-                            const keys = s.split( _dot );
-
-                            while ( keys.length > 1 && null != obj )
-                            {
-                                let key = keys.shift();
-
-                                obj[key] = obj[key] || {};
-
-                                const remaining = keys.length > 0 ? keys.join( _dot ) : null;
-
-                                if ( remaining )
-                                {
-                                    obj[key][remaining] = obj[key][remaining] || elem;
-                                }
-
-                                obj = obj[key];
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        get locale()
-        {
-            return this.#locale || DEFAULT_LOCALE;
-        }
-
-        get resources()
-        {
-            return lock( this.#resources );
-        }
-
-        get entries()
-        {
-            return lock( Object.entries( this.resources ) );
-        }
-
-        get keys()
-        {
-            return lock( Object.keys( this.resources ) );
-        }
-
-        getResource( pKey )
-        {
-            const key = new ResourceKey( pKey );
-
-            const s = key.toString();
-
-            let obj = this.resources[s];
-
-            if ( !isNull( obj ) && obj instanceof Resource )
-            {
-                return obj;
-            }
-
-            let keys = s.split( _dot );
-
-            obj = this.resources;
-
-            while ( keys.length > 0 && null != obj )
-            {
-                let key = keys.shift();
-                obj = obj[key];
-
-                if ( !isNull( obj ) && obj instanceof Resource )
-                {
                     break;
-                }
             }
-
-            return obj;
+            return map[pKey];
         }
 
-        get( pKey )
+        clone()
         {
-            let resource = this.getResource( pKey );
-
-            if ( !isNull( resource ) && resource instanceof Resource )
-            {
-                return resource.value || resource.defaultValue || resource;
-            }
-
-            const s = asString( pKey, true );
-
-            let keys = s.split( _dot );
-
-            let obj = this.resources;
-
-            while ( keys.length > 0 && null != obj )
-            {
-                let key = keys.shift();
-                obj = obj[key];
-            }
-
-            if ( isNull( obj ) )
-            {
-                return asString( pKey, true );
-            }
-
-            return obj?.value || obj?.defaultValue || obj;
+            return new (this.constructor[Symbol.species] || this.constructor)( ...(objectValues( this )) );
         }
     }
 
-    class ResourceCollection extends ResourceMap
-    {
-        #defaultMap;
-
-        #defaultResources = {};
-
-        constructor( pLocale, pDefaultMap, ...pResources )
-        {
-            super( pLocale, ...pResources );
-
-            this.#defaultMap = pDefaultMap instanceof ResourceMap ? pDefaultMap : new ResourceMap( DEFAULT_LOCALE, ...pDefaultMap );
-
-            this.#defaultResources = this.#defaultMap?.resources || { ...pResources };
-        }
-
-        get defaultMap()
-        {
-            return this.#defaultMap || this;
-        }
-
-        get resources()
-        {
-            return { ...(this.#defaultResources || this.defaultMap.resources), ...super.resources };
-        }
-
-        get entries()
-        {
-            const defaultEntries = this.defaultMap.entries();
-            const superEntries = super.entries();
-
-            return unique( [
-                               ...defaultEntries,
-                               ...superEntries
-                           ].flat() );
-        }
-
-        get keys()
-        {
-            const defaultKeys = this.defaultMap.keys();
-            const superKeys = super.keys();
-
-            return unique( [
-                               ...defaultKeys,
-                               ...superKeys
-                           ].flat() );
-        }
-
-        getResource( pKey )
-        {
-            const resource = super.getResource( pKey );
-
-            if ( isNull( resource ) )
-            {
-                return this.defaultMap.getResource( pKey );
-            }
-
-            return resource;
-        }
-
-        get( pKey )
-        {
-            const resource = this.getResource( pKey );
-            if ( !isNull( resource ) && resource instanceof Resource )
-            {
-                return resource.value || resource.defaultValue || resource;
-            }
-            return resource?.value || resource?.defaultValue || resource || asString( pKey, true );
-        }
-    }
-
-    class ResourceBundle extends LocaleResourcesBase
-    {
-        #resourceMaps = {};
-        #resources = {};
-
-        constructor( ...pResourceMaps )
-        {
-            super();
-
-            let arrMaps = asArray( varargs( ...pResourceMaps ) ).filter( e => !isNull( e ) ).map( e => (e instanceof ResourceMap) ? e : ((e instanceof Resource) ? new ResourceMap( DEFAULT_LOCALE, e ) : null) );
-
-            arrMaps = arrMaps.filter( e => !isNull( e ) && e instanceof ResourceMap );
-
-            for( let rsrcMap of arrMaps )
-            {
-                if ( isNull( rsrcMap ) || !(rsrcMap instanceof ResourceMap) )
-                {
-                    continue;
-                }
-
-                const resources = { ...(rsrcMap.resources || {}) };
-
-                if ( Object.keys( resources ).length <= 0 )
-                {
-                    continue;
-                }
-
-                const keys = this.buildLocaleKeyPermutations( rsrcMap.locale );
-
-                for( let key of keys )
-                {
-                    let map = this.initializeMapEntry( this.#resourceMaps, key, [] );
-                    map.push( rsrcMap );
-
-                    this.appendMapEntry( this.#resources, key, resources );
-                }
-            }
-        }
-
-        get resourceMaps()
-        {
-            return { ...(this.#resourceMaps || {}) };
-        }
-
-        getResourceMaps( pLocale )
-        {
-            const locale = resolveLocale( pLocale );
-
-            const keys = this.buildLocaleKeyPermutations( locale );
-
-            const maps = this.resourceMaps;
-
-            const arr = [];
-
-            for( let key of keys )
-            {
-                const a = maps[key];
-                if ( a && a.length > 0 )
-                {
-                    arr.push( a );
-                }
-            }
-
-            return arr.flat();
-        }
-
-        get resources()
-        {
-            return { ...this.#resources };
-        }
-
-        getResource( pLocale, pKey )
-        {
-            const locale = resolveLocale( pLocale );
-
-            const maps = this.getResourceMaps( locale );
-
-            let resource = null;
-
-            for( let map of maps )
-            {
-                resource = map.getResource( pKey );
-                if ( !isNull( resource ) && resource instanceof Resource )
-                {
-                    break;
-                }
-            }
-
-            return resource;
-        }
-
-        get( pLocale, pKey )
-        {
-            const locale = resolveLocale( pLocale );
-
-            let resource = this.getResource( locale, pKey );
-
-            if ( !isNull( resource ) && resource instanceof Resource )
-            {
-                return resource.value || resource.defaultValue || resource;
-            }
-
-            let value = null;
-
-            const s = asString( pKey, true );
-
-            const localeKeys = this.buildLocaleKeyPermutations( locale ) || [];
-
-            for( let localeKey of localeKeys )
-            {
-                let obj = this.resources[localeKey];
-
-                if ( isNull( obj ) )
-                {
-                    continue;
-                }
-
-                let resourceKeys = s.split( _dot );
-
-                while ( resourceKeys.length > 0 && null != obj )
-                {
-                    let key = resourceKeys.shift();
-                    obj = obj[key];
-                }
-
-                if ( !isNull( obj ) )
-                {
-                    value = obj?.value || obj?.defaultValue;
-                }
-
-                if ( _ud !== typeof value && null !== value )
-                {
-                    break;
-                }
-            }
-
-            return value || asString( pKey, true );
-        }
-    }
 
     let mod =
         {
             dependencies,
             classes:
                 {
-                    ResourceKey,
-                    Resource,
-                    ResourceMap,
-                    ResourceCollection,
-                    ResourceBundle
+                    LocaleResourcesBase
                 },
             DEFAULT_LOCALE_STRING,
             DEFAULTS,
@@ -1411,7 +619,8 @@ const {
             DEFAULT_NUMBER_SYMBOLS,
             deriveDecimalSymbols,
             calculateDecimalSymbols,
-            toCanonicalNumericFormat
+            toCanonicalNumericFormat,
+            LocaleResourcesBase
         };
 
     mod = modulePrototype.extend( mod );

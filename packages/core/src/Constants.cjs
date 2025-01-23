@@ -89,6 +89,8 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             isReadOnly,
             isObjectLiteral,
             objectEntries,
+            objectValues,
+            objectKeys,
             populateOptions,
             mergeOptions,
             lock,
@@ -2002,6 +2004,10 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             isObjectLiteral,
 
             objectEntries,
+
+            objectValues,
+
+            objectKeys,
 
             /**
              * Returns a local (mutable) copy of the value specified.

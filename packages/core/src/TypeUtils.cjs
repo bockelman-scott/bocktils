@@ -1753,11 +1753,11 @@ const $scope = constants?.$scope || function()
      */
     const instanceOfAny = function( pObject, ...pClasses )
     {
-        const classes = [].concat( ...(pClasses || []) ) || [];
+        const classes = ( [].concat( ...(pClasses || []) ) || [] ).filter( e => isClass( e, false ) );
 
         let is = false;
 
-        while ( !is && classes?.length )
+        while ( !is && classes?.length && isObject( pObject ) )
         {
             const cls = classes.shift();
 
@@ -1822,7 +1822,7 @@ const $scope = constants?.$scope || function()
     {
         if ( isFunction( pObject ) || isClass( pObject ) )
         {
-            return pObject?.constructor || pObject?.prototype;
+            return pObject?.constructor || pObject[Symbol.species] || pObject?.prototype;
         }
 
         const proto = getProto( pObject );
@@ -1861,6 +1861,12 @@ const $scope = constants?.$scope || function()
     const isInstanceOfListedClass = function( pObject, ...pListedClasses )
     {
         return instanceOfAny( pObject, ...pListedClasses );
+    };
+
+    const isAssignableTo = function( pValue, pClass )
+    {
+        const cls = isClass( pClass ) ? pClass || this.constructor : this.constructor;
+        return instanceOfAny( cls, cls[Symbol.species] ) && !(this === pValue);
     };
 
     /**
@@ -2687,6 +2693,7 @@ const $scope = constants?.$scope || function()
             isListedClass,
             isInstanceOfUserDefinedClass,
             isInstanceOfListedClass,
+            isAssignableTo,
             isSymbol,
             isType,
             areSameType,

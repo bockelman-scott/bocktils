@@ -2693,6 +2693,20 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
         return [...new Set( entries )].filter( e => null != e[1] ).map( stringifyKeys );
     }
 
+    function objectValues( pObject )
+    {
+        const values = [];
+        objectEntries( pObject ).forEach( e => values.push( e[1] ) );
+        return values;
+    }
+
+    function objectKeys( pObject )
+    {
+        const keys = [];
+        objectEntries( pObject ).forEach( e => keys.push( e[0] ) );
+        return keys;
+    }
+
     function mergeOptions( pOptions, ...pDefaults )
     {
         const maxMergeDepth = 12;
@@ -3525,6 +3539,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
             isReadOnly,
             isObjectLiteral,
             objectEntries,
+            objectValues,
+            objectKeys,
             populateOptions,
             mergeOptions,
             lock,
