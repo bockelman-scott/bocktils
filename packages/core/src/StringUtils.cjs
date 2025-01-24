@@ -121,6 +121,7 @@ const $scope = constants?.$scope || function()
             isNull,
             isNotNull,
             isNonNullObject,
+            isDate,
             isString,
             isNumber,
             isBigInt,
@@ -1427,12 +1428,17 @@ const $scope = constants?.$scope || function()
 
         const options = populateOptions( (isObject( pDefault ) ? pDefault : pOptions), DEFAULT_NUMBER_SYMBOLS );
 
-        const type = typeof input;
-
         if ( isNull( input ) )
         {
             return asInt( dflt, zero, options );
         }
+
+        if ( isDate( input ) || isFunction( input.getTime ) )
+        {
+            return asInt( input.getTime() );
+        }
+
+        const type = typeof input;
 
         function warnValueOutOfRange( pInput, pSource = AS_INT )
         {
@@ -1440,8 +1446,6 @@ const $scope = constants?.$scope || function()
 
             modulePrototype.reportError( new IllegalArgumentError( msg ), msg, S_WARN, (modName + _colon + _colon + (pSource || AS_INT)) );
         }
-
-        let radix = _calculateRadix( input );
 
         if ( [_num, _big].includes( type ) )
         {
@@ -1475,6 +1479,8 @@ const $scope = constants?.$scope || function()
         let val = zero;
 
         let canonical = toCanonicalNumericFormat( input, options );
+
+        let radix = _calculateRadix( input );
 
         if ( 10 === radix )
         {

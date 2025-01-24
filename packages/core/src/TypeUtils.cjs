@@ -1668,6 +1668,12 @@ const $scope = constants?.$scope || function()
         return (isDate( date, true ));
     };
 
+
+    const isValidDateOrNumeric = function( pDate )
+    {
+        return isDate( pDate ) || isInteger( pDate ) || isNumeric( pDate );
+    };
+
     /**
      * Returns true if the specified value is an instance of RegExp<br>
      * or, if not <i>strict</i>, if the specified value is a string representation of a regular expression<br>
@@ -1753,7 +1759,7 @@ const $scope = constants?.$scope || function()
      */
     const instanceOfAny = function( pObject, ...pClasses )
     {
-        const classes = ( [].concat( ...(pClasses || []) ) || [] ).filter( e => isClass( e, false ) );
+        const classes = ([].concat( ...(pClasses || []) ) || []).filter( e => isClass( e, false ) );
 
         let is = false;
 
@@ -2633,6 +2639,11 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    function resolveMoment( pNow )
+    {
+        return isDate( pNow ) ? pNow || new Date() : new Date();
+    }
+
     /**
      * This is the module itself, exported from this function
      */
@@ -2696,6 +2707,8 @@ const $scope = constants?.$scope || function()
             isAssignableTo,
             isSymbol,
             isType,
+            isValidDateOrNumeric,
+            resolveMoment,
             areSameType,
             areCompatibleTypes,
             instanceOfAny,
