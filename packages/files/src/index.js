@@ -24,6 +24,7 @@ const $scope = constants?.$scope || function()
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };
 
+
 (function exposeModule()
 {
     // defines a key we can use to store this module in global scope
@@ -67,6 +68,7 @@ const $scope = constants?.$scope || function()
         S_ERROR,
         no_op,
         ignore,
+        lock,
         populateOptions,
         immutableCopy,
         resolveVisitor,
@@ -325,6 +327,17 @@ const $scope = constants?.$scope || function()
         }
     };
 
+    const NO_ATTRIBUTES = lock( {
+                                    isFile: () => false,
+                                    isDirectory: () => false,
+                                    isSymbolicLink: () => false,
+                                    size: 0,
+                                    created: null,
+                                    modified: null,
+                                    accessed: null,
+                                    stats: {}
+                                } );
+
     /**
      * Represents a subset of the attributes of a file or directory obtained from calls to stat, lstat, or fstat.<br>
      * <br>
@@ -415,16 +428,7 @@ const $scope = constants?.$scope || function()
         if ( isBlank( filePath ) )
         {
             modulePrototype.handleError( new IllegalArgumentError( "Path is required", {} ), FileAttributes.forPath, pFilePath, filePath );
-            return {
-                isFile: () => false,
-                isDirectory: () => false,
-                isSymbolicLink: () => false,
-                size: 0,
-                created: null,
-                modified: null,
-                accessed: null,
-                stats: {}
-            };
+            return NO_ATTRIBUTES;
         }
 
         try
@@ -437,7 +441,7 @@ const $scope = constants?.$scope || function()
             modulePrototype.handleError( ex, FileAttributes.forPath, pFilePath );
         }
 
-        return {};
+        return NO_ATTRIBUTES;
     };
 
     /**
