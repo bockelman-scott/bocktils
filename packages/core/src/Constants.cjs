@@ -107,14 +107,17 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             StatefulListener,
             ExecutionMode,
             ExecutionEnvironment,
+            Visitor,
+            resolveVisitor,
             CURRENT_MODE,
             ARGUMENTS,
             getMessagesLocale,
             isFulfilled,
             isRejected,
+            classes: modulePrototypeClasses,
         } = bockModuleBootstrap;
 
-    const { PromiseResult } = bockModuleBootstrap.classes || {};
+    const { PromiseResult } = modulePrototypeClasses || {};
 
     if ( _ud === typeof CustomEvent )
     {
@@ -770,7 +773,8 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
                     CustomEvent,
                     StatefulListener,
                     ExecutionEnvironment,
-                    ExecutionMode
+                    ExecutionMode,
+                    Visitor
                 },
             _ud,
             /**
@@ -2075,6 +2079,10 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#sleep
              */
             sleep,
+
+            Visitor,
+
+            resolveVisitor,
 
             calculateNumberFormattingSymbols,
 

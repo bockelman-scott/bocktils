@@ -152,6 +152,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
         return (_obj === typeof pObject && null != pObject) ? (!!pAcceptArray || !isArray( pObject ) ? pObject : {}) : {};
     }
 
+    const S_DEFAULT_ERROR_MESSAGE = [S_ERR_PREFIX, S_DEFAULT_OPERATION].join( _spc );
+
     class Args
     {
         #args = [];
@@ -611,6 +613,49 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
         };
     }
 
+    function resolveEventType( pEventName, pOptions )
+    {
+        if ( pEventName instanceof Event )
+        {
+            return (pEventName.type || pEventName.name) || ((null != pOptions) ? resolveEventType( pOptions ) : "custom");
+        }
+        else if ( _str === typeof pEventName )
+        {
+            return pEventName.trim();
+        }
+        else if ( _obj === typeof pEventName )
+        {
+            if ( pEventName?.event instanceof Event )
+            {
+                return resolveEventType( pEventName?.event );
+            }
+
+            return pEventName?.type || pEventName?.name || "custom";
+        }
+
+        return "custom";
+    }
+
+    const resolveEventOptions = function( pEventName, pOptions, pData )
+    {
+        const options =
+            {
+                ...(pOptions || {}),
+                ...(pData?.detail || pData || {}),
+                ...(pData || {}), traceEnabled: false
+            };
+
+        const type = resolveEventType( pEventName, options );
+
+        const optionsDetail = options?.detail || options;
+
+        let data = (_obj === typeof pData ? (pData?.detail || pData) : optionsDetail) || optionsDetail;
+
+        data = data?.detail || data || options?.detail || options || {};
+
+        return { type, data, options };
+    };
+
     /**
      * This class defines a Custom Event other modules can use to communicate with interested consumers.<br>
      * @see <a href="https://developer.mozilla.org/en-US/docs/Web/API/CustomEvent/CustomEvent">MDN: CustomEvent</a>
@@ -638,12 +683,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
          */
         constructor( pEventName, pData, pOptions )
         {
-            super( (pEventName instanceof Event) ? (pEventName.type || pEventName.name) : pEventName );
+            super( resolveEventOptions( pEventName, pOptions, pData ).type || "custom",
+                   resolveEventOptions( pEventName, pOptions, pData ).options );
 
-            this.#type = ((pEventName instanceof Event) ? (pEventName.type || pEventName.name) : pEventName) || "BockModuleEvent";
-            this.#detail = _obj === typeof pData ? (pData || ((pEventName instanceof Event) ? (pEventName.detail || {}) : pData || {})) : !(_ud === typeof pData || null == pData) ? { pData } : {};
+            const { type, data, options } = resolveEventOptions( pEventName, pOptions, pData );
 
-            const options = populateOptions( pOptions, { traceEnabled: false } );
+            this.#type = type || "BockModuleEvent";
+
+            this.#detail = data?.detail || data || options?.detail || options || {};
 
             this.#traceEnabled = !!options.traceEnabled;
 
@@ -705,6 +752,23 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
         CustomEvent = BockModuleEvent;
         $scope()["CustomEvent"] = CustomEvent;
     }
+
+    const resolveEvent = function( pEvent, pData, pOptions )
+    {
+        const evt = pEvent || $scope()?.event;
+
+        if ( evt instanceof CustomEvent || evt instanceof BockModuleEvent )
+        {
+            return evt;
+        }
+
+        if ( evt instanceof Event )
+        {
+            return new CustomEvent( evt, pOptions );
+        }
+
+        return new CustomEvent( evt, pOptions );
+    };
 
     /**
      * This is a function that just does nothing.<br>
@@ -1145,7 +1209,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
          * Constructs an instance of the custom Error class, __Error.<br>
          * @constructor
          * @param {string|Error} pMessage The error message or an Error whose message should be used as the error message
-         * @param {Object} pOptions An object that will be available as a property of this Error
+         * @param {Object} [pOptions={}] An object that will be available as a property of this Error
          */
         constructor( pMessage, pOptions = {} )
         {
@@ -1360,7 +1424,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
      * <br>
      * Constructs a string of the form {ModuleName}::{FunctionName}
      * <br>
-     * @param {string} pModule The name of the module in which the error occurred
+     * @param {string|function|Object} pModule The name of the module in which the error occurred
      * @param {string|function} pFunction The name of the function (or the function itself) in which the error occurred
      *
      * @returns {string} A string used when emitting the error event from a function or method
@@ -1703,6 +1767,115 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
     const _validStr = e => _str === typeof e && _mt_str !== e.trim();
     const _lcaseStr = e => e.trim().toLowerCase();
 
+    /**
+     * Represents a visitor class to support the common Visitor Pattern.
+     * This class also extends the EventTarget interface
+     * to enable event dispatching, specifically for the "visit" event.
+     * Subclasses can use and/or extend its functionality to define their own visiting logic.
+     */
+    class Visitor extends EventTarget
+    {
+        #options;
+
+        constructor( pOptions )
+        {
+            super();
+
+            this.#options = populateOptions( pOptions || {}, {} );
+        }
+
+        get options()
+        {
+            return populateOptions( this.#options || {}, {} );
+        }
+
+        /**
+         * Base class implementation of the visit method.<br>
+         * Dispatches a "visit" event with the visited object or value as its 'detail' data.<br>
+         * Subclasses should override this method<br>
+         * and only call super.visit() if they want to dispatch the "visit" event<br>
+         * <br>
+         * Normally, this method should not return a value,<br>
+         * however, if you want to stop the iteration based on the visited data,<br>
+         * return true or a 'truthy' value.<br>
+         * <br>
+         * All, but only, the accepting functions and methods in the ToolBocks library<br>
+         * are <i>guaranteed</i> to honor this contract.<br>
+         * If you write your own 'accept' method to take instances of this class or its subclasses,<br>
+         * please either honor the contract or document that you do not.
+         * <br>
+         *
+         * @param {*} pVisited - The object or data being visited.
+         *
+         * @return {void|boolean} Normally does not return a value,
+         *                        but if desired, return true or a 'truthy' value to stop an iteration
+         */
+        visit( pVisited )
+        {
+            this.dispatchEvent( new BockModuleEvent( "visit", pVisited, populateOptions( this.#options, { detail: pVisited } ) ) );
+        }
+    }
+
+    class AdHocVisitor extends Visitor
+    {
+        #func = no_op;
+
+        constructor( pFunction, pOptions )
+        {
+            super( pOptions );
+
+            if ( _fun === typeof pFunction )
+            {
+                this.#func = function( pVisited )
+                {
+                    try
+                    {
+                        return pFunction( pVisited );
+                    }
+                    catch( ex )
+                    {
+                        this.dispatchEvent( new BockModuleEvent( "error", {
+                            error: ex,
+                            message: ex.message,
+                            visited: pVisited
+                        }, populateOptions( this.options, { detail: pVisited } ) ) );
+                    }
+                };
+            }
+        }
+
+        visit( pVisited )
+        {
+            return this.#func( pVisited );
+        }
+    }
+
+    class NullVisitor extends Visitor
+    {
+        constructor( pOptions )
+        {
+            super( pOptions );
+        }
+
+        visit( pVisited )
+        {
+            // no op
+        }
+    }
+
+    const resolveVisitor = function( pVisitor )
+    {
+        if ( pVisitor instanceof Visitor || _fun === typeof pVisitor?.visit )
+        {
+            return pVisitor;
+        }
+        else if ( _fun === typeof pVisitor )
+        {
+            return new AdHocVisitor( pVisitor );
+        }
+
+        return new NullVisitor( {} );
+    };
 
     /**
      * This is the base class for all the ToolBocks&trade; modules.
@@ -1855,13 +2028,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
             return false;
         }
 
-        dispatchEvent( event )
+        dispatchEvent( pEvent, pData, pOptions )
         {
-            const dispatched = super.dispatchEvent( event );
+            const evt = resolveEvent( pEvent, pData, pOptions );
+
+            const dispatched = super.dispatchEvent( evt );
 
             if ( dispatched )
             {
-                const type = (String( event.type ) || _mt_str).toLowerCase();
+                const type = (String( evt.type ) || _mt_str).toLowerCase();
 
                 const listeners = this.#statefulListeners[type];
 
@@ -1871,7 +2046,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
                     {
                         try
                         {
-                            listener.handleEvent( event, event?.detail );
+                            listener.handleEvent( evt, evt?.detail, pData, pOptions );
                         }
                         catch( ex )
                         {
@@ -1882,7 +2057,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
 
                 if ( this.traceEnabled )
                 {
-                    this.trace( "dispatchEvent", { moduleName: this.moduleName, event, listeners } );
+                    this.trace( "dispatchEvent", { moduleName: this.moduleName, event: evt || pEvent, listeners } );
                 }
             }
         }
@@ -1982,7 +2157,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
          * Returns a string used when emitting the error event from a function or method.
          * <br><br>
          * Constructs a string of the form {ModuleName}::{FunctionName}<br>
-         * @param {string} pModuleName The name of the module in which the error occurred
+         * @param {string|Object|function} pModuleName The name of the module in which the error occurred
          * @default The name of this module
          * @param {string|function} pFunction The name of the function (or the function itself) in which the error occurred
          * @returns {string} A string used when emitting the error event from a function or method
@@ -2199,6 +2374,26 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
             {
                 // ignored
             }
+        }
+
+        handleError( pError, pContext, ...pExtra )
+        {
+            const source = this.calculateErrorSourceName( this, pContext?.name || pContext || pError?.stack || pError );
+            this.reportError( pError, pError?.message || S_DEFAULT_ERROR_MESSAGE, S_ERROR, source, ...pExtra );
+        }
+
+        async handleErrorAsync( pError, pContext, ...pExtra )
+        {
+            const me = this;
+
+            const source = this.calculateErrorSourceName( this, pContext?.name || pContext || pError?.stack || pError );
+
+            const func = async function( pError, pContext, ...pExtra )
+            {
+                me.reportError( pError, pError?.message || S_DEFAULT_ERROR_MESSAGE, S_ERROR, source, ...pExtra );
+            };
+
+            setTimeout( func, 10 );
         }
 
         /**
@@ -3531,6 +3726,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
             S_DEFAULT_OPERATION,
 
             resolveError,
+            resolveEvent,
 
             EMPTY_OBJECT,
             EMPTY_ARRAY,
@@ -3559,6 +3755,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
             IterationCap,
             ComparatorFactory,
             StatefulListener,
+            Visitor,
+
+            resolveVisitor,
 
             CURRENT_MODE,
             ARGUMENTS,
@@ -3589,7 +3788,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
                     IllegalArgumentError,
                     IterationCap,
                     ComparatorFactory,
-                    StatefulListener
+                    StatefulListener,
+                    Visitor
                 }
         };
 

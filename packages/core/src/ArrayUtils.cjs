@@ -677,7 +677,7 @@ const $scope = constants?.$scope || function()
             IDENTITY: e => true,
 
             /**
-             * A filter that returns the none of the elements of the source array.<br><br>
+             * A filter that returns none of the elements of the source array.<br><br>
              * USAGE: <code>const filtered = array.filter( Filters.NONE );</code><br>
              * @type {function(*):boolean}
              * @alias module:ArrayUtils#Filters#NONE

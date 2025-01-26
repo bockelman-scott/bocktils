@@ -1671,7 +1671,7 @@ const $scope = constants?.$scope || function()
 
     const isValidDateOrNumeric = function( pDate )
     {
-        return isDate( pDate ) || isInteger( pDate ) || isNumeric( pDate );
+        return !isNull( pDate ) && (isDate( pDate ) || isInteger( pDate ) || isNumeric( pDate ));
     };
 
     /**
@@ -2475,7 +2475,7 @@ const $scope = constants?.$scope || function()
         {
             super( pValue );
 
-            this.#type = pType;
+            this.#type = pType || typeof (pValue);
         }
 
         get type()

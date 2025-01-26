@@ -64,17 +64,21 @@ const $scope = constants?.$scope || function()
         _mt_str,
         _dot,
         _pathSep,
-        _prevDir,
         S_ERROR,
+        no_op,
         ignore,
         populateOptions,
+        immutableCopy,
+        resolveVisitor,
         classes
     } = constants;
 
-    const { ModuleEvent, ModulePrototype } = classes;
+    const { ModuleEvent, ModulePrototype, Visitor } = classes;
 
     const {
+        isDefined,
         isNull,
+        isString,
         isObject,
         isArray,
         isTypedArray,
@@ -84,16 +88,37 @@ const $scope = constants?.$scope || function()
         isNumeric,
         firstMatchingType,
         resolveMoment,
-        isValidDateOrNumeric
+        isValidDateOrNumeric,
+        VisitedSet
     } = typeUtils;
 
     const { asString, asInt, toUnixPath, toBool, isBlank } = stringUtils;
 
     const { varargs, asArray, Filters } = arrayUtils;
 
-    const { accessSync, statSync, mkdirSync, createWriteStream, writeFileSync, constants: fs_constants, } = fs;
+    const {
+        accessSync,
+        statSync,
+        mkdirSync,
+        rmdirSync,
+        readdirSync,
+        symlinkSync,
+        createWriteStream,
+        writeFileSync,
+        constants: fs_constants,
+    } = fs;
 
-    const { access, readdir, opendir, stat, lstat, rm, rename } = fsAsync;
+    const {
+        access,
+        readdir,
+        opendir,
+        stat,
+        lstat,
+        rm,
+        rmdir,
+        rename,
+        symlink
+    } = fsAsync;
 
 
     if ( _ud === typeof CustomEvent )
@@ -124,117 +149,20 @@ const $scope = constants?.$scope || function()
         return msg.replaceAll( /\{(\d+)}/g, _mt_str );
     };
 
-    /**
-     * Represents a subset of the attributes of a file or directory obtained from calls to stat, lstat, or fstat.<br>
-     * <br>
-     *
-     */
-    class FileAttributes
+    function resolvePath( pPath )
     {
-        #stats;
-
-        #size;
-
-        #_isFile;
-        #_isDirectory;
-        #_isSymbolicLink;
-
-        #created;
-        #modified;
-        #accessed;
-
-        /**
-         * Constructs an instance of the FileAttributes class
-         * from an object whose structure matches that of the Node.js fs.Stats class
-         *
-         * @param {fs.Stats|{size:number,birthtime:Date,mtime:Date,atime:Date}} pObject
-         */
-        constructor( pObject )
+        if ( isArray( pPath ) )
         {
-            const object = isObject( pObject ) ? pObject : {};
-
-            this.#stats = { ...object };
-
-            this.#size = asInt( object?.size, 0 );
-
-            this.#created = isDate( object?.birthtime ) ? new Date( object?.birthtime ) : null;
-            this.#modified = isDate( object?.mtime ) ? new Date( object?.mtime ) : null;
-            this.#accessed = isDate( object?.atime ) ? new Date( object?.atime ) : null;
-
-            this.#_isFile = isFunction( object?.isFile ) ? object?.isFile() : false;
-            this.#_isDirectory = isFunction( object?.isDirectory ) ? object?.isDirectory() : false;
-            this.#_isSymbolicLink = isFunction( object?.isSymbolicLink ) ? object?.isSymbolicLink() : false;
+            return path.resolve( ...(asArray( pPath ).flat()) );
         }
-
-        get size()
+        else if ( isObject( pPath ) )
         {
-            return asInt( this.#size );
+            return path.resolve( path.join( pPath?.parentPath || pPath?.path || "./", pPath.name || _mt_str ) );
         }
-
-        isFile()
+        else
         {
-            return toBool( this.#_isFile );
+            return path.resolve( asString( pPath, true ) );
         }
-
-        isDirectory()
-        {
-            return toBool( this.#_isDirectory );
-        }
-
-        isSymbolicLink()
-        {
-            return toBool( this.#_isSymbolicLink );
-        }
-
-        get created()
-        {
-            return this.#created;
-        }
-
-        get modified()
-        {
-            return this.#modified;
-        }
-
-        get accessed()
-        {
-            return this.#accessed;
-        }
-
-        get stats()
-        {
-            return this.#stats;
-        }
-    }
-
-    FileAttributes.forPath = async function( pFilePath )
-    {
-        const stats = await stat( path.normalize( pFilePath ) );
-        return new FileAttributes( stats );
-    };
-
-    /**
-     * Converts the input buffer or array-like object into an array.
-     *
-     * @param {Buffer|Array|TypedArray|any} pBuffer - The input data which can be a buffer, array, typed array, or any other object.
-     * @return {Array|any} An array representation of the input, or the input itself if it does not match the expected types.
-     */
-    function arrayFromBuffer( pBuffer )
-    {
-        return asArray( pBuffer instanceof Buffer ? new Uint8Array( pBuffer ) : isArray( pBuffer ) || isTypedArray( pBuffer ) ? new Uint8Array( pBuffer ) : pBuffer );
-    }
-
-    /**
-     * Creates a typed array from a given buffer or array-like object.
-     *
-     * @param {Buffer|Array|TypedArray} pBuffer - The input buffer, array, or typed array to transform into a typed array.
-     * @param {Function|*} [pArrayClass=Uint8Array] - The constructor for the target typed array class. Defaults to Uint8Array if not provided.
-     * @return {TypedArray} A new typed array instance created from the input buffer or array-like object.
-     */
-    function typedArrayFromBuffer( pBuffer, pArrayClass = Uint8Array )
-    {
-        const ArrayClass = pArrayClass || Uint8Array;
-        return (pBuffer instanceof Buffer ? new ArrayClass( pBuffer ) : isArray( pBuffer ) || isTypedArray( pBuffer ) ? new ArrayClass( pBuffer ) : new ArrayClass( asArray( pBuffer ) ));
     }
 
     function extractPathSeparator( pPath )
@@ -245,22 +173,6 @@ const $scope = constants?.$scope || function()
 
         return (matches && matches?.length > 1 ? matches[1] : _pathSep);
     }
-
-    const upDirs = function( pNumDirs )
-    {
-        let numDirs = Math.floor( pNumDirs || 0 );
-
-        numDirs = isNaN( numDirs ) || !isFinite( numDirs ) || numDirs < 0 ? 0 : numDirs;
-
-        let path = _mt_str;
-
-        for( let i = numDirs; i--; )
-        {
-            path += _prevDir + _pathSep;
-        }
-
-        return path || _mt_str;
-    };
 
     const exists = function( pPath )
     {
@@ -322,11 +234,37 @@ const $scope = constants?.$scope || function()
             }
             catch( ex )
             {
-                konsole.warn( dirPath, "does not exist and could not be created", ex );
+                modulePrototype.handleError( ex, makeDirectory, dirPath );
             }
         }
 
         return success;
+    };
+
+    const removeDirectory = function( pDirectoryPath )
+    {
+        let dirPath = path.resolve( toUnixPath( asString( pDirectoryPath, true ) ) );
+        try
+        {
+            rmdirSync( dirPath, { recursive: true } );
+        }
+        catch( ex )
+        {
+            modulePrototype.handleError( ex, removeDirectory, dirPath );
+        }
+    };
+
+    const asyncRemoveDirectory = async function( pDirectoryPath )
+    {
+        let dirPath = path.resolve( toUnixPath( asString( pDirectoryPath, true ) ) );
+        try
+        {
+            await rmdir( dirPath, { recursive: true } );
+        }
+        catch( ex )
+        {
+            modulePrototype.handleError( ex, asyncRemoveDirectory, dirPath );
+        }
     };
 
     /**
@@ -353,10 +291,153 @@ const $scope = constants?.$scope || function()
             }
             catch( ex )
             {
-                konsole.warn( dirPath, "does not exist and could not be created", ex );
+                modulePrototype.handleError( ex, asyncMakeDirectory, dirPath );
             }
         }
         return success;
+    };
+
+    const link = function( pSourcePath, pTargetPath )
+    {
+        const sourcePath = resolvePath( pSourcePath );
+        const targetPath = resolvePath( pTargetPath );
+        try
+        {
+            symlinkSync( sourcePath, targetPath );
+        }
+        catch( ex )
+        {
+            modulePrototype.handleError( ex, link, pSourcePath, pTargetPath );
+        }
+    };
+
+    const asyncLink = async function( pSourcePath, pTargetPath )
+    {
+        const sourcePath = resolvePath( pSourcePath );
+        const targetPath = resolvePath( pTargetPath );
+        try
+        {
+            await fsAsync.symlink( sourcePath, targetPath );
+        }
+        catch( ex )
+        {
+            modulePrototype.handleError( ex, asyncLink, pSourcePath, pTargetPath );
+        }
+    };
+
+    /**
+     * Represents a subset of the attributes of a file or directory obtained from calls to stat, lstat, or fstat.<br>
+     * <br>
+     *
+     */
+    class FileAttributes
+    {
+        #stats;
+
+        #size;
+
+        #_isFile;
+        #_isDirectory;
+        #_isSymbolicLink;
+
+        #created;
+        #modified;
+        #accessed;
+
+        /**
+         * Constructs an instance of the FileAttributes class
+         * from an object whose structure matches that of the Node.js fs.Stats class
+         *
+         * @param {fs.Stats|{size:number,birthtime:Date,mtime:Date,atime:Date}} pObject
+         */
+        constructor( pObject )
+        {
+            const object = isObject( pObject ) ? pObject : {};
+
+            this.#stats = { ...object };
+
+            this.#size = asInt( object?.size, 0 );
+
+            this.#created = isDate( object?.birthtime ) ? new Date( object?.birthtime ) : object?.created;
+            this.#modified = isDate( object?.mtime ) ? new Date( object?.mtime ) : object?.modified;
+            this.#accessed = isDate( object?.atime ) ? new Date( object?.atime ) : object?.accessed;
+
+            this.#_isFile = isFunction( object?.isFile ) ? object?.isFile() : false;
+            this.#_isDirectory = isFunction( object?.isDirectory ) ? object?.isDirectory() : false;
+            this.#_isSymbolicLink = isFunction( object?.isSymbolicLink ) ? object?.isSymbolicLink() : false;
+        }
+
+        get size()
+        {
+            return asInt( this.#size );
+        }
+
+        isFile()
+        {
+            return toBool( this.#_isFile );
+        }
+
+        isDirectory()
+        {
+            return toBool( this.#_isDirectory );
+        }
+
+        isSymbolicLink()
+        {
+            return toBool( this.#_isSymbolicLink );
+        }
+
+        get created()
+        {
+            return isValidDateOrNumeric( this.#created ) ? new Date( this.#created ) : null;
+        }
+
+        get modified()
+        {
+            return isValidDateOrNumeric( this.#modified ) ? new Date( this.#modified ) : null;
+        }
+
+        get accessed()
+        {
+            return isValidDateOrNumeric( this.#accessed ) ? new Date( this.#accessed ) : null;
+        }
+
+        get stats()
+        {
+            return this.#stats;
+        }
+    }
+
+    FileAttributes.forPath = async function( pFilePath )
+    {
+        const filePath = resolvePath( pFilePath );
+
+        if ( isBlank( filePath ) )
+        {
+            modulePrototype.handleError( new IllegalArgumentError( "Path is required", {} ), FileAttributes.forPath, pFilePath, filePath );
+            return {
+                isFile: () => false,
+                isDirectory: () => false,
+                isSymbolicLink: () => false,
+                size: 0,
+                created: null,
+                modified: null,
+                accessed: null,
+                stats: {}
+            };
+        }
+
+        try
+        {
+            const stats = await stat( path.normalize( filePath ) );
+            return new FileAttributes( stats );
+        }
+        catch( ex )
+        {
+            modulePrototype.handleError( ex, FileAttributes.forPath, pFilePath );
+        }
+
+        return {};
     };
 
     /**
@@ -393,11 +474,6 @@ const $scope = constants?.$scope || function()
     {
         const fileAttributes = await FileAttributes.forPath( pPath );
         return fileAttributes?.isSymbolicLink() || false;
-    }
-
-    function resolvePath( pPath )
-    {
-        return isArray( pPath ) ? path.resolve( asArray( pPath ) ) : path.resolve( asString( pPath, true ) );
     }
 
     /**
@@ -451,6 +527,24 @@ const $scope = constants?.$scope || function()
         return (newFilename + (_dot + newExt)).trim();
     }
 
+    function getFileEntry( pFilePath )
+    {
+        const dirPath = path.dirname( pFilePath );
+        const entries = readdirSync( dirPath, { withFileTypes: true } );
+        const fileName = path.basename( pFilePath );
+
+        return entries.find( entry => entry.name === fileName );
+    }
+
+    async function asyncGetFileEntry( pFilePath )
+    {
+        const dirPath = path.dirname( pFilePath );
+        const entries = await readdir( dirPath, { withFileTypes: true } );
+        const fileName = path.basename( pFilePath );
+
+        return entries.find( entry => entry.name === fileName );
+    }
+
     function getTempDirectory()
     {
         return os.tmpdir();
@@ -468,268 +562,160 @@ const $scope = constants?.$scope || function()
         return `${prefix}_${timestamp}_${Math.random().toString( 36 ).substring( 2, 15 )}${extension}`;
     }
 
+    const resolveTempFileArguments = function()
+    {
+        const tempDir = getTempDirectory();
+
+        const randomFileName = generateTempFileName();
+
+        const filePath = path.join( tempDir, randomFileName );
+
+        return {
+            tempDir,
+            randomFileName,
+            filePath,
+        };
+    };
+
     function createTempFile()
     {
-        const tempDir = getTempDirectory();
+        const { tempDir, randomFileName, filePath } = resolveTempFileArguments();
 
-        const randomFileName = generateTempFileName();
-
-        const filePath = path.join( tempDir, randomFileName );
-
-        // Create an empty file
         fs.writeFileSync( filePath, _mt_str, { flag: "w" } );
 
-        return filePath;
+        return getFileEntry( filePath );
     }
 
-    async function createTempFileAsync()
+    async function asyncCreateTempFile()
     {
-        const tempDir = getTempDirectory();
-        const randomFileName = generateTempFileName();
-        const filePath = path.join( tempDir, randomFileName );
+        const { tempDir, randomFileName, filePath } = resolveTempFileArguments();
+
         await fsAsync.writeFile( filePath, _mt_str, { flag: "w" } );
-        return filePath;
+
+        return await asyncGetFileEntry( filePath );
     }
 
-    /**
-     * @typedef {string} DirectorySearchReturnType
-     */
-
-    const DIR_SEARCH_RETURN_TYPES =
-        {
-            "PATH": "Path",
-            "FILEINFO": "FileInfo",
-            "ENTRY": "DirEntry",
-            "CONTENTS": "FileContents",
-        };
-
-    /**
-     * @typedef {Object} DirectorySearchOptions
-     *
-     * @property {function(fs.Dirent):boolean} [entry_filter= Filters.IDENTITY] A filter to determine what directories to explore
-     * @property {function(FileInfo):boolean}  [file_filter=null] A filter to determine what files to include in results
-     * @property {boolean} [breadthFirst=false] Whether to perform a breadth first search or (by default) depth first search
-     * @property {DirectorySearchReturnType} [returnType=DIR_SEARCH_RETURN_TYPES.FILEINFO] What kind of data should be in the results array
-     * @property {boolean} [stopOnFirstMatch=false] Whether to return as soon as one or more results are available without exploring other directories
-     *
-     */
-
-    /**
-     *
-     * @type {DirectorySearchOptions}
-     */
-    const DIR_SEARCH_OPTIONS =
-        {
-            entry_filter: Filters.IDENTITY,
-            file_filter: null,
-            breadthFirst: false,
-            returnType: DIR_SEARCH_RETURN_TYPES.FILEINFO,
-            stopOnFirstMatch: false,
-        };
-
-    /**
-     * Resolves and constructs search options from the provided parameters.
-     *
-     * @param {DirectorySearchOptions} pOptions - An object containing search configuration options.
-     * @param {string} pStartDirectory - The starting directory path for the search operation.
-     * @return {Object} Returns an object containing the resolved search options:
-     *                  startDirectory, entryFilter, fileFilter, breadthFirst, returnType,
-     *                  queue, entries, and a condition function to determine the search flow.
-     */
-    function resolveSearchOptions( pOptions, pStartDirectory )
+    function createFile( pFilePath, pContent = _mt_str, pOverwrite = false )
     {
-        const options = populateOptions( pOptions, DIR_SEARCH_OPTIONS );
+        const filePath = resolvePath( pFilePath );
+        const content = asString( pContent, true );
 
-        const entryFilter = Filters.IS_FILTER( options.entry_filter ) ? options.entry_filter : Filters.IDENTITY;
-
-        const fileFilter = Filters.IS_FILTER( options.file_filter ) ? options.file_filter : null;
-
-        const startDirectory = path.resolve( pStartDirectory );
-
-        const breadthFirst = options.breadthFirst;
-
-        const returnType = options.returnType;
-
-        const queue = [startDirectory]; // Queue for BFS
-
-        let entries = [];
-
-        let firstIteration = true;
-
-        const condition = breadthFirst ? () => queue.length > 0 : () => entries.length > 0 || firstIteration;
-
-        return { startDirectory, entryFilter, fileFilter, breadthFirst, returnType, queue, entries, condition };
-    }
-
-    /**
-     * Find a file (or files) or a subdirectory meeting specified criteria,
-     * using either breadth-first or depth-first search
-     *
-     * @param {string} pStartDirectory
-     * @param pOptions
-     * @return {Array<string|FileInfo|fs.Dirent>} An array of paths, FileInfo objects, or directory entries depending on the options passed
-     */
-    async function find( pStartDirectory, pOptions = DIR_SEARCH_OPTIONS )
-    {
-        const options = populateOptions( pOptions, DIR_SEARCH_OPTIONS );
-
-        let {
-            startDirectory = path.resolve( pStartDirectory ),
-            entryFilter,
-            fileFilter,
-            breadthFirst,
-            returnType,
-            entries,
-            queue,
-            condition
-        } = resolveSearchOptions( options, pStartDirectory );
-
-        let results = [];
-
-        const matchingCriteria = async function( pEntry )
+        if ( pOverwrite || !exists( filePath ) )
         {
-            let matching = [];
+            fs.writeFileSync( filePath, content, { flag: "w" } );
 
-            if ( !isNull( pEntry ) && entryFilter( pEntry ) )
-            {
-                const fullPath = path.join( (pEntry.parentPath || pEntry.path), pEntry.name );
-
-                let files = [pEntry];
-
-                let directoryEntries = new Map();
-                directoryEntries.set( fullPath, pEntry );
-
-                if ( pEntry.isDirectory() )
-                {
-                    const items = await fsAsync.readdir( fullPath, { withFileTypes: true } );
-                    if ( items && items.length > 0 )
-                    {
-                        files.push( ...items );
-
-                        items.forEach( item => directoryEntries.set( path.join( (item.parentPath || item.path), item.name ), item ) );
-                    }
-                }
-
-                let fileInfos = files.map( file => new FileInfo( path.join( (file.parentPath || file.path), file.name ) ) );
-
-                for( const fileInfo of fileInfos )
-                {
-                    const stats = await fileInfo.getStats();
-                    fileInfo.updateAttributes( stats );
-                }
-
-                if ( Filters.IS_FILTER( fileFilter ) )
-                {
-                    fileInfos = fileInfos.filter( fileFilter );
-                }
-
-                matching.push( ...fileInfos );
-
-                if ( returnType === DIR_SEARCH_RETURN_TYPES.ENTRY )
-                {
-                    matching = matching.map( fileInfo => directoryEntries.get( fileInfo.filepath ) );
-                }
-                else if ( returnType === DIR_SEARCH_RETURN_TYPES.PATH )
-                {
-                    matching = matching.map( fileInfo => fileInfo.filepath );
-                }
-                else if ( returnType === DIR_SEARCH_RETURN_TYPES.CONTENTS )
-                {
-                    matching = matching.map( fileInfo => fileInfo.isFile() || fileInfo.isSymbolicLink() ? fs.readFileSync( fileInfo.filepath, { encoding: "utf8" } ) : fs.readdirSync( fileInfo.filepath ) );
-                }
-            }
-
-            return matching;
-        };
-
-        while ( condition() )
-        {
-            const currentDir = queue.shift();
-
-            try
-            {
-                entries = await fsAsync.readdir( currentDir, { withFileTypes: true } );
-
-                for( const entry of entries )
-                {
-                    const fullPath = path.join( currentDir, entry.name );
-
-                    const matching = asArray( await matchingCriteria( entry ) );
-
-                    if ( matching?.length > 0 )
-                    {
-                        results.push( ...matching );
-
-                        if ( options.stopOnFirstMatch )
-                        {
-                            return results;
-                        }
-                    }
-
-                    if ( breadthFirst && entry.isDirectory() )
-                    {
-                        queue.push( fullPath ); // Add subdirectory to queue
-                    }
-                    else
-                    {
-                        results.push( await find( fullPath, pOptions ) );
-
-                        if ( results.length > 0 && options.stopOnFirstMatch )
-                        {
-                            return results;
-                        }
-                    }
-                }
-            }
-            catch( err )
-            {
-                console.error( `Error reading directory ${currentDir}:`, err );
-            }
+            return getFileEntry( filePath );
         }
 
-        return results;
+        const error = new Error( `File ${filePath} already exists` );
+
+        modulePrototype.handleError( error, createFile, pFilePath, pContent, pOverwrite );
+
+        return error;
     }
 
-    /**
-     * Breadth-first algorithm, returning every file that meets the filter or
-     * directory containing files that meet the filter
-     *
-     * @param pStartDirectory
-     * @param pFileFilter
-     * @return
-     */
-    function collectFiles( pStartDirectory, pFileFilter )
+    async function asyncCreateFile( pFilePath, pContent, pOverwrite = false )
     {
+        const filePath = resolvePath( pFilePath );
 
+        const content = asString( pContent, true );
+
+        if ( pOverwrite || !exists( filePath ) )
+        {
+            await fsAsync.writeFile( filePath, content, { flag: "w" } );
+
+            return await asyncGetFileEntry( filePath );
+        }
+
+        const error = new Error( `File ${filePath} already exists` );
+
+        modulePrototype.handleError( error, asyncCreateFile, pFilePath, pContent, pOverwrite );
+
+        return error;
     }
 
-    /**
-     * Returns true if the specified directory name is a path component of the specified directory.
-     *
-     * @param pDirectory
-     * @param pDirectoryName
-     * @param pIgnoreCase
-     * @return
-     */
-    function containsSubdirectory( pDirectory,
-                                   pDirectoryName,
-                                   pIgnoreCase )
+    const deleteFile = function( pFilePath, pFollowLinks = false )
     {
+        const filePath = resolvePath( pFilePath );
+        if ( exists( filePath ) )
+        {
+            if ( pFollowLinks && isSymbolicLink( filePath ) )
+            {
+                // TODO;
+            }
+            fs.unlinkSync( filePath );
+        }
+    };
 
-    }
-
-    /**
-     * Returns true if the specified directory contains one or more files accepted by the specified FilenameFilter
-     * Used to find library and class paths for specific library files
-     *
-     * @param pDirectory  - the directory to search
-     * @param pFileFilter - the filter criteria one or more files must match for this method to return true
-     * @return - true if the specified directory contains files matching the criteria expressed by the filter
-     */
-    function containsMatchingFiles( pDirectory, pFileFilter )
+    const deleteMatchingFiles = function( pDirectoryPath, pFileNameFilter, pFollowLinks = false )
     {
+        const dirPath = resolvePath( pDirectoryPath );
 
-    }
+        const filter = Filters.IS_FILTER( pFileNameFilter ) ? pFileNameFilter : Filters.NONE;
+
+        if ( exists( dirPath ) && isDirectory( dirPath ) )
+        {
+            const files = readdirSync( dirPath, { withFileTypes: true } );
+
+            for( const file of files )
+            {
+                if ( (file.isFile() || file.isSymbolicLink()) && filter( file.name ) )
+                {
+                    if ( isSymbolicLink( path.join( dirPath, file.name ) ) && pFollowLinks )
+                    {
+                        const linkTarget = fs.readlinkSync( path.join( dirPath, file.name ) );
+                        if ( exists( linkTarget ) )
+                        {
+                            deleteMatchingFiles( linkTarget, filter, pFollowLinks );
+                        }
+                    }
+                    fs.unlinkSync( path.join( dirPath, file.name ) );
+                }
+            }
+        }
+    };
+
+    const asyncDeleteFile = async function( pFilePath, pFollowLinks = false )
+    {
+        const filePath = resolvePath( pFilePath );
+        if ( await asyncExists( filePath ) )
+        {
+            if ( pFollowLinks && await isSymbolicLink( filePath ) )
+            {
+                // TODO;
+            }
+            await fsAsync.unlink( filePath );
+        }
+    };
+
+    const asyncDeleteMatchingFiles = async function( pDirectoryPath, pFileNameFilter, pFollowLinks = false )
+    {
+        const dirPath = resolvePath( pDirectoryPath );
+
+        const filter = Filters.IS_FILTER( pFileNameFilter ) ? pFileNameFilter : Filters.NONE;
+
+        if ( await asyncExists( dirPath ) && await isDirectory( dirPath ) )
+        {
+            const files = await readdir( dirPath, { withFileTypes: true } );
+
+            for( const file of files )
+            {
+                if ( (file.isFile() || file.isSymbolicLink()) && filter( file.name ) )
+                {
+                    if ( await isSymbolicLink( path.join( dirPath, file.name ) ) && pFollowLinks )
+                    {
+                        const linkTarget = await fsAsync.readlink( path.join( dirPath, file.name ) );
+                        if ( await asyncExists( linkTarget ) )
+                        {
+                            await asyncDeleteMatchingFiles( linkTarget, filter, pFollowLinks );
+                        }
+                    }
+                    await fsAsync.unlink( path.join( dirPath, file.name ) );
+                }
+            }
+        }
+    };
+
 
     class FileInfo
     {
@@ -748,9 +734,9 @@ const $scope = constants?.$scope || function()
 
         constructor( pFilePath, pFileAttributes = {} )
         {
-            this.#filepath = path.resolve( asString( pFilePath, true ) );
+            this.#filepath = isString( pFilePath ) ? path.resolve( asString( pFilePath, true ) ) : path.join( (pFilePath?.parentPath || pFilePath?.path) || _mt_str, pFilePath?.name || _mt_str );
 
-            this.#attributes = isObject( pFileAttributes ) ? pFileAttributes : {};
+            this.#attributes = isObject( pFileAttributes ) ? new FileAttributes( pFileAttributes ) : {};
 
             this.updateAttributes( this.#attributes );
         }
@@ -774,6 +760,8 @@ const $scope = constants?.$scope || function()
             this.#_isSymbolicLink = isFunction( attributes?.isSymbolicLink ) ? attributes?.isSymbolicLink() : false;
 
             this.#attributes = new FileAttributes( attributes );
+
+            return this;
         }
 
         get filepath()
@@ -1045,13 +1033,14 @@ const $scope = constants?.$scope || function()
         return files.reverse();
     };
 
-    FileInfo.from = function( pFilePath, pCreatedDate = null, pSize = 0 )
+    FileInfo.from = function( pFilePath )
     {
         if ( pFilePath instanceof FileInfo )
         {
             return pFilePath;
         }
-        return new FileInfo( pFilePath, pCreatedDate, pSize );
+        const stats = statSync( pFilePath );
+        return new FileInfo( pFilePath, stats );
     };
 
     FileInfo.fromAsync = async function( pFilePath )
@@ -1061,7 +1050,7 @@ const $scope = constants?.$scope || function()
             return pFilePath;
         }
         const stats = await stat( pFilePath );
-        return new FileInfo( pFilePath, stats.birthtime, stats.size );
+        return new FileInfo( pFilePath, stats );
     };
 
     FileInfo.asFileInfo = function( pFile )
@@ -1076,76 +1065,289 @@ const $scope = constants?.$scope || function()
         return a.compareTo( b );
     };
 
-    FileInfo.collect = async function( pDirectory, pFilter, pRecursionLevel = 0 )
+    FileInfo.collect = async function( pDirectory )
     {
-        let files = [];
 
-        const directory = path.resolve( toUnixPath( pDirectory ) );
-
-        const filter = Filters.IS_FILTER( pFilter ) ? pFilter : isNonNullObject( pFilter ) && isFunction( pFilter.test ) ? pFilter?.test || pFilter : Filters.IDENTITY;
-
-        const recursionLevel = asInt( pRecursionLevel, 0 );
-
-        let dir = null;
-
-        try
-        {
-            dir = await opendir( directory );
-
-            for await ( const dirent of dir )
-            {
-                if ( dirent.isFile() )
-                {
-                    const filepath = path.resolve( directory, dirent.name );
-
-                    const stats = await stat( filepath );
-
-                    const fileInfo = new FileInfo( filepath,
-                                                   new FileAttributes( stats.size,
-                                                                       stats.birthtime,
-                                                                       stats.mtime,
-                                                                       stats.atime,
-                                                                       true,
-                                                                       false ),
-                                                   stats.size,
-                                                   stats.birthtime,
-                                                   stats.mtime,
-                                                   stats.atime,
-                                                   stats.isFile(),
-                                                   stats.isSymbolicLink() );
-
-                    if ( filter( fileInfo ) )
-                    {
-                        files.push( fileInfo );
-                    }
-                }
-                else if ( dirent.isDirectory() && recursionLevel > 0 )
-                {
-                    const filepath = path.resolve( directory, dirent.name );
-
-                    const items = await FileInfo.collect( filepath, filter, Math.max( recursionLevel - 1, 0 ) );
-
-                    files.push( items );
-                }
-            }
-        }
-        catch( ex )
-        {
-            konsole.error( interpolateErrorMessage( errMsg, "collecting files from", "the directory", directory ), directory, ex.message, ex );
-        }
-
-        if ( recursionLevel <= 0 )
-        {
-            files = files.length > 0 ? await FileInfo.sort( ...files ) : [];
-        }
-
-        return files;
     };
 
+    const EXPLORER_ENTRY_ACTION =
+        {
+            CONTINUE: 0,
+            STOP: 1,
+            SKIP: 2,
+        };
+
+    class DirectoryExplorer
+    {
+        #visitor = null;
+
+        #directoryFilter = Filters.IDENTITY;
+        #fileFilter = Filters.IDENTITY;
+
+        #breadthFirst = false;
+
+        constructor( pVisitor, pFileFilter, pDirectoryFilter, pBreadthFirst )
+        {
+            this.#visitor = resolveVisitor( pVisitor );
+
+            this.#fileFilter = Filters.IS_FILTER( pFileFilter ) ? pFileFilter : Filters.IDENTITY;
+            this.#directoryFilter = Filters.IS_FILTER( pDirectoryFilter ) ? pDirectoryFilter : Filters.IDENTITY;
+            this.#breadthFirst = !!pBreadthFirst;
+        }
+
+        async _processDirectoryEntry( pDirectory, pDirectoryFilter, pIncludeFilter, pVisitor, pResults )
+        {
+            const dirInfo = await FileInfo.fromAsync( pDirectory );
+
+            if ( pDirectoryFilter( dirInfo ) || pDirectoryFilter( pDirectory ) )
+            {
+                if ( pIncludeFilter( dirInfo ) || pIncludeFilter( pDirectory ) )
+                {
+                    pResults.push( dirInfo );
+
+                    if ( pVisitor.visit( dirInfo ) )
+                    {
+                        return EXPLORER_ENTRY_ACTION.STOP;
+                    }
+                }
+
+                return EXPLORER_ENTRY_ACTION.CONTINUE;
+            }
+
+            return EXPLORER_ENTRY_ACTION.SKIP;
+        }
+
+        async _processFileEntry( pFilePath, pEntry, pFilter, pVisitor, pResults )
+        {
+            if ( !isNull( pEntry ) && (pEntry.isFile() || pEntry.isSymbolicLink()) )
+            {
+                const entryInfo = await FileInfo.fromAsync( pFilePath );
+
+                if ( pFilter( entryInfo ) || pFilter( pFilePath ) )
+                {
+                    pResults.push( entryInfo );
+
+                    if ( pVisitor.visit( entryInfo ) )
+                    {
+                        return EXPLORER_ENTRY_ACTION.STOP;
+                    }
+
+                    return EXPLORER_ENTRY_ACTION.CONTINUE;
+                }
+            }
+            return EXPLORER_ENTRY_ACTION.SKIP;
+        }
+
+        async exploreDirectory( pDirectory, pVisitor, pFilter, pResults = [] )
+        {
+            const dirPath = resolvePath( pDirectory );
+            const visitor = resolveVisitor( pVisitor );
+            const filter = Filters.IS_FILTER( pFilter ) ? pFilter : this.#directoryFilter;
+            const results = pResults || [];
+
+            const entries = await fsAsync.readdir( dirPath, { withFileTypes: true } );
+
+            for( const entry of entries )
+            {
+                const entryPath = path.resolve( path.join( pDirectory, entry.name ) );
+
+                let action = await this._processFileEntry( entryPath, entry, filter, visitor, results );
+
+                if ( EXPLORER_ENTRY_ACTION.STOP === action )
+                {
+                    return results;
+                }
+            }
+
+            return results;
+        }
+
+        resolveArguments( pDirectory, pVisitor, pFileFilter, pDirectoryFilter, pBreadthFirst )
+        {
+            const startDirectory = resolvePath( pDirectory );
+            const visitor = resolveVisitor( pVisitor );
+            const fileFilter = Filters.IS_FILTER( pFileFilter ) ? pFileFilter : this.#fileFilter;
+            const directoryFilter = Filters.IS_FILTER( pDirectoryFilter ) ? pDirectoryFilter : this.#directoryFilter;
+            const breadthFirst = isDefined( pBreadthFirst ) ? !!pBreadthFirst : this.#breadthFirst;
+            return { startDirectory, visitor, fileFilter, directoryFilter, breadthFirst };
+        }
+
+        async collect( pDirectory, pVisitor, pFileFilter, pDirectoryFilter, pBreadthFirst )
+        {
+            const {
+                startDirectory,
+                visitor,
+                fileFilter,
+                directoryFilter,
+                breadthFirst
+            } = this.resolveArguments( pDirectory, pVisitor, pFileFilter, pDirectoryFilter, pBreadthFirst );
+
+            const results = [];
+
+            const explored = [];
+
+            const queue = [startDirectory]; // Queue for BFS
+
+            while ( queue.length > 0 )
+            {
+                let dirPath = queue.shift();
+
+                if ( explored.includes( dirPath ) )
+                {
+                    continue;
+                }
+
+                let action = await this._processDirectoryEntry( dirPath, directoryFilter, fileFilter, visitor, results );
+
+                if ( EXPLORER_ENTRY_ACTION.STOP === action )
+                {
+                    return results;
+                }
+
+                if ( EXPLORER_ENTRY_ACTION.SKIP === action )
+                {
+                    continue;
+                }
+
+                const entries = await fsAsync.readdir( dirPath, { withFileTypes: true } );
+
+                for( const entry of entries )
+                {
+                    const entryPath = path.resolve( path.join( dirPath, entry.name ) );
+
+                    action = await this._processFileEntry( entryPath, entry, fileFilter, visitor, results );
+
+                    if ( EXPLORER_ENTRY_ACTION.STOP === action )
+                    {
+                        return results;
+                    }
+
+                    if ( entry.isDirectory() )
+                    {
+                        if ( breadthFirst )
+                        {
+                            queue.push( entryPath );
+                        }
+                        else
+                        {
+                            const collected = await this.collect( entryPath, visitor, fileFilter, directoryFilter, breadthFirst );
+
+                            results.push( ...(asArray( collected ).flat()) );
+                        }
+                    }
+                }
+
+                explored.push( dirPath );
+            }
+
+            return results;
+        }
+
+        async findFirst( pDirectory, pFilter, pRecursive = false, pBreadthFirst = false )
+        {
+            const directoryPath = resolvePath( pDirectory );
+
+            const filter = Filters.IS_FILTER( pFilter ) ? pFilter : this.#fileFilter;
+
+            const recursive = !!pRecursive;
+
+            const breadthFirst = !!pBreadthFirst;
+
+            let fileInfo = null;
+
+            const queue = [directoryPath];
+
+            const explored = [];
+
+            while ( queue.length > 0 )
+            {
+                const dirPath = queue.shift();
+
+                if ( explored.includes( dirPath ) )
+                {
+                    continue;
+                }
+
+                const entries = await fsAsync.readdir( dirPath, { withFileTypes: true } );
+
+                for( const entry of entries )
+                {
+                    const entryPath = path.resolve( path.join( dirPath, entry.name ) );
+
+                    let info = await FileInfo.fromAsync( entryPath );
+
+                    if ( filter( info ) || filter( entryPath ) )
+                    {
+                        fileInfo = info;
+                        break;
+                    }
+
+                    if ( entry.isDirectory() && recursive )
+                    {
+                        if ( breadthFirst )
+                        {
+                            queue.push( entryPath );
+                        }
+                        else
+                        {
+                            info = await this.findFirst( entryPath, filter, pRecursive, pBreadthFirst );
+                        }
+                    }
+                }
+
+                explored.push( dirPath );
+            }
+
+            return fileInfo;
+        }
+    }
+
+    const findFiles = async function( pDirectory, pVisitor, pFileFilter, pDirectoryFilter, pBreadthFirst )
+    {
+        const explorer = new DirectoryExplorer( pVisitor, pFileFilter, pDirectoryFilter, pBreadthFirst );
+
+        return await explorer.collect( pDirectory, pVisitor, pFileFilter, pDirectoryFilter, pBreadthFirst );
+    };
 
     let mod =
         {
-            dependencies
+            dependencies,
+            classes:
+                {
+                    FileAttributes,
+                    FileInfo
+                },
+            exists,
+            asyncExists,
+            makeDirectory,
+            asyncMakeDirectory,
+            removeDirectory,
+            asyncRemoveDirectory,
+            link,
+            asyncLink,
+            isFile,
+            isDirectory,
+            isSymbolicLink,
+            resolvePath,
+            extractPathSeparator,
+            removeExtension,
+            replaceExtension,
+            getTempDirectory,
+            generateTempFileName,
+            createTempFile,
+            asyncCreateTempFile,
+            createFile,
+            asyncCreateFile,
+            getFileEntry,
+            asyncGetFileEntry,
+            deleteFile,
+            deleteMatchingFiles,
+            asyncDeleteFile,
+            asyncDeleteMatchingFiles,
+            createTempFileAsync: asyncCreateTempFile,
+            findFiles,
+            FileAttributes,
+            FileInfo
         };
 
 
