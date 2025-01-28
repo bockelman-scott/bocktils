@@ -1,3 +1,5 @@
+// noinspection AssignmentToForLoopParameterJS
+
 /**
  * Defines several useful functions for manipulating Strings.
  * DEPENDS ON Constants.cjs
@@ -2559,17 +2561,61 @@ const $scope = constants?.$scope || function()
     const DEFAULT_TIDY_OPTIONS =
         {
             trim: true,
-            removeRedundantSpaces: true,
             replaceTabsWithSpaces: false,
             replaceSpacesWithTabs: false,
+            removeRedundantSpaces: true,
             spacesPerTab: 4,
             functions: [],
             lowercase: false,
             uppercase: false,
             camelCase: false,
             snakeCase: false,
-            properCase: false
+            properCase: false,
+            capitalize: false,
         };
+
+    const TRIM_OPERATIONS =
+        {
+            trim: ( str ) => asString( str, true ).replaceAll( /[\r\n]+/g, _spc ).trim(),
+            replaceTabsWithSpaces: ( str, options ) => asString( str ).replaceAll( /\t/g, _spc.repeat( Math.max( 1, asInt( options?.spacesPerTab || 1 ) ) ) ),
+            replaceSpacesWithTabs: ( str, options ) => asString( str ).replaceAll( new RegExp( _spc.repeat( Math.max( 1, asInt( options?.spacesPerTab || 1 ) ) ), "g" ), _tab ),
+            removeRedundantSpaces: ( str ) => asString( str ).replaceAll( / {2,}/g, _spc )
+        };
+
+    const CASE_OPERATIONS =
+        {
+            toLowerCase: lcase,
+            lowercase: lcase,
+            toUpperCase: ucase,
+            uppercase: ucase,
+            capitalize: ( input ) =>
+                input.length > 1
+                ? ucase( input.slice( 0, 1 ) ) + lcase( input.slice( 1 ) )
+                : ucase( input ),
+            camelCase: toCamelCase,
+            toCamelCase: toCamelCase,
+            snakeCase: toSnakeCase,
+            toSnakeCase: toSnakeCase,
+            properCase: ( input, options ) =>
+                toProperCase( input, Object.assign( { ...DEFAULT_PROPERCASE_OPTIONS }, options || {} ) ),
+            toProperCase: ( input, options ) =>
+                toProperCase( input, Object.assign( { ...DEFAULT_PROPERCASE_OPTIONS }, options || {} ) )
+        };
+
+    function convertCase( pString, pOptions = DEFAULT_TIDY_OPTIONS )
+    {
+        let str = asString( pString );
+
+        for( const [key, operation] of Object.entries( CASE_OPERATIONS ) )
+        {
+            if ( pOptions[key] )
+            {
+                str = operation( pString, pOptions ) || str;
+            }
+        }
+
+        return asString( str );
+    }
 
     /**
      * A null-safe, type-safe, alternative to the String method, trim
@@ -2591,39 +2637,27 @@ const $scope = constants?.$scope || function()
      */
     const tidy = function( pString, pOptions = DEFAULT_TIDY_OPTIONS )
     {
+        const options = populateOptions( pOptions, DEFAULT_TIDY_OPTIONS );
+
         if ( _ud === typeof pString || null === pString )
         {
             // note that we code this in such a way that it can be bound to the String.prototype as a member function (a.k.a. method)
             if ( (this instanceof String || String === this?.constructor) && isFunction( this.tidy ) )
             {
-                return tidy( String( this ).valueOf() || asString( this, pOptions?.trim ), pOptions );
+                return tidy( String( this ).valueOf() || asString( this, options?.trim ), options );
             }
 
             return _mt_str;
         }
 
-        const options = populateOptions( pOptions, DEFAULT_TIDY_OPTIONS );
-
         let str = asString( pString, options?.trim );
 
-        if ( options?.trim )
+        for( const [key, operation] of Object.entries( TRIM_OPERATIONS ) )
         {
-            str = str.replaceAll( /[\r\n]+/g, _spc ).trim();
-        }
-
-        if ( options.replaceTabsWithSpaces )
-        {
-            str = str.replaceAll( /\t/g, _spc.repeat( Math.max( 1, asInt( options?.spacesPerTab || 1 ) ) ) );
-        }
-
-        if ( options.replaceSpacesWithTabs )
-        {
-            str = str.replaceAll( new RegExp( _spc.repeat( Math.max( 1, asInt( options?.spacesPerTab || 1 ) ) ), "g" ), _tab );
-        }
-
-        if ( options.removeRedundantSpaces )
-        {
-            str = str.replaceAll( / {2,}/g, _spc );
+            if ( options[key] )
+            {
+                str = operation( str, options );
+            }
         }
 
         let operations = [];
@@ -2633,39 +2667,12 @@ const $scope = constants?.$scope || function()
             operations = operations.concat( ...(options?.functions || []) ).filter( e => isFunction( e ) && e.length > 0 );
         }
 
-        if ( options?.toLowerCase || options?.lowercase )
-        {
-            str = lcase( str );
-        }
-        else if ( options?.toUpperCase || options?.uppercase )
-        {
-            str = ucase( str );
-        }
-        else if ( options?.capitalize )
-        {
-            str = str.length > 1 ? ucase( str.slice( 0, 1 ) ) + lcase( str.slice( 1 ) ) : ucase( str );
-        }
-        else if ( options?.camelCase || options?.toCamelCase )
-        {
-            str = toCamelCase( str );
-        }
-        else if ( options?.snakeCase || options?.toSnakeCase )
-        {
-            str = toSnakeCase( str );
-        }
-        else if ( options?.properCase || options?.toProperCase )
-        {
-            str = toProperCase( str, Object.assign( { ...DEFAULT_PROPERCASE_OPTIONS }, options || {} ) );
-        }
-
         let temp = (_mt_str + asString( str ));
 
         if ( operations.length )
         {
-            for( let i = 0, n = operations.length; i < n; i++ )
+            for( const func of operations )
             {
-                const func = operations[i];
-
                 if ( isFunction( func ) )
                 {
                     try
@@ -2678,11 +2685,11 @@ const $scope = constants?.$scope || function()
                     }
                 }
 
-                str = str || temp;
+                str = asString( str || temp );
             }
         }
 
-        str = (asString( str, options?.trim ));
+        str = convertCase( asString( str, options?.trim ), options );
 
         return str;
     };

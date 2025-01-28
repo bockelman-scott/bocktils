@@ -4680,6 +4680,7 @@ const $scope = constants?.$scope || function()
         {
             while ( true )
             {
+                // noinspection ES6RedundantAwait
                 const can = await this.canTake();
 
                 if ( can )

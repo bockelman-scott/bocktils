@@ -1,4 +1,3 @@
-
 /** import the dependencies **/
 const constants = require( "../src/Constants.cjs" );
 
@@ -1705,11 +1704,38 @@ describe( "tidy is a supercharged function with many options", () =>
               } ) ).toEqual( "A B C" );
           } );
 
-    test( "tidy('A\tb\tc', {replaceTabsWithSpaces:true, lowercase: true}) === 'a b c'",
+    test( "tidy('A\tb\tc', {removeRedundantSpaces:false, replaceTabsWithSpaces:true, lowercase: true}) === 'a b c'",
           () =>
           {
               let s = "A\tb\tc";
-              expect( stringUtils.tidy( s, { replaceTabsWithSpaces: true, lowercase: true } ) ).toEqual( "a b c" );
+              expect( stringUtils.tidy( s, {
+                  removeRedundantSpaces: false,
+                  replaceTabsWithSpaces: true,
+                  lowercase: true
+              } ) ).toEqual( "a    b    c" );
+          } );
+
+    test( "tidy('A\tb\tc', {removeRedundantSpaces:false, replaceTabsWithSpaces:true, lowercase: true, spacesPerTab:2}) === 'a b c'",
+          () =>
+          {
+              let s = "A\tb\tc";
+              expect( stringUtils.tidy( s, {
+                  removeRedundantSpaces: false,
+                  replaceTabsWithSpaces: true,
+                  lowercase: true,
+                  spacesPerTab: 2
+              } ) ).toEqual( "a  b  c" );
+          } );
+
+    test( "tidy('A\tb\tc', {replaceTabsWithSpaces:true, lowercase: true, spacesPerTab:1}) === 'a b c'",
+          () =>
+          {
+              let s = "A\tb\tc";
+              expect( stringUtils.tidy( s, {
+                  replaceTabsWithSpaces: true,
+                  lowercase: true,
+                  spacesPerTab: 1
+              } ) ).toEqual( "a b c" );
           } );
 
     test( "tidy('A\tb\tc', {replaceTabsWithSpaces:true, removeRedundantSpaces:false, trim:false}) === '    A    b    c '",
@@ -1728,7 +1754,7 @@ describe( "tidy is a supercharged function with many options", () =>
           () =>
           {
               let s = " A    b  c ";
-              expect( stringUtils.tidy( s, { replaceSpacesWithTabs: true } ) ).toEqual( "A\tb c" );
+              expect( stringUtils.tidy( s, { replaceSpacesWithTabs: true, spacesPerTab: 4 } ) ).toEqual( "A\tb c" );
           } );
 
     test( "tidy(' A    b  c ', {replaceSpacesWithTabs:true, removeRedundantSpaces:false}) === 'A\tb  c'",
@@ -1813,6 +1839,7 @@ describe( "StringComparator", () =>
           () =>
           {
               let options = { caseSensitive: false };
+
               let comparator = new stringUtils.StringComparatorFactory( options ).comparator();
 
               let arr = [].concat( strings );
