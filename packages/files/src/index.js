@@ -1,10 +1,92 @@
-const os = require( "os" );
-const fs = require( "node:fs" );
-const fsAsync = require( "node:fs/promises" );
-const path = require( "node:path" );
-const stream = require( "node:stream" );
+/**
+ * @fileoverview
+ * @name FileUtils
+ * @author Scott Bockelman
+ * @license MIT
+ *
+ * <p>This module exposes functions and classes for working with a local file system.</p>
+ * <br>
+ * These functions and classes aim to provide an abstraction and execution-environment agnostic adapter
+ * to allow (to the extent possible) the same code using these functions and/or classes to work without modification
+ * in Node.js, Deno, Browsers and Workers.
+ * <br>
+ */
 
-const { Transform } = stream;
+/**
+ * Represents the operating system API for working with the host system.<br>
+ * In Node.js, this is "os", in Deno, this is the "Deno" global,
+ * in browsers and workers, this is implemented via XmlHttpRequest (though discouraged and deprecated)
+ *
+ * @type {Object}
+ */
+let os;
+
+/**
+ * Represents the synchronous or callback-required API for working with a file system.<br>
+ * In Node.js, this is "fs", in Deno, this is the "Deno" global,
+ * in browsers and workers, this is implemented via XmlHttpRequest (though discouraged and deprecated)
+ *
+ * @type {Object}
+ */
+let fs;
+
+/**
+ * Represent the asynchronous API for working with a file system.<br>
+ * In Node.js, this is "fs/promises", in Deno, this is the "Deno" global,
+ * in browsers and workers, this is implemented via the Fetch API
+ *
+ * @type {Object}
+ */
+let fsAsync;
+
+/**
+ * Represent the stream API for working with streams.
+ * In Node.js, this is "node:streams", in Deno, this is the "Deno" global,
+ * in browsers and workers, this is implemented via WebSockets
+ */
+let stream;
+
+/**
+ * Represents the functionality related to resolving file paths and file names.
+ * In Node.js, this is the node: path module.  In Deno, this is @TODO
+ * In browsers, this is... @TODO
+ *
+ * @type {Object|function}
+ */
+let path;
+
+
+/**
+ * Represents the path of the current working directory.
+ * This variable typically holds the absolute path of the directory
+ * where the program is being executed.
+ *
+ * This value may be used for file system operations or to determine
+ * the relative locations of other files and directories.
+ *
+ * Note: Ensure proper handling when manipulating or joining paths
+ * to avoid errors related to file system operations.
+ *
+ * @type {string}
+ */
+let currentDirectory;
+
+/**
+ * Represents the root directory of the project.
+ * This variable is used as a reference point for resolving
+ * file and folder paths relative to the project's base directory.
+ *
+ * @type {string}
+ */
+let projectRootDirectory;
+
+/**
+ * Represents the default file system path <i>or URL</i> used as the base directory
+ * for finding and loading resources.<br>
+ *
+ * @type {string}
+ */
+let defaultPath;
 
 const core = require( "@toolbocks/core" );
 
@@ -36,26 +118,8 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
-    /**
-     * This is a dictionary of this module's dependencies.
-     * <br>
-     * It is exported as a property of this module,
-     * allowing us to just import this module<br>
-     * and then use the other utilities as properties of this module.
-     * <br>
-     * @dict
-     * @type {Object}
-     */
-    const dependencies =
-        {
-            constants,
-            typeUtils,
-            stringUtils,
-            arrayUtils,
-            fs,
-            fsAsync,
-            path
-        };
+    let _deno = null;
+    let _node = null;
 
     /*
      * Create local variables for the imported values and functions we use.
@@ -64,7 +128,9 @@ const $scope = constants?.$scope || function()
         _str,
         _mt_str,
         _dot,
-        _pathSep,
+        _colon,
+        _slash,
+        _backslash,
         S_ERROR,
         no_op,
         ignore,
@@ -75,7 +141,9 @@ const $scope = constants?.$scope || function()
         classes
     } = constants;
 
-    const { ModuleEvent, ModulePrototype, Visitor } = classes;
+    const _pathSep = _slash;
+
+    const { ModuleEvent, ModulePrototype, ExecutionEnvironment, Visitor } = classes;
 
     const {
         isDefined,
@@ -98,6 +166,134 @@ const $scope = constants?.$scope || function()
 
     const { varargs, asArray, Filters } = arrayUtils;
 
+
+    if ( _ud === typeof CustomEvent )
+    {
+        CustomEvent = ModuleEvent;
+    }
+
+    const modName = "FileUtils";
+
+    let modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
+
+    const executionEnvironment = modulePrototype.executionEnvironment;
+
+    /*## environment-specific:node start ##*/
+    if ( executionEnvironment.isNode() )
+    {
+        _node = $scope();
+        os = require( "os" );
+        fs = require( "node:fs" );
+        fsAsync = require( "node:fs/promises" );
+        stream = require( "node:stream" );
+        path = require( "node:path" );
+        currentDirectory = path.dirname( __filename );
+        projectRootDirectory = path.resolve( currentDirectory, "../../../" );
+        defaultPath = path.resolve( currentDirectory, "../messages/defaults.json" );
+    }
+    /*## environment-specific:node end ##*/
+
+    if ( executionEnvironment.isDeno() )
+    {
+        _deno = executionEnvironment.DenoGlobal;
+
+        (async function()
+        {
+            os = require( "os" );
+            fs = require( "fs" );
+            fsAsync = require( "fs/promises" );
+            stream = require( "stream" );
+            path = require( "path" );
+            currentDirectory = path.dirname( __filename );
+        }());
+
+    }
+
+    if ( _ud === typeof path )
+    {
+        path = {
+            join: ( ...parts ) => parts.map( e => toUnixPath( e ) ).join( _pathSep ).replaceAll( /\/\/+/g, _pathSep ),
+            basename: ( p ) => toUnixPath( p ).substring( toUnixPath( p ).lastIndexOf( _pathSep ) + 1 ),
+            dirname: ( p ) => toUnixPath( p ).substring( 0, toUnixPath( p ).lastIndexOf( _pathSep ) ) || _dot,
+            extname: ( p ) =>
+            {
+                let s = toUnixPath( p );
+                const lastDot = s.lastIndexOf( _dot );
+                if ( lastDot === -1 || lastDot === s.length - 1 )
+                {
+                    return _mt_str;
+                }
+                return s.substring( lastDot );
+            },
+            resolve: ( ...pathSegments ) =>
+            {
+                let resolvedPath = _mt_str;
+                let segments = asArray( varargs( ...pathSegments ) ).map( e => toUnixPath( e ) );
+                for( const segment of segments )
+                {
+                    if ( segment.startsWith( _pathSep ) )
+                    {
+                        resolvedPath = segment;
+                    }
+                    else if ( isBlank( resolvedPath ) )
+                    {
+                        resolvedPath = segment;
+                    }
+                    else
+                    {
+                        resolvedPath += _pathSep + segment;
+                    }
+                }
+                return toUnixPath( resolvedPath );
+            },
+            isAbsolute: ( p ) =>
+            {
+                const s = toUnixPath( asString( p, true ) );
+                return (s.startsWith( _pathSep ) || s.startsWith( _backslash ) || /^[A-Z]?:/.test( s )) && !s.includes( ".." );
+            },
+            normalize: ( p ) => toUnixPath( p ).replace( /\/\/+/g, _pathSep ).replace( /\/$/, _mt_str ),
+            sep: _pathSep,
+            delimiter: _colon,
+            parse: ( pathString ) =>
+            {
+                const base = path.basename( pathString );
+                const dir = path.dirname( pathString );
+                const ext = path.extname( pathString );
+                const name = base.substring( 0, base.length - ext.length );
+                const root = pathString.startsWith( _pathSep ) ? _pathSep : _mt_str;
+                return {
+                    root: root,
+                    dir: dir,
+                    base: base,
+                    ext: ext,
+                    name: name
+                };
+            },
+            format: ( pathObject ) =>
+            {
+                return toUnixPath( pathObject.dir + _pathSep + pathObject.base );
+            }
+        };
+    }
+
+    /**
+     * This is a dictionary of this module's dependencies.
+     * <br>
+     * It is exported as a property of this module,
+     * allowing us to just import this module<br>
+     * and then use the other utilities as properties of this module.
+     * <br>
+     * @dict
+     * @type {Object}
+     */
+    const dependencies =
+        {
+            constants,
+            typeUtils,
+            stringUtils,
+            arrayUtils
+        };
+
     const {
         accessSync,
         statSync,
@@ -108,12 +304,33 @@ const $scope = constants?.$scope || function()
         createWriteStream,
         writeFileSync,
         constants: fs_constants,
-    } = fs;
+    } = fs || {};
 
     const {
         access,
-        readdir,
-        opendir,
+        readFolder = (_deno?.readDir ||
+                      async function( pPath )
+                      {
+                          return await fsAsync.readdir( pPath, { withFileTypes: true } );
+                      }),
+        listFolderEntries = async function( pPath, pOptions )
+        {
+            if ( isFunction( fsAsync?.readdir ) )
+            {
+                const p = path.resolve( pPath );
+                return await fsAsync.readdir( p );
+            }
+            else if ( isFunction( _deno.readDir ) )
+            {
+                const names = [];
+                const entries = await _deno.readDir( pPath, pOptions );
+                for await ( const entry of entries )
+                {
+                    names.push( path.join( pPath ), entry.name );
+                }
+                return names;
+            }
+        },
         stat,
         lstat,
         rm,
@@ -122,15 +339,6 @@ const $scope = constants?.$scope || function()
         symlink
     } = fsAsync;
 
-
-    if ( _ud === typeof CustomEvent )
-    {
-        CustomEvent = ModuleEvent;
-    }
-
-    const modName = "FileUtils";
-
-    let modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
 
     const MILLIS_PER_SECOND = 1000;
     const MILLIS_PER_MINUTE = 60 * MILLIS_PER_SECOND;
@@ -543,7 +751,7 @@ const $scope = constants?.$scope || function()
     async function asyncGetFileEntry( pFilePath )
     {
         const dirPath = path.dirname( pFilePath );
-        const entries = await readdir( dirPath, { withFileTypes: true } );
+        const entries = await readFolder( dirPath );
         const fileName = path.basename( pFilePath );
 
         return entries.find( entry => entry.name === fileName );
@@ -700,7 +908,7 @@ const $scope = constants?.$scope || function()
 
         if ( await asyncExists( dirPath ) && await isDirectory( dirPath ) )
         {
-            const files = await readdir( dirPath, { withFileTypes: true } );
+            const files = await readFolder( dirPath );
 
             for( const file of files )
             {
@@ -721,7 +929,7 @@ const $scope = constants?.$scope || function()
     };
 
 
-    class FileInfo
+    class _BockFileInfo
     {
         #filepath;
         #attributes;
@@ -917,7 +1125,7 @@ const $scope = constants?.$scope || function()
         {
             const now = new Date();
 
-            const other = pOther instanceof this.constructor ? pOther : new FileInfo( pOther );
+            const other = pOther instanceof this.constructor ? pOther : new _BockFileInfo( pOther );
 
             const thisCreated = await this.getCreatedDate();
 
@@ -984,20 +1192,20 @@ const $scope = constants?.$scope || function()
         }
     }
 
-    FileInfo.compare = async function( pA, pB )
+    _BockFileInfo.compare = async function( pA, pB )
     {
-        const a = pA instanceof FileInfo ? pA : new FileInfo( pA );
-        const b = pB instanceof FileInfo ? pB : new FileInfo( pB );
+        const a = pA instanceof _BockFileInfo ? pA : new _BockFileInfo( pA );
+        const b = pB instanceof _BockFileInfo ? pB : new _BockFileInfo( pB );
         return await a.compareTo( b );
     };
 
-    FileInfo.sort = async function( ...pFiles )
+    _BockFileInfo.sort = async function( ...pFiles )
     {
-        const files = asArray( varargs( ...pFiles ) ).map( pFile => pFile instanceof FileInfo ? pFile : new FileInfo( pFile ) );
+        const files = asArray( varargs( ...pFiles ) ).map( pFile => pFile instanceof _BockFileInfo ? pFile : new _BockFileInfo( pFile ) );
 
         async function convert( pFile )
         {
-            const fileInfo = pFile instanceof FileInfo ? pFile : new FileInfo( pFile );
+            const fileInfo = pFile instanceof _BockFileInfo ? pFile : new _BockFileInfo( pFile );
 
             const created = await fileInfo.getCreatedDate();
 
@@ -1031,45 +1239,45 @@ const $scope = constants?.$scope || function()
         return sorted;
     };
 
-    FileInfo.sortDescending = async function( ...pFiles )
+    _BockFileInfo.sortDescending = async function( ...pFiles )
     {
-        let files = await FileInfo.sort( ...pFiles );
+        let files = await _BockFileInfo.sort( ...pFiles );
         return files.reverse();
     };
 
-    FileInfo.from = function( pFilePath )
+    _BockFileInfo.from = function( pFilePath )
     {
-        if ( pFilePath instanceof FileInfo )
+        if ( pFilePath instanceof _BockFileInfo )
         {
             return pFilePath;
         }
         const stats = statSync( pFilePath );
-        return new FileInfo( pFilePath, stats );
+        return new _BockFileInfo( pFilePath, stats );
     };
 
-    FileInfo.fromAsync = async function( pFilePath )
+    _BockFileInfo.fromAsync = async function( pFilePath )
     {
-        if ( pFilePath instanceof FileInfo )
+        if ( pFilePath instanceof _BockFileInfo )
         {
             return pFilePath;
         }
         const stats = await stat( pFilePath );
-        return new FileInfo( pFilePath, stats );
+        return new _BockFileInfo( pFilePath, stats );
     };
 
-    FileInfo.asFileInfo = function( pFile )
+    _BockFileInfo.asFileInfo = function( pFile )
     {
-        return pFile instanceof FileInfo ? pFile : (!isNull( pFile ) ? new FileInfo( pFile ) : null);
+        return pFile instanceof _BockFileInfo ? pFile : (!isNull( pFile ) ? new _BockFileInfo( pFile ) : null);
     };
 
-    FileInfo.COMPARATOR = function( pA, pB )
+    _BockFileInfo.COMPARATOR = function( pA, pB )
     {
-        const a = FileInfo.asFileInfo( pA );
-        const b = FileInfo.asFileInfo( pB );
+        const a = _BockFileInfo.asFileInfo( pA );
+        const b = _BockFileInfo.asFileInfo( pB );
         return a.compareTo( b );
     };
 
-    FileInfo.collect = async function( pDirectory )
+    _BockFileInfo.collect = async function( pDirectory )
     {
 
     };
@@ -1101,7 +1309,7 @@ const $scope = constants?.$scope || function()
 
         async _processDirectoryEntry( pDirectory, pDirectoryFilter, pIncludeFilter, pVisitor, pResults )
         {
-            const dirInfo = await FileInfo.fromAsync( pDirectory );
+            const dirInfo = await _BockFileInfo.fromAsync( pDirectory );
 
             if ( pDirectoryFilter( dirInfo ) || pDirectoryFilter( pDirectory ) )
             {
@@ -1125,7 +1333,7 @@ const $scope = constants?.$scope || function()
         {
             if ( !isNull( pEntry ) && (pEntry.isFile() || pEntry.isSymbolicLink()) )
             {
-                const entryInfo = await FileInfo.fromAsync( pFilePath );
+                const entryInfo = await _BockFileInfo.fromAsync( pFilePath );
 
                 if ( pFilter( entryInfo ) || pFilter( pFilePath ) )
                 {
@@ -1149,7 +1357,7 @@ const $scope = constants?.$scope || function()
             const filter = Filters.IS_FILTER( pFilter ) ? pFilter : this.#directoryFilter;
             const results = pResults || [];
 
-            const entries = await fsAsync.readdir( dirPath, { withFileTypes: true } );
+            const entries = await readFolder( dirPath );
 
             for( const entry of entries )
             {
@@ -1213,7 +1421,7 @@ const $scope = constants?.$scope || function()
                     continue;
                 }
 
-                const entries = await fsAsync.readdir( dirPath, { withFileTypes: true } );
+                const entries = await readFolder( dirPath );
 
                 for( const entry of entries )
                 {
@@ -1272,13 +1480,13 @@ const $scope = constants?.$scope || function()
                     continue;
                 }
 
-                const entries = await fsAsync.readdir( dirPath, { withFileTypes: true } );
+                const entries = await readFolder( dirPath );
 
                 for( const entry of entries )
                 {
                     const entryPath = path.resolve( path.join( dirPath, entry.name ) );
 
-                    let info = await FileInfo.fromAsync( entryPath );
+                    let info = await _BockFileInfo.fromAsync( entryPath );
 
                     if ( filter( info ) || filter( entryPath ) )
                     {
@@ -1319,7 +1527,7 @@ const $scope = constants?.$scope || function()
             classes:
                 {
                     FileAttributes,
-                    FileInfo
+                    FileInfo: _BockFileInfo
                 },
             exists,
             asyncExists,
@@ -1351,7 +1559,7 @@ const $scope = constants?.$scope || function()
             createTempFileAsync: asyncCreateTempFile,
             findFiles,
             FileAttributes,
-            FileInfo
+            FileInfo: _BockFileInfo
         };
 
 

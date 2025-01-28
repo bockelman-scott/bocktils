@@ -48,10 +48,38 @@ const _ud = "undefined";
  */
 const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === typeof globalThis ? {} : globalThis || {}) : (global || (_ud === typeof globalThis ? this || {} : globalThis || this || {}) || this || {})) : (self || (_ud === typeof globalThis ? this || {} : globalThis || this || {})));
 
-const ENV = (_ud !== typeof process ? process.env : ($scope() || {})["__BOCK_MODULE_ENVIRONMENT__"] || { "MODE": "DEV" });
+const ENV = (function( pScope = $scope() )
+{
+    let scp = pScope || $scope();
 
-const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
+    let environment = {};
 
+    if ( _ud !== typeof process )
+    {
+        environment = process.env;
+    }
+    else if ( _ud !== typeof Deno )
+    {
+        try
+        {
+            environment = Deno?.env?.toObject();
+        }
+        catch( ex )
+        {
+            konsole.error( "Could not load environment", ex.message, ex );
+        }
+    }
+    else
+    {
+        environment = (scp || {})["__BOCK_MODULE_ENVIRONMENT__"] || { "MODE": "DEV" };
+    }
+
+    return environment;
+});
+
+const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !== typeof Deno ? Deno.args || [] : []))];
+
+// noinspection OverlyNestedFunctionJS,FunctionTooLongJS
 /**
  * This module is constructed by an Immediately Invoked Function Expression (IIFE).
  * see: <a href="https://developer.mozilla.org/en-US/docs/Glossary/IIFE">MDN: IIFE</a> for more information on this design pattern
@@ -118,6 +146,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
             S_INFO = "info",
             S_TRACE = "trace",
 
+            S_CUSTOM = "custom",
+
             S_ERR_PREFIX = `An ${S_ERROR} occurred while`,
             S_DEFAULT_OPERATION = "executing script",
 
@@ -125,6 +155,112 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
             EMPTY_ARRAY = Object.freeze( [] )
 
         } = (dependencies || {});
+
+    /**
+     * This is a function that just does nothing.<br>
+     * This is useful when you need a default for a missing argument or expected function.<br>
+     */
+    function no_op()
+    {
+        // do nothing
+    }
+
+    const isStr = pObj => _str === typeof pObj;
+    const isFunc = pObj => _fun === typeof pObj;
+    const isObj = pObj => _obj === typeof pObj;
+    const isNum = pObj => _num === typeof pObj;
+    const isBool = pObj => _bool === typeof pObj;
+    const isBig = pObj => _big === typeof pObj;
+    const isSymbol = pObj => _symbol === typeof pObj;
+    const isDate = pObj => isObj( pObj ) && pObj instanceof Date;
+    const isRegExp = pObj => isObj( pObj ) && pObj instanceof RegExp;
+    const isError = pObj => isObj( pObj ) && pObj instanceof Error;
+    const isMap = pObj => isObj( pObj ) && pObj instanceof Map;
+    const isSet = pObj => isObj( pObj ) && pObj instanceof Set;
+    const isNull = pObj => isObj( pObj ) && null === pObj;
+    const isUndefined = pObj => _ud === typeof pObj;
+    const isNonNullObj = pObj => isObj( pObj ) && null != pObj;
+    const isPrimitive = pObj => isStr( pObj ) || isNum( pObj ) || isBool( pObj ) || isBig( pObj ) || isSymbol( pObj );
+    const isPromise = pObj => isObj( pObj ) && pObj instanceof Promise;
+    const isThenable = pObj => isObj( pObj ) && (isPromise( pObj ) || isFunc( pObj.then ));
+
+    const _asStr = e => isStr( e ) ? e : (e?.type || e?.name || null);
+    const _isValidStr = e => isStr( e ) && (_mt_str !== e.trim());
+    const _lcase = e => _asStr( e ).trim().toLowerCase();
+    const _ucase = e => _asStr( e ).trim().toUpperCase();
+
+    const S_DEFAULT_ERROR_MESSAGE = [S_ERR_PREFIX, S_DEFAULT_OPERATION].join( _spc );
+
+    const ATTEMPT_FAILED = [S_ERR_PREFIX, "attempting to execute the specified function, "].join( _spc );
+    const NOT_A_FUNCTION = "The specified value is not a function";
+
+    const AsyncFunction = (async function() {}).constructor;
+    const isAsyncFunction = function( pObject )
+    {
+        return isFunc( pObject ) && (pObject.constructor === AsyncFunction || pObject === AsyncFunction);
+    };
+
+    function handleAttempt( pFunction, ...pArgs )
+    {
+        if ( isFunc( pFunction ) )
+        {
+            try
+            {
+                return !isAsyncFunction( pFunction ) ? pFunction( ...pArgs ) : pFunction( ...pArgs ).then( result => result );
+            }
+            catch( ex )
+            {
+                handleAttempt.handleError( ex, pFunction, ...pArgs );
+            }
+        }
+        else
+        {
+            handleAttempt.handleError( pFunction, pFunction, ...pArgs );
+        }
+
+        return pFunction;
+    }
+
+    handleAttempt.handleError = function( pError, pFunction, ...pArgs )
+    {
+        konsole.error( (pError instanceof Error ? ATTEMPT_FAILED : NOT_A_FUNCTION), pError?.message || pFunction?.name || _mt_str, pError || {}, pFunction || {}, ...pArgs );
+    };
+
+    function attempt( pFunction, ...pArgs )
+    {
+        return handleAttempt( pFunction, pArgs );
+    }
+
+    async function asyncAttempt( pFunction, ...pArgs )
+    {
+        return handleAttempt( pFunction, pArgs );
+    }
+
+    function attemptMethod( pThis, pMethod, ...pArgs )
+    {
+        if ( isFunc( pMethod ) && isObj( pThis ) )
+        {
+            return attempt( () => pMethod.call( pThis, ...pArgs ) );
+        }
+        return pMethod;
+    }
+
+    async function asyncAttemptMethod( pThis, pMethod, ...pArgs )
+    {
+        if ( isFunc( pMethod ) && isObj( pThis ) )
+        {
+            return await asyncAttempt( () => pMethod.call( pThis, ...pArgs ) );
+        }
+    }
+
+    function bindMethod( pMethod, pThis )
+    {
+        if ( isFunc( pMethod ) && isObj( pThis ) )
+        {
+            return attempt( () => pMethod.bind( pThis ) );
+        }
+        return pMethod;
+    }
 
     const modName = "BockModulePrototype";
 
@@ -137,7 +273,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
      */
     function isArray( pObject )
     {
-        return (_fun === typeof Array.isArray && Array.isArray( pObject )) || {}.toString.call( pObject ) === "[object Array]";
+        return (isFunc( Array.isArray ) && Array.isArray( pObject )) || {}.toString.call( pObject ) === "[object Array]";
     }
 
     /**
@@ -149,11 +285,13 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
      */
     function resolveObject( pObject, pAcceptArray = false )
     {
-        return (_obj === typeof pObject && null != pObject) ? (!!pAcceptArray || !isArray( pObject ) ? pObject : {}) : {};
+        return isNonNullObj( pObject ) ? (!!pAcceptArray || !isArray( pObject ) ? pObject : {}) : {};
     }
 
-    const S_DEFAULT_ERROR_MESSAGE = [S_ERR_PREFIX, S_DEFAULT_OPERATION].join( _spc );
-
+    /**
+     * A class to handle and manage an array of string arguments where each argument can optionally
+     * represent key-value mappings separated by an equals sign ("=").
+     */
     class Args
     {
         #args = [];
@@ -167,21 +305,21 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
 
                 const populateMap = e =>
                 {
-                    const parts = e.split( "=" );
+                    const parts = _asStr( e ).split( "=" );
                     const key = (parts.length ? parts[0].trim() : _mt_str).trim();
                     const value = parts.length > 1 ? parts[1]?.trim() : key;
 
                     if ( key && value )
                     {
                         this.#map[key] = value;
-                        this.#map[key.toLowerCase()] = value;
-                        this.#map[key.toUpperCase()] = value;
+                        this.#map[_lcase( key )] = value;
+                        this.#map[_ucase( key )] = value;
                     }
                 };
 
                 if ( this.#args.length > 0 )
                 {
-                    this.#args.filter( e => null != e && _str === typeof e ).forEach( populateMap );
+                    this.#args.filter( e => null != e && isStr( e ) ).forEach( populateMap );
                 }
             }
         }
@@ -198,13 +336,22 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
 
         get( pKey, pDefaultValue )
         {
-            let keys = [pKey, pKey.toLowerCase(), pKey.toUpperCase()];
+            let keys = [pKey, _lcase( pKey ), _ucase( pKey )];
             let values = keys.map( e => this.#map[e] );
             let value = values.find( e => null != e );
             return value || pDefaultValue;
         }
     }
 
+    /**
+     * Represents the set of arguments passed to the IIFE that constructs a module.
+     * Extends the base Args class and allows passing additional parameters to the constructor.
+     *
+     * This class is primarily used to handle and manage arguments required
+     * by a specific module. It serves as a wrapper for parameterized arguments.
+     *
+     * Inherits from the Args class.
+     */
     class ModuleArgs extends Args
     {
         constructor( ...pArgs )
@@ -213,6 +360,21 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
         }
     }
 
+    /**
+     * CmdLineArgs extends the Args class to handle and process command line arguments.
+     * This class is designed to accept variable arguments upon initialization
+     * and passes them to the parent Args class for further handling.
+     *
+     * It can be utilized to create utilities, command line tools, or any
+     * functionality requiring parsing and management of command line argument inputs.
+     *
+     * This class relies on the Args class for core functionalities
+     * and extends its behavior as needed.
+     *
+     * @class
+     * @extends Args
+     * @param {...any} pArgs - The list of arguments passed from the command line
+     */
     class CmdLineArgs extends Args
     {
         constructor( ...pArgs )
@@ -221,26 +383,54 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
         }
     }
 
+    /**
+     * Represents the arguments passed to the function that created this module.
+     * @type {ModuleArgs}
+     */
     const MODULE_ARGUMENTS = new ModuleArgs( ...pArgs );
 
-    const ARGUMENTS = new CmdLineArgs( CMD_LINE_ARGS || (_ud === typeof process ? process.argv : []) );
+    /**
+     * Represents the arguments passed on the command line when the application using this module was executed.
+     *
+     * @type {CmdLineArgs}
+     */
+    const ARGUMENTS = new CmdLineArgs( CMD_LINE_ARGS || (_ud === typeof process ? process.argv : (_ud !== typeof Deno ? Deno.args : [])) );
 
+    /**
+     * Represents the environment variables configured for the current runtime
+     * @type {{key:string,value:string}}
+     */
     const ENVIRONMENT = resolveObject( pEnvironment || ENV, false );
 
+    /**
+     * The ExecutionMode class represents a mode of execution, such as "Production", "Development", "Testing", etc.<br>
+     * <br>
+     * The mode also defines whether 'tracing' is enabled, which is usually reserved for Debugging-related modes.
+     * <br>
+     * @class
+     */
     class ExecutionMode
     {
         #name;
         #traceEnabled;
 
+        /**
+         * Constructs an instance of the ExecutionMode class.<br>
+         * <br>
+         *
+         * @param {string} pName - The name of the mode.
+         * @param {boolean} [pTraceEnabled=false] - Optional flag to enable or disable tracing. Defaults to false.
+         * @return {Object} A new instance of the class with the specified name and trace settings.
+         */
         constructor( pName, pTraceEnabled = false )
         {
-            this.#name = (_mt_str + (pName || S_NONE)).trim().toUpperCase();
+            this.#name = _ucase( _asStr( pName || S_NONE ).trim() );
             this.#traceEnabled = !!pTraceEnabled;
         }
 
         get name()
         {
-            return (_mt_str + this.#name).trim().toUpperCase();
+            return _ucase( _asStr( this.#name ).trim() );
         }
 
         get traceEnabled()
@@ -254,6 +444,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
         }
     }
 
+    /**
+     * Enumeration representing the default execution modes.<br>
+     */
     ExecutionMode.MODES =
         {
             NONE: Object.freeze( new ExecutionMode( S_NONE, false ) ),
@@ -275,11 +468,22 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
     const CURRENT_MODE = Object.freeze( ExecutionMode.MODES[ENVIRONMENT.MODE] || ExecutionMode.MODES[ARGUMENTS.get( "mode" )] || ExecutionMode.DEFAULT );
     ExecutionMode.CURRENT = Object.freeze( CURRENT_MODE );
 
+    /**
+     * Defines a new execution mode for the program.<br>
+     * <br>
+     * An execution mode specifies a particular configuration or setup in which the program operates.<br>
+     * <br>
+     *
+     * @param {string} pName - The name of the execution mode to define.
+     * @param {boolean} [pTraceEnabled=false] Whether to emit more verbose information during application execution.
+     * @returns {ExecutionMode} The newly defined Execution MOde if it did not already exist.
+     * @throws {Error} Throws an error if the name is not valid or collides with an existing mode.
+     */
     ExecutionMode.defineMode = function( pName, pTraceEnabled = false )
     {
-        if ( pName && pName.length > 0 )
+        if ( isStr( pName ) && _mt_str !== pName.trim() )
         {
-            const name = (_mt_str + (pName || S_NONE)).trim().toUpperCase();
+            const name = _ucase( _asStr( pName || S_NONE ).trim() );
             const traceEnabled = !!pTraceEnabled;
 
             if ( null == ExecutionMode[name] )
@@ -300,30 +504,100 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
      * In other environments, we just provide an empty object to avoid checking for the environment.<br>
      * @type {NodeModule|Object}
      */
-    const MODULE_OBJECT = (_ud !== typeof module) ? module : {};
+    const MODULE_OBJECT = (_ud !== typeof module) ? module : { exports: {} };
 
     /**
      * Returns true if the execution context is <i>most likely</i> Node.js<br>
      * by checking for the existence of<br>
      * a global 'module' property,<br>
      * a global function named 'require'<br>
-     * and the absence of globally defined symbols for 'self' and 'window'
+     * and the absence of globally defined symbols for 'self', 'window', and 'Deno'
+     *
+     * @function
      * @returns {boolean} true if the execution context is <i>most likely</i> Node.js
      */
     const isNode = function()
     {
-        return (_ud === typeof self && _ud === typeof window) && (_ud !== typeof module) && (_fun === typeof require);
+        if ( (_ud === typeof self) && (_ud === typeof window) && (_ud !== typeof module) && (isFunc( require )) )
+        {
+            return (_ud === typeof Deno) && (_ud !== typeof process);
+        }
+        return false;
     };
 
+    /**
+     * Returns true if the current runtime environment is Deno.
+     *
+     * This function determines if the execution environment is Deno by verifying
+     * that it is not running in a Node.js environment and by checking for the existence
+     * of the `Deno` global object.
+     *
+     * @function
+     * @returns {boolean} Returns true if the runtime environment is Deno, otherwise false.
+     */
+    const isDeno = function()
+    {
+        if ( !isNode() )
+        {
+            return (_ud !== typeof Deno);
+        }
+        return false;
+    };
+
+    const isWorker = function()
+    {
+        // @TODO
+    };
+
+    /**
+     * Returns true if the current execution environment is a web browser.<br>
+     *
+     * @function
+     * @returns true if the current execution environment is a web browser.<br>
+     */
+    const isBrowser = function()
+    {
+        if ( !isNode() && !isDeno() )
+        {
+            return (_ud !== typeof window) && (_ud !== typeof document) && (_ud !== typeof navigator);
+        }
+        return false;
+    };
+
+    /**
+     * Returns the Locale string, such as "en-US",
+     * representing the language and region
+     * that will be used to resolve messages
+     * that are specified using features of the ResourceUtils module.
+     * <br><br>
+     * This is either the default locale for the system hosting the runtime<br>
+     * or can be specified by any one of the following environment properties:<br>
+     * <br>
+     * LC_ALL
+     * LC_MESSAGES
+     * LANG
+     *
+     * @returns the Locale string, such as "en-US", representing the language and region that will be used to resolve messages
+     */
     const getMessagesLocale = function( pEnvironment = ENVIRONMENT )
     {
         const environment = resolveObject( pEnvironment || ENV, false );
 
         let locale = environment?.LC_ALL || environment?.LC_MESSAGES || environment?.LANG || Intl.DateTimeFormat().resolvedOptions().locale;
 
-        return _mt_str + (_str === typeof locale ? locale : locale?.basename || Intl.DateTimeFormat().resolvedOptions().locale);
+        return _mt_str + (isStr( locale ) ? locale : locale?.basename || Intl.DateTimeFormat().resolvedOptions().locale);
     };
 
+    /**
+     * This class provides a representation of an execution environment<br>
+     * which encapsulates global scope, process metadata, localization, runtime capabilities, platform details, and other
+     * environment-specific resources.<br>
+     * <br>
+     * It can be used to differentiate between different runtime contexts,
+     * such as Node.js, Deno, and browser environments.<br>
+     *
+     * @class
+     */
     class ExecutionEnvironment
     {
         #globalScope;
@@ -359,7 +633,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
         {
             this.#globalScope = pGlobalScope || $scope();
 
-            this.#DenoGlobal = _ud === typeof Deno && _ud === typeof this.#globalScope?.Deno ? null : (_ud === typeof Deno ? Deno : null) || this.#globalScope?.Deno;
+            this.#DenoGlobal = _ud === typeof Deno && _ud === typeof this.#globalScope?.Deno ? null : (_ud !== typeof Deno ? Deno : null) || this.#globalScope?.Deno;
 
             this.#process = _ud !== typeof process ? process : this.#DenoGlobal || null;
 
@@ -367,7 +641,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
 
             this.#version = this.#versions?.node || this.#versions?.deno;
 
-            this.#console = (_ud !== typeof console && _fun === typeof console?.log) ? console : null;
+            this.#console = (_ud !== typeof console && isFunc( console?.log )) ? console : null;
 
             this.#window = _ud !== typeof window ? window : null;
 
@@ -385,7 +659,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
 
             this.#customElements = _ud !== typeof customElements ? customElements : null;
 
-            this.#fetch = _ud !== typeof fetch && _fun === typeof fetch ? fetch : null;
+            this.#fetch = _ud !== typeof fetch && isFunc( fetch ) ? fetch : null;
 
             this.#ENV = { ...ENVIRONMENT };
             this.#ARGUMENTS = lock( ARGUMENTS );
@@ -408,6 +682,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
         get process()
         {
             return this.#process;
+        }
+
+        get DenoGlobal()
+        {
+            return this.#DenoGlobal;
         }
 
         get versions()
@@ -437,12 +716,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
 
         isDeno()
         {
-            return !this.isNode() && (null != this.#DenoGlobal);
+            return !this.isNode() && isDeno() && (null != this.#DenoGlobal);
         }
 
         isBrowser()
         {
-            return !(this.isNode() || this.isDeno()) && null != this.#window && null != this.#document && null != this.#navigator;
+            return !(this.isNode() || this.isDeno()) && isBrowser() && null != this.#window && null != this.#document && null != this.#navigator;
         }
 
         get navigator()
@@ -464,13 +743,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
         {
             const func = (null != this.#fetch) || (null != this.globalScope?.fetch) ? this.#fetch || this.globalScope?.fetch : null;
 
-            return null != func && _fun === typeof func;
+            return null != func && isFunc( func );
         }
 
         parseUserAgent( pUserAgent )
         {
-            // Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36
-
             const userAgent = (_mt_str + (pUserAgent || this.userAgent || _mt_str)).trim();
 
             // TODO: improve when necessary
@@ -556,20 +833,67 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
         {
             return this.#ARGUMENTS;
         }
+
+        get ModuleCache()
+        {
+            return (this.isDeno() ? Deno.cache : this.globalScope) || {};
+        }
+
+        cacheModule( pModuleName, pModulePath, pModule )
+        {
+            const moduleName = (_mt_str + (pModuleName || _mt_str)).trim();
+
+            if ( this.isDeno() )
+            {
+                const modulePath = (_mt_str + (pModulePath || _mt_str)).trim();
+
+                asyncAttempt( () => Deno.cache( modulePath ) ).then( no_op ).catch( no_op );
+            }
+        }
     }
 
+    /**
+     * Returns true if the specified Promise result is in a 'fulfilled' state.<br>
+     * <br>
+     * This is most useful in the context of Promise.allSettled
+     * <br>
+     *
+     * @function isFulfilled
+     * @param {Object|string} pResult - The result object to evaluate.<br>
+     *
+     * @returns {boolean} Returns true if the result has a status of 'fulfilled', false otherwise.
+     */
     const isFulfilled = function( pResult )
     {
         const result = resolveObject( pResult ) || pResult || {};
         return "fulfilled" === (result?.status || result);
     };
 
+    /**
+     * Returns true if the specified Promise result is in a 'rejected' state.<br>
+     * <br>
+     * This is most useful in the context of Promise.allSettled
+     * <br>
+     *
+     * @function isRejected
+     * @param {Object|string} pResult - The result object to evaluate.<br>
+     *
+     * @returns {boolean} Returns true if the result has a status of 'rejected', false otherwise.
+     */
     const isRejected = function( pResult )
     {
         const result = resolveObject( pResult ) || pResult || {};
         return "rejected" === (result?.status || result);
     };
 
+    /**
+     * This class is a wrapper that represents the result of a promise.<br>
+     * Provides information about the status,
+     * resolved value,
+     * or the rejection reason of the promise.
+     *
+     * @class
+     */
     class PromiseResult
     {
         #result;
@@ -602,14 +926,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
 
         isFulfilled()
         {
-            const result = resolveObject( this.#result );
-            return "fulfilled" === this.status || ("fulfilled" === (result?.status || result));
+            return isFulfilled( this.#result ) || "fulfilled" === this.status;
         };
 
         isRejected()
         {
-            const result = resolveObject( this.#result );
-            return "rejected" === this.status || "rejected" === (result?.status || result);
+            return isRejected( this.#result ) || "rejected" === this.status;
         };
     }
 
@@ -617,23 +939,23 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
     {
         if ( pEventName instanceof Event )
         {
-            return (pEventName.type || pEventName.name) || ((null != pOptions) ? resolveEventType( pOptions ) : "custom");
+            return (pEventName.type || pEventName.name) || ((null != pOptions) ? resolveEventType( pOptions ) : S_CUSTOM);
         }
-        else if ( _str === typeof pEventName )
+        else if ( isStr( pEventName ) )
         {
             return pEventName.trim();
         }
-        else if ( _obj === typeof pEventName )
+        else if ( isObj( pEventName ) )
         {
             if ( pEventName?.event instanceof Event )
             {
                 return resolveEventType( pEventName?.event );
             }
 
-            return pEventName?.type || pEventName?.name || "custom";
+            return pEventName?.type || pEventName?.name || S_CUSTOM;
         }
 
-        return "custom";
+        return S_CUSTOM;
     }
 
     const resolveEventOptions = function( pEventName, pOptions, pData )
@@ -649,9 +971,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
 
         const optionsDetail = options?.detail || options;
 
-        let data = (_obj === typeof pData ? (pData?.detail || pData) : optionsDetail) || optionsDetail;
+        let data = (isObj( pData ) ? (pData?.detail || pData) : optionsDetail) || optionsDetail;
 
-        data = data?.detail || data || options?.detail || options || {};
+        data = data?.detail || data?.data || data || options?.detail || options || options?.data || options || {};
 
         return { type, data, options };
     };
@@ -683,7 +1005,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
          */
         constructor( pEventName, pData, pOptions )
         {
-            super( resolveEventOptions( pEventName, pOptions, pData ).type || "custom",
+            super( resolveEventOptions( pEventName, pOptions, pData ).type || S_CUSTOM,
                    resolveEventOptions( pEventName, pOptions, pData ).options );
 
             const { type, data, options } = resolveEventOptions( pEventName, pOptions, pData );
@@ -764,20 +1086,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
 
         if ( evt instanceof Event )
         {
-            return new CustomEvent( evt, pOptions );
+            return new BockModuleEvent( evt, pData, pOptions );
         }
 
-        return new CustomEvent( evt, pOptions );
+        return new BockModuleEvent( evt, pData, pOptions );
     };
-
-    /**
-     * This is a function that just does nothing.<br>
-     * This is useful when you need a default for a missing argument or expected function.<br>
-     */
-    function no_op()
-    {
-        // do nothing
-    }
 
     /**
      * Suspends the execution of the asynchronous function for a specified number of milliseconds.
@@ -832,7 +1145,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
      */
     const isReadOnly = function( pObject )
     {
-        if ( _obj === typeof pObject )
+        if ( isObj( pObject ) )
         {
             return (null === pObject) || Object.isFrozen( pObject ) || Object.isSealed( pObject );
         }
@@ -856,7 +1169,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
      */
     const asPhrase = function( ...pArgs )
     {
-        return [...pArgs].flat( Infinity ).map( e => (_mt_str + e).trim() ).join( _spc );
+        return [...pArgs].flat( Infinity ).map( e => (_asStr( e )).trim() ).join( _spc );
     };
 
     /**
@@ -914,7 +1227,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
      */
     function populateOptions( pOptions, pDefaults )
     {
-        const defaults = Object.assign( {}, (_obj === typeof pDefaults && null != pDefaults) ? { ...pDefaults } : {} );
+        const defaults = Object.assign( {}, isNonNullObj( pDefaults ) ? { ...pDefaults } : {} );
         return Object.assign( resolveObject( defaults || {}, true ), resolveObject( pOptions || pDefaults || {}, true ) );
     }
 
@@ -930,7 +1243,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
     {
         const options = populateOptions( pOptions, DEFAULT_COPY_OPTIONS );
         const option = options[pProperty] || pDefault || 0;
-        return Math.max( 0, parseInt( (_num === typeof option) ? option : ((/^[\d.]$/.test( option )) ? option : (_num === typeof pDefault ? pDefault : 0)) ) );
+        return Math.max( 0, parseInt( isNum( option ) ? option : ((/^[\d.]$/.test( option )) ? option : (isNum( pDefault ) ? pDefault : 0)) ) );
     }
 
     /**
@@ -990,9 +1303,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
      */
     function generateStack( pError )
     {
-        let stack = pError instanceof Error ? pError?.stack : _str === typeof pError ? pError : _mt_str;
+        let stack = pError instanceof Error ? pError?.stack : isStr( pError ) ? pError : _mt_str;
 
-        if ( _ud === typeof stack || null == stack || _str !== typeof stack )
+        if ( _ud === typeof stack || null == stack || !isStr( stack ) )
         {
             stack = pError?.toString() || ((pError?.name || pError?.type) + _colon + _spc + (_mt_str + pError?.message).replace( (pError?.name || pError?.type || "~!~"), _mt_str )) + "\n";
 
@@ -1034,7 +1347,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
          */
         constructor( pStack, pError )
         {
-            this.#stack = (pStack instanceof String ?
+            this.#stack = (pStack instanceof String || isStr( pStack ) ?
                            pStack :
                            pStack instanceof Error ?
                            (pStack?.stack || generateStack( pStack ))
@@ -1108,7 +1421,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
          */
         parseFrame( pFrame )
         {
-            let frame = _num === typeof pFrame ? this.frames[pFrame] : pFrame;
+            let frame = isNum( pFrame ) ? this.frames[pFrame] : pFrame;
 
             let rx = /((\w*)@)?([^:]+):(\d+):(\d+)/;
 
@@ -1163,7 +1476,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
             this.#columnNumber = this.#columnNumber || this.parts?.columnNumber;
             return this.#columnNumber || this.parts?.columnNumber;
         }
-
     }
 
     /**
@@ -1177,8 +1489,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
 
     function resolveLogLevel( pLevel )
     {
-        const levels = [S_NONE, S_LOG, S_WARN, S_ERROR, S_DEBUG, S_TRACE, S_LOG];
-        let level = (_str === typeof pLevel) ? pLevel.toLowerCase() : (_num === typeof pLevel && pLevel >= 0 && pLevel <= 6 ? levels[pLevel] : S_ERROR);
+        const levels = [S_NONE, S_LOG, S_WARN, S_ERROR, S_DEBUG, S_TRACE, S_LOG].map( e => _lcase( e.trim() ) );
+        let level = (isStr( pLevel )) ? _lcase( _asStr( pLevel ).trim() ) : (isNum( pLevel ) && pLevel >= 0 && pLevel <= 6 ? levels[pLevel] : S_ERROR);
         return (levels.includes( level ) ? level : S_ERROR);
     }
 
@@ -1213,7 +1525,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
          */
         constructor( pMessage, pOptions = {} )
         {
-            super( (_str === typeof pMessage ? (pMessage || DEFAULT_ERROR_MSG) : ((pMessage instanceof Error) ? (pMessage.message || pMessage.name || DEFAULT_ERROR_MSG) : DEFAULT_ERROR_MSG)) );
+            super( (isStr( pMessage ) ? (pMessage || DEFAULT_ERROR_MSG) : ((pMessage instanceof Error) ? (pMessage.message || pMessage.name || DEFAULT_ERROR_MSG) : DEFAULT_ERROR_MSG)) );
 
             this.#type = ((pMessage instanceof Error) ? pMessage.type || pMessage.name : (this.constructor?.name)).replace( /^__/, _mt_str );
             this.#name = ((pMessage instanceof Error) ? pMessage.name || pMessage.type : (this.constructor?.name)).replace( /^__/, _mt_str );
@@ -1223,13 +1535,13 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
                 Error.captureStackTrace( this, this.constructor );
             }
 
-            this.#msg = (_str === typeof pMessage) ? (pMessage || super.message) : ((pMessage instanceof Error) ? pMessage.message || super.message : DEFAULT_ERROR_MSG);
+            this.#msg = (isStr( pMessage )) ? (pMessage || super.message) : ((pMessage instanceof Error) ? pMessage.message || super.message : DEFAULT_ERROR_MSG);
 
             this.#options = immutableCopy( pOptions || {} );
 
             this.#cause = (this.#options?.cause instanceof Error ? this.#options?.cause : (pMessage instanceof Error ? pMessage : null) || (pMessage instanceof Error ? pMessage : null));
 
-            this.#code = (this.#options?.code || _num === typeof pMessage ? pMessage : null);
+            this.#code = (this.#options?.code || (isNum( pMessage ) ? pMessage : null));
             this.#referenceId = this.#options?.referenceId || __Error.generateReferenceId( this, this.#code );
         }
 
@@ -1310,7 +1622,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
 
             const level = resolveLogLevel( pLevel );
 
-            if ( _fun === typeof logger[level] )
+            if ( isFunc( logger[level] ) )
             {
                 logger[level]( this.toString(), this.options );
             }
@@ -1326,7 +1638,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
 
     __Error.generateReferenceId = function( pError, pCode )
     {
-        return "Reference ID:" + (pCode ? " (" + (_num === typeof pCode ? String( pCode ) : _asStr( pCode )) + "): " : _mt_str) + (++__Error.NEXT_REF_ID);
+        return "Reference ID:" + (pCode ? " (" + (isNum( pCode ) ? String( pCode ) : _asStr( pCode )) + "): " : _mt_str) + (++__Error.NEXT_REF_ID);
     };
 
     /**
@@ -1391,11 +1703,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
      * <br>
      * @param {Error|string} pError  An Error or a string with which to create a new Error
      * @param {string|Error} pMessage A string to use as the message property of the returned Error or an Error whose message will be used instead
-     * @returns {__Error} an Error (actually an instance of __Error), which provides an environment-agnostic stack trace)
+     * @returns {__Error} an Error (actually an instance of __Error, which provides an environment-agnostic stack trace)
      */
     function resolveError( pError, pMessage )
     {
-        if ( !(pError instanceof Error || pMessage instanceof Error || (_str === typeof pMessage && !(_mt_str === pMessage.trim()))) )
+        if ( !(pError instanceof Error || pMessage instanceof Error || (isStr( pMessage ) && !(_mt_str === pMessage.trim()))) )
         {
             return null;
         }
@@ -1431,8 +1743,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
      */
     const calculateErrorSourceName = function( pModule, pFunction )
     {
-        const modName = _obj === typeof pModule ? (pModule?.moduleName || pModule?.name) : _str === typeof pModule ? pModule : _unknown;
-        const funName = _fun === typeof pFunction ? (pFunction?.name || "anonymous") : _str === typeof pFunction ? pFunction : _unknown;
+        const modName = isObj( pModule ) ? (pModule?.moduleName || pModule?.name) : isStr( pModule ) ? pModule : _unknown;
+        const funName = isFunc( pFunction ) ? (pFunction?.name || "anonymous") : isStr( pFunction ) ? pFunction : _unknown;
 
         return (modName || pModule) + _colon + _colon + (funName || pFunction);
     };
@@ -1594,7 +1906,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
 
             this.#options = populateOptions( pOptions, {} );
 
-            this.#name = (_str === typeof pName ? pName : this.#options?.name) || ("StatefulListener_" + String( this.#id ));
+            this.#name = (isStr( pName ) ? pName : this.#options?.name) || ("StatefulListener_" + String( this.#id ));
 
             this.#mode = this.#options?.mode instanceof ExecutionMode ? this.#options?.mode : CURRENT_MODE;
 
@@ -1710,7 +2022,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
                 return true;
             }
 
-            if ( pOther instanceof this.constructor || _fun === typeof pOther?.handleEvent )
+            if ( pOther instanceof this.constructor || isFunc( pOther?.handleEvent ) )
             {
                 return (this.#id === pOther?.id);
             }
@@ -1729,7 +2041,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
          */
         compareTo( pOther )
         {
-            if ( null == pOther || !(pOther instanceof this.constructor || _fun === typeof pOther?.handleEvent) )
+            if ( null == pOther || !(pOther instanceof this.constructor || isFunc( pOther?.handleEvent )) )
             {
                 return -1;
             }
@@ -1762,10 +2074,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
      * @private
      */
     const MODULE_CACHE = {};
-
-    const _asStr = e => _str === typeof e ? e : e?.type || e?.name || null;
-    const _validStr = e => _str === typeof e && _mt_str !== e.trim();
-    const _lcaseStr = e => e.trim().toLowerCase();
 
     /**
      * Represents a visitor class to support the common Visitor Pattern.
@@ -1824,7 +2132,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
         {
             super( pOptions );
 
-            if ( _fun === typeof pFunction )
+            if ( isFunc( pFunction ) )
             {
                 this.#func = function( pVisited )
                 {
@@ -1865,11 +2173,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
 
     const resolveVisitor = function( pVisitor )
     {
-        if ( pVisitor instanceof Visitor || _fun === typeof pVisitor?.visit )
+        if ( pVisitor instanceof Visitor || isFunc( pVisitor?.visit ) )
         {
             return pVisitor;
         }
-        else if ( _fun === typeof pVisitor )
+        else if ( isFunc( pVisitor ) )
         {
             return new AdHocVisitor( pVisitor );
         }
@@ -1938,14 +2246,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
         {
             super();
 
-            this.#moduleName = (_str === typeof pModuleName) ? pModuleName || modName : (_obj === typeof pModuleName ? pModuleName?.moduleName || pModuleName?.name : _mt_str) || modName;
-            this.#cacheKey = (_str === typeof pCacheKey) ? pCacheKey || INTERNAL_NAME : (_obj === typeof pModuleName ? pModuleName?.cacheKey || pModuleName?.name : _mt_str);
+            this.#moduleName = (isStr( pModuleName )) ? pModuleName || modName : (isObj( pModuleName ) ? pModuleName?.moduleName || pModuleName?.name : _mt_str) || modName;
+            this.#cacheKey = (isStr( pCacheKey )) ? pCacheKey || INTERNAL_NAME : (isObj( pModuleName ) ? pModuleName?.cacheKey || pModuleName?.name : _mt_str);
 
             this.#traceEnabled = !!pTraceEnabled;
 
             // if the constructor is called with an object, instead of a string,
             // inherit its properties and functions
-            if ( _obj === typeof pModuleName )
+            if ( isObj( pModuleName ) )
             {
                 this.extend( pModuleName );
             }
@@ -1985,13 +2293,18 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
             }
         }
 
-        addEventListener( type, callback, options )
+        addEventListener( pType, pCallback, pOptions )
         {
-            super.addEventListener( type, callback, options );
+            super.addEventListener( pType, pCallback, pOptions );
 
             if ( this.traceEnabled )
             {
-                this.trace( "addEventListener", { moduleName: this.moduleName, type, callback, options } );
+                this.trace( "addEventListener", {
+                    moduleName: this.moduleName,
+                    type: pType,
+                    callback: pCallback,
+                    options: pOptions
+                } );
             }
         }
 
@@ -2001,7 +2314,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
             {
                 if ( null != pTypes && pTypes.length > 0 )
                 {
-                    const types = [...pTypes].map( _asStr ).filter( _validStr ).map( _lcaseStr );
+                    const types = [...pTypes].map( _asStr ).filter( _isValidStr ).map( _lcase );
 
                     for( let type of types )
                     {
@@ -2044,14 +2357,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
                 {
                     for( let listener of listeners )
                     {
-                        try
-                        {
-                            listener.handleEvent( evt, evt?.detail, pData, pOptions );
-                        }
-                        catch( ex )
-                        {
-                            // ignore errors thrown by 'external' code
-                        }
+                        attempt( () => listener.handleEvent( evt, evt?.detail, pData, pOptions ) );
                     }
                 }
 
@@ -2062,18 +2368,23 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
             }
         }
 
-        removeEventListener( type, callback, options )
+        removeEventListener( pType, pCallback, pOptions )
         {
-            super.removeEventListener( type, callback, options );
+            super.removeEventListener( pType, pCallback, pOptions );
 
-            if ( callback instanceof StatefulListener )
+            if ( pCallback instanceof StatefulListener )
             {
-                this.removeStatefulListener( callback, type );
+                this.removeStatefulListener( pCallback, pType );
             }
 
             if ( this.traceEnabled )
             {
-                this.trace( "removeEventListener", { moduleName: this.moduleName, type, callback, options } );
+                this.trace( "removeEventListener", {
+                    moduleName: this.moduleName,
+                    type: pType,
+                    callback: pCallback,
+                    options: pOptions
+                } );
             }
         }
 
@@ -2090,11 +2401,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
          */
         removeStatefulListener( pListener, ...pTypes )
         {
-            let id = (pListener instanceof StatefulListener || (_num === typeof pListener?.id && pListener?.id > 0)) ? pListener?.id : (_num === typeof pListener) ? pListener : 0;
+            let id = (pListener instanceof StatefulListener || (isNum( pListener?.id ) && pListener?.id > 0)) ? pListener?.id : (isNum( pListener )) ? pListener : 0;
 
             const forAllTypes = (null == pTypes || 0 === pTypes.length || pTypes.includes( "*" ));
 
-            let types = forAllTypes ? Object.keys( this.#statefulListeners ) : [...pTypes].map( _asStr ).filter( _validStr ).map( _lcaseStr );
+            let types = forAllTypes ? Object.keys( this.#statefulListeners ) : [...pTypes].map( _asStr ).filter( _isValidStr ).map( _lcase );
 
             for( let type of types )
             {
@@ -2136,7 +2447,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
          */
         get moduleName()
         {
-            return this.#moduleName || this.#cacheKey;
+            return _asStr( this.#moduleName || this.#cacheKey );
         }
 
         /**
@@ -2145,7 +2456,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
          */
         get cacheKey()
         {
-            return this.#cacheKey || this.#moduleName;
+            return _asStr( this.#cacheKey || this.#moduleName );
         }
 
         getMessagesLocale()
@@ -2243,13 +2554,13 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
          */
         static isLogger( pLogger )
         {
-            return (_obj === typeof pLogger
+            return (isObj( pLogger )
                     && null !== pLogger
-                    && _fun === typeof pLogger[S_LOG]
-                    && _fun === typeof pLogger[S_INFO]
-                    && _fun === typeof pLogger[S_WARN]
-                    && _fun === typeof pLogger[S_DEBUG]
-                    && _fun === typeof pLogger[S_ERROR]);
+                    && isFunc( pLogger[S_LOG] )
+                    && isFunc( pLogger[S_INFO] )
+                    && isFunc( pLogger[S_WARN] )
+                    && isFunc( pLogger[S_DEBUG] )
+                    && isFunc( pLogger[S_ERROR] ));
         }
 
         /**
@@ -2342,28 +2653,22 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
                     this.trace( "reportError", { moduleName: this.moduleName, err, msg, level, source: pSource } );
                 }
 
-                try
+                if ( BockModulePrototype.isLogger( this.logger ) )
                 {
-                    if ( BockModulePrototype.isLogger( this.logger ) )
-                    {
-                        this.logger[level]( ...msg );
-                    }
-                }
-                catch( ex2 )
-                {
-                    konsole.error( ex2, ...msg );
+                    attemptMethod( this.logger, this.logger[level], ...msg );
                 }
 
                 try
                 {
-                    this.dispatchEvent( new CustomEvent( S_ERROR,
-                                                         {
-                                                             error: err,
-                                                             message: msg.filter( e => _str === typeof e ).join( _spc ),
-                                                             level: level,
-                                                             method: _mt_str + ((_mt_str + pSource) || this.moduleName || "BockModule"),
-                                                             extra: [...pExtra]
-                                                         } ) );
+                    const data = {
+                        error: err,
+                        message: msg.filter( e => isStr( e ) ).join( _spc ),
+                        level: level,
+                        method: _mt_str + ((_mt_str + pSource) || this.moduleName || "BockModule"),
+                        extra: [...pExtra]
+                    };
+
+                    this.dispatchEvent( new BockModuleEvent( S_ERROR, data, data ) );
                 }
                 catch( ex2 )
                 {
@@ -2412,7 +2717,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
          */
         extend( pObject )
         {
-            if ( null != pObject && _obj === typeof pObject )
+            if ( isNonNullObj( pObject ) )
             {
                 if ( !this.locked )
                 {
@@ -2460,7 +2765,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
         {
             let mod = pObject || this;
 
-            if ( null != mod && _obj === typeof mod && !(mod instanceof this.constructor) )
+            if ( isNonNullObj( mod ) && !(mod instanceof this.constructor) )
             {
                 mod = this.extend( mod );
             }
@@ -2472,7 +2777,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
                 MODULE.exports = lock( mod || this );
             }
 
-            const key = _str === typeof pCacheKey ? (_mt_str + pCacheKey).trim() : _mt_str;
+            const key = isStr( pCacheKey ) ? _asStr( pCacheKey ).trim() : _mt_str;
 
             if ( $scope() && _mt_str !== key.trim() )
             {
@@ -2511,11 +2816,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
          */
         static create( pModuleName, pCacheKey, pObject )
         {
-            let modulePrototype = (_str === typeof pModuleName) ? MODULE_CACHE[pModuleName] : null;
-            modulePrototype = modulePrototype || (_str === typeof pCacheKey ? MODULE_CACHE[pCacheKey] : new BockModulePrototype( pModuleName, pCacheKey ));
+            let modulePrototype = isStr( pModuleName ) ? MODULE_CACHE[pModuleName] : null;
+
+            modulePrototype = modulePrototype || (isStr( pCacheKey ) ? MODULE_CACHE[pCacheKey] : new BockModulePrototype( pModuleName, pCacheKey ));
             modulePrototype = modulePrototype || new BockModulePrototype( pModuleName, pCacheKey );
 
-            if ( null != pObject && _obj === typeof pObject )
+            if ( isNonNullObj( pObject ) )
             {
                 modulePrototype.extend( pObject );
             }
@@ -2530,6 +2836,95 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
                 this.#executionEnvironment = new ExecutionEnvironment( this.globalScope );
             }
             return this.#executionEnvironment;
+        }
+
+        attempt( pFunction, ...pArgs )
+        {
+            let result = this.initializeResult( pFunction );
+
+            try
+            {
+                result.returnValue = attempt( pFunction, ...pArgs );
+            }
+            catch( ex )
+            {
+                result.exceptions.push( ex );
+
+                this.reportError( ex, ex.message, S_ERROR, this.calculateErrorSourceName( this, pFunction ), ...pArgs );
+            }
+
+            return this.calculateResult( result );
+        }
+
+        async asyncAttempt( pFunction, ...pArgs )
+        {
+            let result = this.initializeResult( pFunction );
+
+            try
+            {
+                result.returnValue = await asyncAttempt( pFunction, ...pArgs );
+            }
+            catch( ex )
+            {
+                result.exceptions.push( ex );
+
+                this.reportError( ex, ex.message, S_ERROR, this.calculateErrorSourceName( this, pFunction ), ...pArgs );
+            }
+
+            return this.calculateResult( result );
+        }
+
+        attemptMethod( pObject, pMethod, ...pArgs )
+        {
+            let result = this.initializeResult( pMethod );
+
+            const thiz = pObject || this;
+
+            try
+            {
+                result.returnValue = attemptMethod( thiz, pMethod, ...pArgs );
+            }
+            catch( ex )
+            {
+                result.exceptions.push( ex );
+
+                this.reportError( ex, ex.message, S_ERROR, this.calculateErrorSourceName( thiz, pMethod ), ...pArgs );
+            }
+        }
+
+        async asyncAttemptMethod( pObject, pMethod, ...pArgs )
+        {
+            let result = this.initializeResult( pMethod );
+
+            const thiz = pObject || this;
+
+            try
+            {
+                result.returnValue = await asyncAttemptMethod( thiz, pMethod, ...pArgs );
+            }
+            catch( ex )
+            {
+                result.exceptions.push( ex );
+
+                this.reportError( ex, ex.message, S_ERROR, this.calculateErrorSourceName( thiz, pMethod ), ...pArgs );
+            }
+        }
+
+        initializeResult( pValue )
+        {
+            return { returnValue: pValue, exceptions: [] };
+        }
+
+        calculateResult( pResult )
+        {
+            const result = pResult || this.initializeResult();
+
+            return {
+                returnValue: result?.exceptions?.length <= 0 ? result?.returnValue : null,
+                exceptions: [...(result.exceptions || [])],
+                errors: [...(result.exceptions || [])],
+                hasErrors: () => result?.exceptions?.length > 0,
+            };
         }
     }
 
@@ -2554,7 +2949,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
     {
         let mod = pObject;
 
-        if ( null != mod && _obj === typeof mod && (mod instanceof BockModulePrototype) )
+        if ( isNonNullObj( mod ) && (mod instanceof BockModulePrototype) )
         {
             return mod.expose( mod, pCacheKey );
         }
@@ -2568,12 +2963,17 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
 
     BockModulePrototype.exportModule = exportModule;
 
+    handleAttempt.handleError = ( pError, pFunction, ...pArgs ) =>
+    {
+        throw new __Error( pError, { context: pFunction, args: pArgs } );
+    };
+
     /**
      * Asynchronously import a module into the current scope.
      * <br>
      * Emits the load Event before returning the Promise that resolves to the required/imported module.
      * <br>
-     * @param {string} pModulePath The name of, or filepath to, the required module
+     * @param {string} pModulePath The name of, filepath to, or URL of, the required module
      * @returns {Promise<BockModulePrototype>} A Promise that resolves to the requested module
      */
     async function requireModule( pModulePath )
@@ -2587,14 +2987,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
 
         if ( isNode() )
         {
-            try
-            {
-                mod = require( pModulePath );
-            }
-            catch( ex )
-            {
-                GLOBAL_INSTANCE.reportError( ex, `requiring module ${pModulePath}`, S_ERROR, "Module::requireModule" );
-            }
+            mod = attempt( require, pModulePath );
         }
 
         if ( null == mod )
@@ -2609,14 +3002,17 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
             }
         }
 
-        if ( _obj === typeof mod && null != mod )
+        if ( isNonNullObj( mod ) )
         {
-            mod = new BockModulePrototype( mod );
+            if ( mod instanceof Promise )
+            {
+                mod = await Promise.resolve( mod );
+            }
         }
 
         if ( null != mod && mod instanceof BockModulePrototype )
         {
-            GLOBAL_INSTANCE.dispatchEvent( new CustomEvent( "load", mod ) );
+            GLOBAL_INSTANCE.dispatchEvent( new BockModuleEvent( "load", mod, {} ) );
         }
 
         return mod;
@@ -2624,14 +3020,170 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
 
     function isObjectLiteral( pObject )
     {
-        if ( _obj === typeof pObject && null != pObject )
+        if ( isNonNullObj( pObject ) )
         {
             let constructorFunction = pObject.constructor || Object.getPrototypeOf( pObject )?.constructor;
 
-            return (_fun !== typeof constructorFunction || ("Object" === constructorFunction.name || Object === constructorFunction));
+            return ( !isFunc( constructorFunction ) || ("Object" === constructorFunction.name || Object === constructorFunction));
         }
         return false;
     }
+
+    function resolveCopyOptions( pOptions = DEFAULT_COPY_OPTIONS )
+    {
+        const resolvedOptions = populateOptions( pOptions, DEFAULT_COPY_OPTIONS );
+        const depth = _getDepth( resolvedOptions );
+        const maxStackSize = _getMaxStackSize( resolvedOptions );
+        const freeze = resolvedOptions.freeze === true;
+
+        resolvedOptions.depth = depth;
+        resolvedOptions.maxStackSize = maxStackSize;
+
+        return { resolvedOptions, maxStackSize, freeze };
+    }
+
+    const cloneArray = ( array, options, stack ) =>
+    {
+        let clone = [...array];
+
+        if ( options.depth > 0 )
+        {
+            options.depth -= 1;
+
+            stack.push( clone );
+
+            try
+            {
+                clone = clone.map( ( item, index ) => _copy( item, options, [...stack, index] ) );
+            }
+            finally
+            {
+                stack.pop();
+            }
+        }
+
+        return clone;
+    };
+
+    const cloneObject = ( object, options, stack ) =>
+    {
+        let clone = (isFunc( object.clone )) ? object.clone() : (isObjectLiteral( object ) ? { ...object } : object);
+
+        if ( options.depth > 0 )
+        {
+            options.depth -= 1;
+
+            stack.push( clone );
+
+            try
+            {
+                for( const [key, value] of objectEntries( object ) )
+                {
+                    if ( key != null )
+                    {
+                        clone[key] = _copy( value, options, [...stack, key] );
+
+                        if ( typeof clone[key] === _fun )
+                        {
+                            bindMethod( clone[key], clone );
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                stack.pop();
+            }
+        }
+
+        return clone;
+    };
+
+    function handleCopyUndefined( pObject, pOptions, pFreezeFunction )
+    {
+        const undefinedReplacement = pOptions.undefinedReplacement ?? null;
+        return pFreezeFunction( undefinedReplacement );
+    }
+
+    function handleCopyNull( pObject, pOptions, pFreezeFunction )
+    {
+        const nullReplacement = pOptions.nullReplacement ?? EMPTY_OBJECT;
+        return pFreezeFunction( nullReplacement );
+    }
+
+    function handleCopyString( pString )
+    {
+        return _mt_str + pString;
+    }
+
+    function handleCopyNumber( pNumber )
+    {
+        if ( _big === typeof pNumber )
+        {
+            return BigInt( pNumber );
+        }
+        return parseFloat( pNumber );
+    }
+
+    function handleCopyBoolean( pBoolean )
+    {
+        return pBoolean === true;
+    }
+
+    function handleCopyFunction( pFunction )
+    {
+        if ( isFunc( pFunction ) )
+        {
+            return pFunction;
+        }
+        return () => pFunction;
+    }
+
+    function handleCopySymbol( pSymbol )
+    {
+        return pSymbol;
+    }
+
+    function handleCopyObject( pObject, pOptions, pFreezeFunction, pStack )
+    {
+        if ( null === pObject )
+        {
+            return handleCopyNull( pObject, pOptions, pFreezeFunction );
+        }
+
+        let clone = pObject;
+
+        if ( pObject instanceof Date )
+        {
+            clone = new Date( pObject.getTime() );
+        }
+        else if ( pObject instanceof RegExp )
+        {
+            clone = new RegExp( pObject, pObject.flags || _mt_str );
+        }
+        else if ( isArray( pObject ) )
+        {
+            clone = cloneArray( pObject, pOptions, pStack );
+        }
+        else
+        {
+            clone = cloneObject( pObject, pOptions, pStack );
+        }
+
+        return pFreezeFunction( clone );
+    }
+
+    const CopyHandlers = new Map();
+
+    CopyHandlers.set( _ud, handleCopyUndefined );
+    CopyHandlers.set( _str, handleCopyString );
+    CopyHandlers.set( _num, handleCopyNumber );
+    CopyHandlers.set( _big, handleCopyNumber );
+    CopyHandlers.set( _bool, handleCopyBoolean );
+    CopyHandlers.set( _fun, handleCopyFunction );
+    CopyHandlers.set( _symbol, handleCopySymbol );
+    CopyHandlers.set( _obj, handleCopyObject );
+    CopyHandlers.set( "*", ( pObject ) => pObject );
 
     /**
      * Returns a deep copy of the value specified.
@@ -2653,147 +3205,23 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
      */
     const _copy = function( pObject, pOptions = DEFAULT_COPY_OPTIONS, pStack = [] )
     {
-        const options = populateOptions( pOptions, DEFAULT_COPY_OPTIONS );
+        const { resolvedOptions, maxStackSize, freeze } = resolveCopyOptions( pOptions );
 
-        const depth = _getDepth( options );
-        options.depth = depth;
-
-        const freeze = (true === options.freeze);
-
-        let clone = pObject;
+        const maybeFreeze = ( item ) => (freeze ? lock( item ) : item);
 
         const stack = [].concat( pStack || [] );
 
-        const maxStackSize = _getMaxStackSize( options );
-        options.maxStackSize = maxStackSize;
-
         if ( stack.length > maxStackSize )
         {
-            return freeze ? lock( clone ) : clone;
+            return maybeFreeze( pObject );
         }
 
-        switch ( typeof pObject )
-        {
-            case _ud:
-                let obj = (null === options?.undefinedReplacement ? null : options?.undefinedReplacement ?? null);
-                return freeze ? lock( obj ) : obj;
+        const handler = CopyHandlers.get( typeof pObject ) || CopyHandlers.get( "*" );
 
-            case _str:
-                return (_mt_str + pObject);
-
-            case _num:
-                return parseFloat( pObject );
-
-            case _big:
-                return BigInt( pObject );
-
-            case _bool:
-                return Boolean( pObject );
-
-            case _fun:
-                return (freeze ? lock( pObject ) : pObject);
-
-            case _symbol:
-                return pObject;
-
-            case _obj:
-                if ( null == pObject )
-                {
-                    let obj = (null === options?.nullReplacement ? null : options?.nullReplacement ?? EMPTY_OBJECT);
-                    return freeze ? lock( obj ) : obj;
-                }
-
-                if ( pObject instanceof Date )
-                {
-                    clone = new Date( pObject.getTime() );
-                }
-                else if ( pObject instanceof RegExp )
-                {
-                    clone = new RegExp( pObject, (pObject.flags || _mt_str) );
-                }
-                else if ( isArray( pObject ) )
-                {
-                    clone = [...pObject];
-
-                    if ( depth > 0 )
-                    {
-                        options.depth = depth - 1;
-
-                        stack.push( clone );
-
-                        try
-                        {
-                            clone = clone.map( ( e, i ) => _copy( e, options, stack.concat( i ) ) );
-                        }
-                        finally
-                        {
-                            stack.pop();
-                        }
-                    }
-                }
-                else
-                {
-                    if ( _fun === typeof pObject?.clone )
-                    {
-                        clone = pObject.clone();
-                    }
-                    else
-                    {
-                        clone = !isObjectLiteral( pObject ) ? pObject : Object.assign( {}, pObject );
-
-                        if ( depth > 0 )
-                        {
-                            options.depth = depth - 1;
-
-                            stack.push( clone );
-
-                            try
-                            {
-                                const entries = objectEntries( pObject );
-
-                                for( let entry of entries )
-                                {
-                                    if ( null == entry || entry?.length < 2 )
-                                    {
-                                        continue;
-                                    }
-
-                                    const key = entry[0];
-                                    const value = entry[1];
-
-                                    try
-                                    {
-                                        clone[key] = _copy( value, options, stack.concat( key ) );
-                                    }
-                                    catch( exSet )
-                                    {
-                                        //ignore
-                                    }
-
-                                    if ( _fun === typeof clone[key] )
-                                    {
-                                        try
-                                        {
-                                            clone[key].bind( clone );
-                                        }
-                                        catch( ex )
-                                        {
-                                            GLOBAL_INSTANCE.reportError( ex, key + " could not be bound to the clone", S_WARN, this?.name );
-                                        }
-                                    }
-                                }
-                            }
-                            finally
-                            {
-                                stack.pop();
-                            }
-                        }
-                    }
-                }
-        }
-
-        return freeze ? lock( clone ) : clone;
+        return handler( pObject, resolvedOptions, maybeFreeze, stack );
     };
+
+    _copy.CopyHandlers = CopyHandlers;
 
     /**
      * Returns a local (mutable) copy of the value specified.
@@ -2834,7 +3262,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
 
         const stringifyKeys = e => (_symbol !== typeof e[0]) ? [(_mt_str + (e[0])).trim(), e[1]] : [e[0], e[1]];
 
-        if ( _obj === typeof pObject && null != pObject )
+        if ( isNonNullObj( pObject ) )
         {
             (Object.entries( pObject || {} )).forEach( e => entries.push( e ) );
 
@@ -2854,27 +3282,19 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
                 entries = (entries.concat( ...([...(new Set( pObject ).entries())].map( stringifyKeys )) ));
             }
 
-            try
-            {
-                const propertyNames = [...Object.getOwnPropertyNames( pObject ), ...Object.getOwnPropertySymbols( pObject )];
-
-                propertyNames.forEach( ( key ) =>
-                                       {
-                                           const value = pObject[key];
-                                           if ( null != value )
-                                           {
-                                               entries.push( [key, value] );
-                                           }
-                                       } );
-            }
-            catch( ex )
-            {
-                // ignored
-            }
+            [...Object.getOwnPropertyNames( pObject ),
+             ...Object.getOwnPropertySymbols( pObject )].forEach( ( key ) =>
+                                                                  {
+                                                                      const value = pObject[key];
+                                                                      if ( null != value )
+                                                                      {
+                                                                          entries.push( [key, value] );
+                                                                      }
+                                                                  } );
 
             entries = entries.map( stringifyKeys );
 
-            let source = _fun === typeof pObject?.constructor ? Function.prototype.toString.call( pObject.constructor ) : _str;
+            let source = isFunc( pObject?.constructor ) ? Function.prototype.toString.call( pObject.constructor ) : _mt_str;
             let rx = /(get +(\w+)\( *\))|(#(\w)[;\r\n,])/;
             let matches = rx.exec( source );
             while ( matches && matches?.length > 2 && source?.length > 4 )
@@ -2909,19 +3329,19 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
 
         let obj = {};
 
-        let arr = [...(pDefaults || [])].filter( e => _obj === typeof e && null != e );
+        let arr = [...(pDefaults || [])].filter( isNonNullObj );
 
         arr.unshift( pOptions || {} );
 
-        arr = arr.filter( e => _obj === typeof e && null != e ).map( e => localCopy( e ) );
+        arr = arr.filter( isNonNullObj ).map( e => localCopy( e ) );
 
         function merge( pDepth, pObj, pValue, pKey )
         {
             const kee = (_mt_str + (pKey || pObj || "value"));
 
-            const o = (_obj === typeof pObj) ? (pObj || { [kee]: pValue }) : { [kee]: pObj || {} };
+            const o = isObj( pObj ) ? (pObj || { [kee]: pValue }) : { [kee]: pObj || {} };
 
-            const val = localCopy( (_obj === typeof pValue) ? (pValue || { [kee]: pValue }) : { [kee]: pValue } );
+            const val = localCopy( isObj( pValue ) ? (pValue || { [kee]: pValue }) : { [kee]: pValue } );
 
             if ( pDepth > maxMergeDepth )
             {
@@ -2932,22 +3352,22 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
 
             for( const [k, v] of kvPairs )
             {
-                if ( null === v || _ud === typeof v || (_obj === typeof v && Object.keys( v || {} ).length === 0) )
+                if ( null === v || _ud === typeof v || (isObj( v ) && Object.keys( v || {} ).length === 0) )
                 {
                     continue;
                 }
 
-                if ( !(k in o) || null === o[k] || _ud === typeof o[k] || (_obj === typeof o[k] && Object.keys( o[k] || {} ).length === 0) )
+                if ( !(k in o) || null === o[k] || _ud === typeof o[k] || (isObj( o[k] ) && Object.keys( o[k] || {} ).length === 0) )
                 {
                     o[k] = v;
                 }
-                else if ( _obj === typeof v && _obj === typeof o[k] )
+                else if ( isObj( v ) && isObj( o[k] ) )
                 {
                     o[k] = merge( ++pDepth, o[k], v, k );
                 }
                 else
                 {
-                    o[k] = (_obj === typeof o[k] ? merge( ++pDepth, o[k], { [k]: v }, k ) : v);
+                    o[k] = (isObj( o[k] ) ? merge( ++pDepth, o[k], { [k]: v }, k ) : v);
                 }
             }
 
@@ -2971,13 +3391,13 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
                 {
                     obj[key] = value;
                 }
-                else if ( _obj === typeof value && _obj === typeof obj[key] )
+                else if ( isObj( value ) && isObj( obj[key] ) )
                 {
                     obj[key] = merge( ++mergeDepth, obj[key], value, key );
                 }
                 else
                 {
-                    obj[key] = (_obj === typeof obj[key] ? merge( ++mergeDepth, obj[key], { [key]: value }, key ) : value);
+                    obj[key] = (isObj( obj[key] ) ? merge( ++mergeDepth, obj[key], { [key]: value }, key ) : value);
                 }
             }
         }
@@ -3015,9 +3435,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
 
         let type = pType || typeof a;
 
-        type = (_validTypes.includes( type ) || _fun === typeof type) ? type : typeof a;
+        type = (_validTypes.includes( type ) || isFunc( type )) ? type : typeof a;
 
-        if ( type === typeof a || (_fun === typeof type && a instanceof type) )
+        if ( type === typeof a || (isFunc( type ) && a instanceof type) )
         {
             return a;
         }
@@ -3026,7 +3446,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
 
         if ( (stack?.length || 0) > MAX_STACK_SIZE )
         {
-            GLOBAL_INSTANCE.reportError( (new __Error( "Maximum Stack Size Exceeded" )), "Maximum Stack Size Exceeded while coercing a value to another type", S_WARN, this?.name );
+            const message = "Maximum Stack Size Exceeded";
+            GLOBAL_INSTANCE.reportError( (new __Error( message )), message + " while coercing a value to another type", S_WARN, this?.name );
 
             return a;
         }
@@ -3046,7 +3467,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
                 return Boolean( a );
 
             case _fun:
-                return _fun === typeof a ? a : function() { return a; };
+                return isFunc( a ) ? a : function() { return a; };
 
             case _symbol:
                 return Symbol.for( (_mt_str + _coerce( a, _str, stack.concat( a ) )) );
@@ -3064,14 +3485,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
                 {
                     let regExp = _coerce( a, _str, stack.concat( a ) );
 
-                    try
-                    {
-                        regExp = new RegExp( regExp );
-                    }
-                    catch( ex )
-                    {
-                        GLOBAL_INSTANCE.reportError( ex, ex.message, S_WARN, this?.name );
-                    }
+                    regExp = attempt( () => new RegExp( regExp ) );
 
                     return regExp;
                 }
@@ -3187,12 +3601,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
 
         get maxStackSize()
         {
-            return (_num === typeof this.#maxStackSize ? Math.max( 2, Math.min( this.#maxStackSize, MAX_STACK_SIZE ) ) : MAX_STACK_SIZE);
+            return (isNum( this.#maxStackSize ) ? Math.max( 2, Math.min( this.#maxStackSize, MAX_STACK_SIZE ) ) : MAX_STACK_SIZE);
         }
 
         set maxStackSize( pValue )
         {
-            this.#maxStackSize = (_num === typeof pValue ? Math.max( 2, Math.min( pValue || this.#maxStackSize, MAX_STACK_SIZE ) ) : MAX_STACK_SIZE);
+            this.#maxStackSize = (isNum( pValue ) ? Math.max( 2, Math.min( pValue || this.#maxStackSize, MAX_STACK_SIZE ) ) : MAX_STACK_SIZE);
         }
 
         _copyOptions( pOverrides )
@@ -3207,7 +3621,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
                 trimStrings: (false === overrides?.trimStrings ? false : overrides?.trimStrings || this.trimStrings),
                 reverse: (false === overrides?.reverse ? false : overrides?.reverse || this.reverse),
                 coerce: (false === overrides?.coerce ? false : overrides?.coerce || this.coerce),
-                maxStackSize: Math.max( 2, Math.min( _num === typeof overrides?.maxStackSize ? overrides?.maxStackSize : this.maxStackSize, MAX_STACK_SIZE ) ),
+                maxStackSize: Math.max( 2, Math.min( isNum( overrides?.maxStackSize ) ? overrides?.maxStackSize : this.maxStackSize, MAX_STACK_SIZE ) ),
             };
         }
 
@@ -3397,7 +3811,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
                         return (nullsFirst ? 1 : -1);
                     }
 
-                    if ( _fun === typeof a?.compareTo )
+                    if ( isFunc( a?.compareTo ) )
                     {
                         comp = a.compareTo( b ) || 0;
                         break;
@@ -3492,7 +3906,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
         {
             let type = pType || this.type;
 
-            const typeIsClass = _fun === typeof type;
+            const typeIsClass = isFunc( type );
 
             if ( "*" === type )
             {
@@ -3660,38 +4074,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
             ModuleEvent: BockModuleEvent,
             ModulePrototype: BockModulePrototype,
             CustomEvent,
-            isLogger: BockModulePrototype.isLogger,
-            calculateErrorSourceName,
-            notify: function( pFromModule,
-                              pError,
-                              pMessage = pError?.message || S_DEFAULT_OPERATION,
-                              pLevel = S_ERROR,
-                              pSource = _mt_str,
-                              ...pExtra )
-            {
-                let thiz = pFromModule || this || GLOBAL_INSTANCE;
-
-                if ( thiz instanceof BockModulePrototype )
-                {
-                    thiz.reportError( pError, pMessage, pLevel, pSource, ...pExtra );
-                }
-                else
-                {
-                    GLOBAL_INSTANCE.reportError( pError, pMessage, pLevel, pSource, ...pExtra );
-                }
-            },
-            getGlobalLogger: function()
-            {
-                return BockModulePrototype.getGlobalLogger();
-            },
-            setGlobalLogger: function( pLogger )
-            {
-                BockModulePrototype.setGlobalLogger( pLogger );
-            },
-            exportModule,
-            requireModule,
-            importModule: requireModule,
-            sleep,
 
             _ud,
             _obj,
@@ -3762,6 +4144,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
             CURRENT_MODE,
             ARGUMENTS,
 
+            isLogger: BockModulePrototype.isLogger,
+            calculateErrorSourceName,
+
             getExecutionEnvironment: function()
             {
                 return new ExecutionEnvironment();
@@ -3771,6 +4156,19 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : [])];
 
             isFulfilled,
             isRejected,
+
+            getGlobalLogger: function()
+            {
+                return BockModulePrototype.getGlobalLogger();
+            },
+            setGlobalLogger: function( pLogger )
+            {
+                BockModulePrototype.setGlobalLogger( pLogger );
+            },
+            exportModule,
+            requireModule,
+            importModule: requireModule,
+            sleep,
 
             classes:
                 {

@@ -127,6 +127,7 @@ const $scope = constants?.$scope || function()
         isNonNullValue,
         isString,
         isEmptyString,
+        isPrimitive,
         isRegExp,
         isNumeric,
         isNumber,
@@ -187,7 +188,7 @@ const $scope = constants?.$scope || function()
     const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
 
     // poly-fill for isArray; probably obsolete with modern environments
-    if ( _fun !== typeof Array.isArray )
+    if ( !isFunction( Array.isArray ) )
     {
         try
         {
@@ -380,16 +381,18 @@ const $scope = constants?.$scope || function()
      * If the input is an object, this function populates and returns a new array with its "first-level" properties<br>
      * <br>
      * @param {*} pValue Any object or value to convert to an array and/or process as per the {@link AsArrayOptions}
+     *
      * @param {AsArrayOptions} pOptions An object to define how input values are evaluated<br>
      * and how the resulting array is processed before being returned.
-     * @param {number} pRecursions <b>USED INTERNALLY TO PREVENT INFINITE RECURSION<br>
+     *
+     * @param pRecursionCount
      *                                DO NOT PASS A VALUE FROM CALLING CODE</b>
      *
      * @returns {Array<*>} an Array, based on the input and the options specified
      *
      * @alias module:ArrayUtils.asArray
      */
-    const asArray = function( pValue, pOptions = DEFAULT_AS_ARRAY_OPTIONS, pRecursions = 0 )
+    const asArray = function( pValue, pOptions = DEFAULT_AS_ARRAY_OPTIONS, pRecursionCount = 0 )
     {
         const options = populateOptions( pOptions, DEFAULT_AS_ARRAY_OPTIONS );
 
@@ -398,12 +401,10 @@ const $scope = constants?.$scope || function()
             return processAsArrayOptions( pValue, options );
         }
 
-        if ( isNull( pValue ) && !(false === pValue || 0 === pValue) )
+        if ( isNull( pValue, true ) || isUndefined( pValue ) )
         {
             return [];
         }
-
-        let arr = pValue || [];
 
         if ( isString( pValue ) )
         {
@@ -411,103 +412,97 @@ const $scope = constants?.$scope || function()
             {
                 return [];
             }
-            if ( !isEmptyString( pValue ) )
-            {
-                const splitter = options?.splitOn || null;
-                const sep = (isString( splitter ) ? asString( splitter ) : (isRegExp( splitter ) ? new RegExp( splitter, splitter?.flags ) : null));
-                arr = (!isNull( sep ) ? pValue.split( sep ) : [pValue]) || [];
-            }
-        }
-        else
-        {
-            arr = [_num, _big, _bool, _symbol].includes( typeof pValue ) ? [pValue] : pValue;
+            return processAsArrayOptions( splitStringValue( pValue, options ), options );
         }
 
-        const recursions = Math.max( 0, asInt( pRecursions ) || 0 );
-
-        if ( !(isArray( arr ) || isTypedArray( arr )) )
+        if ( isPrimitive( pValue ) )
         {
-            switch ( typeof arr )
-            {
-                case _obj:
-                    if ( isNull( arr ) )
-                    {
-                        arr = [];
-                    }
-                    else if ( isSet( arr ) )
-                    {
-                        arr = [...arr.values()];
-                    }
-                    else if ( isMap( arr ) )
-                    {
-                        arr = fromIterable( arr.entries(), options );
-                    }
-                    else
-                    {
-                        arr = (isNull( arr ) ? [] : (isIterable( arr ) ? fromIterable( arr, options ) : Object.values( arr ))) || [];
-                    }
-                    break;
-
-                case _str:
-                    const splitter = options?.splitOn || null;
-                    const sep = !isNull( splitter ) ? (isString( splitter ) ? asString( splitter ) : (isRegExp( splitter ) ? new RegExp( splitter, splitter?.flags ) : null)) : null;
-                    arr = (!isNull( sep ) ? arr.split( sep ) : [arr]) || [arr];
-                    break;
-
-                case _num:
-                case _big:
-                case _bool:
-                    arr = [arr];
-                    break;
-
-                case _fun:
-
-                    if ( recursions < 3 )
-                    {
-                        try
-                        {
-                            if ( isClass( arr ) )
-                            {
-                                const clazz = arr;
-
-                                arr = asArray( new clazz( options ), options, recursions + 1 ) || [];
-                            }
-                            else
-                            {
-                                const func = arr;
-
-                                arr = asArray( func( options ), options, recursions + 1 ) || [];
-                            }
-                        }
-                        catch( ex )
-                        {
-                            modulePrototype.reportError( ex, "trying to execute " + (arr?.name || arr), S_WARN, modName + "::asArray" );
-                        }
-                    }
-                    else
-                    {
-                        arr = [arr];
-                    }
-                    break;
-
-                default:
-                    if ( _fun === (typeof arr[Symbol.iterator]) )
-                    {
-                        arr = fromIterable( arr, options );
-                    }
-                    break;
-
-            } // end switch
-        } // end else
-
-        if ( isTypedArray( arr ) )
-        {
-            arr = [...arr];
+            return [pValue];
         }
 
-        arr = processAsArrayOptions( arr, options );
+        if ( isObject( pValue ) )
+        {
+            return processAsArrayOptions( processObjectValue( pValue, options, pRecursionCount ), options );
+        }
 
-        return (isArray( arr ) ? (arr || []) : [arr]) || [];
+        return [];
+    };
+
+    /**
+     * Helper function to split a string value based on options.splitOn.
+     */
+    const splitStringValue = ( pStr, pOptions ) =>
+    {
+        const sep = pOptions?.splitOn || null;
+        const separator = getSplitter( sep );
+        return separator ? pStr.split( separator ) : [pStr];
+    };
+
+    /**
+     * Helper function to determine the proper split separator.
+     */
+    const getSplitter = ( pSep ) =>
+    {
+        if ( isString( pSep ) )
+        {
+            return asString( pSep );
+        }
+        if ( isRegExp( pSep ) )
+        {
+            return new RegExp( pSep, pSep?.flags );
+        }
+        return null;
+    };
+
+    /**
+     * Helper function to process object values based on their type.
+     */
+    const processObjectValue = ( pObj, pOptions, pRecursionCount ) =>
+    {
+        if ( isSet( pObj ) )
+        {
+            return [...pObj.values()];
+        }
+
+        if ( isMap( pObj ) )
+        {
+            return fromIterable( pObj.entries(), pOptions );
+        }
+
+        if ( isIterable( pObj ) )
+        {
+            return fromIterable( pObj, pOptions );
+        }
+
+        if ( isFunction( pObj ) && pRecursionCount < 3 )
+        {
+            return processFunctionValue( pObj, pOptions, pRecursionCount );
+        }
+
+        if ( isTypedArray( pObj ) )
+        {
+            return [...pObj];
+        }
+
+        return Object.values( pObj ) || [];
+    };
+
+    /**
+     * Helper function to process function values.
+     */
+    const processFunctionValue = ( pFunc, pOptions, pRecursionCount ) =>
+    {
+        try
+        {
+            return isClass( pFunc )
+                   ? asArray( new pFunc( pOptions ), pOptions, pRecursionCount + 1 )
+                   : asArray( pFunc( pOptions ), pOptions, pRecursionCount + 1 );
+        }
+        catch( error )
+        {
+            modulePrototype.reportError( error, `Error executing function: ${pFunc?.name}`, S_WARN, `${modName}::asArray` );
+        }
+        return [pFunc];
     };
 
     /**

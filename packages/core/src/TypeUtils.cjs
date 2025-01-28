@@ -44,6 +44,7 @@ const $scope = constants?.$scope || function()
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };
 
+// noinspection FunctionTooLongJS
 /**
  * This module is constructed by an Immediately Invoked Function Expression (IIFE).
  * see: <a href="https://developer.mozilla.org/en-US/docs/Glossary/IIFE">MDN: IIFE</a> for more information on this design pattern
@@ -163,6 +164,10 @@ const $scope = constants?.$scope || function()
      * @alias module:TypeUtils#JS_TYPES
      */
     const JS_TYPES = lock( [_ud].concat( VALID_TYPES ) );
+
+    const PRIMITIVE_TYPES = lock( [_str, _num, _big, _symbol, _bool] );
+
+    const isPrimitive = ( value ) => PRIMITIVE_TYPES.includes( typeof value );
 
     /**
      * This object is a dictionary of the default values for each primitive type<br>
@@ -340,7 +345,7 @@ const $scope = constants?.$scope || function()
      * This oddly named function, so as not to collide with 'isArray',<br>
      * is used to polyfill Array for ancient browsers or non-spec execution environments<br>
      *
-     * @function doesBeArray
+     * @function _isArr
      *
      * @param {*} pArg a value to evaluate
      *
@@ -348,22 +353,12 @@ const $scope = constants?.$scope || function()
      *
      * @private
      */
-    function doesBeArray( pArg )
-    {
-        return !(_ud === typeof pArg || null == pArg) && "[object Array]" === {}.toString.call( pArg );
-    }
+    const _isArr = ( pArg ) => !(_ud === typeof pArg || null == pArg) && "[object Array]" === {}.toString.call( pArg );
 
     // poly-fill for isArray; probably obsolete with modern environments
     if ( _fun !== typeof Array.isArray )
     {
-        try
-        {
-            Array.isArray = doesBeArray;
-        }
-        catch( ex )
-        {
-            modulePrototype.reportError( ex, "extending the built-in Array class", S_WARN, modName + "::Array::isArray" );
-        }
+        modulePrototype.attempt( () => Array.isArray = _isArr );
     }
 
     /**
@@ -377,10 +372,7 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isUndefined
      */
-    const isUndefined = function( pObject )
-    {
-        return (_ud === typeof pObject || undefined === pObject);
-    };
+    const isUndefined = ( pObject ) => (_ud === typeof pObject || undefined === pObject);
 
     /**
      * Returns true if the specified value IS defined.<br>
@@ -396,10 +388,21 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isDefined
      */
-    const isDefined = function( pObject )
-    {
-        return !isUndefined( pObject );
-    };
+    const isDefined = ( pObject ) => !isUndefined( pObject );
+
+
+    /**
+     * Returns true if the specified value is a string or a {@link String} object<br>
+     *
+     * @function isString
+     *
+     * @param {*} pObj A value to evaluate
+     *
+     * @returns {boolean} true if the specified value is a string or a String
+     *
+     * @alias module:TypeUtils.isString
+     */
+    const isString = ( pObj ) => (_str === typeof pObj) || pObj instanceof String;
 
     /**
      * Returns true if the specified value is an empty string.<br>
@@ -417,10 +420,7 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isEmptyString
      */
-    const isEmptyString = function( pObject )
-    {
-        return _str === typeof (pObject) && (_mt_str === pObject || _str.length === 0);
-    };
+    const isEmptyString = ( pObject ) => isString( pObject ) && (_mt_str === pObject || _str.length === 0);
 
     /**
      * Returns true if the specified value is null<br>
@@ -439,10 +439,7 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isNull
      */
-    const isNull = function( pObject, pStrict = false )
-    {
-        return pStrict ? (null === pObject) : (isUndefined( pObject ) || null == pObject || isEmptyString( pObject ));
-    };
+    const isNull = ( pObject, pStrict = false ) => pStrict ? (null === pObject) : (isUndefined( pObject ) || null == pObject || isEmptyString( pObject ));
 
     /**
      * Returns true if the specified value is <i>NOT</i> null<br>
@@ -464,10 +461,7 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isNotNull
      */
-    const isNotNull = function( pObject, pStrict = false )
-    {
-        return !isNull( pObject, pStrict );
-    };
+    const isNotNull = ( pObject, pStrict = false ) => !isNull( pObject, pStrict );
 
     /**
      * Returns true if the specified value is a Function.<br>
@@ -484,10 +478,7 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isFunction
      */
-    const isFunction = function( pObj, pStrict = true )
-    {
-        return !isNull( pObj ) && (_fun === typeof pObj || ( !pStrict && (_fun === typeof pObj.call) && (_fun === typeof pObj.apply)));
-    };
+    const isFunction = ( pObj, pStrict = true ) => !isNull( pObj ) && (_fun === typeof pObj || ( !pStrict && (_fun === typeof pObj.call) && (_fun === typeof pObj.apply)));
 
     /**
      * Returns true if the specified value is an <i>asynchronous</i> Function<br>
@@ -499,10 +490,7 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isAsyncFunction
      */
-    const isAsyncFunction = function( pObject )
-    {
-        return isFunction( pObject, true ) && (pObject.constructor === AsyncFunction || pObject === AsyncFunction);
-    };
+    const isAsyncFunction = ( pObject ) => isFunction( pObject, true ) && (pObject.constructor === AsyncFunction || pObject === AsyncFunction);
 
     /**
      * Returns true if the specified value is a function that creates a generator<br>
@@ -515,10 +503,7 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isGeneratorFunction
      */
-    function isGeneratorFunction( pObject )
-    {
-        return (isFunction( pObject ) && "[object Generator]" === {}.toString.call( pObject.prototype, pObject.prototype ));
-    }
+    const isGeneratorFunction = ( pObject ) => (isFunction( pObject ) && "[object Generator]" === {}.toString.call( pObject.prototype, pObject.prototype ));
 
     /**
      * @typedef {Object} ObjectEvaluationOptions
@@ -553,10 +538,7 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isPrimitiveWrapper
      */
-    function isPrimitiveWrapper( pObj )
-    {
-        return !isNull( pObj ) && ([].concat( PRIMITIVE_WRAPPER_TYPES )).filter( e => pObj instanceof e ).length > 0; // (pObj instanceof String || pObj instanceof Number || pObj instanceof Boolean || pObj instanceof BigInt);
-    }
+    const isPrimitiveWrapper = ( pObj ) => !isNull( pObj ) && ([].concat( PRIMITIVE_WRAPPER_TYPES )).filter( e => pObj instanceof e ).length > 0;
 
     /**
      * Returns true if the specified value is an object.<br>
@@ -590,7 +572,7 @@ const $scope = constants?.$scope || function()
                 return false;
             }
 
-            return !(options.rejectArrays && doesBeArray( pObj ));
+            return !(options.rejectArrays && _isArr( pObj ));
         }
         return false;
     };
@@ -606,41 +588,16 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isCustomObject
      */
-    const isCustomObject = function( pObj )
-    {
-        return isObject( pObj ) && pObj.prototype !== null && pObj.prototype !== Object && (pObj.constructor === null || pObj.constructor !== Object);
-    };
+    const isCustomObject = ( pObj ) => isObject( pObj ) && pObj.prototype !== null && pObj.prototype !== Object && (pObj.constructor === null || pObj.constructor !== Object);
 
-    const isError = function( pObj )
-    {
-        return isObject( pObj ) && pObj instanceof Error;
-    };
+    const isError = ( pObj ) => isObject( pObj ) && pObj instanceof Error;
 
-    const isEvent = function( pObj )
-    {
-        return isObject( pObj ) && (pObj instanceof Event || pObj instanceof CustomEvent || pObj instanceof ModuleEvent);
-    };
+    const isEvent = ( pObj ) => isObject( pObj ) && (pObj instanceof Event || pObj instanceof CustomEvent || pObj instanceof ModuleEvent);
 
     const firstError = function( ...pObj )
     {
         let arr = !isNull( pObj ) ? isArray( pObj ) ? pObj : [pObj] : [];
         return arr.filter( e => isError( e ) ).shift();
-    };
-
-    /**
-     * Returns true if the specified value is a string or a {@link String} object<br>
-     *
-     * @function isString
-     *
-     * @param {*} pObj A value to evaluate
-     *
-     * @returns {boolean} true if the specified value is a string or a String
-     *
-     * @alias module:TypeUtils.isString
-     */
-    const isString = function( pObj )
-    {
-        return (_str === typeof pObj) || pObj instanceof String;
     };
 
     /**
@@ -672,10 +629,7 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isNumber
      */
-    const isNumber = function( pObj )
-    {
-        return ([_num, _big].includes( typeof pObj ) || pObj instanceof Number || pObj instanceof BigInt) && !(isObject( pObj ) && pObj instanceof Date);
-    };
+    const isNumber = ( pObj ) => ([_num, _big].includes( typeof pObj ) || pObj instanceof Number || pObj instanceof BigInt) && !(isObject( pObj ) && pObj instanceof Date);
 
     /**
      * Returns true if the specified value is a BigInt.<br>
@@ -688,10 +642,7 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isBigInt
      */
-    const isBigInt = function( pNum )
-    {
-        return isNumber( pNum ) && _big === typeof pNum;
-    };
+    const isBigInt = ( pNum ) => isNumber( pNum ) && _big === typeof pNum;
 
     /**
      * Returns true if the value is NaN or is not Finite<br>
@@ -1198,10 +1149,7 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isBoolean
      */
-    const isBoolean = function( pValue )
-    {
-        return ((_bool === typeof pValue) && ((false === pValue) || true === pValue)) || pValue instanceof Boolean;
-    };
+    const isBoolean = ( pValue ) => ((_bool === typeof pValue) && ((false === pValue) || true === pValue)) || pValue instanceof Boolean;
 
     /**
      * Returns true if the specified value is an object and is not null.<br>
@@ -1250,10 +1198,7 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isNonNullValue
      */
-    const isNonNullValue = function( pObject )
-    {
-        return (false === pObject || 0 === pObject || _mt_str === pObject || isNotNull( pObject, false ));
-    };
+    const isNonNullValue = ( pObject ) => (false === pObject || 0 === pObject || _mt_str === pObject || isNotNull( pObject, false ));
 
     /**
      * Returns true if the specified value is an array
@@ -1264,10 +1209,7 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isArray
      */
-    const isArray = function( pObj )
-    {
-        return isObject( pObj ) && ((isFunction( Array.isArray )) ? Array.isArray( pObj ) : doesBeArray( pObj ));
-    };
+    const isArray = ( pObj ) => isObject( pObj ) && ((isFunction( Array.isArray )) ? Array.isArray( pObj ) : _isArr( pObj ));
 
     /**
      * Returns true if the specified value is an instance of a {@link TypedArray}.
@@ -1281,10 +1223,7 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isTypedArray
      */
-    const isTypedArray = function( pObj )
-    {
-        return (([...TYPED_ARRAYS].filter( e => isObject( pObj ) && pObj instanceof e ))?.length || 0) > 0;
-    };
+    const isTypedArray = ( pObj ) => (([...TYPED_ARRAYS].filter( e => isObject( pObj ) && pObj instanceof e ))?.length || 0) > 0;
 
     /**
      * Returns true if the specified value is iterable.<br>
@@ -1296,10 +1235,7 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isIterable
      */
-    const isIterable = function( pObj )
-    {
-        return !isNull( pObj ) && (isFunction( pObj[Symbol.iterator] ) || isArray( pObj ) || isTypedArray( pObj ));
-    };
+    const isIterable = ( pObj ) => !isNull( pObj ) && (isFunction( pObj[Symbol.iterator] ) || isArray( pObj ) || isTypedArray( pObj ));
 
     /**
      * Returns true if the specified value is spreadable.<br>
@@ -1330,10 +1266,7 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isAsyncIterable
      */
-    const isAsyncIterable = function( pObj )
-    {
-        return !isNull( pObj ) && isFunction( pObj[Symbol.asyncIterator] );
-    };
+    const isAsyncIterable = ( pObj ) => !isNull( pObj ) && isFunction( pObj[Symbol.asyncIterator] );
 
     /**
      * Returns true if the specified value is array-like<br>
@@ -1377,10 +1310,7 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isSymbol
      */
-    const isSymbol = function( pValue )
-    {
-        return _symbol === typeof pValue || pValue instanceof Symbol;
-    };
+    const isSymbol = ( pValue ) => _symbol === typeof pValue || pValue instanceof Symbol;
 
     /**
      * Returns true if the specified value cannot be modified<br>
@@ -1581,6 +1511,9 @@ const $scope = constants?.$scope || function()
         return false;
     };
 
+    const MIN_DATE_TIME = -30610202964000; // Approx. year -271821
+    const MAX_DATE_TIME = 7258140000000;  // Approx. year 2262
+
     /**
      * Returns true if the specified object is an instance of Date<br>
      * or if not <i>strict</i>, if the specified object can be converted into a Date<br>
@@ -1600,34 +1533,33 @@ const $scope = constants?.$scope || function()
             return false;
         }
 
-        let is = (pObj instanceof Date) || ("[object Date]" === {}.toString.call( pObj ) || (pObj.constructor === Date) || (pObj.prototype === Date));
-
-        if ( is || pStrict )
+        // Check if input is already a valid Date instance
+        if ( pObj instanceof Date || {}.toString.call( pObj ) === "[object Date]" )
         {
-            return is;
+            return true;
         }
 
-        let date = isObject( pObj ) && pObj instanceof Number ? new Date( pObj.valueOf() ) : (isNumber( pObj ) ? new Date( pObj ) : null);
-
-        if ( !isNull( date ) )
+        if ( pStrict )
         {
-            is = isFunction( date.getTime ) && date.getTime() >= -30610202964000 && date.getTime() <= 7258140000000;
+            return false;
         }
 
-        if ( !is && (isString( pObj ) || pObj instanceof String) )
-        {
-            if ( (isFunction( pDateParser ) || isFunction( pDateParser?.parse || pDateParser?.parseDate )) )
-            {
-                try
-                {
-                    date = (pDateParser.parse || pDateParser.parseDate || pDateParser).call( pDateParser, pObj );
-                }
-                catch( ex )
-                {
-                    modulePrototype.reportError( ex, `formatting ${pObj} as a date`, S_WARN, modName + "::isDate" );
-                }
-            }
+        // Attempt to create a Date if input is a numeric or object containing a number
+        let date = isObject( pObj ) && pObj instanceof Number
+                   ? new Date( pObj.valueOf() )
+                   : isNumber( pObj )
+                     ? new Date( pObj )
+                     : null;
 
+        if ( date && isValidDateInstance( date ) )
+        {
+            return true;
+        }
+
+        // Try parsing if input is a string
+        if ( isString( pObj ) || pObj instanceof String )
+        {
+            date = parseDate( pObj, pDateParser );
             if ( isNull( date ) )
             {
                 try
@@ -1640,12 +1572,9 @@ const $scope = constants?.$scope || function()
                 }
             }
         }
-        else
-        {
-            return is && (date instanceof Date);
-        }
 
-        if ( null == date || !isDate( date, true ) )
+        // Final fallback check for string, number, or big types
+        if ( !date || !isDate( date, true ) )
         {
             switch ( typeof pObj )
             {
@@ -1660,19 +1589,37 @@ const $scope = constants?.$scope || function()
                     {
                         modulePrototype.reportError( ex, `evaluating ${pObj} as a Date`, S_ERROR, modName + "::isDate" );
                     }
-
                     break;
             }
         }
 
-        return (isDate( date, true ));
+        return isDate( date, true );
     };
 
-
-    const isValidDateOrNumeric = function( pDate )
+// Helper to validate a Date instance
+    const isValidDateInstance = ( date ) =>
     {
-        return !isNull( pDate ) && (isDate( pDate ) || isInteger( pDate ) || isNumeric( pDate ));
+        return isFunction( date.getTime ) && date.getTime() >= MIN_DATE_TIME && date.getTime() <= MAX_DATE_TIME;
     };
+
+// Helper to parse a string using optional parser
+    const parseDate = ( input, dateParser ) =>
+    {
+        if ( isFunction( dateParser ) || isFunction( dateParser?.parse || dateParser?.parseDate ) )
+        {
+            try
+            {
+                return (dateParser.parse || dateParser.parseDate || dateParser).call( dateParser, input );
+            }
+            catch( ex )
+            {
+                modulePrototype.reportError( ex, `formatting ${input} as a date`, S_WARN, modName + "::isDate" );
+            }
+        }
+        return null;
+    };
+
+    const isValidDateOrNumeric = ( pDate ) => !isNull( pDate ) && (isDate( pDate ) || isInteger( pDate ) || isNumeric( pDate ));
 
     /**
      * Returns true if the specified value is an instance of RegExp<br>
@@ -1869,10 +1816,35 @@ const $scope = constants?.$scope || function()
         return instanceOfAny( pObject, ...pListedClasses );
     };
 
-    const isAssignableTo = function( pValue, pClass )
+    /**
+     * Returns true if the specified value is an instance of, or is assignable to, one of the specified classes.<br>
+     * That is, if the specified value is an instance of one of the classes or one of their subclasses,
+     * this function returns true.
+     *
+     * @param {*} pValue - The value to be checked for assignment compatibility.
+     * @param {...Function} pClass - One or more class constructors of which the value must be an instance of or a subclass of in order to return true.
+     * If no classes are specified, the constructor of the object to which this function is bound is used.
+     * @returns {boolean} - Returns true if the value is assignable to one or more of the specified classes
+     */
+    const isAssignableTo = function( pValue, ...pClass )
     {
-        const cls = isClass( pClass ) ? pClass || this.constructor : this.constructor;
-        return instanceOfAny( cls, cls[Symbol.species] ) && !(this === pValue);
+        if ( isNull( pValue ) )
+        {
+            return false;
+        }
+
+        const klasses = isNull( pClass ) ? [this.constructor] : (isArray( pClass ) ? pClass : [pClass]);
+
+        for( let klass of klasses )
+        {
+            const cls = isClass( klass ) ? klass || this.constructor : this.constructor;
+            if ( instanceOfAny( cls, cls[Symbol.species] ) && !(this === pValue) )
+            {
+                return true;
+            }
+        }
+
+        return false;
     };
 
     /**
@@ -2627,6 +2599,11 @@ const $scope = constants?.$scope || function()
             return [].concat( this.#exceptions ).flat();
         }
 
+        get errors()
+        {
+            return this.exceptions;
+        }
+
         addErrors( ...pError )
         {
             this.#exceptions.push( ...pError );
@@ -2660,6 +2637,7 @@ const $scope = constants?.$scope || function()
             isNull,
             isNotNull,
             isNonNullValue,
+            isPrimitive,
             isPrimitiveWrapper,
             isObject,
             isCustomObject,

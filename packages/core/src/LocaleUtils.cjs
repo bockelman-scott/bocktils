@@ -61,7 +61,7 @@ const {
         classes
     } = constants;
 
-    const { isDefined, isNull, isString, isNumeric, isObject, isArray, isFunction } = typeUtils;
+    const { isDefined, isNull, isString, isNumeric, isObject, isArray, isFunction, isClass, instanceOfAny } = typeUtils;
 
     const
         {
@@ -449,9 +449,35 @@ const {
 
         }
 
+        /**
+         * The Symbol.species accessor property is a 'well-known' Symbol
+         * we can use to return our constructor to external consumers.
+         *
+         * @return {Function} The constructor function of this class.
+         */
         static get [Symbol.species]()
         {
             return this;
+        }
+
+        /**
+         * Determines if a specified value can be assigned to a given class or the current instance's class.<br>
+         * That is, is the value an instance of the specified class or a subclass of the specified class.
+         *
+         * @param {any} pValue - The value to be checked for assignability.
+         * @param {Function} pClass - The class to check against. If not provided, defaults to the class of the current instance.
+         * @return {boolean} Returns true if the value is assignable to the class, otherwise false.
+         */
+        isAssignableTo( pValue, pClass )
+        {
+            if ( isNull( pValue ) )
+            {
+                return false;
+            }
+
+            const cls = isClass( pClass ) ? pClass || this.constructor[Symbol.species] || this.constructor : this.constructor[Symbol.species] || this.constructor;
+
+            return instanceOfAny( cls, cls[Symbol.species] ) && !(this === pValue);
         }
 
         parseLocale( pLocale )
@@ -564,6 +590,11 @@ const {
             return map[pKey];
         }
 
+        /**
+         * Returns a copy of this instance as a new object.
+         *
+         * @returns {LocaleResourcesBase} A copy of this instance as a new object.
+         */
         clone()
         {
             return new (this.constructor[Symbol.species] || this.constructor)( ...(objectValues( this )) );

@@ -84,7 +84,6 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             ModuleEvent,
             ModulePrototype,
             calculateErrorSourceName,
-            notify,
             asPhrase,
             isReadOnly,
             isObjectLiteral,
@@ -1928,8 +1927,6 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#resolveError
              */
             resolveError,
-
-            notify,
 
             asPhrase,
 
