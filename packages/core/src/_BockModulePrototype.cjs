@@ -15,8 +15,7 @@
  * <ul>
  * <li>the ability to cap any iteration to a maximum number of loops</li>
  * <li>the ability to create "deep" local and/or immutable copies of objects</li>
- * <li>the ability to reliably process options passed to functions that have default options</li>
- * <li>and a factory for creating common comparison functions</li>
+ * <li> and the ability to reliably process options passed to functions that have default options</li>
  * </ul>
  * <br>
  * </p>
@@ -27,7 +26,6 @@
  * @see IllegalArgumentError
  * @see StackTrace
  * @see IterationCap
- * @see {@link ComparatorFactory}
  *
  * <br>
  */
@@ -184,10 +182,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
     const isPromise = pObj => isObj( pObj ) && pObj instanceof Promise;
     const isThenable = pObj => isObj( pObj ) && (isPromise( pObj ) || isFunc( pObj.then ));
 
-    const _asStr = e => isStr( e ) ? e : (e?.type || e?.name || null);
+    const _asStr = e => isStr( e ) ? e : (e?.type || e?.name || _mt_str);
     const _isValidStr = e => isStr( e ) && (_mt_str !== e.trim());
-    const _lcase = e => _asStr( e ).trim().toLowerCase();
-    const _ucase = e => _asStr( e ).trim().toUpperCase();
+    const _lcase = e => _asStr( e ).toLowerCase();
+    const _ucase = e => _asStr( e ).toUpperCase();
 
     const S_DEFAULT_ERROR_MESSAGE = [S_ERR_PREFIX, S_DEFAULT_OPERATION].join( _spc );
 
@@ -629,6 +627,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
 
         #mode = CURRENT_MODE;
 
+        // noinspection OverlyComplexFunctionJS
         constructor( pGlobalScope )
         {
             this.#globalScope = pGlobalScope || $scope();
@@ -1495,6 +1494,22 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
     }
 
     /**
+     * Initializes the message passed to the constructor.
+     */
+    function initializeMessage( pMessageOrError )
+    {
+        if ( isStr( pMessageOrError ) )
+        {
+            return pMessageOrError || DEFAULT_ERROR_MSG;
+        }
+        if ( pMessageOrError instanceof Error )
+        {
+            return pMessageOrError.message || pMessageOrError.name || DEFAULT_ERROR_MSG;
+        }
+        return DEFAULT_ERROR_MSG;
+    }
+
+    /**
      * This class allows custom Errors to be defined.
      * <br><br>
      * This class and its subclasses also provide a stack trace regardless of browser or environment.
@@ -1510,7 +1525,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
 
         #type;
         #name;
-        #cause;
+
+        #cause = null;
 
         #trace;
 
@@ -1520,29 +1536,71 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         /**
          * Constructs an instance of the custom Error class, __Error.<br>
          * @constructor
-         * @param {string|Error} pMessage The error message or an Error whose message should be used as the error message
+         * @param {string|Error} pMsgOrErr The error message or an Error whose message should be used as the error message
          * @param {Object} [pOptions={}] An object that will be available as a property of this Error
          */
-        constructor( pMessage, pOptions = {} )
+        constructor( pMsgOrErr, pOptions = {} )
         {
-            super( (isStr( pMessage ) ? (pMessage || DEFAULT_ERROR_MSG) : ((pMessage instanceof Error) ? (pMessage.message || pMessage.name || DEFAULT_ERROR_MSG) : DEFAULT_ERROR_MSG)) );
+            super( initializeMessage( pMsgOrErr ) );
 
-            this.#type = ((pMessage instanceof Error) ? pMessage.type || pMessage.name : (this.constructor?.name)).replace( /^__/, _mt_str );
-            this.#name = ((pMessage instanceof Error) ? pMessage.name || pMessage.type : (this.constructor?.name)).replace( /^__/, _mt_str );
+            this.#options = immutableCopy( pOptions );
 
+            this.#type = this.getErrorTypeOrName( pMsgOrErr ).replace( /^__/, _mt_str );
+            this.#name = this.getErrorTypeOrName( pMsgOrErr ).replace( /^__/, _mt_str );
+
+            this.#msg = super.message;
+
+            this.#cause = this.determineCause( pMsgOrErr, this.#options?.cause );
+
+            this.#code = this.calculateErrorCode( pMsgOrErr );
+
+            this.#referenceId = this.calculateReferenceId( pMsgOrErr );
+
+            // Capture stack trace if available
             if ( Error.captureStackTrace )
             {
                 Error.captureStackTrace( this, this.constructor );
             }
+        }
 
-            this.#msg = (isStr( pMessage )) ? (pMessage || super.message) : ((pMessage instanceof Error) ? pMessage.message || super.message : DEFAULT_ERROR_MSG);
+        calculateReferenceId( pMsgOrErr )
+        {
+            return this.#options?.referenceId || (isError( pMsgOrErr ) ? pMsgOrErr?.referenceId || __Error.generateReferenceId( this, this.#code ) : __Error.generateReferenceId( this, this.#code )) || this.#referenceId;
+        }
 
-            this.#options = immutableCopy( pOptions || {} );
+        calculateErrorCode( pMsgOrErr )
+        {
+            return this.#options?.code || (isNum( pMsgOrErr ) ? pMsgOrErr : (isError( pMsgOrErr ) ? pMsgOrErr?.code : null)) || this.#code;
+        }
 
-            this.#cause = (this.#options?.cause instanceof Error ? this.#options?.cause : (pMessage instanceof Error ? pMessage : null) || (pMessage instanceof Error ? pMessage : null));
+        /**
+         * Returns the error type or name for the given message or defaults.
+         */
+        getErrorTypeOrName( pError )
+        {
+            if ( pError instanceof Error )
+            {
+                return _asStr( pError.type || pError.name || this.constructor?.name || "Error" ).replace( /^__/, _mt_str );
+            }
+            return _asStr( this.constructor?.name || "Error" ).replace( /^__/, _mt_str );
+        }
 
-            this.#code = (this.#options?.code || (isNum( pMessage ) ? pMessage : null));
-            this.#referenceId = this.#options?.referenceId || __Error.generateReferenceId( this, this.#code );
+        /**
+         * Determines the cause of the error based on provided options or message.
+         */
+        determineCause( pError, pCause )
+        {
+            if ( pCause instanceof Error )
+            {
+                return pCause;
+            }
+
+            if ( pError instanceof Error )
+            {
+                return pError;
+            }
+
+            return this.#cause;
         }
 
         /**
@@ -1609,6 +1667,16 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         get columnNumber()
         {
             return super.columnNumber || this.stackTrace?.columnNumber;
+        }
+
+        get code()
+        {
+            return this.#code || this.calculateErrorCode( this );
+        }
+
+        get referenceId()
+        {
+            return this.#referenceId || this.calculateReferenceId( this );
         }
 
         /**
@@ -3421,6 +3489,40 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         return immutableCopy( pObject, IMMUTABLE_COPY_OPTIONS, pStack );
     };
 
+    const STACK_ERROR_MESSAGE = "Maximum Stack Size Exceeded";
+
+    const resolveType = ( pValue, pType ) =>
+    {
+        let type = pType || typeof pValue;
+        return (_validTypes.includes( type ) || isFunc( type )) ? type : typeof pValue;
+    };
+
+    const isMatchingType = ( pValue, pType ) => (pType === typeof pValue) || (isFunc( pType ) && pValue instanceof pType);
+
+    const coercions =
+        {
+            [_str]: ( pValue ) => _asStr( _mt_str + pValue ),
+            [_num]: ( pValue ) => parseFloat( _asStr( pValue ) || "0" ),
+            [_big]: ( pValue ) => BigInt( _asStr( pValue ).replace( /n$/, _mt_str ) || "0" ),
+            [_bool]: ( pValue ) => (pValue === true),
+            [_fun]: ( pValue ) => (isFunc( pValue ) ? pValue : () => pValue),
+            [_symbol]: ( pValue, pStack ) => Symbol.for( _asStr( _coerce( pValue, _str, [...pStack, pValue] ) ) ),
+            [_obj]: ( pValue, pStack ) => [_asStr( _mt_str + _coerce( pValue, _str, [...pStack, pValue] ) )],
+            "default": function( pValue, pType, pStack )
+            {
+                if ( pType === Date || isDate( pType ) || pType instanceof Date )
+                {
+                    return new Date( _coerce( pValue, _num, [...pStack, pValue] ) );
+                }
+                if ( pType === RegExp || isRegExp( pType ) || pType instanceof RegExp )
+                {
+                    let regexp = _coerce( pValue, _str, [...pStack, pValue] );
+                    return attempt( () => new RegExp( regexp ) );
+                }
+                return _coerce( pValue, typeof pValue, [...pStack, pValue] );
+            }
+        };
+
     /**
      * Attempts to coerce, or cast, the specified value to the specified type
      * @param {*} pValue A value to convert to another type, if possible
@@ -3431,561 +3533,29 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
      */
     const _coerce = function( pValue, pType, pStack = [] )
     {
-        let a = (_ud === typeof pValue || null === pValue) ? null : pValue;
+        const coercedValue = (_ud === typeof pValue || pValue === null) ? _mt_str : pValue;
 
-        let type = pType || typeof a;
+        let resolvedType = resolveType( pValue, pType );
 
-        type = (_validTypes.includes( type ) || isFunc( type )) ? type : typeof a;
-
-        if ( type === typeof a || (isFunc( type ) && a instanceof type) )
+        if ( isMatchingType( coercedValue, resolvedType ) )
         {
-            return a;
+            return coercedValue;
         }
 
         const stack = pStack || [];
 
-        if ( (stack?.length || 0) > MAX_STACK_SIZE )
+        if ( (stack.length || 0) > MAX_STACK_SIZE )
         {
-            const message = "Maximum Stack Size Exceeded";
-            GLOBAL_INSTANCE.reportError( (new __Error( message )), message + " while coercing a value to another type", S_WARN, this?.name );
-
-            return a;
+            const message = `${STACK_ERROR_MESSAGE} while coercing a value to another type`;
+            const error = new __Error( message, { context: _coerce, args: [pValue, resolvedType, stack] } );
+            GLOBAL_INSTANCE.reportError( error, message, S_WARN, _coerce );
+            return coercedValue;
         }
 
-        switch ( type )
-        {
-            case _str:
-                return _mt_str + (null === a ? _mt_str : a);
+        const coercion = coercions[resolvedType] || coercions["default"];
 
-            case _num:
-                return parseFloat( _mt_str + (null === a ? _mt_str : a) );
-
-            case _big:
-                return BigInt( (_mt_str + (null === a ? _mt_str : a)).replace( /n$/, _mt_str ) );
-
-            case _bool:
-                return Boolean( a );
-
-            case _fun:
-                return isFunc( a ) ? a : function() { return a; };
-
-            case _symbol:
-                return Symbol.for( (_mt_str + _coerce( a, _str, stack.concat( a ) )) );
-
-            case _obj:
-                return [(_mt_str + _coerce( a, _str, stack.concat( a ) ))];
-
-            default:
-                if ( type === Date || typeof type === Date || type instanceof Date )
-                {
-                    return new Date( _coerce( a, _num, stack.concat( a ) ) );
-                }
-
-                if ( type === RegExp || typeof type === RegExp || type instanceof RegExp )
-                {
-                    let regExp = _coerce( a, _str, stack.concat( a ) );
-
-                    regExp = attempt( () => new RegExp( regExp ) );
-
-                    return regExp;
-                }
-
-                return _coerce( a, typeof type, stack.concat( a ) );
-        }
+        return coercion( coercedValue, resolvedType, [...stack, coercedValue] );
     };
-
-    /**
-     * @typedef {Object} ComparatorOptions
-     * @property {string|function} [type='*'] The type or class the compared values should be coerced to before being compared.<br> Defaults to '*' meaning the comparator will compare any 2 compatible types / values<br>
-     * @property {boolean} [strict=true] If true, values compared must be of the same type and no type coercion will be used
-     * @property {boolean} [nullsFirst=true] If true, null values will be considered less than other values,<br> If false, null values will be considered greater than other values<br>
-     * @property {boolean} [caseSensitive=true] If true, strings are compared according to case as well as content.<br> If false, strings are compared without regard to case.<br>
-     * @property {boolean} [trimStrings=false] If true, whitespace is ignored when comparing string values
-     * @property {boolean} [reverse=false] If true, items will be ordered in 'descending' order
-     * @property {boolean} [coerce=false] If true, values will be coerced to the same type before comparison
-     * @property {number} [maxStackSize=MAX_STACK_SIZE] The number of recursive calls allowed
-     */
-
-    /**
-     * These are default options for the ComparatorFactory class.
-     * @const
-     * @type {ComparatorOptions}
-     */
-    const DEFAULT_COMPARATOR_OPTIONS =
-        {
-            type: "*",
-            strict: true,
-            nullsFirst: true,
-            caseSensitive: true,
-            trimStrings: false,
-            reverse: false,
-            coerce: false,
-            maxStackSize: MAX_STACK_SIZE
-        };
-
-    /**
-     * This class can be used to create generic comparators.
-     * <br><br>
-     * ComparatorOptions can be used to control how the returned comparators behave.
-     * <br><br>
-     *
-     * @see ComparatorOptions
-     *
-     * @class
-     */
-    class ComparatorFactory
-    {
-        #type;
-        #strict = true;
-        #nullsFirst = true;
-        #reverse = false;
-        #caseSensitive = true;
-        #trimStrings = false;
-        #coerce = false;
-        #maxStackSize = MAX_STACK_SIZE;
-
-        #options = DEFAULT_COMPARATOR_OPTIONS;
-
-        /**
-         * Constructs an instance of the factory.
-         * <br><br>
-         * The factory itself is <b>not</b> a comparator.
-         * <br>
-         * Call the {@link ComparatorFactory#comparator} method to obtain a comparator after configuring the desired ComparatorOptions.
-         * <br>
-         * @constructor
-         * @param {string|function} [pType='*'] The type of values that will be compared
-         * @param {ComparatorOptions} [pOptions=DEFAULT_COMPARATOR_OPTIONS] An object describing how a comparator will behave.
-         * @see ComparatorOptions
-         */
-        constructor( pType = "*", pOptions = DEFAULT_COMPARATOR_OPTIONS )
-        {
-            this.#options = populateOptions( pOptions, DEFAULT_COMPARATOR_OPTIONS );
-
-            this.#type = pType || this.#options?.type || "*";
-
-            const options = this.#options;
-
-            this.#strict = false !== options?.strict && ("*" !== this.#type);
-            this.#nullsFirst = false !== options?.nullsFirst;
-            this.#caseSensitive = false !== options?.caseSensitive;
-            this.#trimStrings = false !== options?.trimStrings;
-            this.#reverse = true === options?.reverse;
-            this.#coerce = true === options?.coerce;
-            this.#maxStackSize = Math.max( 2, _getMaxStackSize( options ) );
-        }
-
-        clone()
-        {
-            return new ComparatorFactory( this.type, this.options );
-        }
-
-        /**
-         * Returns a constructor for this class.
-         * @returns {ComparatorFactory}
-         */
-        static get [Symbol.species]()
-        {
-            return this;
-        }
-
-        get type()
-        {
-            return this.#type || "*";
-        }
-
-        set type( pType )
-        {
-            this.#type = pType || this.#type || "*";
-        }
-
-        get maxStackSize()
-        {
-            return (isNum( this.#maxStackSize ) ? Math.max( 2, Math.min( this.#maxStackSize, MAX_STACK_SIZE ) ) : MAX_STACK_SIZE);
-        }
-
-        set maxStackSize( pValue )
-        {
-            this.#maxStackSize = (isNum( pValue ) ? Math.max( 2, Math.min( pValue || this.#maxStackSize, MAX_STACK_SIZE ) ) : MAX_STACK_SIZE);
-        }
-
-        _copyOptions( pOverrides )
-        {
-            const overrides = populateOptions( pOverrides, populateOptions( this.#options || {}, DEFAULT_COMPARATOR_OPTIONS ) );
-
-            return {
-                type: overrides?.type || this.type || "*",
-                strict: (false === overrides?.strict ? false : overrides?.strict || this.strict),
-                nullsFirst: (false === overrides?.nullsFirst ? false : overrides?.nullsFirst || this.nullsFirst),
-                caseSensitive: (false === overrides?.caseSensitive ? false : overrides?.caseSensitive || this.caseSensitive),
-                trimStrings: (false === overrides?.trimStrings ? false : overrides?.trimStrings || this.trimStrings),
-                reverse: (false === overrides?.reverse ? false : overrides?.reverse || this.reverse),
-                coerce: (false === overrides?.coerce ? false : overrides?.coerce || this.coerce),
-                maxStackSize: Math.max( 2, Math.min( isNum( overrides?.maxStackSize ) ? overrides?.maxStackSize : this.maxStackSize, MAX_STACK_SIZE ) ),
-            };
-        }
-
-        get options()
-        {
-            return populateOptions( this._copyOptions(), populateOptions( this.#options || {}, DEFAULT_COMPARATOR_OPTIONS ) );
-        }
-
-        get strict()
-        {
-            return true === this.#strict && "*" !== this.type;
-        }
-
-        set strict( pStrict )
-        {
-            this.#strict = !!pStrict;
-        }
-
-        get coerce()
-        {
-            return this.#coerce;
-        }
-
-        set coerce( pCoerce )
-        {
-            this.#coerce = pCoerce;
-        }
-
-        get nullsFirst()
-        {
-            return this.#nullsFirst;
-        }
-
-        set nullsFirst( pNullsFirst )
-        {
-            this.#nullsFirst = !!pNullsFirst;
-        }
-
-        get caseSensitive()
-        {
-            return this.#caseSensitive;
-        }
-
-        set caseSensitive( pCaseSensitive )
-        {
-            this.#caseSensitive = !!pCaseSensitive;
-        }
-
-        get trimStrings()
-        {
-            return this.#trimStrings;
-        }
-
-        set trimStrings( pTrimStrings )
-        {
-            this.#trimStrings = !!pTrimStrings;
-        }
-
-        get reverse()
-        {
-            return this.#reverse;
-        }
-
-        set reverse( pReverse )
-        {
-            this.#reverse = !!pReverse;
-        }
-
-        _compare( pA, pB, pOptions )
-        {
-            const options = populateOptions( pOptions, populateOptions( this.options || {}, DEFAULT_COMPARATOR_OPTIONS ) );
-
-            let stack = options.stack || [];
-
-            let strict = (true === options?.strict) || this.strict;
-
-            let coerce = (true === options?.coerce) || this.coerce;
-
-            let nullsFirst = (true === options?.nullsFirst) || this.nullsFirst;
-
-            let trimStrings = (true === options?.trimStrings) || this.trimStrings;
-
-            let caseSensitive = (true === options?.caseSensitive) || this.caseSensitive;
-
-            let reverse = (true === options?.reverse) || this.reverse;
-
-            let a = pA;
-            let b = pB;
-
-            a = _symbol === typeof a ? Symbol.keyFor( a ) : a;
-            b = _symbol === typeof b ? Symbol.keyFor( b ) : b;
-
-            a = a || (0 === a ? 0 : false === a ? false : _mt_str === a ? a : null);
-            b = b || (0 === b ? 0 : false === b ? false : _mt_str === b ? b : null);
-
-            let type = (_ud === typeof a || null === a) ? ((_ud === typeof b || null === b) ? _ud : typeof b) : typeof a;
-
-            if ( coerce )
-            {
-                type = ("*" !== this.type && _ud !== this.type && _ud !== typeof this.type) ? this.type : _str;
-
-                a = _coerce( a, type );
-                b = _coerce( b, type );
-            }
-
-            let isExpectedType = this.matchesType( a, b );
-
-            if ( strict && !isExpectedType )
-            {
-                return 0;
-            }
-
-            let comp = 0;
-
-            switch ( (type || this.type) )
-            {
-                case _ud:
-                    return nullsFirst ? -1 : 1;
-
-                case _str:
-
-                    a = (null === a) ? _mt_str : a;
-                    b = (null === b) ? _mt_str : b;
-
-                    a = _mt_str + (trimStrings ? (_mt_str + a).trim() : a);
-                    b = _mt_str + (trimStrings ? (_mt_str + b).trim() : b);
-
-                    if ( !caseSensitive )
-                    {
-                        a = (_mt_str + a).toUpperCase();
-                        b = (_mt_str + b).toUpperCase();
-                    }
-
-                    comp = a > b ? 1 : a < b ? -1 : 0;
-
-                    break;
-
-                case _num:
-                case _big:
-
-                    a = null === a ? NaN : parseFloat( a );
-                    b = null === b ? NaN : parseFloat( b );
-
-                    if ( isNaN( a ) || null === a )
-                    {
-                        if ( isNaN( b ) || null === b )
-                        {
-                            return 0;
-                        }
-                        return (nullsFirst ? -1 : 1);
-                    }
-                    else if ( isNaN( b ) || null === b )
-                    {
-                        return (nullsFirst ? 1 : -1);
-                    }
-
-                    comp = a > b ? 1 : a < b ? -1 : 0;
-
-                    break;
-
-                case _bool:
-                    a = (a ? 1 : -1);
-                    b = (b ? 1 : -1);
-
-                    comp = a > b ? 1 : a < b ? -1 : 0;
-
-                    break;
-
-                case _fun:
-                    return 0;
-
-                case _symbol:
-                    return 0;
-
-                case _obj:
-
-                    if ( null === a )
-                    {
-                        if ( null === b )
-                        {
-                            return 0;
-                        }
-                        return (nullsFirst ? -1 : 1);
-                    }
-                    else if ( null === b )
-                    {
-                        return (nullsFirst ? 1 : -1);
-                    }
-
-                    if ( isFunc( a?.compareTo ) )
-                    {
-                        comp = a.compareTo( b ) || 0;
-                        break;
-                    }
-
-                    if ( isArray( a ) )
-                    {
-                        if ( isArray( b ) )
-                        {
-                            let comp = a.length > b.length ? 1 : a.length < b.length ? -1 : 0;
-
-                            if ( 0 === comp )
-                            {
-                                for( let i = 0, n = a.length; i < n && 0 === comp; i++ )
-                                {
-                                    comp = this._compare( a[i], b[i], { stack, ...options } );
-                                }
-                            }
-                        }
-
-                        comp = a.length > 1 ? 1 : comp = a.length > 0 ? this._compare( a[0], b, { stack, ...options } ) : _mt_str === (_mt_str + b) ? 0 : -1;
-
-                        break;
-                    }
-                    else if ( isArray( b ) )
-                    {
-                        comp = b.length > 1 ? -1 : comp = b.length > 0 ? this._compare( a, b[0], { stack, ...options } ) : _mt_str === (_mt_str + a) ? 0 : 1;
-                        break;
-                    }
-
-                    if ( a instanceof Date || [_num, _big].includes( typeof a ) )
-                    {
-                        if ( b instanceof Date || [_num, _big].includes( typeof b ) )
-                        {
-                            comp = a > b ? 1 : a < b ? -1 : 0;
-                        }
-                        break;
-                    }
-
-                    if ( a instanceof RegExp || [_str].includes( typeof a ) )
-                    {
-                        let sa = a.toString();
-
-                        if ( b instanceof RegExp || [_str].includes( typeof b ) )
-                        {
-                            let sb = b.toString();
-
-                            const comparator = new ComparatorFactory( _str ).comparator();
-
-                            comp = comparator( sa, sb );
-                        }
-                        break;
-                    }
-
-                    for( let prop in a )
-                    {
-                        let propValue = a[prop];
-                        let otherValue = b[prop];
-
-                        comp = this._compare( propValue, otherValue, { stack, ...options } );
-
-                        if ( 0 !== comp )
-                        {
-                            break;
-                        }
-                    }
-
-                    break;
-
-                default:
-                    comp = 0;
-            }
-
-            return (reverse ? -comp : comp);
-        }
-
-        /**
-         * Returns a function that can be passed to the 'sort' method of an order-able object, such as Array
-         * @returns {function(*, *): number} a function that can be passed to the 'sort' method of an order-able object, such as Array
-         */
-        comparator()
-        {
-            const me = this;
-
-            return function( pA, pB )
-            {
-                return me._compare( pA, pB, me.options );
-            };
-        }
-
-        matchesType( pA, pB, pType )
-        {
-            let type = pType || this.type;
-
-            const typeIsClass = isFunc( type );
-
-            if ( "*" === type )
-            {
-                return true;
-            }
-
-            let a = pA;
-            let b = pB;
-
-            if ( this.coerce )
-            {
-                a = _coerce( a, type );
-                b = _coerce( b, type );
-            }
-
-            if ( null === pA || _ud === typeof pA )
-            {
-                if ( null === pB || _ud === typeof pB )
-                {
-                    return true;
-                }
-                return (typeof b === type || (typeIsClass && pB instanceof type));
-            }
-            else if ( null === pB || _ud === typeof pB )
-            {
-                return (typeof a === type || (typeIsClass && pA instanceof type));
-            }
-
-            return (typeof a === typeof b) && (typeof a === type || (typeIsClass && a instanceof type)) && (typeof b === type || (typeIsClass && b instanceof type));
-        }
-
-        /**
-         * Returns a function to sort elements or properties of an order-able object, such as an array<br>
-         * that treats null values as less than any other values
-         * @see {@link ComparatorFactory#comparator}
-         * @returns {function(*, *): number}
-         */
-        nullsFirstComparator()
-        {
-            const options = this._copyOptions( { nullsFirst: true } );
-            return new ComparatorFactory( this.type, options ).comparator();
-        }
-
-        /**
-         * Returns a function to sort elements or properties of an order-able object, such as an array<br>
-         * that treats null values as greater than any other values
-         * @see {@link ComparatorFactory#comparator}
-         * @returns {function(*, *): number}
-         */
-        nullsLastComparator()
-        {
-            const options = this._copyOptions( { nullsFirst: false } );
-            return new ComparatorFactory( this.type, options ).comparator();
-        }
-
-        /**
-         * Returns a function to sort elements or properties of an order-able object, such as an array<br>
-         * that compares string values without regard to case
-         * @see {@link ComparatorFactory#comparator}
-         * @returns {function(*, *): number}
-         */
-        caseInsensitiveComparator()
-        {
-            const options = this._copyOptions( { caseSensitive: false, type: "string" } );
-            return new ComparatorFactory( options?.type || this.type, options ).comparator();
-        }
-
-        /**
-         * Returns a function to sort elements or properties of an order-able object, such as an array<br>
-         * that will reverse the order ordinarily obtained
-         * @see {@link ComparatorFactory#comparator}
-         * @returns {function(*, *): number}
-         */
-        reverseComparator()
-        {
-            const options = this._copyOptions( { reverse: true } );
-            return new ComparatorFactory( this.type, options ).comparator();
-        }
-    }
 
     /**
      * This is the maximum allowed value for instances of the IterationCap class
@@ -4135,7 +3705,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             __Error,
             IllegalArgumentError,
             IterationCap,
-            ComparatorFactory,
             StatefulListener,
             Visitor,
 
@@ -4185,7 +3754,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
                     __Error,
                     IllegalArgumentError,
                     IterationCap,
-                    ComparatorFactory,
                     StatefulListener,
                     Visitor
                 }

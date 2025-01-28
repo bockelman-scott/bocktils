@@ -102,7 +102,6 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             IllegalArgumentError,
             resolveError,
             IterationCap,
-            ComparatorFactory,
             StatefulListener,
             ExecutionMode,
             ExecutionEnvironment,
@@ -668,7 +667,6 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * <li><i>IllegalArgumentError</i>: A subclass of the __Error class<br>
              *                                  specifically intended for reporting when expected arguments to functions or methods are missing or invalid</li>
              * <li><i>IterationCap</i>: A class to make it easy to limit iterations when other conditions may fail to terminate the loop</li>
-             * <li><i>ComparatorFactory</i>: A Factory class to generate comparators, functions to pass to Array.sort</li>
              * <li><i>StackTrace</i>: A utility class for capturing and managing stack traces in any execution environment</li>
              * </ul>
              * @alias module:Constants#classes
@@ -686,6 +684,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
                      * @alias module:Constants#classes#ModuleEvent
                      */
                     ModuleEvent,
+
                     /**
                      * This is the base class for all ToolBocks&trade; modules.
                      * <br>
@@ -705,6 +704,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
                      * @alias module:Constants#classes#ModulePrototype
                      */
                     ModulePrototype,
+
                     /**
                      * This class allows custom Errors to be defined.
                      * <br>
@@ -716,6 +716,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
                      * @alias module:Constants#classes#__Error
                      */
                     __Error,
+
                     /**
                      * This subclass of Error is useful when validating function arguments.
                      * <br>
@@ -727,6 +728,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
                      * @alias module:Constants#classes#IllegalArgumentError
                      */
                     IllegalArgumentError,
+
                     /**
                      * This class allows us to easily cap an iteration,<br>
                      * such as a 'for' loop or a 'while' loop.
@@ -750,17 +752,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
                      * @alias module:Constants#classes#IterationCap
                      */
                     IterationCap,
-                    /**
-                     * This class can be used to create generic comparators.
-                     * <br><br>
-                     * ComparatorOptions can be used to control how the returned comparators behave.
-                     * <br>
-                     * @see ComparatorOptions
-                     *
-                     * @class
-                     * @alias module:Constants#classes#ComparatorFactory
-                     */
-                    ComparatorFactory,
+
                     /**
                      * This class provides cross-environment functionality related to an error's stack (trace)
                      * <br><br>
@@ -769,10 +761,15 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
                      * @alias module:Constants#classes#StackTrace
                      */
                     StackTrace,
+
                     CustomEvent,
+
                     StatefulListener,
+
                     ExecutionEnvironment,
+
                     ExecutionMode,
+
                     Visitor
                 },
             _ud,
@@ -1929,18 +1926,6 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             resolveError,
 
             asPhrase,
-
-            /**
-             * This class can be used to create generic comparators.
-             * <br><br>
-             * ComparatorOptions can be used to control how the returned comparators behave.
-             * <br>
-             * @see ComparatorOptions
-             *
-             * @class
-             * @alias module:Constants#ComparatorFactory
-             */
-            ComparatorFactory,
 
             $scope,
 

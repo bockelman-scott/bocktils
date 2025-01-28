@@ -98,7 +98,6 @@ const $scope = constants?.$scope || function()
             _obj,
             _symbol,
             IllegalArgumentError,
-            ComparatorFactory,
             funcToString,
             populateOptions,
             lock,
@@ -2696,48 +2695,6 @@ const $scope = constants?.$scope || function()
 
     String.prototype.tidy = tidy;
 
-    class StringComparatorFactory extends ComparatorFactory
-    {
-        constructor( pOptions )
-        {
-            super( _str, pOptions );
-        }
-
-        _compare( pA, pB, pOptions )
-        {
-            let comp = super._compare( pA, pB, pOptions );
-
-            if ( 0 === comp )
-            {
-                let a = asString( pA, this.trimStrings );
-                let b = asString( pB, this.trimStrings );
-
-                if ( !this.caseSensitive )
-                {
-                    a = ucase( a );
-                    b = ucase( b );
-                }
-
-                comp = a > b ? 1 : a < b ? -1 : 0;
-
-                if ( 0 === comp )
-                {
-                    a = asString( pA, this.trimStrings );
-                    b = asString( pB, this.trimStrings );
-
-                    comp = a > b ? 1 : a < b ? -1 : 0;
-                }
-
-                if ( this.reverse )
-                {
-                    comp = -comp;
-                }
-            }
-
-            return comp;
-        }
-    }
-
     function toggleCaps( pStr, pFirstLetterCase, pRestCase )
     {
         let str = asString( pStr );
@@ -2869,8 +2826,7 @@ const $scope = constants?.$scope || function()
             getFunctionSource,
             asUtf8ByteArray,
             fromUtf8ByteArray,
-            classes: { StringComparatorFactory, ModuleEvent, ModulePrototype, CustomEvent },
-            StringComparatorFactory
+            classes: { ModuleEvent, ModulePrototype, CustomEvent },
         };
 
     mod = modulePrototype.extend( mod );
