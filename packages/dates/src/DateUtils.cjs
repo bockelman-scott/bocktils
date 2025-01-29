@@ -1,17 +1,18 @@
 const core = require( "../../core/src/CoreUtils.cjs" );
 
 /**
- * Establish separate constants for each of the common utilities imported
- * @see ../src/CommonUtils.cjs
+ * Establish separate constants for each of the utilities imported
+ * @see ../src/CoreUtils.cjs
  */
 const { constants, typeUtils, stringUtils, arrayUtils } = core;
 
-const { _ud = "undefined" } = constants;
-
-const $scope = core?.$scope || constants?.$scope || function()
-{
-    return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-};
+const {
+    _ud = "undefined",
+    $scope = (core?.$scope || constants?.$scope || function()
+    {
+        return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
+    })
+} = constants;
 
 // noinspection FunctionTooLongJS
 (function exposeModule()
@@ -37,14 +38,14 @@ const $scope = core?.$scope || constants?.$scope || function()
         populateOptions,
         IterationCap,
         IllegalArgumentError,
-        no_op,
         op_true,
-        op_false
+        op_false,
+        objectEntries
     } = constants;
 
-    const { Result, isDate, isNumber, isFunction, isValidDateInstance } = typeUtils;
+    const { Result, isString, isDate, isNumber, isFunction, isValidDateInstance } = typeUtils;
 
-    const { asString, asInt, toBool } = stringUtils;
+    const { asString, asInt, toBool, ucase } = stringUtils;
 
     const { asArray, varargs, Filters } = arrayUtils;
 
@@ -72,6 +73,174 @@ const $scope = core?.$scope || constants?.$scope || function()
             YEAR: 9,
             DECADE: 10,
             DAY_OF_WEEK: 11
+        } );
+
+    const UNIT_NAMES = {};
+
+    const UNIT_MULTIPLES =
+        {
+            MILLISECOND: 1,
+            SECOND: 1_000,
+            MINUTE: 60_000,
+            HOUR: 3_600_000,
+            DAY: 86_400_000,
+            WEEK: 604_800_000,
+            WORK_WEEK: (7 * 86_400_000),
+            MONTH: 2_592_000_000,
+            YEAR: 31_536_000_000,
+            DECADE: 315_360_000_000
+        };
+
+    objectEntries( UNIT ).forEach( ( [key, value] ) => UNIT_NAMES[value] = ucase( key ) );
+
+    const resolveUnit = ( pUnit ) => (isNumber( pUnit ) && pUnit < 1_000) ? pUnit : UNIT[ucase( asString( pUnit ) )] || UNIT_NAMES[pUnit];
+
+    const resolveUnitName = ( pUnit ) => UNIT_NAMES[resolveUnit( pUnit )];
+
+    const UNIT_METHODS =
+        {
+            MILLISECOND: ["setMilliseconds", "getMilliseconds"],
+            SECOND: ["setSeconds", "getSeconds"],
+            MINUTE: ["setMinutes", "getMinutes"],
+            HOUR: ["setHours", "getHours"],
+            DAY: ["setDate", "getDate"],
+            WEEK: ["setDate", "getDate"],
+            WORK_WEEK: ["setDate", "getDate"],
+            MONTH: ["setMonth", "getMonth"],
+            YEAR: ["setFullYear", "getFullYear"],
+            DECADE: ["setFullYear", "getFullYear"]
+        };
+
+    UNIT_METHODS.update = ( pDate, pUnit, pAdjustment ) =>
+    {
+        const date = isValidDateArgument( pDate ) ? new Date( pDate ) : new Date();
+
+        const key = resolveUnitName( resolveUnit( pUnit ) );
+
+        const methods = UNIT_METHODS[key];
+        const accessor = methods[1];
+        const mutator = methods[0];
+
+        return new Date( date[mutator]( date[accessor]() + asInt( pAdjustment ) ) );
+    };
+
+    class TimeUnit
+    {
+        #unit;
+        #name;
+        #multiplier;
+
+        constructor( pUnit )
+        {
+            this.#unit = resolveUnit( pUnit );
+            this.#name = resolveUnitName( pUnit );
+            this.#multiplier = UNIT_MULTIPLES[this.#name];
+        }
+
+        get unit()
+        {
+            return this.#unit;
+        }
+
+        get name()
+        {
+            return this.#name;
+        }
+
+        get multiplier()
+        {
+            return asInt( this.#multiplier );
+        }
+
+        resolveMultiplier( pOther )
+        {
+            if ( pOther === this )
+            {
+                return this.multiplier;
+            }
+
+            if ( pOther instanceof this.constructor )
+            {
+                return pOther.multiplier;
+            }
+
+            if ( isNumber( pOther ) )
+            {
+                if ( pOther >= 1_000 )
+                {
+                    return asInt( pOther );
+                }
+
+                return TIME_UNITS[resolveUnitName( asInt( pOther ) )]?.multiplier ?? 0;
+            }
+
+            return asInt( isString( pOther ) ? UNIT_MULTIPLES[ucase( asString( pOther, true ) )] : 0 );
+        }
+
+        lessThan( pOther )
+        {
+            return this.multiplier < this.resolveMultiplier( pOther );
+        }
+
+        greaterThan( pOther )
+        {
+            return this.multiplier > this.resolveMultiplier( pOther );
+        }
+
+        compareTo( pOther )
+        {
+            return this.lessThan( pOther ) ? -1 : this.greaterThan( pOther ) ? 1 : 0;
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
+        get mutator()
+        {
+            const methods = UNIT_METHODS[this.name];
+            return methods[0];
+        }
+
+        get accessor()
+        {
+            const methods = UNIT_METHODS[this.name];
+            return methods[1];
+        }
+
+        update( pDate, pAdjustment )
+        {
+            if ( this.greaterThan( TIME_UNITS[UNIT_NAMES[UNIT.YEAR]] || new TimeUnit( UNIT.YEAR ) ) )
+            {
+                let date = new Date( pDate );
+
+                date.setFullYear( date.getFullYear() + (10 - (date.getFullYear() % 10)) );
+
+                if ( pAdjustment < 0 )
+                {
+                    date.setFullYear( date.getFullYear() + (2 * pAdjustment) );
+                }
+
+                return lock( date );
+            }
+
+            return lock( UNIT_METHODS.update( pDate, this.unit, pAdjustment ) );
+        }
+    }
+
+    const TIME_UNITS = lock(
+        {
+            MILLISECOND: lock( new TimeUnit( UNIT.MILLISECOND ) ),
+            SECOND: lock( new TimeUnit( UNIT.SECOND ) ),
+            MINUTE: lock( new TimeUnit( UNIT.MINUTE ) ),
+            HOUR: lock( new TimeUnit( UNIT.HOUR ) ),
+            DAY: lock( new TimeUnit( UNIT.DAY ) ),
+            WEEK: lock( new TimeUnit( UNIT.WEEK ) ),
+            WORK_WEEK: lock( new TimeUnit( UNIT.WORK_WEEK ) ),
+            MONTH: lock( new TimeUnit( UNIT.MONTH ) ),
+            YEAR: lock( new TimeUnit( UNIT.YEAR ) ),
+            DECADE: lock( new TimeUnit( UNIT.DECADE ) )
         } );
 
     const DateConstants = lock(
@@ -121,6 +290,10 @@ const $scope = core?.$scope || constants?.$scope || function()
                     PAST: -1
                 } ),
             Units: lock( UNIT ),
+            UnitNames: lock( UNIT_NAMES ),
+            UnitMethods: lock( UNIT_METHODS ),
+            UnitMultiples: lock( UNIT_MULTIPLES ),
+            TimeUnits: lock( TIME_UNITS ),
             MILLISECONDS_PER_SECOND: 1_000,
             SECONDS_PER_MINUTE: 60,
             MINUTES_PER_HOUR: 60,
@@ -129,7 +302,6 @@ const $scope = core?.$scope || constants?.$scope || function()
             DAYS_PER_WORK_WEEK: 5
         } );
 
-    const MILLISECOND = 1;
     const MILLIS_PER_SECOND = DateConstants.MILLISECONDS_PER_SECOND;
     const MILLIS_PER_MINUTE = (DateConstants.SECONDS_PER_MINUTE * MILLIS_PER_SECOND);
     const MILLIS_PER_HOUR = (DateConstants.MINUTES_PER_HOUR * MILLIS_PER_MINUTE);
@@ -167,96 +339,26 @@ const $scope = core?.$scope || constants?.$scope || function()
      * Returns a function that will add or subtract one unit to the specified date
      *
      * @param pUnit one of the UNIT constants
-     * @param pDecrement {boolean} pass true to returns a function that subtracts one unit instead
+     * @param pAsDecrement {boolean} pass true to return a function that subtracts one unit instead
      */
-    const incrementer = function( pUnit, pDecrement = false )
+    const incrementer = function( pUnit, pAsDecrement = false )
     {
-        let millis = 0;
+        const increment = pAsDecrement ? -1 : 1;
 
-        let increment = true === pDecrement ? -1 : 1;
+        const unit = resolveUnit( pUnit );
 
-        switch ( pUnit )
-        {
-            case UNIT.MILLISECOND:
-                millis = MILLISECOND;
-                break;
+        const timeUnit = TIME_UNITS[resolveUnitName( unit )];
 
-            case UNIT.SECOND:
-                millis = MILLIS_PER_SECOND;
-                break;
+        let adjustment = timeUnit.lessThan( TIME_UNITS[UNIT.MINUTE] ) ? (timeUnit.multiplier * increment) : increment;
 
-            case UNIT.MINUTE:
-                return function( pDate )
-                {
-                    let date = new Date( pDate );
-                    date.setMinutes( date.getMinutes() + increment );
-                    return lock( date );
-                };
+        adjustment *= [UNIT_NAMES.WEEK, UNIT_NAMES.WORK_WEEK].includes( timeUnit.name ) ? DateConstants.DAYS_PER_WEEK : 1;
 
-            case UNIT.HOUR:
-                return function( pDate )
-                {
-                    let date = new Date( pDate );
-                    date.setHours( date.getHours() + increment );
-                    return lock( date );
-                };
+        adjustment = [UNIT_NAMES.DECADE].includes( timeUnit.name ) ? (10 - (date.getFullYear() % 10)) : adjustment;
 
-            case UNIT.DAY:
-                return function( pDate )
-                {
-                    let date = new Date( pDate );
-                    date.setDate( date.getDate() + increment );
-                    return lock( date );
-                };
-
-            case UNIT.WEEK:
-                return function( pDate )
-                {
-                    let date = new Date( pDate );
-                    date.setDate( date.getDate() + (DateConstants.DAYS_PER_WEEK * increment) );
-                    return lock( date );
-                };
-
-            case UNIT.YEAR:
-                return function( pDate )
-                {
-                    let date = new Date( pDate );
-                    date.setFullYear( date.getFullYear() + increment );
-                    return lock( date );
-                };
-
-            case UNIT.MONTH:
-                return function( pDate )
-                {
-                    let date = new Date( pDate );
-                    date.setMonth( date.getMonth() + increment );
-                    return lock( date );
-                };
-
-            case UNIT.DECADE:
-                return function( pDate )
-                {
-                    let date = new Date( pDate );
-                    date.setFullYear( date.getFullYear() + (10 - (date.getFullYear() % 10)) );
-                    if ( true === pDecrement )
-                    {
-                        date.setFullYear( date.getFullYear() + (2 * increment) );
-                    }
-                    return lock( date );
-                };
-
-        }
-
-        return function( pDate )
-        {
-            return lock( new Date( pDate.getTime() + millis ) );
-        };
+        return ( pDate ) => timeUnit.update( pDate, adjustment );
     };
 
-    const isLeapYear = function( pYear )
-    {
-        return (((0 === (pYear % 4)) && ((0 !== (pYear % 100)) || (0 === (pYear % 400)))));
-    };
+    const isLeapYear = ( pYear ) => (((0 === (pYear % 4)) && ((0 !== (pYear % 100)) || (0 === (pYear % 400)))));
 
     class Month
     {
@@ -364,17 +466,11 @@ const $scope = core?.$scope || constants?.$scope || function()
 
     const months = lock( Object.entries( MONTHS_DATA ) );
 
-    const isValidDateArgument = function( pDate )
-    {
-        return isValidDateInstance( pDate ) || isNumber( pDate );
-    };
+    const isValidDateArgument = ( pDate ) => isValidDateInstance( pDate ) || isNumber( pDate );
 
     const validateArguments = ( pDateA, pDateB ) => isValidDateArgument( pDateA ) && isValidDateArgument( pDateB );
 
-    const toTimestamp = function( pDate, pDefault = Date.now() )
-    {
-        return isDate( pDate ) ? pDate.getTime() : isNumber( pDate ) ? Math.floor( pDate ) : pDefault || Date.now();
-    };
+    const toTimestamp = ( pDate, pDefault = Date.now() ) => isDate( pDate ) ? pDate.getTime() : isNumber( pDate ) ? Math.floor( pDate ) : pDefault || Date.now();
 
     const transform = function( pDate, pFunction )
     {
@@ -442,7 +538,6 @@ const $scope = core?.$scope || constants?.$scope || function()
 
         return [].concat( dates.map( ( date ) => new Date( +date ) ) );
     };
-
 
     /**
      * Returns true if the first date is earlier than the second date.
@@ -598,7 +693,7 @@ const $scope = core?.$scope || constants?.$scope || function()
 
         const day = date.getDay();
 
-        const unit = isNumber( pUnit ) ? pUnit : UNIT[stringUtils.asString( pUnit ).toUpperCase()];
+        const unit = resolveUnit( pUnit );
 
         switch ( unit )
         {
@@ -703,7 +798,7 @@ const $scope = core?.$scope || constants?.$scope || function()
     {
         let date = isDate( pDate ) ? new Date( pDate ) : new Date();
 
-        const unit = isNumber( pUnit ) ? pUnit : UNIT[stringUtils.asString( pUnit ).toUpperCase()];
+        const unit = resolveUnit( pUnit );
 
         switch ( unit )
         {
@@ -830,7 +925,6 @@ const $scope = core?.$scope || constants?.$scope || function()
 
                 return op_false;
             }
-
         };
 
     const calculateOccurrencesOf = function( pYear, pMonth, pDay )
@@ -1483,10 +1577,7 @@ const $scope = core?.$scope || constants?.$scope || function()
             includeWeekends: false,
             includeHolidays: true,
             maxDates: 10_000,
-            exitCriteria: function( pDate, pEndDate, pIterations )
-            {
-                return pIterations >= this.maxDates || isValidDateArgument( pEndDate ) && pDate >= pEndDate;
-            },
+            exitCriteria: ( pDate, pEndDate, pIterations ) => pIterations >= this.maxDates || isValidDateArgument( pEndDate ) && pDate >= pEndDate,
             holidays: HOLIDAYS.USA
         };
 
@@ -1588,14 +1679,15 @@ const $scope = core?.$scope || constants?.$scope || function()
 
         /**
          *
-         * @returns {function():boolean}
+         * @returns {function(pDate:Date,pEndDate:Date,pIterations:number,pMaxIterations:number):boolean}
          */
         get exitCriteria()
         {
-            return isFunction( this.#exitCriteria ) ? this.#exitCriteria : ( pDate, pEndDate, pIterations, pMaxIterations ) =>
+            if ( isFunction( this.#exitCriteria ) )
             {
-                return pIterations >= pMaxIterations || (isValidDateArgument( pEndDate ) && pDate >= pEndDate);
-            };
+                return this.#exitCriteria;
+            }
+            return ( pDate, pEndDate, pIterations, pMaxIterations ) => pIterations >= pMaxIterations || (isValidDateArgument( pEndDate ) && pDate >= pEndDate);
         }
 
         map( ...pFunctions )
@@ -1626,7 +1718,7 @@ const $scope = core?.$scope || constants?.$scope || function()
             const end = this.endDate;
 
             const interval = asInt( this.interval );
-            const maxDates = this.maxDates;
+            const maxDates = asInt( iterable.maxDates );
 
             const includeWeekends = this.includeWeekends;
             const includeHolidays = this.includeHolidays;
@@ -1697,15 +1789,9 @@ const $scope = core?.$scope || constants?.$scope || function()
         }
     }
 
-    const getWeekdays = function( pStartDate, pEndDate, pOptions = DATES_ITERABLE_OPTIONS )
-    {
-        return new DatesIterable( pStartDate, pEndDate, pOptions );
-    };
+    const getWeekdays = ( pStartDate, pEndDate, pOptions = DATES_ITERABLE_OPTIONS ) => new DatesIterable( pStartDate, pEndDate, pOptions );
 
-    const getBusinessDays = function( pStartDate, pEndDate, pOptions = DATES_ITERABLE_WORKDAY_OPTIONS )
-    {
-        return new DatesIterable( pStartDate, pEndDate, pOptions );
-    };
+    const getBusinessDays = ( pStartDate, pEndDate, pOptions = DATES_ITERABLE_WORKDAY_OPTIONS ) => new DatesIterable( pStartDate, pEndDate, pOptions );
 
     let mod =
         {
@@ -1713,6 +1799,7 @@ const $scope = core?.$scope || constants?.$scope || function()
             DateConstants,
             classes:
                 {
+                    TimeUnit,
                     Holiday,
                     HolidayDefinition,
                     HolidayExactDateDefinition,
@@ -1737,6 +1824,10 @@ const $scope = core?.$scope || constants?.$scope || function()
             TWELVE_HOURS,
             ONE_DAY,
             UNIT,
+            UNIT_NAMES,
+            UNIT_MULTIPLES,
+            UNIT_METHODS,
+            TIME_UNITS,
             HOLIDAYS,
             US_HOLIDAYS: HOLIDAYS.USA,
             isDate,
