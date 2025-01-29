@@ -6,8 +6,6 @@ const core = require( "../../core/src/CoreUtils.cjs" );
  */
 const { constants, typeUtils, stringUtils, arrayUtils } = core;
 
-const funcUtils = require( "../../common/src/FunctionUtils.cjs" );
-
 const { _ud = "undefined" } = constants;
 
 const $scope = core?.$scope || constants?.$scope || function()
@@ -15,6 +13,7 @@ const $scope = core?.$scope || constants?.$scope || function()
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };
 
+// noinspection FunctionTooLongJS
 (function exposeModule()
 {
     const INTERNAL_NAME = "__BOCK__DATE_UTILS__";
@@ -32,15 +31,22 @@ const $scope = core?.$scope || constants?.$scope || function()
             arrayUtils
         };
 
-    const { classes, lock, populateOptions, IterationCap, IllegalArgumentError } = constants;
+    const {
+        classes,
+        lock,
+        populateOptions,
+        IterationCap,
+        IllegalArgumentError,
+        no_op,
+        op_true,
+        op_false
+    } = constants;
 
-    const { Result, isDate, isNumber, isFunction } = typeUtils;
+    const { Result, isDate, isNumber, isFunction, isValidDateInstance } = typeUtils;
 
     const { asString, asInt, toBool } = stringUtils;
 
     const { asArray, varargs, Filters } = arrayUtils;
-
-    const { attempt, op_true, op_false } = funcUtils;
 
     const { ModuleEvent, ModulePrototype } = classes;
 
@@ -318,9 +324,9 @@ const $scope = core?.$scope || constants?.$scope || function()
             return this.#year;
         }
 
-        set year( value )
+        set year( pValue )
         {
-            this.#year = value;
+            this.#year = pValue;
         }
 
         get days()
@@ -360,13 +366,10 @@ const $scope = core?.$scope || constants?.$scope || function()
 
     const isValidDateArgument = function( pDate )
     {
-        return isDate( pDate ) || isNumber( pDate );
+        return isValidDateInstance( pDate ) || isNumber( pDate );
     };
 
-    const validateArguments = function( pDateA, pDateB )
-    {
-        return isValidDateArgument( pDateA ) && isValidDateArgument( pDateB );
-    };
+    const validateArguments = ( pDateA, pDateB ) => isValidDateArgument( pDateA ) && isValidDateArgument( pDateB );
 
     const toTimestamp = function( pDate, pDefault = Date.now() )
     {
@@ -382,7 +385,7 @@ const $scope = core?.$scope || constants?.$scope || function()
             errors.push( new IllegalArgumentError( "The second argument to transform must be a function with at least one parameter" ) );
         }
 
-        return (isFunction( pFunction ) ? attempt( pFunction, pDate ) : new Result( pDate, errors ));
+        return (isFunction( pFunction ) ? modulePrototype.attempt( pFunction, pDate ) : new Result( pDate, errors ));
     };
 
     const _compare = function( pDateA, pDateB, pTransformerFunction )
@@ -399,6 +402,7 @@ const $scope = core?.$scope || constants?.$scope || function()
         return tsA - tsB;
     };
 
+    // noinspection OverlyComplexFunctionJS
     const _setFields = function( pDate, pYear, pMonth, pDay, pHours, pMinutes, pSeconds, pMilliseconds )
     {
         if ( isValidDateArgument( pDate ) )
@@ -1582,6 +1586,10 @@ const $scope = core?.$scope || constants?.$scope || function()
             return asArray( this.#holidays || HOLIDAYS.USA );
         }
 
+        /**
+         *
+         * @returns {function():boolean}
+         */
         get exitCriteria()
         {
             return isFunction( this.#exitCriteria ) ? this.#exitCriteria : ( pDate, pEndDate, pIterations, pMaxIterations ) =>

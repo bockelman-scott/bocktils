@@ -275,7 +275,7 @@ const $scope = constants?.$scope || function()
             {
                 this.#message = pMessage?.message || pMessage?.name || _mt_str;
                 this.#level = pLevel instanceof LogLevel || isNumeric( pLevel ) ? LogLevel.resolveLevel( pLevel, { level: LogLevel.ERROR } ) : LogLevel.ERROR;
-                this.#error = pMessage;
+                this.#error = resolveError( pMessage, pError?.message || pError ) || pError;
                 this.#source = resolveSource( pSource, pMessage );
                 this.#data = asArray( varargs( ...pData ) );
             }
@@ -289,7 +289,7 @@ const $scope = constants?.$scope || function()
 
                 this.#message = asString( detail.message || (isString( evt ) ? asString( evt ) : type) ) || _mt_str;
                 this.#level = LogLevel.resolveLevel( detail.level || type || S_ERROR ) || S_ERROR;
-                this.#error = resolveError( (pError instanceof Error ? pError : null) || detail.error, (detail.message || pError?.message || _mt_str) );
+                this.#error = resolveError( isError( pError ) ? pError : evt?.error, pError?.message );
                 this.#source = resolveSource( pSource || detail.source || target?.name, this.#error || pMessage || pSource );
                 this.#data = asArray( varargs( ...pData ) || asArray( detail.data ) );
             }

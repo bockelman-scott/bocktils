@@ -83,7 +83,26 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
         {
             ModuleEvent,
             ModulePrototype,
+            TYPES_CHECKS,
+            getExecutionEnvironment,
+            getGlobalLogger,
+            setGlobalLogger,
+            exportModule,
+            requireModule,
+            importModule,
             calculateErrorSourceName,
+            no_op,
+            op_true,
+            op_false,
+            op_identity,
+            canBind,
+            resolveMethod,
+            attempt,
+            attemptMethod,
+            asyncAttempt,
+            asyncAttemptMethod,
+            bindMethod,
+            fireAndForget,
             asPhrase,
             isReadOnly,
             isObjectLiteral,
@@ -101,6 +120,10 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             __Error,
             IllegalArgumentError,
             resolveError,
+            resolveEvent,
+            resolveObject,
+            resolveLogLevel,
+            resolveType,
             IterationCap,
             StatefulListener,
             ExecutionMode,
@@ -317,9 +340,6 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * Strings that are interpreted as 'true' when encountered in JSON or other configuration contexts
              */
             _affirmatives = lock( [].concat( ...([S_TRUE, "1", "on", S_ENABLED, "t", S_YES]) ) ),
-
-            // does nothing, on purpose
-            no_op = function() {},
 
             ignore = no_op,
 
@@ -654,7 +674,10 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
 
     let mod =
         {
+            $scope,
+
             dependencies,
+
             /**
              * The classes exported with this module.<br>
              * <br>
@@ -772,7 +795,9 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
 
                     Visitor
                 },
+
             _ud,
+
             /**
              * The string returned by the typeof operator when applied to an {@link Object}<br>
              * Value: "object"
@@ -781,6 +806,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_obj
              */
             _obj,
+
             /**
              * The string returned by the typeof operator when applied to a {@link Function}<br>
              * Value: "function"
@@ -789,6 +815,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_fun
              */
             _fun,
+
             /**
              * The string returned by the typeof operator when applied to a {@link String}<br>
              * Value: "string"
@@ -797,6 +824,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_str
              */
             _str,
+
             /**
              * The string returned by the typeof operator when applied to a {@link Number}<br>
              * Value: "number"
@@ -805,6 +833,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_num
              */
             _num,
+
             /**
              * The string returned by the typeof operator when applied to a {@link BigInt}<br>
              * Value: "bigint"
@@ -813,6 +842,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_big
              */
             _big,
+
             /**
              * The string returned by the typeof operator when applied to a {@link boolean}<br>
              * Value: "boolean"
@@ -821,6 +851,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_bool
              */
             _bool,
+
             /**
              * The string returned by the typeof operator when applied to a {@link Symbol}<br>
              * Value: "symbol"
@@ -829,6 +860,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_symbol
              */
             _symbol,
+
             /**
              * An array of the defined JavaScript Types, including "undefined"<br>
              * @const
@@ -836,6 +868,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_types
              */
             _types,
+
             /**
              * An array of the JavaScript Types that represent defined variables, that is, the types excluding "undefined"<br>
              * @const
@@ -843,6 +876,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_validTypes
              */
             _validTypes,
+
             /**
              * The null terminator character, often used in C-like languages to indicate the end of a string.
              * <br><br>
@@ -851,6 +885,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_z
              */
             _z,
+
             /**
              * The empty string<br>
              * Value: ""<br>
@@ -859,6 +894,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_mt_str
              */
             _mt_str,
+
             /**
              * The empty character<br>
              * Value: ''<br>
@@ -867,6 +903,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_mt_chr
              */
             _mt_chr,
+
             /**
              * A double-quote character; ASCII CODE 34<br>
              * Value: " <br>
@@ -874,6 +911,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_dblqt
              */
             _dblqt,
+
             /**
              * A single-quote character; ASCII CODE 39<br>
              * Value: ' <br>
@@ -882,6 +920,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_sglqt
              */
             _sglqt,
+
             /**
              * An apostrophe character; ASCII CODE 39<br>
              * Value: ' <br>
@@ -890,6 +929,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_apos
              */
             _apos,
+
             /**
              * A <i>fancy</i> apostrophe character; Character Code 8217<br>
              * Value: &#8217; <br>
@@ -898,6 +938,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_aposFancy
              */
             _aposFancy,
+
             /**
              * A <i>fancy</i> opening quote character; Character Code 8220<br>
              * Value: &#8220; <br>
@@ -906,6 +947,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_dblqtLeftFancy
              */
             _dblqtLeftFancy,
+
             /**
              * A <i>fancy</i> closing quote character; Character Code 8221<br>
              * Value: &#8221; <br>
@@ -914,6 +956,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_dblqtRightFancy
              */
             _dblqtRightFancy,
+
             /**
              * A <i>fancy</i> opening single quote character; Character Code 8216<br>
              * Value: &#8216; <br>
@@ -922,6 +965,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_sglqtLeftFancy
              */
             _sglqtLeftFancy,
+
             /**
              * A <i>fancy</i> closing single quote character; Character Code 8217<br>
              * Value: &#8217; <br>
@@ -930,6 +974,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_sglqtRightFancy
              */
             _sglqtRightFancy,
+
             /**
              * The character used to delimit a regular expression literal <br>
              * Value: / <br>
@@ -938,6 +983,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_rxLiteral
              */
             _rxLiteral,
+
             /**
              * The character used to separate file paths on unix-like systems<br>
              * Value: / <br>
@@ -946,6 +992,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_solidus
              */
             _solidus,
+
             /**
              * The character used to separate alternatives in a phrase such as "and/or"<br>
              * Value: / <br>
@@ -954,6 +1001,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_slash
              */
             _slash,
+
             /**
              * The character used to indicate a division operation in most programming languages<br>
              * Value: / <br>
@@ -962,6 +1010,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_divide
              */
             _divide,
+
             /**
              * The character used to separate file paths on Windows or DOS-like systems<br>
              * Value: \ <br>
@@ -970,6 +1019,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_reverse_solidus
              */
             _reverse_solidus,
+
             /**
              * The backslash character<br>
              * Value: \ <br>
@@ -978,6 +1028,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_backslash
              */
             _backslash,
+
             /**
              * The semicolon character, often used to indicate the end of a statement in C-like languages<br>
              * Value: ; <br>
@@ -986,6 +1037,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_semicolon
              */
             _semicolon,
+
             /**
              * The colon character, used to assign values to keys in an object literal<br>
              * Value: : <br>
@@ -994,6 +1046,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_colon
              */
             _colon,
+
             /**
              * The comma character<br>
              * Value: , <br>
@@ -1002,6 +1055,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_comma
              */
             _comma,
+
             /**
              * The underscore character, often used in variable names when using "snake case"<br>
              * Value: _ <br>
@@ -1010,6 +1064,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_underscore
              */
             _underscore,
+
             /**
              * The hyphen character, often used to break a word across lines<br>
              * Value: - <br>
@@ -1018,6 +1073,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_hyphen
              */
             _hyphen,
+
             /**
              * The asterisk character, often used as to indicate there is more information in a footnote<br>
              * Value: * <br>
@@ -1026,6 +1082,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_asterisk
              */
             _asterisk,
+
             /**
              * The asterisk character, often used as the multiplication operator in many programming languages<br>
              * Value: * <br>
@@ -1034,6 +1091,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_multiply
              */
             _multiply,
+
             /**
              * The character used to indicate the subtraction operation<br>
              * Value: - <br>
@@ -1042,6 +1100,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_minus
              */
             _minus,
+
             /**
              * The character used to indicate the addition operation or a positive number<br>
              * Value: + <br>
@@ -1050,6 +1109,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_plus
              */
             _plus,
+
             /**
              * The tilde character, often found on the same key as ` on most keyboards<br>
              * Value: ~ <br>
@@ -1058,6 +1118,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_tilde
              */
             _tilde,
+
             /**
              * A single space character, often used to separate words in phrases and sentences<br>
              * Character code: 32
@@ -1067,6 +1128,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_spc
              */
             _spc,
+
             /**
              * A dot or period character, often used to indicate the end of a sentence<br>
              * Value: . <br>
@@ -1075,6 +1137,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_dot
              */
             _dot,
+
             /**
              * The sequence of characters used to indicate some characters have been omitted<br>
              * Value: ... <br>
@@ -1083,6 +1146,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_ellipsis
              */
             _ellipsis,
+
             /**
              * The TAB character sometimes used to indent characters, but frowned upon as a means of indenting code<br>
              * Character Code: 9
@@ -1092,6 +1156,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_tab
              */
             _tab,
+
             /**
              * The linefeed character used to indicate a new line on unix-like systems<br>
              * Character Code: 10
@@ -1101,6 +1166,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_lf
              */
             _lf,
+
             /**
              * The character sequence used to indicate a newline on Windows<br>
              * Carriage Return followed by Line Feed
@@ -1111,6 +1177,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_crlf
              */
             _crlf,
+
             /**
              * A non-breaking space character, often used in HTML to preserve whitespace that might otherwise be ignored/removed<br>
              * Character Code: 161
@@ -1120,6 +1187,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_nbsp
              */
             _nbsp: " ",
+
             /**
              * The UPPERCASE letters of the English alphabet: ABCDEFGHIJKLMNOPQRSTUVWXYZ
              * @const
@@ -1127,6 +1195,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_ALPHABET_ENGLISH_UCASE
              */
             _ALPHABET_ENGLISH_UCASE,
+
             /**
              * The lowercase letters of the English alphabet: abcdefghijklmnopqrstuvwxyz
              * @const
@@ -1134,6 +1203,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_ALPHABET_ENGLISH_UCASE
              */
             _ALPHABET_ENGLISH_LCASE,
+
             /**
              * An array of the UPPERCASE letters of the English alphabet
              * @const
@@ -1141,6 +1211,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_LETTERS_ENGLISH_UCASE
              */
             _LETTERS_ENGLISH_UCASE,
+
             /**
              * An array of the lowercase letters of the English alphabet
              * @const
@@ -1148,6 +1219,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_LETTERS_ENGLISH_LCASE
              */
             _LETTERS_ENGLISH_LCASE,
+
             /**
              * The characters used to represent base-10 numbers: 0123456789
              * @const
@@ -1155,6 +1227,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#_DIGIT_CHARACTERS
              */
             _DIGIT_CHARACTERS,
+
             /**
              * An array of the digit characters used to represent base-10 numbers
              * @const
@@ -1162,6 +1235,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#DIGITS
              */
             DIGITS,
+
             /**
              * A map of number values by digit
              * @const
@@ -1169,6 +1243,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#DIGITS_MAP
              */
             DIGITS_MAP,
+
             /**
              * An array of the characters used to represent base-16 numbers: 0123456789ABCDEF
              * @const
@@ -1176,6 +1251,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#HEX_DIGITS
              */
             HEX_DIGITS,
+
             /**
              * A map of numerical values by hexadecimal digit character
              * @const
@@ -1183,6 +1259,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#HEX_DIGITS_MAP
              */
             HEX_DIGITS_MAP,
+
             /**
              * An array of the characters used to represent base-8 numbers: 01234567
              * @const
@@ -1190,6 +1267,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#OCT_DIGITS
              */
             OCT_DIGITS,
+
             /**
              * A map of numerical values by octal digit character
              * @const
@@ -1197,6 +1275,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#OCT_DIGITS_MAP
              */
             OCT_DIGITS_MAP,
+
             /**
              * An array of the characters used to represent base-2 numbers: 01
              * @const
@@ -1204,6 +1283,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#BIN_DIGITS
              */
             BIN_DIGITS,
+
             /**
              * A map of numerical values by binary digit character
              * @const
@@ -1864,11 +1944,14 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#DEFAULT_MAX_STACK_DEPTH
              */
             DEFAULT_MAX_STACK_DEPTH,
+
             REG_EXP,
             REG_EXP_DOT,
             REG_EXP_LEADING_DOT,
             REG_EXP_TRAILING_DOT,
             DEFAULT_NUMBER_FORMATTING_SYMBOLS,
+
+            TYPES_CHECKS,
 
             /**
              * This class allows us to easily cap an iteration,<br>
@@ -1924,10 +2007,23 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#resolveError
              */
             resolveError,
+            resolveEvent,
+            resolveObject,
+            resolveLogLevel,
+            resolveType,
+            resolveMethod,
+            canBind,
+            attempt,
+            attemptMethod,
+            asyncAttempt,
+            asyncAttemptMethod,
+            bindMethod,
+            fireAndForget,
+
+            isFulfilled,
+            isRejected,
 
             asPhrase,
-
-            $scope,
 
             /**
              * A function that does nothing.<br>
@@ -1952,6 +2048,12 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              */
             ignore,
 
+            op_true,
+
+            op_false,
+
+            op_identity,
+
             /**
              * Returns an object corresponding to a set of default options with one or more properties
              * overridden or added by the properties of the specified object, 'pOptions'
@@ -1965,7 +2067,6 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#populateOptions
              */
             populateOptions,
-
 
             mergeOptions,
 
@@ -2084,14 +2185,31 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#funcAsString
              */
             funcAsString,
+
             calculateErrorSourceName,
-            getExecutionEnvironment: function()
-            {
-                return new ExecutionEnvironment();
-            },
+
+            getExecutionEnvironment,
+
+            CURRENT_MODE,
+
+            ARGUMENTS,
+
             getMessagesLocale,
+
             MESSAGES_LOCALE,
+
             isLogger,
+
+            getGlobalLogger,
+
+            setGlobalLogger,
+
+            exportModule,
+
+            requireModule,
+
+            importModule,
+
             __testLogger: function( ...pTestData )
             {
                 (this.logger || modulePrototype.logger).warn( ...pTestData );

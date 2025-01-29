@@ -1596,11 +1596,7 @@ const $scope = constants?.$scope || function()
         return isDate( date, true );
     };
 
-// Helper to validate a Date instance
-    const isValidDateInstance = ( date ) =>
-    {
-        return isFunction( date.getTime ) && date.getTime() >= MIN_DATE_TIME && date.getTime() <= MAX_DATE_TIME;
-    };
+    const isValidDateInstance = ( date ) => !isNull( date ) && isFunction( date.getTime ) && date.getTime() >= MIN_DATE_TIME && date.getTime() <= MAX_DATE_TIME;
 
 // Helper to parse a string using optional parser
     const parseDate = ( input, dateParser ) =>
@@ -2686,6 +2682,7 @@ const $scope = constants?.$scope || function()
             isSymbol,
             isType,
             isValidDateOrNumeric,
+            isValidDateInstance,
             resolveMoment,
             areSameType,
             areCompatibleTypes,
@@ -2699,6 +2696,7 @@ const $scope = constants?.$scope || function()
             estimateBytesForType,
             NVL,
             isReadOnly,
+
             /**
              * The classes exported with this module.<br>
              * <br>
@@ -2709,6 +2707,7 @@ const $scope = constants?.$scope || function()
              * @alias module:TypeUtils#classes
              */
             classes: { VisitedSet, Option, TypedOption, StringOption, NumericOption, BooleanOption, Result },
+
             VisitedSet,
             Option,
             TypedOption,

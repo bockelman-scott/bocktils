@@ -46,6 +46,22 @@ const _ud = "undefined";
  */
 const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === typeof globalThis ? {} : globalThis || {}) : (global || (_ud === typeof globalThis ? this || {} : globalThis || this || {}) || this || {})) : (self || (_ud === typeof globalThis ? this || {} : globalThis || this || {})));
 
+/**
+ * ENV is a function that provides access to the application's environment variables.
+ * It determines the environment variables based on the runtime context (Node.js, Deno, or a fallback).
+ *
+ * - In Node.js, it fetches the environment variables using `process.env`.
+ * - In Deno, it retrieves the environment variables using `Deno.env.toObject()`.
+ * - As a fallback, it uses a scoped variable (`__BOCK_MODULE_ENVIRONMENT__`) or defaults to a development mode object (`{ "MODE": "DEV" }`).
+ * - Handles runtime-specific changes and ensures compatibility across different environments.
+ * - Logs an error to the console if it encounters an issue while accessing environment variables.
+ *
+ * Note: The behavior of this function is influenced by the runtime's availability and capabilities.
+ *
+ * @function
+ * @param {Object} [pScope=$scope()] - A scoping function or object that provides access to the environment information in the absence of process or Deno.
+ * @returns {Object} An object containing the current environment variables or a default fallback configuration.
+ */
 const ENV = (function( pScope = $scope() )
 {
     let scp = pScope || $scope();
@@ -75,6 +91,16 @@ const ENV = (function( pScope = $scope() )
     return environment;
 });
 
+/**
+ * Represents the command-line arguments passed to the application.
+ * Aggregates arguments from different runtime environments, such as Node.js and Deno.
+ *
+ * - In a Node.js environment: It utilizes `process.argv`, which is an array containing the command-line arguments passed when the Node.js process was launched.
+ * - In a Deno environment: It utilizes `Deno.args`, which is an array containing the list of command-line arguments.
+ * - If none of the recognized runtime environments are detected, it defaults to an empty array.
+ *
+ * This variable is dynamically populated based on the available runtime environment.
+ */
 const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !== typeof Deno ? Deno.args || [] : []))];
 
 // noinspection OverlyNestedFunctionJS,FunctionTooLongJS
@@ -134,6 +160,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             _comma = ",",
             _underscore = "_",
             _colon = ":",
+            _asterisk = "*",
             _unknown = "Unknown",
 
             S_NONE = "none",
@@ -150,7 +177,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             S_DEFAULT_OPERATION = "executing script",
 
             EMPTY_OBJECT = Object.freeze( {} ),
-            EMPTY_ARRAY = Object.freeze( [] )
+            EMPTY_ARRAY = Object.freeze( [] ),
+
+            AsyncFunction = (async function() {}).constructor
 
         } = (dependencies || {});
 
@@ -158,10 +187,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
      * This is a function that just does nothing.<br>
      * This is useful when you need a default for a missing argument or expected function.<br>
      */
-    function no_op()
-    {
-        // do nothing
-    }
+    const no_op = () => {};
+
+    const op_true = () => true;
+    const op_false = () => false;
+    const op_identity = ( pArg ) => pArg;
 
     const isStr = pObj => _str === typeof pObj;
     const isFunc = pObj => _fun === typeof pObj;
@@ -172,10 +202,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
     const isSymbol = pObj => _symbol === typeof pObj;
     const isDate = pObj => isObj( pObj ) && pObj instanceof Date;
     const isRegExp = pObj => isObj( pObj ) && pObj instanceof RegExp;
-    const isError = pObj => isObj( pObj ) && pObj instanceof Error;
+    const isError = Error.isError || (( pObj ) => isObj( pObj ) && pObj instanceof Error);
     const isMap = pObj => isObj( pObj ) && pObj instanceof Map;
     const isSet = pObj => isObj( pObj ) && pObj instanceof Set;
-    const isNull = pObj => isObj( pObj ) && null === pObj;
+    const isNull = pObj => _ud === typeof pObj || null === pObj;
     const isUndefined = pObj => _ud === typeof pObj;
     const isNonNullObj = pObj => isObj( pObj ) && null != pObj;
     const isPrimitive = pObj => isStr( pObj ) || isNum( pObj ) || isBool( pObj ) || isBig( pObj ) || isSymbol( pObj );
@@ -192,12 +222,38 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
     const ATTEMPT_FAILED = [S_ERR_PREFIX, "attempting to execute the specified function, "].join( _spc );
     const NOT_A_FUNCTION = "The specified value is not a function";
 
-    const AsyncFunction = (async function() {}).constructor;
+    /**
+     * Returns true if the specified value is an asynchronous function.
+     *
+     * @function
+     * @param {any} pObject - The value to be evaluated.
+     * @returns {boolean} true if the value is an asynchronous function, otherwise false.
+     */
     const isAsyncFunction = function( pObject )
     {
         return isFunc( pObject ) && (pObject.constructor === AsyncFunction || pObject === AsyncFunction);
     };
 
+    /**
+     * Executes a function with the specified arguments,
+     * handling both synchronous and asynchronous function execution.<br>
+     * <br>
+     * Catches and processes any errors that occur during the function execution,<br>
+     * rather than allowing them to propagate to the calling code.<br>
+     * <br>
+     * Callers can control how these errors are handled
+     * by overwriting this function's 'handleError' method.<br>
+     * <br>
+     * The Module Prototype, for example, replaces 'handleError'
+     * with a call to its reportError method, which emits an error event and/or writes to a user-specified logger.<br>
+     * <br>
+     *
+     * @param {Function} pFunction The function to be executed. Can be a synchronous or asynchronous function.
+     * @param {...any} pArgs The arguments to pass to the function when it is invoked.
+     * @return {any|Promise<any>} Returns the result of the function execution.
+     *                            If the function is asynchronous,
+     *                            a Promise is returned resolving to the result.
+     */
     function handleAttempt( pFunction, ...pArgs )
     {
         if ( isFunc( pFunction ) )
@@ -219,47 +275,204 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         return pFunction;
     }
 
+    /**
+     * Handles any errors that occur during a call to one of the 'attempt' functions.<br>
+     * <br>
+     *
+     * This function is intended to consume any errors that occur
+     * when performing an operation via the handleAttempt function (called internally by each of the 'attempt' functions).
+     * It avoids propagating the error(s) to consumer code, preferring to use the libray convention of emitting an event.<br>
+     * <br>
+     * <b>NOTE</b> This is the DEFAULT implementation
+     * and is replaced with the ModulePrototype 'reportError' method
+     * once that class is defined.<br>
+     *
+     * @function handleError
+     *
+     * @memberof handleAttempt
+     *
+     * @param {Error|Function} pError - The error encountered during the attempted function call.
+     * @param {Function} [pFunction] - The function that was being executed when the error occurred
+     * @param {...*} [pArgs] - The arguments that were passed to the function that threw an error
+     */
     handleAttempt.handleError = function( pError, pFunction, ...pArgs )
     {
         konsole.error( (pError instanceof Error ? ATTEMPT_FAILED : NOT_A_FUNCTION), pError?.message || pFunction?.name || _mt_str, pError || {}, pFunction || {}, ...pArgs );
     };
 
+    /**
+     * Executes the specified function with the provided arguments
+     * and handles the execution using the handleAttempt function,
+     * consuming any errors that may occur
+     * by calling the 'handleAttempt.handleError' function
+     * instead of propagating the errors.
+     *
+     * @param {Function} pFunction The function to attempt to execute.
+     * @param {...*} pArgs The arguments to pass to the function being executed.
+     * @return {*} The result returned by executing the function.
+     */
     function attempt( pFunction, ...pArgs )
     {
-        return handleAttempt( pFunction, pArgs );
+        return handleAttempt( pFunction, ...pArgs );
     }
 
+    /**
+     * Executes specified function asynchronously with the provided arguments
+     * and handles the execution using the handleAttempt function,
+     * consuming any errors that may occur
+     * by calling the 'handleAttempt.handleError' function
+     * instead of propagating the errors.
+     *
+     * @param {Function} pFunction The function to attempt to execute.
+     * @param {...*} pArgs The arguments to pass to the function being executed.
+     * @return {Promise<*>} A Promise that resolves to the result of executing the function.
+     */
     async function asyncAttempt( pFunction, ...pArgs )
     {
         return handleAttempt( pFunction, pArgs );
     }
 
+    /**
+     * Returns true if the specified function can be bound to a specified object or function context.
+     *
+     * The function checks if the provided function is a valid function<br>
+     * and if the context is an object or a function, allowing the method to be bound to it.<br>
+     * <br>
+     *
+     * @param {Function} pMethod - The function to evaluate.
+     * @param {Object|Function} pThis - The context to which the function is or could be bound.
+     * @returns {boolean} true if the method is a function
+     *                    and the context is an object or a function,
+     *                    otherwise false.
+     */
+    const canBind = ( pMethod, pThis ) => isFunc( pMethod ) && (isObj( pThis ) || isFunc( pThis ));
+
+    /**
+     * Returns a valid function based on the specified parameters.<br>
+     * <br>
+     *
+     * @param {Function|string} pMethod - The method to be resolved. It can be a function or a string representing a method name.
+     * @param {object|Function} pThis - The context or object that may contain the method if `pMethod` is a string or to which the method is bound or could be bound.
+     * @returns {Function} - Returns the specified function or a fallback function if the method cannot be resolved.
+     */
+    const resolveMethod = ( pMethod, pThis ) => canBind( pMethod, pThis ) ? pMethod : (isStr( pMethod ) && (isObj( pThis ) || isFunc( pThis )) ? pThis[pMethod] || (() => pMethod || pThis) : (() => pMethod || pThis));
+
+    /**
+     * Calls the specified method with the arguments passed,
+     * using the specified object as the 'this' context to which the function is bound
+     * or will be temporarily bound during execution.<br>
+     * <br>
+     *
+     * If the specified method cannot be executed or the context is invalid,
+     * the method is returned without being executed.
+     *
+     * @param {Object|Function} pThis - The object on which the method should be called.
+     * @param {Function} pMethod - The function or method to be executed.
+     * @param {...*} pArgs - Zero or more arguments to be passed to the method.
+     *
+     * @return {*} The result of the executed method or the method itself if it is not executable or cannot be bound to the context
+     */
     function attemptMethod( pThis, pMethod, ...pArgs )
     {
-        if ( isFunc( pMethod ) && isObj( pThis ) )
+        const method = resolveMethod( pMethod, pThis );
+
+        if ( canBind( method, pThis ) )
         {
-            return attempt( () => pMethod.call( pThis, ...pArgs ) );
+            return attempt( () => method.call( pThis, ...pArgs ) );
         }
-        return pMethod;
+
+        return method;
     }
 
+    /**
+     * Calls the specified asynchronous method with the arguments passed,
+     * using the specified object as the 'this' context to which the function is bound
+     * or will be temporarily bound during execution.<br>
+     * <br>
+     *
+     * If the specified method cannot be executed or the context is invalid,
+     * the method is returned without being executed.
+     *
+     * @param {Object|Function} pThis - The object on which the method should be called.
+     * @param {Function} pMethod - The function or method to be executed.
+     * @param {...*} pArgs - Zero or more arguments to be passed to the method.
+     *
+     * @return {Promise<*>} A Promise that resolves to the result of the executed method
+     * or the method itself if it is not executable or cannot be bound to the specified context
+     */
     async function asyncAttemptMethod( pThis, pMethod, ...pArgs )
     {
-        if ( isFunc( pMethod ) && isObj( pThis ) )
+        const method = resolveMethod( pMethod, pThis );
+
+        if ( canBind( method, pThis ) )
         {
-            return await asyncAttempt( () => pMethod.call( pThis, ...pArgs ) );
+            return await asyncAttempt( () => method.call( pThis, ...pArgs ) );
         }
+
+        return method;
     }
 
-    function bindMethod( pMethod, pThis )
+    /**
+     * Binds a method to a specific context and optionally pre-sets additional arguments.
+     * This function attempts to resolve and bind the given method to the provided context.
+     * If binding is not possible, it returns the unresolved method.
+     *
+     * @param {Function|string} pMethod - The method to bind, either as a function or a string representing the method name.
+     * @param {Object} pThis - The context (this) to which to bind the method.
+     * @param {...*} pArgs - Optional arguments to preset for the method.
+     *
+     * @return {Function} The bound method if binding is successful; otherwise, the unresolved method.
+     */
+    function bindMethod( pMethod, pThis, ...pArgs )
     {
-        if ( isFunc( pMethod ) && isObj( pThis ) )
+        const method = resolveMethod( pMethod, pThis );
+
+        if ( canBind( method, pThis ) )
         {
-            return attempt( () => pMethod.bind( pThis ) );
+            return attempt( () => method.bind( pThis, ...pArgs ) );
         }
-        return pMethod;
+
+        return method;
     }
 
+    /**
+     * Asynchronously executes a function without blocking and without any callbacks.<br>
+     * Does not require try/catch; any errors are simply ignored, as per the "and forget" semantics.<br>
+     *
+     * @param {Function|AsyncFunction} pAsyncFunction The function to execute
+     * @param {...*} pArgs Zero or more arguments to pass to the function
+     */
+    const fireAndForget = function( pAsyncFunction, ...pArgs )
+    {
+        const func = pAsyncFunction || no_op;
+
+        if ( isAsyncFunction( func ) )
+        {
+            setTimeout( function()
+                        {
+                            func.call( $scope(), ...pArgs ).then( no_op ).catch( no_op );
+                        }, 10, ...pArgs );
+        }
+        else if ( isFunc( func ) )
+        {
+            async function _( ...pArgs )
+            {
+                attempt( func.call( $scope(), ...pArgs ), ...pArgs );
+            }
+
+            fireAndForget( _, ...pArgs );
+        }
+    };
+
+    /**
+     * This is an internal cache of constructed and loaded modules.<br>
+     * @type {Object}
+     * @dict
+     * @private
+     */
+    let MODULE_CACHE = {};
+
+    /* This is the internal name of this module; it is exported as ModulePrototype */
     const modName = "BockModulePrototype";
 
     /**
@@ -286,6 +499,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         return isNonNullObj( pObject ) ? (!!pAcceptArray || !isArray( pObject ) ? pObject : {}) : {};
     }
 
+    const freeze = ( pObj ) => Object.freeze( pObj );
+
     /**
      * A class to handle and manage an array of string arguments where each argument can optionally
      * represent key-value mappings separated by an equals sign ("=").
@@ -295,6 +510,21 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         #args = [];
         #map = {};
 
+        /**
+         * Constructs and initializes an instance of the Args class
+         * with the specified arguments.<br>
+         * <br>
+         * The arguments are used to populate an internal map of key/value pairs.<br>
+         * <br>
+         * The initialization process involves checking if arguments are provided
+         * and then constructing a mapping of key-value pairs based on the provided arguments.<br>
+         *
+         * @param {...*} pArgs - Zero or more arguments,
+         *                       which are used to populate the internal map
+         *                       if they are present and are strings.
+         *
+         * @return {Args} This constructor does not explicitly return any value.
+         */
         constructor( ...pArgs )
         {
             if ( pArgs && isArray( pArgs ) && pArgs.length > 0 )
@@ -304,8 +534,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
                 const populateMap = e =>
                 {
                     const parts = _asStr( e ).split( "=" );
-                    const key = (parts.length ? parts[0].trim() : _mt_str).trim();
-                    const value = parts.length > 1 ? parts[1]?.trim() : key;
+                    const key = _asStr( parts.length ? _asStr( parts[0] ).trim() : _mt_str ).trim();
+                    const value = parts.length > 1 ? _asStr( parts[1] || key ) : key;
 
                     if ( key && value )
                     {
@@ -317,21 +547,39 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
 
                 if ( this.#args.length > 0 )
                 {
-                    this.#args.filter( e => null != e && isStr( e ) ).forEach( populateMap );
+                    (this.#args.filter( e => null != e && isStr( e ) )).forEach( populateMap );
                 }
             }
         }
 
+        /**
+         * Returns a copy of the array of arguments represented by this instance.
+         *
+         * @return {Array} A copy of the array containing the stored arguments.
+         */
         get args()
         {
             return [...(this.#args || [])];
         }
 
+        /**
+         * Returns a new Map populated with the entries from the internal map.
+         *
+         * @return {Map} A new Map object containing the entries from the internal map.
+         */
         get map()
         {
             return new Map( Object.entries( this.#map ) );
         }
 
+        /**
+         * Retrieves the value associated with the given key.<br>
+         * If the key is not found, the specified default value is returned.<br>
+         *
+         * @param {string} pKey - The key, or argument name, to use to retrieve the value of the argument.
+         * @param {*} pDefaultValue - The default value to return if no value is found for the specified key.
+         * @return {*} The value associated with the key, or the default value if the key is not found.
+         */
         get( pKey, pDefaultValue )
         {
             let keys = [pKey, _lcase( pKey ), _ucase( pKey )];
@@ -342,12 +590,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
     }
 
     /**
-     * Represents the set of arguments passed to the IIFE that constructs a module.
-     * Extends the base Args class and allows passing additional parameters to the constructor.
-     *
+     * Represents the set of arguments passed to the IIFE that constructs a module.<br>
+     * Extends the base Args class and allows passing additional parameters to the constructor.<br>
+     * <br>
      * This class is primarily used to handle and manage arguments required
-     * by a specific module. It serves as a wrapper for parameterized arguments.
-     *
+     * by a specific module. It serves as a wrapper for parameterized arguments.<br>
+     * <br>
      * Inherits from the Args class.
      */
     class ModuleArgs extends Args
@@ -359,19 +607,23 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
     }
 
     /**
-     * CmdLineArgs extends the Args class to handle and process command line arguments.
-     * This class is designed to accept variable arguments upon initialization
-     * and passes them to the parent Args class for further handling.
-     *
-     * It can be utilized to create utilities, command line tools, or any
-     * functionality requiring parsing and management of command line argument inputs.
-     *
-     * This class relies on the Args class for core functionalities
-     * and extends its behavior as needed.
+     * CmdLineArgs extends the Args class to handle and process command line arguments.<br>
+     * <br>
+     * This class is designed to accept a variable number arguments<br>
+     * that are passed either on the command line
+     * when executing the process that hosts this module<br>
+     * or by another process that spawns or executes the process loading this module.<br>
+     * <br>
+     * It can be utilized to create utilities, command line tools, or any other
+     * functionality requiring parsing and management of command line arguments
+     * or paramaters passed to a host process.<br>
+     * <br>
      *
      * @class
      * @extends Args
-     * @param {...any} pArgs - The list of arguments passed from the command line
+     *
+     * @param {...any} pArgs - The arguments passed on the command line
+     *                         or by a script that launched the application using this module.
      */
     class CmdLineArgs extends Args
     {
@@ -440,6 +692,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         {
             konsole.trace( pMsg, this );
         }
+
+        equals( pOther )
+        {
+            return (this === pOther) || (_ucase( _asStr( this.name ) ).trim()) === (_ucase( _asStr( pOther?.name ) ).trim());
+        }
     }
 
     /**
@@ -447,12 +704,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
      */
     ExecutionMode.MODES =
         {
-            NONE: Object.freeze( new ExecutionMode( S_NONE, false ) ),
-            PROD: Object.freeze( new ExecutionMode( "PRODUCTION", false ) ),
-            DEV: Object.freeze( new ExecutionMode( "DEVELOPMENT", false ) ),
-            DEBUG: Object.freeze( new ExecutionMode( "DEBUG", true ) ),
-            TEST: Object.freeze( new ExecutionMode( "TEST", true ) ),
-            TRACE: Object.freeze( new ExecutionMode( "TRACE", true ) )
+            NONE: freeze( new ExecutionMode( S_NONE, false ) ),
+            PROD: freeze( new ExecutionMode( "PRODUCTION", false ) ),
+            DEV: freeze( new ExecutionMode( "DEVELOPMENT", false ) ),
+            DEBUG: freeze( new ExecutionMode( "DEBUG", true ) ),
+            TEST: freeze( new ExecutionMode( "TEST", true ) ),
+            TRACE: freeze( new ExecutionMode( "TRACE", true ) )
         };
 
     Object.entries( ExecutionMode.MODES ).forEach( ( [key, value] ) =>
@@ -460,11 +717,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
                                                        ExecutionMode[key] = value;
                                                    } );
 
-    ExecutionMode.MODES.DEFAULT = Object.freeze( ExecutionMode.MODES.DEV );
-    ExecutionMode.DEFAULT = Object.freeze( ExecutionMode.MODES.DEFAULT );
+    ExecutionMode.MODES.DEFAULT = freeze( ExecutionMode.MODES.DEV );
+    ExecutionMode.DEFAULT = freeze( ExecutionMode.MODES.DEFAULT );
 
-    const CURRENT_MODE = Object.freeze( ExecutionMode.MODES[ENVIRONMENT.MODE] || ExecutionMode.MODES[ARGUMENTS.get( "mode" )] || ExecutionMode.DEFAULT );
-    ExecutionMode.CURRENT = Object.freeze( CURRENT_MODE );
+    const CURRENT_MODE = freeze( ExecutionMode.MODES[ENVIRONMENT.MODE] || ExecutionMode.MODES[ARGUMENTS.get( "mode" )] || ExecutionMode.DEFAULT );
+    ExecutionMode.CURRENT = freeze( CURRENT_MODE );
 
     /**
      * Defines a new execution mode for the program.<br>
@@ -488,8 +745,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             {
                 const executionMode = new ExecutionMode( name, traceEnabled );
 
-                ExecutionMode.MODES[name] = Object.freeze( executionMode );
-                ExecutionMode[name] = Object.freeze( executionMode );
+                ExecutionMode.MODES[name] = freeze( executionMode );
+                ExecutionMode[name] = freeze( executionMode );
 
                 return executionMode;
             }
@@ -575,7 +832,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
      * LC_MESSAGES
      * LANG
      *
-     * @returns the Locale string, such as "en-US", representing the language and region that will be used to resolve messages
+     * @returns the Locale string, such as "en-US", representing the language and region
+     * that will be used to resolve messages
      */
     const getMessagesLocale = function( pEnvironment = ENVIRONMENT )
     {
@@ -835,16 +1093,18 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
 
         get ModuleCache()
         {
-            return (this.isDeno() ? Deno.cache : this.globalScope) || {};
+            return BockModulePrototype.MODULE_CACHE || MODULE_CACHE;
         }
 
         cacheModule( pModuleName, pModulePath, pModule )
         {
-            const moduleName = (_mt_str + (pModuleName || _mt_str)).trim();
+            const moduleName = _asStr( pModuleName || pModulePath ).trim();
+
+            this.ModuleCache[moduleName] = this.ModuleCache[moduleName] || pModule;
 
             if ( this.isDeno() )
             {
-                const modulePath = (_mt_str + (pModulePath || _mt_str)).trim();
+                const modulePath = _asStr( pModulePath || pModuleName ).trim();
 
                 asyncAttempt( () => Deno.cache( modulePath ) ).then( no_op ).catch( no_op );
             }
@@ -1196,7 +1456,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
      * @type {CopyOptions}
      * @see CopyOptions
      */
-    const DEFAULT_COPY_OPTIONS = Object.freeze(
+    const DEFAULT_COPY_OPTIONS = freeze(
         {
             maxStackSize: MAX_STACK_SIZE,
             nullReplacement: EMPTY_OBJECT,
@@ -1214,7 +1474,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
      */
     let IMMUTABLE_COPY_OPTIONS = { ...DEFAULT_COPY_OPTIONS };
     IMMUTABLE_COPY_OPTIONS.freeze = true;
-    IMMUTABLE_COPY_OPTIONS = Object.freeze( IMMUTABLE_COPY_OPTIONS );
+    IMMUTABLE_COPY_OPTIONS = freeze( IMMUTABLE_COPY_OPTIONS );
 
     /**
      * Returns an object corresponding to a set of default options with one or more properties
@@ -1282,15 +1542,42 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
 
         if ( _ud === typeof pObject )
         {
-            return (null === options?.undefinedReplacement ? null : options?.undefinedReplacement ?? null);
+            return freeze( null === options?.undefinedReplacement ? null : options?.undefinedReplacement ?? null );
         }
 
         if ( null === pObject )
         {
-            return (null === options?.nullReplacement ? null : options?.nullReplacement ?? EMPTY_OBJECT);
+            return freeze( null === options?.nullReplacement ? null : options?.nullReplacement ?? EMPTY_OBJECT );
         }
 
-        return Object.freeze( pObject );
+        return freeze( pObject );
+    };
+
+    /**
+     * Provide a shim until https://github.com/tc39/proposal-is-error is widely available
+     * @type {*|(function(*): (boolean|*))}
+     */
+    Error.isError = Error.isError || function( pError )
+    {
+        if ( isNull( pError ) )
+        {
+            return false;
+        }
+
+        if ( pError instanceof Error || pError?.prototype instanceof Error || pError?.constructor === Error || pError?.prototype?.constructor === Error )
+        {
+            return true;
+        }
+
+        let is = false;
+
+        if ( isObj( pError ) || isFunc( pError ) )
+        {
+            is = _isValidStr( pError?.name || pError?.message || pError?.stack );
+            is &= _asStr( pError?.name || pError?.message ).includes( "Error" );
+        }
+
+        return is || (Error.prototype.toString.call( pError ) === (isFunc( pError?.toString ) ? pError.toString() : _asStr( pError )));
     };
 
     /**
@@ -1498,15 +1785,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
      */
     function initializeMessage( pMessageOrError )
     {
-        if ( isStr( pMessageOrError ) )
+        if ( isError( pMessageOrError ) )
         {
-            return pMessageOrError || DEFAULT_ERROR_MSG;
+            return pMessageOrError.message || pMessageOrError.name || Error.prototype.toString.call( pMessageOrError, pMessageOrError ) || DEFAULT_ERROR_MSG;
         }
-        if ( pMessageOrError instanceof Error )
-        {
-            return pMessageOrError.message || pMessageOrError.name || DEFAULT_ERROR_MSG;
-        }
-        return DEFAULT_ERROR_MSG;
+        return _asStr( pMessageOrError || DEFAULT_ERROR_MSG ) || DEFAULT_ERROR_MSG;
     }
 
     /**
@@ -1561,6 +1844,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             {
                 Error.captureStackTrace( this, this.constructor );
             }
+
+            this.#trace = this.#options?.stackTrace;
         }
 
         calculateReferenceId( pMsgOrErr )
@@ -1644,7 +1929,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
 
         get cause()
         {
-            this.#cause = this.#cause || (this.#options?.cause instanceof Error ? this.#options?.cause : super.cause) || super.cause;
+            this.#cause = this.#cause || (isError( this.#options?.cause ) ? this.#options?.cause : super.cause) || super.cause;
             return this.#cause;
         }
 
@@ -1692,13 +1977,24 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
 
             if ( isFunc( logger[level] ) )
             {
-                logger[level]( this.toString(), this.options );
+                attemptMethod( logger, logger[level], this.toString(), this.options );
             }
+        }
+
+        cloneOptions( pOptions )
+        {
+            let options = populateOptions( pOptions, { ...this.options } );
+            return localCopy( options );
         }
 
         clone()
         {
-            return new this.constructor( this.message, this.options );
+            let options = this.cloneOptions( this.options );
+
+            options.cause = options.cause || this.cause;
+            options.stackTrace = options.stackTrace || this.stackTrace || this.#trace;
+
+            return new this.constructor( this.message, options );
         }
     }
 
@@ -1755,9 +2051,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
 
         clone()
         {
-            return new this.constructor( this.message, this.options );
+            const options = this.cloneOptions( this.options );
+
+            options.cause = options.cause || this.cause;
+            options.stackTrace = options.stackTrace || this.stackTrace;
+
+            return new this.constructor( this.message, options );
         }
     }
+
 
     /**
      * Returns an instance of the custom __Error class from the arguments specified.
@@ -1775,28 +2077,20 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
      */
     function resolveError( pError, pMessage )
     {
-        if ( !(pError instanceof Error || pMessage instanceof Error || (isStr( pMessage ) && !(_mt_str === pMessage.trim()))) )
+        if ( !(isError( pError ) || isError( pMessage ) || (_isValidStr( pMessage ) || _isValidStr( pError ))) )
         {
             return null;
         }
 
-        if ( pError instanceof Error )
-        {
-            return new __Error( pError );
-        }
-        else if ( pMessage instanceof Error )
-        {
-            return new __Error( pMessage );
-        }
+        const msg = _isValidStr( pMessage ) ? pMessage : _isValidStr( pError ) ? pError : pError?.message || pMessage?.message || DEFAULT_ERROR_MSG;
 
-        let cause = pError instanceof Error ? pError : pMessage instanceof Error ? pMessage : null;
+        let cause = isError( pError ) ? pError : isError( pMessage ) ? pMessage : null;
 
-        if ( cause instanceof Error )
-        {
-            return new __Error( (pError?.message || pMessage || pError || DEFAULT_ERROR_MSG), { cause } );
-        }
+        let options = isError( cause ) ? { message: msg, cause } : { message: msg };
 
-        return null;
+        let errors = ([pError, pMessage]).map( e => e instanceof __Error ? e : (isError( e ) ? new __Error( e, options ) : new __Error( msg, options )) );
+
+        return errors.length > 0 ? errors[0] : new __Error( msg, options );
     }
 
     /**
@@ -1811,10 +2105,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
      */
     const calculateErrorSourceName = function( pModule, pFunction )
     {
-        const modName = isObj( pModule ) ? (pModule?.moduleName || pModule?.name) : isStr( pModule ) ? pModule : _unknown;
-        const funName = isFunc( pFunction ) ? (pFunction?.name || "anonymous") : isStr( pFunction ) ? pFunction : _unknown;
+        const modName = isObj( pModule ) ? _asStr( pModule?.moduleName || pModule?.name ) : isStr( pModule ) ? pModule : _unknown;
+        const funName = isFunc( pFunction ) ? _asStr( pFunction?.name || "anonymous" ) : isStr( pFunction ) ? pFunction : _unknown;
 
-        return (modName || pModule) + _colon + _colon + (funName || pFunction);
+        return _asStr( modName || pModule ) + (_colon + _colon) + _asStr( funName || pFunction );
     };
 
     /**
@@ -1845,7 +2139,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
          */
         constructor( pModule, pMethod, pFileName, pLineNumber, pColumnNumber )
         {
-            this.#fileName = pFileName || (_ud === typeof __filename ? _unknown : __filename);
+            this.#fileName = _asStr( pFileName || (_ud === typeof __filename ? _unknown : __filename) );
             this.#lineNumber = pLineNumber || -1;
             this.#columnNumber = pColumnNumber || -1;
 
@@ -1978,7 +2272,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
 
             this.#mode = this.#options?.mode instanceof ExecutionMode ? this.#options?.mode : CURRENT_MODE;
 
-            if ( ExecutionMode.MODES.TEST === this.#mode || this.#mode?.traceEnabled )
+            if ( ExecutionMode.MODES.TEST.equals( this.#mode ) || this.#mode?.traceEnabled )
             {
                 this.eventsHandled = [];
             }
@@ -2017,7 +2311,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         handleEvent( pEvent, ...pExtra )
         {
             // the only thing implemented in the base class is for debugging and testing modes
-            if ( this.eventsHandled )
+            if ( isArray( this.eventsHandled ) )
             {
                 this.eventsHandled.push( { event: pEvent, extra: [...(pExtra || [])] } );
             }
@@ -2136,14 +2430,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
     StatefulListener.NEXT_ID = 1;
 
     /**
-     * This is an internal cache of constructed and loaded modules.<br>
-     * @type {Object}
-     * @dict
-     * @private
-     */
-    const MODULE_CACHE = {};
-
-    /**
      * Represents a visitor class to support the common Visitor Pattern.
      * This class also extends the EventTarget interface
      * to enable event dispatching, specifically for the "visit" event.
@@ -2210,11 +2496,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
                     }
                     catch( ex )
                     {
-                        this.dispatchEvent( new BockModuleEvent( "error", {
-                            error: ex,
-                            message: ex.message,
-                            visited: pVisited
-                        }, populateOptions( this.options, { detail: pVisited } ) ) );
+                        this.dispatchEvent( new BockModuleEvent( "error",
+                                                                 {
+                                                                     error: ex,
+                                                                     message: ex.message,
+                                                                     visited: pVisited
+                                                                 }, populateOptions( this.options, { detail: pVisited } ) ) );
                     }
                 };
             }
@@ -2358,6 +2645,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             if ( this.traceEnabled )
             {
                 konsole.trace( pMessage, pOptions || "Called without options" );
+
+                this.dispatchEvent( new BockModuleEvent( "trace", pMessage, pOptions ) );
             }
         }
 
@@ -2471,7 +2760,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         {
             let id = (pListener instanceof StatefulListener || (isNum( pListener?.id ) && pListener?.id > 0)) ? pListener?.id : (isNum( pListener )) ? pListener : 0;
 
-            const forAllTypes = (null == pTypes || 0 === pTypes.length || pTypes.includes( "*" ));
+            const forAllTypes = (null == pTypes || 0 === pTypes.length || pTypes.includes( _asterisk ));
 
             let types = forAllTypes ? Object.keys( this.#statefulListeners ) : [...pTypes].map( _asStr ).filter( _isValidStr ).map( _lcase );
 
@@ -2564,7 +2853,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             {
                 if ( BockModulePrototype.#globalLoggingEnabled )
                 {
-                    logger = BockModulePrototype.getGlobalLogger();
+                    logger = BockModulePrototype.getGlobalLogger() || this.#logger;
                 }
 
                 logger = this.#logger || logger || konsole;
@@ -2712,7 +3001,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
 
                 let msg = [S_ERR_PREFIX, s, err, ...pExtra];
 
-                let level = (_mt_str + pLevel).trim().toLowerCase();
+                let level = _lcase( _asStr( pLevel ).trim() );
 
                 level = [S_LOG, S_INFO, S_WARN, S_DEBUG, S_ERROR].includes( level || S_ERROR ) ? level : S_ERROR;
 
@@ -2721,20 +3010,21 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
                     this.trace( "reportError", { moduleName: this.moduleName, err, msg, level, source: pSource } );
                 }
 
-                if ( BockModulePrototype.isLogger( this.logger ) )
+                if ( this.#loggingEnabled && BockModulePrototype.isLogger( this.logger ) )
                 {
                     attemptMethod( this.logger, this.logger[level], ...msg );
                 }
 
                 try
                 {
-                    const data = {
-                        error: err,
-                        message: msg.filter( e => isStr( e ) ).join( _spc ),
-                        level: level,
-                        method: _mt_str + ((_mt_str + pSource) || this.moduleName || "BockModule"),
-                        extra: [...pExtra]
-                    };
+                    const data =
+                        {
+                            error: err,
+                            message: msg.filter( e => isStr( e ) ).join( _spc ),
+                            level: level,
+                            method: _mt_str + ((_mt_str + pSource) || this.moduleName || "BockModule"),
+                            extra: [...pExtra]
+                        };
 
                     this.dispatchEvent( new BockModuleEvent( S_ERROR, data, data ) );
                 }
@@ -2759,11 +3049,17 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         {
             const me = this;
 
-            const source = this.calculateErrorSourceName( this, pContext?.name || pContext || pError?.stack || pError );
+            const source = this.calculateErrorSourceName( this, (pContext?.name || pContext || pError?.stack || pError) );
 
-            const func = async function( pError, pContext, ...pExtra )
+            const error = resolveError( pError, pError?.message );
+
+            const msg = pError?.message || S_DEFAULT_ERROR_MESSAGE;
+
+            const extra = [...pExtra];
+
+            const func = async function()
             {
-                me.reportError( pError, pError?.message || S_DEFAULT_ERROR_MESSAGE, S_ERROR, source, ...pExtra );
+                me.reportError( error, msg, S_ERROR, source, ...extra );
             };
 
             setTimeout( func, 10 );
@@ -2867,7 +3163,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         {
             const mod = this.extend( pObject );
 
-            dispatchEvent( new CustomEvent( "load", mod ) );
+            const object = isNonNullObj( pObject ) ? { ...pObject } : {};
+
+            dispatchEvent( new BockModuleEvent( "load", mod, { ...object } ) );
 
             return mod;
         }
@@ -2908,17 +3206,19 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
 
         attempt( pFunction, ...pArgs )
         {
-            let result = this.initializeResult( pFunction );
+            const me = this;
+
+            const { func, result, handle } = this.initializeAttempt( pFunction, me );
 
             try
             {
+                handleAttempt.handleError = handle;
+
                 result.returnValue = attempt( pFunction, ...pArgs );
             }
             catch( ex )
             {
-                result.exceptions.push( ex );
-
-                this.reportError( ex, ex.message, S_ERROR, this.calculateErrorSourceName( this, pFunction ), ...pArgs );
+                handle( ex, func, ...pArgs );
             }
 
             return this.calculateResult( result );
@@ -2926,17 +3226,19 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
 
         async asyncAttempt( pFunction, ...pArgs )
         {
-            let result = this.initializeResult( pFunction );
+            const me = this;
+
+            const { func, result, handle } = this.initializeAttempt( pFunction, me );
 
             try
             {
+                handleAttempt.handleError = handle;
+
                 result.returnValue = await asyncAttempt( pFunction, ...pArgs );
             }
             catch( ex )
             {
-                result.exceptions.push( ex );
-
-                this.reportError( ex, ex.message, S_ERROR, this.calculateErrorSourceName( this, pFunction ), ...pArgs );
+                handle( ex, func, ...pArgs );
             }
 
             return this.calculateResult( result );
@@ -2944,43 +3246,65 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
 
         attemptMethod( pObject, pMethod, ...pArgs )
         {
-            let result = this.initializeResult( pMethod );
+            const me = this;
 
-            const thiz = pObject || this;
+            const { func, result, handle } = this.initializeAttempt( pMethod, me );
 
             try
             {
-                result.returnValue = attemptMethod( thiz, pMethod, ...pArgs );
+                handleAttempt.handleError = handle;
+
+                result.returnValue = attemptMethod( me, func, ...pArgs );
             }
             catch( ex )
             {
-                result.exceptions.push( ex );
-
-                this.reportError( ex, ex.message, S_ERROR, this.calculateErrorSourceName( thiz, pMethod ), ...pArgs );
+                handle( ex, func, ...pArgs );
             }
+
+            return this.calculateResult( result );
         }
 
         async asyncAttemptMethod( pObject, pMethod, ...pArgs )
         {
-            let result = this.initializeResult( pMethod );
+            const me = this;
 
-            const thiz = pObject || this;
+            const { func, result, handle } = this.initializeAttempt( pMethod, me );
 
             try
             {
-                result.returnValue = await asyncAttemptMethod( thiz, pMethod, ...pArgs );
+                handleAttempt.handleError = handle;
+
+                result.returnValue = await asyncAttemptMethod( me, func, ...pArgs );
             }
             catch( ex )
             {
-                result.exceptions.push( ex );
-
-                this.reportError( ex, ex.message, S_ERROR, this.calculateErrorSourceName( thiz, pMethod ), ...pArgs );
+                handle( ex, func, ...pArgs );
             }
+        }
+
+        initializeAttempt( pMethod, pThis )
+        {
+            const me = pThis || this;
+
+            const func = resolveMethod( isStr( pMethod ) ? (me[pMethod] || pMethod) : (pMethod || me.asyncAttemptMethod), me );
+
+            const result = this.initializeResult( func );
+
+            const handle = function( pError, pFunction, ...pArgs )
+            {
+                const error = resolveError( pError, (pFunction || func)?.name );
+
+                result.exceptions.push( error );
+
+                me.reportError( error, error?.message, S_ERROR, me.calculateErrorSourceName( me, (pFunction || func) ), ...pArgs );
+            };
+
+            return { func, result, handle };
         }
 
         initializeResult( pValue )
         {
-            return { returnValue: pValue, exceptions: [] };
+            return { returnValue: pValue, exceptions: [], hasError: function() { return this.exceptions.length > 0;} };
         }
 
         calculateResult( pResult )
@@ -2995,6 +3319,20 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             };
         }
     }
+
+    /**
+     * Define a cache scoped to the BlockModulePrototype namespace.<br>
+     * <br>
+     * This property is used to store and manage cached module data.<br>
+     *
+     * It is intended to store modules that have already been resolved and loaded,
+     * potentially improving performance by reducing redundant computations.<br>
+     * <br>
+     * This cache is implemented as a POJO data structure
+     * that maps module identifiers to their corresponding cached instances.<br>
+     */
+    BockModulePrototype.MODULE_CACHE = BockModulePrototype.MODULE_CACHE || MODULE_CACHE;
+    MODULE_CACHE = BockModulePrototype.MODULE_CACHE;
 
     /**
      * Defines a private instance of the ModulePrototype
@@ -3033,7 +3371,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
 
     handleAttempt.handleError = ( pError, pFunction, ...pArgs ) =>
     {
-        throw new __Error( pError, { context: pFunction, args: pArgs } );
+        GLOBAL_INSTANCE.handleError( pError, pFunction, ...pArgs );
     };
 
     /**
@@ -3080,7 +3418,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
 
         if ( null != mod && mod instanceof BockModulePrototype )
         {
-            GLOBAL_INSTANCE.dispatchEvent( new BockModuleEvent( "load", mod, {} ) );
+            GLOBAL_INSTANCE.dispatchEvent( new BockModuleEvent( "load", mod, { module_path: pModulePath } ) );
         }
 
         return mod;
@@ -3251,7 +3589,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
     CopyHandlers.set( _fun, handleCopyFunction );
     CopyHandlers.set( _symbol, handleCopySymbol );
     CopyHandlers.set( _obj, handleCopyObject );
-    CopyHandlers.set( "*", ( pObject ) => pObject );
+    CopyHandlers.set( _asterisk, ( pObject ) => pObject );
 
     /**
      * Returns a deep copy of the value specified.
@@ -3284,7 +3622,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             return maybeFreeze( pObject );
         }
 
-        const handler = CopyHandlers.get( typeof pObject ) || CopyHandlers.get( "*" );
+        const handler = CopyHandlers.get( typeof pObject ) || CopyHandlers.get( _asterisk );
 
         return handler( pObject, resolvedOptions, maybeFreeze, stack );
     };
@@ -3473,7 +3811,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         return obj;
     }
 
-
     /**
      * Returns a read-only copy of an object,
      * whose properties are also read-only copies of properties of the specified object
@@ -3495,66 +3832,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
     {
         let type = pType || typeof pValue;
         return (_validTypes.includes( type ) || isFunc( type )) ? type : typeof pValue;
-    };
-
-    const isMatchingType = ( pValue, pType ) => (pType === typeof pValue) || (isFunc( pType ) && pValue instanceof pType);
-
-    const coercions =
-        {
-            [_str]: ( pValue ) => _asStr( _mt_str + pValue ),
-            [_num]: ( pValue ) => parseFloat( _asStr( pValue ) || "0" ),
-            [_big]: ( pValue ) => BigInt( _asStr( pValue ).replace( /n$/, _mt_str ) || "0" ),
-            [_bool]: ( pValue ) => (pValue === true),
-            [_fun]: ( pValue ) => (isFunc( pValue ) ? pValue : () => pValue),
-            [_symbol]: ( pValue, pStack ) => Symbol.for( _asStr( _coerce( pValue, _str, [...pStack, pValue] ) ) ),
-            [_obj]: ( pValue, pStack ) => [_asStr( _mt_str + _coerce( pValue, _str, [...pStack, pValue] ) )],
-            "default": function( pValue, pType, pStack )
-            {
-                if ( pType === Date || isDate( pType ) || pType instanceof Date )
-                {
-                    return new Date( _coerce( pValue, _num, [...pStack, pValue] ) );
-                }
-                if ( pType === RegExp || isRegExp( pType ) || pType instanceof RegExp )
-                {
-                    let regexp = _coerce( pValue, _str, [...pStack, pValue] );
-                    return attempt( () => new RegExp( regexp ) );
-                }
-                return _coerce( pValue, typeof pValue, [...pStack, pValue] );
-            }
-        };
-
-    /**
-     * Attempts to coerce, or cast, the specified value to the specified type
-     * @param {*} pValue A value to convert to another type, if possible
-     * @param {string|function} pType  The type or class to which to convert the specified value
-     * @param pStack USED INTERNALLY TO PREVENT INFINITE RECURSION
-     * @returns {*} A value of the type or class requested (if possible)
-     * @private
-     */
-    const _coerce = function( pValue, pType, pStack = [] )
-    {
-        const coercedValue = (_ud === typeof pValue || pValue === null) ? _mt_str : pValue;
-
-        let resolvedType = resolveType( pValue, pType );
-
-        if ( isMatchingType( coercedValue, resolvedType ) )
-        {
-            return coercedValue;
-        }
-
-        const stack = pStack || [];
-
-        if ( (stack.length || 0) > MAX_STACK_SIZE )
-        {
-            const message = `${STACK_ERROR_MESSAGE} while coercing a value to another type`;
-            const error = new __Error( message, { context: _coerce, args: [pValue, resolvedType, stack] } );
-            GLOBAL_INSTANCE.reportError( error, message, S_WARN, _coerce );
-            return coercedValue;
-        }
-
-        const coercion = coercions[resolvedType] || coercions["default"];
-
-        return coercion( coercedValue, resolvedType, [...stack, coercedValue] );
     };
 
     /**
@@ -3679,9 +3956,56 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
 
             resolveError,
             resolveEvent,
+            resolveObject,
+            resolveLogLevel,
+            resolveType,
 
             EMPTY_OBJECT,
             EMPTY_ARRAY,
+
+            AsyncFunction,
+
+            no_op,
+            op_true,
+            op_false,
+            op_identity,
+
+            TYPES_CHECKS:
+                {
+                    isStr,
+                    isFunc,
+                    isObj,
+                    isArray,
+                    isDate,
+                    isRegExp,
+                    isNum,
+                    isBig,
+                    isBool,
+                    isSymbol,
+                    isNull,
+                    isUndefined,
+                    isPrimitive,
+                    isThenable,
+                    isPromise,
+                    isError,
+                    isAsyncFunction,
+                },
+
+            S_DEFAULT_ERROR_MESSAGE,
+            ATTEMPT_FAILED,
+            NOT_A_FUNCTION,
+
+            canBind,
+            resolveMethod,
+
+            attempt,
+            attemptMethod,
+            asyncAttempt,
+            asyncAttemptMethod,
+
+            bindMethod,
+
+            fireAndForget,
 
             asPhrase,
 

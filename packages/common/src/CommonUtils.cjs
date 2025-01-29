@@ -1,7 +1,5 @@
 const core = require( "@toolbocks/core" );
 
-const funcUtils = require( "./FunctionUtils.cjs" );
-
 const objectUtils = require( "./ObjectUtils.cjs" );
 
 const jsonUtils = require( "@toolbocks/json" );
@@ -44,7 +42,6 @@ const $scope = constants?.$scope || function()
             localeUtils,
             NumberParser,
             guidUtils,
-            funcUtils,
             objectUtils,
             jsonUtils,
             dependencies:
@@ -55,7 +52,6 @@ const $scope = constants?.$scope || function()
                     arrayUtils,
                     localeUtils,
                     guidUtils,
-                    funcUtils,
                     objectUtils,
                     jsonUtils,
                 }
