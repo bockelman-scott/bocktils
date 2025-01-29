@@ -199,14 +199,13 @@ const $scope = constants?.$scope || function()
 
         (async function()
         {
-            os = require( "os" );
-            fs = require( "fs" );
-            fsAsync = require( "fs/promises" );
-            stream = require( "stream" );
-            path = require( "path" );
+            os = require( "node:os" );
+            fs = require( "node:fs" );
+            fsAsync = require( "node:fs/promises" );
+            stream = require( "node:stream" );
+            path = require( "node:path" );
             currentDirectory = path.dirname( __filename );
         }());
-
     }
 
     if ( _ud === typeof path )
