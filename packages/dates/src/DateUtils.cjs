@@ -331,6 +331,12 @@ const {
 
             return lock( date );
         }
+
+        equals( pOther )
+        {
+            const other = resolveUnit( pOther );
+            return this.id === other.id || this.name === other.name || this.multiplier === other.multiplier;
+        }
     }
 
     class Decade extends TimeUnit
@@ -445,26 +451,6 @@ const {
             TWELVE_HOURS,
             ONE_DAY
         } );
-
-
-    /**
-     * Returns a function that will add or subtract one unit to the specified date
-     *
-     * @param pUnit one of the UNIT constants
-     * @param pAsDecrement {boolean} pass true to return a function that subtracts one unit instead
-     */
-    const incrementer = function( pUnit, pAsDecrement = false )
-    {
-        const increment = pAsDecrement ? -1 : 1;
-
-        const timeUnit = resolveUnit( pUnit );
-
-        let adjustment = timeUnit.lessThan( TIME_UNITS.MINUTE ) ? (timeUnit.multiplier * increment) : increment;
-
-        adjustment *= [TIME_UNITS.WEEK, TIME_UNITS.WORK_WEEK].includes( timeUnit ) ? DAYS_PER_WEEK : 1;
-
-        return ( pDate ) => timeUnit.update( pDate, adjustment );
-    };
 
     const isLeapYear = ( pYear ) => (((0 === (pYear % 4)) && ((0 !== (pYear % 100)) || (0 === (pYear % 400)))));
 
@@ -724,8 +710,7 @@ const {
 
     const numDaysInYear = function( pYear )
     {
-        const year = resolveFullYear( isNumeric( pYear ) ? asInt( pYear ) : new Date().getFullYear() );
-
+        const year = resolveFullYear( isDate( pYear ) ? pYear.getFullYear() : (isNumeric( pYear ) ? asInt( pYear ) : new Date().getFullYear()) );
         return (isLeapYear( year )) ? 366 : 365;
     };
 
@@ -734,12 +719,9 @@ const {
         if ( isValidDateArgument( pDate ) )
         {
             let date = new Date( pDate );
-
             date = _setFields( date, resolveFullYear( pYear ), 0, 1, 0, 0, 0, 0 );
-
             return lock( date );
         }
-
         return pDate;
     };
 
@@ -748,15 +730,12 @@ const {
         if ( isValidDateArgument( pDate ) )
         {
             let date = new Date( pDate );
-
             const month = date.getMonth();
-
             const daysInMonth = numDaysInMonth( month, date.getFullYear() );
-
             date = _setFields( date, date.getFullYear(), month, Math.max( 1, Math.min( daysInMonth, asInt( pDayNum ) ) ), 0, 0, 0, 0, 0 );
-
             return lock( date );
         }
+        return pDate;
     };
 
     const toWeekDay = function( pDate, pWeekDay = 0 )
@@ -769,6 +748,7 @@ const {
             date.setDate( date.getDate() + (asInt( pWeekDay ) - day) );
             return lock( date );
         }
+        return pDate;
     };
 
     const toHour = function( pDate, pHour = 0 )
@@ -776,12 +756,9 @@ const {
         if ( isValidDateArgument( pDate ) )
         {
             let date = new Date( pDate );
-
             date = _setFields( date, date.getFullYear(), date.getMonth(), date.getDate(), asInt( pHour ), 0, 0, 0, 0 );
-
             return lock( date );
         }
-
         return pDate;
     };
 
@@ -793,7 +770,6 @@ const {
             date = _setFields( date, date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), asInt( pMinute ), 0, 0, 0 );
             return lock( date );
         }
-
         return pDate;
     };
 
@@ -805,7 +781,6 @@ const {
             date = _setFields( date, date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), date.getMinutes(), asInt( pSecond ), 0, 0 );
             return lock( date );
         }
-
         return pDate;
     };
 
@@ -826,85 +801,38 @@ const {
 
     const lastInstant = ( pDate ) => toMillisecond( toSecond( toMinute( toHour( pDate, 23 ), 59 ), 59 ), 999 );
 
-    const startOfWeek = function( pDate )
-    {
-        return TIME_UNITS.WEEK.startsFor( pDate );
-    };
+    const startOfWeek = ( pDate ) => TIME_UNITS.WEEK.startsFor( pDate );
 
-    const startOfDecade = function( pDate )
-    {
-        return TIME_UNITS.DECADE.startsFor( pDate );
-    };
+    const startOfDecade = ( pDate ) => TIME_UNITS.DECADE.startsFor( pDate );
 
-    const startOfYear = function( pDate )
-    {
-        return TIME_UNITS.YEAR.startsFor( pDate );
-    };
+    const startOfYear = ( pDate ) => TIME_UNITS.YEAR.startsFor( pDate );
 
-    const startOfMonth = function( pDate )
-    {
-        return TIME_UNITS.MONTH.startsFor( pDate );
-    };
+    const startOfMonth = ( pDate ) => TIME_UNITS.MONTH.startsFor( pDate );
 
-    const startOfDay = function( pDate )
-    {
-        return TIME_UNITS.DAY.startsFor( pDate );
-    };
+    const startOfDay = ( pDate ) => TIME_UNITS.DAY.startsFor( pDate );
 
-    const startOfHour = function( pDate )
-    {
-        return TIME_UNITS.HOUR.startsFor( pDate );
-    };
+    const startOfHour = ( pDate ) => TIME_UNITS.HOUR.startsFor( pDate );
 
-    const startOfMinute = function( pDate )
-    {
-        return TIME_UNITS.MINUTE.startsFor( pDate );
-    };
+    const startOfMinute = ( pDate ) => TIME_UNITS.MINUTE.startsFor( pDate );
 
-    const startOfSecond = function( pDate )
-    {
-        return TIME_UNITS.SECOND.startsFor( pDate );
-    };
+    const startOfSecond = ( pDate ) => TIME_UNITS.SECOND.startsFor( pDate );
 
-    const endOfWeek = function( pDate )
-    {
-        return TIME_UNITS.WEEK.endsFor( pDate );
-    };
 
-    const endOfDecade = function( pDate )
-    {
-        return TIME_UNITS.DECADE.endsFor( pDate );
-    };
+    const endOfWeek = ( pDate ) => TIME_UNITS.WEEK.endsFor( pDate );
 
-    const endOfYear = function( pDate )
-    {
-        return TIME_UNITS.YEAR.endsFor( pDate );
-    };
+    const endOfDecade = ( pDate ) => TIME_UNITS.DECADE.endsFor( pDate );
 
-    const endOfMonth = function( pDate )
-    {
-        return TIME_UNITS.MONTH.endsFor( pDate );
-    };
+    const endOfYear = ( pDate ) => TIME_UNITS.YEAR.endsFor( pDate );
 
-    const endOfDay = function( pDate )
-    {
-        return TIME_UNITS.DAY.endsFor( pDate );
-    };
+    const endOfMonth = ( pDate ) => TIME_UNITS.MONTH.endsFor( pDate );
 
-    const endOfHour = function( pDate )
-    {
-        return TIME_UNITS.HOUR.endsFor( pDate );
-    };
+    const endOfDay = ( pDate ) => TIME_UNITS.DAY.endsFor( pDate );
 
-    const endOfMinute = function( pDate )
-    {
-        return TIME_UNITS.MINUTE.endsFor( pDate );
-    };
+    const endOfHour = ( pDate ) => TIME_UNITS.HOUR.endsFor( pDate );
 
-    const endOfSecond = function( pDate )
-    {
-        return TIME_UNITS.SECOND.endsFor( pDate );
-    };
+    const endOfMinute = ( pDate ) => TIME_UNITS.MINUTE.endsFor( pDate );
+
+    const endOfSecond = ( pDate ) => TIME_UNITS.SECOND.endsFor( pDate );
 
     const DateFilters =
         {
@@ -922,47 +850,18 @@ const {
             FIRST_OF_MONTH: ( e ) => isDate( e ) && (1 === e.getDate()),
             LAST_OF_MONTH: ( e ) => isDate( e ) && (numDaysInMonth( e.getMonth(), e.getFullYear() ) === e.getDate()),
 
-            laterThan: function( pDate )
-            {
-                if ( isValidDateArgument( pDate ) )
-                {
-                    const date = new Date( pDate );
+            laterThan: ( pDate ) => ( e ) => after( e, pDate ),
 
-                    return function( e )
-                    {
-                        return isDate( e ) && e > date;
-                    };
-                }
-
-                return op_true;
-            },
-
-            earlierThan: function( pDate )
-            {
-                if ( isValidDateArgument( pDate ) )
-                {
-                    const date = new Date( pDate );
-
-                    return function( e )
-                    {
-                        return isDate( e ) && e < date;
-                    };
-                }
-
-                return op_true;
-            },
+            earlierThan: ( pDate ) => ( e ) => before( e, pDate ),
 
             between: function( pStartDate, pEndDate )
             {
                 if ( isValidDateArgument( pStartDate ) && isValidDateArgument( pEndDate ) )
                 {
-                    let startDate = new Date( earliest( pStartDate, pEndDate ) );
-                    let endDate = new Date( latest( pStartDate, pEndDate ) );
+                    const startDate = new Date( earliest( pStartDate, pEndDate ) );
+                    const endDate = new Date( latest( pStartDate, pEndDate ) );
 
-                    return function( e )
-                    {
-                        return isDate( e ) && e > startDate && e <= endDate;
-                    };
+                    return ( e ) => isDate( e ) && e > startDate && e <= endDate;
                 }
 
                 return op_false;
