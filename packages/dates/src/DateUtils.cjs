@@ -34,279 +34,43 @@ const {
 
     const {
         classes,
+        _mt_str,
         lock,
         populateOptions,
         IterationCap,
         IllegalArgumentError,
+        no_op,
         op_true,
         op_false,
         objectEntries
     } = constants;
 
-    const { Result, isString, isDate, isNumber, isFunction, isValidDateInstance } = typeUtils;
+    const { Result, isNull, isString, isDate, isNumber, isNumeric, isFunction, isValidDateInstance, clamp } = typeUtils;
 
     const { asString, asInt, toBool, ucase } = stringUtils;
 
     const { asArray, varargs, Filters } = arrayUtils;
 
-    const { ModuleEvent, ModulePrototype } = classes;
-
-    if ( _ud === typeof CustomEvent )
-    {
-        CustomEvent = ModuleEvent;
-    }
+    const { ModulePrototype } = classes;
 
     const modName = "DateUtils";
 
     const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
 
-    const UNIT = lock(
-        {
-            MILLISECOND: 1,
-            SECOND: 2,
-            MINUTE: 3,
-            HOUR: 4,
-            DAY: 5,
-            WEEK: 6,
-            WORK_WEEK: 7,
-            MONTH: 8,
-            YEAR: 9,
-            DECADE: 10,
-            DAY_OF_WEEK: 11
-        } );
+    const resolveDate = ( pDate ) => isDate( pDate ) ? pDate : isNumber( pDate ) ? new Date( pDate ) : new Date();
 
-    const UNIT_NAMES = {};
+    const MILLISECONDS_PER_SECOND = 1_000;
+    const SECONDS_PER_MINUTE = 60;
+    const MINUTES_PER_HOUR = 60;
+    const HOURS_PER_DAY = 24;
+    const DAYS_PER_WEEK = 7;
+    const DAYS_PER_WORK_WEEK = 5;
 
-    const UNIT_MULTIPLES =
-        {
-            MILLISECOND: 1,
-            SECOND: 1_000,
-            MINUTE: 60_000,
-            HOUR: 3_600_000,
-            DAY: 86_400_000,
-            WEEK: 604_800_000,
-            WORK_WEEK: (7 * 86_400_000),
-            MONTH: 2_592_000_000,
-            YEAR: 31_536_000_000,
-            DECADE: 315_360_000_000
-        };
-
-    objectEntries( UNIT ).forEach( ( [key, value] ) => UNIT_NAMES[value] = ucase( key ) );
-
-    const resolveUnit = ( pUnit ) => (isNumber( pUnit ) && pUnit < 1_000) ? pUnit : UNIT[ucase( asString( pUnit ) )] || UNIT_NAMES[pUnit];
-
-    const resolveUnitName = ( pUnit ) => UNIT_NAMES[resolveUnit( pUnit )];
-
-    const UNIT_METHODS =
-        {
-            MILLISECOND: ["setMilliseconds", "getMilliseconds"],
-            SECOND: ["setSeconds", "getSeconds"],
-            MINUTE: ["setMinutes", "getMinutes"],
-            HOUR: ["setHours", "getHours"],
-            DAY: ["setDate", "getDate"],
-            WEEK: ["setDate", "getDate"],
-            WORK_WEEK: ["setDate", "getDate"],
-            MONTH: ["setMonth", "getMonth"],
-            YEAR: ["setFullYear", "getFullYear"],
-            DECADE: ["setFullYear", "getFullYear"]
-        };
-
-    UNIT_METHODS.update = ( pDate, pUnit, pAdjustment ) =>
-    {
-        const date = isValidDateArgument( pDate ) ? new Date( pDate ) : new Date();
-
-        const key = resolveUnitName( resolveUnit( pUnit ) );
-
-        const methods = UNIT_METHODS[key];
-        const accessor = methods[1];
-        const mutator = methods[0];
-
-        return new Date( date[mutator]( date[accessor]() + asInt( pAdjustment ) ) );
-    };
-
-    class TimeUnit
-    {
-        #unit;
-        #name;
-        #multiplier;
-
-        constructor( pUnit )
-        {
-            this.#unit = resolveUnit( pUnit );
-            this.#name = resolveUnitName( pUnit );
-            this.#multiplier = UNIT_MULTIPLES[this.#name];
-        }
-
-        get unit()
-        {
-            return this.#unit;
-        }
-
-        get name()
-        {
-            return this.#name;
-        }
-
-        get multiplier()
-        {
-            return asInt( this.#multiplier );
-        }
-
-        resolveMultiplier( pOther )
-        {
-            if ( pOther === this )
-            {
-                return this.multiplier;
-            }
-
-            if ( pOther instanceof this.constructor )
-            {
-                return pOther.multiplier;
-            }
-
-            if ( isNumber( pOther ) )
-            {
-                if ( pOther >= 1_000 )
-                {
-                    return asInt( pOther );
-                }
-
-                return TIME_UNITS[resolveUnitName( asInt( pOther ) )]?.multiplier ?? 0;
-            }
-
-            return asInt( isString( pOther ) ? UNIT_MULTIPLES[ucase( asString( pOther, true ) )] : 0 );
-        }
-
-        lessThan( pOther )
-        {
-            return this.multiplier < this.resolveMultiplier( pOther );
-        }
-
-        greaterThan( pOther )
-        {
-            return this.multiplier > this.resolveMultiplier( pOther );
-        }
-
-        compareTo( pOther )
-        {
-            return this.lessThan( pOther ) ? -1 : this.greaterThan( pOther ) ? 1 : 0;
-        }
-
-        static get [Symbol.species]()
-        {
-            return this;
-        }
-
-        get mutator()
-        {
-            const methods = UNIT_METHODS[this.name];
-            return methods[0];
-        }
-
-        get accessor()
-        {
-            const methods = UNIT_METHODS[this.name];
-            return methods[1];
-        }
-
-        update( pDate, pAdjustment )
-        {
-            if ( this.greaterThan( TIME_UNITS[UNIT_NAMES[UNIT.YEAR]] || new TimeUnit( UNIT.YEAR ) ) )
-            {
-                let date = new Date( pDate );
-
-                date.setFullYear( date.getFullYear() + (10 - (date.getFullYear() % 10)) );
-
-                if ( pAdjustment < 0 )
-                {
-                    date.setFullYear( date.getFullYear() + (2 * pAdjustment) );
-                }
-
-                return lock( date );
-            }
-
-            return lock( UNIT_METHODS.update( pDate, this.unit, pAdjustment ) );
-        }
-    }
-
-    const TIME_UNITS = lock(
-        {
-            MILLISECOND: lock( new TimeUnit( UNIT.MILLISECOND ) ),
-            SECOND: lock( new TimeUnit( UNIT.SECOND ) ),
-            MINUTE: lock( new TimeUnit( UNIT.MINUTE ) ),
-            HOUR: lock( new TimeUnit( UNIT.HOUR ) ),
-            DAY: lock( new TimeUnit( UNIT.DAY ) ),
-            WEEK: lock( new TimeUnit( UNIT.WEEK ) ),
-            WORK_WEEK: lock( new TimeUnit( UNIT.WORK_WEEK ) ),
-            MONTH: lock( new TimeUnit( UNIT.MONTH ) ),
-            YEAR: lock( new TimeUnit( UNIT.YEAR ) ),
-            DECADE: lock( new TimeUnit( UNIT.DECADE ) )
-        } );
-
-    const DateConstants = lock(
-        {
-            Months: lock(
-                {
-                    JANUARY: 0,
-                    FEBRUARY: 1,
-                    MARCH: 2,
-                    APRIL: 3,
-                    MAY: 4,
-                    JUNE: 5,
-                    JULY: 6,
-                    AUGUST: 7,
-                    SEPTEMBER: 8,
-                    OCTOBER: 9,
-                    NOVEMBER: 10,
-                    DECEMBER: 11
-                } ),
-            Days: lock(
-                {
-                    SUNDAY: 0,
-                    MONDAY: 1,
-                    TUESDAY: 2,
-                    WEDNESDAY: 3,
-                    THURSDAY: 4,
-                    FRIDAY: 5,
-                    SATURDAY: 6
-                } ),
-            Occurrence: lock(
-                {
-                    LAST: -1,
-                    FIRST: 0,
-                    SECOND: 1,
-                    THIRD: 2,
-                    FOURTH: 3,
-                    FIFTH: 4,
-                    SIXTH: 5,
-                    SEVENTH: 6,
-                    EIGHTH: 7,
-                    NINTH: 8,
-                    TENTH: 9
-                } ),
-            Direction: lock(
-                {
-                    FUTURE: 0,
-                    PAST: -1
-                } ),
-            Units: lock( UNIT ),
-            UnitNames: lock( UNIT_NAMES ),
-            UnitMethods: lock( UNIT_METHODS ),
-            UnitMultiples: lock( UNIT_MULTIPLES ),
-            TimeUnits: lock( TIME_UNITS ),
-            MILLISECONDS_PER_SECOND: 1_000,
-            SECONDS_PER_MINUTE: 60,
-            MINUTES_PER_HOUR: 60,
-            HOURS_PER_DAY: 24,
-            DAYS_PER_WEEK: 7,
-            DAYS_PER_WORK_WEEK: 5
-        } );
-
-    const MILLIS_PER_SECOND = DateConstants.MILLISECONDS_PER_SECOND;
-    const MILLIS_PER_MINUTE = (DateConstants.SECONDS_PER_MINUTE * MILLIS_PER_SECOND);
-    const MILLIS_PER_HOUR = (DateConstants.MINUTES_PER_HOUR * MILLIS_PER_MINUTE);
-    const MILLIS_PER_DAY = (DateConstants.HOURS_PER_DAY * MILLIS_PER_HOUR);
-    const MILLIS_PER_WEEK = (DateConstants.DAYS_PER_WEEK * MILLIS_PER_DAY);
+    const MILLIS_PER_SECOND = MILLISECONDS_PER_SECOND;
+    const MILLIS_PER_MINUTE = (SECONDS_PER_MINUTE * MILLIS_PER_SECOND);
+    const MILLIS_PER_HOUR = (MINUTES_PER_HOUR * MILLIS_PER_MINUTE);
+    const MILLIS_PER_DAY = (HOURS_PER_DAY * MILLIS_PER_HOUR);
+    const MILLIS_PER_WEEK = (DAYS_PER_WEEK * MILLIS_PER_DAY);
     const MILLIS_PER_YEAR = Math.floor( 365.25 * MILLIS_PER_DAY );
 
     const MILLIS_PER = lock(
@@ -316,7 +80,8 @@ const {
             HOUR: MILLIS_PER_HOUR,
             DAY: MILLIS_PER_DAY,
             WEEK: MILLIS_PER_WEEK,
-            YEAR: MILLIS_PER_YEAR
+            YEAR: MILLIS_PER_YEAR,
+            DECADE: (10 * MILLIS_PER_YEAR)
         } );
 
     const ONE_MINUTE = MILLIS_PER_MINUTE;
@@ -335,6 +100,353 @@ const {
 
     const ONE_DAY = MILLIS_PER_DAY;
 
+    const Months = lock(
+        {
+            JANUARY: 0,
+            FEBRUARY: 1,
+            MARCH: 2,
+            APRIL: 3,
+            MAY: 4,
+            JUNE: 5,
+            JULY: 6,
+            AUGUST: 7,
+            SEPTEMBER: 8,
+            OCTOBER: 9,
+            NOVEMBER: 10,
+            DECEMBER: 11
+        } );
+
+    const Days = lock(
+        {
+            SUNDAY: 0,
+            MONDAY: 1,
+            TUESDAY: 2,
+            WEDNESDAY: 3,
+            THURSDAY: 4,
+            FRIDAY: 5,
+            SATURDAY: 6
+        } );
+
+    const Occurrence = lock(
+        {
+            LAST: -1,
+            FIRST: 0,
+            SECOND: 1,
+            THIRD: 2,
+            FOURTH: 3,
+            FIFTH: 4,
+            SIXTH: 5,
+            SEVENTH: 6,
+            EIGHTH: 7,
+            NINTH: 8,
+            TENTH: 9
+        } );
+
+    const Direction = lock(
+        {
+            FUTURE: 0,
+            PAST: -1
+        } );
+
+    class TimeUnit
+    {
+        #id;
+        #name;
+        #multiplier;
+        #accessorName;
+        #mutatorName;
+
+        #minimumValue = 0;
+
+        constructor( pId, pName, pMultiplier, pAccessor, pMutator, pMinimumValue = 0 )
+        {
+            this.#id = pId;
+            this.#name = pName;
+            this.#multiplier = pMultiplier;
+            this.#accessorName = pAccessor || "getTime";
+            this.#mutatorName = pMutator || "setTime";
+
+            this.#minimumValue = asInt( pMinimumValue, 0 );
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
+        get id()
+        {
+            return asInt( this.#id );
+        }
+
+        get name()
+        {
+            return asString( this.#name, true );
+        }
+
+        get multiplier()
+        {
+            return asInt( this.#multiplier );
+        }
+
+        get accessorName()
+        {
+            return asString( this.#accessorName, true );
+        }
+
+        get mutatorName()
+        {
+            return asString( this.#mutatorName, true );
+        }
+
+        getAccessor()
+        {
+            return Date.prototype[this.accessorName] || function() { return 0; };
+        }
+
+        getMutator()
+        {
+            return Date.prototype[this.mutatorName] || no_op;
+        }
+
+        get minimumValue()
+        {
+            return asInt( this.#minimumValue );
+        }
+
+        resolveMultiplier( pOther )
+        {
+            const other = resolveUnit( pOther );
+
+            if ( other === this )
+            {
+                return this.multiplier;
+            }
+
+            return other?.multiplier || asInt( other );
+        }
+
+        lessThan( pOther )
+        {
+            return this.multiplier < this.resolveMultiplier( pOther );
+        }
+
+        greaterThan( pOther )
+        {
+            return this.multiplier > this.resolveMultiplier( pOther );
+        }
+
+        compareTo( pOther )
+        {
+            return this.lessThan( pOther ) ? -1 : this.greaterThan( pOther ) ? 1 : 0;
+        }
+
+        update( pDate, pAdjustment )
+        {
+            const date = resolveDate( pDate );
+
+            const mutator = this.getMutator();
+            const accessor = this.getAccessor();
+
+            return new Date( mutator.call( date, (accessor.call( date ) + asInt( pAdjustment )) ) );
+        }
+
+        adjust( pDate, pAdjustment = 0 )
+        {
+            let adjustment = asInt( pAdjustment, 1 );
+
+            adjustment *= (this.lessThan( TIME_UNITS.MINUTE ) ? this.multiplier : 1);
+
+            adjustment *= ((/week/i).test( this.name ) ? DAYS_PER_WEEK : 1);
+
+            return this.update( pDate, adjustment );
+        }
+
+        increment( pDate, pAdjustment = 1 )
+        {
+            return this.adjust( pDate, Math.max( asInt( pAdjustment, 1 ), 1 ) );
+        }
+
+        decrement( pDate, pAdjustment = -1 )
+        {
+            return this.adjust( pDate, Math.min( asInt( pAdjustment, -1 ), -1 ) );
+        }
+
+        startsFor( pDate )
+        {
+            let date = new Date( resolveDate( pDate ) );
+
+            if ( ((/week/i).test( this.name )) )
+            {
+                const day = date.getDay();
+
+                const adjustment = (/work/i).test( this.name ) ? 1 : 0;
+
+                date = new Date( toNoon( date ) );
+                date.setDate( (date.getDate() - day) + adjustment );
+                date = toMidnight( date );
+            }
+            else
+            {
+                const entries = objectEntries( TIME_UNITS );
+
+                for( const [key, value] of entries )
+                {
+                    if ( (/week|decade/i).test( key ) || (/week|decade/i).test( value?.name ) )
+                    {
+                        continue;
+                    }
+
+                    if ( this.greaterThan( value ) )
+                    {
+                        const mutator = value.getMutator();
+                        modulePrototype.attempt( () => mutator.call( date, asInt( value.minimumValue ) ) );
+                    }
+                }
+            }
+
+            return lock( date );
+        }
+
+        endsFor( pDate )
+        {
+            let date = new Date( resolveDate( pDate ) );
+
+            date = new Date( this.startsFor( date ) );
+
+            if ( ((/week/i).test( this.name )) )
+            {
+                const adjustment = (/work/i).test( this.name ) ? 5 : 7;
+
+                date.setDate( date.getDate() + adjustment );
+                date.setMilliseconds( date.getMilliseconds() - 1 );
+                return lock( date );
+            }
+            else
+            {
+                date = this.increment( date, 1 );
+            }
+
+            date.setMilliseconds( date.getMilliseconds() - 1 );
+
+            return lock( date );
+        }
+    }
+
+    class Decade extends TimeUnit
+    {
+        constructor( pId, pName, pMultiplier, pAccessor, pMutator )
+        {
+            super( pId, pName, pMultiplier, pAccessor, pMutator );
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
+        update( pDate, pAdjustment )
+        {
+            let date = resolveDate( pDate );
+
+            let adjustment = asInt( pAdjustment );
+
+            date.setFullYear( date.getFullYear() + (10 - (date.getFullYear() % 10)) );
+
+            if ( adjustment < 0 )
+            {
+                date.setFullYear( date.getFullYear() + (2 * adjustment) );
+            }
+
+            return lock( date );
+        }
+
+        startsFor( pDate )
+        {
+            let date = new Date( resolveDate( pDate ) );
+
+            date.setFullYear( date.getFullYear() - (date.getFullYear() % 10) );
+
+            date.setMonth( 0 );
+            date.setDate( 1 );
+            date.setHours( 0 );
+            date.setMinutes( 0 );
+            date.setSeconds( 0 );
+            date.setMilliseconds( 0 );
+
+            return lock( date );
+        }
+    }
+
+    const TIME_UNITS = lock(
+        {
+            MILLISECOND: lock( new TimeUnit( 1, "Milliseconds", 1, "getMilliseconds", "setMilliseconds" ) ),
+            SECOND: lock( new TimeUnit( 2, "Seconds", MILLIS_PER.SECOND, "getSeconds", "setSeconds" ) ),
+            MINUTE: lock( new TimeUnit( 3, "Minutes", MILLIS_PER.MINUTE, "getMinutes", "setMinutes" ) ),
+            HOUR: lock( new TimeUnit( 4, "Hours", MILLIS_PER.HOUR, "getHours", "setHours" ) ),
+            DAY: lock( new TimeUnit( 5, "Days", MILLIS_PER.DAY, "getDate", "setDate", 1 ) ),
+            WEEK: lock( new TimeUnit( 6, "Weeks", MILLIS_PER.WEEK, "getDate", "setDate", 1 ) ),
+            WORK_WEEK: lock( new TimeUnit( 7, "Work Weeks", MILLIS_PER.WEEK, "getDate", "setDate", 1 ) ),
+            MONTH: lock( new TimeUnit( 8, "Months", 2_592_000_000, "getMonth", "setMonth" ) ),
+            YEAR: lock( new TimeUnit( 9, "Years", MILLIS_PER.YEAR, "getFullYear", "setFullYear" ) ),
+            DECADE: lock( new Decade( 10, "Decades", MILLIS_PER.DECADE, "getFullYear", "setFullYear" ) )
+        } );
+
+    const TIME_UNITS_BY_ID =
+        {
+            // populated by code
+        };
+
+    const TIME_UNITS_BY_NAME =
+        {
+            // populated by code
+        };
+
+    // populates TIME_UNITS_BY_ID and TIME_UNITS_BY_NAME
+    objectEntries( TIME_UNITS ).forEach( ( [key, value] ) =>
+                                         {
+                                             TIME_UNITS_BY_ID[value.id] = value;
+                                             TIME_UNITS_BY_NAME[value.name] = value;
+                                         } );
+
+    const resolveUnit = ( pUnit ) =>
+        isNull( pUnit ) ? new TimeUnit( 0, "NULL UNIT", 0 ) :
+        pUnit instanceof TimeUnit ? pUnit :
+        isString( pUnit ) ? TIME_UNITS_BY_NAME[pUnit] || TIME_UNITS[ucase( pUnit )] || TIME_UNITS[ucase( pUnit.replace( /s$/i, _mt_str ) )] :
+        isNumber( pUnit ) && pUnit < 1_000 ? TIME_UNITS_BY_ID[pUnit] : new TimeUnit( pUnit, asString( pUnit ), pUnit );
+
+    const DateConstants = lock(
+        {
+            Months,
+            Days,
+            Occurrence,
+            Direction,
+            Units: lock( TIME_UNITS ),
+            UnitNames: lock( Object.keys( TIME_UNITS_BY_NAME ) ),
+            TimeUnits: lock( TIME_UNITS ),
+            MILLISECONDS_PER_SECOND,
+            SECONDS_PER_MINUTE,
+            MINUTES_PER_HOUR,
+            HOURS_PER_DAY,
+            DAYS_PER_WEEK,
+            DAYS_PER_WORK_WEEK,
+            MILLIS_PER,
+            ONE_MINUTE,
+            TWO_MINUTES,
+            FIVE_MINUTES,
+            TEN_MINUTES,
+            TWENTY_MINUTES,
+            THIRTY_MINUTES,
+            FORTY_FIVE_MINUTES,
+            ONE_HOUR,
+            TWO_HOURS,
+            SIX_HOURS,
+            EIGHT_HOURS,
+            TWELVE_HOURS,
+            ONE_DAY
+        } );
+
+
     /**
      * Returns a function that will add or subtract one unit to the specified date
      *
@@ -345,15 +457,11 @@ const {
     {
         const increment = pAsDecrement ? -1 : 1;
 
-        const unit = resolveUnit( pUnit );
+        const timeUnit = resolveUnit( pUnit );
 
-        const timeUnit = TIME_UNITS[resolveUnitName( unit )];
+        let adjustment = timeUnit.lessThan( TIME_UNITS.MINUTE ) ? (timeUnit.multiplier * increment) : increment;
 
-        let adjustment = timeUnit.lessThan( TIME_UNITS[UNIT.MINUTE] ) ? (timeUnit.multiplier * increment) : increment;
-
-        adjustment *= [UNIT_NAMES.WEEK, UNIT_NAMES.WORK_WEEK].includes( timeUnit.name ) ? DateConstants.DAYS_PER_WEEK : 1;
-
-        adjustment = [UNIT_NAMES.DECADE].includes( timeUnit.name ) ? (10 - (date.getFullYear() % 10)) : adjustment;
+        adjustment *= [TIME_UNITS.WEEK, TIME_UNITS.WORK_WEEK].includes( timeUnit ) ? DAYS_PER_WEEK : 1;
 
         return ( pDate ) => timeUnit.update( pDate, adjustment );
     };
@@ -369,9 +477,9 @@ const {
 
         constructor( pName, pIndex, pDays )
         {
-            this.#index = Math.max( 0, Math.min( 11, asInt( pIndex ) ) );
+            this.#index = clamp( asInt( pIndex ), 0, 11 );
             this.#name = stringUtils.toProperCase( stringUtils.asString( pName, true ) );
-            this.#days = Math.max( 28, Math.min( 31, asInt( pDays ) ) );
+            this.#days = clamp( asInt( pDays ), 28, 31 );
         }
 
         static get [Symbol.species]()
@@ -498,19 +606,25 @@ const {
         return tsA - tsB;
     };
 
+    const resolveFullYear = ( pYear ) =>
+    {
+        const year = asInt( pYear );
+        return (year < 100 ? (year < 50 ? year + 1900 : year + 2000) : year < 1_000 ? year + 1000 : year);
+    };
+
     // noinspection OverlyComplexFunctionJS
     const _setFields = function( pDate, pYear, pMonth, pDay, pHours, pMinutes, pSeconds, pMilliseconds )
     {
         if ( isValidDateArgument( pDate ) )
         {
-            const year = asInt( pYear, pDate.getFullYear() );
-            const month = asInt( pMonth, pDate.getMonth() );
-            const day = asInt( pDay, pDate.getDate() );
+            const year = resolveFullYear( asInt( pYear, pDate.getFullYear() ) );
+            const month = clamp( asInt( pMonth, pDate.getMonth() ), 0, 11 );
+            const day = clamp( asInt( pDay, pDate.getDate() ), 1, numDaysInMonth( month, year ) );
 
-            const hour = asInt( pHours, pDate.getHours() );
-            const minutes = asInt( pMinutes, pDate.getMinutes() );
-            const seconds = asInt( pSeconds, pDate.getSeconds() );
-            const milliseconds = asInt( pMilliseconds, pDate.getMilliseconds() );
+            const hour = clamp( asInt( pHours, pDate.getHours() ), 0, 23 );
+            const minutes = clamp( asInt( pMinutes, pDate.getMinutes() ), 0, 59 );
+            const seconds = clamp( asInt( pSeconds, pDate.getSeconds() ), 0, 59 );
+            const milliseconds = clamp( asInt( pMilliseconds, pDate.getMilliseconds() ), 0, 999 );
 
             const date = new Date( pDate );
 
@@ -542,80 +656,56 @@ const {
     /**
      * Returns true if the first date is earlier than the second date.
      *
-     * If the first argument is not a date or a number, returns false.
-     * If the second argument is omitted or not a date or a number, returns true.
+     * If either argument is not a valid date or a number, returns false.
      *
      * @param pDateA a date to compare to another date
-     * @param pDateB a date to which to compare pDateA
+     * @param pDateB a date to which to compare the first date
      * @param pTransformerFunction (optional) function to call on each argument before comparison
+     *
+     * @returns true if the first date is earlier than the second date
      */
-    const before = function( pDateA, pDateB, pTransformerFunction )
-    {
-        if ( !validateArguments( pDateA, pDateB ) )
-        {
-            return false;
-        }
-
-        const comp = _compare( pDateA, pDateB, pTransformerFunction );
-
-        return comp < 0;
-    };
+    const before = ( pDateA, pDateB, pTransformerFunction ) =>
+        ((validateArguments( pDateA, pDateB )) && _compare( pDateA, pDateB, pTransformerFunction ) < 0);
 
     /**
      * Returns true if the first date is later than the second date.
      *
-     * If the first argument is not a date or a number, returns false.
-     * If the second argument is omitted or not a date or a number, returns true.
-     *
+     * If either argument is not a valid date or a number, returns false.
+     * *
      * @param pDateA a date to compare to another date
-     * @param pDateB a date to which to compare pDateA
+     * @param pDateB a date to which to compare the first date
      * @param pTransformerFunction (optional) function to call on each argument before comparison
+     *
+     * @returns true if the first date is later than the second date, false otherwise
      */
-    const after = function( pDateA, pDateB, pTransformerFunction )
-    {
-        let dateA = isValidDateArgument( pDateA ) ? pDateA : new Date();
-        let dateB = isValidDateArgument( pDateB ) ? pDateB : new Date();
-
-        const comp = _compare( dateA, dateB, pTransformerFunction );
-
-        return comp > 0;
-    };
+    const after = ( pDateA, pDateB, pTransformerFunction ) =>
+        ((validateArguments( pDateA, pDateB )) && _compare( pDateA, pDateB, pTransformerFunction ) > 0);
 
     /**
      * Returns true if the first date is the same date as the second date.
      *
-     * If the first argument is not a date or a number, returns false.
-     * If the second argument is omitted or not a date or a number, returns true.
-     *
+     * If either argument is not a valid date or a number, returns false.
+     * *
      * @param pDateA a date to compare to another date
-     * @param pDateB a date to which to compare pDateA
+     * @param pDateB a date to which to compare the first date
      * @param pTransformerFunction (optional) function to call on each argument before comparison
      *                             For example, you could convert both dates to noon,
      *                             if you just want to know if it is the same DAY
+     *
+     * @returns true if the first date is the same as the second date, false otherwise
      */
-    const equal = function( pDateA, pDateB, pTransformerFunction )
-    {
-        if ( !validateArguments( pDateA, pDateB ) )
-        {
-            return false;
-        }
-
-        const comp = _compare( pDateA, pDateB, pTransformerFunction );
-
-        return comp === 0;
-    };
+    const equal = ( pDateA, pDateB, pTransformerFunction ) =>
+        ((validateArguments( pDateA, pDateB )) && _compare( pDateA, pDateB, pTransformerFunction ) === 0);
 
     const earliest = function( ...pDates )
     {
         const dates = sortDates( ...pDates );
-
         return (dates?.length || 0) > 0 ? lock( new Date( dates[0] ) ) : null;
     };
 
     const latest = function( ...pDates )
     {
         const dates = sortDates( ...pDates );
-
         return (dates?.length || 0) > 0 ? lock( new Date( dates[dates.length - 1] ) ) : null;
     };
 
@@ -634,18 +724,18 @@ const {
 
     const numDaysInYear = function( pYear )
     {
-        const year = isNumber( pYear ) ? asInt( pYear ) : new Date().getFullYear();
+        const year = resolveFullYear( isNumeric( pYear ) ? asInt( pYear ) : new Date().getFullYear() );
 
         return (isLeapYear( year )) ? 366 : 365;
     };
 
-    const toNoon = function( pDate )
+    const toYear = function( pDate, pYear = new Date().getFullYear() )
     {
         if ( isValidDateArgument( pDate ) )
         {
             let date = new Date( pDate );
 
-            date = _setFields( date, date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0, 0, 0 );
+            date = _setFields( date, resolveFullYear( pYear ), 0, 1, 0, 0, 0, 0 );
 
             return lock( date );
         }
@@ -653,27 +743,41 @@ const {
         return pDate;
     };
 
-    const toMidnight = function( pDate )
+    const toMonthDay = function( pDate, pDayNum = 1 )
     {
         if ( isValidDateArgument( pDate ) )
         {
             let date = new Date( pDate );
 
+            const month = date.getMonth();
+
+            const daysInMonth = numDaysInMonth( month, date.getFullYear() );
+
+            date = _setFields( date, date.getFullYear(), month, Math.max( 1, Math.min( daysInMonth, asInt( pDayNum ) ) ), 0, 0, 0, 0, 0 );
+
+            return lock( date );
+        }
+    };
+
+    const toWeekDay = function( pDate, pWeekDay = 0 )
+    {
+        if ( isValidDateArgument( pDate ) )
+        {
+            let date = new Date( pDate );
+            const day = date.getDay();
             date = _setFields( date, date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0, 0 );
-
+            date.setDate( date.getDate() + (asInt( pWeekDay ) - day) );
             return lock( date );
         }
-
-        return pDate;
     };
 
-    const lastInstant = function( pDate )
+    const toHour = function( pDate, pHour = 0 )
     {
         if ( isValidDateArgument( pDate ) )
         {
             let date = new Date( pDate );
 
-            date = _setFields( date, date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999 );
+            date = _setFields( date, date.getFullYear(), date.getMonth(), date.getDate(), asInt( pHour ), 0, 0, 0, 0 );
 
             return lock( date );
         }
@@ -681,201 +785,139 @@ const {
         return pDate;
     };
 
-    /**
-     * Returns a date representing the start of the period specified in which the date occurs.
-     *
-     * @param pUnit one of the UNIT constants or a string matches the key of one of the unit constants
-     * @param pDate the date for which to return the start of the specified period (unit)
-     */
-    const getStartOf = function( pUnit, pDate )
+    const toMinute = function( pDate, pMinute = 0 )
     {
-        let date = isDate( pDate ) ? new Date( pDate ) : new Date();
-
-        const day = date.getDay();
-
-        const unit = resolveUnit( pUnit );
-
-        switch ( unit )
+        if ( isValidDateArgument( pDate ) )
         {
-            case UNIT.WEEK:
-                date = new Date( toNoon( date ) );
-                date.setDate( date.getDate() - day );
-                date = toMidnight( date );
-
-                break;
-
-            case UNIT.WORK_WEEK:
-                date = new Date( toNoon( date ) );
-                date.setDate( (date.getDate() - day) + 1 );
-                date = toMidnight( date );
-                break;
-
-            case UNIT.DECADE:
-                date = new Date( toNoon( date ) );
-                date.setFullYear( date.getFullYear() - (date.getFullYear() % 10) );
-            //fallthrough
-
-            case UNIT.YEAR:
-                date.setMonth( 0 );
-            // fallthrough
-
-            case UNIT.MONTH:
-                date.setDate( 1 );
-            //fallthrough
-
-            case UNIT.DAY:
-                date.setHours( 0 );
-            //fallthrough
-
-            case UNIT.HOUR:
-                date.setMinutes( 0 );
-            //fallthrough
-
-            case UNIT.MINUTE:
-                date.setSeconds( 0 );
-            // fallthrough
-
-            case UNIT.SECOND:
-                date.setMilliseconds( 0 );
-            // fallthrough
-
-            case UNIT.MILLISECOND:
-                date.setMilliseconds( 0 );
+            let date = new Date( pDate );
+            date = _setFields( date, date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), asInt( pMinute ), 0, 0, 0 );
+            return lock( date );
         }
 
-        return lock( new Date( date ) );
+        return pDate;
     };
+
+    const toSecond = function( pDate, pSecond = 0 )
+    {
+        if ( isValidDateArgument( pDate ) )
+        {
+            let date = new Date( pDate );
+            date = _setFields( date, date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), date.getMinutes(), asInt( pSecond ), 0, 0 );
+            return lock( date );
+        }
+
+        return pDate;
+    };
+
+    const toMillisecond = function( pDate, pMillisecond = 0 )
+    {
+        if ( isValidDateArgument( pDate ) )
+        {
+            let date = new Date( pDate );
+            date = _setFields( date, date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), date.getMinutes(), date.getSeconds(), asInt( pMillisecond ), 0 );
+            return lock( date );
+        }
+        return pDate;
+    };
+
+    const toNoon = ( pDate ) => toHour( pDate, 12 );
+
+    const toMidnight = ( pDate ) => toHour( pDate, 0 );
+
+    const lastInstant = ( pDate ) => toMillisecond( toSecond( toMinute( toHour( pDate, 23 ), 59 ), 59 ), 999 );
 
     const startOfWeek = function( pDate )
     {
-        return getStartOf( UNIT.WEEK, pDate );
+        return TIME_UNITS.WEEK.startsFor( pDate );
     };
 
     const startOfDecade = function( pDate )
     {
-        return getStartOf( UNIT.DECADE, pDate );
+        return TIME_UNITS.DECADE.startsFor( pDate );
     };
 
     const startOfYear = function( pDate )
     {
-        return getStartOf( UNIT.YEAR, pDate );
+        return TIME_UNITS.YEAR.startsFor( pDate );
     };
 
     const startOfMonth = function( pDate )
     {
-        return getStartOf( UNIT.MONTH, pDate );
+        return TIME_UNITS.MONTH.startsFor( pDate );
     };
 
     const startOfDay = function( pDate )
     {
-        return getStartOf( UNIT.DAY, pDate );
+        return TIME_UNITS.DAY.startsFor( pDate );
     };
 
     const startOfHour = function( pDate )
     {
-        return getStartOf( UNIT.HOUR, pDate );
+        return TIME_UNITS.HOUR.startsFor( pDate );
     };
 
     const startOfMinute = function( pDate )
     {
-        return getStartOf( UNIT.MINUTE, pDate );
+        return TIME_UNITS.MINUTE.startsFor( pDate );
     };
 
     const startOfSecond = function( pDate )
     {
-        return getStartOf( UNIT.SECOND, pDate );
-    };
-
-    /**
-     * Returns a date representing the last millisecond of the specified period in which the date occurs
-     *
-     * @param pUnit
-     * @param pDate
-     *
-     * @returns {Date}
-     */
-    const getEndOf = function( pUnit, pDate )
-    {
-        let date = isDate( pDate ) ? new Date( pDate ) : new Date();
-
-        const unit = resolveUnit( pUnit );
-
-        switch ( unit )
-        {
-            case UNIT.WEEK:
-                date = new Date( getStartOf( unit, date ) );
-                date.setDate( date.getDate() + 6 );
-                return getEndOf( UNIT.DAY, date );
-
-            case UNIT.WORK_WEEK:
-                date = new Date( getStartOf( unit, date ) );
-                date.setDate( date.getDate() + 4 );
-                return getEndOf( UNIT.DAY, date );
-
-            default:
-                const increment = incrementer( unit );
-                const next = increment( date );
-                date = getStartOf( unit, next );
-                break;
-        }
-
-        date.setMilliseconds( date.getMilliseconds() - 1 );
-
-        return lock( new Date( date ) );
+        return TIME_UNITS.SECOND.startsFor( pDate );
     };
 
     const endOfWeek = function( pDate )
     {
-        return getEndOf( UNIT.WEEK, pDate );
+        return TIME_UNITS.WEEK.endsFor( pDate );
     };
 
     const endOfDecade = function( pDate )
     {
-        return getEndOf( UNIT.DECADE, pDate );
+        return TIME_UNITS.DECADE.endsFor( pDate );
     };
 
     const endOfYear = function( pDate )
     {
-        return getEndOf( UNIT.YEAR, pDate );
+        return TIME_UNITS.YEAR.endsFor( pDate );
     };
 
     const endOfMonth = function( pDate )
     {
-        return getEndOf( UNIT.MONTH, pDate );
+        return TIME_UNITS.MONTH.endsFor( pDate );
     };
 
     const endOfDay = function( pDate )
     {
-        return getEndOf( UNIT.DAY, pDate );
+        return TIME_UNITS.DAY.endsFor( pDate );
     };
 
     const endOfHour = function( pDate )
     {
-        return getEndOf( UNIT.HOUR, pDate );
+        return TIME_UNITS.HOUR.endsFor( pDate );
     };
 
     const endOfMinute = function( pDate )
     {
-        return getEndOf( UNIT.MINUTE, pDate );
+        return TIME_UNITS.MINUTE.endsFor( pDate );
     };
 
     const endOfSecond = function( pDate )
     {
-        return getEndOf( UNIT.SECOND, pDate );
+        return TIME_UNITS.SECOND.endsFor( pDate );
     };
 
     const DateFilters =
         {
-            WEEKDAYS: ( e ) => isDate( e ) && ![DateConstants.Days.SUNDAY, DateConstants.Days.SATURDAY].includes( e.getDay() ),
-            WEEKENDS: ( e ) => isDate( e ) && [DateConstants.Days.SUNDAY, DateConstants.Days.SATURDAY].includes( e.getDay() ),
+            WEEKDAYS: ( e ) => isDate( e ) && ![Days.SUNDAY, Days.SATURDAY].includes( e.getDay() ),
+            WEEKENDS: ( e ) => isDate( e ) && [Days.SUNDAY, Days.SATURDAY].includes( e.getDay() ),
 
-            SUNDAYS: ( e ) => isDate( e ) && (DateConstants.Days.SUNDAY === e.getDay()),
-            MONDAYS: ( e ) => isDate( e ) && (DateConstants.Days.MONDAY === e.getDay()),
-            TUESDAYS: ( e ) => isDate( e ) && (DateConstants.Days.TUESDAY === e.getDay()),
-            WEDNESDAYS: ( e ) => isDate( e ) && (DateConstants.Days.WEDNESDAY === e.getDay()),
-            THURSDAYS: ( e ) => isDate( e ) && (DateConstants.Days.THURSDAY === e.getDay()),
-            FRIDAYS: ( e ) => isDate( e ) && (DateConstants.Days.FRIDAY === e.getDay()),
-            SATURDAYS: ( e ) => isDate( e ) && (DateConstants.Days.SATURDAY === e.getDay()),
+            SUNDAYS: ( e ) => isDate( e ) && (Days.SUNDAY === e.getDay()),
+            MONDAYS: ( e ) => isDate( e ) && (Days.MONDAY === e.getDay()),
+            TUESDAYS: ( e ) => isDate( e ) && (Days.TUESDAY === e.getDay()),
+            WEDNESDAYS: ( e ) => isDate( e ) && (Days.WEDNESDAY === e.getDay()),
+            THURSDAYS: ( e ) => isDate( e ) && (Days.THURSDAY === e.getDay()),
+            FRIDAYS: ( e ) => isDate( e ) && (Days.FRIDAY === e.getDay()),
+            SATURDAYS: ( e ) => isDate( e ) && (Days.SATURDAY === e.getDay()),
 
             FIRST_OF_MONTH: ( e ) => isDate( e ) && (1 === e.getDate()),
             LAST_OF_MONTH: ( e ) => isDate( e ) && (numDaysInMonth( e.getMonth(), e.getFullYear() ) === e.getDate()),
@@ -932,7 +974,7 @@ const {
         const year = asInt( pYear );
         const month = asInt( pMonth );
 
-        const dayNumber = 0 === pDay ? 0 : asInt( pDay, DateConstants.Days.MONDAY );
+        const dayNumber = 0 === pDay ? 0 : asInt( pDay, Days.MONDAY );
 
         let startDate = new Date( year, month, 1, 0, 0, 0, 0 );
 
@@ -953,7 +995,7 @@ const {
         {
             const date = new Date( startDate );
 
-            date.setDate( startDate.getDate() + (i * DateConstants.DAYS_PER_WEEK) );
+            date.setDate( startDate.getDate() + (i * DAYS_PER_WEEK) );
 
             if ( date.getMonth() === month )
             {
@@ -998,11 +1040,11 @@ const {
          * which is used to calculate the date the holiday occurs in a specific year.
          *
          * @param pUseExactDate {boolean} specify true if the holiday always occurs on a specific date
-         * @param pMonth {number} the DateConstants.Months value for the month in which the holiday occurs
+         * @param pMonth {number} the Months value for the month in which the holiday occurs
          * @param pDate {number} the calendar day of the holiday, for example 25 for Christmas
-         * @param pOccurrence {number} the DateConstants.Occurrence indicating which occurrence of weekday
+         * @param pOccurrence {number} the Occurrence indicating which occurrence of weekday
          * to use to calculate the date of the associated Holiday, if exactDate is false
-         * @param pWeekday {number} the DateConstants.Days value indicating the day of the week
+         * @param pWeekday {number} the Days value indicating the day of the week
          * to use to calculate the date of the associated Holiday, if useExactDate is false
          */
         constructor( pUseExactDate, pMonth, pDate, pOccurrence, pWeekday )
@@ -1154,10 +1196,10 @@ const {
 
             switch ( weekday )
             {
-                case DateConstants.Days.SUNDAY:
+                case Days.SUNDAY:
                     return avoidWeekend( pDate );
 
-                case DateConstants.Days.SATURDAY:
+                case Days.SATURDAY:
                     return subtractDays( pDate, 1 );
 
                 default:
@@ -1196,7 +1238,7 @@ const {
             {
                 if ( isValidDateArgument( pDate ) )
                 {
-                    const map = { [DateConstants.Days.SUNDAY]: 2, [DateConstants.Days.SATURDAY]: 1 };
+                    const map = { [Days.SUNDAY]: 2, [Days.SATURDAY]: 1 };
 
                     const weekday = pDate.getDay();
 
@@ -1236,16 +1278,16 @@ const {
         {
             USA: lock(
                 [
-                    lock( new Holiday( "New Year's Day", new HolidayExactDateDefinition( DateConstants.Months.JANUARY, 1 ), Holiday.MondayRules.DEFAULT ) ),
-                    lock( new Holiday( "Martin Luther King, Jr. Day", new HolidayRelativeDefinition( DateConstants.Months.JANUARY, DateConstants.Occurrence.THIRD, DateConstants.Days.MONDAY ), Holiday.MondayRules.DEFAULT ) ),
-                    lock( new Holiday( "President’s Day", new HolidayRelativeDefinition( DateConstants.Months.FEBRUARY, DateConstants.Occurrence.THIRD, DateConstants.Days.MONDAY ), Holiday.MondayRules.DEFAULT ) ),
-                    lock( new Holiday( "Memorial Day", new HolidayRelativeDefinition( DateConstants.Months.MAY, DateConstants.Occurrence.LAST, DateConstants.Days.MONDAY ), Holiday.MondayRules.DEFAULT ) ),
-                    lock( new Holiday( "Independence Day", new HolidayExactDateDefinition( DateConstants.Months.JULY, 4 ), Holiday.MondayRules.INDEPENDENCE_DAY ) ),
-                    lock( new Holiday( "Labor Day", new HolidayRelativeDefinition( DateConstants.Months.SEPTEMBER, DateConstants.Occurrence.FIRST, DateConstants.Days.MONDAY ), Holiday.MondayRules.DEFAULT ) ),
-                    lock( new Holiday( "Columbus Day", new HolidayRelativeDefinition( DateConstants.Months.OCTOBER, DateConstants.Occurrence.SECOND, DateConstants.Days.MONDAY ), Holiday.MondayRules.DEFAULT ) ),
-                    lock( new Holiday( "Veteran’s Day", new HolidayExactDateDefinition( DateConstants.Months.NOVEMBER, 11 ), Holiday.MondayRules.DEFAULT ) ),
-                    lock( new Holiday( "Thanksgiving", new HolidayRelativeDefinition( DateConstants.Months.NOVEMBER, DateConstants.Occurrence.FOURTH, DateConstants.Days.THURSDAY ), Holiday.MondayRules.NULL_RULE ) ),
-                    lock( new Holiday( "Christmas", new HolidayExactDateDefinition( DateConstants.Months.DECEMBER, 25 ), Holiday.MondayRules.NULL_RULE ) )
+                    lock( new Holiday( "New Year's Day", new HolidayExactDateDefinition( Months.JANUARY, 1 ), Holiday.MondayRules.DEFAULT ) ),
+                    lock( new Holiday( "Martin Luther King, Jr. Day", new HolidayRelativeDefinition( Months.JANUARY, Occurrence.THIRD, Days.MONDAY ), Holiday.MondayRules.DEFAULT ) ),
+                    lock( new Holiday( "President’s Day", new HolidayRelativeDefinition( Months.FEBRUARY, Occurrence.THIRD, Days.MONDAY ), Holiday.MondayRules.DEFAULT ) ),
+                    lock( new Holiday( "Memorial Day", new HolidayRelativeDefinition( Months.MAY, Occurrence.LAST, Days.MONDAY ), Holiday.MondayRules.DEFAULT ) ),
+                    lock( new Holiday( "Independence Day", new HolidayExactDateDefinition( Months.JULY, 4 ), Holiday.MondayRules.INDEPENDENCE_DAY ) ),
+                    lock( new Holiday( "Labor Day", new HolidayRelativeDefinition( Months.SEPTEMBER, Occurrence.FIRST, Days.MONDAY ), Holiday.MondayRules.DEFAULT ) ),
+                    lock( new Holiday( "Columbus Day", new HolidayRelativeDefinition( Months.OCTOBER, Occurrence.SECOND, Days.MONDAY ), Holiday.MondayRules.DEFAULT ) ),
+                    lock( new Holiday( "Veteran’s Day", new HolidayExactDateDefinition( Months.NOVEMBER, 11 ), Holiday.MondayRules.DEFAULT ) ),
+                    lock( new Holiday( "Thanksgiving", new HolidayRelativeDefinition( Months.NOVEMBER, Occurrence.FOURTH, Days.THURSDAY ), Holiday.MondayRules.NULL_RULE ) ),
+                    lock( new Holiday( "Christmas", new HolidayExactDateDefinition( Months.DECEMBER, 25 ), Holiday.MondayRules.NULL_RULE ) )
                 ] )
         } );
 
@@ -1291,16 +1333,16 @@ const {
             start = addDays( start, 1 );
         }
 
-        const end = avoidWeekend( lastInstant( pEndDate ), DateConstants.Direction.PAST );
+        const end = avoidWeekend( lastInstant( pEndDate ), Direction.PAST );
         const endDay = end.getDay();
 
         const days = daysBetween( start, end );
 
-        const weeks = Math.floor( days / DateConstants.DAYS_PER_WEEK );
+        const weeks = Math.floor( days / DAYS_PER_WEEK );
 
-        let extraDays = Math.abs( days ) % DateConstants.DAYS_PER_WEEK;
+        let extraDays = Math.abs( days ) % DAYS_PER_WEEK;
 
-        return (weeks * DateConstants.DAYS_PER_WORK_WEEK) + extraDays;
+        return (weeks * DAYS_PER_WORK_WEEK) + extraDays;
     };
 
     const daysRemainingIn = function( pUnit, pDate )
@@ -1309,38 +1351,37 @@ const {
 
         const day = date.getDay();
 
-        const unit = isNumber( pUnit ) ? pUnit : UNIT[stringUtils.asString( pUnit ).toUpperCase()];
+        const unit = resolveUnit( pUnit );
 
         let remaining = 0;
 
         switch ( unit )
         {
-            case UNIT.WEEK:
+            case TIME_UNITS.WEEK:
                 remaining = Math.abs( day - 6 );
                 break;
 
-            case UNIT.WORK_WEEK:
-                remaining = (day < DateConstants.DAYS_PER_WORK_WEEK ? (day - DateConstants.DAYS_PER_WORK_WEEK) : 0);
+            case TIME_UNITS.WORK_WEEK:
+                remaining = (day < DAYS_PER_WORK_WEEK ? (day - DAYS_PER_WORK_WEEK) : 0);
                 break;
 
-            case UNIT.DECADE:
+            case TIME_UNITS.DECADE:
                 remaining = daysBetween( date, endOfDecade( date ) );
                 break;
 
-
-            case UNIT.YEAR:
+            case TIME_UNITS.YEAR:
                 remaining = daysBetween( date, endOfYear( date ) );
                 break;
 
-            case UNIT.MONTH:
+            case TIME_UNITS.MONTH:
                 remaining = daysBetween( date, endOfMonth( date ) );
                 break;
 
-            case UNIT.DAY:
-            case UNIT.HOUR:
-            case UNIT.MINUTE:
-            case UNIT.SECOND:
-            case UNIT.MILLISECOND:
+            case TIME_UNITS.DAY:
+            case TIME_UNITS.HOUR:
+            case TIME_UNITS.MINUTE:
+            case TIME_UNITS.SECOND:
+            case TIME_UNITS.MILLISECOND:
 
             default:
                 remaining = 0;
@@ -1400,22 +1441,15 @@ const {
         {
             const numWeeks = isNumber( pNumWeeks ) ? asInt( pNumWeeks ) : 0;
 
-            return addDays( pDate, (numWeeks * DateConstants.DAYS_PER_WEEK) );
+            return addDays( pDate, (numWeeks * DAYS_PER_WEEK) );
         }
     };
 
-    const subtractWeeks = function( pDate, pNumWeeks )
-    {
-        const numWeeks = isNumber( pNumWeeks ) ? asInt( pNumWeeks ) : 0;
-        return addWeeks( pDate, -(numWeeks) );
-    };
+    const subtractWeeks = ( pDate, pNumWeeks ) => addWeeks( pDate, -(isNumber( pNumWeeks ) ? asInt( pNumWeeks ) : 0) );
 
-    const isWeekend = function( pDate )
-    {
-        return isValidDateArgument( pDate ) && [DateConstants.Days.SATURDAY, DateConstants.Days.SUNDAY].includes( pDate.getDay() );
-    };
+    const isWeekend = ( pDate ) => isValidDateArgument( pDate ) && [Days.SATURDAY, Days.SUNDAY].includes( pDate.getDay() );
 
-    const avoidWeekend = function( pDate, pDirection = DateConstants.Direction.FUTURE )
+    const avoidWeekend = function( pDate, pDirection = Direction.FUTURE )
     {
         if ( isValidDateArgument( pDate ) )
         {
@@ -1425,12 +1459,12 @@ const {
 
             const map = direction >= 0 ?
                 {
-                    [DateConstants.Days.SUNDAY]: 1,
-                    [DateConstants.Days.SATURDAY]: 2
+                    [Days.SUNDAY]: 1,
+                    [Days.SATURDAY]: 2
                 } :
                 {
-                    [DateConstants.Days.SUNDAY]: -2,
-                    [DateConstants.Days.SATURDAY]: -1
+                    [Days.SUNDAY]: -2,
+                    [Days.SATURDAY]: -1
                 };
 
             const weekday = date.getDay();
@@ -1461,9 +1495,9 @@ const {
 
             let date = toNoon( startDate );
 
-            const numWeeks = sign * (Math.floor( Math.abs( numDays ) / DateConstants.DAYS_PER_WORK_WEEK ));
+            const numWeeks = sign * (Math.floor( Math.abs( numDays ) / DAYS_PER_WORK_WEEK ));
 
-            const extraDays = (sign * (Math.abs( numDays ) % DateConstants.DAYS_PER_WORK_WEEK));
+            const extraDays = (sign * (Math.abs( numDays ) % DAYS_PER_WORK_WEEK));
 
             date = addWeeks( date, numWeeks );
             date = addDays( date, extraDays );
@@ -1823,15 +1857,14 @@ const {
             EIGHT_HOURS,
             TWELVE_HOURS,
             ONE_DAY,
-            UNIT,
-            UNIT_NAMES,
-            UNIT_MULTIPLES,
-            UNIT_METHODS,
             TIME_UNITS,
+            TIME_UNITS_BY_ID,
+            TIME_UNITS_BY_NAME,
             HOLIDAYS,
             US_HOLIDAYS: HOLIDAYS.USA,
             isDate,
             isValidDateArgument,
+            resolveDate,
             isLeapYear,
             isWeekend,
             isHoliday,

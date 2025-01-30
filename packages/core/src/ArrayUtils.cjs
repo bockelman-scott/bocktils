@@ -149,7 +149,8 @@ const $scope = constants?.$scope || function()
         toDecimal,
         toHex,
         toOctal,
-        toBinary
+        toBinary,
+        clamp
     } = typeUtils;
 
     const {
@@ -4234,7 +4235,7 @@ const $scope = constants?.$scope || function()
 
         const value = pElem || _mt_str;
 
-        const limit = Math.min( Math.max( 1, asInt( pLimit, ((arr?.length || 2) - 1) ) ), 10_000 );
+        const limit = clamp( asInt( pLimit, ((arr?.length || 2) - 1) ), 1, 10_000 );
 
         const numElements = arr.push( value );
 
@@ -4443,7 +4444,7 @@ const $scope = constants?.$scope || function()
 
         shrink( pNewLimit, pEvictNewest )
         {
-            const limit = Math.min( Math.max( 1, asInt( pNewLimit, this.#arr?.length ) ), 65_536 );
+            const limit = clamp( asInt( pNewLimit, this.#arr?.length ), 1, 65_536 );
 
             if ( limit > this.#limit )
             {
@@ -4472,7 +4473,7 @@ const $scope = constants?.$scope || function()
 
         extend( pNewLimit, ...pElems )
         {
-            const limit = Math.min( Math.max( 1, asInt( pNewLimit, this.size ) ), MAX_QUEUE_SIZE );
+            const limit = clamp( asInt( pNewLimit, this.size ), 1, MAX_QUEUE_SIZE );
 
             this.#limit = Math.max( limit, this.#limit );
 
@@ -4528,7 +4529,7 @@ const $scope = constants?.$scope || function()
 
     BoundedQueue.create = function( pLimit = 100, ...pArr )
     {
-        const limit = Math.min( Math.max( 1, asInt( pLimit, (pArr?.length || pArr?.size) ) ), MAX_QUEUE_SIZE );
+        const limit = clamp( asInt( pLimit, (pArr?.length || pArr?.size) ), 1, MAX_QUEUE_SIZE );
 
         const arr = isArray( pArr ) ? varargs( pArr ) : ((null != pArr && pArr instanceof BoundedQueue) ? pArr : asArray( pArr ));
 
@@ -4697,7 +4698,7 @@ const $scope = constants?.$scope || function()
 
     AsyncBoundedQueue.create = function( pLimit = 100, ...pArr )
     {
-        const limit = Math.min( Math.max( 1, asInt( pLimit, (pArr?.length || pArr?.size) ) ), MAX_QUEUE_SIZE );
+        const limit = clamp( asInt( pLimit, (pArr?.length || pArr?.size) ), 1, MAX_QUEUE_SIZE );
 
         const arr = isArray( pArr ) ? varargs( pArr ) : ((null != pArr && pArr instanceof BoundedQueue) ? pArr : asArray( pArr ));
 

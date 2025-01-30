@@ -379,6 +379,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
                  "void",
                  "while",
                  "with"] ),
+            clamp = ( pNum, pMin, pMax ) => Math.min( Math.max( pNum, pMin ), pMax ),
             funcToString = Function.prototype.toString,
             funcAsString = function( pFunction )
             {
@@ -2169,12 +2170,15 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
 
             calculateNumberFormattingSymbols,
 
+            clamp,
+
             /**
              * Shorthand for Function.prototype.toString<br>
              * @type {function}
              * @alias module:Constants#funcToString
              */
             funcToString,
+
             /**
              * Returns the name or source for the specified Function<br>
              *

@@ -133,10 +133,10 @@ describe( "DateUtils.after", () =>
               expect( after( today, tomorrow ) ).toBe( false );
           } );
 
-    test( "DateUtils.after returns true for ( null, today )",
+    test( "DateUtils.after returns false for ( null, today )",
           () =>
           {
-              expect( after( null, today ) ).toBe( true );
+              expect( after( null, today ) ).toBe( false );
           } );
 
     test( "DateUtils.after returns false for ( yesterday, undefined )",
@@ -568,17 +568,17 @@ describe( "DateUtils.endOf...", () =>
     test( "DateUtils.endOfWeek returns the last millisecond of October 19th, 2024 for any date in that calendar week",
           () =>
           {
-              let expected = new Date( 2024, 9, 19, 23, 59, 59, 999 );
+              let expected = Object.freeze( new Date( 2024, 9, 19, 23, 59, 59, 999 ) );
 
-              let dateA = new Date( 2024, 9, 13, 1, 2, 3, 4 );
-              let dateB = new Date( 2024, 9, 14, 9, 37, 0, 0 );
-              let dateC = new Date( 2024, 9, 15, 23, 59, 59, 999 );
-              let dateD = new Date( 2024, 9, 16, 23, 59, 59, 999 );
-              let dateE = new Date( 2024, 9, 17, 23, 59, 59, 999 );
-              let dateF = new Date( 2024, 9, 18, 23, 59, 59, 999 );
-              let dateG = new Date( 2024, 9, 19, 23, 59, 59, 999 );
+              let dateA = Object.freeze( new Date( 2024, 9, 13, 1, 2, 3, 4 ) );
+              let dateB = Object.freeze( new Date( 2024, 9, 14, 9, 37, 0, 0 ) );
+              let dateC = Object.freeze( new Date( 2024, 9, 15, 23, 59, 59, 999 ) );
+              let dateD = Object.freeze( new Date( 2024, 9, 16, 23, 59, 59, 999 ) );
+              let dateE = Object.freeze( new Date( 2024, 9, 17, 23, 59, 59, 999 ) );
+              let dateF = Object.freeze( new Date( 2024, 9, 18, 23, 59, 59, 999 ) );
+              let dateG = Object.freeze( new Date( 2024, 9, 19, 23, 59, 59, 999 ) );
 
-              let dateH = new Date( 2024, 9, 20, 0, 0, 0, 0 );
+              let dateH = Object.freeze( new Date( 2024, 9, 20, 0, 0, 0, 0 ) );
 
               expect( endOfWeek( expected ) ).toEqual( expected );
 
@@ -605,7 +605,10 @@ describe( "DateUtils.endOf...", () =>
               let dateF = new Date( 2024, 10, 2, 2, 0, 0, 0 );
 
               expect( endOfDay( dateA ) ).toEqual( new Date( 2024, 9, 13, 23, 59, 59, 999 ) );
-              expect( endOfDay( dateA ) ).toEqual( lastInstant( dateA ) );
+
+              const lastInstantOf = lastInstant( dateA );
+
+              expect( endOfDay( dateA ) ).toEqual( lastInstantOf );
 
               expect( endOfDay( dateB ) ).toEqual( new Date( 2023, 9, 14, 23, 59, 59, 999 ) );
               expect( endOfDay( dateB ) ).toEqual( lastInstant( dateB ) );

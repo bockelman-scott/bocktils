@@ -137,7 +137,8 @@ const $scope = constants?.$scope || function()
             isHex,
             isNanOrInfinite,
             toDecimal,
-            firstMatchingType
+            firstMatchingType,
+            clamp
         } = typeUtils;
 
     /**
@@ -1004,7 +1005,7 @@ const $scope = constants?.$scope || function()
         }
         else
         {
-            s = s.slice( 0, Math.min( s.length, Math.max( 1, (maxLength - ellipsisLength) ) ) );
+            s = s.slice( 0, clamp( (maxLength - ellipsisLength), 1, s.length ) );
             s += ellipsis;
         }
 
@@ -1030,7 +1031,7 @@ const $scope = constants?.$scope || function()
         }
         else
         {
-            s = ellipsis + s.slice( 0, Math.min( s.length, Math.max( 1, (maxLength - ellipsisLength) ) ) );
+            s = ellipsis + s.slice( 0, clamp( (maxLength - ellipsisLength), 1, s.length ) );
         }
 
         return truncate( s, pMaxLength );
@@ -1647,8 +1648,7 @@ const $scope = constants?.$scope || function()
         const greatest = Math.max( minimum, maximum );
         const smallest = Math.min( minimum, maximum );
 
-
-        return Math.min( greatest, Math.max( smallest, value ) );
+        return clamp( value, smallest, greatest );
     };
 
     const toFloatWithinRange = function( pStr, pMin, pMax, pOptions = calculateDecimalSymbols() )
@@ -1663,7 +1663,7 @@ const $scope = constants?.$scope || function()
         const greatest = Math.max( minimum, maximum );
         const smallest = Math.min( minimum, maximum );
 
-        return Math.min( greatest, Math.max( smallest, value ) );
+        return clamp( value, smallest, greatest );
     };
 
     /**
@@ -1689,7 +1689,7 @@ const $scope = constants?.$scope || function()
 
         if ( (arr?.length || zero) > idx )
         {
-            return Math.max( minIdx, Math.min( idx, maxIdx ) );
+            return clamp( idx, minIdx, maxIdx );
         }
 
         if ( pOptions?.defaultToEnd )
@@ -2786,6 +2786,7 @@ const $scope = constants?.$scope || function()
             toIntWithinRange,
             toFloatWithinRange,
             safeIndex,
+            clamp,
             validIdentifier,
             asKey,
             endsWithAny,

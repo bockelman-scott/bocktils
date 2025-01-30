@@ -217,6 +217,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
     const _lcase = e => _asStr( e ).toLowerCase();
     const _ucase = e => _asStr( e ).toUpperCase();
 
+    const clamp = ( pNum, pMin, pMax ) => isNum( pNum ) ? Math.min( Math.max( pNum, pMin ), pMax ) : pNum;
+
     const S_DEFAULT_ERROR_MESSAGE = [S_ERR_PREFIX, S_DEFAULT_OPERATION].join( _spc );
 
     const ATTEMPT_FAILED = [S_ERR_PREFIX, "attempting to execute the specified function, "].join( _spc );
@@ -3872,7 +3874,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
          */
         constructor( pMaxIterations )
         {
-            this.#maxIterations = Math.min( Math.max( 1, parseInt( pMaxIterations ) ), MAX_ITERATIONS );
+            this.#maxIterations = clamp( parseInt( pMaxIterations ), 1, MAX_ITERATIONS );
 
             this.#iterations = 0;
         }
@@ -3969,6 +3971,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             op_true,
             op_false,
             op_identity,
+
+            clamp,
 
             TYPES_CHECKS:
                 {

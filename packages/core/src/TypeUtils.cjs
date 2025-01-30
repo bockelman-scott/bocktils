@@ -2623,11 +2623,13 @@ const $scope = constants?.$scope || function()
     let mod =
         {
             dependencies,
+
             JS_TYPES,
             VALID_TYPES,
             TYPE_DEFAULTS,
             TYPE_SORT_ORDER,
             BYTES_PER_TYPE,
+
             isUndefined,
             isDefined,
             isNull,
@@ -2657,11 +2659,6 @@ const $scope = constants?.$scope || function()
             isHex,
             isDecimal,
             isNanOrInfinite,
-            toDecimal,
-            toHex,
-            toOctal,
-            toBinary,
-            toBits,
             isBoolean,
             isArray,
             isTypedArray,
@@ -2683,6 +2680,12 @@ const $scope = constants?.$scope || function()
             isType,
             isValidDateOrNumeric,
             isValidDateInstance,
+            toDecimal,
+            toHex,
+            toOctal,
+            toBinary,
+            toBits,
+            clamp: ( pNum, pMin, pMax ) => isNumeric( pNum ) ? Math.min( Math.max( toDecimal( pNum ), pMin ), pMax ) : pNum,
             resolveMoment,
             areSameType,
             areCompatibleTypes,
