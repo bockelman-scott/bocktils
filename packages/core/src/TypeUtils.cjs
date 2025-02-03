@@ -96,6 +96,7 @@ const $scope = constants?.$scope || function()
             _obj,
             _symbol,
             _minus,
+            _zero,
             DIGITS,
             DIGITS_MAP,
             HEX_DIGITS,
@@ -119,6 +120,7 @@ const $scope = constants?.$scope || function()
             isObjectLiteral,
             populateOptions,
             no_op,
+            attempt,
             lock,
             classes
         } = constants;
@@ -390,7 +392,6 @@ const $scope = constants?.$scope || function()
      */
     const isDefined = ( pObject ) => !isUndefined( pObject );
 
-
     /**
      * Returns true if the specified value is a string or a {@link String} object<br>
      *
@@ -588,7 +589,7 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isCustomObject
      */
-    const isCustomObject = ( pObj ) => isObject( pObj ) && pObj.prototype !== null && pObj.prototype !== Object && (pObj.constructor === null || pObj.constructor !== Object);
+    const isCustomObject = ( pObj ) => isObject( pObj ) && pObj.prototype !== null && pObj.prototype !== Object && (pObj.constructor === null || pObj.constructor !== Object) && !isPrimitiveWrapper( pObj );
 
     const isError = ( pObj ) => isObject( pObj ) && pObj instanceof Error;
 
@@ -615,7 +616,7 @@ const $scope = constants?.$scope || function()
         {
             return pObj;
         }
-        return (0 === pObj || "0" === pObj || false === pObj) ? "0" : ((_mt_str + String( pObj ) + _mt_str).trim()).replaceAll( /[,_]/g, _mt_str ).trim();
+        return (0 === pObj || _zero === pObj || false === pObj) ? _zero : ((_mt_str + String( pObj ) + _mt_str).trim()).replaceAll( /[,_]/g, _mt_str ).trim();
     }
 
     /**
@@ -755,7 +756,7 @@ const $scope = constants?.$scope || function()
     function isHex( pObj )
     {
         const s = _toString( pObj );
-        return ("0" !== s) && /^(-)?(0x)([\dA-Fa-f]+)?(([.,])([\dA-Fa-f]+))?$/i.test( s ) && !/[G-Wg-w\s]|[yzYZ]/.test( s );
+        return (_zero !== s) && /^(-)?(0x)([\dA-Fa-f]+)?(([.,])([\dA-Fa-f]+))?$/i.test( s ) && !/[G-Wg-w\s]|[yzYZ]/.test( s );
     }
 
     /**
@@ -774,7 +775,7 @@ const $scope = constants?.$scope || function()
     function isOctal( pObj )
     {
         const s = _toString( pObj );
-        return ("0" !== s) && /^(-)?(0o)([0-7]+)?(([.,])([0-7]+))?$/i.test( s ) && !/[A-Za-np-z\s]/.test( s );
+        return (_zero !== s) && /^(-)?(0o)([0-7]+)?(([.,])([0-7]+))?$/i.test( s ) && !/[A-Za-np-z\s]/.test( s );
     }
 
     /**
@@ -793,7 +794,7 @@ const $scope = constants?.$scope || function()
     function isBinary( pObj )
     {
         const s = _toString( pObj );
-        return ("0" !== s) && /^(-)?(0b)([0-1]+)?(([.,])([0-1]+))?$/i.test( s ) && !/[AC-Z]|[ac-z]|\s/.test( s );
+        return (_zero !== s) && /^(-)?(0b)([0-1]+)?(([.,])([0-1]+))?$/i.test( s ) && !/[AC-Z]|[ac-z]|\s/.test( s );
     }
 
     /**
@@ -810,7 +811,7 @@ const $scope = constants?.$scope || function()
     function isDecimal( pObj )
     {
         const s = _toString( pObj );
-        return ("0" === s || "-0" === s || ( !(isHex( s ) || isOctal( s ) || isBinary( s )) && !/[^\d.+-]/.test( s )));
+        return (_zero === s || "-0" === s || ( !(isHex( s ) || isOctal( s ) || isBinary( s )) && !/[^\d.+-]/.test( s )));
     }
 
     /**
@@ -839,7 +840,7 @@ const $scope = constants?.$scope || function()
      */
     const isNumeric = function( pObj, pAllowLeadingZeroForBase10 = false )
     {
-        if ( isNumber( pObj ) || "0" === pObj )
+        if ( isNumber( pObj ) || _zero === pObj )
         {
             return true;
         }
@@ -851,7 +852,7 @@ const $scope = constants?.$scope || function()
 
         let value = ((_mt_str + _toString( pObj )).replace( /n+$/, _mt_str )).trim();
 
-        if ( "0" === pObj || isDecimal( value ) || isHex( value ) || isOctal( value ) || isBinary( value ) )
+        if ( _zero === pObj || isDecimal( value ) || isHex( value ) || isOctal( value ) || isBinary( value ) )
         {
             if ( isDecimal( value ) && !!pAllowLeadingZeroForBase10 )
             {
@@ -891,7 +892,7 @@ const $scope = constants?.$scope || function()
     {
         const valid = pStrict ? isNumber( pValue ) : isNumeric( pValue );
 
-        return valid && ((0 === pValue || /^0+$/.test( _toString( pValue ) )) || (Math.round( parseFloat( pValue ) ) === 0 && Math.abs( parseFloat( pValue ) ) < 0.000000000000001));
+        return valid && ((0 === pValue || /^0+$|^[0.-]{1,3}0+$/.test( _toString( pValue ) )) || (Math.round( parseFloat( pValue ) ) === 0 && Math.abs( parseFloat( pValue ) ) < 0.000000000000001));
     };
 
     /**
@@ -938,54 +939,8 @@ const $scope = constants?.$scope || function()
         }
     }
 
-    /**
-     * Returns the decimal representation of the specified value<br>
-     * <br>
-     * If the specified value is not numeric, returns 0<br>
-     * <br>
-     * If the specified value is an array, a new array is returned with each element in the array mapped to a decimal representation<br>
-     *
-     * @param {number|string|Array<(number|string)>} pObj A value or an array of values to convert to a decimal representation<br>
-     *
-     * @returns {number|Array<number>} a decimal representation of the specified value
-     *
-     * @alias module:TypeUtils.toDecimal
-     */
-    const toDecimal = function( pObj )
+    const _stringToDecimal = function( pObj, pDecimalSeparator = _dot )
     {
-        if ( isArray( pObj ) )
-        {
-            return [...pObj].map( toDecimal );
-        }
-
-        if ( !isNumeric( pObj ) )
-        {
-            return 0;
-        }
-
-        let value = 0;
-
-        if ( isDecimal( pObj ) )
-        {
-            try
-            {
-                value = parseFloat( pObj );
-            }
-            catch( ex )
-            {
-                modulePrototype.reportError( ex, "parsing " + _toString( pObj ), S_WARN, modName + "::toDecimal" );
-                value = 0;
-            }
-
-            return value;
-        }
-
-        if ( isNumber( pObj ) )
-        {
-            let num = Number( pObj );
-            return parseFloat( num.toString( 10 ) );
-        }
-
         let s = _toString( pObj ).trim();
 
         let sign = s.startsWith( _minus ) ? -1 : 1;
@@ -996,15 +951,19 @@ const $scope = constants?.$scope || function()
 
         s = s.replace( /^0([box])/i, _mt_str );
 
-        let parts = s.split( _dot );
+        const sep = pDecimalSeparator || _dot;
 
-        let integer = (parts[0] || "0");
-        let fraction = (parts[1] || "0");
+        let parts = s.split( sep );
+
+        let integer = (parts[0] || _zero);
+        let fraction = (parts[1] || _zero);
 
         if ( /^0+$/.test( fraction ) )
         {
             return parseInt( s, power ) * sign;
         }
+
+        let value = 0;
 
         let digitsMap = getDigitsMap( power );
 
@@ -1027,6 +986,47 @@ const $scope = constants?.$scope || function()
         }
 
         return value * sign;
+    };
+
+    /**
+     * Returns the decimal representation of the specified value<br>
+     * <br>
+     * If the specified value is not numeric, returns 0<br>
+     * <br>
+     * If the specified value is an array, a new array is returned with each element in the array mapped to a decimal representation<br>
+     *
+     * @param {number|string|Array<(number|string)>} pObj A value or an array of values to convert to a decimal representation<br>
+     *
+     * @param {string} [pDecimalSeparator=.] The symbol used to separate the integer part from the fractional part of a non-integer value
+     *
+     * @returns {number|Array<number>} a decimal representation of the specified value
+     *
+     * @alias module:TypeUtils.toDecimal
+     */
+    const toDecimal = function( pObj, pDecimalSeparator = _dot )
+    {
+        if ( isArray( pObj ) )
+        {
+            return [...pObj].map( toDecimal );
+        }
+
+        if ( !isNumeric( pObj ) )
+        {
+            return 0;
+        }
+
+        if ( isDecimal( pObj ) )
+        {
+            return attempt( () => parseFloat( pObj ) ) || 0;
+        }
+
+        if ( isNumber( pObj ) )
+        {
+            let num = Number( pObj );
+            return parseFloat( num.toString( 10 ) );
+        }
+
+        return _stringToDecimal( pObj, pDecimalSeparator );
     };
 
     /**
@@ -1137,8 +1137,12 @@ const $scope = constants?.$scope || function()
             length++;
         }
 
-        return (_mt_str + s).padStart( length, "0" ).trim();
+        return (_mt_str + s).padStart( length, _zero ).trim();
     };
+
+    const toInteger = ( pValue ) => parseInt( toDecimal( pValue ) );
+
+    const toFloat = ( pValue ) => parseFloat( toDecimal( pValue ) );
 
     /**
      * Returns true if the specified value is a boolean or Boolean object<br>

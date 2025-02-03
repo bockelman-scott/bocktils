@@ -97,9 +97,22 @@ const $scope = constants?.$scope || function()
             _bool,
             _obj,
             _symbol,
+            _zero,
+
+            _defaultLocaleString = "en-US",
+            _defaultLocale,
+            _defaultCurrency,
+            DEFAULT_NUMBER_FORMATTING_SYMBOLS,
+
+            _rxFunctionSignature = /^(\(?\s*((async(\s+))?\s*function))\s*?([$_\w]+[$_\w]*)?\s*\((\s*(([$_\w]+[$_\w]*\s*,?)\s*)*(\.{3}([$_\w]+[$_\w]*\s*,?)*\s*)*)(?<!,\s*)\)/,
+            _rxFunction = /^(async )*function/,
+            _rxClass = /^class/,
+
             IllegalArgumentError,
             funcToString,
             populateOptions,
+            mergeOptions,
+            attempt,
             lock,
             classes
         } = constants;
@@ -122,6 +135,7 @@ const $scope = constants?.$scope || function()
             isNull,
             isNotNull,
             isNonNullObject,
+            isPrimitiveWrapper,
             isDate,
             isString,
             isNumber,
@@ -138,14 +152,17 @@ const $scope = constants?.$scope || function()
             isNanOrInfinite,
             toDecimal,
             firstMatchingType,
-            clamp
+            clamp,
+            NVL
         } = typeUtils;
+
+    const isLocale = ( pValue ) => (pValue instanceof Intl.Locale) || (isString( pValue ) && !isBlank( pValue ) && (/^[A-Z]{2}$|^[A-Z]{2}(-[^\d\\\/ \s]+)+$/i).test( pValue ));
 
     /**
      * These are the default values assumed for number formatting, when calling methods such as asInt or asFloat
      * @type {Readonly<{decimal_point: string, currency_symbol: RegExp, grouping_separator: string}>}
      */
-    const DEFAULT_NUMBER_SYMBOLS = constants?.DEFAULT_NUMBER_FORMATTING_SYMBOLS || lock(
+    const DEFAULT_NUMBER_SYMBOLS = DEFAULT_NUMBER_FORMATTING_SYMBOLS || lock(
         {
             decimal_point: ".",
             grouping_separator: ",",
@@ -213,6 +230,7 @@ const $scope = constants?.$scope || function()
      */
     const DEFAULT_AS_STRING_OPTIONS =
         {
+            trim: false,
             omitFunctions: true,
             executeFunctions: false,
             returnFunctionSource: false,
@@ -225,32 +243,26 @@ const $scope = constants?.$scope || function()
             checkForByteArray: false
         };
 
-    function _executeTransformations( pString, ...pTransformations )
+    const _aso = ( pOptions ) => populateOptions( pOptions, DEFAULT_AS_STRING_OPTIONS );
+
+    function _transform( pString, ...pTransformations )
     {
         let s = (_mt_str + pString);
 
         let prior = (_mt_str + s);
 
-        let transformations = ([].concat( ...pTransformations )).filter( e => isFunction( e ) && e.length > 0 );
+        let transformations = ([].concat( ...pTransformations )).flat().filter( e => isFunction( e ) && e.length > 0 );
 
-        if ( transformations?.length )
+        for( let f of transformations )
         {
-            for( let f of transformations )
-            {
-                try
-                {
-                    s = f( s );
-                }
-                catch( ex )
-                {
-                    if ( isNull( s ) || (_mt_str === (_mt_str + s).trim()) )
-                    {
-                        s = prior;
-                    }
-                }
+            s = attempt( f, s, prior );
 
-                prior = s;
+            if ( isNull( s ) || (_mt_str === (_mt_str + s).trim()) )
+            {
+                s = prior;
             }
+
+            prior = s;
         }
 
         return s;
@@ -332,6 +344,257 @@ const $scope = constants?.$scope || function()
         return s;
     }
 
+    function _handleFunctionInput( pValue, pTrim, pOptions )
+    {
+        const options = _aso( pOptions );
+
+        const input = _resolveInput.call( pValue, pValue ) || pValue;
+
+        if ( options.omitFunctions )
+        {
+            return _mt_str;
+        }
+
+        let result = options.executeFunctions ? _attemptInvocation( input, options ) : _mt_str;
+
+        if ( isBlank( result ) )
+        {
+            result = (options.returnFunctionSource ? getFunctionSource( input ) : _mt_str) ||
+                     input?.name ||
+                     input?.constructor?.name ||
+                     _mt_str;
+        }
+
+        result = asString( result, pTrim, options );
+
+        if ( isBlank( result ) )
+        {
+            result = _getClassOrFunctionNameFromSource( result, options );
+        }
+
+        return result;
+    }
+
+    function _attemptInvocation( pFunction, pOptions )
+    {
+        const options = _aso( pOptions );
+
+        if ( isFunction( pFunction ) )
+        {
+            return attempt( () => pFunction.call( options?.this || options, options ), options ) ||
+                   getFunctionName( pFunction, options );
+        }
+    }
+
+    function getFunctionName( pFunction, pOptions )
+    {
+        const options = _aso( pOptions );
+
+        if ( isFunction( pFunction ) )
+        {
+            return pFunction?.name ||
+                   pFunction?.constructor?.name ||
+                   (options.returnFunctionSource ?
+                    getFunctionSource( pFunction ) :
+                    _getClassOrFunctionNameFromSource( getFunctionSource( pFunction, options ), options ));
+        }
+
+        if ( isString( pFunction ) )
+        {
+            return _getClassOrFunctionNameFromSource( pFunction, options );
+        }
+
+        return _mt_str;
+    }
+
+    function _getClassOrFunctionNameFromSource( pValue, pOptions )
+    {
+        const options = _aso( pOptions );
+
+        if ( isFunction( pValue ) )
+        {
+            return getFunctionName( pValue, options );
+        }
+
+        const regExp = _rxClass.test( pValue ) ? _rxClass : _rxFunction;
+
+        if ( regExp.test( pValue ) )
+        {
+            let value = asString( pValue.replace( regExp, _mt_str ), true, options );
+
+            let indices = [value.indexOf( _spc ), value.indexOf( "{" )].filter( e => e > 1 );
+
+            let results = indices.map( e => value.slice( 0, e ) );
+
+            if ( results.length > 0 )
+            {
+                return results.shift();
+            }
+        }
+
+        return pValue;
+    }
+
+    function _handlePrimitiveWrapperInput( pValue, pTrim, pOptions )
+    {
+        let input = _resolveInput.call( pValue, pValue ) || pValue;
+
+        if ( input instanceof Boolean )
+        {
+            return input.valueOf() ? S_TRUE : S_FALSE;
+        }
+
+        const options = _aso( pOptions );
+        const trim = pTrim || options.trim;
+
+        if ( input instanceof Number || input instanceof BigInt )
+        {
+            return asString( toDecimal( input.valueOf() ), trim, options );
+        }
+
+        if ( input instanceof String )
+        {
+            return asString( input.valueOf(), trim, options );
+        }
+
+        return (isFunction( input?.valueOf ) ? asString( input.valueOf(), trim, options ) : (isFunction( input?.toString ) ? asString( input.toString(), trim, options ) : _mt_str));
+    }
+
+    function _handleDateInput( pValue, pTrim, pOptions )
+    {
+        const options = _aso( pOptions );
+
+        let input = new Date( _resolveInput.call( pValue, pValue ) || pValue );
+
+        let s = input.toISOString();
+
+        const formatter = isFunction( options?.dateFormatter?.format ) ? options?.dateFormatter?.format : options?.dateFormatter;
+
+        if ( isFunction( formatter ) )
+        {
+            const thiz = options?.dateFormatter || $scope();
+
+            const date = input || pValue;
+
+            s = attempt( () => formatter.call( thiz, date, options ), options ) || date.toISOString();
+        }
+
+        return s;
+    }
+
+    function _handleToStringMethod( pValue, pTrim, pOptions )
+    {
+        const options = _aso( pOptions );
+        const trim = pTrim || options.trim;
+
+        const me = modulePrototype || exposeModule || asString;
+
+        const input = _resolveInput.call( pValue, pValue ) || pValue;
+
+        if ( isNull( input ) )
+        {
+            return _mt_str;
+        }
+
+        let s = input.toString();
+
+        function isGenericObjectString( pStr )
+        {
+            const value = pStr || s;
+
+            return "[object object]" === lcase( value ) || "Object" === value || isBlank( value );
+        }
+
+        if ( isGenericObjectString( s ) )
+        {
+            s = input?.name || input?.constructor?.name || input?.prototype?.name || _mt_str;
+
+            if ( isGenericObjectString( s ) )
+            {
+                // this is a bit of a hack, but if the JsonUtils are also loaded,
+                // we want to use the asJson function, which can handle circular references
+                let stringify = firstMatchingType( _fun, me.asJson, me.stringify, ($scope()["__BOCK_JSON_UTILS__"] || $scope()["__BOCK_JSON_INTERPOLATION__"])?.asJson, $scope().asJson, JSON.stringify );
+
+                s = isFunction( input.toJson ) ? input.toJson() : attempt( () => stringify.call( me, input, options ), input, options ) || input?.name || input?.constructor?.name || input?.prototype?.name || _mt_str;
+            }
+        }
+
+        s = isGenericObjectString( s ) ? "{}" : s;
+
+        return trim ? (_mt_str + (s || _mt_str)).trim() : s;
+    }
+
+    function _handleObjectInput( pValue, pTrim, pOptions )
+    {
+        if ( isNull( pValue ) )
+        {
+            return _mt_str;
+        }
+
+        const options = _aso( pOptions );
+
+        const trim = pTrim || options.trim;
+
+        let input = _resolveInput.call( pValue, pValue ) || pValue;
+
+        let s = _mt_str;
+
+        // if the argument is an array, recursively call this function on each element
+        // and join the results on the joinOn option or the empty character
+        if ( isArray( input ) )
+        {
+            const arr = [...input];
+
+            if ( options.checkForByteArray && arr.every( e => isNumeric( e ) && toDecimal( e ) ) <= 255 )
+            {
+                s = fromUtf8ByteArray( arr.map( e => toDecimal( e ) ) );
+            }
+            else
+            {
+                s = [].concat( ...(input || []) ).map( e => asString( e, trim, options ) ).join( (asString( options.joinOn ) || _mt_chr) );
+            }
+            return s;
+        }
+
+        // handle ObjectWrapper types
+        if ( isPrimitiveWrapper( input ) )
+        {
+            return _handlePrimitiveWrapperInput( input, trim, options );
+        }
+
+        // handle Dates by converting to the normal local string representation
+        // unless a date formatter has been supplied
+        if ( input instanceof Date )
+        {
+            return _handleDateInput( input, trim, options );
+        }
+
+        // convert RegExp to their normal string representation
+        if ( input instanceof RegExp )
+        {
+            return input.toString();
+        }
+
+        // if the object defines a toString method, we try that
+        if ( isFunction( input?.toString ) )
+        {
+            return _handleToStringMethod( input, trim, options );
+        }
+
+        return Object.toString.call( input, input );
+    }
+
+    function _handleNumericString( pInput, pOptions )
+    {
+        const options = _aso( pOptions );
+
+        let value = (isNumber( pInput ) || isNumeric( pInput ) ? String( _mt_str + pInput ) : pInput).trim();
+
+        value = value.replace( /\D+$/g, _mt_str ).trim();
+
+        return String( toDecimal( value, options ) );
+    }
+
     /**
      * Returns a string representation of the argument passed,<br>
      * optionally removing leading and trailing whitespace<br>
@@ -364,95 +627,47 @@ const $scope = constants?.$scope || function()
     const asString = function( pStr, pTrim = false, pOptions = DEFAULT_AS_STRING_OPTIONS )
     {
         // ingest any options passed; specific options override the default options ingested
-        const options = Object.assign( Object.assign( {}, DEFAULT_AS_STRING_OPTIONS ), pOptions || {} );
+        const options = _aso( pOptions );
 
         // capture 'this' in a closure-scoped variable for use in the 'stringify' function below
         const me = asString || this;
 
-        const methodName = "asString";
-
         let s = _mt_str;
 
-        // allow this function to be added as a method to String.prototype if desired
+        let trim = pTrim || options.trim;
+        options.trim = trim;
+
+        // this function can be added as a method to String.prototype, Number.prototype, and Boolean.prototype if desired
         if ( isUndefined( pStr ) || isNull( pStr, true ) || arguments.length <= 0 )
         {
             // note that we code this in such a way that it can be bound to the String.prototype as a member function (a.k.a. method)
-            if ( (this instanceof String || String === this?.constructor) && isFunction( this.asString ) )
+            if ( isFunction( this.asString ) )
             {
-                return me( String( this ).valueOf() || me( this, pTrim ), pTrim );
+                return me( String( this ).valueOf() || me( this, trim ), trim );
             }
         }
 
         let input = _resolveInput.call( this, pStr );
 
-        const transformations = ([].concat( options?.transformations || [] )).filter( e => isFunction( e ) && e.length > 0 );
-
-        // handle the easiest case immediately
-        if ( isString( input ) )
-        {
-            s = pTrim ? input.trim() : input;
-
-            if ( options.assumeNumeric )
-            {
-                s = input.trim();
-
-                let chars = s.split( _mt_chr );
-
-                if ( options.removeLeadingZeroes )
-                {
-                    let iterations = 0;
-
-                    while ( chars?.length > 0 && /[\s0]/.test( chars[0] ) && iterations++ < (s?.length || 0) )
-                    {
-                        chars.shift();
-                    }
-                }
-
-                s = chars.join( _mt_chr );
-
-                s = s.replace( /\D+$/g, _mt_str );
-
-                try
-                {
-                    let n = parseFloat( s );
-                    s = String( n );
-                }
-                catch( ex )
-                {
-                    modulePrototype.reportError( ex, "removing non-numeric characters", S_ERROR, (modName + _colon + _colon + methodName), s );
-                }
-            }
-
-            if ( pTrim )
-            {
-                return (_mt_str + (s || _mt_str).trim());
-            }
-
-            s = _executeTransformations( s, transformations );
-
-            return s;
-        }
+        const transformations = ([].concat( ...(options?.transformations || []) )).flat().filter( e => isFunction( e ) && e.length > 0 );
 
         // return a value based on the type pf the argument
         switch ( typeof input )
         {
-            // double-check the easy case
             case _str:
-                s = (_mt_str + (input || _mt_str));
-                break;
+                s = trim ? input.trim() : input;
+
+                if ( options.assumeNumeric )
+                {
+                    s = (_mt_str + _handleNumericString( input, options ));
+                }
+
+                return _transform( s, transformations );
 
             // numeric values are converted to the string representation of their float value
             case _num:
             case _big:
-                try
-                {
-                    let n = isBigInt( input ) || !isNanOrInfinite( input ) ? parseFloat( input ) : 0;
-                    s = isNanOrInfinite( n ) ? "0" : (_mt_str + n);
-                }
-                catch( ex )
-                {
-                    modulePrototype.reportError( ex, "trying to interpret " + (_mt_str + input) + " as a number", S_WARN, (modName + _colon + _colon + methodName) );
-                }
+                s = _handleNumericString( input, options ) || _zero;
                 break;
 
             // booleans are converted to either the string "true" or the string "false"
@@ -462,183 +677,11 @@ const $scope = constants?.$scope || function()
 
             // objects are special case...
             case _obj:
-                // if the argument is an array, recursively call this function on each element and join the results on the joinOn option or the empty character
-                if ( Array.isArray( input ) )
-                {
-                    if ( options.checkForByteArray && input.every( e => isNumeric( e ) && toDecimal( e ) ) <= 255 )
-                    {
-                        s = fromUtf8ByteArray( input.map( e => toDecimal( e ) ) );
-                    }
-                    else
-                    {
-                        s = [].concat( ...(input || []) ).map( e => asString( e, pTrim, options ) ).join( (asString( options.joinOn ) || _mt_chr) );
-                    }
-                    break;
-                }
-
-                // handle ObjectWrapper types
-                if ( input instanceof Boolean )
-                {
-                    s = input.valueOf() ? S_TRUE : S_FALSE;
-                    break;
-                }
-
-                // handle ObjectWrapper types
-                if ( input instanceof Number )
-                {
-                    s = asString( _mt_str + input.valueOf(), pTrim, options );
-                    break;
-                }
-
-                // handle Dates by converting to the normal local string representation
-                // unless a date formatter has been supplied
-                if ( input instanceof Date )
-                {
-                    if ( isFunction( options.dateFormatter ) )
-                    {
-                        try
-                        {
-                            s = options.dateFormatter.call( $scope(), input );
-                        }
-                        catch( ex )
-                        {
-                            modulePrototype.reportError( ex, "formatting a Date", S_WARN, (modName + _colon + _colon + methodName) );
-                            s = input.toISOString();
-                        }
-                    }
-                    else
-                    {
-                        s = input.toISOString();
-                    }
-                    break;
-                }
-
-                // convert RegExp to their normal string representation
-                if ( input instanceof RegExp )
-                {
-                    s = input.toString();
-                    break;
-                }
-
-                // if the object defines a toString method, we try that
-                if ( isFunction( input?.toString ) )
-                {
-                    s = input.toString();
-
-                    //if the string representation is the generic string,
-                    if ( "[object object]" === lcase( s ) || "Object" === s || isBlank( s ) )
-                    {
-                        // try to get the value of a name property or the constructor's name
-                        // note that this could return undesirable results for objects with a coincidental name property
-                        try
-                        {
-                            s = input?.name || input?.constructor?.name || _mt_str;
-                        }
-                        catch( ex )
-                        {
-                            try
-                            {
-                                s = input?.constructor?.name || _mt_str;
-                            }
-                            catch( e )
-                            {
-                                modulePrototype.reportError( e, "obtaining the name of a function", S_WARN, (modName + _colon + _colon + methodName) );
-                            }
-                        }
-
-                        if ( "[object object]" === lcase( s ) || "Object" === s || isBlank( s ) )
-                        {
-                            // this is a bit of a hack, but if the JsonUtils are also loaded,
-                            // we want to use the asJson function, which can handle circular references
-                            let stringify = firstMatchingType( _fun, me.stringify, ($scope()["__BOCK_JSON_UTILS__"] || $scope()["__BOCK_JSON_INTERPOLATION__"])?.asJson, $scope().asJson, JSON.stringify );
-
-                            try
-                            {
-                                s = isFunction( input?.toJson ) ? (input.toJson() || (stringify || JSON.stringify)( input )) : (stringify || JSON.stringify)( input );
-                            }
-                            catch( ex )
-                            {
-                                modulePrototype.reportError( ex, "while converting an object to JSON", S_WARN, (modName + _colon + _colon + methodName) );
-
-                                if ( !isString( s ) || isBlank( s ) )
-                                {
-                                    const entries = [...(Object.entries( input ) || [])];
-
-                                    s = entries.map( entry => asString( entry[0] ) + ":" + asString( entry[1] ) ).join( _comma );
-                                }
-                                else if ( lcase( asString( ex.message ) ).includes( "circular" ) )
-                                {
-                                    s = asString( ex.message );
-                                }
-                            }
-                        }
-                    }
-                }
-
+                s = _handleObjectInput( input, pTrim, options );
                 break;
 
             case _fun:
-
-                if ( !options.omitFunctions )
-                {
-                    if ( options.executeFunctions )
-                    {
-                        try
-                        {
-                            s = input.call( $scope() );
-                        }
-                        catch( ex )
-                        {
-                            modulePrototype.reportError( ex, "while executing a function as input to asString", S_WARN, (modName + _colon + _colon + methodName) );
-
-                            s = input?.name || input?.constructor?.name || (options.returnFunctionSource ? getFunctionSource( input ) : _mt_str);
-                        }
-                    }
-
-                    if ( isBlank( s ) )
-                    {
-                        try
-                        {
-                            s = (options.returnFunctionSource ? getFunctionSource( input ) : _mt_str) || input?.name || input?.constructor?.name || _mt_str;
-                        }
-                        catch( ex )
-                        {
-                            modulePrototype.reportError( ex, "getting a string representation of a function", S_WARN, (modName + _colon + _colon + methodName) );
-                        }
-                    }
-
-                    s = asString( s, pTrim, options );
-                }
-                else
-                {
-                    s = _mt_str;
-                }
-
-                if ( isBlank( s ) )
-                {
-                    let regExp = /^class/.test( s ) ? /^class/ : /^(async )*function/;
-
-                    if ( regExp.test( s ) )
-                    {
-                        s = asString( s.replace( regExp, _mt_str ), true, options );
-
-                        let idx = s.indexOf( _spc );
-
-                        if ( idx > 1 )
-                        {
-                            s = s.slice( 0, idx );
-                        }
-                        else
-                        {
-                            idx = s.indexOf( "{" );
-                            if ( idx > 1 )
-                            {
-                                s = s.slice( 0, idx );
-                            }
-                        }
-                    }
-                }
-
+                s = _handleFunctionInput( input, pTrim, options );
                 break;
 
             default:
@@ -652,7 +695,7 @@ const $scope = constants?.$scope || function()
             return _mt_str;
         }
 
-        return _executeTransformations( _mt_str + ((true === pTrim) ? ((_mt_str + s).trim()) : s), transformations );
+        return _transform( _mt_str + ((true === trim) ? ((_mt_str + s).trim()) : s), ...transformations );
     };
 
     String.prototype.asString = asString;
@@ -1245,13 +1288,15 @@ const $scope = constants?.$scope || function()
         return s;
     };
 
-    const calculateDecimalSymbols = function( pLocale, pCurrency )
+    const calculateDecimalSymbols = function( pLocale = _defaultLocale, pCurrency = _defaultCurrency )
     {
-        let locale = (pLocale instanceof Intl.Locale) ? (pLocale?.baseName || "en_US") : isNull( pLocale ) || isBlank( pLocale ) ? asString( (((new Intl.NumberFormat()).resolvedOptions())?.locale)?.baseName ) || "en-US" : asString( pLocale );
+        let locale = NVL( pLocale, _defaultLocale );
 
-        let currency = isNull( pCurrency ) || isBlank( pCurrency ) ? "USD" : asString( pCurrency || "USD" );
+        locale = (locale instanceof Intl.Locale) ? (locale?.baseName || _defaultLocaleString) : isNull( locale ) || isBlank( locale ) ? asString( (((new Intl.NumberFormat()).resolvedOptions())?.locale)?.baseName ) || _defaultLocaleString : asString( locale );
 
-        const numberFormatter = new Intl.NumberFormat( (asString( locale ) || "en-US"),
+        let currency = isNull( pCurrency ) || isBlank( pCurrency ) ? _defaultCurrency : asString( pCurrency || _defaultCurrency );
+
+        const numberFormatter = new Intl.NumberFormat( (asString( locale ) || _defaultLocaleString),
                                                        {
                                                            style: "currency",
                                                            currency: currency

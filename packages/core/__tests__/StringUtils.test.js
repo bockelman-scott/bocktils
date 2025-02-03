@@ -4,7 +4,15 @@ const constants = require( "../src/Constants.cjs" );
 /** import the utilities we are testing */
 const stringUtils = require( "../src/StringUtils.cjs" );
 
-const { asString, findDuplicatedSubstrings, findCommonSubstrings } = stringUtils;
+const {
+    asString,
+    asKey,
+    isEmpty,
+    isBlank,
+    toCanonicalNumericFormat,
+    findDuplicatedSubstrings,
+    findCommonSubstrings
+} = stringUtils;
 
 const repoName = "bocktils";
 
@@ -363,27 +371,27 @@ describe( "validIdentifier", () =>
 
 describe( "asKey", () =>
 {
-    test( "asKey(0) == \"0\"", () => expect( stringUtils.asKey( 0 ) ).toEqual( 0 ) );
+    test( "asKey(0) == \"0\"", () => expect( asKey( 0 ) ).toEqual( 0 ) );
 
-    test( "asKey(123) == \"123\"", () => expect( stringUtils.asKey( 123 ) ).toEqual( 123 ) );
+    test( "asKey(123) == \"123\"", () => expect( asKey( 123 ) ).toEqual( 123 ) );
 
-    test( "asKey(/123/) == \"123\"", () => expect( stringUtils.asKey( "/123/" ) ).toEqual( "\"123\"" ) );
+    test( "asKey(/123/) == \"123\"", () => expect( asKey( "/123/" ) ).toEqual( "\"123\"" ) );
 } );
 
 describe( "isEmpty", () =>
 {
-    test( "isEmpty(\"abc\") is false", () => expect( stringUtils.isEmpty( "abc" ) ).toBe( false ) );
+    test( "isEmpty(\"abc\") is false", () => expect( isEmpty( "abc" ) ).toBe( false ) );
 
-    test( "isEmpty(\"\") is true", () => expect( stringUtils.isEmpty( "" ) ).toBe( true ) );
+    test( "isEmpty(\"\") is true", () => expect( isEmpty( "" ) ).toBe( true ) );
 
-    test( "isEmpty(\" \") is false", () => expect( stringUtils.isEmpty( " " ) ).toBe( false ) );
+    test( "isEmpty(\" \") is false", () => expect( isEmpty( " " ) ).toBe( false ) );
 } );
 
 describe( "isBlank", () =>
 {
-    test( "isBlank(\" \") is true", () => expect( stringUtils.isBlank( " " ) ).toBe( true ) );
+    test( "isBlank(\" \") is true", () => expect( isBlank( " " ) ).toBe( true ) );
 
-    test( "isBlank(\"\\r\\n \\t\") is true", () => expect( stringUtils.isBlank( "\r\n  \t" ) ).toBe( true ) );
+    test( "isBlank(\"\\r\\n \\t\") is true", () => expect( isBlank( "\r\n  \t" ) ).toBe( true ) );
 } );
 
 describe( "Detecting Capitalization", () =>
@@ -496,7 +504,7 @@ describe( "Numeric-related 'helpers'", () =>
           {
               let s = "1,234.567";
 
-              s = stringUtils.toCanonicalNumericFormat( s );
+              s = toCanonicalNumericFormat( s );
 
               expect( s ).toEqual( "1234.567" );
 
@@ -509,7 +517,7 @@ describe( "Numeric-related 'helpers'", () =>
           {
               let s = "1.234.567,89";
 
-              s = stringUtils.toCanonicalNumericFormat( s );
+              s = toCanonicalNumericFormat( s );
 
               expect( s ).toEqual( "1234567.89" );
 
@@ -529,7 +537,7 @@ describe( "Numeric-related 'helpers'", () =>
 
               let s = "1.234.567,89";
 
-              s = stringUtils.toCanonicalNumericFormat( s, options );
+              s = toCanonicalNumericFormat( s, options );
 
               expect( s ).toEqual( "1234567.89" );
 

@@ -243,6 +243,8 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             BIN_DIGITS = lock( (_DIGIT_CHARACTERS.slice( 0, 2 )).split( _mt_str ) ),
             BIN_DIGITS_MAP = lock( new Map( BIN_DIGITS.map( ( e, i ) => [e, i] ) ) ),
 
+            _zero = "0",
+
             _rxLiteral = "/",
             _solidus = "/",
             _slash = "/",
@@ -275,6 +277,10 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             _rxTrailingWhitespace = /\s+$/,
 
             _rxVariableToken = /\$\{[^}]+}/,
+
+            _rxFunctionSignature = /^(\(?\s*((async(\s+))?\s*function))\s*?([$_\w]+[$_\w]*)?\s*\((\s*(([$_\w]+[$_\w]*\s*,?)\s*)*(\.{3}([$_\w]+[$_\w]*\s*,?)*\s*)*)(?<!,\s*)\)/,
+            _rxFunction = /^(async )*function/,
+            _rxClass = /^class/,
 
             _defaultLocaleString = "en-US",
             _defaultLocale = lock( new Intl.Locale( _defaultLocaleString ) ),
@@ -1357,6 +1363,8 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              */
             BIN_DIGITS_MAP,
 
+            _zero,
+
             /**
              * An object defining the number of milliseconds per
              * SECOND, MINUTE, HOUR, DAY, and WEEK
@@ -1907,6 +1915,10 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * @alias module:Constants#BUILTIN_TYPE_NAMES
              */
             BUILTIN_TYPE_NAMES,
+
+            _rxFunctionSignature,
+            _rxFunction,
+            _rxClass,
 
             /**
              * A regular expression that matches a block comment.<br>

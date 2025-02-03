@@ -1126,6 +1126,40 @@ describe( "isZero", () =>
           {
               expect( isZero( "0", false ) ).toBe( true );
           } );
+
+    test( "isZero('0.00004',false) === false",
+          () =>
+          {
+              expect( isZero( "0.00004", false ) ).toBe( false );
+          } );
+
+
+    test( "isZero('.00004',false) === false",
+          () =>
+          {
+              expect( isZero( "0.00004", false ) ).toBe( false );
+          } );
+
+
+    test( "isZero('-0.00',false) === true",
+          () =>
+          {
+              expect( isZero( "-0.00", false ) ).toBe( true );
+          } );
+
+    test( "isZero('-0',false) === true",
+          () =>
+          {
+              expect( isZero( "-0", false ) ).toBe( true );
+          } );
+
+    test( "isZero('-.00',false) === false",
+          () =>
+          {
+              expect( isZero( "-.00", false ) ).toBe( false );
+          } );
+
+
 } );
 
 describe( "isInteger", () =>
