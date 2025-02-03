@@ -3,7 +3,7 @@
  * You can define your own token set to use in place of the default if desired.
  */
 
-const core = require( "@toolbocks/core" );
+ const core = require( "@toolbocks/core" );
 
 /**
  * Establish separate constants for each of the common utilities imported
@@ -12,6 +12,7 @@ const core = require( "@toolbocks/core" );
 const { constants, typeUtils, stringUtils, arrayUtils, localeUtils } = core;
 
 const dateUtils = require( "./DateUtils.cjs" );
+const RepetitionRules = require( "adm-zip/util/constants" );
 
 const {
     _ud = "undefined",
@@ -58,7 +59,7 @@ const {
 
     const { isNull, isString, isNumber, clamp } = typeUtils;
 
-    const { asString, isBlank, asInt, asFloat, lcase, ucase, leftOf, rightOf, rightOfLast, leftOfLast } = stringUtils;
+    const { asString, isBlank, asInt, asFloat, lcase, ucase } = stringUtils;
 
     const { asArray } = arrayUtils;
 
@@ -1746,8 +1747,6 @@ const {
 
         parse( pSegment, pBuffer )
         {
-            const rxTz = () => /((GMT|UTC)([+-])?(\d{1,2})?:?(\d{2})?)|(((\w+ )*)(Time)?$)/gd;
-
             const buffer = pBuffer || { [DATE_PARTS.TIME_ZONE]: _mt_str };
 
             const segment = asString( pSegment, true );
@@ -1760,7 +1759,6 @@ const {
                 {
                     const date = buffer.toDate();
 
-
                     dateString = date.toString();
                 }
                 catch( ignored )
@@ -1772,33 +1770,6 @@ const {
             if ( !(isString( segment ) || isString( dateString )) || (isBlank( segment ) && isBlank( dateString )) )
             {
                 return buffer;
-            }
-
-            let matched = _mt_str;
-            let gmtPhrase = _mt_str;
-            let gmt = _mt_str;
-            let gmtOperator = _mt_str;
-            let gmtHours = _mt_str;
-            let gmtMinutes = _mt_str;
-
-            let tzPhrase = _mt_str;
-
-            let matches = rxTz().exec( segment ) || rxTz().exec( dateString );
-
-            if ( null === matches || matches.length < 2 )
-            {
-                matches = rxTz().exec( dateString ) || rxTz().exec( segment );
-            }
-
-            if ( null !== matches && matches.length > 0 )
-            {
-                matched = asString( matches[0], true );
-                gmtPhrase = matches.length > 1 ? matches[1] : asString( matched, true );
-                gmt = matches.length > 2 ? matches[2] : ucase( asString( matched, true ).replace( /[\d:;+-]/g, _mt_str ) );
-                gmtOperator = matches.length > 3 ? matches[3] : matched;
-                gmtHours = matches.length > 4 ? matches[4] : asInt( leftOf( rightOf( asString( matched, true ), (gmtOperator || _hyphen) ), _colon ).replace( /\D+/g, _mt_str ).replace( /^0+/, _mt_str ) );
-                gmtMinutes = matches.length > 5 ? matches[5] : asInt( rightOfLast( asString( matched, true ), _colon ).replace( /\D+/g, _mt_str ).replace( /^0+/, _mt_str ) );
-                tzPhrase = matches.length > 6 ? matches[6] || matches[7] : asString( matched, true );
             }
 
             return buffer;
@@ -2245,20 +2216,20 @@ const {
 
                 if ( left.characters.length > 2 || ["E"].includes( left.characters[0] ) || ["h", "H", "K", "k", "G", "a"].includes( right.characters[0] ) )
                 {
-                    results.push( new TokenLiteral( _spc ) );
+                    results.push( new TokenLiteral( _spc, RepetitionRules.NONE, this ) );
                 }
                 else if ( ["L", "M", "D", "d", "y"].includes( left.characters[0] ) )
                 {
                     if ( ["L", "M", "D", "d", "y"].includes( right.characters[0] ) )
                     {
-                        results.push( new TokenLiteral( _slash ) );
+                        results.push( new TokenLiteral( _slash, RepetitionRules.NONE, this ) );
                     }
                 }
                 else if ( ["h", "H", "K", "k", "m", "s", "S"].includes( left.characters[0] ) )
                 {
                     if ( ["h", "H", "K", "k", "m", "s", "S"].includes( right.characters[0] ) )
                     {
-                        results.push( new TokenLiteral( _colon ) );
+                        results.push( new TokenLiteral( _colon, RepetitionRules.NONE, this ) );
                     }
                 }
             }

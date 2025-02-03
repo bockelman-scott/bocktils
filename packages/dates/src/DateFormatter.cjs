@@ -47,7 +47,7 @@ const {
 
     const { asString, asInt } = stringUtils;
 
-    const { asArray, includesAny } = arrayUtils;
+    const { includesAny } = arrayUtils;
 
     const { classes: TokenSetClasses, getDefaultTokenSet, SUPPORTED_INTL_OPTIONS } = tokenSetUtils;
 

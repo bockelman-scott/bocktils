@@ -35,12 +35,6 @@ const {
     const {
         classes,
         _mt_str,
-        _spc,
-        _colon,
-        _slash,
-        _hyphen,
-        _minus,
-        _underscore,
         lock,
         populateOptions,
         mergeOptions,
@@ -61,10 +55,7 @@ const {
         isNumber,
         isNumeric,
         isFunction,
-        isObject,
         isNonNullObject,
-        isArray,
-        isLikeArray,
         isValidDateOrNumeric,
         isValidDateInstance,
         clamp
@@ -74,14 +65,8 @@ const {
         asString,
         isBlank,
         asInt,
-        asFloat,
         toBool,
-        ucase,
-        leftOf,
-        rightOf,
-        leftOfLast,
-        rightOfLast,
-        toUnixPath
+        ucase
     } = stringUtils;
 
     const { asArray, varargs, Filters } = arrayUtils;
@@ -321,12 +306,12 @@ const {
 
     function isFormatter( pFormatter )
     {
-        return !isNull( pFormatter ) && isObject( pFormatter ) && isFunction( pFormatter?.format );
+        return !isNull( pFormatter ) && isNonNullObject( pFormatter ) && isFunction( pFormatter?.format );
     }
 
     function isCalculator( pCalculator )
     {
-        return !isNull( pCalculator ) && isObject( pCalculator ) && isFunction( pCalculator?.calculate );
+        return !isNull( pCalculator ) && isNonNullObject( pCalculator ) && isFunction( pCalculator?.calculate );
     }
 
     resolveDate = ( pDate ) => isDate( pDate ) ? pDate : isNumeric( pDate ) ? new Date( asInt( pDate ) ) : DateBuffer.isBuffer( pDate ) ? pDate.toDate() : Now();
@@ -2200,7 +2185,9 @@ const {
             getBusinessDays,
             daysRemainingIn,
             mergeOptions,
-            merge
+            merge,
+            Now,
+            rxTz
         };
 
     mod = modulePrototype.extend( mod );

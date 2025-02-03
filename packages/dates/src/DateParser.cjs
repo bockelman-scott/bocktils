@@ -28,6 +28,7 @@ const {
 } = constants;
 
 
+// noinspection FunctionTooLongJS
 (function exposeModule()
 {
     const INTERNAL_NAME = "__BOCK__DATE_PARSER__";
@@ -47,7 +48,7 @@ const {
             dateFormatUtils
         };
 
-    const { _mt_str, _str, _num, _obj, _fun, _underscore, _colon, mergeOptions, classes } = constants;
+    const { _mt_str, _str, _num, _obj, no_op, _hyphen, _minus, _underscore, _colon, mergeOptions, classes } = constants;
 
     const { ModulePrototype } = classes;
 
@@ -58,24 +59,39 @@ const {
         isNumber,
         isNumeric,
         isNanOrInfinite,
+        isValidDateOrNumeric,
         isArray,
+        isLikeArray,
         isNonNullObject,
         firstMatchingType,
         clamp
     } = typeUtils;
 
-    const { asInt, asFloat, asString, lcase, isBlank, toUnixPath } = stringUtils;
+    const {
+        asInt,
+        asString,
+        lcase,
+        ucase,
+        isBlank,
+        toUnixPath,
+        leftOf,
+        rightOf,
+        rightOfLast
+    } = stringUtils;
 
     const { asArray, flatArgs, includesAny } = arrayUtils;
 
     const { resolveLocale, isSameLocale } = localeUtils;
 
     const {
+        resolveDate,
         DATE_PARTS,
         DateBuffer,
         numDaysInMonth,
         calculateNthOccurrenceOfDay,
-        merge = constants.merge
+        merge = constants.merge,
+        rxTz = () => /((GMT|UTC)([+-])?(\d{1,2})?:?(\d{2})?)|(((\w+ )*)(Time)?$)/gd,
+        Now = () => new Date()
     } = dateUtils;
 
     const { classes: TokenSetClasses, getDefaultTokenSet, SUPPORTED_INTL_OPTIONS } = tokenSetUtils;
@@ -704,6 +720,8 @@ const {
         };
 
     mod = modulePrototype.extend( mod );
+
+    TimeZone.loadTimeZoneData( DEFAULT_TIME_ZONE_DATA_LOCATION ).then( no_op ).catch( no_op );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 }());
