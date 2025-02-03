@@ -9,6 +9,7 @@ const {
     asKey,
     isEmpty,
     isBlank,
+    asInt,
     toCanonicalNumericFormat,
     findDuplicatedSubstrings,
     findCommonSubstrings
@@ -729,7 +730,7 @@ describe( "asInt", () =>
           () =>
           {
               let s = "01";
-              let n = stringUtils.asInt( s );
+              let n = asInt( s );
               expect( n ).toEqual( 1 ) && expect( typeof n ).toBe( "number" );
           }
     );
@@ -738,7 +739,7 @@ describe( "asInt", () =>
           () =>
           {
               let s = 12.57;
-              let n = stringUtils.asInt( s );
+              let n = asInt( s );
               expect( n ).toEqual( 13 ) && expect( typeof n ).toBe( "number" );
           }
     );
@@ -747,7 +748,7 @@ describe( "asInt", () =>
           () =>
           {
               let s = 12.34;
-              let n = stringUtils.asInt( s );
+              let n = asInt( s );
               expect( n ).toEqual( 12 ) && expect( typeof n ).toBe( "number" );
           }
     );
@@ -756,7 +757,7 @@ describe( "asInt", () =>
           () =>
           {
               let s = true;
-              let n = stringUtils.asInt( s );
+              let n = asInt( s );
               expect( n ).toEqual( 1 ) && expect( typeof n ).toBe( "number" );
           }
     );
@@ -765,7 +766,7 @@ describe( "asInt", () =>
           () =>
           {
               let s = false;
-              let n = stringUtils.asInt( s );
+              let n = asInt( s );
               expect( n ).toEqual( 0 ) && expect( typeof n ).toBe( "number" );
           }
     );
@@ -774,7 +775,7 @@ describe( "asInt", () =>
           () =>
           {
               let s = "0o012.34";
-              let n = stringUtils.asInt( s );
+              let n = asInt( s );
               expect( n ).toEqual( 10 ) && expect( typeof n ).toBe( "number" );
           }
     );
@@ -783,7 +784,7 @@ describe( "asInt", () =>
           () =>
           {
               let s = "0x004";
-              let n = stringUtils.asInt( s );
+              let n = asInt( s );
               expect( n ).toEqual( 4 ) && expect( typeof n ).toBe( "number" );
           }
     );
@@ -792,7 +793,7 @@ describe( "asInt", () =>
           () =>
           {
               let s = "0x009b";
-              let n = stringUtils.asInt( s );
+              let n = asInt( s );
               expect( n ).toEqual( 155 ) && expect( typeof n ).toBe( "number" );
           }
     );
@@ -801,7 +802,7 @@ describe( "asInt", () =>
           () =>
           {
               let s = "not~a~number";
-              let n = stringUtils.asInt( s );
+              let n = asInt( s );
               expect( n ).toEqual( 0 ) && expect( typeof n ).toBe( "number" );
           }
     );
@@ -810,7 +811,7 @@ describe( "asInt", () =>
           () =>
           {
               let s = "not~a~number";
-              let n = stringUtils.asInt( s, -1 );
+              let n = asInt( s, -1 );
               expect( n ).toEqual( -1 ) && expect( typeof n ).toBe( "number" );
           }
     );

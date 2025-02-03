@@ -151,6 +151,8 @@ const $scope = constants?.$scope || function()
             isHex,
             isNanOrInfinite,
             toDecimal,
+            toInteger,
+            toFloat,
             firstMatchingType,
             clamp,
             NVL
@@ -1354,7 +1356,7 @@ const $scope = constants?.$scope || function()
 
     const deriveDecimalSymbols = function( pNumString, pOptions = calculateDecimalSymbols() )
     {
-        const options = Object.assign( {}, pOptions || DEFAULT_NUMBER_SYMBOLS );
+        const options = populateOptions( pOptions, DEFAULT_NUMBER_SYMBOLS );
 
         let s = asString( pNumString );
 
@@ -1460,8 +1462,6 @@ const $scope = constants?.$scope || function()
      * @param {any} pValue a number or string representing a number
      * @param {number} pDefault a number to return if the value cannot be interpreted as a number
      *
-     * NOTE: when converting floating point number to an integer, we round using half_even rounding
-     *
      * @param pOptions
      * @returns {number} an integer value represented by or implied by the value provided
      */
@@ -1469,23 +1469,13 @@ const $scope = constants?.$scope || function()
     {
         const zero = 0;
 
-        const input = _resolveInput.call( this, pValue );
+        const dflt = isNumber( pDefault ) || isString( pDefault ) ? pDefault : zero;
 
-        const dflt = isNumber( pDefault ) || isString( pDefault ) ? pDefault : 0;
+        const options = mergeOptions( (isObject( pDefault ) ? pDefault : pOptions), pOptions, DEFAULT_NUMBER_SYMBOLS );
 
-        const options = populateOptions( (isObject( pDefault ) ? pDefault : pOptions), DEFAULT_NUMBER_SYMBOLS );
+        let input = _resolveInput.call( this, pValue );
 
-        if ( isNull( input ) )
-        {
-            return asInt( dflt, zero, options );
-        }
-
-        if ( isDate( input ) || isFunction( input.getTime ) )
-        {
-            return asInt( input.getTime() );
-        }
-
-        const type = typeof input;
+        input = isNull( input ) ? asInt( dflt, zero, options ) : input;
 
         function warnValueOutOfRange( pInput, pSource = AS_INT )
         {
@@ -1494,75 +1484,62 @@ const $scope = constants?.$scope || function()
             modulePrototype.reportError( new IllegalArgumentError( msg ), msg, S_WARN, (modName + _colon + _colon + (pSource || AS_INT)) );
         }
 
-        if ( [_num, _big].includes( type ) )
+        let val = dflt;
+
+        const type = typeof input;
+
+        function isOutOfRange( pValue )
         {
-            if ( isNanOrInfinite( input ) )
-            {
-                return asInt( dflt, zero, options );
-            }
-
-            if ( _big === type && (input > Number.MAX_SAFE_INTEGER || input < Number.MIN_SAFE_INTEGER) )
-            {
-                warnValueOutOfRange( input );
-
-                return asInt( dflt, zero, options );
-            }
-
-            const val = parseInt( (input).toFixed( 0 ) );
-
-            if ( isNanOrInfinite( val ) )
-            {
-                return asInt( dflt, zero, options );
-            }
-
-            return val;
+            return (pValue || input) > Number.MAX_SAFE_INTEGER || (pValue || input) < Number.MIN_SAFE_INTEGER;
         }
 
-        if ( _bool === type )
+        if ( [_num, _big].includes( type ) && isOutOfRange( input ) )
         {
-            return input ? 1 : zero;
+            warnValueOutOfRange( input );
+
+            return asInt( dflt, zero, options );
         }
 
-        let val = zero;
-
-        let canonical = toCanonicalNumericFormat( input, options );
-
-        let radix = _calculateRadix( input );
-
-        if ( 10 === radix )
+        switch ( type )
         {
-            canonical = trimLeadingCharacters( input, "0" );
-            canonical = startsWithAny( canonical, _dot, _comma ) ? "0" + canonical : canonical;
-        }
-
-        try
-        {
-            val = parseInt( canonical.replace( /^0[box]/i, _mt_str ), radix );
-
-            if ( isNanOrInfinite( val ) )
-            {
-                val = asInt( dflt, zero, options );
-            }
-
-            try
-            {
-                const asBig = 10 === radix ? BigInt( canonical ) : BigInt( val );
-
-                if ( asBig < val || asBig > val )
+            case _num:
+            case _big:
+                if ( isNanOrInfinite( input ) )
                 {
-                    warnValueOutOfRange( input );
-
                     return asInt( dflt, zero, options );
                 }
-            }
-            catch( ex2 )
-            {
-                // ignore this one
-            }
+
+                val = parseInt( (input).toFixed( 0 ) );
+
+                break;
+
+            case _str:
+                val = (isNumeric( input ) ? parseInt( toDecimal( input, (options.decimal_point || _dot) ) ) : asInt( dflt, zero, options ));
+                break;
+
+            case _bool:
+                return input ? 1 : 0;
+
+            case _obj:
+                if ( isDate( input ) || isFunction( input?.getTime ) )
+                {
+                    val = asInt( input.getTime() );
+                }
+                break;
+
+            default:
+                break;
         }
-        catch( ex )
+
+        if ( isNanOrInfinite( val ) )
         {
-            modulePrototype.reportError( ex, "trying to interpret '" + asString( pValue || input ) + "' as a number", S_WARN, (modName + _colon + _colon + AS_INT) );
+            val = asInt( dflt, zero, options );
+        }
+
+        if ( isOutOfRange( val ) )
+        {
+            warnValueOutOfRange( val );
+            val = asInt( dflt, zero, options );
         }
 
         return val || zero;

@@ -892,7 +892,7 @@ const $scope = constants?.$scope || function()
     {
         const valid = pStrict ? isNumber( pValue ) : isNumeric( pValue );
 
-        return valid && ((0 === pValue || /^0+$|^[0.-]{1,3}0+$/.test( _toString( pValue ) )) || (Math.round( parseFloat( pValue ) ) === 0 && Math.abs( parseFloat( pValue ) ) < 0.000000000000001));
+        return valid && ((0 === pValue || /^-?0+$|^0+$|^[0.-]{1,3}0+$/.test( _toString( pValue ) )) || (Math.round( parseFloat( pValue ) ) === 0 && Math.abs( parseFloat( pValue ) ) < 0.000000000000001));
     };
 
     /**
@@ -909,14 +909,14 @@ const $scope = constants?.$scope || function()
      */
     function getDigitsMap( pBase )
     {
-        let base = !isNull( pBase ) && (isNumber( pBase ) || isString( pBase )) ? parseInt( pBase ) : 10;
+        let base = !isNull( pBase ) && isNumeric( pBase ) ? parseInt( pBase ) : 10;
 
         base = (isNanOrInfinite( base ) ? (isString( pBase ) ? ({
                                                                     "hex": 16,
                                                                     "octal": 8,
                                                                     "binary": 2,
                                                                     "decimal": 10
-                                                                }[(pBase.trim().toLowerCase())] || 10) : 10) : 10);
+                                                                }[(pBase.trim().toLowerCase())] || 10) : 10) : base);
 
         switch ( base )
         {
@@ -971,18 +971,21 @@ const $scope = constants?.$scope || function()
 
         for( let i = 0, n = intDigits.length; i < n; i++ )
         {
-            let digit = intDigits[i];
+            const digit = intDigits[i];
+            const multiple = power ** i;
 
-            value += Math.pow( digitsMap[digit], i );
+            const base = digitsMap.get( digit ) || parseInt( digit );
+            value += isZero( base ) ? 0 : base * multiple;
         }
 
         let fractionDigits = fraction.split( _mt_str );
 
         for( let i = 0, n = fractionDigits.length; i < n; i++ )
         {
-            let digit = fractionDigits[i];
-
-            value += Math.pow( digitsMap[digit], -(i + 1) );
+            const digit = fractionDigits[i];
+            const multiple = power ** -(i + 1);
+            const base = digitsMap.get( digit ) || parseInt( digit );
+            value += isZero( base ) ? 0 : base * multiple;
         }
 
         return value * sign;
@@ -2654,7 +2657,9 @@ const $scope = constants?.$scope || function()
             isEmptyString,
             isNumber,
             isInteger,
+            toInteger,
             isFloat,
+            toFloat,
             isBigInt,
             isNumeric,
             isZero,
