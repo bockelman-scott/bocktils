@@ -111,6 +111,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             objectKeys,
             populateOptions,
             mergeOptions,
+            merge = mergeOptions,
             lock,
             deepFreeze,
             localCopy,
@@ -671,6 +672,69 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
                        } );
 
         return lock( symbols ) || DEFAULT_NUMBER_FORMATTING_SYMBOLS;
+    };
+
+    const COMPARE_LESS_THAN = -1;
+    const COMPARE_EQUAL = 0;
+    const COMPARE_GREATER_THAN = 1;
+
+    const compare = ( pFirst, pSecond, pNullsFirst = true ) =>
+    {
+        let comp = COMPARE_EQUAL;
+
+        if ( _fun === typeof pFirst.lessThan )
+        {
+            comp = pFirst.lessThan( pSecond, pNullsFirst ) ? COMPARE_LESS_THAN : COMPARE_EQUAL;
+        }
+
+        if ( COMPARE_EQUAL === comp && (_fun === typeof pSecond.lessThan) )
+        {
+            comp = pSecond.lessThan( pFirst, pNullsFirst ) ? COMPARE_GREATER_THAN : COMPARE_EQUAL;
+        }
+
+        if ( COMPARE_EQUAL === comp )
+        {
+            return pFirst < pSecond ? COMPARE_LESS_THAN : (pFirst > pSecond ? COMPARE_GREATER_THAN : COMPARE_EQUAL);
+        }
+
+        return comp;
+    };
+
+    const compareTo = ( pFirst, pSecond, pNullsFirst = true ) =>
+    {
+        let comp = COMPARE_EQUAL;
+
+        if ( _fun === typeof pFirst.compareTo )
+        {
+            comp = pFirst.compareTo( pSecond, pNullsFirst );
+        }
+
+        if ( COMPARE_EQUAL === comp && _fun === typeof pSecond.compareTo )
+        {
+            comp = pSecond.compareTo( pFirst, pNullsFirst );
+            if ( COMPARE_EQUAL !== comp )
+            {
+                return -comp;
+            }
+        }
+
+        return compare( pFirst, pSecond, pNullsFirst ) || COMPARE_EQUAL;
+    };
+
+    const compareNullable = ( pFirst, pSecond, pNullsFirst = true ) =>
+    {
+        const secondIsNull = _ud === typeof pSecond || null === pSecond;
+
+        if ( _ud === typeof pFirst || null === pFirst )
+        {
+            return secondIsNull ? COMPARE_EQUAL : (pNullsFirst ? COMPARE_LESS_THAN : COMPARE_GREATER_THAN);
+        }
+        else if ( secondIsNull )
+        {
+            return (pNullsFirst ? COMPARE_GREATER_THAN : COMPARE_LESS_THAN);
+        }
+
+        return compareTo( pFirst, pSecond, pNullsFirst ) || compare( pFirst, pSecond, pNullsFirst );
     };
 
     let mod =
@@ -2071,6 +2135,8 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
 
             mergeOptions,
 
+            merge,
+
             /**
              * Returns true if the specified value is immutable.<br>
              * <br>
@@ -2213,6 +2279,11 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             requireModule,
 
             importModule,
+
+            COMPARE_EQUAL,
+            COMPARE_GREATER_THAN,
+            COMPARE_LESS_THAN,
+            compareNullable,
 
             __testLogger: function( ...pTestData )
             {

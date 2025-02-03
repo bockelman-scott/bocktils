@@ -3,7 +3,7 @@
  * You can define your own token set to use in place of the default if desired.
  */
 
-const core = require( "../../core/src/CoreUtils.cjs" );
+const core = require( "@toolbocks/core" );
 
 /**
  * Establish separate constants for each of the common utilities imported
@@ -13,13 +13,15 @@ const { constants, typeUtils, stringUtils, arrayUtils, localeUtils } = core;
 
 const dateUtils = require( "./DateUtils.cjs" );
 
-const { _ud = "undefined" } = constants;
+const {
+    _ud = "undefined",
+    $scope = core?.$scope || constants?.$scope || function()
+    {
+        return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
+    }
+} = constants;
 
-const $scope = core?.$scope || constants?.$scope || function()
-{
-    return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-};
-
+// noinspection FunctionTooLongJS
 (function exposeModule()
 {
     const INTERNAL_NAME = "__BOCK__DATE_FORMAT_TOKEN_SET__";
@@ -39,17 +41,31 @@ const $scope = core?.$scope || constants?.$scope || function()
             dateUtils
         };
 
-    const { _mt_str, populateOptions, lock, classes } = constants;
+    const {
+        classes,
+        _mt_str,
+        _spc,
+        _colon,
+        _slash,
+        _hyphen,
+        populateOptions,
+        mergeOptions,
+        merge,
+        lock,
+        COMPARE_EQUAL,
+        compareNullable
+    } = constants;
 
-    const { isNull, isDate, isNumber } = typeUtils;
+    const { isNull, isString, isNumber, clamp } = typeUtils;
 
-    const { asString, asInt, lcase } = stringUtils;
+    const { asString, isBlank, asInt, asFloat, lcase, ucase, leftOf, rightOf, rightOfLast, leftOfLast } = stringUtils;
 
-    const asArray = arrayUtils.asArray;
+    const { asArray } = arrayUtils;
 
     const {
         DEFAULTS: LOCALE_DEFAULTS,
         DEFAULT_LOCALE_STRING,
+        isSameLocale,
         resolveLocale,
         getMonthNames,
         getMonthAbbreviations,
@@ -62,32 +78,30 @@ const $scope = core?.$scope || constants?.$scope || function()
         FORMATS,
     } = localeUtils;
 
-    const { ModuleEvent, ModulePrototype } = classes;
+    const { ModulePrototype } = classes;
 
-    if ( _ud === typeof CustomEvent )
-    {
-        CustomEvent = ModuleEvent;
-    }
+    const modName = "DateFormatTokenSet";
 
-    const modulePrototype = new ModulePrototype( "DateFormatTokenSet", INTERNAL_NAME );
+    const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
 
     const
         {
+            resolveDate,
             DateConstants,
+            DatePart,
             calculateOccurrencesOf,
             calculateNthOccurrenceOfDay,
             subtractDays,
             daysBetween,
             startOfMonth,
-            toNoon
+            toNoon,
+            DateBuffer,
+            addDays
         } = dateUtils;
 
     const dateConstants = lock( DateConstants );
 
-    const MONTHS = dateConstants.Months;
-    const DAYS = dateConstants.Days;
-    const OCCURRENCE = dateConstants.Occurrence;
-    const UNITS = dateConstants.Units;
+    const { DATE_PARTS, Months, Days, Occurrence } = dateConstants;
 
     const DEFAULT_LOCALE = new Intl.Locale( DEFAULT_LOCALE_STRING );
 
@@ -249,11 +263,6 @@ const $scope = core?.$scope || constants?.$scope || function()
 
     const SUPPORTED_TOKENS = lock( [].concat( DEFINED_TOKENS ).map( e => Object.keys( e ).flat() ).flat() );
 
-    const resolveDate = function( pDate )
-    {
-        return isDate( pDate ) ? pDate : isNumber( pDate ) ? new Date( pDate ) : new Date();
-    };
-
     /**
      * Common Week Numbering Systems:
      *
@@ -271,7 +280,7 @@ const $scope = core?.$scope || constants?.$scope || function()
 
         constructor( pFirstDayOfWeek )
         {
-            this.#firstDayOfWeek = pFirstDayOfWeek || DAYS.MONDAY;
+            this.#firstDayOfWeek = pFirstDayOfWeek || Days.MONDAY;
         }
 
         static get [Symbol.species]()
@@ -284,9 +293,9 @@ const $scope = core?.$scope || constants?.$scope || function()
             const date = resolveDate( pDate );
 
             // the first week of the year is the week that contains the first Thursday of the year
-            const firstThursday = calculateNthOccurrenceOfDay( date.getFullYear(), MONTHS.JANUARY, OCCURRENCE.FIRST, DAYS.THURSDAY );
+            const firstThursday = calculateNthOccurrenceOfDay( date.getFullYear(), Months.JANUARY, Occurrence.FIRST, Days.THURSDAY );
 
-            const startOfWeek = subtractDays( firstThursday, ((6 - DAYS.THURSDAY) + this.firstDayOfWeek) );
+            const startOfWeek = subtractDays( firstThursday, ((6 - Days.THURSDAY) + this.firstDayOfWeek) );
 
             const days = daysBetween( startOfWeek, date ) + this.firstDayOfWeek;
 
@@ -323,9 +332,9 @@ const $scope = core?.$scope || constants?.$scope || function()
             return this.#firstDayOfWeek;
         }
 
-        set firstDayOfWeek( value )
+        set firstDayOfWeek( pValue )
         {
-            this.#firstDayOfWeek = value;
+            this.#firstDayOfWeek = pValue;
         }
     }
 
@@ -341,7 +350,7 @@ const $scope = core?.$scope || constants?.$scope || function()
     {
         constructor()
         {
-            super( DAYS.MONDAY );
+            super( Days.MONDAY );
         }
     }
 
@@ -351,10 +360,23 @@ const $scope = core?.$scope || constants?.$scope || function()
 
         #repetitionRule;
 
-        constructor( pCharacters, pRepetitionRule = REPETITION_RULES.REPEAT )
+        #parentSet;
+
+        constructor( pCharacters, pRepetitionRule = REPETITION_RULES.REPEAT, pParentSet = null )
         {
             this.#characters = asString( pCharacters );
             this.#repetitionRule = pRepetitionRule;
+            this.#parentSet = pParentSet;
+        }
+
+        get parentSet()
+        {
+            return this.#parentSet;
+        }
+
+        set parentSet( pTokenSet )
+        {
+            this.#parentSet = pTokenSet instanceof TokenSet ? pTokenSet : this.#parentSet;
         }
 
         static get [Symbol.species]()
@@ -367,6 +389,11 @@ const $scope = core?.$scope || constants?.$scope || function()
             return asString( this.#characters );
         }
 
+        get firstCharacter()
+        {
+            return this.characters.charAt( 0 );
+        }
+
         get repetitionRule()
         {
             return this.#repetitionRule;
@@ -374,7 +401,7 @@ const $scope = core?.$scope || constants?.$scope || function()
 
         resolveDate( pDate )
         {
-            return isDate( pDate ) ? pDate : isNumber( pDate ) ? new Date( pDate ) : new Date();
+            return resolveDate( pDate );
         }
 
         resolveLocale( pLocale )
@@ -406,6 +433,11 @@ const $scope = core?.$scope || constants?.$scope || function()
             throw new Error( "Not Implemented" );
         }
 
+        parse( pSegment, pBuffer )
+        {
+            return pBuffer;
+        }
+
         /**
          * Returns the string that produced this token
          * @returns {string} the string that produced this token
@@ -417,20 +449,41 @@ const $scope = core?.$scope || constants?.$scope || function()
 
         /**
          * Returns an object compatible with Intl.DateFormat
-         * @return {object} an object compatible with Intl.DateFormat
+         * @return {object|null} an object compatible with Intl.DateFormat
          */
         toOption()
         {
             // subclasses must define
             throw new Error( "Not Implemented" );
         }
+
+        get comparator()
+        {
+            return ( a, b ) => 0;
+        }
+
+        getMonthNumber( pString )
+        {
+            if ( this.parentSet )
+            {
+                return this.parentSet.getMonthNumber( pString );
+            }
+        }
+
+        getDayNumber( pString )
+        {
+            if ( this.parentSet )
+            {
+                return this.parentSet.getDayNumber( pString );
+            }
+        }
     }
 
     class TokenLiteral extends Token
     {
-        constructor( pCharacters, pRepetitionRule )
+        constructor( pCharacters, pRepetitionRule, pParentSet = null )
         {
-            super( pCharacters, pRepetitionRule );
+            super( pCharacters, pRepetitionRule, pParentSet );
         }
 
         static get [Symbol.species]()
@@ -443,9 +496,41 @@ const $scope = core?.$scope || constants?.$scope || function()
             return asString( this.characters );
         }
 
+        parse( pSegment, pBuffer )
+        {
+            return pBuffer;
+        }
+
         toOption()
         {
             return {};
+        }
+
+        get comparator()
+        {
+            return ( a, b ) =>
+            {
+                if ( a instanceof this.constructor )
+                {
+                    if ( b instanceof this.constructor )
+                    {
+                        return compareNullable( a.characters, b.characters );
+                    }
+                    if ( isString( b ) || isNumber( b ) )
+                    {
+                        return compareNullable( a.characters, asString( b ) );
+                    }
+                    return 0;
+                }
+                else if ( isString( a ) || isNumber( a ) )
+                {
+                    if ( b instanceof this.constructor )
+                    {
+                        return compareNullable( asString( a ), b.characters );
+                    }
+                    return compareNullable( asString( a ), asString( b ) );
+                }
+            };
         }
     }
 
@@ -454,9 +539,9 @@ const $scope = core?.$scope || constants?.$scope || function()
         #minValue = 0;
         #maxValue = 0;
 
-        constructor( pCharacters, pMinValue, pMaxValue, pRepetitionRule = REPETITION_RULES.PAD )
+        constructor( pCharacters, pMinValue, pMaxValue, pRepetitionRule = REPETITION_RULES.PAD, pParentSet = null )
         {
-            super( pCharacters, pRepetitionRule );
+            super( pCharacters, pRepetitionRule, pParentSet );
 
             this.#minValue = pMinValue;
             this.#maxValue = pMaxValue;
@@ -523,15 +608,31 @@ const $scope = core?.$scope || constants?.$scope || function()
 
             return this.formatNumber( value, asString( this.characters ).length );
         }
+
+        parse( pSegment, pBuffer )
+        {
+            return pBuffer;
+        }
+
+        get comparator()
+        {
+            return ( a, b ) =>
+            {
+                const aa = asFloat( a );
+                const bb = asFloat( b );
+
+                return aa < bb ? -1 : aa > bb ? 1 : 0;
+            };
+        }
     }
 
     class TokenEra extends Token
     {
         #eras = [].concat( ERAS );
 
-        constructor( pCharacters, pEras = ERAS )
+        constructor( pCharacters, pEras = ERAS, pParentSet = null )
         {
-            super( pCharacters, REPETITION_RULES.NONE );
+            super( pCharacters, REPETITION_RULES.NONE, pParentSet );
 
             this.#eras = [].concat( pEras || ERAS );
         }
@@ -563,61 +664,28 @@ const $scope = core?.$scope || constants?.$scope || function()
             return lock( opt );
         }
 
+        get comparator()
+        {
+            return ( a, b ) =>
+            {
+                let comp = compareNullable( a?.start, b?.start );
+
+                if ( comp === COMPARE_EQUAL )
+                {
+                    comp = compareNullable( a?.end, b?.end );
+                }
+
+                return COMPARE_EQUAL === comp ? a < b ? -1 : a > b ? 1 : 0 : comp;
+            };
+        }
+
         getValue( pDate, pLocale )
         {
             const date = this.resolveDate( pDate );
 
             let eras = [].concat( this.eras );
 
-            eras = eras.sort( ( a, b ) =>
-                              {
-                                  let comp = 0;
-
-                                  if ( isNull( a.start ) )
-                                  {
-                                      if ( isNull( b.start ) )
-                                      {
-                                          comp = 0;
-                                      }
-                                      else
-                                      {
-                                          comp = -1;
-                                      }
-                                  }
-                                  else if ( isNull( b.start ) )
-                                  {
-                                      comp = 1;
-                                  }
-                                  else
-                                  {
-                                      comp = a.start < b.start ? -1 : a.start > b.start ? 1 : 0;
-                                  }
-
-                                  if ( 0 === comp )
-                                  {
-                                      if ( isNull( a.end ) )
-                                      {
-                                          if ( isNull( b.end ) )
-                                          {
-                                              comp = 0;
-                                          }
-                                          else
-                                          {
-                                              comp = -1;
-                                          }
-                                      }
-                                      else if ( isNull( b.end ) )
-                                      {
-                                          comp = 1;
-                                      }
-                                      else
-                                      {
-                                          comp = a.end < b.end ? -1 : a.end > b.end ? 1 : 0;
-                                      }
-                                  }
-
-                                  return comp;
-                              } );
+            eras = eras.sort( this.comparator );
 
             let value = constants._mt_str;
 
@@ -648,12 +716,19 @@ const $scope = core?.$scope || constants?.$scope || function()
                 }
             }
 
-            return value;
+            return value || DatePart.ERA.calculate( date );
         }
 
         format( pDate, pLocale )
         {
             return this.getValue( pDate );
+        }
+
+        parse( pSegment, pBuffer )
+        {
+            const segment = asString( pSegment, true );
+            const buffer = pBuffer || { [DATE_PARTS.ERA]: segment };
+            buffer[DATE_PARTS.ERA] = segment;
         }
     }
 
@@ -662,9 +737,9 @@ const $scope = core?.$scope || constants?.$scope || function()
         #am;
         #pm;
 
-        constructor( pCharacters, pAmString = "AM", pPmString = "PM" )
+        constructor( pCharacters, pAmString = "AM", pPmString = "PM", pParentSet = null )
         {
-            super( asString( pCharacters ) || "a", REPETITION_RULES.NONE );
+            super( asString( pCharacters ) || "a", REPETITION_RULES.NONE, pParentSet );
 
             this.#am = (asString( pAmString ) || "AM");
             this.#pm = (asString( pPmString ) || "PM");
@@ -705,13 +780,50 @@ const $scope = core?.$scope || constants?.$scope || function()
             return (value >= 11 ? this.#pm : this.#am);
         }
 
+        parse( pSegment, pBuffer )
+        {
+            let buffer = pBuffer ||
+                {
+                    [DATE_PARTS.HOUR]: -1,
+                    adjustHoursForPm: false,
+                    adjustHoursForCycle: false,
+                    adjustedForPm: false,
+                    adjustedForCycle: false
+                };
+
+            const segment = asString( pSegment, true );
+
+            if ( !isBlank( segment ) && (this.#pm === segment || ucase( this.#pm ) === ucase( segment )) )
+            {
+                const hours = buffer[DATE_PARTS.HOUR];
+
+                if ( hours < buffer.maxHour )
+                {
+                    buffer.adjustHoursForPm = true;
+                }
+            }
+
+            return buffer;
+        }
+
+        get comparator()
+        {
+            return ( a, b ) =>
+            {
+                return compareNullable( a, b );
+            };
+        }
     }
 
     class TokenYear extends Token
     {
-        constructor( pCharacters, pRepetitionRule )
+        #pivotYear;
+
+        constructor( pCharacters, pRepetitionRule, pPivotYear = 75, pParentSet = null )
         {
-            super( pCharacters, pRepetitionRule );
+            super( pCharacters, pRepetitionRule, pParentSet );
+
+            this.#pivotYear = clamp( asInt( pPivotYear ), 0, 99 );
         }
 
         static get [Symbol.species]()
@@ -756,16 +868,49 @@ const $scope = core?.$scope || constants?.$scope || function()
 
             return s;
         }
+
+        parse( pSegment, pBuffer )
+        {
+            let buffer = pBuffer ||
+                {
+                    [DATE_PARTS.YEAR]: -1
+                };
+
+            let segment = asString( pSegment ).replace( /^0+/, _mt_str );
+
+            let num = asInt( segment );
+
+            buffer[DATE_PARTS.YEAR] = ((num > 0 && num < 100) ? num + (num > this.pivotYear ? 1900 : 2000) : num);
+
+            return buffer;
+        }
+
+        get comparator()
+        {
+            return ( a, b ) =>
+            {
+                let comp = compareNullable( a, b );
+
+                if ( COMPARE_EQUAL === comp )
+                {
+                    const aa = asInt( a );
+                    const bb = asInt( b );
+                    return aa < bb ? -1 : aa > bb ? 1 : 0;
+                }
+
+                return comp;
+            };
+        }
     }
 
-    class TokenMonth extends Token
+    class TokenMonth extends TokenNumber
     {
         #names;
         #abbreviations;
 
-        constructor( pCharacters, pMonthNames, pMonthAbbreviations )
+        constructor( pCharacters, pMonthNames, pMonthAbbreviations, pParentSet = null )
         {
-            super( pCharacters, REPETITION_RULES.VARY_FORMAT );
+            super( pCharacters, 0, 11, REPETITION_RULES.VARY_FORMAT, pParentSet );
 
             this.#names = [].concat( asArray( pMonthNames || MONTH_NAMES ) );
             this.#abbreviations = [].concat( asArray( pMonthAbbreviations || this.#names.map( e => e.slice( 0, 3 ) ) || MONTH_NAMES_SHORT ) );
@@ -842,15 +987,29 @@ const $scope = core?.$scope || constants?.$scope || function()
 
             return asString( value + 1 ).padStart( len, "0" );
         }
+
+        parse( pSegment, pBuffer )
+        {
+            let buffer = pBuffer ||
+                {
+                    [DATE_PARTS.MONTH]: -1
+                };
+
+            const segment = asString( pSegment ).replace( /^0+/, _mt_str );
+
+            buffer[DATE_PARTS.MONTH] = (this.characters.length > 2) ? this.getMonthNumber( segment ) : (asInt( segment ) - 1);
+
+            return buffer;
+        }
     }
 
-    class TokenWeek extends Token
+    class TokenWeek extends TokenNumber
     {
         #numberingScheme;
 
-        constructor( pCharacters, pWeekNumberingSystem, pFirstDayOfWeek, pRepetitionRule = REPETITION_RULES.PAD )
+        constructor( pCharacters, pWeekNumberingSystem, pFirstDayOfWeek, pRepetitionRule = REPETITION_RULES.PAD, pParentSet = null )
         {
-            super( pCharacters, pRepetitionRule );
+            super( pCharacters, 1, 52, pRepetitionRule, pParentSet );
 
             this.#numberingScheme = pWeekNumberingSystem || new ISO8601_WeekNumberingSystem( pFirstDayOfWeek );
         }
@@ -900,13 +1059,17 @@ const $scope = core?.$scope || constants?.$scope || function()
             return value;
         }
 
+        parse( pSegment, pBuffer )
+        {
+            return pBuffer || { [DATE_PARTS.WEEK]: -1 };
+        }
     }
 
-    class TokenMonthDay extends Token
+    class TokenMonthDay extends TokenNumber
     {
-        constructor( pCharacters, pRepetitionRule = REPETITION_RULES.PAD )
+        constructor( pCharacters, pRepetitionRule = REPETITION_RULES.PAD, pParentSet = null )
         {
-            super( pCharacters, pRepetitionRule );
+            super( pCharacters, 1, 31, pRepetitionRule, pParentSet );
         }
 
         static get [Symbol.species]()
@@ -952,13 +1115,28 @@ const $scope = core?.$scope || constants?.$scope || function()
             return s;
         }
 
+        parse( pSegment, pBuffer )
+        {
+            let buffer = pBuffer ||
+                {
+                    [DATE_PARTS.DAY]: -1,
+                    [DATE_PARTS.DAY_OF_MONTH]: -1
+                };
+
+            let dayOfMonth = asInt( pSegment.replace( /^0+/, _mt_str ) );
+
+            buffer[DATE_PARTS.DAY] = Math.max( dayOfMonth, 1 );
+            buffer[DATE_PARTS.DAY_OF_MONTH] = Math.max( dayOfMonth, 1 );
+
+            return buffer;
+        }
     }
 
-    class TokenDayInYear extends Token
+    class TokenDayInYear extends TokenNumber
     {
-        constructor( pCharacters, pRepetitionRule = REPETITION_RULES.PAD )
+        constructor( pCharacters, pRepetitionRule = REPETITION_RULES.PAD, pParentSet = null )
         {
-            super( pCharacters, pRepetitionRule );
+            super( pCharacters, 1, 366, pRepetitionRule, pParentSet );
         }
 
         static get [Symbol.species]()
@@ -998,13 +1176,34 @@ const $scope = core?.$scope || constants?.$scope || function()
 
             return s;
         }
+
+        parse( pSegment, pBuffer )
+        {
+            const buffer = pBuffer ||
+                {
+                    [DATE_PARTS.DAY]: -1,
+                    [DATE_PARTS.DAY_OF_YEAR]: -1
+                };
+
+            const dayOfYear = asInt( pSegment.replace( /^0+/, _mt_str ) );
+
+            let date = DateBuffer.isBuffer( buffer ) ? buffer.toDate() : new Date();
+
+            date = new Date( date.getFullYear(), 0, 0 );
+
+            date = addDays( date, dayOfYear );
+
+            const fromDate = DateBuffer.fromDate( date, this.parentSet?.locale );
+
+            return DateBuffer.isBuffer( buffer ) ? buffer.merge( fromDate ) : fromDate;
+        }
     }
 
-    class TokenOccurrenceOfDayInMonth extends Token
+    class TokenOccurrenceOfDayInMonth extends TokenNumber
     {
-        constructor( pCharacters, pRepetitionRule = REPETITION_RULES.PAD )
+        constructor( pCharacters, pRepetitionRule = REPETITION_RULES.PAD, pParentSet = null )
         {
-            super( pCharacters, pRepetitionRule );
+            super( pCharacters, 1, 5, pRepetitionRule, pParentSet );
         }
 
         static get [Symbol.species]()
@@ -1048,6 +1247,11 @@ const $scope = core?.$scope || constants?.$scope || function()
 
             return s;
         }
+
+        parse( pSegment, pBuffer )
+        {
+            return pBuffer || { [DATE_PARTS.DAY]: -1, [DATE_PARTS.DAY_OF_MONTH]: -1 };
+        }
     }
 
     class TokenDayName extends Token
@@ -1056,9 +1260,9 @@ const $scope = core?.$scope || constants?.$scope || function()
         #dayAbbreviations = [].concat( DAY_NAMES_SHORT );
         #dayLetters = [].concat( DAY_LETTERS );
 
-        constructor( pCharacters, pDayNames = DAY_NAMES, pNameAbbreviations = DAY_NAMES_SHORT, pDayLetters = DAY_LETTERS )
+        constructor( pCharacters, pDayNames = DAY_NAMES, pNameAbbreviations = DAY_NAMES_SHORT, pDayLetters = DAY_LETTERS, pParentSet = null )
         {
-            super( pCharacters );
+            super( pCharacters, REPETITION_RULES.REPEAT, pParentSet );
 
             this.#dayNames = [].concat( pDayNames || DAY_NAMES );
             this.#dayAbbreviations = [].concat( pNameAbbreviations || DAY_NAMES_SHORT );
@@ -1143,13 +1347,29 @@ const $scope = core?.$scope || constants?.$scope || function()
 
             return asString( names[index] );
         }
+
+        parse( pSegment, pBuffer )
+        {
+            const buffer = pBuffer ||
+                {
+                    [DATE_PARTS.DAY_OF_WEEK]: -1
+                };
+
+            const segment = asString( pSegment, true ).replace( /^0+/, _mt_str );
+
+            let day = clamp( this.getDayNumber( segment ), 0, 6 );
+
+            buffer[DATE_PARTS.DAY_OF_WEEK] = clamp( day, 0, 6 );
+
+            return buffer;
+        }
     }
 
     class TokenDayNumber extends TokenNumber
     {
-        constructor( pCharacters, pRepetitionRule = REPETITION_RULES.PAD )
+        constructor( pCharacters, pRepetitionRule = REPETITION_RULES.PAD, pParentSet = null )
         {
-            super( pCharacters, 1, 7, pRepetitionRule );
+            super( pCharacters, 1, 7, pRepetitionRule, pParentSet );
         }
 
         static get [Symbol.species]()
@@ -1180,7 +1400,7 @@ const $scope = core?.$scope || constants?.$scope || function()
 
             let s = asString( dayNum );
 
-            if ( DAYS.SUNDAY === dayNum )
+            if ( Days.SUNDAY === dayNum )
             {
                 s = "7";
             }
@@ -1192,18 +1412,104 @@ const $scope = core?.$scope || constants?.$scope || function()
 
             return s;
         }
+
+        parse( pSegment, pBuffer )
+        {
+            const buffer = pBuffer ||
+                {
+                    [DATE_PARTS.DAY_OF_WEEK]: -1
+                };
+
+            const segment = pSegment.replace( /^0+/, _mt_str );
+
+            let day = (this.characters.length > 2) ? clamp( this.getDayNumber( pSegment ), 0, 6 ) : asInt( segment ) - 1;
+
+            buffer[DATE_PARTS.DAY_OF_WEEK] = clamp( day, 0, 6 );
+
+            return buffer;
+        }
     }
 
     class TokenHour extends TokenNumber
     {
-        constructor( pCharacters, pMinValue, pMaxValue, pRepetitionRule = REPETITION_RULES.PAD )
+        #minHour;
+        #maxHour;
+
+        #adjustHoursForPm;
+
+        #hourCycle;
+
+        constructor( pCharacters, pMinValue, pMaxValue, pRepetitionRule = REPETITION_RULES.PAD, pParentSet = null )
         {
-            super( pCharacters, pMinValue, pMaxValue, pRepetitionRule );
+            super( pCharacters, pMinValue, pMaxValue, pRepetitionRule, pParentSet );
+
+            this.#minHour = pMinValue;
+            this.#maxHour = pMaxValue;
+
+            /*
+             H	Hour in day (0-23)	Number	0
+             k	Hour in day (1-24)	Number	24
+             K	Hour in am/pm (0-11)	Number	0
+             h	Hour in am/pm (1-12)	Number	12
+             */
+
+            switch ( this.firstCharacter )
+            {
+                case "h":
+                    this.#hourCycle = "h12";
+                    this.#minHour = 1;
+                    this.#maxHour = 12;
+                    this.#adjustHoursForPm = true;
+                    break;
+
+                case "K":
+                    this.#hourCycle = "h11";
+                    this.#minHour = 0;
+                    this.#maxHour = 11;
+                    this.#adjustHoursForPm = true;
+                    break;
+
+                case "k":
+                    this.#hourCycle = "h24";
+                    this.#minHour = 1;
+                    this.#maxHour = 24;
+                    this.#adjustHoursForPm = false;
+                    break;
+
+                case "H":
+                    this.#hourCycle = "h23";
+                    this.#minHour = 0;
+                    this.#maxHour = 23;
+                    this.#adjustHoursForPm = false;
+                    break;
+
+                default:
+                    this.#hourCycle = "h12";
+                    this.#minHour = 1;
+                    this.#maxHour = 12;
+                    this.#adjustHoursForPm = true;
+                    break;
+            }
         }
 
         static get [Symbol.species]()
         {
             return this;
+        }
+
+        get minHour()
+        {
+            return asInt( this.#minHour );
+        }
+
+        get maxHour()
+        {
+            return asInt( this.#maxHour );
+        }
+
+        get hourCycle()
+        {
+            return this.#hourCycle;
         }
 
         toPattern()
@@ -1213,7 +1519,7 @@ const $scope = core?.$scope || constants?.$scope || function()
 
         toOption()
         {
-            const opt = { hour: FORMATS.TWO_DIGIT };
+            const opt = { hour: FORMATS.TWO_DIGIT, hourCycle: this.hourCycle };
 
             if ( this.characters.length < 2 )
             {
@@ -1246,13 +1552,38 @@ const $scope = core?.$scope || constants?.$scope || function()
 
             return asString( super.formatNumber( value, this.characters.length ) );
         }
+
+        parse( pSegment, pBuffer )
+        {
+            const buffer = pBuffer || { [DATE_PARTS.HOUR]: -1 };
+
+            buffer.minHour = this.minHour;
+            buffer.maxHour = this.maxHour;
+
+            let hour = asInt( asString( pSegment ).replace( /^0+/, _mt_str ) );
+
+            if ( [12, 24].includes( this.maxHour ) && hour > this.maxHour )
+            {
+                hour -= 1;
+
+                buffer.minHour = 0;
+                buffer.maxHour = 23;
+
+                buffer.adjustedForCycle = true;
+                buffer.adjustHoursForCycle = false;
+            }
+
+            buffer[DATE_PARTS.HOUR] = hour;
+
+            return buffer;
+        }
     }
 
     class TokenMinute extends TokenNumber
     {
-        constructor( pCharacter )
+        constructor( pCharacter, pParentSet = null )
         {
-            super( pCharacter, 0, 59 );
+            super( pCharacter, 0, 59, REPETITION_RULES.PAD, pParentSet );
         }
 
         static get [Symbol.species]()
@@ -1283,13 +1614,24 @@ const $scope = core?.$scope || constants?.$scope || function()
 
             return date.getMinutes(); // return a value between 0-59
         }
+
+        parse( pSegment, pBuffer )
+        {
+            const buffer = pBuffer || { [DATE_PARTS.MINUTE]: -1 };
+
+            let minute = asInt( asString( pSegment, true ).replace( /^0+/, _mt_str ) );
+
+            buffer[DATE_PARTS.MINUTE] = clamp( minute, 0, 59 );
+
+            return buffer;
+        }
     }
 
     class TokenSecond extends TokenMinute
     {
-        constructor( pCharacter )
+        constructor( pCharacter, pParentSet = null )
         {
-            super( pCharacter );
+            super( pCharacter, pParentSet );
         }
 
         static get [Symbol.species]()
@@ -1320,13 +1662,24 @@ const $scope = core?.$scope || constants?.$scope || function()
 
             return date.getSeconds(); // return a value between 0-59
         }
+
+        parse( pSegment, pBuffer )
+        {
+            const buffer = pBuffer || { [DATE_PARTS.SECOND]: -1 };
+
+            let second = asInt( asString( pSegment, true ).replace( /^0+/, _mt_str ) );
+
+            buffer[DATE_PARTS.SECOND] = clamp( second, 0, 59 );
+
+            return buffer;
+        }
     }
 
     class TokenMillisecond extends TokenNumber
     {
-        constructor( pCharacter )
+        constructor( pCharacter, pParentSet = null )
         {
-            super( pCharacter, 0, 999 );
+            super( pCharacter, 0, 999, REPETITION_RULES.PAD, pParentSet );
         }
 
         static get [Symbol.species]()
@@ -1352,13 +1705,24 @@ const $scope = core?.$scope || constants?.$scope || function()
 
             return date.getMilliseconds(); // return a value between 0-59
         }
+
+        parse( pSegment, pBuffer )
+        {
+            const buffer = pBuffer || { [DATE_PARTS.MILLISECOND]: -1 };
+
+            let minute = asInt( asString( pSegment, true ).replace( /^0+/, _mt_str ) );
+
+            buffer[DATE_PARTS.MILLISECOND] = clamp( minute, 0, 999 );
+
+            return buffer;
+        }
     }
 
     class TokenTimeZone extends Token
     {
-        constructor( pCharacters, pRepetitionRule )
+        constructor( pCharacters, pRepetitionRule, pParentSet = null )
         {
-            super( pCharacters, pRepetitionRule );
+            super( pCharacters, pRepetitionRule, pParentSet );
         }
 
         static get [Symbol.species]()
@@ -1379,13 +1743,73 @@ const $scope = core?.$scope || constants?.$scope || function()
 
             return lock( opt );
         }
+
+        parse( pSegment, pBuffer )
+        {
+            const rxTz = () => /((GMT|UTC)([+-])?(\d{1,2})?:?(\d{2})?)|(((\w+ )*)(Time)?$)/gd;
+
+            const buffer = pBuffer || { [DATE_PARTS.TIME_ZONE]: _mt_str };
+
+            const segment = asString( pSegment, true );
+
+            let dateString = segment;
+
+            if ( DateBuffer.isBuffer( buffer ) )
+            {
+                try
+                {
+                    const date = buffer.toDate();
+
+
+                    dateString = date.toString();
+                }
+                catch( ignored )
+                {
+                    dateString = dateString || segment;
+                }
+            }
+
+            if ( !(isString( segment ) || isString( dateString )) || (isBlank( segment ) && isBlank( dateString )) )
+            {
+                return buffer;
+            }
+
+            let matched = _mt_str;
+            let gmtPhrase = _mt_str;
+            let gmt = _mt_str;
+            let gmtOperator = _mt_str;
+            let gmtHours = _mt_str;
+            let gmtMinutes = _mt_str;
+
+            let tzPhrase = _mt_str;
+
+            let matches = rxTz().exec( segment ) || rxTz().exec( dateString );
+
+            if ( null === matches || matches.length < 2 )
+            {
+                matches = rxTz().exec( dateString ) || rxTz().exec( segment );
+            }
+
+            if ( null !== matches && matches.length > 0 )
+            {
+                matched = asString( matches[0], true );
+                gmtPhrase = matches.length > 1 ? matches[1] : asString( matched, true );
+                gmt = matches.length > 2 ? matches[2] : ucase( asString( matched, true ).replace( /[\d:;+-]/g, _mt_str ) );
+                gmtOperator = matches.length > 3 ? matches[3] : matched;
+                gmtHours = matches.length > 4 ? matches[4] : asInt( leftOf( rightOf( asString( matched, true ), (gmtOperator || _hyphen) ), _colon ).replace( /\D+/g, _mt_str ).replace( /^0+/, _mt_str ) );
+                gmtMinutes = matches.length > 5 ? matches[5] : asInt( rightOfLast( asString( matched, true ), _colon ).replace( /\D+/g, _mt_str ).replace( /^0+/, _mt_str ) );
+                tzPhrase = matches.length > 6 ? matches[6] || matches[7] : asString( matched, true );
+            }
+
+            return buffer;
+        }
     }
 
     class TokenGeneralTimeZone extends TokenTimeZone
     {
-        constructor( pCharacters, pRepetitionRule )
+        constructor( pCharacters, pRepetitionRule, pParentSet = null )
         {
-            super( pCharacters, pRepetitionRule );
+            super( pCharacters, pRepetitionRule, pParentSet );
         }
 
         static get [Symbol.species]()
@@ -1396,9 +1820,9 @@ const $scope = core?.$scope || constants?.$scope || function()
 
     class TokenRfc822TimeZone extends TokenTimeZone
     {
-        constructor( pCharacters, pRepetitionRule )
+        constructor( pCharacters, pRepetitionRule, pParentSet = null )
         {
-            super( pCharacters, pRepetitionRule );
+            super( pCharacters, pRepetitionRule, pParentSet );
         }
 
         static get [Symbol.species]()
@@ -1409,9 +1833,9 @@ const $scope = core?.$scope || constants?.$scope || function()
 
     class TokenIso8601TimeZone extends TokenTimeZone
     {
-        constructor( pCharacters, pRepetitionRule )
+        constructor( pCharacters, pRepetitionRule, pParentSet = null )
         {
-            super( pCharacters, pRepetitionRule );
+            super( pCharacters, pRepetitionRule, pParentSet );
         }
 
         static get [Symbol.species]()
@@ -1419,6 +1843,31 @@ const $scope = core?.$scope || constants?.$scope || function()
             return this;
         }
     }
+
+    const TOKEN_FACTORY =
+        {
+            G: ( chars, context ) => new TokenEra( chars, context.eras ),
+            y: ( chars, context ) => new TokenYear( chars, REPETITION_RULES.PAD, context.pivotYear, context ),
+            Y: ( chars, context ) => new TokenYear( chars, REPETITION_RULES.PAD, context.pivotYear, context ),
+            M: ( chars, context ) => new TokenMonth( chars, context.monthNames, context.monthAbbreviations, context ),
+            L: ( chars, context ) => new TokenMonth( chars, context.monthNames, context.monthAbbreviations, context ),
+            w: ( chars, context ) => new TokenWeek( chars, context.weekNumberingSystem, context.firstDayOfWeek, context.repetitionRule, context ),
+            W: ( chars, context ) => new TokenWeek( chars, context.weekNumberingSystem, context.firstDayOfWeek, context.repetitionRule, context ),
+            D: ( chars, context ) => new TokenDayInYear( chars, REPETITION_RULES.PAD, context ),
+            d: ( chars, context ) => new TokenMonthDay( chars, REPETITION_RULES.PAD, context ),
+            F: ( chars, context ) => new TokenOccurrenceOfDayInMonth( chars, REPETITION_RULES.PAD, context ),
+            E: ( chars, context ) => new TokenDayName( chars, context.dayNames, context.dayAbbreviations, context.dayLetters, context ),
+            u: ( chars, context ) => new TokenDayNumber( chars, REPETITION_RULES.PAD, context ),
+            a: ( chars, context ) => new TokenAmPm( chars, context.amString, context.pmString, context ),
+            H: ( chars, context ) => new TokenHour( chars, 0, 23, REPETITION_RULES.PAD, context ),
+            h: ( chars, context ) => new TokenHour( chars, 1, 12, REPETITION_RULES.PAD, context ),
+            K: ( chars, context ) => new TokenHour( chars, 0, 11, REPETITION_RULES.PAD, context ),
+            k: ( chars, context ) => new TokenHour( chars, 1, 24, REPETITION_RULES.PAD, context ),
+            m: ( chars, context ) => new TokenMinute( chars, context ),
+            s: ( chars, context ) => new TokenSecond( chars, context ),
+            S: ( chars, context ) => new TokenMillisecond( chars, context ),
+        };
+
 
     const DEFAULT_OPTIONS = lock(
         {
@@ -1431,13 +1880,17 @@ const $scope = core?.$scope || constants?.$scope || function()
             amString: "AM",
             pmString: "PM",
             weekNumberingSystem: new ISO8601_WeekNumberingSystem(),
-            firstDayOfWeek: DAYS.MONDAY
+            firstDayOfWeek: Days.MONDAY,
+            pivotYear: 75,
+            tokenFactory: TOKEN_FACTORY
         } );
 
     class TokenSet
     {
         #locale = DEFAULT_LOCALE;
         #options = DEFAULT_OPTIONS;
+
+        #pivotYear = 75;
 
         #monthNames = MONTH_NAMES;
         #monthAbbreviations = MONTH_NAMES_SHORT;
@@ -1446,28 +1899,38 @@ const $scope = core?.$scope || constants?.$scope || function()
         #dayAbbreviations = DAY_NAMES_SHORT;
         #dayLetters = DAY_LETTERS;
 
+        #datePartCollections = new Map();
+
         #amString = "AM";
         #pmString = "PM";
 
         #eras = ERAS;
 
         #weekNumberingSystem = new ISO8601_WeekNumberingSystem();
-        #firstDayOfWeek = DAYS.MONDAY;
+        #firstDayOfWeek = Days.MONDAY;
 
         #hourCycle;
 
-        constructor( pLocale = DEFAULT_LOCALE, pOptions = {} )
+        #tokenFactory = TOKEN_FACTORY;
+
+        constructor( pLocale = DEFAULT_LOCALE, pOptions = DEFAULT_OPTIONS )
         {
             this.#locale = resolveLocale( pLocale );
 
-            this.#options = Object.assign( {}, pOptions || {} );
+            const localeOptions = { ...(this.getLocaleOptions( this.#locale ) || pOptions || {}) } || {};
+
+            this.#options = mergeOptions( localeOptions, pOptions, DEFAULT_OPTIONS );
 
             this.#monthNames = [].concat( this.#options?.monthNames || getMonthNames( this.#locale ) || MONTH_NAMES );
             this.#monthAbbreviations = [].concat( this.#options?.monthAbbreviations || getMonthAbbreviations( this.#locale ) || MONTH_NAMES_SHORT );
 
+            this.#datePartCollections.set( DATE_PARTS.MONTH, [this.#monthNames, this.#monthAbbreviations, MONTH_NAMES, MONTH_NAMES_SHORT] );
+
             this.#dayNames = [].concat( this.#options?.dayNames || getDayNames( this.#locale ) || DAY_NAMES );
             this.#dayAbbreviations = [].concat( this.#options?.dayAbbreviations || getDayAbbreviations( this.#locale ) || DAY_NAMES_SHORT );
             this.#dayLetters = [].concat( this.#options?.dayLetters || getDayLetters( this.#locale ) || DAY_LETTERS );
+
+            this.#datePartCollections.set( DATE_PARTS.DAY_OF_WEEK, [this.#dayNames, this.#dayAbbreviations, this.#dayLetters, DAY_NAMES, DAY_NAMES_SHORT, DAY_LETTERS] );
 
             this.#eras = [].concat( this.#options?.eras || getEras( this.#locale ) || ERAS );
 
@@ -1476,11 +1939,37 @@ const $scope = core?.$scope || constants?.$scope || function()
 
             this.#weekNumberingSystem = this.#options?.weekNumberingSystem || new ISO8601_WeekNumberingSystem();
 
-            this.#firstDayOfWeek = (DAYS.SUNDAY === this.#options.firstDayOfWeek || 7 === this.#options.firstDayOfWeek ? DAYS.SUNDAY : (this.#options.firstDayOfWeek || getFirstDayOfWeek( this.#locale ) || DAYS.MONDAY));
+            this.#firstDayOfWeek = (Days.SUNDAY === this.#options.firstDayOfWeek || 7 === this.#options.firstDayOfWeek ? Days.SUNDAY : (this.#options.firstDayOfWeek || getFirstDayOfWeek( this.#locale ) || Days.MONDAY));
 
             this.#weekNumberingSystem.firstDayOfWeek = this.#firstDayOfWeek;
 
             this.#hourCycle = this.#locale?.hourCycle;
+
+            this.#pivotYear = this.#options?.pivotYear || 75;
+
+            this.#tokenFactory = this.#options?.tokenFactory || TOKEN_FACTORY;
+        }
+
+        getLocaleOptions( pLocale = DEFAULT_LOCALE )
+        {
+            const locale = resolveLocale( pLocale );
+
+            if ( isSameLocale( DEFAULT_LOCALE, locale ) )
+            {
+                return {};
+            }
+
+            return {
+                monthNames: getMonthNames( locale ),
+                monthAbbreviations: getMonthAbbreviations( locale ),
+                dayNames: getDayNames( locale ),
+                dayAbbreviations: getDayAbbreviations( locale ),
+                dayLetters: getDayLetters( locale ),
+                eras: getEras( locale ),
+                amString: asArray( getAmPmStrings( locale ) )[0],
+                pmString: asArray( getAmPmStrings( locale ) )[1],
+                firstDayOfWeek: getFirstDayOfWeek( locale )
+            };
         }
 
         static get [Symbol.species]()
@@ -1488,21 +1977,21 @@ const $scope = core?.$scope || constants?.$scope || function()
             return this;
         }
 
-        cloneForLocale( pLocale )
-        {
-            let locale = resolveLocale( pLocale || this.#locale ) || this.#locale;
-
-            if ( locale?.baseName !== this.locale?.baseName )
-            {
-                return new TokenSet( locale, this.options );
-            }
-
-            return this;
-        }
-
         get locale()
         {
             return lock( resolveLocale( this.#locale ) || DEFAULT_LOCALE );
+        }
+
+        cloneForLocale( pLocale )
+        {
+            let locale = resolveLocale( pLocale || this.locale ) || this.locale;
+
+            return new TokenSet( locale, this.options ) || this;
+        }
+
+        clone()
+        {
+            return this.cloneForLocale( this.locale );
         }
 
         get options()
@@ -1555,6 +2044,11 @@ const $scope = core?.$scope || constants?.$scope || function()
             return this.#pmString || getAmPmStrings( this.locale )[1] || "PM";
         }
 
+        get pivotYear()
+        {
+            return this.#pivotYear;
+        }
+
         get weekNumberingSystem()
         {
             return lock( this.#weekNumberingSystem || new ISO8601_WeekNumberingSystem( this.firstDayOfWeek ) );
@@ -1575,119 +2069,33 @@ const $scope = core?.$scope || constants?.$scope || function()
             return lock( SUPPORTED_TOKENS );
         }
 
-        getIndexOf( pUnit, pValue )
+        get datePartCollections()
+        {
+            return lock( new Map( this.#datePartCollections ) );
+        }
+
+        getIndexOf( pDatePart, pValue )
         {
             let index = -1;
 
             const value = asString( pValue );
 
-            switch ( pUnit )
+            const datePartCollections = this.datePartCollections;
+
+            const arrays = asArray( datePartCollections.get( pDatePart ) );
+
+            for( const arr of arrays )
             {
-                case UNITS.MONTH:
-                    for( let i = 0; i < 4 && index < 0; i++ )
-                    {
-                        switch ( i )
-                        {
-                            case 0:
-                                index = this.monthNames.indexOf( value );
-
-                                if ( index < 0 )
-                                {
-                                    index = this.monthNames.map( e => lcase( e ) ).indexOf( lcase( value ) );
-                                }
-
-                                break;
-
-                            case 1:
-                                index = this.monthAbbreviations.indexOf( value );
-
-                                if ( index < 0 )
-                                {
-                                    index = this.monthAbbreviations.map( e => lcase( e ) ).indexOf( lcase( value ) );
-                                }
-                                break;
-
-                            case 2:
-                                index = MONTH_NAMES.indexOf( value );
-
-                                if ( index < 0 )
-                                {
-                                    index = MONTH_NAMES.map( e => lcase( e ) ).indexOf( lcase( value ) );
-                                }
-                                break;
-
-                            case 3:
-                                index = MONTH_NAMES_SHORT.indexOf( value );
-                                if ( index < 0 )
-                                {
-                                    index = MONTH_NAMES_SHORT.map( e => lcase( e ) ).indexOf( lcase( value ) );
-                                }
-                                break;
-
-                            default:
-                                break;
-                        }
-                    }
+                index = arr.indexOf( value );
+                if ( index >= 0 )
+                {
                     break;
-
-                case UNITS.DAY_OF_WEEK:
-                    for( let i = 0; i < 6 && index < 0; i++ )
-                    {
-                        switch ( i )
-                        {
-                            case 0:
-                                index = this.dayNames.indexOf( value );
-                                if ( index < 0 )
-                                {
-                                    index = this.dayNames.map( e => lcase( e ) ).indexOf( lcase( value ) );
-                                }
-                                break;
-
-                            case 1:
-                                index = this.dayAbbreviations.indexOf( value );
-                                if ( index < 0 )
-                                {
-                                    index = this.dayAbbreviations.map( e => lcase( e ) ).indexOf( lcase( value ) );
-                                }
-                                break;
-
-                            case 2:
-                                index = this.dayLetters.indexOf( value );
-                                if ( index < 0 )
-                                {
-                                    index = this.dayLetters.map( e => lcase( e ) ).indexOf( lcase( value ) );
-                                }
-                                break;
-
-                            case 3:
-                                index = DAY_NAMES.indexOf( value );
-                                if ( index < 0 )
-                                {
-                                    index = DAY_NAMES.map( e => lcase( e ) ).indexOf( lcase( value ) );
-                                }
-                                break;
-
-                            case 4:
-                                index = DAY_NAMES_SHORT.indexOf( value );
-                                if ( index < 0 )
-                                {
-                                    index = DAY_NAMES_SHORT.map( e => lcase( e ) ).indexOf( lcase( value ) );
-                                }
-                                break;
-
-                            case 5:
-                                index = DAY_LETTERS.indexOf( value );
-                                if ( index < 0 )
-                                {
-                                    index = DAY_LETTERS.map( e => lcase( e ) ).indexOf( lcase( value ) );
-                                }
-                                break;
-
-                            default:
-                                break;
-                        }
-                    }
+                }
+                index = arr.map( e => lcase( e ) ).indexOf( lcase( value ) );
+                if ( index >= 0 )
+                {
                     break;
+                }
             }
 
             return index;
@@ -1695,91 +2103,45 @@ const $scope = core?.$scope || constants?.$scope || function()
 
         getMonthNumber( pString )
         {
-            return this.getIndexOf( UNITS.MONTH, pString );
+            return this.getIndexOf( DATE_PARTS.MONTH, pString );
         }
 
         getDayNumber( pString )
         {
-            return this.getIndexOf( UNITS.DAY_OF_WEEK, pString );
+            return this.getIndexOf( DATE_PARTS.DAY_OF_WEEK, pString );
+        }
+
+        get tokenFactory()
+        {
+            return this.#tokenFactory || TOKEN_FACTORY;
         }
 
         getToken( pCharacters )
         {
-            let char = asString( pCharacters ).slice( 0, 1 );
+            let token = null;
 
-            if ( !SUPPORTED_TOKENS.includes( char ) )
+            const firstChar = asString( pCharacters ).slice( 0, 1 );
+
+            if ( SUPPORTED_TOKENS.includes( firstChar ) )
             {
-                return new TokenLiteral( pCharacters );
+                const factory = this.tokenFactory || TOKEN_FACTORY;
+
+                const tokenBuilder = factory[firstChar];
+
+                if ( tokenBuilder )
+                {
+                    token = tokenBuilder( pCharacters, this );
+                }
             }
 
-            switch ( char )
+            if ( null === token || isNull( token ) )
             {
-                case "G":
-                    return new TokenEra( pCharacters, this.eras );
-
-                case "y":
-                case "Y":
-                    return new TokenYear( pCharacters );
-
-                case "M":
-                case "L":
-                    return new TokenMonth( pCharacters, this.monthNames, this.monthAbbreviations );
-
-                case "w":
-                case "W":
-                    return new TokenWeek( pCharacters, this.weekNumberingSystem, this.firstDayOfWeek );
-
-                case "D":
-                    return new TokenDayInYear( pCharacters );
-
-                case "d":
-                    return new TokenMonthDay( pCharacters );
-
-                case "F":
-                    return new TokenOccurrenceOfDayInMonth( pCharacters );
-
-                case "E":
-                    return new TokenDayName( pCharacters, this.dayNames, this.dayAbbreviations, this.dayLetters );
-
-                case "u":
-                    return new TokenDayNumber( pCharacters );
-
-                case "a":
-                    return new TokenAmPm( pCharacters, this.amString, this.pmString );
-
-                case "H":
-                    return new TokenHour( pCharacters, 0, 23 );
-
-                case "h":
-                    return new TokenHour( pCharacters, 1, 12 );
-
-                case "K":
-                    return new TokenHour( pCharacters, 0, 11 );
-
-                case "k":
-                    return new TokenHour( pCharacters, 1, 24 );
-
-                case "m":
-                    return new TokenMinute( pCharacters );
-
-                case "s":
-                    return new TokenSecond( pCharacters );
-
-                case "S":
-                    return new TokenMillisecond( pCharacters );
-
-                case "z":
-                    break;
-
-                case "Z":
-                    break;
-
-                case "X":
-                    break;
-
-                default:
-                    return new TokenLiteral( pCharacters );
+                token = new TokenLiteral( pCharacters, REPETITION_RULES.NONE, this );
             }
+
+            token.parentSet = this;
+
+            return token;
         }
 
         fromPattern( pFormat )
@@ -1883,20 +2245,20 @@ const $scope = core?.$scope || constants?.$scope || function()
 
                 if ( left.characters.length > 2 || ["E"].includes( left.characters[0] ) || ["h", "H", "K", "k", "G", "a"].includes( right.characters[0] ) )
                 {
-                    results.push( new TokenLiteral( constants._spc ) );
+                    results.push( new TokenLiteral( _spc ) );
                 }
                 else if ( ["L", "M", "D", "d", "y"].includes( left.characters[0] ) )
                 {
                     if ( ["L", "M", "D", "d", "y"].includes( right.characters[0] ) )
                     {
-                        results.push( new TokenLiteral( constants._slash ) );
+                        results.push( new TokenLiteral( _slash ) );
                     }
                 }
                 else if ( ["h", "H", "K", "k", "m", "s", "S"].includes( left.characters[0] ) )
                 {
                     if ( ["h", "H", "K", "k", "m", "s", "S"].includes( right.characters[0] ) )
                     {
-                        results.push( new TokenLiteral( constants._colon ) );
+                        results.push( new TokenLiteral( _colon ) );
                     }
                 }
             }
@@ -1968,7 +2330,9 @@ const $scope = core?.$scope || constants?.$scope || function()
             {
                 return new TokenSet( pLocale, pOptions );
             },
-            DateConstants: dateConstants
+            DateConstants: dateConstants,
+            DATE_PARTS,
+            merge
         };
 
     mod = modulePrototype.extend( mod );

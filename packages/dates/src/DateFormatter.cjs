@@ -5,18 +5,19 @@
  * This module exposes methods for formatting Date objects as strings.
  */
 
-const core = require( "../../core/src/CoreUtils.cjs" );
+const core = require( "@toolbocks/core" );
 
 const { constants, typeUtils, stringUtils, arrayUtils, localeUtils } = core;
 
 const tokenSetUtils = require( "./DateFormatTokenSet.cjs" );
 
-const { _ud = "undefined" } = constants;
-
-const $scope = core?.$scope || constants?.$scope || function()
-{
-    return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-};
+const {
+    _ud = "undefined",
+    $scope = core?.$scope || constants?.$scope || function()
+    {
+        return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
+    }
+} = constants;
 
 (function exposeModule()
 {
@@ -36,20 +37,17 @@ const $scope = core?.$scope || constants?.$scope || function()
             localeUtils
         };
 
-    const { _mt_str, lock, classes } = constants;
+    const { _mt_str, _mt_chr, lock, classes } = constants;
 
-    const { ModuleEvent, ModulePrototype } = classes;
-
-    if ( _ud === typeof CustomEvent )
-    {
-        CustomEvent = ModuleEvent;
-    }
+    const { ModulePrototype } = classes;
 
     const modulePrototype = new ModulePrototype( "DateFormatter", INTERNAL_NAME );
 
-    const { isNull, isDate, isNumber, isString, isObject } = typeUtils;
+    const { isNull, isDate, isNumeric, isString, isArray, isObject, isNonNullObject } = typeUtils;
 
-    const { asString } = stringUtils;
+    const { asString, asInt } = stringUtils;
+
+    const { asArray, includesAny } = arrayUtils;
 
     const { classes: TokenSetClasses, getDefaultTokenSet, SUPPORTED_INTL_OPTIONS } = tokenSetUtils;
 
@@ -63,10 +61,7 @@ const $scope = core?.$scope || constants?.$scope || function()
 
     const DEFAULT_FORMAT = "MM/dd/yyyy hh:mm:ss";
 
-    const resolveDate = function( pDate )
-    {
-        return isDate( pDate ) ? pDate : isNumber( pDate ) ? new Date( pDate ) : new Date();
-    };
+    const resolveDate = ( pDate ) => isDate( pDate ) ? pDate : isNumeric( pDate ) ? new Date( asInt( pDate ) ) : new Date();
 
     class DateFormatter
     {
@@ -80,15 +75,21 @@ const $scope = core?.$scope || constants?.$scope || function()
 
         constructor( pFormat = DEFAULT_FORMAT, pLocale = DEFAULT_LOCALE, pTokenSet = DEFAULT_TOKEN_SET )
         {
-            this.#locale = lock( resolveLocale( pLocale ) );
+            this.#locale = lock( resolveLocale( pLocale, pTokenSet ) );
 
-            this.#tokenSet = lock( (pTokenSet instanceof TokenSet) ? pTokenSet : getDefaultTokenSet( resolveLocale( pLocale ) ) );
+            this.#tokenSet = lock( (pTokenSet instanceof TokenSet) ? pTokenSet : getDefaultTokenSet( this.#locale ) );
 
-            this.#pattern = isString( pFormat ) ? asString( pFormat ) : isObject( pFormat ) ? null : DEFAULT_FORMAT;
+            this.#pattern = isString( pFormat ) ? asString( pFormat ) : isNonNullObject( pFormat ) ? pFormat?.pattern : DEFAULT_FORMAT;
 
-            this.#options = isString( pFormat ) ? null : isObject( pFormat ) ? Object.assign( {}, pFormat ) : null;
+            this.#options = isString( pFormat ) ?
+                { pattern: pFormat, locale: this.#locale, tokenSet: this.#tokenSet } :
+                            (isNonNullObject( pFormat ) ? (isArray( pFormat ) ? [...pFormat] : { ...pFormat }) :
+                                { pattern: DEFAULT_FORMAT, locale: this.#locale, tokenSet: this.#tokenSet });
 
-            this.#useIntlDateFormat = isObject( pFormat ) && (arrayUtils.includesAny( Object.keys( pFormat ), ["dateStyle", "timeStyle"] ) || arrayUtils.includesAny( Object.keys( pFormat ), SUPPORTED_INTL_OPTIONS ));
+            this.#useIntlDateFormat = !isString( pFormat ) &&
+                                      isNonNullObject( pFormat ) &&
+                                      (includesAny( Object.keys( pFormat ),
+                                                    ["dateStyle", "timeStyle", ...SUPPORTED_INTL_OPTIONS] ));
         }
 
         static get [Symbol.species]()
@@ -128,7 +129,7 @@ const $scope = core?.$scope || constants?.$scope || function()
 
             const characters = tokens.map( token => token.characters );
 
-            return characters.join( constants._mt_chr );
+            return characters.join( _mt_chr );
         }
 
         /**
@@ -185,9 +186,9 @@ const $scope = core?.$scope || constants?.$scope || function()
 
         processFormat( pFormat, pTokenSet )
         {
-            const pattern = pFormat || this.pattern;
+            const pattern = (isString( pFormat ) ? pFormat || this.pattern : (isNonNullObject( pFormat ) ? pFormat?.pattern || this.pattern : _mt_str)) || this.pattern;
 
-            let arr = (asString( pattern ) || DEFAULT_FORMAT).split( constants._mt_chr );
+            let arr = (asString( pattern ) || DEFAULT_FORMAT).split( _mt_chr );
 
             const tokenSet = this.resolveTokenSet( pTokenSet );
 
@@ -230,7 +231,7 @@ const $scope = core?.$scope || constants?.$scope || function()
 
                 format = format.map( e => e.format( date ) );
 
-                return format.join( constants._mt_str );
+                return format.join( _mt_str );
             }
 
             if ( isObject( this.options ) )

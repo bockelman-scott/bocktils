@@ -5,13 +5,13 @@
  * This module exposes methods for parsing strings as Date objects.
  */
 
-const utils = require( "../../core/src/CoreUtils.cjs" );
+const core = require( "@toolbocks/core" );
 
 /**
  * Establish separate constants for each of the common utilities imported
  * @see ../src/CoreUtils.cjs
  */
-const { constants, typeUtils, stringUtils, arrayUtils, localeUtils } = utils;
+const { constants, typeUtils, stringUtils, arrayUtils, localeUtils } = core;
 
 const dateUtils = require( "./DateUtils.cjs" );
 
@@ -19,12 +19,14 @@ const tokenSetUtils = require( "./DateFormatTokenSet.cjs" );
 
 const dateFormatUtils = require( "./DateFormatter.cjs" );
 
-const { _ud = "undefined" } = constants;
+const {
+    _ud = "undefined",
+    $scope = core?.$scope || constants?.$scope || function()
+    {
+        return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
+    }
+} = constants;
 
-const $scope = utils?.$scope || constants?.$scope || function()
-{
-    return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-};
 
 (function exposeModule()
 {
@@ -45,26 +47,38 @@ const $scope = utils?.$scope || constants?.$scope || function()
             dateFormatUtils
         };
 
-    const { _mt_str, classes } = constants;
+    const { _mt_str, _str, _num, _obj, _fun, _underscore, _colon, mergeOptions, classes } = constants;
 
-    const { ModuleEvent, ModulePrototype } = classes;
+    const { ModulePrototype } = classes;
 
-    if ( _ud === typeof CustomEvent )
-    {
-        CustomEvent = ModuleEvent;
-    }
+    const {
+        isNull,
+        isString,
+        isDate,
+        isNumber,
+        isNumeric,
+        isNanOrInfinite,
+        isArray,
+        isNonNullObject,
+        firstMatchingType,
+        clamp
+    } = typeUtils;
 
-    const { isString, isDate, isNumber, isObject, isNull, isArray } = typeUtils;
+    const { asInt, asFloat, asString, lcase, isBlank, toUnixPath } = stringUtils;
 
-    const { asInt, asString, lcase, isBlank } = stringUtils;
+    const { asArray, flatArgs, includesAny } = arrayUtils;
 
-    const asArray = arrayUtils.asArray;
+    const { resolveLocale, isSameLocale } = localeUtils;
 
-    const { resolveLocale, DEFAULT_LOCALE_STRING } = localeUtils;
+    const {
+        DATE_PARTS,
+        DateBuffer,
+        numDaysInMonth,
+        calculateNthOccurrenceOfDay,
+        merge = constants.merge
+    } = dateUtils;
 
-    const { calculateNthOccurrenceOfDay } = dateUtils;
-
-    const { classes: TokenSetClasses, getDefaultTokenSet } = tokenSetUtils;
+    const { classes: TokenSetClasses, getDefaultTokenSet, SUPPORTED_INTL_OPTIONS } = tokenSetUtils;
 
     const { TokenSet, TokenLiteral } = TokenSetClasses;
 
@@ -75,6 +89,287 @@ const $scope = utils?.$scope || constants?.$scope || function()
     const modName = "DateParser";
 
     const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
+
+    const resolveFormatter = function( pFormat, pLocale, pOptions )
+    {
+        const formatter = firstMatchingType( DateFormatter, pFormat, pLocale, pOptions );
+
+        if ( isNull( formatter ) )
+        {
+            if ( isNonNullObject( pFormat ) && (includesAny( Object.keys( pFormat ), ["dateStyle", "timeStyle", ...SUPPORTED_INTL_OPTIONS] )) )
+            {
+                return new DateFormatter( pFormat || pOptions, resolveLocale( pLocale, pOptions, pFormat ) );
+            }
+        }
+
+        return formatter || new DateFormatter( isString( pFormat ) ? pFormat : pFormat?.pattern || pOptions?.pattern || (isString( pOptions ) ? pOptions : null), resolveLocale( pLocale, pOptions, pFormat ) );
+    };
+
+    const resolveOptions = function( ...pOptions )
+    {
+        let options = null;
+
+        let candidates = [...(pOptions || [{}])].filter( e => isNonNullObject( e ) );
+
+        for( const candidate of candidates )
+        {
+            options = (candidate instanceof DateFormatter) ? candidate.options || candidate : candidate;
+            if ( isNonNullObject( options ) && Object.keys( options ).includes( "locale" ) )
+            {
+                break;
+            }
+        }
+
+        return options || {};
+    };
+
+    const resolveFormatPattern = function( ...pFormat )
+    {
+        let candidates = flatArgs( ...pFormat ).filter( e => isString( e ) || isNonNullObject( e ) );
+
+        let pattern = _mt_str;
+
+        for( const candidate of candidates )
+        {
+            switch ( typeof candidate )
+            {
+                case _str:
+                case _num:
+                    pattern = asString( candidate );
+                    break;
+
+                case _obj:
+                    pattern = candidate?.pattern;
+                    break;
+            }
+
+            if ( !isBlank( pattern ) )
+            {
+                break;
+            }
+        }
+
+        return pattern;
+    };
+
+    const DEFAULT_TIME_ZONE_DATA_LOCATION = "../time_zone_data/US-TimeZones.properties";
+
+    class TimeChange
+    {
+        #year;
+        #date;
+
+        #delta;
+        #utcOffset;
+
+        constructor( pYear, pDate, pDelta, pUtcOffset )
+        {
+
+        }
+    }
+
+    class TimeZone
+    {
+        #name;
+        #abbreviation;
+        #utcOffset;
+        #localOffset;
+
+        #timeChanges = {};
+
+        constructor( pName, pAbbreviation, pUtcOffset, pLocalOffset, pTimeChanges )
+        {
+            if ( arguments.length < 2 )
+            {
+                const timeZone = TimeZone.parse( pName );
+
+                this.#name = timeZone.#name;
+                this.#abbreviation = timeZone.#abbreviation;
+                this.#utcOffset = timeZone.#utcOffset;
+                this.#localOffset = timeZone.#localOffset;
+                this.#timeChanges = isNonNullObject( timeZone.#timeChanges ) ? timeZone.#timeChanges : {};
+            }
+            else
+            {
+                this.#name = asString( pName, true );
+                this.#abbreviation = asString( pAbbreviation, true );
+                this.#utcOffset = asInt( pUtcOffset );
+                this.#localOffset = asInt( pLocalOffset );
+                this.#timeChanges = isNonNullObject( pTimeChanges ) ? pTimeChanges : {};
+            }
+        }
+
+        get regExp()
+        {
+            return rxTz();
+        }
+
+        static parseDateOrString( pDateOrString )
+        {
+            const str = asString( isString( pDateOrString ) ? asString( pDateOrString, true ) : isDate( pDateOrString ) ? resolveDate( pDateOrString ).toString() : _mt_str, true );
+
+            const date = resolveDate( pDateOrString ) || Now();
+
+            let dateString = isDate( date ) ? date.toString() : str;
+
+            let matches = rxTz().exec( str ) || rxTz().exec( dateString );
+
+            if ( null === matches || matches.length < 2 )
+            {
+                matches = rxTz().exec( dateString ) || rxTz().exec( str );
+            }
+
+            return matches;
+        }
+
+        static parse( pDateOrString )
+        {
+            let matches = isValidDateOrNumeric( pDateOrString ) || isString( pDateOrString ) ? this.parseDateOrString( pDateOrString ) : isArray( pDateOrString ) || isLikeArray( pDateOrString ) ? pDateOrString : [];
+
+            if ( null !== matches && matches.length > 0 )
+            {
+                const matched = asString( matches[0], true ) || _mt_str;
+
+                const gmtPhrase = matches.length > 1 ? matches[1] : asString( matched, true );
+
+                const gmt = matches.length > 2 ? matches[2] : ucase( asString( matched, true ).replace( /[\d:;+-]/g, _mt_str ) );
+
+                const gmtOperator = matches.length > 3 ? matches[3] : matched;
+
+                const gmtHours = matches.length > 4 ? matches[4] : asInt( leftOf( rightOf( asString( matched, true ), (gmtOperator || _hyphen) ), _colon ).replace( /\D+/g, _mt_str ).replace( /^0+/, _mt_str ) );
+
+                const gmtMinutes = matches.length > 5 ? matches[5] : asInt( rightOfLast( asString( matched, true ), _colon ).replace( /\D+/g, _mt_str ).replace( /^0+/, _mt_str ) );
+
+                const tzPhrase = matches.length > 6 ? matches[6] || matches[7] : asString( matched, true );
+
+                let gmtOffset = asInt( gmtHours ) + gmtMinutes > 0 ? asInt( 60 / gmtMinutes ) : 0;
+
+                if ( ([_minus, _hyphen].includes( gmtOperator )) )
+                {
+                    gmtOffset = -1 * gmtOffset;
+                }
+
+                let localOffset = (Now().getTimezoneOffset() / 60) - gmtOffset;
+
+                return new TimeZone( tzPhrase, gmtPhrase, gmtOffset, localOffset );
+            }
+        }
+
+        calculateTimeChanges( pTimezone )
+        {
+
+            return {};
+        }
+
+        static loadTimeZoneDataFromJson( pJson )
+        {
+            const json = JSON.parse( pJson );
+            // TimeZone.DATA = merge( json, TimeZone.DATA );
+
+        }
+
+        static loadTimeZoneDataFromProperties( pContents )
+        {
+            const lines = asString( pContents, true ).split( "\n" ).map( line => line.trim() ).filter( line => !isBlank( line ) && !line.startsWith( "#" ) );
+
+            for( const line of lines )
+            {
+                let entry = asString( line, true );
+                if ( !isBlank( entry ) )
+                {
+                    const kv = entry.split( "=" );
+
+                    let key = asString( kv[0], true );
+                    let value = asString( kv[1] || _mt_str, true );
+
+                    const parts = value.split( "|" );
+
+                    const abbr = parts[0];
+
+                    const utcOffset = asString( parts[1], true ).split( _colon );
+                    const utcOffsetHours = asInt( utcOffset[0] );
+                    const utcOffsetMinutes = asInt( utcOffset[1] );
+
+                    TimeZone.DATA[key.replaceAll( / /g, _underscore )] =
+                        {
+                            abbr,
+                            utcOffset: utcOffsetHours + _colon + utcOffsetMinutes,
+                            utcOffsetHours,
+                            utcOffsetMinutes
+                        };
+                }
+            }
+
+            return TimeZone.DATA;
+        }
+
+        static async fetchTimeZoneData( pPath )
+        {
+            let dataLocation = asString( pPath, true );
+
+            let contents = _mt_str;
+
+            const executionEnvironment = modulePrototype.executionEnvironment;
+
+            if ( /https?:\/\//.test( dataLocation ) )
+            {
+                const response = await fetch( dataLocation );
+                contents = await response.text();
+            }
+            else
+            {
+                let currentDirectory;
+
+                /*## environment-specific:node start ##*/
+                if ( executionEnvironment.isNode() )
+                {
+                    const fsAsync = require( "node:fs/promises" );
+                    const path = require( "node:path" );
+
+                    currentDirectory = path.dirname( __filename );
+
+                    let filePath = path.resolve( currentDirectory, toUnixPath( dataLocation ) );
+
+                    contents = asString( await fsAsync.readFile( filePath, { encoding: "utf-8" } ), true );
+                }
+                /*## environment-specific:node end ##*/
+                else if ( executionEnvironment.isDeno() )
+                {
+                    // TODO
+                }
+            }
+
+            return contents;
+        }
+
+        static async loadTimeZoneData( pPath )
+        {
+            let dataLocation = asString( pPath, true );
+
+            if ( isBlank( dataLocation ) )
+            {
+                dataLocation = DEFAULT_TIME_ZONE_DATA_LOCATION;
+            }
+
+            let contents = await TimeZone.fetchTimeZoneData( dataLocation );
+
+            if ( isString( contents ) && !isBlank( contents ) )
+            {
+                if ( contents.startsWith( "{" ) )
+                {
+                    TimeZone.loadTimeZoneDataFromJson( contents );
+                }
+                else
+                {
+                    TimeZone.loadTimeZoneDataFromProperties( contents );
+                }
+            }
+
+            return TimeZone.DATA;
+        }
+    }
+
+    TimeZone.DATA = {};
 
     const deriveFormat = function( pDateString, pLocale )
     {
@@ -101,74 +396,43 @@ const $scope = utils?.$scope || constants?.$scope || function()
         /**
          * Creates an instance of this class to parse strings as numbers.
          *
-         * @param pFormat {string|object} can be either a string defining the expected format of dates to be parsed
-         *                                or an object defining the options of an instance of Intl.DateTimeFormat
-         *                                that would produce values parseable by this instance of DateParser
+         * @param {string|DateFormatter|object} pFormat can be either a string defining the expected format
+         *                                              of dates to be parsed
          *
-         * @param pLocale {Intl.Locale|string|DateFormatter} can be either a locale string, an Intl.Locale, or an instance of DateFormatter
-         * @param pTokenSet {TokenSet} (optional) an instance of TokenSet defining the format pattern symbols used in the format argument
-         * @param pOptions {object|DateFormatter} can be either an object describing DateFormatter options or an instance of DateFormatter
+         *                                              or an instance of DateFormatter
+         *
+         *                                              or an object defining the options
+         *                                              of an instance of Intl.DateTimeFormat
+         *                                              that would produce values parseable
+         *                                              by this instance of DateParser
+         *
+         * @param {Intl.Locale|string|DateFormatter|{locale:(Intl.Locale|string)}} pLocale can be either a locale string,
+         *                                                                                 an Intl.Locale,
+         *                                                                                 an instance of DateFormatter,
+         *                                                                                 or an object
+         *                                                                                 with a locale property
+         *
+         * @param {TokenSet} [pTokenSet=DEFAULT_TOKEN_SET] an instance of TokenSet
+         *                                                 defining the format pattern symbols
+         *                                                 used in the format argument
+         *
+         * @param {object|DateFormatter} pOptions can be either an object describing DateFormatter options
+         *                                        or an instance of DateFormatter
          */
         constructor( pFormat, pLocale, pTokenSet, pOptions )
         {
-            if ( isString( pFormat ) )
-            {
-                this.#pattern = pFormat;
-            }
-            else if ( isObject( pFormat ) )
-            {
-                if ( pFormat instanceof DateFormatter )
-                {
-                    this.#dateFormatter = pFormat;
-                    this.#options = Object.assign( {}, this.#dateFormatter.options || pOptions || {} );
-                    this.#locale = resolveLocale( this.#options?.locale || pLocale ) || this.#locale;
-                }
-                else
-                {
-                    this.#options = Object.assign( {}, pOptions || {} );
-                }
-            }
+            this.#dateFormatter = resolveFormatter( pFormat, pLocale, pOptions );
 
-            if ( pLocale instanceof Intl.Locale || isString( pLocale ) )
-            {
-                this.#locale = resolveLocale( pLocale );
-            }
-            else if ( pLocale instanceof DateFormatter )
-            {
-                this.#dateFormatter = pLocale;
-                this.#options = Object.assign( {}, this.#dateFormatter.options || pOptions || {} );
-                this.#locale = resolveLocale( this.#options?.locale );
-            }
+            this.#options = resolveOptions( pOptions, pFormat, pTokenSet, pLocale );
 
-            if ( pOptions && isObject( pOptions ) )
-            {
-                if ( pOptions instanceof DateFormatter )
-                {
-                    this.#dateFormatter = pOptions;
-                    this.#options = Object.assign( {}, this.#dateFormatter.options || pOptions || {} );
-                    this.#locale = resolveLocale( this.#options.locale || pLocale ) || this.#locale;
-                }
-                else
-                {
-                    this.#options = Object.assign( {}, pOptions || {} );
-                }
-            }
+            this.#pattern = resolveFormatPattern( pFormat, this.#dateFormatter, pOptions );
 
-            if ( isNull( this.#dateFormatter ) || !(this.#dateFormatter instanceof DateFormatter) )
-            {
-                this.#dateFormatter = new DateFormatter( this.#locale, this.#options || {} );
-            }
+            this.#locale = resolveLocale( pLocale, this.#options, pOptions, this.#dateFormatter, pTokenSet, pFormat );
 
-            this.#locale = (this.#locale instanceof Intl.Locale) ? this.#locale : this.#dateFormatter?.locale || resolveLocale( DEFAULT_LOCALE_STRING );
+            this.#tokenSet = (pTokenSet instanceof TokenSet) ? pTokenSet : this.#dateFormatter?.tokenSet || getDefaultTokenSet( this.#locale );
+            this.#tokenSet = !isSameLocale( this.#locale, this.#tokenSet.locale ) ? this.#tokenSet.cloneForLocale( this.#locale ) : this.#tokenSet;
 
-            this.#tokenSet = (pTokenSet instanceof TokenSet) ? pTokenSet : this.#dateFormatter?.tokenSet;
-
-            this.#tokenSet = (this.#tokenSet instanceof TokenSet) ? this.#tokenSet : getDefaultTokenSet( this.#locale );
-
-            if ( isNull( this.#options ) || !isObject( this.#options ) || Object.keys( this.#options ).length <= 0 )
-            {
-                this.#options = Object.assign( {}, this.#dateFormatter?.options || this.#tokenSet?.options || {} );
-            }
+            this.#options = mergeOptions( this.#options, this.#dateFormatter?.options, this.#tokenSet?.options, pOptions || {} );
         }
 
         static get [Symbol.species]()
@@ -178,12 +442,12 @@ const $scope = utils?.$scope || constants?.$scope || function()
 
         get locale()
         {
-            return resolveLocale( this.#locale || this.#dateFormatter?.locale );
+            return resolveLocale( this.#locale, this.#dateFormatter, this.#tokenSet, this.#options );
         }
 
         get options()
         {
-            return Object.assign( {}, this.#options || this.#dateFormatter?.options || {} );
+            return mergeOptions( {}, this.#options, this.#dateFormatter?.options || {}, this.#tokenSet?.options || {} );
         }
 
         get pattern()
@@ -196,12 +460,27 @@ const $scope = utils?.$scope || constants?.$scope || function()
             return this.#pattern;
         }
 
+        isPattern( pString )
+        {
+            if ( isString( pString ) && this.pattern === pString )
+            {
+                return true;
+            }
+
+            if ( isNumeric( pString ) )
+            {
+                return isNumber( this.pattern ) || !/\D/.test( this.pattern );
+            }
+
+            return false;
+        }
+
         get tokenSet()
         {
             this.#tokenSet = (this.#tokenSet instanceof TokenSet) ? this.#tokenSet : this.#dateFormatter?.tokenSet || getDefaultTokenSet( this.locale );
             this.#tokenSet = this.#tokenSet || getDefaultTokenSet( this.locale );
 
-            if ( this.locale?.baseName !== this.#tokenSet?.locale?.baseName )
+            if ( !isSameLocale( this.locale, this.#tokenSet?.locale ) )
             {
                 this.#tokenSet = this.#tokenSet.cloneForLocale( this.locale );
             }
@@ -217,18 +496,17 @@ const $scope = utils?.$scope || constants?.$scope || function()
         get dateFormatter()
         {
             this.#dateFormatter = !(this.#dateFormatter instanceof DateFormatter) ? new DateFormatter( (this.pattern || this.options), this.locale, this.tokenSet ) : this.#dateFormatter;
-
             return this.#dateFormatter;
         }
 
         get pivotYear()
         {
-            return Math.max( 0, asInt( this.#pivotYear ) );
+            return clamp( asInt( this.#pivotYear ), 0, 99 );
         }
 
         set pivotYear( pValue )
         {
-            this.#pivotYear = Math.max( 0, asInt( pValue ) );
+            this.#pivotYear = clamp( asInt( pValue ), 0, 99 );
         }
 
         isSupportedNumberingSystem( pNumberingSystem )
@@ -236,55 +514,6 @@ const $scope = utils?.$scope || constants?.$scope || function()
             return (isNull( pNumberingSystem ) || isBlank( pNumberingSystem ) || "latn" === lcase( pNumberingSystem ));
         }
 
-        /*
-
-         isPatternCompatibleWith( pString )
-         {
-         let s = _mt_str + asString( pString );
-
-         let rx = /(\d+|[^ \\\/.,:;-]+)([ \\\/.,:;-]*?)+/;
-
-         let elements = [];
-
-         let matches = rx.exec( s );
-
-         while ( null != matches && matches.length )
-         {
-         s = s.replace( new RegExp( "^" + matches[0] ), _mt_str );
-
-         elements.push( ...(matches.slice( 1 )) );
-
-         matches = rx.exec( s );
-         }
-
-         elements = elements.flat();
-
-         let rxString = _mt_str;
-
-         for( let i = 0, n = elements.length; i < n; i++ )
-         {
-         const elem = elements[i];
-
-         if ( /[\d+]/.test( elem ) )
-         {
-         rxString += "(y+|M{1,2}|L{1,2}|d+|D+|u+|h+|H+|k+|K+|m+|s+|S+)";
-         }
-         else if ( /[ \\\/.,:;-]+/.test( elem ) )
-         {
-         rxString += "([ \\\\\\/.,:;-]+)";
-         }
-         else if ( /\w+/.test( elem ) )
-         {
-         rxString += "(G+|E+|a+|M{3,}|L{3,})";
-         }
-         }
-
-         const regExp = new RegExp( rxString );
-
-         return (regExp.test( this.pattern ));
-         }
-
-         */
         getTokens( pPattern )
         {
             const format = isBlank( asString( pPattern ) ) ? this.pattern : asString( pPattern );
@@ -357,21 +586,12 @@ const $scope = utils?.$scope || constants?.$scope || function()
 
         parse( pString )
         {
-            if ( isDate( pString ) || isNumber( pString ) )
+            if ( isDate( pString ) || (isNumber( pString ) && !isNanOrInfinite( pString ) && !this.isPattern( pString )) )
             {
                 return new Date( pString );
             }
 
             const s = asString( pString );
-
-            /*
-             let compatible = this.isPatternCompatibleWith( s );
-
-             if ( !compatible )
-             {
-             console.warn( "Date String,", s, "does not seem to match specified format pattern:", this.pattern );
-             }
-             */
 
             const tokens = this.getTokens();
 
@@ -379,180 +599,70 @@ const $scope = utils?.$scope || constants?.$scope || function()
 
             const segments = this.getSegments( s, literals );
 
-            let year = -1;
-            let month = -1;
-            let dayOfMonth = -1;
-            let day = -1;
-            let hours = -1;
-            let minutes = -1;
-            let seconds = -1;
-            let milliseconds = -1;
-
-            let adjustHoursForPm = false;
-
-            function adjustHours( pHours )
-            {
-                let hrs = asInt( pHours );
-
-                if ( hrs >= 0 && hrs < 12 )
-                {
-                    hrs += 12;
-                }
-
-                return Math.min( 23, hrs );
-            }
+            let buffer = new DateBuffer();
 
             for( let i = 0, n = segments.length; i < n; i++ )
             {
-                let num = -1;
-
-                let tokenLength = 1;
-
-                const token = tokens[i];
                 const segment = segments[i];
 
-                const tokenClass = typeUtils.getClassName( token );
+                const token = tokens[i] || this.tokenSet.getToken( segment ) || new TokenLiteral( segment );
 
-                switch ( tokenClass )
-                {
-                    case "TokenLiteral":
-                        break;
-
-                    case "TokenYear":
-                        num = asInt( segment );
-
-                        if ( num > 0 )
-                        {
-                            if ( num < 100 )
-                            {
-                                num += (num > this.pivotYear ? 1900 : 2000);
-                            }
-                        }
-
-                        year = num;
-
-                        break;
-
-                    case "TokenMonth":
-                        tokenLength = token.characters.length;
-                        if ( tokenLength > 2 )
-                        {
-                            month = Math.min( 11, Math.max( 0, this.getMonthNumber( segment ) ) );
-                        }
-                        else
-                        {
-                            month = Math.min( 11, Math.max( 0, asInt( segment.replace( /^0+/, _mt_str ) ) - 1 ) );
-                        }
-
-                        break;
-
-                    case "TokenMonthDay":
-
-                        dayOfMonth = asInt( segment.replace( /^0+/, _mt_str ) );
-
-                        break;
-
-                    case "TokenHour":
-                        const tokenCharacter = token.characters.slice( 0, 1 );
-
-                        switch ( tokenCharacter )
-                        {
-                            case "H":
-                                hours = asInt( segment.replace( /^0+/, _mt_str ) );
-                                break;
-                            // return new TokenHour( pCharacters, 0, 23 );
-
-                            case "h":
-                                num = asInt( segment.replace( /^0+/, _mt_str ) );
-                                num = 12 === num ? 0 : num > 12 ? num - 12 : num;
-                                hours = num;
-
-                                break;
-                            // return new TokenHour( pCharacters, 1, 12 );
-
-                            case "K":
-                                num = asInt( segment.replace( /^0+/, _mt_str ) );
-                                num = 12 === num ? 0 : num > 11 ? num - 12 : num;
-                                hours = num;
-
-                                break;
-                            // return new TokenHour( pCharacters, 0, 11 );
-
-                            case "k":
-                                num = asInt( segment.replace( /^0+/, _mt_str ) );
-                                num = 24 === num ? 0 : num;
-                                hours = num;
-
-                                break;
-                            // return new TokenHour( pCharacters, 1, 24 );
-
-                        }
-
-                        if ( adjustHoursForPm )
-                        {
-                            hours = adjustHours( hours );
-                            adjustHoursForPm = false;
-                        }
-
-                        break;
-
-                    case "TokenMinute":
-                        minutes = asInt( segment.replace( /^0+/, _mt_str ) );
-                        break;
-
-                    case "TokenSecond":
-                        seconds = asInt( segment.replace( /^0+/, _mt_str ) );
-                        break;
-
-                    case "TokenMillisecond":
-                        milliseconds = asInt( segment.replace( /^0+/, _mt_str ) );
-                        break;
-
-                    case "TokenAmPm":
-                        if ( asString( segment, true ) === asString( this.tokenSet.pmString, true ) )
-                        {
-                            if ( hours >= 0 && hours < 12 )
-                            {
-                                hours += 12;
-                            }
-                            else if ( hours < 0 )
-                            {
-                                adjustHoursForPm = true;
-                            }
-                        }
-
-                        break;
-
-                    case "TokenDayName":
-
-                        tokenLength = token.characters.length;
-                        if ( tokenLength > 2 )
-                        {
-                            day = Math.min( 6, Math.max( 0, this.getDayNumber( segment ) ) );
-                        }
-                        else
-                        {
-                            day = asInt( segment.replace( /^0+/, _mt_str ) );
-                        }
-
-                        break;
-                }
+                buffer = merge( (token.parse( segment, buffer ) || buffer), buffer );
             }
 
             const currentDate = new Date();
 
-            year = year < 0 ? currentDate.getFullYear() : year;
-            month = month < 0 ? currentDate.getMonth() : month;
-            dayOfMonth = dayOfMonth < 1 ? calculateNthOccurrenceOfDay( year, month, 0, (day < 0 ? currentDate.getDay() : day) ) : dayOfMonth;
+            let timeZone = buffer[DATE_PARTS.TIME_ZONE];
+            let utcOffset = buffer[DATE_PARTS.UTC_OFFSET];
 
-            hours = Math.min( 23, Math.max( 0, hours ) );
-            minutes = Math.min( 59, Math.max( 0, minutes ) );
-            seconds = Math.min( 59, Math.max( 0, seconds ) );
-            milliseconds = Math.min( 999, Math.max( 0, milliseconds ) );
+            let year = buffer[DATE_PARTS.YEAR];
+            (year === -1) ? currentDate.getFullYear() : year;
 
-            return new Date( year, month, dayOfMonth, hours, minutes, seconds, milliseconds );
+            let month = clamp( buffer[DATE_PARTS.MONTH], 0, 11 );
+
+            let dayOfWeek = buffer[DATE_PARTS.DAY_OF_WEEK];
+
+            let dayOfMonth = buffer[DATE_PARTS.DAY_OF_MONTH];
+            dayOfMonth = dayOfMonth < 1 ? calculateNthOccurrenceOfDay( year, month, 0, (dayOfWeek < 0 ? currentDate.getDay() : dayOfWeek) ) : dayOfMonth;
+
+            let hours = buffer[DATE_PARTS.HOUR];
+            let minutes = buffer[DATE_PARTS.MINUTE];
+            let seconds = buffer[DATE_PARTS.SECOND];
+            let milliseconds = buffer[DATE_PARTS.MILLISECOND];
+
+            let maxHour = clamp( buffer.maxHour, 23, 24 );
+
+            let adjustedForPm = buffer.adjustedForPm;
+            let adjustHoursForPm = buffer.adjustHoursForPm && !adjustedForPm;
+
+            if ( adjustHoursForPm )
+            {
+                hours += 12;
+
+                adjustedForPm = buffer.adjustedForPm = true;
+                adjustHoursForPm = buffer.adjustHoursForPm = false;
+            }
+
+            if ( hours > maxHour )
+            {
+                dayOfMonth += 1;
+                hours -= (maxHour - hours);
+            }
+
+            if ( dayOfMonth > numDaysInMonth( year, month ) )
+            {
+                dayOfMonth = 1;
+                month += 1;
+            }
+
+            if ( month > 11 )
+            {
+                year += 1;
+                month = 0;
+            }
+
+            return new Date( year, clamp( month, 0, 11 ), clamp( dayOfMonth, 1, 31 ), clamp( hours, 0, 23 ), clamp( minutes, 0, 59 ), clamp( seconds, 0, 59 ), clamp( milliseconds, 0, 999 ) );
         }
-
     }
 
     DateParser.fromDateFormatter = function( pDateFormatter )
@@ -578,8 +688,12 @@ const $scope = utils?.$scope || constants?.$scope || function()
             dependencies,
             classes:
                 {
+                    TimeChange,
+                    TimeZone,
                     DateParser
                 },
+            TimeChange,
+            TimeZone,
             DateParser,
             parse: function( pString, pFormat, pLocale, pTokenSet, pOptions )
             {

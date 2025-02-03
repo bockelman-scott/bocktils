@@ -4,7 +4,7 @@ const dateParserModule = require( "../src/DateParser.cjs" );
 
 const { constants } = core;
 
-const { DateParser } = dateParserModule;
+const { DateParser, TimeZone } = dateParserModule;
 
 describe( "DateParser", () =>
 {
@@ -228,5 +228,19 @@ describe( "DateParser", () =>
                 expect( results ).toEqual( expectedResults );
             }
         }
+    } );
+} );
+
+
+describe( "TimeZone", () =>
+{
+    test( "TimeZone.DATA can be loaded at runtime", async() =>
+    {
+        console.log( typeof TimeZone );
+
+        await TimeZone.loadTimeZoneData();
+
+        console.log( TimeZone.DATA );
+
     } );
 } );

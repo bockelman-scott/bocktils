@@ -2756,6 +2756,109 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    const lengthPriorityComparator = ( pLongestFirst ) => ( a, b ) =>
+    {
+        let comp = a.length - b.length;
+        return (comp === 0) ? a.localeCompare( b ) : pLongestFirst ? -comp : comp;
+    };
+
+    const DEFAULT_SUBSTRING_OPTIONS =
+        {
+            caseSensitive: true,
+            ignored: []
+        };
+
+    function findDuplicatedSubstrings( pStr, pOptions = DEFAULT_SUBSTRING_OPTIONS )
+    {
+        const options = populateOptions( pOptions, DEFAULT_SUBSTRING_OPTIONS );
+
+        const s = asString( isArray( pStr ) ? pStr.join( _mt_str ) : pStr );
+
+        const caseSensitive = options?.caseSensitive && (true !== options?.ignoreCase);
+
+        const ignored = options?.ignored || [];
+
+        let common = [];
+
+        for( let i = 0, n = s.length; i < n; i++ )
+        {
+            let j = i + 1;
+
+            let a = s.slice( i, i + 1 );
+
+            if ( ignored.includes( a ) || ignored.includes( a.slice( -1 ) ) )
+            {
+                continue;
+            }
+
+            let idx = caseSensitive ? s.indexOf( a, j ) : ucase( s ).indexOf( ucase( a ), j );
+
+            while ( idx >= 0 && ((i + a.length + 1) < n) )
+            {
+                common.push( a );
+
+                a = s.slice( i, Math.min( (i + a.length + 1), n ) );
+
+                if ( ignored.includes( a ) || ignored.includes( a.slice( -1 ) ) )
+                {
+                    break;
+                }
+
+                idx = caseSensitive ? s.indexOf( a, j ) : ucase( s ).indexOf( ucase( a ), j );
+            }
+        }
+
+        return [...(new Set( common ))].sort( lengthPriorityComparator( true ) );
+    }
+
+    function findCommonSubstrings( ...pStrs )
+    {
+        const common = [];
+
+        // filter out empty strings
+        let strings = [...(pStrs || [])].flat().map( asString ).filter( e => !isEmpty( e ) );
+
+        if ( strings.length < 1 )
+        {
+            return common;
+        }
+        else if ( strings.length < 2 )
+        {
+            return findDuplicatedSubstrings( strings[0] );
+        }
+
+        // sort strings by length, shortest string first
+        // because no common substring can be longer than the shortest complete string
+        strings = strings.sort( lengthPriorityComparator( false ) );
+
+        // keep track of the index of the current search string in each of the other strings
+
+        let indices = [];
+
+        let s = strings[0];
+
+        let a = _mt_str;
+
+        for( let i = 0, n = s.length; i < n && (i + a.length) < n; )
+        {
+            a = s.slice( i, Math.min( (i + a.length + 1), n ) );
+
+            indices = strings.map( e => e.indexOf( a ) );
+
+            if ( indices.every( e => e >= 0 ) )
+            {
+                common.push( a );
+            }
+            else
+            {
+                a = _mt_str;
+                i += 1;
+            }
+        }
+
+        return [...(new Set( common ))].sort( lengthPriorityComparator( true ) );
+    }
+
     let mod =
         {
             dependencies,
@@ -2817,6 +2920,8 @@ const $scope = constants?.$scope || function()
             uncapitalize,
             cartesian,
             repeat,
+            findDuplicatedSubstrings,
+            findCommonSubstrings,
             toUnixPath,
             isRelativePath,
             toAbsolutePath,

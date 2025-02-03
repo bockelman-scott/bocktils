@@ -4,6 +4,8 @@ const constants = require( "../src/Constants.cjs" );
 /** import the utilities we are testing */
 const stringUtils = require( "../src/StringUtils.cjs" );
 
+const { asString, findDuplicatedSubstrings, findCommonSubstrings } = stringUtils;
+
 const repoName = "bocktils";
 
 function testAsString( pStr, pTrim, pOptions )
@@ -11,7 +13,7 @@ function testAsString( pStr, pTrim, pOptions )
     Object.assign( this, constants );
     Object.assign( this, stringUtils );
 
-    return stringUtils.asString( pStr, pTrim, pOptions );
+    return asString( pStr, pTrim, pOptions );
 }
 
 let strings = ["abc", "abd", "bcd", "cbd", "dbc", "acb", "dogs", "cats", "lions", "lion", "cat", "Dog", "Cat", "ABC", "AbC", "CAB", "DDD", "CBD", "DBC", "ACb", "DOGS", "DoGs", "CATS", "cAtS", "   abc", "abc   ", "   ", "", "   CAB   "];
@@ -1805,3 +1807,60 @@ describe( "tidy is a supercharged function with many options", () =>
           } );
 } );
 
+describe( "findDuplicatedSubstrings", () =>
+{
+    test( "findDuplicatedSubstrings in a path or list", () =>
+    {
+        let s = "a/b/c/a/b/c/d/e/a/b/c";
+
+        let commonSubstrings = findDuplicatedSubstrings( s );
+
+        expect( commonSubstrings[0] ).toEqual( "/a/b/c" );
+        expect( commonSubstrings[1] ).toEqual( "a/b/c/" );
+
+        commonSubstrings = findDuplicatedSubstrings( s, { ignored: ["/"] } );
+
+        expect( commonSubstrings ).toEqual( ["a", "b", "c"] );
+
+        s = "apple,apples,applesauce,banana,snapple,band,bandaid,banana split,banana pudding,";
+
+        commonSubstrings = findDuplicatedSubstrings( s );
+
+        expect( commonSubstrings[0] ).toEqual( ",banana " );
+
+        commonSubstrings = findDuplicatedSubstrings( s, { ignored: [",", " "] } );
+
+        expect( commonSubstrings.slice( 0, 2 ) ).toEqual( ["apples", "banana"] );
+
+    } );
+
+    test( "findDuplicatedSubstrings without regard to case", () =>
+    {
+        let s = "a/b/c/A/B/c/d/e/a/b/C";
+
+        let commonSubstrings = findDuplicatedSubstrings( s );
+
+        expect( commonSubstrings[0] ).toEqual( "a/b/" );
+
+        commonSubstrings = findDuplicatedSubstrings( s, { ignoreCase: true } );
+
+        expect( commonSubstrings[0] ).toEqual( "/A/B/c" );
+        expect( commonSubstrings[1] ).toEqual( "a/b/c/" );
+    } );
+
+} );
+
+
+describe( "findCommonSubstrings", () =>
+{
+    test( "findCommonSubstrings in a set of strings", () =>
+    {
+        let strings = ["abcdefg", "bcde", "defghi"];
+
+        const commonSubstrings = findCommonSubstrings( strings );
+
+        expect( commonSubstrings ).toEqual( ["de", "d"] );
+
+
+    } );
+} );

@@ -61,7 +61,18 @@ const {
         classes
     } = constants;
 
-    const { isDefined, isNull, isString, isNumeric, isObject, isArray, isFunction, isClass, instanceOfAny } = typeUtils;
+    const {
+        isDefined,
+        isNull,
+        isString,
+        isNumeric,
+        isObject,
+        isArray,
+        isFunction,
+        isDate,
+        isClass,
+        instanceOfAny
+    } = typeUtils;
 
     const
         {
@@ -159,24 +170,39 @@ const {
     // Intl.Locale object representing the default locale
     const DEFAULT_LOCALE = new Intl.Locale( DEFAULT_LOCALE_STRING );
 
+    const isLocale = ( pValue ) => (pValue instanceof Intl.Locale) || (isString( pValue ) && !isBlank( pValue ) && (/^[A-Z]{2}$|^[A-Z]{2}(-[^\d\\\/ \s]+)+$/i).test( pValue ));
+
     /**
      * Returns an Intl.Locale object corresponding to the specified locale string or Intl.Locale
-     * @param pLocale {string|Intl.Locale} a string representing a Locale or an instance of Intl.Locale
-     * @returns {Readonly<Intl.Locale>} An Intl.Locale object corresponding to the specified locale string or Intl.Locale
+     * @param {...(string|Intl.Locale|{locale:(string|Intl.Locale)})} pLocales one or more strings representing a Locale
+     * or instances of Intl.Locale
+     * or an object with a locale property
+     * that is either a string representing a Locale
+     * or an Intl.Locale
+     *
+     * @returns {Readonly<Intl.Locale>} An Intl.Locale object corresponding to the first valid locale string or Intl.Locale specified
      */
-    const resolveLocale = function( pLocale )
+    const resolveLocale = function( ...pLocales )
     {
-        let locale;
+        let locale = null;
 
-        try
-        {
-            locale = (pLocale instanceof Intl.Locale) ? pLocale : (isString( pLocale ) && !isBlank( pLocale )) ? new Intl.Locale( pLocale.replace( /_/g, "-" ) ) : DEFAULT_LOCALE;
-        }
-        catch( ex )
-        {
-            modulePrototype.reportError( ex, (pLocale + " is not a supported locale specifier"), S_WARN, calculateErrorSourceName( modName, "resolveLocale" ), pLocale );
+        let locales = flatArgs( pLocales ).filter( e => !isNull( e ) && isLocale( e ) );
 
-            locale = DEFAULT_LOCALE;
+        for( let elem of locales )
+        {
+            try
+            {
+                locale = (elem instanceof Intl.Locale) ? elem : (isString( elem ) && !isBlank( elem )) ? new Intl.Locale( asString( elem ).replace( /_/g, "-" ).trim() ) : resolveLocale( elem?.locale );
+            }
+            catch( ex )
+            {
+                modulePrototype.reportError( ex, (elem + " is not a supported locale or locale specifier"), S_WARN, calculateErrorSourceName( modName, "resolveLocale" ), elem );
+            }
+
+            if ( locale instanceof Intl.Locale )
+            {
+                break;
+            }
         }
 
         return lock( locale || DEFAULT_LOCALE );
@@ -204,7 +230,7 @@ const {
      *
      * @param pLocaleA the first locale to compare to the second locale
      * @param pLocaleB the locale to compare to the first locale
-     * @param pMinimize (optional) specify true to compare only the language component  of the locales
+     * @param pMinimize (optional) specify true to compare only the language component of the locales
      * @returns {boolean} true if the specified locales represent the same Locale
      */
     function isSameLocale( pLocaleA, pLocaleB, pMinimize = false )
@@ -218,7 +244,7 @@ const {
             localeB = localeB.minimize();
         }
 
-        return localeA === localeB || localeA.baseName === localeB.baseName;
+        return localeA === localeB || localeA?.baseName === localeB?.baseName;
     }
 
     function isSameLanguage( pLocaleA, pLocaleB )
@@ -260,15 +286,21 @@ const {
         return getMonthDisplayValues( pLocale, FORMAT_LONG );
     };
 
+    const getMonthName = ( pDate, pLocale ) => isDate( pDate ) ? asArray( getMonthNames( resolveLocale( pLocale ) ) )[pDate.getMonth()] : isLocale( pDate ) ? getMonthNames( pDate, pLocale ) : _mt_str;
+
     const getMonthAbbreviations = function( pLocale )
     {
         return getMonthDisplayValues( pLocale, FORMAT_SHORT );
     };
 
+    const getMonthAbbr = ( pDate, pLocale ) => isDate( pDate ) ? asArray( getMonthAbbreviations( resolveLocale( pLocale ) ) )[pDate.getMonth()] : isLocale( pDate ) ? getMonthAbbreviations( pDate, pLocale ) : _mt_str;
+
     const getMonthLetters = function( pLocale )
     {
         return getMonthDisplayValues( pLocale, FORMAT_NARROW );
     };
+
+    const getMonthLtr = ( pDate, pLocale ) => isDate( pDate ) ? asArray( getMonthLetters( resolveLocale( pLocale ) ) )[pDate.getMonth()] : isLocale( pDate ) ? getMonthLetters( pDate, pLocale ) : _mt_str;
 
     const getDayDisplayValues = function( pLocale, pFormat )
     {
@@ -288,18 +320,24 @@ const {
 
     const getDayNames = function( pLocale )
     {
-        return getDayDisplayValues( pLocale, FORMAT_LONG );
+        return isDate( pLocale ) ? getDayName( pLocale ) : getDayDisplayValues( pLocale, FORMAT_LONG );
     };
+
+    const getDayName = ( pDate, pLocale ) => isDate( pDate ) ? asArray( getDayNames( resolveLocale( pLocale ) ) )[pDate.getDay()] : isLocale( pDate ) ? getDayNames( pDate, pLocale ) : _mt_str;
 
     const getDayAbbreviations = function( pLocale )
     {
         return getDayDisplayValues( pLocale, FORMAT_SHORT );
     };
 
+    const getDayAbbr = ( pDate, pLocale ) => isDate( pDate ) ? asArray( getDayAbbreviations( pLocale ) )[pDate.getDay()] : _mt_str;
+
     const getDayLetters = function( pLocale )
     {
         return getDayDisplayValues( pLocale, FORMAT_NARROW );
     };
+
+    const getDayLtr = ( pDate, pLocale ) => isDate( pDate ) ? asArray( getDayLetters( pLocale ) )[pDate.getDay()] : _mt_str;
 
     const getEras = function( pLocale )
     {
@@ -619,19 +657,26 @@ const {
                     TWO_DIGIT: FORMAT_2DIGIT,
                     NUMERIC: FORMAT_NUMERIC,
                 },
+            isLocale,
             resolveLocale,
             isDefaultLocale,
             isDefaultLanguage,
             isSameLocale,
             isSameLanguage,
             getMonthNames,
+            getNameOfMonth: getMonthName,
             getMonthAbbreviations,
+            getAbbrOfMonth: getMonthAbbr,
             getMonthShortNames: getMonthAbbreviations,
             getMonthLetters,
+            getMonthLtr,
             getDayNames,
+            getNameOfDay: getDayName,
             getDayAbbreviations,
+            getAbbrOfDay: getDayAbbr,
             getDayShortNames: getDayAbbreviations,
             getDayLetters,
+            getDayLtr,
             getEras,
             getAmPmStrings,
             getWeekData,

@@ -193,6 +193,7 @@ const $scope = constants?.$scope || function()
     }
     /*## environment-specific:node end ##*/
 
+    /*## environment-specific:deno start ##*/
     if ( executionEnvironment.isDeno() )
     {
         _deno = executionEnvironment.DenoGlobal;
@@ -207,6 +208,7 @@ const $scope = constants?.$scope || function()
             currentDirectory = path.dirname( __filename );
         }());
     }
+    /*## environment-specific:deno end ##*/
 
     if ( _ud === typeof path )
     {

@@ -4020,6 +4020,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             objectKeys,
             populateOptions,
             mergeOptions,
+            merge: mergeOptions,
             lock,
             deepFreeze,
             DEFAULT_COPY_OPTIONS,

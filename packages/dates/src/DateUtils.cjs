@@ -1,10 +1,10 @@
-const core = require( "../../core/src/CoreUtils.cjs" );
+const core = require( "@toolbocks/core" );
 
 /**
  * Establish separate constants for each of the utilities imported
  * @see ../src/CoreUtils.cjs
  */
-const { constants, typeUtils, stringUtils, arrayUtils } = core;
+const { constants, typeUtils, stringUtils, arrayUtils, localeUtils } = core;
 
 const {
     _ud = "undefined",
@@ -35,21 +35,58 @@ const {
     const {
         classes,
         _mt_str,
+        _spc,
+        _colon,
+        _slash,
+        _hyphen,
+        _minus,
+        _underscore,
         lock,
         populateOptions,
+        mergeOptions,
+        merge,
         IterationCap,
         IllegalArgumentError,
         no_op,
-        op_true,
         op_false,
-        objectEntries
+        objectEntries,
+        attemptMethod
     } = constants;
 
-    const { Result, isNull, isString, isDate, isNumber, isNumeric, isFunction, isValidDateInstance, clamp } = typeUtils;
+    const {
+        Result,
+        isNull,
+        isString,
+        isDate,
+        isNumber,
+        isNumeric,
+        isFunction,
+        isObject,
+        isNonNullObject,
+        isArray,
+        isLikeArray,
+        isValidDateOrNumeric,
+        isValidDateInstance,
+        clamp
+    } = typeUtils;
 
-    const { asString, asInt, toBool, ucase } = stringUtils;
+    const {
+        asString,
+        isBlank,
+        asInt,
+        asFloat,
+        toBool,
+        ucase,
+        leftOf,
+        rightOf,
+        leftOfLast,
+        rightOfLast,
+        toUnixPath
+    } = stringUtils;
 
     const { asArray, varargs, Filters } = arrayUtils;
+
+    const { resolveLocale, getNameOfDay, getAbbrOfDay, getNameOfMonth, getAbbrOfMonth } = localeUtils;
 
     const { ModulePrototype } = classes;
 
@@ -57,7 +94,351 @@ const {
 
     const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
 
-    const resolveDate = ( pDate ) => isDate( pDate ) ? pDate : isNumber( pDate ) ? new Date( pDate ) : new Date();
+    const Now = () => new Date();
+
+    const rxTz = () => /((GMT|UTC)([+-])?(\d{1,2})?:?(\d{2})?)|(((\w+ )*)(Time)?$)/gd;
+
+    let resolveDate = ( pDate ) => isDate( pDate ) ? pDate : isNumeric( pDate ) ? new Date( asInt( pDate ) ) : Now();
+
+    const DATE_PARTS =
+        {
+            ERA: "era",
+            YEAR: "year",
+            MONTH: "month",
+            MONTH_NAME: "monthName",
+            MONTH_ABBR: "monthAbbr",
+            DAY: "date",
+            DAY_OF_WEEK: "day",
+            DAY_OF_MONTH: "dayOfMonth",
+            DAY_OF_YEAR: "dayOfYear",
+            DAY_NAME: "dayName",
+            DAY_ABBR: "dayAbbr",
+            WEEK: "week",
+            WORK_WEEK: "workWeek",
+            WEEK_OF_YEAR: "weekOfYear",
+            WEEK_OF_MONTH: "weekOfMonth",
+            HOUR: "hour",
+            AM_PM: "amPm",
+            HOUR_OF_DAY_12: "hourOfDay12",
+            HOUR_OF_DAY_24: "hourOfDay24",
+            MINUTE: "minute",
+            SECOND: "second",
+            MILLISECOND: "millisecond",
+            TIME_ZONE: "timeZone",
+            UTC_OFFSET: "utcOffset"
+        };
+
+    class DateBuffer
+    {
+        // noinspection OverlyComplexFunctionJS
+        constructor( pDate, pLocale )
+        {
+            this.initializeDefaults();
+
+            const date = isValidDateOrNumeric( pDate ) ? resolveDate( pDate ) : null;
+
+            if ( isDate( date ) )
+            {
+                this.initialize( date, pLocale );
+            }
+
+            this.adjustHoursForPm = false;
+            this.adjustHoursForCycle = false;
+
+            this.adjustedForPm = false;
+            this.adjustedForCycle = false;
+
+            this.minHour = 0;
+            this.maxHour = 23;
+        }
+
+        merge( pBuffer )
+        {
+            const source = isDate( pBuffer ) ? DateBuffer.fromDate( pBuffer ) : isNull( pBuffer ) ? {} : pBuffer;
+
+            const keys = Object.keys( DATE_PARTS );
+
+            for( const key of keys )
+            {
+                const value = source[key];
+
+                if ( (isString( value ) && !isBlank( value )) || (isNumber( value ) && value >= 0) )
+                {
+                    this[key] = value;
+                }
+            }
+
+            this.adjustedForPm = source.adjustedForPm || this.adjustedForPm;
+            this.adjustedForCycle = source.adjustedForCycle || this.adjustedForCycle;
+
+            this.adjustHoursForPm = (source.adjustHoursForPm || this.adjustHoursForPm) && !this.adjustedForPm;
+            this.adjustHoursForCycle = (source.adjustHoursForCycle || this.adjustHoursForCycle) && !this.adjustedForCycle;
+
+            return this;
+        }
+
+        toDate()
+        {
+            const { year, month } = this._yearMonth();
+
+            return new Date( year,
+                             month,
+                             clamp( this[DATE_PARTS.DAY], 1, 31 ),
+                             clamp( this[DATE_PARTS.HOUR], 0, 23 ),
+                             clamp( this[DATE_PARTS.MINUTE], 0, 59 ),
+                             clamp( this[DATE_PARTS.SECOND], 0, 59 ),
+                             clamp( this[DATE_PARTS.MILLISECOND], 0, 999 ) );
+        }
+
+        toUTCDate()
+        {
+            const { year, month } = this._yearMonth();
+
+            return Date.UTC( year,
+                             month,
+                             clamp( this[DATE_PARTS.DAY], 1, 31 ),
+                             clamp( this[DATE_PARTS.HOUR], 0, 23 ),
+                             clamp( this[DATE_PARTS.MINUTE], 0, 59 ),
+                             clamp( this[DATE_PARTS.SECOND], 0, 59 ),
+                             clamp( this[DATE_PARTS.MILLISECOND], 0, 999 ) );
+        }
+
+        _yearMonth()
+        {
+            const currentDate = Now();
+
+            let year = this[DATE_PARTS.YEAR];
+            year = clamp( (year < 0 ? currentDate.getFullYear() : year), 1, 9999 );
+
+            let month = this[DATE_PARTS.MONTH];
+            month = clamp( (month < 0 ? currentDate.getMonth() : month), 0, 11 );
+
+            return { year, month };
+        }
+
+        initializeDefaults()
+        {
+            this[DATE_PARTS.YEAR] = -1;
+
+            this[DATE_PARTS.MONTH] = -1;
+            this[DATE_PARTS.MONTH_NAME] = _mt_str;
+            this[DATE_PARTS.MONTH_ABBR] = _mt_str;
+
+            this[DATE_PARTS.DAY] = -1;
+            this[DATE_PARTS.DAY_OF_WEEK] = -1;
+            this[DATE_PARTS.DAY_OF_MONTH] = -1;
+            this[DATE_PARTS.DAY_OF_YEAR] = -1;
+            this[DATE_PARTS.DAY_NAME] = _mt_str;
+            this[DATE_PARTS.DAY_ABBR] = _mt_str;
+
+            this[DATE_PARTS.HOUR] = -1;
+            this[DATE_PARTS.HOUR_OF_DAY_12] = -1;
+            this[DATE_PARTS.HOUR_OF_DAY_24] = -1;
+
+            this[DATE_PARTS.MINUTE] = -1;
+
+            this[DATE_PARTS.SECOND] = -1;
+
+            this[DATE_PARTS.MILLISECOND] = -1;
+
+            this[DATE_PARTS.UTC_OFFSET] = 0;
+
+            this[DATE_PARTS.TIME_ZONE] = null;
+
+            this[DATE_PARTS.AM_PM] = _mt_str;
+        }
+
+        initialize( pDate, pLocale )
+        {
+            if ( !isDate( pDate ) )
+            {
+                this.initializeDefaults();
+            }
+
+            const locale = resolveLocale( pLocale );
+
+            this[DATE_PARTS.YEAR] = date.getFullYear();
+
+            this[DATE_PARTS.MONTH] = date.getMonth();
+            this[DATE_PARTS.MONTH_NAME] = getNameOfMonth( date, locale );
+            this[DATE_PARTS.MONTH_ABBR] = getAbbrOfMonth( date, locale );
+
+            this[DATE_PARTS.DAY] = date.getDate();
+            this[DATE_PARTS.DAY_OF_WEEK] = date.getDay();
+            this[DATE_PARTS.DAY_OF_MONTH] = date.getDate();
+            this[DATE_PARTS.DAY_OF_YEAR] = daysBetween( new Date( date.getFullYear(), 0, 0 ), date );
+            this[DATE_PARTS.DAY_NAME] = getNameOfDay( date, locale );
+            this[DATE_PARTS.DAY_ABBR] = getAbbrOfDay( date, locale );
+
+            this[DATE_PARTS.HOUR] = date.getHours();
+            this[DATE_PARTS.HOUR_OF_DAY_12] = (date.getHours() % 12) || 12;
+            this[DATE_PARTS.HOUR_OF_DAY_24] = date.getHours() + 1;
+
+            this[DATE_PARTS.MINUTE] = date.getMinutes();
+
+            this[DATE_PARTS.SECOND] = date.getSeconds();
+
+            this[DATE_PARTS.MILLISECOND] = date.getMilliseconds();
+
+            this[DATE_PARTS.UTC_OFFSET] = (date.getTimezoneOffset() / 60);
+
+            this[DATE_PARTS.TIME_ZONE] = null;
+
+            this[DATE_PARTS.AM_PM] = date.getHours() >= 11 ? "PM" : "AM";
+        }
+    }
+
+    DateBuffer.isBuffer = ( pBuffer ) => (pBuffer instanceof DateBuffer);
+
+    DateBuffer.fromDate = function( pDate, pLocale )
+    {
+        return new DateBuffer( pDate, pLocale );
+    };
+
+    DateBuffer.fromBuffer = function( pBuffer )
+    {
+        const source = isNull( pBuffer ) ? {} : pBuffer;
+
+        const buffer = new DateBuffer();
+
+        const keys = Object.keys( DATE_PARTS );
+
+        for( const key of keys )
+        {
+            buffer[key] = source[key] || (/_/.test( key ) && !(/hour/i).test( key ) ? _mt_str : -1);
+        }
+
+        buffer.adjustedForPm = source.adjustedForPm || buffer.adjustedForPm;
+        buffer.adjustedForCycle = source.adjustedForCycle || buffer.adjustedForCycle;
+
+        buffer.adjustHoursForPm = (source.adjustHoursForPm || buffer.adjustHoursForPm) && !buffer.adjustedForPm;
+        buffer.adjustHoursForCycle = (source.adjustHoursForCycle || buffer.adjustHoursForCycle) && !buffer.adjustedForCycle;
+
+        return buffer;
+    };
+
+    DateBuffer.fromObject = ( pObject ) => DateBuffer.fromBuffer( pObject );
+
+    function isFormatter( pFormatter )
+    {
+        return !isNull( pFormatter ) && isObject( pFormatter ) && isFunction( pFormatter?.format );
+    }
+
+    function isCalculator( pCalculator )
+    {
+        return !isNull( pCalculator ) && isObject( pCalculator ) && isFunction( pCalculator?.calculate );
+    }
+
+    resolveDate = ( pDate ) => isDate( pDate ) ? pDate : isNumeric( pDate ) ? new Date( asInt( pDate ) ) : DateBuffer.isBuffer( pDate ) ? pDate.toDate() : Now();
+
+    class DatePart
+    {
+        #name;
+        #defaultFormatToken;
+        #calculator;
+        #formatter;
+
+        constructor( pName, pDefaultToken, pCalculator, pFormatter )
+        {
+            this.#name = asString( pName, true );
+
+            this.#defaultFormatToken = asString( pDefaultToken, true );
+
+            this.#calculator = isFunction( pCalculator ) ? pCalculator.bind( this ) : isFunction( pCalculator?.calculate ) ? pCalculator.calculate.bind( this ) : no_op;
+
+            this.#formatter = isFunction( pFormatter ) ? pFormatter.bind( this ) : isFunction( pFormatter?.format ) ? pFormatter.format.bind( this ) : no_op;
+        }
+
+        get name()
+        {
+            return asString( this.#name, true );
+        }
+
+        get defaultFormatToken()
+        {
+            return asString( this.#defaultFormatToken, true );
+        }
+
+        get calculator()
+        {
+            const calculator = this.#calculator;
+
+            return isFunction( calculator ) ? calculator.bind( this ) : isCalculator( calculator ) ? calculator.calculate.bind( this ) : () => _mt_str;
+        }
+
+        get formatter()
+        {
+            let formatter = this.#formatter;
+
+            formatter = isFunction( formatter ) ? formatter.bind( this ) : isFormatter( formatter ) ? formatter.format.bind( this ) : null;
+
+            if ( isNull( formatter ) )
+            {
+                const len = clamp( this.defaultFormatToken?.length, 1, 4 );
+                formatter = ( pDate, pLocale ) => asString( this.calculate( pDate, this.calculator, pLocale ) ).padStart( len, "0" );
+            }
+
+            return formatter.bind( this );
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
+        equals( pOther )
+        {
+            if ( isNull( pOther ) )
+            {
+                return false;
+            }
+
+            const otherName = pOther instanceof this.constructor ? pOther?.name : isString( pOther ) ? asString( pOther, true ) : _mt_str;
+
+            return ucase( this.name ) === ucase( otherName );
+        }
+
+        calculate( pDate, pCalculator, pLocale )
+        {
+            const calculator = isCalculator( pCalculator ) ? pCalculator : this.calculator;
+
+            return isFunction( calculator ) ? attemptMethod( this, calculator, resolveDate( pDate ), pLocale ) : _mt_str;
+        }
+
+        format( pDate, pLocale, pFormatter )
+        {
+            const formatter = isFormatter( pFormatter ) ? pFormatter : this.formatter;
+
+            const locale = resolveLocale( pLocale );
+
+            return isFunction( formatter ) ? attemptMethod( this, formatter, resolveDate( pDate ), locale ) : _mt_str;
+        }
+    }
+
+    const AD_START = new Date( 1, 0, 1, 0, 0, 0, 0 );
+
+    DatePart.ERA = new DatePart( DATE_PARTS.ERA, "G", ( pDate ) => resolveDate( pDate ) > AD_START ? "AD" : "BC" );
+    DatePart.YEAR = new DatePart( DATE_PARTS.YEAR, "yyyy", ( pDate ) => resolveDate( pDate ).getFullYear() );
+    DatePart.MONTH = new DatePart( DATE_PARTS.MONTH, "MM", ( pDate ) => resolveDate( pDate ).getMonth(), ( pDate ) => asString( resolveDate( pDate ).getMonth() + 1 ).padStart( 2, "0" ) );
+    DatePart.DAY = new DatePart( DATE_PARTS.DAY, "dd", ( pDate ) => resolveDate( pDate ).getDate() );
+    DatePart.HOUR = new DatePart( DATE_PARTS.HOUR, "hh", ( pDate ) => resolveDate( pDate ).getHours() );
+    DatePart.MINUTE = new DatePart( DATE_PARTS.MINUTE, "mm", ( pDate ) => resolveDate( pDate ).getMinutes() );
+    DatePart.SECOND = new DatePart( DATE_PARTS.SECOND, "ss", ( pDate ) => resolveDate( pDate ).getSeconds() );
+    DatePart.MILLISECOND = new DatePart( DATE_PARTS.MILLISECOND, "SS", ( pDate ) => resolveDate( pDate ).getMilliseconds() );
+    DatePart.WEEK_OF_YEAR = new DatePart( DATE_PARTS.WEEK_OF_YEAR, "ww" );
+    DatePart.WEEK_OF_MONTH = new DatePart( DATE_PARTS.WEEK_OF_MONTH, "WW" );
+    DatePart.DAY_OF_YEAR = new DatePart( DATE_PARTS.DAY_OF_YEAR, "DD", ( pDate ) =>
+    {
+        const date = resolveDate( pDate );
+        return daysBetween( new Date( date.getFullYear(), 0, 0 ), date );
+    } );
+    DatePart.DAY_OF_WEEK = new DatePart( DATE_PARTS.DAY_OF_WEEK, "E", ( pDate ) => resolveDate( pDate ).getDay() );
+    DatePart.AM_PM = new DatePart( DATE_PARTS.AM_PM, "a", ( pDate ) => resolveDate( pDate ).getHours() >= 11 ? "PM" : "AM" );
+    DatePart.TIME_ZONE = new DatePart( DATE_PARTS.TIME_ZONE, "z", ( pDate ) =>
+    {
+        const matches = (/(\([\w ]+\))/i).exec( resolveDate( pDate ).toString() );
+        return matches && matches.length > 1 ? matches[1] : _mt_str;
+    } );
 
     const MILLISECONDS_PER_SECOND = 1_000;
     const SECONDS_PER_MINUTE = 60;
@@ -158,6 +539,7 @@ const {
 
         #minimumValue = 0;
 
+        // noinspection OverlyComplexFunctionJS
         constructor( pId, pName, pMultiplier, pAccessor, pMutator, pMinimumValue = 0 )
         {
             this.#id = pId;
@@ -386,16 +768,16 @@ const {
 
     const TIME_UNITS = lock(
         {
-            MILLISECOND: lock( new TimeUnit( 1, "Milliseconds", 1, "getMilliseconds", "setMilliseconds" ) ),
-            SECOND: lock( new TimeUnit( 2, "Seconds", MILLIS_PER.SECOND, "getSeconds", "setSeconds" ) ),
-            MINUTE: lock( new TimeUnit( 3, "Minutes", MILLIS_PER.MINUTE, "getMinutes", "setMinutes" ) ),
-            HOUR: lock( new TimeUnit( 4, "Hours", MILLIS_PER.HOUR, "getHours", "setHours" ) ),
-            DAY: lock( new TimeUnit( 5, "Days", MILLIS_PER.DAY, "getDate", "setDate", 1 ) ),
-            WEEK: lock( new TimeUnit( 6, "Weeks", MILLIS_PER.WEEK, "getDate", "setDate", 1 ) ),
-            WORK_WEEK: lock( new TimeUnit( 7, "Work Weeks", MILLIS_PER.WEEK, "getDate", "setDate", 1 ) ),
-            MONTH: lock( new TimeUnit( 8, "Months", 2_592_000_000, "getMonth", "setMonth" ) ),
-            YEAR: lock( new TimeUnit( 9, "Years", MILLIS_PER.YEAR, "getFullYear", "setFullYear" ) ),
-            DECADE: lock( new Decade( 10, "Decades", MILLIS_PER.DECADE, "getFullYear", "setFullYear" ) )
+            MILLISECOND: lock( new TimeUnit( 1, DATE_PARTS.MILLISECOND, 1, "getMilliseconds", "setMilliseconds" ) ),
+            SECOND: lock( new TimeUnit( 2, DATE_PARTS.SECOND, MILLIS_PER.SECOND, "getSeconds", "setSeconds" ) ),
+            MINUTE: lock( new TimeUnit( 3, DATE_PARTS.MINUTE, MILLIS_PER.MINUTE, "getMinutes", "setMinutes" ) ),
+            HOUR: lock( new TimeUnit( 4, DATE_PARTS.HOUR, MILLIS_PER.HOUR, "getHours", "setHours" ) ),
+            DAY: lock( new TimeUnit( 5, DATE_PARTS.DAY, MILLIS_PER.DAY, "getDate", "setDate", 1 ) ),
+            WEEK: lock( new TimeUnit( 6, DATE_PARTS.WEEK, MILLIS_PER.WEEK, "getDate", "setDate", 1 ) ),
+            WORK_WEEK: lock( new TimeUnit( 7, DATE_PARTS.WORK_WEEK, MILLIS_PER.WEEK, "getDate", "setDate", 1 ) ),
+            MONTH: lock( new TimeUnit( 8, DATE_PARTS.MONTH, 2_592_000_000, "getMonth", "setMonth" ) ),
+            YEAR: lock( new TimeUnit( 9, DATE_PARTS.YEAR, MILLIS_PER.YEAR, "getFullYear", "setFullYear" ) ),
+            DECADE: lock( new Decade( 10, "Decade", MILLIS_PER.DECADE, "getFullYear", "setFullYear" ) )
         } );
 
     const TIME_UNITS_BY_ID =
@@ -413,13 +795,14 @@ const {
                                          {
                                              TIME_UNITS_BY_ID[value.id] = value;
                                              TIME_UNITS_BY_NAME[value.name] = value;
+                                             TimeUnit[value.name] = value;
                                          } );
 
     const resolveUnit = ( pUnit ) =>
-        isNull( pUnit ) ? new TimeUnit( 0, "NULL UNIT", 0 ) :
+        isNull( pUnit ) ? new TimeUnit( 0, "NULL UNIT", 0, "getMilliseconds", "setMilliseconds", 0 ) :
         pUnit instanceof TimeUnit ? pUnit :
         isString( pUnit ) ? TIME_UNITS_BY_NAME[pUnit] || TIME_UNITS[ucase( pUnit )] || TIME_UNITS[ucase( pUnit.replace( /s$/i, _mt_str ) )] :
-        isNumber( pUnit ) && pUnit < 1_000 ? TIME_UNITS_BY_ID[pUnit] : new TimeUnit( pUnit, asString( pUnit ), pUnit );
+        isNumber( pUnit ) && pUnit < 1_000 ? TIME_UNITS_BY_ID[pUnit] : new TimeUnit( pUnit, asString( pUnit ), pUnit, "getTime", "setTime", 0 );
 
     const DateConstants = lock(
         {
@@ -427,9 +810,12 @@ const {
             Days,
             Occurrence,
             Direction,
+            DATE_PARTS,
+            DatePart,
             Units: lock( TIME_UNITS ),
             UnitNames: lock( Object.keys( TIME_UNITS_BY_NAME ) ),
             TimeUnits: lock( TIME_UNITS ),
+            TimeUnit,
             MILLISECONDS_PER_SECOND,
             SECONDS_PER_MINUTE,
             MINUTES_PER_HOUR,
@@ -507,7 +893,7 @@ const {
         {
             super( pName, pIndex, 28 );
 
-            this.#year = new Date().getFullYear();
+            this.#year = Now().getFullYear();
         }
 
         static get [Symbol.species]()
@@ -697,7 +1083,7 @@ const {
 
     const numDaysInMonth = function( pMonth, pYear )
     {
-        const year = isNumber( pYear ) ? asInt( pYear ) : new Date().getFullYear();
+        const year = isNumber( pYear ) ? asInt( pYear ) : Now().getFullYear();
 
         let arr = months.map( ( entry ) => entry[1] );
 
@@ -710,11 +1096,11 @@ const {
 
     const numDaysInYear = function( pYear )
     {
-        const year = resolveFullYear( isDate( pYear ) ? pYear.getFullYear() : (isNumeric( pYear ) ? asInt( pYear ) : new Date().getFullYear()) );
+        const year = resolveFullYear( isDate( pYear ) ? pYear.getFullYear() : (isNumeric( pYear ) ? asInt( pYear ) : Now().getFullYear()) );
         return (isLeapYear( year )) ? 366 : 365;
     };
 
-    const toYear = function( pDate, pYear = new Date().getFullYear() )
+    const toYear = function( pDate, pYear = Now().getFullYear() )
     {
         if ( isValidDateArgument( pDate ) )
         {
@@ -1042,6 +1428,8 @@ const {
                 }
                 catch( ex )
                 {
+                    modulePrototype.handleError( ex, "Holiday._applyMondayRule", this, date );
+
                     date = isDate( date ) ? date : pDate;
                 }
             }
@@ -1233,7 +1621,6 @@ const {
         }
 
         const end = avoidWeekend( lastInstant( pEndDate ), Direction.PAST );
-        const endDay = end.getDay();
 
         const days = daysBetween( start, end );
 
@@ -1246,7 +1633,7 @@ const {
 
     const daysRemainingIn = function( pUnit, pDate )
     {
-        let date = isDate( pDate ) ? new Date( pDate ) : new Date();
+        let date = isDate( pDate ) ? new Date( pDate ) : Now();
 
         const day = date.getDay();
 
@@ -1385,7 +1772,6 @@ const {
             const sign = numDays < 0 ? -1 : 1;
 
             let startDate = new Date( pDate );
-            const startDay = startDate.getDay();
 
             const hour = startDate.getHours();
             const minute = startDate.getMinutes();
@@ -1547,7 +1933,7 @@ const {
 
         constructor( pStartDate, pEndDate, pOptions = DATES_ITERABLE_OPTIONS )
         {
-            this.#startDate = lock( isValidDateArgument( pStartDate ) ? new Date( pStartDate ) : new Date() );
+            this.#startDate = lock( isValidDateArgument( pStartDate ) ? new Date( pStartDate ) : Now() );
             this.#endDate = isValidDateArgument( pEndDate ) ? lock( new Date( pEndDate ) ) : null;
 
             this.#options = lock( populateOptions( pOptions, DATES_ITERABLE_OPTIONS ) );
@@ -1567,7 +1953,7 @@ const {
 
         get startDate()
         {
-            return isValidDateArgument( this.#startDate ) ? this.#startDate : new Date();
+            return isValidDateArgument( this.#startDate ) ? this.#startDate : Now();
         }
 
         get endDate()
@@ -1732,7 +2118,9 @@ const {
             DateConstants,
             classes:
                 {
+                    DatePart,
                     TimeUnit,
+                    DateBuffer,
                     Holiday,
                     HolidayDefinition,
                     HolidayExactDateDefinition,
@@ -1761,6 +2149,10 @@ const {
             TIME_UNITS_BY_NAME,
             HOLIDAYS,
             US_HOLIDAYS: HOLIDAYS.USA,
+            DATE_PARTS,
+            DatePart,
+            TimeUnit,
+            DateBuffer,
             isDate,
             isValidDateArgument,
             resolveDate,
@@ -1805,7 +2197,10 @@ const {
             daysBetween,
             workDaysBetween,
             getWeekdays,
-            getBusinessDays
+            getBusinessDays,
+            daysRemainingIn,
+            mergeOptions,
+            merge
         };
 
     mod = modulePrototype.extend( mod );
