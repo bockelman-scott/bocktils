@@ -99,27 +99,17 @@ const $scope = constants?.$scope || function()
             _zero,
             DIGITS,
             DIGITS_MAP,
-            HEX_DIGITS,
             HEX_DIGITS_MAP,
-            OCT_DIGITS,
             OCT_DIGITS_MAP,
-            BIN_DIGITS,
             BIN_DIGITS_MAP,
             S_ERROR,
             S_WARN,
-            S_ERR_PREFIX,
             TYPED_ARRAYS,
-            ERROR_TYPES,
             PRIMITIVE_WRAPPER_TYPES,
-            GLOBAL_TYPES,
-            BUILTIN_TYPES,
             BUILTIN_TYPE_NAMES,
-            SERIALIZABLE_TYPES,
             AsyncFunction,
             IllegalArgumentError,
-            isObjectLiteral,
             populateOptions,
-            no_op,
             attempt,
             lock,
             classes
@@ -797,11 +787,7 @@ const $scope = constants?.$scope || function()
         return (_zero !== s) && /^(-)?(0b)([0-1]+)?(([.,])([0-1]+))?$/i.test( s ) && !/[AC-Z]|[ac-z]|\s/.test( s );
     }
 
-    function isScientificNotation( pObj )
-    {
-        const s = _toString( pObj ).trim();
-        return (/^[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)$/).test( s );
-    }
+    const isScientificNotation = ( pObj ) => (/^[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)$/).test( _toString( pObj ).trim() );
 
     /**
      * Returns true if the specified value represents a decimal number (base 10)<br>
@@ -829,10 +815,7 @@ const $scope = constants?.$scope || function()
      *
      * @returns {number} the base for the numeric value specified (16, 8, or 10)
      */
-    function calculateRadix( pObj )
-    {
-        return isDecimal( pObj ) ? 10 : isHex( pObj ) ? 16 : isOctal( pObj ) ? 8 : isBinary( pObj ) ? 2 : 0;
-    }
+    const calculateRadix = ( pObj ) => isDecimal( pObj ) ? 10 : isHex( pObj ) ? 16 : isOctal( pObj ) ? 8 : isBinary( pObj ) ? 2 : 0;
 
     /**
      * Returns true if the specified value is, or can be converted to, a number<br>
@@ -2094,13 +2077,7 @@ const $scope = constants?.$scope || function()
     const defaultFor = function( pType )
     {
         let type = isString( pType ) ? (_mt_str + pType).trim().toLowerCase() : typeof (pType);
-
-        if ( isString( type ) && JS_TYPES.includes( type ) )
-        {
-            return TYPE_DEFAULTS[type];
-        }
-
-        return defaultFor( typeof type );
+        return ( isString( type ) && JS_TYPES.includes( type ) ) ? TYPE_DEFAULTS[type] : defaultFor( typeof type );
     };
 
     /**

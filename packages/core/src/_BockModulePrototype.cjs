@@ -309,7 +309,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
      * by calling the 'handleAttempt.handleError' function
      * instead of propagating the errors.
      *
-     * @param {Function} pFunction The function to attempt to execute.
+     * @param {Function|NodeRequire} pFunction The function to attempt to execute.
      * @param {...*} pArgs The arguments to pass to the function being executed.
      * @return {*} The result returned by executing the function.
      */
@@ -618,7 +618,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
      * <br>
      * It can be utilized to create utilities, command line tools, or any other
      * functionality requiring parsing and management of command line arguments
-     * or paramaters passed to a host process.<br>
+     * or parameters passed to a host process.<br>
      * <br>
      *
      * @class
@@ -722,7 +722,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
     ExecutionMode.MODES.DEFAULT = freeze( ExecutionMode.MODES.DEV );
     ExecutionMode.DEFAULT = freeze( ExecutionMode.MODES.DEFAULT );
 
-    const CURRENT_MODE = freeze( ExecutionMode.MODES[ENVIRONMENT.MODE] || ExecutionMode.MODES[ARGUMENTS.get( "mode" )] || ExecutionMode.DEFAULT );
+    const CURRENT_MODE = freeze( ExecutionMode.MODES[ENVIRONMENT["MODE"]] || ExecutionMode.MODES[ARGUMENTS.get( "mode" )] || ExecutionMode.DEFAULT );
     ExecutionMode.CURRENT = freeze( CURRENT_MODE );
 
     /**
@@ -1316,7 +1316,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
          */
         get detail()
         {
-            return this.#detail || super.detail;
+            return this.#detail || super.detail || super.data;
         }
 
         trace( pMsg )
@@ -1458,14 +1458,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
      * @type {CopyOptions}
      * @see CopyOptions
      */
-    const DEFAULT_COPY_OPTIONS = freeze(
+    const DEFAULT_COPY_OPTIONS =
         {
             maxStackSize: MAX_STACK_SIZE,
             nullReplacement: EMPTY_OBJECT,
             undefinedReplacement: EMPTY_OBJECT,
             depth: 99,
             freeze: false
-        } );
+        };
 
     /**
      * These are the default options used with the immutableCopy function.<br>
@@ -1476,7 +1476,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
      */
     let IMMUTABLE_COPY_OPTIONS = { ...DEFAULT_COPY_OPTIONS };
     IMMUTABLE_COPY_OPTIONS.freeze = true;
-    IMMUTABLE_COPY_OPTIONS = freeze( IMMUTABLE_COPY_OPTIONS );
 
     /**
      * Returns an object corresponding to a set of default options with one or more properties
@@ -3559,7 +3558,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             return handleCopyNull( pObject, pOptions, pFreezeFunction );
         }
 
-        let clone = pObject;
+        let clone;
 
         if ( pObject instanceof Date )
         {
@@ -4023,7 +4022,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             merge: mergeOptions,
             lock,
             deepFreeze,
-            DEFAULT_COPY_OPTIONS,
+            DEFAULT_COPY_OPTIONS: lock( DEFAULT_COPY_OPTIONS ),
             localCopy,
             immutableCopy,
 
