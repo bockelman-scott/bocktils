@@ -24,6 +24,7 @@ const $scope = constants?.$scope || function()
     return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
 };
 
+// noinspection FunctionTooLongJS
 /**
  * This immediately invoked function expression (IIFE)
  * defines and returns the StringUtils module
@@ -67,8 +68,9 @@ const $scope = constants?.$scope || function()
             _spc,
             _dot,
             _comma,
+            _hyphen,
+            _apos,
             _underscore,
-            _ellipsis,
             _tab,
             _z,
             _unixPathSep,
@@ -80,14 +82,7 @@ const $scope = constants?.$scope || function()
             _slash,
             S_TRUE,
             S_FALSE,
-            S_ERROR = "error",
-            S_ERR_PREFIX = `An ${S_ERROR} occurred while`,
-            S_DEFAULT_OPERATION = "executing script",
             S_WARN = "warn",
-            S_LOG = "log",
-            S_DEBUG = "debug",
-            S_INFO = "info",
-            S_TRACE = "trace",
             RESERVED_WORDS,
             _affirmatives,
             _str,
@@ -99,12 +94,14 @@ const $scope = constants?.$scope || function()
             _symbol,
             _zero,
 
+            BUILTIN_TYPES,
+            ERROR_TYPES,
+
             _defaultLocaleString = "en-US",
             _defaultLocale,
             _defaultCurrency,
             DEFAULT_NUMBER_FORMATTING_SYMBOLS,
 
-            _rxFunctionSignature = /^(\(?\s*((async(\s+))?\s*function))\s*?([$_\w]+[$_\w]*)?\s*\((\s*(([$_\w]+[$_\w]*\s*,?)\s*)*(\.{3}([$_\w]+[$_\w]*\s*,?)*\s*)*)(?<!,\s*)\)/,
             _rxFunction = /^(async )*function/,
             _rxClass = /^class/,
 
@@ -119,11 +116,6 @@ const $scope = constants?.$scope || function()
 
     const { ModuleEvent, ModulePrototype } = classes;
 
-    if ( _ud === typeof CustomEvent )
-    {
-        CustomEvent = ModuleEvent;
-    }
-
     const modName = "StringUtils";
 
     let modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
@@ -131,34 +123,27 @@ const $scope = constants?.$scope || function()
     const
         {
             isUndefined,
-            isDefined,
             isNull,
-            isNotNull,
-            isNonNullObject,
             isPrimitiveWrapper,
             isDate,
             isString,
             isNumber,
-            isBigInt,
             isNumeric,
+            isScientificNotation,
             isBoolean,
             isObject,
             isArray,
+            isLikeArray,
+            isMap,
+            isSet,
             isFunction,
-            isDecimal,
-            isBinary,
-            isOctal,
-            isHex,
+            isRegExp,
             isNanOrInfinite,
             toDecimal,
-            toInteger,
-            toFloat,
             firstMatchingType,
             clamp,
             NVL
         } = typeUtils;
-
-    const isLocale = ( pValue ) => (pValue instanceof Intl.Locale) || (isString( pValue ) && !isBlank( pValue ) && (/^[A-Z]{2}$|^[A-Z]{2}(-[^\d\\\/ \s]+)+$/i).test( pValue ));
 
     /**
      * These are the default values assumed for number formatting, when calling methods such as asInt or asFloat
@@ -196,13 +181,17 @@ const $scope = constants?.$scope || function()
             {
                 input = (Number( this ).valueOf() || parseFloat( _mt_str + this )) || pValue;
             }
-            if ( this instanceof String || String === this?.constructor || isString( this?.prototype ) )
+            else if ( this instanceof String || String === this?.constructor || isString( this?.prototype ) )
             {
                 input = (String( this ).valueOf() || asString( _mt_str + this )) || pValue;
             }
-            if ( this instanceof Boolean || Boolean === this?.constructor || isBoolean( this?.prototype ) )
+            else if ( this instanceof Boolean || Boolean === this?.constructor || isBoolean( this?.prototype ) )
             {
-                input = this.valueOf() || Boolean( this ) || pValue;
+                input = Boolean( this.valueOf() );
+            }
+            else if ( this[Symbol.toPrimitive] )
+            {
+                input = this[Symbol.toPrimitive]( "string" ) || pValue;
             }
         }
 
@@ -350,20 +339,21 @@ const $scope = constants?.$scope || function()
     {
         const options = _aso( pOptions );
 
-        const input = _resolveInput.call( pValue, pValue ) || pValue;
-
         if ( options.omitFunctions )
         {
             return _mt_str;
         }
 
-        let result = options.executeFunctions ? _attemptInvocation( input, options ) : _mt_str;
+        const input = _resolveInput.call( this, pValue ) || pValue;
+
+        let result = options.executeFunctions ? _attemptInvocation( input, options ) || _mt_str : _mt_str;
 
         if ( isBlank( result ) )
         {
             result = (options.returnFunctionSource ? getFunctionSource( input ) : _mt_str) ||
                      input?.name ||
                      input?.constructor?.name ||
+                     input?.prototype?.name ||
                      _mt_str;
         }
 
@@ -590,7 +580,12 @@ const $scope = constants?.$scope || function()
     {
         const options = _aso( pOptions );
 
-        let value = (isNumber( pInput ) || isNumeric( pInput ) ? String( _mt_str + pInput ) : pInput).trim();
+        let value = String( isNumber( pInput ) || isNumeric( pInput ) ? String( _mt_str + pInput ) : pInput ).trim();
+
+        if ( isScientificNotation( value ) )
+        {
+            return String( toDecimal( value, options ) );
+        }
 
         value = value.replace( /\D+$/g, _mt_str ).trim();
 
@@ -628,30 +623,14 @@ const $scope = constants?.$scope || function()
      */
     const asString = function( pStr, pTrim = false, pOptions = DEFAULT_AS_STRING_OPTIONS )
     {
-        // ingest any options passed; specific options override the default options ingested
         const options = _aso( pOptions );
 
-        // capture 'this' in a closure-scoped variable for use in the 'stringify' function below
-        const me = asString || this;
-
-        let s = _mt_str;
+        let s;
 
         let trim = pTrim || options.trim;
         options.trim = trim;
 
-        // this function can be added as a method to String.prototype, Number.prototype, and Boolean.prototype if desired
-        if ( isUndefined( pStr ) || isNull( pStr, true ) || arguments.length <= 0 )
-        {
-            // note that we code this in such a way that it can be bound to the String.prototype as a member function (a.k.a. method)
-            if ( isFunction( this.asString ) )
-            {
-                return me( String( this ).valueOf() || me( this, trim ), trim );
-            }
-        }
-
         let input = _resolveInput.call( this, pStr );
-
-        const transformations = ([].concat( ...(options?.transformations || []) )).flat().filter( e => isFunction( e ) && e.length > 0 );
 
         // return a value based on the type pf the argument
         switch ( typeof input )
@@ -663,8 +642,7 @@ const $scope = constants?.$scope || function()
                 {
                     s = (_mt_str + _handleNumericString( input, options ));
                 }
-
-                return _transform( s, transformations );
+                break;
 
             // numeric values are converted to the string representation of their float value
             case _num:
@@ -677,7 +655,7 @@ const $scope = constants?.$scope || function()
                 s = input ? S_TRUE : S_FALSE;
                 break;
 
-            // objects are special case...
+            // objects are a special case...
             case _obj:
                 s = _handleObjectInput( input, pTrim, options );
                 break;
@@ -696,6 +674,8 @@ const $scope = constants?.$scope || function()
         {
             return _mt_str;
         }
+
+        const transformations = ([].concat( ...(options?.transformations || []) )).flat().filter( e => isFunction( e ) && e.length > 0 );
 
         return _transform( _mt_str + ((true === trim) ? ((_mt_str + s).trim()) : s), ...transformations );
     };
@@ -859,6 +839,15 @@ const $scope = constants?.$scope || function()
             defaultIdentifier: _underscore
         };
 
+    function _replaceInvalidIdentifier( pStr, pOptions )
+    {
+        if ( isBlank( pStr ) || RESERVED_WORDS.includes( pStr ) )
+        {
+            return pOptions?.defaultIdentifier || _underscore;
+        }
+        return pStr;
+    }
+
     /**
      * Returns a string that is a valid JavaScript identifier.
      * @see https://developer.mozilla.org/en-US/docs/Glossary/Identifier
@@ -868,14 +857,9 @@ const $scope = constants?.$scope || function()
      */
     const validIdentifier = function( pStr, pOptions = DEFAULT_VALID_IDENTIFIER_OPTIONS )
     {
-        const options = Object.assign( Object.assign( {}, DEFAULT_VALID_IDENTIFIER_OPTIONS ), pOptions || {} );
+        const options = populateOptions( pOptions, DEFAULT_VALID_IDENTIFIER_OPTIONS );
 
-        let s = asString( pStr, true ).trim();
-
-        if ( isBlank( s ) )
-        {
-            return options?.defaultIdentifier || _underscore;
-        }
+        let s = _replaceInvalidIdentifier( asString( pStr, true ).trim(), options );
 
         let chars = s.split( _mt_chr );
 
@@ -888,12 +872,7 @@ const $scope = constants?.$scope || function()
 
         s = s.replaceAll( /[^A-Za-z$_]/g, _mt_str );
 
-        if ( isBlank( s ) || RESERVED_WORDS.includes( s ) )
-        {
-            return options?.defaultIdentifier || _underscore;
-        }
-
-        return asString( s, true );
+        return _replaceInvalidIdentifier( asString( s, true ), options );
     };
 
     const DEFAULT_AS_KEY_OPTIONS = { supportDotNotation: false, defaultIdentifier: _underscore };
@@ -910,12 +889,7 @@ const $scope = constants?.$scope || function()
     {
         const options = populateOptions( pOptions, DEFAULT_AS_KEY_OPTIONS );
 
-        let s = asString( pStr, true );
-
-        if ( isBlank( s ) || RESERVED_WORDS.includes( s ) )
-        {
-            return options?.defaultIdentifier || _underscore;
-        }
+        let s = _replaceInvalidIdentifier( asString( pStr, true ), options );
 
         const validName = validIdentifier( s, options );
 
@@ -1001,26 +975,6 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * Returns a substring not longer than pMaxLength
-     * @param pStr the string to (potentially) truncate to the specified length
-     * @param pMaxLength the length to which to truncate the string
-     * @returns {string}
-     */
-    function truncate( pStr, pMaxLength = -1 )
-    {
-        let s = asString( pStr );
-
-        const maxLength = asInt( pMaxLength, -1 );
-
-        if ( maxLength >= 0 )
-        {
-            return s.slice( 0, Math.min( maxLength, s.length ) );
-        }
-
-        return s;
-    }
-
-    /**
      * Returns true if the specified string contains both UPPERCASE and lowercase letters
      * @param pStr a string to test for mixed case characters
      * @returns {boolean} true if the string specified contains both UPPERCASE and lowercase letters
@@ -1030,57 +984,6 @@ const $scope = constants?.$scope || function()
         const str = asString( pStr, true );
         return /[A-Z]/.test( str ) && /[a-z/]/.test( str );
     };
-
-    function appendEllipsis( pStr, pMaxLength = -1, pEllipsis = _ellipsis )
-    {
-        let s = asString( pStr );
-
-        const ellipsis = asString( pEllipsis ) || _ellipsis;
-
-        const ellipsisLength = (ellipsis?.length || 3);
-
-        const defaultMaxLength = (s?.length || 0) + ellipsisLength;
-
-        let maxLength = asInt( pMaxLength, defaultMaxLength );
-        maxLength = Math.max( (maxLength > 0 ? maxLength : defaultMaxLength), ellipsisLength );
-
-        if ( ((s + ellipsis)?.length || 0) <= maxLength )
-        {
-            s += (ellipsis || _mt_str);
-        }
-        else
-        {
-            s = s.slice( 0, clamp( (maxLength - ellipsisLength), 1, s.length ) );
-            s += ellipsis;
-        }
-
-        return truncate( s, pMaxLength );
-    }
-
-    function prependEllipsis( pStr, pMaxLength = -1, pEllipsis = _ellipsis )
-    {
-        let s = asString( pStr );
-
-        const ellipsis = asString( pEllipsis ) || _ellipsis;
-
-        const ellipsisLength = (ellipsis?.length || 3);
-
-        const defaultMaxLength = ellipsisLength + (s?.length || 0);
-
-        let maxLength = asInt( pMaxLength, defaultMaxLength );
-        maxLength = Math.max( (maxLength > 0 ? maxLength : defaultMaxLength), ellipsisLength );
-
-        if ( ((ellipsis + s)?.length || 0) <= maxLength )
-        {
-            s = (ellipsis || _mt_str) + s;
-        }
-        else
-        {
-            s = ellipsis + s.slice( 0, clamp( (maxLength - ellipsisLength), 1, s.length ) );
-        }
-
-        return truncate( s, pMaxLength );
-    }
 
     /**
      * Returns the number of times a specified substring appears in the specified string
@@ -1099,9 +1002,9 @@ const $scope = constants?.$scope || function()
         return arr.length - 1;
     };
 
-    function reconcileTheString( pString )
+    function findPosition( pStr, pOf )
     {
-        return asString( asString( pString, false ) || ((this instanceof String) ? this.valueOf() : _mt_str) || _resolveInput.call( this, pString ) );
+        return (_str === typeof pOf) ? pStr.indexOf( pOf ) : asInt( pOf, pStr?.length );
     }
 
     /**
@@ -1115,19 +1018,24 @@ const $scope = constants?.$scope || function()
      */
     const leftOf = function( pString, pOf )
     {
-        let s = reconcileTheString.call( this, pString );
+        let s = asString( _resolveInput.call( this, pString ) );
 
-        const typeOf = typeof pOf;
+        const pos = findPosition( s, pOf );
 
-        const pos = (_str === typeOf) ? s.indexOf( pOf ) : asInt( pOf, s?.length );
+        return (0 <= pos) ? s.substring( 0, pos ) : s;
+    };
+
+    function sliceToPosition( pPosition, pString, pOf )
+    {
+        const pos = asInt( pPosition, -1 );
 
         if ( 0 <= pos )
         {
-            s = s.substring( 0, pos );
+            return pString.slice( pos + ((_str === typeof pOf) ? pOf.length : 1), pString.length );
         }
 
-        return s;
-    };
+        return pString;
+    }
 
     /**
      * Returns the text to the right of the FIRST occurrence of pOf (or if pOf is a number, the index specified by pOf)
@@ -1137,19 +1045,17 @@ const $scope = constants?.$scope || function()
      */
     const rightOf = function( pString, pOf )
     {
-        let s = reconcileTheString.call( this, pString );
+        let s = asString( _resolveInput.call( this, pString ) );
 
-        const typeOf = typeof pOf;
+        const pos = findPosition( s, pOf );
 
-        const pos = (_str === typeOf) ? s.indexOf( pOf ) : asInt( pOf, s?.length );
-
-        if ( 0 <= pos )
-        {
-            s = s.slice( pos + ((_str === typeOf) ? pOf.length : 1), s.length );
-        }
-
-        return s;
+        return sliceToPosition( pos, s, pOf );
     };
+
+    function findLastPosition( pStr, pOf )
+    {
+        return (_str === typeof pOf) ? pStr.lastIndexOf( pOf ) : asInt( pOf, pStr?.length );
+    }
 
     /**
      * Returns the text to the left of the LAST occurrence of pOf (or if pOf is a number, the index specified by pOf)
@@ -1159,18 +1065,11 @@ const $scope = constants?.$scope || function()
      */
     const leftOfLast = function( pString, pOf )
     {
-        let s = reconcileTheString.call( this, pString );
+        let s = asString( _resolveInput.call( this, pString ) );
 
-        const typeOf = typeof pOf;
+        const pos = findLastPosition( s, pOf );
 
-        const pos = (_str === typeOf) ? s.lastIndexOf( pOf ) : asInt( pOf, s?.length );
-
-        if ( 0 <= pos )
-        {
-            s = s.substring( 0, pos );
-        }
-
-        return s;
+        return (0 <= pos) ? s.substring( 0, pos ) : s;
     };
 
     /**
@@ -1181,19 +1080,17 @@ const $scope = constants?.$scope || function()
      */
     const rightOfLast = function( pString, pOf )
     {
-        let s = reconcileTheString.call( this, pString );
+        let s = asString( _resolveInput.call( this, pString ) );
 
-        const typeOf = typeof pOf;
+        const pos = findLastPosition( s, pOf );
 
-        const pos = (_str === typeOf) ? s.lastIndexOf( pOf ) : asInt( pOf, s?.length );
-
-        if ( 0 <= pos )
-        {
-            s = s.slice( pos + ((_str === typeOf) ? pOf.length : 1), s.length );
-        }
-
-        return s;
+        return sliceToPosition( pos, s, pOf );
     };
+
+    String.prototype.leftOf = leftOf;
+    String.prototype.rightOf = rightOf;
+    String.prototype.leftOfLast = leftOfLast;
+    String.prototype.rightOfLast = rightOfLast;
 
     function enclosedIn( pString, pLeft, pRight )
     {
@@ -1204,32 +1101,16 @@ const $scope = constants?.$scope || function()
         return (left === chars[0]) && (right === chars[chars.length - 1]);
     }
 
-    const isJson = function( pStr )
+    function enclosed( pString )
     {
-        if ( !isString( pStr ) || isBlank( pStr ) )
-        {
-            return isNumber( pStr );
-        }
+        const str = asString( pString, true );
 
-        const str = tidy( asString( pStr, true ) ).trim().replace( /^[ \n\r]+/, _mt_str ).replace( /[ \n\r]+$/, _mt_str );
+        let pairs = [["[", "]"], ["{", "}"], [_dblqt, _dblqt], [_sglqt, _sglqt], ["`", "`"]];
 
-        const chars = (str.split( _mt_chr ));
+        pairs = pairs.map( e => (str.startsWith( e[0] ) && str.endsWith( e[1] )) ).filter( isTrue );
 
-        if ( chars.length > 1 )
-        {
-            if ( enclosedIn( chars, "[", "]" ) || enclosedIn( chars, "{", "}" ) || enclosedIn( chars, _dblqt ) || enclosedIn( chars, _sglqt ) )
-            {
-                return true;
-            }
-
-            if ( "null" === str || "void" === str || "undefined" === str || isNumber( str ) || !(/[^0-9-.]+/.test( str )) )
-            {
-                return true;
-            }
-        }
-
-        return false;
-    };
+        return pairs.length > 0;
+    }
 
     /**
      * Returns a string with all leading instances of the specified character removed
@@ -1256,7 +1137,7 @@ const $scope = constants?.$scope || function()
 
     const trimMatchingChars = function( pStr, pRegExpOrChar = _spc, pOptions = DEFAULT_TRIM_MATCHING_OPTIONS )
     {
-        const options = Object.assign( Object.assign( {}, DEFAULT_TRIM_MATCHING_OPTIONS ), pOptions || DEFAULT_TRIM_MATCHING_OPTIONS );
+        const options = populateOptions( pOptions, DEFAULT_TRIM_MATCHING_OPTIONS );
 
         let s = asString( pStr );
 
@@ -1445,16 +1326,39 @@ const $scope = constants?.$scope || function()
         return asString( s, true );
     }
 
-    function _calculateRadix( pNum )
+    function _warnIntegerOutOfRange( pInput, pSource = AS_INT )
     {
-        let input = asString( pNum, true );
+        const msg = ["asInt cannot return values greater than", Number.MAX_SAFE_INTEGER, "or less than", Number.MIN_SAFE_INTEGER, _dot, _spc, (pInput || "the specified value"), "cannot be converted to an Integer"].join( _spc );
 
-        if ( input.startsWith( "0" ) || includesAny( lcase( input ), "b", "o", "x" ) || /\D/.test( input ) )
+        modulePrototype.reportError( new IllegalArgumentError( msg ), msg, S_WARN, (modName + _colon + _colon + (pSource || AS_INT)) );
+    }
+
+    function _isIntegerOutOfRange( pValue )
+    {
+        return pValue > Number.MAX_SAFE_INTEGER || pValue < Number.MIN_SAFE_INTEGER;
+    }
+
+    function _resolveAsArguments( pAsFloat, pValue, pDefault = 0, pOptions = calculateDecimalSymbols() )
+    {
+        const zero = pAsFloat ? 0.0 : 0;
+        const one = pAsFloat ? 1.0 : 1;
+
+        const dflt = isNumber( pDefault ) || isString( pDefault ) ? pDefault : zero;
+
+        const options = mergeOptions( (isObject( pDefault ) ? pDefault : pOptions), pOptions, DEFAULT_NUMBER_SYMBOLS );
+
+        let input = _resolveInput.call( this, pValue );
+
+        input = isNull( input ) ? pAsFloat ? asFloat( dflt, zero, options ) : asInt( dflt, zero, options ) : input;
+
+        if ( isPrimitiveWrapper( input ) )
         {
-            return (isHex( input ) ? 16 : ((isOctal( input ) ? 8 : (isBinary( input ) ? 2 : 10))));
+            input = input.valueOf();
         }
 
-        return 10;
+        const type = typeof input;
+
+        return { input, dflt, options, type, zero, one };
     }
 
     /**
@@ -1467,50 +1371,28 @@ const $scope = constants?.$scope || function()
      */
     const asInt = function( pValue, pDefault = 0, pOptions = calculateDecimalSymbols() )
     {
-        const zero = 0;
+        const {
+            input,
+            dflt,
+            options,
+            type,
+            zero,
+            one
+        } = _resolveAsArguments( false, _resolveInput.call( this, pValue ), pDefault, pOptions );
 
-        const dflt = isNumber( pDefault ) || isString( pDefault ) ? pDefault : zero;
-
-        const options = mergeOptions( (isObject( pDefault ) ? pDefault : pOptions), pOptions, DEFAULT_NUMBER_SYMBOLS );
-
-        let input = _resolveInput.call( this, pValue );
-
-        input = isNull( input ) ? asInt( dflt, zero, options ) : input;
-
-        function warnValueOutOfRange( pInput, pSource = AS_INT )
+        if ( [_num, _big].includes( type ) && _isIntegerOutOfRange( input ) )
         {
-            const msg = ["asInt cannot return values greater than", Number.MAX_SAFE_INTEGER, "or less than", Number.MIN_SAFE_INTEGER, _dot, _spc, (pInput || input || "the specified value"), "cannot be converted to an Integer"].join( _spc );
-
-            modulePrototype.reportError( new IllegalArgumentError( msg ), msg, S_WARN, (modName + _colon + _colon + (pSource || AS_INT)) );
+            _warnIntegerOutOfRange( input );
+            return asInt( dflt, zero, options );
         }
 
         let val = dflt;
-
-        const type = typeof input;
-
-        function isOutOfRange( pValue )
-        {
-            return (pValue || input) > Number.MAX_SAFE_INTEGER || (pValue || input) < Number.MIN_SAFE_INTEGER;
-        }
-
-        if ( [_num, _big].includes( type ) && isOutOfRange( input ) )
-        {
-            warnValueOutOfRange( input );
-
-            return asInt( dflt, zero, options );
-        }
 
         switch ( type )
         {
             case _num:
             case _big:
-                if ( isNanOrInfinite( input ) )
-                {
-                    return asInt( dflt, zero, options );
-                }
-
-                val = parseInt( (input).toFixed( 0 ) );
-
+                val = !isNanOrInfinite( input ) ? parseInt( (input).toFixed( 0 ) ) : asInt( dflt, zero, options );
                 break;
 
             case _str:
@@ -1518,7 +1400,7 @@ const $scope = constants?.$scope || function()
                 break;
 
             case _bool:
-                return input ? 1 : 0;
+                return input ? one : zero;
 
             case _obj:
                 if ( isDate( input ) || isFunction( input?.getTime ) )
@@ -1536,9 +1418,9 @@ const $scope = constants?.$scope || function()
             val = asInt( dflt, zero, options );
         }
 
-        if ( isOutOfRange( val ) )
+        if ( _isIntegerOutOfRange( val ) )
         {
-            warnValueOutOfRange( val );
+            _warnIntegerOutOfRange( val );
             val = asInt( dflt, zero, options );
         }
 
@@ -1558,87 +1440,45 @@ const $scope = constants?.$scope || function()
      */
     const asFloat = function( pValue, pDefault = 0, pOptions = calculateDecimalSymbols() )
     {
-        const zero = 0.0;
-        const one = 1.0;
+        const {
+            input,
+            dflt,
+            options,
+            type,
+            zero,
+            one
+        } = _resolveAsArguments( true, _resolveInput.call( this, pValue ), pDefault, pOptions );
 
-        const input = _resolveInput.call( this, pValue );
+        let val = dflt;
 
-        const dflt = isNumber( pDefault ) || isString( pDefault ) ? pDefault : 0;
-
-        const options = Object.assign( {}, (isNonNullObject( pOptions ) ? pOptions : (isNonNullObject( pDefault ) ? pDefault : pOptions)) || calculateDecimalSymbols() );
-
-        const type = typeof input;
-
-        if ( isNull( input ) )
+        switch ( type )
         {
-            return asFloat( dflt, zero, options );
-        }
+            case _num:
+            case _big:
+                val = !isNanOrInfinite( input ) ? parseFloat( input ) : asFloat( dflt, zero, options );
+                break;
 
-        let radix = _calculateRadix( input );
+            case _str:
+                val = (isNumeric( input ) ? parseFloat( toDecimal( input, (options.decimal_point || _dot) ) ) : asFloat( dflt, zero, options ));
+                break;
 
-        let canonical = toCanonicalNumericFormat( input, options );
+            case _bool:
+                return input ? one : zero;
 
-        if ( canonical.startsWith( "0" ) && 10 === radix )
-        {
-            canonical = trimLeadingCharacters( input, "0" );
-            canonical = startsWithAny( canonical, _dot, _comma ) ? "0" + canonical : canonical;
-        }
-
-        if ( _big === type )
-        {
-            return asInt( canonical, dflt, options );
-        }
-
-        if ( _num === type )
-        {
-            const val = parseFloat( canonical );
-
-            if ( isNanOrInfinite( val ) )
-            {
-                return asFloat( dflt, zero, options );
-            }
-
-            return val;
-        }
-
-        if ( _bool === type )
-        {
-            return input ? one : zero;
-        }
-
-        let val = zero;
-
-        try
-        {
-            if ( 10 === radix )
-            {
-                val = parseFloat( canonical );
-            }
-            else
-            {
-                let parts = canonical.split( _dot );
-
-                let intPart = (parts?.length || 0) > 0 ? parts[0] : input;
-
-                let decPart = (parts?.length || 0) > 1 ? parts[1] : _mt_str;
-
-                val = asInt( intPart, 0, options );
-
-                if ( !isBlank( decPart ) )
+            case _obj:
+                if ( isDate( input ) || isFunction( input?.getTime ) )
                 {
-                    let digits = decPart.split( _mt_chr );
-                    val = digits.reduce( ( sum, digit, index ) => sum + parseInt( digit, radix ) * Math.pow( radix, -(index + 1) ), val );
+                    val = asFloat( input.getTime() );
                 }
-            }
+                break;
 
-            if ( isNanOrInfinite( val ) )
-            {
-                val = asFloat( dflt, zero, options );
-            }
+            default:
+                break;
         }
-        catch( ex )
+
+        if ( isNanOrInfinite( val ) )
         {
-            modulePrototype.reportError( ex, "trying to interpret '" + asString( pValue || input ) + "' as a number", S_WARN, (modName + _colon + _colon + AS_INT) );
+            val = asFloat( dflt, zero, options );
         }
 
         return val || zero;
@@ -1658,14 +1498,14 @@ const $scope = constants?.$scope || function()
         return Math.max( 0.0, asFloat( pStr ) );
     };
 
-    const toIntWithinRange = function( pStr, pMin, pMax, pOptions = calculateDecimalSymbols() )
+    const toNumberWithinRange = function( pStr, pMin, pMax, converter, pOptions = calculateDecimalSymbols() )
     {
-        const options = Object.assign( {}, pOptions || calculateDecimalSymbols() );
+        const options = populateOptions( pOptions, DEFAULT_NUMBER_SYMBOLS );
 
-        const value = asInt( pStr, 0, options );
+        const value = converter( pStr, 0, options );
 
-        const minimum = asInt( pMin, 0, options );
-        const maximum = asInt( pMax, 0, options );
+        const minimum = converter( pMin, 0, options );
+        const maximum = converter( pMax, 0, options );
 
         const greatest = Math.max( minimum, maximum );
         const smallest = Math.min( minimum, maximum );
@@ -1673,19 +1513,14 @@ const $scope = constants?.$scope || function()
         return clamp( value, smallest, greatest );
     };
 
+    const toIntWithinRange = function( pStr, pMin, pMax, pOptions = calculateDecimalSymbols() )
+    {
+        return toNumberWithinRange( pStr, pMin, pMax, asInt, pOptions );
+    };
+
     const toFloatWithinRange = function( pStr, pMin, pMax, pOptions = calculateDecimalSymbols() )
     {
-        const options = Object.assign( {}, pOptions || calculateDecimalSymbols() );
-
-        const value = asFloat( pStr, 0, options );
-
-        const minimum = asFloat( pMin, 0, options );
-        const maximum = asFloat( pMax, 0, options );
-
-        const greatest = Math.max( minimum, maximum );
-        const smallest = Math.min( minimum, maximum );
-
-        return clamp( value, smallest, greatest );
+        return toNumberWithinRange( pStr, pMin, pMax, asFloat, pOptions );
     };
 
     /**
@@ -1696,30 +1531,45 @@ const $scope = constants?.$scope || function()
      * @param {Object} pOptions - a set of options to control subtle behaviors of the function, such as whether 0 or the last valid index is returned when the provided index is invalid
      * @returns {number} a number between 0 and one less than the length of the indexed object (i.e., Array or String)
      */
-    const safeIndex = function( pIndex, pIndexed, pOptions = { defaultToEnd: false } )
+    const safeIndex = function( pIndex, pIndexed, pOptions = { defaultToEnd: false, min: 0 } )
     {
-        const zero = 0;
-        const one = 1;
+        const arr = isLikeArray( pIndexed ) ? pIndexed || [] : [] || [];
 
-        const arr = pIndexed || [];
+        const length = arr.length;
 
-        const maxIdx = Math.max( zero, (Math.min( (pOptions?.max || (arr?.length || zero)), ((arr?.length || zero) - one) )) );
+        const options = populateOptions( pOptions, { defaultToEnd: false, min: 0, max: length - 1 } );
 
-        const minIdx = Math.max( zero, (pOptions?.min || -(one)) );
+        const maxIndex = Math.min( asInt( options.max, length - 1 ), length - 1 );
 
-        const idx = asInt( (isNumber( pIndex ) ? pIndex : asInt( pIndex )), (pOptions?.defaultToEnd ? maxIdx : minIdx) );
+        const minIndex = Math.max( 0, asInt( options.min, 0 ) );
 
-        if ( (arr?.length || zero) > idx )
+        let index = asInt( pIndex, 0 );
+
+        if ( index < minIndex || index > maxIndex )
         {
-            return clamp( idx, minIdx, maxIdx );
+            index = options.defaultToEnd ? maxIndex : minIndex;
         }
 
-        if ( pOptions?.defaultToEnd )
-        {
-            return Math.min( arr?.length || 0, maxIdx );
-        }
+        return clamp( index, minIndex, Math.max( minIndex, maxIndex ) );
+    };
 
-        return Math.max( minIdx, Math.min( (pOptions?.defaultToEnd ? maxIdx : zero) ) );
+    const ENDS_WITH = ( s ) => e => s.endsWith( e );
+    const STARTS_WITH = ( s ) => e => s.startsWith( e );
+    const CONTAINS = ( s ) => e => s.includes( e );
+    const MATCHES = ( s ) => e => isRegExp( e ) && e.test( s );
+
+    const _matchesSome = function( pStr, pFilterCreator, ...pArr )
+    {
+        const s = asString( pStr, false );
+        const arr = [].concat( ...(pArr || []) );
+        return arr?.length > 0 ? arr.some( pFilterCreator( s ) ) : isEmpty( s );
+    };
+
+    const _matchesEvery = function( pStr, pFilterCreator, ...pArr )
+    {
+        const s = asString( pStr, false );
+        const arr = [].concat( ...(pArr || []) );
+        return arr?.length > 0 ? arr.every( pFilterCreator( s ) ) : isEmpty( s );
     };
 
     /**
@@ -1730,11 +1580,7 @@ const $scope = constants?.$scope || function()
      */
     const endsWithAny = function( pStr, ...pArr )
     {
-        const s = asString( pStr, false );
-
-        const arr = [].concat( ...(pArr || []) );
-
-        return arr?.length > 0 ? arr.some( e => s.endsWith( e ) ) : isEmpty( s );
+        return _matchesSome( pStr, ENDS_WITH, ...pArr );
     };
 
     /**
@@ -1745,11 +1591,39 @@ const $scope = constants?.$scope || function()
      */
     const startsWithAny = function( pStr, ...pArr )
     {
-        const s = asString( pStr, true );
+        return _matchesSome( pStr, STARTS_WITH, ...pArr );
+    };
 
-        const arr = [].concat( ...(pArr || []) );
+    /**
+     * Returns true if the specified string matches any of the provided regular expressions.
+     * <br>
+     *
+     * @param {string} pStr - The string to be evaluated against the regular expressions.
+     *
+     * @param {...RegExp} pRx - A set of regular expressions to test against the input string.
+     *
+     * @returns {boolean}       true if the input string matches at least one of the provided regular expressions,
+     *                          otherwise false.
+     */
+    const matchesAny = function( pStr, ...pRx )
+    {
+        return _matchesSome( pStr, MATCHES, ...pRx );
+    };
 
-        return arr?.length > 0 ? arr.some( e => (e instanceof RegExp) ? e.test( s ) : s.startsWith( e ) ) : isEmpty( s );
+    /**
+     * Returns true if the specified string matches ALL the provided regular expressions.
+     * <br>
+     *
+     * @param {string} pStr - The string to be evaluated against the regular expressions.
+     *
+     * @param {...RegExp} pRx - A set of regular expressions to test against the input string.
+     *
+     * @returns {boolean}       true if the input string matches every one of the provided regular expressions,
+     *                          otherwise false.
+     */
+    const matchesAll = function( pStr, ...pRx )
+    {
+        return _matchesEvery( pStr, MATCHES, ...pRx );
     };
 
     /**
@@ -1760,11 +1634,7 @@ const $scope = constants?.$scope || function()
      */
     const includesAny = function( pStr, ...pArr )
     {
-        const s = asString( pStr, false );
-
-        const arr = [].concat( ...(pArr || []) );
-
-        return arr?.length > 0 ? arr.some( e => s.includes( e ) ) : isEmpty( s );
+        return _matchesSome( pStr, CONTAINS, ...pArr );
     };
 
     /**
@@ -1775,12 +1645,32 @@ const $scope = constants?.$scope || function()
      */
     const includesAll = function( pStr, ...pArr )
     {
-        const s = asString( pStr, false );
-
-        const arr = [].concat( ...(pArr || []) );
-
-        return arr?.length > 0 ? arr.every( e => s.includes( e ) ) : isEmpty( s );
+        return _matchesEvery( pStr, CONTAINS, ...pArr );
     };
+
+    function _objectToBoolean( pValue, ...pFunctionArgs )
+    {
+        if ( isNull( pValue ) )
+        {
+            return false;
+        }
+        else if ( pValue instanceof Boolean )
+        {
+            return Boolean( pValue.valueOf() );
+        }
+        else if ( isArray( pValue ) || isMap( pValue ) || isSet( pValue ) )
+        {
+            return Object.values( pValue ).flat().some( e => evaluateBoolean( e, ...pFunctionArgs ) );
+        }
+        else if ( isDate( pValue ) || isFunction( pValue?.getTime ) )
+        {
+            return pValue.getTime() > 0;
+        }
+        else if ( BUILTIN_TYPES.filter( e => pValue instanceof e ).length > 0 )
+        {
+            return ERROR_TYPES.filter( e => pValue instanceof e ).length <= 0;
+        }
+    }
 
     /**
      * Returns true if the value specified can be interpreted as an affirmative.
@@ -1793,100 +1683,52 @@ const $scope = constants?.$scope || function()
      */
     const evaluateBoolean = function( pValue, ...pFunctionArgs )
     {
-        let val = pValue;
-
-        if ( _ud === typeof pValue )
-        {
-            if ( ((this instanceof Boolean || Boolean === this?.constructor || this === Boolean.prototype)) )
-            {
-                val = this.valueOf();
-            }
-        }
+        let val = _resolveInput.call( this, pValue );
 
         // missing values are always interpreted as negatives (false)
-        if ( (_ud === typeof val) || (undefined === val) || (null == val) || (_z === val) || false === val )
+        if ( isNull( val ) )
         {
             return false;
         }
 
-        // boolean values are already true or false, so just return the value
-        if ( _bool === typeof val || true === val )
+        switch ( typeof val )
         {
-            return val;
-        }
+            // if the value is a string, we check to see
+            // if it is one of the strings defined to represent an affirmative (truthy) value
+            case _str:
+                return _affirmatives.includes( lcase( tidy( asString( val, true ) ) ) );
 
-        // if the value is a string, we check to see if it is one of the strings defined to represent an affirmative (truthy) value
-        if ( isString( val ) )
-        {
-            const value = lcase( tidy( val, {} ) );
+            // boolean values are already true or false, so just return the value
+            case _bool:
+                return Boolean( val );
 
-            return !isBlank( value ) && _affirmatives.includes( value );
-        }
+            // if the value is a number, we consider any value > 0 to be a truthy value;
+            // note that NaN is considered false
+            case _num:
+            case _big:
+                return !isNaN( val ) && asFloat( val ) > 0.0;
 
-        // if the value is a number, we consider any value > 0 to be a truthy value; note that NaN is considered false
-        if ( _num === typeof val )
-        {
-            const value = parseFloat( val );
+            // if the value is a function, we try to invoke it with any arguments passed
+            // and return the result of evaluating its return value
+            case _fun:
+                return evaluateBoolean( _attemptInvocation( val, ...pFunctionArgs ), ...pFunctionArgs );
 
-            if ( !isNaN( value ) )
-            {
-                return value > 0;
-            }
+            // if the value is an object, we return true if any of its properties evaluate to true;
+            // note that this is an unexpected case at present,
+            // but exists to catch all argument types the function may encounter
+            case _obj:
+                return _objectToBoolean( val, pFunctionArgs ) || false;
 
-            return false;
-        }
-
-        // if the value is a function, we try to invoke it with any arguments passed and return the result of evaluating its return value
-        if ( _fun === (typeof val) )
-        {
-            try
-            {
-                return evaluateBoolean( val( ...(pFunctionArgs || []) ), ...(pFunctionArgs || []) );
-            }
-            catch( ex )
-            {
-                const msg = "trying to determine the verity of '" + (val?.name || asString( val )) + "' with arguments " + (pFunctionArgs || []).join( _comma );
-                modulePrototype.reportError( ex, msg, S_ERROR, (modName + _colon + _colon + "evaluateBoolean") );
+            default:
                 return false;
-            }
         }
-
-        // if the value is an object, we return true if any of its properties evaluate to true;
-        // note that this is an unexpected case at present, but exists to catch all argument types the function may encounter
-        if ( _obj === typeof val )
-        {
-            if ( Array.isArray( val ) )
-            {
-                for( let i = val.length; i--; )
-                {
-                    if ( evaluateBoolean( val[i] ) )
-                    {
-                        return true;
-                    }
-                }
-            }
-            else
-            {
-                for( const prop in val )
-                {
-                    if ( Object.hasOwn( val, prop ) )
-                    {
-                        if ( evaluateBoolean( val[prop] ) )
-                        {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-
-        return false;
     };
 
     const isTrue = evaluateBoolean;
     const toBool = evaluateBoolean;
 
     Boolean.prototype.evaluate = evaluateBoolean;
+    String.prototype.toBool = evaluateBoolean;
 
     /**
      * This function converts all (carriage return + line feed) sequences to line feed only sequences
@@ -1955,7 +1797,6 @@ const $scope = constants?.$scope || function()
     const isRelativePath = function( pPath )
     {
         let filepath = toUnixPath( pPath );
-
         return filepath.includes( _unixThisDir ) || filepath.includes( _unixPrevDir ) || filepath.startsWith( _dot );
     };
 
@@ -2020,9 +1861,9 @@ const $scope = constants?.$scope || function()
         // unless there is no previous array element, which means we have reached the root
         let idx = dirs.indexOf( _dot + _dot );
 
-        function moreDirectoriesToProcess( idx, dirs )
+        function moreDirectoriesToProcess( pIndex, pDirs )
         {
-            return idx >= 0 && (idx < dirs.length) && (dirs.length > 1);
+            return pIndex >= 0 && (pIndex < pDirs.length) && (pDirs.length > 1);
         }
 
         while ( moreDirectoriesToProcess( idx, dirs ) )
@@ -2069,25 +1910,41 @@ const $scope = constants?.$scope || function()
         return false;
     };
 
-    /**
-     * Returns true if the specified string appears to be a JSON expression representing an Object.
-     * This function does not attempt to parse the JSON.  Rather this just checks to see if the string begins with { and ends with }
-     * @param pString a string that might be a JSON expression representing an Object
-     * @param pTest
-     * @returns {boolean} true if the string appears to be a JSON expression representing an Object
-     * @throws Error if the argument passed is already an Object,
-     * if we encounter an Error when trying to stringify that Object,
-     * that Error will be thrown from this function
-     */
-    const isValidJsonObject = function( pString, pTest = false )
+    const _prepareJson = function( pString )
     {
-        const s = isString( pString ) ? tidy( pString ) : _obj === typeof pString ? JSON.stringify( pString ) : _mt_str;
+        return isString( pString ) ? tidy( pString ) : isObject( pString ) ? JSON.stringify( pString ) : _mt_str;
+    };
+
+    /**
+     * Returns true if the specified input is a valid JSON entity.<br>
+     * A valid JSON entity, for this purpose, is defined as either
+     * a string representing an Object or an Array.<br>
+     *
+     * @param {string|object} pString - The input to validate. It can be a string or an object.
+     *                                  If it's an object, it will be converted to a JSON string.
+     *
+     * @param {Array<string>} [pChars=["{", "}"]] - The expected starting and ending characters
+     *                                              of a valid JSON structure. Defaults to curly braces.
+     *
+     * @param {boolean} [pTest=false] - If true, parses the JSON text to ensure it represents an object or array.<br>
+     *                                  Defaults to false, in which case, we only validate that the string appears to have a proper form.
+     *
+     * @returns {boolean} Returns true if the input is a string representing a JSON object or array
+     * based on the specified parameters; otherwise, false.
+     */
+    const isValidJsonEntity = function( pString, pChars = ["{", "}"], pTest = false )
+    {
+        let str = _resolveInput.call( this, pString );
+
+        const s = attempt( _prepareJson, str ) || asString( str, true );
 
         let rx = new RegExp( _rxValidJson, "s" ); // the 's' flag means to enable dot (.) to match newline characters (\n)
 
         let matches = rx.exec( s );
 
-        if ( !isNull( matches ) && matches.length > 3 && ("{" === matches[1] && "}" === matches[3]) )
+        let chars = [].concat( ...(pChars || ["{", "}"]) );
+
+        if ( !isNull( matches ) && matches.length > 3 && (chars[0] === matches[1] && chars[1] === matches[3]) )
         {
             try
             {
@@ -2102,36 +1959,74 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * Returns true if the specified string appears to be a JSON expression representing an Array.
-     * This function does not attempt to parse the JSON.  Rather this just checks to see if the string begins with [ and ends with ]
+     * Returns true if the specified string appears to be a JSON expression representing an Object.
+     *
+     * @param {string|object} pString a string that might be a JSON expression representing an Object
+     *
+     * @param {boolean} pTest If true, this function will only return true if we can successfully parse the JSON
+     *
+     * @returns {boolean} true if the string appears to be a JSON expression representing an Object
+     */
+    const isValidJsonObject = function( pString, pTest = false )
+    {
+        return isValidJsonEntity( pString, ["{", "}"], pTest ) && ( !pTest || !isArray( JSON.parse( pString ) ));
+    };
+
+    /**
+     * Returns true if the specified string appears to be a JSON expression representing an Array.<br>
+     *
      * @param pString a string that might be a JSON expression representing an Array
-     * @param pTest
+     *
+     * @param {boolean} pTest If true, this function will only return true if we can successfully parse the JSON
+     *
      * @returns {boolean} true if the string appears to be a JSON expression representing an Array
-     * @throws Error if the argument passed is already an Array or Object,
-     * if we encounter an Error when trying to stringify that Array or Object,
-     * that Error will be thrown from this function
      */
     const isValidJsonArray = function( pString, pTest = false )
     {
-        const s = isString( pString ) ? tidy( pString ) : _obj === typeof pString ? JSON.stringify( pString ) : _mt_str;
-
-        let rx = new RegExp( _rxValidJson, "s" ); // the 's' flag means to enable dot (.) to match newline characters (\n)
-
-        let matches = rx.exec( s );
-
-        if ( matches && matches.length > 3 && ("[" === matches[1] && "]" === matches[3]) )
-        {
-            try
-            {
-                return !pTest || isArray( JSON.parse( s ) );
-            }
-            catch( ex )
-            {
-                // ignore
-            }
-        }
-        return false;
+        return isValidJsonEntity( pString, ["[", "]"], pTest ) && ( !pTest || isArray( JSON.parse( pString ) ));
     };
+
+    /**
+     * Determines whether a given input can be considered as JSON or not.
+     *
+     * The function evaluates the input string by checking various conditions:
+     * - If the input is not a string or is blank, it checks if it is a number.
+     * - Trims the input string and removes leading or trailing whitespaces.
+     * - Checks if the input is enclosed in appropriate brackets.
+     * - Validates specific keywords such as "null", "void", and "undefined".
+     * - Ensures that the input does not contain invalid characters for JSON representation.
+     *
+     * @function
+     * @param {string|number|any} pStr - The input value to evaluate as potential JSON.
+     * @returns {boolean} - true if the input is considered JSON, otherwise false.
+     */
+    const isJson = function( pStr )
+    {
+        if ( !isString( pStr ) || isBlank( pStr ) )
+        {
+            return isNumber( pStr );
+        }
+
+        const str = tidy( asString( pStr, true ) ).trim().replace( /^[ \n\r]+/, _mt_str ).replace( /[ \n\r]+$/, _mt_str );
+
+        if ( enclosed( str ) )
+        {
+            return true;
+        }
+
+        return "null" === str || "void" === str || "undefined" === str || isNumber( str ) || !(/[^0-9-.]+/.test( str ));
+    };
+
+    /**
+     * @typedef {Object} JsonValidationOptions Options to control the behavior of the 'isValidJson' function
+     *
+     * @property {boolean} [jsonObjectsOnly=false] When true, the string must represent an object, rather than an array or other type
+     * @property {boolean} [jsonArraysOnly=false]  When true, the string must represent an array, rather than an object or other type
+     * @property {boolean} [acceptPrimitives=false] When true, the string can represent any valid JavaScript type, such as a number, string, or even null or undefined
+     * @property {object} [jsonOptions={ objectsOnly: false, arraysOnly: false, test: false }] An alternative mechanism for passing the validation options
+     * @property {boolean} [testJson=false] When true, potentially valid JSON will be parsed to ensure it is actually valid
+     *
+     */
 
     const JSON_VALIDATION_OPTIONS =
         {
@@ -2144,63 +2039,41 @@ const $scope = constants?.$scope || function()
 
     /**
      * Returns true if the specified string appears to be a JSON expression representing an Object or Array.
-     * This function does not attempt to parse the JSON.  Rather this just checks to see if the string begins with { and ends with } or begins with [ and ends with ]
-     * @param pString a string that might be a JSON expression representing an Object
-     * @param pOptions an object defining whether to return true only for Arrays or Objects
+     *
+     * @param {string|object} pString a string that might be a JSON expression representing an Object
+     *
+     * @param {JsonValidationOptions} pOptions an object defining whether to return true only for Arrays or Objects
+     *
      * @returns {boolean} true if the string appears to be a JSON expression representing an Object or Array
-     * @throws Error if the argument passed is already an Object or Array,
-     * if we encounter an Error when trying to stringify that Object or Array,
-     * that Error will be thrown from this function
      */
     const isValidJson = function( pString, pOptions = JSON_VALIDATION_OPTIONS )
     {
-        const s = isString( pString ) ? tidy( pString ) : _obj === typeof pString ? JSON.stringify( pString ) : _mt_str;
+        let str = _resolveInput.call( this, pString );
 
-        let testJson = pOptions?.testJson || pOptions?.jsonOptions?.test;
+        const s = attempt( _prepareJson, str ) || asString( str, true );
 
-        if ( pOptions?.jsonObjectsOnly || pOptions?.jsonOptions?.objectsOnly )
+        const options = populateOptions( pOptions, JSON_VALIDATION_OPTIONS );
+
+        let testJson = options?.testJson || options?.jsonOptions?.test;
+
+        if ( options?.jsonObjectsOnly || options?.jsonOptions?.objectsOnly )
         {
             return isValidJsonObject( s, testJson );
         }
 
-        if ( pOptions?.jsonArraysOnly || pOptions?.jsonOptions?.arraysOnly )
+        if ( options?.jsonArraysOnly || options?.jsonOptions?.arraysOnly )
         {
             return isValidJsonArray( s, testJson );
         }
 
-        if ( pOptions?.acceptPrimitives )
+        let is = isValidJsonObject( s, testJson ) || isValidJsonArray( s, testJson );
+
+        if ( !is && options?.acceptPrimitives )
         {
-            if ( (s.startsWith( "\"" ) && s.endsWith( "\"" )) || (/\d+/g).test( s ) || "null" === s || "void" === s || S_TRUE === s || S_FALSE === s )
-            {
-                try
-                {
-                    return !testJson || !isNull( JSON.parse( s ) );
-                }
-                catch( ex )
-                {
-                    //ignore
-                }
-            }
+            is = isJson( s );
         }
 
-        let rx = new RegExp( _rxValidJson, "s" ); // the 's' flag means to enable dot (.) to match newline characters (\n)
-
-        let matches = rx.exec( s );
-
-        if ( matches && matches.length > 3 &&
-             (("[" === matches[1] && "]" === matches[3]) || ("{" === matches[1] && "}" === matches[3])) )
-        {
-            try
-            {
-                return !testJson || !isNull( JSON.parse( s ) );
-            }
-            catch( ex )
-            {
-                // ignore
-            }
-        }
-
-        return false;
+        return is;
     };
 
     const DEFAULT_VALID_NUMBER_OPTIONS = lock(
@@ -2209,6 +2082,8 @@ const $scope = constants?.$scope || function()
             maximumValue: Number.POSITIVE_INFINITY,
             ...DEFAULT_NUMBER_SYMBOLS
         } );
+
+    const _ano = ( pOptions ) => populateOptions( pOptions, DEFAULT_VALID_NUMBER_OPTIONS );
 
     /**
      * Returns true if the argument is a number
@@ -2222,11 +2097,11 @@ const $scope = constants?.$scope || function()
      */
     const isValidNumber = function( pNum, pOptions = DEFAULT_VALID_NUMBER_OPTIONS )
     {
-        const options = populateOptions( pOptions, DEFAULT_VALID_NUMBER_OPTIONS );
+        const options = _ano( pOptions );
 
-        const minValue = Math.max( Number.NEGATIVE_INFINITY, (0 === pOptions?.minimumValue ? 0 : options.minimumValue) );
+        const minValue = Math.max( Number.NEGATIVE_INFINITY, (0 === options?.minimumValue ? 0 : options.minimumValue) );
 
-        const maxValue = Math.min( Number.POSITIVE_INFINITY, (0 === pOptions?.maximumValue ? 0 : options.maximumValue) );
+        const maxValue = Math.min( Number.POSITIVE_INFINITY, (0 === options?.maximumValue ? 0 : options.maximumValue) );
 
         // if the argument isn't defined, is null, or is not a numeric type or instance of Number, it is not valid, return false
         if ( _ud === typeof pNum || null == pNum || !([_num, _big].includes( typeof pNum ) || (_obj === typeof pNum && pNum instanceof Number)) )
@@ -2267,7 +2142,7 @@ const $scope = constants?.$scope || function()
 
     const isValidNumeric = function( pStr, pOptions = DEFAULT_VALID_NUMBER_OPTIONS )
     {
-        const options = Object.assign( {}, pOptions || DEFAULT_VALID_NUMBER_OPTIONS );
+        const options = _ano( pOptions );
 
         if ( isValidNumber( pStr, options ) )
         {
@@ -2292,7 +2167,6 @@ const $scope = constants?.$scope || function()
                 break;
 
             case _fun:
-
                 try
                 {
                     let n = pStr.call( $scope(), pStr );
@@ -2345,7 +2219,7 @@ const $scope = constants?.$scope || function()
      */
     const handleMc = function handleMc( pString, pOptions = MC_OPTIONS )
     {
-        const options = Object.assign( Object.assign( {}, MC_OPTIONS ), pOptions || {} );
+        const options = populateOptions( pOptions, MC_OPTIONS );
 
         let s = asString( pString, false ) || _mt_str;
 
@@ -2356,13 +2230,13 @@ const $scope = constants?.$scope || function()
 
         let out = _mt_str;
 
-        let tokens = s.split( " " );
+        let tokens = s.split( _spc );
 
         for( let i = 0, n = tokens.length; i < n; i++ )
         {
             let t = tokens[i];
 
-            let prefixes = ["Mc", "Mac", "O'"].concat( options?.prefixes || [] );
+            let prefixes = ["Mc", "Mac", "O'"].concat( options?.prefixes || [] ).flat();
 
             let Mc = -1;
             let len = 0;
@@ -2395,7 +2269,7 @@ const $scope = constants?.$scope || function()
     const DEFAULT_PROPERCASE_OPTIONS =
         {
             separator: _spc,
-            surnamePrefixes: ["Mc", "Mac"]
+            surnamePrefixes: MC_OPTIONS.prefixes
         };
 
     /**
@@ -2432,18 +2306,18 @@ const $scope = constants?.$scope || function()
 
             temp = word.substring( 1, word.length ).toLowerCase();
 
-            if ( temp.indexOf( "'" ) >= 0 )
+            if ( temp.indexOf( _apos ) >= 0 )
             {
                 //handle O'Leary
-                temp = "'" + toProperCase( temp, Object.assign( { ...DEFAULT_PROPERCASE_OPTIONS }, { separator: "'" } ) );
+                temp = _apos + toProperCase( temp, Object.assign( { ...options }, { separator: _apos } ) );
             }
 
-            let pos = temp.indexOf( "-" );
+            let pos = temp.indexOf( _hyphen );
 
             if ( pos >= 0 )
             {
                 //handle Thorne-Smith (temp = horne-smith )
-                temp = temp.substring( 0, pos ) + "-" + handleMc( temp.substring( pos + 1, pos + 2 ).toUpperCase() + temp.substring( pos + 2, temp.length ) );
+                temp = temp.substring( 0, pos ) + _hyphen + handleMc( temp.substring( pos + 1, pos + 2 ).toUpperCase() + temp.substring( pos + 2, temp.length ) );
             }
 
             out += temp;
@@ -2496,7 +2370,7 @@ const $scope = constants?.$scope || function()
      */
     const toSnakeCase = function( pStr )
     {
-        let s = (asString( pStr, false ) || _mt_str);
+        let s = asString( pStr, false ) || _mt_str;
 
         s = lcase( s.slice( 0, 1 ) ) + s.slice( 1 );
 
@@ -2534,26 +2408,28 @@ const $scope = constants?.$scope || function()
 
     const reverseString = function( pStr )
     {
-        let arr = [].concat( pStr );
+        let str = _resolveInput.call( this, pStr );
 
-        if ( null == pStr || _ud === typeof pStr )
+        if ( null == str || _ud === typeof str || isBlank( str ) )
         {
             return _mt_str;
         }
 
-        switch ( typeof pStr )
+        let arr = [].concat( str );
+
+        switch ( typeof str )
         {
             case _ud:
                 arr = [];
                 break;
 
             case _str:
-                arr = pStr.split( _mt_chr );
+                arr = asString( str ).split( _mt_chr );
                 break;
 
             case _num:
             case _big:
-                let s = asString( pStr );
+                let s = asString( str );
                 arr = s.split( _mt_chr );
                 break;
 
@@ -2563,9 +2439,9 @@ const $scope = constants?.$scope || function()
 
             case _obj:
 
-                if ( isArray( pStr ) )
+                if ( isArray( str ) )
                 {
-                    arr = [].concat( pStr );
+                    arr = [].concat( ...(str || []) );
                 }
 
                 break;
@@ -2578,6 +2454,8 @@ const $scope = constants?.$scope || function()
 
         return asString( arr.join( _mt_chr ) );
     };
+
+    String.prototype.reverse = String.prototype.reverse || reverseString;
 
     const DEFAULT_TIDY_OPTIONS =
         {
@@ -2627,11 +2505,13 @@ const $scope = constants?.$scope || function()
     {
         let str = asString( pString );
 
+        const options = populateOptions( pOptions, DEFAULT_TIDY_OPTIONS );
+
         for( const [key, operation] of Object.entries( CASE_OPERATIONS ) )
         {
-            if ( pOptions[key] )
+            if ( options[key] )
             {
-                str = operation( pString, pOptions ) || str;
+                str = operation( str, options ) || str;
             }
         }
 
@@ -2660,18 +2540,7 @@ const $scope = constants?.$scope || function()
     {
         const options = populateOptions( pOptions, DEFAULT_TIDY_OPTIONS );
 
-        if ( _ud === typeof pString || null === pString )
-        {
-            // note that we code this in such a way that it can be bound to the String.prototype as a member function (a.k.a. method)
-            if ( (this instanceof String || String === this?.constructor) && isFunction( this.tidy ) )
-            {
-                return tidy( String( this ).valueOf() || asString( this, options?.trim ), options );
-            }
-
-            return _mt_str;
-        }
-
-        let str = asString( pString, options?.trim );
+        let str = asString( _resolveInput.call( this, pString ) || pString, options?.trim );
 
         for( const [key, operation] of Object.entries( TRIM_OPERATIONS ) )
         {
@@ -2698,11 +2567,11 @@ const $scope = constants?.$scope || function()
                 {
                     try
                     {
-                        str = func.apply( $scope, [str, options] );
+                        str = func.apply( this || $scope, [str, options] );
                     }
                     catch( ex )
                     {
-                        modulePrototype.reportError( ex, "trying to execute " + asString( func?.name || funcToString.call() ) + " as a number", S_WARN, (modName + _colon + _colon + "tidy") );
+                        modulePrototype.reportError( ex, "trying to execute " + asString( func?.name || funcToString.call( func ) ) + " as a number", S_WARN, (modName + _colon + _colon + "tidy") );
                     }
                 }
 
@@ -2725,14 +2594,12 @@ const $scope = constants?.$scope || function()
 
     function capitalize( pStr, pPreserve = false )
     {
-        let str = asString( pStr );
-        return toggleCaps( str, ucase, (pPreserve ? asString : lcase) );
+        return toggleCaps( asString( pStr ), ucase, (pPreserve ? asString : lcase) );
     }
 
     function uncapitalize( pStr )
     {
-        let str = asString( pStr );
-        return toggleCaps( str, lcase, asString );
+        return toggleCaps( asString( pStr ), lcase, asString );
     }
 
     function cartesian( pStrA, pStrB )
@@ -2885,6 +2752,7 @@ const $scope = constants?.$scope || function()
         {
             dependencies,
             DEFAULT_AS_STRING_OPTIONS,
+            DEFAULT_NUMBER_SYMBOLS,
             asString,
             isEmpty,
             isBlank,
@@ -2900,7 +2768,6 @@ const $scope = constants?.$scope || function()
             rightOfLast,
             trimLeadingCharacters,
             trimMatchingChars,
-            DEFAULT_NUMBER_SYMBOLS,
             calculateDecimalSymbols,
             deriveDecimalSymbols,
             toCanonicalNumericFormat,
@@ -2918,6 +2785,8 @@ const $scope = constants?.$scope || function()
             startsWithAny,
             includesAny,
             includesAll,
+            matchesAny,
+            matchesAll,
             evaluateBoolean,
             isTrue,
             toBool,

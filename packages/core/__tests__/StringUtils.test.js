@@ -12,7 +12,8 @@ const {
     asInt,
     toCanonicalNumericFormat,
     findDuplicatedSubstrings,
-    findCommonSubstrings
+    findCommonSubstrings,
+    includesAll
 } = stringUtils;
 
 const repoName = "bocktils";
@@ -985,13 +986,13 @@ describe( "safeIndex", () =>
     test( "safeIndex(3, 'abcdefghi', { defaultToEnd: false, min:5, max:11 }",
           () =>
           {
-              expect( stringUtils.safeIndex( 3, "abcdefghi", { defaultToEnd: true, min: 5, max: 11 } ) ).toEqual( 5 );
+              expect( stringUtils.safeIndex( 3, "abcdefghi", { defaultToEnd: false, min: 5, max: 11 } ) ).toEqual( 5 );
           } );
 
     test( "safeIndex(15, 'abcdefghi', { defaultToEnd: false, min:3, max:5 }",
           () =>
           {
-              expect( stringUtils.safeIndex( 3, "abcdefghi", { defaultToEnd: true, min: 5, max: 11 } ) ).toEqual( 5 );
+              expect( stringUtils.safeIndex( 15, "abcdefghi", { defaultToEnd: false, min: 5, max: 11 } ) ).toEqual( 5 );
           } );
 } );
 
@@ -1074,21 +1075,21 @@ describe( "includesAll", () =>
           () =>
           {
               let s = "abcdef";
-              expect( stringUtils.includesAll( s, ["a", "ef", "def"] ) ).toBe( true );
+              expect( includesAll( s, ["a", "ef", "def"] ) ).toBe( true );
           } );
 
     test( "includesAll - expected false",
           () =>
           {
               let s = "abcdef";
-              expect( stringUtils.includesAll( s, ["a", "bcd", "fgh", "hij"] ) ).toBe( false );
+              expect( includesAll( s, ["a", "bcd", "fgh", "hij"] ) ).toBe( false );
           } );
 
     test( "includesAll('',[]) === true",
           () =>
           {
               let s = "";
-              expect( stringUtils.includesAll( s, [] ) ).toBe( true );
+              expect( includesAll( s, [] ) ).toBe( true );
           } );
 } );
 

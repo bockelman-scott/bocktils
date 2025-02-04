@@ -416,7 +416,7 @@ const $scope = constants?.$scope || function()
      */
     function decimalExpansion( pScientificNotation )
     {
-        const sNum = lcase( asString( pScientificNotation, true ) );
+        const sNum = lcase( String( pScientificNotation ).trim() );
 
         const rx = /[eE]/i;
 

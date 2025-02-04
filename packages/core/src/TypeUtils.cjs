@@ -797,6 +797,12 @@ const $scope = constants?.$scope || function()
         return (_zero !== s) && /^(-)?(0b)([0-1]+)?(([.,])([0-1]+))?$/i.test( s ) && !/[AC-Z]|[ac-z]|\s/.test( s );
     }
 
+    function isScientificNotation( pObj )
+    {
+        const s = _toString( pObj ).trim();
+        return (/^[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)$/).test( s );
+    }
+
     /**
      * Returns true if the specified value represents a decimal number (base 10)<br>
      *
@@ -852,7 +858,7 @@ const $scope = constants?.$scope || function()
 
         let value = ((_mt_str + _toString( pObj )).replace( /n+$/, _mt_str )).trim();
 
-        if ( _zero === pObj || isDecimal( value ) || isHex( value ) || isOctal( value ) || isBinary( value ) )
+        if ( _zero === pObj || isDecimal( value ) || isHex( value ) || isOctal( value ) || isBinary( value ) || isScientificNotation( value ) )
         {
             if ( isDecimal( value ) && !!pAllowLeadingZeroForBase10 )
             {
@@ -1016,6 +1022,27 @@ const $scope = constants?.$scope || function()
         if ( !isNumeric( pObj ) )
         {
             return 0;
+        }
+
+        if ( isScientificNotation( pObj ) )
+        {
+            let s = String( pObj ).trim();
+
+            const rx = /[eE]/i;
+
+            if ( rx.test( s ) )
+            {
+                const parts = s.split( rx );
+
+                let coefficient = parseFloat( parts[0] );
+
+                let exponent = parseInt( (parts.length > 1 ? parts[1] : 0), 10 );
+
+                coefficient = isBigInt( coefficient ) || isBigInt( exponent ) ? BigInt( coefficient ) : coefficient;
+                exponent = isBigInt( coefficient ) || isBigInt( exponent ) ? BigInt( exponent ) : exponent;
+
+                return parseFloat( (coefficient * 10 ** exponent).toFixed( Math.abs( exponent ) ) );
+            }
         }
 
         if ( isDecimal( pObj ) )
@@ -2667,6 +2694,7 @@ const $scope = constants?.$scope || function()
             isOctal,
             isHex,
             isDecimal,
+            isScientificNotation,
             isNanOrInfinite,
             isBoolean,
             isArray,
