@@ -1093,6 +1093,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             return this.#ARGUMENTS;
         }
 
+        get tmpDirectoryName()
+        {
+            return this.ENV?.TMPDIR || (this.isWindows() ? "C:\\Windows\\Temp" : "/tmp");
+        }
+
         get ModuleCache()
         {
             return BockModulePrototype.MODULE_CACHE || MODULE_CACHE;

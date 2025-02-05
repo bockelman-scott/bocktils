@@ -23,7 +23,7 @@ const {
 } = fileLogger;
 
 const {
-    FileInfo,
+    FileObject,
     LogLevel,
     LogFormatter
 } = fileLoggerClasses;
@@ -48,7 +48,7 @@ describe( "LogFilePattern", () =>
 {
     const stats = fs.statSync( path.resolve( testSubDirectory, "1000.data" ) );
 
-    const fakeInfo = new FileInfo( path.resolve( testSubDirectory, "1000.data" ), stats.birthtime, stats.size );
+    const fakeInfo = new FileObject( path.resolve( testSubDirectory, "1000.data" ), stats.birthtime, stats.size );
 
     test( "LogFilePattern describes how to name the files", () =>
     {
@@ -99,11 +99,11 @@ describe( "LogFilePattern", () =>
     } );
 } );
 
-describe( "FileInfo", () =>
+describe( "FileObject", () =>
 {
-    test( "FileInfo is a 'smart-wrapper' for files collected from directory", async() =>
+    test( "FileObject is a 'smart-wrapper' for files collected from directory", async() =>
     {
-        const fileInfo = new FileInfo( path.resolve( srcDirectory + "/index.js" ) );
+        const fileInfo = new FileObject( path.resolve( srcDirectory + "/index.js" ) );
 
         const created = await fileInfo.getCreatedDate();
 
@@ -133,7 +133,7 @@ describe( "FileInfo", () =>
 
         expect( expired ).toBe( false );
 
-        const otherFileInfo = new FileInfo( __filename );
+        const otherFileInfo = new FileObject( __filename );
 
         const comp = await fileInfo.compareTo( otherFileInfo );
 
@@ -142,7 +142,7 @@ describe( "FileInfo", () =>
         return Promise.resolve( true );
     } );
 
-    test( "FileInfo.sort is a static method to sort instances asynchronously", async() =>
+    test( "FileObject.sort is a static method to sort instances asynchronously", async() =>
     {
         let directoryPath = testSubDirectory;
 
@@ -151,7 +151,7 @@ describe( "FileInfo", () =>
         files = files.map( file => path.join( directoryPath, file ) );
 
 
-        let sorted = await FileInfo.sort( ...files );
+        let sorted = await FileObject.sort( ...files );
 
         sorted = sorted.map( e => (e.toString() + "\n") );
 
@@ -160,7 +160,7 @@ describe( "FileInfo", () =>
         expect( sorted[11].replace( /\n+$/, "" ).endsWith( "all_bones_mp3_zip.data" ) ).toBe( true );
 
 
-        sorted = await FileInfo.sortDescending( ...files );
+        sorted = await FileObject.sortDescending( ...files );
 
         sorted = sorted.map( e => (e.toString() + "\n") );
 

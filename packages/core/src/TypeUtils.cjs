@@ -110,6 +110,8 @@ const $scope = constants?.$scope || function()
             AsyncFunction,
             IllegalArgumentError,
             populateOptions,
+            objectEntries,
+            objectKeys,
             attempt,
             lock,
             classes
@@ -2077,7 +2079,7 @@ const $scope = constants?.$scope || function()
     const defaultFor = function( pType )
     {
         let type = isString( pType ) ? (_mt_str + pType).trim().toLowerCase() : typeof (pType);
-        return ( isString( type ) && JS_TYPES.includes( type ) ) ? TYPE_DEFAULTS[type] : defaultFor( typeof type );
+        return (isString( type ) && JS_TYPES.includes( type )) ? TYPE_DEFAULTS[type] : defaultFor( typeof type );
     };
 
     /**
@@ -2623,10 +2625,31 @@ const $scope = constants?.$scope || function()
         }
     }
 
-    function resolveMoment( pNow )
+    const resolveMoment = ( pNow ) => isDate( pNow ) ? pNow || new Date() : new Date();
+
+    const isDirectoryEntry = function( pEntry )
     {
-        return isDate( pNow ) ? pNow || new Date() : new Date();
-    }
+        if ( isNull( pEntry ) || !isNonNullObject( pEntry ) )
+        {
+            return false;
+        }
+
+        const keys = objectKeys( pEntry );
+
+        if ( keys.includes( "name" ) )
+        {
+            if ( keys.includes( "isFile" ) && keys.includes( "isDirectory" ) && keys.includes( "isSymLink" ) )
+            {
+                return true;
+            }
+
+            return !!(isFunction( pEntry?.isFile ) &&
+                      isFunction( pEntry?.isDirectory ) &&
+                      isFunction( pEntry?.isSymbolicLink ));
+        }
+
+        return false;
+    };
 
     /**
      * This is the module itself, exported from this function
@@ -2694,6 +2717,7 @@ const $scope = constants?.$scope || function()
             isType,
             isValidDateOrNumeric,
             isValidDateInstance,
+            isDirectoryEntry,
             toDecimal,
             toHex,
             toOctal,

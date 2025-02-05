@@ -20,8 +20,8 @@ const {
     removeDirectory,
     asyncRemoveDirectory,
     asyncCreateTempFile,
-    createFile,
-    asyncCreateFile,
+    createTextFile,
+    asyncCreateTextFile,
     deleteFile,
     asyncDeleteFile,
     deleteMatchingFiles,
@@ -41,8 +41,8 @@ const {
     generateTempFileName,
     createTempFile,
     findFiles,
-    FileAttributes,
-    FileInfo
+    FileStats,
+    FileObject
 } = fileUtils;
 
 const currentDirectory = path.dirname( __filename );
@@ -133,7 +133,7 @@ describe( "FileUtils", () =>
     {
         makeDirectory( path.join( __dirname, "test-dir" ) );
 
-        createFile( path.join( __dirname, "test-dir", "test-file.txt" ) );
+        createTextFile( path.join( __dirname, "test-dir", "test-file.txt" ) );
 
         expect( exists( path.join( __dirname, "test-dir", "test-file.txt" ) ) ).toBe( true );
 
@@ -146,7 +146,7 @@ describe( "FileUtils", () =>
     {
         await asyncMakeDirectory( path.join( __dirname, "async-test-dir" ) );
 
-        await asyncCreateFile( path.join( __dirname, "async-test-dir", "async-test-file.txt" ) );
+        await asyncCreateTextFile( path.join( __dirname, "async-test-dir", "async-test-file.txt" ) );
 
         expect( await asyncExists( path.join( __dirname, "async-test-dir" ) ) ).toBe( true );
 
@@ -203,9 +203,9 @@ describe( "FileUtils::findFiles", () =>
 {
     test( "'findFiles' can perform breadth-first searches", async() =>
     {
-        const directoryFilter = ( entry ) => isFunction( entry?.isDirectory ) && entry.isDirectory() && entry.name !== "__tests__";
+        const directoryFilter = ( entry ) => (null !== entry) && (entry?.name || entry) !== "__tests__";
 
-        const fileFilter = ( entry ) => path.basename( entry.filepath || entry ) === "package.json";
+        const fileFilter = ( entry ) => (null !== entry) && path.basename( resolvePath( entry?.filepath || entry ) ) === "package.json";
 
         const found = await findFiles( packagesDirectory, null, fileFilter, directoryFilter, true );
 

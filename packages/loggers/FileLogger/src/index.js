@@ -215,7 +215,7 @@ const $scope = constants?.$scope || function()
 
         generateTimestamp( pDateOrFileInfo, pResolution = DEFAULTS.TIMESTAMP_RESOLUTION )
         {
-            let date = isDate( pDateOrFileInfo ) ? pDateOrFileInfo : (pDateOrFileInfo instanceof FileInfo ? pDateOrFileInfo.created : null);
+            let date = isDate( pDateOrFileInfo ) ? pDateOrFileInfo : (pDateOrFileInfo instanceof FileObject ? pDateOrFileInfo.created : null);
 
             if ( !isNull( date ) && isDate( date ) )
             {
@@ -355,7 +355,7 @@ const $scope = constants?.$scope || function()
         return isFunction( pArchiver ) ? pArchiver : isNonNullObject( pArchiver ) && isFunction( pArchiver.archive ) ? pArchiver : null;
     }
 
-    class FileInfo
+    class FileObject
     {
         #filepath;
         #created;
@@ -485,7 +485,7 @@ const $scope = constants?.$scope || function()
         {
             const now = new Date();
 
-            const other = pOther instanceof this.constructor ? pOther : new FileInfo( pOther );
+            const other = pOther instanceof this.constructor ? pOther : new FileObject( pOther );
 
             const thisCreated = await this.getCreatedDate();
 
@@ -552,20 +552,20 @@ const $scope = constants?.$scope || function()
         }
     }
 
-    FileInfo.compare = async function( pA, pB )
+    FileObject.compare = async function( pA, pB )
     {
-        const a = pA instanceof FileInfo ? pA : new FileInfo( pA );
-        const b = pB instanceof FileInfo ? pB : new FileInfo( pB );
+        const a = pA instanceof FileObject ? pA : new FileObject( pA );
+        const b = pB instanceof FileObject ? pB : new FileObject( pB );
         return await a.compareTo( b );
     };
 
-    FileInfo.sort = async function( ...pFiles )
+    FileObject.sort = async function( ...pFiles )
     {
-        const files = asArray( varargs( ...pFiles ) ).map( pFile => pFile instanceof FileInfo ? pFile : new FileInfo( pFile ) );
+        const files = asArray( varargs( ...pFiles ) ).map( pFile => pFile instanceof FileObject ? pFile : new FileObject( pFile ) );
 
         async function convert( pFile )
         {
-            const fileInfo = pFile instanceof FileInfo ? pFile : new FileInfo( pFile );
+            const fileInfo = pFile instanceof FileObject ? pFile : new FileObject( pFile );
 
             const created = await fileInfo.getCreatedDate();
 
@@ -599,29 +599,29 @@ const $scope = constants?.$scope || function()
         return sorted;
     };
 
-    FileInfo.sortDescending = async function( ...pFiles )
+    FileObject.sortDescending = async function( ...pFiles )
     {
-        let files = await FileInfo.sort( ...pFiles );
+        let files = await FileObject.sort( ...pFiles );
         return files.reverse();
     };
 
-    FileInfo.from = function( pFilePath, pCreatedDate = null, pSize = 0 )
+    FileObject.from = function( pFilePath, pCreatedDate = null, pSize = 0 )
     {
-        if ( pFilePath instanceof FileInfo )
+        if ( pFilePath instanceof FileObject )
         {
             return pFilePath;
         }
-        return new FileInfo( pFilePath, pCreatedDate, pSize );
+        return new FileObject( pFilePath, pCreatedDate, pSize );
     };
 
-    FileInfo.fromAsync = async function( pFilePath )
+    FileObject.fromAsync = async function( pFilePath )
     {
-        if ( pFilePath instanceof FileInfo )
+        if ( pFilePath instanceof FileObject )
         {
             return pFilePath;
         }
         const stats = await stat( pFilePath );
-        return new FileInfo( pFilePath, stats.birthtime, stats.size );
+        return new FileObject( pFilePath, stats.birthtime, stats.size );
     };
 
     class LogFileRetentionPolicy
@@ -683,7 +683,7 @@ const $scope = constants?.$scope || function()
 
                         const stats = await stat( filepath );
 
-                        const fileInfo = new FileInfo( filepath, stats.birthtime, stats.size );
+                        const fileInfo = new FileObject( filepath, stats.birthtime, stats.size );
 
                         if ( filter( fileInfo ) )
                         {
@@ -697,7 +697,7 @@ const $scope = constants?.$scope || function()
                 konsole.error( "An error occurred while collecting log files from the directory:", directory, ex.message, ex );
             }
 
-            files = files.length > 0 ? await FileInfo.sort( ...files ) : [];
+            files = files.length > 0 ? await FileObject.sort( ...files ) : [];
 
             return files;
         }
@@ -708,7 +708,7 @@ const $scope = constants?.$scope || function()
 
             const maxDays = this.maxDays;
 
-            const criteria = ( pFile ) => FileInfo.from( pFile ).isExpired( maxDays, now );
+            const criteria = ( pFile ) => FileObject.from( pFile ).isExpired( maxDays, now );
 
             const fileInfos = await this.collectFiles( pDirectory, criteria );
 
@@ -731,7 +731,7 @@ const $scope = constants?.$scope || function()
                 return [];
             }
 
-            toDelete = toDelete.filter( pFile => FileInfo.from( pFile ).isExpired( this.maxDays, now ) );
+            toDelete = toDelete.filter( pFile => FileObject.from( pFile ).isExpired( this.maxDays, now ) );
 
             return await this.deleteFiles( ...toDelete );
         }
@@ -860,7 +860,7 @@ const $scope = constants?.$scope || function()
 
             const num = Math.min( fileInfos.length, Math.max( 1, asInt( pNumToHandle ) ) );
 
-            let files = await FileInfo.sortDescending( ...fileInfos );
+            let files = await FileObject.sortDescending( ...fileInfos );
 
             files = files.slice( 0, num );
 
@@ -1894,7 +1894,7 @@ const $scope = constants?.$scope || function()
 
             const filename = me.filename;
 
-            const fileInfo = FileInfo.from( filepath );
+            const fileInfo = FileObject.from( filepath );
 
             const archivedFilePath = me.calculateFilePath( fileInfo, asInt( pTimestampResolution, filePattern.timestampResolution ) );
 
@@ -2047,7 +2047,7 @@ const $scope = constants?.$scope || function()
                     LogFilter,
                     LogRecord,
                     LogFilePattern,
-                    FileInfo,
+                    FileObject,
                     LogFileRetentionPolicy,
                     FileRotationIntervalUnit,
                     FileRotationInterval,
@@ -2064,7 +2064,7 @@ const $scope = constants?.$scope || function()
             resolveFormatter,
             resolveFilter,
             LogFilePattern,
-            FileInfo,
+            FileObject,
             LogFileRetentionPolicy,
             FileRotationIntervalUnit,
             FileRotationInterval,
