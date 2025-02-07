@@ -4,13 +4,25 @@ const path = require( "path" );
 
 const core = require( "@toolbocks/core" );
 
+const fileUtils = require( "@toolbocks/files" );
+
 const fileLogger = require( "../src/index.js" );
 
 const { typeUtils, stringUtils } = core;
 
-const { isString } = typeUtils;
+const { isString, isFunction } = typeUtils;
 
 const { asString } = stringUtils;
+
+const {
+    resolvePath,
+    resolveDirectoryPath,
+    extractPathSeparator,
+    getFilePathData,
+    getFileName,
+    getDirectoryName,
+    getFileExtension,
+} = fileUtils;
 
 const {
     classes: fileLoggerClasses,
@@ -137,7 +149,7 @@ describe( "FileObject", () =>
 
         const comp = await fileInfo.compareTo( otherFileInfo );
 
-        expect( comp ).toEqual( 1 ); // this file was created later
+        expect( comp ).toEqual( -1 ); // this file was created earlier
 
         return Promise.resolve( true );
     } );
@@ -193,7 +205,9 @@ describe( "LogFileRetentionPolicy", () =>
         // pMaximumDays, pMaximumFiles,
         let retentionPolicy = new LogFileRetentionPolicy( 30, 10 );
 
-        const files = await retentionPolicy.collectFiles( testSubDirectory, e => asString( e.filename ).startsWith( "1" ) );
+        const fileFilter = e => asString( e.filename, true ).startsWith( "1" ) || (isString( e ) && asString( e, true ).startsWith( "1" ));
+
+        const files = await retentionPolicy.collectFiles( testSubDirectory, null, fileFilter );
 
         expect( files.length ).toEqual( 10 );
 
@@ -201,8 +215,9 @@ describe( "LogFileRetentionPolicy", () =>
 
         expect( strings.length ).toEqual( 10 );
 
-        expect( path.basename( strings.sort()[0] ) ).toEqual( "1000.data" );
+        const sorted = strings.sort() || [];
 
+        expect( getFileName( sorted[0] ) ).toEqual( "1000.data" );
 
         return Promise.resolve( true );
     } );
@@ -215,7 +230,7 @@ describe( "LogFileRetentionPolicy", () =>
 
         expect( files.length ).toEqual( 12 );
 
-        expect( files.every( e => isString( e ) ) ).toBe( true );
+        expect( files.every( e => e instanceof FileObject) ).toBe( true );
 
 
         return Promise.resolve( true );

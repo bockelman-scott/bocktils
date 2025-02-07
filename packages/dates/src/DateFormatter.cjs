@@ -88,7 +88,7 @@ const {
 
             this.#useIntlDateFormat = !isString( pFormat ) &&
                                       isNonNullObject( pFormat ) &&
-                                      (includesAny( Object.keys( pFormat ),
+                                      (includesAny( Object.keys( pFormat || {} ),
                                                     ["dateStyle", "timeStyle", ...SUPPORTED_INTL_OPTIONS] ));
         }
 

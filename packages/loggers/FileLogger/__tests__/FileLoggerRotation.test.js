@@ -4,11 +4,23 @@ const path = require( "path" );
 
 const core = require( "@toolbocks/core" );
 
+const fileUtils = require( "@toolbocks/files" );
+
 const fileLogger = require( "../src/index.js" );
 
 const { stringUtils } = core;
 
 const { isBlank } = stringUtils;
+
+const {
+    resolvePath,
+    resolveDirectoryPath,
+    extractPathSeparator,
+    getFilePathData,
+    getFileName,
+    getDirectoryName,
+    getFileExtension,
+} = fileUtils;
 
 const {
     classes: fileLoggerClasses,
@@ -22,12 +34,12 @@ const currentDirectory = path.dirname( __filename );
 
 const projectRootDirectory = path.resolve( currentDirectory, "../../../../" );
 
-const logDir = path.resolve( projectRootDirectory, "logs" );
+const logDir = resolvePath( path.resolve( projectRootDirectory, "logs" ) );
 
 describe( "Log Rotation", () =>
 {
     jest.useFakeTimers();
-    
+
     test( "Log Files are 'rotated'", async() =>
     {
         let logger = new FileLogger( { directory: logDir } );

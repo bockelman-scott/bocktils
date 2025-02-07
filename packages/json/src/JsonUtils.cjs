@@ -300,7 +300,7 @@ const $scope = constants?.$scope || function()
                 continue;
             }
 
-            let propName = (prop.replace( /^_/, _mt_str ));
+            let propName = (prop.replace( /^[_#]/, _mt_str ));
 
             propName = propName.replaceAll( /[\r\n()\\/.]/g, _mt_str );
 

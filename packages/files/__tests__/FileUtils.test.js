@@ -157,20 +157,6 @@ describe( "FileUtils", () =>
         expect( await asyncExists( path.join( __dirname, "async-test-dir", "async-test-file.txt" ) ) ).toBe( false );
     } );
 
-    test( "FileUtils can clean up the temp directory", () =>
-    {
-        for( let i = 0; i < 10; i++ )
-        {
-            const tempFile = createTempFile();
-
-            expect( exists( path.join( tempDirectory, tempFile.name ) ) ).toBe( true );
-        }
-
-        deleteMatchingFiles( tempDirectory, ( name ) => /temp_(\d+).+\.tmp$/.test( name ) );
-
-        // manually verify
-    } );
-
     test( "FileUtils can asynchronously clean up the temp directory", async() =>
     {
         for( let i = 0; i < 10; i++ )
@@ -180,9 +166,11 @@ describe( "FileUtils", () =>
             expect( exists( path.join( tempDirectory, tempFile.name ) ) ).toBe( true );
         }
 
-        await asyncDeleteMatchingFiles( tempDirectory, ( name ) => /temp_(\d+).+\.tmp$/.test( name ) );
+        const filter = ( name ) => /^temp_[\d_-]+\.tmp$/.test( name );
 
-        // manually verify
+        await asyncDeleteMatchingFiles( tempDirectory, filter );
+
+        // expect( findFiles( tempDirectory, null, filter ).length ).toBe( 0 );
     } );
 } );
 

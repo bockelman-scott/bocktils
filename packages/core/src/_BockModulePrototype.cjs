@@ -209,6 +209,19 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
     const isUndefined = pObj => _ud === typeof pObj;
     const isNonNullObj = pObj => isObj( pObj ) && null != pObj;
     const isPrimitive = pObj => isStr( pObj ) || isNum( pObj ) || isBool( pObj ) || isBig( pObj ) || isSymbol( pObj );
+
+    /**
+     * Returns true if the specified value is an asynchronous function.
+     *
+     * @function
+     * @param {any} pObject - The value to be evaluated.
+     * @returns {boolean} true if the value is an asynchronous function, otherwise false.
+     */
+    const isAsyncFunction = function( pObject )
+    {
+        return isFunc( pObject ) && (pObject.constructor === AsyncFunction || pObject === AsyncFunction);
+    };
+
     const isPromise = pObj => isObj( pObj ) && pObj instanceof Promise;
     const isThenable = pObj => isObj( pObj ) && (isPromise( pObj ) || isFunc( pObj.then ));
 
@@ -224,17 +237,31 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
     const ATTEMPT_FAILED = [S_ERR_PREFIX, "attempting to execute the specified function, "].join( _spc );
     const NOT_A_FUNCTION = "The specified value is not a function";
 
-    /**
-     * Returns true if the specified value is an asynchronous function.
-     *
-     * @function
-     * @param {any} pObject - The value to be evaluated.
-     * @returns {boolean} true if the value is an asynchronous function, otherwise false.
-     */
-    const isAsyncFunction = function( pObject )
+    if ( !isFunc( Promise?.try ) )
     {
-        return isFunc( pObject ) && (pObject.constructor === AsyncFunction || pObject === AsyncFunction);
-    };
+        Promise.try = async function( pFunction, ...pArgs )
+        {
+            try
+            {
+                if ( isAsyncFunction( pFunction ) )
+                {
+                    return await pFunction.call( $scope(), ...pArgs );
+                }
+                else if ( isFunc( pFunction ) )
+                {
+                    return pFunction.call( $scope(), ...pArgs );
+                }
+                else
+                {
+                    return Promise.reject( new Error( NOT_A_FUNCTION ) );
+                }
+            }
+            catch( ex )
+            {
+                return Promise.reject( ex );
+            }
+        };
+    }
 
     /**
      * Executes a function with the specified arguments,
@@ -262,7 +289,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         {
             try
             {
-                return !isAsyncFunction( pFunction ) ? pFunction( ...pArgs ) : pFunction( ...pArgs ).then( result => result );
+                return !isAsyncFunction( pFunction ) ?
+                       pFunction.call( $scope(), ...pArgs ) :
+                       pFunction.call( $scope(), ...pArgs ).then( result => result );
             }
             catch( ex )
             {
@@ -271,10 +300,20 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         }
         else
         {
-            handleAttempt.handleError( pFunction, pFunction, ...pArgs );
+            const error = new Error( NOT_A_FUNCTION );
+            handleAttempt.handleError( error, pFunction, ...pArgs );
         }
 
         return pFunction;
+    }
+
+    async function asyncHandleAttempt( pFunction, ...pArgs )
+    {
+        if ( !isAsyncFunction( pFunction ) )
+        {
+            return handleAttempt( pFunction, ...pArgs );
+        }
+        return await pFunction.call( $scope(), ...pArgs ).catch( ex => handleAttempt.handleError( ex, pFunction, ...pArgs ) );
     }
 
     /**
@@ -331,7 +370,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
      */
     async function asyncAttempt( pFunction, ...pArgs )
     {
-        return handleAttempt( pFunction, pArgs );
+        return await asyncHandleAttempt( pFunction, ...pArgs );
     }
 
     /**
@@ -2457,6 +2496,16 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             return populateOptions( this.#options || {}, {} );
         }
 
+        mergeOptions( pOptions )
+        {
+            if ( isNonNullObj( pOptions ) )
+            {
+                this.#options = populateOptions( pOptions || this.#options || {}, this.#options || {} );
+            }
+
+            return this;
+        }
+
         /**
          * Base class implementation of the visit method.<br>
          * Dispatches a "visit" event with the visited object or value as its 'detail' data.<br>
@@ -2480,9 +2529,17 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
          */
         visit( pVisited )
         {
-            this.dispatchEvent( new BockModuleEvent( "visit", pVisited, populateOptions( this.#options, { detail: pVisited } ) ) );
+            this.dispatchEvent( new BockModuleEvent( "visit",
+                                                     pVisited,
+                                                     populateOptions( this.#options,
+                                                                      {
+                                                                          detail: pVisited,
+                                                                          data: pVisited
+                                                                      } ) ) );
         }
     }
+
+    Visitor.isVisitor = ( pVisitor ) => (pVisitor instanceof Visitor || isFunc( pVisitor?.visit ));
 
     class AdHocVisitor extends Visitor
     {
@@ -2507,7 +2564,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
                                                                      error: ex,
                                                                      message: ex.message,
                                                                      visited: pVisited
-                                                                 }, populateOptions( this.options, { detail: pVisited } ) ) );
+                                                                 }, populateOptions( this.options,
+                                                                                     {
+                                                                                         detail: pVisited,
+                                                                                         data: pVisited,
+                                                                                         error: ex
+                                                                                     } ) ) );
                     }
                 };
             }
@@ -2515,7 +2577,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
 
         visit( pVisited )
         {
-            return this.#func( pVisited );
+            const me = this;
+            return attempt( () => (me || this).#func( pVisited ) );
         }
     }
 
@@ -2532,18 +2595,22 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         }
     }
 
-    const resolveVisitor = function( pVisitor )
+    const resolveVisitor = function( pVisitor, pOptions = {} )
     {
-        if ( pVisitor instanceof Visitor || isFunc( pVisitor?.visit ) )
+        if ( Visitor.isVisitor( pVisitor ) )
         {
+            if ( pVisitor instanceof Visitor )
+            {
+                return pVisitor.mergeOptions( pOptions ) || pVisitor;
+            }
             return pVisitor;
         }
         else if ( isFunc( pVisitor ) )
         {
-            return new AdHocVisitor( pVisitor );
+            return new AdHocVisitor( pVisitor, pOptions );
         }
 
-        return new NullVisitor( {} );
+        return new NullVisitor( pOptions );
     };
 
     /**
@@ -3718,21 +3785,21 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             }
         }
 
-        return [...new Set( entries )].filter( e => null != e[1] ).map( stringifyKeys );
+        return [...(new Set( entries ))].filter( e => null != e[1] ).map( stringifyKeys );
     }
 
     function objectValues( pObject )
     {
-        const values = [];
+        const values = (isNonNullObj( pObject ) ? Object.values( pObject || {} ) : []) || [];
         objectEntries( pObject ).forEach( e => values.push( e[1] ) );
-        return values;
+        return [...(new Set( values.filter( e => _ud !== typeof e && null !== e ) ))];
     }
 
     function objectKeys( pObject )
     {
-        const keys = [];
+        const keys = (isNonNullObj( pObject ) ? Object.keys( pObject || {} ) : []) || [];
         objectEntries( pObject ).forEach( e => keys.push( e[0] ) );
-        return keys;
+        return [...(new Set( keys.filter( e => null != e && isStr( e ) ) ))];
     }
 
     function mergeOptions( pOptions, ...pDefaults )

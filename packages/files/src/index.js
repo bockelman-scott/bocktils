@@ -116,6 +116,7 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
+    // declare variables to hold the execution environment-specific namespace(s)
     let _deno = null;
     let _node = null;
 
@@ -123,28 +124,29 @@ const $scope = constants?.$scope || function()
      * Create local variables for the imported values and functions we use.
      */
     const {
-        _str,
         _mt_str,
         _dot,
         _colon,
         _slash,
         _backslash,
-        S_ERROR,
         no_op,
         ignore,
         lock,
         populateOptions,
         mergeOptions,
-        immutableCopy,
+        Visitor,
         resolveVisitor,
         attempt,
         asyncAttempt,
+        objectKeys,
+        objectValues,
+        objectEntries,
         classes
     } = constants;
 
     const _pathSep = _slash;
 
-    const { ModuleEvent, ModulePrototype, ExecutionEnvironment, Visitor } = classes;
+    const { ModulePrototype } = classes;
 
     const {
         isDefined,
@@ -153,23 +155,22 @@ const $scope = constants?.$scope || function()
         isNumber,
         isObject,
         isArray,
-        isTypedArray,
         isDate,
         isNonNullObject,
         isFunction,
+        isAsyncFunction,
         isNumeric,
         isError,
         isDirectoryEntry,
         firstMatchingType,
         resolveMoment,
         isValidDateOrNumeric,
-        VisitedSet,
         clamp
     } = typeUtils;
 
     const { asString, asInt, toUnixPath, toBool, isBlank, leftOfLast, rightOfLast } = stringUtils;
 
-    const { varargs, asArray, Filters } = arrayUtils;
+    const { varargs, asArray, unique, includesAll, Filters } = arrayUtils;
 
     const modName = "FileUtils";
 
@@ -180,6 +181,8 @@ const $scope = constants?.$scope || function()
     const _isNode = executionEnvironment.isNode();
     const _isDeno = executionEnvironment.isDeno();
     const _isBrowser = executionEnvironment.isBrowser();
+
+    let WriteStream;
 
     /*## environment-specific:node start ##*/
     if ( _isNode )
@@ -195,6 +198,8 @@ const $scope = constants?.$scope || function()
         currentDirectory = path.dirname( __filename );
         projectRootDirectory = path.resolve( currentDirectory, "../../../" );
         defaultPath = path.resolve( currentDirectory, "../messages/defaults.json" );
+
+        WriteStream = fs.WriteStream;
     }
     /*## environment-specific:node end ##*/
 
@@ -203,6 +208,8 @@ const $scope = constants?.$scope || function()
     {
         _node = null;
         _deno = executionEnvironment.DenoGlobal;
+
+        WriteStream = _ud === typeof WritableStream ? null : WritableStream;
     }
     /*## environment-specific:deno end ##*/
 
@@ -220,11 +227,27 @@ const $scope = constants?.$scope || function()
         currentDirectory = _ud !== typeof window ? window.location.pathname : _mt_str;
         projectRootDirectory = _mt_str;
         defaultPath = currentDirectory;
+
+        WriteStream = _ud === typeof WritableStream ? null : WritableStream;
     }
 
     /*## environment-specific:browser end ##*/
 
-
+    /**
+     * Dynamically imports the `os`, `fs`, `fs/promises`, `stream`, and `path` Node.js modules<br>
+     * and assigns them to variables, 'os', 'fs', 'fsAsync', 'stream', and 'path' respectively.<br>
+     * <br>
+     * Also sets the 'currentDirectory' variable, using the `path` module
+     * and potentially available global variable, __filename.<br>
+     * <br>
+     * Handles any errors during the module imports
+     * by delegating to the `handleError` method,
+     * which will emit an 'error' event for which you can listen.
+     * <br>
+     *
+     * @return {Promise<void>} A promise that resolves when the required Node.js modules are successfully imported
+     *                         or rejects if an error occurs.
+     */
     async function importNodeModules()
     {
         try
@@ -242,12 +265,20 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    /*
+     * If the 'path' module is unavailable in the current execution environment,
+     * we define our own methods as proxies
+     */
     if ( _ud === typeof path || isNull( path ) )
     {
         path = {
+
             join: ( ...parts ) => parts.map( e => toUnixPath( e ) ).join( _pathSep ).replaceAll( /\/\/+/g, _pathSep ),
+
             basename: ( p ) => toUnixPath( p ).substring( toUnixPath( p ).lastIndexOf( _pathSep ) + 1 ),
+
             dirname: ( p ) => toUnixPath( p ).substring( 0, toUnixPath( p ).lastIndexOf( _pathSep ) ) || _dot,
+
             extname: ( p ) =>
             {
                 let s = toUnixPath( p );
@@ -258,6 +289,7 @@ const $scope = constants?.$scope || function()
                 }
                 return s.substring( lastDot );
             },
+
             resolve: ( ...pathSegments ) =>
             {
                 let resolvedPath = _mt_str;
@@ -279,14 +311,19 @@ const $scope = constants?.$scope || function()
                 }
                 return toUnixPath( resolvedPath );
             },
+
             isAbsolute: ( p ) =>
             {
                 const s = toUnixPath( asString( p, true ) );
                 return (s.startsWith( _pathSep ) || s.startsWith( _backslash ) || /^[A-Z]?:/.test( s )) && !s.includes( ".." );
             },
+
             normalize: ( p ) => toUnixPath( p ).replace( /\/\/+/g, _pathSep ).replace( /\/$/, _mt_str ),
+
             sep: _pathSep,
+
             delimiter: _colon,
+
             parse: ( pathString ) =>
             {
                 const base = path.basename( pathString );
@@ -302,6 +339,7 @@ const $scope = constants?.$scope || function()
                     name: name
                 };
             },
+
             format: ( pathObject ) =>
             {
                 return toUnixPath( pathObject.dir + _pathSep + pathObject.base );
@@ -309,7 +347,42 @@ const $scope = constants?.$scope || function()
         };
     }
 
-    const FsFile = _deno?.FsFile || function() {};
+    class StatsProxy
+    {
+        atime;
+        mtime;
+        ctime;
+        birthtime;
+
+        constructor( pStats )
+        {
+            this.atime = pStats?.atime;
+            this.mtime = pStats?.mtime;
+            this.ctime = pStats?.ctime;
+            this.birthtime = pStats?.birthtime;
+        }
+    }
+
+    StatsProxy.keys = () => ["atime", "mtime", "ctime", "birthtime"];
+
+    const FsStats = _isNode ? (fs?.Stats || StatsProxy) : (_isDeno ? (_deno?.FileInfo || StatsProxy) : StatsProxy);
+
+    const isFileStats = function( pEntry )
+    {
+        if ( isNull( pEntry ) || !isNonNullObject( pEntry ) )
+        {
+            return false;
+        }
+
+        if ( pEntry instanceof FsStats || pEntry instanceof StatsProxy )
+        {
+            return true;
+        }
+
+        const keys = asArray( objectKeys( pEntry ) );
+
+        return includesAll( keys, StatsProxy.keys() );
+    };
 
     /**
      * This is a dictionary of this module's dependencies.
@@ -329,6 +402,14 @@ const $scope = constants?.$scope || function()
             arrayUtils
         };
 
+    /**
+     * Generates a temporary file name using the given prefix and extension.
+     * The file name includes a timestamp and a random string for uniqueness.
+     *
+     * @param {string} [pPrefix="temp"] - The prefix to use for the file name. Defaults to 'temp' if not provided.
+     * @param {string} [pExtension=".tmp"] - The extension to use for the file name. Defaults to '.tmp' if not provided.
+     * @return {string} A unique temporary file name.
+     */
     function generateTempFileName( pPrefix = "temp", pExtension = ".tmp" )
     {
         const prefix = asString( pPrefix, true ) || "temp";
@@ -340,7 +421,13 @@ const $scope = constants?.$scope || function()
         return `${prefix}_${timestamp}_${Math.random().toString( 36 ).substring( 2, 15 )}${extension}`;
     }
 
+    /*
+     * Defines local variables for the synchronous functions found in the FileSystem API of the current execution environment.
+     * Each function is declared with a default implementation
+     * that is conditional upon whether we are running in Node.js, Deno, Bun, or a browser
+     */
     const {
+
         accessSync = _isNode ? fs.accessSync : function( pPath )
         {
             try
@@ -354,16 +441,22 @@ const $scope = constants?.$scope || function()
             }
             return false;
         },
+
         statSync = _isNode ? fs.statSync : _deno?.statSync,
+
         realpathSync = _isNode ? fs.realpathSync : _deno?.realPathSync,
+
         mkdirSync = _isNode ? fs.mkdirSync : _deno?.mkdirSync,
-        rmdirSync = _isNode ? fs.rmdirSync || function( pPath, pOptions )
+
+        rmdirSync = _isNode ? function( pPath, pOptions )
         {
             const options = mergeOptions( pOptions, { recurse: true, force: true, maxRetries: 3, retryDelay: 150 } );
             const filePath = resolveDirectoryPath( pPath );
             fs.rm( filePath, options );
         } : _deno?.removeSync,
+
         readdirSync = _isNode ? fs.readdirSync : _deno?.readDirSync,
+
         readFolderSync = _isNode ? function( pPath )
                                  {
                                      return fs.readdirSync( resolvePath( pPath ), { withFileTypes: true } );
@@ -372,17 +465,28 @@ const $scope = constants?.$scope || function()
                          {
                              return _deno?.readDirSync( resolvePath( pPath ) );
                          },
+
         symlinkSync = _isNode ? fs.symlinkSync : _deno?.symlinkSync,
+
         unlinkSync = _isNode ? fs.unlinkSync : _deno?.removeSync,
+
         createWriteStream = _isNode ? fs.createWriteStream : function( pPath, pOptions )
         {
 
         },
+
         writeFileSync = _isNode ? fs.writeFileSync : _deno?.writeFileSync,
-        writeTextFileSync = _isNode ? fs.writeFileSync : _deno?.writeTextFileSync,
+
+        writeTextFileSync = _isNode ? function( pPath, pContent )
+        {
+            const filePath = resolvePath( pPath );
+            fs.writeFileSync( filePath, asString( pContent ), { encoding: "utf8" } );
+        } : _deno?.writeTextFileSync,
 
         chmodSync = _isNode ? fs.chmodSync : _deno?.chmodSync,
+
         chownSync = _isNode ? fs.chownSync : _deno?.chownSync,
+
         closeSync = _isNode ? fs.closeSync : _deno?.closeSync || async function( pFsFile )
         {
             if ( pFsFile && isFunction( pFsFile?.close ) )
@@ -390,14 +494,20 @@ const $scope = constants?.$scope || function()
                 asyncAttempt( pFsFile.close() ).then( no_op ).catch( no_op );
             }
         },
+
         copyFileSync = _isNode ? fs.copyFileSync : _deno?.copyFileSync,
+
         createSync = _isNode ? function( pPath )
         {
             fs.writeFileSync( resolvePath( pPath ), _mt_str, { encoding: "utf8" } );
         } : _deno?.createSync,
+
         linkSync = _isNode ? fs.linkSync : _deno?.linkSync,
+
         lstatSync = _isNode ? fs.lstatSync : _deno?.lstatSync,
+
         makeTempDirSync = _isNode ? fs.mkdtempSync : _deno?.makeTempDirSync,
+
         makeTempFileSync = _isNode ? function( pPrefix = "temp", pExtension = ".tmp", pDirectory = null )
         {
             const tempFileName = generateTempFileName( pPrefix, pExtension );
@@ -411,23 +521,40 @@ const $scope = constants?.$scope || function()
                                                                    dir: pDirectory
                                                                }, );
                            },
+
         openSync = _isNode ? fs.openSync : _deno?.openSync,
+
         readDirSync = _isNode ? fs.readdirSync : _deno?.readDirSync,
+
         readFileSync = _isNode ? fs.readFileSync : _deno?.readFileSync,
+
         readLinkSync = _isNode ? fs.readlinkSync : _deno?.readLinkSync,
+
         readTextFileSync = _isNode ? function( pPath )
         {
             return fs.readFileSync( pPath, { encoding: "utf-8" } );
         } : _deno?.readTextFileSync,
+
         realPathSync = _isNode ? fs.realpathSync : _deno?.realPathSync,
+
         removeSync = _isNode ? fs.rmSync : _deno?.removeSync,
+
         renameSync = _isNode ? fs.renameSync : _deno?.renameSync,
+
         truncateSync = _isNode ? fs.truncateSync : _deno?.truncateSync,
+
         utimeSync = _isNode ? fs.utimesSync : _deno?.utimeSync,
+
         constants: fs_constants,
     } = (fs || _deno || _node || {});
 
+    /*
+     * Defines local variables for the asynchronous functions found in the FileSystem API of the current execution environment.
+     * Each function is declared with a default implementation
+     * that is conditional upon whether we are running in Node.js, Deno, Bun, or a browser
+     */
     const {
+
         access = _isNode ? fsAsync.access : async function( pPath )
         {
             try
@@ -441,7 +568,9 @@ const $scope = constants?.$scope || function()
             }
             return false;
         },
+
         readdir = _isNode ? fsAsync.readdir : _deno?.readDir,
+
         readFolder = _isNode ? (async function( pPath )
         {
             return await fsAsync.readdir( resolvePath( pPath ), { withFileTypes: true } );
@@ -450,6 +579,7 @@ const $scope = constants?.$scope || function()
               {
                   return await fsAsync.readdir( resolvePath( pPath ), { withFileTypes: true } );
               }),
+
         listFolderEntries = async function( pPath, pOptions )
         {
             const filePath = resolvePath( pPath );
@@ -472,24 +602,36 @@ const $scope = constants?.$scope || function()
                 return names;
             }
         },
+
         writeFile = _isNode ? fs.writeFile : _deno?.writeFile,
+
         writeTextFile = _isNode ? fs.writeFile : _deno?.writeTextFile,
+
         realpath = _isNode ? fs.realpath : _deno?.realPath,
+
         stat = _isNode ? fsAsync.stat : _deno?.stat,
+
         lstat = _isNode ? fsAsync.lstat : _deno?.lstat,
+
         rm = _isNode ? fsAsync.rm : _deno?.remove,
-        rmdir = _isNode ? fsAsync.rmdir || async function( pPath, pOptions )
+
+        rmdir = _isNode ? async function( pPath, pOptions )
         {
-            const options = mergeOptions( pOptions, { recurse: true, force: true, maxRetries: 3, retryDelay: 150 } );
+            const options = mergeOptions( pOptions, { recursive: true, force: true, maxRetries: 3, retryDelay: 150 } );
             const filePath = resolveDirectoryPath( pPath );
             await fsAsync.rm( filePath, options );
         } : _deno?.remove,
+
         rename = _isNode ? fsAsync.rename : _deno?.rename,
+
         symlink = _isNode ? fsAsync.symlink : _deno?.symlink,
+
         unlink = _isNode ? fsAsync.unlink : _deno?.unlink,
 
         chmod = _isNode ? fsAsync.chmod : _deno?.chmod,
+
         chown = _isNode ? fsAsync.chown : _deno?.chown,
+
         close = _isNode ? fs.closeSync : _deno?.close || function( pFsFile )
         {
             if ( pFsFile && isFunction( pFsFile?.close ) )
@@ -497,12 +639,16 @@ const $scope = constants?.$scope || function()
                 pFsFile.close();
             }
         },
+
         copyFile = _isNode ? fsAsync.copyFile : _deno?.copyFile,
+
         create = _isNode ? async function( pPath, pOptions )
         {
             fs.writeFile( resolvePath( pPath ), _mt_str, populateOptions( pOptions, { encoding: "utf8" } ) );
         } : _deno?.create,
+
         makeTempDir = _isNode ? fsAsync.mkdtemp : _deno?.makeTempDir,
+
         makeTempFile = _isNode ? async function( pPrefix = "temp", pExtension = ".tmp", pDirectory = null )
         {
             const tempFileName = generateTempFileName( pPrefix, pExtension );
@@ -512,28 +658,94 @@ const $scope = constants?.$scope || function()
             } );
             return tempFileName;
         } : _deno?.makeTempFile,
+
         mkdir = _isNode ? fsAsync.mkdir : _deno?.mkdir || _deno?.mkDir,
+
         open = _isNode ? fsAsync.open : _deno?.open,
+
         readDir = _isNode ? fsAsync.readdir : _deno?.readDir,
+
         readFile = _isNode ? fsAsync.readFile : _deno?.readFile,
+
         readLink = _isNode ? fsAsync.readlink : _deno?.readLink,
+
         readTextFile = _isNode ? async function( pPath ) { return await fsAsync.readFile( pPath, { encoding: "utf-8" } ); } : _deno?.readTextFile,
+
         realPath = _isNode ? fsAsync.realpath : _deno?.realPath,
+
         remove = _isNode ? fsAsync.rm : _deno?.remove,
+
         truncate = _isNode ? fsAsync.truncate : _deno?.truncate,
+
         umask = _isNode ? process.umask : _deno?.umask,
+
         utime = _isNode ? fsAsync.utimes : _deno?.utime,
+
         watchFs = _isNode ? fsAsync.watch : _deno?.watchFs,
 
     } = (fsAsync || _deno || _node || {});
 
-    const F_OK = _isNode ? fs_constants.F_OK : _isDeno ? 0 : 0;
+    /*
+     * Defines the FileSystem API CONSTANTS normally found in the node:fs module.
+     * If we are running in Node.js,
+     * this object will be updated to reflect the current and correct values
+     * for the Node version running
+     */
+    let fsConstants =
+        {
+            F_OK: 0,
+            X_OK: 1,
+            W_OK: 2,
+            R_OK: 4,
+            O_RDONLY: 0,
+            O_WRONLY: 1,
+            O_RDWR: 2,
+            O_APPEND: 8,
+            O_CREAT: 256,
+            O_TRUNC: 512,
+            O_EXCL: 1024,
+            UV_DIRENT_UNKNOWN: 0,
+            UV_DIRENT_FILE: 1,
+            UV_DIRENT_DIR: 2,
+            UV_DIRENT_LINK: 3,
+            UV_DIRENT_FIFO: 4,
+            UV_DIRENT_SOCKET: 5,
+            UV_DIRENT_CHAR: 6,
+            UV_DIRENT_BLOCK: 7,
+            UV_FS_COPYFILE_EXCL: 1,
+            UV_FS_SYMLINK_DIR: 1,
+            UV_FS_SYMLINK_JUNCTION: 2,
+            UV_FS_O_FILEMAP: 536870912,
+            S_IWUSR: 128,
+            S_IRUSR: 256,
+            S_IFCHR: 8192,
+            S_IFDIR: 16384,
+            S_IFREG: 32768,
+            S_IFLNK: 40960,
+            S_IFMT: 61440,
+            COPYFILE_EXCL: 1,
+            UV_FS_COPYFILE_FICLONE: 2,
+            COPYFILE_FICLONE: 2,
+            UV_FS_COPYFILE_FICLONE_FORCE: 4,
+            COPYFILE_FICLONE_FORCE: 4
+        };
+
+    // update the constants from the execution environment if they are available
+    fsConstants = _isNode ? mergeOptions( fsConstants, (fs.constants || fs_constants || fsConstants) ) : fsConstants;
 
     const MILLIS_PER_SECOND = 1000;
     const MILLIS_PER_MINUTE = 60 * MILLIS_PER_SECOND;
     const MILLIS_PER_HOUR = 60 * MILLIS_PER_MINUTE;
     const MILLIS_PER_DAY = 24 * MILLIS_PER_HOUR;
 
+    /**
+     * Resolves a given input to an absolute, normalized Unix-style file system path.
+     *
+     * @param {string|Array|string[]|Object} pPath - The path input to resolve.
+     *        It can be a string, an array of path segments, or an object containing path information.
+     *        If null or undefined, a default empty string path is returned.
+     * @return {string} The resolved and normalized Unix-style path as a string.
+     */
     function resolvePath( pPath )
     {
         let p = _mt_str;
@@ -545,31 +757,60 @@ const $scope = constants?.$scope || function()
 
         if ( isArray( pPath ) )
         {
-            p = path.resolve( ...(asArray( pPath ).flat()) );
+            p = attempt( () => path.resolve( ...(asArray( pPath ).flat()) ) );
         }
-        else if ( isObject( pPath ) )
+        else if ( isDirectoryEntry( pPath ) )
         {
-            p = path.resolve( path.join( (pPath?.parentPath || pPath?.path || "./"), (pPath.name || _mt_str) ) );
+            p = attempt( () => path.resolve( path.join( (pPath?.parentPath || pPath?.path || "./"), (pPath.name || _mt_str) ) ) );
         }
         else
         {
-            p = path.resolve( toUnixPath( asString( pPath, true ).trim() ) );
+            p = attempt( () => path.resolve( toUnixPath( asString( pPath, true, { joinOn: _mt_str } ).trim() ) ) );
         }
 
-        return toUnixPath( asString( p, true ) );
+        return p || (toUnixPath( asString( p, true ) ));
     }
 
+    /**
+     * Resolves the specified directory path to an absolute path, converting it to a Unix-style path format.
+     *
+     * @param {string|*} pDirectoryPath - The directory path to resolve.
+     *                                    If a string is provided,
+     *                                    it will be processed and resolved to an absolute path.
+     *
+     * @return {string} The resolved and normalized directory path in Unix-style format.
+     */
     function resolveDirectoryPath( pDirectoryPath )
     {
-        return toUnixPath( isString( pDirectoryPath ) ? path.resolve( toUnixPath( asString( pDirectoryPath, true ) ) ) : resolvePath( pDirectoryPath ) );
+        return toUnixPath( isString( pDirectoryPath ) ? attempt( () => path.resolve( toUnixPath( asString( pDirectoryPath, true ) ) ) ) : resolvePath( pDirectoryPath ) );
     }
 
+    /**
+     * Extracts the path separator from the given file path.<br>
+     * This method attempts to resolve the provided path<br>
+     * and returns the first occurrence of a path separator (either '/' or '\') in the resolved path.
+     *
+     * @param {string} pPath - The file path from which to extract the path separator.
+     * @return {string} The identified path separator,
+     *                  or the default path separator ('/') if none is found.
+     */
     function extractPathSeparator( pPath )
     {
         let matches = /([\/\\]+)/.exec( resolvePath( pPath ) );
         return (matches && matches?.length > 1 ? matches[1] : _pathSep);
     }
 
+    /**
+     * Processes the given file path and extracts detailed file path information.
+     *
+     * @param {string} pFilePath - The file path to be processed.
+     *
+     * @return {Object} An object containing the following properties:<br><br>
+     *         filePath: The resolved file path.<br>
+     *         dirName: The directory name of the file path.<br>
+     *         fileName: The base name of the file including its extension.<br>
+     *         extension: The file extension, if any.<br>
+     */
     function getFilePathData( pFilePath )
     {
         const filePath = resolvePath( pFilePath );
@@ -583,31 +824,64 @@ const $scope = constants?.$scope || function()
         return { filePath, dirName, fileName, extension };
     }
 
+    /**
+     * Retrieves the file extension from a given file path.
+     *
+     * @param {string} pFilePath - The full path or name of the file from which to extract the extension.
+     *
+     * @return {string} The file extension of the given file path.
+     *                  Returns an empty string if no extension is found.
+     */
     function getFileExtension( pFilePath )
     {
         const { fileName, extension } = getFilePathData( pFilePath );
         return asString( extension, true ) || asString( _dot + rightOfLast( fileName, _dot ), true );
     }
 
+    /**
+     * Extracts and returns the file name from the given file path.
+     *
+     * @param {string} pFilePath - The full path to the file.
+     *
+     * @return {string} The extracted file name as a string.
+     */
     function getFileName( pFilePath )
     {
         const { filePath, fileName } = getFilePathData( pFilePath );
         return asString( (fileName || rightOfLast( filePath, _slash )), true );
     }
 
+    /**
+     * Retrieves the directory name from a given file path.
+     *
+     * @param {string} pFilePath - The file path from which the directory name will be extracted.
+     * @return {string} The directory name extracted from the file path.
+     */
     function getDirectoryName( pFilePath )
     {
         const { filePath, dirName } = getFilePathData( pFilePath );
         return asString( dirName, true ) || asString( leftOfLast( filePath, _slash ), true );
     }
 
+    /**
+     * Returns true if the specified file or directory exists at the given path.
+     * <br><br>
+     * <b>This function is synchronous</b>
+     * <br>
+     *
+     * @function
+     *
+     * @param {string} pPath - The path to the file or directory to check.
+     *
+     * @returns {boolean} Returns true if the file or directory exists, false otherwise.
+     */
     const exists = function( pPath )
     {
         let exists;
 
         try
         {
-            accessSync( resolvePath( pPath ), F_OK );
+            accessSync( resolvePath( pPath ), fsConstants.F_OK );
             exists = true;
         }
         catch( ignored )
@@ -618,12 +892,24 @@ const $scope = constants?.$scope || function()
         return exists;
     };
 
+    /**
+     * Returns true if the specified file or directory exists at the given path.
+     * <br><br>
+     * <b>This function is <i>asynchronous</i></b>
+     * <br>
+     *
+     * @param {string} pPath - The path to the file or directory to check for existence.
+     *
+     * @returns {Promise<boolean>} A Promise that resolves to true
+     *                             if the file or directory exists,
+     *                             false otherwise.
+     */
     const asyncExists = async function( pPath )
     {
         let exists;
         try
         {
-            await access( resolvePath( pPath ), F_OK );
+            await access( resolvePath( pPath ), fsConstants.F_OK );
             exists = true;
         }
         catch( ignored )
@@ -634,22 +920,28 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * Creates a directory at the specified path if it does not already exist.
+     * Creates a directory at the specified path if it does not already exist.<br>
+     * <br>
+     * <b>This function is synchronous</b>
      *
      * This function resolves the provided directory path, converts it to a Unix-style path,
-     * checks if the directory exists, and attempts to create it if it does not. The creation
-     * process includes options to create parent directories recursively if necessary.
+     * checks if the directory exists, and attempts to create it if it does not.
+     * <br>
      *
-     * If the directory does not exist and cannot be created, a warning is logged.
+     * The creation process includes options to create parent directories recursively if necessary.
+     * <br>
      *
-     * @param {string} pDirectoryPath - The path of the directory to be created. The path is
-     *                                   resolved and processed to ensure validity.
-     * @returns {boolean} Returns true if the directory either already exists or was successfully created;
-     *                    otherwise, false.
+     * If the directory does not exist and cannot be created, a warning is logged.<br>
+     * <br>
+     *
+     * @param {string} pDirectoryPath - The path of the directory to be created.
+     *
+     * @returns {boolean} Returns true if the directory either already exists
+     *                    or was successfully created; otherwise, false.
      */
     const makeDirectory = function( pDirectoryPath )
     {
-        let dirPath = resolveDirectoryPath( pDirectoryPath );
+        let dirPath = attempt( () => resolveDirectoryPath( pDirectoryPath ) );
 
         if ( !exists( dirPath ) )
         {
@@ -663,50 +955,134 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * Asynchronously creates a directory if it does not already exist.
+     * Asynchronously creates a directory if it does not already exist.<br>
+     * <br>
+     * <b>This function is <i>asynchronous</i></b>
      *
-     * @param {string} pDirectoryPath - The path of the directory to create. The path will be
-     * converted to Unix-style before attempting to create the directory.
-     * @returns {Promise<boolean>} Resolves with `true` if the directory exists or is successfully created,
-     * otherwise resolves with `false`.
+     * @param {string} pDirectoryPath - The path of the directory to create.
+     *
+     * @returns {Promise<boolean>} A Promise that resolves to true if the directory exists
+     *                             or is successfully created; otherwise, false
      */
     const asyncMakeDirectory = async function( pDirectoryPath )
     {
-        let dirPath = resolveDirectoryPath( pDirectoryPath );
+        let dirPath = attempt( () => resolveDirectoryPath( pDirectoryPath ) );
 
-        await asyncAttempt( async() => await fsAsync.mkdir( dirPath, { recursive: true } ) );
+        if ( !(await asyncExists( dirPath )) )
+        {
+            await asyncAttempt( async() => await mkdir( dirPath, { recursive: true } ) );
+        }
 
         return await asyncExists( dirPath );
     };
 
+    /**
+     * Removes a directory and its contents at the specified path.<br>
+     * <br>
+     * <b>This function is synchronous</b>
+     * <br>
+     *
+     * @param {string} pDirectoryPath - The path of the directory to be removed.
+     *
+     * @returns {boolean} Returns true if the directory was successfully removed, false otherwise.
+     */
     const removeDirectory = function( pDirectoryPath )
     {
-        let dirPath = resolveDirectoryPath( pDirectoryPath );
+        let dirPath = attempt( () => resolveDirectoryPath( pDirectoryPath ) );
 
         attempt( () => rmdirSync( dirPath, { recursive: true } ) );
 
         return !exists( dirPath );
     };
 
+    /**
+     * Asynchronously removes a directory and its contents, including subdirectories and files.<br>
+     * <br>
+     * <b>This function is <i>asynchronous</i></b>
+     * <br>
+     * This function resolves the given directory path,
+     * then recursively deletes the directory and any of its subdirectories.<br>
+     * This function includes error handling to retry the operation up to three times.<br>
+     * with a delay between attempts.
+     * <br>
+     *
+     * @param {string} pDirectoryPath - The path of the directory to be removed.
+     *
+     * @returns {Promise<boolean>} A Promise that resolves to true if the directory was successfully removed or did not exist,
+     *                             or false if it still exists.
+     */
     const asyncRemoveDirectory = async function( pDirectoryPath )
     {
-        let dirPath = resolveDirectoryPath( pDirectoryPath );
+        let dirPath = attempt( () => resolveDirectoryPath( pDirectoryPath ) );
 
         await asyncAttempt( async() => await rmdir( dirPath, { recursive: true, maxRetries: 3, retryDelay: 150 } ) );
 
         return !await asyncExists( dirPath );
     };
 
+    /**
+     * Creates a symbolic link between the specified source path and target path.<br>
+     * <br>
+     * <b>This function is synchronous</b>
+     * <br>
+     * This function resolves the provided source and target paths,
+     * and establishes a symbolic link pointing from the target path to the source path.<br>
+     *
+     * @param {string} pSourcePath - The source path to which the symbolic link will point.
+     *
+     * @param {string} pTargetPath - The target path where the symbolic link will be created.
+     */
     const link = function( pSourcePath, pTargetPath )
     {
         attempt( () => symlinkSync( resolvePath( pSourcePath ), resolvePath( pTargetPath ) ) );
     };
 
+    /**
+     * Asynchronously creates a symlink between a source path and a target path.<br>
+     * <br>
+     * <b>This function is <i>asynchronous</i></b>
+     * <br>
+     * This function resolves the provided source and target paths,
+     * then asynchronously creates a symbolic link connecting the target path to the source path.<br>
+     * <br>
+     * The symlink creation process is executed inside an asynchronous wrapper function that handles any errors.<br>
+     * <br>
+     * Any errors encountered are emitted as events.<br>
+     *
+     * @param {string} pSourcePath - The file system path to the source file or directory.
+     * @param {string} pTargetPath - The file system path to the target file or directory.
+     * @returns {Promise<void>} A promise that resolves when the symlink is successfully created.
+     */
     const asyncLink = async function( pSourcePath, pTargetPath )
     {
         asyncAttempt( async() => await symlink( resolvePath( pSourcePath ), resolvePath( pTargetPath ) ) );
     };
 
+    /**
+     * A constant object representing a set of attributes with default or null values,<br>
+     * indicating the absence of any specific file, directory, or symbolic link properties.<br>
+     * <br>
+     * The `NO_ATTRIBUTES` object includes the following properties:<br>
+     * <br>
+     * - `isFile`: A function that always returns `false`, indicating the object is not treated as a file.<br>
+     * <br>
+     * - `isDirectory`: A function that always returns `false`, indicating the object is not treated as a directory.<br>
+     * <br>
+     * - `isSymbolicLink`: A function that always returns `false`, indicating the object is not treated as a symbolic link.<br>
+     * <br>
+     * - `size`: Set to `0`, representing zero file size or no content.<br>
+     * <br>
+     * - `created`: Set to `null`, indicating no creation time is defined.<br>
+     * <br>
+     * - `modified`: Set to `null`, indicating no last modification time is defined.<br>
+     * <br>
+     * - `accessed`: Set to `null`, indicating no last access time is defined.<br>
+     * <br>
+     * - `stats`: An empty object meant to represent the absence of any statistical metadata.<br>
+     * <br>
+     *
+     * This constant is encapsulated in an immutable structure to ensure its properties cannot be modified.
+     */
     const NO_ATTRIBUTES = lock( {
                                     isFile: () => false,
                                     isDirectory: () => false,
@@ -718,7 +1094,19 @@ const $scope = constants?.$scope || function()
                                     stats: {}
                                 } );
 
-    class DirectoryEntry
+    /**
+     * Represents a directory entry with associated metadata such as type and path information.<br>
+     * <br>
+     * Extends the `Visitor` class.<br>
+     * <br>
+     * This class provides methods to check the type of the directory entry (file, directory, or symbolic link)
+     * and allows access to the entry's metadata including name and parent path.<br>
+     * <br>
+     * This class abstracts the differences between Deno.DirEnt and fs.DirEnt and provides a common interface.<br>
+     * <br>
+     * @class
+     */
+    class DirectoryEntry extends Visitor
     {
         #entry;
 
@@ -729,8 +1117,27 @@ const $scope = constants?.$scope || function()
 
         #parentPath;
 
+        /**
+         * Constructs an instance with the provided directory entry and/or full path.<br>
+         * If both values are specified, the full path takes precedence in determining the filepath.<br>
+         * <br>
+         * Assigns key properties for managing file or directory entries.<br>
+         * <br>
+         *
+         * @param {Object|string} pDirEntry An object representing the directory entry,
+         *                                  or a string representing a file path.<br>
+         *                                  If an object is passed,
+         *                                  it should contain attributes such as `name` and `parentPath`,
+         *                                  and/or specific properties or methods for determining the type of the entry.<br>
+         *
+         * @param {string} pFullPath A full string path to the file or directory. Defaults to constructing a path using `pDirEntry` details if not provided.
+         *
+         * @return {void} Does not return a value. Initializes the instance with resolved file or directory details.
+         */
         constructor( pDirEntry, pFullPath )
         {
+            super( { filepath: pFullPath || (pDirEntry?.parentPath + _slash + pDirEntry?.name) || _mt_str } );
+
             const object = isNonNullObject( pDirEntry ) ? pDirEntry : isString( pDirEntry ) ? { name: getFileName( pDirEntry ) } : {};
 
             this.#entry = isDirectoryEntry( object ) ? pDirEntry : null;
@@ -783,29 +1190,43 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    /**
+     * A static factory method to create and return a new DirectoryEntry instance from the specified arguments.<br>
+     * <br>
+     * <b>This function is synchronous</b>
+     * <br>
+     *
+     * @param {Object} pObject - An object containing information about a directory entry.
+     * @param {string} pFullPath - A string representing the full path to the file or directory
+     *                             to be represented by the returned instance
+     *
+     * @returns {DirectoryEntry} A new DirectoryEntry instance constructed from the specified object/data.
+     *
+     */
     DirectoryEntry.from = function( pObject, pFullPath )
     {
         const object = isNonNullObject( pObject ) ? pObject : {};
 
         if ( isDirectoryEntry( object ) )
         {
-            return new DirectoryEntry( object, pFullPath );
+            return new DirectoryEntry( object, resolvePath( pFullPath || ((object?.path || object?.parentPath) + _slash + object?.name) ) );
         }
 
         return new DirectoryEntry( {
-                                       name: object?.name,
+                                       name: object?.name || getFileName( pFullPath ),
+                                       parentPath: getDirectoryName( pFullPath ) || object?.parentPath || object?.path,
                                        isFile: isFunction( object?.isFile ) ? object?.isFile() : object?.isFile || false,
                                        isDirectory: isFunction( object?.isDirectory ) ? object?.isDirectory() : object?.isDirectory || false,
                                        isSymbolicLink: isFunction( object?.isSymbolicLink ) ? object?.isSymbolicLink() : object?.isSymbolicLink || object?.isSymLink || false
                                    },
-                                   resolvePath( pFullPath ) );
+                                   resolvePath( pFullPath || ((object?.path || object?.parentPath) + _slash + object?.name) ) );
     };
 
     /**
      * Represents a subset of the attributes of a file or directory
      * obtained from calls to stat, lstat, or fstat.<br>
      * <br>
-     *
+     * @class
      */
     class FileStats
     {
@@ -827,14 +1248,14 @@ const $scope = constants?.$scope || function()
          * Constructs an instance of the FileStats class
          * from an object whose structure matches that of the Node.js fs.Stats class
          *
-         * @param {fs.Stats|fs.Dirent|{size:number,birthtime:Date,mtime:Date,atime:Date}} pObject
+         * @param {fs.Stats|fs.Dirent|{size:number,birthtime:Date,mtime:Date,atime:Date}} pStats
          * @param {string} [pFilePath=null]
          */
-        constructor( pObject, pFilePath )
+        constructor( pStats, pFilePath )
         {
-            const object = isObject( pObject ) ? (isDirectoryEntry( pObject ) ? DirectoryEntry.from( pObject, pFilePath ) : pObject) : {};
+            const object = isFileStats( pStats ) ? pStats : attempt( () => statSync( resolvePath( pFilePath || pStats ) ) );
 
-            this.#stats = { ...object };
+            this.#stats = isNonNullObject( object ) ? { ...object } : {};
 
             this.#size = asInt( object?.size, 0 );
 
@@ -975,6 +1396,17 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    /**
+     * Returns an instance of FileStats representing a subset of the data returned by calling 'stat' for the file.<br>
+     * <br>
+     * <b>This function is <i>asynchronous</i></b>
+     * <br>
+     * @function FileStats.forPath
+     *
+     * @param {string} pFilePath - The file path for which statistical information is desired.
+     *
+     * @returns {Object} An object containing statistical data of the file at the specified path.
+     */
     FileStats.forPath = async function( pFilePath )
     {
         const filePath = resolvePath( pFilePath );
@@ -987,7 +1419,7 @@ const $scope = constants?.$scope || function()
 
         try
         {
-            const stats = await stat( path.normalize( filePath ) );
+            const stats = await stat( resolvePath( path.normalize( filePath ) ) );
             return new FileStats( stats, filePath );
         }
         catch( ex )
@@ -1002,18 +1434,22 @@ const $scope = constants?.$scope || function()
      * Asynchronously checks if the given path is a file.
      *
      * @param {string} pPath - The path to check, provided as a string.
-     * @return {Promise<boolean>} A promise that resolves to `true` if the path is a file, `false` otherwise.
+     *
+     * @return {Promise<boolean>} A promise that resolves to true if the path is a file, false otherwise.
      */
     async function isFile( pPath )
     {
-        const fileStates = await FileStats.forPath( resolvePath( pPath ) );
-        return fileStates?.isFile() || false;
+        const fileStats = await FileStats.forPath( resolvePath( pPath ) );
+        return fileStats?.isFile() || false;
     }
 
     /**
-     * Checks whether the specified path refers to a directory.
+     * Asynchronously checks whether the specified path refers to a directory.<br>
+     * <br>
+     * <b>This function is <i>asynchronous</i></b>
      *
      * @param {string} pPath - The path to check, normalized and resolved to an absolute path.
+     *
      * @return {Promise<boolean>} A promise that resolves to true if the path is a directory, otherwise false.
      */
     async function isDirectory( pPath )
@@ -1023,9 +1459,10 @@ const $scope = constants?.$scope || function()
     }
 
     /**
-     * Checks whether the specified path refers to a directory.
+     * Asynchronously checks whether the specified path refers to a symbolic link (symlink).<br>
      *
      * @param {string} pPath - The path to check, normalized and resolved to an absolute path.
+     *
      * @return {Promise<boolean>} A promise that resolves to true if the path is a directory, otherwise false.
      */
     async function isSymbolicLink( pPath )
@@ -1035,11 +1472,12 @@ const $scope = constants?.$scope || function()
     }
 
     /**
-     * Removes the file extension from the given file path.
+     * Removes the file extension from the given file path.<br>
      *
      * @param {string} pPath - The file path from which the extension will be removed.
      *
-     * @param {boolean} [pExhaustive=false]
+     * @param {boolean} [pExhaustive=false] If true will remove all text following the first occurrence of a '.',
+     *                                      otherwise, removes only the text following the last occurrence of a '.'
      *
      * @return {string} The file path without the extension(s).
      */
@@ -1075,7 +1513,9 @@ const $scope = constants?.$scope || function()
      *
      * @param {string} pPath - The file path whose extension needs to be replaced.
      * @param {string} pNewExtension - The new extension to be applied to the file path.
-     * @param pExhaustive
+     * @param {boolean} [pExhaustive=false] If true, replaces all text following the first occurrence of a '.',
+     *                                      otherwise, replaces only the text following the last occurrence of a '.'
+     *
      * @return {string} The updated file path with the new extension.
      */
     function replaceExtension( pPath, pNewExtension, pExhaustive = false )
@@ -1087,22 +1527,50 @@ const $scope = constants?.$scope || function()
         return (newFilename + (_dot + newExt)).trim();
     }
 
-    function getFileEntry( pFilePath )
+    function getEntries( pFilePath )
     {
         const { dirName, fileName } = getFilePathData( pFilePath );
+        const entries = attempt( () => readFolderSync( dirName, { withFileTypes: true } ) ) || [];
+        return { dirName, fileName, entries };
+    }
 
-        const entries = readFolderSync( dirName, { withFileTypes: true } );
+    /**
+     * Retrieves a specific file entry from a directory based on the given file path.<br>
+     * <br>
+     * <b>This function is synchronous</b>
+     * <br>
+     *
+     * @param {string} pFilePath - The full path to the file whose entry is to be retrieved.
+     *
+     * @return {Object|undefined} The file entry object if found,
+     *                            or undefined if the file does not exist.
+     */
+    function getFileEntry( pFilePath )
+    {
+        const { fileName, entries } = getEntries( pFilePath );
+        return asArray( entries || [] ).find( entry => entry.name === fileName );
+    }
 
-        return entries.find( entry => entry.name === fileName );
+    function getDirectoryEntry( pFilePath )
+    {
+        const { fileName, entries } = getEntries( pFilePath );
+        const found = asArray( entries || [] ).find( entry => entry.name === fileName );
+        return found ? DirectoryEntry.from( found, pFilePath ) : FileObject.NO_FILE;
     }
 
     async function asyncGetFileEntry( pFilePath )
     {
         const { dirName, fileName } = getFilePathData( pFilePath );
-
-        const entries = await readFolder( dirName );
-
+        const entries = await asyncAttempt( async() => await readFolder( dirName ) );
         return entries.find( entry => entry.name === fileName );
+    }
+
+    async function asyncGetDirectoryEntry( pFilePath )
+    {
+        const { dirName, fileName } = getFilePathData( pFilePath );
+        const entries = await asyncAttempt( async() => await readFolder( dirName ) );
+        const found = entries.find( entry => entry.name === fileName );
+        return found ? DirectoryEntry.from( found, pFilePath ) : FileObject.NO_FILE;
     }
 
     function getTempDirectory()
@@ -1178,17 +1646,18 @@ const $scope = constants?.$scope || function()
     function createTextFile( pFilePath, pContent = _mt_str, pOverwrite = false )
     {
         const filePath = resolvePath( pFilePath );
+
         const content = asString( pContent );
 
         if ( pOverwrite || !exists( filePath ) )
         {
             if ( _isNode )
             {
-                writeFileSync( filePath, content, { flag: "w", flush: true } );
+                attempt( () => writeFileSync( filePath, content, { flag: "w", flush: true } ) );
             }
             else if ( _isDeno )
             {
-                writeTextFileSync( filePath, content, { append: true, create: pOverwrite } );
+                attempt( () => writeTextFileSync( filePath, content, { append: true, create: pOverwrite } ) );
             }
         }
         else
@@ -1210,16 +1679,20 @@ const $scope = constants?.$scope || function()
         {
             if ( _isNode )
             {
-                await writeFile( filePath, content, { flag: "w" } );
+                await asyncAttempt( async() => await writeFile( filePath, content, { flag: "w" } ) );
             }
             else if ( _isDeno )
             {
-                await writeTextFile( filePath, content, { append: true, create: pOverwrite } );
+                await asyncAttempt( async() => await writeTextFile( filePath, content,
+                                                                    {
+                                                                        append: true,
+                                                                        create: pOverwrite
+                                                                    } ) );
             }
         }
         else
         {
-            const error = new Error( `File ${filePath} already exists` );
+            const error = new Error( `File, ${filePath}, already exists` );
             modulePrototype.handleError( error, asyncCreateTextFile, pFilePath, pContent, pOverwrite );
         }
 
@@ -1250,11 +1723,18 @@ const $scope = constants?.$scope || function()
                                                  } ).catch( ( err ) => modulePrototype.handleError( err, deleteFile, pFilePath, filePath, realPath ) );
             }
 
-            attempt( () => unlinkSync( filePath ) );
-
-            if ( realPath !== filePath )
+            try
             {
-                attempt( () => unlinkSync( realPath ) );
+                attempt( () => unlinkSync( filePath ) );
+
+                if ( realPath !== filePath )
+                {
+                    attempt( () => unlinkSync( realPath ) );
+                }
+            }
+            catch( ignored )
+            {
+                // ignored
             }
         }
 
@@ -1271,141 +1751,351 @@ const $scope = constants?.$scope || function()
 
             if ( pFollowLinks && await isSymbolicLink( filePath ) )
             {
-                realPath = await realpath( filePath );
+                realPath = await asyncAttempt( async() => await realpath( filePath ) );
             }
 
-            await asyncAttempt( () => unlink( filePath ) );
-
-            if ( realPath !== filePath )
+            try
             {
-                await asyncAttempt( async() => await unlink( realPath ) );
+                await asyncAttempt( () => unlink( filePath ) ).catch( no_op );
+
+                if ( realPath !== filePath )
+                {
+                    await asyncAttempt( async() => await unlink( realPath ) ).catch( no_op );
+                }
+            }
+            catch( ignored )
+            {
+                // ignored
             }
         }
 
         return !(await asyncExists( filePath ));
     };
 
-    const deleteMatchingFiles = function( pDirectoryPath, pFileNameFilter, pFollowLinks = false )
+    const isMatchingDirectory = async( pDirEntry, pDirectoryNameFilter ) =>
     {
-        const dirPath = resolveDirectoryPath( pDirectoryPath );
-
-        const filter = Filters.IS_FILTER( pFileNameFilter ) ? pFileNameFilter : Filters.NONE;
-
-        const deleted = [];
-
-        if ( exists( dirPath ) && isDirectory( dirPath ) )
+        if ( !pDirEntry || !pDirEntry.isDirectory() )
         {
-            const files = readFolderSync( dirPath, { withFileTypes: true } );
-
-            for( const file of files )
-            {
-                if ( !isNull( file ) )
-                {
-                    if ( (file.isFile() || file.isSymbolicLink()) && filter( file.name ) )
-                    {
-                        const filePath = resolvePath( path.join( dirPath, file.name ) );
-                        if ( deleteFile( filePath, pFollowLinks ) )
-                        {
-                            deleted.push( filePath );
-                        }
-                    }
-                }
-            }
+            return false;
         }
 
-        return deleted;
+        return isAsyncFunction( pDirectoryNameFilter )
+               ? await Filters.asyncMeetsCriteria( pDirectoryNameFilter, pDirEntry.name )
+               : Filters.meetsCriteria( pDirectoryNameFilter, pDirEntry.name );
     };
 
-    const asyncDeleteMatchingFiles = async function( pDirectoryPath, pFileNameFilter, pFollowLinks = false )
+    const isMatchingDirectoryObject = async( pDirInfo, pDirectoryFilter ) =>
     {
-        const dirPath = resolveDirectoryPath( pDirectoryPath );
+        const dirInfo = await asyncAttempt( async() => await DirectoryObject.fromAsync( pDirInfo ) );
 
-        const filter = Filters.IS_FILTER( pFileNameFilter ) ? pFileNameFilter : Filters.NONE;
+        const filter = Filters.resolve( pDirectoryFilter, Filters.IDENTITY );
 
-        const deleted = [];
+        return dirInfo.isDirectory() && await Filters.asyncMeetsCriteria( filter, dirInfo );
+    };
 
-        if ( await asyncExists( dirPath ) && await isDirectory( dirPath ) )
+    const isMatchingFile = async( pFileEntry, pFileNameFilter ) =>
+    {
+        if ( !pFileEntry || !(pFileEntry.isFile() || pFileEntry.isSymbolicLink()) )
         {
-            const files = await readFolder( dirPath );
+            return false;
+        }
 
-            for await ( const file of files )
+        return isAsyncFunction( pFileNameFilter )
+               ? await Filters.asyncMeetsCriteria( pFileNameFilter, pFileEntry.name )
+               : Filters.meetsCriteria( pFileNameFilter, pFileEntry.name );
+    };
+
+    const isMatchingFileObject = async( pFileObject, pFilter ) =>
+    {
+        const fileObj = await asyncAttempt( async() => await FileObject.fromAsync( pFileObject ) );
+
+        const filter = Filters.resolve( pFilter, Filters.NONE );
+
+        return await Filters.asyncMeetsCriteria( filter, fileObj );
+    };
+
+    const asyncDeleteMatchingFiles = async( pDirPath, pFileNameFilter, pFollowLinks = false ) =>
+    {
+        const dirPath = resolveDirectoryPath( pDirPath );
+
+        const { filter } = Filters.resolve( pFileNameFilter, Filters.NONE );
+
+        if ( !(await asyncExists( dirPath )) || !(await isDirectory( dirPath )) )
+        {
+            return [];
+        }
+
+        const files = await asyncAttempt( () => readFolder( dirPath ) );
+
+        const toDelete = [];
+        const deletedFiles = [];
+        const expectedDeletions = [];
+
+        for await ( const file of files )
+        {
+            if ( await isMatchingFile( file, filter ) )
             {
-                if ( !isNull( file ) )
+                const filePath = resolvePath( path.join( dirPath, file.name ) );
+
+                expectedDeletions.push( filePath );
+
+                const wasDeleted = await asyncDeleteFile( filePath, pFollowLinks ).catch( () => false );
+
+                if ( wasDeleted )
                 {
-                    if ( (file.isFile() || file.isSymbolicLink()) && filter( file.name ) )
-                    {
-                        const filePath = resolvePath( path.join( dirPath, file.name ) );
-                        if ( await asyncDeleteFile( filePath, pFollowLinks ) )
-                        {
-                            deleted.push( filePath );
-                        }
-                    }
+                    deletedFiles.push( filePath );
+                }
+                else
+                {
+                    toDelete.push( filePath );
                 }
             }
         }
 
-        return deleted;
+        const { deleted, remaining } = await retryFailedDeletions( toDelete, deletedFiles, pFollowLinks );
+
+        deletedFiles.push( ...deleted );
+
+        if ( deletedFiles.length < expectedDeletions.length )
+        {
+            const error = new Error( `Unable to delete all files matching filter` );
+            modulePrototype.handleError( error, asyncDeleteMatchingFiles, pDirPath, pFileNameFilter, pFollowLinks, deletedFiles, remaining, expectedDeletions );
+        }
+
+        return unique( deletedFiles );
+    };
+
+    const retryFailedDeletions = async( pToDelete, pDeletedFiles = [], pFollowLinks = true ) =>
+    {
+        const toDelete = asArray( pToDelete );
+
+        while ( toDelete.length )
+        {
+            const filePath = toDelete.pop();
+            if ( await asyncDeleteFile( filePath, !!pFollowLinks ) )
+            {
+                pDeletedFiles.push( filePath );
+            }
+        }
+
+        return {
+            deleted: pDeletedFiles,
+            remaining: pToDelete.filter( filePath => !pDeletedFiles.includes( filePath ) )
+        };
+    };
+
+    class FileProxy
+    {
+        readable;
+        writable;
+
+        constructor( pFileEntry, pReadable, pWritable )
+        {
+            this.readable = pReadable;
+            this.writable = pWritable;
+        }
+
+        [Symbol.dispose]()
+        {
+
+        }
+
+        close()
+        {
+
+        }
+
+        isTerminal()
+        {
+
+        }
+
+        lock()
+        {
+
+        }
+
+        lockSync()
+        {
+
+        }
+
+        read()
+        {
+
+        }
+
+        readSync()
+        {
+
+        }
+
+        seek()
+        {
+
+        }
+
+        seekSync()
+        {
+
+        }
+
+        setRaw()
+        {
+
+        }
+
+        stat()
+        {
+
+        }
+
+        statSync()
+        {
+
+        }
+
+        sync()
+        {
+
+        }
+
+        syncData()
+        {
+
+        }
+
+        syncDataSync()
+        {
+
+        }
+
+        syncSync()
+        {
+
+        }
+
+        truncate()
+        {
+
+        }
+
+        truncateSync()
+        {
+
+        }
+
+        unlock()
+        {
+
+        }
+
+        unlockSync()
+        {
+
+        }
+
+        utime()
+        {
+
+        }
+
+        utimeSync()
+        {
+
+        }
+
+        write()
+        {
+
+        }
+
+        writeSync()
+        {
+
+        }
+
+    }
+
+    /**
+     * Defines a proxy for the Deno.FsFile interface if we are running in Node.js or Bun
+     * @type {*|(function())}
+     */
+    const FsFile = _deno?.FsFile || FileProxy;
+
+    const isFsFile = ( pFile ) =>
+    {
+        return pFile instanceof FsFile || pFile instanceof FileProxy;
     };
 
     class FileObject extends EventTarget
     {
-        #filepath;
-        #attributes;
-        #entry;
+        #filepath = _mt_str;
 
-        #fsFile;
+        #stats = null;
 
-        #_isFile;
-        #_isDirectory;
-        #_isSymbolicLink;
+        #entry = null;
 
-        #created;
-        #modified;
-        #accessed;
+        #fsFile = null;
 
-        #size;
+        #_isFile = null;
+        #_isDirectory = null;
+        #_isSymbolicLink = null;
 
-        #valid;
+        #created = null;
+        #modified = null;
+        #accessed = null;
 
-        constructor( pFilePath, pFileAttributes = null, pDirEntry = null )
+        #size = -1;
+
+        #valid = false;
+
+        constructor( pFilePath, pFileStats = null, pDirEntry = null, pFsFile = null )
         {
             super();
 
             this.#filepath = resolvePath( pFilePath );
 
-            this.#attributes = isNonNullObject( pFileAttributes ) ?
-                               new FileStats( pFileAttributes, this.#filepath ) :
-                               isNonNullObject( pDirEntry ) ?
-                               new FileStats( pDirEntry ) : {};
+            this.#stats = isFileStats( pFileStats ) ?
+                          new FileStats( pFileStats, this.#filepath ) :
+                          isDirectoryEntry( pDirEntry ) ?
+                          new FileStats( pDirEntry ) : {};
 
-            this.updateAttributes( this.#attributes );
+            if ( isFileStats( this.#stats ) )
+            {
+                this.updateStats( this.#stats );
+            }
 
             this.#entry = isNonNullObject( pDirEntry ) ? new DirectoryEntry( pDirEntry, this.#filepath ) : {};
+
+            this.#fsFile = !isNull( pFsFile ) ? pFsFile : !isNull( pDirEntry ) ? new FsFile( pDirEntry ) : null;
 
             this.#valid = !isBlank( this.#filepath );
         }
 
-        updateAttributes( pAttributes, pPopulateIfMissing = false )
+        updateStats( pStats, pPopulateIfMissing = false )
         {
-            let attributes = pAttributes || this.#attributes;
+            let stats = pStats || this.#stats;
 
-            attributes = (isNonNullObject( attributes ) && Object.keys( attributes ).length > 0) ? attributes : (pPopulateIfMissing ? new FileStats( statSync( this.filepath ), this.filepath ) : {});
+            const hasValidAttributes = isNonNullObject( stats ) && objectKeys( stats ).length > 0;
 
-            const createdDate = attributes?.created || this.#created;
-            const modifiedDate = attributes?.modified || this.#modified;
-            const accessedDate = attributes?.accessed || this.#accessed;
+            stats = hasValidAttributes ? stats : (pPopulateIfMissing ? new FileStats( statSync( this.filepath ), this.filepath ) : {});
+
+            const createdDate = stats?.created || this.#created;
+            const modifiedDate = stats?.modified || this.#modified;
+            const accessedDate = stats?.accessed || this.#accessed;
 
             this.#created = isValidDateOrNumeric( createdDate ) ? new Date( asInt( createdDate ) ) : this.#created;
             this.#modified = isValidDateOrNumeric( modifiedDate ) ? new Date( asInt( modifiedDate ) ) : this.#modified;
             this.#accessed = isValidDateOrNumeric( accessedDate ) ? new Date( asInt( accessedDate ) ) : this.#accessed;
 
-            this.#size = asInt( attributes?.size, this.#size );
+            this.#size = asInt( stats?.size, this.#size );
 
-            this.#_isFile = isFunction( attributes?.isFile ) ? attributes?.isFile() : this.#_isFile;
-            this.#_isDirectory = isFunction( attributes?.isDirectory ) ? attributes?.isDirectory() : this.#_isDirectory;
-            this.#_isSymbolicLink = isFunction( attributes?.isSymbolicLink ) ? attributes?.isSymbolicLink() : this.#_isSymbolicLink;
+            this.#_isFile = isFunction( stats?.isFile ) ? stats?.isFile() : this.#_isFile;
+            this.#_isDirectory = isFunction( stats?.isDirectory ) ? stats?.isDirectory() : this.#_isDirectory;
+            this.#_isSymbolicLink = isFunction( stats?.isSymbolicLink ) ? stats?.isSymbolicLink() : this.#_isSymbolicLink;
 
-            this.#attributes = isNonNullObject( attributes ) ? new FileStats( attributes, this.filepath ) : this.#attributes;
+            this.#stats = isNonNullObject( stats ) ? new FileStats( stats, this.filepath ) : this.#stats;
 
             return this;
         }
@@ -1447,10 +2137,10 @@ const $scope = constants?.$scope || function()
 
             if ( !isNull( stats ) )
             {
-                this.updateAttributes( new FileStats( stats, this.filepath ), true );
+                this.updateStats( new FileStats( stats, this.filepath ), true );
             }
 
-            return stats || this.#attributes;
+            return stats || this.#stats;
         }
 
         async getLStats()
@@ -1460,10 +2150,10 @@ const $scope = constants?.$scope || function()
 
             if ( !isNull( stats ) )
             {
-                this.updateAttributes( new FileStats( stats, this.filepath ), true );
+                this.updateStats( new FileStats( stats, this.filepath ), true );
             }
 
-            return stats || this.#attributes;
+            return stats || this.#stats;
         }
 
         async _refreshFileStats()
@@ -1540,9 +2230,21 @@ const $scope = constants?.$scope || function()
 
         async isExpired( pMaxAgeDays, pNow )
         {
-            const now = resolveMoment( pNow );
-            const age = clamp( await this.calculateAge( now ), 0, 1_000 );
-            return age > asInt( pMaxAgeDays, age );
+            if ( await this.isDirectory() )
+            {
+                return false;
+            }
+
+            if ( await this.isFile() || await this.isSymbolicLink() )
+            {
+                const now = resolveMoment( pNow );
+
+                const age = clamp( await this.calculateAge( now ), 0, 1_000 );
+
+                return age > asInt( pMaxAgeDays, age );
+            }
+
+            return false;
         }
 
         async compareTo( pOther )
@@ -1570,56 +2272,56 @@ const $scope = constants?.$scope || function()
                 comp = this.filepath.localeCompare( other.filepath );
             }
 
-            return comp;
+            return comp > 0 ? 1 : comp < 0 ? -1 : 0;
         }
 
         async isFile()
         {
-            if ( isNull( this._isFile ) )
+            if ( isNull( this.#_isFile, true ) )
             {
                 const stats = await this._refreshFileStats();
 
-                this._isFile = stats.isFile();
-                this._isSymbolicLink = stats.isSymbolicLink();
-                this._isDirectory = stats.isDirectory();
+                this.#_isFile = stats.isFile();
+                this.#_isSymbolicLink = stats.isSymbolicLink();
+                this.#_isDirectory = stats.isDirectory();
             }
 
-            return this._isFile;
+            return this.#_isFile;
         }
 
         async isSymbolicLink()
         {
-            if ( isNull( this._isSymbolicLink ) )
+            if ( isNull( this.#_isSymbolicLink, true ) )
             {
                 const stats = await this._refreshFileStats();
 
-                this._isFile = stats.isFile();
-                this._isSymbolicLink = stats.isSymbolicLink();
-                this._isDirectory = stats.isDirectory();
+                this.#_isFile = stats.isFile();
+                this.#_isSymbolicLink = stats.isSymbolicLink();
+                this.#_isDirectory = stats.isDirectory();
             }
 
-            return this._isSymbolicLink;
+            return this.#_isSymbolicLink;
         }
 
         async isDirectory()
         {
-            if ( isNull( this._isDirectory ) )
+            if ( isNull( this.#_isDirectory, true ) )
             {
                 const stats = await this._refreshFileStats();
 
-                this._isFile = stats.isFile();
-                this._isSymbolicLink = stats.isSymbolicLink();
-                this._isDirectory = stats.isDirectory();
+                this.#_isFile = stats.isFile();
+                this.#_isSymbolicLink = stats.isSymbolicLink();
+                this.#_isDirectory = stats.isDirectory();
             }
 
-            return this._isDirectory;
+            return this.#_isDirectory;
         }
 
         async getRealPath()
         {
             if ( await this.isSymbolicLink() )
             {
-                return await realpath( this.filepath );
+                return await asyncAttempt( async() => await realpath( this.filepath ) );
             }
             return this.filepath;
         }
@@ -1654,6 +2356,7 @@ const $scope = constants?.$scope || function()
         const comparator = function( pA, pB )
         {
             let comp = pA.created.getTime() - pB.created.getTime();
+
             if ( 0 === comp )
             {
                 comp = pA.size - pB.size;
@@ -1662,6 +2365,7 @@ const $scope = constants?.$scope || function()
             {
                 comp = pA.fileInfo.filepath.localeCompare( pB.fileInfo.filepath );
             }
+
             return comp;
         };
 
@@ -1680,6 +2384,24 @@ const $scope = constants?.$scope || function()
         return files.reverse();
     };
 
+    FileObject.fromStats = function( pFilePath, pStats, pDirEntry, pDefaultObject = FileObject.NO_FILE )
+    {
+        const filePath = resolvePath( pFilePath || pDirEntry );
+
+        if ( !isBlank( filePath ) )
+        {
+            const stats = new FileStats( isFileStats( pStats ) ? pStats : attempt( () => statSync( filePath ) ) );
+
+            const isFile = isNonNullObject( stats ) ? stats.isFile() || stats.isSymbolicLink() : false;
+            const isDirectory = isNonNullObject( stats ) ? stats.isDirectory() : false;
+
+            return isFile ? new FileObject( filePath, stats, pDirEntry ) :
+                   (isDirectory ? new DirectoryObject( filePath, stats, pDirEntry ) : (pDefaultObject || FileObject.NO_FILE));
+        }
+
+        return pDefaultObject || FileObject.NO_FILE;
+    };
+
     FileObject.from = function( pFilePath, pStats, pDirEntry )
     {
         if ( pFilePath instanceof FileObject )
@@ -1687,15 +2409,7 @@ const $scope = constants?.$scope || function()
             return pFilePath;
         }
 
-        const filePath = resolvePath( pFilePath );
-
-        if ( !isBlank( filePath ) )
-        {
-            const stats = pStats || attempt( () => statSync( filePath ) );
-            return new FileObject( filePath, stats, pDirEntry );
-        }
-
-        return FileObject.NO_FILE;
+        return FileObject.fromStats( pFilePath, pStats, pDirEntry, FileObject.NO_FILE );
     };
 
     FileObject.fromAsync = async function( pFilePath, pStats, pDirEntry )
@@ -1705,15 +2419,7 @@ const $scope = constants?.$scope || function()
             return pFilePath;
         }
 
-        const filePath = resolvePath( pFilePath );
-
-        if ( !isBlank( filePath ) )
-        {
-            const stats = pStats || await asyncAttempt( async() => await stat( filePath ) );
-            return new FileObject( filePath, stats, pDirEntry );
-        }
-
-        return FileObject.NO_FILE;
+        return FileObject.fromStats( pFilePath, pStats, pDirEntry, FileObject.NO_FILE );
     };
 
     FileObject.asFileInfo = function( pFile )
@@ -1728,12 +2434,162 @@ const $scope = constants?.$scope || function()
         return a.compareTo( b );
     };
 
+    class DirectoryObject extends FileObject
+    {
+        constructor( pFilePath, pFileStats, pDirEntry )
+        {
+            super( pFilePath, pFileStats, pDirEntry );
+        }
+
+        async isFile()
+        {
+            return Promise.resolve( false );
+        }
+
+        async isDirectory()
+        {
+            return Promise.resolve( true );
+        }
+
+        async getFiles()
+        {
+            const dirPath = resolveDirectoryPath( this.filepath );
+
+            if ( await asyncExists( dirPath ) && await isDirectory( dirPath ) )
+            {
+                const files = await asyncAttempt( async() => await readFolder( dirPath ) );
+
+                return files.map( e => new FileObject( path.resolve( dirPath, e.name ), e, e ) );
+            }
+
+            return [];
+        }
+    }
+
+    DirectoryObject.NO_DIR = new DirectoryObject( _mt_str, {}, {} );
+
+    DirectoryObject.compare = FileObject.compare;
+
+    DirectoryObject.sort = async function( ...pDirs )
+    {
+        const dirs = asArray( varargs( ...pDirs ) ).map( pDir => pDir instanceof DirectoryObject ? pDir : new DirectoryObject( pDir ) );
+
+        async function convert( pObject )
+        {
+            const fileInfo = pObject instanceof DirectoryObject ? pObject : new DirectoryObject( pObject );
+
+            const created = await fileInfo.getCreatedDate();
+
+            const size = await fileInfo.getSize();
+
+            return { fileInfo, created, size };
+        }
+
+        const promises = dirs.map( convert );
+
+        const comparator = function( pA, pB )
+        {
+            let comp = pA.created.getTime() - pB.created.getTime();
+
+            if ( 0 === comp )
+            {
+                comp = pA.size - pB.size;
+            }
+            if ( 0 === comp )
+            {
+                comp = pA.fileInfo.filepath.localeCompare( pB.fileInfo.filepath );
+            }
+
+            return comp;
+        };
+
+        let results = await Promise.all( promises );
+
+        let sorted = results.sort( comparator );
+
+        sorted = sorted.map( e => e.fileInfo );
+
+        return sorted;
+    };
+
+    DirectoryObject.sortDescending = async function( ...pDirs )
+    {
+        let dirs = await DirectoryObject.sort( ...pDirs );
+        return dirs.reverse();
+    };
+
+    DirectoryObject.from = function( pFilePath, pStats, pDirEntry )
+    {
+        if ( pFilePath instanceof DirectoryObject )
+        {
+            return pFilePath;
+        }
+
+        return FileObject.fromStats( pFilePath, pStats, pDirEntry, DirectoryObject.NO_DIR );
+    };
+
+    DirectoryObject.fromAsync = async function( pFilePath, pStats, pDirEntry )
+    {
+        if ( pFilePath instanceof DirectoryObject )
+        {
+            return pFilePath;
+        }
+
+        return FileObject.fromStats( pFilePath, pStats, pDirEntry, DirectoryObject.NO_DIR );
+    };
+
+    DirectoryObject.asDirInfo = function( pDir )
+    {
+        return pDir instanceof DirectoryObject ? pDir : (!isNull( pDir ) ? new DirectoryObject( pDir ) : null);
+    };
+
+    DirectoryObject.COMPARATOR = function( pA, pB )
+    {
+        const a = DirectoryObject.asDirInfo( pA );
+        const b = DirectoryObject.asDirInfo( pB );
+        return a.compareTo( b );
+    };
+
     const EXPLORER_ENTRY_ACTION =
         {
             CONTINUE: 0,
             STOP: 1,
             SKIP: 2,
+
+            isSkip: function( pAction )
+            {
+                return pAction === this.SKIP;
+            },
+            isStop: function( pAction )
+            {
+                return pAction === this.STOP;
+            },
+            isContinue: function( pAction )
+            {
+                return pAction === this.CONTINUE;
+            }
         };
+
+    class DirExplorerState
+    {
+        #id;
+
+        #curDirEntry = null;
+
+        #curDirPath = null;
+        #curFilePath = null;
+
+        #curQueue = [];
+        #curResults = [];
+
+        #arguments = {};
+
+        constructor( pId, pArguments )
+        {
+            this.#id = pId;
+            this.#arguments = pArguments;
+        }
+    }
 
     class DirectoryExplorer
     {
@@ -1744,32 +2600,69 @@ const $scope = constants?.$scope || function()
 
         #breadthFirst = false;
 
+        #collectionState = new Map();
+
         constructor( pVisitor, pFileFilter, pDirectoryFilter, pBreadthFirst )
         {
-            this.#visitor = resolveVisitor( pVisitor );
-
             this.#fileFilter = Filters.IS_FILTER( pFileFilter ) ? pFileFilter : Filters.IDENTITY;
             this.#directoryFilter = Filters.IS_FILTER( pDirectoryFilter ) ? pDirectoryFilter : Filters.IDENTITY;
             this.#breadthFirst = !!pBreadthFirst;
+
+            this.#visitor = resolveVisitor( pVisitor,
+                                            {
+                                                fileFilter: pFileFilter,
+                                                directoryFilter: pDirectoryFilter,
+                                                breadthFirst: ( !!pBreadthFirst)
+                                            } );
         }
 
-        async _processDirectoryEntry( pDirectory, pDirectoryFilter, pIncludeFilter, pVisitor, pResults )
+        get visitor()
         {
-            if ( isNull( pDirectory ) )
+            return resolveVisitor( this.#visitor );
+        }
+
+        get directoryFilter()
+        {
+            return this.#directoryFilter;
+        }
+
+        get fileFilter()
+        {
+            return this.#fileFilter;
+        }
+
+        get breadthFirst()
+        {
+            return this.#breadthFirst;
+        }
+
+        async _evaluateDirectory( pDirPath, pDirFilter, pInclusionFilter, pVisitor, pResults = [] )
+        {
+            if ( isNull( pDirPath ) || isBlank( pDirPath ) )
             {
                 return EXPLORER_ENTRY_ACTION.SKIP;
             }
 
-            const dirInfo = await FileObject.fromAsync( pDirectory, null, pDirectory );
+            const dirPath = resolvePath( pDirPath );
 
-            if ( pDirectoryFilter( dirInfo ) || pDirectoryFilter( pDirectory ) )
+            const stats = await asyncAttempt( async() => await stat( dirPath ) );
+
+            const dirInfo = await asyncAttempt( async() => await DirectoryObject.fromAsync( dirPath, stats ) );
+
+            const directoryFilter = Filters.resolve( pDirFilter, Filters.resolve( this.directoryFilter, Filters.IDENTITY ) );
+
+            const inclusionFilter = Filters.resolve( pInclusionFilter, Filters.resolve( this.fileFilter, Filters.IDENTITY ) );
+
+            if ( await isMatchingDirectoryObject( dirInfo, directoryFilter ) )
             {
-                if ( pIncludeFilter( dirInfo ) || pIncludeFilter( dirInfo.filepath ) )
+                if ( await isMatchingFileObject( dirInfo, inclusionFilter ) )
                 {
                     pResults.push( dirInfo );
                 }
 
-                if ( pVisitor.visit( dirInfo ) )
+                const visitor = resolveVisitor( pVisitor, { dirPath: dirPath, dir: dirInfo } );
+
+                if ( attempt( () => visitor.visit( dirInfo ) ) )
                 {
                     return EXPLORER_ENTRY_ACTION.STOP;
                 }
@@ -1782,17 +2675,23 @@ const $scope = constants?.$scope || function()
 
         async _processFileEntry( pFilePath, pEntry, pFilter, pVisitor, pResults )
         {
-            if ( !isNull( pEntry ) && (pEntry.isFile() || pEntry.isSymbolicLink()) )
+            if ( isDirectoryEntry( pEntry ) && (pEntry.isFile() || pEntry.isSymbolicLink()) )
             {
                 const filePath = resolvePath( pFilePath || pEntry );
 
-                const entryInfo = await FileObject.fromAsync( filePath, null, pEntry );
+                const stats = await asyncAttempt( async() => await stat( filePath ) );
 
-                if ( pFilter( entryInfo ) || pFilter( filePath ) )
+                const entryInfo = await asyncAttempt( async() => await FileObject.fromAsync( filePath, stats, pEntry ) );
+
+                const fileFilter = Filters.resolve( pFilter, Filters.resolve( this.fileFilter, Filters.IDENTITY ) );
+
+                if ( await isMatchingFileObject( entryInfo, fileFilter ) )
                 {
                     pResults.push( entryInfo );
 
-                    if ( pVisitor.visit( entryInfo ) )
+                    const visitor = resolveVisitor( pVisitor, { entry: entryInfo } );
+
+                    if ( attempt( () => visitor.visit( entryInfo ) ) )
                     {
                         return EXPLORER_ENTRY_ACTION.STOP;
                     }
@@ -1803,47 +2702,21 @@ const $scope = constants?.$scope || function()
             return EXPLORER_ENTRY_ACTION.SKIP;
         }
 
-        async exploreDirectory( pDirectory, pVisitor, pFilter, pResults = [] )
-        {
-            const dirPath = resolveDirectoryPath( pDirectory );
-
-            const visitor = resolveVisitor( pVisitor );
-
-            const filter = Filters.IS_FILTER( pFilter ) ? pFilter : this.#fileFilter;
-
-            const results = pResults || [];
-
-            const entries = await asyncAttempt( async() => await readFolder( dirPath ) );
-
-            for await ( const entry of entries )
-            {
-                if ( !isNull( entry ) )
-                {
-                    const entryPath = path.resolve( path.join( dirPath, entry.name ) );
-
-                    const filePath = resolvePath( entryPath || entry );
-
-                    let action = await this._processFileEntry( filePath, entry, filter, visitor, results );
-
-                    if ( EXPLORER_ENTRY_ACTION.STOP === action )
-                    {
-                        return results;
-                    }
-                }
-            }
-
-            return results;
-        }
-
         resolveArguments( pDirectory, pVisitor, pFileFilter, pDirectoryFilter, pBreadthFirst )
         {
-            const startDirectory = resolveDirectoryPath( pDirectory );
+            const startDirectory = attempt( () => resolveDirectoryPath( pDirectory ) );
 
-            const visitor = resolveVisitor( pVisitor );
+            const visitor = resolveVisitor( pVisitor,
+                                            {
+                                                dir: pDirectory,
+                                                fileFilter: pFileFilter,
+                                                directoryFilter: pDirectoryFilter,
+                                                breadthFirst: ( !!pBreadthFirst)
+                                            } );
 
-            const fileFilter = Filters.IS_FILTER( pFileFilter ) ? pFileFilter : this.#fileFilter;
+            const fileFilter = Filters.resolve( pFileFilter, this.#fileFilter );
 
-            const directoryFilter = Filters.IS_FILTER( pDirectoryFilter ) ? pDirectoryFilter : this.#directoryFilter;
+            const directoryFilter = Filters.resolve( pDirectoryFilter, this.#directoryFilter );
 
             const breadthFirst = isDefined( pBreadthFirst ) ? !!pBreadthFirst : this.#breadthFirst;
 
@@ -1852,13 +2725,9 @@ const $scope = constants?.$scope || function()
 
         async collect( pDirectory, pVisitor, pFileFilter, pDirectoryFilter, pBreadthFirst )
         {
-            const {
-                startDirectory,
-                visitor,
-                fileFilter,
-                directoryFilter,
-                breadthFirst
-            } = this.resolveArguments( pDirectory, pVisitor, pFileFilter, pDirectoryFilter, pBreadthFirst );
+            const args = this.resolveArguments( pDirectory, pVisitor, pFileFilter, pDirectoryFilter, pBreadthFirst );
+
+            const { startDirectory } = args;
 
             const results = [];
 
@@ -1868,65 +2737,93 @@ const $scope = constants?.$scope || function()
 
             while ( queue.length > 0 )
             {
-                let dirPath = queue.shift();
+                const dirPath = queue.shift();
 
                 if ( explored.includes( dirPath ) )
                 {
                     continue;
                 }
 
-                let action = await this._processDirectoryEntry( dirPath, directoryFilter, fileFilter, visitor, results );
+                const action = await asyncAttempt( async() => await this.exploreDirectory( dirPath, args, results, queue ) );
 
-                if ( EXPLORER_ENTRY_ACTION.STOP === action )
+                if ( EXPLORER_ENTRY_ACTION.isStop( action ) )
                 {
                     return results;
-                }
-
-                if ( EXPLORER_ENTRY_ACTION.SKIP === action )
-                {
-                    continue;
-                }
-
-                const entries = await asyncAttempt( async() => await readFolder( dirPath ) );
-
-                for await ( const entry of entries )
-                {
-                    if ( isNull( entry ) )
-                    {
-                        continue;
-                    }
-
-                    const entryPath = path.resolve( path.join( dirPath, entry.name ) );
-
-                    if ( entry.isFile() || entry.isSymbolicLink() )
-                    {
-                        action = await this._processFileEntry( entryPath, entry, fileFilter, visitor, results );
-
-                        if ( EXPLORER_ENTRY_ACTION.STOP === action )
-                        {
-                            return results;
-                        }
-                    }
-
-                    if ( entry.isDirectory() )
-                    {
-                        if ( breadthFirst )
-                        {
-                            queue.push( entryPath );
-                        }
-                        else
-                        {
-                            const collected = await this.collect( entryPath, visitor, fileFilter, directoryFilter, breadthFirst );
-
-                            results.push( ...(asArray( collected ).flat()) );
-                        }
-                    }
                 }
 
                 explored.push( dirPath );
             }
 
             return results;
+        }
+
+        async exploreDirectory( pPath, pOptions, pResults = [], pQueue = [] )
+        {
+            const dirPath = resolvePath( pPath );
+
+            const {
+                directoryFilter,
+                fileFilter,
+                visitor,
+                breadthFirst
+            } = pOptions || this.resolveArguments( dirPath );
+
+            let action = await this._evaluateDirectory( dirPath,
+                                                        directoryFilter,
+                                                        fileFilter,
+                                                        visitor,
+                                                        pResults );
+
+            if ( !EXPLORER_ENTRY_ACTION.isContinue( action ) )
+            {
+                return action;
+            }
+
+            const entries = await asyncAttempt( async() => await readFolder( dirPath ) );
+
+            for await ( const entry of entries )
+            {
+                if ( !entry )
+                {
+                    continue;
+                }
+
+                const entryPath = resolvePath( path.resolve( path.join( dirPath, entry.name ) ) );
+
+                if ( entry.isFile() || entry.isSymbolicLink() )
+                {
+                    action = await this._processFileEntry( entryPath, entry, fileFilter, visitor, pResults );
+
+                    if ( EXPLORER_ENTRY_ACTION.isStop( action ) )
+                    {
+                        return action;
+                    }
+                }
+                else if ( entry.isDirectory() )
+                {
+                    await this._processDirectory( entryPath, pOptions, breadthFirst, pResults, pQueue );
+                }
+            }
+
+            return EXPLORER_ENTRY_ACTION.CONTINUE;
+        }
+
+        async _processDirectory( pDirPath, pArguments, pBreadthFirst, pResults, pQueue )
+        {
+            const dirPath = resolvePath( pDirPath );
+
+            if ( pBreadthFirst )
+            {
+                pQueue.push( dirPath );
+            }
+            else
+            {
+                const args = pArguments || this.resolveArguments( dirPath );
+
+                const collected = await asyncAttempt( async() => await this.collect( dirPath, args?.visitor, args?.fileFilter, args?.directoryFilter, pBreadthFirst ) );
+
+                pResults.push( ...(asArray( collected || [] ).flat()) );
+            }
         }
 
         async findFirst( pDirectory, pFilter, pRecursive = false, pBreadthFirst = false )
@@ -1960,9 +2857,10 @@ const $scope = constants?.$scope || function()
                 {
                     const entryPath = path.resolve( path.join( dirPath, entry.name ) );
 
-                    let info = await FileObject.fromAsync( entryPath, null, entry );
+                    let info = await FileObject.fromAsync( entryPath, entry, entry );
 
-                    if ( filter( info ) || filter( entryPath ) )
+                    // noinspection ES6RedundantAwait
+                    if ( await filter( info ) )
                     {
                         fileInfo = info;
                         break;
@@ -1976,9 +2874,10 @@ const $scope = constants?.$scope || function()
                         }
                         else
                         {
-                            info = await this.findFirst( entryPath, filter, pRecursive, pBreadthFirst );
+                            info = await this.findFirst( entryPath, filter, recursive, breadthFirst );
 
-                            if ( filter( info ) || filter( entryPath ) )
+                            // noinspection ES6RedundantAwait
+                            if ( await filter( info ) || await filter( entryPath ) )
                             {
                                 fileInfo = info;
                                 break;
@@ -2000,11 +2899,7 @@ const $scope = constants?.$scope || function()
         return await explorer.collect( pDirectory, pVisitor, pFileFilter, pDirectoryFilter, pBreadthFirst );
     };
 
-    FileObject.collect = async function( pDirectory, pVisitor, pFileFilter, pDirectoryFilter, pBreadthFirst )
-    {
-        const explorer = new DirectoryExplorer( pVisitor, pFileFilter, pDirectoryFilter, pBreadthFirst );
-        return await explorer.collect( pDirectory, pVisitor, pFileFilter, pDirectoryFilter, pBreadthFirst );
-    };
+    FileObject.collect = findFiles;
 
     let mod =
         {
@@ -2046,7 +2941,6 @@ const $scope = constants?.$scope || function()
             getFileEntry,
             asyncGetFileEntry,
             deleteFile,
-            deleteMatchingFiles,
             asyncDeleteFile,
             asyncDeleteMatchingFiles,
             createTempFileAsync: asyncCreateTempFile,
@@ -2057,6 +2951,8 @@ const $scope = constants?.$scope || function()
             FileStats,
             FileObject,
 
+            access,
+            accessSync,
             readdirSync,
             createWriteStream,
             chmodSync,
@@ -2081,7 +2977,9 @@ const $scope = constants?.$scope || function()
             listFolderEntries,
             rm,
             writeFile,
+            writeFileSync,
             writeTextFile,
+            writeTextFileSync,
             realpath,
             stat,
             statSync,
@@ -2110,7 +3008,11 @@ const $scope = constants?.$scope || function()
             utime,
             watchFs,
 
+            WriteStream,
 
+            fs_constants,
+            fsConstants,
+            importNodeModules
         };
 
     mod = modulePrototype.extend( mod );

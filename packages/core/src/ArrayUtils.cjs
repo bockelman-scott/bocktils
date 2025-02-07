@@ -92,11 +92,13 @@ const $scope = constants?.$scope || function()
         ignore,
         AsyncFunction,
         IllegalArgumentError,
-        EMPTY_ARRAY,
+        objectKeys,
         populateOptions,
         localCopy,
         immutableCopy,
         lock,
+        attempt,
+        asyncAttempt,
         classes
     } = constants;
 
@@ -140,6 +142,9 @@ const $scope = constants?.$scope || function()
         isIterable,
         isBoolean,
         isFunction,
+        isAsyncFunction,
+        isPromise,
+        isThenable,
         isDate,
         isClass,
         areSameType,
@@ -430,29 +435,20 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * Helper function to split a string value based on options.splitOn.
-     */
-    const splitStringValue = ( pStr, pOptions ) =>
-    {
-        const sep = pOptions?.splitOn || null;
-        const separator = getSplitter( sep );
-        return separator ? pStr.split( separator ) : [pStr];
-    };
-
-    /**
      * Helper function to determine the proper split separator.
      */
     const getSplitter = ( pSep ) =>
     {
-        if ( isString( pSep ) )
-        {
-            return asString( pSep );
-        }
-        if ( isRegExp( pSep ) )
-        {
-            return new RegExp( pSep, pSep?.flags );
-        }
-        return null;
+        return isString( pSep ) ? asString( pSep ) : isRegExp( pSep ) ? new RegExp( pSep, pSep?.flags ) : null;
+    };
+
+    /**
+     * Helper function to split a string value based on options.splitOn.
+     */
+    const splitStringValue = ( pStr, pOptions ) =>
+    {
+        const separator = getSplitter( pOptions?.splitOn || null );
+        return separator ? pStr.split( separator ) : [pStr];
     };
 
     /**
@@ -610,7 +606,7 @@ const $scope = constants?.$scope || function()
                     len = pObject?.length;
                     break;
                 }
-                len = Object.keys( pObject ).length;
+                len = objectKeys( pObject ).length;
                 break;
 
             default:
@@ -688,6 +684,9 @@ const $scope = constants?.$scope || function()
              */
             IS_FILTER: e => isFunction( e ) && e?.length > 0 && e?.length <= 3,
 
+
+            IS_ASYNC_FILTER: e => isAsyncFunction( e ) && e?.length > 0 && e?.length <= 3,
+
             /**
              * A filter to return the elements of an array that are mapping functions<br>
              * USAGE: <code>const filters = array.filter( Filters.IS_MAPPER );</code><br>
@@ -695,6 +694,9 @@ const $scope = constants?.$scope || function()
              * @alias module:ArrayUtils#Filters#IS_MAPPER
              */
             IS_MAPPER: e => isFunction( e ) && e?.length > 0 && e?.length <= 3,
+
+
+            IS_ASYNC_MAPPER: e => isAsyncFunction( e ) && e?.length > 0 && e?.length <= 3,
 
             /**
              * A filter to return the elements of an array that are comparator functions<br>
@@ -839,6 +841,8 @@ const $scope = constants?.$scope || function()
              * */
             IS_DATE: e => isDate( e ),
 
+            IS_JS_TYPE: e => [_ud, _obj, _fun, _str, _num, _big, _bool, _symbol].includes( e ),
+
             /**
              * A filter to return the elements of an array suitable as comparator functions
              * for the {@link Array.sort} method<br><br>
@@ -850,26 +854,6 @@ const $scope = constants?.$scope || function()
              *
              * */
             COMPARATORS: (e => Filters.IS_FUNCTION( e ) && Filters.IS_COMPARATOR( e )),
-
-            /**
-             * A <b>function</b> to return an array of filter functions from varargs<br>
-             * <br>
-             * USAGE: <code>const filters = _copyPredicateArguments( filterA, filterB, ... filterN );</code><br>
-             * <br>
-             *
-             * @param {...function} pPredicates One or more filter functions
-             * to include in the returned array
-             *
-             * @return {Array<function(*):boolean>} An array of filter functions
-             *
-             * @type {function(...*)}
-             *
-             * @alias module:ArrayUtils#Filters._copyPredicateArguments
-             */
-            _copyPredicateArguments: function( ...pPredicates )
-            {
-                return ([].concat( ...asArray( (pPredicates || [Filters.IDENTITY]) ) )).filter( Filters.IS_FILTER );
-            },
 
             /**
              * A <i><b>function</b> that returns a filter</i>
@@ -886,23 +870,8 @@ const $scope = constants?.$scope || function()
              */
             makeTypeFilter: function( ...pType )
             {
-                const types = [].concat( ...(asArray( pType || [] )) ).filter( e => [_ud, _obj, _fun, _str, _num, _big, _bool, _symbol].includes( e ) );
-
-                return function( e )
-                {
-                    let matches = false;
-
-                    for( const type of types )
-                    {
-                        if ( type === typeof e )
-                        {
-                            matches = true;
-                            break;
-                        }
-                    }
-
-                    return matches;
-                };
+                const types = asArgs( ...pType ).filter( Filters.IS_JS_TYPE );
+                return ( e ) => types.map( type => type === typeof e ).reduce( ( a, b ) => a || b, false );
             },
 
             /**
@@ -921,33 +890,20 @@ const $scope = constants?.$scope || function()
              */
             makeMatchesAllFilter: function( ...pPredicates )
             {
-                const predicates = Filters._copyPredicateArguments( ...pPredicates );
+                const predicates = flatFilteredArgs( Filters.IS_FILTER, ...pPredicates );
 
-                return function( e )
+                if ( predicates.length <= 0 )
                 {
-                    let matches = true;
+                    return Filters.NONE;
+                }
 
-                    for( const func of predicates )
-                    {
-                        try
-                        {
-                            if ( true !== func( e ) )
-                            {
-                                matches = false;
-                                break;
-                            }
-                        }
-                        catch( ex )
-                        {
-                            ignore( ex );
-
-                            matches = false;
-                            break;
-                        }
-                    }
-
-                    return matches;
+                const filter = function( e )
+                {
+                    let mapped = predicates.map( func => func( e ) );
+                    return mapped.every( e => true === e );
                 };
+
+                return Filters.IS_FILTER( filter ) ? filter : Filters.NONE;
             },
 
             /**
@@ -966,30 +922,20 @@ const $scope = constants?.$scope || function()
              * */
             makeMatchesAnyFilter: function( ...pPredicates )
             {
-                const predicates = Filters._copyPredicateArguments( ...pPredicates );
+                const predicates = flatFilteredArgs( Filters.IS_FILTER, ...pPredicates );
 
-                return function( e )
+                if ( predicates.length <= 0 )
                 {
-                    let matches = false;
+                    return Filters.IDENTITY;
+                }
 
-                    for( const func of predicates )
-                    {
-                        try
-                        {
-                            if ( true === func( e ) )
-                            {
-                                matches = true;
-                                break;
-                            }
-                        }
-                        catch( ex )
-                        {
-                            ignore( ex );
-                        }
-                    }
-
-                    return matches;
+                const filter = function( e )
+                {
+                    let mapped = predicates.map( func => func( e ) );
+                    return mapped.some( e => true === e );
                 };
+
+                return Filters.IS_FILTER( filter ) ? filter : Filters.IDENTITY;
             },
 
             /**
@@ -1007,19 +953,17 @@ const $scope = constants?.$scope || function()
              * */
             makeMatchesNoneFilter: function( ...pPredicates )
             {
-                const predicates = [].concat( ...(pPredicates || []) ).filter( Filters.IS_FILTER );
+                const predicates = flatFilteredArgs( Filters.IS_FILTER, ...pPredicates );
 
-                if ( predicates.length > 0 )
+                if ( predicates.length <= 0 )
+                {
+                    return Filters.NONE;
+                }
+                else
                 {
                     const func = Filters.makeMatchesAnyFilter( ...predicates );
-
-                    return function( e )
-                    {
-                        return !func( e );
-                    };
+                    return ( e ) => !func( e );
                 }
-
-                return function() { return true; };
             },
 
             /**
@@ -1032,6 +976,12 @@ const $scope = constants?.$scope || function()
                 let num = isNumber( pNum ) ? parseInt( Number( pNum ).toFixed( 0 ) ) : isString( pNum ) ? parseInt( pNum ) : 1;
 
                 return isNumber( num ) && !isNaN( num ) && isFinite( num ) ? num : 1;
+            },
+
+            _getNumElemsMatched( pPredicates, e )
+            {
+                const predicates = flatFilteredArgs( Filters.IS_FILTER, ...pPredicates );
+                return predicates.map( predicate => attempt( predicate, e ) ? 1 : 0 ).reduce( ( a, b ) => a + b, 0 );
             },
 
             /**
@@ -1051,7 +1001,12 @@ const $scope = constants?.$scope || function()
              */
             makeMatchesNPlusFilter: function( pNumMatches, ...pPredicates )
             {
-                const predicates = Filters._copyPredicateArguments( ...pPredicates );
+                const predicates = flatFilteredArgs( Filters.IS_FILTER, ...pPredicates );
+
+                if ( predicates.length <= 0 )
+                {
+                    return Filters.NONE;
+                }
 
                 const numExpected = Filters._numExpected( pNumMatches );
 
@@ -1060,29 +1015,7 @@ const $scope = constants?.$scope || function()
                     reportIllegalArguments( pNumMatches, predicates.length, "makeMatchesNPlusFilter" );
                 }
 
-                return function( e )
-                {
-                    let numMatches = 0;
-
-                    for( const func of predicates )
-                    {
-                        try
-                        {
-                            numMatches += (func( e ) ? 1 : 0);
-                        }
-                        catch( ex )
-                        {
-                            ignore( ex );
-                        }
-
-                        if ( numMatches >= numExpected )
-                        {
-                            break;
-                        }
-                    }
-
-                    return (numMatches >= numExpected);
-                };
+                return ( e ) => this._getNumElemsMatched( predicates, e ) >= numExpected;
             },
 
             /**
@@ -1101,7 +1034,7 @@ const $scope = constants?.$scope || function()
              */
             makeMatchesExactlyNFilter: function( pNumMatches, ...pPredicates )
             {
-                const predicates = [].concat( ...(pPredicates || []) ).filter( Filters.IS_FILTER );
+                const predicates = flatFilteredArgs( Filters.IS_FILTER, ...pPredicates );
 
                 let numExpected = Filters._numExpected( pNumMatches );
 
@@ -1110,76 +1043,31 @@ const $scope = constants?.$scope || function()
                     reportIllegalArguments( pNumMatches, predicates.length, "makeMatchesExactlyNFilter" );
                 }
 
-                return function( e )
-                {
-                    let numMatches = 0;
-
-                    for( const func of predicates )
-                    {
-                        try
-                        {
-                            numMatches += (func( e ) ? 1 : 0);
-                        }
-                        catch( ex )
-                        {
-                            ignore( ex );
-
-                            numMatches = Infinity;
-                            break;
-                        }
-                    }
-
-                    return (numMatches === numExpected);
-                };
+                return ( e ) => this._getNumElemsMatched( predicates, e ) === numExpected;
             },
 
             /**
              * A <i><b>function</b> that returns a filter</i>
              * that returns an array whose elements satisfy <b>LESS THAN <i>n</i></b> of the specified filters<br>
              * <br>
-             * USAGE: <code>const filtered = array.filter( Filters.makeMatchesLessThanNFilter( filterA, filterB, ...filterN ) );</code><br>
+             * USAGE: <code>const filtered = array.filter( Filters.makeMatchesUpToNFilter( filterA, filterB, ...filterN ) );</code><br>
              *
              * @param {number} pNumAllowed The maximum number of filters an element can match
              * @param {...function(*):boolean} pPredicates <i>n</i> or more filter functions
              *
-             * @return {function(*):boolean} A filter that returns an array whose elements satisfy less than <i>n</i> of the specified filters
+             * @return {function(*):boolean} A filter that returns an array whose elements satisfy less than or equal to <i>n</i> of the specified filters
              *
              * @type {function(number,...function)}
              *
-             * @alias module:ArrayUtils#Filters.makeMatchesLessThanNFilter
+             * @alias module:ArrayUtils#Filters.makeMatchesUpToNFilter
              */
-            makeMatchesLessThanNFilter: function( pNumAllowed, ...pPredicates )
+            makeMatchesUpToNFilter: function( pNumAllowed, ...pPredicates )
             {
-                const predicates = [].concat( ...(pPredicates || []) ).filter( Filters.IS_FILTER );
+                const predicates = flatFilteredArgs( Filters.IS_FILTER, ...pPredicates );
 
                 let numAllowed = this._numExpected( pNumAllowed );
 
-                return function( e )
-                {
-                    let numMatches = 0;
-
-                    for( const func of predicates )
-                    {
-                        try
-                        {
-                            numMatches += (func( e ) ? 1 : 0);
-                        }
-                        catch( ex )
-                        {
-                            ignore( ex );
-
-                            numMatches = Infinity;
-                            break;
-                        }
-
-                        if ( numMatches >= numAllowed )
-                        {
-                            break;
-                        }
-                    }
-
-                    return (numMatches < numAllowed);
-                };
+                return ( e ) => this._getNumElemsMatched( predicates, e ) <= numAllowed;
             },
 
             /**
@@ -1208,7 +1096,7 @@ const $scope = constants?.$scope || function()
              * */
             IS_POPULATED_OBJECT: function( e )
             {
-                const filter = Filters.makeMatchesAllFilter( Filters.IS_OBJECT, Filters.IS_NOT_NULL, e => Filters.IS_ARRAY( e ) ? ((e?.length || 0) > 0) : (Object.keys( e )?.length || 0) > 0 );
+                const filter = Filters.makeMatchesAllFilter( Filters.IS_OBJECT, Filters.IS_NOT_NULL, e => Filters.IS_ARRAY( e ) ? ((e?.length || 0) > 0) : (objectKeys( e )?.length || 0) > 0 );
                 return filter( e );
             },
 
@@ -1224,7 +1112,7 @@ const $scope = constants?.$scope || function()
              * */
             IS_POPULATED_NON_ARRAY_OBJECT: function( e )
             {
-                const filter = Filters.makeMatchesAllFilter( Filters.IS_OBJECT( e ), Filters.IS_NOT_NULL, e => ( !Filters.IS_ARRAY( e ) && Object.keys( e ).length > 0) );
+                const filter = Filters.makeMatchesAllFilter( Filters.IS_OBJECT( e ), Filters.IS_NOT_NULL, e => ( !Filters.IS_ARRAY( e ) && objectKeys( e || {} ).length > 0) );
                 return filter( e );
             },
 
@@ -1319,17 +1207,7 @@ const $scope = constants?.$scope || function()
             {
                 const rx = new RegExp( pRx || /.*/s );
 
-                return function( e )
-                {
-                    if ( !isString( e ) )
-                    {
-                        return false;
-                    }
-
-                    const re = new RegExp( rx || /.*/s );
-
-                    return re.test( e );
-                };
+                return ( e ) => isString( e ) && (new RegExp( rx || /.*/s )).test( e );
             },
 
             /**
@@ -1350,21 +1228,36 @@ const $scope = constants?.$scope || function()
              */
             NOT: function( ...pPredicates )
             {
-                const filters = asArray( pPredicates ).filter( Filters.IS_FILTER );
+                const predicates = flatFilteredArgs( Filters.IS_FILTER, ...pPredicates );
+                return Filters.makeMatchesNoneFilter( ...predicates );
+            },
 
-                return function( e, i, a )
+            defineIncludedFunction( ...pArr )
+            {
+                const arr = [...(varargs( ...pArr ))];
+
+                function included( pElem )
                 {
-                    for( let f of filters )
+                    let is = arr?.length > 0 && arr.includes( pElem );
+
+                    if ( isArray( pElem ) )
                     {
-                        const meets = f( e, i, a );
-                        if ( meets )
-                        {
-                            return false;
-                        }
+                        const filtered = arr.filter( Filters.IS_ARRAY );
+                        is = filtered.some( e => arraysEqual( e, pElem ) ) || is;
+                    }
+                    else if ( isObject( pElem ) )
+                    {
+                        const filtered = arr.filter( Filters.IS_OBJECT );
+
+                        const objectsEqual = ( a, b ) => (a === b) || (isNull( a ) && isNull( b )) || ( !isNull( a ) && isObject( a ) && (objectKeys( a ).length === objectKeys( (b || {}) ).length) && objectKeys( a ).every( key => a[key] === b[key] || (isObject( a[key] ) && isObject( b[key] ) && objectsEqual( a[key], b[key] )) ));
+
+                        is = filtered.some( e => objectsEqual( e, pElem ) ) || is;
                     }
 
-                    return true;
-                };
+                    return is;
+                }
+
+                return included;
             },
 
             /**
@@ -1384,49 +1277,9 @@ const $scope = constants?.$scope || function()
              */
             NOT_IN: function( ...pArr )
             {
-                const arr = varargs( ...pArr );
+                const included = this.defineIncludedFunction( ...pArr );
 
-                return function( e )
-                {
-                    let retained = arr?.length > 0 ? !(arr.includes( e )) : (_ud !== typeof e && null !== e);
-
-                    if ( retained && isArray( e ) )
-                    {
-                        let filtered = arr.filter( Filters.IS_ARRAY );
-                        for( let elem of filtered )
-                        {
-                            if ( arraysEqual( elem, e ) )
-                            {
-                                retained = false;
-                                break;
-                            }
-                        }
-                    }
-                    else if ( isObject( e ) )
-                    {
-                        let filtered = arr.filter( Filters.IS_OBJECT );
-
-                        for( let elem of filtered )
-                        {
-                            if ( arraysEqual( Object.keys( e ), Object.keys( elem ), {
-                                trim: true,
-                                comparator: Comparators._compare
-                            } ) )
-                            {
-                                if ( arraysEqual( Object.values( e ), Object.values( elem ), {
-                                    trim: false,
-                                    comparator: Comparators._compare
-                                } ) )
-                                {
-                                    retained = false;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    return retained;
-                };
+                return ( e ) => !included( e );
             },
 
             /**
@@ -1448,49 +1301,8 @@ const $scope = constants?.$scope || function()
             IN:
                 function( ...pArr )
                 {
-                    const arr = varargs( ...pArr );
-
-                    return function( e )
-                    {
-                        let retained = arr?.length > 0 && (arr.includes( e ));
-
-                        if ( !retained && isArray( e ) )
-                        {
-                            let filtered = arr.filter( Filters.IS_ARRAY );
-                            for( let elem of filtered )
-                            {
-                                if ( arraysEqual( elem, e ) )
-                                {
-                                    retained = true;
-                                    break;
-                                }
-                            }
-                        }
-                        else if ( isObject( e ) )
-                        {
-                            let filtered = arr.filter( Filters.IS_OBJECT );
-
-                            for( let elem of filtered )
-                            {
-                                if ( arraysEqual( Object.keys( e ), Object.keys( elem ), {
-                                    trim: true,
-                                    comparator: Comparators._compare
-                                } ) )
-                                {
-                                    if ( arraysEqual( Object.values( e ), Object.values( elem ), {
-                                        trim: false,
-                                        comparator: Comparators._compare
-                                    } ) )
-                                    {
-                                        retained = true;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-
-                        return retained;
-                    };
+                    const included = this.defineIncludedFunction( ...pArr );
+                    return ( e ) => included( e );
                 },
 
             /**
@@ -1568,6 +1380,120 @@ const $scope = constants?.$scope || function()
                 };
             },
 
+            meetsCriteria: function( pFilter, pElem )
+            {
+                let meets = false;
+
+                if ( Filters.IS_ASYNC_FILTER( pFilter ) )
+                {
+                    this.asyncMeetsCriteria( pFilter, pElem ).then( result => meets = result );
+                    return meets;
+                }
+                else if ( Filters.IS_FILTER( pFilter ) )
+                {
+                    meets = attempt( pFilter, pElem );
+                }
+
+                return meets;
+            },
+
+            asyncMeetsCriteria: async function( pFilter, pElem )
+            {
+                return (Filters.IS_ASYNC_FILTER( pFilter ) ? await asyncAttempt( pFilter, pElem ) : (Filters.IS_FILTER( pFilter ) ? attempt( pFilter, pElem ) : false));
+            },
+
+            filter( pFilter, pFilterable )
+            {
+                let arr = asArray( pFilterable || [] );
+
+                if ( Filters.IS_ASYNC_FILTER( pFilter ) )
+                {
+                    this.asyncFilter( pFilter, arr ).then( filtered => arr = filtered ).then( result => result );
+                    return arr;
+                }
+                else if ( Filters.IS_FILTER( pFilter ) )
+                {
+                    return arr.filter( pFilter );
+                }
+                return arr;
+            },
+
+            asyncFilter: async function( pFilter, pFilterable )
+            {
+                let arr = asArray( pFilterable || [] );
+
+                if ( Filters.IS_ASYNC_FILTER( pFilter ) )
+                {
+                    let filtered = [];
+
+                    for( let elem of arr )
+                    {
+                        let meetsCriteria = await asyncAttempt( pFilter, elem );
+
+                        if ( isPromise( meetsCriteria ) || isThenable( meetsCriteria ) )
+                        {
+                            meetsCriteria = await meetsCriteria.then( result => !!result );
+                        }
+
+                        if ( true === meetsCriteria )
+                        {
+                            filtered.push( elem );
+                        }
+                    }
+
+                    return filtered;
+                }
+                else if ( Filters.IS_FILTER( pFilter ) )
+                {
+                    return arr.filter( pFilter );
+                }
+
+                return arr;
+            },
+
+            makeFilterAsync: function( pFilter, pDefaultToIdentity )
+            {
+                if ( Filters.IS_ASYNC_FILTER( pFilter ) )
+                {
+                    return pFilter;
+                }
+
+                let filter = Filters.IS_FILTER( pFilter ) ? pFilter : (pDefaultToIdentity ? Filters.IDENTITY : Filters.NONE);
+
+                return async( e ) => await Filters.asyncMeetsCriteria( filter, e );
+            },
+
+            compose: function( ...pFilters )
+            {
+                const filters = flatFilteredArgs( Filters.IS_FILTER, ...pFilters );
+
+                if ( filters.some( Filters.IS_ASYNC_FILTER ) )
+                {
+                    const asyncFilters = filters.map( e => Filters.makeFilterAsync( e, true ) ).filter( Filters.IS_ASYNC_FILTER );
+
+                    const composed = async( e ) =>
+                    {
+                        let result = true;
+
+                        for await ( const filter of asyncFilters )
+                        {
+                            result &= await Filters.asyncMeetsCriteria( filter, e );
+
+                            if ( false === result || 0 === result )
+                            {
+                                result = false;
+                                break;
+                            }
+                        }
+
+                        return result;
+                    };
+
+                    return Filters.IS_ASYNC_FILTER( composed ) ? composed : Filters.makeFilterAsync( composed, true );
+                }
+                return this.makeMatchesAllFilter( ...filters );
+            },
+
             /**
              * A <i><b>function</b> that returns a filter</i>
              * that is composed of the filters specified<br>
@@ -1582,7 +1508,7 @@ const $scope = constants?.$scope || function()
              */
             chain: function( ...pFilters )
             {
-                const filters = ([].concat( ...(pFilters || [Filters.IDENTITY]) )).filter( Filters.IS_FILTER );
+                const filters = flatFilteredArgs( Filters.IS_FILTER, ...pFilters );
 
                 return function( e, i, a )
                 {
@@ -1599,8 +1525,20 @@ const $scope = constants?.$scope || function()
 
                     return matches;
                 };
+            },
+
+            resolve: function( pFilter, pDefaultFilter = Filters.IDENTITY )
+            {
+                let filter = Filters.IS_FILTER( pFilter ) ? pFilter : (Filters.IS_FILTER( pDefaultFilter ) ? pDefaultFilter : Filters.IDENTITY);
+
+                return Filters.IS_ASYNC_FILTER( filter ) ? ( e ) => asyncAttempt( filter, e ) : filter;
             }
         };
+
+    function resolveFilter( pFilter, pDefaultFilter = Filters.IDENTITY )
+    {
+        return Filters.resolve( pFilter, pDefaultFilter );
+    }
 
     /**
      * This is a top-level function that returns a filter<br>
@@ -1644,6 +1582,9 @@ const $scope = constants?.$scope || function()
              * @alias module:ArrayUtils#Mappers#IDENTITY
              * */
             IDENTITY: e => e,
+
+
+            NONE: e => null,
 
             /**
              * A mapper that returns an array
@@ -1868,10 +1809,7 @@ const $scope = constants?.$scope || function()
              * @type {function(*):string}
              * @alias module:ArrayUtils#Mappers#TO_LOWERCASE
              * */
-            TO_LOWERCASE: function( e )
-            {
-                return lcase( asString( e ) );
-            },
+            TO_LOWERCASE: ( e ) => lcase( asString( e ) ),
 
             /**
              * A mapper that returns an array
@@ -1882,9 +1820,48 @@ const $scope = constants?.$scope || function()
              * @type {function(*):string}
              * @alias module:ArrayUtils#Mappers#TO_UPPERCASE
              * */
-            TO_UPPERCASE: function( e )
+            TO_UPPERCASE: ( e ) => ucase( asString( e ) ),
+
+            convert: ( pMapper, pElem ) => attempt( pMapper, pElem ),
+
+            asyncConvert: async( pMapper, pElem ) => await attempt( pMapper, pElem ),
+
+            asyncMap: async function( pMapper, ...pArr )
             {
-                return ucase( asString( e ) );
+                let arr = asArray( varargs( ...pArr ) );
+
+                if ( Filters.IS_ASYNC_MAPPER( pMapper ) )
+                {
+                    let mapped = [];
+
+                    for( let elem of arr )
+                    {
+                        if ( await asyncAttempt( pMapper, elem ) )
+                        {
+                            mapped.push( elem );
+                        }
+                    }
+
+                    return mapped;
+                }
+                else if ( Filters.IS_MAPPER( pMapper ) )
+                {
+                    return arr.map( pMapper );
+                }
+
+                return arr;
+            },
+
+            makeMapperAsync: function( pMapper, pDefaultToIdentity )
+            {
+                if ( Filters.IS_ASYNC_MAPPER( pMapper ) )
+                {
+                    return pMapper;
+                }
+
+                let mapper = Filters.IS_MAPPER( pMapper ) ? pMapper : (pDefaultToIdentity ? Mappers.IDENTITY : Mappers.NONE);
+
+                return async( e ) => await Mappers.asyncConvert( mapper, e );
             },
 
             /**
@@ -1917,8 +1894,17 @@ const $scope = constants?.$scope || function()
 
                     return value;
                 };
+            },
+            resolve: function( pMapper, pDefaultMapper = Mappers.IDENTITY )
+            {
+                return Filters.IS_MAPPER( pMapper ) ? pMapper : (Filters.IS_MAPPER( pDefaultMapper ) ? pDefaultMapper : Mappers.IDENTITY);
             }
         };
+
+    function resolveMapper( pMapper, pDefaultMapper = Mappers.IDENTITY )
+    {
+        return Mappers.resolve( pMapper, pDefaultMapper );
+    }
 
     /**
      * @typedef {function(*,*):number} Comparator
@@ -1930,23 +1916,6 @@ const $scope = constants?.$scope || function()
      * <br>
      * This is a function that could be passed to the {@link Array.sort} method, for example
      */
-
-    /**
-     * Returns an array of valid comparator functions
-     *
-     * @param {...Comparator} pComparators - The comparators to be resolved and filtered<br>
-     * If none are provided, an array containing a default comparator is returned
-     *
-     * @return {Array<Comparator>} A filtered array of valid comparator functions
-     *
-     * @type {function(...Comparator):Array<Comparator>}
-     *
-     * @alias module:ArrayUtils.resolveComparators
-     */
-    function resolveComparators( ...pComparators )
-    {
-        return [].concat( varargs( ...(pComparators || [Comparators.NONE]) ) ).filter( Filters.COMPARATORS );
-    }
 
     /**
      * This is a collection of {@link Comparator}s <i>and functions that create comparators</i>
@@ -2025,29 +1994,8 @@ const $scope = constants?.$scope || function()
                 let sA = asString( a ) || (isFunction( a?.toString ) ? a.toString() : _mt_str);
                 let sB = asString( b ) || (isFunction( b?.toString ) ? b.toString() : _mt_str);
 
-                if ( isBlank( sA ) && !isString( a ) )
-                {
-                    try
-                    {
-                        sA = JSON.stringify( a );
-                    }
-                    catch( exJson )
-                    {
-                        ignore( exJson );
-                    }
-                }
-
-                if ( isBlank( sB ) && !isString( b ) )
-                {
-                    try
-                    {
-                        sB = JSON.stringify( b );
-                    }
-                    catch( exJson )
-                    {
-                        ignore( exJson );
-                    }
-                }
+                sA = isBlank( sA ) && !isString( a ) ? attempt( () => JSON.stringify( a ) ) : sA;
+                sB = isBlank( sB ) && !isString( b ) ? attempt( () => JSON.stringify( b ) ) : sB;
 
                 let comp = Comparators._compare( sA, sB );
 
@@ -2135,14 +2083,7 @@ const $scope = constants?.$scope || function()
 
                     if ( isFunction( pTransformation ) )
                     {
-                        try
-                        {
-                            value = pTransformation.apply( pElem, [pElem, ref] );
-                        }
-                        catch( ex )
-                        {
-                            modulePrototype.reportError( ex, "trying to transform " + pElem, S_WARN, modName + "::Comparators.BY_POSITION" );
-                        }
+                        value = attempt( () => pTransformation.apply( pElem, [pElem, ref] ) );
                     }
 
                     return value;
@@ -2171,14 +2112,7 @@ const $scope = constants?.$scope || function()
 
                     if ( isFunction( pPositionFunction ) )
                     {
-                        try
-                        {
-                            position = pPositionFunction.apply( arr, [pElem, arr] );
-                        }
-                        catch( ex )
-                        {
-                            modulePrototype.reportError( ex, "trying to find the position of " + pElem + " in array" + arr, S_WARN, modName + "::Comparators.BY_POSITION.findPosition" );
-                        }
+                        position = attempt( () => pPositionFunction.apply( pElem, [pElem, arr] ) );
                     }
 
                     return position;
@@ -2312,8 +2246,32 @@ const $scope = constants?.$scope || function()
             isComparator: function( pCandidate )
             {
                 return isFunction( pCandidate ) && 2 === pCandidate?.length;
+            },
+
+            resolve: function( pComparator, pDefaultComparator = Comparators.NONE )
+            {
+                return Filters.IS_COMPARATOR( pComparator ) ? pComparator : (Filters.IS_COMPARATOR( pDefaultComparator ) ? pDefaultComparator : Comparators.NONE);
             }
         };
+
+
+    /**
+     * Returns an array of valid comparator functions
+     *
+     * @param {...Comparator} pComparators - The comparators to be resolved and filtered<br>
+     * If none are provided, an array containing a default comparator is returned
+     *
+     * @return {Array<Comparator>} A filtered array of valid comparator functions
+     *
+     * @type {function(...Comparator):Array<Comparator>}
+     *
+     * @alias module:ArrayUtils.resolveComparators
+     */
+    function resolveComparators( ...pComparators )
+    {
+        const comparators = flatFilteredArgs( Filters.IS_COMPARATOR, ...pComparators );
+        return comparators.length <= 0 ? [Comparators.NONE] : comparators;
+    }
 
     /**
      * @readonly
@@ -2912,7 +2870,7 @@ const $scope = constants?.$scope || function()
 
         if ( !!options?.acceptObjects && isObject( pArr ) )
         {
-            return (Object.keys( pArr )?.length || 0) >= minLength;
+            return (objectKeys( pArr )?.length || 0) >= minLength;
         }
 
         return (isArray( pArr )) && pArr.length >= minLength;
@@ -3448,7 +3406,7 @@ const $scope = constants?.$scope || function()
         for( let i = 0, n = functions.length; i < n; i++ )
         {
             let obj = functions[i];
-            let idx = Object.keys( obj )[0];
+            let idx = objectKeys( obj )[0];
             let func = obj[idx];
 
             clone.splice( asInt( idx ), 0, func );
@@ -3604,21 +3562,23 @@ const $scope = constants?.$scope || function()
      */
     const includesAny = function( pArr, ...pSearchFor )
     {
-        const a = asArray( pArr );
-        const b = asArray( pSearchFor );
+        const a = [...(asArray( pArr ))];
+        const b = [...(asArgs( ...pSearchFor ))];
 
-        let result = false;
+        return a.some( e => b.includes( e ) );
+    };
 
-        for( let elem of b )
+    const includesAll = function( pArr, ...pSearchFor )
+    {
+        const a = [...(asArray( pArr ))];
+        const b = [...(asArgs( ...pSearchFor ))];
+
+        if ( a.length < b.length )
         {
-            if ( a.includes( elem ) )
-            {
-                result = true;
-                break;
-            }
+            return false;
         }
 
-        return result;
+        return b.every( e => a.includes( e ) );
     };
 
     /**
@@ -5110,6 +5070,7 @@ const $scope = constants?.$scope || function()
             calculateLength,
             arraysEqual,
             includesAny,
+            includesAll,
             areSubsets,
             superset,
             union,
@@ -5127,6 +5088,8 @@ const $scope = constants?.$scope || function()
             Filters: lock( Filters ),
             Mappers: lock( Mappers ),
             Comparators: lock( Comparators ),
+            resolveFilter,
+            resolveMapper,
             predicate,
             Transformer,
             TransformerChain,

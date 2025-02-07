@@ -112,7 +112,7 @@ const {
 
         if ( isNull( formatter ) )
         {
-            if ( isNonNullObject( pFormat ) && (includesAny( Object.keys( pFormat ), ["dateStyle", "timeStyle", ...SUPPORTED_INTL_OPTIONS] )) )
+            if ( isNonNullObject( pFormat ) && (includesAny( Object.keys( pFormat || {} ), ["dateStyle", "timeStyle", ...SUPPORTED_INTL_OPTIONS] )) )
             {
                 return new DateFormatter( pFormat || pOptions, resolveLocale( pLocale, pOptions, pFormat ) );
             }
@@ -130,7 +130,7 @@ const {
         for( const candidate of candidates )
         {
             options = (candidate instanceof DateFormatter) ? candidate.options || candidate : candidate;
-            if ( isNonNullObject( options ) && Object.keys( options ).includes( "locale" ) )
+            if ( isNonNullObject( options ) && Object.keys( options || {} ).includes( "locale" ) )
             {
                 break;
             }

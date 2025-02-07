@@ -671,19 +671,19 @@ describe( "Filters", () =>
               expect( filtered ).toEqual( ["a", "b", "c", 1, 2, 3] );
           } );
 
-    test( "The makeMatchesLessThanNFilter Predicate FUNCTION returns a filter to retain only elements that match less than the specified number of the filters specified",
+    test( "The makeMatchesUpToNFilter Predicate FUNCTION returns a filter to retain only elements that match less than the specified number of the filters specified",
           () =>
           {
               const arr = ["a", "ab", "abc", "b", "bc", "c", 1, 2, 3, 11, 22, 33, {}, ["a", "ab", "abc", "b", "bc", "c", 1, 2, 3, 11, 22, 33, {}]];
 
               const filter1 = e => "string" === typeof e;
-              const filter2 = e => e?.length > 1;
+              const filter2 = e => String( e )?.length > 1;
               const filter3 = e => "number" === typeof e;
               const filter4 = e => e > 10;
 
-              const filtered = arr.filter( Filters.makeMatchesLessThanNFilter( 2, filter1, filter2, filter3, filter4 ) );
+              const filtered = arr.filter( Filters.makeMatchesUpToNFilter( 2, filter1, filter2, filter3, filter4 ) );
 
-              expect( filtered ).toEqual( ["a", "b", "c", 1, 2, 3, {}, ["a", "ab", "abc", "b", "bc", "c", 1, 2, 3, 11, 22, 33, {}]] );
+              expect( filtered ).toEqual( ["a", "ab", "abc", "b", "bc", "c", 1, 2, 3, {}, ["a", "ab", "abc", "b", "bc", "c", 1, 2, 3, 11, 22, 33, {}]] );
           } );
 
     test( "The IS_POPULATED_ARRAY Predicate returns true if the specified value is an array with at least 1 'truthy' element",
@@ -833,7 +833,7 @@ describe( "Filters", () =>
           } );
 
 
-    test( "The IN Predicate FUNCTION returns a filter to retain only elements that do also appear in the other array",
+    test( "The IN Predicate FUNCTION returns a filter to retain only elements that also appear in the other array",
           () =>
           {
               const arr = ["abc", "def", "ghi", 2, true, ["abc"], { a: "abc" }, "ABC"];

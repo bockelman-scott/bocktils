@@ -2,8 +2,19 @@ const path = require( "path" );
 
 const core = require( "@toolbocks/core" );
 
+const fileUtils = require( "@toolbocks/files" );
+
 const fileLogger = require( "../src/index.js" );
 
+const {
+    resolvePath,
+    resolveDirectoryPath,
+    extractPathSeparator,
+    getFilePathData,
+    getFileName,
+    getDirectoryName,
+    getFileExtension,
+} = fileUtils;
 
 const { classes: fileLoggerClasses, FileLogger } = fileLogger;
 
@@ -21,11 +32,13 @@ describe( "FileLogger", () =>
     {
         let logger = new FileLogger( { directory: logDir } );
 
-        expect( logger.directory ).toEqual( logDir );
+        const expectedDir = resolvePath( logDir );
+
+        expect( logger.directory ).toEqual( expectedDir );
 
         logger = new FileLogger( { directory: logDir } );
 
-        expect( logger.directory ).toEqual( logDir );
+        expect( logger.directory ).toEqual( expectedDir );
 
         let record = new LogRecord( "This is information",
                                     "info",

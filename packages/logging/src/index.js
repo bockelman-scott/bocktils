@@ -177,7 +177,7 @@ const $scope = constants?.$scope || function()
         return (pIdOrName instanceof LogLevel) ? pIdOrName : (LogLevel.CACHE[pIdOrName] || LogLevel.CACHE[lcase( asString( pIdOrName, true ) )]);
     };
 
-    LogLevel.resolveLevel = function( pLevel, pOptions )
+    LogLevel.resolveLevel = function( pLevel )
     {
         return (pLevel instanceof LogLevel ? pLevel : LogLevel.getLevel( pLevel )) || LogLevel.DEFAULT;
     };
