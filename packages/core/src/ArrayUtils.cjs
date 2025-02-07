@@ -4368,7 +4368,7 @@ const $scope = constants?.$scope || function()
             return {
                 exceededBounds: (this.size > this.limit),
                 evicted: null,
-                size: this.#arr.length,
+                size: this.#arr?.length,
                 limit: this.#limit,
                 next: this.peek()
             };
@@ -5044,6 +5044,173 @@ const $scope = constants?.$scope || function()
         return combineConsecutive( { types: [_str], separator: sep }, ...arr );
     };
 
+    class Stack extends Array
+    {
+        constructor( ...pArgs )
+        {
+            super( ...pArgs );
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
+        push( ...pArgs )
+        {
+            return super.push( ...pArgs );
+        }
+
+        pop()
+        {
+            if ( this.length > 0 )
+            {
+                return super.pop();
+            }
+        }
+
+        peek()
+        {
+            return this.length > 0 ? this[this.length - 1] : null;
+        }
+
+        clear()
+        {
+            this.length = 0;
+        }
+
+        drain()
+        {
+            const arr = [];
+
+            while ( this.length > 0 )
+            {
+                arr.unshift( this.pop() );
+            }
+
+            return new this.constructor( arr );
+        }
+    }
+
+    const MAX_STACK_SIZE = 256;
+
+    class BoundedStack extends Stack
+    {
+        #limit;
+
+        constructor( pLimit, ...pArgs )
+        {
+            super( ...pArgs );
+
+            this.#limit = clamp( asInt( pLimit, MAX_STACK_SIZE ), 10, MAX_STACK_SIZE );
+
+            while ( this.length > this.#limit )
+            {
+                super.pop();
+            }
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
+        get limit()
+        {
+            return clamp( asInt( this.#limit, MAX_STACK_SIZE ), 10, MAX_STACK_SIZE );
+        }
+
+        push( ...pArgs )
+        {
+            const arr = asArgs( ...pArgs );
+
+            const capacity = this.limit;
+
+            while ( this.length < capacity && arr.length )
+            {
+                super.push( arr.shift() );
+            }
+
+            return this.length;
+        }
+
+        unshift( ...pArgs )
+        {
+            const arr = asArgs( ...pArgs );
+
+            const capacity = this.limit;
+
+            while ( this.length < capacity && arr.length )
+            {
+                super.unshift( arr.pop() );
+            }
+
+            return this.length;
+        }
+
+        fill( pValue, pStart, pEnd )
+        {
+            let start = asInt( pStart, 0 );
+
+            start = start < 0 ? Math.min( this.limit, (start + this.length) ) : ((start < -(this.length)) ? 0 : (start >= this.length) ? this.length : start);
+
+            let end = asInt( pEnd, Math.min( this.limit, this.length ) );
+
+            return super.fill( pValue, start, end );
+        }
+    }
+
+    class AsyncBoundedStack extends BoundedStack
+    {
+        constructor( pLimit, ...pArgs )
+        {
+            super( pLimit, ...pArgs );
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
+        async pop()
+        {
+            if ( this.length > 0 )
+            {
+                return await super.pop();
+            }
+        }
+
+        async peek()
+        {
+            if ( this.length > 0 )
+            {
+                return super.peek();
+            }
+        }
+
+        async push( ...pArgs )
+        {
+            return super.push( ...pArgs );
+        }
+
+        async clear()
+        {
+            this.length = 0;
+        }
+
+        async drain()
+        {
+            const arr = [];
+
+            while ( this.length > 0 )
+            {
+                arr.unshift( await this.pop() );
+            }
+
+            return new AsyncBoundedStack( arr );
+        }
+    }
+
     let mod =
         {
             dependencies,
@@ -5096,6 +5263,9 @@ const $scope = constants?.$scope || function()
             ComparatorChain,
             BoundedQueue,
             AsyncBoundedQueue,
+            Stack,
+            BoundedStack,
+            AsyncBoundedStack,
             chainFilters,
             chainMappers,
             enQueue,

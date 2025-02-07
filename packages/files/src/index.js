@@ -42,14 +42,19 @@ let fsAsync;
 /**
  * Represent the stream API for working with streams.
  * In Node.js, this is "node:streams", in Deno, this is the "Deno" global,
- * in browsers and workers, this is implemented via WebSockets
+ * in browsers and workers, this is implemented via the Stream API:
+ * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/Streams_API}
  */
 let stream;
 
 /**
  * Represents the functionality related to resolving file paths and file names.
- * In Node.js, this is the node: path module.  In Deno, this is @TODO
- * In browsers, this is... @TODO
+ * <br>
+ * In Node.js, this is the node: path module.
+ * <br>
+ * When this is unavailable,
+ * this module provides its own implementation of the basic functionality.
+ * <br>
  *
  * @type {Object|function}
  */
@@ -57,24 +62,27 @@ let path;
 
 
 /**
- * Represents the path of the current working directory.
+ * Represents the path of the current working directory.<br>
+ * <br>
  * This variable typically holds the absolute path of the directory
- * where the program is being executed.
+ * where the program is being executed.<br>
+ * <br>
  *
  * This value may be used for file system operations or to determine
- * the relative locations of other files and directories.
- *
- * Note: Ensure proper handling when manipulating or joining paths
- * to avoid errors related to file system operations.
+ * the relative locations of other files and directories.<br>
+ * <br>
  *
  * @type {string}
  */
 let currentDirectory;
 
 /**
- * Represents the root directory of the project.
+ * Represents the root directory of this package.<br>
+ * <br>
+ *
  * This variable is used as a reference point for resolving
- * file and folder paths relative to the project's base directory.
+ * file and folder paths relative to the module's base directory.
+ * <br>
  *
  * @type {string}
  */
@@ -88,8 +96,16 @@ let projectRootDirectory;
  */
 let defaultPath;
 
+/**
+ * The toolbocks/core package provides the building blocks
+ * upon which other ToolBocks modules depend.<br>
+ * <br>
+ */
 const core = require( "@toolbocks/core" );
 
+/**
+ * These modules are imported from toolbocks/core
+ */
 const { constants, typeUtils, stringUtils, arrayUtils } = core;
 
 /* define a variable for typeof undefined **/
@@ -139,8 +155,6 @@ const $scope = constants?.$scope || function()
         attempt,
         asyncAttempt,
         objectKeys,
-        objectValues,
-        objectEntries,
         classes
     } = constants;
 
@@ -153,7 +167,6 @@ const $scope = constants?.$scope || function()
         isNull,
         isString,
         isNumber,
-        isObject,
         isArray,
         isDate,
         isNonNullObject,
@@ -170,7 +183,7 @@ const $scope = constants?.$scope || function()
 
     const { asString, asInt, toUnixPath, toBool, isBlank, leftOfLast, rightOfLast } = stringUtils;
 
-    const { varargs, asArray, unique, includesAll, Filters } = arrayUtils;
+    const { varargs, flatArgs, asArray, unique, includesAll, Filters, AsyncBoundedQueue } = arrayUtils;
 
     const modName = "FileUtils";
 
@@ -195,6 +208,7 @@ const $scope = constants?.$scope || function()
         fsAsync = require( "node:fs/promises" );
         stream = require( "node:stream" );
         path = require( "node:path" );
+
         currentDirectory = path.dirname( __filename );
         projectRootDirectory = path.resolve( currentDirectory, "../../../" );
         defaultPath = path.resolve( currentDirectory, "../messages/defaults.json" );
@@ -273,15 +287,15 @@ const $scope = constants?.$scope || function()
     {
         path = {
 
-            join: ( ...parts ) => parts.map( e => toUnixPath( e ) ).join( _pathSep ).replaceAll( /\/\/+/g, _pathSep ),
+            join: ( ...parts ) => flatArgs( parts ).map( e => toUnixPath( e ) ).join( _pathSep ).replaceAll( /\/\/+/g, _pathSep ),
 
-            basename: ( p ) => toUnixPath( p ).substring( toUnixPath( p ).lastIndexOf( _pathSep ) + 1 ),
+            basename: ( p ) => toUnixPath( asString( p ) ).substring( toUnixPath( p ).lastIndexOf( _pathSep ) + 1 ),
 
-            dirname: ( p ) => toUnixPath( p ).substring( 0, toUnixPath( p ).lastIndexOf( _pathSep ) ) || _dot,
+            dirname: ( p ) => toUnixPath( asString( p ) ).substring( 0, toUnixPath( p ).lastIndexOf( _pathSep ) ) || _dot,
 
             extname: ( p ) =>
             {
-                let s = toUnixPath( p );
+                let s = toUnixPath( asString( p ) );
                 const lastDot = s.lastIndexOf( _dot );
                 if ( lastDot === -1 || lastDot === s.length - 1 )
                 {
@@ -293,7 +307,7 @@ const $scope = constants?.$scope || function()
             resolve: ( ...pathSegments ) =>
             {
                 let resolvedPath = _mt_str;
-                let segments = asArray( varargs( ...pathSegments ) ).map( e => toUnixPath( e ) );
+                let segments = flatArgs( ...pathSegments ).map( e => toUnixPath( e ) );
                 for( const segment of segments )
                 {
                     if ( segment.startsWith( _pathSep ) )
@@ -343,12 +357,30 @@ const $scope = constants?.$scope || function()
             format: ( pathObject ) =>
             {
                 return toUnixPath( pathObject.dir + _pathSep + pathObject.base );
-            }
+            },
+
+            fromDirEntry: ( pEntry ) => !isNull( pEntry ) ? ((pEntry?.parentPath || pEntry?.path) + _pathSep + pEntry?.name) : _mt_str
         };
     }
 
+    /**
+     * This class provides a stand-in for fs.Stats or the Deno FileInfo interface.<br>
+     * <br>
+     * This class provides only those properties this module requires.<br>
+     * <br>
+     * Properties:
+     * - size: Represents the size of the file or directory
+     * - atime: Represents the last access time of the file or directory.
+     * - mtime: Represents the last modification time of the file or directory.
+     * - ctime: Represents the last change time of the file or directory metadata.
+     * - birthtime: Represents the creation time of the file or directory.
+     *
+     * Constructor:
+     * - Initializes the class with time-related properties from a given statistics object.
+     */
     class StatsProxy
     {
+        size;
         atime;
         mtime;
         ctime;
@@ -356,6 +388,7 @@ const $scope = constants?.$scope || function()
 
         constructor( pStats )
         {
+            this.size = pStats?.size;
             this.atime = pStats?.atime;
             this.mtime = pStats?.mtime;
             this.ctime = pStats?.ctime;
@@ -363,10 +396,42 @@ const $scope = constants?.$scope || function()
         }
     }
 
-    StatsProxy.keys = () => ["atime", "mtime", "ctime", "birthtime"];
+    /**
+     * Returns the properties an object must have
+     * to be considered a valid "FileStats" object.
+     *
+     * @returns {Array.<string>} The minimal set of properties
+     *                           an object must provide to be used as a stats provider
+     */
+    StatsProxy.keys = () => ["size", "atime", "mtime", "ctime", "birthtime"];
 
+    /**
+     * The `FsStats` variable is a conditional assignment that determines the appropriate
+     * file system statistics implementation based on the runtime environment.
+     *
+     * - In a Node.js environment (`_isNode` is true), it references the `fs.Stats` class if available,
+     *   or defaults to `StatsProxy`.
+     * - In a Deno environment (`_isDeno` is true), it uses the `_deno.FileInfo` class if available,
+     *   or defaults to `StatsProxy`.
+     * - In other environments or if neither specific API is detected, it defaults to `StatsProxy`.
+     *
+     * This variable abstracts file system statistics retrieval across different JavaScript runtime environments.
+     */
     const FsStats = _isNode ? (fs?.Stats || StatsProxy) : (_isDeno ? (_deno?.FileInfo || StatsProxy) : StatsProxy);
 
+    /**
+     * Determines whether the provided entry is a file stats object.
+     *
+     * This function checks if the given `pEntry` is a valid file stats object.
+     * It verifies that the entry is not null, is an object, and matches
+     * the required structure for file stats. It also checks whether the
+     * entry is an instance of `FsStats` or `StatsProxy`, or has all the keys
+     * defined by `StatsProxy`.
+     *
+     * @param {object} pEntry - The entry to test for file stats compatibility.
+     *
+     * @returns {boolean} Returns `true` if the entry is a file stats object; otherwise, `false`.
+     */
     const isFileStats = function( pEntry )
     {
         if ( isNull( pEntry ) || !isNonNullObject( pEntry ) )
@@ -731,7 +796,7 @@ const $scope = constants?.$scope || function()
         };
 
     // update the constants from the execution environment if they are available
-    fsConstants = _isNode ? mergeOptions( fsConstants, (fs.constants || fs_constants || fsConstants) ) : fsConstants;
+    fsConstants = lock( _isNode ? mergeOptions( fsConstants, (fs.constants || fs_constants || fsConstants) ) : fsConstants );
 
     const MILLIS_PER_SECOND = 1000;
     const MILLIS_PER_MINUTE = 60 * MILLIS_PER_SECOND;
@@ -1124,13 +1189,15 @@ const $scope = constants?.$scope || function()
          * Assigns key properties for managing file or directory entries.<br>
          * <br>
          *
-         * @param {Object|string} pDirEntry An object representing the directory entry,
-         *                                  or a string representing a file path.<br>
-         *                                  If an object is passed,
-         *                                  it should contain attributes such as `name` and `parentPath`,
-         *                                  and/or specific properties or methods for determining the type of the entry.<br>
+         * @param {fs.Dirent|DirectoryObject|DirectoryEntry|Object|string} pDirEntry
+         *          An object representing the directory entry,
+         *          or a string representing a file path.<br>
+         *          If an object is passed,
+         *          it should contain attributes such as `name` and `parentPath`,
+         *          and/or specific properties or methods for determining the type of the entry.<br>
          *
-         * @param {string} pFullPath A full string path to the file or directory. Defaults to constructing a path using `pDirEntry` details if not provided.
+         * @param {string} pFullPath A full string path to the file or directory.
+         *                           Defaults to constructing a path using `pDirEntry` details if not provided.
          *
          * @return {void} Does not return a value. Initializes the instance with resolved file or directory details.
          */
@@ -1223,8 +1290,7 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * Represents a subset of the attributes of a file or directory
-     * obtained from calls to stat, lstat, or fstat.<br>
+     * Represents a subset of the attributes obtained from calls to stat, lstat, or fstat.<br>
      * <br>
      * @class
      */
@@ -1248,7 +1314,7 @@ const $scope = constants?.$scope || function()
          * Constructs an instance of the FileStats class
          * from an object whose structure matches that of the Node.js fs.Stats class
          *
-         * @param {fs.Stats|fs.Dirent|{size:number,birthtime:Date,mtime:Date,atime:Date}} pStats
+         * @param {FileStats|FsStats|fs.Stats|fs.Dirent|{size:number,birthtime:Date,mtime:Date,atime:Date}} pStats
          * @param {string} [pFilePath=null]
          */
         constructor( pStats, pFilePath )
@@ -1852,9 +1918,14 @@ const $scope = constants?.$scope || function()
             }
         }
 
-        const { deleted, remaining } = await retryFailedDeletions( toDelete, deletedFiles, pFollowLinks );
+        const { deleted = [], remaining = [] } = asyncAttempt( async() => await retryFailedDeletions( toDelete,
+                                                                                                      deletedFiles,
+                                                                                                      pFollowLinks ) );
 
-        deletedFiles.push( ...deleted );
+        if ( isArray( deleted ) && deleted.length > 0 )
+        {
+            deletedFiles.push( ...deleted );
+        }
 
         if ( deletedFiles.length < expectedDeletions.length )
         {
@@ -1884,15 +1955,36 @@ const $scope = constants?.$scope || function()
         };
     };
 
+    /**
+     * This class is a stand-in for the Deno.FsFile object.<br>
+     * <br>
+     * @class
+     */
     class FileProxy
     {
+        #entry;
+
+        #fsFile;
+
         readable;
         writable;
 
         constructor( pFileEntry, pReadable, pWritable )
         {
+            this.#entry = pFileEntry;
+
             this.readable = pReadable;
             this.writable = pWritable;
+        }
+
+        set fsFile( pFile )
+        {
+            this.#fsFile = pFile;
+        }
+
+        get entry()
+        {
+            return this.#entry;
         }
 
         [Symbol.dispose]()
@@ -2018,7 +2110,7 @@ const $scope = constants?.$scope || function()
     }
 
     /**
-     * Defines a proxy for the Deno.FsFile interface if we are running in Node.js or Bun
+     * Defines a proxy for the Deno.FsFile interface if we are running in another execution environment
      * @type {*|(function())}
      */
     const FsFile = _deno?.FsFile || FileProxy;
@@ -2028,6 +2120,15 @@ const $scope = constants?.$scope || function()
         return pFile instanceof FsFile || pFile instanceof FileProxy;
     };
 
+    /**
+     * This class provides a wrapper for the various attributes related to a file or directory.<br>
+     * <br>
+     * All operations that return a file or collection of files return instances of this class.<br>
+     * <br>
+     * Filters and Mappers used when performing collection operations
+     * should assume that the element argument will be of this type.<br>
+     *
+     */
     class FileObject extends EventTarget
     {
         #filepath = _mt_str;
@@ -2110,9 +2211,19 @@ const $scope = constants?.$scope || function()
             return getFileName( this.filepath );
         }
 
+        get name()
+        {
+            return this.filename;
+        }
+
         get directory()
         {
             return getDirectoryName( this.filepath );
+        }
+
+        get parentPath()
+        {
+            return this.directory;
         }
 
         toString()
@@ -2327,6 +2438,13 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    /**
+     * Represents a constant `NO_FILE` used to indicate a state where no file is associated or
+     * selected, serving as a placeholder or sentinel value.
+     *
+     * This property can be used to check against or assign a state where
+     * no file operations are applicable.
+     */
     FileObject.NO_FILE = new FileObject( _mt_str, {}, {} );
 
     FileObject.compare = async function( pA, pB )
@@ -2574,15 +2692,22 @@ const $scope = constants?.$scope || function()
     {
         #id;
 
-        #curDirEntry = null;
-
-        #curDirPath = null;
-        #curFilePath = null;
-
-        #curQueue = [];
-        #curResults = [];
-
         #arguments = {};
+
+        #visitor;
+        #fileFilter;
+        #directoryFilter;
+
+        #breadthFirst;
+
+        #entry = null;
+
+        #dirPath = null;
+        #filePath = null;
+
+        #queue = [];
+        #results = [];
+        #explored = [];
 
         constructor( pId, pArguments )
         {
@@ -2600,7 +2725,7 @@ const $scope = constants?.$scope || function()
 
         #breadthFirst = false;
 
-        #collectionState = new Map();
+        #collectionStates = new AsyncBoundedQueue( 5, [] );
 
         constructor( pVisitor, pFileFilter, pDirectoryFilter, pBreadthFirst )
         {
