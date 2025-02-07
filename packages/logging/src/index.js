@@ -11,6 +11,7 @@ const $scope = constants?.$scope || function()
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };
 
+// noinspection FunctionTooLongJS
 (function exposeModule()
 {
     const INTERNAL_NAME = "__BOCK__LOGGING_UTILITIES__";
@@ -110,7 +111,7 @@ const $scope = constants?.$scope || function()
 
         toString() { return this.#name; }
 
-        [Symbol.toPrimitive]( hint )
+        [Symbol.toPrimitive]()
         {
             return this.#name;
         }
@@ -425,7 +426,7 @@ const $scope = constants?.$scope || function()
             return s;
         }
 
-        [Symbol.toPrimitive]( pHint )
+        [Symbol.toPrimitive]()
         {
             return this.toString();
         }

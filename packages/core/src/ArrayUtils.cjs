@@ -39,6 +39,7 @@ const $scope = constants?.$scope || function()
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };
 
+// noinspection FunctionTooLongJS
 /**
  * This module is constructed by an Immediately Invoked Function Expression (IIFE).
  * see: <a href="https://developer.mozilla.org/en-US/docs/Glossary/IIFE">MDN: IIFE</a> for more information on this design pattern
@@ -3913,10 +3914,7 @@ const $scope = constants?.$scope || function()
 
             const calculateCharacter = e => String.fromCharCode( asInt( e.charCodeAt( 0 ) ) + asInt( increment ) );
 
-            function _str( e )
-            {
-                return e.split( _mt_str ).map( calculateCharacter ).join( _mt_str );
-            }
+            const _str = ( e ) => e.split( _mt_str ).map( calculateCharacter ).join( _mt_str );
 
             /**
              * Returns an iterable that will successively produce strings

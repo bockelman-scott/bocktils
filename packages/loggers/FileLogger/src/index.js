@@ -37,6 +37,7 @@ const $scope = constants?.$scope || function()
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };
 
+// noinspection FunctionTooLongJS
 (function exposeModule()
 {
     // defines a key we can use to store this module in global scope
@@ -791,13 +792,7 @@ const $scope = constants?.$scope || function()
             return pValue;
         }
 
-        if ( isNumeric( pValue ) )
-        {
-            const unit = FileRotationIntervalUnit.resolve( pValue );
-            return new FileRotationInterval( 1, unit );
-        }
-
-        if ( isString( pValue ) )
+        if ( isNumeric( pValue ) || isString( pValue ) )
         {
             const unit = FileRotationIntervalUnit.resolve( pValue );
             return new FileRotationInterval( 1, unit );
@@ -1134,14 +1129,14 @@ const $scope = constants?.$scope || function()
             return this.#filter || super.filter;
         }
 
-        get logFormatter()
+        get formatter()
         {
             return this.#formatter || super.logFormatter;
         }
 
-        get formatter()
+        get logFormatter()
         {
-            return this.#formatter || super.logFormatter;
+            return this.formatter;
         }
 
         get retentionPolicy()
@@ -1186,7 +1181,6 @@ const $scope = constants?.$scope || function()
                     konsole.error( "Unable to create usable log directory", this.#directory, "This logger will be disabled" );
 
                     this.#level = LogLevel.OFF;
-
                     this.disable();
                 }
             }

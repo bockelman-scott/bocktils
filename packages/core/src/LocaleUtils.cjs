@@ -18,6 +18,7 @@ const {
     }
 } = constants;
 
+// noinspection FunctionTooLongJS
 (function exposeModule()
 {
     // define a key under which we can cache this module in the global scope
@@ -42,8 +43,6 @@ const {
     // Create local aliases for values imported from other modules
     const {
         _mt_str,
-        _spc,
-        _dot,
         _hyphen,
         _str,
         _num,
@@ -51,13 +50,10 @@ const {
         _bool,
         _obj,
         _fun,
-        _symbol,
         S_WARN,
         S_ERROR,
         lock,
-        objectEntries,
         objectValues,
-        objectKeys,
         classes
     } = constants;
 
@@ -70,8 +66,6 @@ const {
         isArray,
         isFunction,
         isDate,
-        isClass,
-        instanceOfAny
     } = typeUtils;
 
     const
@@ -86,7 +80,7 @@ const {
             toCanonicalNumericFormat
         } = stringUtils;
 
-    const { varargs, asArray, flatArgs, unique, Filters } = arrayUtils;
+    const { asArray, flatArgs, unique, Filters } = arrayUtils;
 
     const modName = "LocaleUtils";
 
@@ -496,26 +490,6 @@ const {
         static get [Symbol.species]()
         {
             return this;
-        }
-
-        /**
-         * Determines if a specified value can be assigned to a given class or the current instance's class.<br>
-         * That is, is the value an instance of the specified class or a subclass of the specified class.
-         *
-         * @param {any} pValue - The value to be checked for assignability.
-         * @param {Function} pClass - The class to check against. If not provided, defaults to the class of the current instance.
-         * @return {boolean} Returns true if the value is assignable to the class, otherwise false.
-         */
-        isAssignableTo( pValue, pClass )
-        {
-            if ( isNull( pValue ) )
-            {
-                return false;
-            }
-
-            const cls = isClass( pClass ) ? pClass || this.constructor[Symbol.species] || this.constructor : this.constructor[Symbol.species] || this.constructor;
-
-            return instanceOfAny( cls, cls[Symbol.species] ) && !(this === pValue);
         }
 
         parseLocale( pLocale )

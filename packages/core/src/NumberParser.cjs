@@ -3,12 +3,12 @@ const typeUtils = require( "./TypeUtils.cjs" );
 const stringUtils = require( "./StringUtils.cjs" );
 const localeUtils = require( "./LocaleUtils.cjs" );
 
-const { _ud = "undefined" } = constants;
-
-const $scope = constants?.$scope || function()
-{
-    return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-};
+const {
+    _ud = "undefined", $scope = constants?.$scope || function()
+    {
+        return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
+    }
+} = constants;
 
 (function exposeModule()
 {
@@ -138,7 +138,7 @@ const $scope = constants?.$scope || function()
 
         get separators()
         {
-            if ( this._separators && Object.keys( this._separators ).length )
+            if ( this._separators && Object.keys( this._separators || {} ).length )
             {
                 return lock( this._separators );
             }
