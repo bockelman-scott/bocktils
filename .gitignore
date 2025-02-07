@@ -13,6 +13,10 @@ package-lock.json
 **/out
 **/out/*
 
+**/test_data/unzipped_files
+**/test_data/unzipped_files/*
+
+
 build/staging
 build/dist
 build/ctrf
