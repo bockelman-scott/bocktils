@@ -40,11 +40,11 @@ const crypto = $scope().crypto || require( "crypto" );
 
     const { asString, isBlank, asInt } = stringUtils;
 
-    const { ModulePrototype } = classes;
+    const { ToolBocksModule } = classes;
 
     const modName = "GUIDUtils";
 
-    const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
+    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
 
     const MAX_CACHED_VALUES = 10_000;
     const DEFAULT_CACHED_VALUES = 1_000;

@@ -40,7 +40,7 @@ const $scope = constants?.$scope || function()
 
     let { classes } = constants;
 
-    const { ModulePrototype } = classes;
+    const { ToolBocksModule } = classes;
 
     const { funcUtils, objectUtils } = commonUtils;
 
@@ -65,7 +65,7 @@ const $scope = constants?.$scope || function()
             regexUtils
         };
 
-    const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
+    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
 
     let mod =
         {

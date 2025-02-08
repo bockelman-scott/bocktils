@@ -37,11 +37,11 @@ const {
         classes
     } = constants;
 
-    const { ModulePrototype } = classes;
+    const { ToolBocksModule } = classes;
 
     const modName = "BufferUtils";
 
-    const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
+    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
 
     const executionEnvironment = modulePrototype.executionEnvironment;
 

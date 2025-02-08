@@ -114,11 +114,11 @@ const $scope = constants?.$scope || function()
             classes
         } = constants;
 
-    const { ModuleEvent, ModulePrototype } = classes;
+    const { ModuleEvent, ToolBocksModule } = classes;
 
     const modName = "StringUtils";
 
-    let modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
+    let modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
 
     const
         {
@@ -2823,7 +2823,7 @@ const $scope = constants?.$scope || function()
             getFunctionSource,
             asUtf8ByteArray,
             fromUtf8ByteArray,
-            classes: { ModuleEvent, ModulePrototype, CustomEvent },
+            classes: { ModuleEvent, ToolBocksModule, CustomEvent },
         };
 
     mod = modulePrototype.extend( mod );

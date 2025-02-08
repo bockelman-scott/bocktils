@@ -62,7 +62,7 @@ const $scope = constants?.$scope || function()
         resolveError
     } = constants;
 
-    const { ModuleEvent, ModulePrototype, ExecutionMode, StatefulListener, StackTrace } = classes;
+    const { ModuleEvent, ToolBocksModule, ExecutionMode, StatefulListener, StackTrace } = classes;
 
     if ( _ud === typeof CustomEvent )
     {
@@ -89,7 +89,7 @@ const $scope = constants?.$scope || function()
     const { asArray, varargs, Filters, concatenateConsecutiveStrings, unique } = arrayUtils;
 
 
-    const modulePrototype = new ModulePrototype( "LoggingUtils", INTERNAL_NAME );
+    const modulePrototype = new ToolBocksModule( "LoggingUtils", INTERNAL_NAME );
 
     class LogLevel
     {

@@ -83,11 +83,11 @@ const $scope = constants?.$scope || function()
             EMPTY_OBJECT = Object.freeze( {} )
         } = constants;
 
-    const { ModuleEvent, ModulePrototype } = classes;
+    const { ModuleEvent, ToolBocksModule } = classes;
 
     const modName = "ObjectUtils";
 
-    let modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
+    let modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
 
     let
         {

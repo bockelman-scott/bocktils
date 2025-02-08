@@ -163,7 +163,7 @@ const $scope = constants?.$scope || function()
 
     const _pathSep = _slash;
 
-    const { ModulePrototype } = classes;
+    const { ToolBocksModule } = classes;
 
     const {
         isDefined,
@@ -199,7 +199,7 @@ const $scope = constants?.$scope || function()
 
     const modName = "FileUtils";
 
-    let modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
+    let modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
 
     const executionEnvironment = modulePrototype.executionEnvironment;
 

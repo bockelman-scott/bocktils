@@ -50,7 +50,7 @@ const {
 
     const { _mt_str, _str, _num, _obj, no_op, _hyphen, _minus, _underscore, _colon, mergeOptions, classes } = constants;
 
-    const { ModulePrototype } = classes;
+    const { ToolBocksModule } = classes;
 
     const {
         isNull,
@@ -104,7 +104,7 @@ const {
 
     const modName = "DateParser";
 
-    const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
+    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
 
     const resolveFormatter = function( pFormat, pLocale, pOptions )
     {

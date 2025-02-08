@@ -84,9 +84,9 @@ const {
 
     const modName = "LocaleUtils";
 
-    const { ModulePrototype } = classes;
+    const { ToolBocksModule } = classes;
 
-    const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
+    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
 
     const calculateErrorSourceName = function( pModule = modName, pFunction )
     {

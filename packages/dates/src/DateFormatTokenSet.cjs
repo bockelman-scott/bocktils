@@ -79,11 +79,11 @@ const {
         FORMATS,
     } = localeUtils;
 
-    const { ModulePrototype } = classes;
+    const { ToolBocksModule } = classes;
 
     const modName = "DateFormatTokenSet";
 
-    const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
+    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
 
     const
         {

@@ -1,7 +1,7 @@
 {
   "name": "@toolbocks/core",
   "version": "1.0.0",
-  "description": "Core dependencies for the ToolBocks packages. Provides the custom ModulePrototype, Constants, Type Utilities, String Utilities, Array Utilities, Locale Utilities, and an i18n-aware Number Parser",
+  "description": "Core dependencies for the ToolBocks packages. Provides the custom ToolBocksModule, Constants, Type Utilities, String Utilities, Array Utilities, Locale Utilities, and an i18n-aware Number Parser",
   "main": "src/CoreUtils.cjs",
   "dependencies": {
   },

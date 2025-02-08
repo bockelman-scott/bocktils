@@ -39,9 +39,9 @@ const {
 
     const { _mt_str, _mt_chr, lock, classes } = constants;
 
-    const { ModulePrototype } = classes;
+    const { ToolBocksModule } = classes;
 
-    const modulePrototype = new ModulePrototype( "DateFormatter", INTERNAL_NAME );
+    const modulePrototype = new ToolBocksModule( "DateFormatter", INTERNAL_NAME );
 
     const { isNull, isDate, isNumeric, isString, isArray, isObject, isNonNullObject } = typeUtils;
 

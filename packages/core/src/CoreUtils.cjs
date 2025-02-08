@@ -24,7 +24,7 @@ const $scope = constants?.$scope || function()
 
     const { classes } = constants;
 
-    const { ModuleEvent, ModulePrototype } = classes;
+    const { ModuleEvent, ToolBocksModule } = classes;
 
     if ( _ud === typeof CustomEvent )
     {
@@ -33,7 +33,7 @@ const $scope = constants?.$scope || function()
 
     const { NumberParser } = numberParser;
 
-    const modulePrototype = new ModulePrototype( "CoreUtils", INTERNAL_NAME );
+    const modulePrototype = new ToolBocksModule( "CoreUtils", INTERNAL_NAME );
 
     let mod =
         {

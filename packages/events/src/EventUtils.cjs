@@ -38,11 +38,11 @@ const $scope = constants?.$scope || function()
 
     const { asString, capitalize, uncapitalize } = stringUtils;
 
-    const { ModuleEvent, ModulePrototype } = classes;
+    const { ModuleEvent, ToolBocksModule } = classes;
 
     const modName = "EventUtils";
 
-    const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
+    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
 
     const S_ON = "on";
     const S_ABORT = "abort";

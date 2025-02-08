@@ -1,6 +1,6 @@
 /**
  * @fileoverview
- * @name ModulePrototype
+ * @name ToolBocksModule
  * @author Scott Bockelman
  * @license MIT
  *
@@ -20,8 +20,8 @@
  * <br>
  * </p>
  *
- * @see BockModulePrototype
- * @see BockModuleEvent
+ * @see ToolBocksModule
+ * @see ToolBocksModuleEvent
  * @see {@link __Error},
  * @see IllegalArgumentError
  * @see StackTrace
@@ -325,7 +325,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
      * It avoids propagating the error(s) to consumer code, preferring to use the libray convention of emitting an event.<br>
      * <br>
      * <b>NOTE</b> This is the DEFAULT implementation
-     * and is replaced with the ModulePrototype 'reportError' method
+     * and is replaced with the ToolBocksModule 'reportError' method
      * once that class is defined.<br>
      *
      * @function handleError
@@ -513,8 +513,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
      */
     let MODULE_CACHE = {};
 
-    /* This is the internal name of this module; it is exported as ModulePrototype */
-    const modName = "BockModulePrototype";
+    /* This is the internal name of this module; it is exported as ToolBocksModule */
+    const modName = "ToolBocksModule";
 
     /**
      * Returns true if the specified argument is an array.<br>
@@ -1139,7 +1139,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
 
         get ModuleCache()
         {
-            return BockModulePrototype.MODULE_CACHE || MODULE_CACHE;
+            return ToolBocksModule.MODULE_CACHE || MODULE_CACHE;
         }
 
         cacheModule( pModuleName, pModulePath, pModule )
@@ -1290,7 +1290,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
      * Use the 'detail' property to share data with event handlers.<br>
      * @class
      */
-    class BockModuleEvent extends Event
+    class ToolBocksModuleEvent extends Event
     {
         #type;
         #detail;
@@ -1305,8 +1305,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
          *
          * @param {Object} pOptions
          *
-         * @see BockModulePrototype#reportError
-         * @see BockModulePrototype#dispatchEvent
+         * @see ToolBocksModule#reportError
+         * @see ToolBocksModule#dispatchEvent
          */
         constructor( pEventName, pData, pOptions )
         {
@@ -1315,7 +1315,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
 
             const { type, data, options } = resolveEventOptions( pEventName, pOptions, pData );
 
-            this.#type = type || "BockModuleEvent";
+            this.#type = type || "ToolBocksModuleEvent";
 
             this.#detail = data?.detail || data || options?.detail || options || {};
 
@@ -1331,7 +1331,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
 
         /**
          * Returns a constructor for this class.
-         * @returns {BockModuleEvent}
+         * @returns {ToolBocksModuleEvent}
          */
         static get [Symbol.species]()
         {
@@ -1340,7 +1340,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
 
         clone()
         {
-            return new BockModuleEvent( this.type, this.detail, this.traceEnabled );
+            return new ToolBocksModuleEvent( this.type, this.detail, this.traceEnabled );
         }
 
         /**
@@ -1372,11 +1372,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
     /**
      * If the environment does not define CustomEvent,<br>
      * we define a global property using our custom event, ModuleEvent
-     * @see BockModuleEvent
+     * @see ToolBocksModuleEvent
      */
     if ( _ud === typeof CustomEvent )
     {
-        CustomEvent = BockModuleEvent;
+        CustomEvent = ToolBocksModuleEvent;
         $scope()["CustomEvent"] = CustomEvent;
     }
 
@@ -1384,17 +1384,17 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
     {
         const evt = pEvent || $scope()?.event;
 
-        if ( evt instanceof CustomEvent || evt instanceof BockModuleEvent )
+        if ( evt instanceof CustomEvent || evt instanceof ToolBocksModuleEvent )
         {
             return evt;
         }
 
         if ( evt instanceof Event )
         {
-            return new BockModuleEvent( evt, pData, pOptions );
+            return new ToolBocksModuleEvent( evt, pData, pOptions );
         }
 
-        return new BockModuleEvent( evt, pData, pOptions );
+        return new ToolBocksModuleEvent( evt, pData, pOptions );
     };
 
     /**
@@ -2350,7 +2350,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
          * as it is not implemented in the base class.
          * <br>
          *
-         * @param {Event|BockModuleEvent} pEvent - The event object containing details about the event to handle.
+         * @param {Event|ToolBocksModuleEvent} pEvent - The event object containing details about the event to handle.
          * @param {...*} [pExtra] - Additional data or parameters that may be passed with the event.
          */
         handleEvent( pEvent, ...pExtra )
@@ -2529,7 +2529,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
          */
         visit( pVisited )
         {
-            this.dispatchEvent( new BockModuleEvent( "visit",
+            this.dispatchEvent( new ToolBocksModuleEvent( "visit",
                                                      pVisited,
                                                      populateOptions( this.#options,
                                                                       {
@@ -2559,7 +2559,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
                     }
                     catch( ex )
                     {
-                        this.dispatchEvent( new BockModuleEvent( "error",
+                        this.dispatchEvent( new ToolBocksModuleEvent( "error",
                                                                  {
                                                                      error: ex,
                                                                      message: ex.message,
@@ -2631,7 +2631,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
      * <br>
      * @extends EventTarget
      */
-    class BockModulePrototype extends EventTarget
+    class ToolBocksModule extends EventTarget
     {
         // the name of this instance, or module
         #moduleName;
@@ -2664,7 +2664,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
          * <br>
          * @constructor
          *
-         * @param {string|BockModulePrototype|Object} pModuleName The name of this instance, or another instance<br>
+         * @param {string|ToolBocksModule|Object} pModuleName The name of this instance, or another instance<br>
          *                                                 from which to inherit the name and other properties
          * @param {string} pCacheKey A unique key to use to cache this module in global scope to improve performance
          * @param {boolean} pTraceEnabled
@@ -2701,7 +2701,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
 
         /**
          * Returns a constructor for this class.
-         * @returns {BockModulePrototype}
+         * @returns {ToolBocksModule}
          */
         static get [Symbol.species]()
         {
@@ -2719,7 +2719,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             {
                 konsole.trace( pMessage, pOptions || "Called without options" );
 
-                this.dispatchEvent( new BockModuleEvent( "trace", pMessage, pOptions ) );
+                this.dispatchEvent( new ToolBocksModuleEvent( "trace", pMessage, pOptions ) );
             }
         }
 
@@ -2924,9 +2924,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
 
             if ( this.#loggingEnabled )
             {
-                if ( BockModulePrototype.#globalLoggingEnabled )
+                if ( ToolBocksModule.#globalLoggingEnabled )
                 {
-                    logger = BockModulePrototype.getGlobalLogger() || this.#logger;
+                    logger = ToolBocksModule.getGlobalLogger() || this.#logger;
                 }
 
                 logger = this.#logger || logger || konsole;
@@ -2944,7 +2944,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
          */
         set logger( pLogger )
         {
-            if ( BockModulePrototype.isLogger( pLogger ) )
+            if ( ToolBocksModule.isLogger( pLogger ) )
             {
                 this.#logger = pLogger;
             }
@@ -2999,9 +2999,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
          */
         static setGlobalLogger( pLogger )
         {
-            if ( BockModulePrototype.isLogger( pLogger ) )
+            if ( ToolBocksModule.isLogger( pLogger ) )
             {
-                BockModulePrototype.#globalLogger = pLogger;
+                ToolBocksModule.#globalLogger = pLogger;
             }
         };
 
@@ -3014,7 +3014,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
          */
         static getGlobalLogger()
         {
-            return BockModulePrototype.#globalLogger;
+            return ToolBocksModule.#globalLogger;
         }
 
         /**
@@ -3022,7 +3022,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
          */
         static disableGlobalLogger()
         {
-            BockModulePrototype.#globalLoggingEnabled = false;
+            ToolBocksModule.#globalLoggingEnabled = false;
         }
 
         /**
@@ -3031,7 +3031,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
          */
         static enableGlobalLogger()
         {
-            BockModulePrototype.#globalLoggingEnabled = true;
+            ToolBocksModule.#globalLoggingEnabled = true;
         }
 
         /**
@@ -3083,7 +3083,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
                     this.trace( "reportError", { moduleName: this.moduleName, err, msg, level, source: pSource } );
                 }
 
-                if ( this.#loggingEnabled && BockModulePrototype.isLogger( this.logger ) )
+                if ( this.#loggingEnabled && ToolBocksModule.isLogger( this.logger ) )
                 {
                     attemptMethod( this.logger, this.logger[level], ...msg );
                 }
@@ -3099,7 +3099,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
                             extra: [...pExtra]
                         };
 
-                    this.dispatchEvent( new BockModuleEvent( S_ERROR, data, data ) );
+                    this.dispatchEvent( new ToolBocksModuleEvent( S_ERROR, data, data ) );
                 }
                 catch( ex2 )
                 {
@@ -3150,7 +3150,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         /**
          * Adds the properties and functions of the object to this instance, or module
          * @param {Object} pObject An object defining one or more properties or methods to add to this module
-         * @returns {BockModulePrototype} This instance, now augmented with the properties and methods of the specified object
+         * @returns {ToolBocksModule} This instance, now augmented with the properties and methods of the specified object
          */
         extend( pObject )
         {
@@ -3173,7 +3173,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
                     return Object.assign( this, pObject || {} );
                 }
 
-                let modulePrototype = new BockModulePrototype( pObject );
+                let modulePrototype = new ToolBocksModule( pObject );
 
                 return Object.assign( modulePrototype, pObject );
             }
@@ -3193,7 +3193,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
          * @param {string} pCacheKey A unique key under which to cache this module in the global scope
          * @param pModuleScope {NodeModule|Object} the local module object from which the object is defined
          *
-         * @returns {BockModulePrototype} This instance, potentially extended with properties and functions from the specified object
+         * @returns {ToolBocksModule} This instance, potentially extended with properties and functions from the specified object
          * <br>
          * Emits a "load" event with this module as its detail data
          * @fires load
@@ -3229,7 +3229,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         /**
          * Asynchronously extends this module and emits the load event when complete
          * @param {Object} pObject Another module or object whose properties and functions will be added to this instance
-         * @returns {Promise<BockModulePrototype>} A Promise that resolves to the updated module
+         * @returns {Promise<ToolBocksModule>} A Promise that resolves to the updated module
          * @fires load
          */
         async enhance( pObject )
@@ -3238,27 +3238,27 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
 
             const object = isNonNullObj( pObject ) ? { ...pObject } : {};
 
-            dispatchEvent( new BockModuleEvent( "load", mod, { ...object } ) );
+            dispatchEvent( new ToolBocksModuleEvent( "load", mod, { ...object } ) );
 
             return mod;
         }
 
         /**
-         * This is a static factory method to construct a new instance of the ModulePrototype.
+         * This is a static factory method to construct a new instance of the ToolBocksModule.
          * <br>
          * If the module has already been constructed and loaded, it may be returned from the cache.
          * <br>
          * @param {string} pModuleName The name of the module to construct
          * @param {string} pCacheKey A key that may be used to cache the module in the global scope
          * @param {Object} pObject (optional) another module or object whose properties and functions will be added to the new instance
-         * @returns {BockModulePrototype} A newly constructed Module with the specified name or the existing module if it is found in the cache
+         * @returns {ToolBocksModule} A newly constructed Module with the specified name or the existing module if it is found in the cache
          */
         static create( pModuleName, pCacheKey, pObject )
         {
             let modulePrototype = isStr( pModuleName ) ? MODULE_CACHE[pModuleName] : null;
 
-            modulePrototype = modulePrototype || (isStr( pCacheKey ) ? MODULE_CACHE[pCacheKey] : new BockModulePrototype( pModuleName, pCacheKey ));
-            modulePrototype = modulePrototype || new BockModulePrototype( pModuleName, pCacheKey );
+            modulePrototype = modulePrototype || (isStr( pCacheKey ) ? MODULE_CACHE[pCacheKey] : new ToolBocksModule( pModuleName, pCacheKey ));
+            modulePrototype = modulePrototype || new ToolBocksModule( pModuleName, pCacheKey );
 
             if ( isNonNullObj( pObject ) )
             {
@@ -3404,43 +3404,43 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
      * This cache is implemented as a POJO data structure
      * that maps module identifiers to their corresponding cached instances.<br>
      */
-    BockModulePrototype.MODULE_CACHE = BockModulePrototype.MODULE_CACHE || MODULE_CACHE;
-    MODULE_CACHE = BockModulePrototype.MODULE_CACHE;
+    ToolBocksModule.MODULE_CACHE = ToolBocksModule.MODULE_CACHE || MODULE_CACHE;
+    MODULE_CACHE = ToolBocksModule.MODULE_CACHE;
 
     /**
-     * Defines a private instance of the ModulePrototype
+     * Defines a private instance of the ToolBocksModule
      * to be used in functions that are not defined as methods
      * @see _copy
-     * @type {BockModulePrototype}
+     * @type {ToolBocksModule}
      */
-    const GLOBAL_INSTANCE = new BockModulePrototype( "GLOBAL_INSTANCE", "__BOCK__MODULE_PROTOTYPE_GLOBAL_INSTANCE__" );
+    const GLOBAL_INSTANCE = new ToolBocksModule( "GLOBAL_INSTANCE", "__BOCK__MODULE_PROTOTYPE_GLOBAL_INSTANCE__" );
 
     MODULE_CACHE["GLOBAL_INSTANCE"] = GLOBAL_INSTANCE;
     MODULE_CACHE["__BOCK__MODULE_PROTOTYPE_GLOBAL_INSTANCE__"] = GLOBAL_INSTANCE;
 
     /**
      * Makes the specified object available as a module that can be imported or required by other code
-     * @param {Object|BockModulePrototype} pObject The object or module to export
+     * @param {Object|ToolBocksModule} pObject The object or module to export
      * @param {string} pCacheKey A key under which the exported module may be cached
-     * @returns {BockModulePrototype} The exported module
+     * @returns {ToolBocksModule} The exported module
      */
     function exportModule( pObject, pCacheKey )
     {
         let mod = pObject;
 
-        if ( isNonNullObj( mod ) && (mod instanceof BockModulePrototype) )
+        if ( isNonNullObj( mod ) && (mod instanceof ToolBocksModule) )
         {
             return mod.expose( mod, pCacheKey );
         }
 
-        let modulePrototype = new BockModulePrototype( mod, pCacheKey );
+        let modulePrototype = new ToolBocksModule( mod, pCacheKey );
 
         mod = modulePrototype.extend( mod || pObject );
 
         return mod.expose( mod, pCacheKey );
     }
 
-    BockModulePrototype.exportModule = exportModule;
+    ToolBocksModule.exportModule = exportModule;
 
     handleAttempt.handleError = ( pError, pFunction, ...pArgs ) =>
     {
@@ -3453,13 +3453,13 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
      * Emits the load Event before returning the Promise that resolves to the required/imported module.
      * <br>
      * @param {string} pModulePath The name of, filepath to, or URL of, the required module
-     * @returns {Promise<BockModulePrototype>} A Promise that resolves to the requested module
+     * @returns {Promise<ToolBocksModule>} A Promise that resolves to the requested module
      */
     async function requireModule( pModulePath )
     {
         let mod = MODULE_CACHE[pModulePath];
 
-        if ( null != mod && mod instanceof BockModulePrototype )
+        if ( null != mod && mod instanceof ToolBocksModule )
         {
             return mod;
         }
@@ -3489,9 +3489,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             }
         }
 
-        if ( null != mod && mod instanceof BockModulePrototype )
+        if ( null != mod && mod instanceof ToolBocksModule )
         {
-            GLOBAL_INSTANCE.dispatchEvent( new BockModuleEvent( "load", mod, { module_path: pModulePath } ) );
+            GLOBAL_INSTANCE.dispatchEvent( new ToolBocksModuleEvent( "load", mod, { module_path: pModulePath } ) );
         }
 
         return mod;
@@ -4107,8 +4107,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
 
     const mod =
         {
-            ModuleEvent: BockModuleEvent,
-            ModulePrototype: BockModulePrototype,
+            ModuleEvent: ToolBocksModuleEvent,
+            ToolBocksModule: ToolBocksModule,
             CustomEvent,
 
             _ud,
@@ -4231,7 +4231,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             CURRENT_MODE,
             ARGUMENTS,
 
-            isLogger: BockModulePrototype.isLogger,
+            isLogger: ToolBocksModule.isLogger,
             calculateErrorSourceName,
 
             getExecutionEnvironment: function()
@@ -4246,11 +4246,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
 
             getGlobalLogger: function()
             {
-                return BockModulePrototype.getGlobalLogger();
+                return ToolBocksModule.getGlobalLogger();
             },
             setGlobalLogger: function( pLogger )
             {
-                BockModulePrototype.setGlobalLogger( pLogger );
+                ToolBocksModule.setGlobalLogger( pLogger );
             },
             exportModule,
             requireModule,
@@ -4266,8 +4266,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
                     ExecutionEnvironment,
                     ObjectEntry,
                     PromiseResult,
-                    ModuleEvent: BockModuleEvent,
-                    ModulePrototype: BockModulePrototype,
+                    ModuleEvent: ToolBocksModuleEvent,
+                    ToolBocksModule,
                     SourceInfo,
                     StackTrace,
                     __Error,

@@ -24,14 +24,14 @@ const $scope = constants?.$scope || function()
 
     const { classes } = constants;
 
-    const { ModuleEvent, ModulePrototype } = classes;
+    const { ModuleEvent, ToolBocksModule } = classes;
 
     if ( _ud === typeof CustomEvent )
     {
         CustomEvent = ModuleEvent;
     }
 
-    const modulePrototype = new ModulePrototype( "CommonUtils", INTERNAL_NAME );
+    const modulePrototype = new ToolBocksModule( "CommonUtils", INTERNAL_NAME );
 
     let mod =
         {

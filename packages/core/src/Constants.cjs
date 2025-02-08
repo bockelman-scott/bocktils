@@ -15,7 +15,7 @@
  */
 
 // import the only dependency for this module
-const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
+const bockModuleBootstrap = require( "./ToolBocksModule.cjs" );
 
 /**
  * This module is constructed by an Immediately Invoked Function Expression (IIFE).
@@ -82,7 +82,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
     const
         {
             ModuleEvent,
-            ModulePrototype,
+            ToolBocksModule,
             TYPES_CHECKS,
             getExecutionEnvironment,
             getGlobalLogger,
@@ -163,9 +163,9 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
      * <br>
      * The variables and functions defined in this file are added to the module before it is exported and returned.
      * <br>
-     * @type {ModulePrototype}
+     * @type {ToolBocksModule}
      */
-    let modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
+    let modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
 
     /**
      * This is the default limit for recursive functions
@@ -454,7 +454,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
      *
      * @alias module:Constants.isLogger
      */
-    const isLogger = ModulePrototype.isLogger;
+    const isLogger = ToolBocksModule.isLogger;
 
     /**
      * This is a regular expression that matches a single dot character anywhere in a string<br>
@@ -758,7 +758,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
              * Classes:<br>
              * <ul>
              * <li><i>ModuleEvent</i>: A CustomEvent that can be emitted from a module function</li>
-             * <li><i>ModulePrototype</i>: The base class for all ToolBocks&trade; modules</li>
+             * <li><i>ToolBocksModule</i>: The base class for all ToolBocks&trade; modules</li>
              * <li><i>__Error</i>: A subclass of Error used when throwing or reporting errors from modules<br>
              *                     that also supports an execution-agnostic StackTrace</li>
              * <li><i>IllegalArgumentError</i>: A subclass of the __Error class<br>
@@ -798,9 +798,9 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
                      * Module documentation will list all the events (other than "error") for which a consumer might listen.
                      * <br>
                      * @class
-                     * @alias module:Constants#classes#ModulePrototype
+                     * @alias module:Constants#classes#ToolBocksModule
                      */
-                    ModulePrototype,
+                    ToolBocksModule,
 
                     /**
                      * This class allows custom Errors to be defined.

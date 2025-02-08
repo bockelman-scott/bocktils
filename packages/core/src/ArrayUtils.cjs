@@ -103,7 +103,7 @@ const $scope = constants?.$scope || function()
         classes
     } = constants;
 
-    const { ModuleEvent, ModulePrototype } = classes;
+    const { ModuleEvent, ToolBocksModule } = classes;
 
     /*
      * If the environment does not define CustomEvent,<br>
@@ -190,9 +190,9 @@ const $scope = constants?.$scope || function()
      * <br>
      * The functions defined in this file are added to the module before it is exported and returned.
      * <br>
-     * @type {ModulePrototype}
+     * @type {ToolBocksModule}
      */
-    const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
+    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
 
     // poly-fill for isArray; probably obsolete with modern environments
     if ( !isFunction( Array.isArray ) )

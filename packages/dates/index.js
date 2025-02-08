@@ -47,7 +47,7 @@ const $scope = core?.$scope || constants?.$scope || function()
 
     const { Result, isDate } = typeUtils;
 
-    const { ModuleEvent, ModulePrototype } = classes;
+    const { ModuleEvent, ToolBocksModule } = classes;
 
     if ( _ud === typeof CustomEvent )
     {
@@ -106,7 +106,7 @@ const $scope = core?.$scope || constants?.$scope || function()
 
     const modName = "DatesPackage";
 
-    const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
+    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
 
     let mod =
         {

@@ -119,7 +119,7 @@ const $scope = constants?.$scope || function()
             classes
         } = constants;
 
-    const { ModulePrototype, ModuleEvent } = classes;
+    const { ToolBocksModule, ModuleEvent } = classes;
 
     /**
      * Represents the name of the module<br>
@@ -135,9 +135,9 @@ const $scope = constants?.$scope || function()
      * <br>
      * The variables and functions defined in this file are added to the module before it is exported and returned.
      * <br>
-     * @type {ModulePrototype}
+     * @type {ToolBocksModule}
      */
-    let modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
+    let modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
 
     /**
      * This is an array of the 'valid' JavaScript primitive types.<br>

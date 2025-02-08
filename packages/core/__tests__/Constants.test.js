@@ -687,7 +687,7 @@ describe( "Errors", () =>
 
 } );
 
-describe( "ModulePrototype - Events", () =>
+describe( "ToolBocksModule - Events", () =>
 {
     const loggedMessages = [];
 

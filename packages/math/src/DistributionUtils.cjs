@@ -104,7 +104,7 @@ const $scope = constants?.$scope || function()
 
     const { RoundingMode } = MathUtilsClasses;
 
-    const { ModulePrototype } = classes;
+    const { ToolBocksModule } = classes;
 
     /**
      * This is the name of this module
@@ -120,9 +120,9 @@ const $scope = constants?.$scope || function()
      * <br>
      * The functions defined in this file are added to the module before it is exported and returned.
      * <br>
-     * @type {ModulePrototype}
+     * @type {ToolBocksModule}
      */
-    const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
+    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
 
     const MAX_TOLERANCE = 0.00000000000005;
 

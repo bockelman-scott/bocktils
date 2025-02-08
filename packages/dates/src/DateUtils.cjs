@@ -73,11 +73,11 @@ const {
 
     const { resolveLocale, getNameOfDay, getAbbrOfDay, getNameOfMonth, getAbbrOfMonth } = localeUtils;
 
-    const { ModulePrototype } = classes;
+    const { ToolBocksModule } = classes;
 
     const modName = "DateUtils";
 
-    const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
+    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
 
     const Now = () => new Date();
 

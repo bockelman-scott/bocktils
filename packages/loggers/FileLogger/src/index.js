@@ -83,7 +83,7 @@ const $scope = constants?.$scope || function()
         firstMatchingType
     } = typeUtils;
 
-    const { ModulePrototype } = classes;
+    const { ToolBocksModule } = classes;
 
     const { asString, asInt, asFloat, isBlank, ucase, toBool } = stringUtils;
 
@@ -165,7 +165,7 @@ const $scope = constants?.$scope || function()
 
     const getMidnight = ( pDate ) => new Date( resolveMoment( pDate ) ).setHours( 23, 59, 59, 999 );
 
-    let modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
+    let modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
 
     const messagesLocale = MESSAGES_LOCALE || getMessagesLocale();
 

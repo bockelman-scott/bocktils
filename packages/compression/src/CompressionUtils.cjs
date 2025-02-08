@@ -87,7 +87,7 @@ const {
         classes
     } = constants;
 
-    const { ModuleEvent, ModulePrototype } = classes;
+    const { ModuleEvent, ToolBocksModule } = classes;
 
     const {
         isNull,
@@ -148,7 +148,7 @@ const {
 
     const modName = "CompressionUtils";
 
-    const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
+    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
 
     const ZERO_LENGTH_BUFFER = lock( Buffer.alloc( 0 ) );
 

@@ -224,7 +224,7 @@ const $scope = constants?.$scope || function()
         isAssignableTo
     } = typeUtils;
 
-    const { ModulePrototype } = classes;
+    const { ToolBocksModule } = classes;
 
     const { asString, asInt, asFloat, isBlank, lcase, ucase, toUnixPath, toBool } = stringUtils;
 
@@ -251,7 +251,7 @@ const $scope = constants?.$scope || function()
             localeUtils
         };
 
-    let modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
+    let modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
 
     const executionEnvironment = modulePrototype.executionEnvironment;
 
