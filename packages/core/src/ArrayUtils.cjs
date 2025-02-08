@@ -4354,6 +4354,26 @@ const $scope = constants?.$scope || function()
             throw new Error( "The queue is empty" );
         }
 
+        remove( pItem )
+        {
+            if ( this.size > 0 )
+            {
+                if ( _ud === typeof pItem || isNull( pItem ) )
+                {
+                    return this.#arr.shift();
+                }
+                else
+                {
+                    const index = this.#arr.indexOf( pItem );
+                    if ( index >= 0 )
+                    {
+                        return this.#arr.splice( index, 1 )[0];
+                    }
+                    return this.#arr.shift();
+                }
+            }
+        }
+
         peek()
         {
             if ( this.size > 0 )

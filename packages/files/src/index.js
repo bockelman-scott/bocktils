@@ -109,7 +109,7 @@ const core = require( "@toolbocks/core" );
 const { constants, typeUtils, stringUtils, arrayUtils } = core;
 
 /* define a variable for typeof undefined **/
-const { _ud = "undefined" } = constants;
+const { _ud = "undefined", konsole = console } = constants;
 
 /**
  * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
@@ -183,7 +183,7 @@ const $scope = constants?.$scope || function()
 
     const { asString, asInt, toUnixPath, toBool, isBlank, leftOfLast, rightOfLast } = stringUtils;
 
-    const { varargs, flatArgs, asArray, unique, includesAll, Filters, AsyncBoundedQueue } = arrayUtils;
+    const { varargs, asArgs, flatArgs, asArray, unique, includesAll, Filters, AsyncBoundedQueue } = arrayUtils;
 
     const modName = "FileUtils";
 
@@ -2709,10 +2709,143 @@ const $scope = constants?.$scope || function()
         #results = [];
         #explored = [];
 
+        _debugNumTakes = 0;
+        _debugNumPuts = 0;
+
         constructor( pId, pArguments )
         {
             this.#id = pId;
-            this.#arguments = pArguments;
+            this.#arguments = mergeOptions( pArguments, this.#arguments || {} );
+
+            this.#visitor = resolveVisitor( this.#arguments.visitor );
+            this.#fileFilter = Filters.resolve( this.#arguments.fileFilter );
+            this.#directoryFilter = Filters.resolve( this.#arguments.directoryFilter );
+            this.#breadthFirst = this.#arguments.breadthFirst || false;
+
+            this.#entry = this.#arguments.entry || null;
+            this.#dirPath = this.#arguments.dirPath || null;
+            this.#filePath = this.#arguments.filePath || null;
+
+            this.#queue = this.#arguments.queue || [];
+            this.#results = this.#arguments.results || [];
+            this.#explored = this.#arguments.explored || [];
+        }
+
+        get id()
+        {
+            return this.#id;
+        }
+
+        get entry()
+        {
+            return !isNull( this.#entry ) ? new DirectoryEntry( this.#entry, asString( this.#filePath || this.#dirPath, true ) ) : null;
+        }
+
+        get dirPath()
+        {
+            return resolvePath( asString( this.#dirPath, true ) );
+        }
+
+        set dirPath( pDirPath )
+        {
+            if ( !isBlank( pDirPath ) )
+            {
+                this.#dirPath = resolvePath( asString( pDirPath, true ) );
+                this.#filePath = _mt_str;
+            }
+        }
+
+        get filePath()
+        {
+            return resolvePath( asString( this.#filePath, true ) );
+        }
+
+        set filePath( pFilePath )
+        {
+            this.#filePath = resolvePath( pFilePath );
+        }
+
+        get visitor()
+        {
+            return resolveVisitor( this.#visitor, {} );
+        }
+
+        get fileFilter()
+        {
+            return this.#fileFilter;
+        }
+
+        get directoryFilter()
+        {
+            return this.#directoryFilter;
+        }
+
+        get breadthFirst()
+        {
+            return this.#breadthFirst;
+        }
+
+        isQueueEmpty()
+        {
+            return this.#queue.length <= 0;
+        }
+
+        take()
+        {
+            this._debugNumTakes++;
+
+            if ( !this.isQueueEmpty() )
+            {
+                return this.#queue.shift();
+            }
+        }
+
+        enQueue( pPath )
+        {
+            this._debugNumPuts++;
+
+            this.#queue.push( pPath );
+        }
+
+        setExplored( pPath )
+        {
+            this.#explored.push( resolvePath( pPath ) );
+            this.#explored = unique( this.#explored );
+        }
+
+        isExplored( pPath )
+        {
+            return asArray( this.#explored ).includes( resolvePath( pPath ) );
+        }
+
+        display()
+        {
+            konsole.log( "SEARCH STATE", this.id, "\n",
+                         "EXPLORED:", this.#explored, "\n",
+                         "QUEUED:", this.#queue, "\n",
+                         "RESULTS:", this.#results,
+                         "NUM_TAKES:", this._debugNumTakes,
+                         "NUM_PUTS:", this._debugNumPuts, "\n\n" );
+        }
+
+        addResult( pResult )
+        {
+            this.#results.push( pResult );
+        }
+
+        addResults( ...pResults )
+        {
+            this.#results.push( ...(asArgs( ...pResults )) );
+        }
+
+        getResults()
+        {
+            return [...(asArray( this.#results ))];
+        }
+
+        get args()
+        {
+            return lock( { ...this.#arguments } );
         }
     }
 
@@ -2725,7 +2858,9 @@ const $scope = constants?.$scope || function()
 
         #breadthFirst = false;
 
-        #collectionStates = new AsyncBoundedQueue( 5, [] );
+        #collectionStateId = 0;
+
+        #collectionStates;
 
         constructor( pVisitor, pFileFilter, pDirectoryFilter, pBreadthFirst )
         {
@@ -2739,6 +2874,8 @@ const $scope = constants?.$scope || function()
                                                 directoryFilter: pDirectoryFilter,
                                                 breadthFirst: ( !!pBreadthFirst)
                                             } );
+
+            this.#collectionStates = new AsyncBoundedQueue( 5, [] );
         }
 
         get visitor()
@@ -2748,12 +2885,12 @@ const $scope = constants?.$scope || function()
 
         get directoryFilter()
         {
-            return this.#directoryFilter;
+            return Filters.resolve( this.#directoryFilter );
         }
 
         get fileFilter()
         {
-            return this.#fileFilter;
+            return Filters.resolve( this.#fileFilter );
         }
 
         get breadthFirst()
@@ -2761,31 +2898,65 @@ const $scope = constants?.$scope || function()
             return this.#breadthFirst;
         }
 
-        async _evaluateDirectory( pDirPath, pDirFilter, pInclusionFilter, pVisitor, pResults = [] )
+        async resolveSearchState( pSearchState )
+        {
+            let searchState = pSearchState || await this.#collectionStates.peek();
+
+            if ( isNull( searchState ) || !(searchState instanceof DirExplorerState) )
+            {
+                searchState = new DirExplorerState( ++this.#collectionStateId,
+                                                    {
+                                                        visitor: resolveVisitor( this.visitor ),
+                                                        fileFilter: Filters.resolve( this.fileFilter ),
+                                                        directoryFilter: Filters.resolve( this.directoryFilter ),
+                                                        breadthFirst: this.breadthFirst
+                                                    } );
+
+                await this.#collectionStates.enQueue( searchState );
+            }
+
+            return searchState;
+        }
+
+        async _evaluateDirectory( pDirPath, pSearchState )
         {
             if ( isNull( pDirPath ) || isBlank( pDirPath ) )
             {
                 return EXPLORER_ENTRY_ACTION.SKIP;
             }
 
+            const searchState = await this.resolveSearchState( pSearchState );
+
             const dirPath = resolvePath( pDirPath );
+
+            if ( searchState.isExplored( dirPath ) )
+            {
+                return EXPLORER_ENTRY_ACTION.SKIP;
+            }
 
             const stats = await asyncAttempt( async() => await stat( dirPath ) );
 
             const dirInfo = await asyncAttempt( async() => await DirectoryObject.fromAsync( dirPath, stats ) );
 
-            const directoryFilter = Filters.resolve( pDirFilter, Filters.resolve( this.directoryFilter, Filters.IDENTITY ) );
+            const directoryFilter = Filters.resolve( searchState.directoryFilter, Filters.resolve( this.directoryFilter, Filters.IDENTITY ) );
 
-            const inclusionFilter = Filters.resolve( pInclusionFilter, Filters.resolve( this.fileFilter, Filters.IDENTITY ) );
+            const inclusionFilter = Filters.resolve( searchState.fileFilter, Filters.resolve( this.fileFilter, Filters.IDENTITY ) );
 
             if ( await isMatchingDirectoryObject( dirInfo, directoryFilter ) )
             {
+                searchState.dirPath = dirPath;
+
                 if ( await isMatchingFileObject( dirInfo, inclusionFilter ) )
                 {
-                    pResults.push( dirInfo );
+                    searchState.addResult( dirInfo );
                 }
 
-                const visitor = resolveVisitor( pVisitor, { dirPath: dirPath, dir: dirInfo } );
+                const visitor = resolveVisitor( searchState.visitor,
+                                                {
+                                                    dir: dirInfo,
+                                                    fileFilter: inclusionFilter,
+                                                    directoryFilter: directoryFilter
+                                                } );
 
                 if ( attempt( () => visitor.visit( dirInfo ) ) )
                 {
@@ -2798,23 +2969,32 @@ const $scope = constants?.$scope || function()
             return EXPLORER_ENTRY_ACTION.SKIP;
         }
 
-        async _processFileEntry( pFilePath, pEntry, pFilter, pVisitor, pResults )
+        async _processFileEntry( pFilePath, pEntry, pSearchState )
         {
             if ( isDirectoryEntry( pEntry ) && (pEntry.isFile() || pEntry.isSymbolicLink()) )
             {
                 const filePath = resolvePath( pFilePath || pEntry );
 
+                const searchState = await this.resolveSearchState( pSearchState );
+
                 const stats = await asyncAttempt( async() => await stat( filePath ) );
 
                 const entryInfo = await asyncAttempt( async() => await FileObject.fromAsync( filePath, stats, pEntry ) );
 
-                const fileFilter = Filters.resolve( pFilter, Filters.resolve( this.fileFilter, Filters.IDENTITY ) );
+                const fileFilter = Filters.resolve( searchState.fileFilter, Filters.resolve( this.fileFilter, Filters.IDENTITY ) );
 
                 if ( await isMatchingFileObject( entryInfo, fileFilter ) )
                 {
-                    pResults.push( entryInfo );
+                    searchState.filePath = filePath;
 
-                    const visitor = resolveVisitor( pVisitor, { entry: entryInfo } );
+                    searchState.addResult( entryInfo );
+
+                    const visitor = resolveVisitor( searchState.visitor,
+                                                    {
+                                                        entry: entryInfo,
+                                                        fileFilter: fileFilter,
+                                                        filePath: filePath
+                                                    } );
 
                     if ( attempt( () => visitor.visit( entryInfo ) ) )
                     {
@@ -2827,77 +3007,81 @@ const $scope = constants?.$scope || function()
             return EXPLORER_ENTRY_ACTION.SKIP;
         }
 
-        resolveArguments( pDirectory, pVisitor, pFileFilter, pDirectoryFilter, pBreadthFirst )
+        async resolveArguments( pDirectory, pSearchState )
         {
-            const startDirectory = attempt( () => resolveDirectoryPath( pDirectory ) );
+            const directory = resolveDirectoryPath( pDirectory );
 
-            const visitor = resolveVisitor( pVisitor,
-                                            {
-                                                dir: pDirectory,
-                                                fileFilter: pFileFilter,
-                                                directoryFilter: pDirectoryFilter,
-                                                breadthFirst: ( !!pBreadthFirst)
-                                            } );
+            const searchState = await this.resolveSearchState( pSearchState );
 
-            const fileFilter = Filters.resolve( pFileFilter, this.#fileFilter );
+            const visitor = resolveVisitor( searchState?.visitor || this.visitor, searchState?.args || {} );
 
-            const directoryFilter = Filters.resolve( pDirectoryFilter, this.#directoryFilter );
+            const fileFilter = Filters.resolve( searchState.fileFilter, this.#fileFilter );
 
-            const breadthFirst = isDefined( pBreadthFirst ) ? !!pBreadthFirst : this.#breadthFirst;
+            const directoryFilter = Filters.resolve( searchState.directoryFilter, this.#directoryFilter );
 
-            return { startDirectory, visitor, fileFilter, directoryFilter, breadthFirst };
+            const breadthFirst = isDefined( searchState.breadthFirst ) ? !!searchState.breadthFirst : this.#breadthFirst;
+
+            return { directory, visitor, fileFilter, directoryFilter, breadthFirst };
         }
 
-        async collect( pDirectory, pVisitor, pFileFilter, pDirectoryFilter, pBreadthFirst )
+        async collect( pDirectory )
         {
-            const args = this.resolveArguments( pDirectory, pVisitor, pFileFilter, pDirectoryFilter, pBreadthFirst );
+            const searchState = new DirExplorerState( ++this.#collectionStateId,
+                                                      {
+                                                          visitor: resolveVisitor( this.visitor ),
+                                                          fileFilter: Filters.resolve( this.fileFilter ),
+                                                          directoryFilter: Filters.resolve( this.directoryFilter ),
+                                                          breadthFirst: this.breadthFirst,
+                                                          dirPath: resolveDirectoryPath( pDirectory )
+                                                      } );
 
-            const { startDirectory } = args;
+            await this.#collectionStates.enQueue( searchState );
 
-            const results = [];
+            const args = await this.resolveArguments( pDirectory, searchState );
 
-            const explored = [];
+            const { directory } = args;
 
-            const queue = [startDirectory]; // Queue for BFS
+            searchState.enQueue( directory );
 
-            while ( queue.length > 0 )
+            while ( !searchState.isQueueEmpty() )
             {
-                const dirPath = queue.shift();
+                const dirPath = resolvePath( searchState.take() );
 
-                if ( explored.includes( dirPath ) )
+                if ( isBlank( dirPath ) || searchState.isExplored( dirPath ) )
                 {
                     continue;
                 }
 
-                const action = await asyncAttempt( async() => await this.exploreDirectory( dirPath, args, results, queue ) );
+                searchState.dirPath = dirPath;
+
+                const action = await asyncAttempt( async() => await this._exploreDirectory( dirPath, searchState ) );
+
+                searchState.setExplored( dirPath );
 
                 if ( EXPLORER_ENTRY_ACTION.isStop( action ) )
                 {
-                    return results;
+                    break;
                 }
-
-                explored.push( dirPath );
             }
+
+            // searchState.display();
+
+            const results = searchState.getResults();
+
+            await this.#collectionStates.remove( searchState );
 
             return results;
         }
 
-        async exploreDirectory( pPath, pOptions, pResults = [], pQueue = [] )
+        async _exploreDirectory( pPath, pSearchState )
         {
             const dirPath = resolvePath( pPath );
 
-            const {
-                directoryFilter,
-                fileFilter,
-                visitor,
-                breadthFirst
-            } = pOptions || this.resolveArguments( dirPath );
+            const searchState = await this.resolveSearchState( pSearchState );
 
-            let action = await this._evaluateDirectory( dirPath,
-                                                        directoryFilter,
-                                                        fileFilter,
-                                                        visitor,
-                                                        pResults );
+            searchState.dirPath = dirPath;
+
+            let action = await this._evaluateDirectory( dirPath, searchState );
 
             if ( !EXPLORER_ENTRY_ACTION.isContinue( action ) )
             {
@@ -2917,103 +3101,128 @@ const $scope = constants?.$scope || function()
 
                 if ( entry.isFile() || entry.isSymbolicLink() )
                 {
-                    action = await this._processFileEntry( entryPath, entry, fileFilter, visitor, pResults );
+                    searchState.filePath = entryPath;
+
+                    action = await this._processFileEntry( entryPath, entry, searchState );
 
                     if ( EXPLORER_ENTRY_ACTION.isStop( action ) )
                     {
                         return action;
                     }
                 }
-                else if ( entry.isDirectory() )
+                else if ( entry.isDirectory() && !searchState.isExplored( entryPath ) )
                 {
-                    await this._processDirectory( entryPath, pOptions, breadthFirst, pResults, pQueue );
+                    searchState.dirPath = entryPath;
+
+                    await this._processDirectory( entryPath, searchState );
                 }
             }
 
             return EXPLORER_ENTRY_ACTION.CONTINUE;
         }
 
-        async _processDirectory( pDirPath, pArguments, pBreadthFirst, pResults, pQueue )
+        async _processDirectory( pDirPath, pSearchState )
         {
             const dirPath = resolvePath( pDirPath );
 
-            if ( pBreadthFirst )
+            const searchState = await this.resolveSearchState( pSearchState );
+
+            if ( searchState.breadthFirst && !searchState.isExplored( dirPath ) )
             {
-                pQueue.push( dirPath );
+                searchState.enQueue( dirPath );
             }
             else
             {
-                const args = pArguments || this.resolveArguments( dirPath );
-
-                const collected = await asyncAttempt( async() => await this.collect( dirPath, args?.visitor, args?.fileFilter, args?.directoryFilter, pBreadthFirst ) );
-
-                pResults.push( ...(asArray( collected || [] ).flat()) );
+                await asyncAttempt( async() => await this._exploreDirectory( dirPath, searchState ) );
+                searchState.setExplored( dirPath );
             }
+        }
+
+        async _findFirst( pDirectory, pSearchState, pRecursive )
+        {
+            const searchState = await this.resolveSearchState( pSearchState );
+
+            const dirPath = resolveDirectoryPath( pDirectory );
+
+            const filter = Filters.resolve( searchState.fileFilter, this.fileFilter );
+
+            searchState.dirPath = dirPath;
+
+            let fileInfo = null;
+
+            const recursive = !!pRecursive;
+
+            const entries = await asyncAttempt( async() => await readFolder( dirPath ) );
+
+            for await ( const entry of entries )
+            {
+                const entryPath = resolvePath( path.resolve( path.join( dirPath, entry.name ) ) );
+
+                let info = await FileObject.fromAsync( entryPath, entry, entry );
+
+                if ( await isMatchingFileObject( info, filter ) )
+                {
+                    fileInfo = info;
+
+                    searchState.filePath = entryPath;
+                    searchState.addResult( info );
+
+                    break;
+                }
+
+                if ( entry.isDirectory() && recursive )
+                {
+                    if ( searchState.breadthFirst && !searchState.isExplored( entryPath ) )
+                    {
+                        searchState.enQueue( entryPath );
+                    }
+                    else
+                    {
+                        fileInfo = await this._findFirst( entryPath, searchState );
+                    }
+                }
+            }
+
+            return fileInfo;
         }
 
         async findFirst( pDirectory, pFilter, pRecursive = false, pBreadthFirst = false )
         {
-            const directoryPath = resolveDirectoryPath( pDirectory );
+            const searchState = new DirExplorerState( ++this.#collectionStateId,
+                                                      {
+                                                          visitor: resolveVisitor( this.visitor ),
+                                                          fileFilter: Filters.resolve( pFilter, this.fileFilter || Filters.IDENTITY ),
+                                                          directoryFilter: Filters.resolve( this.directoryFilter ),
+                                                          breadthFirst: pBreadthFirst,
+                                                          dirPath: resolveDirectoryPath( pDirectory )
+                                                      } );
 
-            const filter = Filters.IS_FILTER( pFilter ) ? pFilter : this.#fileFilter;
+            await this.#collectionStates.enQueue( searchState );
 
             const recursive = !!pRecursive;
 
-            const breadthFirst = !!pBreadthFirst;
+            const directory = resolveDirectoryPath( pDirectory );
+
+            searchState.enQueue( directory );
 
             let fileInfo = null;
 
-            const queue = [directoryPath];
-
-            const explored = [];
-
-            while ( queue.length > 0 )
+            while ( !searchState.isQueueEmpty() && isNull( fileInfo ) )
             {
-                const dirPath = queue.shift();
+                const dirPath = resolvePath( searchState.take() );
 
-                if ( explored.includes( dirPath ) )
+                if ( isBlank( dirPath ) || searchState.isExplored( dirPath ) )
                 {
                     continue;
                 }
 
-                const entries = await asyncAttempt( async() => await readFolder( dirPath ) );
+                fileInfo = await this._findFirst( dirPath, searchState, recursive );
 
-                for await ( const entry of entries )
-                {
-                    const entryPath = path.resolve( path.join( dirPath, entry.name ) );
-
-                    let info = await FileObject.fromAsync( entryPath, entry, entry );
-
-                    // noinspection ES6RedundantAwait
-                    if ( await filter( info ) )
-                    {
-                        fileInfo = info;
-                        break;
-                    }
-
-                    if ( entry.isDirectory() && recursive )
-                    {
-                        if ( breadthFirst )
-                        {
-                            queue.push( entryPath );
-                        }
-                        else
-                        {
-                            info = await this.findFirst( entryPath, filter, recursive, breadthFirst );
-
-                            // noinspection ES6RedundantAwait
-                            if ( await filter( info ) || await filter( entryPath ) )
-                            {
-                                fileInfo = info;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                explored.push( dirPath );
+                searchState.setExplored( dirPath );
             }
 
+            await this.#collectionStates.remove( searchState );
+            
             return fileInfo;
         }
     }
@@ -3021,7 +3230,7 @@ const $scope = constants?.$scope || function()
     const findFiles = async function( pDirectory, pVisitor, pFileFilter, pDirectoryFilter, pBreadthFirst )
     {
         const explorer = new DirectoryExplorer( pVisitor, pFileFilter, pDirectoryFilter, pBreadthFirst );
-        return await explorer.collect( pDirectory, pVisitor, pFileFilter, pDirectoryFilter, pBreadthFirst );
+        return await explorer.collect( pDirectory );
     };
 
     FileObject.collect = findFiles;
