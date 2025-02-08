@@ -15,7 +15,7 @@
  */
 
 // import the only dependency for this module
-const bockModuleBootstrap = require( "./ToolBocksModule.cjs" );
+const bockModuleBootstrap = require( "./_ToolBocksModule.cjs" );
 
 /**
  * This module is constructed by an Immediately Invoked Function Expression (IIFE).
