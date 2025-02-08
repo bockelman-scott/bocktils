@@ -108,6 +108,7 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             asPhrase,
             isReadOnly,
             isObjectLiteral,
+            ObjectEntry = bockModuleBootstrap?.classes?.ObjectEntry,
             objectEntries,
             objectValues,
             objectKeys,
@@ -2031,6 +2032,8 @@ const bockModuleBootstrap = require( "./_BockModulePrototype.cjs" );
             DEFAULT_NUMBER_FORMATTING_SYMBOLS,
 
             TYPES_CHECKS,
+
+            ObjectEntry,
 
             /**
              * This class allows us to easily cap an iteration,<br>

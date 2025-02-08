@@ -11,12 +11,13 @@ const { constants, typeUtils, stringUtils, arrayUtils } = core;
 
 const {
     _ud = "undefined",
-    $scope = function()
+    $scope = constants?.$scope || function()
     {
         return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
     }
 } = constants;
 
+// noinspection OverlyComplexFunctionJS,FunctionTooLongJS
 (function exposeModule()
 {
     const INTERNAL_NAME = "__BOCK__BUFFER_UTILS__";
@@ -29,34 +30,39 @@ const {
     const {
         _mt_str,
         lock,
+        objectEntries,
+        objectKeys,
+        objectValues,
+        mergeOptions,
         classes
     } = constants;
 
-    const { ModuleEvent, ModulePrototype } = classes;
-
-    if ( _ud === typeof CustomEvent )
-    {
-        CustomEvent = ModuleEvent;
-    }
+    const { ModulePrototype } = classes;
 
     const modName = "BufferUtils";
 
     const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
 
+    const executionEnvironment = modulePrototype.executionEnvironment;
+
+    const _isNode = executionEnvironment.isNode();
+    const _isDeno = executionEnvironment.isDeno();
+    const _isBrowser = executionEnvironment.isBrowser();
+
     const {
-        isUndefined,
         isDefined,
         isNull,
         isString,
         isNumber,
         isFunction,
         isArray,
-        isTypedArray
+        isTypedArray,
+        toDecimal
     } = typeUtils;
 
-    const { asString } = stringUtils;
+    const { asString, asInt } = stringUtils;
 
-    const { flatArgs, asArray } = arrayUtils;
+    const { flatArgs, asArray, Mappers, Filters } = arrayUtils;
 
     const base64 = "base64";
 
@@ -64,42 +70,150 @@ const {
 
     const DEFAULT_TEXT_ENCODING = utf8;
 
-    const validEncodings = lock( ["ascii", "utf8", utf8, "utf16le", "utf-16le", "ucs2", "ucs-2", base64, "base64url", "latin1", "binary", "hex"] );
+    const VALID_ENCODINGS = lock( ["ascii", "utf8", utf8, "utf16le", "utf-16le", "ucs2", "ucs-2", base64, "base64url", "latin1", "binary", "hex"] );
 
-    const BufferDefined = (_ud !== typeof Buffer && isFunction( Buffer?.isBuffer ) && Buffer.isBuffer( Buffer.from( [0x62, 0x75, 0x66, 0x66, 0x65, 0x72] ) ));
+    function isBufferDefined()
+    {
+        if ( _isNode )
+        {
+            return true;
+        }
+        const buffer = $scope().Buffer;
+        return (_ud !== typeof buffer && isFunction( buffer?.isBuffer ) && buffer.isBuffer( buffer.from( [0x62, 0x75, 0x66, 0x66, 0x65, 0x72] ) ));
+    }
 
-    const TextEncoderDefined = (_ud !== typeof TextEncoder);
+    let BufferDefined = isBufferDefined();
 
-    const BTOA_DEFINED = (_ud !== typeof btoa) && isFunction( btoa );
+    let nodeBuffer = {};
 
-    const ATOB_DEFINED = (_ud !== typeof atob) && isFunction( atob );
+    if ( !BufferDefined && isDefined( require ) && isFunction( require ) )
+    {
+        try
+        {
+            nodeBuffer = require( "node:buffer" );
+        }
+        catch( ex )
+        {
+            modulePrototype.handleError( ex, exposeModule, "node:buffer" );
+        }
+    }
+
+    function isTextEncoderDefined()
+    {
+        return (_ud !== typeof TextEncoder);
+    }
+
+    function isTextDecoderDefined()
+    {
+        return (_ud !== typeof TextDecoder);
+    }
+
+    let TextEncoderDefined = isTextEncoderDefined();
+    let TextDecoderDefined = isTextDecoderDefined();
+
+    if ( !TextEncoderDefined || !TextDecoderDefined )
+    {
+        if ( isDefined( require ) && isFunction( require ) )
+        {
+            try
+            {
+                const nodeUtil = require( "node:util" );
+
+                TextEncoder = nodeUtil?.TextEncoder || $scope().TextEncoder;
+                TextDecoder = nodeUtil?.TextDecoder || $scope().TextDecoder;
+
+                $scope().TextEncoder = $scope().TextEncoder || TextEncoder;
+                $scope().TextDecoder = $scope().TextDecoder || TextDecoder;
+
+                TextEncoderDefined = isTextEncoderDefined();
+                TextDecoderDefined = isTextDecoderDefined();
+            }
+            catch( ex )
+            {
+                modulePrototype.handleError( ex, exposeModule, "node:util TextEncoder/TextDecoder" );
+            }
+        }
+    }
 
     function resolveEncoding( pEncoding )
     {
-        if ( isString( pEncoding ) && validEncodings.includes( pEncoding ) )
+        if ( isString( pEncoding ) && VALID_ENCODINGS.includes( pEncoding ) )
         {
             return pEncoding;
         }
         return DEFAULT_TEXT_ENCODING;
     }
 
-    if ( BufferDefined )
+    let mod;
+
+    let {
+        Buffer = $scope()?.Buffer || nodeBuffer.Buffer || Uint8Array,
+        Blob = $scope()?.Blob || Uint8Array,
+        File = $scope()?.File,
+        atob = $scope()?.atob,
+        btoa = $scope()?.btoa,
+        BlobOptions = $scope()?.BlobOptions || { type: "application/octet-stream" },
+        FileOptions = $scope()?.FileOptions || { type: "application/octet-stream" },
+        isAscii = $scope()?.isAscii,
+        isUtf8 = $scope()?.isUtf8,
+        SlowBuffer = $scope()?.SlowBuffer || Uint8Array,
+        transcode = $scope()?.transcode || Uint8Array.prototype.transcode,
+        TranscodeEncoding = $scope()?.TranscodeEncoding || utf8,
+    } = nodeBuffer || {};
+
+    BufferDefined = (_ud !== typeof Buffer) && isBufferDefined();
+
+    const BTOA_DEFINED = (_ud !== typeof btoa) && isFunction( btoa );
+    const ATOB_DEFINED = (_ud !== typeof atob) && isFunction( atob );
+
+    if ( _ud === typeof File || isNull( File ) || !isFunction( File ) )
     {
-        let mod = {
-            Buffer,
-            resolveEncoding,
-            TextEncoderDefined,
-            BTOA_DEFINED,
-            ATOB_DEFINED,
-            btoa: BTOA_DEFINED ? btoa : ( pString ) => Buffer.from( pString ).toString( base64 ),
-            atob: ATOB_DEFINED ? atob : ( pString ) => Buffer.from( pString, base64 ).toString(),
-            BufferDefined,
-            TextEncoder: TextEncoderDefined ? TextEncoder : {},
+        File = function( pData, pFileName, pOptions )
+        {
+            const options = mergeOptions( FileOptions, pOptions );
+
+            this.data = pData;
+            this.fileName = pFileName;
+            this.type = options?.type;
+            this.modified = options?.lastModified || Date.now();
+            this.endings = options?.endings || "native";
         };
 
-        mod = modulePrototype.extend( mod );
+        File.prototype.name = function()
+        {
+            return this.fileName;
+        };
 
-        return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
+        File.prototype.lastModified = function()
+        {
+            return this.modified;
+        };
+    }
+
+    if ( BufferDefined )
+    {
+        mod = {
+            Buffer,
+            Blob,
+            File,
+            atob,
+            btoa,
+            BlobOptions,
+            FileOptions,
+            isAscii,
+            isUtf8,
+            SlowBuffer,
+            transcode,
+            TranscodeEncoding
+        };
+
+        objectEntries( mod ).forEach( ( [key, value] ) =>
+                                      {
+                                          if ( _ud !== typeof $scope()[key] )
+                                          {
+                                              $scope()[key] = value;
+                                          }
+                                      } );
     }
     else
     {
@@ -110,7 +224,7 @@ const {
             return [...args];
         }
 
-        class Buffer extends Uint8Array
+        class __Buffer extends Uint8Array
         {
             #uInt8Array;
 
@@ -159,16 +273,29 @@ const {
                 }
             }
 
+            get uInt8Array()
+            {
+                return this.#uInt8Array || this;
+            }
+
+            get byteOffset()
+            {
+                return this.#byteOffset || this.uInt8Array.byteOffset || 0;
+            }
+
+            get byteLength()
+            {
+                return this.#byteLength || this.uInt8Array.byteLength || 0;
+            }
+
             get text()
             {
-                if ( TextEncoderDefined )
-                {
-                    return new TextDecoder().decode( this.#uInt8Array );
-                }
-                else
-                {
-                    return String.fromCharCode.apply( null, this.#uInt8Array );
-                }
+                return this.decode();
+            }
+
+            decode()
+            {
+                return (isTextEncoderDefined()) ? new TextDecoder().decode( this.uInt8Array ) : String.fromCharCode.apply( String, this.uInt8Array );
             }
 
             write( pString, pEncoding )
@@ -181,9 +308,10 @@ const {
                 }
                 else
                 {
-                    this.#uInt8Array = new Uint8Array( asArray( pString.split( _mt_str ) ).map( e => e.charCodeAt( 0 ) ) );
+                    this.#uInt8Array = new Uint8Array( asArray( asString( pString ).split( _mt_str ) ).map( e => e.charCodeAt( 0 ) ) );
                 }
-                return this.#uInt8Array.length;
+
+                return this.uInt8Array.length;
             }
 
             toString( pEncoding, pStart, pEnd )
@@ -192,17 +320,17 @@ const {
 
                 if ( TextEncoderDefined && encoding === utf8 )
                 {
-                    return new TextDecoder().decode( this.#uInt8Array );
+                    return new TextDecoder().decode( this.uInt8Array );
                 }
                 else
                 {
-                    return String.fromCharCode.apply( null, this.#uInt8Array );
+                    return String.fromCharCode.apply( String, this.uInt8Array );
                 }
             }
 
             slice( pStart, pEnd )
             {
-                return this.#uInt8Array.slice( pStart, pEnd );
+                return this.uInt8Array.slice( pStart, pEnd );
             }
 
             equals( pOther )
@@ -222,7 +350,7 @@ const {
 
             reverse()
             {
-                return this.#uInt8Array.reverse();
+                return this.uInt8Array.reverse();
             }
 
             fill( pValue, pOffset, pEnd, pEncoding )
@@ -232,17 +360,17 @@ const {
 
             indexOf( pValue, pStart, pEncoding )
             {
-                return this.#uInt8Array.indexOf( pValue, pStart );
+                return this.uInt8Array.indexOf( pValue, pStart );
             }
 
             lastIndexOf( pValue, pStart, pEncoding )
             {
-                return this.#uInt8Array.lastIndexOf( pValue, pStart );
+                return this.uInt8Array.lastIndexOf( pValue, pStart );
             }
 
             includes( pValue, pStart, pEncoding )
             {
-                return this.#uInt8Array.includes( pValue, pStart );
+                return this.uInt8Array.includes( pValue, pStart );
             }
 
             copyWithin( pTarget, pStart, pEnd )
@@ -252,101 +380,116 @@ const {
 
             every( pPredicate, pThis )
             {
-                return this.#uInt8Array.every( pPredicate, pThis );
+                return this.uInt8Array.every( Filters.resolve( pPredicate ), pThis );
             }
 
             filter( pPredicate, pThis )
             {
-                return this.#uInt8Array.filter( pPredicate, pThis );
+                return this.uInt8Array.filter( Filters.resolve( pPredicate ), pThis );
             }
 
             find( pPredicate, pThis )
             {
-                return this.#uInt8Array.find( pPredicate, pThis );
+                return this.uInt8Array.find( Filters.resolve( pPredicate ), pThis );
             }
 
             findIndex( pPredicate, pThis )
             {
-                return this.#uInt8Array.findIndex( pPredicate, pThis );
+                return this.uInt8Array.findIndex( Filters.resolve( pPredicate ), pThis );
             }
 
             forEach( pCallback, pThis )
             {
-                this.#uInt8Array.forEach( pCallback, pThis );
+                if ( isFunction( pCallback ) )
+                {
+                    this.uInt8Array.forEach( pCallback, pThis );
+                }
             }
 
             join( pSeparator )
             {
-                return this.#uInt8Array.join( pSeparator );
+                return this.uInt8Array.join( pSeparator );
             }
 
             map( pCallback, pThis )
             {
-                return this.#uInt8Array.map( pCallback, pThis );
+                if ( isFunction( pCallback ) )
+                {
+                    return this.uInt8Array.map( pCallback, pThis );
+                }
             }
 
             reduce( pCallback )
             {
-                return this.#uInt8Array.reduce( pCallback );
+                if ( isFunction( pCallback ) )
+                {
+                    return this.uInt8Array.reduce( pCallback );
+                }
             }
 
             reduceRight( pCallback )
             {
-                return this.#uInt8Array.reduceRight( pCallback );
+                if ( isFunction( pCallback ) )
+                {
+                    return this.uInt8Array.reduceRight( pCallback );
+                }
             }
 
             set( pArr, pOffset )
             {
-                this.#uInt8Array.set( pArr, pOffset );
+                this.#uInt8Array.set( pArr, asInt( pOffset ) );
             }
 
             some( pPredicate, pThis )
             {
-                return this.#uInt8Array.some( pPredicate, pThis );
+                return this.uInt8Array.some( Filters.resolve( pPredicate ), pThis );
             }
 
             sort( pComparator )
             {
-                return this.#uInt8Array.sort( pComparator );
+                if ( isFunction( pComparator ) )
+                {
+                    return this.#uInt8Array.sort( pComparator );
+                }
             }
 
             toLocaleString()
             {
-                return this.#uInt8Array.toLocaleString();
+                return this.uInt8Array.toLocaleString();
             }
 
             valueOf()
             {
-                return this.#uInt8Array.valueOf();
+                return this.uInt8Array.valueOf();
             }
 
             [Symbol.iterator]()
             {
-                return this.#uInt8Array[Symbol.iterator]();
+                return this.uInt8Array[Symbol.iterator]();
             }
 
             entries()
             {
-                return this.#uInt8Array.entries();
+                return isFunction( this.uInt8Array?.entries ) ? this.uInt8Array.entries() : objectEntries( this.uInt8Array );
             }
 
             keys()
             {
-                return this.#uInt8Array.keys();
+                return isFunction( this.uInt8Array?.keys ) ? this.uInt8Array.keys() : objectKeys( this.uInt8Array );
             }
 
             values()
             {
-                return this.#uInt8Array.values();
+                return isFunction( this.uInt8Array?.values ) ? this.uInt8Array.values() : objectValues( this.uInt8Array );
             }
 
             at( pIndex )
             {
-                return this.#uInt8Array.at( pIndex );
+                return this.uInt8Array.at( asInt( pIndex ) );
             }
         }
 
-        Buffer.from = function( pIn, pEncoding )
+        __Buffer.from = function( pIn, pEncoding )
         {
             if ( isString( pIn ) )
             {
@@ -361,20 +504,27 @@ const {
                     uint8Array = new Uint8Array( asArray( asString( pIn ).split( _mt_str ) ).map( e => e.charCodeAt( 0 ) ) );
                 }
 
-                return new Buffer( uint8Array );
+                return new __Buffer( uint8Array );
             }
             else if ( isArray( pIn ) )
             {
-                return new Buffer( pIn );
+                return new __Buffer( pIn );
             }
         };
 
-        Buffer.alloc = function( pSize, pFill, pEncoding )
+        __Buffer.alloc = function( pSize, pFill, pEncoding )
         {
-            return new Buffer( pSize );
+            const buffer = new __Buffer( asInt( pSize ) );
+
+            if ( isDefined( pFill ) )
+            {
+                buffer.fill( pFill, 0, pSize, pEncoding );
+            }
+
+            return buffer;
         };
 
-        Buffer.concat = function( pArr )
+        __Buffer.concat = function( pArr )
         {
             let arr = asArray( pArr );
 
@@ -385,30 +535,97 @@ const {
                 buffers = buffers.concat( ...(new Uint8Array( a )) );
             }
 
-            return new Buffer( new Uint8Array( buffers ) );
+            return new __Buffer( new Uint8Array( buffers ) );
         };
 
-        Buffer.copyBytesFrom = function( pSource, pSourceOffset, pTarget, pTargetOffset, pLength )
+        __Buffer.copyBytesFrom = function( pSource, pSourceOffset, pTarget, pTargetOffset, pLength )
         {
-            return new Buffer( pSource.buffer || pSource, pSourceOffset, pLength );
+            return new __Buffer( pSource.buffer || pSource, asInt( pSourceOffset ), asInt( pLength ) );
         };
 
-        let mod =
-            {
-                Buffer,
-                resolveEncoding,
-                TextEncoderDefined,
-                BTOA_DEFINED,
-                ATOB_DEFINED,
-                btoa: BTOA_DEFINED ? btoa : ( pString ) => Buffer.from( pString ).toString( base64 ),
-                atob: ATOB_DEFINED ? atob : ( pString ) => Buffer.from( pString, base64 ).toString(),
-                BufferDefined,
-                TextEncoder: TextEncoderDefined ? TextEncoder : {},
-            };
+        if ( _ud === typeof Buffer )
+        {
+            Buffer = __Buffer;
+        }
 
-        mod = modulePrototype.extend( mod );
-
-        return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
+        mod = {
+            Buffer,
+            __Buffer,
+            Blob,
+            File,
+            atob,
+            btoa,
+            BlobOptions,
+            FileOptions,
+            isAscii,
+            isUtf8,
+            SlowBuffer,
+            transcode,
+            TranscodeEncoding
+        };
     }
+
+    if ( !isBufferDefined() )
+    {
+        Buffer = mod.Buffer || mod.__Buffer;
+        $scope().Buffer = $scope().Buffer || Buffer;
+    }
+
+    /**
+     * Converts the input buffer or array-like object into an array.
+     *
+     * @param {Buffer|Array|TypedArray|any} pBuffer - The input data which can be a buffer, array, typed array, or any other object.
+     * @return {Uint8Array<number>} An byte array representation of the input, or the input itself if it does not match the expected types.
+     */
+    function arrayFromBuffer( pBuffer )
+    {
+        const arr = asArray( pBuffer, { splitOn: /[^\d.ABCDEFx ]/gi } ).map( Mappers.TRIMMED ).map( toDecimal );
+        return new Uint8Array( arr );
+    }
+
+    /**
+     * Creates a typed array from a given buffer or array-like object.
+     *
+     * @param {Buffer|Array|TypedArray} pBuffer - The input buffer, array, or typed array to transform into a typed array.
+     * @param {Function|*} [pArrayClass=Uint8Array] - The constructor for the target typed array class. Defaults to Uint8Array if not provided.
+     * @return {TypedArray} A new typed array instance created from the input buffer or array-like object.
+     */
+    function typedArrayFromBuffer( pBuffer, pArrayClass = Uint8Array )
+    {
+        const ArrayClass = pArrayClass || Uint8Array;
+        return isBufferDefined() ? (pBuffer instanceof Buffer ? new ArrayClass( pBuffer ) : isArray( pBuffer ) || isTypedArray( pBuffer ) ? new ArrayClass( pBuffer ) : new ArrayClass( arrayFromBuffer( pBuffer ) )) : arrayFromBuffer( pBuffer );
+    }
+
+    const more =
+        {
+            BufferDefined,
+            TextEncoderDefined,
+            TextDecoderDefined,
+            BTOA_DEFINED,
+            ATOB_DEFINED,
+            btoa: BTOA_DEFINED ? btoa || $scope().btoa : ( pString ) => Buffer.from( pString ).toString( base64 ),
+            atob: ATOB_DEFINED ? atob || $scope().atob : ( pString ) => Buffer.from( pString, base64 ).toString(),
+            TextEncoder: TextEncoderDefined ? TextEncoder || $scope().TextEncoder : {},
+            TextDecoder: TextDecoderDefined ? TextDecoder || $scope().TextDecoder : {},
+            File: File || $scope().File,
+            Blob: Blob || $scope().Blob,
+            BlobOptions: BlobOptions || $scope().BlobOptions,
+            FileOptions: FileOptions || $scope().FileOptions,
+            isAscii: isAscii || $scope().isAscii,
+            isUtf8: isUtf8 || $scope().isUtf8,
+            SlowBuffer: SlowBuffer || $scope().SlowBuffer,
+            transcode: transcode || $scope().transcode,
+            TranscodeEncoding: TranscodeEncoding || $scope().TranscodeEncoding,
+            arrayFromBuffer,
+            typedArrayFromBuffer
+        };
+
+    mod = mergeOptions( mod, more );
+
+    mod.Buffer = mod.Buffer || $scope().Buffer || Buffer;
+
+    mod = modulePrototype.extend( mod );
+
+    return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 
 }());

@@ -34,7 +34,11 @@ const core = require( "@toolbocks/core" );
  */
 const { constants, typeUtils, stringUtils, arrayUtils } = core;
 
+const bufferUtils = require( "@toolbocks/buffer" );
+
 const base64Utils = require( "@toolbocks/base64" );
+
+const fileUtils = require( "@toolbocks/files" );
 
 /**
  * Import adm-zip dependency
@@ -45,18 +49,16 @@ const fs = require( "node:fs" );
 const fsAsync = require( "node:fs/promises" );
 const { pipeline } = require( "node:stream/promises" );
 const { Readable } = require( "node:stream" );
-const nodeBuffer = require( "node:buffer" );
 
-const path = require( "node:path" );
 const zlib = require( "node:zlib" );
 const crypto = require( "node:crypto" );
 
-const { _ud = "undefined" } = constants;
-
-const $scope = constants?.$scope || function()
-{
-    return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-};
+const {
+    _ud = "undefined", $scope = constants?.$scope || function()
+    {
+        return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
+    }
+} = constants;
 
 (function exposeModule()
 {
@@ -90,30 +92,57 @@ const $scope = constants?.$scope || function()
     const {
         isNull,
         isString,
-        isNumber,
         isNumeric,
         isObject,
         isFunction,
-        isAsyncFunction,
         isArray,
         isTypedArray,
-        isError,
         toDecimal,
         toBits
     } = typeUtils;
 
     const { asString, asInt, isBlank, lcase, ucase, toBool } = stringUtils;
 
-    const { varargs, asArray, Filters, Mappers } = arrayUtils;
+    const { varargs, asArray, Filters } = arrayUtils;
 
     if ( _ud === typeof CustomEvent )
     {
         CustomEvent = ModuleEvent;
     }
 
-    const { Dir, Dirent } = fs;
+    const {
+        isFile,
+        isDirectory,
+        resolvePath,
+        removeExtension,
+        replaceExtension,
+        exists,
+        makeDirectory,
+        asyncMakeDirectory,
+        removeDirectory,
+        asyncRemoveDirectory,
+        link,
+        asyncLink,
+        isSymbolicLink,
+        resolveDirectoryPath,
+        extractPathSeparator,
+        getFilePathData,
+        getFileName,
+        getDirectoryName,
+        getFileExtension,
 
-    const { File } = nodeBuffer || $scope();
+    } = fileUtils || $scope();
+
+    const {
+        File,
+        arrayFromBuffer,
+        typedArrayFromBuffer
+    } = bufferUtils || $scope();
+
+    if ( _ud === typeof Buffer )
+    {
+        Buffer = bufferUtils.Buffer || $scope().Buffer;
+    }
 
     const { encode, decode } = base64Utils;
 
@@ -140,157 +169,6 @@ const $scope = constants?.$scope || function()
      * @type {number}
      */
     const MAX_SIZE_ALLOWED = (25 * BYTES_PER_MEGABYTE);
-
-    /**
-     * Converts the input buffer or array-like object into an array.
-     *
-     * @param {Buffer|Array|TypedArray|any} pBuffer - The input data which can be a buffer, array, typed array, or any other object.
-     * @return {Uint8Array<number>} An byte array representation of the input, or the input itself if it does not match the expected types.
-     */
-    function arrayFromBuffer( pBuffer )
-    {
-        const arr = asArray( pBuffer, { splitOn: /[^\d.ABCDEFx ]/gi } ).map( Mappers.TRIMMED ).map( toDecimal );
-        return new Uint8Array( arr );
-    }
-
-    /**
-     * Creates a typed array from a given buffer or array-like object.
-     *
-     * @param {Buffer|Array|TypedArray} pBuffer - The input buffer, array, or typed array to transform into a typed array.
-     * @param {Function|*} [pArrayClass=Uint8Array] - The constructor for the target typed array class. Defaults to Uint8Array if not provided.
-     * @return {TypedArray} A new typed array instance created from the input buffer or array-like object.
-     */
-    function typedArrayFromBuffer( pBuffer, pArrayClass = Uint8Array )
-    {
-        const ArrayClass = pArrayClass || Uint8Array;
-        return (pBuffer instanceof Buffer ? new ArrayClass( pBuffer ) : isArray( pBuffer ) || isTypedArray( pBuffer ) ? new ArrayClass( pBuffer ) : new ArrayClass( arrayFromBuffer( pBuffer ) ));
-    }
-
-    /**
-     * Asynchronously checks if the given path is a file.
-     *
-     * @param {string} pPath - The path to check, provided as a string.
-     * @return {Promise<boolean>} A promise that resolves to `true` if the path is a file, `false` otherwise.
-     */
-    async function isFile( pPath )
-    {
-        if ( !(isString( pPath ) || pPath instanceof File) )
-        {
-            return false;
-        }
-
-        if ( pPath instanceof File )
-        {
-            return true;
-        }
-
-        const filepath = path.normalize( path.resolve( asString( pPath, true ) ) );
-
-        try
-        {
-            const stats = await fsAsync.stat( filepath );
-            return stats?.isFile();
-        }
-        catch( ex )
-        {
-            modulePrototype.reportError( ex, "checking if path is a file or directory", S_ERROR, modName + "::isFile", "pPath:", pPath, "filepath:", filepath );
-        }
-        return false;
-    }
-
-    /**
-     * Checks whether the specified path refers to a directory.
-     *
-     * @param {string} pPath - The path to check, normalized and resolved to an absolute path.
-     * @return {Promise<boolean>} A promise that resolves to true if the path is a directory, otherwise false.
-     */
-    async function isDirectory( pPath )
-    {
-        if ( !(isString( pPath ) || pPath instanceof Dir) )
-        {
-            return false;
-        }
-
-        if ( pPath instanceof Dir )
-        {
-            return true;
-        }
-
-        const filepath = path.normalize( path.resolve( asString( pPath, true ) ) );
-
-        try
-        {
-            const stats = await fsAsync.stat( filepath );
-            return stats?.isDirectory();
-        }
-        catch( ex )
-        {
-            modulePrototype.reportError( ex, "checking if path is a file or directory", S_ERROR, modName + "::isDirectory", pPath );
-        }
-        return false;
-    }
-
-    const exists = function( pPath )
-    {
-        let exists;
-
-        try
-        {
-            fs.accessSync( pPath, fs.constants.W_OK );
-            exists = true;
-        }
-        catch( ex )
-        {
-            exists = false;
-        }
-
-        return exists;
-    };
-
-    const asyncExists = async function( pPath )
-    {
-        let exists;
-
-        try
-        {
-            await fsAsync.access( pPath, fs.constants.F_OK );
-            exists = true;
-        }
-        catch( ex )
-        {
-            exists = false;
-        }
-
-        return exists;
-    };
-
-    /**
-     * Removes the file extension from the given file path.
-     *
-     * @param {string} pPath - The file path from which the extension will be removed.
-     * @return {string} The file path without the extension.
-     */
-    function removeExtension( pPath )
-    {
-        const filepath = path.resolve( asString( pPath, true ) );
-        const ext = path.extname( filepath );
-        return filepath.replace( ext, _mt_str ).replace( /\/$/, _mt_str ).replace( /\\$/, _mt_str ).replace( ext, _mt_str );
-    }
-
-    /**
-     * Replaces the extension of a given file path with a new extension.
-     *
-     * @param {string} pPath - The file path whose extension needs to be replaced.
-     * @param {string} pNewExtension - The new extension to be applied to the file path.
-     * @return {string} The updated file path with the new extension.
-     */
-    function replaceExtension( pPath, pNewExtension )
-    {
-        const filepath = path.resolve( asString( pPath, true ) );
-        const newExt = asString( pNewExtension, true ).replace( /^\.+/, _mt_str );
-        const newFilename = removeExtension( filepath );
-        return (newFilename + (_dot + newExt)).trim();
-    }
 
     const PKZIP_CLASSES = (function()
     {
@@ -400,7 +278,7 @@ const $scope = constants?.$scope || function()
          * This static factory method returns a new instance of ArchiveEntryHeader
          * for the specified portion of the PkZip archive
          * @param pHeader
-         * @returns {ArchiveDataHeader}
+         * @returns {ArchiveEntryHeader}
          */
         ArchiveEntryHeader.fromHeader = function( pHeader )
         {
@@ -671,7 +549,7 @@ const $scope = constants?.$scope || function()
 
         /**
          * Returns an instance of ArchiveEntry representing the named entry (or the entry at the specified index)
-         * @param pArchive {Buffer|Array} a Buffer or an array of bytes representing an archive
+         * @param pArchive {Buffer|Array|string} a Buffer or an array of bytes representing an archive
          * @param pName {string|number} The file name of the entry to return or the index of the entry to return
          * @param pPassword {string} (optional) password required to access the contents of the archive
          * @returns {ArchiveEntry} an instance of ArchiveEntry representing the named entry (or the entry at the specified index)
@@ -864,8 +742,8 @@ const $scope = constants?.$scope || function()
 
     function _resolveInputOutput( pInputPath, pOutputPath )
     {
-        const inputPath = isString( pInputPath ) ? path.resolve( asString( pInputPath, true ) ) : isBuffer( pInputPath ) ? Buffer.from( pInputPath ) : asArray( pInputPath );
-        const outputPath = isString( pOutputPath ) ? path.resolve( asString( pOutputPath, true ) ) : isBuffer( pOutputPath ) ? Buffer.from( pOutputPath ) : asArray( pOutputPath );
+        const inputPath = isString( pInputPath ) ? resolvePath( asString( pInputPath, true ) ) : isBuffer( pInputPath ) ? Buffer.from( pInputPath ) : asArray( pInputPath );
+        const outputPath = isString( pOutputPath ) ? resolvePath( asString( pOutputPath, true ) ) : isBuffer( pOutputPath ) ? Buffer.from( pOutputPath ) : asArray( pOutputPath );
 
         return { inputPath, outputPath };
     }
@@ -1179,7 +1057,7 @@ const $scope = constants?.$scope || function()
                                 try
                                 {
                                     const realPath = await fsAsync.readlink( target, DEFAULT_ENCODING );
-                                    const absolutePath = path.normalize( path.resolve( realPath ) );
+                                    const absolutePath = ( resolvePath( realPath ) );
                                     await fsAsync.unlink( absolutePath );
                                 }
                                 catch( ex )
@@ -1206,7 +1084,7 @@ const $scope = constants?.$scope || function()
         {
             const me = this;
 
-            const target = path.resolve( asString( pPath, true ) );
+            const target = resolvePath( asString( pPath, true ) );
 
             const recursive = pRecursive;
 
@@ -1238,7 +1116,7 @@ const $scope = constants?.$scope || function()
 
             const error = resolveError( pError );
 
-            const target = path.resolve( asString( pPath, true ) );
+            const target = resolvePath( asString( pPath, true ) );
 
             return async( pError, pPath ) =>
             {
@@ -1529,7 +1407,7 @@ const $scope = constants?.$scope || function()
                 switch ( rightSide )
                 {
                     case PIPE.FILE:
-                        outputPath = path.dirname( outputPath );
+                        outputPath = getDirectoryName( outputPath );
                     // fallthrough
 
                     case PIPE.DIRECTORY:
@@ -1596,7 +1474,7 @@ const $scope = constants?.$scope || function()
                     {
                         for await( const dirent of dir )
                         {
-                            const ipt = path.resolve( dirent.path, dirent.name );
+                            const ipt = resolvePath( dirent );
 
                             await pkUnZip( ipt, outputPath, options );
                         }
@@ -1620,7 +1498,7 @@ const $scope = constants?.$scope || function()
                     switch ( rightSide )
                     {
                         case PIPE.FILE:
-                            outputPath = path.dirname( outputPath );
+                            outputPath = getDirectoryName( outputPath );
                         // fallthrough
 
                         case PIPE.DIRECTORY:
@@ -1631,7 +1509,7 @@ const $scope = constants?.$scope || function()
                             {
                                 const name = entry.name || ("zipEntry" + ((n++ > 0) ? ("_" + n) : ""));
                                 const data = asArray( entry.getData() );
-                                const outPath = path.resolve( outputPath, name );
+                                const outPath = resolvePath( [outputPath, name] );
                                 await fsAsync.writeFile( outPath, data ).catch( ex => modulePrototype.reportError( ex, "writing file", S_ERROR, errorSource, outPath, data ) );
                             }
 
@@ -1703,7 +1581,7 @@ const $scope = constants?.$scope || function()
 
         let recursive = false;
 
-        let outputFilePath = isString( outputPath ) ? path.normalize( path.resolve( outputPath ) ) : outputPath;
+        let outputFilePath = isString( outputPath ) ? resolvePath( outputPath ) : outputPath;
 
         const extension = ".zip";
 
@@ -1742,9 +1620,9 @@ const $scope = constants?.$scope || function()
             case PIPE.DIRECTORY:
                 if ( !await isDirectory( outputFilePath ) )
                 {
-                    await fsAsync.mkdir( path.dirname( outputPath ), { recursive: true } );
+                    await fsAsync.mkdir( getDirectoryName( outputPath ), { recursive: true } );
                 }
-                outputFilePath = path.resolve( outputPath, path.basename( replaceExtension( path.basename( inputPath ), extension ) ) );
+                outputFilePath = resolvePath( [outputPath, getFileName( replaceExtension( getFileName( inputPath ), extension ) )] );
                 break;
 
             case PIPE.BUFFER:
@@ -1781,7 +1659,7 @@ const $scope = constants?.$scope || function()
 
     async function handleZlibOperation( pInputPath, pOutputPath, pTransformer, pHandleError, pHandleSuccess, pRecursive )
     {
-        // this is a fake destructuring, because argument is an array not a collection of key/value pairs
+        // this is a fake destructuring, because arguments is an array not a collection of key/value pairs
         let {
             inputPath = pInputPath,
             outputPath = pOutputPath,
@@ -1793,7 +1671,7 @@ const $scope = constants?.$scope || function()
 
         if ( isBuffer( outputPath ) )
         {
-            inputPath = isString( inputPath ) ? path.normalize( path.resolve( inputPath ) ) : isBuffer( inputPath ) ? Buffer.from( inputPath ) : await fsAsync.readFile( inputPath );
+            inputPath = isString( inputPath ) ? resolvePath( inputPath ) : isBuffer( inputPath ) ? Buffer.from( inputPath ) : await fsAsync.readFile( inputPath );
             inputPath = await isFile( inputPath ) ? await fsAsync.readFile( inputPath ) : inputPath;
 
             const stream = Readable.from( inputPath );
@@ -1872,7 +1750,7 @@ const $scope = constants?.$scope || function()
             }
             else if ( PIPE.DIRECTORY === rightSide )
             {
-                outputPath = path.resolve( outputPath, path.basename( replaceExtension( path.basename( inputPath ), extension ) ) );
+                outputPath = resolvePath( [outputPath, getFileName( replaceExtension( getFileName( inputPath ), extension ) )] );
             }
             else
             {
@@ -1920,7 +1798,7 @@ const $scope = constants?.$scope || function()
 
             if ( PIPE.DIRECTORY === rightSide || PIPE.FILE === rightSide )
             {
-                outputPath = isString( inputPath ) ? path.resolve( outputPath, path.basename( removeExtension( path.basename( inputPath ) ) ) ) : outputPath;
+                outputPath = isString( inputPath ) ? resolvePath( [outputPath, getFileName( removeExtension( getFileName( inputPath ) ) )] ) : outputPath;
             }
             else
             {
@@ -2410,7 +2288,7 @@ const $scope = constants?.$scope || function()
         {
             try
             {
-                let available = isString( pFilePath ) ? await exists( path.resolve( pFilePath ) ) : false;
+                let available = isString( pFilePath ) ? await exists( resolvePath( pFilePath ) ) : false;
 
                 if ( !available && isString( pFilePath ) )
                 {
@@ -2442,7 +2320,7 @@ const $scope = constants?.$scope || function()
 
                 if ( !exists && isString( pPath ) )
                 {
-                    let dirname = path.resolve( pPath );
+                    let dirname = resolvePath( pPath );
                     if ( !isBlank( dirname ) )
                     {
                         exists = await this.checkFilePath( dirname );
@@ -2471,7 +2349,7 @@ const $scope = constants?.$scope || function()
 
             let exists = isString( filepath ) ? await this.checkFilePath( filepath ) : !isNull( filepath );
 
-            let outputPath = pDirectory || this.outputDirectory || path.dirname( filepath );
+            let outputPath = pDirectory || this.outputDirectory || getDirectoryName( filepath );
 
             if ( isString( outputPath ) )
             {
@@ -2487,7 +2365,7 @@ const $scope = constants?.$scope || function()
 
         async archive( pFilePath, pOptions )
         {
-            const directory = (this.#outputDirectory || (isString( pFilePath ) ? path.dirname( pFilePath ) : _mt_str)).trim();
+            const directory = (this.#outputDirectory || (isString( pFilePath ) ? getDirectoryName( pFilePath ) : _mt_str)).trim();
 
             const {
                 exists,
@@ -2542,7 +2420,7 @@ const $scope = constants?.$scope || function()
             {
                 if ( await isFile( directory ) )
                 {
-                    directory = path.dirname( directory );
+                    directory = getDirectoryName( directory );
                 }
             }
 

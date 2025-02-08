@@ -2640,11 +2640,13 @@ const $scope = constants?.$scope || function()
 
         if ( keys.includes( "name" ) )
         {
+            // check for Deno.DirEntry
             if ( keys.includes( "isFile" ) && keys.includes( "isDirectory" ) && keys.includes( "isSymLink" ) )
             {
                 return true;
             }
 
+            // check for Node.js Dirent
             return !!(isFunction( pEntry?.isFile ) &&
                       isFunction( pEntry?.isDirectory ) &&
                       isFunction( pEntry?.isSymbolicLink ));

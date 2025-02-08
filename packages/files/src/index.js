@@ -103,6 +103,8 @@ let defaultPath;
  */
 const core = require( "@toolbocks/core" );
 
+const bufferUtils = require( "@toolbocks/buffer" );
+
 /**
  * These modules are imported from toolbocks/core
  */
@@ -155,7 +157,8 @@ const $scope = constants?.$scope || function()
         attempt,
         asyncAttempt,
         objectKeys,
-        classes
+        classes,
+        IllegalArgumentError
     } = constants;
 
     const _pathSep = _slash;
@@ -184,6 +187,15 @@ const $scope = constants?.$scope || function()
     const { asString, asInt, toUnixPath, toBool, isBlank, leftOfLast, rightOfLast } = stringUtils;
 
     const { varargs, asArgs, flatArgs, asArray, unique, includesAll, Filters, AsyncBoundedQueue } = arrayUtils;
+
+    const {
+        Buffer = $scope().Buffer,
+        File = $scope().File,
+        TextEncoder = $scope().TextEncoder,
+        TextDecoder = $scope().TextDecoder,
+        arrayFromBuffer,
+        typedArrayFromBuffer
+    } = bufferUtils;
 
     const modName = "FileUtils";
 
@@ -259,7 +271,7 @@ const $scope = constants?.$scope || function()
      * which will emit an 'error' event for which you can listen.
      * <br>
      *
-     * @return {Promise<void>} A promise that resolves when the required Node.js modules are successfully imported
+     * @return {Promise<{object}>} A promise that resolves when the required Node.js modules are successfully imported
      *                         or rejects if an error occurs.
      */
     async function importNodeModules()
@@ -272,6 +284,19 @@ const $scope = constants?.$scope || function()
             stream = require( "node:stream" ) || stream;
             path = require( "node:path" ) || path;
             currentDirectory = path.dirname( __filename ) || currentDirectory;
+
+            return Promise.resolve(
+                {
+                    os,
+                    fs,
+                    fsAsync,
+                    stream,
+                    path,
+                    currentDirectory,
+                    projectRootDirectory,
+                    defaultPath
+                }
+            );
         }
         catch( ex )
         {
@@ -493,6 +518,8 @@ const $scope = constants?.$scope || function()
      */
     const {
 
+        Dir = _isNode ? fs.Dir : null,
+
         accessSync = _isNode ? fs.accessSync : function( pPath )
         {
             try
@@ -588,6 +615,8 @@ const $scope = constants?.$scope || function()
                            },
 
         openSync = _isNode ? fs.openSync : _deno?.openSync,
+
+        opendirSync = _isNode ? fs.opendirSync : _deno?.readDirSync,
 
         readDirSync = _isNode ? fs.readdirSync : _deno?.readDirSync,
 
@@ -727,6 +756,8 @@ const $scope = constants?.$scope || function()
         mkdir = _isNode ? fsAsync.mkdir : _deno?.mkdir || _deno?.mkDir,
 
         open = _isNode ? fsAsync.open : _deno?.open,
+
+        opendir = _isNode ? fsAsync.opendir : _deno?.readDir,
 
         readDir = _isNode ? fsAsync.readdir : _deno?.readDir,
 
@@ -1462,24 +1493,25 @@ const $scope = constants?.$scope || function()
         }
     }
 
+
     /**
      * Returns an instance of FileStats representing a subset of the data returned by calling 'stat' for the file.<br>
      * <br>
      * <b>This function is <i>asynchronous</i></b>
      * <br>
-     * @function FileStats.forPath
+     * @function FileStats.fromFilePath
      *
      * @param {string} pFilePath - The file path for which statistical information is desired.
      *
      * @returns {Object} An object containing statistical data of the file at the specified path.
      */
-    FileStats.forPath = async function( pFilePath )
+    FileStats.fromFilePath = async function( pFilePath )
     {
         const filePath = resolvePath( pFilePath );
 
         if ( isBlank( filePath ) )
         {
-            modulePrototype.handleError( new IllegalArgumentError( "Path is required", {} ), FileStats.forPath, pFilePath, filePath );
+            modulePrototype.handleError( new IllegalArgumentError( "Path is required", {} ), FileStats.fromFilePath, pFilePath, filePath );
             return NO_ATTRIBUTES;
         }
 
@@ -1490,7 +1522,63 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            modulePrototype.handleError( ex, FileStats.forPath, pFilePath );
+            modulePrototype.handleError( ex, FileStats.fromFilePath, pFilePath );
+        }
+
+        return NO_ATTRIBUTES;
+    };
+
+    FileStats.fromStats = function( pStats, pFilePath )
+    {
+        return new FileStats( pStats, pFilePath );
+    };
+
+    FileStats.fromDirEnt = function( pDirEntry, pFilePath )
+    {
+        const filePath = resolvePath( pFilePath || ((pDirEntry?.parentPath || pDirEntry?.path || _mt_str) + _slash + (pDirEntry?.name || _mt_str)) );
+
+        if ( !isBlank( filePath ) )
+        {
+            return FileStats.fromFilePath( filePath );
+        }
+
+        modulePrototype.reportError( new Error( `Unable to create FileStats from directory entry: ${pDirEntry}` ) );
+
+        return {};
+    };
+
+    FileStats.fromFileProxy = function( pProxy, pFilePath )
+    {
+        const filePath = resolvePath( pFilePath || pProxy?.filePath || _mt_str );
+
+        if ( isNonNullObject( pProxy ) && isFunction( pProxy.statSync ) )
+        {
+            return new FileStats( pProxy.statSync(), filePath );
+        }
+
+        return FileStats.fromFilePath( filePath );
+    };
+
+    FileStats.from = function( pObject, pFilePath )
+    {
+        if ( isDirectoryEntry( pObject ) )
+        {
+            return FileStats.fromDirEnt( pObject, pFilePath );
+        }
+
+        if ( isFileStats( pObject ) )
+        {
+            return FileStats.fromStats( pObject, pFilePath );
+        }
+
+        if ( pObject instanceof FileProxy )
+        {
+            return FileStats.fromFileProxy( pObject, pFilePath );
+        }
+
+        if ( isString( pObject ) )
+        {
+            return FileStats.fromFilePath( pObject );
         }
 
         return NO_ATTRIBUTES;
@@ -1505,7 +1593,17 @@ const $scope = constants?.$scope || function()
      */
     async function isFile( pPath )
     {
-        const fileStats = await FileStats.forPath( resolvePath( pPath ) );
+        if ( isFunction( File ) && pPath instanceof File )
+        {
+            return true;
+        }
+
+        if ( isDirectoryEntry( pPath ) )
+        {
+            return isFunction( pPath.isFile ) ? pPath.isFile() : pPath.isFile;
+        }
+
+        const fileStats = await FileStats.fromFilePath( resolvePath( pPath ) );
         return fileStats?.isFile() || false;
     }
 
@@ -1520,7 +1618,12 @@ const $scope = constants?.$scope || function()
      */
     async function isDirectory( pPath )
     {
-        const fileStats = await FileStats.forPath( resolvePath( pPath ) );
+        if ( !isNull( Dir ) && pPath instanceof Dir )
+        {
+            return true;
+        }
+
+        const fileStats = await FileStats.fromFilePath( resolvePath( pPath ) );
         return fileStats?.isDirectory() || false;
     }
 
@@ -1533,7 +1636,7 @@ const $scope = constants?.$scope || function()
      */
     async function isSymbolicLink( pPath )
     {
-        const fileStats = await FileStats.forPath( resolvePath( pPath ) );
+        const fileStats = await FileStats.fromFilePath( resolvePath( pPath ) );
         return fileStats?.isSymbolicLink() || false;
     }
 
@@ -1956,145 +2059,410 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * This class is a stand-in for the Deno.FsFile object.<br>
+     * This class is a stand-in for the Deno.FsFile, Node.Js FileHandle object, or the Wen API File object.<br>
      * <br>
      * @class
      */
-    class FileProxy
+    class FileProxy extends EventTarget
     {
-        #entry;
+        #filePath;
 
         #fsFile;
+        #fileHandle;
+        #file;
 
-        readable;
-        writable;
-
-        constructor( pFileEntry, pReadable, pWritable )
+        constructor( pFilePath, pFileHandle )
         {
-            this.#entry = pFileEntry;
+            super();
 
-            this.readable = pReadable;
-            this.writable = pWritable;
+            this.#filePath = resolvePath( pFilePath );
+
+            this.#fileHandle = isFileHandle( pFileHandle ) ? pFileHandle : null;
+            this.#fsFile = isFsFile( pFileHandle ) ? pFileHandle : null;
         }
 
-        set fsFile( pFile )
+        get filePath()
         {
-            this.#fsFile = pFile;
+            return this.#filePath;
         }
 
-        get entry()
+        async getFile()
         {
-            return this.#entry;
+            if ( isNull( this.#file ) )
+            {
+                this.#file = isDefined( File ) ? await asyncAttempt( async() => new File() ) : this;
+            }
+            return this.#file;
+        }
+
+        async getFileHandle()
+        {
+            if ( isFileHandle( this.#fileHandle ) )
+            {
+                return this.#fileHandle;
+            }
+
+            const fileHandle = asyncAttempt( async() => await open( this.#filePath, { read: true, write: true } ) );
+
+            if ( !isNull( fileHandle ) && isFileHandle( fileHandle ) )
+            {
+                this.#fileHandle = fileHandle;
+                return fileHandle;
+            }
+
+            return this;
+        }
+
+        set fsFile( pFsFile )
+        {
+            if ( isFsFile( pFsFile ) )
+            {
+                this.#fsFile = pFsFile;
+            }
+            else if ( isFileHandle( pFsFile ) )
+            {
+                this.#fileHandle = pFsFile;
+            }
+        }
+
+        async getFsFile()
+        {
+            if ( isFsFile( this.#fsFile ) )
+            {
+                return this.#fsFile;
+            }
+
+            const fsFile = asyncAttempt( async() => await open( this.#filePath, { read: true, write: true } ) );
+
+            if ( !isNull( fsFile ) && isFsFile( fsFile ) )
+            {
+                this.#fsFile = fsFile;
+                return fsFile;
+            }
+
+            return this;
+        }
+
+        set fileHandle( pFileHandle )
+        {
+            if ( isFileHandle( pFileHandle ) )
+            {
+                this.#fileHandle = pFileHandle;
+            }
+            else if ( isFsFile( pFileHandle ) )
+            {
+                this.#fsFile = pFileHandle;
+            }
+        }
+
+        notMe( pObject )
+        {
+            return this !== pObject;
         }
 
         [Symbol.dispose]()
         {
-
+            this.close().then( no_op ).catch( modulePrototype.handleError );
         }
 
-        close()
+        async close()
         {
+            let emit = false;
 
+            if ( !isNull( this.#fsFile ) && this.notMe( this.#fsFile ) )
+            {
+                await asyncAttempt( async() => await this.#fsFile.close() );
+                emit = true;
+            }
+            else if ( !isNull( this.#fileHandle ) && this.notMe( this.#fileHandle ) )
+            {
+                close( this.#fileHandle );
+                emit = true;
+            }
+
+            if ( emit )
+            {
+                this.dispatchEvent( new Event( "close" ) );
+            }
+        }
+
+        closeSync()
+        {
+            let emit = false;
+
+            if ( !isNull( this.#fsFile ) && this.notMe( this.#fsFile ) )
+            {
+                this.#fsFile.closeSync();
+                emit = true;
+            }
+            else if ( !isNull( this.#fileHandle ) && this.notMe( this.#fileHandle ) )
+            {
+                closeSync( this.#fileHandle?.fd );
+                emit = true;
+            }
+
+            if ( emit )
+            {
+                this.dispatchEvent( new Event( "close" ) );
+            }
         }
 
         isTerminal()
         {
-
+            if ( !isNull( this.#fsFile ) )
+            {
+                return this.#fsFile.isTerminal();
+            }
+            // no Node.js equivalent?
+            return false;
         }
 
-        lock()
+        async lock()
         {
-
+            if ( !isNull( this.#fsFile ) && this.notMe( this.#fsFile ) )
+            {
+                const fsFile = this.#fsFile;
+                return asyncAttempt( async() => fsFile.lock() );
+            }
+            // no Node.js equivalent?
         }
 
         lockSync()
         {
-
+            if ( !isNull( this.#fsFile ) && this.notMe( this.#fsFile ) )
+            {
+                const fsFile = this.#fsFile;
+                return attempt( () => fsFile.lockSync() );
+            }
+            // no Node.js equivalent?
         }
 
-        read()
+        async read( pBuffer )
         {
+            if ( !isNull( this.#fsFile ) && this.notMe( this.#fsFile ) )
+            {
+                const fsFile = this.#fsFile;
+                asyncAttempt( async() => fsFile.read( pBuffer ) );
+                return { buffer: pBuffer, bytesRead: fsFile.bytesRead };
+            }
 
+            if ( !isNull( this.#fileHandle ) && this.notMe( this.#fileHandle ) )
+            {
+                const fileHandle = this.#fileHandle;
+                asyncAttempt( async() => fileHandle.read( pBuffer ) );
+            }
+
+            const me = this;
+
+            const filePath = this.filePath;
+
+            const proxy = asyncAttempt( async() => await me.getFileHandle( filePath ) || await me.getFsFile( filePath ) );
+
+            if ( !isNull( proxy ) && this.notMe( proxy ) )
+            {
+                const { buffer, bytesRead } = asyncAttempt( async() => await proxy.read( pBuffer ) );
+                return { buffer, bytesRead };
+            }
+
+            const buffer = asyncAttempt( async() => await readFile( filePath ) );
+
+            const bytesCopied = buffer.copy( pBuffer );
+
+            return { buffer, bytesRead: bytesCopied };
         }
 
-        readSync()
+        readSync( pBuffer )
         {
+            if ( !isNull( this.#fsFile ) && this.notMe( this.#fsFile ) )
+            {
+                const fsFile = this.#fsFile;
+                return { buffer: pBuffer, bytesRead: fsFile.readSync() };
+            }
 
+            const filePath = this.filePath;
+
+            const buffer = attempt( () => readFileSync( filePath ) );
+
+            const bytesCopied = buffer.copy( pBuffer );
+
+            return { buffer, bytesRead: bytesCopied };
         }
 
-        seek()
+        async seek( pOffset, pWhence = FileProxy.SeekMode.Current )
         {
-
+            if ( !isNull( this.#fsFile ) && this.notMe( this.#fsFile ) )
+            {
+                return this.#fsFile.seek( asInt( pOffset, pWhence ), pWhence );
+            }
+            // no Node.js equivalent?
         }
 
-        seekSync()
+        seekSync( pOffset, pWhence = FileProxy.SeekMode.Current )
         {
-
+            if ( !isNull( this.#fsFile ) && this.notMe( this.#fsFile ) )
+            {
+                return this.#fsFile.seekSync( asInt( pOffset, pWhence ), pWhence );
+            }
+            // no Node.js equivalent?
         }
 
-        setRaw()
+        setRaw( pMode, pOptions )
         {
-
+            if ( !isNull( this.#fsFile ) && this.notMe( this.#fsFile ) )
+            {
+                return this.#fsFile.setRaw( pMode, pOptions );
+            }
+            // no Node.js equivalent?
         }
 
-        stat()
+        async stat()
         {
+            const proxy = !isNull( this.#fsFile ) ? this.#fsFile : !isNull( this.#fileHandle ) ? this.#fileHandle : null;
 
+            if ( !isNull( proxy ) && this.notMe( proxy ) )
+            {
+                return asyncAttempt( async() => await proxy.stat() );
+            }
+
+            const filePath = this.filePath;
+            return asyncAttempt( async() => await stat( filePath ) );
         }
 
         statSync()
         {
+            const proxy = !isNull( this.#fsFile ) ? this.#fsFile : null;
 
+            if ( !isNull( proxy ) && this.notMe( proxy ) )
+            {
+                return attempt( () => proxy.statSync() );
+            }
+
+            const filePath = this.filePath;
+            return attempt( () => statSync( filePath ) );
         }
 
-        sync()
+        async sync()
         {
+            const proxy = !isNull( this.#fsFile ) ? this.#fsFile : (!isNull( this.#fileHandle ) ? this.#fileHandle : null);
 
+            if ( !isNull( proxy ) && this.notMe( proxy ) )
+            {
+                return asyncAttempt( async() => await proxy.sync() );
+            }
+
+            const filePath = this.filePath;
+            return asyncAttempt( async() => fsAsync.sync( filePath ) );
         }
 
         syncData()
         {
+            if ( !isNull( this.#fsFile ) && this.notMe( this.#fsFile ) )
+            {
+                return this.#fsFile.syncData();
+            }
 
+            const me = this;
+            return asyncAttempt( async() => await me.sync() );
         }
 
         syncDataSync()
         {
-
+            if ( !isNull( this.#fsFile ) && this.notMe( this.#fsFile ) )
+            {
+                return this.#fsFile.syncDataSync();
+            }
+            const me = this;
+            return asyncAttempt( async() => await me.sync() );
         }
 
         syncSync()
         {
-
+            if ( !isNull( this.#fsFile ) && this.notMe( this.#fsFile ) )
+            {
+                return this.#fsFile.syncSync();
+            }
+            const me = this;
+            return asyncAttempt( async() => await me.sync() );
         }
 
-        truncate()
+        truncate( pLength )
         {
+            const proxy = !isNull( this.#fsFile ) ? this.#fsFile : (!isNull( this.#fileHandle ) ? this.#fileHandle : null);
 
+            if ( !isNull( proxy ) && this.notMe( proxy ) )
+            {
+                return asyncAttempt( async() => await proxy.truncate( asInt( pLength ) ) );
+            }
+
+            const filePath = this.filePath;
+
+            return asyncAttempt( async() => await fsAsync.truncate( filePath, asInt( pLength ) ) );
         }
 
-        truncateSync()
+        truncateSync( pLength )
         {
+            const proxy = !isNull( this.#fsFile ) ? this.#fsFile : (!isNull( this.#fileHandle ) ? this.#fileHandle : null);
 
+            if ( !isNull( proxy ) && this.notMe( proxy ) )
+            {
+                return asyncAttempt( async() => await proxy.truncateSync( asInt( pLength ) ) );
+            }
+
+            const filePath = this.filePath;
+
+            return attempt( () => fs.truncateSync( filePath, asInt( pLength ) ) );
         }
 
         unlock()
         {
-
+            if ( !isNull( this.#fsFile ) && this.notMe( this.#fsFile ) )
+            {
+                const fsFile = this.#fsFile;
+                return asyncAttempt( async() => fsFile.unlock() );
+            }
+            // no Node.js equivalent?
         }
 
         unlockSync()
         {
-
+            if ( !isNull( this.#fsFile ) && this.notMe( this.#fsFile ) )
+            {
+                const fsFile = this.#fsFile;
+                return attempt( () => fsFile.unlockSync() );
+            }
+            // no Node.js equivalent?
         }
 
-        utime()
+        async utime( pAccessTime, pModificationTime )
         {
+            if ( !isNull( this.#fsFile ) && this.notMe( this.#fsFile ) )
+            {
+                const fsFile = this.#fsFile;
+                return asyncAttempt( async() => fsFile.utime( pAccessTime, pModificationTime ) );
+            }
 
+            if ( !isNull( this.#fileHandle ) && this.notMe( this.#fileHandle ) )
+            {
+                const fileHandle = this.#fileHandle;
+                asyncAttempt( async() => fileHandle.utimes( pAccessTime, pModificationTime ) );
+            }
+
+            const filePath = this.filePath;
+
+            asyncAttempt( async() => await fsAsync.utimes( filePath, pAccessTime, pModificationTime ) );
         }
 
-        utimeSync()
+        utimeSync( pAccessTime, pModificationTime )
         {
+            if ( !isNull( this.#fsFile ) && this.notMe( this.#fsFile ) )
+            {
+                const fsFile = this.#fsFile;
+                return attempt( () => fsFile.utimeSync( pAccessTime, pModificationTime ) );
+            }
 
+            const filePath = this.filePath;
+
+            attempt( () => fs.utimesSync( filePath, pAccessTime, pModificationTime ) );
         }
 
         write()
@@ -2109,6 +2477,13 @@ const $scope = constants?.$scope || function()
 
     }
 
+    FileProxy.SeekMode =
+        {
+            Start: 0,
+            Current: 1,
+            End: 2
+        };
+
     /**
      * Defines a proxy for the Deno.FsFile interface if we are running in another execution environment
      * @type {*|(function())}
@@ -2117,7 +2492,39 @@ const $scope = constants?.$scope || function()
 
     const isFsFile = ( pFile ) =>
     {
-        return pFile instanceof FsFile || pFile instanceof FileProxy;
+        if ( _isDeno )
+        {
+            if ( isNonNullObject( pFile )
+                 && isFunction( pFile.close )
+                 && isFunction( pFile.read )
+                 && isFunction( pFile.write )
+                 && isFunction( pFile.stat )
+                 && isFunction( pFile.lock )
+                 && isFunction( pFile.seek )
+                 && isFunction( pFile.isTerminal )
+                 && isFunction( pFile.setRaw ) )
+            {
+                return true;
+            }
+        }
+
+        return _isDeno && (pFile instanceof FsFile || pFile instanceof FileProxy);
+    };
+
+    const isFileHandle = ( pFileHandle ) =>
+    {
+        if ( _isNode )
+        {
+            return (isNonNullObject( pFileHandle )
+                    && isFunction( pFileHandle.close )
+                    && isFunction( pFileHandle.read )
+                    && isFunction( pFileHandle.write )
+                    && isFunction( pFileHandle.stat )
+                    && isFunction( pFileHandle.createReadStream )
+                    && isFunction( pFileHandle.createWriteStream )
+                    && isFunction( pFileHandle.datasync ));
+        }
+        return false;
     };
 
     /**
@@ -2137,7 +2544,7 @@ const $scope = constants?.$scope || function()
 
         #entry = null;
 
-        #fsFile = null;
+        #fileProxy = null;
 
         #_isFile = null;
         #_isDirectory = null;
@@ -2151,16 +2558,13 @@ const $scope = constants?.$scope || function()
 
         #valid = false;
 
-        constructor( pFilePath, pFileStats = null, pDirEntry = null, pFsFile = null )
+        constructor( pFilePath, pFileStats = null, pDirEntry = null )
         {
             super();
 
             this.#filepath = resolvePath( pFilePath );
 
-            this.#stats = isFileStats( pFileStats ) ?
-                          new FileStats( pFileStats, this.#filepath ) :
-                          isDirectoryEntry( pDirEntry ) ?
-                          new FileStats( pDirEntry ) : {};
+            this.#stats = FileStats.from( pFileStats );
 
             if ( isFileStats( this.#stats ) )
             {
@@ -2169,9 +2573,9 @@ const $scope = constants?.$scope || function()
 
             this.#entry = isNonNullObject( pDirEntry ) ? new DirectoryEntry( pDirEntry, this.#filepath ) : {};
 
-            this.#fsFile = !isNull( pFsFile ) ? pFsFile : !isNull( pDirEntry ) ? new FsFile( pDirEntry ) : null;
-
             this.#valid = !isBlank( this.#filepath );
+
+            this.#fileProxy = this.#valid ? new FileProxy( this.#filepath ) : null;
         }
 
         updateStats( pStats, pPopulateIfMissing = false )
@@ -3222,7 +3626,7 @@ const $scope = constants?.$scope || function()
             }
 
             await this.#collectionStates.remove( searchState );
-            
+
             return fileInfo;
         }
     }
@@ -3331,6 +3735,8 @@ const $scope = constants?.$scope || function()
             makeTempFile,
             mkdir,
             open,
+            opendir,
+            opendirSync,
             readDir,
             readFile,
             readLink,

@@ -3735,6 +3735,122 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         return _copy( pObject, options, pStack );
     };
 
+    /**
+     * This class wraps the 2-element arrays returned from Object::entries,
+     * so we can treat them like objects with a key and a value property instead of an array.
+     * This class extends Array, so it retains all the functionality normally available for Object entries
+     */
+    class ObjectEntry extends Array
+    {
+        #key;
+        #value;
+        #type;
+
+        #parent;
+
+        constructor( ...pArgs )
+        {
+            super( ...pArgs );
+
+            this.#key = _mt_str;
+            this.#value = null;
+
+            if ( isArray( pArgs ) )
+            {
+                const args = [...pArgs];
+
+                this.#key = (args?.length || 0) > 0 ? args[0] : this[0] || _mt_str;
+                this.#value = (args?.length || 0) > 1 ? args[1] || this[1] : this[1];
+                this.#parent = (args?.length || 0) > 2 ? args[2] || this[2] : this[2];
+            }
+
+            this.#type = typeof this.#value;
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
+        get key()
+        {
+            return this.#key || (this.length > 0 ? this[0] : _mt_str);
+        }
+
+        get value()
+        {
+            return this.#value || (this.length > 1 ? this[1] : null);
+        }
+
+        get type()
+        {
+            return this.#type;
+        }
+
+        get parent()
+        {
+            return this.#parent || (this.length > 2 ? this[2] : null);
+        }
+
+        /**
+         * Returns true if the value property of this entry is null or undefined
+         * @returns {*}
+         */
+        isEmpty()
+        {
+            return !isNull( this.value );
+        }
+
+        /**
+         * Returns true if this entry has a string key and a defined/non-null value
+         * @returns {*|boolean}
+         */
+        isValid()
+        {
+            return isStr( this.key ) && !this.isEmpty();
+        }
+
+        /**
+         * Redefine the map function of the superclass, Array
+         * We only want to apply the function to the value AND we want to return a new ObjectEntry, not a raw array
+         * @param pFunction
+         */
+        map( pFunction )
+        {
+            if ( isFunc( pFunction ) )
+            {
+                const thiz = this.constructor[Symbol.species];
+                return new thiz( this.key, pFunction.call( this, this.value ), this.parent );
+            }
+            return this;
+        }
+
+        filter( pFunction )
+        {
+            if ( isFunc( pFunction ) )
+            {
+                return !!pFunction.call( this, this.value );
+            }
+            return this;
+        }
+
+        fold()
+        {
+            return this.value;
+        }
+
+        valueOf()
+        {
+            return this.value;
+        }
+    }
+
+    /**
+     * Defines a constant for an invalid entry
+     * @type {Readonly<ObjectEntry>}
+     */
+    ObjectEntry.INVALID_ENTRY = lock( new ObjectEntry() );
+
     function objectEntries( pObject )
     {
         let entries = [];
@@ -3749,7 +3865,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
 
             if ( isObjectLiteral( pObject ) && entries.length > 0 )
             {
-                return entries;
+                return [...(new Set( entries ))].filter( e => null != e[1] ).map( stringifyKeys ).map( e => new ObjectEntry( ...[e[0], e[1], pObject] ) );
             }
 
             if ( pObject instanceof Map )
@@ -3785,7 +3901,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             }
         }
 
-        return [...(new Set( entries ))].filter( e => null != e[1] ).map( stringifyKeys );
+        return [...(new Set( entries ))].filter( e => null != e[1] ).map( stringifyKeys ).map( e => new ObjectEntry( ...[e[0], e[1], pObject] ) );
     }
 
     function objectValues( pObject )
@@ -4098,6 +4214,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             localCopy,
             immutableCopy,
 
+            ObjectEntry,
+
             ExecutionMode,
             ExecutionEnvironment,
             SourceInfo,
@@ -4146,6 +4264,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
                     CmdLineArgs,
                     ExecutionMode,
                     ExecutionEnvironment,
+                    ObjectEntry,
                     PromiseResult,
                     ModuleEvent: BockModuleEvent,
                     ModulePrototype: BockModulePrototype,

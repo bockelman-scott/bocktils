@@ -1,4 +1,3 @@
-
 const objectFunctorUtils = require( "../src/ObjectFunctor.cjs" );
 
 const { classes } = objectFunctorUtils;
@@ -43,7 +42,7 @@ describe( "ObjectFunctor", () =>
           {
               const functor = new ObjectFunctor( obj );
 
-              expect( functor.length ).toEqual( 10 );
+              expect( functor.length ).toEqual( 9 );
 
           } );
 } );

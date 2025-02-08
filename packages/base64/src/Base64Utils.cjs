@@ -10,13 +10,14 @@ const core = require( "@toolbocks/core" );
  */
 const { constants, typeUtils, stringUtils, arrayUtils } = core;
 
-const { _ud = "undefined" } = constants;
+const {
+    _ud = "undefined", $scope = constants?.$scope || function()
+    {
+        return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
+    }
+} = constants;
 
-const $scope = constants?.$scope || function()
-{
-    return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
-};
-
+// noinspection FunctionTooLongJS
 (function exposeModule()
 {
     const INTERNAL_NAME = "__BOCK__BASE64_UTILS__";
@@ -34,7 +35,6 @@ const $scope = constants?.$scope || function()
         _slash,
         _underscore,
         _comma,
-        S_ERROR,
         _ALPHABET_ENGLISH_UCASE,
         _ALPHABET_ENGLISH_LCASE,
         _DIGIT_CHARACTERS,
@@ -55,19 +55,19 @@ const $scope = constants?.$scope || function()
 
     const modulePrototype = new ModulePrototype( modName, INTERNAL_NAME );
 
-    const { isNull, isString, isEmptyString, isNumber, isIterable, isFunction } = typeUtils;
+    const { isNull, isString, isEmptyString, isFunction } = typeUtils;
 
     const { asString, asInt, ucase, lcase } = stringUtils;
 
     const { asArray } = arrayUtils;
 
-    const base64 = "base64";
+    const BASE64 = "base64";
 
-    const utf8 = "utf-8";
+    const UTF8 = "utf-8";
 
-    const DEFAULT_TEXT_ENCODING = utf8;
+    const DEFAULT_TEXT_ENCODING = UTF8;
 
-    const validEncodings = lock( ["ascii", "utf8", utf8, "utf16le", "utf-16le", "ucs2", "ucs-2", base64, "base64url", "latin1", "binary", "hex"] );
+    const validEncodings = lock( ["ascii", "utf8", UTF8, "utf16le", "utf-16le", "ucs2", "ucs-2", BASE64, "base64url", "latin1", "binary", "hex"] );
 
     const DEFAULT_CHAR_62 = "+";
     const DEFAULT_CHAR_63 = "/";
@@ -270,44 +270,8 @@ const $scope = constants?.$scope || function()
     function resolveEncoding( pEncoding )
     {
         let encoding = lcase( asString( pEncoding, true ) );
-        return validEncodings.includes( encoding ) ? encoding : utf8;
+        return validEncodings.includes( encoding ) ? encoding : UTF8;
     }
-
-    const bufferToTypedArray = function( pBuffer )
-    {
-        let typedArray = [];
-
-        try
-        {
-            typedArray = new Uint8Array( pBuffer );
-        }
-        catch( ex )
-        {
-            modulePrototype.reportError( ex, ex.message, S_ERROR, modName + "::bufferToTypedArray", pBuffer );
-
-            if ( pBuffer instanceof Uint8Array )
-            {
-                return pBuffer;
-            }
-
-            if ( isIterable( pBuffer ) )
-            {
-                typedArray = [...pBuffer];
-            }
-        }
-
-        return typedArray;
-    };
-
-    const typedArrayToBuffer = function( pArray )
-    {
-        if ( isBufferDefined() )
-        {
-            return Buffer.from( pArray );
-        }
-
-        throw new Error( "Buffer is undefined in this execution context" );
-    };
 
     function toBytes( pData )
     {
@@ -334,7 +298,7 @@ const $scope = constants?.$scope || function()
         }
     }
 
-    function encode( pData, pSpec = DEFAULT_VARIANT )
+    function encode( pData, pVariant = DEFAULT_VARIANT )
     {
         if ( isString( pData ) && isBToADefined() )
         {
@@ -342,49 +306,60 @@ const $scope = constants?.$scope || function()
         }
 
         const data = toBytes( pData );
-
         if ( isBufferDefined() )
         {
-            const buffer = Buffer.from( data || [] );
-            return cleanBase64( buffer.toString( base64 ) );
+            return cleanBase64( Buffer.from( data || [] ).toString( BASE64 ) );
         }
 
-        let s = _mt_str;
+        const lookupTable = getBase64Alphabet( pVariant ).split( _mt_str );
 
+        let encodedString = _mt_str;
 
-        const lookup = getBase64Alphabet( pSpec ).split( _mt_str );
-
-        for( let i = 0, n = data.length; i < n; i += 3 )
+        for( let i = 0; i < data.length; i += 3 )
         {
-            let byte_block_1 = (data[i] << 16);
-            let byte_block_2 = (i < (n + 1)) ? (data[i + 1] << 8) : 0;
-            let byte_block_3 = (i < (n + 2)) ? (data[i + 2]) : 0;
-
-            byte_block_1 = Math.max( 0, !isNaN( byte_block_1 ) ? byte_block_1 || 0 : 0 );
-            byte_block_2 = Math.max( 0, !isNaN( byte_block_2 ) ? byte_block_2 || 0 : 0 );
-            byte_block_3 = Math.max( 0, !isNaN( byte_block_3 ) ? byte_block_3 || 0 : 0 );
-
-            let three_byte_block = (byte_block_1 + byte_block_2 + byte_block_3);
-
-            for( let k = 0; k < 4; k++ )
-            {
-                const key = (three_byte_block >> ((3 - k) * 6)) & 0x3F;
-
-                s += isNumber( key ) ? lookup[key] : lookup[0];
-            }
+            encodedString += processThreeBytes( data, i, lookupTable );
         }
 
-        if ( requiresPadding( pSpec ) )
+        if ( requiresPadding( pVariant ) )
         {
-            while ( s.length % 4 !== 0 )
-            {
-                s += DEFAULT_PADDING_CHAR;
-            }
+            encodedString = addPadding( encodedString );
         }
 
-        return asString( s, true );
+        return asString( encodedString, true );
     }
 
+    // Helper Functions
+    function processThreeBytes( pData, pIndex, pLookupTable )
+    {
+        const index = asInt( pIndex );
+
+        const firstByte = pData[index] << 16 || 0;
+        const secondByte = pData[index + 1] ? pData[index + 1] << 8 : 0;
+        const thirdByte = pData[index + 2] || 0;
+        const threeByteBlock = firstByte + secondByte + thirdByte;
+
+        let block = _mt_str;
+
+        for( let k = 0; k < 4; k++ )
+        {
+            const key = (threeByteBlock >> ((3 - k) * 6)) & 0x3F;
+            block += pLookupTable[key] || pLookupTable[0];
+        }
+
+        return block;
+    }
+
+    function addPadding( pEncodedString )
+    {
+        let encodedString = asString( pEncodedString, true );
+
+        while ( encodedString.length % 4 !== 0 )
+        {
+            encodedString += DEFAULT_PADDING_CHAR;
+        }
+
+        return encodedString;
+    }
 
     const decode = function( pBase64, pSpec = DEFAULT_VARIANT )
     {
@@ -452,7 +427,7 @@ const $scope = constants?.$scope || function()
 
         if ( isBufferDefined() )
         {
-            const buffer = Buffer.from( str, base64 );
+            const buffer = Buffer.from( str, BASE64 );
 
             let result = buffer.toString( encoding );
 
