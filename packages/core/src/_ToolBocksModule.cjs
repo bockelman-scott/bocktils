@@ -1263,7 +1263,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         return S_CUSTOM;
     }
 
-    const resolveEventOptions = function( pEventName, pOptions, pData )
+    const resolveEventOptions = function( pEventName, pData, pOptions )
     {
         const options =
             {
@@ -1310,10 +1310,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
          */
         constructor( pEventName, pData, pOptions )
         {
-            super( resolveEventOptions( pEventName, pOptions, pData ).type || S_CUSTOM,
-                   resolveEventOptions( pEventName, pOptions, pData ).options );
+            super( resolveEventOptions( pEventName, pData, pOptions ).type || S_CUSTOM,
+                   resolveEventOptions( pEventName, pData, pOptions ).options );
 
-            const { type, data, options } = resolveEventOptions( pEventName, pOptions, pData );
+            const { type, data, options } = resolveEventOptions( pEventName, pData, pOptions );
 
             this.#type = type || "ToolBocksModuleEvent";
 

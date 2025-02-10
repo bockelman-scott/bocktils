@@ -40,7 +40,7 @@ const {
 // noinspection FunctionTooLongJS
 (function exposeModule()
 {
-    const INTERNAL_NAME = "__BOCK__HTTP_REQUEST__";
+    const INTERNAL_NAME = "__BOCK__HTTP_RESPONSE__";
 
     if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
     {
@@ -74,7 +74,7 @@ const {
     const { ToolBocksModule } = classes;
 
 
-    const modName = "HttpRequest";
+    const modName = "HttpResponse";
 
     const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
 
