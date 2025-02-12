@@ -207,6 +207,9 @@ const bockModuleBootstrap = require( "./_ToolBocksModule.cjs" );
             _underscore = "_",
             _hyphen = "-",
             _asterisk = "*",
+            _ampersand = "&",
+            _equals = "=",
+            _assignment = "=",
             _multiply = _asterisk,
             _minus = _hyphen,
             _plus = "+",
@@ -1156,6 +1159,12 @@ const bockModuleBootstrap = require( "./_ToolBocksModule.cjs" );
              * @alias module:Constants#_asterisk
              */
             _asterisk,
+
+            _ampersand,
+
+            _equals,
+
+            _assignment,
 
             /**
              * The asterisk character, often used as the multiplication operator in many programming languages<br>

@@ -59,19 +59,16 @@ const {
         };
 
 
-    const {
-        classes
-    } = constants;
-
+    const { classes, lock } = constants;
 
     const { ModuleEvent, ToolBocksModule } = classes;
+
+    const { asString, asInt, lcase, ucase, capitalize } = stringUtils;
 
 
     const modName = "HttpConstants";
 
     const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
-
-    const { asString, asInt, lcase, ucase, capitalize } = stringUtils;
 
 
     /**
@@ -102,6 +99,11 @@ const {
         requiresBody()
         {
             return (this.#verb === "POST") || (this.#verb === "PUT") || (this.#verb === "PATCH");
+        }
+
+        forbidBody()
+        {
+            return (this.#verb === "GET") || (this.#verb === "HEAD") || (this.#verb === "OPTIONS") || (this.#verb === "DELETE");
         }
     }
 
@@ -141,6 +143,20 @@ const {
                                          HttpVerb[key] = new HttpVerb( value );
                                      } );
 
+
+    const MODES = lock(
+        {
+            SAME_ORIGIN: "same-origin",
+            NO_CORS: "no-cors",
+            CORS: "cors",
+            DEFAULT: "same-origin"
+        } );
+
+    const PRIORITY = lock( {
+                               LOW: "low",
+                               HIGH: "high",
+                               AUTO: "auto"
+                           } );
 
     /**
      * Represents an HTTP content type (or mime-type).
@@ -693,6 +709,8 @@ const {
             STATUS_TEXT,
             STATUS_TEXT_ARRAY,
             VERBS,
+            MODES,
+            PRIORITY,
             CONTENT_TYPES,
             TYPES,
             HTTP_HEADERS,

@@ -34,6 +34,7 @@ const {
         objectKeys,
         objectValues,
         mergeOptions,
+        attempt,
         classes
     } = constants;
 
@@ -133,6 +134,11 @@ const {
                 modulePrototype.handleError( ex, exposeModule, "node:util TextEncoder/TextDecoder" );
             }
         }
+    }
+
+    if ( _ud === typeof ReadableStream )
+    {
+        ReadableStream = $scope().ReadableStream || attempt( () => (_isNode ? require( "stream" ).Readable : ReadableStream) );
     }
 
     function resolveEncoding( pEncoding )
@@ -596,6 +602,9 @@ const {
         return isBufferDefined() ? (pBuffer instanceof Buffer ? new ArrayClass( pBuffer ) : isArray( pBuffer ) || isTypedArray( pBuffer ) ? new ArrayClass( pBuffer ) : new ArrayClass( arrayFromBuffer( pBuffer ) )) : arrayFromBuffer( pBuffer );
     }
 
+    const isBlob = ( pValue ) => (_ud !== typeof Blob && pValue instanceof Blob);
+    const isFile = ( pValue ) => (_ud !== typeof File && pValue instanceof File);
+
     const more =
         {
             BufferDefined,
@@ -616,8 +625,11 @@ const {
             SlowBuffer: SlowBuffer || $scope().SlowBuffer,
             transcode: transcode || $scope().transcode,
             TranscodeEncoding: TranscodeEncoding || $scope().TranscodeEncoding,
+            ReadableStream: (_ud !== typeof ReadableStream) && isFunction( ReadableStream ) ? ReadableStream : $scope().ReadableStream,
             arrayFromBuffer,
-            typedArrayFromBuffer
+            typedArrayFromBuffer,
+            isBlob,
+            isFile
         };
 
     mod = mergeOptions( mod, more );

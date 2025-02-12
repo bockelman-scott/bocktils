@@ -591,7 +591,7 @@ const $scope = constants?.$scope || function()
 
     const firstError = function( ...pObj )
     {
-        let arr = !isNull( pObj ) ? isArray( pObj ) ? pObj : [pObj] : [];
+        let arr = (!isNull( pObj ) ? isArray( pObj ) ? pObj : [pObj] : []).flat().filter( isError );
         return arr.filter( e => isError( e ) ).shift();
     };
 
@@ -679,17 +679,17 @@ const $scope = constants?.$scope || function()
      */
     const isInteger = function( pObj, pStrict = true )
     {
-        let is = 0 === pObj || (isNumber( pObj ) && parseInt( pObj ) === pObj);
+        let is = (0 === pObj) || (isNumber( pObj ) && !isNanOrInfinite( pObj ) && (parseInt( pObj ) === pObj));
 
         if ( !is && !pStrict && isString( pObj ) && isNumeric( pObj ) )
         {
             let n = parseFloat( pObj );
 
-            if ( isInteger( n, true ) )
+            if ( !isNanOrInfinite( n ) && isInteger( n, true ) )
             {
-                let s = _mt_str + String( n );
+                let s = (_mt_str + String( n )).trim();
 
-                return s === pObj;
+                return s === (_mt_str + String( pObj )).trim();
             }
         }
 
@@ -704,20 +704,23 @@ const $scope = constants?.$scope || function()
      * @function isFloat
      *
      * @param {number|string} pObj A value to evaluate
+     *
      * @param {boolean} pStrict  If true, the specified value must be a number; strings will not be parsed
+     *
+     * @param {boolean} pZeroIsFloat indicates whether to consider zero a float or an integer, Defaults to true
      *
      * @returns {boolean} true if the specified value cannot be expressed as an integer (or zero)
      *
      * @alias module:TypeUtils.isFloat
      */
-    const isFloat = function( pObj, pStrict = true )
+    const isFloat = function( pObj, pStrict = true, pZeroIsFloat = true )
     {
         if ( 0 === pObj )
         {
-            return true;
+            return !!pZeroIsFloat;
         }
 
-        let is = isNumber( pObj ) && (parseFloat( pObj ) !== parseInt( pObj ));
+        let is = isNumber( pObj ) && !isNaN( parseFloat( pObj ) ) && ((parseFloat( pObj ) !== parseInt( pObj )) || parseFloat( pObj ) % 1 !== 0);
 
         if ( !is && !pStrict && isString( pObj ) && isNumeric( pObj ) )
         {
@@ -735,7 +738,7 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * Returns true if the specified value represents a hexadecimal number (base 16)<br>
+     S     * Returns true if the specified value represents a hexadecimal number (base 16)<br>
      * The value can either be a hexadecimal literal, such a 0xFF, <br>
      * or a string starting with "0x" and containing only the hexadecimal digits, a minus sign, or a decimal point<br>
      *
@@ -749,7 +752,7 @@ const $scope = constants?.$scope || function()
      */
     function isHex( pObj )
     {
-        const s = _toString( pObj );
+        const s = _toString( pObj ).replaceAll( /_/g, _mt_str ).trim();
         return (_zero !== s) && /^(-)?(0x)([\dA-Fa-f]+)?(([.,])([\dA-Fa-f]+))?$/i.test( s ) && !/[G-Wg-w\s]|[yzYZ]/.test( s );
     }
 
@@ -768,7 +771,7 @@ const $scope = constants?.$scope || function()
      */
     function isOctal( pObj )
     {
-        const s = _toString( pObj );
+        const s = _toString( pObj ).replaceAll( /_/g, _mt_str ).trim();
         return (_zero !== s) && /^(-)?(0o)([0-7]+)?(([.,])([0-7]+))?$/i.test( s ) && !/[A-Za-np-z\s]/.test( s );
     }
 
@@ -787,11 +790,11 @@ const $scope = constants?.$scope || function()
      */
     function isBinary( pObj )
     {
-        const s = _toString( pObj );
+        const s = _toString( pObj ).replaceAll( /_/g, _mt_str ).trim();
         return (_zero !== s) && /^(-)?(0b)([0-1]+)?(([.,])([0-1]+))?$/i.test( s ) && !/[AC-Z]|[ac-z]|\s/.test( s );
     }
 
-    const isScientificNotation = ( pObj ) => (/^[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)$/).test( _toString( pObj ).trim() );
+    const isScientificNotation = ( pObj ) => (/^[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)$/).test( _toString( pObj ).replaceAll( /_/g, _mt_str ).trim() );
 
     /**
      * Returns true if the specified value represents a decimal number (base 10)<br>
@@ -806,8 +809,8 @@ const $scope = constants?.$scope || function()
      */
     function isDecimal( pObj )
     {
-        const s = _toString( pObj );
-        return (_zero === s || "-0" === s || ( !(isHex( s ) || isOctal( s ) || isBinary( s )) && !/[^\d.+-]/.test( s )));
+        const s = _toString( pObj ).replaceAll( /_/g, _mt_str ).trim();
+        return (_zero === s || "-0" === s || ( !(isHex( s ) || isOctal( s ) || isBinary( s )) && !/[^\dEe.+-]/.test( s )));
     }
 
     /**
@@ -838,7 +841,7 @@ const $scope = constants?.$scope || function()
             return true;
         }
 
-        if ( !([_num, _big, _str].includes( typeof pObj ) || (pObj instanceof Number || pObj instanceof String)) )
+        if ( (_ud === typeof pObj || null === pObj) || !([_num, _big, _str].includes( typeof pObj ) || (pObj instanceof Number || pObj instanceof String)) )
         {
             return false;
         }
@@ -1141,6 +1144,8 @@ const $scope = constants?.$scope || function()
 
         return (s.startsWith( "-" ) ? "-0b" : "0b") + s.replace( /^-/, _mt_str ).trim();
     };
+
+    // TODO: handle negative values and overflow
 
     const toBits = function( pValue, pLength = 16 )
     {
@@ -1854,8 +1859,9 @@ const $scope = constants?.$scope || function()
 
         for( let klass of klasses )
         {
-            const cls = isClass( klass ) ? klass || this.constructor : this.constructor;
-            if ( instanceOfAny( cls, cls[Symbol.species] ) && !(this === pValue) )
+            const cls = getClass( klass || this.constructor );
+
+            if ( instanceOfAny( pValue, cls, cls[Symbol.species] ) && !(this === pValue) )
             {
                 return true;
             }
@@ -2272,6 +2278,31 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    class _AsyncIterator
+    {
+        #iterator;
+
+        constructor( pIterator )
+        {
+            this.#iterator = pIterator;
+        }
+
+        async next()
+        {
+            return await this.#iterator.next();
+        }
+
+        [Symbol.asyncIterator]()
+        {
+            return this;
+        }
+
+        [Symbol.iterator]()
+        {
+            return this.#iterator;
+        }
+    }
+
     /**
      * This subclass of _Iterable just returns done immediately
      * @class
@@ -2310,75 +2341,86 @@ const $scope = constants?.$scope || function()
      *                   strings are converted into an array of characters,
      *                   scalar values are converted into a 1-element array containing the value
      *
-     * @returns {_Iterable} an instance of _Iterable
+     * @param {boolean} pAsync Pass true to create an AsyncIterable
+     *
+     * @returns {_AsyncIterator} an instance of _Iterable
      */
-    const toIterable = function( pArrayLike )
+    const toIterable = function( pArrayLike, pAsync = false )
     {
+        let iterable = null;
+
         switch ( typeof pArrayLike )
         {
             case _ud:
-                return new NullIterator();
+                iterable = new NullIterator();
+                break;
 
             case _str:
-                return new _Iterable( pArrayLike.split( _mt_str ) );
+                iterable = new _Iterable( pArrayLike.split( _mt_str ) );
+                break;
 
             case _num:
             case _big:
             case _bool:
-                return new _Iterable( [pArrayLike] );
+                iterable = new _Iterable( [pArrayLike] );
+                break;
 
             case _fun:
                 if ( isGeneratorFunction( pArrayLike ) )
                 {
-                    return pArrayLike();
+                    iterable = pArrayLike();
                 }
-
-                return new _Iterable( [pArrayLike] );
+                else
+                {
+                    iterable = new _Iterable( [pArrayLike] );
+                }
+                break;
 
             case _obj:
                 if ( isArray( pArrayLike ) )
                 {
-                    return new _Iterable( pArrayLike );
+                    iterable = new _Iterable( pArrayLike );
                 }
-
-                if ( pArrayLike instanceof Map )
+                else if ( pArrayLike instanceof Map )
                 {
-                    return new _Iterable( [...pArrayLike.entries()] );
+                    iterable = new _Iterable( [...pArrayLike.entries()] );
                 }
-
-                if ( pArrayLike instanceof Set )
+                else if ( pArrayLike instanceof Set )
                 {
-                    return new _Iterable( [...pArrayLike] );
+                    iterable = new _Iterable( [...pArrayLike] );
                 }
-
-                if ( isDate( pArrayLike ) )
+                else if ( isDate( pArrayLike ) )
                 {
-                    return new _Iterable( [pArrayLike] );
+                    iterable = new _Iterable( [pArrayLike] );
                 }
-
-                if ( isIterable( pArrayLike ) )
+                else if ( isIterable( pArrayLike ) )
                 {
-                    return new _Iterable( pArrayLike );
+                    iterable = new _Iterable( pArrayLike );
                 }
-
-                const newObject = {};
-
-                const entries = Object.entries( pArrayLike );
-
-                for( let entry of entries )
+                else
                 {
-                    const key = entry[0];
+                    const newObject = {};
 
-                    const value = entry[1];
+                    const entries = Object.entries( pArrayLike );
 
-                    newObject[key] = toIterable( value );
+                    for( let entry of entries )
+                    {
+                        const key = entry[0];
+
+                        const value = entry[1];
+
+                        newObject[key] = toIterable( value );
+                    }
+
+                    iterable = new _Iterable( Object.entries( newObject ) );
                 }
-
-                return new _Iterable( Object.entries( newObject ) );
+                break;
 
             default:
-                return new NullIterator();
+                iterable = new NullIterator();
         }
+
+        return pAsync ? new _AsyncIterator( iterable ) : iterable;
     };
 
     /**
@@ -2655,6 +2697,71 @@ const $scope = constants?.$scope || function()
         return false;
     };
 
+    const isArrayBuffer = ( pValue ) => (_ud !== typeof ArrayBuffer && pValue instanceof ArrayBuffer);
+    const isSharedArrayBuffer = ( pValue ) => (_ud !== typeof SharedArrayBuffer && pValue instanceof SharedArrayBuffer);
+    const isDataView = ( pValue ) => (_ud !== typeof DataView && pValue instanceof DataView);
+
+    function calculateTypedArrayClass( ...pArray )
+    {
+        const arr = isNull( pArray ) ? [] : [].concat( ...(pArray || []) ).flat().filter( isNumeric ).map( toDecimal );
+
+        if ( arr.length <= 0 )
+        {
+            return Int8Array;
+        }
+
+        const hasFloat = arr.some( isFloat );
+
+        const maxAbs = Math.max( ...(arr.map( Math.abs )) );
+
+        if ( hasFloat )
+        {
+            return maxAbs <= 2 ** 31 ? Float32Array : Float64Array;
+        }
+
+        const signed = arr.some( e => e < 0 );
+
+        const bitsNeeded = Math.ceil( Math.log2( maxAbs + 1 ) );
+
+        if ( bitsNeeded <= 8 )
+        {
+            return signed ? Int8Array : Uint8Array;
+        }
+
+        if ( bitsNeeded <= 16 )
+        {
+            return signed ? Int16Array : Uint16Array;
+        }
+
+        if ( bitsNeeded <= 32 )
+        {
+            return signed ? Int32Array : Uint32Array;
+        }
+
+        if ( bitsNeeded <= 64 )
+        {
+            return BigUint64Array;
+        }
+
+        return Float64Array;
+    }
+
+    const toTypedArray = function( pArray )
+    {
+        let arr = isNull( pArray ) ? [] : ((isTypedArray( pArray ) || isArray( pArray )) ? pArray : [pArray].flat());
+
+        if ( isTypedArray( arr ) )
+        {
+            return arr;
+        }
+
+        arr = [].concat( ...(pArray || []) ).flat().filter( isNumeric ).map( toDecimal );
+
+        const typedArrayClass = calculateTypedArrayClass( arr );
+
+        return new typedArrayClass( arr );
+    };
+
     /**
      * This is the module itself, exported from this function
      */
@@ -2724,6 +2831,9 @@ const $scope = constants?.$scope || function()
             isValidDateOrNumeric,
             isValidDateInstance,
             isDirectoryEntry,
+            isArrayBuffer,
+            isSharedArrayBuffer,
+            isDataView,
             toDecimal,
             toHex,
             toOctal,
@@ -2743,6 +2853,8 @@ const $scope = constants?.$scope || function()
             estimateBytesForType,
             NVL,
             isReadOnly,
+            calculateTypedArrayClass,
+            toTypedArray,
 
             /**
              * The classes exported with this module.<br>

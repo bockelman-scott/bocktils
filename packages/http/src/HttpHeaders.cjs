@@ -68,11 +68,6 @@ const {
 
     const { ToolBocksModule } = classes;
 
-
-    const modName = "HttpHeaders";
-
-    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
-
     const
         {
             isNull,
@@ -82,10 +77,15 @@ const {
             isFunction
         } = typeUtils;
 
-
     const { asString, isBlank } = stringUtils;
 
     const { isHeader } = httpConstants;
+
+
+    const modName = "HttpHeaders";
+
+    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+
 
     function isWebApiHeadersObject( pObject )
     {

@@ -132,17 +132,24 @@ const $scope = constants?.$scope || function()
             isScientificNotation,
             isBoolean,
             isObject,
+            isNonNullObject,
             isArray,
             isLikeArray,
+            isTypedArray,
             isMap,
             isSet,
             isFunction,
             isRegExp,
             isNanOrInfinite,
+            isClass,
+            getClass,
+            getClassName,
             toDecimal,
             firstMatchingType,
             clamp,
-            NVL
+            NVL,
+            calculateTypedArrayClass,
+            toTypedArray,
         } = typeUtils;
 
     /**
@@ -231,32 +238,43 @@ const $scope = constants?.$scope || function()
             assumeAlphabetic: true,
             dateFormatter: null,
             transformations: [function( s ) { return s;}],
-            checkForByteArray: false
+            checkForByteArray: false,
+            decoder: null,
+            encoder: null,
         };
 
     const _aso = ( pOptions ) => populateOptions( pOptions, DEFAULT_AS_STRING_OPTIONS );
 
-    function _transform( pString, ...pTransformations )
+    const isTransformer = ( e ) => (isFunction( e ) && e.length > 0) || (isNonNullObject( e ) && isFunction( e?.transform ));
+
+    function applyTransformations( pString, ...pTransformations )
     {
         let s = (_mt_str + pString);
 
+        let transformers = isNull( pTransformations ) ? [] : (isArray( pTransformations ) ? (pTransformations.length === 0 ? [] : [...pTransformations]) : [pTransformations]);
+
+        transformers = transformers.flat().filter( isTransformer );
+
         let prior = (_mt_str + s);
 
-        let transformations = ([].concat( ...pTransformations )).flat().filter( e => isFunction( e ) && e.length > 0 );
-
-        for( let f of transformations )
+        for( let transformer of transformers )
         {
-            s = attempt( f, s, prior );
-
-            if ( isNull( s ) || (_mt_str === (_mt_str + s).trim()) )
+            if ( !transformer )
             {
-                s = prior;
+                continue;
             }
 
-            prior = s;
+            const transform = (isNonNullObject( transformer ) && isFunction( transformer?.transform ) ? transformer.transform : transformer);
+
+            s = attempt( () => transform.call( transformer, s, prior ) ) || prior;
         }
 
         return s;
+    }
+
+    function _transform( pString, ...pTransformations )
+    {
+        return applyTransformations( pString, ...pTransformations );
     }
 
     function getFunctionSource( pFunction )
@@ -299,6 +317,53 @@ const $scope = constants?.$scope || function()
         return bytes;
     }
 
+    function bytesPerElement( pByteArray )
+    {
+        const byteArrayClass = getClass( pByteArray );
+        return asInt( byteArrayClass?.BYTES_PER_ELEMENT, 0 ) || asInt( getClassName( byteArrayClass || pByteArray ).replaceAll( /\D/g, _mt_str ) ) / 8;
+    }
+
+    function resolveTextEncoder( pTextEncoder, pByteArrayClass )
+    {
+        const byteArrayClass = isClass( pByteArrayClass ) ? pByteArrayClass : getClass( pByteArrayClass );
+
+        let encoder = isNonNullObject( pTextEncoder ) && isFunction( pTextEncoder.encode ) ? pTextEncoder : null;
+
+        if ( isNull( encoder ) )
+        {
+            const bytes = bytesPerElement( byteArrayClass );
+
+            switch ( bytes )
+            {
+                case 0:
+                case 1:
+                    return { encode: asUtf8ByteArray };
+
+                default:
+                    if ( _ud !== typeof TextEncoder )
+                    {
+                        return new TextEncoder();
+                    }
+                    return { encode: ( s ) => { return new byteArrayClass( asUtf8ByteArray( s ) ); } };
+            }
+        }
+
+        return encoder;
+    }
+
+    const toByteArray = function( pString, pTextEncoder, pByteArrayClass = Uint8Array, ...pTransformers )
+    {
+        let s = asString( pString );
+
+        let byteArrayClass = isClass( pByteArrayClass ) ? pByteArrayClass || Uint8Array : Uint8Array;
+
+        s = applyTransformations( s, ...pTransformers );
+
+        const encoder = resolveTextEncoder( pTextEncoder, byteArrayClass );
+
+        return new byteArrayClass( encoder.encode( s ) );
+    };
+
     function fromUtf8ByteArray( pBytes )
     {
         let s = _mt_str;
@@ -334,6 +399,102 @@ const $scope = constants?.$scope || function()
 
         return s;
     }
+
+    function _toUint8Array( pTypedArray )
+    {
+        if ( isNull( pTypedArray ) )
+        {
+            return new Uint8Array( 0 );
+        }
+
+        let typedArray = toTypedArray( pTypedArray );
+
+        if ( typedArray instanceof Uint8Array )
+        {
+            return typedArray;
+        }
+
+        let uint8Array;
+
+        const length = typedArray.length;
+
+        const bytes = bytesPerElement( typedArray );
+
+        uint8Array = new Uint8Array( length * bytes );
+
+        if ( bytes <= 1 )
+        {
+            for( let i = 0; i < length; i++ )
+            {
+                uint8Array[i] = clamp( typedArray[i], 0, 255 );
+            }
+            return uint8Array;
+        }
+
+        if ( bytes >= 8 )
+        {
+            const view = new DataView( uint8Array.buffer );  // Use DataView for 64-bit
+
+            for( let i = 0; i < length; i++ )
+            {
+                view.setFloat64( i * 8, typedArray[i], true ); // Little-endian (adjust if needed)
+            }
+
+            return uint8Array;
+        }
+
+        for( let i = 0; i < length; i++ )
+        {
+            for( let j = 0; j < bytes; j++ )
+            {
+                let rightShift = j * 8;
+                uint8Array[i * 2 + j] = rightShift > 0 ? ((typedArray[i] >> rightShift) & 0xFF) : (typedArray[i] & 0xFF);
+            }
+        }
+
+        return uint8Array;
+    }
+
+    function resolveTextDecoder( pTextDecoder, pByteArrayClass )
+    {
+        const byteArrayClass = isClass( pByteArrayClass ) ? pByteArrayClass : getClass( pByteArrayClass );
+
+        let decoder = isNonNullObject( pTextDecoder ) && isFunction( pTextDecoder.decode ) ? pTextDecoder : null;
+
+        if ( isNull( decoder ) )
+        {
+            const bytes = bytesPerElement( byteArrayClass );
+
+            switch ( bytes )
+            {
+                case 0:
+                case 1:
+                    return { decode: fromUtf8ByteArray };
+
+                default:
+                    if ( _ud !== typeof TextDecoder )
+                    {
+                        return new TextDecoder();
+                    }
+                    return { decode: ( pArray ) => { return fromUtf8ByteArray( _toUint8Array( pArray ) ); } };
+            }
+        }
+    }
+
+    const fromByteArray = function( pByteArray, pTextDecoder, ...pTransformers )
+    {
+        let array = isTypedArray( pByteArray ) || (isArray( pByteArray ) && pByteArray.every( e => isNumeric( e ) && toDecimal( e ) <= 255 ));
+
+        let byteArrayClass = getClass( pByteArray ) || (array ? Uint8Array : pByteArray);
+
+        const decoder = resolveTextDecoder( pTextDecoder, byteArrayClass );
+
+        let s = decoder.decode( pByteArray );
+
+        s = applyTransformations( s, ...pTransformers );
+
+        return s;
+    };
 
     function _handleFunctionInput( pValue, pTrim, pOptions )
     {
@@ -531,6 +692,11 @@ const $scope = constants?.$scope || function()
 
         let s = _mt_str;
 
+        if ( isTypedArray( input ) )
+        {
+            return fromByteArray( input, options?.decoder, options?.transformations );
+        }
+
         // if the argument is an array, recursively call this function on each element
         // and join the results on the joinOn option or the empty character
         if ( isArray( input ) )
@@ -675,7 +841,7 @@ const $scope = constants?.$scope || function()
             return _mt_str;
         }
 
-        const transformations = ([].concat( ...(options?.transformations || []) )).flat().filter( e => isFunction( e ) && e.length > 0 );
+        const transformations = ([].concat( ...(options?.transformations || []) )).flat().filter( isTransformer );
 
         return _transform( _mt_str + ((true === trim) ? ((_mt_str + s).trim()) : s), ...transformations );
     };

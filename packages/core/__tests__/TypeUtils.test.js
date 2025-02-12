@@ -1,61 +1,106 @@
-/** import the utilities to test **/
+const constants = require( "../src/Constants.cjs" );
+
+const { ModuleEvent } = constants?.classes;
+
 const typeUtils = require( "../src/TypeUtils.cjs" );
 
-const {
-    VALID_TYPES,
-    JS_TYPES,
-    TYPE_DEFAULTS,
-    isUndefined,
-    isDefined,
-    isNull,
-    isNonNullObject,
-    isPrimitiveWrapper,
-    isGeneratorFunction,
-    isArray,
-    isTypedArray,
-    isLikeArray,
-    isType,
-    isObject,
-    isCustomObject,
-    isFunction,
-    isAsyncFunction,
-    isIterable,
-    toIterable,
-    isSpreadable,
-    isClass,
-    getClass,
-    getClassName,
-    isString,
-    isNumber,
-    isNumeric,
-    isZero,
-    isOctal,
-    isHex,
-    isBinary,
-    isDecimal,
-    isBigInt,
-    isInteger,
-    isFloat,
-    isBoolean,
-    isSymbol,
-    isDate,
-    isRegExp,
-    isError,
-    isMap,
-    isSet,
-    toDecimal,
-    toOctal,
-    toHex,
-    toBinary,
-    areSameType,
-    instanceOfAny,
-    isUserDefinedClass,
-    isListedClass,
-    isInstanceOfUserDefinedClass,
-    isInstanceOfListedClass,
-    defaultFor,
-    firstMatchingType,
-} = typeUtils;
+const
+    {
+        JS_TYPES,
+        VALID_TYPES,
+        TYPE_DEFAULTS,
+        TYPE_SORT_ORDER,
+        BYTES_PER_TYPE,
+
+        isUndefined,
+        isDefined,
+        isNull,
+        isNotNull,
+        isNonNullValue,
+        isPrimitive,
+        isPrimitiveWrapper,
+        isObject,
+        isCustomObject,
+        isNonNullObject,
+        isError,
+        isEvent,
+        firstError,
+        isFunction,
+        isAsyncFunction,
+        isGeneratorFunction,
+        isPromise,
+        isThenable,
+        isString,
+        isEmptyString,
+        isNumber,
+        isInteger,
+        toInteger,
+        isFloat,
+        toFloat,
+        isBigInt,
+        isNumeric,
+        isZero,
+        isBinary,
+        isOctal,
+        isHex,
+        isDecimal,
+        isScientificNotation,
+        isNanOrInfinite,
+        isBoolean,
+        isArray,
+        isTypedArray,
+        isIterable,
+        isAsyncIterable,
+        isLikeArray,
+        isSpreadable,
+        isMap,
+        isSet,
+        isDate,
+        isRegExp,
+        isClass,
+        isUserDefinedClass,
+        isListedClass,
+        isInstanceOfUserDefinedClass,
+        isInstanceOfListedClass,
+        isAssignableTo,
+        isSymbol,
+        isType,
+        isValidDateOrNumeric,
+        isValidDateInstance,
+        isDirectoryEntry,
+        isArrayBuffer,
+        isSharedArrayBuffer,
+        isDataView,
+        toDecimal,
+        toHex,
+        toOctal,
+        toBinary,
+        toBits,
+        clamp,
+        resolveMoment,
+        areSameType,
+        areCompatibleTypes,
+        instanceOfAny,
+        getClass,
+        getClassName,
+        defaultFor,
+        castTo,
+        toIterable,
+        firstMatchingType,
+        estimateBytesForType,
+        NVL,
+        isReadOnly,
+        calculateTypedArrayClass,
+        toTypedArray,
+        classes,
+        VisitedSet,
+        Option,
+        TypedOption,
+        StringOption,
+        NumericOption,
+        BooleanOption,
+        Result
+    } = typeUtils;
 
 const anAsyncFunction = async function()
 {
@@ -256,6 +301,115 @@ describe( "isNull", () =>
           } );
 
 // isNotNull is just a negation of isNull, so no tests are provided
+} );
+
+describe( "isNotNull", () =>
+{
+    test( "isNotNull(undefined,true) === false",
+          () =>
+          {
+              // strict returns true for any value other than exactly null
+              expect( isNotNull( undefined, true ) ).toBe( true );
+
+              // lax returns true only for values that are not undefined, null, or empty strings
+              expect( isNotNull( undefined, false ) ).toBe( false );
+          } );
+
+    test( "isNotNull() === true",
+          () =>
+          {
+              expect( isNotNull() ).toBe( false );
+          } );
+
+    test( "isNotNull(null,true) === true",
+          () =>
+          {
+              expect( isNotNull( null, true ) ).toBe( false );
+          } );
+
+    test( "isNotNull('',true) === true",
+          () =>
+          {
+              expect( isNotNull( "", true ) ).toBe( true );
+          } );
+
+    test( "isNotNull('') === false",
+          () =>
+          {
+              expect( isNotNull( "" ) ).toBe( false );
+          } );
+} );
+
+describe( "isNonNullValue", () =>
+{
+    test( "isNonNullValue('')",
+          () =>
+          {
+              expect( isNonNullValue( "" ) ).toBe( true );
+          } );
+
+    test( "isNonNullValue(false)",
+          () =>
+          {
+              expect( isNonNullValue( false ) ).toBe( true );
+          } );
+
+    test( "isNonNullValue(0)",
+          () =>
+          {
+              expect( isNonNullValue( 0 ) ).toBe( true );
+          } );
+
+    const ImNull = null;
+
+    test( "isNonNullValue(ImNull)",
+          () =>
+          {
+              expect( isNonNullValue( ImNull ) ).toBe( false );
+          } );
+} );
+
+
+describe( "isPrimitive", () =>
+{
+    test( "isPrimitive('')",
+          () =>
+          {
+              expect( isPrimitive( "" ) ).toBe( true );
+          } );
+
+    test( "isPrimitive(false)",
+          () =>
+          {
+              expect( isPrimitive( false ) ).toBe( true );
+          } );
+
+    test( "isPrimitive(0)",
+          () =>
+          {
+              expect( isPrimitive( 0 ) ).toBe( true );
+          } );
+
+    const ImNull = null;
+
+    test( "isPrimitive(ImNull)",
+          () =>
+          {
+              expect( isPrimitive( ImNull ) ).toBe( false );
+          } );
+
+    test( "isPrimitive(Boolean)",
+          () =>
+          {
+              expect( isPrimitive( new Boolean( false ) ) ).toBe( false );
+          } );
+
+    test( "isPrimitive(function)",
+          () =>
+          {
+              expect( isPrimitive( function() {} ) ).toBe( false );
+          } );
+
 } );
 
 describe( "isPrimitiveWrapper", () =>
@@ -479,6 +633,151 @@ describe( "isNonNullObject", () =>
           } );
 } );
 
+
+describe( "isError", () =>
+{
+    test( "isError('')",
+          () =>
+          {
+              expect( isError( "" ) ).toBe( false );
+          } );
+
+    test( "isError(false)",
+          () =>
+          {
+              expect( isError( false ) ).toBe( false );
+          } );
+
+    test( "isError(0)",
+          () =>
+          {
+              expect( isError( 0 ) ).toBe( false );
+          } );
+
+    test( "isError(Error)",
+          () =>
+          {
+              expect( isError( Error ) ).toBe( false );
+          } );
+
+    test( "isError(new Error('msg'))",
+          () =>
+          {
+              expect( isError( new Error( "msg" ) ) ).toBe( true );
+          } );
+
+    const ImNull = null;
+
+    test( "isError(ImNull)",
+          () =>
+          {
+              expect( isError( ImNull ) ).toBe( false );
+          } );
+
+    test( "isError(thrown)",
+          () =>
+          {
+              try
+              {
+                  const s = 4;
+                  const t = s.trim();
+              }
+              catch( thrown )
+              {
+                  expect( isError( thrown ) ).toBe( true );
+              }
+          } );
+} );
+
+
+describe( "isEvent", () =>
+{
+    test( "isEvent('')",
+          () =>
+          {
+              expect( isEvent( "" ) ).toBe( false );
+          } );
+
+    test( "isEvent(false)",
+          () =>
+          {
+              expect( isEvent( false ) ).toBe( false );
+          } );
+
+    test( "isEvent(0)",
+          () =>
+          {
+              expect( isEvent( 0 ) ).toBe( false );
+          } );
+
+    const ImNull = null;
+
+    test( "isEvent(ImNull)",
+          () =>
+          {
+              expect( isEvent( ImNull ) ).toBe( false );
+          } );
+
+    test( "isEvent(Event)",
+          () =>
+          {
+              expect( isEvent( Event ) ).toBe( false );
+          } );
+
+    test( "isEvent(new Event())",
+          () =>
+          {
+              expect( isEvent( new Event( "error" ) ) ).toBe( true );
+          } );
+
+    test( "isEvent(new ModuleEvent())",
+          () =>
+          {
+              expect( typeof ModuleEvent === "function" ).toBe( true );
+
+              expect( isEvent( new ModuleEvent( "custom" ) ) ).toBe( true );
+          } );
+
+    test( "isEvent(new CustomEvent())",
+          () =>
+          {
+              expect( typeof CustomEvent === "function" ).toBe( true );
+
+              expect( isEvent( new CustomEvent( "custom" ) ) ).toBe( true );
+          } );
+
+    test( "isEvent(dispatched event)",
+          () =>
+          {
+              typeUtils.dispatchEvent( new Event( "error" ) );
+
+              function handleEvent( pEvt )
+              {
+                  expect( isEvent( pEvt ) ).toBe( true );
+              }
+
+              typeUtils.addEventListener( "error", handleEvent );
+          } );
+} );
+
+describe( "firstError", () =>
+{
+    test( "firstError([])",
+          () =>
+          {
+              expect( firstError( [] ) ).toBe( undefined );
+          } );
+
+    test( "firstError([a,b,c])",
+          () =>
+          {
+              const errorA = new Error( "msg" );
+              const errorB = new Error( "MSG" );
+
+              expect( firstError( [4, {}, errorA, errorB] ) ).toEqual( errorA );
+          } );
+} );
+
 describe( "isFunction", () =>
 {
     test( "isFunction(C) === true",
@@ -614,6 +913,189 @@ describe( "isAsyncFunction", () =>
               expect( isAsyncFunction( new C().lazyLog() ) ).toBe( false );
           } );
 } );
+
+describe( "isPromise", () =>
+{
+    test( "isPromise(execute async function)",
+          () =>
+          {
+              async function execute()
+              {
+                  return "abc";
+              }
+
+              expect( isPromise( execute() ) ).toBe( true );
+          } );
+
+    test( "isPromise(execute async function)",
+          async() =>
+          {
+              async function execute()
+              {
+                  return "abc";
+              }
+
+              expect( isPromise( await execute() ) ).toBe( false );
+              expect( await execute() ).toEqual( "abc" );
+          } );
+} );
+
+describe( "isThenable", () =>
+{
+    test( "isThenable",
+          async() =>
+          {
+              async function execute()
+              {
+                  return "abc";
+              }
+
+              expect( isThenable( execute() ) ).toBe( true );
+
+              expect( Boolean( true === isThenable( await execute() ) ) ).toBe( false );
+              expect( isThenable( await execute() ) ).not.toBe( true );
+
+              class Then
+              {
+                  then( pResolve, pReject )
+                  {
+                      pResolve( "abc" );
+                  }
+
+                  constructor() {}
+              }
+
+              expect( isPromise( new Then() ) ).toBe( false );
+              expect( isThenable( new Then() ) ).toBe( true );
+              expect( isThenable( await new Then() ) ).not.toBe( true );
+          } );
+} );
+
+describe( "isEmptyString", () =>
+{
+    test( "isEmptyString('') === true",
+          () =>
+          {
+              expect( isEmptyString( "" ) ).toBe( true );
+          } );
+
+    test( "isEmptyString(' ') === false",
+          () =>
+          {
+              expect( isEmptyString( " " ) ).toBe( false );
+          } );
+
+    test( "isEmptyString({}) === false",
+          () =>
+          {
+              expect( isEmptyString( {} ) ).toBe( false );
+          } );
+
+    test( "isEmptyString(0) === false",
+          () =>
+          {
+              expect( isEmptyString( 0 ) ).toBe( false );
+          } );
+
+    test( "isEmptyString(' '.trim()) === true",
+          () =>
+          {
+              expect( isEmptyString( " ".trim() ) ).toBe( true );
+          } );
+} );
+
+describe( "toInteger", () =>
+{
+    test( "toInteger('7') === 7",
+          () =>
+          {
+              expect( toInteger( "7" ) ).toBe( 7 );
+              expect( toInteger( "7.1" ) ).toBe( 7 );
+          } );
+
+    test( "toInteger('0o07') === 7",
+          () =>
+          {
+              expect( toInteger( "0o07" ) ).toBe( 7 );
+              expect( toInteger( "0o07.1" ) ).toBe( 7 );
+          } );
+
+    test( "toInteger('0o222') === ",
+          () =>
+          {
+              expect( toInteger( "0o222" ) ).toBe( 128 + 16 + 2 );
+          } );
+} );
+
+describe( "toFloat", () =>
+{
+    test( "toFloat('1.32') === 1.32",
+          () =>
+          {
+              expect( toFloat( "1.32" ) ).toBe( 1.32 );
+              expect( toFloat( "1.32.1" ) ).toBe( 1.32 );
+              expect( toFloat( "1.32" ) * 2 ).toBe( 2.64 );
+          } );
+} );
+
+describe( "isBigInt", () =>
+{
+    test( "isBigInt('666n') === true",
+          () =>
+          {
+              expect( BigInt( "666" ) ).toEqual( 666n );
+              expect( isBigInt( 666n ) ).toBe( true );
+          } );
+} );
+
+describe( "isBinary", () =>
+{
+    test( "isBinary('1.32') === false",
+          () =>
+          {
+              expect( isBinary( "1.32" ) ).toBe( false );
+              expect( isBinary( "0b0101" ) ).toBe( true );
+              expect( toBinary( 666 * 2 ) ).toEqual( "0b10100110100" );
+          } );
+} );
+
+describe( "isScientificNotation", () =>
+{
+    test( "isScientificNotation('1.32') === false",
+          () =>
+          {
+              expect( isScientificNotation( "1.32" ) ).toBe( false );
+              expect( isScientificNotation( "-4e-12" ) ).toBe( true );
+          } );
+} );
+
+describe( "isNanOrInfinite", () =>
+{
+    test( "isNanOrInfinite",
+          () =>
+          {
+              expect( isNanOrInfinite( parseFloat( "1.32" ) ) ).toBe( false );
+              expect( isNanOrInfinite( 1 / 0 ) ).toBe( true );
+              expect( isNanOrInfinite( Number.MAX_VALUE * 2 ) ).toBe( true );
+          } );
+} );
+
+describe( "isAsyncIterable", () =>
+{
+    test( "isAsyncIterable",
+          () =>
+          {
+              const asyncGeneratorFunction = async function* () {};
+              const generator = asyncGeneratorFunction();
+
+              expect( isAsyncIterable( generator ) ).toBe( true );
+
+              expect( isAsyncIterable( [] ) ).toBe( false );
+
+              expect( isAsyncIterable( toIterable( [1, 2, 3], true ) ) ).toBe( true );
+          } );
+} );
+
 
 describe( "isClass", () =>
 {
@@ -1077,6 +1559,21 @@ describe( "toNumericBase",
 
           } );
 
+describe( "toBits", () =>
+{
+    test( "toBits",
+          () =>
+          {
+              const nums = [0, -1, 16, 17, 200, 212, 255, 256, 16_768, 64_000, -127, -128, -16, -17, -200, -212];
+
+              for( let i = nums.length; i--; )
+              {
+                  console.log( "Decimal:", nums[i], "16-bit:", toBits( nums[i] ), "32-bit:", toBits( nums[i], 32 ), "8-bit:", toBits( nums[i], 8 ) );
+              }
+          } );
+} );
+
+
 describe( "isZero", () =>
 {
     test( "isZero(1) === false",
@@ -1527,6 +2024,137 @@ describe( "isType", () =>
           } );
 } );
 
+describe( "isValidDateOrNumeric", () =>
+{
+    test( "isValidDateOrNumeric",
+          () =>
+          {
+              const now = new Date();
+
+              expect( isValidDateOrNumeric( now ) ).toBe( true );
+              expect( isValidDateOrNumeric( now.getTime() ) ).toBe( true );
+              expect( isValidDateOrNumeric( "123454321" ) ).toBe( true );
+
+              expect( isValidDateOrNumeric( "Tuesday, July 11th, 2011" ) ).toBe( false );
+          } );
+} );
+
+describe( "isValidDateInstance", () =>
+{
+    test( "isValidDateInstance",
+          () =>
+          {
+              const now = new Date();
+
+              expect( isValidDateInstance( now ) ).toBe( true );
+              expect( isValidDateInstance( now.getTime() ) ).toBe( false );
+
+          } );
+} );
+
+describe( "isDirectoryEntry", () =>
+{
+    test( "isDirectoryEntry",
+          () =>
+          {
+              const denoLike =
+                  {
+                      name: "text.txt",
+                      isFile: true,
+                      isDirectory: false,
+                      isSymLink: false,
+                      isBlockDevice: false,
+                      isCharacterDevice: false,
+                      isFIFO: false,
+                      isSocket: false
+                  };
+
+              const nodeJsLike =
+                  {
+                      name: "text.txt",
+                      isFile: e => false,
+                      isDirectory: e => false,
+                      isSymbolicLink: e => false,
+                      isBlockDevice: e => false,
+                      isCharacterDevice: e => false
+                  };
+
+              const notDirEnt =
+                  {
+                      a: 1,
+                      b: 2,
+                      c: "abc",
+                      name: "text.txt",
+                  };
+
+              expect( isDirectoryEntry( denoLike ) ).toBe( true );
+              expect( isDirectoryEntry( nodeJsLike ) ).toBe( true );
+              expect( isDirectoryEntry( notDirEnt ) ).toBe( false );
+          } );
+} );
+
+describe( "isArrayBuffer", () =>
+{
+    test( "isArrayBuffer",
+          () =>
+          {
+              const buffer = new Uint8Array( 10 ).buffer;
+              expect( isArrayBuffer( buffer ) ).toBe( true );
+
+              const uint8Array = new Uint8Array( buffer );
+              expect( isArrayBuffer( uint8Array ) ).toBe( false );
+              expect( isArrayBuffer( uint8Array.buffer ) ).toBe( true );
+
+              const arrayBuffer = new ArrayBuffer( 8 );
+              const view = new Int32Array( arrayBuffer );
+
+              expect( isArrayBuffer( view ) ).toBe( false );
+              expect( isArrayBuffer( arrayBuffer ) ).toBe( true );
+          } );
+} );
+
+describe( "isSharedArrayBuffer", () =>
+{
+    test( "isSharedArrayBuffer",
+          () =>
+          {
+              const buffer = new Uint8Array( 10 ).buffer;
+              expect( isArrayBuffer( buffer ) ).toBe( true );
+              expect( isSharedArrayBuffer( buffer ) ).toBe( false );
+
+              const sab = new SharedArrayBuffer( 16 );
+
+              expect( isSharedArrayBuffer( sab ) ).toBe( true );
+
+              // SharedArrayBuffer is NOT a subclass of ArrayBuffer
+              expect( sab instanceof ArrayBuffer ).toBe( false );
+              expect( isArrayBuffer( sab ) ).toBe( false );
+
+          } );
+} );
+
+describe( "isDataView", () =>
+{
+    test( "isDataView",
+          () =>
+          {
+              const buffer = new Uint8Array( 10 ).buffer;
+              expect( isDataView( buffer ) ).toBe( false );
+
+              let view = new DataView( buffer );
+              expect( isDataView( view ) ).toBe( true );
+              expect( isArrayBuffer( view.buffer ) ).toBe( true );
+
+              const sab = new SharedArrayBuffer( 16 );
+              view = new DataView( sab );
+
+              expect( isDataView( sab ) ).toBe( false );
+              expect( isDataView( view ) ).toBe( true );
+              expect( isArrayBuffer( view.buffer ) ).toBe( false );
+              expect( isSharedArrayBuffer( view.buffer ) ).toBe( true );
+          } );
+} );
+
 describe( "areSameType", () =>
 {
     test( "areSameType( strings )",
@@ -1908,6 +2536,29 @@ describe( "isInstanceOfListedClass", () =>
           () =>
           {
               expect( isInstanceOfListedClass( {}, C, B, A ) ).toBe( false );
+          } );
+} );
+
+describe( "isAssignableTo", () =>
+{
+    test( "isAssignableTo",
+          () =>
+          {
+              const a = new A();
+              const b = new B();
+              const c = new C();
+
+              expect( isAssignableTo( c, A ) ).toBe( true );
+              expect( isAssignableTo( c, B ) ).toBe( true );
+              expect( isAssignableTo( c, C ) ).toBe( true );
+
+              expect( isAssignableTo( b, A ) ).toBe( true );
+              expect( isAssignableTo( c, B ) ).toBe( true );
+
+              expect( isAssignableTo( a, B ) ).toBe( false );
+              expect( isAssignableTo( a, C ) ).toBe( false );
+              expect( isAssignableTo( a, B ) ).toBe( false );
+              expect( isAssignableTo( b, C ) ).toBe( false );
           } );
 } );
 

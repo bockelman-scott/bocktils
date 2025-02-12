@@ -191,6 +191,7 @@ const $scope = constants?.$scope || function()
     const {
         Buffer = $scope().Buffer,
         File = $scope().File,
+        Blob = $scope().Blob,
         TextEncoder = $scope().TextEncoder,
         TextDecoder = $scope().TextDecoder,
         arrayFromBuffer,
