@@ -1820,9 +1820,15 @@ const $scope = constants?.$scope || function()
         {
             return false;
         }
-        else if ( pValue instanceof Boolean )
+        else if ( isPrimitiveWrapper( pValue ) )
         {
-            return Boolean( pValue.valueOf() );
+            const value = attempt( () => pValue.valueOf() );
+
+            if ( value instanceof Boolean )
+            {
+                return Boolean( value );
+            }
+            return evaluateBoolean( value );
         }
         else if ( isArray( pValue ) || isMap( pValue ) || isSet( pValue ) )
         {
@@ -1830,7 +1836,7 @@ const $scope = constants?.$scope || function()
         }
         else if ( isDate( pValue ) || isFunction( pValue?.getTime ) )
         {
-            return pValue.getTime() > 0;
+            return attempt( () => pValue.getTime() ) > 0;
         }
         else if ( BUILTIN_TYPES.filter( e => pValue instanceof e ).length > 0 )
         {
@@ -1895,6 +1901,9 @@ const $scope = constants?.$scope || function()
 
     Boolean.prototype.evaluate = evaluateBoolean;
     String.prototype.toBool = evaluateBoolean;
+
+    Boolean.evaluate = evaluateBoolean;
+    String.toBool = evaluateBoolean;
 
     /**
      * This function converts all (carriage return + line feed) sequences to line feed only sequences

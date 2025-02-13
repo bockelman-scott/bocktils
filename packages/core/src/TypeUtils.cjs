@@ -97,6 +97,7 @@ const $scope = constants?.$scope || function()
             _symbol,
             _minus,
             _zero,
+            _affirmatives,
             DIGITS,
             DIGITS_MAP,
             HEX_DIGITS_MAP,
@@ -114,7 +115,9 @@ const $scope = constants?.$scope || function()
             populateOptions,
             objectEntries,
             objectKeys,
+            objectValues,
             attempt,
+            asyncAttempt,
             lock,
             classes
         } = constants;
@@ -935,6 +938,8 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    const clamp = ( pNum, pMin, pMax ) => isArray( pNum ) ? [...pNum].flat().map( e => clamp( e, pMin, pMax ) ) : isNumeric( pNum ) ? Math.min( Math.max( toDecimal( pNum ), pMin ), pMax ) : pNum;
+
     const _stringToDecimal = function( pObj, pDecimalSeparator = _dot )
     {
         let s = _toString( pObj ).trim();
@@ -1031,7 +1036,7 @@ const $scope = constants?.$scope || function()
                 coefficient = isBigInt( coefficient ) || isBigInt( exponent ) ? BigInt( coefficient ) : coefficient;
                 exponent = isBigInt( coefficient ) || isBigInt( exponent ) ? BigInt( exponent ) : exponent;
 
-                return parseFloat( (coefficient * 10 ** exponent).toFixed( Math.abs( exponent ) ) );
+                return parseFloat( (coefficient * 10 ** exponent).toFixed( clamp( Math.abs( exponent ), 0, 100 ) ) );
             }
         }
 
@@ -1147,7 +1152,7 @@ const $scope = constants?.$scope || function()
 
     // TODO: handle negative values and overflow
 
-    const toBits = function( pValue, pLength = 16 )
+    const toBits = function( pValue, pLength = 16, pThrowOnOverflow = true )
     {
         let s = String( toBinary( pValue ) ).trim().replaceAll( /(^-?0b)|\D/g, _mt_str ).trim();
 
@@ -1454,11 +1459,18 @@ const $scope = constants?.$scope || function()
 
         if ( !isNull( pValues ) )
         {
-            const values = isLikeArray( pValues, true ) ? [...pValues] : [pValues || _mt_str];
+            const values = (isLikeArray( pValues, true ) ? [...pValues] : [pValues || _mt_str]);
 
             const types = values.map( e => typeof e );
 
-            return (types.every( e => [_num, _big, _str].includes( typeof e ) ));
+            if ( types.every( e => [_num, _big, _str].includes( typeof e ) ) )
+            {
+                if ( types.some( e => [_num, _big].includes( e ) ) )
+                {
+                    return values.every( isNumeric );
+                }
+                return true;
+            }
         }
 
         return false;
@@ -2090,77 +2102,437 @@ const $scope = constants?.$scope || function()
         return (isString( type ) && JS_TYPES.includes( type )) ? TYPE_DEFAULTS[type] : defaultFor( typeof type );
     };
 
+    const DEFAULT_CAST_OPTIONS =
+        {
+            propertyKey: _mt_str,
+            nullOrUndefined: defaultFor,
+            reduceArrayFor: [_num, _big, _bool],
+            preserveArrayForCastToObject: true,
+            joinOn: _mt_str,
+            executeFunctions: true,
+            bindFunctionsTo: null,
+            passToFunctions: [],
+            dateFormatter: null,
+            dateParser: null,
+        };
+
+    // noinspection JSPrimitiveTypeWrapperUsage
+    class CastUtils
+    {
+        #toType;
+        #originalValue;
+        #value;
+        #key;
+        #options;
+
+        #numericFilter = e => isValidDateOrNumeric( e ) || isBoolean( e );
+        #toNumber = e => isDate( e ) ? attempt( () => e.getTime() ) : (isBoolean( e ) ? (e ? 1 : 0) : toDecimal( e ));
+
+        constructor( pValue, pToType, pOptions = DEFAULT_CAST_OPTIONS )
+        {
+            this.#options = populateOptions( pOptions || {}, DEFAULT_CAST_OPTIONS );
+
+            this.#key = this.#options?.propertyKey || _mt_str;
+
+            this.#toType = isString( pToType ) ? (String( _mt_str + pToType ).trim().toLowerCase()) : typeof (pToType);
+            this.#toType = isString( this.#toType ) && VALID_TYPES.includes( this.#toType ) ? this.#toType : _str;
+
+            this.#originalValue = pValue;
+
+            this.#value = this.initializeValue( pValue );
+        }
+
+        get toType()
+        {
+            return String( this.#toType || _str ).trim().toLowerCase();
+        }
+
+        get value()
+        {
+            let val = isPromise( this.#value ) ? Promise.resolve( this.#value ).then( ( pResult ) => this.#value = pResult ) : this.#value;
+            return isPromise( val ) ? this.#originalValue : val;
+        }
+
+        get key()
+        {
+            return String( this.#key || _mt_str ).trim();
+        }
+
+        get options()
+        {
+            return populateOptions( this.#options || {}, DEFAULT_CAST_OPTIONS );
+        }
+
+        get numericFilter()
+        {
+            return this.#numericFilter;
+        }
+
+        get toNumber()
+        {
+            return this.#toNumber;
+        }
+
+        arrToNumber( pArr )
+        {
+            return [...(pArr || [])].flat( Infinity ).filter( this.#numericFilter ).map( this.#toNumber ).reduce( ( acc, e ) => acc + toDecimal( e ), 0 );
+        }
+
+        initializeValue( pValue )
+        {
+            const me = this;
+            const type = this.#toType || _str;
+
+            let value = pValue;
+
+            if ( _ud === typeof pValue || isNull( pValue, true ) )
+            {
+                const nullOrUndefined = this.#options?.nullOrUndefined;
+                value = isFunction( nullOrUndefined ) ? attempt( () => nullOrUndefined?.call( me, type ) ) : null;
+            }
+
+            if ( this.#toType === typeof value )
+            {
+                this.#value = value;
+                return value;
+            }
+
+            const reduceArrayForTypes = [...(this.#options?.reduceArrayFor || [])].filter( e => isString( e ) && VALID_TYPES.includes( e.trim().toLowerCase() ) );
+
+            if ( isArray( value ) && reduceArrayForTypes?.includes( this.#toType ) )
+            {
+                value = this.reduceArray( [...(value)] || [] );
+            }
+
+            if ( _fun !== this.#toType && isFunction( value ) )
+            {
+                value = this.executeFunctions( value );
+            }
+
+            this.#value = value;
+
+            return value;
+        }
+
+        executeFunctions( pValue )
+        {
+            const me = this;
+
+            let value = pValue || this.#value || this.#originalValue;
+
+            if ( _fun !== this.#toType && isFunction( value ) && this.#options?.executeFunctions )
+            {
+                let args = [...(this.#options?.passToFunctions || [])];
+
+                let bindTo = this.#options?.bindFunctionsTo || me || this;
+
+                let result = attempt( () => value.call( bindTo, ...args ) );
+
+                result = (isPromise( result ) ? asyncAttempt( async() => result.then( e => e ).then( value => me.initializeValue( value ) ) ) : result);
+
+                value = isPromise( result ) ? value : result;
+            }
+
+            return value;
+        }
+
+        reduceArray( pArray )
+        {
+            if ( !isLikeArray( pArray ) )
+            {
+                return pArray;
+            }
+
+            const me = this;
+
+            let value = [...(pArray || this.#value || [])];
+
+            value = [_num, _big, _bool].includes( this.#toType ) ? attempt( () => (me || this).arrToNumber( value ) ) : value;
+
+            value = this.#toType === _str ? pArray.map( e => String( _mt_str + e ) ).join( this.#options?.joinOn || _mt_str ) : value;
+
+            value = this.#toType === _symbol ? pArray.map( e => (isSymbol( e ) ? e : Symbol.for( e ) || Symbol( e )) ) : value;
+
+            value = this.#toType === _obj ? (!this.#options?.preserveArrayForCastToObject ? { ...(objectValues( value ).flat()) } : value) : value;
+
+            value = this.#toType === _fun ? isArray( value ) ? [...(value || [])].map( e => isFunction( e ) ? e : () => e ) : value : value;
+
+            return value;
+        }
+
+        castToBoolean( pValue )
+        {
+            let value = pValue || this.value || this.#originalValue;
+
+            if ( isBoolean( value ) )
+            {
+                return value;
+            }
+
+            if ( isFunction( Boolean.evaluate ) )
+            {
+                value = attempt( () => Boolean.evaluate( value ) );
+            }
+
+            if ( isFunction( value ) )
+            {
+                const me = this;
+                let args = [...(this.#options?.passToFunctions || [])];
+                let bindTo = this.#options?.bindFunctionsTo || me || this;
+                value = attempt( () => value.call( bindTo, ...args ) );
+            }
+
+            value = isDate( value ) || isFunction( value?.getTime ) ? attempt( () => value.getTime() ) : value;
+
+            value = isArray( value ) ? this.arrToNumber( value ) : value;
+
+            value = isObject( value ) ? attempt( () => Object.keys( value || {} ).length > 0 ) : value;
+
+            value = isString( value ) && [...(_affirmatives || [])].includes( String( value ).trim().toLowerCase() ) ? true : value;
+
+            value = isNumeric( value ) ? (toDecimal( value ) > 0) : value;
+
+            return Boolean( value );
+        }
+
+        castToNumber( pValue, pAsBigInt = false )
+        {
+            let value = pValue || this.value;
+
+            value = isSymbol( value ) ? 0 : value;
+            value = isPrimitiveWrapper( value ) ? attempt( () => value.valueOf() ) : value;
+            value = isArray( value ) ? this.arrToNumber( value ) : value;
+            value = isNumeric( value ) ? toDecimal( value ) : value;
+            value = isBoolean( value ) ? (value ? 1 : 0) : value;
+            value = isDate( value ) ? attempt( () => value.getTime() ) : value;
+            value = (isFunction( value?.asFloat )) ? attempt( () => value.asFloat() ) : toFloat( value );
+
+            return pAsBigInt ? BigInt( parseInt( toDecimal( value ) ) ) : toDecimal( Number( value ) );
+        }
+
+        castToString( pValue )
+        {
+            let value = pValue || this.value;
+
+            value = isPrimitiveWrapper( value ) ? attempt( () => value.valueOf() ) : value;
+
+            value = isDate( value ) ? this.castDateToString( value ) || value : value;
+
+            value = isFunction( value ) ? attempt( () => Function.prototype.toString.call( value, value ) ) : value;
+
+            value = isArray( value ) ? [...(value || [])].map( e => this.castToString( e ) ).join( this.options?.joinOn ) : value;
+
+            value = isNumeric( value ) ? String( toDecimal( value ) ) : value;
+
+            value = isFunction( value?.asString ) ? attempt( () => value.asString() ) : value;
+
+            const prior = value || pValue || this.value;
+
+            value = isFunction( value?.toString ) ? attempt( () => value.toString() ) : value;
+
+            if ( "[object Object]" === String( value ) )
+            {
+                value = attempt( () => JSON.stringify( prior || {} ) ) || "{}";
+            }
+
+            return _mt_str + String( value );
+        }
+
+        castDateToString( pDate, pDateFormatter )
+        {
+            let date = pDate || this.value;
+
+            let str = isDate( date ) ? attempt( () => date.toISOString() ) : _mt_str;
+
+            if ( isValidDateOrNumeric( date ) )
+            {
+                date = new Date( toDecimal( date?.getTime ? (attempt( () => date.getTime() ) || date) : date ) );
+
+                const dateFormatter = pDateFormatter || this.options?.dateFormatter || (function( pDate ) { return isDate( pDate ) ? pDate?.toISOString() || _mt_str : String( pDate ); });
+
+                const formatter = isFunction( dateFormatter?.format ) ? dateFormatter.format : dateFormatter;
+
+                str = isFunction( formatter ) ? attempt( () => formatter.call( dateFormatter, date ) ) : str;
+            }
+
+            return str || attempt( () => (date || pDate).toISOString() );
+        }
+
+        castToDate( pValue, pDateParser )
+        {
+            let value = pValue || this.value;
+
+            if ( isDate( value ) )
+            {
+                return new Date( value );
+            }
+
+            if ( isValidDateOrNumeric( value ) )
+            {
+                return new Date( parseInt( toDecimal( value ) ) );
+            }
+
+            if ( isString( value ) )
+            {
+                const dateParser = pDateParser || this.options.dateParser || (function( pVal ) { return isString( pVal ) ? attempt( () => new Date( pVal ) ) : null; });
+
+                const parser = isFunction( dateParser?.parse ) ? dateParser?.parse : (isFunction( dateParser?.parseDate ) ? dateParser.parseDate : dateParser);
+
+                const date = isFunction( parser ) ? attempt( () => parser.call( dateParser, value ) ) : null;
+
+                return !isNaN( date ) && isDate( date ) ? date : null;
+            }
+
+            modulePrototype.reportError( new Error( "unable to parse date" ), "attempting to parse date", S_WARN, modName + "::castToDate", value );
+
+            return null;
+
+        }
+
+        castToObject( pValue, pPropertyKey )
+        {
+            const me = this;
+
+            let value = pValue || this.value;
+            let key = pPropertyKey || this.key;
+
+            if ( _ud === typeof pValue || isNull( pValue, true ) )
+            {
+                const nullOrUndefined = this.#options?.nullOrUndefined;
+                value = isFunction( nullOrUndefined ) ? attempt( () => nullOrUndefined?.call( me, this.toType ) ) : null;
+            }
+
+            value = isArray( value ) ? (this.options?.preserveArrayForCastToObject ? value : { ...(objectValues( value ).flat()) }) : value;
+
+            if ( isFunction( value ) )
+            {
+                return this.objectFromFunction( value, key );
+            }
+
+            if ( isSymbol( value ) )
+            {
+                return { value };
+            }
+
+            if ( isEmptyString( key ) )
+            {
+                value = this.boxPrimitive( value );
+            }
+            else
+            {
+                value = { [key]: value };
+            }
+
+            return value;
+        }
+
+        boxPrimitive( pValue )
+        {
+            let value = pValue || this.value;
+            // noinspection JSPrimitiveTypeWrapperUsage
+            value = isString( pValue ) ? new String( value ) : value;
+            // noinspection JSPrimitiveTypeWrapperUsage
+            value = isBoolean( pValue ) ? new Boolean( value ) : value;
+            return isNumber( value ) ? _big === this.toType ? new Number( BigInt( parseInt( value ) ) ) : new Number( value ) : value;
+        }
+
+        objectFromFunction( pValue, pKey = _mt_str )
+        {
+            let value = pValue || this.value;
+            let key = pKey || this.key;
+
+            if ( isFunction( value ) )
+            {
+                value =
+                    {
+                        apply: ( pThis, ...pArgs ) => value.apply( pThis || $scope(), [...pArgs] ),
+                        call: ( pThis, ...pArgs ) => value.call( pThis || $scope(), ...pArgs ),
+                    };
+            }
+
+            if ( !isEmptyString( key ) )
+            {
+                value[key] = value;
+            }
+
+            return value;
+        }
+
+        castToFunction( pValue, pAsynchronous = false )
+        {
+            let value = pValue || this.value;
+
+            if ( isFunction( value ) )
+            {
+                if ( pAsynchronous )
+                {
+                    return isAsyncFunction( value ) ? value : () => asyncAttempt( () => value() );
+                }
+                return value;
+            }
+
+            return pAsynchronous ? isAsyncFunction( value ) ? value : () => asyncAttempt( () => value ) : () => attempt( () => value );
+        }
+
+        castToSymbol( pValue )
+        {
+            let value = pValue || this.value;
+            return isSymbol( value ) ? value : (isString( value ) ? Symbol.for( String( _mt_str + value ) ) || Symbol( String( _mt_str + value ) ) : null);
+        }
+
+        cast( pValue )
+        {
+            let value = isNonNullValue( pValue ) || isNonNullObject( pValue ) ? pValue : (pValue || this.value);
+
+            if ( this.toType === typeof value )
+            {
+                return value;
+            }
+
+            switch ( this.toType )
+            {
+                case _num:
+                case _big:
+                    return this.castToNumber( value, _big === this.toType );
+
+                case _bool:
+                    return this.castToBoolean( value );
+
+                case _str:
+                    return this.castToString( value );
+
+                case _obj:
+                    return this.castToObject( value );
+
+                case _fun:
+                    return this.castToFunction( value );
+
+                case _symbol:
+                    return this.castToSymbol( value );
+
+                default:
+                    break;
+            }
+
+        }
+    }
+
     /**
      * Returns a new value converted to the specified type, if possible
      * <br>
      * @param {*} pValue A value to convert to the specified type
      * @param {string} pType The type to which to convert the specified value, if possible
      *
+     * @param pOptions
      * @returns {*} a new value converted to the specified type, if possible
      *
      * @alias module:TypeUtils.castTo
      */
-    const castTo = function( pValue, pType )
+    const castTo = function( pValue, pType, pOptions = DEFAULT_CAST_OPTIONS )
     {
-        let type = isString( pType ) ? (_mt_str + pType).trim().toLowerCase() : typeof (pType);
+        const castUtils = new CastUtils( pValue, pType, pOptions );
 
-        type = isString( type ) && VALID_TYPES.includes( type ) ? type : _str;
-
-        let value = !isNull( pValue, true ) ? pValue : pValue || null;
-
-        switch ( type )
-        {
-            case _str:
-                value = (isFunction( value?.asString )) ? value.asString() : (_mt_str + value);
-                break;
-
-            case _num:
-            case _big:
-                try
-                {
-                    value = (isFunction( value?.asFloat )) ? value.asFloat() : parseFloat( value );
-                }
-                catch( ex )
-                {
-                    modulePrototype.reportError( ex, `casting ${value} to number`, S_WARN, modName + "::castTo" );
-                }
-                break;
-
-            case _bool:
-                value = Boolean( value );
-                break;
-
-            case _obj:
-                switch ( typeof value )
-                {
-                    case _obj:
-                        break;
-
-                    case _str:
-                        value = new String( value );
-                        break;
-
-                    case _num:
-                        value = new Number( value );
-                        break;
-
-                    case _big:
-                        value = new Number( BigInt( value ) );
-                        break;
-
-                    case _bool:
-                        value = new Boolean( value );
-                        break;
-
-                    default:
-                        break;
-                }
-                break;
-
-            default:
-                break;
-        }
-        return value;
+        return castUtils.cast();
     };
 
     const NVL = function( ...pValue )
@@ -2669,7 +3041,7 @@ const $scope = constants?.$scope || function()
         }
     }
 
-    const resolveMoment = ( pNow ) => isDate( pNow ) ? pNow || new Date() : new Date();
+    const resolveMoment = ( pNow ) => isDate( pNow ) ? pNow : (isNumeric( pNow ) ? (isDate( new Date( pNow ) ) ? new Date( pNow ) : new Date()) : new Date());
 
     const isDirectoryEntry = function( pEntry )
     {
@@ -2839,7 +3211,7 @@ const $scope = constants?.$scope || function()
             toOctal,
             toBinary,
             toBits,
-            clamp: ( pNum, pMin, pMax ) => isNumeric( pNum ) ? Math.min( Math.max( toDecimal( pNum ), pMin ), pMax ) : pNum,
+            clamp,
             resolveMoment,
             areSameType,
             areCompatibleTypes,

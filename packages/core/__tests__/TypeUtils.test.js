@@ -1,6 +1,8 @@
 const constants = require( "../src/Constants.cjs" );
 
-const { ModuleEvent } = constants?.classes;
+const { classes, _num, _str, _bool, _obj, _fun, _symbol, _big, _ud, attempt, asyncAttempt } = constants;
+
+const { ModuleEvent } = classes;
 
 const typeUtils = require( "../src/TypeUtils.cjs" );
 
@@ -92,7 +94,6 @@ const
         isReadOnly,
         calculateTypedArrayClass,
         toTypedArray,
-        classes,
         VisitedSet,
         Option,
         TypedOption,
@@ -200,6 +201,32 @@ describe( "TYPE Constants", () =>
               expect( TYPE_DEFAULTS["object"] ).toBe( null );
               expect( TYPE_DEFAULTS["symbol"] ).toBe( null );
               expect( TYPE_DEFAULTS["undefined"] ).toBe( undefined );
+          } );
+
+    test( "TYPE_SORT_ORDER are the expected values",
+          () =>
+          {
+              expect( TYPE_SORT_ORDER[_num] ).toEqual( 0 );
+              expect( TYPE_SORT_ORDER[_big] ).toEqual( 1 );
+              expect( TYPE_SORT_ORDER[_bool] ).toEqual( 2 );
+              expect( TYPE_SORT_ORDER[_str] ).toEqual( 3 );
+              expect( TYPE_SORT_ORDER[_obj] ).toEqual( 4 );
+              expect( TYPE_SORT_ORDER[_fun] ).toEqual( 5 );
+              expect( TYPE_SORT_ORDER[_symbol] ).toEqual( 6 );
+              expect( TYPE_SORT_ORDER[_ud] ).toEqual( 7 );
+          } );
+
+    test( "BYTES_PER_TYPE are the expected values",
+          () =>
+          {
+              expect( BYTES_PER_TYPE[_num] ).toEqual( 8 );
+              expect( BYTES_PER_TYPE[_big] ).toEqual( 16 );
+              expect( BYTES_PER_TYPE[_bool] ).toEqual( 1 );
+              expect( BYTES_PER_TYPE[_str] ).toEqual( 2 );
+              expect( BYTES_PER_TYPE[_obj] ).toEqual( 0 );
+              expect( BYTES_PER_TYPE[_fun] ).toEqual( 0 );
+              expect( BYTES_PER_TYPE[_symbol] ).toEqual( 0 );
+              expect( BYTES_PER_TYPE[_ud] ).toEqual( -1 );
           } );
 } );
 
@@ -1574,6 +1601,34 @@ describe( "toBits", () =>
 } );
 
 
+describe( "clamp is Math.min,Math.max combined", () =>
+{
+    test( "clamp",
+          () =>
+          {
+              const nums = [-2, 2, -4, 4, -57, 57, -101, 101, -303, 303, -1000, 1000, Number.MIN_VALUE, Number.MAX_VALUE];
+
+              nums.map( e => clamp( e, -100, 100 ) ).forEach( e => expect( e ).toBeGreaterThanOrEqual( -100 ) );
+              nums.map( e => clamp( e, -100, 100 ) ).forEach( e => expect( e ).toBeLessThanOrEqual( 100 ) );
+
+              clamp( nums, -100, 100 ).forEach( e => expect( e ).toBeGreaterThanOrEqual( -100 ) );
+              clamp( nums, -100, 100 ).forEach( e => expect( e ).toBeLessThanOrEqual( 100 ) );
+          } );
+} );
+
+describe( "resolveMoment", () =>
+{
+    test( "resolveMoment",
+          () =>
+          {
+              let moment = resolveMoment( "2020-03-14" );
+              expect( isDate( moment ) ).toBe( true );
+
+              moment = resolveMoment( Date.now );
+              expect( isDate( moment ) ).toBe( true );
+          } );
+} );
+
 describe( "isZero", () =>
 {
     test( "isZero(1) === false",
@@ -2206,6 +2261,275 @@ describe( "areSameType", () =>
               expect( areSameType( ...numbers ) ).toBe( false );
           } );
 } );
+
+describe( "areCompatibleTypes", () =>
+{
+    test( "areCompatibleTypes returns true if the values can all reasonably be converted to the same type",
+          () =>
+          {
+              const numeric = [1, 1.0, 1n, "1", "0xff", BigInt( 12 )];
+              const strings = ["1", "1.0", "1n", "12"];
+              const booleans = [true, false, 1 === 1, 0 < 2];
+              const dates = [new Date(), new Date( 2024, 1, 1 )];
+              const objects = [{}, { a: 1 }, Object.create( null )];
+
+              const mixed = [1, "1", true, new Date()];
+              const mixed2 = [1, "1", true, new Date(), "foo"];
+
+              expect( areCompatibleTypes( ...numeric ) ).toBe( true );
+              expect( areCompatibleTypes( ...strings ) ).toBe( true );
+              expect( areCompatibleTypes( ...booleans ) ).toBe( true );
+              expect( areCompatibleTypes( ...dates ) ).toBe( true );
+              expect( areCompatibleTypes( ...objects ) ).toBe( true );
+              expect( areCompatibleTypes( ...mixed ) ).toBe( false );
+              expect( areCompatibleTypes( ...mixed2 ) ).toBe( false );
+          } );
+} );
+
+
+describe( "castTo", () =>
+{
+    test( "castTo",
+          () =>
+          {
+              const date = new Date();
+
+              let a = 1;
+              let b = "2";
+              let c = true;
+              let d = date;
+              let e = {};
+              let f = [1, 2, 3];
+              let g = Symbol( "g" );
+              let h = function( ...pArgs )
+              {
+                  return pArgs;
+              };
+
+              const aAsNum = castTo( a, _num );
+              const aAsBool = castTo( a, _bool );
+              const aAsStr = castTo( a, _str );
+              const aAsObjValue = castTo( a, _obj, { propertyKey: "value" } );
+              const aAsObj = castTo( a, _obj );
+              const aAsSymbol = castTo( a, _symbol );
+              const aAsFunc = castTo( a, _fun );
+
+              const bAsNum = castTo( b, _num );
+              const bAsBool = castTo( b, _bool );
+              const bAsStr = castTo( b, _str );
+              const bAsObjValue = castTo( b, _obj, { propertyKey: "value" } );
+              const bAsObj = castTo( b, _obj );
+              const bAsSymbol = castTo( b, _symbol );
+              const bAsFunc = castTo( b, _fun );
+
+              const cAsNum = castTo( c, _num );
+              const cAsBool = castTo( c, _bool );
+              const cAsStr = castTo( c, _str );
+              const cAsObjValue = castTo( c, _obj, { propertyKey: "value" } );
+              const cAsObj = castTo( c, _obj );
+              const cAsSymbol = castTo( c, _symbol );
+              const cAsFunc = castTo( c, _fun );
+
+              const dAsNum = castTo( d, _num );
+              const dAsBool = castTo( d, _bool );
+              const dAsStr = castTo( d, _str );
+              const dAsObjValue = castTo( d, _obj, { propertyKey: "value" } );
+              const dAsObj = castTo( d, _obj );
+              const dAsSymbol = castTo( d, _symbol );
+              const dAsFunc = castTo( d, _fun );
+
+              const eAsNum = castTo( e, _num );
+              const eAsBool = castTo( e, _bool );
+              const eAsStr = castTo( e, _str );
+              const eAsObjValue = castTo( e, _obj, { propertyKey: "value" } );
+              const eAsObj = castTo( e, _obj );
+              const eAsSymbol = castTo( e, _symbol );
+              const eAsFunc = castTo( e, _fun );
+
+              const fAsNum = castTo( f, _num );
+              const fAsBool = castTo( f, _bool );
+              const fAsStr = castTo( f, _str );
+              const fAsObjValue = castTo( f, _obj, { propertyKey: "value" } );
+              const fAsObj = castTo( f, _obj );
+              const fAsSymbol = castTo( f, _symbol );
+              const fAsFunc = castTo( f, _fun );
+
+              const gAsNum = castTo( g, _num );
+              const gAsBool = castTo( g, _bool );
+              const gAsStr = castTo( g, _str );
+              const gAsObjValue = castTo( g, _obj, { propertyKey: "value" } );
+              const gAsObj = castTo( g, _obj );
+              const gAsSymbol = castTo( g, _symbol );
+              const gAsFunc = castTo( g, _fun );
+
+              const hAsNum = castTo( h, _num );
+              const hAsBool = castTo( h, _bool );
+              const hAsStr = castTo( h, _str );
+              const hAsObjValue = castTo( h, _obj, { propertyKey: "value" } );
+              const hAsObj = castTo( h, _obj );
+              const hAsSymbol = castTo( h, _symbol );
+              const hAsFunc = castTo( h, _fun );
+
+              /* AS NUMBER */
+              /*------------------------------------------*/
+
+              expect( typeof aAsNum ).toBe( _num );
+              expect( typeof bAsNum ).toBe( _num );
+              expect( typeof cAsNum ).toBe( _num );
+              expect( typeof dAsNum ).toBe( _num );
+              expect( typeof eAsNum ).toBe( _num );
+              expect( typeof fAsNum ).toBe( _num );
+              expect( typeof gAsNum ).toBe( _num );
+              expect( typeof hAsNum ).toBe( _num );
+
+              expect( aAsNum ).toEqual( 1 );
+              expect( bAsNum ).toEqual( 2 );
+              expect( cAsNum ).toEqual( 1 );
+              expect( dAsNum ).toEqual( date.getTime() );
+              expect( eAsNum ).toEqual( 0 );
+              expect( fAsNum ).toEqual( 6 );
+              expect( gAsNum ).toEqual( 0 );
+              expect( hAsNum ).toEqual( 0 );
+
+              /* AS BOOLEAN */
+              /*------------------------------------------*/
+
+              expect( typeof aAsBool ).toBe( _bool );
+              expect( typeof bAsBool ).toBe( _bool );
+              expect( typeof cAsBool ).toBe( _bool );
+              expect( typeof dAsBool ).toBe( _bool );
+              expect( typeof eAsBool ).toBe( _bool );
+              expect( typeof fAsBool ).toBe( _bool );
+              expect( typeof gAsBool ).toBe( _bool );
+              expect( typeof hAsBool ).toBe( _bool );
+
+              expect( aAsBool ).toEqual( true );
+              expect( bAsBool ).toEqual( true );
+              expect( cAsBool ).toEqual( true );
+              expect( dAsBool ).toEqual( true );
+              expect( eAsBool ).toEqual( false );
+              expect( fAsBool ).toEqual( true );
+              expect( gAsBool ).toEqual( true );
+              expect( hAsBool ).toEqual( false );
+
+              expect( castTo( () => true, _bool ) ).toEqual( true );
+              expect( castTo( () => 0, _bool ) ).toEqual( false );
+
+              /* AS STRING */
+              /*------------------------------------------*/
+
+              expect( typeof aAsStr ).toBe( _str );
+              expect( typeof bAsStr ).toBe( _str );
+              expect( typeof cAsStr ).toBe( _str );
+              expect( typeof dAsStr ).toBe( _str );
+              expect( typeof eAsStr ).toBe( _str );
+              expect( typeof fAsStr ).toBe( _str );
+              expect( typeof gAsStr ).toBe( _str );
+              expect( typeof hAsStr ).toBe( _str );
+
+              expect( aAsStr ).toEqual( "1" );
+              expect( bAsStr ).toEqual( "2" );
+              expect( cAsStr ).toEqual( "true" );
+              expect( castTo( false, _str ) ).toEqual( "false" );
+              expect( dAsStr ).toEqual( date.toISOString() );
+              expect( eAsStr ).toEqual( "{}" );
+              expect( fAsStr ).toEqual( "123" );
+              expect( gAsStr ).toEqual( "Symbol(g)" );
+
+              expect( String( hAsStr ).trim() ).toEqual( "" );
+              expect( castTo( h, _str, { executeFunctions: false } ) ).toEqual( Function.prototype.toString.call( h ) );
+
+              expect( castTo( () => true, _str ) ).toEqual( "true" );
+              expect( castTo( () => true, _str, { executeFunctions: false } ) ).toEqual( `() => true` );
+
+              expect( castTo( () => 0, _str ) ).toEqual( "0" );
+              expect( castTo( () => 0, _str, { executeFunctions: false } ) ).toEqual( `() => 0` );
+
+
+              /* AS OBJECT */
+              /*------------------------------------------*/
+
+              expect( typeof aAsObj ).toBe( _obj );
+              expect( typeof bAsObj ).toBe( _obj );
+              expect( typeof cAsObj ).toBe( _obj );
+              expect( typeof dAsObj ).toBe( _obj );
+              expect( typeof eAsObj ).toBe( _obj );
+              expect( typeof fAsObj ).toBe( _obj );
+              expect( typeof gAsObj ).toBe( _obj );
+              expect( typeof hAsObj ).toBe( _obj );
+
+              expect( aAsObj ).toEqual( new Number( 1 ) );
+              expect( bAsObj ).toEqual( new String( "2" ) );
+              expect( cAsObj ).toEqual( new Boolean( true ) );
+              expect( dAsObj ).toEqual( date );
+              expect( eAsObj ).toEqual( {} );
+              expect( fAsObj ).toEqual( f );
+              expect( gAsObj ).toEqual( { value: g } );
+              expect( hAsObj ).toEqual( [] );
+
+
+              expect( typeof aAsObjValue ).toBe( _obj );
+              expect( typeof bAsObjValue ).toBe( _obj );
+              expect( typeof cAsObjValue ).toBe( _obj );
+              expect( typeof dAsObjValue ).toBe( _obj );
+              expect( typeof eAsObjValue ).toBe( _obj );
+              expect( typeof fAsObjValue ).toBe( _obj );
+              expect( typeof gAsObjValue ).toBe( _obj );
+              expect( typeof hAsObjValue ).toBe( _obj );
+
+              expect( aAsObjValue ).toEqual( { value: 1 } );
+              expect( bAsObjValue ).toEqual( { value: "2" } );
+              expect( cAsObjValue ).toEqual( { value: true } );
+              expect( dAsObjValue ).toEqual( date );
+              expect( eAsObjValue ).toEqual( {} );
+              expect( fAsObjValue ).toEqual( f );
+              expect( gAsObjValue ).toEqual( { value: g } );
+              expect( hAsObjValue ).toEqual( [] );
+
+              /* AS SYMBOL */
+              /*------------------------------------------*/
+
+              expect( typeof aAsSymbol ).toBe( _obj );
+              expect( typeof bAsSymbol ).toBe( _symbol );
+              expect( typeof cAsSymbol ).toBe( _obj );
+              expect( typeof dAsSymbol ).toBe( _obj );
+              expect( typeof eAsSymbol ).toBe( _obj );
+              expect( typeof fAsSymbol ).toBe( _obj );
+              expect( typeof gAsSymbol ).toBe( _symbol );
+              expect( typeof hAsSymbol ).toBe( _obj );
+
+              expect( aAsSymbol ).toEqual( null );
+              expect( bAsSymbol ).toEqual( Symbol.for( "2" ) );
+              expect( cAsSymbol ).toEqual( null );
+              expect( dAsSymbol ).toEqual( null );
+              expect( eAsSymbol ).toEqual( null );
+              expect( fAsSymbol ).toEqual( null );
+              expect( gAsSymbol ).toEqual( g );
+              expect( hAsSymbol ).toEqual( null );
+
+              /* AS FUNCTION */
+              /*------------------------------------------*/
+
+              expect( typeof aAsFunc ).toBe( _fun );
+              expect( typeof bAsFunc ).toBe( _fun );
+              expect( typeof cAsFunc ).toBe( _fun );
+              expect( typeof dAsFunc ).toBe( _fun );
+              expect( typeof eAsFunc ).toBe( _fun );
+              expect( typeof fAsFunc ).toBe( _fun );
+              expect( typeof gAsFunc ).toBe( _fun );
+              expect( typeof hAsFunc ).toBe( _fun );
+
+              expect( aAsFunc() ).toEqual( 1 );
+              expect( bAsFunc() ).toEqual( "2" );
+              expect( cAsFunc() ).toEqual( true );
+              expect( dAsFunc() ).toEqual( date );
+              expect( eAsFunc() ).toEqual( {} );
+              expect( fAsFunc() ).toEqual( [1, 2, 3] );
+              expect( gAsFunc() ).toEqual( g );
+              expect( hAsFunc ).toEqual( h );
+          } );
+} );
+
 
 describe( "isMap", () =>
 {
