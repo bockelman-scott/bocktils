@@ -787,7 +787,7 @@ describe( "firstError", () =>
     test( "firstError([])",
           () =>
           {
-              expect( firstError( [] ) ).toBe( undefined );
+              expect( firstError( [] ) ).toBe( null );
           } );
 
     test( "firstError([a,b,c])",

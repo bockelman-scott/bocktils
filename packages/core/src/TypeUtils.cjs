@@ -164,8 +164,30 @@ const $scope = constants?.$scope || function()
      */
     const JS_TYPES = lock( [_ud].concat( VALID_TYPES ) );
 
+    /**
+     * This is an immutable array of the primitive types defined in JavaScript.<br>
+     * These are the string, number, BigInt, symbol, and boolean types.<br>
+     * <br>
+     * @namespace PRIMITIVE_TYPES
+     * @const
+     * @readonly
+     * @type {Array<string>}
+     * @alias module:TypeUtils#PRIMITIVE_TYPES
+     */
     const PRIMITIVE_TYPES = lock( [_str, _num, _big, _symbol, _bool] );
 
+    /**
+     * Returns true if the type of the specified value is a primitive data type.<br>
+     * That is, it is not an object, function, or custom type.<br>
+     * <br>
+     *
+     * @param {*} value - The value to evaluate
+     * @returns {boolean} Returns true if the value is a primitive type, otherwise false.
+     *
+     * @function isPrimitive
+     *
+     * @alias module:TypeUtils.isPrimitive
+     */
     const isPrimitive = ( value ) => PRIMITIVE_TYPES.includes( typeof value );
 
     /**
@@ -230,6 +252,17 @@ const $scope = constants?.$scope || function()
             [_ud]: 7
         } );
 
+    /**
+     * The VisitedSet class extends the native JavaScript Set class,
+     * providing additional functionality
+     * to handle objects.
+     * It overrides the `has` method to ensure that object references
+     * are checked for equality within the set.
+     * Instances of this class are used in recursive algorithms to avoid visiting the same node more than once.
+     *
+     * @class
+     * @alias module:TypeUtils#VisitedSet
+     */
     class VisitedSet extends Set
     {
         constructor( ...pValues )
@@ -270,6 +303,8 @@ const $scope = constants?.$scope || function()
      * Finally, the estimated number of bytes for the string type is actually 'bytes per character'
      * <br>
      *
+     * @function estimateBytesForType
+     *
      * @param {string} pType - The JavaScript data type to estimate memory usage for.
      *
      * @returns {number} - The estimated number of bytes for the given type.<br>
@@ -282,6 +317,8 @@ const $scope = constants?.$scope || function()
      *                     0 for symbols and functions (size indeterminable),<br>
      *                     0 for objects (dynamic size, indeterminable),<br>
      *                     and -1 for unsupported or unknown types.<br>
+     *
+     *  @alias module:TypeUtils.estimateBytesForType
      */
     const estimateBytesForType = function( pType )
     {
@@ -588,14 +625,60 @@ const $scope = constants?.$scope || function()
      */
     const isCustomObject = ( pObj ) => isObject( pObj ) && pObj.prototype !== null && pObj.prototype !== Object && (pObj.constructor === null || pObj.constructor !== Object) && !isPrimitiveWrapper( pObj );
 
+
+    /**
+     * Returns true if the specified value is an object that represents an Error.<br>
+     * That is, if the object is an instance of Error or a subclass of Error.<br>
+     *
+     * @function isError
+     *
+     * @param {*} pObj A value to evaluate
+     *
+     * @returns {boolean} true if the specified value is an object representing a runtime error
+     *
+     * @alias module:TypeUtils.isError
+     */
     const isError = ( pObj ) => isObject( pObj ) && pObj instanceof Error;
 
+    /**
+     * Returns true if the specified value is an object that represents an Event<br>
+     * That is, the object is an instance of Event, CustomEvent, or a subclass of Event or CustomEven
+     *
+     * @function isEvent
+     *
+     * @param {*} pObj A value to evaluate
+     *
+     * @returns {boolean} true if the specified value is an Event or CustomEvent or a subclass of either
+     *
+     * @alias module:TypeUtils.isCustomObject
+     */
     const isEvent = ( pObj ) => isObject( pObj ) && (pObj instanceof Event || pObj instanceof CustomEvent || pObj instanceof ModuleEvent);
 
+    /**
+     * Returns the first object that is an instance of Error from the provided input.<br>
+     * <br>
+     * <br>
+     * The function takes a variable number of parameters, processes them into a flat array,
+     * and filters out non-error objects. It then returns the first error object found.
+     * <br>
+     * <br>
+     * If the input is null or undefined, or if none of the elements are error objects,
+     * the function returns null.
+     *
+     * @function firstError
+     *
+     * @param {...*} pObj - A variable number of arguments, which can be of any type.
+     *                      If multiple arguments are passed, they are converted into a flat array.
+     *                      Only error objects within this input are considered.
+     *
+     * @returns {Error|undefined} The first error object from the input, or undefined if no errors are found.
+     *
+     * @alias module:TypeUtils.firstError
+     */
     const firstError = function( ...pObj )
     {
         let arr = (!isNull( pObj ) ? isArray( pObj ) ? pObj : [pObj] : []).flat().filter( isError );
-        return arr.filter( e => isError( e ) ).shift();
+        return arr.filter( e => isError( e ) ).shift() || null;
     };
 
     /**
@@ -741,7 +824,7 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     S     * Returns true if the specified value represents a hexadecimal number (base 16)<br>
+     * Returns true if the specified value represents a hexadecimal number (base 16)<br>
      * The value can either be a hexadecimal literal, such a 0xFF, <br>
      * or a string starting with "0x" and containing only the hexadecimal digits, a minus sign, or a decimal point<br>
      *
@@ -797,6 +880,17 @@ const $scope = constants?.$scope || function()
         return (_zero !== s) && /^(-)?(0b)([0-1]+)?(([.,])([0-1]+))?$/i.test( s ) && !/[AC-Z]|[ac-z]|\s/.test( s );
     }
 
+    /**
+     * Returns true if the specified value represents a number expressed in scientific notation (i.e., 4e-12)<br>
+     *
+     * @function isScientificNotation
+     *
+     * @param {string|number} pObj A value to evaluate
+     *
+     * @returns {boolean} true if the specified value represents a number expressed in scientific notation
+     *
+     * @alias module:TypeUtils.isScientificNotation
+     */
     const isScientificNotation = ( pObj ) => (/^[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)$/).test( _toString( pObj ).replaceAll( /_/g, _mt_str ).trim() );
 
     /**
@@ -938,8 +1032,42 @@ const $scope = constants?.$scope || function()
         }
     }
 
-    const clamp = ( pNum, pMin, pMax ) => isArray( pNum ) ? [...pNum].flat().map( e => clamp( e, pMin, pMax ) ) : isNumeric( pNum ) ? Math.min( Math.max( toDecimal( pNum ), pMin ), pMax ) : pNum;
+    /**
+     * Returns a number or an array of numbers constrained to be within the specified minimum and maximum bounds.<br>
+     * <br>
+     * This is basically shorthand for Math.max( Math.min( n, max ), min )<br>
+     * <br>
+     * <br>
+     * This function operates recursively if the input is an array, clamping each numerical value
+     * within the provided bounds.<br>
+     * <br>
+     * For non-numeric inputs, the value is returned unchanged.<br>
+     * <br>
+     * @param {number|Array} pNum - The number or array of numbers to be clamped.
+     *                              Nested arrays of any depth are supported.
+     *
+     * @param {number} pMin - The minimum value to which numbers should be clamped.
+     *
+     * @param {number} pMax - The maximum value to which numbers should be clamped.
+     *
+     * @returns {number|Array} - The clamped number or an array of clamped numbers.<br>
+     *                           Non-numeric input is returned as is.
+     *
+     * @alias module:TypeUtils.clamp
+     */
+    const clamp = ( pNum, pMin, pMax ) => isArray( pNum ) ? [...pNum].map( e => clamp( e, pMin, pMax ) ) : isNumeric( pNum ) ? Math.min( Math.max( toDecimal( pNum ), pMin ), pMax ) : pNum;
 
+    /**
+     * Converts a string representation of a number (potentially including a fractional part)
+     * into its decimal numerical equivalent.
+     * This function accommodates various radix notations and handles optional custom decimal separators.
+     *
+     * @param {Object|string|number} pObj - The input value to convert to a decimal, which can be a string, number, or other object types.
+     * @param {string} [pDecimalSeparator=_dot] - An optional custom character used as the decimal separator.
+     * @returns {number} - The decimal numerical value obtained from the string representation.
+     *
+     * @private
+     */
     const _stringToDecimal = function( pObj, pDecimalSeparator = _dot )
     {
         let s = _toString( pObj ).trim();
@@ -1167,8 +1295,34 @@ const $scope = constants?.$scope || function()
         return (_mt_str + s).padStart( length, _zero ).trim();
     };
 
+    /**
+     * Converts a given value to an integer.
+     *
+     * This function takes an input value, converts it to a decimal representation,
+     * and then converts the result into an integer using `parseInt`.
+     *
+     * @param {*} pValue - The value to be converted to an integer. It is expected
+     *                     that the input can be handled by the `toDecimal` helper function.
+     *
+     * @returns {number} The integer representation of the input value.
+     *
+     * @alias module:TypeUtils.toInteger
+     */
     const toInteger = ( pValue ) => parseInt( toDecimal( pValue ) );
 
+    /**
+     * Converts the provided value to a floating-point number.
+     *
+     * This function coverts the input into a decimal representation,
+     * using the `toDecimal` function,
+     * and then converts it to a floating-point number
+     * using `parseFloat`.
+     *
+     * @param {*} pValue - The value to be converted to a floating-point number.
+     * @returns {number} The float representation of the input value.
+     *
+     * @alias module:TypeUtils.toFloat
+     */
     const toFloat = ( pValue ) => parseFloat( toDecimal( pValue ) );
 
     /**
@@ -1634,9 +1788,41 @@ const $scope = constants?.$scope || function()
         return isDate( date, true );
     };
 
-    const isValidDateInstance = ( date ) => !isNull( date ) && isFunction( date.getTime ) && date.getTime() >= MIN_DATE_TIME && date.getTime() <= MAX_DATE_TIME;
+    /**
+     * Returns true if the specified value is a valid Date instance.<br>
+     * <br>
+     * This function validates whether the provided `date` parameter is a non-null object,
+     * contains a `getTime` method, and has a timestamp that falls within the predefined
+     * minimum (`MIN_DATE_TIME`) and maximum (`MAX_DATE_TIME`) date limits.
+     *
+     * @param {Object} date - The date object to validate.
+     * @returns {boolean} Returns true if the date object is considered valid; otherwise, false.
+     */
+    const isValidDateInstance = ( date ) => !isNull( date ) &&
+                                            isFunction( date.getTime ) &&
+                                            !isNanOrInfinite( date.getTime() ) &&
+                                            date.getTime() >= MIN_DATE_TIME &&
+                                            date.getTime() <= MAX_DATE_TIME;
 
-// Helper to parse a string using optional parser
+
+    /**
+     * Parses a given input into a date object using a provided parser or parser object.<br>
+     * <br>
+     * The function supports custom parsing mechanisms by invoking the `parse` or `parseDate`
+     * methods of the parser, or the parser itself, if it is a function.<br>
+     * <br>
+     * If the input cannot be parsed or an error occurs during parsing,
+     * the function dispatches an error event and returns null.
+     *
+     * @param {*} input - The input to be parsed into a date.
+     *
+     * @param {Function|Object} dateParser - A function or object responsible for parsing the input.
+     *                                       If an object, it should have a `parse` or `parseDate` method.
+     *
+     * @returns {Date|null} The parsed date object, or null if parsing failed or an error occurs.
+     *
+     * @alias module:TypeUtils.parseDate
+     */
     const parseDate = ( input, dateParser ) =>
     {
         if ( isFunction( dateParser ) || isFunction( dateParser?.parse || dateParser?.parseDate ) )
@@ -1653,6 +1839,20 @@ const $scope = constants?.$scope || function()
         return null;
     };
 
+    /**
+     * Returns true if the specified value is a valid date or a numeric value.<br>
+     * <br>
+     * This function evaluates if the provided parameter is not null and
+     * meets one of the following conditions:
+     * - It is a valid date.
+     * - It is an integer.
+     * - It is a value that can be parsed to a number.
+     *
+     * @param {*} pDate - The input value to validate.
+     * @returns {boolean} Returns true if the input is a valid date, an integer, or a numeric value; otherwise, returns false.
+     *
+     * @alias module:TypeUtils.isValidDateOrNumeric
+     */
     const isValidDateOrNumeric = ( pDate ) => !isNull( pDate ) && (isDate( pDate ) || isInteger( pDate ) || isNumeric( pDate ));
 
     /**
@@ -1793,6 +1993,20 @@ const $scope = constants?.$scope || function()
         return isClass( pFunction ) && instanceOfAny( new pFunction(), ...pListedClasses );
     };
 
+    /**
+     * Retrieves the prototype of a provided object or class.
+     *
+     * This function attempts to determine the prototype of the given input using the following order of precedence:
+     * - `Object.getPrototypeOf`.
+     * - The `__proto__` property, if available.
+     * - The constructor's `prototype` property.
+     * - The direct `prototype` property of the input.
+     *
+     * For classes, it prioritizes retrieving the `prototype` property or the class itself.
+     *
+     * @param {object|Function} pObject - The object or class for which the prototype is to be determined.
+     * @returns {object|null|undefined} The prototype of the given input, or `null`/`undefined` if it cannot be determined or if the input is not valid.
+     */
     const getProto = function( pObject )
     {
         if ( isObject( pObject ) )
@@ -1805,6 +2019,19 @@ const $scope = constants?.$scope || function()
         }
     };
 
+    /**
+     * Retrieves the constructor of the provided object or function.
+     *
+     * This function determines the constructor of a given object or function by
+     * checking if the input is a function, a class, or an instance of a class.
+     * It attempts to fetch the constructor reference through several fallback methods,
+     * including checking the Symbol.species property or the prototype of the input.
+     * If the input is not a function or class, it examines the prototype chain to
+     * deduce the constructor.
+     *
+     * @param {Object|Function} pObject - The object or function whose constructor is to be retrieved.
+     * @returns {Function|null} The constructor function if found, otherwise null.
+     */
     const getConstructor = function( pObject )
     {
         if ( isFunction( pObject ) || isClass( pObject ) )
@@ -2102,6 +2329,38 @@ const $scope = constants?.$scope || function()
         return (isString( type ) && JS_TYPES.includes( type )) ? TYPE_DEFAULTS[type] : defaultFor( typeof type );
     };
 
+    /**
+     * @typedef {object} CastOptions
+     *
+     * @property {string} propertyKey
+     * @property {function} nullOrUndefined: defaultFor
+     * @property {Array.<string>} reduceArrayFor: [_num, _big, _bool]
+     * @property {boolean} preserveArrayForCastToObject: true
+     * @property {string} joinOn: _mt_str
+     * @property {boolean} executeFunctions: true
+     * @property {object} bindFunctionsTo: null
+     * @property {Array.<*>} passToFunctions: []
+     * @property {object|function} dateFormatter: null
+     * @property {object|function} dateParser: null
+     *
+     */
+
+    /**
+     * A constant object defining the default options for casting operations.
+     *
+     * @constant {Object} DEFAULT_CAST_OPTIONS
+     * @type {CastOptions}
+     * @property {string} propertyKey - The default key to use when accessing properties for casting.
+     * @property {Function} nullOrUndefined - A function to handle default values for null or undefined inputs.
+     * @property {Array} reduceArrayFor - An array of types to attempt reduction for when casting arrays.
+     * @property {boolean} preserveArrayForCastToObject - Determines whether to preserve arrays when casting to objects.
+     * @property {string} joinOn - A delimiter string used when joining array values into a single string during casting.
+     * @property {boolean} executeFunctions - Indicates whether to execute functions during the casting process.
+     * @property {Object|null} bindFunctionsTo - If specified, binds functions to this object during execution.
+     * @property {Array} passToFunctions - Functions to be passed during casting operations.
+     * @property {Function|null} dateFormatter - A function to format date objects during casting, or null for default behavior.
+     * @property {Function|null} dateParser - A function to parse date strings during casting, or null for default behavior.
+     */
     const DEFAULT_CAST_OPTIONS =
         {
             propertyKey: _mt_str,
@@ -2116,7 +2375,14 @@ const $scope = constants?.$scope || function()
             dateParser: null,
         };
 
-    // noinspection JSPrimitiveTypeWrapperUsage
+    /**
+     * CastUtils is a utility class designed for consistent type casting and transformations between various data types.
+     * The class supports a range of type conversions while providing flexibility and customization through options.
+     *
+     * @class
+     * @private
+     */
+        // noinspection JSPrimitiveTypeWrapperUsage
     class CastUtils
     {
         #toType;
@@ -2662,6 +2928,10 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    /**
+     * A wrapper class to adapt a synchronous iterator into an asynchronous iterator wrapper.<br>
+     * Provides asynchronous iteration capabilities for iterables or iterators.<br>
+     */
     class _AsyncIterator
     {
         #iterator;
@@ -2694,9 +2964,7 @@ const $scope = constants?.$scope || function()
      *
      * alias module:TypeUtils.NullIterator
      *
-     *
      * @protected
-     *
      *
      */
     class NullIterator extends _Iterable
@@ -2727,7 +2995,7 @@ const $scope = constants?.$scope || function()
      *
      * @param {boolean} pAsync Pass true to create an AsyncIterable
      *
-     * @returns {_AsyncIterator} an instance of _Iterable
+     * @returns {_AsyncIterator|_Iterable} an instance of _Iterable or _AsyncIterator
      */
     const toIterable = function( pArrayLike, pAsync = false )
     {
@@ -3053,8 +3321,42 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    /**
+     * Returns a valid Date object based on the specified value.<br>
+     * If the specified value is a valid Date, returns that value,
+     * otherwise, returns the current Date.
+     *
+     * @param {*} pNow - The input value to be resolved. It can be a date, numeric timestamp,
+     *                   or any other data type.
+     *
+     * @returns {Date}   A Date object derived from the input.
+     *                   If the input is:
+     *                 - A valid Date object, it is returned as-is.
+     *                 - A numeric timestamp, it is converted to a Date object.
+     *                   If the timestamp does not result in a valid date, the current date is returned.
+     *                 - Any other data type, the current date is returned.
+     */
     const resolveMoment = ( pNow ) => isDate( pNow ) ? pNow : (isNumeric( pNow ) ? (isDate( new Date( pNow ) ) ? new Date( pNow ) : new Date()) : new Date());
 
+    /**
+     * Returns true if the specified value is a directory entry object.<br>
+     * <br>
+     * A directory entry is an object matching the structure of the objects returned by Node.js or Deno
+     * when reading a directory with file types=true.<br>
+     * <br>
+     * This function checks if the provided object represents a directory entry,
+     * considering both Deno's `DirEntry` structure and Node.js's `Dirent`.
+     * For Deno `DirEntry`, the object must have a `name` property and include
+     * the boolean properties `isFile`, `isDirectory`, and `isSymLink`.
+     * For Node.js `Dirent`, the object must have the `name` property and
+     * include the methods `isFile`, `isDirectory`, and `isSymbolicLink`.
+     *
+     * @param {Object} pEntry - The input to be evaluated as a possible directory entry.
+     *
+     * @returns {boolean} - Returns true if the input is a valid directory entry object, otherwise false.
+     *
+     * @alias module:TypeUtils.isDirectoryEntry
+     */
     const isDirectoryEntry = function( pEntry )
     {
         if ( isNull( pEntry ) || !isNonNullObject( pEntry ) )
@@ -3081,8 +3383,49 @@ const $scope = constants?.$scope || function()
         return false;
     };
 
+    /**
+     * Returns true if the specified value is an instance of ArrayBuffer.<br>
+     * <br>
+     * This function evaluates whether the given parameter is an object
+     * of type ArrayBuffer. It ensures that ArrayBuffer is defined and
+     * accessible before performing the instance check. If the environment
+     * does not support ArrayBuffer, the function returns false.
+     *
+     * @param {*} pValue - The value to be checked against ArrayBuffer.
+     * @returns {boolean} True if the value is an instance of ArrayBuffer, otherwise false.
+     *
+     * @alias module:TypeUtils.isArrayBuffer
+     */
     const isArrayBuffer = ( pValue ) => (_ud !== typeof ArrayBuffer && pValue instanceof ArrayBuffer);
+
+    /**
+     * Returns true if the specified value is an instance of SharedArrayBuffer.<br>
+     * <br>
+     * This function evaluates whether the given parameter is an object
+     * of type SharedArrayBuffer. It ensures that SharedArrayBuffer is defined and
+     * accessible before performing the instance check. If the environment
+     * does not support SharedArrayBuffer, the function returns false.
+     *
+     * @param {*} pValue - The value to be checked against SharedArrayBuffer.
+     * @returns {boolean} True if the value is an instance of SharedArrayBuffer, otherwise false.
+     *
+     * @alias module:TypeUtils.isSharedArrayBuffer
+     */
     const isSharedArrayBuffer = ( pValue ) => (_ud !== typeof SharedArrayBuffer && pValue instanceof SharedArrayBuffer);
+
+    /**
+     * Returns true if the specified value is an instance of DataView.<br>
+     * <br>
+     * This function evaluates whether the given parameter is an object
+     * of type DataView. It ensures that DataView is defined and
+     * accessible before performing the instance check. If the environment
+     * does not support DataView, the function returns false.
+     *
+     * @param {*} pValue - The value to be checked against DataView.
+     * @returns {boolean} True if the value is an instance of DataView, otherwise false.
+     *
+     * @alias module:TypeUtils.isArrayBuffer
+     */
     const isDataView = ( pValue ) => (_ud !== typeof DataView && pValue instanceof DataView);
 
     /**
@@ -3121,6 +3464,17 @@ const $scope = constants?.$scope || function()
         return clamp( necessary, 8, 64 );
     }
 
+    /**
+     * Calculates the minimum number of bits required to represent a range of values
+     * between the specified minimum and maximum values.
+     *
+     * @param {number|string} pMinValue The minimum value of the range, can be either a number or a numeric string.
+     * @param {number|string} pMaxValue The maximum value of the range, can be either a number or a numeric string.
+     * @return {number} The minimum number of bits required to represent the values in the specified range,
+     * including a sign bit if necessary.
+     *
+     * @alias module:TypeUtils.calculateBitsNeeded
+     */
     function calculateBitsNeeded( pMinValue, pMaxValue )
     {
         // protect against non-numeric input
@@ -3142,12 +3496,30 @@ const $scope = constants?.$scope || function()
         return bitsNeeded;
     }
 
+    /**
+     * Returns true if any of the specified values is a floating-point number.
+     *
+     * @param {...*} pArgs - One or more values to be evaluated
+     * @return {boolean} Returns true if any of the arguments are floating-point numbers, otherwise false.
+     *
+     * @alias module:TypeUtils.containsFloat
+     */
     function containsFloat( ...pArgs )
     {
         const arr = explode( ...pArgs ).filter( isNumeric ).map( toDecimal );
         return arr.some( isFloat );
     }
 
+    /**
+     * Determines the appropriate typed array class (Float32Array or Float64Array)
+     * to represent floating-point numbers based on the range of values.
+     *
+     * @param {number} pMinValue - The minimum value in the range.
+     * @param {number} pMaxValue - The maximum value in the range.
+     * @return {Function} The constructor function for the chosen typed array class (Float32Array or Float64Array).
+     *
+     * @private
+     */
     function _calculateFloatTypedArrayClass( pMinValue, pMaxValue )
     {
         return Math.max( Math.abs( pMinValue ), Math.abs( pMaxValue ) ) <= 2 ** 31 ? Float32Array : Float64Array;
@@ -3167,6 +3539,8 @@ const $scope = constants?.$scope || function()
      *                    Int8Array, Uint8Array, Int16Array, Uint16Array,
      *                    Int32Array, Uint32Array, Float32Array, Float64Array,
      *                    or BigUint64Array.
+     *
+     * @alias module:TypeUtils.calculateTypedArrayClass
      */
     function calculateTypedArrayClass( ...pArray )
     {
@@ -3207,6 +3581,22 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    /**
+     * Converts the provided array to a typed array.
+     *
+     * If the input is already a typed array, it is returned as-is.
+     * Otherwise, it determines the appropriate typed array class based on the elements of the array,
+     * and converts the input array to that typed array. If the calculated class is BigUint64Array or
+     * BigInt64Array, the elements of the array are converted to BigInt using a helper function
+     * `toDecimal` before creating the typed array.
+     *
+     * @function toTypedArray
+     * @param {Array|TypedArray} pArray The input array or typed array to convert.
+     * @returns {TypedArray|Uint8Array|Int8Array|Uint16Array|Int16Array|Uint32Array|Int32Array|BigInt64Array|BigUint64Array|Float32Array|Float64Array}
+     *          A new typed array or the original typed array if already in typed array format.
+     *
+     * @alias module:TypeUtils.toTypedArray
+     */
     const toTypedArray = function( pArray )
     {
         if ( isTypedArray( pArray ) )
@@ -3214,16 +3604,25 @@ const $scope = constants?.$scope || function()
             return pArray;
         }
 
-        let arr = [...(pArray || [])];
-
-        const typedArrayClass = calculateTypedArrayClass( ...arr );
-
-        if ( typedArrayClass === BigUint64Array || typedArrayClass === BigInt64Array )
+        try
         {
-            arr = arr.map( e => BigInt( toDecimal( e ) ) );
+            let arr = [...(pArray || [])];
+
+            const typedArrayClass = calculateTypedArrayClass( ...arr );
+
+            if ( typedArrayClass === BigUint64Array || typedArrayClass === BigInt64Array )
+            {
+                arr = arr.map( e => BigInt( toDecimal( e ) ) );
+            }
+
+            return new typedArrayClass( arr );
+        }
+        catch( ex )
+        {
+            modulePrototype.handleError( ex, toTypedArray, pArray );
         }
 
-        return new typedArrayClass( arr );
+        return pArray;
     };
 
     /**
@@ -3238,6 +3637,9 @@ const $scope = constants?.$scope || function()
             TYPE_DEFAULTS,
             TYPE_SORT_ORDER,
             BYTES_PER_TYPE,
+
+            flattened,
+            explode,
 
             isUndefined,
             isDefined,
@@ -3263,6 +3665,7 @@ const $scope = constants?.$scope || function()
             isInteger,
             toInteger,
             isFloat,
+            containsFloat,
             toFloat,
             isBigInt,
             isNumeric,
