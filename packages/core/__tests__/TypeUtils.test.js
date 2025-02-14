@@ -1,6 +1,6 @@
 const constants = require( "../src/Constants.cjs" );
 
-const { classes, _num, _str, _bool, _obj, _fun, _symbol, _big, _ud, attempt, asyncAttempt } = constants;
+const { classes, _num, _str, _bool, _obj, _fun, _symbol, _big, _ud, lock, attempt, asyncAttempt } = constants;
 
 const { ModuleEvent } = classes;
 
@@ -92,15 +92,10 @@ const
         estimateBytesForType,
         NVL,
         isReadOnly,
+        calculateBitsNeeded,
+        alignToBytes,
         calculateTypedArrayClass,
-        toTypedArray,
-        VisitedSet,
-        Option,
-        TypedOption,
-        StringOption,
-        NumericOption,
-        BooleanOption,
-        Result
+        toTypedArray
     } = typeUtils;
 
 const anAsyncFunction = async function()
@@ -2530,6 +2525,335 @@ describe( "castTo", () =>
           } );
 } );
 
+describe( "estimateBytesForType", () =>
+{
+    test( "estimateBytesForType",
+          () =>
+          {
+              expect( estimateBytesForType( _str ) ).toEqual( 2 );
+              expect( estimateBytesForType( _num ) ).toEqual( 8 );
+              expect( estimateBytesForType( _big ) ).toEqual( 16 );
+              expect( estimateBytesForType( _bool ) ).toEqual( 1 );
+              expect( estimateBytesForType( _obj ) ).toEqual( 0 );
+              expect( estimateBytesForType( _fun ) ).toEqual( 0 );
+              expect( estimateBytesForType( _symbol ) ).toEqual( 0 );
+              expect( estimateBytesForType( _ud ) ).toEqual( -1 );
+
+          } );
+} );
+
+describe( "NVL", () =>
+{
+    test( "NVL",
+          () =>
+          {
+              const map = new Map();
+
+              const weakMap = new WeakMap();
+
+              const set = new Set();
+
+              const weakSet = new WeakSet();
+
+              const date = new Date();
+
+              const symbol_i = Symbol( "i" );
+
+
+              map.set( "a", 1 );
+              map.set( "b", "2" );
+              map.set( "c", false );
+              map.set( "d", null );
+              map.set( "e", undefined );
+              map.set( "f", NaN );
+              map.set( "g", Infinity );
+              map.set( "h", -Infinity );
+              map.set( "i", symbol_i );
+              map.set( "j", function() {} );
+              map.set( "k", date );
+              map.set( "l", map );
+              map.set( "m", set );
+              map.set( "n", weakMap );
+              map.set( "o", weakSet );
+              map.set( "p", new ArrayBuffer( 10 ) );
+              map.set( "q", new SharedArrayBuffer( 10 ) );
+
+              expect( NVL( map, "a", 10 ) ).toEqual( map );
+
+              expect( NVL( map.get( "a" ), 23, null, "foo" ) ).toEqual( 1 );
+
+              expect( NVL( null, "foo", map.get( "b" ), 23 ) ).toEqual( "foo" );
+              expect( NVL( "foo", map.get( "b" ), 23, null ) ).toEqual( "foo" );
+              expect( NVL( map.get( "b" ), 23, null, "foo" ) ).toEqual( "2" );
+              expect( NVL( 23, null, "foo", map.get( "b" ) ) ).toEqual( 23 );
+
+              expect( NVL( map.get( "z" ), map.get( null ), map.get( "c" ), 23, "foo" ) ).toEqual( false );
+              expect( NVL( map.get( "z" ), map.get( null ), map.get( "k" ), 23, "foo" ) ).toEqual( date );
+              expect( NVL( map.get( "e" ), map.get( null ), map.get( "c" ), map.get( "k" ), 23, "foo" ) ).toEqual( false );
+              expect( NVL( map.get( "e" ), map.get( null ), map.get( "k" ), map.get( "c" ), 23, "foo" ) ).toEqual( date );
+              expect( NVL( map.get( "e" ), map.get( null ), map.get( "f" ), map.get( "c" ), 23, "foo" ) ).toEqual( false );
+
+              expect( NVL( map.get( "d" ), map.get( "e" ), map.get( null ), map.get( "f" ), map.get( "g" ), map.get( "h" ) ) ).toEqual( null );
+              expect( NVL( map.get( "l" ), map.get( "m" ), map.get( "n" ), map.get( "o" ), map.get( "p" ), map.get( "q" ), map.get( "a" ) ) ).toEqual( map );
+              expect( NVL( map.get( "m" ), map.get( "n" ), map.get( "o" ), map.get( "p" ), map.get( "q" ), map.get( "l" ), map.get( "a" ) ) ).toEqual( set );
+              expect( NVL( map.get( "n" ), map.get( "o" ), map.get( "p" ), map.get( "q" ), map.get( "l" ), map.get( "m" ), map.get( "a" ) ) ).toEqual( weakMap );
+              expect( NVL( map.get( "o" ), map.get( "p" ), map.get( "q" ), map.get( "l" ), map.get( "m" ), map.get( "n" ), map.get( "a" ) ) ).toEqual( weakSet );
+              expect( NVL( map.get( "p" ), map.get( "q" ), map.get( "l" ), map.get( "m" ), map.get( "n" ), map.get( "o" ), map.get( "a" ) ) ).toEqual( new ArrayBuffer( 10 ) );
+              expect( NVL( map.get( "q" ), map.get( "l" ), map.get( "m" ), map.get( "n" ), map.get( "o" ), map.get( "p" ), map.get( "a" ) ) ).toEqual( new SharedArrayBuffer( 10 ) );
+
+          } );
+} );
+
+describe( "isReadOnly", () =>
+{
+    test( "isReadOnly",
+          () =>
+          {
+              expect( isReadOnly( "foo" ) ).toEqual( true );
+              expect( isReadOnly( 1 ) ).toEqual( true );
+              expect( isReadOnly( true ) ).toEqual( true );
+              expect( isReadOnly( null ) ).toEqual( true );
+              expect( isReadOnly( undefined ) ).toEqual( true );
+              expect( isReadOnly( Symbol( "foo" ) ) ).toEqual( true );
+              expect( isReadOnly( function() {} ) ).toEqual( true );
+
+              expect( isReadOnly( {} ) ).toEqual( false );
+              expect( isReadOnly( [1, 2, 3] ) ).toEqual( false );
+
+              expect( isReadOnly( lock( { a: "a" } ) ) ).toEqual( true );
+              expect( isReadOnly( lock( [1, 2, 3] ) ) ).toEqual( true );
+
+              expect( (lock( { a: "a" } )) ).toEqual( { a: "a" } );
+              expect( (lock( [1, 2, 3] )) ).toEqual( [1, 2, 3] );
+
+              expect( isReadOnly( Object.seal( { a: "a" } ) ) ).toEqual( true );
+              expect( isReadOnly( Object.seal( [1, 2, 3] ) ) ).toEqual( true );
+
+              expect( (lock( { a: "a" } )) ).toEqual( { a: "a" } );
+              expect( (lock( [1, 2, 3] )) ).toEqual( [1, 2, 3] );
+          } );
+} );
+
+
+describe( "calculateBitsNeeded", () =>
+{
+    test( "calculateBitsNeeded",
+          () =>
+          {
+              const bitsForMinMaxValue = calculateBitsNeeded( Number.MIN_VALUE, Number.MAX_VALUE );
+              const bitsForMinMaxSafeInt = calculateBitsNeeded( Number.MIN_SAFE_INTEGER, Number.MAX_SAFE_INTEGER );
+
+              expect( bitsForMinMaxValue ).toEqual( 1_024 );
+              expect( bitsForMinMaxSafeInt ).toEqual( 54 );
+
+              const bitsForZero = calculateBitsNeeded( 0 );
+
+              expect( bitsForZero ).toEqual( 1 );
+
+              const map = new Map();
+
+              for( let i = 0, n = 64; i <= n; i++ )
+              {
+                  map.set( String( 2 ** i ), calculateBitsNeeded( 2 ** i ) );
+
+                  expect( map.get( String( 2 ** i ) ) ).toEqual( i );
+
+                  map.set( String( -(2 ** i) ), calculateBitsNeeded( -(2 ** i) ) );
+
+                  expect( map.get( String( -(2 ** i) ) ) ).toEqual( i + 1 );
+              }
+
+          } );
+} );
+
+describe( "alignToBytes", () =>
+{
+    test( "alignToBytes",
+          () =>
+          {
+              const bitsForMinMaxSafeInt = calculateBitsNeeded( Number.MIN_SAFE_INTEGER, Number.MAX_SAFE_INTEGER );
+
+              expect( alignToBytes( bitsForMinMaxSafeInt ) ).toEqual( 64 );
+
+              const bitsForZero = calculateBitsNeeded( 0 );
+
+              expect( alignToBytes( bitsForZero ) ).toEqual( 8 );
+
+              const map = new Map();
+
+              let bits = 8;
+
+              let key = "";
+
+              for( let i = 0, n = 64; i < n; i++ )
+              {
+                  key = String( 2 ** i );
+
+                  map.set( key, alignToBytes( calculateBitsNeeded( 2 ** i ) ) );
+
+                  bits *= (i > bits ? 2 : 1);
+
+                  // console.log( key, bits );
+
+                  expect( map.get( key ) ).toEqual( bits );
+
+                  key = String( -(2 ** i) );
+
+                  map.set( key, alignToBytes( calculateBitsNeeded( -(2 ** i) ) ) );
+
+                  // console.log( key, bits );
+
+                  expect( map.get( key ) ).toEqual( i + 1 > bits ? bits * 2 : bits );
+              }
+
+              // console.log( map.entries() );
+          } );
+} );
+
+describe( "calculateTypedArrayClass", () =>
+{
+    const nums0 = [2, 17, 33, 100, 75, 127];
+    const nums1 = [2, 17, 33, 100, 75, 255, 256];
+    const nums2 = [2, 17, 33, 100, 75, 255, 666, 700];
+    const nums3 = [255, 256, 666, 1000, 2_000];
+    const nums4 = [255, 256, 666, 1000, 2_000, 20_000];
+    const nums5 = [1000, 2_000, 20_000, 200_000];
+    const nums6 = [1000, 2_000, 20_000, 200_000, 2_000_000];
+    const nums7 = [1000, 2_000, 20_000, 200_000, 2_000_000, 20_000_000];
+    const nums8 = [1000, 2_000, 20_000, 200_000, 2_000_000, 20_000_000, 200_000_000];
+    const nums9 = [1000, 2_000, 20_000, 200_000, 2_000_000, 20_000_000, 200_000_000, 200_000_000_000];
+
+
+    test( "calculateTypedArrayClass",
+          () =>
+          {
+              const flipSign = e => 0 - e;
+
+              const class0 = calculateTypedArrayClass( ...nums0 );
+              const class1 = calculateTypedArrayClass( ...nums1 );
+              const class2 = calculateTypedArrayClass( ...nums2 );
+              const class3 = calculateTypedArrayClass( ...nums3 );
+              const class4 = calculateTypedArrayClass( ...nums4 );
+              const class5 = calculateTypedArrayClass( ...nums5 );
+              const class6 = calculateTypedArrayClass( ...nums6 );
+              const class7 = calculateTypedArrayClass( ...nums7 );
+              const class8 = calculateTypedArrayClass( ...nums8 );
+              const class9 = calculateTypedArrayClass( ...nums9 );
+
+              const class10 = calculateTypedArrayClass( ...(nums0.map( flipSign )) );
+              const class11 = calculateTypedArrayClass( ...(nums1.map( flipSign )) );
+              const class12 = calculateTypedArrayClass( ...(nums2.map( flipSign )) );
+              const class13 = calculateTypedArrayClass( ...(nums3.map( flipSign )) );
+              const class14 = calculateTypedArrayClass( ...(nums4.map( flipSign )) );
+              const class15 = calculateTypedArrayClass( ...(nums5.map( flipSign )) );
+              const class16 = calculateTypedArrayClass( ...(nums6.map( flipSign )) );
+              const class17 = calculateTypedArrayClass( ...(nums7.map( flipSign )) );
+              const class18 = calculateTypedArrayClass( ...(nums8.map( flipSign )) );
+              const class19 = calculateTypedArrayClass( ...(nums9.map( flipSign )) );
+
+
+              const arrayClassesA = [class0, class1, class2, class3, class4, class5, class6, class7, class8, class9];
+              const arrayClassesB = [class10, class11, class12, class13, class14, class15, class16, class17, class18, class19];
+
+              // console.log( arrayClassesA, arrayClassesB );
+
+              expect( class0 ).toBe( Uint8Array );
+              expect( class1 ).toBe( Uint8Array );
+              expect( class2 ).toBe( Uint16Array );
+              expect( class3 ).toBe( Uint16Array );
+              expect( class4 ).toBe( Uint16Array );
+              expect( class5 ).toBe( Uint32Array );
+              expect( class6 ).toBe( Uint32Array );
+              expect( class7 ).toBe( Uint32Array );
+              expect( class8 ).toBe( Uint32Array );
+              expect( class9 ).toBe( BigUint64Array );
+
+              expect( class10 ).toBe( Int8Array );
+              expect( class11 ).toBe( Int16Array );
+              expect( class12 ).toBe( Int16Array );
+              expect( class13 ).toBe( Int16Array );
+              expect( class14 ).toBe( Int16Array );
+              expect( class15 ).toBe( Int32Array );
+              expect( class16 ).toBe( Int32Array );
+              expect( class17 ).toBe( Int32Array );
+              expect( class18 ).toBe( Int32Array );
+              expect( class19 ).toBe( BigInt64Array );
+
+          } );
+} );
+
+describe( "toTypedArray", () =>
+{
+    test( "toTypedArray",
+          () =>
+          {
+              let array = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+              let typedArray = toTypedArray( array );
+
+              expect( typedArray ).toBeInstanceOf( Uint8Array );
+
+              array = array.map( e => 0 - e );
+
+              typedArray = toTypedArray( array );
+
+              expect( typedArray ).toBeInstanceOf( Int8Array );
+
+
+              array = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000];
+
+              typedArray = toTypedArray( array );
+
+              expect( typedArray ).toBeInstanceOf( Uint16Array );
+
+              array = array.map( e => 0 - e );
+
+              typedArray = toTypedArray( array );
+
+              expect( typedArray ).toBeInstanceOf( Int16Array );
+
+
+              array = [100_000, 200_000, 300_000, 400_000, 500_000, 600_000];
+
+              typedArray = toTypedArray( array );
+
+              expect( typedArray ).toBeInstanceOf( Uint32Array );
+
+              array = array.map( e => 0 - e );
+
+              typedArray = toTypedArray( array );
+
+              expect( typedArray ).toBeInstanceOf( Int32Array );
+
+
+              array = [100_000_000, 200_000_000, 300_000_000];
+
+              typedArray = toTypedArray( array );
+
+              expect( typedArray ).toBeInstanceOf( Uint32Array );
+
+              array = array.map( e => 0 - e );
+
+              typedArray = toTypedArray( array );
+
+              expect( typedArray ).toBeInstanceOf( Int32Array );
+
+
+              array = [100_000_000_000, 200_000_000_000, 300_000_000_000];
+
+              typedArray = toTypedArray( array );
+
+              expect( typedArray ).toBeInstanceOf( BigUint64Array );
+
+              array = array.map( e => 0 - e );
+
+              typedArray = toTypedArray( array );
+
+              expect( typedArray ).toBeInstanceOf( BigInt64Array );
+
+
+          } );
+} );
 
 describe( "isMap", () =>
 {

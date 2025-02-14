@@ -2535,10 +2535,22 @@ const $scope = constants?.$scope || function()
         return castUtils.cast();
     };
 
+    /**
+     * Similar to the SQL function,
+     * returns the first defined/non-null value that is also not NaN or Infinity.
+     *
+     * If all values are null, undefined, or NaN, or =/-Infinity, returns null.
+     *
+     *
+     * @param {...*} pValue - One or more variables of any type, the first of which that is not null or undefined will be returned.
+     * @returns {*} - The first value that is not null, undefined, NaN, or Infinity.
+     * If all specified values are either null, undefined, NaN, or Infinity, returns null.
+     */
     const NVL = function( ...pValue )
     {
-        let arr = [].concat( ...pValue );
-        arr = arr.filter( e => !isNull( e ) );
+        let arr = [...(pValue || [])];
+        arr = arr.filter( isNonNullValue );
+        arr = arr.filter( e => !isNumber( e ) || !isNanOrInfinite( e ) );
         return arr.length > 0 ? arr[0] : null;
     };
 
@@ -3073,63 +3085,143 @@ const $scope = constants?.$scope || function()
     const isSharedArrayBuffer = ( pValue ) => (_ud !== typeof SharedArrayBuffer && pValue instanceof SharedArrayBuffer);
     const isDataView = ( pValue ) => (_ud !== typeof DataView && pValue instanceof DataView);
 
+    /**
+     * Applies Array.flat to the variable number of values
+     * @param {...*} pArgs One or more values, treated as an array
+     * @returns {FlatArray<*[], 1>[]} An array of the values passed, flattening one level of nested arrays
+     */
+    function flattened( ...pArgs )
+    {
+        return [...(pArgs || [])].flat();
+    }
+
+    /**
+     * Applies Array.flat(Infinity) to the variable number of values
+     * @param {...*} pArgs One or more values, treated as an array
+     * @returns {FlatArray<*[], 1>[]} An array of the values passed, flattening all nested arrays
+     */
+    function explode( ...pArgs )
+    {
+        return [...(pArgs || [])].flat( Infinity );
+    }
+
+    /**
+     * Aligns a given number of bits to the nearest valid byte boundary.
+     * Valid byte boundaries are 8, 16, 32, and 64 for all supported environments
+     *
+     * @param {number} pNumBits - The number of bits to align.
+     * @return {number} The aligned byte size, clamped between 8 and 64.
+     */
+    function alignToBytes( pNumBits )
+    {
+        let numBits = clamp( isNumeric( pNumBits ) ? toDecimal( pNumBits || 8 ) : 8, 8, 64 );
+
+        let necessary = (numBits > 8 ? (numBits > 16 ? (numBits > 32 ? 64 : 32) : 16) : 8);
+
+        return clamp( necessary, 8, 64 );
+    }
+
+    function calculateBitsNeeded( pMinValue, pMaxValue )
+    {
+        // protect against non-numeric input
+        let minValue = isNumeric( pMinValue ) ? toDecimal( pMinValue ) : isNumeric( pMaxValue ) ? toDecimal( pMaxValue ) : 0;
+        let maxValue = isNumeric( pMaxValue ) ? toDecimal( pMaxValue ) : isNumeric( pMinValue ) ? toDecimal( pMinValue ) : 0;
+
+        minValue = Math.min( minValue, maxValue );
+        maxValue = Math.max( minValue, maxValue );
+
+        //use the largest absolute value to calculate the minimum required bits
+        const num = Math.max( Math.abs( minValue ), Math.abs( maxValue ) );
+
+        // take the ceiling of the base-2 logarithm of the absolute value
+        let bitsNeeded = num === 0 ? 1 : Math.ceil( Math.log2( Math.abs( num ) ) );
+
+        // add 1 for a sign bit if either value is negative
+        bitsNeeded += (minValue < 0 || maxValue < 0 ? 1 : 0);
+
+        return bitsNeeded;
+    }
+
+    function containsFloat( ...pArgs )
+    {
+        const arr = explode( ...pArgs ).filter( isNumeric ).map( toDecimal );
+        return arr.some( isFloat );
+    }
+
+    function _calculateFloatTypedArrayClass( pMinValue, pMaxValue )
+    {
+        return Math.max( Math.abs( pMinValue ), Math.abs( pMaxValue ) ) <= 2 ** 31 ? Float32Array : Float64Array;
+    }
+
+    /**
+     * Returns the appropriate TypedArray <b>class</b>
+     * based on the provided array-like input.
+     *
+     * @param {...*} pArray A variable-length list of elements.
+     *                      Elements can be primitives or arrays.
+     *                      They are flattened, converted to numeric values,
+     *                      and evaluated to determine the correct TypedArray class.
+     *
+     * @return {Function} The constructor of the appropriate TypedArray class.
+     *                    The returned class will be one of the following:
+     *                    Int8Array, Uint8Array, Int16Array, Uint16Array,
+     *                    Int32Array, Uint32Array, Float32Array, Float64Array,
+     *                    or BigUint64Array.
+     */
     function calculateTypedArrayClass( ...pArray )
     {
-        const arr = isNull( pArray ) ? [] : [].concat( ...(pArray || []) ).flat().filter( isNumeric ).map( toDecimal );
+        const arr = [...(explode( ...(pArray || []) ).filter( isNumeric ).map( toDecimal ))];
 
-        if ( arr.length <= 0 )
+        const minValue = Math.min( ...(arr.map( toDecimal )) );
+        const maxValue = Math.max( ...(arr.map( toDecimal )) );
+
+        if ( containsFloat( ...(arr || []) ) )
         {
-            return Int8Array;
-        }
-
-        const hasFloat = arr.some( isFloat );
-
-        const maxAbs = Math.max( ...(arr.map( Math.abs )) );
-
-        if ( hasFloat )
-        {
-            return maxAbs <= 2 ** 31 ? Float32Array : Float64Array;
+            return _calculateFloatTypedArrayClass( minValue, maxValue );
         }
 
         const signed = arr.some( e => e < 0 );
 
-        const bitsNeeded = Math.ceil( Math.log2( maxAbs + 1 ) );
+        let bitsNeeded = calculateBitsNeeded( minValue, maxValue );
 
-        if ( bitsNeeded <= 8 )
+        // Align to the appropriate type boundary (8, 16, 32, or 64)
+        bitsNeeded = clamp( alignToBytes( bitsNeeded ), 8, 64 );
+
+        switch ( bitsNeeded )
         {
-            return signed ? Int8Array : Uint8Array;
-        }
+            case 0:
+            case 8:
+                return signed ? Int8Array : Uint8Array;
 
-        if ( bitsNeeded <= 16 )
-        {
-            return signed ? Int16Array : Uint16Array;
-        }
+            case 16:
+                return signed ? Int16Array : Uint16Array;
 
-        if ( bitsNeeded <= 32 )
-        {
-            return signed ? Int32Array : Uint32Array;
-        }
+            case 32:
+                return signed ? Int32Array : Uint32Array;
 
-        if ( bitsNeeded <= 64 )
-        {
-            return BigUint64Array;
-        }
+            case 64:
+                return signed ? BigInt64Array : BigUint64Array;
 
-        return Float64Array;
+            default:
+                return Int8Array;
+        }
     }
 
     const toTypedArray = function( pArray )
     {
-        let arr = isNull( pArray ) ? [] : ((isTypedArray( pArray ) || isArray( pArray )) ? pArray : [pArray].flat());
-
-        if ( isTypedArray( arr ) )
+        if ( isTypedArray( pArray ) )
         {
-            return arr;
+            return pArray;
         }
 
-        arr = [].concat( ...(pArray || []) ).flat().filter( isNumeric ).map( toDecimal );
+        let arr = [...(pArray || [])];
 
-        const typedArrayClass = calculateTypedArrayClass( arr );
+        const typedArrayClass = calculateTypedArrayClass( ...arr );
+
+        if ( typedArrayClass === BigUint64Array || typedArrayClass === BigInt64Array )
+        {
+            arr = arr.map( e => BigInt( toDecimal( e ) ) );
+        }
 
         return new typedArrayClass( arr );
     };
@@ -3225,6 +3317,8 @@ const $scope = constants?.$scope || function()
             estimateBytesForType,
             NVL,
             isReadOnly,
+            calculateBitsNeeded,
+            alignToBytes,
             calculateTypedArrayClass,
             toTypedArray,
 
