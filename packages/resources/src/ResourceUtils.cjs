@@ -219,6 +219,7 @@ const $scope = constants?.$scope || function()
         isClass,
         isNonNullObject,
         isNonNullValue,
+        isMap,
         firstMatchingType,
         instanceOfAny,
         isAssignableTo
@@ -263,6 +264,158 @@ const $scope = constants?.$scope || function()
     {
         defaultPath = path.resolve( "../messages/defaults.json" );
     }
+
+    class Properties extends Map
+    {
+        #defaults;
+
+        constructor( pDefaults )
+        {
+            super();
+
+            this.#defaults = isNonNullObject( pDefaults ) && (isMap( pDefaults ) || pDefaults instanceof this.constructor) ? pDefaults : null;
+        }
+
+        get defaults()
+        {
+            return (this.hasValidDefaults() ? lock( this.#defaults ) : null);
+        }
+
+        set defaults( pDefaults )
+        {
+            this.#defaults = Properties.isProperties( pDefaults ) && this !== pDefaults ? pDefaults : null;
+        }
+
+        [Symbol.iterator]()
+        {
+            return lock( this.entries() );
+        }
+
+        entries()
+        {
+            let arr = super.entries();
+
+            if ( this.hasValidDefaults() )
+            {
+                const me = this;
+                this.#defaults.forEach( ( v, k ) => !(me || this).has( k ) ? arr.push( [k, v] ) : no_op );
+            }
+
+            return lock( [...arr] );
+        }
+
+        keys()
+        {
+            const arr = super.keys();
+
+            if ( this.hasValidDefaults() )
+            {
+                const me = this;
+                this.#defaults.forEach( ( v, k ) => !(me || this).has( k ) ? arr.push( k ) : no_op );
+            }
+
+            return lock( [...arr] );
+        }
+
+        values()
+        {
+            const arr = super.values();
+
+            if ( this.hasValidDefaults() )
+            {
+                const me = this;
+                this.#defaults.forEach( ( v, k ) => !(me || this).has( k ) ? arr.push( v ) : no_op );
+            }
+
+            return lock( [...arr] );
+        }
+
+        clear()
+        {
+            super.clear();
+
+            if ( this.hasValidDefaults() )
+            {
+                this.#defaults.clear();
+            }
+        }
+
+        forEach( pFunction, pThis )
+        {
+            const me = this;
+            this.entries().forEach( e => pFunction.call( pThis || me || this, e[1], e[0], this ) );
+        }
+
+        get( pKey )
+        {
+            let value = super.get( pKey );
+
+            if ( isNull( value ) && this.hasValidDefaults() )
+            {
+                value = this.#defaults.get( pKey );
+            }
+
+            return value;
+        }
+
+        has( pKey )
+        {
+            return super.has( pKey ) || (this.hasValidDefaults() && this.#defaults.has( pKey ));
+        }
+
+        hasValidDefaults()
+        {
+            return Properties.isProperties( this.#defaults ) && (this.#defaults !== this);
+        }
+
+    }
+
+    Properties.isProperties = function( pObject )
+    {
+        return isNonNullObject( pObject ) && (isMap( pObject ) || pObject instanceof Properties);
+    };
+
+    /**
+     * Parses a string input containing key-value pairs and converts it into an object representation.
+     *
+     * The input string should contain key-value pairs separated by newlines,
+     * where each pair is formatted as either "key=value" or "key:value", as determined in the options.
+     *
+     * @function
+     * @name Properties.fromString
+     * @param {string} pString - The string containing key-value pairs to be parsed.
+     * @param pOptions
+     * @returns {Properties} A key-value object constructed from the parsed string input.
+     */
+    Properties.fromString = function( pString, pOptions )
+    {
+
+    };
+
+    /**
+     * Reads properties from a file and returns them as an object.
+     *
+     * This method parses the specified file and loads its contents as key-value
+     * pairs, assuming the format is compatible with traditional properties file
+     * syntax. It can handle standard features such as comments and empty lines.
+     *
+     * @param {string} pFilePath - The path to the properties file to be loaded.
+     * @param pOptions
+     * @returns {Properties} An object representing the key-value pairs from the file.
+     */
+    Properties.fromFile = function( pFilePath, pOptions )
+    {
+
+    };
+
+    /**
+     *
+     */
+    Properties.fromUrl = function( pUrl, pOptions )
+    {
+
+    };
+
 
     /**
      * Represents the default configuration options for the application or library.
@@ -1535,6 +1688,7 @@ const $scope = constants?.$scope || function()
             classes:
                 {
                     LocaleResourcesBase,
+                    Properties,
                     Resource,
                     ResourceKey,
                     ResourceMap,
