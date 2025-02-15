@@ -14,6 +14,9 @@ const
         TYPE_SORT_ORDER,
         BYTES_PER_TYPE,
 
+        flattened,
+        explode,
+
         isUndefined,
         isDefined,
         isNull,
@@ -38,6 +41,7 @@ const
         isInteger,
         toInteger,
         isFloat,
+        containsFloat,
         toFloat,
         isBigInt,
         isNumeric,
@@ -78,6 +82,11 @@ const
         toOctal,
         toBinary,
         toBits,
+        intToBits,
+        floatToBits,
+        invertBits,
+        resolveBitString,
+        twosComplement,
         clamp,
         resolveMoment,
         areSameType,
@@ -1586,12 +1595,20 @@ describe( "toBits", () =>
     test( "toBits",
           () =>
           {
-              const nums = [0, -1, 16, 17, 200, 212, 255, 256, 16_768, 64_000, -127, -128, -16, -17, -200, -212];
+              // 10101010
+              let num = 0b10101010;
+              expect( parseInt( "10101010", 2 ) ).toEqual( 170 );
+              expect( toDecimal( num ) ).toEqual( 170 );
+              expect( toBits( num ) ).toEqual( "10101010" );
 
-              for( let i = nums.length; i--; )
-              {
-                  console.log( "Decimal:", nums[i], "16-bit:", toBits( nums[i] ), "32-bit:", toBits( nums[i], 32 ), "8-bit:", toBits( nums[i], 8 ) );
-              }
+              num = 1025;
+              expect( parseInt( "010000000001", 2 ) ).toEqual( 1025 );
+              expect( toBits( num ) ).toEqual( "0000010000000001" );
+
+              num = -1025;
+
+              expect( toBits( num ) ).toEqual( "1111101111111111" );
+
           } );
 } );
 

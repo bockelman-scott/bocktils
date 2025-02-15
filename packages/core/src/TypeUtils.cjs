@@ -1278,23 +1278,6 @@ const $scope = constants?.$scope || function()
         return (s.startsWith( "-" ) ? "-0b" : "0b") + s.replace( /^-/, _mt_str ).trim();
     };
 
-    // TODO: handle negative values and overflow
-
-    const toBits = function( pValue, pLength = 16, pThrowOnOverflow = true )
-    {
-        let s = String( toBinary( pValue ) ).trim().replaceAll( /(^-?0b)|\D/g, _mt_str ).trim();
-
-        let length = parseInt( isNumeric( pLength ) ? toDecimal( pLength ) : 16 );
-
-        // bitwise operator is intentional
-        while ( length < 8 || (length & (length - 1)) || length % 8 !== 0 )
-        {
-            length++;
-        }
-
-        return (_mt_str + s).padStart( length, _zero ).trim();
-    };
-
     /**
      * Converts a given value to an integer.
      *
@@ -3625,6 +3608,195 @@ const $scope = constants?.$scope || function()
         return pArray;
     };
 
+    function invertBits( pBitString )
+    {
+        let bitString = resolveBitString( pBitString );
+
+        const arr = new Array( bitString.length );
+
+        for( let i = 0, n = bitString.length; i < n; i++ )
+        {
+            arr[i] = _zero === bitString[i] ? "1" : _zero;
+        }
+
+        return arr.join( _mt_str );
+    }
+
+    function resolveBitString( pBitString )
+    {
+        switch ( typeof pBitString )
+        {
+            case _str:
+                // the expected case, a string of zeroes and ones
+                let bitString = pBitString.trim();
+                if ( /^[01]+$/.test( bitString ) )
+                {
+                    return bitString.trim().replaceAll( /[^01]/g, _mt_str );
+                }
+
+                // TODO: other cases...
+
+                break;
+
+            case _num:
+            case _big:
+                return toBits( pBitString );
+
+            case _obj:
+                if ( isArray( pBitString ) || isTypedArray( pBitString ) )
+                {
+                    const arr = [...pBitString];
+
+                    if ( arr.every( e => [0, 1].includes( toDecimal( e ) ) ) )
+                    {
+                        return arr.join( _mt_str );
+                    }
+
+                    // TODO: other cases, byte arrays, string arrays to be encoded...
+                }
+
+                if ( isArrayBuffer( pBitString ) || isSharedArrayBuffer( pBitString ) || isDataView( pBitString ) )
+                {
+                    // TODO: is 8 the correct size?
+                    return resolveBitString( new Uint8Array( pBitString ) );
+                }
+
+                break;
+        }
+
+        modulePrototype.handleError( new Error( `Unable to resolve bit string: ${pBitString}` ), resolveBitString, pBitString );
+
+        return _mt_str;
+    }
+
+    function addOneToBitString( pBitString )
+    {
+        let bitString = resolveBitString( pBitString );
+
+        const bits = bitString.split( _mt_str );
+
+        // add one
+        let carry = 1;
+
+        // Iterate from LSB to MSB
+        for( let i = bits.length; ((i--) > 0) && (carry > 0); )
+        {
+            const bit = bits[i];
+
+            if ( _zero === bit )
+            {
+                bits[i] = "1";
+                carry = 0;
+            }
+            else
+            {
+                bits[i] = _zero;
+            }
+        }
+
+        return bits.join( _mt_str );
+    }
+
+    /**
+     * Computes the two's complement of a given binary string.<br>
+     * <br>
+     *
+     * The input should be a binary string composed of '0's and '1's only.<br>
+     * The function assumes that the input binary string is valid
+     * and does not perform any additional validation.<br>
+     *
+     * The two's complement of a binary number
+     * is calculated by inverting all the bits (0s become 1s, and 1s become 0s)
+     * and then adding 1 to the result.
+     *
+     * @param {string} pBitString - A binary string for which the two's complement is to be calculated.
+     * @returns {string} The two's complement of the input binary string as another binary string.
+     */
+    const twosComplement = function( pBitString )
+    {
+        let bitString = resolveBitString( pBitString );
+
+        bitString = invertBits( bitString );
+
+        return addOneToBitString( bitString );
+    };
+
+    const intToBits = function( pValue )
+    {
+        const num = isNumeric( pValue ) ? toDecimal( pValue ) : 0;
+
+        const length = alignToBytes( calculateBitsNeeded( num, num ) );
+
+        if ( length > 64 )
+        {
+            throw new Error( `Cannot convert ${num} to bits. The value requires more than 64 bits.` );
+        }
+
+        const negative = num < 0;
+
+        let abs = Math.abs( num );
+
+        // initialize the bit string with the sign-bit
+        let bitString = _mt_str;
+
+        // we iterate from length-1 in order to reserve the sign-bit for a possible negative value
+        for( let i = (length - 1); abs >= 0 && i >= 0; i-- )
+        {
+            const place = 2 ** i;
+
+            if ( abs >= place )
+            {
+                bitString += "1";
+                abs -= place;
+            }
+            else
+            {
+                bitString += "0";
+            }
+        }
+
+        // bitString = bitString.padStart( length, "0" );
+
+        if ( negative )
+        {
+            bitString = twosComplement( bitString );
+        }
+
+        return bitString;
+    };
+
+    const floatToBits = function( pValue )
+    {
+        throw new Error( "Not implemented" );
+    };
+
+    const toBits = function( pValue )
+    {
+        const num = isNumeric( pValue ) ? toDecimal( pValue ) : 0;
+
+        if ( isFloat( num ) )
+        {
+            return floatToBits( num );
+        }
+
+        if ( isInteger( num ) )
+        {
+            return intToBits( num );
+        }
+
+        if ( isString( num ) )
+        {
+            if ( isNumeric( num ) )
+            {
+                return toBits( toDecimal( pValue ) );
+            }
+
+            throw new IllegalArgumentError( `Cannot convert ${num} to bits. The value is not a number.` );
+        }
+
+
+    };
+
     /**
      * This is the module itself, exported from this function
      */
@@ -3706,6 +3878,11 @@ const $scope = constants?.$scope || function()
             toOctal,
             toBinary,
             toBits,
+            intToBits,
+            floatToBits,
+            invertBits,
+            resolveBitString,
+            twosComplement,
             clamp,
             resolveMoment,
             areSameType,
