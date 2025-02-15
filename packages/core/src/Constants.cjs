@@ -108,6 +108,8 @@ const bockModuleBootstrap = require( "./_ToolBocksModule.cjs" );
             asPhrase,
             isReadOnly,
             isObjectLiteral,
+            detectCycles,
+            executeCallback,
             ObjectEntry = bockModuleBootstrap?.classes?.ObjectEntry,
             objectEntries,
             objectValues,
@@ -2184,6 +2186,10 @@ const bockModuleBootstrap = require( "./_ToolBocksModule.cjs" );
             isReadOnly,
 
             isObjectLiteral,
+
+            detectCycles,
+
+            executeCallback,
 
             objectEntries,
 

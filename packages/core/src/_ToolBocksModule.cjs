@@ -487,21 +487,23 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
     {
         const func = pAsyncFunction || no_op;
 
+        const args = [...(pArgs || [])];
+
         if ( isAsyncFunction( func ) )
         {
             setTimeout( function()
                         {
-                            func.call( $scope(), ...pArgs ).then( no_op ).catch( no_op );
-                        }, 10, ...pArgs );
+                            func.call( $scope(), ...(pArgs || args || []) ).then( no_op ).catch( no_op );
+                        }, 10, ...(pArgs || args || []) );
         }
         else if ( isFunc( func ) )
         {
             async function _( ...pArgs )
             {
-                attempt( func.call( $scope(), ...pArgs ), ...pArgs );
+                attempt( func.call( $scope(), ...(pArgs || args || []) ), ...(pArgs || args || []) );
             }
 
-            fireAndForget( _, ...pArgs );
+            fireAndForget( _, ...(pArgs || args || []) );
         }
     };
 
@@ -1433,6 +1435,146 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             error: no_op,
             trace: no_op
         };
+
+    function _calculateRuns( pStack, pIteration, pStackLength, pRunLength, pBuffer )
+    {
+        for( let i = 0, n = pStackLength; i < n; i += pRunLength )
+        {
+            let start = i + pIteration;
+
+            const end = Math.min( start + pRunLength, pStackLength );
+
+            const seq = String( _mt_str + (pStack.slice( start, end ).join( "*" )) ).trim();
+
+            pBuffer.push( seq );
+        }
+    }
+
+    function executeCallback( pCallback, ...pArgs )
+    {
+        if ( isFunc( pCallback ) )
+        {
+            const args = [...(pArgs || [])];
+
+            if ( isAsyncFunction( pCallback ) )
+            {
+                fireAndForget( pCallback, ...(args || []) );
+            }
+            else
+            {
+                attempt( pCallback, ...(args || []) );
+            }
+        }
+    }
+
+    /**
+     * This function attempts to detect potential infinite loops.
+     * The first argument is an array that holds strings indicative of some operation or step that has been called recursively
+     * The second argument is the number of contiguous operations that, if repeated as a sequence, might indicate an infinite loop
+     * The third argument is the number of times a sequence of contiguous operations must be found before being considered to be in an infinite loop
+     *
+     * Example: ["a", "b", "c", "d", "e", "b", "c", "a", "b", "c", "d", "a", "b", "c", "d"] - starts to repeat at index 7, and repeats 2 times
+     *
+     * @param {Array<string>} pStack an array of operations or paths representing a sequence of function calls or elements processed
+     * @param {Number} pRunLength the number of contiguous elements to consider a sequence
+     * @param {Number} pMaxRepetitions the maximum number of times a sequence of run-length operations can appear before being considered a repeating/infinite loop
+     * @param pOnDetected {function} (optional) function to call when a cycle has been detected, defaults to a no-op
+     * @returns true if cycling
+     */
+    const detectCycles = function( pStack, pRunLength = 5, pMaxRepetitions = 3, pOnDetected = no_op )
+    {
+        /**
+         * The list of operations that have occurred thus far
+         * @type {Array.<string>}
+         */
+        const _stack = [...(pStack || [])];
+
+        /**
+         * The current length of the stack
+         * @type {number}
+         */
+        const stackLength = _stack.length;
+
+        /**
+         * The length of a single repeating sequence to recognize
+         * @type {number}
+         */
+        let runLength = pRunLength || 3;
+
+        /**
+         * The maximum number of times a sequence can repeat before this function will return true
+         * @type {number}
+         */
+        const maxRepeats = pMaxRepetitions || 3;
+
+        // if the list of operations
+        // isn't even as long as it would have to be
+        // to contain > maximum repetitions, return false
+        if ( stackLength < (runLength * maxRepeats) )
+        {
+            return false;
+        }
+
+        /**
+         * an array to hold the sequences
+         *
+         * @type {Array.<string>}
+         */
+        let runs = [];
+
+        /**
+         * Using a nested loop algorithm...
+         *
+         * To account for the possibility
+         * that there is a repeating sequence that is LONGER than the runLength specified,
+         * we have an outer loop that increases the runLength by 1
+         *
+         * In the next-most inner loop,
+         * we stagger the start index into the array by 1
+         * each time we iterate the next-most-outer loop
+         *
+         * Within the innermost loop,
+         * we get the number of elements for each sequence
+         * and create a string we can compare to other sequences
+         * then compare and count repetitions, returning true if we reach or exceed
+         * the maximum number of repetitions of a sequence
+         */
+
+        const threshold = (stackLength / maxRepeats);
+
+        while ( runLength <= threshold )
+        {
+            for( let j = 0, m = stackLength; j < m; j++ )
+            {
+                _calculateRuns( _stack, j, stackLength, runLength, runs );
+
+                if ( runs.length < maxRepeats )
+                {
+                    return false;
+                }
+
+                let repetitions = 1; // the first instance counts
+
+                for( let i = 0, n = runs.length - 1; i < n; i++ )
+                {
+                    repetitions += ((runs[i] === runs[i + 1]) ? 1 : 0);
+                }
+
+                if ( repetitions >= maxRepeats )
+                {
+                    executeCallback( pOnDetected, _stack, runs, repetitions, runLength, maxRepeats );
+
+                    return true;
+                }
+
+                runs.length = 0;
+            }
+
+            runLength += 1;
+        }
+
+        return false;
+    };
 
     /**
      * Returns true if the specified value is immutable.<br>
@@ -2530,12 +2672,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         visit( pVisited )
         {
             this.dispatchEvent( new ToolBocksModuleEvent( "visit",
-                                                     pVisited,
-                                                     populateOptions( this.#options,
-                                                                      {
-                                                                          detail: pVisited,
-                                                                          data: pVisited
-                                                                      } ) ) );
+                                                          pVisited,
+                                                          populateOptions( this.#options,
+                                                                           {
+                                                                               detail: pVisited,
+                                                                               data: pVisited
+                                                                           } ) ) );
         }
     }
 
@@ -2560,16 +2702,16 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
                     catch( ex )
                     {
                         this.dispatchEvent( new ToolBocksModuleEvent( "error",
-                                                                 {
-                                                                     error: ex,
-                                                                     message: ex.message,
-                                                                     visited: pVisited
-                                                                 }, populateOptions( this.options,
-                                                                                     {
-                                                                                         detail: pVisited,
-                                                                                         data: pVisited,
-                                                                                         error: ex
-                                                                                     } ) ) );
+                                                                      {
+                                                                          error: ex,
+                                                                          message: ex.message,
+                                                                          visited: pVisited
+                                                                      }, populateOptions( this.options,
+                                                                                          {
+                                                                                              detail: pVisited,
+                                                                                              data: pVisited,
+                                                                                              error: ex
+                                                                                          } ) ) );
                     }
                 };
             }
@@ -4197,6 +4339,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             bindMethod,
 
             fireAndForget,
+
+            executeCallback,
+
+            detectCycles,
 
             asPhrase,
 

@@ -254,20 +254,40 @@ const $scope = constants?.$scope || function()
 
     /**
      * The VisitedSet class extends the native JavaScript Set class,
-     * providing additional functionality
-     * to handle objects.
-     * It overrides the `has` method to ensure that object references
-     * are checked for equality within the set.
-     * Instances of this class are used in recursive algorithms to avoid visiting the same node more than once.
+     * providing additional functionality to handle equality comparison for objects.
+     *
+     * Instances of this class are useful in recursive algorithms
+     * to avoid visiting the same node more than once.
      *
      * @class
      * @alias module:TypeUtils#VisitedSet
      */
     class VisitedSet extends Set
     {
-        constructor( ...pValues )
+        /**
+         * A function used to determine the equality of two objects.
+         *
+         * This function should accept two parameters representing the objects to be compared
+         * and return a boolean value indicating whether the objects are considered equal.
+         *
+         * Typically, the equality function is used in contexts such as data comparison,
+         * filtering, deduplication, or other scenarios that require logic to compare two values.
+         *
+         * @type {function({object},{object}):boolean}
+         *
+         * @param {any} element1 - The object to compare to the other.
+         *
+         * @param {any} element2 - The other object to compare to the first.
+         *
+         * @returns {boolean} true if the two objects are considered equal, otherwise false.
+         */
+        #equalityFunction = (( a, b ) => a === b);
+
+        constructor( pEqualityFunction = ( a, b ) => a === b, ...pValues )
         {
             super( pValues );
+
+            this.#equalityFunction = pEqualityFunction || (( a, b ) => a === b);
         }
 
         static get [Symbol.species]()
@@ -284,7 +304,7 @@ const $scope = constants?.$scope || function()
 
             for( let v of this.values() )
             {
-                if ( isObject( v ) && v === pValue )
+                if ( isObject( v ) && (v === pValue || isFunction( this.#equalityFunction ) ? this.#equalityFunction( v, pValue ) : pValue === v) )
                 {
                     return true;
                 }
@@ -574,6 +594,18 @@ const $scope = constants?.$scope || function()
      * @alias module:TypeUtils.isPrimitiveWrapper
      */
     const isPrimitiveWrapper = ( pObj ) => !isNull( pObj ) && ([].concat( PRIMITIVE_WRAPPER_TYPES )).filter( e => pObj instanceof e ).length > 0;
+
+    /**
+     * Returns the primitive type value of the specified object.<br>
+     *
+     * @param {*} pValue
+     */
+    const toPrimitive = function( pValue )
+    {
+        let value = isPrimitive( pValue ) ? pValue : pValue.valueOf();
+        value = isPrimitive( value ) ? value : isNull( value ) ? 0 : attempt( () => isFunction( value.toString ) ? value.toString() : {}.prototype.toString.call( value ) );
+        return value;
+    };
 
     /**
      * Returns true if the specified value is an object.<br>
@@ -1291,7 +1323,7 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.toInteger
      */
-    const toInteger = ( pValue ) => parseInt( toDecimal( pValue ) );
+    const toInteger = ( pValue ) => attempt( () => parseInt( toDecimal( pValue ) ) );
 
     /**
      * Converts the provided value to a floating-point number.
@@ -1306,7 +1338,7 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.toFloat
      */
-    const toFloat = ( pValue ) => parseFloat( toDecimal( pValue ) );
+    const toFloat = ( pValue ) => attempt( () => parseFloat( toDecimal( pValue ) ) );
 
     /**
      * Returns true if the specified value is a boolean or Boolean object<br>
@@ -1479,6 +1511,149 @@ const $scope = constants?.$scope || function()
      * @alias module:TypeUtils.isSymbol
      */
     const isSymbol = ( pValue ) => _symbol === typeof pValue || pValue instanceof Symbol;
+
+    /**
+     * @typedef {object} IsPopulatedOptions
+     *
+     * @property {Array.<string>} [acceptedTypes=['object']]
+     * @property {number} [minimumLength=1]
+     * @property {boolean} [acceptArrays=true]
+     * @property {Array.<string>} [mandatoryKeys=[]]
+     *
+     */
+
+    /**
+     *
+     * @type {IsPopulatedOptions}
+     */
+    const DEFAULT_IS_POPULATED_OPTIONS =
+        {
+            acceptedTypes: [_obj],
+            minimumLength: 1,
+            acceptArrays: true,
+            mandatoryKeys: []
+        };
+
+    /**
+     * Returns true if the specified value is
+     *
+     * an object with at least <i>n</i> non-empty properties
+     * (where n is the value specified in the options minimumLength argument or 1)
+     * and (optionally) having the specified key(s) specified in the options mandatoryKeys property
+     *
+     * or
+     *
+     *  DEPENDING ON VALUES PASSED IN THE OPTIONS ARGUMENT:
+     *
+     *  an array with at least <i>n</i> non-null, non-empty elements
+     *  (where n is the value specified in the options minimumLength argument or 1) or
+     *
+     *
+     *  a valid number or
+     *  a boolean or
+     *  a function or
+     *  a non-empty string
+     *
+     * @param {*} pObject a value to evaluate
+     *
+     * @param pOptions an object defining optional characteristics the value must satisfy
+     *                 acceptedTypes: an array of types to accept (defaults to ["object"])
+     *                 minimumKeys: an integer defining how many properties an object must have
+     *                              (or elements a pruned array must have)
+     *                              defaults to 1
+     *                 acceptArrays: whether to return true if the evaluated value is an array
+     *                               defaults to false
+     * @returns {*|boolean}
+     */
+    const isPopulated = function( pObject, pOptions = DEFAULT_IS_POPULATED_OPTIONS )
+    {
+        let opts = populateOptions( pOptions, DEFAULT_IS_POPULATED_OPTIONS );
+
+        let acceptedTypes = [_obj].concat( ...(opts.acceptedTypes || []) ).flat();
+        acceptedTypes = acceptedTypes.map( e => isString( e ) ? e.trim().toLowerCase() : e );
+        acceptedTypes = acceptedTypes.filter( e => VALID_TYPES.includes( e ) );
+
+        if ( isNull( pObject ) || !(acceptedTypes.includes( typeof pObject )) )
+        {
+            return false;
+        }
+
+        const minimumLength = Math.max( 1, (opts.minimumLength || 1) );
+
+        let mandatoryKeys = [...(opts.mandatoryKeys || [])];
+        mandatoryKeys = mandatoryKeys.map( e => isString( e ) ? e.trim().toLowerCase() : e );
+        mandatoryKeys = mandatoryKeys.filter( e => isString( e ) && e.length > 0 );
+
+        let populated = false;
+
+        for( const acceptedType of acceptedTypes )
+        {
+            if ( acceptedType === typeof pObject )
+            {
+                switch ( acceptedType )
+                {
+                    case _str:
+                        populated = (isString( pObject ) && pObject.length >= minimumLength);
+                        break;
+
+                    case _bool:
+                        populated = (isBoolean( pObject ));
+                        break;
+
+                    case _num:
+                    case _big:
+                        populated = (isNumeric( pObject ) && !isNanOrInfinite( toFloat( pObject ) ));
+                        break;
+
+                    case _obj:
+                        populated = (isNonNullObject( pObject, false,
+                                                      {
+                                                          rejectNull: true,
+                                                          allowEmptyObjects: minimumLength < 1,
+                                                          rejectPrimitiveWrappers: false,
+                                                          rejectArrays: !opts.acceptArrays
+                                                      } ));
+
+                        if ( populated )
+                        {
+                            if ( isArray( pObject ) )
+                            {
+                                const arr = [...(pObject || [])].filter( e => isNonNullValue( e ) && ( !isNumeric( e ) || !isNanOrInfinite( toFloat( e ) )) );
+                                populated = (arr.length >= minimumLength);
+                            }
+                            else if ( isPrimitiveWrapper( pObject ) )
+                            {
+                                return isPopulated( toPrimitive( pObject.valueOf() ), opts );
+                            }
+                            else
+                            {
+                                populated = mandatoryKeys.length <= 0 || mandatoryKeys.every( key => isDefined( pObject[key] ) );
+                            }
+                        }
+
+                        break;
+                }
+            }
+        }
+
+        return populated;
+    };
+
+    /**
+     * Returns true if the specified value is a non-null object with at least one key
+     * @param pObject
+     * @returns {*|boolean}
+     */
+    const isValidObject = function( pObject )
+    {
+        return isNonNullObject( pObject,
+                                {
+                                    rejectPrimitiveWrappers: false,
+                                    rejectArrays: false,
+                                    rejectNull: true,
+                                    allowEmptyObjects: false
+                                } );
+    };
 
     /**
      * Returns true if the specified value cannot be modified<br>
@@ -2092,6 +2267,12 @@ const $scope = constants?.$scope || function()
         return false;
     };
 
+    function resolveCandidates( ...pCandidates )
+    {
+        let arr = !isNull( pCandidates ) ? (isArray( pCandidates ) || isSpreadable( pCandidates ) ? [...(pCandidates || [])] : []) : [];
+        return (arr.length <= 1) ? arr.flat() : arr;
+    }
+
     /**
      * Returns the first of the candidates that is of the specified type<br>
      * (or null if no candidates meet the criterion)<br>
@@ -2105,7 +2286,7 @@ const $scope = constants?.$scope || function()
      */
     const firstMatchingType = function( pType, ...pCandidates )
     {
-        let arr = !isNull( pCandidates ) ? (isArray( pCandidates ) ? [].concat( ...pCandidates ) : (isSpreadable( pCandidates ) ? [...pCandidates] : [])) : [];
+        let arr = resolveCandidates( ...pCandidates );
 
         if ( isString( pType ) )
         {
@@ -2140,6 +2321,42 @@ const $scope = constants?.$scope || function()
 
         return arr.length > 0 ? arr[0] : null;
     };
+
+    class Finder
+    {
+        #filterCriteria = ( e ) => isNonNullValue( e );
+
+        constructor( pFilterCriteria )
+        {
+            this.#filterCriteria = isFunction( pFilterCriteria ) ? pFilterCriteria : ( e ) => isNonNullValue( e );
+        }
+
+        findAll( ...pCandidates )
+        {
+            let arr = resolveCandidates( ...pCandidates );
+            return arr.filter( this.#filterCriteria );
+        }
+
+        findFirst( ...pCandidates )
+        {
+            let arr = resolveCandidates( ...pCandidates );
+            arr = this.findAll( ...pCandidates );
+            return arr.length > 0 ? arr[0] : null;
+        }
+
+        findAllNot( ...pCandidates )
+        {
+            let arr = resolveCandidates( ...pCandidates );
+            return arr.filter( e => !this.#filterCriteria( e ) );
+        }
+
+        findFirstNot( ...pCandidates )
+        {
+            let arr = resolveCandidates( ...pCandidates );
+            arr = this.findAllNot( ...pCandidates );
+            return arr.length > 0 ? arr[0] : null;
+        }
+    }
 
     /**
      * Returns the class (function) of which the specified object is an instance
@@ -3418,7 +3635,15 @@ const $scope = constants?.$scope || function()
      */
     function flattened( ...pArgs )
     {
-        return [...(pArgs || [])].flat();
+        if ( isArray( pArgs ) || isLikeArray( pArgs ) )
+        {
+            return [...(pArgs || [])].flat();
+        }
+
+        if ( isNonNullObject( pArgs ) )
+        {
+
+        }
     }
 
     /**
@@ -3721,11 +3946,11 @@ const $scope = constants?.$scope || function()
         return addOneToBitString( bitString );
     };
 
-    const intToBits = function( pValue )
+    const intToBits = function( pValue, pLength = 8 )
     {
         const num = isNumeric( pValue ) ? toDecimal( pValue ) : 0;
 
-        const length = alignToBytes( calculateBitsNeeded( num, num ) );
+        const length = alignToBytes( Math.max( pLength, calculateBitsNeeded( num, num ) ) );
 
         if ( length > 64 )
         {
@@ -3770,31 +3995,31 @@ const $scope = constants?.$scope || function()
         throw new Error( "Not implemented" );
     };
 
-    const toBits = function( pValue )
+    const toBits = function( pValue, pLength )
     {
         const num = isNumeric( pValue ) ? toDecimal( pValue ) : 0;
 
-        if ( isFloat( num ) )
+        if ( 0 === num || isInteger( num ) )
         {
-            return floatToBits( num );
+            return intToBits( num, pLength );
         }
 
-        if ( isInteger( num ) )
+        if ( isFloat( num ) )
         {
-            return intToBits( num );
+            return floatToBits( num, pLength );
         }
 
         if ( isString( num ) )
         {
             if ( isNumeric( num ) )
             {
-                return toBits( toDecimal( pValue ) );
+                return toBits( toDecimal( pValue ), pLength );
             }
 
             throw new IllegalArgumentError( `Cannot convert ${num} to bits. The value is not a number.` );
         }
 
-
+        return String( parseInt( toDecimal( num ), 2 ) ).replace( /^0b/, _mt_str );
     };
 
     /**
@@ -3823,6 +4048,8 @@ const $scope = constants?.$scope || function()
             isObject,
             isCustomObject,
             isNonNullObject,
+            isValidObject,
+            isPopulated,
             isError,
             isEvent,
             firstError,
@@ -3911,8 +4138,9 @@ const $scope = constants?.$scope || function()
              * </ul>
              * @alias module:TypeUtils#classes
              */
-            classes: { VisitedSet, Option, TypedOption, StringOption, NumericOption, BooleanOption, Result },
+            classes: { Finder, VisitedSet, Option, TypedOption, StringOption, NumericOption, BooleanOption, Result },
 
+            Finder,
             VisitedSet,
             Option,
             TypedOption,

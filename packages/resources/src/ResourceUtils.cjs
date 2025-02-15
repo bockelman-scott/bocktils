@@ -382,12 +382,22 @@ const $scope = constants?.$scope || function()
      * where each pair is formatted as either "key=value" or "key:value", as determined in the options.
      *
      * @function
-     * @name Properties.fromString
+     * @name Properties.fromPropertiesString
      * @param {string} pString - The string containing key-value pairs to be parsed.
      * @param pOptions
      * @returns {Properties} A key-value object constructed from the parsed string input.
      */
-    Properties.fromString = function( pString, pOptions )
+    Properties.fromPropertiesString = function( pString, pOptions )
+    {
+
+    };
+
+    Properties.fromObject = function( pObject, pOptions )
+    {
+
+    };
+
+    Properties.fromJsonString = function( pJson, pOptions )
     {
 
     };
@@ -403,7 +413,7 @@ const $scope = constants?.$scope || function()
      * @param pOptions
      * @returns {Properties} An object representing the key-value pairs from the file.
      */
-    Properties.fromFile = function( pFilePath, pOptions )
+    Properties.fromFile = async function( pFilePath, pOptions )
     {
 
     };
@@ -411,7 +421,7 @@ const $scope = constants?.$scope || function()
     /**
      *
      */
-    Properties.fromUrl = function( pUrl, pOptions )
+    Properties.fromUrl = async function( pUrl, pOptions )
     {
 
     };

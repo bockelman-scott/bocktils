@@ -3215,7 +3215,7 @@ const $scope = constants?.$scope || function()
         let arr = asArray( pArr, { "sanitize": true } );
 
         // this is the array we will return, so we do not modify the input argument
-        let pruned = [].concat( arr ).filter( Filters.IS_NOT_NULL );
+        let pruned = [...(arr || [])].filter( Filters.IS_NOT_NULL );
 
         const rejectedTypes = varargs( ...pRejectedTypes );
 
@@ -3230,7 +3230,7 @@ const $scope = constants?.$scope || function()
         }
 
         // always return an array to avoid null-pointer exceptions
-        return pruned || [];
+        return lock( pruned || [] );
     };
 
     /**
