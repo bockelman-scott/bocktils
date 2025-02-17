@@ -409,6 +409,7 @@ describe( "arraysEqual", () =>
               expect( arraysEqual( arr5, arr6, { comparator: ( a, b ) => a > b ? 1 : a < b ? -1 : 0 } ) ).toBe( false );
               expect( arraysEqual( arr5, arr6,
                                    {
+                                       ignoreOrder: true,
                                        comparator: ( a, b ) => asString( a ) > asString( b ) ? 1 : asString( a ) < asString( b ) ? -1 : 0,
                                        trim: true
                                    } ) ).toBe( true );

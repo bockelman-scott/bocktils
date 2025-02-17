@@ -58,7 +58,7 @@ const {
     findNode,
     findRoot,
     tracePathTo,
-    
+
 } = objectUtils;
 
 describe( "detectCycles prevents infinite recursion", () =>
@@ -460,7 +460,7 @@ describe( "isValidEntry", () =>
 describe( "Unique object ID", () =>
 {
     // ObjectUtils adds this property to the Object prototype
-    test( "getUniqueId() returns a value unique to the object",
+    test( "getUniqueObjectInstanceId() returns a value unique to the object",
           () =>
           {
               let o = new ClassOne();
@@ -469,21 +469,21 @@ describe( "Unique object ID", () =>
 
               const regExp = /^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$/i;
 
-              expect( regExp.test( o.getUniqueId() ) ).toBe( true );
-              expect( regExp.test( o2.getUniqueId() ) ).toBe( true );
-              expect( regExp.test( o3.getUniqueId() ) ).toBe( true );
+              expect( regExp.test( o.getUniqueObjectInstanceId() ) ).toBe( true );
+              expect( regExp.test( o2.getUniqueObjectInstanceId() ) ).toBe( true );
+              expect( regExp.test( o3.getUniqueObjectInstanceId() ) ).toBe( true );
 
-              expect( o.GUID ).toEqual( o.getUniqueId() );
-              expect( o2.GUID ).toEqual( o2.getUniqueId() );
-              expect( o3.GUID ).toEqual( o3.getUniqueId() );
+              expect( o["__GUID"] ).toEqual( o.getUniqueObjectInstanceId() );
+              expect( o2["__GUID"] ).toEqual( o2.getUniqueObjectInstanceId() );
+              expect( o3["__GUID"] ).toEqual( o3.getUniqueObjectInstanceId() );
 
-              expect( regExp.test( [].GUID ) ).toBe( true );
+              expect( regExp.test( []?.["__GUID"] ) ).toBe( true );
 
-              expect( regExp.test( new Date().GUID ) ).toBe( true );
+              expect( regExp.test( new Date()["__GUID"] ) ).toBe( true );
 
-              expect( regExp.test( "abc".GUID ) ).toBe( true );
+              expect( regExp.test( "abc"["__GUID"] ) ).toBe( true );
 
-              expect( regExp.test( regExp.GUID ) ).toBe( true );
+              expect( regExp.test( regExp["__GUID"] ) ).toBe( true );
           } );
 } );
 
@@ -705,7 +705,13 @@ describe( "getValues", () =>
 
               let comparator = arrayUtils.Comparators.BY_STRING_VALUE;
 
-              expect( arrayUtils.arraysEqual( values, [8, "888", "Eight", "One more than seven"], { comparator } ) ).toBe( true );
+              const arr = [8, "888", "Eight", "One more than seven"];
+
+              expect( arrayUtils.arraysEqual( values, arr,
+                                              {
+                                                  comparator,
+                                                  ignoreOrder: true
+                                              } ) ).toBe( true );
           } );
 } );
 

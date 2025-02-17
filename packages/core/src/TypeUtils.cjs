@@ -113,6 +113,7 @@ const $scope = constants?.$scope || function()
             isPromise = ( pArg ) => (pArg && (pArg.constructor === Promise || pArg === Promise || pArg instanceof Promise)),
             isThenable = ( pArg ) => (pArg && (pArg.then && ("function" === typeof pArg.then))),
             populateOptions,
+            detectCycles,
             objectEntries,
             objectKeys,
             objectValues,
@@ -309,6 +310,8 @@ const $scope = constants?.$scope || function()
                     return true;
                 }
             }
+
+            return false;
         }
     }
 
@@ -593,7 +596,7 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isPrimitiveWrapper
      */
-    const isPrimitiveWrapper = ( pObj ) => !isNull( pObj ) && ([].concat( PRIMITIVE_WRAPPER_TYPES )).filter( e => pObj instanceof e ).length > 0;
+    const isPrimitiveWrapper = ( pObj ) => !isNull( pObj ) && [...PRIMITIVE_WRAPPER_TYPES].filter( e => pObj instanceof e ).length > 0;
 
     /**
      * Returns the primitive type value of the specified object.<br>
@@ -602,8 +605,15 @@ const $scope = constants?.$scope || function()
      */
     const toPrimitive = function( pValue )
     {
-        let value = isPrimitive( pValue ) ? pValue : pValue.valueOf();
-        value = isPrimitive( value ) ? value : isNull( value ) ? 0 : attempt( () => isFunction( value.toString ) ? value.toString() : {}.prototype.toString.call( value ) );
+        if ( _ud === typeof pValue || null === pValue )
+        {
+            return 0;
+        }
+
+        let value = isPrimitive( pValue ) ? pValue : (isPrimitiveWrapper( pValue ) ? pValue?.valueOf() : isDate( pValue ) ? pValue.getTime() : pValue);
+
+        value = isPrimitive( value ) ? value : attempt( () => isFunction( value?.toString ) ? value.toString() : {}.prototype.toString.call( value ) );
+
         return value;
     };
 
@@ -1488,11 +1498,11 @@ const $scope = constants?.$scope || function()
             return true;
         }
 
-        if ( !isNull( pArg ) && !isNull( pArg?.length ) )
+        if ( !isNull( pArg ) && isNumeric( pArg?.length ) )
         {
-            const keys = Object.keys( pArg );
+            const keys = Object.keys( pArg || {} ).filter( e => "length" !== e );
 
-            if ( keys.some( key => isNumeric( key ) ) )
+            if ( keys.every( key => isNumeric( key ) ) )
             {
                 return !pMustBeIterable || isIterable( pArg );
             }
@@ -3833,6 +3843,210 @@ const $scope = constants?.$scope || function()
         return pArray;
     };
 
+    const COMPARE_OPTIONS = { nullFirst: false, prioritizeNumeric: false };
+
+    function compareForNullOrIdentity( pA, pB, pOptions = COMPARE_OPTIONS )
+    {
+        if ( pA === pB )
+        {
+            return 0;
+        }
+
+        const options = populateOptions( pOptions, COMPARE_OPTIONS );
+        const nullsFirst = !!options.nullFirst;
+
+        return (isNull( pA )) ? isNull( pB ) ? 0 : (nullsFirst ? -1 : 1) : (isNull( pB )) ? nullsFirst ? 1 : -1 : null;
+    }
+
+    function compareNumericValues( pA, pB )
+    {
+        const a = toDecimal( pA );
+        const b = toDecimal( pB );
+
+        return a < b ? -1 : a > b ? 1 : 0;
+    }
+
+    function compareArrays( pA, pB, pOptions = COMPARE_OPTIONS, pVisited = new VisitedSet(), pStack = [] )
+    {
+        let arrA = [...(pA || [pA] || [])];
+        let arrB = [...(pB || [pB] || [])];
+
+        let comp = compare( arrA.length, arrB.length, pOptions, pVisited, pStack );
+
+        if ( 0 === comp )
+        {
+            const options = populateOptions( pOptions, COMPARE_OPTIONS );
+
+            const visited = pVisited || new VisitedSet();
+            const stack = pStack || [];
+
+            arrA = arrA.sort( ( a, b ) => compare( a, b, options, visited, stack ) );
+            arrB = arrB.sort( ( a, b ) => compare( a, b, options, visited, stack ) );
+
+            for( let i = 0; i < arrA.length; i++ )
+            {
+                comp = compare( arrA[i], arrB[i], options, visited, stack.concat( String( i ) ) );
+
+                if ( 0 !== comp )
+                {
+                    break;
+                }
+            }
+        }
+
+        return comp;
+    }
+
+    function compareObjects( pA, pB, pOptions = COMPARE_OPTIONS, pVisited = new VisitedSet(), pStack = [] )
+    {
+        if ( !isNonNullObject( pA ) )
+        {
+            return isNonNullObject( pB ) ? -1 : 0;
+        }
+        else if ( !isNonNullObject( pB ) )
+        {
+            return 1;
+        }
+
+        const options = populateOptions( pOptions, COMPARE_OPTIONS );
+
+        let entriesA = objectEntries( pA );
+        let entriesB = objectEntries( pB );
+
+        let comp = compareForNullOrIdentity( entriesA, entriesB, options );
+
+        if ( isNull( comp ) || ![-1, 0, 1].includes( comp ) )
+        {
+            // compare by number of entries first
+            comp = entriesA.length - entriesB.length;
+            comp = comp > 0 ? 1 : (comp < 0 ? -1 : 0);
+
+            if ( 0 === comp )
+            {
+                // compare keys
+                comp = compareArrays( (entriesA.map( e => String( e[0] ) ).sort()), (entriesB.map( e => String( e[0] ) ).sort()), options, pVisited, pStack );
+
+                let visited = pVisited || new VisitedSet();
+                let stack = pStack || [];
+
+                // sort entries by key before comparing values
+                entriesA = entriesA.sort( ( a, b ) => compare( a[0], b[0], options, visited, stack ) );
+                entriesB = entriesB.sort( ( a, b ) => compare( a[0], b[0], options, visited, stack ) );
+
+                // compare values
+                if ( 0 === comp )
+                {
+                    if ( visited.has( pA ) && visited.has( pB ) )
+                    {
+                        return 0;
+                    }
+
+                    visited.add( pA );
+
+                    comp = compareArrays( entriesA.map( e => e[1] ), entriesB.map( e => e[1] ), options, visited, stack );
+                }
+            }
+        }
+
+        return comp;
+    }
+
+    function canCompareAsPrimitive( pValue )
+    {
+        return isPrimitive( pValue ) || isPrimitiveWrapper( pValue ) || isDate( pValue ) || isFunction( pValue ) || isRegExp( pValue ) || isNumeric( pValue );
+    }
+
+    function comparePrimitiveValues( pA, pB, pOptions = COMPARE_OPTIONS )
+    {
+        const options = populateOptions( pOptions, COMPARE_OPTIONS );
+
+        let comp = 0;
+
+        if ( options.prioritizeNumeric && isNumeric( pA ) && isNumeric( pB ) )
+        {
+            comp = compareNumericValues( pA, pB );
+        }
+        else if ( canCompareAsPrimitive( pA ) && canCompareAsPrimitive( pB ) )
+        {
+            comp = (toPrimitive( pA ) || pA) - (toPrimitive( pB ) || pB);
+        }
+
+        comp = comp > 0 ? 1 : (comp < 0 ? -1 : 0);
+
+        return comp;
+    }
+
+    const compare = function( pA, pB, pOptions = COMPARE_OPTIONS, pVisited = new VisitedSet(), pStack = [] )
+    {
+        const options = populateOptions( pOptions, COMPARE_OPTIONS );
+
+        let comp = compareForNullOrIdentity( pA, pB, options );
+
+        if ( !isNull( comp ) && [-1, 0, 1].includes( comp ) )
+        {
+            return comp;
+        }
+
+        comp = comparePrimitiveValues( pA, pB, options );
+
+        if ( 0 === comp )
+        {
+            let visited = pVisited || new VisitedSet();
+            let stack = pStack || [];
+
+            if ( detectCycles( stack, 5, 5 ) )
+            {
+                return 0;
+            }
+
+            if ( isArray( pA ) || isArray( pB ) )
+            {
+                comp = compareArrays( (isArray( pA ) ? pA : [pA]), (isArray( pB ) ? pB : [pB]), options, visited, stack );
+            }
+            else
+            {
+                comp = compareObjects( pA, pB, options, visited, stack );
+            }
+        }
+
+        return comp;
+    };
+
+    class ComparatorFactory
+    {
+        #options;
+
+        constructor( pCompareOptions = COMPARE_OPTIONS )
+        {
+            this.#options = lock( populateOptions( pCompareOptions, pCompareOptions ) );
+        }
+
+        comparator()
+        {
+            return ( a, b ) => compare( a, b, this.#options );
+        }
+
+        nullsFirstComparator()
+        {
+            return ( a, b ) => compare( a, b, { ...this.#options, nullFirst: true } );
+        }
+
+        numericComparator()
+        {
+            return ( a, b ) => compare( a, b, { ...this.#options, prioritizeNumeric: true } );
+        }
+
+        reverseComparator()
+        {
+            return ( a, b ) => -(compare( a, b, this.#options ));
+        }
+
+        areEqual( pA, pB )
+        {
+            return pA === pB || (0 === compare( pA, pB, this.#options ));
+        }
+    }
+
     function invertBits( pBitString )
     {
         let bitString = resolveBitString( pBitString );
@@ -4138,8 +4352,20 @@ const $scope = constants?.$scope || function()
              * </ul>
              * @alias module:TypeUtils#classes
              */
-            classes: { Finder, VisitedSet, Option, TypedOption, StringOption, NumericOption, BooleanOption, Result },
+            classes:
+                {
+                    ComparatorFactory,
+                    Finder,
+                    VisitedSet,
+                    Option,
+                    TypedOption,
+                    StringOption,
+                    NumericOption,
+                    BooleanOption,
+                    Result
+                },
 
+            ComparatorFactory,
             Finder,
             VisitedSet,
             Option,

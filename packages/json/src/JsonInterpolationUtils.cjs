@@ -49,8 +49,6 @@
  */
 const core = require( "@toolbocks/core" );
 
-const objectUtils = require( "../../common/src/ObjectUtils.cjs" );
-
 const { constants, typeUtils, stringUtils, arrayUtils } = core;
 
 const { _ud = "undefined" } = constants;
@@ -81,8 +79,7 @@ const $scope = constants?.$scope || function()
             constants,
             typeUtils,
             stringUtils,
-            arrayUtils,
-            objectUtils
+            arrayUtils
         };
 
     const
@@ -104,6 +101,9 @@ const $scope = constants?.$scope || function()
             populateOptions,
             ignore,
             lock,
+            detectCycles,
+            objectEntries,
+            ObjectEntry,
             classes
         } = constants;
 
@@ -121,22 +121,17 @@ const $scope = constants?.$scope || function()
             isNull,
             isNonNullObject,
             isNonNullValue,
+            isPopulated,
             toIterable,
+            instanceOfAny,
+            ComparatorFactory,
+            Finder,
             VisitedSet
         } = typeUtils;
 
     const { asString, asInt, isBlank, isJson, lcase, rightOfLast } = stringUtils;
 
-    const { asArray, pruneArray, unique } = arrayUtils;
-
-    const
-        {
-            isPopulated = objectUtils?.isPopulatedObject || objectUtils?.isPopulated,
-            firstValidObject,
-            detectCycles,
-            ObjectEntry,
-            ExploredSet
-        } = objectUtils;
+    const { asArray, pruneArray, unique, toNonBlankStrings } = arrayUtils;
 
     const modName = "JsonInterpolationUtils";
 
@@ -167,6 +162,17 @@ const $scope = constants?.$scope || function()
     const INVALID_KEY = "INVALID_KEY";
 
     const NO_VARIABLE_DEFINED = "~~no-variable-defined~~";
+
+    const DEFAULT_CRITERIA = ( e ) => isNonNullObject( e ) && isPopulated( e );
+
+    const firstValidObject = function( ...pObjects )
+    {
+        const finder = new Finder( DEFAULT_CRITERIA );
+        return finder.findFirst( ...pObjects );
+    };
+
+    const COMPARATOR_FACTORY = new ComparatorFactory();
+    const DEFAULT_COMPARATOR = COMPARATOR_FACTORY.comparator();
 
     const infiniteLoopMessage = function( pPaths, pLength, pRepetitions )
     {
@@ -218,6 +224,141 @@ const $scope = constants?.$scope || function()
     const DEFAULT_NULL_HANDLER = function( pValue, pOptions )
     {
         return _ud === typeof pValue ? _dblqt + _dblqt : (null === pValue ? null : asJson( pValue, DEFAULT_REPLACER, pOptions?.space, pOptions ));
+    };
+
+    function resolveTreePath( pPath )
+    {
+        return toNonBlankStrings( isString( pPath ) ? [...(pPath.split( _dot ).flat())] : isArray( pPath ) ? (pPath || []) : [] ).flat();
+    }
+
+    function resolveTargetNode( pNode, pRoot )
+    {
+        return isNull( pNode ) ? (_mt_str === pNode ? pNode : (isNull( pRoot ) ? null : pRoot)) : pNode;
+    }
+
+    function resolveRootNode( pRoot )
+    {
+        return isNull( pRoot ) ? $scope() : (isPopulated( pRoot ) || isFunction( pRoot )) ? pRoot : $scope();
+    }
+
+    function resolveTraceToArguments( pVisited, pStack, pPath, pRoot, pNode )
+    {
+        const scope = $scope();
+
+        const visited = asArray( pVisited || [] );
+
+        let stack = asArray( pStack || [] );
+
+        let paths = resolveTreePath( pPath );
+
+        let root = resolveRootNode( pRoot );
+
+        let target = resolveTargetNode( pNode, (pRoot || root) );
+
+        return { scope, visited, stack, paths, root, target };
+    }
+
+    const tracePredicateOptions =
+        {
+            minimumKeys: 1,
+            acceptArrays: true,
+            validTypes: [_obj, _num, _big, _str, _bool]
+        };
+
+    const tracePathTo = function( pNode, pRoot, pPath = [], pStack = [], pVisited = [] )
+    {
+        let {
+            scope,
+            visited,
+            stack,
+            paths,
+            root,
+            target
+        } = resolveTraceToArguments( pVisited, pStack, pPath, pRoot, pNode );
+
+        if ( isNull( target ) ||
+             COMPARATOR_FACTORY.areEqual( (pNode || target), (pRoot || root) ) ||
+             COMPARATOR_FACTORY.areEqual( target, pRoot ) ||
+             COMPARATOR_FACTORY.areEqual( root, target ) )
+        {
+            return paths;
+        }
+
+        if ( detectCycles( stack, 5, 5 ) )
+        {
+            modulePrototype.reportError( new Error( `Entered an infinite loop at ${stack.join( _dot )}` ), `iterating a cyclically-connected graph`, S_ERROR, (modName + "::detectCycles"), stack );
+            return [];
+        }
+
+        let found = false;
+
+        const predicate = entry =>
+        {
+            return !isNull( entry.value ) &&
+                   isString( entry.key ) &&
+                   !visited.includes( entry.value ) &&
+                   !COMPARATOR_FACTORY.areEqual( entry.value, root ) &&
+                   !COMPARATOR_FACTORY.areEqual( entry.value, scope ) &&
+                   isPopulated( entry.value,
+                                tracePredicateOptions );
+        };
+
+        if ( COMPARATOR_FACTORY.areEqual( root, scope ) || COMPARATOR_FACTORY.areEqual( root, target ) )
+        {
+            return paths;
+        }
+
+        const entries = objectEntries( root ).filter( predicate );
+
+        for( let entry of entries )
+        {
+            let key = asString( entry.key || entry[0] );
+            let value = entry.value || entry[1];
+
+            visited.push( value );
+
+            if ( COMPARATOR_FACTORY.areEqual( value, target ) )
+            {
+                paths.push( key );
+                found = true;
+                break;
+            }
+
+            if ( isPopulated( value ) )
+            {
+                let result = tracePathTo( target, value, paths.concat( key ), stack.concat( key ), visited );
+
+                if ( (result?.length || 0) > 0 )
+                {
+                    paths = asArray( result ).map( e => isString( e ) ? e.split( _dot ) : e ).flat();
+                    found = true;
+                    break;
+                }
+            }
+        }
+
+        return (found ? paths : []);
+    };
+
+    const findNode = function( pRoot, ...pPaths )
+    {
+        let paths = toNonBlankStrings( [...(asArray( pPaths ))].flat() );
+
+        let node = resolveRootNode( pRoot );
+
+        while ( isPopulated( node ) && paths.length )
+        {
+            const property = paths.shift();
+
+            if ( isBlank( property ) )
+            {
+                continue;
+            }
+
+            node = node?.[property];
+        }
+
+        return (paths.length <= 0) ? node : null;
     };
 
     const DEFAULT_OPTIONS_FOR_JSON =
@@ -278,8 +419,10 @@ const $scope = constants?.$scope || function()
         {
             const preamble = parts[0].split( _semicolon ); // 0: ${(@<type>,  1: @base
 
-            let type = lcase( asString( preamble[0] || S_PATH, true ).replaceAll( /[${(@><;]+/g, _mt_str ).trim() );
-            let base = lcase( asString( preamble[1] || S_ROOT, true ).replaceAll( /[${(@><;]+/g, _mt_str ).trim() );
+            const rxSpecialCharacters = /[${(@><;]+/g;
+
+            let type = lcase( asString( preamble[0] || S_PATH, true ).replaceAll( rxSpecialCharacters, _mt_str ).trim() );
+            let base = lcase( asString( preamble[1] || S_ROOT, true ).replaceAll( rxSpecialCharacters, _mt_str ).trim() );
 
             let variable = asString( parts[2], true ) || rightOfLast( key, _colon );
 
@@ -395,9 +538,9 @@ const $scope = constants?.$scope || function()
             return this.#value;
         }
 
-        set value( value )
+        set value( pValue )
         {
-            this.#value = (value instanceof this.constructor) ? value?.value : value;
+            this.#value = (pValue instanceof this.constructor) ? pValue?.value : pValue;
         }
 
         get json()
@@ -405,9 +548,9 @@ const $scope = constants?.$scope || function()
             return asString( this.#json, true );
         }
 
-        set json( value )
+        set json( pValue )
         {
-            this.#json = asString( value, true );
+            this.#json = asString( pValue, true );
         }
 
         get parts()
@@ -432,7 +575,7 @@ const $scope = constants?.$scope || function()
 
         get path()
         {
-            return [].concat( ...(asArray( this.#path || asString( this.#parts?.variable, true )?.split( _dot ) || [] )) );
+            return [...(asArray( this.#path || (asString( this.#parts?.variable, true )?.split( _dot )) || [] ))].flat();
         }
     }
 
@@ -448,17 +591,17 @@ const $scope = constants?.$scope || function()
             return false;
         }
 
-        if ( !objectUtils.same( pOther?.root, this.root ) )
+        if ( !COMPARATOR_FACTORY.areEqual( pOther?.root, this.root ) )
         {
             return false;
         }
 
-        if ( !objectUtils.same( pOther?.current, this.current ) )
+        if ( !COMPARATOR_FACTORY.areEqual( pOther?.current, this.current ) )
         {
             return false;
         }
 
-        return objectUtils.same( pOther?.value, this.value );
+        return (COMPARATOR_FACTORY.areEqual( pOther?.value, this.value ));
     };
 
     class ResolvedMap extends Map
@@ -626,11 +769,11 @@ const $scope = constants?.$scope || function()
 
     function _resolvedVisitedSet( pVisited, pOptions )
     {
-        let visited = firstValidObject( pVisited, pOptions?.visited ) || new ExploredSet();
-        return (visited instanceof ExploredSet) ? visited : new ExploredSet();
+        let visited = firstValidObject( pVisited, pOptions?.visited ) || new VisitedSet();
+        return (visited instanceof VisitedSet) ? visited : new VisitedSet();
     }
 
-    function _handleCaughtException( pOnError, pError, pSource, pLevel, pJson, pOptions, pVisited, pResolved, pPaths, pRoot )
+    function _handleCaughtException( pOnError, pError, pSource, pLevel, ...pArgs /*pJson, pOptions, pVisited, pResolved, pPaths, pRoot*/ )
     {
         if ( isFunction( pOnError ) )
         {
@@ -638,11 +781,11 @@ const $scope = constants?.$scope || function()
 
             try
             {
-                shouldThrow = pOnError( pError, pSource, pJson, pOptions, pVisited, pResolved, pPaths, pRoot );
+                shouldThrow = pOnError( pError, pSource, ...pArgs );
             }
             catch( ex )
             {
-                modulePrototype.reportError( ex, ex?.message, pLevel || S_ERROR, calculateErrorSourceName( modName, "_handleCaughtException -> onError" ), pJson, pOptions, pVisited, pResolved, pPaths, pRoot );
+                modulePrototype.reportError( ex, ex?.message, pLevel || S_ERROR, calculateErrorSourceName( modName, "_handleCaughtException -> onError" ), ...pArgs );
             }
 
             if ( shouldThrow )
@@ -650,7 +793,7 @@ const $scope = constants?.$scope || function()
                 throw new Error( pError?.message || pError );
             }
         }
-        modulePrototype.reportError( pError, pError?.message, pLevel || S_ERROR, pSource, pJson, pOptions, pVisited, pResolved, pPaths, pRoot );
+        modulePrototype.reportError( pError, pError?.message, pLevel || S_ERROR, pSource, ...pArgs );
     }
 
     class Segment
@@ -873,12 +1016,12 @@ const $scope = constants?.$scope || function()
                     {
                         case S_ROOT:
                         case "global":
-                            value = objectUtils.findNode( root, ...paths );
+                            value = findNode( root, ...paths );
                             break;
 
                         case "this":
                         case "scope":
-                            value = objectUtils.findNode( current, ...paths );
+                            value = findNode( current, ...paths );
                             break;
                     }
 
@@ -1142,7 +1285,7 @@ const $scope = constants?.$scope || function()
                         }
                         else
                         {
-                            if ( objectUtils.instanceOfAny( pValue, Date, Number, Boolean, Symbol ) )
+                            if ( instanceOfAny( pValue, Date, Number, Boolean, Symbol ) )
                             {
                                 result = pValue;
                             }
@@ -1152,7 +1295,7 @@ const $scope = constants?.$scope || function()
                             }
                             else
                             {
-                                const entries = objectUtils.getEntries( pValue );
+                                const entries = objectEntries( pValue );
 
                                 for( let entry of entries )
                                 {
@@ -1390,7 +1533,7 @@ const $scope = constants?.$scope || function()
     {
         let obj = isNonNullObject( pObject ) ? pObject : {};
 
-        let entries = objectUtils.getEntries( obj || {} ) || [];
+        let entries = objectEntries( obj || {} ) || [];
 
         let excluded = asArray( pExcluded || [] ) || [];
         let included = asArray( pIncluded || [] ) || [];
@@ -1448,7 +1591,7 @@ const $scope = constants?.$scope || function()
                              pReplacer = DEFAULT_REPLACER,
                              pSpace = null,
                              pOptions = DEFAULT_OPTIONS_FOR_JSON,
-                             pVisited = new ExploredSet(),
+                             pVisited = new VisitedSet(),
                              pResolved = new ResolvedMap(),
                              pPaths = [],
                              pRoot = null,
@@ -1527,7 +1670,7 @@ const $scope = constants?.$scope || function()
         let resolved = _resolveResolvedMap( pResolved || options.resolved, options );
         options.resolved = resolved;
 
-        let visited = pVisited || options.visited || new ExploredSet();
+        let visited = pVisited || options.visited || new VisitedSet();
         options.visited = visited;
 
         const omitFunctions = options?.omitFunctions;
@@ -1584,7 +1727,7 @@ const $scope = constants?.$scope || function()
 
                 let resolvedValue = resolved.find( object, root, current );
 
-                let asResolved = resolvedValue || new ResolvedValue( buildPathExpression( S_PATH, S_ROOT, objectUtils.tracePathTo( object, root ) ), root, current, object );
+                let asResolved = resolvedValue || new ResolvedValue( buildPathExpression( S_PATH, S_ROOT, tracePathTo( object, root ) ), root, current, object );
 
                 resolved.set( asResolved?.key, asResolved );
 
@@ -1734,7 +1877,7 @@ const $scope = constants?.$scope || function()
                     InterpolatableValue,
                     ResolvedValue,
                     ResolvedMap,
-                    ExploredSet
+                    VisitedSet
                 },
             asJson,
             parseJson,

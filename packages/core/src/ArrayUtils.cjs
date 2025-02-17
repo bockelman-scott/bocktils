@@ -94,6 +94,8 @@ const $scope = constants?.$scope || function()
         AsyncFunction,
         IllegalArgumentError,
         objectKeys,
+        objectValues,
+        objectEntries,
         populateOptions,
         localCopy,
         immutableCopy,
@@ -123,6 +125,7 @@ const $scope = constants?.$scope || function()
     const modName = "ArrayUtils";
 
     const {
+        ComparatorFactory,
         VALID_TYPES,
         TYPE_SORT_ORDER,
         isUndefined,
@@ -139,8 +142,10 @@ const $scope = constants?.$scope || function()
         isSet,
         isMap,
         isArray,
+        isLikeArray,
         isTypedArray,
         isIterable,
+        isSpreadable,
         isBoolean,
         isFunction,
         isAsyncFunction,
@@ -216,7 +221,7 @@ const $scope = constants?.$scope || function()
      * @type {Array<string>}
      * @alias module:ArrayUtils#ARRAY_METHODS
      */
-    const ARRAY_METHODS = ["length", "GUID", "getUniqueId"].concat( [].concat( Object.getOwnPropertyNames( Array.prototype ).filter( e => "function" === typeof [][e] ) ) );
+    const ARRAY_METHODS = ["length", "GUID", "getUniqueObjectInstanceId"].concat( [].concat( Object.getOwnPropertyNames( Array.prototype ).filter( e => "function" === typeof [][e] ) ) );
 
     const COMPARE_TO = "compareTo";
 
@@ -299,7 +304,7 @@ const $scope = constants?.$scope || function()
     {
         const options = populateOptions( pOptions, DEFAULT_AS_ARRAY_OPTIONS );
 
-        let arr = pArr || [];
+        let arr = isArray( pArr ) ? pArr : (isSpreadable( pArr ) ? [...(pArr || [])] : [pArr || _mt_str]);
 
         const flatten = !!options?.flatten;
 
@@ -334,8 +339,7 @@ const $scope = constants?.$scope || function()
 
         if ( isFunction( comparator ) && comparator?.length === 2 )
         {
-            arr = [].concat( (arr || []) );
-            arr = arr.sort( comparator );
+            arr = [...(arr || [])].sort( comparator );
         }
 
         return arr || [];
@@ -2858,23 +2862,13 @@ const $scope = constants?.$scope || function()
     {
         const options = populateOptions( pOptions, DEFAULT_POPULATED_ARRAY_OPTIONS );
 
-        const minLength = Math.max( 1, asInt( asString( options?.minimumLength, true ) || 1 ) );
+        const minLength = Math.max( 1, asInt( options.minimumLength ) || 1 );
 
-        const arr = !((_ud === typeof pArr) || (null === pArr)) ? (pArr || []) : [];
+        let arr = isArray( pArr ) || (options.acceptArrayLike && isLikeArray( pArr )) ? pArr : null;
 
-        if ( !!options?.acceptArrayLike )
-        {
-            const isIndexedObject = (isArray( pArr )) || Object.hasOwn( arr, "length" );
+        arr = arr || (options.acceptObjects && isObject( pArr ) ? objectValues( pArr || {} ) : []);
 
-            return isIndexedObject && (minLength <= (arr?.length || 0));
-        }
-
-        if ( !!options?.acceptObjects && isObject( pArr ) )
-        {
-            return (objectKeys( pArr )?.length || 0) >= minLength;
-        }
-
-        return (isArray( pArr )) && pArr.length >= minLength;
+        return arr.length >= minLength;
     };
 
     /**
@@ -3127,73 +3121,37 @@ const $scope = constants?.$scope || function()
      */
     const sortArray = function( pArr, pComparator )
     {
-        let arr = [].concat( ...(pArr || []) );
+        let arr = isArray( pArr ) || isSpreadable( pArr ) ? [...(pArr || [])] : asArray( pArr );
 
         let opts = { comparator: pComparator || COMPARE_TO };
 
-        if ( isFunction( pComparator ) )
-        {
-            opts.comparator = pComparator;
-        }
+        opts.comparator = (Filters.IS_COMPARATOR( pComparator ) ? pComparator : opts.comparator || COMPARE_TO);
 
-        if ( isString( opts?.comparator ) && S_TRUE === opts?.comparator )
-        {
-            opts.comparator = true;
-        }
+        const comparator = ((Filters.IS_COMPARATOR( opts.comparator )) ?
+                            opts.comparator :
+                            function( pElemA, pElemB, pProperty )
+                            {
+                                let property = asString( asString( pProperty ) || (isString( opts.comparator ) ? asString( opts.comparator ) : _mt_str) || COMPARE_TO );
 
-        if ( isBoolean( opts?.comparator ) )
-        {
-            opts.comparator = opts.comparator ? COMPARE_TO : "toString";
-        }
+                                if ( property )
+                                {
+                                    let a = pElemA?.[pProperty] || pElemA?.compareTo || pElemB?.[pProperty] || pElemA;
+                                    let b = pElemB?.[pProperty] || pElemB?.compareTo || pElemA?.[pProperty] || pElemB;
 
-        const comparator = ((isFunction( opts?.comparator )) ? opts?.comparator : function( pElemA, pElemB, pProperty )
-        {
-            let property = asString( asString( pProperty ) || asString( opts?.comparator ) || COMPARE_TO );
+                                    a = (isFunction( a )) ? attempt( () => a.apply( (pElemA || $scope()), [pElemB || b, opts] ) ) : (pElemA || a);
+                                    b = (isFunction( b )) ? attempt( () => b.apply( (pElemB || $scope()), [pElemA || a, opts] ) ) : (pElemB || a);
 
-            if ( property )
-            {
-                let a = pElemA?.[pProperty] || pElemB?.[pProperty] || pElemA?.compareTo;
-                let b = pElemB?.[pProperty] || pElemA?.[pProperty] || pElemB?.compareTo;
+                                    return a < b ? -1 : (a > b ? 1 : 0);
+                                }
 
-                if ( isFunction( a ) )
-                {
-                    a = a.apply( pElemA || pElemB || $scope(), [pElemB, opts] );
-                }
-                else
-                {
-                    a = pElemA;
-                }
+                                return pElemA < pElemB ? -1 : pElemA > pElemB ? 1 : 0;
+                            });
 
-                if ( isFunction( b ) )
-                {
-                    b = b.apply( pElemB || pElemA || $scope(), [pElemA, opts] );
-                }
-                else
-                {
-                    b = pElemB;
-                }
+        let arr2 = [...arr];
 
-                return a < b ? -1 : (a > b ? 1 : 0);
-            }
+        arr2 = attempt( () => arr2.sort( comparator ) );
 
-            return pElemA < pElemB ? -1 : pElemA > pElemB ? 1 : 0;
-        });
-
-        let arr2 = [].concat( ...arr );
-
-        try
-        {
-            arr2 = arr2.sort( comparator );
-
-            if ( arr2 && arr2?.length === arr?.length )
-            {
-                arr = [].concat( ...arr2 );
-            }
-        }
-        catch( ex )
-        {
-            modulePrototype.reportError( ex, "sorting an array", S_WARN, modName + "::sortArray" );
-        }
+        arr = (arr2?.length === arr?.length) ? [...(arr2 || arr || [])] : arr;
 
         return arr || pArr;
     };
@@ -3460,7 +3418,7 @@ const $scope = constants?.$scope || function()
     {
         const options = populateOptions( pOptions, DEFAULT_EQUALITY_OPTIONS );
 
-        let arr = [...(asArray( pArr ))];
+        let arr = [...(asArray( pArr || [] ))];
 
         if ( options.trim )
         {
@@ -3492,14 +3450,13 @@ const $scope = constants?.$scope || function()
             arr = arr.map( e => isNumeric( e ) ? toDecimal( e ) : e );
         }
 
-        const comparator = Filters.IS_COMPARATOR( options.comparator ) ? options.comparator : null;
-
-        if ( Filters.IS_COMPARATOR( comparator ) )
+        if ( options.ignoreOrder )
         {
-            arr = arr.sort( comparator );
+            const comparator = Filters.IS_COMPARATOR( options.comparator ) ? options.comparator : new ComparatorFactory( options ).comparator();
+            arr = attempt( () => arr.sort( comparator ) );
         }
 
-        return [...arr];
+        return arr || pArr;
     };
 
     /**

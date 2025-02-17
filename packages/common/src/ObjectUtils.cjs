@@ -173,7 +173,7 @@ const $scope = constants?.$scope || function()
         CustomEvent = ModuleEvent;
     }
 
-    const uniqueObjectId = Symbol.for( "__BOCK__UNIQUE_OBJECT_ID__" );
+    /*const uniqueObjectId = Symbol.for( "__BOCK__UNIQUE_OBJECT_ID__" );
 
     try
     {
@@ -188,7 +188,7 @@ const $scope = constants?.$scope || function()
                                    set: no_op
                                } );
 
-        Object.prototype.getUniqueId = function()
+        Object.prototype.getUniqueObjectInstanceId = function()
         {
             return this[uniqueObjectId];
         };
@@ -206,7 +206,7 @@ const $scope = constants?.$scope || function()
     catch( ex )
     {
         // objects won't have a uniqueObjectId unless they already do
-    }
+    }*/
 
     /**
      * Defines the maximum length of a branch of an object graph that will be cloned when copying an object.
@@ -231,13 +231,13 @@ const $scope = constants?.$scope || function()
      * An array of the names of the methods exposed by Object
      * @type {string[]}
      */
-    const OBJECT_METHODS = lock( [S_LENGTH, "isIdenticalTo", "equals", S_GUID, "getUniqueId"].concat( [].concat( Object.getOwnPropertyNames( Object.prototype ).filter( e => isFunction( {}[e] ) ) ) ) );
+    const OBJECT_METHODS = lock( [S_LENGTH, "isIdenticalTo", "equals", S_GUID, "getUniqueObjectInstanceId"].concat( [].concat( Object.getOwnPropertyNames( Object.prototype ).filter( e => isFunction( {}[e] ) ) ) ) );
 
     /**
      * An array of property names that are never included in calls to getProperties, getKeys, getValues, or getEntries
      * @type {Readonly<string[]>}
      */
-    const ALWAYS_EXCLUDED = lock( [S_GUID, "getUniqueId", "__unique_object_id__"] );
+    const ALWAYS_EXCLUDED = lock( [S_GUID, "getUniqueObjectInstanceId", "__unique_object_id__"] );
 
     /**
      * An array of property names that are excluded in calls to getProperties, getKeys, getValues, or getEntries
@@ -272,28 +272,12 @@ const $scope = constants?.$scope || function()
     {
         constructor( ...pValues )
         {
-            super( pValues );
+            super( (( a, b ) => same( a, b ) || a === b), ...pValues );
         }
 
         static get [Symbol.species]()
         {
             return this;
-        }
-
-        has( pValue )
-        {
-            if ( super.has( pValue ) )
-            {
-                return true;
-            }
-
-            for( let v of this.values() )
-            {
-                if ( (isObject( v ) && same( pValue, v )) || v === pValue )
-                {
-                    return true;
-                }
-            }
         }
     }
 
@@ -1999,8 +1983,8 @@ const $scope = constants?.$scope || function()
             return false;
         }
 
-        const firstID = asString( pFirst?.getUniqueId() || pFirst?.GUID );
-        const secondID = asString( pSecond?.getUniqueId() || pSecond?.GUID );
+        const firstID = asString( pFirst?.getUniqueObjectInstanceId() || pFirst?.GUID );
+        const secondID = asString( pSecond?.getUniqueObjectInstanceId() || pSecond?.GUID );
 
         if ( !(isBlank( firstID ) || isBlank( secondID )) && same( firstID, secondID, pStrict, String, true, stack ) )
         {

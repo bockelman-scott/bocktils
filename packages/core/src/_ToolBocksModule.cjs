@@ -818,7 +818,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
     {
         if ( (_ud === typeof self) && (_ud === typeof window) && (_ud !== typeof module) && (isFunc( require )) )
         {
-            return (_ud === typeof Deno) && (_ud !== typeof process);
+            if ( _ud === typeof Deno && (_ud !== typeof process) )
+            {
+                return !isAsyncFunction( require );
+            }
         }
         return false;
     };
@@ -1158,6 +1161,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             }
         }
     }
+
+    ExecutionEnvironment.isNodeProcess = function( pProcess )
+    {
+        return isNode() && isObj( pProcess ) && (_ud !== typeof pProcess?.allowedNodeEnvironmentFlags);
+    };
 
     /**
      * Returns true if the specified Promise result is in a 'fulfilled' state.<br>
@@ -2185,11 +2193,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         }
     }
 
-    __Error.NEXT_REF_ID = 10000;
+    __Error.NEXT_REF_ID = 10_000;
 
     __Error.generateReferenceId = function( pError, pCode )
     {
-        return "Reference ID:" + (pCode ? " (" + (isNum( pCode ) ? String( pCode ) : _asStr( pCode )) + "): " : _mt_str) + (++__Error.NEXT_REF_ID);
+        let nextId = ++__Error.NEXT_REF_ID;
+
+        nextId = nextId > 999_999 ? 10_000 : nextId;
+
+        return "Reference ID:" + (pCode ? " (" + (isNum( pCode ) ? String( pCode ) : _asStr( pCode )) + "): " : _mt_str) + nextId;
     };
 
     /**
@@ -2246,7 +2258,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             return new this.constructor( this.message, options );
         }
     }
-
 
     /**
      * Returns an instance of the custom __Error class from the arguments specified.
@@ -2452,6 +2463,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         constructor( pName, pOptions )
         {
             this.#id = StatefulListener.nextId();
+
+            if ( this.#id > 999_999_999_999 )
+            {
+                StatefulListener.NEXT_ID = 1;
+            }
 
             this.#options = populateOptions( pOptions, {} );
 
@@ -3940,7 +3956,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
          */
         isEmpty()
         {
-            return !isNull( this.value );
+            return isNull( this.value );
         }
 
         /**
@@ -3961,8 +3977,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         {
             if ( isFunc( pFunction ) )
             {
-                const thiz = this.constructor[Symbol.species];
-                return new thiz( this.key, pFunction.call( this, this.value ), this.parent );
+                const me = this;
+                const thiz = this.constructor[Symbol.species] || me.constructor;
+                return new thiz( this.key, attempt( () => pFunction.call( (me || this), (me || this).value ), (me || this).parent ) );
             }
             return this;
         }
@@ -3971,9 +3988,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         {
             if ( isFunc( pFunction ) )
             {
-                return !!pFunction.call( this, this.value );
+                const me = this;
+                return attempt( () => pFunction.call( (me || this), (me || this).value ) );
             }
-            return this;
+            return this.isValid();
         }
 
         fold()
@@ -3985,6 +4003,45 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         {
             return this.value;
         }
+    }
+
+    const crypto = $scope().crypto || ((isDeno() && _ud !== typeof Deno) ? Deno.crypto : attempt( () => require( "node:crypto" ) )) || attempt( () => require( "crypto" ) );
+
+    const UNIQUE_OBJECT_ID = Symbol.for( "__BOCK__UNIQUE_OBJECT_ID__" ) || Symbol( "__BOCK__UNIQUE_OBJECT_ID__" );
+
+    try
+    {
+        Object.defineProperty( Object.prototype,
+                               UNIQUE_OBJECT_ID,
+                               {
+                                   get: function()
+                                   {
+                                       this.__unique_object_id__ = (this.__unique_object_id__ || attempt( () => crypto.randomUUID() ));
+                                       return this.__unique_object_id__ || new Date().getTime();
+                                   },
+                                   set: no_op,
+                                   enumerable: false,
+                               } );
+
+        Object.prototype.getUniqueObjectInstanceId = function()
+        {
+            return this[UNIQUE_OBJECT_ID];
+        };
+
+        Object.defineProperty( Object.prototype,
+                               "__GUID",
+                               {
+                                   get: function()
+                                   {
+                                       return this[UNIQUE_OBJECT_ID] || attempt( () => crypto.randomUUID() );
+                                   },
+                                   set: no_op,
+                                   enumerable: false,
+                               } );
+    }
+    catch( ex )
+    {
+        // objects won't have a UNIQUE_OBJECT_ID unless they already do
     }
 
     /**
@@ -4041,6 +4098,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
                 source = source.slice( matches.index + match.length + 4 );
                 matches = rx.exec( source );
             }
+
+            entries = entries.filter( e => !["_GUID", "__unique_object_id__", UNIQUE_OBJECT_ID].includes( e.key || e[0] ) );
         }
 
         return [...(new Set( entries ))].filter( e => null != e[1] ).map( stringifyKeys ).map( e => new ObjectEntry( ...[e[0], e[1], pObject] ) );
