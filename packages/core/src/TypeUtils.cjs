@@ -112,8 +112,10 @@ const $scope = constants?.$scope || function()
             IllegalArgumentError,
             isPromise = ( pArg ) => (pArg && (pArg.constructor === Promise || pArg === Promise || pArg instanceof Promise)),
             isThenable = ( pArg ) => (pArg && (pArg.then && ("function" === typeof pArg.then))),
+            isObjectLiteral,
             populateOptions,
             detectCycles,
+            ObjectEntry,
             objectEntries,
             objectKeys,
             objectValues,
@@ -1544,6 +1546,88 @@ const $scope = constants?.$scope || function()
             mandatoryKeys: []
         };
 
+    function resolveAcceptedTypes( pOptions )
+    {
+        const options = populateOptions( pOptions, DEFAULT_IS_POPULATED_OPTIONS );
+        let acceptedTypes = [_obj].concat( ...(options.acceptedTypes || []) ).flat();
+        acceptedTypes = acceptedTypes.map( e => isString( e ) ? e.trim().toLowerCase() : e );
+        return acceptedTypes.filter( e => VALID_TYPES.includes( e ) );
+    }
+
+    function resolveMandatoryKeys( pOptions )
+    {
+        const options = populateOptions( pOptions, DEFAULT_IS_POPULATED_OPTIONS );
+        let mandatoryKeys = [...(options.mandatoryKeys || [])];
+        mandatoryKeys = mandatoryKeys.map( e => isString( e ) ? e.trim().toLowerCase() : e );
+        return mandatoryKeys.filter( e => isString( e ) && e.length > 0 );
+    }
+
+    function resolveIsPopulatedArgs( pOptions = DEFAULT_IS_POPULATED_OPTIONS )
+    {
+        let options = populateOptions( pOptions, DEFAULT_IS_POPULATED_OPTIONS );
+
+        const minimumLength = Math.max( 1, (options.minimumLength || 1) );
+
+        let acceptedTypes = resolveAcceptedTypes( options );
+        let mandatoryKeys = resolveMandatoryKeys( options );
+
+        return { options, minimumLength, acceptedTypes, mandatoryKeys };
+    }
+
+    function isPopulatedType( pType, pObject, pMinLength = 1, pAcceptArrays = true, pMandatoryKeys = [] )
+    {
+        let populated = false;
+
+        let minimumLength = Math.max( 1, parseInt( pMinLength || "1" ) );
+
+        switch ( pType )
+        {
+            case _str:
+                populated = (isString( pObject ) && pObject.length >= minimumLength);
+                break;
+
+            case _bool:
+                populated = (isBoolean( pObject ));
+                break;
+
+            case _num:
+            case _big:
+                populated = (isNumeric( pObject ) && !isNanOrInfinite( toFloat( pObject ) ));
+                break;
+
+            case _obj:
+                populated = (isNonNullObject( pObject,
+                                              false,
+                                              {
+                                                  rejectNull: true,
+                                                  allowEmptyObjects: minimumLength < 1,
+                                                  rejectPrimitiveWrappers: false,
+                                                  rejectArrays: !pAcceptArrays
+                                              } ));
+
+                if ( populated )
+                {
+                    if ( isArray( pObject ) )
+                    {
+                        const arr = [...(pObject || [])].filter( e => isNonNullValue( e ) && ( !isNumeric( e ) || !isNanOrInfinite( toFloat( e ) )) );
+                        populated = (arr.length >= minimumLength);
+                    }
+                    else if ( isPrimitiveWrapper( pObject ) )
+                    {
+                        return isPopulated( toPrimitive( pObject ) );
+                    }
+                    else
+                    {
+                        const mandatoryKeys = [...(pMandatoryKeys || [])];
+                        populated = mandatoryKeys.length <= 0 || mandatoryKeys.every( key => isDefined( pObject[key] ) );
+                    }
+                }
+
+                break;
+        }
+
+    }
+
     /**
      * Returns true if the specified value is
      *
@@ -1577,22 +1661,12 @@ const $scope = constants?.$scope || function()
      */
     const isPopulated = function( pObject, pOptions = DEFAULT_IS_POPULATED_OPTIONS )
     {
-        let opts = populateOptions( pOptions, DEFAULT_IS_POPULATED_OPTIONS );
-
-        let acceptedTypes = [_obj].concat( ...(opts.acceptedTypes || []) ).flat();
-        acceptedTypes = acceptedTypes.map( e => isString( e ) ? e.trim().toLowerCase() : e );
-        acceptedTypes = acceptedTypes.filter( e => VALID_TYPES.includes( e ) );
+        let { options, minimumLength, acceptedTypes, mandatoryKeys } = resolveIsPopulatedArgs( pOptions );
 
         if ( isNull( pObject ) || !(acceptedTypes.includes( typeof pObject )) )
         {
             return false;
         }
-
-        const minimumLength = Math.max( 1, (opts.minimumLength || 1) );
-
-        let mandatoryKeys = [...(opts.mandatoryKeys || [])];
-        mandatoryKeys = mandatoryKeys.map( e => isString( e ) ? e.trim().toLowerCase() : e );
-        mandatoryKeys = mandatoryKeys.filter( e => isString( e ) && e.length > 0 );
 
         let populated = false;
 
@@ -1600,49 +1674,13 @@ const $scope = constants?.$scope || function()
         {
             if ( acceptedType === typeof pObject )
             {
-                switch ( acceptedType )
-                {
-                    case _str:
-                        populated = (isString( pObject ) && pObject.length >= minimumLength);
-                        break;
+                populated = isPopulatedType( acceptedType, pObject, minimumLength, options.acceptArrays, mandatoryKeys );
+                break;
+            }
 
-                    case _bool:
-                        populated = (isBoolean( pObject ));
-                        break;
-
-                    case _num:
-                    case _big:
-                        populated = (isNumeric( pObject ) && !isNanOrInfinite( toFloat( pObject ) ));
-                        break;
-
-                    case _obj:
-                        populated = (isNonNullObject( pObject, false,
-                                                      {
-                                                          rejectNull: true,
-                                                          allowEmptyObjects: minimumLength < 1,
-                                                          rejectPrimitiveWrappers: false,
-                                                          rejectArrays: !opts.acceptArrays
-                                                      } ));
-
-                        if ( populated )
-                        {
-                            if ( isArray( pObject ) )
-                            {
-                                const arr = [...(pObject || [])].filter( e => isNonNullValue( e ) && ( !isNumeric( e ) || !isNanOrInfinite( toFloat( e ) )) );
-                                populated = (arr.length >= minimumLength);
-                            }
-                            else if ( isPrimitiveWrapper( pObject ) )
-                            {
-                                return isPopulated( toPrimitive( pObject.valueOf() ), opts );
-                            }
-                            else
-                            {
-                                populated = mandatoryKeys.length <= 0 || mandatoryKeys.every( key => isDefined( pObject[key] ) );
-                            }
-                        }
-
-                        break;
-                }
+            if ( populated )
+            {
+                break;
             }
         }
 
@@ -3638,6 +3676,44 @@ const $scope = constants?.$scope || function()
      */
     const isDataView = ( pValue ) => (_ud !== typeof DataView && pValue instanceof DataView);
 
+    function toObjectLiteral( pObject, pVisited = new VisitedSet(), pStack = [] )
+    {
+        if ( !isObject( pObject ) || isObjectLiteral( pObject ) )
+        {
+            return pObject;
+        }
+
+        const entries = ObjectEntry.unwrapValues( objectEntries( pObject ) );
+
+        const obj = {};
+
+        const visited = pVisited || new VisitedSet();
+        const stack = pStack || [];
+
+        for( const [key, value] of entries )
+        {
+            if ( visited.has( value ) || detectCycles( stack, 5, 5 ) )
+            {
+                obj[key] = value;
+                continue;
+            }
+
+            visited.add( value );
+            stack.push( value );
+
+            try
+            {
+                obj[key] = toObjectLiteral( value, visited, stack );
+            }
+            finally
+            {
+                stack.pop();
+            }
+        }
+
+        return obj;
+    }
+
     /**
      * Applies Array.flat to the variable number of values
      * @param {...*} pArgs One or more values, treated as an array
@@ -4342,6 +4418,7 @@ const $scope = constants?.$scope || function()
             alignToBytes,
             calculateTypedArrayClass,
             toTypedArray,
+            toObjectLiteral,
 
             /**
              * The classes exported with this module.<br>

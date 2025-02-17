@@ -3994,16 +3994,137 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             return this.isValid();
         }
 
+        #handleFold( pVisited = new Set(), pStack = [], pDepth = 0 )
+        {
+            let value = this.value;
+
+            if ( value instanceof this.constructor )
+            {
+                const visited = pVisited || new Set();
+                const stack = pStack || [];
+                const depth = pDepth || 0;
+
+                visited.add( this );
+                stack.push( this.key );
+
+                try
+                {
+                    value = value.#handleFold( visited, stack, depth + 1 );
+                }
+                finally
+                {
+                    stack.pop();
+                }
+            }
+
+            return value;
+        }
+
         fold()
         {
-            return this.value;
+            return this.#handleFold();
         }
 
         valueOf()
         {
             return this.value;
         }
+
+        toArray( pVisited = new Set(), pStack = [], pDepth = 0 )
+        {
+            let key = this.key;
+            let value = this.value;
+
+            if ( value instanceof this.constructor )
+            {
+                const visited = pVisited || new Set();
+                const stack = pStack || [];
+                const depth = pDepth || 0;
+
+                if ( detectCycles( stack, 5, 5 ) || visited.has( value ) || depth > 32 )
+                {
+                    return [key, value];
+                }
+
+                visited.add( value );
+                stack.push( key );
+
+                try
+                {
+                    value = value.toArray( visited, stack, depth + 1 );
+                }
+                finally
+                {
+                    stack.pop();
+                }
+            }
+
+            return [key, value];
+        }
     }
+
+    ObjectEntry.foldEntries = function( pEntries )
+    {
+        let entries = !isNull( pEntries ) && isArray( pEntries ) ? [...(pEntries || [])] : [];
+
+        let results = new Array( entries.length );
+
+        for( let entry of entries )
+        {
+            let key = entry?.key || entry[0] || _mt_str;
+            let value = entry?.value || entry[1] || null;
+
+            if ( value instanceof ObjectEntry )
+            {
+                value = value.fold();
+            }
+
+            results.push( [key, value] );
+        }
+
+        return results;
+    };
+
+    ObjectEntry.unwrapValues = function( pEntries )
+    {
+        let entries = !isNull( pEntries ) && isArray( pEntries ) ? [...(pEntries || [])] : [];
+
+        let results = new Array( entries.length );
+
+        const visited = new Set();
+        const stack = [];
+
+        for( let entry of entries )
+        {
+            let key = entry?.key || entry[0] || _mt_str;
+            let value = entry?.value || entry[1] || null;
+
+            if ( value instanceof ObjectEntry )
+            {
+                if ( detectCycles( stack, 5, 5 ) || visited.has( value ) )
+                {
+                    results.push( [key, value] );
+                    continue;
+                }
+
+                visited.add( value );
+                stack.push( key );
+
+                try
+                {
+                    value = value.toArray( visited, stack, 0 );
+                }
+                finally
+                {
+                    stack.pop();
+                }
+            }
+
+            results.push( [key, value] );
+        }
+
+        return results;
+    };
 
     const crypto = $scope().crypto || ((isDeno() && _ud !== typeof Deno) ? Deno.crypto : attempt( () => require( "node:crypto" ) )) || attempt( () => require( "crypto" ) );
 
