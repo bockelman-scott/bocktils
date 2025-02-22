@@ -128,9 +128,13 @@ describe( "DateFormatter", () =>
 
             let tests = example.tests;
 
+            let dates = [];
+
             for( let i = 0, n = tests.length; i < n; ++i )
             {
                 let t = tests[i];
+
+                dates.push( [t.date, t.expected] );
 
                 expect( dateFormatter.format( t.date ) ).toEqual( t.expected );
             }

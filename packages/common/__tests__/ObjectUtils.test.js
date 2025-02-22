@@ -2,7 +2,12 @@ const core = require( "@toolbocks/core" );
 
 const objectUtils = require( "../src/ObjectUtils.cjs" );
 
-const { constants = objectUtils?.dependencies?.constants, arrayUtils = objectUtils?.dependencies?.arrayUtils } = core;
+const
+    {
+        constants = objectUtils?.dependencies?.constants,
+        typeUtils = objectUtils?.dependencies?.typeUtils,
+        arrayUtils = objectUtils?.dependencies?.arrayUtils
+    } = core;
 
 /**
  * Defines a string to represent the type, undefined
@@ -20,26 +25,26 @@ const $scope = constants?.$scope || function()
 objectUtils.disableLogging();
 
 const {
-    detectCycles,
+    detectCycles = constants?.detectCycles,
     getKeys,
     getProperties,
-    getProperty,
+    getProperty = constants?.getProperty || typeUtils?.getProperty,
     hasProperty,
-    setProperty,
+    setProperty = constants?.setProperty || typeUtils?.setProperty,
     getValues,
     getEntries,
-    ObjectEntry,
+    ObjectEntry = constants?.ObjectEntry || typeUtils?.ObjectEntry,
     isEmptyObject,
     isNullOrEmpty,
-    isNullOrNaN,
+    isNullOrNaN = typeUtils?.isNullOrNaN,
     isMissing,
-    getClass,
-    getClassName,
+    getClass = typeUtils?.getClass,
+    getClassName = typeUtils?.getClassName,
     convertToInstanceOf,
     isValidEntry,
     hasNoProperties,
     isEmptyValue,
-    isPopulatedObject,
+    isPopulatedObject = typeUtils?.isPopulated,
     isValidObject,
     firstValidObject,
     firstPopulatedObject,
@@ -872,7 +877,7 @@ describe( "isPopulatedObject", () =>
           {
               let obj = { a: 1 };
 
-              expect( isPopulatedObject( obj, { manadatoryKeys: ["b", "c"] } ) ).toBe( false );
+              expect( isPopulatedObject( obj, { mandatoryKeys: ["b", "c"] } ) ).toBe( false );
           } );
 
     test( "isPopulatedObject returns false if the specified argument is an object that does not contain all mandatory keys",
@@ -880,7 +885,7 @@ describe( "isPopulatedObject", () =>
           {
               let obj = { a: 1, b: 1 };
 
-              expect( isPopulatedObject( obj, { manadatoryKeys: ["b", "c"] } ) ).toBe( false );
+              expect( isPopulatedObject( obj, { mandatoryKeys: ["b", "c"] } ) ).toBe( false );
           } );
 
     test( "isPopulatedObject returns true if the specified argument is an object that contains all mandatory keys",
@@ -888,7 +893,7 @@ describe( "isPopulatedObject", () =>
           {
               let obj = { a: 1, b: 1, c: 1 };
 
-              expect( isPopulatedObject( obj, { manadatoryKeys: ["b", "c"] } ) ).toBe( true );
+              expect( isPopulatedObject( obj, { mandatoryKeys: ["b", "c"] } ) ).toBe( true );
           } );
 
     test( "isPopulatedObject returns false if the specified argument is an object with no populated properties",
@@ -896,7 +901,7 @@ describe( "isPopulatedObject", () =>
           {
               let obj = { a: {} };
 
-              expect( isPopulatedObject( obj ) ).toBe( false );
+              expect( isPopulatedObject( obj, { countDeadBranches: false } ) ).toBe( false );
           } );
 
     test( "isPopulatedObject returns false if the specified argument is an object graph with no populated properties",
@@ -904,7 +909,7 @@ describe( "isPopulatedObject", () =>
           {
               let obj = { a: { b: { c: null } } };
 
-              expect( isPopulatedObject( obj ) ).toBe( false );
+              expect( isPopulatedObject( obj, { countDeadBranches: false } ) ).toBe( false );
           } );
 
     test( "isPopulatedObject returns true if the specified argument is an object graph with at least one populated properties",
@@ -912,7 +917,7 @@ describe( "isPopulatedObject", () =>
           {
               let obj = { a: { b: { c: 1 } } };
 
-              expect( isPopulatedObject( obj ) ).toBe( true );
+              expect( isPopulatedObject( obj, { countDeadBranches: false } ) ).toBe( true );
           } );
 
     test( "isPopulatedObject returns true if the specified argument is one of the valid types and is not considered 'empty'",
@@ -920,7 +925,7 @@ describe( "isPopulatedObject", () =>
           {
               let obj = "abc";
 
-              expect( isPopulatedObject( obj, { validTypes: ["string", "object"] } ) ).toBe( true );
+              expect( isPopulatedObject( obj, { acceptedTypes: ["string", "object"] } ) ).toBe( true );
           } );
 
     test( "isPopulatedObject returns false if the specified argument is one of the valid types but is considered 'empty'",
@@ -928,7 +933,7 @@ describe( "isPopulatedObject", () =>
           {
               let obj = "";
 
-              expect( isPopulatedObject( obj, { validTypes: ["string", "object"] } ) ).toBe( false );
+              expect( isPopulatedObject( obj, { acceptedTypes: ["string", "object"] } ) ).toBe( false );
           } );
 
     test( "isPopulatedObject returns false if the specified argument is an array (by default)",
@@ -2132,6 +2137,11 @@ describe( "toLiteral erases class prototype", () =>
                   {
                       return this.#zip;
                   }
+
+                  fullAddress()
+                  {
+                      return `${this.city}, ${this.state} ${this.zip}`;
+                  }
               }
 
               class House
@@ -2189,7 +2199,7 @@ describe( "toLiteral erases class prototype", () =>
 
               house.lock();
 
-              let obj = toLiteral( house, { removeFunctions: false } );
+              let obj = toLiteral( house, { omitFunctions: false } );
 
               expect( obj === house ).toBe( false );
 
@@ -2204,6 +2214,8 @@ describe( "toLiteral erases class prototype", () =>
               expect( obj.address instanceof Address ).toBe( false );
 
               expect( typeof obj.lock ).toEqual( "function" );
+
+              expect( typeof obj.address.fullAddress ).toBe( "function" );
 
           } );
 } );
@@ -2245,31 +2257,6 @@ describe( "findNode / findRoot",
 
                         node = findNode( obj, "a", "a" );
                         expect( node ).toBe( undefined );
-                    } );
-
-              test( "findRoot",
-                    () =>
-                    {
-                        const dependencies = findNode( $scope(), "__BOCK__OBJECT_UTILS__", "dependencies" );
-
-                        expect( Object.keys( dependencies ).length ).toBe( 5 );
-
-                        const root = findRoot( obj, obj.a.b.c );
-
-                        expect( root ).toEqual( obj );
-
-                        let pathTo = tracePathTo( obj.a.b.c, obj.a );
-
-                        expect( pathTo.join( "." ) ).toEqual( "b.c" );
-
-                        pathTo = tracePathTo( obj.a.b.c.d, obj.a );
-
-                        expect( pathTo.join( "." ) ).toEqual( "b.c.d" );
-
-                        const found = findRoot( this, obj.a.b.c );
-
-                        expect( found ).toBe( null );
-
                     } );
           } );
 

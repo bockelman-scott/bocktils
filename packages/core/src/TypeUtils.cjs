@@ -98,6 +98,7 @@ const $scope = constants?.$scope || function()
             _minus,
             _zero,
             _affirmatives,
+            _underscore,
             DIGITS,
             DIGITS_MAP,
             HEX_DIGITS_MAP,
@@ -112,6 +113,9 @@ const $scope = constants?.$scope || function()
             IllegalArgumentError,
             isPromise = ( pArg ) => (pArg && (pArg.constructor === Promise || pArg === Promise || pArg instanceof Promise)),
             isThenable = ( pArg ) => (pArg && (pArg.then && ("function" === typeof pArg.then))),
+            toNodePathArray,
+            getProperty,
+            setProperty,
             isObjectLiteral,
             populateOptions,
             detectCycles,
@@ -122,10 +126,14 @@ const $scope = constants?.$scope || function()
             attempt,
             asyncAttempt,
             lock,
-            classes
+            classes,
+            moduleUtils
         } = constants;
 
-    const { ToolBocksModule, ModuleEvent } = classes;
+    const { ToolBocksModule, ModuleEvent, propertyDescriptors, objectMethods } = moduleUtils;// classes;
+
+    const functionToString = Function.prototype.toString;
+    const objectToString = Object.prototype.toString;
 
     /**
      * Represents the name of the module<br>
@@ -318,6 +326,68 @@ const $scope = constants?.$scope || function()
     }
 
     /**
+     * ResolvedSet is a class extending VisitedSet, providing additional functionality
+     * for storing and resolving values associated with specific objects or paths.
+     */
+    class ResolvedSet extends VisitedSet
+    {
+        #map = new Map();
+        #mapByNodePath = new Map();
+
+        constructor( pEqualityFunction = ( a, b ) => a === b, ...pValues )
+        {
+            super( pEqualityFunction, ...pValues );
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
+        resolveForNodePath( pValue, ...pNodePath )
+        {
+            let paths = toNodePathArray( ...pNodePath );
+
+            if ( isNull( paths ) || paths.length <= 0 )
+            {
+                return this.resolve( pValue );
+            }
+
+            paths = paths.join( _dot );
+
+            let value = this.#mapByNodePath.get( paths );
+
+            value = isNonNullValue( value ) ? value : pValue;
+
+            if ( isNonNullValue( value ) )
+            {
+                this.#mapByNodePath.set( paths, value );
+            }
+
+            return value;
+        }
+
+        resolve( pObject, pValue )
+        {
+            if ( isObject( pObject ) )
+            {
+                if ( isNonNullValue( pValue ) )
+                {
+                    this.add( pObject );
+                    this.#map.set( pObject, pValue );
+                    return pValue;
+                }
+                else
+                {
+                    return this.has( pObject ) ? this.#map.get( pObject ) : null;
+                }
+            }
+
+            return isNonNullValue( pValue ) ? pValue : (pValue || pObject);
+        }
+    }
+
+    /**
      * Returns the estimated number of bytes required to represent the specified data type.
      * <br>
      * <br>
@@ -414,7 +484,7 @@ const $scope = constants?.$scope || function()
      *
      * @private
      */
-    const _isArr = ( pArg ) => !(_ud === typeof pArg || null == pArg) && "[object Array]" === {}.toString.call( pArg );
+    const _isArr = ( pArg ) => !(_ud === typeof pArg || null == pArg) && "[object Array]" === objectToString.call( pArg, pArg );
 
     // poly-fill for isArray; probably obsolete with modern environments
     if ( _fun !== typeof Array.isArray )
@@ -579,13 +649,20 @@ const $scope = constants?.$scope || function()
      * @type {ObjectEvaluationOptions}
      * @alias module:TypeUtils#DEFAULT_IS_OBJECT_OPTIONS
      */
-    const DEFAULT_IS_OBJECT_OPTIONS =
+    const DEFAULT_IS_OBJECT_OPTIONS = lock(
         {
             rejectPrimitiveWrappers: true,
             rejectArrays: false,
             rejectNull: false,
             allowEmptyObjects: true
-        };
+        } );
+
+    /**
+     * This object defines the default options for the {@link isNonNullObject} function.<br>
+     * @type {ObjectEvaluationOptions}
+     * @alias module:TypeUtils#IS_NON_NULL_OBJECT_OPTIONS
+     */
+    const IS_NON_NULL_OBJECT_OPTIONS = lock( { ...DEFAULT_IS_OBJECT_OPTIONS, rejectNull: true } );
 
     /**
      * Returns true if the specified value is an instance of String, Number, Boolean, or BigInt<br>
@@ -614,7 +691,7 @@ const $scope = constants?.$scope || function()
 
         let value = isPrimitive( pValue ) ? pValue : (isPrimitiveWrapper( pValue ) ? pValue?.valueOf() : isDate( pValue ) ? pValue.getTime() : pValue);
 
-        value = isPrimitive( value ) ? value : attempt( () => isFunction( value?.toString ) ? value.toString() : {}.prototype.toString.call( value ) );
+        value = isPrimitive( value ) ? value : attempt( () => isFunction( value?.toString ) ? value.toString() : functionToString.call( value, value ) );
 
         return value;
     };
@@ -628,31 +705,32 @@ const $scope = constants?.$scope || function()
      * @see {@link DEFAULT_IS_OBJECT_OPTIONS}
      * @see {@link isPrimitiveWrapper}
      *
-     * @param {*} pObj A value to evaluate
+     * @param {*} pObject A value to evaluate
      * @param {ObjectEvaluationOptions} pOptions An object specifying how to handle arrays, null values, or primitive value wrappers<br>
      *
      * @returns {boolean} true if the specified value is an object according to the options specified
      *
      * @alias module:TypeUtils.isObject
      */
-    const isObject = function( pObj, pOptions = DEFAULT_IS_OBJECT_OPTIONS )
+    const isObject = function( pObject, pOptions = DEFAULT_IS_OBJECT_OPTIONS )
     {
-        if ( (_obj === typeof pObj) || pObj instanceof Object )
+        function getKeys( pObject )
+        {
+            return pObject instanceof Map ||
+                   pObject instanceof Set ||
+                   isFunction( pObject?.keys ) ? [...(pObject.keys() || [])] : [...(Object.keys( pObject || {} ) || [])];
+        }
+
+        if ( (_obj === typeof pObject) || pObject instanceof Object )
         {
             const options = populateOptions( pOptions, DEFAULT_IS_OBJECT_OPTIONS );
 
-            if ( options.rejectNull && isNull( pObj ) )
-            {
-                return false;
-            }
-
-            if ( options.rejectPrimitiveWrappers && isPrimitiveWrapper( pObj ) )
-            {
-                return false;
-            }
-
-            return !(options.rejectArrays && _isArr( pObj ));
+            return !((options.rejectNull && isNull( pObject )) ||
+                     (options.rejectArrays && _isArr( pObject )) ||
+                     (options.rejectPrimitiveWrappers && isPrimitiveWrapper( pObject )) ||
+                     ( !options.allowEmptyObjects && getKeys( pObject ).length <= 0));
         }
+
         return false;
     };
 
@@ -865,6 +943,23 @@ const $scope = constants?.$scope || function()
         }
 
         return is;
+    };
+
+    /**
+     * Returns true if the specified object is either null, undefined, or a number that is not valid or not finite.
+     * If the second argument is true, will also return true for empty or whitespace-only strings
+     * @param {*} pObject the value to evaluate
+     * @param {boolean} pTreatStringsAsObjects a boolean value that indicates whether to return true for empty strings
+     * @returns {boolean} true if the value is null, undefined, or NaN (or one of the Infinity values)
+     *
+     * @function isNullOrNaN
+     *
+     * @alias module:TypeUtils.isNullOrNaN
+     *
+     */
+    const isNullOrNaN = function( pObject, pTreatStringsAsObjects = false )
+    {
+        return isNull( pObject, !pTreatStringsAsObjects ) || (isNumber( pObject ) && isNanOrInfinite( pObject ));
     };
 
     /**
@@ -1372,13 +1467,15 @@ const $scope = constants?.$scope || function()
      * @param {boolean} pStrict Specify true to treat any value that is not identical to null as not-null
      * @param pOptions {ObjectEvaluationOptions} An object to clarify how to handle objects that are not null, but have no properties, i.e., {}
      *
+     * @param {Array.<string>} pStack
+     *
      * @returns {boolean} true if the specified value is an object and is not null
      *
      * @alias module:TypeUtils.isNonNullObject
      */
-    const isNonNullObject = function( pObject, pStrict = false, pOptions = DEFAULT_IS_OBJECT_OPTIONS )
+    const isNonNullObject = function( pObject, pStrict = false, pOptions = IS_NON_NULL_OBJECT_OPTIONS, pStack = [] )
     {
-        const options = populateOptions( pOptions, DEFAULT_IS_OBJECT_OPTIONS );
+        const options = populateOptions( pOptions, IS_NON_NULL_OBJECT_OPTIONS );
 
         if ( !isNull( pObject, pStrict ) && isObject( pObject, options ) )
         {
@@ -1387,15 +1484,21 @@ const $scope = constants?.$scope || function()
                 return true;
             }
 
-            const entries = Object.entries( pObject );
+            const entries = objectEntries( pObject );
 
-            if ( options.rejectNull )
+            const populatedEntry = ( entry ) =>
             {
-                return (entries?.length > 0 && !isNull( entries[0][1], pStrict ));
-            }
+                const val = entry.value || entry[1];
+                return isNonNullValue( val ) &&
+                       ( !isObject( val ) ||
+                         isNonNullObject( val, pStrict, options, [...(pStack || []), entry.key] ));
+            };
 
-            return (entries?.length > 0);
+            const populated = ( entries ) => !isNull( entries.find( populatedEntry ) );
+
+            return (entries?.length > 0) && ((detectCycles( pStack, 6, 3 )) || populated( entries ));
         }
+
         return false;
     };
 
@@ -1404,13 +1507,13 @@ const $scope = constants?.$scope || function()
      * which might otherwise evaluate to 'falsey',<br>
      * is actually a non-null value, such as 0, false, or an empty string<br>
      *
-     * @param {*} pObject A value to evaluate
+     * @param {*} pValue A value to evaluate
      * @returns {boolean} true if the specified value is actually a non-null value,
      * even when it might otherwise evaluate to 'falsey', (such as 0, false, or an empty string)
      *
      * @alias module:TypeUtils.isNonNullValue
      */
-    const isNonNullValue = ( pObject ) => (false === pObject || 0 === pObject || _mt_str === pObject || isNotNull( pObject, false ));
+    const isNonNullValue = ( pValue ) => (false === pValue || 0 === pValue || _mt_str === pValue || isNotNull( pValue, false ));
 
     /**
      * Returns true if the specified value is an array
@@ -1527,10 +1630,15 @@ const $scope = constants?.$scope || function()
     /**
      * @typedef {object} IsPopulatedOptions
      *
-     * @property {Array.<string>} [acceptedTypes=['object']]
-     * @property {number} [minimumLength=1]
-     * @property {boolean} [acceptArrays=true]
-     * @property {Array.<string>} [mandatoryKeys=[]]
+     * @property {Array.<string>} [acceptedTypes=['object']] an array of the types of values to be considered.  Defaults to "object"
+     * @property {number} [minimumLength=1] a whole number indicating the fewest properties an object
+     *                                      must have to be considered populated.<br>
+     *                                      If strings are being considered, this value specifies the fewest characters a string must have.
+     *
+     * @property {boolean} [acceptArrays=true] a boolean to indicate whether to treat arrays as objects for the purpose of evaluating as populated
+     * @property {Array.<string>} [mandatoryKeys=[]] an array of strings specifying the properties an object must have to be considered populated
+     * @property {boolean} [countDeadBranches=true] a boolean to indicate whether a property that is an object graph ending in an empty leaf counts toward the minimum length
+     *
      *
      */
 
@@ -1542,8 +1650,9 @@ const $scope = constants?.$scope || function()
         {
             acceptedTypes: [_obj],
             minimumLength: 1,
-            acceptArrays: true,
-            mandatoryKeys: []
+            acceptArrays: false,
+            mandatoryKeys: [],
+            countDeadBranches: true
         };
 
     function resolveAcceptedTypes( pOptions )
@@ -1564,26 +1673,123 @@ const $scope = constants?.$scope || function()
 
     function resolveIsPopulatedArgs( pOptions = DEFAULT_IS_POPULATED_OPTIONS )
     {
-        let options = populateOptions( pOptions, DEFAULT_IS_POPULATED_OPTIONS );
+        const options = populateOptions( pOptions, DEFAULT_IS_POPULATED_OPTIONS );
 
-        const minimumLength = Math.max( 1, (options.minimumLength || 1) );
+        const acceptedTypes = resolveAcceptedTypes( options );
 
-        let acceptedTypes = resolveAcceptedTypes( options );
-        let mandatoryKeys = resolveMandatoryKeys( options );
+        const mandatoryKeys = resolveMandatoryKeys( options );
 
-        return { options, minimumLength, acceptedTypes, mandatoryKeys };
+        const minimumLength = Math.max( 1, (mandatoryKeys?.length || 0), (options.minimumKeys || options.minimumLength || 1) );
+
+        const countDeadBranches = !!options.countDeadBranches;
+
+        return { options, minimumLength, acceptedTypes, mandatoryKeys, countDeadBranches };
     }
 
-    function isPopulatedType( pType, pObject, pMinLength = 1, pAcceptArrays = true, pMandatoryKeys = [] )
+    function isPopulatedObject( pObject, pOptions = DEFAULT_IS_POPULATED_OPTIONS, pVisited = new ResolvedSet(), pStack = [] )
     {
+        const {
+            options,
+            minimumLength,
+            acceptedTypes,
+            mandatoryKeys,
+            countDeadBranches
+        } = resolveIsPopulatedArgs( pOptions );
+
+        const mandatory = [...(mandatoryKeys || [])];
+        const minLength = Math.max( 1, (mandatory?.length || 0), toInteger( minimumLength ) );
+        const acceptArrays = !!options.acceptArrays;
+
         let populated = false;
 
-        let minimumLength = Math.max( 1, parseInt( pMinLength || "1" ) );
+        let nonNull = (isNonNullObject( pObject,
+                                        false,
+                                        {
+                                            rejectNull: true,
+                                            allowEmptyObjects: minLength < 1,
+                                            rejectPrimitiveWrappers: false,
+                                            rejectArrays: !acceptArrays
+                                        } ));
+
+        if ( nonNull )
+        {
+            if ( isArray( pObject ) && acceptArrays )
+            {
+                let arr = [...(pObject || [])].filter( e => isNonNullValue( e ) && ( !isNumeric( e ) || !isNanOrInfinite( toFloat( e ) )) );
+
+                if ( !countDeadBranches )
+                {
+                    arr = arr.filter( ( e, i ) => isPopulated( e, options, pVisited, [...(pStack || []), String( i )] ) );
+                }
+
+                populated = (arr.length >= minLength);
+            }
+            else if ( isPrimitiveWrapper( pObject ) )
+            {
+                populated = isPopulated( toPrimitive( pObject ), options, pVisited, [...(pStack || [])] );
+            }
+            else
+            {
+                if ( countDeadBranches )
+                {
+                    const keys = objectKeys( pObject || {} );
+                    populated = (keys.length >= minLength);
+
+                    if ( populated )
+                    {
+                        populated = mandatory.length <= 0 || mandatory.every( key => isDefined( pObject[key] ) );
+                    }
+                }
+                else
+                {
+                    const entries = objectEntries( pObject || {} );
+
+                    for( const entry of entries )
+                    {
+                        const value = entry.value;
+
+                        const opts = { ...options };
+
+                        opts.minimumLength = isString( value ) ? value?.length : options.minimumLength;
+                        opts.acceptedTypes = isNonNullValue( value ) ? [...acceptedTypes, (typeof value)] : acceptedTypes;
+
+                        if ( isPopulated( value, opts, pVisited, [...(pStack || []), entry.key] ) )
+                        {
+                            populated = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        return populated;
+    }
+
+    function isPopulatedType( pType, pObject, pOptions = DEFAULT_IS_POPULATED_OPTIONS, pVisited = new ResolvedSet(), pStack = [] )
+    {
+        const {
+            options,
+            minimumLength,
+            acceptedTypes,
+            mandatoryKeys,
+            countDeadBranches
+        } = resolveIsPopulatedArgs( pOptions );
+
+        let populated = false;
+
+        let minKeys = Math.max( 0, mandatoryKeys.length );
+        let minLength = Math.max( minKeys, parseInt( minimumLength || "1" ) );
+        let acceptArrays = acceptedTypes.includes( _obj ) && !!options.acceptArrays;
 
         switch ( pType )
         {
+            case _ud:
+                populated = false;
+                break;
+
             case _str:
-                populated = (isString( pObject ) && pObject.length >= minimumLength);
+                populated = (isString( pObject ) && pObject.length >= minLength);
                 break;
 
             case _bool:
@@ -1596,36 +1802,16 @@ const $scope = constants?.$scope || function()
                 break;
 
             case _obj:
-                populated = (isNonNullObject( pObject,
-                                              false,
-                                              {
-                                                  rejectNull: true,
-                                                  allowEmptyObjects: minimumLength < 1,
-                                                  rejectPrimitiveWrappers: false,
-                                                  rejectArrays: !pAcceptArrays
-                                              } ));
 
-                if ( populated )
-                {
-                    if ( isArray( pObject ) )
-                    {
-                        const arr = [...(pObject || [])].filter( e => isNonNullValue( e ) && ( !isNumeric( e ) || !isNanOrInfinite( toFloat( e ) )) );
-                        populated = (arr.length >= minimumLength);
-                    }
-                    else if ( isPrimitiveWrapper( pObject ) )
-                    {
-                        return isPopulated( toPrimitive( pObject ) );
-                    }
-                    else
-                    {
-                        const mandatoryKeys = [...(pMandatoryKeys || [])];
-                        populated = mandatoryKeys.length <= 0 || mandatoryKeys.every( key => isDefined( pObject[key] ) );
-                    }
-                }
+                const visited = pVisited || new ResolvedSet();
+                const stack = pStack || [];
+
+                populated = (acceptArrays || !isArray( pObject )) && isPopulatedObject( pObject, options, visited, stack );
 
                 break;
         }
 
+        return populated;
     }
 
     /**
@@ -1657,13 +1843,15 @@ const $scope = constants?.$scope || function()
      *                              defaults to 1
      *                 acceptArrays: whether to return true if the evaluated value is an array
      *                               defaults to false
+     * @param pVisited
+     * @param pStack
      * @returns {*|boolean}
      */
-    const isPopulated = function( pObject, pOptions = DEFAULT_IS_POPULATED_OPTIONS )
+    const isPopulated = function( pObject, pOptions = DEFAULT_IS_POPULATED_OPTIONS, pVisited = new ResolvedSet(), pStack = [] )
     {
         let { options, minimumLength, acceptedTypes, mandatoryKeys } = resolveIsPopulatedArgs( pOptions );
 
-        if ( isNull( pObject ) || !(acceptedTypes.includes( typeof pObject )) )
+        if ( !isNonNullValue( pObject ) || !(acceptedTypes.includes( typeof pObject )) )
         {
             return false;
         }
@@ -1674,7 +1862,18 @@ const $scope = constants?.$scope || function()
         {
             if ( acceptedType === typeof pObject )
             {
-                populated = isPopulatedType( acceptedType, pObject, minimumLength, options.acceptArrays, mandatoryKeys );
+                const visited = pVisited || new ResolvedSet();
+                const stack = pStack || [];
+
+                if ( detectCycles( stack, 5, 5 ) )
+                {
+                    return populated || visited.resolve( pObject );
+                }
+
+                populated = !!(visited.resolve( pObject )) || isPopulatedType( acceptedType, pObject, options, visited, stack );
+
+                visited.resolve( pObject, !!populated );
+
                 break;
             }
 
@@ -2123,7 +2322,7 @@ const $scope = constants?.$scope || function()
     {
         if ( isFunction( pFunction ) || ( !pStrict && BUILTIN_TYPE_NAMES.includes( pFunction?.name )) )
         {
-            if ( /^class\s/.test( (Function.prototype.toString.call( pFunction, pFunction )).trim() ) )
+            if ( /^class\s/.test( (functionToString.call( pFunction, pFunction )).trim() ) )
             {
                 return true;
             }
@@ -2405,6 +2604,18 @@ const $scope = constants?.$scope || function()
             return arr.length > 0 ? arr[0] : null;
         }
     }
+
+    const firstValidObject = function( ...pObjects )
+    {
+        const finder = new Finder( ( e ) => isNonNullObject( e ) && objectKeys( e ).length > 0 );
+        return finder.findFirst( ...pObjects );
+    };
+
+    const firstPopulatedObject = function( ...pObjects )
+    {
+        const finder = new Finder( ( e ) => isNonNullObject( e ) && isPopulated( e ) );
+        return finder.findFirst( ...pObjects );
+    };
 
     /**
      * Returns the class (function) of which the specified object is an instance
@@ -2832,7 +3043,7 @@ const $scope = constants?.$scope || function()
 
             value = isDate( value ) ? this.castDateToString( value ) || value : value;
 
-            value = isFunction( value ) ? attempt( () => Function.prototype.toString.call( value, value ) ) : value;
+            value = isFunction( value ) ? attempt( () => functionToString.call( value, value ) ) : value;
 
             value = isArray( value ) ? [...(value || [])].map( e => this.castToString( e ) ).join( this.options?.joinOn ) : value;
 
@@ -3676,40 +3887,102 @@ const $scope = constants?.$scope || function()
      */
     const isDataView = ( pValue ) => (_ud !== typeof DataView && pValue instanceof DataView);
 
-    function toObjectLiteral( pObject, pVisited = new VisitedSet(), pStack = [] )
+
+    const DEFAULT_OBJECT_LITERAL_OPTIONS =
+        {
+            prune: false,
+            trimStrings: false,
+            omitFunctions: true,
+            transientProperties: []
+        };
+
+    function toObjectLiteral( pObject, pOptions = DEFAULT_OBJECT_LITERAL_OPTIONS, pVisited = new ResolvedSet(), pStack = [] )
     {
         if ( !isObject( pObject ) || isObjectLiteral( pObject ) )
         {
             return pObject;
         }
 
-        const entries = ObjectEntry.unwrapValues( objectEntries( pObject ) );
+        const options = populateOptions( pOptions, DEFAULT_OBJECT_LITERAL_OPTIONS );
+
+        const includeProperty = ( pValue ) => ( !options.prune || isNonNullValue( pValue )) && ( !options.omitFunctions || !isFunction( pValue ));
+
+        const processValue = ( newValue ) => (options.trimStrings && isString( newValue )) ? newValue.trim() : newValue;
+
+        const transientProperties = ["constructor", "prototype", "toJson", "toObject", "global", "this", "toString", "__GUID", ...(([options.transientProperties] || []).flat())];
+
+
+        const visited = pVisited || new ResolvedSet();
+
+        const stack = [...(pStack || [])];
+
+
+        const entries = ObjectEntry.unwrapValues( pObject );
+
 
         const obj = {};
 
-        const visited = pVisited || new VisitedSet();
-        const stack = pStack || [];
+        visited.add( pObject );
 
-        for( const [key, value] of entries )
+        for( const entry of entries )
         {
-            if ( visited.has( value ) || detectCycles( stack, 5, 5 ) )
+            const key = entry[0];
+            const value = entry[1];
+
+            if ( transientProperties.includes( key ) || key.startsWith( "#" ) )
             {
-                obj[key] = value;
                 continue;
             }
 
-            visited.add( value );
-            stack.push( value );
+            if ( visited.has( value ) || detectCycles( stack, 5, 5 ) )
+            {
+                let newValue = visited.resolve( value ) || value;
 
-            try
-            {
-                obj[key] = toObjectLiteral( value, visited, stack );
+                newValue = processValue( newValue );
+
+                if ( includeProperty( newValue ) )
+                {
+                    obj[key] = newValue;
+                }
+
+                continue;
             }
-            finally
+
+            const resolvedValue = visited.resolveForNodePath( undefined, [...stack, key] );
+
+            let newValue = (resolvedValue || attempt( () => toObjectLiteral( value, options, visited, [...stack, key] ) ) || value);
+
+            newValue = processValue( newValue );
+
+            if ( includeProperty( newValue ) )
             {
-                stack.pop();
+                obj[key] = newValue;
+
+                if ( obj[key] )
+                {
+                    visited.resolveForNodePath( obj[key], [...stack, key] );
+                }
             }
         }
+
+        if ( !options.omitFunctions )
+        {
+            const excludedMethods = ["constructor", "toString", "valueOf"];
+
+            const excludeGeneric = e => isString( e ) && !excludedMethods.includes( e.trim() );
+
+            objectMethods( pObject ).filter( excludeGeneric ).forEach( ( method ) =>
+                                                                       {
+                                                                           const func = pObject[method];
+                                                                           if ( isFunction( func ) )
+                                                                           {
+                                                                               obj[method] = func.bind( obj );
+                                                                           }
+                                                                       } );
+
+        }
+
+        visited.resolve( pObject, obj );
 
         return obj;
     }
@@ -3725,11 +3998,6 @@ const $scope = constants?.$scope || function()
         {
             return [...(pArgs || [])].flat();
         }
-
-        if ( isNonNullObject( pArgs ) )
-        {
-
-        }
     }
 
     /**
@@ -3740,6 +4008,64 @@ const $scope = constants?.$scope || function()
     function explode( ...pArgs )
     {
         return [...(pArgs || [])].flat( Infinity );
+    }
+
+    /**
+     * Returns an object literal (or Map) of key/value nodes
+     * where the key is the concatenated path to the leaf node in the source object.
+     *
+     * @param {object} pObject the source object from which to generate the new object
+     * @param {boolean} [pAsMap=false] indicates whether to return an object literal or an instance of Map
+     *
+     * @param pPathString
+     * @param pVisited
+     * @param pStack
+     * @returns {object|Map<string,*>} a new object that is either an object literal or an instance of Map
+     *                                 where the keys are the concatenated path to the original value in the source object
+     */
+    function collapse( pObject, pAsMap = false, pPathString = _mt_str, pVisited = new ResolvedSet(), pStack = [] )
+    {
+        let obj = pAsMap ? new Map() : {};
+
+        const options =
+            {
+                rejectPrimitiveWrappers: false,
+                rejectArrays: false,
+                rejectNull: true,
+                allowEmptyObjects: false
+            };
+
+        if ( isNonNullObject( pObject ) )
+        {
+            const visited = pVisited || new ResolvedSet();
+            const stack = [...(pStack || [])];
+
+            if ( visited.has( pObject ) || detectCycles( stack, 5, 5 ) )
+            {
+                obj = visited.resolve( pObject ) || pObject;
+            }
+
+            let literal = toObjectLiteral( pObject );
+
+            let pathString = pPathString || _mt_str;
+
+            objectEntries( literal ).forEach( ( entry ) =>
+                                              {
+                                                  const key = entry.key;
+                                                  const value = entry.value;
+
+                                                  while ( isNonNullObject( value ) )
+                                                  {
+
+                                                  }
+
+                                              } );
+        }
+    }
+
+    function expand( pObject )
+    {
+
     }
 
     /**
@@ -4088,6 +4414,38 @@ const $scope = constants?.$scope || function()
         return comp;
     };
 
+    try
+    {
+        Object.prototype.compareTo = function( pOther )
+        {
+
+        };
+
+        Object.prototype.equals = function( pOther )
+        {
+
+        };
+    }
+    catch( ex )
+    {
+        // in case the environment does not allow extending the built-in types
+    }
+
+    ObjectEntry.prototype.compareTo = function( pOther )
+    {
+
+    };
+
+    ObjectEntry.prototype.equals = function( pOther )
+    {
+
+    };
+
+    ObjectEntry.compare = function( pA, pB, pOptions = COMPARE_OPTIONS )
+    {
+
+    };
+
     class ComparatorFactory
     {
         #options;
@@ -4338,6 +4696,7 @@ const $scope = constants?.$scope || function()
             isObject,
             isCustomObject,
             isNonNullObject,
+            isNullOrNaN,
             isValidObject,
             isPopulated,
             isError,
@@ -4411,6 +4770,8 @@ const $scope = constants?.$scope || function()
             castTo,
             toIterable,
             firstMatchingType,
+            firstValidObject,
+            firstPopulatedObject,
             estimateBytesForType,
             NVL,
             isReadOnly,
@@ -4419,6 +4780,9 @@ const $scope = constants?.$scope || function()
             calculateTypedArrayClass,
             toTypedArray,
             toObjectLiteral,
+            getProperty,
+            setProperty,
+            toNodePathArray,
 
             /**
              * The classes exported with this module.<br>
@@ -4434,6 +4798,7 @@ const $scope = constants?.$scope || function()
                     ComparatorFactory,
                     Finder,
                     VisitedSet,
+                    ResolvedSet,
                     Option,
                     TypedOption,
                     StringOption,
@@ -4445,6 +4810,7 @@ const $scope = constants?.$scope || function()
             ComparatorFactory,
             Finder,
             VisitedSet,
+            ResolvedSet,
             Option,
             TypedOption,
             StringOption,

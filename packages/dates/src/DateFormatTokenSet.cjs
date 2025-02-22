@@ -3,7 +3,7 @@
  * You can define your own token set to use in place of the default if desired.
  */
 
- const core = require( "@toolbocks/core" );
+const core = require( "@toolbocks/core" );
 
 /**
  * Establish separate constants for each of the common utilities imported
@@ -117,15 +117,15 @@ const {
             },
         ];
 
-    const MONTH_NAMES = lock( [].concat( LOCALE_DEFAULTS.MONTH_NAMES || getMonthNames( DEFAULT_LOCALE ) ) );
+    const MONTH_NAMES = lock( [...(LOCALE_DEFAULTS.MONTH_NAMES || getMonthNames( DEFAULT_LOCALE ))] );
 
-    const MONTH_NAMES_SHORT = lock( [].concat( LOCALE_DEFAULTS.MONTH_NAMES_SHORT || getMonthAbbreviations( DEFAULT_LOCALE ) ) );
+    const MONTH_NAMES_SHORT = lock( [...(LOCALE_DEFAULTS.MONTH_NAMES_SHORT || getMonthAbbreviations( DEFAULT_LOCALE ))] );
 
-    const DAY_NAMES = lock( [].concat( LOCALE_DEFAULTS.DAY_NAMES || getDayNames( DEFAULT_LOCALE ) ) );
+    const DAY_NAMES = lock( [...(LOCALE_DEFAULTS.DAY_NAMES || getDayNames( DEFAULT_LOCALE ))] );
 
-    const DAY_NAMES_SHORT = lock( [].concat( LOCALE_DEFAULTS.DAY_NAMES_SHORT || getDayAbbreviations( DEFAULT_LOCALE ) ) );
+    const DAY_NAMES_SHORT = lock( [...(LOCALE_DEFAULTS.DAY_NAMES_SHORT || getDayAbbreviations( DEFAULT_LOCALE ))] );
 
-    const DAY_LETTERS = lock( [].concat( LOCALE_DEFAULTS.DAY_LETTERS || getDayLetters( DEFAULT_LOCALE ) ) );
+    const DAY_LETTERS = lock( [...(LOCALE_DEFAULTS.DAY_LETTERS || getDayLetters( DEFAULT_LOCALE ))] );
 
     const REPETITION_RULES = lock(
         {
@@ -262,7 +262,7 @@ const {
 
     const SUPPORTED_INTL_OPTIONS = lock( Object.keys( DEFINED_INTL_OPTIONS ) );
 
-    const SUPPORTED_TOKENS = lock( [].concat( DEFINED_TOKENS ).map( e => Object.keys( e ).flat() ).flat() );
+    const SUPPORTED_TOKENS = lock( [...(DEFINED_TOKENS)].map( e => Object.keys( e ).flat() ).flat() );
 
     /**
      * Common Week Numbering Systems:
@@ -629,13 +629,13 @@ const {
 
     class TokenEra extends Token
     {
-        #eras = [].concat( ERAS );
+        #eras = [...(ERAS)];
 
         constructor( pCharacters, pEras = ERAS, pParentSet = null )
         {
             super( pCharacters, REPETITION_RULES.NONE, pParentSet );
 
-            this.#eras = [].concat( pEras || ERAS );
+            this.#eras = [...asArray( pEras || ERAS )];
         }
 
         static get [Symbol.species]()
@@ -645,7 +645,7 @@ const {
 
         get eras()
         {
-            return [].concat( this.#eras || ERAS );
+            return [...(this.#eras || ERAS)];
         }
 
         toPattern()
@@ -684,7 +684,7 @@ const {
         {
             const date = this.resolveDate( pDate );
 
-            let eras = [].concat( this.eras );
+            let eras = [...(this.eras || ERAS)];
 
             eras = eras.sort( this.comparator );
 
@@ -913,8 +913,8 @@ const {
         {
             super( pCharacters, 0, 11, REPETITION_RULES.VARY_FORMAT, pParentSet );
 
-            this.#names = [].concat( asArray( pMonthNames || MONTH_NAMES ) );
-            this.#abbreviations = [].concat( asArray( pMonthAbbreviations || this.#names.map( e => e.slice( 0, 3 ) ) || MONTH_NAMES_SHORT ) );
+            this.#names = [...(asArray( pMonthNames || MONTH_NAMES ))];
+            this.#abbreviations = [...(asArray( pMonthAbbreviations || this.#names.map( e => e.slice( 0, 3 ) ) || MONTH_NAMES_SHORT ))];
         }
 
         static get [Symbol.species]()
@@ -1257,17 +1257,17 @@ const {
 
     class TokenDayName extends Token
     {
-        #dayNames = [].concat( DAY_NAMES );
-        #dayAbbreviations = [].concat( DAY_NAMES_SHORT );
-        #dayLetters = [].concat( DAY_LETTERS );
+        #dayNames = [...(DAY_NAMES)];
+        #dayAbbreviations = [...(DAY_NAMES_SHORT)];
+        #dayLetters = [...(DAY_LETTERS)];
 
         constructor( pCharacters, pDayNames = DAY_NAMES, pNameAbbreviations = DAY_NAMES_SHORT, pDayLetters = DAY_LETTERS, pParentSet = null )
         {
             super( pCharacters, REPETITION_RULES.REPEAT, pParentSet );
 
-            this.#dayNames = [].concat( pDayNames || DAY_NAMES );
-            this.#dayAbbreviations = [].concat( pNameAbbreviations || DAY_NAMES_SHORT );
-            this.#dayLetters = [].concat( pDayLetters || DAY_LETTERS );
+            this.#dayNames = [...(pDayNames || DAY_NAMES)];
+            this.#dayAbbreviations = [...(pNameAbbreviations || DAY_NAMES_SHORT)];
+            this.#dayLetters = [...(pDayLetters || DAY_LETTERS)];
         }
 
         static get [Symbol.species]()
@@ -1277,17 +1277,17 @@ const {
 
         get dayNames()
         {
-            return [].concat( this.#dayNames || DAY_NAMES );
+            return [...(this.#dayNames || DAY_NAMES)];
         }
 
         get dayAbbreviations()
         {
-            return [].concat( this.#dayAbbreviations || DAY_NAMES_SHORT );
+            return [...(this.#dayAbbreviations || DAY_NAMES_SHORT)];
         }
 
         get dayLetters()
         {
-            return [].concat( this.#dayLetters || DAY_LETTERS );
+            return [...(this.#dayLetters || DAY_LETTERS)];
         }
 
         toPattern()
@@ -1892,18 +1892,18 @@ const {
 
             this.#options = mergeOptions( localeOptions, pOptions, DEFAULT_OPTIONS );
 
-            this.#monthNames = [].concat( this.#options?.monthNames || getMonthNames( this.#locale ) || MONTH_NAMES );
-            this.#monthAbbreviations = [].concat( this.#options?.monthAbbreviations || getMonthAbbreviations( this.#locale ) || MONTH_NAMES_SHORT );
+            this.#monthNames = [...(this.#options?.monthNames || getMonthNames( this.#locale ) || MONTH_NAMES)];
+            this.#monthAbbreviations = [...(this.#options?.monthAbbreviations || getMonthAbbreviations( this.#locale ) || MONTH_NAMES_SHORT)];
 
             this.#datePartCollections.set( DATE_PARTS.MONTH, [this.#monthNames, this.#monthAbbreviations, MONTH_NAMES, MONTH_NAMES_SHORT] );
 
-            this.#dayNames = [].concat( this.#options?.dayNames || getDayNames( this.#locale ) || DAY_NAMES );
-            this.#dayAbbreviations = [].concat( this.#options?.dayAbbreviations || getDayAbbreviations( this.#locale ) || DAY_NAMES_SHORT );
-            this.#dayLetters = [].concat( this.#options?.dayLetters || getDayLetters( this.#locale ) || DAY_LETTERS );
+            this.#dayNames = [...(this.#options?.dayNames || getDayNames( this.#locale ) || DAY_NAMES)];
+            this.#dayAbbreviations = [...(this.#options?.dayAbbreviations || getDayAbbreviations( this.#locale ) || DAY_NAMES_SHORT)];
+            this.#dayLetters = [...(this.#options?.dayLetters || getDayLetters( this.#locale ) || DAY_LETTERS)];
 
             this.#datePartCollections.set( DATE_PARTS.DAY_OF_WEEK, [this.#dayNames, this.#dayAbbreviations, this.#dayLetters, DAY_NAMES, DAY_NAMES_SHORT, DAY_LETTERS] );
 
-            this.#eras = [].concat( this.#options?.eras || getEras( this.#locale ) || ERAS );
+            this.#eras = [...(this.#options?.eras || getEras( this.#locale ) || ERAS)];
 
             this.#amString = this.#options?.amString || ((getAmPmStrings( this.#locale ) || [_mt_str])[0]) || "AM";
             this.#pmString = this.#options?.pmString || ((getAmPmStrings( this.#locale ) || [_mt_str])[1]) || "PM";
@@ -1972,32 +1972,32 @@ const {
 
         get monthNames()
         {
-            return [].concat( this.#monthNames || getMonthNames( this.locale ) || MONTH_NAMES );
+            return [...(this.#monthNames || getMonthNames( this.locale ) || MONTH_NAMES)];
         }
 
         get monthAbbreviations()
         {
-            return [].concat( this.#monthAbbreviations || getMonthAbbreviations( this.locale ) || MONTH_NAMES_SHORT );
+            return [...(this.#monthAbbreviations || getMonthAbbreviations( this.locale ) || MONTH_NAMES_SHORT)];
         }
 
         get dayNames()
         {
-            return [].concat( this.#dayNames || getDayNames( this.locale ) || DAY_NAMES );
+            return [...(this.#dayNames || getDayNames( this.locale ) || DAY_NAMES)];
         }
 
         get dayAbbreviations()
         {
-            return [].concat( this.#dayAbbreviations || getDayAbbreviations( this.locale ) || DAY_NAMES_SHORT );
+            return [...(this.#dayAbbreviations || getDayAbbreviations( this.locale ) || DAY_NAMES_SHORT)];
         }
 
         get dayLetters()
         {
-            return [].concat( this.#dayLetters || getDayLetters( this.locale ) || DAY_LETTERS );
+            return [...(this.#dayLetters || getDayLetters( this.locale ) || DAY_LETTERS)];
         }
 
         get eras()
         {
-            return [].concat( this.#eras || getEras( this.locale ) || ERAS );
+            return [...(this.#eras || getEras( this.locale ) || ERAS)];
         }
 
         get hourCycle()

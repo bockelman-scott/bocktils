@@ -15,7 +15,7 @@
  */
 
 // import the only dependency for this module
-const bockModuleBootstrap = require( "./_ToolBocksModule.cjs" );
+const moduleUtils = require( "./_ToolBocksModule.cjs" );
 
 /**
  * This module is constructed by an Immediately Invoked Function Expression (IIFE).
@@ -76,7 +76,7 @@ const bockModuleBootstrap = require( "./_ToolBocksModule.cjs" );
      */
     const dependencies =
         {
-            bockModuleBootstrap
+            moduleUtils
         };
 
     const
@@ -107,13 +107,17 @@ const bockModuleBootstrap = require( "./_ToolBocksModule.cjs" );
             fireAndForget,
             asPhrase,
             isReadOnly,
+            bracketsToDots,
+            toNodePathArray,
             isObjectLiteral,
             detectCycles,
             executeCallback,
-            ObjectEntry = bockModuleBootstrap?.classes?.ObjectEntry,
+            ObjectEntry = moduleUtils?.classes?.ObjectEntry,
             objectEntries,
             objectValues,
             objectKeys,
+            getProperty,
+            setProperty,
             populateOptions,
             mergeOptions,
             merge = mergeOptions,
@@ -141,10 +145,10 @@ const bockModuleBootstrap = require( "./_ToolBocksModule.cjs" );
             getMessagesLocale,
             isFulfilled,
             isRejected,
-            classes: modulePrototypeClasses,
-        } = bockModuleBootstrap;
+            classes: moduleUtilsClasses,
+        } = moduleUtils;
 
-    const { PromiseResult } = modulePrototypeClasses || {};
+    const { PromiseResult } = moduleUtilsClasses || {};
 
     if ( _ud === typeof CustomEvent )
     {
@@ -337,7 +341,7 @@ const bockModuleBootstrap = require( "./_ToolBocksModule.cjs" );
 
             PRIMITIVE_WRAPPER_TYPES = lock( [String, Number, Boolean, BigInt] ),
 
-            GLOBAL_TYPES = lock( [Object, Array, Function, Date, RegExp, Symbol, Math, JSON, Map, Set, Promise, ArrayBuffer, SharedArrayBuffer, DataView, WeakMap, WeakRef, WeakSet].concat( ...PRIMITIVE_WRAPPER_TYPES ) ),
+            GLOBAL_TYPES = lock( [Object, Array, Function, Date, RegExp, Symbol, Math, JSON, Map, Set, Promise, ArrayBuffer, SharedArrayBuffer, DataView, WeakMap, WeakRef, WeakSet, ...PRIMITIVE_WRAPPER_TYPES] ),
 
             BUILTIN_TYPES = lock( [].concat( ...TYPED_ARRAYS ).concat( ...ERROR_TYPES ).concat( ...GLOBAL_TYPES ) ),
 
@@ -401,7 +405,7 @@ const bockModuleBootstrap = require( "./_ToolBocksModule.cjs" );
                 return (_fun === typeof pFunction ? pFunction?.name || funcToString.call( pFunction, pFunction ) : (_mt_str + pFunction));
             },
             MESSAGES_LOCALE = getMessagesLocale()
-        } = (bockModuleBootstrap || $scope() || {});
+        } = (moduleUtils || $scope() || {});
 
     /**
      * Represents a set of time durations in milliseconds.
@@ -756,6 +760,8 @@ const bockModuleBootstrap = require( "./_ToolBocksModule.cjs" );
             $scope,
 
             dependencies,
+
+            moduleUtils,
 
             /**
              * The classes exported with this module.<br>
@@ -2148,6 +2154,13 @@ const bockModuleBootstrap = require( "./_ToolBocksModule.cjs" );
             op_false,
 
             op_identity,
+
+            bracketsToDots,
+
+            toNodePathArray,
+
+            getProperty,
+            setProperty,
 
             /**
              * Returns an object corresponding to a set of default options with one or more properties

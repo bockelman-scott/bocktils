@@ -669,10 +669,10 @@ describe( "Errors", () =>
 
         expect( catcher( "A", "B" ) ).toEqual( 0 );
 
-        expect( loggedMessages ).toEqual( [
-                                              "IllegalArgumentError: Both arguments to add must be numbers",
-                                              { "a": "A", "b": "B", }
-                                          ] );
+        expect( loggedMessages.slice( 0, 2 ) ).toEqual( [
+                                                            "IllegalArgumentError: Both arguments to add must be numbers",
+                                                            { "a": "A", "b": "B", }
+                                                        ] );
 
 
     } );

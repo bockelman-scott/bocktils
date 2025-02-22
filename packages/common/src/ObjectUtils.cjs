@@ -70,6 +70,7 @@ const $scope = constants?.$scope || function()
             S_WARN,
             S_TRACE,
             no_op,
+            bracketsToDots,
             populateOptions,
             funcToString,
             lock,
@@ -100,12 +101,15 @@ const $scope = constants?.$scope || function()
             isObject,
             isCustomObject,
             isNonNullObject,
+            isValidObject,
+            isPopulated,
             isFunction,
             isAsyncFunction,
             isNumber,
             isNumeric,
             isZero,
             isNanOrInfinite,
+            isNullOrNaN,
             isBoolean,
             isArray,
             isMap,
@@ -128,6 +132,9 @@ const $scope = constants?.$scope || function()
             VisitedSet,
             defaultFor,
             areSameType,
+            firstValidObject,
+            firstPopulatedObject,
+            toObjectLiteral,
             estimateBytesForType,
             BYTES_PER_TYPE
         } = typeUtils;
@@ -175,38 +182,38 @@ const $scope = constants?.$scope || function()
 
     /*const uniqueObjectId = Symbol.for( "__BOCK__UNIQUE_OBJECT_ID__" );
 
-    try
-    {
-        Object.defineProperty( Object.prototype,
-                               uniqueObjectId,
-                               {
-                                   get: function()
-                                   {
-                                       this.__unique_object_id__ = this.__unique_object_id__ || guidUtils.guid();
-                                       return this.__unique_object_id__;
-                                   },
-                                   set: no_op
-                               } );
+     try
+     {
+     Object.defineProperty( Object.prototype,
+     uniqueObjectId,
+     {
+     get: function()
+     {
+     this.__unique_object_id__ = this.__unique_object_id__ || guidUtils.guid();
+     return this.__unique_object_id__;
+     },
+     set: no_op
+     } );
 
-        Object.prototype.getUniqueObjectInstanceId = function()
-        {
-            return this[uniqueObjectId];
-        };
+     Object.prototype.getUniqueObjectInstanceId = function()
+     {
+     return this[uniqueObjectId];
+     };
 
-        Object.defineProperty( Object.prototype,
-                               S_GUID,
-                               {
-                                   get: function()
-                                   {
-                                       return this[uniqueObjectId];
-                                   },
-                                   set: no_op
-                               } );
-    }
-    catch( ex )
-    {
-        // objects won't have a uniqueObjectId unless they already do
-    }*/
+     Object.defineProperty( Object.prototype,
+     S_GUID,
+     {
+     get: function()
+     {
+     return this[uniqueObjectId];
+     },
+     set: no_op
+     } );
+     }
+     catch( ex )
+     {
+     // objects won't have a uniqueObjectId unless they already do
+     }*/
 
     /**
      * Defines the maximum length of a branch of an object graph that will be cloned when copying an object.
@@ -598,18 +605,6 @@ const $scope = constants?.$scope || function()
             return isNull( pObject ) || isEmptyObject( pObject, pTreatStringsAsObjects );
         }
         return false;
-    };
-
-    /**
-     * Returns true if the specified object is either null, undefined, or a number that is not valid or not finite.
-     * If the second argument is true, will also return true for empty or whitespace-only strings
-     * @param pObject the value to evaluate
-     * @param pTreatStringsAsObjects a boolean value that indicates whether to return true for empty strings
-     * @returns {boolean} true if the value is null, undefined, or NaN (or one of the Infinity values)
-     */
-    const isNullOrNaN = function( pObject, pTreatStringsAsObjects = false )
-    {
-        return isNull( pObject, !pTreatStringsAsObjects ) || (isNumber( pObject ) && isNanOrInfinite( pObject ));
     };
 
     /**
@@ -1072,175 +1067,6 @@ const $scope = constants?.$scope || function()
         return false;
     };
 
-    const DEFAULT_IS_POPULATED_OPTIONS =
-        {
-            validTypes: [_obj],
-            minimumKeys: 1,
-            acceptArrays: false,
-            mandatoryKey: _mt_str
-        };
-
-    /**
-     * Returns true if the specified value is
-     *
-     * an object with at least n non-empty properties
-     * (where n is the value specified in the options argument or 1)
-     * and (optionally) having the specified key(s)
-     *
-     * or
-     *
-     *  DEPENDING ON VALUES PASSED IN THE OPTIONS ARGUMENT:
-     *
-     *  an array with at least n non-null, non-empty elements
-     *  (where n is the value specified in the options argument or 1) or
-     *
-     *
-     *  a valid number or
-     *  a boolean or
-     *  a function or
-     *  a non-empty string
-     *
-     * @param pObject a value to evaluate
-     * @param pOptions an object defining optional characteristics the value must satisfy
-     *                 validTypes: an array of types to accept (defaults to ["object"])
-     *                 minimumKeys: an integer defining how many properties an object must have
-     *                              (or elements a pruned array must have)
-     *                              defaults to 1
-     *                 acceptArrays: whether to return true if the evaluated value is an array
-     *                               defaults to false
-     * @returns {*|boolean}
-     */
-    const isPopulated = function( pObject, pOptions = DEFAULT_IS_POPULATED_OPTIONS )
-    {
-        let opts = populateOptions( pOptions, DEFAULT_IS_POPULATED_OPTIONS );
-
-        const validTypes = [_obj].concat( ...(opts.validTypes || EMPTY_ARRAY) );
-
-        if ( isNull( pObject ) || !(validTypes.includes( typeof pObject )) )
-        {
-            return false;
-        }
-
-        const minimumKeys = Math.max( 1, (opts.minimumKeys || 1) );
-
-        let mandatoryKeys = [].concat( ...(opts?.manadatoryKeys || [opts?.mandatoryKey || _mt_str]) );
-        mandatoryKeys = (mandatoryKeys && mandatoryKeys.length > 0) ? mandatoryKeys.filter( NON_BLANK_STRINGS ) : EMPTY_ARRAY;
-
-        switch ( typeof pObject )
-        {
-            case _obj:
-                if ( isArray( pObject ) )
-                {
-                    return opts?.acceptArrays && pruneArray( pObject )?.length >= minimumKeys;
-                }
-
-                if ( hasNoProperties( pObject ) )
-                {
-                    return false;
-                }
-
-                if ( getProperties( pObject ).length >= minimumKeys )
-                {
-                    let populated = true;
-
-                    if ( mandatoryKeys && mandatoryKeys.length > 0 )
-                    {
-                        for( const key of mandatoryKeys )
-                        {
-                            if ( !isBlank( key ) && !(key in pObject) )
-                            {
-                                populated = false;
-                                break;
-                            }
-                        }
-                    }
-
-                    return populated;
-                }
-                break;
-
-            case _fun:
-                return true;
-
-            case _str:
-                return _mt_str !== pObject && pObject.length >= minimumKeys;
-
-            case _bool:
-                return true;
-
-            case _num:
-            case _big:
-                return isValidNumber( pObject );
-
-            default:
-                return pObject;
-        }
-
-        return false;
-    };
-
-    /**
-     * Returns true if the specified value is a non-null object with at least one key
-     * @param pObject
-     * @returns {*|boolean}
-     */
-    const isValidObject = function( pObject )
-    {
-        return isNonNullObject( pObject ) && getKeys( pObject ).length > 0;
-    };
-
-    /**
-     * Returns the first value specified that is a valid object
-     * @param pObject
-     * @returns {null}
-     */
-    const firstValidObject = function( ...pObject )
-    {
-        let object = null;
-
-        let objects = (varargs( ...pObject )).filter( isValidObject );
-
-        if ( null == objects || (objects?.length || 0) <= 0 )
-        {
-            return object;
-        }
-
-        while ( (null === object || !isValidObject( object )) && objects.length > 0 )
-        {
-            object = objects.shift();
-        }
-
-        return object;
-    };
-
-    /**
-     * Returns the first value specified that is a populated object, as per the criteria
-     * @param pCriteria an object to pass options to the isPopulated function used internally
-     * @param pObject one or more values that might be populated objects
-     * @returns {object} the first object satisfying the criteria
-     * @see isPopulated
-     */
-    const firstPopulatedObject = function( pCriteria = DEFAULT_IS_POPULATED_OPTIONS, ...pObject )
-    {
-        const options = populateOptions( pCriteria, DEFAULT_IS_POPULATED_OPTIONS );
-
-        let object = null;
-
-        let objects = (varargs( ...pObject )).filter( e => isPopulated( e, options ) );
-
-        if ( null == objects || (objects?.length || 0) <= 0 )
-        {
-            return object;
-        }
-
-        while ( (null === object || !isPopulated( object, options )) && objects.length > 0 )
-        {
-            object = objects.shift();
-        }
-
-        return null !== object && isPopulated( object, options ) ? object : null;
-    };
-
     const tracePathTo = function( pNode, pRoot, pPath = [], pStack = [], pVisited = [] )
     {
         let stack = asArray( pStack || [] );
@@ -1449,32 +1275,6 @@ const $scope = constants?.$scope || function()
         this.callCount = Math.max( 0, asInt( findRoot.callCount ) - 1 );
 
         return root;
-    };
-
-    /**
-     * This function converts a property path such as arr[0][0][0] into arr.0.0.0,
-     * taking advantage of the fact that arrays are really just objects whose properties look like integers
-     * @param pPropertyPath {string} a property name or path to a property
-     * @returns {string} a property name or path with brackets notation converted into dot notation
-     */
-    const bracketsToDots = function( pPropertyPath )
-    {
-        let propertyName = isString( pPropertyPath ) ? asString( pPropertyPath, true ) : _mt_str;
-
-        if ( !isBlank( propertyName ) )
-        {
-            // the regular expression is used to convert array bracket access into dot property access
-            const rx = /\[(\d+)]/g;
-
-            // convert something like arr[0][0][0] into arr.0.0.0,
-            // taking advantage of the fact that arrays are really just objects whose properties look like integers
-            propertyName = rx.test( propertyName ) ? propertyName.replace( rx, ".$1" ) : propertyName;
-
-            // remove any leading or trailing dots, because those would be missing or empty property names
-            propertyName = propertyName.replace( REG_EXP_LEADING_DOT, _mt_str ).replace( REG_EXP_TRAILING_DOT, _mt_str );
-        }
-
-        return propertyName;
     };
 
     /**
@@ -3016,11 +2816,13 @@ const $scope = constants?.$scope || function()
 
         return obj;
     };
+    /*
 
-    const DEFAULT_LITERAL_OPTIONS =
-        {
-            removeFunctions: true
-        };
+     const DEFAULT_LITERAL_OPTIONS =
+     {
+     removeFunctions: true
+     };
+     */
 
     /**
      * Returns an object literal based on the specified object.
@@ -3031,164 +2833,166 @@ const $scope = constants?.$scope || function()
      * @param pStack
      * @returns {*} a new object with no class or prototype affiliation
      */
-    const toLiteral = function( pObject, pOptions = DEFAULT_LITERAL_OPTIONS, pStack = [] )
-    {
-        const options = populateOptions( pOptions, DEFAULT_LITERAL_OPTIONS );
+    /*
+     const toLiteral = function( pObject, pOptions = DEFAULT_LITERAL_OPTIONS, pStack = [] )
+     {
+     const options = populateOptions( pOptions, DEFAULT_LITERAL_OPTIONS );
 
-        let literal = {};
+     let literal = {};
 
-        if ( isFunction( pObject ) )
-        {
-            return (options.removeFunctions ? undefined : pObject);
-        }
+     if ( isFunction( pObject ) )
+     {
+     return (options.removeFunctions ? undefined : pObject);
+     }
 
-        if ( isNullOrEmpty( pObject ) )
-        {
-            return emptyClone( pObject, _obj );
-        }
+     if ( isNullOrEmpty( pObject ) )
+     {
+     return emptyClone( pObject, _obj );
+     }
 
-        const stack = asArray( pStack || [] );
+     const stack = asArray( pStack || [] );
 
-        if ( detectCycles( stack, 3, 3 ) )
-        {
-            return assign( (emptyClone( pObject, _obj ) || {}), pObject || {} );
-        }
+     if ( detectCycles( stack, 3, 3 ) )
+     {
+     return assign( (emptyClone( pObject, _obj ) || {}), pObject || {} );
+     }
 
-        if ( pObject instanceof Map )
-        {
-            let _map = {};
+     if ( pObject instanceof Map )
+     {
+     let _map = {};
 
-            for( let entry of pObject.entries() )
-            {
-                let key = asString( entry[0] );
-                _map[key] = toLiteral( entry[1], options, stack.concat( key ) );
-            }
+     for( let entry of pObject.entries() )
+     {
+     let key = asString( entry[0] );
+     _map[key] = toLiteral( entry[1], options, stack.concat( key ) );
+     }
 
-            literal = asNew( _map );
-        }
-        else if ( pObject instanceof Set )
-        {
-            literal = [].concat( [...pObject] ).map( ( e, i ) => toLiteral( e, options, stack.concat( i ) ) );
-        }
-        else
-        {
-            switch ( typeof pObject )
-            {
-                case _ud:
+     literal = asNew( _map );
+     }
+     else if ( pObject instanceof Set )
+     {
+     literal = [].concat( [...pObject] ).map( ( e, i ) => toLiteral( e, options, stack.concat( i ) ) );
+     }
+     else
+     {
+     switch ( typeof pObject )
+     {
+     case _ud:
 
-                    literal = undefined;
-                    break;
+     literal = undefined;
+     break;
 
-                case _str:
-                case _num:
-                case _big:
-                case _bool:
+     case _str:
+     case _num:
+     case _big:
+     case _bool:
 
-                    literal = pObject;
-                    break;
+     literal = pObject;
+     break;
 
-                case _fun:
+     case _fun:
 
-                    if ( options.removeFunctions )
-                    {
-                        literal = undefined;
-                    }
-                    break;
+     if ( options.removeFunctions )
+     {
+     literal = undefined;
+     }
+     break;
 
-                case _symbol:
+     case _symbol:
 
-                    literal = pObject;
-                    break;
+     literal = pObject;
+     break;
 
-                case _obj:
-                    if ( isArray( pObject ) )
-                    {
-                        literal = [...pObject].map( ( e, i ) => toLiteral( e, options, stack.concat( i ) ) );
-                    }
-                    else
-                    {
-                        literal = emptyClone( pObject, _obj ) || {};
+     case _obj:
+     if ( isArray( pObject ) )
+     {
+     literal = [...pObject].map( ( e, i ) => toLiteral( e, options, stack.concat( i ) ) );
+     }
+     else
+     {
+     literal = emptyClone( pObject, _obj ) || {};
 
-                        let entries = [...(getEntries( pObject ))];
+     let entries = [...(getEntries( pObject ))];
 
-                        getProperties( pObject ).forEach( ( key, i ) =>
-                                                          {
-                                                              const properties = [key, toLiteral( pObject[key], options, stack.concat( i ) )];
-                                                              if ( properties && properties.length > 1 && isString( properties[0] ) && !isNull( properties[1] ) )
-                                                              {
-                                                                  entries.push( properties );
-                                                              }
-                                                          } );
+     getProperties( pObject ).forEach( ( key, i ) =>
+     {
+     const properties = [key, toLiteral( pObject[key], options, stack.concat( i ) )];
+     if ( properties && properties.length > 1 && isString( properties[0] ) && !isNull( properties[1] ) )
+     {
+     entries.push( properties );
+     }
+     } );
 
-                        for( let entry of entries )
-                        {
-                            let key = entry.key || entry[0];
-                            let value = entry.value || entry[1];
+     for( let entry of entries )
+     {
+     let key = entry.key || entry[0];
+     let value = entry.value || entry[1];
 
-                            if ( !isBlank( key ) )
-                            {
-                                let literalValue = toLiteral( value, options, stack.concat( key ) );
+     if ( !isBlank( key ) )
+     {
+     let literalValue = toLiteral( value, options, stack.concat( key ) );
 
-                                let remove = isNull( literalValue );
+     let remove = isNull( literalValue );
 
-                                if ( !options.prune || !isEmptyValue( literalValue ) )
-                                {
-                                    if ( !options.removeFunctions || !(isFunction( literalValue )) )
-                                    {
-                                        setProperty( literal, key, literalValue );
-                                    }
-                                    else
-                                    {
-                                        remove = true;
-                                    }
-                                }
+     if ( !options.prune || !isEmptyValue( literalValue ) )
+     {
+     if ( !options.removeFunctions || !(isFunction( literalValue )) )
+     {
+     setProperty( literal, key, literalValue );
+     }
+     else
+     {
+     remove = true;
+     }
+     }
 
-                                if ( remove )
-                                {
-                                    removeProperty( literal, key );
-                                }
-                            }
-                        }
-                    }
+     if ( remove )
+     {
+     removeProperty( literal, key );
+     }
+     }
+     }
+     }
 
-                    break;
+     break;
 
-                default:
-                    break;
-            }
-        }
+     default:
+     break;
+     }
+     }
 
-        if ( null !== literal && isObject( literal ) )
-        {
-            const errorSource = modName + "::toLiteral";
+     if ( null !== literal && isObject( literal ) )
+     {
+     const errorSource = modName + "::toLiteral";
 
-            try
-            {
-                literal.prototype = Object.prototype;
-                literal.__proto__ = Object.prototype;
-            }
-            catch( ex )
-            {
-                modulePrototype.reportError( ex, `resetting prototype`, S_WARN, errorSource );
-            }
+     try
+     {
+     literal.prototype = Object.prototype;
+     literal.__proto__ = Object.prototype;
+     }
+     catch( ex )
+     {
+     modulePrototype.reportError( ex, `resetting prototype`, S_WARN, errorSource );
+     }
 
-            try
-            {
-                literal.constructor = null;
-            }
-            catch( ex )
-            {
-                modulePrototype.reportError( ex, `removing constructor`, S_WARN, errorSource );
-            }
+     try
+     {
+     literal.constructor = null;
+     }
+     catch( ex )
+     {
+     modulePrototype.reportError( ex, `removing constructor`, S_WARN, errorSource );
+     }
 
-            if ( options.prune )
-            {
-                literal = pruneObject( literal, options );
-            }
-        }
+     if ( options.prune )
+     {
+     literal = pruneObject( literal, options );
+     }
+     }
 
-        return literal;
-    };
+     return literal;
+     };
+     */
 
     /**
      * Performs a 'deep' Object.assign of the properties of the source to the target.
@@ -3431,16 +3235,18 @@ const $scope = constants?.$scope || function()
             getProperties,
             isEmptyValue,
             hasNoProperties,
+            isValidObject,
+            firstValidObject,
+            firstPopulatedObject,
             isPopulated,
             isPopulatedObject: isPopulated,
+            toObjectLiteral,
+            toLiteral: toObjectLiteral,
             pruneObject,
             prune: pruneObject,
             ExploredSet,
             IterationCap,
             ObjectEntry,
-            isValidObject,
-            firstValidObject,
-            firstPopulatedObject,
             identical,
             getProperty,
             hasProperty,
@@ -3452,7 +3258,6 @@ const $scope = constants?.$scope || function()
             copy: clone,
             clone,
             toStructuredCloneableObject,
-            toLiteral,
             arrayToObject,
             evaluateBoolean,
             toBool,

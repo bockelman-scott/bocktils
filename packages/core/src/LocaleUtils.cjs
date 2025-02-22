@@ -152,14 +152,14 @@ const {
         } );
 
     // local variable used to generate locale-specific month names and abbreviations
-    const sampleMonthDates = DEFAULTS.MONTH_NAMES.map( ( e, i ) => new Date( 2024, i, 1, 12, 0, 0, 0 ) );
+    const SAMPLE_MONTH_DATES = DEFAULTS.MONTH_NAMES.map( ( e, i ) => new Date( 2024, i, 1, 12, 0, 0, 0 ) );
 
     // local variable used to generate locale-specific day names. abbreviations, and single-letter values.
     // Note that we use September 2024 because September 2024 starts on a Sunday
-    const sampleDayDates = DEFAULTS.DAY_NAMES.map( ( e, i ) => new Date( 2024, 8, (i + 1), 12, 0, 0, 0 ) );
+    const SAMPLE_DAY_DATES = DEFAULTS.DAY_NAMES.map( ( e, i ) => new Date( 2024, 8, (i + 1), 12, 0, 0, 0 ) );
 
     // local variable used to generate locale-specific AM/PM strings
-    const amPmDates = [new Date( 2024, 0, 1, 8, 0, 0, 0 ), new Date( 2024, 0, 1, 20, 0, 0, 0 )];
+    const AM_PM_DATES = [new Date( 2024, 0, 1, 8, 0, 0, 0 ), new Date( 2024, 0, 1, 20, 0, 0, 0 )];
 
     // Intl.Locale object representing the default locale
     const DEFAULT_LOCALE = new Intl.Locale( DEFAULT_LOCALE_STRING );
@@ -254,10 +254,7 @@ const {
         return asString( asString( localeA?.baseName ).split( _hyphen )[0] ) === asString( asString( localeB?.baseName ).split( _hyphen )[0] );
     }
 
-    function isDefaultLanguage( pLocale )
-    {
-        return isDefaultLocale( pLocale ) || isSameLanguage( DEFAULT_LOCALE, pLocale );
-    }
+    const isDefaultLanguage = ( pLocale ) => isDefaultLocale( pLocale ) || isSameLanguage( DEFAULT_LOCALE, pLocale );
 
     const getMonthDisplayValues = function( pLocale, pFormat )
     {
@@ -272,27 +269,18 @@ const {
 
         const dateTimeFormat = new Intl.DateTimeFormat( locale.baseName, { month: pFormat } );
 
-        return sampleMonthDates.map( date => asString( dateTimeFormat.format( date ).replace( /\d+/g, _mt_str ), true ) );
+        return SAMPLE_MONTH_DATES.map( date => asString( dateTimeFormat.format( date ).replace( /\d+/g, _mt_str ), true ) );
     };
 
-    const getMonthNames = function( pLocale )
-    {
-        return getMonthDisplayValues( pLocale, FORMAT_LONG );
-    };
+    const getMonthNames = ( pLocale ) => getMonthDisplayValues( pLocale, FORMAT_LONG );
 
     const getMonthName = ( pDate, pLocale ) => isDate( pDate ) ? asArray( getMonthNames( resolveLocale( pLocale ) ) )[pDate.getMonth()] : isLocale( pDate ) ? getMonthNames( pDate, pLocale ) : _mt_str;
 
-    const getMonthAbbreviations = function( pLocale )
-    {
-        return getMonthDisplayValues( pLocale, FORMAT_SHORT );
-    };
+    const getMonthAbbreviations = ( pLocale ) => getMonthDisplayValues( pLocale, FORMAT_SHORT );
 
     const getMonthAbbr = ( pDate, pLocale ) => isDate( pDate ) ? asArray( getMonthAbbreviations( resolveLocale( pLocale ) ) )[pDate.getMonth()] : isLocale( pDate ) ? getMonthAbbreviations( pDate, pLocale ) : _mt_str;
 
-    const getMonthLetters = function( pLocale )
-    {
-        return getMonthDisplayValues( pLocale, FORMAT_NARROW );
-    };
+    const getMonthLetters = ( pLocale ) => getMonthDisplayValues( pLocale, FORMAT_NARROW );
 
     const getMonthLtr = ( pDate, pLocale ) => isDate( pDate ) ? asArray( getMonthLetters( resolveLocale( pLocale ) ) )[pDate.getMonth()] : isLocale( pDate ) ? getMonthLetters( pDate, pLocale ) : _mt_str;
 
@@ -309,27 +297,18 @@ const {
 
         const dateTimeFormat = new Intl.DateTimeFormat( locale.baseName, { weekday: pFormat } );
 
-        return sampleDayDates.map( date => asString( dateTimeFormat.format( date ), true ) );
+        return SAMPLE_DAY_DATES.map( date => asString( dateTimeFormat.format( date ), true ) );
     };
 
-    const getDayNames = function( pLocale )
-    {
-        return isDate( pLocale ) ? getDayName( pLocale ) : getDayDisplayValues( pLocale, FORMAT_LONG );
-    };
+    const getDayNames = ( pLocale ) => isDate( pLocale ) ? getDayName( pLocale ) : getDayDisplayValues( pLocale, FORMAT_LONG );
 
     const getDayName = ( pDate, pLocale ) => isDate( pDate ) ? asArray( getDayNames( resolveLocale( pLocale ) ) )[pDate.getDay()] : isLocale( pDate ) ? getDayNames( pDate, pLocale ) : _mt_str;
 
-    const getDayAbbreviations = function( pLocale )
-    {
-        return getDayDisplayValues( pLocale, FORMAT_SHORT );
-    };
+    const getDayAbbreviations = ( pLocale ) => getDayDisplayValues( pLocale, FORMAT_SHORT );
 
     const getDayAbbr = ( pDate, pLocale ) => isDate( pDate ) ? asArray( getDayAbbreviations( pLocale ) )[pDate.getDay()] : _mt_str;
 
-    const getDayLetters = function( pLocale )
-    {
-        return getDayDisplayValues( pLocale, FORMAT_NARROW );
-    };
+    const getDayLetters = ( pLocale ) => getDayDisplayValues( pLocale, FORMAT_NARROW );
 
     const getDayLtr = ( pDate, pLocale ) => isDate( pDate ) ? asArray( getDayLetters( pLocale ) )[pDate.getDay()] : _mt_str;
 
@@ -377,7 +356,7 @@ const {
                                                             hourCycle: "h12"
                                                         } );
 
-        return amPmDates.map( e => asString( dateTimeFormat.format( e ) ).replace( /(0?8|20)[: ]?(00)([: ]?(00))?/, _mt_str ).trim() );
+        return AM_PM_DATES.map( e => asString( dateTimeFormat.format( e ) ).replace( /(0?8|20)[: ]?(00)([: ]?(00))?/, _mt_str ).trim() );
     };
 
     const getWeekData = function( pLocale )
