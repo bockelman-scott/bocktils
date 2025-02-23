@@ -1686,6 +1686,26 @@ const $scope = constants?.$scope || function()
         return { options, minimumLength, acceptedTypes, mandatoryKeys, countDeadBranches };
     }
 
+    function isPopulatedArray( pObject, pCountEmptyElements, pOptions, pVisited, pStack )
+    {
+        if ( !isArray( pObject ) )
+        {
+            return false;
+        }
+
+        let arr = [...(pObject || [])].filter( e => isNonNullValue( e ) && ( !isNumeric( e ) || !isNanOrInfinite( toFloat( e ) )) );
+
+        if ( !pCountEmptyElements )
+        {
+            arr = arr.filter( ( e, i ) => isPopulated( e, pOptions, pVisited, [...(pStack || []), String( i )] ) );
+        }
+
+        let minLength = toInteger( pOptions?.minimumLength ) || 1;
+        minLength = Math.max( 1, isNanOrInfinite( minLength ) ? 1 : minLength );
+
+        return (arr.length >= minLength);
+    }
+
     function isPopulatedObject( pObject, pOptions = DEFAULT_IS_POPULATED_OPTIONS, pVisited = new ResolvedSet(), pStack = [] )
     {
         const {
@@ -1715,14 +1735,7 @@ const $scope = constants?.$scope || function()
         {
             if ( isArray( pObject ) && acceptArrays )
             {
-                let arr = [...(pObject || [])].filter( e => isNonNullValue( e ) && ( !isNumeric( e ) || !isNanOrInfinite( toFloat( e ) )) );
-
-                if ( !countDeadBranches )
-                {
-                    arr = arr.filter( ( e, i ) => isPopulated( e, options, pVisited, [...(pStack || []), String( i )] ) );
-                }
-
-                populated = (arr.length >= minLength);
+                populated = isPopulatedArray( pObject, countDeadBranches, options, pVisited, pStack, minLength );
             }
             else if ( isPrimitiveWrapper( pObject ) )
             {
@@ -2131,7 +2144,7 @@ const $scope = constants?.$scope || function()
         }
 
         // Check if input is already a valid Date instance
-        if ( pObj instanceof Date || {}.toString.call( pObj ) === "[object Date]" )
+        if ( pObj instanceof Date || objectToString.call( pObj ) === "[object Date]" )
         {
             return true;
         }
