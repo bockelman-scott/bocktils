@@ -70,7 +70,7 @@ const ENV = (function( pScope = $scope() )
 
     if ( _ud !== typeof process )
     {
-        environment = process.env;
+        environment = process?.env;
     }
     else if ( _ud !== typeof Deno )
     {
@@ -101,7 +101,7 @@ const ENV = (function( pScope = $scope() )
  *
  * This variable is dynamically populated based on the available runtime environment.
  */
-const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !== typeof Deno ? Deno.args || [] : []))];
+const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !== typeof Deno ? Deno?.args || [] : []))];
 
 // noinspection OverlyNestedFunctionJS,FunctionTooLongJS
 /**
@@ -189,38 +189,311 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
      */
     const no_op = () => {};
 
+    /**
+     * A constant function that always returns the boolean value, true.
+     *
+     * This function does not accept any arguments and is designed to return true
+     * unconditionally.
+     *
+     * Commonly used as a utility in scenarios where a function
+     * that always evaluates to true is required.
+     *
+     * @function
+     * @returns {boolean} Returns the boolean value, true.
+     */
     const op_true = () => true;
+
+    /**
+     * A constant function that always returns the boolean value, false.
+     *
+     * This function does not accept any arguments and is designed to return false
+     * unconditionally.
+     *
+     * Commonly used as a utility in scenarios where a function
+     * that always evaluates to false is required.
+     *
+     * @function
+     *
+     * @returns {boolean} Returns the boolean value, false.
+     */
     const op_false = () => false;
+
+    /**
+     * Returns the specified argument(s) as-is
+     * or as an array when multiple values are passed.<br>
+     * <br>
+     * If no arguments are passed, returns an empty array.<br>
+     *
+     * @param {...*} pArg - The argument(s) to return.
+     * @returns {*} The argument specified or an array containing all arguments if multiple values are passed.<br>
+     * If no arguments are passed, returns an empty array.<br>
+     */
     const op_identity = ( ...pArg ) => [...(pArg || [])].length > 1 ? [...(pArg || [])] : [...(pArg || [])][0];
 
+    /**
+     * An alias for the native Function.prototype.toString method.<br>
+     * This function returns the string representation of a specified function.<br>
+     * This is normally the source code of the function.<br>
+     *
+     * @returns {string} the string representation of a specified function
+     */
     const functionToString = Function.prototype.toString;
+
+    /**
+     * An alias for the Object.prototype.toString method.<br>
+     * <br>
+     * Normally returns a string representing the object type of the given value.<br>
+     * Typically used to determine the internal class of an object
+     * by extracting the string from its output, such as `[object <i>Type</i]`.
+     *
+     * @returns {string} a string representing the object type of the given value
+     */
     const objectToString = Object.prototype.toString;
+
+    /**
+     * An alais for the Error.prototype.toString method.<br>
+     * <br>
+     *
+     * @returns {string} a string representing the error specified (usually the error type and message)
+     */
     const errorToString = Error.prototype.toString;
 
-    const isStr = pObj => _str === typeof pObj;
-    const isFunc = pObj => _fun === typeof pObj;
-    const isObj = pObj => _obj === typeof pObj;
-    const isNum = pObj => _num === typeof pObj;
-    const isBool = pObj => _bool === typeof pObj;
-    const isBig = pObj => _big === typeof pObj;
-    const isSymbol = pObj => _symbol === typeof pObj;
-    const isDate = pObj => isObj( pObj ) && pObj instanceof Date;
-    const isRegExp = pObj => isObj( pObj ) && pObj instanceof RegExp;
-    const isError = Error.isError || (( pObj ) => isObj( pObj ) && pObj instanceof Error);
-    const isMap = pObj => isObj( pObj ) && pObj instanceof Map;
-    const isSet = pObj => isObj( pObj ) && pObj instanceof Set;
+    /*
+     * The following functions are used in the base module,
+     * because more sophisticated functions to detect and convert types
+     * are exposed in a separate TypeUtil module.
+     *
+     * External code should prefer those functions over these rudimentary checks.
+     */
+
+    /**
+     * Returns true if the specified value is undefined.
+     *
+     * @param {*} pObj The value to evaluate
+     *
+     * @returns {boolean} true if the specified value is undefined.
+     */
+    const isUndefined = pObj => _ud === typeof pObj || undefined === pObj;
+
+    /**
+     * Returns true if the specified value is null or undefined.
+     *
+     * @param {*} pObj The value to evaluate
+     *
+     * @returns {boolean} true if the specified value is null or undefined.
+     */
     const isNull = pObj => _ud === typeof pObj || null === pObj;
-    const isUndefined = pObj => _ud === typeof pObj;
-    const isNonNullObj = pObj => isObj( pObj ) && null != pObj;
-    const isPrimitive = pObj => isStr( pObj ) || isNum( pObj ) || isBool( pObj ) || isBig( pObj ) || isSymbol( pObj );
+
+    /**
+     * Returns true if the specified value is a (primitive) string.<br>
+     * This will return true if if the string is an empty string.<br>
+     * To check for a non-empty string, use _isValidStr
+     *
+     * @param {*} pObj The value to evaluate
+     *
+     * @returns {boolean} true if the specified value is a (primitive) string.
+     */
+    const isStr = pObj => _str === typeof pObj;
+
+    /**
+     * Returns true if the specified value is a (primitive) string with one or more non-whitespace characters.
+     *
+     * @param {*} e The value to evaluate
+     *
+     * @returns {boolean} true if the specified value is a (primitive) string with one or more non-whitespace characters.
+     */
+    const _isValidStr = e => isStr( e ) && (_mt_str !== e.trim());
+
+    /**
+     * Returns true if the specified value is a function.
+     *
+     * @param {*} pObj The value to evaluate
+     *
+     * @returns {boolean} true if the specified value is a function.
+     */
+    const isFunc = pObj => _fun === typeof pObj || pObj instanceof Function;
+
+    /**
+     * Returns true if the specified value is an object.<br>
+     * Note that null *is* an object.<br>
+     * To discover only a non-null object, use isNonNullObj<br>
+     *
+     * @param {*} pObj The value to evaluate
+     *
+     * @returns {boolean} true if the specified value is an object.
+     */
+    const isObj = pObj => _obj === typeof pObj;
+
+    /**
+     * Returns true if the specified value is a (primitive) number.
+     *
+     * @param {*} pObj The value to evaluate
+     *
+     * @returns {boolean} true if the specified value is a (primitive) number.
+     */
+    const isNum = pObj => _num === typeof pObj;
+
+    /**
+     * Returns true if the specified value is a (primitive) boolean.
+     *
+     * @param {*} pObj The value to evaluate
+     *
+     * @returns {boolean} true if the specified value is a (primitive) boolean.
+     */
+    const isBool = pObj => _bool === typeof pObj;
+
+    /**
+     * Returns true if the specified value is a (primitive) BigInt.
+     *
+     * @param {*} pObj The value to evaluate
+     *
+     * @returns {boolean} true if the specified value is a (primitive) BigInt.
+     */
+    const isBig = pObj => _big === typeof pObj;
+
+    /**
+     * Returns true if the specified value is a Symbol.
+     *
+     * @param {*} pObj The value to evaluate
+     *
+     * @returns {boolean} true if the specified value is a Symbol.
+     */
+    const isSymbol = pObj => _symbol === typeof pObj;
+
+    /**
+     * Returns true if the specified value is a Date.
+     *
+     * @param {*} pObj The value to evaluate
+     *
+     * @returns {boolean} true if the specified value is a Date.
+     */
+    const isDate = pObj => isObj( pObj ) && (pObj instanceof Date || pObj.constructor === Date || objectToString.call( pObj ) === "[object Date]");
+
+    /**
+     * Returns true if the specified value is a RegExp (regular expression object).
+     *
+     * @param {*} pObj The value to evaluate
+     *
+     * @returns {boolean} true if the specified value is a RegExp (regular expression object).
+     */
+    const isRegExp = pObj => isObj( pObj ) && pObj instanceof RegExp;
+
+    /**
+     * Returns true if the specified value is an Error (or a subclass of Error).
+     *
+     * @param {*} pObj The value to evaluate
+     *
+     * @returns {boolean} true if the specified value is an Error (or a subclass of Error).
+     */
+    const isError = Error.isError || (( pObj ) => isObj( pObj ) && pObj instanceof Error);
+
+    /**
+     * Returns true if the specified value is an instance of Map or a subclass of Map.
+     *
+     * @param {*} pObj The value to evaluate
+     *
+     * @returns {boolean} true if the specified value is an instance of Map or a subclass of Map.
+     */
+    const isMap = pObj => isObj( pObj ) && pObj instanceof Map;
+    /**
+     * Returns true if the specified value is an instance of Set or a subclass of Set
+     *
+     * @param {*} pObj The value to evaluate
+     *
+     * @returns {boolean} true if the specified value is an instance of Set or a subclass of Set.
+     */
+    const isSet = pObj => isObj( pObj ) && pObj instanceof Set;
+
+    /**
+     * Returns true if the specified value is an object <i>and is not null<i>.
+     *
+     * @param {*} pObj The value to evaluate
+     *
+     * @returns {boolean} true if the specified value is an object <i>and is not null<i>.
+     */
+    const isNonNullObj = pObj => isObj( pObj ) && !isNull( pObj );
+
+    /**
+     * Returns true if the specified value is of a primitive type (that is, not an object or function).
+     *
+     * @param {*} pObj The value to evaluate
+     *
+     * @returns {boolean} true if the specified value is of a primitive type (that is, not an object or function).
+     */
+    const isPrimitive = pObj => !isObj( pObj ) && (isStr( pObj ) || isNum( pObj ) || isBool( pObj ) || isBig( pObj ) || isSymbol( pObj ));
+
+    /**
+     * Returns true if the specified value is a JavaScript class.<br>
+     * This is done by checking that the value is a function and its source starts with the word, "class "<br>
+     *
+     * @param {*} pObj The value to evaluate
+     *
+     * @returns {boolean} true if the specified value is a JavaScript class.
+     */
     const isClass = pObj => isFunc( pObj ) && (/^class\s/.test( (functionToString.call( pObj, pObj )).trim() ));
 
+    /**
+     * A constant array of the standard JavaScript error types.<br>
+     * <br>
+     * This array contains the constructors for the basic built-in error types in JavaScript.<br>
+     * <br>
+     */
     const ERROR_TYPES = [Error, AggregateError, RangeError, ReferenceError, SyntaxError, URIError];
 
+    /**
+     * A constant array of the standard JavaScript primitive wrapper types.<br>
+     * <br>
+     * <br>
+     * This array includes:<br>
+     * - String: The wrapper for the string primitive type.<br>
+     * - Number: The wrapper for the number primitive type.<br>
+     * - Boolean: The wrapper for the boolean primitive type.<br>
+     * - BigInt: The wrapper for the bigint primitive type.<br>
+     * <br>
+     * <br>
+     * Note: JavaScript wrapper types are distinct from their primitive values.<br>
+     * The typeof a JavaScript wrapper is "object", rather than the primitive type it "boxes", or wraps.
+     */
     const PRIMITIVE_WRAPPER_TYPES = [String, Number, Boolean, BigInt];
 
+    /**
+     * GLOBAL_TYPES is an array containing all standard JavaScript global object types and structures
+     * expected to exist in any execution context.<br>
+     * <br>
+     * The purpose of this array is to provide a comprehensive list of global types
+     * that can be iterated or evaluated for type validation.<br>
+     * <br>
+     *
+     * The array includes:<br>
+     * - Array<br>
+     * - Function<br>
+     * - Date<br>
+     * - RegExp<br>
+     * - Symbol<br>
+     * - Map<br>
+     * - Set<br>
+     * - Promise<br>
+     * - ArrayBuffer<br>
+     * - DataView<br>
+     * - WeakMap<br>
+     * - WeakRef<br>
+     * - WeakSet<br>
+     * <br>
+     * as well as the contents of `ERROR_TYPES` and `PRIMITIVE_WRAPPER_TYPES`
+     *
+     */
     const GLOBAL_TYPES = [Array, Function, Date, RegExp, Symbol, Map, Set, Promise, ArrayBuffer, DataView, WeakMap, WeakRef, WeakSet, ...ERROR_TYPES, ...PRIMITIVE_WRAPPER_TYPES];
 
+
+    /**
+     * Returns true if the specified value is an object that is not null
+     * and is an instance of one of the values in the GLOBAL_TYPES array.<br>
+     * <br>
+     *
+     * @param {*} pObj The value to evaluate
+     *
+     * @returns {boolean} true if the specified value is an instance of a globally-defined/built-in type.
+     */
     const isGlobalType = pObj => isNonNullObj( pObj ) && [...GLOBAL_TYPES].filter( e => pObj instanceof e ).length > 0;
 
     /**
@@ -235,21 +508,113 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         return isFunc( pObject ) && (pObject.constructor === AsyncFunction || pObject === AsyncFunction);
     };
 
+    /**
+     * Returns true if the specified value is a Promise.
+     *
+     * @param {*} pObj The value to evaluate
+     *
+     * @returns {boolean} true if the specified value is a Promise.
+     */
     const isPromise = pObj => isObj( pObj ) && pObj instanceof Promise;
+
+    /**
+     * Returns true if the specified value is '<i>thenable</i>'.<br>
+     * That is, that the value is either a Promise or an object that defines a function named 'then'<br>
+     *
+     * @param {*} pObj The value to evaluate
+     *
+     * @returns {boolean} true if the specified value is '<i>thenable</i>'.
+     */
     const isThenable = pObj => isObj( pObj ) && (isPromise( pObj ) || isFunc( pObj.then ));
 
-    const _asStr = e => isStr( e ) ? e : String( e?.type || e?.name || _mt_str );
-    const _isValidStr = e => isStr( e ) && (_mt_str !== e.trim());
+
+    /**
+     * Converts the input into a string representation.
+     * If the input is already a string, it is returned as-is.
+     * Otherwise, attempts to create a string based on the input's `type`, `name`, or a default fallback.
+     *
+     * @function
+     * @param {*} e - The input value to be converted to a string.
+     * @returns {string} The string representation of the input.
+     */
+    const _asStr = e => isStr( e ) ? e : String( e?.type || e?.name || (_mt_str + e) );
+
+    /**
+     * Converts the input value to a lowercase string.
+     *
+     * The provided value is first cast to a string using the `_asStr` function,
+     * and then converted to lowercase.
+     *
+     * @param {*} e - The input value to be transformed to lowercase.
+     * @returns {string} - The lowercase string representation of the input value.
+     */
     const _lcase = e => _asStr( e ).toLowerCase();
+
+    /**
+     * Converts the input value to an uppercase.
+     *
+     * The provided value is first cast to a string using the `_asStr` function,
+     * and then converted to lowercase.
+     *
+     * @param {any} e - The input value to be transformed to uppercase.
+     * @returns {string} The uppercase string representation of the input value.
+     */
     const _ucase = e => _asStr( e ).toUpperCase();
 
+    /**
+     * Returns a value not less than a minimum value and not greater than a maximum value.<br>
+     * <br>
+     * This is just shorthand for: <i>Math.min( Math.max( pNum, pMin ), pMax )</i><br>
+     * <br>
+     * If the specified value is a number within the range<br>
+     * defined by the minimum and maximum values,<br>
+     * that value is returned.<br>
+     * <br>
+     * If the specified value is a number less than the minium value,<br>
+     * the minimum value is returned.<br>
+     * <br>
+     * If the specified value is a number greater than the maximum value,<br>
+     * the maximum value is returned.<br>
+     * <br>
+     * If the specified value is not a number, that value is returned unchanged.<br>
+     *
+     * @param {number} pNum - The number to be clamped.
+     * @param {number} pMin - The inclusive minimum boundary.
+     * @param {number} pMax - The inclusive maximum boundary.
+     *
+     * @returns {number} A number within the specified range, or the original value if it's not a number.
+     */
     const clamp = ( pNum, pMin, pMax ) => isNum( pNum ) ? Math.min( Math.max( pNum, pMin ), pMax ) : pNum;
 
+    /**
+     * A constant string representing the default error message.<br>
+     * It is constructed by joining `S_ERR_PREFIX` and `S_DEFAULT_OPERATION` with a space.<br>
+     * This value can be used to represent a generic or default error message across an application.<br>
+     */
     const S_DEFAULT_ERROR_MESSAGE = [S_ERR_PREFIX, S_DEFAULT_OPERATION].join( _spc );
 
+    /**
+     * A constant string representing the default error message
+     * used when a call to the functions, attempt or asyncAttempt
+     * fail.
+     * <br>
+     *
+     */
     const ATTEMPT_FAILED = [S_ERR_PREFIX, "attempting to execute the specified function, "].join( _spc );
+
+    /**
+     * A constant string representing the default error message
+     * used when the value passed to the functions, attempt or asyncAttempt
+     * is not an executable construct.
+     * <br>
+     */
     const NOT_A_FUNCTION = "The specified value is not a function";
 
+    /*
+     * This code attempts to poly-fill the Promise.try functionality.
+     * Promise.try may not be widely supported in all environments
+     * at the time of this library's inception
+     */
     if ( !isFunc( Promise?.try ) )
     {
         try
@@ -307,6 +672,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
     {
         if ( isFunc( pFunction ) )
         {
+            if ( handleAttempt.trace )
+            {
+                handleAttempt.traceFunctionCall( pFunction, ...pArgs );
+            }
+
             try
             {
                 return !isAsyncFunction( pFunction ) ?
@@ -327,6 +697,34 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         return pFunction;
     }
 
+    handleAttempt.traceFunctionCall = ( pFunction, ...pArgs ) =>
+    {
+        if ( !handleAttempt.trace )
+        {
+            return;
+        }
+
+        const nameFromSource = ( pFunction ) =>
+        {
+            let s = _asStr( functionToString.call( pFunction, pFunction ) ).trim();
+            s = s.replace( /function /, _mt_str ).trim().replace( /\s*\(.*\).*/, _mt_str ).trim();
+            return s.replace( /function\s+/, _mt_str ).trim().replace( /\s*\(.*\).*/, _mt_str ).trim();
+        };
+
+        const funcName = pFunction?.name || nameFromSource( pFunction ) || "An anonymous function";
+
+        const hasArguments = [...(pArgs || [])].length > 0;
+
+        if ( hasArguments )
+        {
+            konsole.trace( "Calling", funcName, "with arguments:\n", ...pArgs );
+        }
+        else
+        {
+            konsole.trace( "Calling", funcName, "without arguments" );
+        }
+    };
+
     /**
      * An asynchronous version of handleAttempt
      * Used when attempting to execute asynchronous functions or methods.
@@ -342,6 +740,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         {
             return handleAttempt( pFunction, ...pArgs );
         }
+        else
+        {
+            handleAttempt.traceFunctionCall( pFunction, ...pArgs );
+        }
+
         return await pFunction.call( $scope(), ...pArgs ).catch( ex => handleAttempt.handleError( ex, pFunction, ...pArgs ) );
     }
 
@@ -368,6 +771,13 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
     handleAttempt.handleError = function( pError, pFunction, ...pArgs )
     {
         konsole.error( (pError instanceof Error ? ATTEMPT_FAILED : NOT_A_FUNCTION), pError?.message || pFunction?.name || _mt_str, pError || {}, pFunction || {}, ...pArgs );
+    };
+
+    handleAttempt.trace = false;
+
+    handleAttempt.enableTrace = function()
+    {
+        handleAttempt.trace = true;
     };
 
     /**
@@ -537,7 +947,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         {
             setTimeout( function()
                         {
+                            handleAttempt.traceFunctionCall( func, ...args );
+
                             func.call( $scope(), ...(pArgs || args || []) ).then( no_op ).catch( no_op );
+
                         }, 10, ...(pArgs || args || []) );
         }
         else if ( isFunc( func ) )
@@ -586,7 +999,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
     /**
      * Alias for Object.freeze
      */
-    const freeze = ( pObj ) => Object.freeze( pObj );
+    const freeze = Object.freeze;
 
     /**
      * A class to handle and manage an array of string arguments where each argument can optionally
@@ -684,6 +1097,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
      * by a specific module. It serves as a wrapper for parameterized arguments.<br>
      * <br>
      * Inherits from the Args class.
+     *
+     * @class
      */
     class ModuleArgs extends Args
     {
@@ -740,9 +1155,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
     const ENVIRONMENT = resolveObject( pEnvironment || ENV, false );
 
     /**
-     * The ExecutionMode class represents a mode of execution, such as "Production", "Development", "Testing", etc.<br>
+     * The ExecutionMode class represents a mode of execution,
+     * such as "Production", "Development", "Testing", etc.
      * <br>
-     * The mode also defines whether 'tracing' is enabled, which is usually reserved for Debugging-related modes.
+     * <br>
+     * The mode also defines whether 'tracing' is enabled,
+     * which is usually reserved for Debugging-related modes.
      * <br>
      * @class
      */
@@ -761,25 +1179,55 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
          */
         constructor( pName, pTraceEnabled = false )
         {
-            this.#name = _ucase( _asStr( pName || S_NONE ).trim() );
+            this.#name = _ucase( _asStr( pName || S_NONE ).trim() ).replaceAll( /\s+/g, "_" );
             this.#traceEnabled = !!pTraceEnabled;
         }
 
+        /**
+         * Returns the name of this mode.<br>
+         * The name is always an uppercase string
+         * with any whitespace replaced with underscore characters
+         *
+         * @return {string} The formatted name in uppercase.
+         */
         get name()
         {
-            return _ucase( _asStr( this.#name ).trim() );
+            return _ucase( _asStr( this.#name ).trim() ).replaceAll( /\s+/g, "_" );
         }
 
+        /**
+         * Returns true if this mode supports trace-level debugging.
+         *
+         * @return {boolean} true if this mode supports trace-level debugging.
+         */
         get traceEnabled()
         {
             return this.#traceEnabled;
         }
 
+        /**
+         * Write the specified message to the console using the console.trace method.<br>
+         * In addition to writing the message,
+         * this instance is included as a second argument
+         * and will also be written to the console.<br>
+         *
+         * @param {*} pMsg A message or value to write to the console, using the console.trace method.
+         */
         trace( pMsg )
         {
             konsole.trace( pMsg, this );
         }
 
+        /**
+         * Returns true if the specified object is the same as this object.<br>
+         * The other object is the same if it is actually this exact object
+         * or if it's name is the same as the name of this instance.
+         * <br>
+         *
+         * @param {Object} pOther - The object to compare to this instance.
+         *
+         * @return {boolean} true if the objects are considered equal, false otherwise.
+         */
         equals( pOther )
         {
             return (this === pOther) || (_ucase( _asStr( this.name ) ).trim()) === (_ucase( _asStr( pOther?.name ) ).trim());
@@ -799,15 +1247,40 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             TRACE: freeze( new ExecutionMode( "TRACE", true ) )
         };
 
+    // adds each Execution Mode constant as a static member of the ExecutionMode class
     Object.entries( ExecutionMode.MODES ).forEach( ( [key, value] ) =>
                                                    {
                                                        ExecutionMode[key] = value;
                                                    } );
 
+    /**
+     * This constant represents the default execution mode
+     * if no mode is defined when the module is loaded.
+     * @type {ExecutionMode}
+     */
     ExecutionMode.MODES.DEFAULT = freeze( ExecutionMode.MODES.DEV );
+
+    /**
+     * This static member represents the default execution mode to be assumed
+     * when no mode is defined when the module is loaded.
+     * @type {ExecutionMode}
+     */
     ExecutionMode.DEFAULT = freeze( ExecutionMode.MODES.DEFAULT );
 
-    const CURRENT_MODE = freeze( ExecutionMode.MODES[ENVIRONMENT["MODE"]] || ExecutionMode.MODES[ARGUMENTS.get( "mode" )] || ExecutionMode.DEFAULT );
+    /**
+     * This constant represents the current ExecutionMode.<br>
+     * The ExecutionMode can be set in the Environment
+     * or passed on the command line when the application using this module is executed.
+     * <br>
+     * @type {ExecutionMode}
+     */
+    const CURRENT_MODE = freeze( ExecutionMode.MODES[ENVIRONMENT["MODE"]] || ExecutionMode.MODES[ARGUMENTS.get( "mode", ExecutionMode.DEFAULT )] || ExecutionMode.DEFAULT );
+
+    /**
+     * This static member is set to the current execution mode.<br>
+     *
+     * @type {ExecutionMode}
+     */
     ExecutionMode.CURRENT = freeze( CURRENT_MODE || ExecutionMode.DEFAULT );
 
     /**
@@ -825,7 +1298,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
     {
         if ( isStr( pName ) && _mt_str !== _asStr( pName ).trim() )
         {
-            const name = _ucase( _asStr( pName || S_NONE ).trim() );
+            const name = _ucase( _asStr( pName || S_NONE ).trim() ).replaceAll( /\s+/g, "_" );
             const traceEnabled = !!pTraceEnabled;
 
             if ( null == ExecutionMode[name] )
@@ -840,6 +1313,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         }
         throw new Error( `Invalid or existing mode name: ${pName}` );
     };
+
+    if ( ExecutionMode.CURRENT.traceEnabled )
+    {
+        handleAttempt.enableTrace();
+    }
 
     /**
      * This is the object used by some environments to export functionality.<br>
@@ -889,6 +1367,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         return false;
     };
 
+    /**
+     * Returns true if the current execution content is a Worker or ServiceWorker.<br>
+     *
+     * @returns true if the current execution content is a Worker or ServiceWorker.
+     */
     const isWorker = function()
     {
         // @TODO
@@ -1206,6 +1689,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         }
     }
 
+    /**
+     * Returns true if the specified value is a Node.js process.<br>
+     * <br>
+     * This method returns true if the current execution environment is Node
+     * and the specified value is an object with the 'allowedNodeEnvironmentFlags' property.
+     * <br>
+     *
+     * @returns {boolean} true if the specified value is a Node.js process
+     */
     ExecutionEnvironment.isNodeProcess = function( pProcess )
     {
         return isNode() && isObj( pProcess ) && (_ud !== typeof pProcess?.allowedNodeEnvironmentFlags);
@@ -1294,6 +1786,24 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         };
     }
 
+    /**
+     * Returns the type or name of an event based on the input provided.<br>
+     *
+     * The method supports various input types
+     * such as Event objects, strings, or objects containing event-related data.
+     * <br>
+     *
+     * @param {Event|string|Object} pEventName The event or event-related data,
+     *                                         which can be an Event instance,
+     *                                         a string representing the event name,
+     *                                         or an object with event-related properties.<br>
+     *
+     * @param {Object} [pOptions] Optional parameter containing additional data
+     *                            that may help resolve the event type.
+     *
+     * @return {string} The resolved event type or name as a string.
+     *                  Returns a default value of "custom" if the event type cannot be resolved.
+     */
     function resolveEventType( pEventName, pOptions )
     {
         if ( pEventName instanceof Event )
@@ -1317,6 +1827,31 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         return S_CUSTOM;
     }
 
+    /**
+     * Resolves and returns event options
+     * by combining event-specific options, data, and other provided values
+     * into a unified structure.
+     * <br>
+     * <br>
+     * This function handles objects with nested `detail` properties,
+     * default values, and also resolves the event type.
+     *
+     * @function
+     *
+     * @param {Event|string|Object} pEventName - The event or the name of the event
+     *                                           for which options are resolved.
+     *
+     * @param {Object} [pData] - Optional event data which can include a `detail` property
+     *                           or other relevant data properties.
+     *
+     * @param {Object} [pOptions] - Optional additional options for the event configuration.
+     *
+     * @returns {Object} An object containing the resolved event type, data, and options:<br><br>
+     *                   - `type`: The resolved event type based on the event name and options.<br>
+     *                   - `data`: The resolved event data, which may include `detail`
+     *                             or other relevant information.<br>
+     *                   - `options`: The final merged options object for the event<br>
+     */
     const resolveEventOptions = function( pEventName, pData, pOptions )
     {
         const options =
@@ -1338,10 +1873,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
     };
 
     /**
-     * This class defines a Custom Event other modules can use to communicate with interested consumers.<br>
+     * This class defines a Custom Event that can be used to communicate with interested consumers.<br>
+     * <br>
      * @see <a href="https://developer.mozilla.org/en-US/docs/Web/API/CustomEvent/CustomEvent">MDN: CustomEvent</a>
      * <br>
      * Use the 'detail' property to share data with event handlers.<br>
+     * <br>
+     * <br>
+     * Note: ToolBocks modules use instances of this event to communicate when errors have occurred rather than writing to the console.<br>
      * @class
      */
     class ToolBocksModuleEvent extends Event
@@ -1525,6 +2064,21 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             trace: no_op
         };
 
+    /**
+     * This is a helper function used by the detectCycles function
+     * used to prevent infinite loops when recursive calls
+     * do not have a natural or dependable base case.
+     * <br>
+     * @param {Array} pStack an array that is appended with each iteration of a recursive function.<br>
+     *                       If this array contains repeated sequences of a specified length,
+     *                       we assume we have entered an infinite loop.<br>
+     *
+     * @param {number} pIteration
+     * @param {number} pStackLength
+     * @param {number} pRunLength
+     * @param {Array}  pBuffer an array to hold the calculated 'runs' of a sequence
+     * @private
+     */
     function _calculateRuns( pStack, pIteration, pStackLength, pRunLength, pBuffer )
     {
         for( let i = 0, n = pStackLength; i < n; i += pRunLength )
@@ -1539,6 +2093,18 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         }
     }
 
+    /**
+     * Synchronously executes a specified callback function with the provided arguments.<br>
+     *
+     * @param {Function} pCallback - The callback function to be executed.
+     *                               If the callback is an asynchronous function,
+     *                               it is executed using the "fire and forget" mechanism.
+     *
+     * @param {...*} pArgs - Optional arguments to be passed to the callback function.
+     *
+     * @return {void} This function does not return any value.<br>
+     *                The callback is responsible for any desired side effects.
+     */
     function executeCallback( pCallback, ...pArgs )
     {
         if ( isFunc( pCallback ) )
@@ -1557,18 +2123,40 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
     }
 
     /**
-     * This function attempts to detect potential infinite loops.
-     * The first argument is an array that holds strings indicative of some operation or step that has been called recursively
-     * The second argument is the number of contiguous operations that, if repeated as a sequence, might indicate an infinite loop
-     * The third argument is the number of times a sequence of contiguous operations must be found before being considered to be in an infinite loop
-     *
+     * Returns true if the executing code appears to have entered an infinite loop.<br>
+     * <br>
+     * Common scenarios in which this might occur include parsing or generating JSON
+     * containing self-references or circular references,
+     * iterating an object's entries if the object contains
+     * self-references or circular references,
+     * or executing other recursive code where the base case is unexpectedly never reached.<br>
+     * <br>
+     * This function attempts to detect potential infinite loops
+     * by inspecting the contents of an array passed as the first argument.<br>
+     * <br>
+     * The first argument is an array that holds strings indicative of some operation or step that has been called recursively.
+     * <br>
+     * <br>
+     * The second argument is the number of contiguous operations that,
+     * if repeated as a sequence, might indicate an infinite loop
+     * <br>
+     * <br>
+     * The third argument is the number of times
+     * a sequence of contiguous operations must be found
+     * before being considered to be in an infinite loop
+     * <br>
+     * <br>
      * Example: ["a", "b", "c", "d", "e", "b", "c", "a", "b", "c", "d", "a", "b", "c", "d"] - starts to repeat at index 7, and repeats 2 times
      *
      * @param {Array<string>} pStack an array of operations or paths representing a sequence of function calls or elements processed
+     *
      * @param {Number} pRunLength the number of contiguous elements to consider a sequence
+     *
      * @param {Number} pMaxRepetitions the maximum number of times a sequence of run-length operations can appear before being considered a repeating/infinite loop
+     *
      * @param pOnDetected {function} (optional) function to call when a cycle has been detected, defaults to a no-op
-     * @returns true if cycling
+     *
+     * @returns true if cycles are detected
      */
     const detectCycles = function( pStack, pRunLength = 5, pMaxRepetitions = 3, pOnDetected = no_op )
     {
@@ -1665,17 +2253,29 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         return false;
     };
 
+    /**
+     * Default options for the bracketsToDots function,
+     * which transforms a propertyPath expressed with the index operator ([])
+     * to a propertyPath expressed using dot notation.
+     *
+     * @type {{numericIndexOnly: boolean, useOptionalSyntax: boolean}}
+     */
     const BRACKETS_TO_DOTS_OPTIONS = { numericIndexOnly: true, useOptionalSyntax: false };
 
     /**
-     * This function converts a property path such as arr[0][0][0] into arr.0.0.0,
+     * This function converts a property path expressed with the index operator ([])
+     * to a property path expressed using dot notation.<br>
+     * <br>
+     * A property path such as arr[0][0][0] is transformed into arr.0.0.0,
      * taking advantage of the fact that arrays are really just objects whose properties look like integers
      *
      * @param {string} pPropertyPath a property name or path to a property
      *
-     * @param {object} pOptions
+     * @param {object} [pOptions=BRACKETS_TO_DOTS_OPTIONS] An object defining how to transform the specified value.<br>
+     *                                                     In particular, whether to transform only numeric indices (or also strings),
+     *                                                     and whether to transform the path into a.b.c or a?.b?.c
      *
-     * @returns {string} a property name or path with brackets notation converted into dot notation
+     * @returns {string} a property name or path using dot notation instead of brackets.
      */
     const bracketsToDots = function( pPropertyPath, pOptions = BRACKETS_TO_DOTS_OPTIONS )
     {
@@ -2318,6 +2918,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             return localCopy( options );
         }
 
+        /**
+         * Creates a new instance of the current object with the same message and options.<br>
+         * <br>
+         * The options are cloned, preserving their properties, and any missing
+         * properties in the cloned options are filled from the current instance.
+         *
+         * @return {__Error} A new instance of this object with the same properties as the original.
+         */
         clone()
         {
             let options = this.cloneOptions( this.options );
@@ -2400,6 +3008,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             return this.prefix + ((this.message || super.message).replace( this.prefix, _mt_str ));
         }
 
+        /**
+         * Creates and returns a new instance of the current object with the same properties as the original.
+         * Copies the provided options and sets default values for cause and stackTrace if not already provided.
+         *
+         * @return {IllegalArgumentError} A new instance of IllegalArgumentError with cloned properties.
+         */
         clone()
         {
             const options = this.cloneOptions( this.options );
@@ -2848,12 +3462,49 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         }
     }
 
+    /**
+     * Returns true if the specified value can be used as a Visitor.<br>
+     * <br>
+     * An object can be used as a Visitor if it is an instance of Visitor
+     * or if it has a method named "visit"
+     * <br>
+     * @param {Visitor|object} pVisitor The object to evaluate
+     *
+     * @returns {boolean} true if the specified value can be used as a Visitor
+     */
     Visitor.isVisitor = ( pVisitor ) => (pVisitor instanceof Visitor || isFunc( pVisitor?.visit ));
 
+    /**
+     * This subclass of Visitor allows using any function as a visitor.<br>
+     * <br>
+     * Constructing an instance of this class with a valid function will result in a Visitor
+     * whose visit method calls that function and passes the argument passed to the visit method to that function.
+     *
+     * @class
+     * @extends Visitor
+     */
     class AdHocVisitor extends Visitor
     {
         #func = no_op;
 
+        /**
+         * Constructs an instance of the Visitor class
+         * that will call the provided function when the visit method is called.
+         * <br>
+         *
+         * @param {Function} pFunction - A function to be invoked when the visit method is called.
+         *                               It should accept a single parameter `pVisited`
+         *                               The function should only return a value
+         *                               if the intent is to abort the current iteration of the visited object.
+         *                               In that case, the function should return the boolean value, true
+         *
+         * @param {Object} pOptions - Configuration options for the class.
+         *                            These options are passed to the superclass constructor.
+         *
+         * @return {AdHocVisitor} An instance of Visitor
+         *
+         * @constructor
+         */
         constructor( pFunction, pOptions )
         {
             super( pOptions );
@@ -2883,6 +3534,13 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             }
         }
 
+        /**
+         * Called by an object's internal iterator.
+         *
+         * @param {*} pVisited The value currently being 'visited' by the internal iterator
+         *
+         * @returns {void|boolean} Returns true IFF the intent is to abort the internal iteration.
+         */
         visit( pVisited )
         {
             const me = this;
@@ -2890,6 +3548,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
         }
     }
 
+    /**
+     * This subclass of Visitor is a no op visitor.<br>
+     * Instances of this class can be used when a Visitor is expected,
+     * but you do not want to do anything when visit is called.
+     *
+     * @class
+     * @extends Visitor
+     */
     class NullVisitor extends Visitor
     {
         constructor( pOptions )
@@ -2897,6 +3563,13 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             super( pOptions );
         }
 
+        /**
+         * Called by an object's internal iterator.
+         *
+         * @param {*} pVisited The value currently being 'visited' by the internal iterator
+         *
+         * @returns {void|boolean} THIS IMPLEMENTATION IS A NO OP.
+         */
         visit( pVisited )
         {
             // no op
@@ -2912,9 +3585,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
      * - If the input is a valid visitor function, it wraps the function in an `AdHocVisitor` and applies the options.
      * - If the input does not correspond to any valid visitor, it defaults to returning an instance of `NullVisitor`.
      *
-     * @param {Visitor|Function} pVisitor - The visitor object or function to be resolved.
+     * @param {Visitor|Function|Object} pVisitor - The visitor object or function to be used to construct a Visitor.
+     *
      * @param {Object} [pOptions={}] - Optional configurations to customize the behavior of the resolved visitor.
-     * @returns {Visitor|AdHocVisitor|NullVisitor} The resolved visitor instance.
+     *
+     * @returns {Visitor} The resolved visitor instance.
      */
     const resolveVisitor = function( pVisitor, pOptions = {} )
     {
@@ -3016,6 +3691,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
             MODULE_CACHE[this.#cacheKey] = this;
         }
 
+        /**
+         * Creates and returns a shallow copy of the current module instance.
+         *
+         * @return {ToolBocksModule} A shallow copy of the module
+         */
         clone()
         {
             const copy = { ...this };
@@ -4593,53 +5273,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process.argv || [] : (_ud !=
     function getPrivateEntries( pObject )
     {
         return getPrivates( pObject, [], ( collection, entry ) => collection.push( entry ) );
-    }
-
-    function __getPrivateEntries( pObject )
-    {
-        if ( isNull( pObject ) )
-        {
-            return [];
-        }
-
-        let entries = [];
-
-        let source = extractClassSource( pObject?.constructor || pObject?.prototype || pObject );
-
-        if ( source )
-        {
-            const visited = new Set();
-
-            let rx = /(get +(\w+)\( *\))|(#([^;\r\n,\s(#]+)[;\r\n,])/;
-
-            let matches = attempt( () => rx.exec( source ) );
-
-            while ( matches && matches?.length > 2 && source?.length > 4 )
-            {
-                let match = matches[2] || matches[4];
-
-                let name = match ? String( match ).trim().replace( /^#/, _mt_str ) : _mt_str;
-
-                if ( match && !visited.has( name ) )
-                {
-                    const value = attempt( () => pObject[name] );
-
-                    const entry = [name, value];
-
-                    if ( isValidEntry( entry ) )
-                    {
-                        entries.push( entry );
-                        visited.add( name );
-                    }
-                }
-
-                source = source.slice( matches.index + (match?.length || 0) + 4 );
-
-                matches = attempt( () => rx.exec( source ) );
-            }
-        }
-
-        return entries;
     }
 
     function populateDateEntries( pEntries, pDate )
