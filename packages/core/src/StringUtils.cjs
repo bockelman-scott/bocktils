@@ -1511,7 +1511,7 @@ const $scope = constants?.$scope || function()
 
         const dflt = isNumber( pDefault ) || isString( pDefault ) ? pDefault : zero;
 
-        const options = mergeOptions( (isObject( pDefault ) ? pDefault : pOptions), pOptions, DEFAULT_NUMBER_SYMBOLS );
+        const options = populateOptions( pOptions, (isObject( pDefault ) ? pDefault : pOptions), DEFAULT_NUMBER_SYMBOLS );
 
         let input = _resolveInput.call( this, pValue );
 

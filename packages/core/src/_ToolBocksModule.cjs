@@ -334,6 +334,13 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const isNum = pObj => isBig( pObj ) || (_num === typeof pObj && !isNaN( pObj ) && isFinite( pObj ));
 
+    /**
+     * Returns true if the specified value is a number or string representing a number.
+     *
+     * @param {*} pObj The value to evaluate
+     *
+     * @returns {boolean} true if the specified value can be used as a number.
+     */
     const isNumeric = pObj => isNum( pObj ) || isStr( pObj ) && /[0-9.-]/.test( pObj ) && !isNaN( attempt( () => parseFloat( pObj ) ) );
 
     /**
@@ -724,18 +731,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return s.replace( /function\s+/, _mt_str ).trim().replace( /\s*\(.*\).*/, _mt_str ).trim();
         };
 
-        const funcName = pFunction?.name || nameFromSource( pFunction ) || "An anonymous function";
+        const name = pFunction?.name || nameFromSource( pFunction ) || "An anonymous function";
 
         const hasArguments = [...(pArgs || [])].length > 0;
 
-        if ( hasArguments )
-        {
-            konsole.trace( "Calling", funcName, "with arguments:\n", ...pArgs );
-        }
-        else
-        {
-            konsole.trace( "Calling", funcName, "without arguments" );
-        }
+        konsole.trace( "Calling", name, ...(hasArguments ? ["with arguments:", ...pArgs].map( e => String( e ) + "\n" ) : ["without arguments"]) );
     };
 
     /**
@@ -905,14 +905,18 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     {
         const method = resolveMethod( pMethod, pThis );
 
-        if ( isFunc( method ) )
+        if ( isAsyncFunction( method ) )
         {
             if ( canBind( method, pThis ) )
             {
-                return await asyncAttempt( () => method.call( pThis, ...pArgs ) );
+                return await asyncAttempt( async() => await method.call( pThis, ...pArgs ) );
             }
 
-            return await asyncAttempt( () => method.call( $scope(), ...pArgs ) );
+            return await asyncAttempt( async() => await method.call( $scope(), ...pArgs ) );
+        }
+        else if ( isFunc( method ) )
+        {
+            return attemptMethod( pThis, method, ...pArgs );
         }
 
         handleAttempt.handleError( new Error( NOT_A_FUNCTION ), pThis, pMethod, ...pArgs );
@@ -962,9 +966,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                         {
                             handleAttempt.traceFunctionCall( func, ...args );
 
-                            func.call( $scope(), ...(pArgs || args || []) ).then( no_op ).catch( no_op );
+                            func.call( $scope(), ...(args || pArgs || []) ).then( no_op ).catch( no_op );
 
-                        }, 10, ...(pArgs || args || []) );
+                        }, 10, ...(args || pArgs || []) );
         }
         else if ( isFunc( func ) )
         {
@@ -973,7 +977,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 attempt( func.call( $scope(), ...(pArgs || args || []) ), ...(pArgs || args || []) );
             }
 
-            fireAndForget( _, ...(pArgs || args || []) );
+            fireAndForget( _, ...(args || pArgs || []) );
         }
     };
 
@@ -1219,7 +1223,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          */
         get traceEnabled()
         {
-            return this.#traceEnabled;
+            return !!this.#traceEnabled;
         }
 
         /**
@@ -1398,14 +1402,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @function
      * @returns {boolean} Returns true if the runtime environment is Deno, otherwise false.
      */
-    const isDeno = function()
-    {
-        if ( !isNode() )
-        {
-            return (_ud !== typeof Deno);
-        }
-        return false;
-    };
+    const isDeno = () => !isNode() && (_ud !== typeof Deno);
 
     /**
      * Returns true if the current execution content is a Worker or ServiceWorker.<br>
@@ -1423,14 +1420,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @function
      * @returns true if the current execution environment is a web browser.<br>
      */
-    const isBrowser = function()
-    {
-        if ( !isNode() && !isDeno() )
-        {
-            return (_ud !== typeof window) && (_ud !== typeof document) && (_ud !== typeof navigator);
-        }
-        return false;
-    };
+    const isBrowser = () => ( !isNode() && !isDeno() && (_ud !== typeof window) && (_ud !== typeof document) && (_ud !== typeof navigator));
 
     /**
      * Returns the Locale string, such as "en-US",
@@ -1671,7 +1661,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         get operatingSystem()
         {
-            const os = this.process?.platform || this.#DenoGlobal?.build?.os || this.parseUserAgent( this.userAgent ).os.name || _mt_str;
+            const os = this.process?.platform || this.#DenoGlobal?.build?.os || this.parseUserAgent( this.userAgent )?.os?.name || _mt_str;
             return (os || _unknown).toLowerCase();
         }
 
@@ -1724,7 +1714,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             {
                 const modulePath = _asStr( pModulePath || pModuleName ).trim();
 
-                asyncAttempt( () => Deno.cache( modulePath ) ).then( no_op ).catch( no_op );
+                asyncAttempt( async() => await Deno.cache( modulePath ) ).then( no_op ).catch( no_op );
             }
         }
     }
@@ -1946,8 +1936,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          */
         constructor( pEventName, pData, pOptions )
         {
-            super( resolveEventOptions( pEventName, pData, pOptions ).type || S_CUSTOM,
-                   resolveEventOptions( pEventName, pData, pOptions ).options );
+            super( resolveEventOptions( pEventName, pData, pOptions )?.type || S_CUSTOM,
+                   resolveEventOptions( pEventName, pData, pOptions )?.options );
 
             const { type, data, options } = resolveEventOptions( pEventName, pData, pOptions );
 
@@ -1966,7 +1956,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         get traceEnabled()
         {
-            return this.#traceEnabled;
+            return !!this.#traceEnabled;
         }
 
         get options()
@@ -2513,7 +2503,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             is &= _asStr( pError?.name || pError?.message ).includes( "Error" );
         }
 
-        return is;
+        return !!is;
     };
 
     /**
@@ -2807,7 +2797,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             this.#cause = this.determineCause( pMsgOrErr, this.#options?.cause );
 
-            this.#code = this.calculateErrorCode( pMsgOrErr );
+            this.#code = this.calculateErrorCode( pMsgOrErr, this.#options );
 
             this.#referenceId = this.calculateReferenceId( pMsgOrErr );
 
@@ -2827,7 +2817,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             this.#trace = this.#options?.stackTrace || ((isError( pMsgOrErr ) ? new StackTrace( (pMsgOrErr?.stack || this.stack), pMsgOrErr ) : null));
         }
 
-
         get occurred()
         {
             return new Date( this.#occurred || this[OBJECT_CREATED] );
@@ -2838,9 +2827,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return this.#options?.referenceId || ((isError( pMsgOrErr ) ? pMsgOrErr?.referenceId || __Error.generateReferenceId( this, this.#code ) : __Error.generateReferenceId( this, this.#code )) || this.#referenceId);
         }
 
-        calculateErrorCode( pMsgOrErr )
+        calculateErrorCode( pMsgOrErr, pOptions )
         {
-            return this.#options?.code || (isNum( pMsgOrErr ) ? pMsgOrErr : ((isError( pMsgOrErr ) && this !== pMsgOrErr) ? pMsgOrErr?.code : null)) || this.#code;
+            return pOptions?.code || this.#options?.code || (isNum( pMsgOrErr ) ? pMsgOrErr : ((isError( pMsgOrErr ) && this !== pMsgOrErr) ? pMsgOrErr?.code : null)) || this.#code;
         }
 
         /**
@@ -2931,11 +2920,13 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         get code()
         {
+            this.#code = this.#code || this.calculateErrorCode( this );
             return this.#code || this.calculateErrorCode( this );
         }
 
         get referenceId()
         {
+            this.#referenceId = this.#referenceId || this.calculateReferenceId( this );
             return this.#referenceId || this.calculateReferenceId( this );
         }
 
@@ -3595,12 +3586,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          *
          * @param {*} pVisited The value currently being 'visited' by the internal iterator
          *
+         * @param {...*} [pExtra] Other values an internal iterator might pass to the visitor
+         *
          * @returns {void|boolean} Returns true IFF the intent is to abort the internal iteration.
          */
-        visit( pVisited )
+        visit( pVisited, ...pExtra )
         {
             const me = this;
-            return attempt( () => (me || this).#func.call( (me || this), pVisited ) );
+            return attempt( () => (me || this).#func.call( (me || this), pVisited, ...pExtra ) );
         }
     }
 
@@ -3624,9 +3617,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          *
          * @param {*} pVisited The value currently being 'visited' by the internal iterator
          *
+         * @param {...*} [pExtra] Other values an internal iterator might pass to the visitor
+         *
          * @returns {void|boolean} THIS IMPLEMENTATION IS A NO OP.
          */
-        visit( pVisited )
+        visit( pVisited, ...pExtra )
         {
             // no op
         }
@@ -3780,7 +3775,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         get traceEnabled()
         {
-            return this.#traceEnabled;
+            return !!this.#traceEnabled;
         }
 
         trace( pMessage, pOptions )
@@ -3947,7 +3942,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          */
         get moduleName()
         {
-            return _asStr( this.#moduleName || this.#cacheKey );
+            return String( this.#moduleName || this.#cacheKey );
         }
 
         /**
@@ -3956,7 +3951,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          */
         get cacheKey()
         {
-            return _asStr( this.#cacheKey || this.#moduleName );
+            return String( this.#cacheKey || this.#moduleName );
         }
 
         getMessagesLocale()
@@ -4580,7 +4575,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     }
 
     const isInfiniteLoop = ( object, visited, stack, depth ) => visited.has( object ) || detectCycles( stack, 5, 5 ) || depth > MAX_STACK_SIZE;
-
 
     const DEFAULT_IS_LITERAL_OPTIONS =
         {
@@ -5301,7 +5295,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 break;
             }
 
-            if ( recursive && isNonNullObj( value ) )
+            if ( recursive && isNonNullObj( value ) && !detectCycles( stack, 5, 5 ) )
             {
                 ObjectEntry.iterate( value, visitor, options, visited, [...stack, key] );
             }
@@ -5310,6 +5304,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
 
         visited.add( pObject );
+
+        return visitor;
     };
 
     const crypto = $scope().crypto || ((isDeno() && _ud !== typeof Deno) ? Deno.crypto : attempt( () => require( "node:crypto" ) )) || attempt( () => require( "crypto" ) );
@@ -5338,7 +5334,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                                    {
                                        get: function()
                                        {
-                                           return this[UNIQUE_OBJECT_ID] || attempt( () => crypto.randomUUID() );
+                                           return this[UNIQUE_OBJECT_ID] || this.__unique_object_id__ || attempt( () => crypto.randomUUID() );
                                        },
                                        set: no_op,
                                        enumerable: false,
@@ -5346,7 +5342,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             Object.prototype.getUniqueObjectInstanceId = function()
             {
-                return this[UNIQUE_OBJECT_ID] || this.__GUID;
+                return this[UNIQUE_OBJECT_ID] || this.__GUID || this.__unique_object_id__;
             };
         }
         catch( ex )
@@ -5898,795 +5894,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     {
         return attempt( () => _property( pObject, pPropertyPath, pValue ) );
     }
-
-    const CLASS_SYMBOL =
-        {
-            ID: Symbol( "_bock_id" ),
-            NAME: Symbol( "_bock_name" ),
-            DESCRIPTION: Symbol( "_bock_description" ),
-        };
-
-    class Identified
-    {
-        constructor( pId )
-        {
-            this[CLASS_SYMBOL.ID] = pId;
-        }
-
-        get id()
-        {
-            return this[CLASS_SYMBOL.ID];
-        }
-    }
-
-    class Identifiable extends Identified
-    {
-        constructor( pId )
-        {
-            super( pId );
-        }
-
-        set id( pId )
-        {
-            this[CLASS_SYMBOL.ID] = pId;
-        }
-    }
-
-    class Named extends Identified
-    {
-        constructor( pId, pName )
-        {
-            super( pId );
-            this[CLASS_SYMBOL.NAME] = pName;
-        }
-
-        get name()
-        {
-            return this[CLASS_SYMBOL.NAME];
-        }
-    }
-
-    class Nameable extends Named
-    {
-        #identifiable;
-
-        constructor( pId, pName )
-        {
-            super( pId, pName );
-            this.#identifiable = new Identifiable( pId );
-        }
-
-        get id()
-        {
-            return this.#identifiable.id;
-        }
-
-        set id( pId )
-        {
-            this.#identifiable.id = pId;
-        }
-
-        set name( pName )
-        {
-            this[CLASS_SYMBOL.NAME] = pName;
-        }
-    }
-
-    class Described extends Named
-    {
-        constructor( pId, pName, pDescription )
-        {
-            super( pId, pName );
-
-            this[CLASS_SYMBOL.DESCRIPTION] = pDescription;
-        }
-
-        get description()
-        {
-            return this[CLASS_SYMBOL.DESCRIPTION];
-        }
-    }
-
-    class Describable extends Described
-    {
-        #identifiable;
-        #nameable;
-
-        constructor( pId, pName, pDescription )
-        {
-            super( pId, pName, pDescription );
-
-            this.#identifiable = new Identifiable( pId );
-            this.#nameable = new Nameable( pId, pName );
-        }
-
-        set description( pDescription )
-        {
-            this[CLASS_SYMBOL.DESCRIPTION] = pDescription;
-        }
-
-        set name( pName )
-        {
-            this.#nameable.name = pName;
-        }
-
-        get name()
-        {
-            return this.#nameable.name;
-        }
-
-        set id( pId )
-        {
-            this.#identifiable.id = pId;
-        }
-
-        get id()
-        {
-            return this.#identifiable.id;
-        }
-    }
-
-    class MergeRule extends Described
-    {
-        constructor( pId, pName, pDescription )
-        {
-            super( pId, pName, pDescription );
-        }
-
-        resolveTarget( pObject, pKey )
-        {
-            const obj = isNonNullObj( pObject ) ? pObject || {} : {};
-            const key = isStr( pKey ) || isNum( pKey ) || isSymbol( pKey ) ? pKey : String( pKey || _mt_str );
-            return { obj, key };
-        }
-
-        equals( pOther )
-        {
-            return isNonNullObj( pOther ) &&
-                   this.id === pOther?.id &&
-                   this.name === pOther?.name;
-        }
-    }
-
-    MergeRule.resolveRule = ( pRulesMap, pId, pName ) => (pRulesMap || {})[pId || _mt_str] || (pRulesMap || {})[pName || pId || _mt_str];
-
-    class MergeDirection extends MergeRule
-    {
-        constructor( pId, pName, pDescription )
-        {
-            super( pId, pName, pDescription );
-        }
-
-        order( ...pObjects )
-        {
-            const objects = [...(pObjects || [])];
-            return (this === MergeDirection.LEFT_TO_RIGHT || "ltr" === this[CLASS_SYMBOL.ID]) ? objects : objects.reverse();
-        }
-
-        equals( pOther )
-        {
-            return (pOther instanceof this.constructor) && super.equals( pOther );
-        }
-    }
-
-    MergeDirection.LEFT_TO_RIGHT = new MergeDirection( "ltr", "LeftToRight", "Merge the leftmost objects into the rightmost object" );
-    MergeDirection.RIGHT_TO_LEFT = new MergeDirection( "rtl", "RightToLeft", "Merge the rightmost objects into the leftmost object" );
-
-    MergeDirection.LTR = MergeDirection.LEFT_TO_RIGHT;
-    MergeDirection.RTL = MergeDirection.RIGHT_TO_LEFT;
-
-    MergeDirection.DEFAULT = MergeDirection.LEFT_TO_RIGHT;
-
-    MergeDirection.resolveDirection = ( pDirection ) =>
-    {
-        if ( pDirection instanceof MergeDirection )
-        {
-            return pDirection;
-        }
-
-        if ( isStr( pDirection ) )
-        {
-            const key = String( pDirection || _mt_str ).trim().toUpperCase();
-
-            if ( ["LTR", "RTL", "LEFT_TO_RIGHT", "RIGHT_TO_LEFT"].includes( key ) )
-            {
-                return MergeDirection.resolveDirection( MergeDirection[key] );
-            }
-        }
-
-        return MergeDirection.DEFAULT;
-    };
-
-    class MergeStringsRule extends MergeRule
-    {
-        #separator = (_comma + _spc);
-        #replacement = (_semicolon + _spc);
-
-        constructor( pId, pName, pDescription, pSeparator, pReplacement )
-        {
-            super( pId, pName, pDescription );
-
-            this.#separator = isStr( pSeparator ) ? pSeparator || _mt_str : this.#separator;
-            this.#replacement = isStr( pReplacement ) ? pReplacement || _mt_str : this.#replacement;
-        }
-
-        get separator()
-        {
-            return String( this.#separator );
-        }
-
-        set separator( pSeparator )
-        {
-            this.#separator = isStr( pSeparator ) ? pSeparator || _mt_str : this.#separator;
-        }
-
-        get replacement()
-        {
-            return String( this.#replacement );
-        }
-
-        set replacement( pReplacement )
-        {
-            this.#replacement = isStr( pReplacement ) ? pReplacement || _mt_str : this.#replacement;
-        }
-
-        equals( pOther )
-        {
-            return (pOther instanceof this.constructor) && super.equals( pOther );
-        }
-
-        mergeStrings( ...pStrings )
-        {
-            const strings = [...(pStrings || [])].filter( isStr );
-
-            let value = strings;
-
-            if ( strings.length <= 0 )
-            {
-                return _mt_str;
-            }
-
-            switch ( this[CLASS_SYMBOL.ID] )
-            {
-                case "concat":
-                    value = (strings.map( e => e.includes( this.separator ) ? e.replaceAll( this.separator, this.replacement ) : e ).join( this.separator ));
-                    break;
-
-                case "split":
-                    value = [...new Set( strings )];
-                    break;
-
-                case "onn":
-                    value = strings.filter( e => !isNull( e ) && e.trim().length > 0 );
-                // do not break;
-                // fall through
-
-                case "ow":
-                    value = strings[0] || _mt_str;
-                    break;
-            }
-
-            return value;
-        }
-    }
-
-    MergeStringsRule.CONCAT = new MergeStringsRule( "concatenate", "concatenate", "Concatenate strings into a single string, separated by a comma" );
-    MergeStringsRule.SPLIT = new MergeStringsRule( "split", "split", "Convert strings into an array of strings, storing unique elements from each object" );
-    MergeStringsRule.OVERWRITE = new MergeStringsRule( "ow", "overwrite", "Replace the value of the target object with the value of the source object" );
-    MergeStringsRule.OVERWRITE_NON_NULL = new MergeStringsRule( "onn", "overwrite_non_null", "Replace the value of the target object with the value of the source object if it is not null or empty" );
-
-    MergeStringsRule.RULES =
-        {
-            "concatenate": MergeStringsRule.CONCAT,
-            "split": MergeStringsRule.SPLIT,
-            "ow": MergeStringsRule.OVERWRITE,
-            "overwrite": MergeStringsRule.OVERWRITE,
-
-            "onn": MergeStringsRule.OVERWRITE_NON_NULL,
-            "overwrite_non_null": MergeStringsRule.OVERWRITE_NON_NULL,
-
-            DEFAULT: MergeStringsRule.OVERWRITE_NON_NULL,
-        };
-
-    MergeStringsRule.DEFAULT = MergeStringsRule.RULES.DEFAULT;
-
-    MergeStringsRule.resolveRule = ( pId, pName ) => MergeRule.resolveRule( MergeStringsRule.RULES, pId, pName ) || MergeStringsRule.DEFAULT;
-
-    class MergeNumbersRule extends MergeRule
-    {
-        #operator = function( pA, pB ) { return pA; };
-
-        constructor( pId, pName, pDescription, pOperator )
-        {
-            super( pId, pName, pDescription );
-            this.#operator = isFunc( pOperator ) && pOperator.length === 2 ? pOperator : this.#operator;
-        }
-
-        get operator()
-        {
-            return isFunc( this.#operator ) ? this.#operator : function( pA, pB ) { return pA; };
-        }
-
-        mergeNumbers( ...pNumbers )
-        {
-            let value = 0;
-
-            const numbers = [...(pNumbers || [])].filter( isNumeric ).map( e => parseFloat( e ) ).filter( e => !isNaN( e ) || !isFinite( e ) );
-
-            while ( numbers.length > 1 )
-            {
-                value = this.operator.call( this, numbers.shift(), numbers.shift() );
-            }
-
-            while ( numbers.length > 0 )
-            {
-                value = this.operator.call( this, value, numbers.shift() );
-            }
-
-            return value;
-        }
-    }
-
-    MergeNumbersRule.REPLACE = new MergeNumbersRule( "ow", "overwrite", "set the target value to the the source value", function( a, b ) { return a; } );
-    MergeNumbersRule.PRESERVE = new MergeNumbersRule( "keep", "preserve", "leave the target value as-is; ignore the source value", function( a, b ) { return b; } );
-
-    MergeNumbersRule.ADD = new MergeNumbersRule( "+", "add", "set the target value to the sum of the source value and the target value", function( a, b ) { return a + b; } );
-    MergeNumbersRule.SUBTRACT = new MergeNumbersRule( "-", "subtract", "set the target value to the difference of the source value and the target value", function( a, b ) { return a - b; } );
-    MergeNumbersRule.MULTIPLY = new MergeNumbersRule( "*", "multiply", "set the target value to the product of the source value and the target value", function( a, b ) { return a * b; } );
-    MergeNumbersRule.DIVIDE = new MergeNumbersRule( "/", "divide", "set the target value to the quotient of the source value and the target value", function( a, b ) { return a / b; } );
-
-    MergeNumbersRule.DEFAULT = MergeNumbersRule.REPLACE;
-
-    class MergeArraysRule extends MergeRule
-    {
-        constructor( pId, pName, pDescription )
-        {
-            super( pId, pName, pDescription );
-        }
-
-        equals( pOther )
-        {
-            return (pOther instanceof this.constructor) && super.equals( pOther );
-        }
-
-        mergeArrays( ...pArrays )
-        {
-            let arr = [...(pArrays || [])].map( e => isArray( e ) ? e : isNull( e ) ? [] : [e] );
-
-            switch ( this[CLASS_SYMBOL.ID] )
-            {
-                case "concat":
-                    arr = arr.flat();
-                    break;
-
-                case "unique":
-                    arr = [...new Set( arr.flat() )];
-                    break;
-
-                case "onn":
-                    arr = arr.filter( e => !isNull( e ) && e.length > 0 );
-                // do not break;
-                // fall through
-
-                case "ow":
-                    arr = arr[0];
-                    break;
-
-                case "elements":
-                    break;
-            }
-
-            return [...arr];
-        }
-    }
-
-    MergeArraysRule.CONCAT = new MergeArraysRule( "concat", "concatenate", "Concatenate arrays into a single array" );
-    MergeArraysRule.UNIQUE = new MergeArraysRule( "unique", "concat_unique", "Concatenate arrays into a single array, preserving only unique elements" );
-    MergeArraysRule.OVERWRITE = new MergeArraysRule( "ow", "overwrite", "Replace the value of the target object with the value of the source object" );
-    MergeArraysRule.OVERWRITE_NON_NULL = new MergeArraysRule( "onn", "overwrite_non_null", "Replace the value of the target object with the value of the source object if it is not null or empty" );
-    MergeArraysRule.MERGE_ELEMENTS = new MergeArraysRule( "elements", "merge_elements", "Merge the elements of the source arrays into the target array" );
-
-    MergeArraysRule.RULES =
-        {
-            "concat": MergeArraysRule.CONCAT,
-            "concatenate": MergeArraysRule.CONCAT,
-
-            "unique": MergeArraysRule.UNIQUE,
-            "concat_unique": MergeArraysRule.UNIQUE,
-
-            "ow": MergeArraysRule.OVERWRITE,
-            "overwrite": MergeArraysRule.OVERWRITE,
-
-            "onn": MergeArraysRule.OVERWRITE_NON_NULL,
-            "overwrite_non_null": MergeArraysRule.OVERWRITE_NON_NULL,
-
-            "elements": MergeArraysRule.MERGE_ELEMENTS,
-            "merge_elements": MergeArraysRule.MERGE_ELEMENTS,
-
-            DEFAULT: MergeArraysRule.OVERWRITE_NON_NULL
-        };
-
-    MergeArraysRule.DEFAULT = MergeArraysRule.RULES.DEFAULT;
-
-    MergeArraysRule.resolveRule = ( pId, pName ) => MergeRule.resolveRule( MergeArraysRule.RULES, pId, pName ) || MergeArraysRule.DEFAULT;
-
-    class Recursion extends EventTarget
-    {
-        #id;
-        #stack;
-        #visited;
-        #depth;
-
-        constructor( pId, pVisited, pStack, pDepth )
-        {
-            super();
-
-            this.#id = pId || Recursion.nextId();
-
-            this.#stack = pStack || [];
-            this.#visited = pVisited || new Set();
-            this.#depth = pDepth || 0;
-        }
-
-        get id()
-        {
-            return this.#id;
-        }
-
-        get stack()
-        {
-            return this.#stack || [];
-        }
-
-        get visited()
-        {
-            return this.#visited;
-        }
-
-        get depth()
-        {
-            return this.#depth;
-        }
-
-        asObject()
-        {
-            return {
-                id: this.#id,
-                stack: this.#stack,
-                visited: this.#visited,
-                depth: this.#depth,
-            };
-        }
-
-        isInfiniteLoop( pObject )
-        {
-            return detectCycles( this.stack ) || this.depth > MAX_STACK_SIZE;
-        }
-
-        update( pObject, pKey )
-        {
-            this.#stack.push( pKey );
-            this.#visited.add( pObject );
-            this.#depth++;
-
-            return this;
-        }
-
-        popKey()
-        {
-            return this.#stack.pop();
-        }
-
-        equals( pOther )
-        {
-            return (pOther instanceof this.constructor) && pOther?.id === this.id;
-        }
-    }
-
-    Recursion._ID = 1;
-    Recursion.nextId = () =>
-    {
-        const id = Recursion._ID++;
-
-        if ( id > 999_999_999 )
-        {
-            Recursion._ID = 1;
-        }
-
-        return id;
-    };
-
-    Recursion.start = ( pVisited, pStack, pDepth ) => new Recursion( Recursion.nextId(), pVisited, pStack, pDepth );
-
-    class ObjectMerger extends EventTarget
-    {
-        #options;
-
-        #direction = MergeDirection.LEFT_TO_RIGHT;
-
-        #arrayRule = MergeArraysRule.DEFAULT;
-        #stringRule = MergeStringsRule.DEFAULT;
-        #numberRule = MergeNumbersRule.DEFAULT;
-
-        #recursions = new Map();
-
-        constructor( pDirection, pArrayRule, pStringRule, pNumberRule, pOptions )
-        {
-            super();
-
-            this.#options = pOptions || {};
-
-            this.#direction = this.resolveDirection( pDirection );
-
-            this.#arrayRule = this.resolveArrayRule( pArrayRule );
-            this.#stringRule = this.resolveStringRule( pStringRule );
-            this.#numberRule = this.resolveNumberRule( pNumberRule );
-        }
-
-        resolveRule( pRule )
-        {
-            if ( isNonNullObj( pRule ) )
-            {
-                if ( pRule instanceof MergeRule )
-                {
-                    return pRule;
-                }
-            }
-            return null;
-        }
-
-        resolveStringRule( pStringRule )
-        {
-            const rule = this.resolveRule( pStringRule );
-
-            if ( rule instanceof MergeStringsRule )
-            {
-                return rule;
-            }
-
-            if ( isStr( pStringRule ) )
-            {
-                return MergeStringsRule.resolveRule( pStringRule );
-            }
-
-            return MergeStringsRule.RULES.DEFAULT;
-        }
-
-        resolveArrayRule( pArrayRule )
-        {
-            const rule = this.resolveRule( pArrayRule );
-
-            if ( rule instanceof MergeArraysRule )
-            {
-                return rule;
-            }
-
-            if ( isStr( pArrayRule ) )
-            {
-                return MergeArraysRule.resolveRule( pArrayRule );
-            }
-
-            return MergeArraysRule.RULES.DEFAULT;
-        }
-
-        resolveNumberRule( pNumberRule )
-        {
-            const rule = this.resolveRule( pNumberRule );
-
-            if ( rule instanceof MergeNumbersRule )
-            {
-                return rule;
-            }
-
-            if ( isStr( pNumberRule ) )
-            {
-                switch ( pNumberRule.trim().toLowerCase() )
-                {
-                    case "+":
-                    case "add":
-                        return MergeNumbersRule.ADD;
-
-                    case "-":
-                    case "subtract":
-                        return MergeNumbersRule.SUBTRACT;
-
-                    case "*":
-                    case "multiply":
-                        return MergeNumbersRule.MULTIPLY;
-
-                    case "/":
-                    case "divide":
-                        return MergeNumbersRule.DIVIDE;
-
-                    case "ow":
-                    case "overwrite":
-                        return MergeNumbersRule.REPLACE;
-
-                    case "keep":
-                    case "preserve":
-                        return MergeNumbersRule.PRESERVE;
-                }
-            }
-            return MergeNumbersRule.DEFAULT;
-        }
-
-        resolveDirection( pDirection )
-        {
-            return MergeDirection.resolveDirection( pDirection ) || MergeDirection.DEFAULT;
-        }
-
-        get direction()
-        {
-            return this.resolveDirection( this.#direction );
-        }
-
-        get arrayRule()
-        {
-            return this.resolveArrayRule( this.#arrayRule );
-        }
-
-        get stringRule()
-        {
-            return this.resolveStringRule( this.#stringRule );
-        }
-
-        get numberRule()
-        {
-            return this.resolveNumberRule( this.#numberRule );
-        }
-
-        merge( ...pObjects )
-        {
-            let obj = null;
-
-            const objects = this.direction.order( ...([...(pObjects || [])]) );
-
-            const numObjects = objects.length;
-
-            const recursion = this.resolveRecursion();
-            this.#recursions.set( recursion.id, recursion );
-
-            let key = 0;
-
-            while ( objects.length && !recursion.isInfiniteLoop( obj ) && key < numObjects )
-            {
-                const left = obj || objects.shift();
-                const right = objects.shift() || {};
-
-                obj = this.mergeLtr( left, right, recursion.update( obj, String( key ) ) ) || right;
-
-                key += 1;
-            }
-
-            this.#recursions.delete( recursion.id );
-
-            return obj;
-        }
-
-        mergeLtr( pObjectA, pObjectB, pRecursion )
-        {
-            const me = this;
-
-            const left = isNonNullObj( pObjectA ) ? { ...pObjectA } : null;
-            const right = isNonNullObj( pObjectB ) ? { ...pObjectB } : null;
-
-            if ( isNonNullObj( right ) && isNonNullObj( left ) )
-            {
-                const recursion = this.resolveRecursion( pRecursion );
-
-                const entries = objectEntries( left );
-
-                while ( entries.length && !recursion.isInfiniteLoop( left ) )
-                {
-                    const entry = entries.shift();
-
-                    const key = ObjectEntry.getKey( entry );
-                    const value = ObjectEntry.getValue( entry );
-
-                    right[key] = attempt( () => (me || this).mergeValues( value, right[key], recursion.update( left, key ) ) );
-
-                    recursion.popKey();
-                }
-            }
-
-            return right || left;
-        }
-
-        mergeRtl( pObjectA, pObjectB, pRecursion )
-        {
-            return this.mergeLtr( pObjectB, pObjectA, pRecursion );
-        }
-
-        mergeStrings( pObjectA, pObjectB )
-        {
-            return this.stringRule.mergeStrings( pObjectA, pObjectB );
-        }
-
-        mergeNumbers( pObjectA, pObjectB )
-        {
-            return this.numberRule.mergeNumbers( pObjectA, pObjectB );
-        }
-
-        mergeArrays( pObjectA, pObjectB, pRecursion )
-        {
-            if ( this.arrayRule.equals( MergeArraysRule.MERGE_ELEMENTS ) )
-            {
-
-            }
-
-            return this.arrayRule.mergeArrays( pObjectA, pObjectB );
-        }
-
-        mergeValues( pValueA, pValueB, pRecursion )
-        {
-            const me = this;
-
-            const recursion = this.resolveRecursion( pRecursion );
-
-            if ( isNull( pValueB ) )
-            {
-                return pValueA;
-            }
-
-            if ( isNull( pValueA ) )
-            {
-                return pValueB;
-            }
-
-            if ( isArray( pValueA ) || isArray( pValueB ) )
-            {
-                const valueA = isArray( pValueA ) ? [...pValueA] : [pValueA];
-                const valueB = isArray( pValueB ) ? [...pValueB] : [pValueB];
-
-                return attempt( () => me.mergeArrays( valueA, valueB, recursion ) );
-            }
-
-            if ( isNonNullObj( pValueA ) || isNonNullObj( pValueB ) )
-            {
-                return attempt( () => (me || this).mergeLtr( pValueA, pValueB, recursion ) );
-            }
-
-            if ( isNumeric( pValueA ) && isNumeric( pValueB ) )
-            {
-                let value = attempt( () => (me || this).mergeNumbers( pValueA, pValueB ) );
-
-                if ( !isNaN( value ) && isFinite( value ) )
-                {
-                    return value;
-                }
-            }
-
-            if ( isStr( pValueA ) || isStr( pValueB ) )
-            {
-                return attempt( () => (me || this).mergeStrings( String( pValueA ), String( pValueB ), recursion ) );
-            }
-
-            return pValueA;
-        }
-
-        resolveRecursion( pRecursion )
-        {
-            let recur = (pRecursion instanceof Recursion) ? pRecursion : this.#recursions.get( pRecursion );
-
-            if ( recur instanceof Recursion )
-            {
-                return recur;
-            }
-
-            if ( this.#recursions.size )
-            {
-                const values = [...this.#recursions.values()].sort( ( a, b ) => (a[OBJECT_CREATED] || 0) - (b[OBJECT_CREATED] || 0) );
-                recur = values[0];
-            }
-
-            recur = (recur instanceof Recursion) ? recur : Recursion.start();
-
-            this.#recursions.set( recur.id, recur );
-
-            return recur;
-        }
-    }
-
 
     function mergeOptions( pOptions, ...pDefaults )
     {
