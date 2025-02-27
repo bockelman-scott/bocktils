@@ -86,8 +86,6 @@ const $scope = constants?.$scope || function()
 
     const
         {
-            _mt_str,
-            _dot,
             _str,
             _fun,
             _num,
@@ -95,45 +93,85 @@ const $scope = constants?.$scope || function()
             _bool,
             _obj,
             _symbol,
+
+            _mt_str,
+            _dot,
+            _comma,
             _minus,
             _zero,
+
+            _tilde,
+            _pipe,
+
             _affirmatives,
-            _underscore,
+
             DIGITS,
             DIGITS_MAP,
             HEX_DIGITS_MAP,
             OCT_DIGITS_MAP,
             BIN_DIGITS_MAP,
+
             S_ERROR,
             S_WARN,
+
             TYPED_ARRAYS,
             PRIMITIVE_WRAPPER_TYPES,
+            BUILTIN_TYPES,
             BUILTIN_TYPE_NAMES,
-            AsyncFunction,
-            IllegalArgumentError,
-            isPromise = ( pArg ) => (pArg && (pArg.constructor === Promise || pArg === Promise || pArg instanceof Promise)),
-            isThenable = ( pArg ) => (pArg && (pArg.then && ("function" === typeof pArg.then))),
-            toNodePathArray,
-            getProperty,
-            setProperty,
-            isObjectLiteral,
-            populateOptions,
-            detectCycles,
-            ObjectEntry,
-            objectEntries,
-            objectKeys,
-            objectValues,
-            attempt,
-            asyncAttempt,
-            lock,
-            classes,
+
             moduleUtils
         } = constants;
 
-    const { ToolBocksModule, ModuleEvent, propertyDescriptors, objectMethods } = moduleUtils;// classes;
+    const {
+        ToolBocksModule,
+        ModuleEvent,
 
-    const functionToString = Function.prototype.toString;
-    const objectToString = Object.prototype.toString;
+        functionToString,
+        objectToString,
+        errorToString,
+
+        TYPES_CHECKS,
+
+        propertyDescriptors,
+
+        AsyncFunction,
+        ObjectEntry,
+        IllegalArgumentError,
+
+        TRANSIENT_PROPERTIES,
+
+        resolveVisitor,
+        resolveError,
+        resolveEvent,
+        resolveObject,
+        resolveLogLevel,
+        resolveType,
+        resolveMethod,
+        resolveTransientProperties,
+
+        canBind,
+
+        attempt,
+        asyncAttempt,
+        detectCycles,
+
+        isObjectLiteral,
+        toNodePathArray,
+        getProperty,
+        setProperty,
+        populateOptions,
+
+        lock,
+
+        objectEntries,
+        objectKeys,
+        objectValues,
+        objectMethods,
+
+        isPromise = ( pArg ) => (pArg && (pArg.constructor === Promise || pArg === Promise || pArg instanceof Promise)),
+        isThenable = ( pArg ) => (pArg && (pArg.then && ("function" === typeof pArg.then)))
+
+    } = moduleUtils;
 
     /**
      * Represents the name of the module<br>
@@ -383,9 +421,38 @@ const $scope = constants?.$scope || function()
                 }
             }
 
-            return isNonNullValue( pValue ) ? pValue : (pValue || pObject);
+            return isNonNullValue( pValue ) ? pValue : null;
         }
     }
+
+    /**
+     * An object that maps data types to their estimated size in bytes.
+     * <br>
+     * Note that these values are estimates only<br>
+     * and that the types, symbol, object, and function<br>
+     * cannot be estimated; they must be calculated at runtime.<br>
+     * <br>
+     * Finally, the estimated number of bytes for the String type is actually 'bytes per character'<br>
+     * <br>
+     * @namespace BYTES_PER_TYPE
+     * @dict
+     * @const
+     * @readonly
+     * @type {Object}
+     * @alias module:TypeUtils#BYTES_PER_TYPE
+     */
+    const BYTES_PER_TYPE = lock(
+        {
+            [_str]: 2,
+            [_big]: 16,
+            [_num]: 8,
+            [_bool]: 1,
+            [_fun]: 0,
+            [_obj]: 0,
+            [_symbol]: 0,
+            [_ud]: 0
+        }
+    );
 
     /**
      * Returns the estimated number of bytes required to represent the specified data type.
@@ -418,59 +485,8 @@ const $scope = constants?.$scope || function()
     const estimateBytesForType = function( pType )
     {
         const type = (_mt_str + pType).toLowerCase();
-
-        if ( JS_TYPES.includes( pType ) )
-        {
-            switch ( type )
-            {
-                case _str:
-                    return 2; // Assumes string as UTF-16, 2 bytes per character
-                case _num:
-                    return 8; // Number (IEEE 754 double-precision floating point)
-                case _big:
-                    return 16; // Arbitrary assumption for BigInt size
-                case _bool:
-                    return 1; // Boolean (1 byte)
-                case _symbol:
-                    return 0; // Symbol size cannot be determined
-                case _fun:
-                    return 0; // Functions don't have a measurable byte size
-                case _obj:
-                    return 0; // Objects' sizes are dynamic and can't be determined simply
-                default:
-                    return -1; // For unsupported or unknown types
-            }
-        }
+        return (BYTES_PER_TYPE[type] || ([0, 2, 8, 16, 0, 1, 0, 0][Math.max( 0, JS_TYPES.indexOf( type ) )]) || 0);
     };
-
-    /**
-     * An object that maps data types to their estimated size in bytes.
-     * <br>
-     * Note that these values are estimates only<br>
-     * and that the types, symbol, object, and function<br>
-     * cannot be estimated; they must be calculated at runtime.<br>
-     * <br>
-     * Finally, the estimated number of bytes for the String type is actually 'bytes per character'<br>
-     * <br>
-     * @namespace BYTES_PER_TYPE
-     * @dict
-     * @const
-     * @readonly
-     * @type {Object}
-     * @alias module:TypeUtils#BYTES_PER_TYPE
-     */
-    const BYTES_PER_TYPE = lock(
-        {
-            [_str]: estimateBytesForType( _str ),
-            [_big]: estimateBytesForType( _big ),
-            [_num]: estimateBytesForType( _num ),
-            [_bool]: estimateBytesForType( _bool ),
-            [_fun]: estimateBytesForType( _fun ),
-            [_obj]: estimateBytesForType( _obj ),
-            [_symbol]: estimateBytesForType( _symbol ),
-            [_ud]: estimateBytesForType( _ud )
-        }
-    );
 
     /**
      * This oddly named function, so as not to collide with 'isArray',<br>
@@ -550,7 +566,25 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isEmptyString
      */
-    const isEmptyString = ( pObject ) => isString( pObject ) && (_mt_str === pObject || _str.length === 0);
+    const isEmptyString = ( pObject ) => isString( pObject ) && (_mt_str === pObject || pObject?.length === 0);
+
+    /**
+     * Returns true if the specified value is a string consisting of only whitespace.<br>
+     * <br>
+     * A value is considered to be a blank string<br>
+     * if it is strictly of type "string"<br>
+     * and if when trimmed has a length of 0.<br>
+     * <br>
+     *
+     * @function isBlankString
+     *
+     * @param {*} pObject - The value to be evaluated.
+     *
+     * @returns {boolean} Returns true if the input is string containing only whitespace; otherwise, returns false.
+     *
+     * @alias module:TypeUtils.isBlankString
+     */
+    const isBlankString = ( pObject ) => isString( pObject ) && (_mt_str === pObject.trim() || pObject.trim().length === 0);
 
     /**
      * Returns true if the specified value is null<br>
@@ -633,36 +667,7 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isGeneratorFunction
      */
-    const isGeneratorFunction = ( pObject ) => (isFunction( pObject ) && "[object Generator]" === {}.toString.call( pObject.prototype, pObject.prototype ));
-
-    /**
-     * @typedef {Object} ObjectEvaluationOptions
-     *
-     * @property [rejectPrimitiveWrappers=true] When true, instances of the Boolean, String, Number, and BigInt classes are not considered to be objects.<br>
-     * @property [rejectArrays=false] When true, arrays are not considered to be objects<br>
-     * @property [rejectNull=false] When true, null is not considered to be an object, even though typeof null === "object"
-     * @property [allowEmptyObjects=true] When false, objects with no properties, i.e., Object.keys(obj).length === 0, are not considered objects
-     */
-
-    /**
-     * This object defines the default options for the {@link isObject} function.<br>
-     * @type {ObjectEvaluationOptions}
-     * @alias module:TypeUtils#DEFAULT_IS_OBJECT_OPTIONS
-     */
-    const DEFAULT_IS_OBJECT_OPTIONS = lock(
-        {
-            rejectPrimitiveWrappers: true,
-            rejectArrays: false,
-            rejectNull: false,
-            allowEmptyObjects: true
-        } );
-
-    /**
-     * This object defines the default options for the {@link isNonNullObject} function.<br>
-     * @type {ObjectEvaluationOptions}
-     * @alias module:TypeUtils#IS_NON_NULL_OBJECT_OPTIONS
-     */
-    const IS_NON_NULL_OBJECT_OPTIONS = lock( { ...DEFAULT_IS_OBJECT_OPTIONS, rejectNull: true } );
+    const isGeneratorFunction = ( pObject ) => (isFunction( pObject ) && "[object Generator]" === objectToString.call( pObject.prototype, pObject.prototype ));
 
     /**
      * Returns true if the specified value is an instance of String, Number, Boolean, or BigInt<br>
@@ -697,6 +702,35 @@ const $scope = constants?.$scope || function()
     };
 
     /**
+     * @typedef {Object} ObjectEvaluationOptions
+     *
+     * @property [rejectPrimitiveWrappers=true] When true, instances of the Boolean, String, Number, and BigInt classes are not considered to be objects.<br>
+     * @property [rejectArrays=false] When true, arrays are not considered to be objects<br>
+     * @property [rejectNull=false] When true, null is not considered to be an object, even though typeof null === "object"
+     * @property [allowEmptyObjects=true] When false, objects with no properties, i.e., Object.keys(obj).length === 0, are not considered objects
+     */
+
+    /**
+     * This object defines the default options for the {@link isObject} function.<br>
+     * @type {ObjectEvaluationOptions}
+     * @alias module:TypeUtils#DEFAULT_IS_OBJECT_OPTIONS
+     */
+    const DEFAULT_IS_OBJECT_OPTIONS = lock(
+        {
+            rejectPrimitiveWrappers: true,
+            rejectArrays: false,
+            rejectNull: false,
+            allowEmptyObjects: true
+        } );
+
+    /**
+     * This object defines the default options for the {@link isNonNullObject} function.<br>
+     * @type {ObjectEvaluationOptions}
+     * @alias module:TypeUtils#IS_NON_NULL_OBJECT_OPTIONS
+     */
+    const IS_NON_NULL_OBJECT_OPTIONS = lock( { ...DEFAULT_IS_OBJECT_OPTIONS, rejectNull: true } );
+
+    /**
      * Returns true if the specified value is an object.<br>
      * Use the options to clarify how to treat primitive wrappers, arrays, and nulls<br>
      *
@@ -721,7 +755,7 @@ const $scope = constants?.$scope || function()
                    isFunction( pObject?.keys ) ? [...(pObject.keys() || [])] : [...(Object.keys( pObject || {} ) || [])];
         }
 
-        if ( (_obj === typeof pObject) || pObject instanceof Object )
+        if ( _obj === typeof pObject )
         {
             const options = populateOptions( pOptions, DEFAULT_IS_OBJECT_OPTIONS );
 
@@ -760,7 +794,7 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isError
      */
-    const isError = ( pObj ) => isObject( pObj ) && pObj instanceof Error;
+    const isError = Error.isError || (( pObj ) => isObject( pObj ) && pObj instanceof Error);
 
     /**
      * Returns true if the specified value is an object that represents an Event<br>
@@ -799,8 +833,8 @@ const $scope = constants?.$scope || function()
      */
     const firstError = function( ...pObj )
     {
-        let arr = (!isNull( pObj ) ? isArray( pObj ) ? pObj : [pObj] : []).flat().filter( isError );
-        return arr.filter( e => isError( e ) ).shift() || null;
+        let arr = (!isNull( pObj ) ? isArray( pObj ) ? [...(pObj || [])] : [pObj] : []).flat().filter( isError );
+        return arr.filter( isError ).shift() || null;
     };
 
     /**
@@ -816,9 +850,38 @@ const $scope = constants?.$scope || function()
     {
         if ( isString( pObj ) )
         {
-            return pObj;
+            return isPrimitiveWrapper( pObj ) ? pObj.valueOf() : pObj;
         }
-        return (0 === pObj || _zero === pObj || false === pObj) ? _zero : ((_mt_str + String( pObj ) + _mt_str).trim()).replaceAll( /[,_]/g, _mt_str ).trim();
+        return (0 === pObj || _zero === pObj || false === pObj) ? _zero : ((_mt_str + String( pObj ) + _mt_str).trim());
+    }
+
+    function toNumericString( pObj, pDecimalSeparator = _dot, pGroupSeparator = _comma )
+    {
+        if ( isString( pObj ) )
+        {
+            let s = _toString( pObj ).trim().replaceAll( /_/g, _mt_str ).trim();
+
+            s = s.replace( /n$/, _mt_str ).replace( /(n\s*\)\s*)$/, ")" );
+
+            if ( _comma !== pGroupSeparator )
+            {
+                s = s.replaceAll( pGroupSeparator, _tilde );
+                s = s.replaceAll( (_tilde + _tilde), _tilde );
+            }
+
+            if ( _dot !== pDecimalSeparator )
+            {
+                s = s.replaceAll( pDecimalSeparator, _pipe );
+                s = s.replaceAll( (_pipe + _pipe), _pipe );
+            }
+
+            s = s.replaceAll( _tilde, _comma );
+            s = s.replaceAll( _pipe, _dot );
+
+            return s.replaceAll( /[,_]/g, _mt_str ).trim();
+        }
+
+        return pObj;
     }
 
     /**
@@ -977,7 +1040,13 @@ const $scope = constants?.$scope || function()
      */
     function isHex( pObj )
     {
-        const s = _toString( pObj ).replaceAll( /_/g, _mt_str ).trim();
+        if ( !isString( pObj ) || !pObj.includes( "0x" ) )
+        {
+            return false;
+        }
+
+        const s = toNumericString( pObj );
+
         return (_zero !== s) && /^(-)?(0x)([\dA-Fa-f]+)?(([.,])([\dA-Fa-f]+))?$/i.test( s ) && !/[G-Wg-w\s]|[yzYZ]/.test( s );
     }
 
@@ -996,7 +1065,13 @@ const $scope = constants?.$scope || function()
      */
     function isOctal( pObj )
     {
-        const s = _toString( pObj ).replaceAll( /_/g, _mt_str ).trim();
+        if ( !isString( pObj ) || !pObj.includes( "0o" ) || pObj.includes( "8" ) )
+        {
+            return false;
+        }
+
+        const s = toNumericString( pObj );
+
         return (_zero !== s) && /^(-)?(0o)([0-7]+)?(([.,])([0-7]+))?$/i.test( s ) && !/[A-Za-np-z\s]/.test( s );
     }
 
@@ -1015,7 +1090,13 @@ const $scope = constants?.$scope || function()
      */
     function isBinary( pObj )
     {
-        const s = _toString( pObj ).replaceAll( /_/g, _mt_str ).trim();
+        if ( !isString( pObj ) || !pObj.includes( "0b" ) || pObj.includes( "2" ) )
+        {
+            return false;
+        }
+
+        const s = toNumericString( pObj );
+
         return (_zero !== s) && /^(-)?(0b)([0-1]+)?(([.,])([0-1]+))?$/i.test( s ) && !/[AC-Z]|[ac-z]|\s/.test( s );
     }
 
@@ -1030,7 +1111,7 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isScientificNotation
      */
-    const isScientificNotation = ( pObj ) => (/^[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)$/).test( _toString( pObj ).replaceAll( /_/g, _mt_str ).trim() );
+    const isScientificNotation = ( pObj ) => (/^[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)$/).test( toNumericString( pObj ) );
 
     /**
      * Returns true if the specified value represents a decimal number (base 10)<br>
@@ -1064,34 +1145,34 @@ const $scope = constants?.$scope || function()
      * Returns true if the specified value is, or can be converted to, a number<br>
      * <br>
      * @param  {string|number} pObj A value to evaluate
-     * @param {boolean} [pAllowLeadingZeroForBase10=false] Specify true to allow decimal values with leading zeroes
      *
      * @returns {boolean} true if the specified value is, or can be converted to, a number
      *
      * @alias module:TypeUtils.isNumeric
      */
-    const isNumeric = function( pObj, pAllowLeadingZeroForBase10 = false )
+    const isNumeric = function( pObj )
     {
-        if ( isNumber( pObj ) || _zero === pObj )
+        if ( (isNumber( pObj ) && !isNanOrInfinite( pObj )) || _zero === pObj )
         {
             return true;
         }
 
-        if ( (_ud === typeof pObj || null === pObj) || !([_num, _big, _str].includes( typeof pObj ) || (pObj instanceof Number || pObj instanceof String)) )
+        if ( !([_num, _big, _str].includes( typeof pObj ) || (pObj instanceof Number || pObj instanceof String)) )
         {
             return false;
         }
 
-        let value = ((_mt_str + _toString( pObj )).replace( /n+$/, _mt_str )).trim();
+        let value = (_mt_str + _toString( pObj )).trim();
+        value = value.replace( /^\(/, _mt_str ).replace( /\)$/, _mt_str ).trim();
+        value = value.replace( /n+$/, _mt_str ).trim();
 
-        if ( _zero === pObj || isDecimal( value ) || isHex( value ) || isOctal( value ) || isBinary( value ) || isScientificNotation( value ) )
+        const is_decimal = isDecimal( value );
+
+        if ( _zero === value || is_decimal || isHex( value ) || isOctal( value ) || isBinary( value ) || (/[eE]/i.test( value ) && isScientificNotation( value )) )
         {
-            if ( isDecimal( value ) && !!pAllowLeadingZeroForBase10 )
+            if ( is_decimal )
             {
-                while ( /^0/.test( value ) )
-                {
-                    value = value.slice( 1 );
-                }
+                value = (!((/[boxe]/i).test( value )) ? (value.includes( _dot ) ? value.replace( /^0{2,}/, _zero ) : value.replace( /^0+/, _mt_str )) : value).trim();
             }
 
             if ( _mt_str === value )
@@ -1099,9 +1180,9 @@ const $scope = constants?.$scope || function()
                 return false;
             }
 
-            let integer = parseInt( value, calculateRadix( pObj ) );
+            let integer = attempt( () => parseInt( value, calculateRadix( pObj ) ) );
 
-            return !isNanOrInfinite( integer );
+            return isNumber( integer ) && !isNanOrInfinite( integer );
         }
 
         return false;
@@ -1124,7 +1205,16 @@ const $scope = constants?.$scope || function()
     {
         const valid = pStrict ? isNumber( pValue ) : isNumeric( pValue );
 
-        return valid && ((0 === pValue || /^-?0+$|^0+$|^[0.-]{1,3}0+$/.test( _toString( pValue ) )) || (Math.round( parseFloat( pValue ) ) === 0 && Math.abs( parseFloat( pValue ) ) < 0.000000000000001));
+        if ( 0 === pValue || ( !pStrict && "0" === String( pValue ).trim()) )
+        {
+            return true;
+        }
+
+        const value = String( pValue ).trim().replaceAll( /_/g, _mt_str ).replace( /n$/, _mt_str ).trim();
+
+        const float = attempt( () => parseFloat( value ) );
+
+        return valid && (/^-?0+$|^0+$|^[0.-]{1,3}0+$/.test( value ) || ( !isNanOrInfinite( float ) && Math.round( float ) === 0 && Math.abs( float ) < 0.000000000000001));
     };
 
     /**
@@ -1202,16 +1292,21 @@ const $scope = constants?.$scope || function()
      * This function accommodates various radix notations and handles optional custom decimal separators.
      *
      * @param {Object|string|number} pObj - The input value to convert to a decimal, which can be a string, number, or other object types.
-     * @param {string} [pDecimalSeparator=_dot] - An optional custom character used as the decimal separator.
+     * @param {string} [pDecimalSeparator=_dot] - The character in the string that represents the decimal separator.
+     * @param {string} [pGroupSeparator=_comma] - The character in the string that represents the grouping separator.
      * @returns {number} - The decimal numerical value obtained from the string representation.
      *
      * @private
      */
-    const _stringToDecimal = function( pObj, pDecimalSeparator = _dot )
+    const _stringToDecimal = function( pObj, pDecimalSeparator = _dot, pGroupSeparator = _comma )
     {
-        let s = _toString( pObj ).trim();
+        let s = toNumericString( pObj, pDecimalSeparator, pGroupSeparator );
 
-        let sign = s.startsWith( _minus ) ? -1 : 1;
+        let sign = (s.startsWith( _minus ) || (s.startsWith( "(" ) && s.endsWith( ")" ))) ? -1 : 1;
+
+        s = s.replaceAll( /_/g, _mt_str ).replace( /\(/, _mt_str ).trim().replace( /\)$/, _mt_str ).trim();
+
+        s = s.replace( /n$/, _mt_str ).trim();
 
         let power = calculateRadix( s );
 
@@ -1268,13 +1363,11 @@ const $scope = constants?.$scope || function()
      *
      * @param {number|string|Array<(number|string)>} pObj A value or an array of values to convert to a decimal representation<br>
      *
-     * @param {string} [pDecimalSeparator=.] The symbol used to separate the integer part from the fractional part of a non-integer value
-     *
      * @returns {number|Array<number>} a decimal representation of the specified value
      *
      * @alias module:TypeUtils.toDecimal
      */
-    const toDecimal = function( pObj, pDecimalSeparator = _dot )
+    const toDecimal = function( pObj )
     {
         if ( isArray( pObj ) )
         {
@@ -1286,10 +1379,10 @@ const $scope = constants?.$scope || function()
             return 0;
         }
 
-        if ( isScientificNotation( pObj ) )
-        {
-            let s = String( pObj ).trim();
+        let s = (_mt_str + (String( pObj ).trim())).toLowerCase();
 
+        if ( s.includes( "e" ) && isScientificNotation( pObj ) )
+        {
             const rx = /[eE]/i;
 
             if ( rx.test( s ) )
@@ -1318,8 +1411,19 @@ const $scope = constants?.$scope || function()
             return parseFloat( num.toString( 10 ) );
         }
 
-        return _stringToDecimal( pObj, pDecimalSeparator );
+        return _stringToDecimal( pObj );
     };
+
+    function prepareValue( pValue, pRadix )
+    {
+        let decimalValue = toDecimal( pValue );
+        return decimalValue.toString( pRadix || calculateRadix( decimalValue ) );
+    }
+
+    function _numStr( pStr, pPrefix )
+    {
+        return ((pStr.startsWith( "-" ) ? "-0" : "0") + (String( pPrefix ).toLowerCase()) + pStr.replace( /^-/, _mt_str ).trim()).trim();
+    }
 
     /**
      * Returns a string representation of the specified value as a hexadecimal number<br>
@@ -1339,11 +1443,9 @@ const $scope = constants?.$scope || function()
             return [...pObj].map( toHex );
         }
 
-        let decimalValue = toDecimal( pObj );
+        const s = prepareValue( pObj, 16 );
 
-        const s = decimalValue.toString( 16 );
-
-        return (s.startsWith( "-" ) ? "-0x" : "0x") + s.replace( /^-/, _mt_str ).trim();
+        return _numStr( s, "x" );
     };
 
     /**
@@ -1365,11 +1467,9 @@ const $scope = constants?.$scope || function()
             return [...pObj].map( toOctal );
         }
 
-        let decimalValue = toDecimal( pObj );
+        const s = prepareValue( pObj, 8 );
 
-        const s = decimalValue.toString( 8 );
-
-        return (s.startsWith( "-" ) ? "-0o" : "0o") + s.replace( /^-/, _mt_str ).trim();
+        return _numStr( s, "o" );
     };
 
     /**
@@ -1396,13 +1496,11 @@ const $scope = constants?.$scope || function()
             return [...pValue].map( ( e ) => toBinary( e, pPrecision ) );
         }
 
-        let decimalValue = toDecimal( pValue );
-
-        let s = decimalValue.toString( 2 );
+        let s = prepareValue( pValue, 2 );
 
         if ( s.includes( _dot ) )
         {
-            let maxPrecision = Math.max( 0, Math.min( 15, parseInt( _toString( pPrecision || _mt_str ), 10 ) ) );
+            let maxPrecision = clamp( attempt( () => parseInt( toNumericString( String( pPrecision ), 10 ) ) ), 0, 15 );
 
             if ( (isNanOrInfinite( maxPrecision ) || maxPrecision <= 0) && isNull( pPrecision ) )
             {
@@ -1414,7 +1512,7 @@ const $scope = constants?.$scope || function()
             }
         }
 
-        return (s.startsWith( "-" ) ? "-0b" : "0b") + s.replace( /^-/, _mt_str ).trim();
+        return _numStr( s, "b" );
     };
 
     /**
@@ -1822,6 +1920,14 @@ const $scope = constants?.$scope || function()
                 populated = (acceptArrays || !isArray( pObject )) && isPopulatedObject( pObject, options, visited, stack );
 
                 break;
+
+            case _symbol:
+                populated = !isNull( pObject ) && (isSymbol( pObject ));
+                break;
+
+            default:
+                populated = false;
+                break;
         }
 
         return populated;
@@ -1928,9 +2034,9 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isReadOnly
      */
-    const isReadOnly = constants?.isReadOnly || function( pObject )
+    const isReadOnly = moduleUtils?.isReadOnly || function( pObject )
     {
-        return isObject( pObject ) && (isNull( pObject ) || Object.isFrozen( pObject ) || Object.isSealed( pObject ));
+        return isPrimitive( pObject ) || isNull( pObject ) || (isObject( pObject ) && (isNull( pObject ) || Object.isFrozen( pObject ) || Object.isSealed( pObject )));
     };
 
     /**
@@ -2041,7 +2147,7 @@ const $scope = constants?.$scope || function()
                 {
                     return values.every( isNumeric );
                 }
-                return true;
+                return values.every( isString );
             }
         }
 
@@ -2073,9 +2179,9 @@ const $scope = constants?.$scope || function()
 
         if ( isObject( pObject ) )
         {
-            const entries = Object.entries( pObject );
+            const entries = objectEntries( pObject );
 
-            const strings = entries.filter( entry => isString( entry[0] ) && !(entry[0].startsWith( "[object" )) );
+            const strings = entries.filter( entry => isString( entry.key ) && !(entry.key.startsWith( "[object" )) );
 
             return (entries.length === strings.length);
         }
@@ -2125,6 +2231,49 @@ const $scope = constants?.$scope || function()
     const MAX_DATE_TIME = 7258140000000;  // Approx. year 2262
 
     /**
+     * Returns true if the specified value is a valid Date instance.<br>
+     * <br>
+     * This function validates whether the provided `date` parameter is a non-null object,
+     * contains a `getTime` method, and has a timestamp that falls within the predefined
+     * minimum (`MIN_DATE_TIME`) and maximum (`MAX_DATE_TIME`) date limits.
+     *
+     * @param {Object} date - The date object to validate.
+     * @returns {boolean} Returns true if the date object is considered valid; otherwise, false.
+     */
+    const isValidDateInstance = ( date ) => !isNull( date ) &&
+                                            isFunction( date.getTime ) &&
+                                            !isNanOrInfinite( date.getTime() ) &&
+                                            date.getTime() >= MIN_DATE_TIME &&
+                                            date.getTime() <= MAX_DATE_TIME;
+
+    const canBeDateTime = function( pObj )
+    {
+        let date = isObject( pObj ) && pObj instanceof Number
+                   ? new Date( pObj.valueOf() )
+                   : isNumber( pObj )
+                     ? new Date( pObj )
+                     : isNumeric( pObj ) ? new Date( toInteger( toDecimal( pObj ) ) ) : null;
+
+        if ( date && isValidDateInstance( date ) )
+        {
+            return true;
+        }
+    };
+
+    function _parseDate( pObj, pDateParser )
+    {
+        let date = null;
+
+        if ( isString( pObj ) || pObj instanceof String )
+        {
+            date = parseDate( pObj, pDateParser );
+            return (isNull( date ) || !isValidDateInstance( date ) ? attempt( () => new Date( pObj ) ) : date);
+        }
+
+        return date;
+    }
+
+    /**
      * Returns true if the specified object is an instance of Date<br>
      * or if not <i>strict</i>, if the specified object can be converted into a Date<br>
      *
@@ -2144,7 +2293,7 @@ const $scope = constants?.$scope || function()
         }
 
         // Check if input is already a valid Date instance
-        if ( pObj instanceof Date || objectToString.call( pObj ) === "[object Date]" )
+        if ( TYPES_CHECKS.isDate( pObj ) || pObj instanceof Date || objectToString.call( pObj ) === "[object Date]" )
         {
             return true;
         }
@@ -2155,73 +2304,16 @@ const $scope = constants?.$scope || function()
         }
 
         // Attempt to create a Date if input is a numeric or object containing a number
-        let date = isObject( pObj ) && pObj instanceof Number
-                   ? new Date( pObj.valueOf() )
-                   : isNumber( pObj )
-                     ? new Date( pObj )
-                     : null;
-
-        if ( date && isValidDateInstance( date ) )
+        if ( canBeDateTime( pObj ) )
         {
             return true;
         }
 
         // Try parsing if input is a string
-        if ( isString( pObj ) || pObj instanceof String )
-        {
-            date = parseDate( pObj, pDateParser );
-            if ( isNull( date ) )
-            {
-                try
-                {
-                    date = new Date( pObj );
-                }
-                catch( ex )
-                {
-                    modulePrototype.reportError( ex, `evaluating ${pObj} as a Date`, S_ERROR, modName + "::isDate" );
-                }
-            }
-        }
+        const date = _parseDate( pObj, pDateParser );
 
-        // Final fallback check for string, number, or big types
-        if ( !date || !isDate( date, true ) )
-        {
-            switch ( typeof pObj )
-            {
-                case _str:
-                case _num:
-                case _big:
-                    try
-                    {
-                        date = new Date( pObj );
-                    }
-                    catch( ex )
-                    {
-                        modulePrototype.reportError( ex, `evaluating ${pObj} as a Date`, S_ERROR, modName + "::isDate" );
-                    }
-                    break;
-            }
-        }
-
-        return isDate( date, true );
+        return isDate( date, true ) && isValidDateInstance( date );
     };
-
-    /**
-     * Returns true if the specified value is a valid Date instance.<br>
-     * <br>
-     * This function validates whether the provided `date` parameter is a non-null object,
-     * contains a `getTime` method, and has a timestamp that falls within the predefined
-     * minimum (`MIN_DATE_TIME`) and maximum (`MAX_DATE_TIME`) date limits.
-     *
-     * @param {Object} date - The date object to validate.
-     * @returns {boolean} Returns true if the date object is considered valid; otherwise, false.
-     */
-    const isValidDateInstance = ( date ) => !isNull( date ) &&
-                                            isFunction( date.getTime ) &&
-                                            !isNanOrInfinite( date.getTime() ) &&
-                                            date.getTime() >= MIN_DATE_TIME &&
-                                            date.getTime() <= MAX_DATE_TIME;
-
 
     /**
      * Parses a given input into a date object using a provided parser or parser object.<br>
@@ -2245,14 +2337,7 @@ const $scope = constants?.$scope || function()
     {
         if ( isFunction( dateParser ) || isFunction( dateParser?.parse || dateParser?.parseDate ) )
         {
-            try
-            {
-                return (dateParser.parse || dateParser.parseDate || dateParser).call( dateParser, input );
-            }
-            catch( ex )
-            {
-                modulePrototype.reportError( ex, `formatting ${input} as a date`, S_WARN, modName + "::isDate" );
-            }
+            return attempt( () => (dateParser.parse || dateParser.parseDate || dateParser).call( dateParser, input ) );
         }
         return null;
     };
@@ -2293,10 +2378,10 @@ const $scope = constants?.$scope || function()
 
         if ( pStrict )
         {
-            return pObject instanceof RegExp;
+            return TYPES_CHECKS.isRegExp( pObject ) || pObject instanceof RegExp;
         }
 
-        const s = _mt_str + (isString( pObject ) ? String( pObject ) : (isFunction( pObject.toString ) ? pObject.toString() : {}.toString.call( pObject, pObject )));
+        const s = _mt_str + (isString( pObject ) ? String( pObject ) : (isFunction( pObject.toString ) ? pObject.toString() : objectToString.call( pObject, pObject )));
 
         let pattern = s.replace( /\/[gimsuy]+$/, "/" ).trim();
 
@@ -2307,7 +2392,7 @@ const $scope = constants?.$scope || function()
             try
             {
                 let regExp = new RegExp( pattern );
-                return isRegExp( regExp );
+                return isRegExp( regExp, true );
             }
             catch( ex )
             {
@@ -2333,14 +2418,14 @@ const $scope = constants?.$scope || function()
      */
     const isClass = function( pFunction, pStrict = true )
     {
-        if ( isFunction( pFunction ) || ( !pStrict && BUILTIN_TYPE_NAMES.includes( pFunction?.name )) )
+        if ( isFunction( pFunction ) ||
+             ( !pStrict && (BUILTIN_TYPE_NAMES.includes( pFunction?.name )
+                            || BUILTIN_TYPES.includes( pFunction ))) )
         {
-            if ( /^class\s/.test( (functionToString.call( pFunction, pFunction )).trim() ) )
-            {
-                return true;
-            }
-
-            return !pStrict && BUILTIN_TYPE_NAMES.includes( pFunction?.name );
+            return ( !pStrict &&
+                     (BUILTIN_TYPE_NAMES.includes( pFunction?.name ) ||
+                      BUILTIN_TYPES.includes( pFunction )))
+                   || /^class\s/.test( (functionToString.call( pFunction, pFunction )).trim() );
         }
 
         return false;
@@ -2358,7 +2443,7 @@ const $scope = constants?.$scope || function()
      */
     const instanceOfAny = function( pObject, ...pClasses )
     {
-        const classes = ([].concat( ...(pClasses || []) ) || []).filter( e => isClass( e, false ) );
+        const classes = ([...(pClasses || [])]).filter( e => isClass( e, false ) );
 
         let is = false;
 
@@ -2370,7 +2455,7 @@ const $scope = constants?.$scope || function()
             {
                 try
                 {
-                    is = (pObject instanceof cls) || pObject.prototype === cls;
+                    is = (pObject instanceof cls) || pObject?.constructor === cls || pObject.prototype === cls;
                 }
                 catch( ex )
                 {
@@ -2393,7 +2478,7 @@ const $scope = constants?.$scope || function()
      */
     const isUserDefinedClass = function( pFunction )
     {
-        return isClass( pFunction );
+        return isClass( pFunction ) && !BUILTIN_TYPE_NAMES.includes( pFunction?.name );
     };
 
     /**
@@ -2429,7 +2514,7 @@ const $scope = constants?.$scope || function()
     {
         if ( isObject( pObject ) )
         {
-            return Object.getPrototypeOf( pObject ) || pObject?.__proto__ || pObject?.constructor?.prototype || pObject?.prototype;
+            return Object.getPrototypeOf( pObject ) || pObject?.__proto__ || pObject?.constructor?.prototype || pObject?.prototype || pObject?.constructor;
         }
         if ( isClass( pObject ) )
         {
@@ -2452,14 +2537,12 @@ const $scope = constants?.$scope || function()
      */
     const getConstructor = function( pObject )
     {
-        if ( isFunction( pObject ) || isClass( pObject ) )
+        if ( isFunction( pObject ) || isObject( pObject ) )
         {
-            return pObject?.constructor || pObject[Symbol.species] || pObject?.prototype;
+            return isClass( pObject ) ? pObject : pObject?.constructor || getProto( pObject )?.constructor;
         }
 
-        const proto = getProto( pObject );
-
-        return proto?.constructor || (isFunction( proto ) ? proto : null);
+        return null;
     };
 
     /**
@@ -2492,7 +2575,7 @@ const $scope = constants?.$scope || function()
      */
     const isInstanceOfListedClass = function( pObject, ...pListedClasses )
     {
-        return instanceOfAny( pObject, ...pListedClasses );
+        return instanceOfAny( pObject, ...([...(pListedClasses || [])].filter( isClass )) );
     };
 
     /**
@@ -2507,16 +2590,16 @@ const $scope = constants?.$scope || function()
      */
     const isAssignableTo = function( pValue, ...pClass )
     {
-        if ( isNull( pValue ) )
+        if ( isNull( pValue ) || !isObject( pValue ) )
         {
             return false;
         }
 
-        const klasses = isNull( pClass ) ? [this.constructor] : (isArray( pClass ) ? pClass : [pClass]);
+        const klasses = (isNull( pClass ) ? [this.constructor] : (isArray( pClass ) ? [...(pClass || [])] : [pClass])).filter( isClass );
 
         for( let klass of klasses )
         {
-            const cls = getClass( klass || this.constructor );
+            const cls = getClass( klass || this.constructor ) || klass;
 
             if ( instanceOfAny( pValue, cls, cls[Symbol.species] ) && !(this === pValue) )
             {
@@ -2584,39 +2667,51 @@ const $scope = constants?.$scope || function()
 
     class Finder
     {
-        #filterCriteria = ( e ) => isNonNullValue( e );
+        #filterCriteria = ( e ) => isNonNullValue( e ) || isNonNullObject( e );
 
         constructor( pFilterCriteria )
         {
-            this.#filterCriteria = isFunction( pFilterCriteria ) ? pFilterCriteria : ( e ) => isNonNullValue( e );
+            this.#filterCriteria = isFunction( pFilterCriteria ) ? pFilterCriteria : Finder.DEFAULT_FILTER;
+        }
+
+        defaultFilter()
+        {
+            return Finder.DEFAULT_FILTER;
+        }
+
+        get filterCriteria()
+        {
+            return this.#filterCriteria || this.defaultFilter();
         }
 
         findAll( ...pCandidates )
         {
             let arr = resolveCandidates( ...pCandidates );
-            return arr.filter( this.#filterCriteria );
+            return arr.filter( this.filterCriteria );
         }
 
         findFirst( ...pCandidates )
         {
             let arr = resolveCandidates( ...pCandidates );
-            arr = this.findAll( ...pCandidates );
+            arr = this.findAll( ...arr );
             return arr.length > 0 ? arr[0] : null;
         }
 
         findAllNot( ...pCandidates )
         {
             let arr = resolveCandidates( ...pCandidates );
-            return arr.filter( e => !this.#filterCriteria( e ) );
+            return arr.filter( e => !this.filterCriteria( e ) );
         }
 
         findFirstNot( ...pCandidates )
         {
             let arr = resolveCandidates( ...pCandidates );
-            arr = this.findAllNot( ...pCandidates );
+            arr = this.findAllNot( ...arr );
             return arr.length > 0 ? arr[0] : null;
         }
     }
+
+    Finder.DEFAULT_FILTER = ( e ) => isNonNullValue( e ) || isNonNullObject( e );
 
     const firstValidObject = function( ...pObjects )
     {
@@ -2643,97 +2738,27 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.getClass
      */
-    const getClass = function( pObject, pOptions = { strict: true } )
+    const getClass = function( pObject )
     {
-        const options = Object.assign( { strict: true }, pOptions || {} );
+        const options = { rejectPrimitiveWrappers: false, allowEmptyObjects: true, rejectNull: true };
 
-        const obj = isObject( pObject, { rejectPrimitiveWrappers: false } ) || isFunction( pObject ) ? pObject || function() {} : null;
+        const obj = isObject( pObject, options ) || isFunction( pObject ) || isClass( pObject ) ? pObject : null;
 
-        if ( isNull( obj, true ) )
+        if ( isNull( obj ) )
         {
             return null;
         }
 
-        const strict = options?.strict;
+        let clazz = isClass( obj ) ? obj : obj?.constructor || obj?.prototype?.constructor || obj?.prototype || obj?.__proto__;
 
-        let clazz = isClass( obj, strict ) ? obj : obj?.constructor || obj?.prototype?.constructor || obj?.prototype || obj?.__proto__;
-
-        if ( isClass( clazz, strict ) )
+        if ( isClass( clazz ) )
         {
             return clazz;
         }
 
-        if ( obj )
+        if ( isPrimitiveWrapper( pObject ) || instanceOfAny( pObject, ...BUILTIN_TYPES ) )
         {
-            if ( isClass( obj, strict ) )
-            {
-                clazz = obj;
-            }
-
-            if ( isClass( clazz, strict ) )
-            {
-                return clazz;
-            }
-
-            let _class = clazz;
-
-            const iterationLimit = 5;
-            let iterations = 0;
-
-            // the IterationCap object will return reached when iterations exceed the cap,
-            // so ignore the linter warnings
-            // noinspection LoopStatementThatDoesntLoopJS
-            while ( !isClass( _class, strict ) && (iterations++ <= iterationLimit) )
-            {
-                switch ( iterations )
-                {
-                    case 0:
-                    case 1:
-                        _class = (obj.constructor || obj?.prototype?.constructor) || _class;
-                        break;
-
-                    case 2:
-                        _class = (obj?.prototype?.constructor || isClass( obj?.prototype, strict ) ? obj?.prototype : _class);
-                        break;
-
-                    case 3:
-                        _class = isClass( obj?.prototype, strict ) ? obj?.prototype : _class;
-                        break;
-
-                    case 4:
-                        _class = isClass( obj?.__proto__, strict ) ? obj?.__proto__ : _class;
-                        break;
-
-                    default:
-                        break;
-                }
-            }
-
-            clazz = (isClass( _class, strict ) ? _class : (isClass( clazz, strict ) ? clazz : (isClass( clazz ) ? clazz : Object))) || Object;
-
-            if ( clazz && Object === clazz )
-            {
-                if ( obj instanceof Date )
-                {
-                    clazz = Date;
-                }
-                else if ( obj instanceof RegExp )
-                {
-                    clazz = RegExp;
-                }
-                else if ( obj instanceof Boolean )
-                {
-                    clazz = Boolean;
-                }
-                else if ( obj instanceof String )
-                {
-                    clazz = String;
-                }
-                else if ( obj instanceof Number )
-                {
-                    clazz = Number;
-                }
-            }
+            return pObject?.constructor;
         }
 
         return clazz;
@@ -2753,37 +2778,8 @@ const $scope = constants?.$scope || function()
      */
     const getClassName = function( pObject )
     {
-        const obj = isObject( pObject, { rejectPrimitiveWrappers: false } ) || isFunction( pObject ) ? pObject || function() {} : null;
-
-        if ( isNull( obj, true ) )
-        {
-            return _mt_str;
-        }
-
-        let name = _mt_str;
-
-        if ( obj )
-        {
-            if ( isClass( obj, false ) )
-            {
-                name = String( obj.name || (obj.constructor?.name) );
-            }
-            else if ( isObject( obj ) )
-            {
-                const clazz = getClass( obj, { strict: false } );
-                if ( clazz )
-                {
-                    name = getClassName( clazz );
-                }
-            }
-
-            if ( (_mt_str === name.trim()) )
-            {
-                name = String( obj?.constructor?.name || obj?.prototype?.constructor?.name || obj?.prototype?.name );
-            }
-        }
-
-        return name;
+        const clazz = getClass( pObject );
+        return (!isNull( clazz ) ? clazz?.name || objectToString.call( clazz, clazz ).replace( /\[object\s+/, _mt_str ).replace( /\s*]\s*$/, _mt_str ) : _mt_str) || _mt_str;
     };
 
     /**
@@ -3266,12 +3262,7 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.castTo
      */
-    const castTo = function( pValue, pType, pOptions = DEFAULT_CAST_OPTIONS )
-    {
-        const castUtils = new CastUtils( pValue, pType, pOptions );
-
-        return castUtils.cast();
-    };
+    const castTo = ( pValue, pType, pOptions = DEFAULT_CAST_OPTIONS ) => (new CastUtils( pValue, pType, pOptions )).cast();
 
     /**
      * Similar to the SQL function,
@@ -3511,7 +3502,7 @@ const $scope = constants?.$scope || function()
                 }
                 else if ( pArrayLike instanceof Set )
                 {
-                    iterable = new _Iterable( [...pArrayLike] );
+                    iterable = new _Iterable( [...(pArrayLike.values())] );
                 }
                 else if ( isDate( pArrayLike ) )
                 {
@@ -3906,121 +3897,204 @@ const $scope = constants?.$scope || function()
             prune: false,
             trimStrings: false,
             omitFunctions: true,
-            transientProperties: []
+            transientProperties: [],
+            preserveArrays: true,
         };
+
+
+    function restoreMethods( pSource, pTarget, pOptions = DEFAULT_OBJECT_LITERAL_OPTIONS )
+    {
+        const source = pSource || {};
+        const target = pTarget || source;
+
+        const options = populateOptions( pOptions || {}, DEFAULT_OBJECT_LITERAL_OPTIONS );
+
+        if ( !options.omitFunctions )
+        {
+            const excludedMethods = [...TRANSIENT_PROPERTIES, "constructor", "toString", "valueOf"];
+
+            const excludeGeneric = e => isString( e ) && !excludedMethods.includes( e.trim() );
+
+            objectMethods( source ).filter( excludeGeneric ).forEach( ( method ) =>
+                                                                      {
+                                                                          const func = source[method];
+                                                                          if ( isFunction( func ) )
+                                                                          {
+                                                                              target[method] = func.bind( target );
+                                                                          }
+                                                                      } );
+            return target;
+        }
+    }
+
+    function resolveObjectLiteralArguments( pOptions, pVisited, pStack )
+    {
+        const options = populateOptions( pOptions, DEFAULT_OBJECT_LITERAL_OPTIONS );
+
+        const visited = pVisited || options?.visited || new ResolvedSet();
+
+        const stack = [...(pStack || options?.stack || [])];
+
+        return { options, visited, stack };
+    }
+
+    const includeProperty = ( pKey, pValue, pOptions ) =>
+    {
+        const options = populateOptions( pOptions, DEFAULT_OBJECT_LITERAL_OPTIONS );
+        const transientProperties = resolveTransientProperties( options );
+
+        return ( !options.prune || isNonNullValue( pValue )) &&
+               ( !options.omitFunctions || !isFunction( pValue ))
+               && !transientProperties.includes( String( pKey ) );
+    };
+
+    const processValue = ( pValue, pOptions ) => (pOptions?.trimStrings && isString( pValue )) ? String( pValue ).trim() : pValue;
+
+    function toArrayLiteral( pObject, pOptions, pVisited, pStack )
+    {
+        const { options, visited, stack } = resolveObjectLiteralArguments( pOptions, pVisited, pStack );
+
+        let arr = [...(pObject || [])];
+
+        if ( options?.prune )
+        {
+            arr = arr.filter( isNonNullValue ).filter( e => !isEmptyString( e ) );
+        }
+
+        arr = arr.map( ( e, i ) => toObjectLiteral( e, options, visited, [...stack, String( i )] ) );
+
+        return [...(arr || [])];
+    }
+
+    function arrayToObject( pArr, pOptions, pVisited, pStack )
+    {
+        let object = {};
+
+        let arr = toArrayLiteral( pArr, pOptions, pVisited, pStack );
+
+        for( let i = 0, n = arr.length; i < n; i++ )
+        {
+            object[String( i )] = toObjectLiteral( arr[i], pOptions, pVisited, [...(pStack || []), String( i )] );
+        }
+
+        return object;
+    }
+
+    function _handleArray( pObject, pOptions = DEFAULT_OBJECT_LITERAL_OPTIONS, pVisited = new ResolvedSet(), pStack = [] )
+    {
+        if ( !isArray( pObject ) )
+        {
+            return toObjectLiteral( pObject, pOptions, pVisited, pStack );
+        }
+
+        const { options, visited, stack } = resolveObjectLiteralArguments( pOptions, pVisited, pStack );
+
+        let arr = toArrayLiteral( pObject, options, visited, stack );
+
+        visited.add( arr );
+
+        if ( options?.preserveArrays )
+        {
+            return [...(arr || [])];
+        }
+        else
+        {
+            const object = arrayToObject( arr, options, visited, stack );
+
+            visited.add( object );
+
+            return object;
+        }
+    }
 
     function toObjectLiteral( pObject, pOptions = DEFAULT_OBJECT_LITERAL_OPTIONS, pVisited = new ResolvedSet(), pStack = [] )
     {
-        if ( !isObject( pObject ) || isObjectLiteral( pObject ) )
+        if ( isNull( pObject ) || !isObject( pObject ) || isPrimitive( pObject ) || isObjectLiteral( pObject ) )
         {
             return pObject;
         }
 
-        const options = populateOptions( pOptions, DEFAULT_OBJECT_LITERAL_OPTIONS );
+        const { options, visited, stack } = resolveObjectLiteralArguments( pOptions, pVisited, pStack );
 
-        const includeProperty = ( pValue ) => ( !options.prune || isNonNullValue( pValue )) && ( !options.omitFunctions || !isFunction( pValue ));
+        const transientProperties = resolveTransientProperties( options );
 
-        const processValue = ( newValue ) => (options.trimStrings && isString( newValue )) ? newValue.trim() : newValue;
-
-        const transientProperties = ["constructor", "prototype", "toJson", "toObject", "global", "this", "toString", "__GUID", ...(([options.transientProperties] || []).flat())];
-
-
-        const visited = pVisited || new ResolvedSet();
-
-        const stack = [...(pStack || [])];
-
+        if ( isArray( pObject ) )
+        {
+            return _handleArray( pObject, options, visited, stack );
+        }
 
         const entries = ObjectEntry.unwrapValues( pObject );
 
-
         const obj = {};
 
-        visited.add( pObject );
+        function updateObject( pKey, pValue, pOptions )
+        {
+            pValue = processValue( pValue, pOptions );
+
+            if ( includeProperty( pKey, pValue, pOptions ) )
+            {
+                obj[pKey] = pValue;
+            }
+        }
 
         for( const entry of entries )
         {
             const key = entry[0];
-            const value = entry[1];
 
             if ( transientProperties.includes( key ) || key.startsWith( "#" ) )
             {
                 continue;
             }
 
+            const value = visited.resolveForNodePath( undefined, [...stack, key] ) || entry[1];
+
             if ( visited.has( value ) || detectCycles( stack, 5, 5 ) )
             {
-                let newValue = visited.resolve( value ) || value;
+                let newValue = visited.resolve( value ) || value || entry[1];
 
-                newValue = processValue( newValue );
-
-                if ( includeProperty( newValue ) )
-                {
-                    obj[key] = newValue;
-                }
+                updateObject( key, newValue, options );
 
                 continue;
             }
 
-            const resolvedValue = visited.resolveForNodePath( undefined, [...stack, key] );
+            let newValue = (attempt( () => toObjectLiteral( value, options, visited, [...stack, key] ) ) || value);
 
-            let newValue = (resolvedValue || attempt( () => toObjectLiteral( value, options, visited, [...stack, key] ) ) || value);
+            updateObject( key, newValue, options );
 
-            newValue = processValue( newValue );
-
-            if ( includeProperty( newValue ) )
+            if ( obj[key] )
             {
-                obj[key] = newValue;
-
-                if ( obj[key] )
-                {
-                    visited.resolveForNodePath( obj[key], [...stack, key] );
-                }
+                visited.resolveForNodePath( obj[key], [...stack, key] );
             }
         }
 
-        if ( !options.omitFunctions )
-        {
-            const excludedMethods = ["constructor", "toString", "valueOf"];
+        visited.add( pObject );
 
-            const excludeGeneric = e => isString( e ) && !excludedMethods.includes( e.trim() );
-
-            objectMethods( pObject ).filter( excludeGeneric ).forEach( ( method ) =>
-                                                                       {
-                                                                           const func = pObject[method];
-                                                                           if ( isFunction( func ) )
-                                                                           {
-                                                                               obj[method] = func.bind( obj );
-                                                                           }
-                                                                       } );
-
-        }
+        restoreMethods( pObject, obj, options );
 
         visited.resolve( pObject, obj );
+
+        visited.resolveForNodePath( obj, ...stack );
 
         return obj;
     }
 
     /**
-     * Applies Array.flat to the variable number of values
-     * @param {...*} pArgs One or more values, treated as an array
-     * @returns {FlatArray<*[], 1>[]} An array of the values passed, flattening one level of nested arrays
+     * Applies Array.flat to each of the variable number of values
+     * @param {...*} pArgs One or more values, treated as an array of arrays, each of which will be flattened
+     * @returns {FlatArray<*[], 1>[]} An array of the values passed, flattening all nested arrays
      */
     function flattened( ...pArgs )
     {
-        if ( isArray( pArgs ) || isLikeArray( pArgs ) )
-        {
-            return [...(pArgs || [])].flat();
-        }
-    }
+        let args = (isArray( pArgs ) || isLikeArray( pArgs )) ? [...(pArgs || [])].flat( Infinity ) : [pArgs || _mt_str].filter( e => !isEmptyString( e ) );
 
-    /**
-     * Applies Array.flat(Infinity) to the variable number of values
-     * @param {...*} pArgs One or more values, treated as an array
-     * @returns {FlatArray<*[], 1>[]} An array of the values passed, flattening all nested arrays
-     */
-    function explode( ...pArgs )
-    {
-        return [...(pArgs || [])].flat( Infinity );
+        let arr = [];
+
+        for( let elem of args )
+        {
+            arr.push( isArray( elem ) ? flattened( elem ) : elem );
+        }
+
+        return [...arr].flat();
     }
 
     /**
@@ -4045,34 +4119,72 @@ const $scope = constants?.$scope || function()
                 rejectPrimitiveWrappers: false,
                 rejectArrays: false,
                 rejectNull: true,
-                allowEmptyObjects: false
+                allowEmptyObjects: false,
+                preserveArrays: true,
             };
 
-        if ( isNonNullObject( pObject ) )
+        function setValue( pNodePathString, pValue )
+        {
+            if ( isMap( obj ) )
+            {
+                obj.set( pNodePathString, pValue );
+            }
+            else
+            {
+                obj[pNodePathString] = pValue;
+            }
+        }
+
+        if ( isNonNullObject( pObject, false, options, [...(pStack || [])] ) )
         {
             const visited = pVisited || new ResolvedSet();
             const stack = [...(pStack || [])];
 
+            let pathString = pPathString || stack.join( _dot );
+
             if ( visited.has( pObject ) || detectCycles( stack, 5, 5 ) )
             {
-                obj = visited.resolve( pObject ) || pObject;
+                obj = visited.resolve( pObject ) || visited.resolveForNodePath( undefined, pathString.split( _dot ) ) || pObject;
+            }
+
+            function resolveNestedPaths( pObj, pNodePathString, pVisited, pStack )
+            {
+                const pile = [...(pStack || stack || [])];
+                const traversed = pVisited || new ResolvedSet();
+
+                let nodePathString = String( pNodePathString ) || toNodePathArray( pile ).join( _dot );
+
+                if ( visited.has( pObj ) || detectCycles( pile, 5, 5 ) )
+                {
+                    return;
+                }
+
+                objectEntries( pObj ).forEach( ( entry ) =>
+                                               {
+                                                   const key = entry.key;
+                                                   const value = entry.value;
+
+                                                   if ( isNonNullValue( value ) )
+                                                   {
+                                                       nodePathString = `${nodePathString}${_dot}${key}`;
+
+                                                       while ( isNonNullObject( value ) )
+                                                       {
+                                                           resolveNestedPaths( value, nodePathString, traversed, [...pile, key] );
+                                                       }
+
+                                                       setValue( nodePathString, value );
+
+                                                       traversed.resolveForNodePath( value, nodePathString.split( _dot ) );
+                                                   }
+                                               } );
             }
 
             let literal = toObjectLiteral( pObject );
 
-            let pathString = pPathString || _mt_str;
+            resolveNestedPaths( literal, pathString, visited );
 
-            objectEntries( literal ).forEach( ( entry ) =>
-                                              {
-                                                  const key = entry.key;
-                                                  const value = entry.value;
-
-                                                  while ( isNonNullObject( value ) )
-                                                  {
-
-                                                  }
-
-                                              } );
+            return obj;
         }
     }
 
@@ -4139,7 +4251,7 @@ const $scope = constants?.$scope || function()
      */
     function containsFloat( ...pArgs )
     {
-        const arr = explode( ...pArgs ).filter( isNumeric ).map( toDecimal );
+        const arr = flattened( ...pArgs ).filter( isNumeric ).map( toDecimal );
         return arr.some( isFloat );
     }
 
@@ -4177,7 +4289,7 @@ const $scope = constants?.$scope || function()
      */
     function calculateTypedArrayClass( ...pArray )
     {
-        const arr = [...(explode( ...(pArray || []) ).filter( isNumeric ).map( toDecimal ))];
+        const arr = [...(flattened( ...(pArray || []) ).filter( isNumeric ).map( toDecimal ))];
 
         const minValue = Math.min( ...(arr.map( toDecimal )) );
         const maxValue = Math.max( ...(arr.map( toDecimal )) );
@@ -4431,12 +4543,27 @@ const $scope = constants?.$scope || function()
     {
         Object.prototype.compareTo = function( pOther )
         {
+            if ( this === pOther || pOther.__GUID === this.__GUID )
+            {
+                return 0;
+            }
 
+            return compare( this, pOther );
         };
 
         Object.prototype.equals = function( pOther )
         {
+            if ( isNull( pOther ) )
+            {
+                return false;
+            }
 
+            if ( this === pOther || pOther?.__GUID === this.__GUID )
+            {
+                return true;
+            }
+
+            return compare( this, pOther ) === 0;
         };
     }
     catch( ex )
@@ -4444,19 +4571,39 @@ const $scope = constants?.$scope || function()
         // in case the environment does not allow extending the built-in types
     }
 
-    ObjectEntry.prototype.compareTo = function( pOther )
+    ObjectEntry.prototype.compareTo = function( pOther, pOptions = COMPARE_OPTIONS )
     {
+        if ( this === pOther || pOther?.__GUID === this.__GUID )
+        {
+            return 0;
+        }
 
+        let comp = compare( (this.key || this[0]), (pOther?.key || pOther?.[0]) );
+
+        return 0 === comp ? compare( this, pOther, pOptions ) : comp;
     };
 
     ObjectEntry.prototype.equals = function( pOther )
     {
+        if ( isNull( pOther ) )
+        {
+            return false;
+        }
 
+        if ( this === pOther || pOther?.__GUID === this.__GUID )
+        {
+            return true;
+        }
+
+        return 0 === this.compareTo( pOther );
     };
 
     ObjectEntry.compare = function( pA, pB, pOptions = COMPARE_OPTIONS )
     {
+        const a = ObjectEntry.from( pA );
+        const b = ObjectEntry.from( pB );
 
+        return a.compareTo( b, pOptions );
     };
 
     class ComparatorFactory
@@ -4697,7 +4844,6 @@ const $scope = constants?.$scope || function()
             BYTES_PER_TYPE,
 
             flattened,
-            explode,
 
             isUndefined,
             isDefined,
@@ -4796,6 +4942,7 @@ const $scope = constants?.$scope || function()
             getProperty,
             setProperty,
             toNodePathArray,
+            collapse,
 
             /**
              * The classes exported with this module.<br>

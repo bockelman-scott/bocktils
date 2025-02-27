@@ -463,6 +463,11 @@ const {
             return ( a, b ) => 0;
         }
 
+        get locale()
+        {
+            return this.resolveLocale( this.parentSet?.locale );
+        }
+
         getMonthNumber( pString )
         {
             if ( this.parentSet )
@@ -593,7 +598,7 @@ const {
         {
             const date = this.resolveDate( pDate );
 
-            const locale = this.resolveLocale( pLocale );
+            const locale = this.resolveLocale( pLocale || this.locale );
 
             let value = this.getValue( date, locale );
 
@@ -1277,17 +1282,17 @@ const {
 
         get dayNames()
         {
-            return [...(this.#dayNames || DAY_NAMES)];
+            return [...(this.#dayNames || getDayNames( this.locale ) || DAY_NAMES)];
         }
 
         get dayAbbreviations()
         {
-            return [...(this.#dayAbbreviations || DAY_NAMES_SHORT)];
+            return [...(this.#dayAbbreviations || getDayAbbreviations( this.locale ) || DAY_NAMES_SHORT)];
         }
 
         get dayLetters()
         {
-            return [...(this.#dayLetters || DAY_LETTERS)];
+            return [...(this.#dayLetters || getDayLetters( this.locale ) || DAY_LETTERS)];
         }
 
         toPattern()
@@ -2285,7 +2290,7 @@ const {
             DAY_LETTERS,
             FORMATS,
             REPETITION_RULES,
-            getDefaultTokenSet: function( pLocale = DEFAULT_LOCALE )
+            getDefaultTokenSet: function( pLocale = DEFAULT_LOCALE, pOptions )
             {
                 const locale = resolveLocale( pLocale );
 
@@ -2296,6 +2301,7 @@ const {
                     return new TokenSet();
                 }
 
+                return new TokenSet( pLocale, pOptions );
             },
             buildTokenSet: function( pLocale, pOptions )
             {

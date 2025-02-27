@@ -235,6 +235,8 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
             _sglqtRightFancy = String.fromCharCode( 8217 ),
             _semicolon = ";",
             _colon = ":",
+            _pipe = "|",
+            _question = "?",
 
             _ALPHABET_ENGLISH_UCASE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
             _ALPHABET_ENGLISH_LCASE = _ALPHABET_ENGLISH_UCASE.toLowerCase(),
@@ -400,7 +402,7 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
                  "with"] ),
             clamp = ( pNum, pMin, pMax ) => Math.min( Math.max( pNum, pMin ), pMax ),
             funcToString = Function.prototype.toString,
-            funcAsString = function( pFunction )
+            funcName = function( pFunction )
             {
                 return (_fun === typeof pFunction ? pFunction?.name || funcToString.call( pFunction, pFunction ) : (_mt_str + pFunction));
             },
@@ -1131,6 +1133,10 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
              * @alias module:Constants#_colon
              */
             _colon,
+
+            _pipe,
+
+            _question,
 
             /**
              * The comma character<br>
@@ -2299,9 +2305,9 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
              * @param {function} pFunction The function whose name should be returned.<br>
              * If the function has no non-empty name property, the function's source code is returned<br>
              * @return the name or source of the specified Function<br>
-             * @alias module:Constants#funcAsString
+             * @alias module:Constants#funcName
              */
-            funcAsString,
+            funcName,
 
             calculateErrorSourceName,
 

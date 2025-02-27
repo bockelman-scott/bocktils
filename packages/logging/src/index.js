@@ -53,7 +53,7 @@ const $scope = constants?.$scope || function()
         _lf,
         _crlf,
         lock,
-        funcAsString,
+        funcName,
         populateOptions,
         _defaultLocaleString = "en-US",
         S_ERROR = "error",
@@ -239,10 +239,10 @@ const $scope = constants?.$scope || function()
                     return asString( source?.target || source?.name || source?.type || _mt_str );
                 }
 
-                return {}.toString.call( source, source ) || asString( source, true );
+                return objectToString.call( source, source ) || asString( source, true );
 
             case _fun:
-                return source?.name || funcAsString( source );
+                return source?.name || funcName( source );
 
             case _num:
                 return asString( source );

@@ -49,7 +49,7 @@ const {
 
     const { includesAny } = arrayUtils;
 
-    const { classes: TokenSetClasses, getDefaultTokenSet, SUPPORTED_INTL_OPTIONS } = tokenSetUtils;
+    const { classes: TokenSetClasses, getDefaultTokenSet, buildTokenSet, SUPPORTED_INTL_OPTIONS } = tokenSetUtils;
 
     const { TokenSet, Token } = TokenSetClasses;
 
@@ -75,9 +75,9 @@ const {
 
         constructor( pFormat = DEFAULT_FORMAT, pLocale = DEFAULT_LOCALE, pTokenSet = DEFAULT_TOKEN_SET )
         {
-            this.#locale = lock( resolveLocale( pLocale, pTokenSet ) );
+            this.#locale = lock( resolveLocale( pLocale, pTokenSet?.locale ) );
 
-            this.#tokenSet = lock( (pTokenSet instanceof TokenSet) ? pTokenSet : getDefaultTokenSet( this.#locale ) );
+            this.#tokenSet = lock( (pTokenSet instanceof TokenSet && pTokenSet?.locale === this.#locale) ? pTokenSet : getDefaultTokenSet( this.#locale ) );
 
             this.#pattern = isString( pFormat ) ? asString( pFormat ) : isNonNullObject( pFormat ) ? pFormat?.pattern : DEFAULT_FORMAT;
 
@@ -108,7 +108,7 @@ const {
 
         get tokenSet()
         {
-            this.#tokenSet = lock( (this.#tokenSet instanceof TokenSet) ? this.#tokenSet : getDefaultTokenSet( this.locale ) );
+            this.#tokenSet = lock( (this.#tokenSet instanceof TokenSet && this.locale === this.#tokenSet?.locale) ? this.#tokenSet : getDefaultTokenSet( this.locale ) );
             if ( !isSameLocale( this.#tokenSet.locale, this.#locale ) )
             {
                 this.#tokenSet = new TokenSet( this.locale, this.#tokenSet.options );

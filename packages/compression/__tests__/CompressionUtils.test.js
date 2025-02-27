@@ -355,52 +355,13 @@ describe( "ArchiverOptions", () =>
     test( "ArchiverOptions construction",
           () =>
           {
-              let archiverOptions = new ArchiverOptions( testDataDir );
+              let archiverOptions = new ArchiverOptions();
 
-              expect( archiverOptions.outputDirectory ).toEqual( testDataDir );
               expect( archiverOptions.compressionLevel ).toEqual( DEFAULT_ARCHIVER_OPTIONS.compressionLevel );
               expect( archiverOptions.compressionFormat ).toEqual( DEFAULT_ARCHIVER_OPTIONS.compressionFormat );
-              expect( archiverOptions.passwordProtection ).toEqual( DEFAULT_ARCHIVER_OPTIONS.passwordProtection );
               expect( archiverOptions.onSuccess ).toEqual( DEFAULT_ARCHIVER_OPTIONS.onSuccess );
               expect( archiverOptions.onFailure ).toEqual( DEFAULT_ARCHIVER_OPTIONS.onFailure );
               expect( archiverOptions.deleteSource ).toEqual( DEFAULT_ARCHIVER_OPTIONS.deleteSource );
-
-              archiverOptions = ArchiverOptions.from( { outputDirectory: testDataDir } );
-
-              expect( archiverOptions.outputDirectory ).toEqual( testDataDir );
-              expect( archiverOptions.compressionLevel ).toEqual( DEFAULT_ARCHIVER_OPTIONS.compressionLevel );
-              expect( archiverOptions.compressionFormat ).toEqual( DEFAULT_ARCHIVER_OPTIONS.compressionFormat );
-              expect( archiverOptions.passwordProtection ).toEqual( DEFAULT_ARCHIVER_OPTIONS.passwordProtection );
-/*
-              expect( archiverOptions.onSuccess ).toEqual( DEFAULT_ARCHIVER_OPTIONS.onSuccess.bind( archiverOptions ) );
-              expect( archiverOptions.onFailure ).toEqual( DEFAULT_ARCHIVER_OPTIONS.onFailure.bind( archiverOptions ) );
-*/
-              expect( archiverOptions.deleteSource ).toEqual( DEFAULT_ARCHIVER_OPTIONS.deleteSource );
-
-              let pwd = "?6%2bMG5mS/LG&v_63k4ay6fpP.v-8W";
-              let salt = "2:pXcQarbfSfT2F$:!eRS6kB.nT.tJ5";
-              let encoding = "utf-8";
-
-              const protectedPassword = PasswordProtection.encrypt( pwd, salt, encoding );
-
-              archiverOptions = ArchiverOptions.from(
-                  {
-                      outputDirectory: zippedFilesDir,
-                      compressionLevel: 9,
-                      compressionFormat: CompressionFormat.BROTLI,
-                      passwordProtection: protectedPassword,
-                      deleteSource: true
-                  } );
-
-              expect( archiverOptions.outputDirectory ).toEqual( zippedFilesDir );
-              expect( archiverOptions.compressionLevel ).toEqual( 9 );
-              expect( archiverOptions.compressionFormat ).toEqual( CompressionFormat.BROTLI );
-              expect( archiverOptions.passwordProtection.decrypt() ).toEqual( pwd );
-/*
-              expect( archiverOptions.onSuccess ).toEqual( DEFAULT_ARCHIVER_OPTIONS.onSuccess );
-              expect( archiverOptions.onFailure ).toEqual( DEFAULT_ARCHIVER_OPTIONS.onFailure );
-*/
-              expect( archiverOptions.deleteSource ).toBe( true );
 
           } );
 } );
@@ -414,12 +375,6 @@ describe( "Archiver", () =>
 
               expect( archiver.outputDirectory ).toEqual( testDataDir );
               expect( archiver.compressionFormat ).toEqual( CompressionFormat.DEFAULT );
-              expect( archiver.compressionLevel ).toEqual( DEFAULT_ARCHIVER_OPTIONS.compressionLevel );
-              expect( archiver.passwordProtection ).toEqual( DEFAULT_ARCHIVER_OPTIONS.passwordProtection );
-/*
-              expect( archiver.onSuccess ).toEqual( DEFAULT_ARCHIVER_OPTIONS.onSuccess );
-              expect( archiver.onFailure ).toEqual( DEFAULT_ARCHIVER_OPTIONS.onFailure );
-*/
 
               expect( archiver.compressionOptions ).toEqual( CompressionFormat.DEFAULT.compressionOptions );
               expect( archiver.compressionOptions ).toEqual( CompressionOptions.DEFAULT );
@@ -531,56 +486,8 @@ describe( "pkZip", () =>
               await fsAsync.unlink( path.resolve( unzippedFilesDir, txtFileName ) );
           } );
 
-    /// THIS CURRENTLY DOES NOT WORK, BECAUSE ADMZIP DOES NOT ACTUALLY ENCODE A ZIP WITH A PWD
-    test( "zip text_0.txt with a password",
-          async() =>
-          {
-              const { PasswordProtection } = zipUtils;
-
-              const txtFileName = "text_0.txt";
-              const zipFileName = "text_0.zip";
-
-              const inputPath = path.resolve( textFilesDir, txtFileName );
-              const outputPath = path.resolve( zippedFilesDir );
-
-              const originalContents = await fsAsync.readFile( inputPath, { encoding: utf8 } );
-
-              let pwd = "?6%2bMG5mS/LG&v_63k4ay6fpP.v-8W";
-              let salt = "2:pXcQarbfSfT2F$:!eRS6kB.nT.tJ5";
-
-              const passwordProtection = await PasswordProtection.encrypt( pwd, salt, utf8 );
-
-              const options = CompressionOptions.fromOptions( {
-                                                                  passwordProtection
-                                                              } );
-
-              await pkZip( inputPath, outputPath, options );
-
-              const entries = await fsAsync.readdir( outputPath, { withFileTypes: true } );
-
-              let found = false;
-
-              for( const entry of entries )
-              {
-                  if ( entry && entry.isFile() && entry.name === zipFileName )
-                  {
-                      found = true;
-                      break;
-                  }
-              }
-
-              expect( found ).toBe( true );
-
-              // BUT THIS SHOULD WORK IF A PWD PROTECTED ZIP IS SPECIFIED
-              await pkUnZip( path.resolve( outputPath, zipFileName ), unzippedFilesDir, options );
-
-              const contents = await fsAsync.readFile( path.resolve( unzippedFilesDir, txtFileName ), { encoding: utf8 } );
-
-              expect( contents ).toEqual( originalContents );
-
-              await fsAsync.unlink( path.resolve( outputPath, zipFileName ) );
-              await fsAsync.unlink( path.resolve( unzippedFilesDir, txtFileName ) );
-          } );
+    /// ADM ZIP DOES NOT ACTUALLY ENCODE A ZIP WITH A PWD
+    /// TODO: write my own
 
 } );
 

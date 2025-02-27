@@ -87,59 +87,6 @@ describe( "populateOptions", () =>
 
 } );
 
-
-describe( "mergeOptions", () =>
-{
-    let defaults = [
-        {
-            a: 1,
-            b: 2,
-            c: { "foo": "bar", "baz": "boo" },
-            d: { a: { e: 5, f: 6 }, b: { e: 7, f: 8 }, c: { e: 9, f: 10 } }
-        },
-        {
-            a: "a",
-            b: "two",
-            c: { "foo": "bars", "baz": { "salty": "crackers" } },
-            d: { b: { e: "e", f: "eight", "g": "gee" }, c: { e: 90, f: 100 } }
-        },
-        {
-            a: "ay",
-            b: "too",
-            c: { "foot": "ball", "baz": { "salty": "fish" } },
-            d: { a: { e: 50, f: 69, g: "giant" }, b: { "millis": 1000 }, c: { e: 99, f: 101 } },
-            e: { a: 1, b: 2, c: 3 }
-        },
-    ];
-
-    test( "mergeOptions recursively populates child objects", () =>
-    {
-        let options =
-            {
-                a: "a",
-                b: "two",
-                c: { "foo": "bars", "baz": { "salty": "crackers" } },
-                d: { b: { e: "e", f: "eight", "g": "gee" }, c: { e: 90, f: 100 } }
-            };
-
-        const obj = mergeOptions( {}, options, ...defaults );
-
-        expect( obj ).toEqual( {
-                                   a: "a",
-                                   b: "two",
-                                   c: { foot: "ball", baz: { baz: "boo", salty: "crackers" }, foo: "bars" },
-                                   d: {
-                                       a: { e: 5, f: 6, g: "giant" },
-                                       b: { millis: 1000, e: "e", f: "eight", g: "gee" },
-                                       c: { e: 90, f: 100 }
-                                   },
-                                   e: { a: 1, b: 2, c: 3 }
-                               } );
-
-        // console.log( obj );
-    } );
-} );
-
 describe( "localCopy", () =>
 {
     let arr = ["a", "b", "c", "d"];

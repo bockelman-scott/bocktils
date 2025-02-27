@@ -15,7 +15,6 @@ const
         BYTES_PER_TYPE,
 
         flattened,
-        explode,
 
         isUndefined,
         isDefined,
@@ -104,7 +103,8 @@ const
         calculateBitsNeeded,
         alignToBytes,
         calculateTypedArrayClass,
-        toTypedArray
+        toTypedArray,
+        collapse
     } = typeUtils;
 
 const anAsyncFunction = async function()
@@ -158,6 +158,55 @@ class C extends B
         super();
     }
 }
+
+const geoObject =
+    {
+        "earth":
+            {
+                "continents":
+                    {
+                        "North America":
+                            {
+                                "USA":
+                                    {
+                                        "California": ["San Francisco", "Los Angeles", "San Diego"],
+                                        "Oregon": ["Portland", "Salem", "Eugene"],
+                                        "Washington": ["Seattle", "Tacoma", "Redmond"],
+                                        "Illinois": ["Chicago", "Springfield", "Aurora"]
+                                    },
+                                "Mexico":
+                                    {
+                                        "Mexico City": ["Mexico City", "Guadalajara", "Monterrey"],
+                                        "Veracruz": ["Puebla", "Tijuana", "Cancun"],
+                                        "Guanajuato": ["Guanajuato", "Mexicali", "Cuernavaca"]
+                                    }
+                            },
+                        "South America":
+                            {
+                                "Brazil": ["Brasilia", "Salvador", "Rio de Janeiro"],
+                                "Argentina": ["Buenos Aires", "Cordoba", "Santiago"],
+                                "Chile": ["Santiago", "Punta Arenas", "Valparaiso"]
+                            }
+                    },
+                "oceans":
+                    {
+                        "Atlantic": ["Bermuda", "Canada", "Greenland"],
+                        "Pacific": ["Alaska", "Hawaii", "Oregon", "Alaska", "Yukon"]
+                    }
+            },
+        "Mars":
+            {
+                "continents":
+                    {}
+            },
+        "Jupiter":
+            {
+                "continents":
+                    {}
+            },
+        "Saturn":
+            {}
+    };
 
 describe( "TYPE Constants", () =>
 {
@@ -230,7 +279,7 @@ describe( "TYPE Constants", () =>
               expect( BYTES_PER_TYPE[_obj] ).toEqual( 0 );
               expect( BYTES_PER_TYPE[_fun] ).toEqual( 0 );
               expect( BYTES_PER_TYPE[_symbol] ).toEqual( 0 );
-              expect( BYTES_PER_TYPE[_ud] ).toEqual( -1 );
+              expect( BYTES_PER_TYPE[_ud] ).toEqual( 0 );
           } );
 } );
 
@@ -651,10 +700,11 @@ describe( "isNonNullObject", () =>
     test( "isNonNullObject({'a':null},true,{ allowEmptyObjects: false, rejectNull:true }) === false",
           () =>
           {
-              expect( isNonNullObject( { "a": null }, true, {
-                  allowEmptyObjects: false,
-                  rejectNull: true
-              } ) ).toBe( false );
+              expect( isNonNullObject( { "a": null }, true,
+                                       {
+                                           allowEmptyObjects: false,
+                                           rejectNull: true
+                                       } ) ).toBe( false );
           } );
 
     test( "isNonNullObject({'a':1},true,{ allowEmptyObjects: false }) === true",
@@ -2554,7 +2604,7 @@ describe( "estimateBytesForType", () =>
               expect( estimateBytesForType( _obj ) ).toEqual( 0 );
               expect( estimateBytesForType( _fun ) ).toEqual( 0 );
               expect( estimateBytesForType( _symbol ) ).toEqual( 0 );
-              expect( estimateBytesForType( _ud ) ).toEqual( -1 );
+              expect( estimateBytesForType( _ud ) ).toEqual( 0 );
 
           } );
 } );
@@ -3560,3 +3610,17 @@ describe( "firstMatchingType", () =>
               expect( firstMatchingType( B, [a, b, c] ) ).toEqual( b );
           } );
 } );
+
+/*
+
+ describe( "collapse", () =>
+ {
+ test( "collapse reduced an an object to a key/value map",
+ () =>
+ {
+ const collapsed = collapse( geoObject );
+
+ console.log( collapsed );
+ } );
+ } );
+ */

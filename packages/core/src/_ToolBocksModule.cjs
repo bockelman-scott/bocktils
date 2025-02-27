@@ -160,6 +160,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             _comma = ",",
             _underscore = "_",
             _colon = ":",
+            _semicolon = ";",
             _asterisk = "*",
             _unknown = "Unknown",
 
@@ -286,7 +287,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     /**
      * Returns true if the specified value is a (primitive) string.<br>
-     * This will return true if if the string is an empty string.<br>
+     * This will return true if the string is an empty string.<br>
      * To check for a non-empty string, use _isValidStr
      *
      * @param {*} pObj The value to evaluate
@@ -331,7 +332,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      *
      * @returns {boolean} true if the specified value is a (primitive) number.
      */
-    const isNum = pObj => _num === typeof pObj;
+    const isNum = pObj => isBig( pObj ) || (_num === typeof pObj && !isNaN( pObj ) && isFinite( pObj ));
+
+    const isNumeric = pObj => isNum( pObj ) || isStr( pObj ) && /[0-9.-]/.test( pObj ) && !isNaN( attempt( () => parseFloat( pObj ) ) );
 
     /**
      * Returns true if the specified value is a (primitive) boolean.
@@ -367,7 +370,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      *
      * @returns {boolean} true if the specified value is a Date.
      */
-    const isDate = pObj => isObj( pObj ) && (pObj instanceof Date || pObj.constructor === Date || objectToString.call( pObj ) === "[object Date]");
+    const isDate = pObj => !isNull( pObj ) && isObj( pObj ) && (pObj instanceof Date || pObj?.constructor === Date || objectToString.call( pObj || {} ) === "[object Date]");
 
     /**
      * Returns true if the specified value is a RegExp (regular expression object).
@@ -376,7 +379,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      *
      * @returns {boolean} true if the specified value is a RegExp (regular expression object).
      */
-    const isRegExp = pObj => isObj( pObj ) && pObj instanceof RegExp;
+    const isRegExp = pObj => !isNull( pObj ) && isObj( pObj ) && pObj instanceof RegExp;
 
     /**
      * Returns true if the specified value is an Error (or a subclass of Error).
@@ -424,7 +427,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     /**
      * Returns true if the specified value is a JavaScript class.<br>
-     * This is done by checking that the value is a function and its source starts with the word, "class "<br>
+     * This is done by checking that the value is a function and its source starts with the word, "class" <br>
      *
      * @param {*} pObj The value to evaluate
      *
@@ -456,6 +459,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const PRIMITIVE_WRAPPER_TYPES = [String, Number, Boolean, BigInt];
 
+    const isPrimitiveWrapper = pObj => isObj( pObj ) && PRIMITIVE_WRAPPER_TYPES.filter( e => pObj instanceof e ).length > 0;
+
     /**
      * GLOBAL_TYPES is an array containing all standard JavaScript global object types and structures
      * expected to exist in any execution context.<br>
@@ -483,7 +488,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      *
      */
     const GLOBAL_TYPES = [Array, Function, Date, RegExp, Symbol, Map, Set, Promise, ArrayBuffer, DataView, WeakMap, WeakRef, WeakSet, ...ERROR_TYPES, ...PRIMITIVE_WRAPPER_TYPES];
-
 
     /**
      * Returns true if the specified value is an object that is not null
@@ -525,8 +529,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      *
      * @returns {boolean} true if the specified value is '<i>thenable</i>'.
      */
-    const isThenable = pObj => isObj( pObj ) && (isPromise( pObj ) || isFunc( pObj.then ));
-
+    const isThenable = pObj => !isNull( pObj ) && isObj( pObj ) && (isPromise( pObj ) || isFunc( pObj.then ));
 
     /**
      * Converts the input into a string representation.
@@ -537,7 +540,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @param {*} e - The input value to be converted to a string.
      * @returns {string} The string representation of the input.
      */
-    const _asStr = e => isStr( e ) ? e : String( e?.type || e?.name || (_mt_str + e) );
+    const _asStr = e => isStr( e ) ? e : String( e?.type || e?.name || (_mt_str + String( e )) );
 
     /**
      * Converts the input value to a lowercase string.
@@ -560,6 +563,16 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @returns {string} The uppercase string representation of the input value.
      */
     const _ucase = e => _asStr( e ).toUpperCase();
+
+    /**
+     * Replaces all occurrences of whitespace in a given string with a specified character.
+     *
+     * @param {string} pStr - The string potentially containing whitespace characters to be replaced
+     * @param {string} [pChar=_underscore] - The character with which to replace whitespace.
+     *                                       Defaults to an underscore (_)
+     * @returns {string} A new string with all whitespace replaced by the specified character.
+     */
+    const _spcToChar = ( pStr, pChar = _underscore ) => pStr.replaceAll( /\s+/g, (isStr( pChar ) ? pChar || _underscore : _underscore) );
 
     /**
      * Returns a value not less than a minimum value and not greater than a maximum value.<br>
@@ -987,6 +1000,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return !isNull( pObject ) && ((isFunc( Array.isArray ) && Array.isArray( pObject )) || objectToString.call( pObject ) === "[object Array]");
     }
 
+    const is2dArray = ( pArray ) => isArray( pArray ) && pArray.length > 0 && pArray.every( row => isArray( row ) );
+
+    const isKeyValueArray = ( pArray ) => is2dArray( pArray ) && pArray.every( row => row.length >= 2 && row.length <= 3 && isStr( row[0] ) );
+
     /**
      * Returns a non-null object. Returns the specified object if meets the criteria of being a non-null object.<br>
      * @param {*} pObject The object to return if it is actually a non-null object
@@ -1179,7 +1196,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          */
         constructor( pName, pTraceEnabled = false )
         {
-            this.#name = _ucase( _asStr( pName || S_NONE ).trim() ).replaceAll( /\s+/g, "_" );
+            this.#name = _spcToChar( _ucase( _asStr( pName || S_NONE ).trim() ) );
             this.#traceEnabled = !!pTraceEnabled;
         }
 
@@ -1192,7 +1209,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          */
         get name()
         {
-            return _ucase( _asStr( this.#name ).trim() ).replaceAll( /\s+/g, "_" );
+            return _spcToChar( _ucase( _asStr( this.#name ).trim() ) );
         }
 
         /**
@@ -1298,7 +1315,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     {
         if ( isStr( pName ) && _mt_str !== _asStr( pName ).trim() )
         {
-            const name = _ucase( _asStr( pName || S_NONE ).trim() ).replaceAll( /\s+/g, "_" );
+            const name = _spcToChar( _ucase( _asStr( pName || S_NONE ).trim() ) );
             const traceEnabled = !!pTraceEnabled;
 
             if ( null == ExecutionMode[name] )
@@ -1325,6 +1342,29 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @type {NodeModule|Object}
      */
     const MODULE_OBJECT = (_ud !== typeof module) ? module : { exports: {} };
+
+
+    /**
+     * Returns an object corresponding to a set of default options with one or more properties
+     * overridden or added by the properties of the specified pOptions
+     *
+     * @param {Object} pOptions  An object whose properties should be used
+     * @param {Object} pDefaults An object holding defaults for the properties to be used
+     * @returns {Object} An object combining the defaults with the specified options
+     */
+    function populateOptions( pOptions, ...pDefaults )
+    {
+        let sources = [...(pDefaults || [])].map( e => resolveObject( e || {}, true ) );
+
+        if ( isNonNullObj( pOptions ) )
+        {
+            sources.push( resolveObject( pOptions || pDefaults || {}, true ) );
+        }
+
+        sources = sources.filter( e => isNonNullObj( e ) );
+
+        return Object.assign( {}, ...sources );
+    }
 
     /**
      * Returns true if the execution context is <i>most likely</i> Node.js<br>
@@ -1808,7 +1848,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     {
         if ( pEventName instanceof Event )
         {
-            return (pEventName.type || pEventName.name) || ((null != pOptions) ? resolveEventType( pOptions ) : S_CUSTOM);
+            return (pEventName.type || pEventName?.name) || ((null != pOptions) ? resolveEventType( pOptions ) : S_CUSTOM);
         }
         else if ( isStr( pEventName ) )
         {
@@ -2317,7 +2357,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @param {*} pObject Any object or value that might be immutable
      * @returns {boolean} true if the specified value is immutable
      */
-    const isReadOnly = ( pObject ) => isObj( pObject ) ? (null === pObject) || Object.isFrozen( pObject ) || Object.isSealed( pObject ) : true;
+    const isReadOnly = ( pObject ) => !isObj( pObject ) || (isNull( pObject ) || Object.isFrozen( pObject ) || Object.isSealed( pObject ));
+
+    const TRANSIENT_PROPERTIES = freeze( ["constructor", "prototype", "toJson", "toObject", "global", "this", "toString", "__GUID"] );
+
+    function resolveTransientProperties( pOptions )
+    {
+        const options = populateOptions( pOptions || {}, { transientProperties: [...TRANSIENT_PROPERTIES] } );
+        return [...(new Set( [...TRANSIENT_PROPERTIES, ...(([options.transientProperties] || []).flat())] ))];
+    }
 
     /**
      * Converts the provided arguments into a single string.
@@ -2343,7 +2391,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @type {number}
      * @const
      */
-    const MAX_STACK_SIZE = 64;
+    const MAX_STACK_SIZE = 32;
 
     /**
      * @typedef {Object} CopyOptions
@@ -2383,20 +2431,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     let IMMUTABLE_COPY_OPTIONS = { ...DEFAULT_COPY_OPTIONS };
     IMMUTABLE_COPY_OPTIONS.freeze = true;
-
-    /**
-     * Returns an object corresponding to a set of default options with one or more properties
-     * overridden or added by the properties of the specified pOptions
-     *
-     * @param {Object} pOptions  An object whose properties should be used
-     * @param {Object} pDefaults An object holding defaults for the properties to be used
-     * @returns {Object} An object combining the defaults with the specified options
-     */
-    function populateOptions( pOptions, pDefaults )
-    {
-        const defaults = Object.assign( {}, isNonNullObj( pDefaults ) ? { ...pDefaults } : {} );
-        return Object.assign( resolveObject( defaults || {}, true ), resolveObject( pOptions || pDefaults || {}, true ) );
-    }
 
     /**
      * This is a 'helper' function for reading a numeric property of the localCopy or immutableCopy options
@@ -2461,7 +2495,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     Error.isError = Error.isError || function( pError )
     {
-        if ( isNull( pError ) )
+        if ( isNull( pError ) || isPrimitive( pError ) || isFunc( pError ) )
         {
             return false;
         }
@@ -2473,19 +2507,19 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         let is = false;
 
-        if ( isObj( pError ) || isFunc( pError ) )
+        if ( isObj( pError ) )
         {
             is = _isValidStr( pError?.name || pError?.message || pError?.stack );
             is &= _asStr( pError?.name || pError?.message ).includes( "Error" );
         }
 
-        return is || (errorToString.call( pError, pError ) === (isFunc( pError?.toString ) ? pError.toString() : _asStr( pError )));
+        return is;
     };
 
     /**
      * Returns a string compatible with the StackTrace parseFrame method<br>
      *
-     * @param {Error} pError An Error or a string representing a stack trace
+     * @param {Error|string} pError An Error or a string representing a stack trace
      *
      * @returns {string} a string compatible with the StackTrace parseFrame method
      */
@@ -2752,6 +2786,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         #code;
         #referenceId;
 
+        #occurred;
+
         /**
          * Constructs an instance of the custom Error class, __Error.<br>
          * @constructor
@@ -2762,7 +2798,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             super( initializeMessage( pMsgOrErr ) );
 
-            this.#options = immutableCopy( pOptions );
+            this.#options = populateOptions( pOptions, {} );
 
             this.#type = this.getErrorTypeOrName( pMsgOrErr ).replace( /^__/, _mt_str );
             this.#name = this.getErrorTypeOrName( pMsgOrErr ).replace( /^__/, _mt_str );
@@ -2778,7 +2814,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             // Capture stack trace if available
             if ( Error.captureStackTrace )
             {
-                Error.captureStackTrace( this, this.constructor );
+                Error.captureStackTrace( this, Error );
             }
 
             if ( isError( pMsgOrErr ) )
@@ -2786,12 +2822,20 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 this.stack = pMsgOrErr.stack || this.stack;
             }
 
-            this.#trace = this.#options?.stackTrace || (isError( pMsgOrErr ) ? new StackTrace( (pMsgOrErr?.stack || this.stack), pMsgOrErr ) : null);
+            this.#occurred = isError( pMsgOrErr ) ? pMsgOrErr[OBJECT_CREATED] : isError( this.#cause ) ? this.#cause[OBJECT_CREATED] : new Date();
+
+            this.#trace = this.#options?.stackTrace || ((isError( pMsgOrErr ) ? new StackTrace( (pMsgOrErr?.stack || this.stack), pMsgOrErr ) : null));
+        }
+
+
+        get occurred()
+        {
+            return new Date( this.#occurred || this[OBJECT_CREATED] );
         }
 
         calculateReferenceId( pMsgOrErr )
         {
-            return this.#options?.referenceId || (isError( pMsgOrErr ) ? pMsgOrErr?.referenceId || __Error.generateReferenceId( this, this.#code ) : __Error.generateReferenceId( this, this.#code )) || this.#referenceId;
+            return this.#options?.referenceId || ((isError( pMsgOrErr ) ? pMsgOrErr?.referenceId || __Error.generateReferenceId( this, this.#code ) : __Error.generateReferenceId( this, this.#code )) || this.#referenceId);
         }
 
         calculateErrorCode( pMsgOrErr )
@@ -3407,11 +3451,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     {
         #options;
 
-        constructor( pOptions )
+        #visitFunction;
+
+        constructor( pVisitFunction, pOptions )
         {
             super();
 
             this.#options = populateOptions( pOptions || {}, {} );
+
+            this.#visitFunction = isFunc( pVisitFunction ) ? pVisitFunction.bind( this ) : null;
         }
 
         get options()
@@ -3447,10 +3495,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          *
          * @param {*} pVisited - The object or data being visited.
          *
+         * @param {...*} [pExtra] Additional arguments a particular iterator might pass
+         *
          * @return {void|boolean} Normally does not return a value,
          *                        but if desired, return true or a 'truthy' value to stop an iteration
          */
-        visit( pVisited )
+        visit( pVisited, ...pExtra )
         {
             this.dispatchEvent( new ToolBocksModuleEvent( "visit",
                                                           pVisited,
@@ -3459,6 +3509,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                                                                                detail: pVisited,
                                                                                data: pVisited
                                                                            } ) ) );
+
+            if ( isFunc( this.#visitFunction ) )
+            {
+                const me = this;
+                attempt( () => (me || this).#visitFunction.call( (me || this), pVisited, ...pExtra ) );
+            }
         }
     }
 
@@ -3507,7 +3563,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          */
         constructor( pFunction, pOptions )
         {
-            super( pOptions );
+            super( pFunction, pOptions );
 
             if ( isFunc( pFunction ) )
             {
@@ -3560,7 +3616,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     {
         constructor( pOptions )
         {
-            super( pOptions );
+            super( null, pOptions );
         }
 
         /**
@@ -3599,7 +3655,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             {
                 return pVisitor.mergeOptions( pOptions ) || pVisitor;
             }
-            return pVisitor;
+            return new AdHocVisitor( pVisitor?.visit || pVisitor, pOptions );
         }
         else if ( isFunc( pVisitor ) )
         {
@@ -3689,6 +3745,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             // cache this module to avoid unnecessary reconstruction
             MODULE_CACHE[this.#moduleName] = this;
             MODULE_CACHE[this.#cacheKey] = this;
+
+            const me = this;
+
+            handleAttempt.handleError = function( pError, pContext, ...pExtra )
+            {
+                const error = resolveError( pError, pError?.message );
+
+                (me || this).reportError( error, error?.message, S_ERROR, (me || this).calculateErrorSourceName( (me || this), pContext || handleAttempt ), ...pExtra );
+            };
         }
 
         /**
@@ -4116,9 +4181,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             }
         }
 
+        resolveErrorSource( pContext, pError )
+        {
+            return this.calculateErrorSourceName( this, pContext?.name || pContext || pError?.stack || pError );
+        }
+
         handleError( pError, pContext, ...pExtra )
         {
-            const source = this.calculateErrorSourceName( this, pContext?.name || pContext || pError?.stack || pError );
+            const source = this.resolveErrorSource( pContext, pError );
             this.reportError( pError, pError?.message || S_DEFAULT_ERROR_MESSAGE, S_ERROR, source, ...pExtra );
         }
 
@@ -4126,7 +4196,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             const me = this;
 
-            const source = this.calculateErrorSourceName( this, (pContext?.name || pContext || pError?.stack || pError) );
+            const source = this.resolveErrorSource( pContext, pError );
 
             const error = resolveError( pError, pError?.message );
 
@@ -4177,9 +4247,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     return Object.assign( this, pObject || {} );
                 }
 
-                let modulePrototype = new ToolBocksModule( pObject );
+                let toolbocksModule = new ToolBocksModule( pObject );
 
-                return Object.assign( modulePrototype, pObject );
+                return Object.assign( toolbocksModule, pObject );
             }
 
             return this;
@@ -4259,17 +4329,17 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          */
         static create( pModuleName, pCacheKey, pObject )
         {
-            let modulePrototype = isStr( pModuleName ) ? MODULE_CACHE[pModuleName] : null;
+            let toolbocksModule = isStr( pModuleName ) ? MODULE_CACHE[pModuleName] : null;
 
-            modulePrototype = modulePrototype || (isStr( pCacheKey ) ? MODULE_CACHE[pCacheKey] : new ToolBocksModule( pModuleName, pCacheKey ));
-            modulePrototype = modulePrototype || new ToolBocksModule( pModuleName, pCacheKey );
+            toolbocksModule = toolbocksModule || (isStr( pCacheKey ) ? MODULE_CACHE[pCacheKey] : new ToolBocksModule( pModuleName, pCacheKey ));
+            toolbocksModule = toolbocksModule || new ToolBocksModule( pModuleName, pCacheKey );
 
             if ( isNonNullObj( pObject ) )
             {
-                modulePrototype.extend( pObject );
+                toolbocksModule.extend( pObject );
             }
 
-            return modulePrototype;
+            return toolbocksModule;
         }
 
         get executionEnvironment()
@@ -4357,6 +4427,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             {
                 handle( ex, func, ...pArgs );
             }
+
+            return this.calculateResult( result );
         }
 
         initializeAttempt( pMethod, pThis )
@@ -4437,15 +4509,18 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return mod.expose( mod, pCacheKey );
         }
 
-        let modulePrototype = new ToolBocksModule( mod, pCacheKey );
+        let toolbocksModule = new ToolBocksModule( mod, pCacheKey );
 
-        mod = modulePrototype.extend( mod || pObject );
+        mod = toolbocksModule.extend( mod || pObject );
 
         return mod.expose( mod, pCacheKey );
     }
 
+    // make the function available as a static method
     ToolBocksModule.exportModule = exportModule;
 
+    // We replace the handleAttempt error handler (temporarily) with the ToolBocksModule method
+    // The constructor of a ToolBocksModule will replace the handler with its own instance method.
     handleAttempt.handleError = ( pError, pFunction, ...pArgs ) =>
     {
         GLOBAL_INSTANCE.handleError( pError, pFunction, ...pArgs );
@@ -4498,24 +4573,86 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return mod;
     }
 
+    function hasNoConstructor( pObject )
+    {
+        let constructorFunction = pObject.constructor || Object.getPrototypeOf( pObject )?.constructor;
+        return ( !isFunc( constructorFunction ) || (["Object"].includes( constructorFunction?.name ) || [Object].includes( constructorFunction )));
+    }
+
+    const isInfiniteLoop = ( object, visited, stack, depth ) => visited.has( object ) || detectCycles( stack, 5, 5 ) || depth > MAX_STACK_SIZE;
+
+
+    const DEFAULT_IS_LITERAL_OPTIONS =
+        {
+            recursive: true,
+        };
+
     /**
      * Returns true if the specified value is an object literal.<br>
      * An object literal is an object or array
      * that is not constructed as an instance of a class or built-in type.<br>
      * <br>
+     *
+     * <br>
      * @param {*} pObject - The value to be evaluated.
+     * @param pOptions
+     * @param pVisited
+     * @param pStack
+     * @param pDepth
      * @return {boolean} Returns true if the input is an object literal, otherwise false.
      */
-    function isObjectLiteral( pObject )
+    function isObjectLiteral( pObject, pOptions = DEFAULT_IS_LITERAL_OPTIONS, pVisited = new Set(), pStack = [], pDepth = 0 )
     {
+        const options = populateOptions( pOptions, DEFAULT_IS_LITERAL_OPTIONS );
+
+        const { visited, stack, depth } = initializeRecursionArgs( pVisited, pStack, pDepth, options );
+
+        let isLiteral = false;
+
         if ( isNonNullObj( pObject ) )
         {
-            let constructorFunction = pObject.constructor || Object.getPrototypeOf( pObject )?.constructor;
+            isLiteral = hasNoConstructor( pObject );
 
-            return ( !isFunc( constructorFunction ) || (["Object"].includes( constructorFunction?.name ) || [Object].includes( constructorFunction )));
+            if ( isInfiniteLoop( pObject, visited, stack, depth ) )
+            {
+                return isLiteral;
+            }
+
+            if ( isArray( pObject ) )
+            {
+                isLiteral = attempt( () => pObject.every( (( e, i ) => isNull( e ) || isPrimitive( e ) || isObjectLiteral( e, options, visited, [...stack, String( i )] )) ) );
+
+                visited.add( pObject );
+
+                return isLiteral;
+            }
+
+            if ( isLiteral && options?.recursive )
+            {
+                const entries = isNonNullObj( pObject ) ? objectEntries( pObject ) : isArray( pObject ) ? pObject.map( ( e, i ) => [String( i ), e] ) : [];
+
+                while ( entries.length > 0 && isLiteral )
+                {
+                    const entry = entries.shift();
+
+                    if ( entry )
+                    {
+                        const value = entry?.value || entry[1];
+
+                        isLiteral = isNull( value ) || isPrimitive( value ) || isObjectLiteral( value, options, visited, [...stack, (entry.key || entry[0])] );
+
+                        if ( isNonNullObj( value ) )
+                        {
+                            visited.add( value );
+                        }
+                    }
+                }
+            }
+
+            visited.add( pObject );
         }
 
-        return isArray( pObject );
+        return isLiteral;
     }
 
     /**
@@ -4529,7 +4666,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @param {*} pObj - The value to be evaluated.
      * @returns {boolean} Returns true if the specified value appears to be a class instance; otherwise, false.
      */
-    const isClassInstance = pObj => isNonNullObj( pObj ) && !isObjectLiteral( pObj ) && isClass( pObj?.constructor || Object.getPrototypeOf( pObj )?.constructor );
+    const isClassInstance = pObj => isNonNullObj( pObj ) && isClass( pObj?.constructor || Object.getPrototypeOf( pObj )?.constructor );
 
     /**
      * Resolves and normalizes the options used when copying objects
@@ -4658,6 +4795,26 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         if ( detectCycles( stack, 5, 5 ) )
         {
             return clone;
+        }
+
+        if ( isDate( pObject ) )
+        {
+            return new Date( pObject.getTime() );
+        }
+
+        if ( isRegExp( pObject ) )
+        {
+            return new RegExp( pObject.source, pObject.flags );
+        }
+
+        if ( isPrimitive( pObject ) )
+        {
+            return pObject;
+        }
+
+        if ( isPrimitiveWrapper( pObject ) )
+        {
+            return pObject.valueOf();
         }
 
         const entries = objectEntries( pObject );
@@ -4818,7 +4975,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const _copy = function( pObject, pOptions = DEFAULT_COPY_OPTIONS, pStack = [] )
     {
-        const { resolvedOptions, maxStackSize, freeze } = resolveCopyOptions( pOptions );
+        const { resolvedOptions, freeze } = resolveCopyOptions( pOptions );
 
         const maybeFreeze = ( item ) => (freeze ? lock( item ) : item);
 
@@ -4977,21 +5134,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             if ( value instanceof this.constructor )
             {
-                const visited = pVisited || new Set();
-                const stack = pStack || [];
-                const depth = pDepth || 0;
+                const { visited, stack, depth } = initializeRecursionArgs( pVisited, pStack, pDepth );
 
-                visited.add( this );
-                stack.push( this.key );
+                if ( detectCycles( stack, 5, 5 ) || depth > MAX_STACK_SIZE )
+                {
+                    return value;
+                }
 
-                try
-                {
-                    value = value.#_handleFold( visited, stack, depth + 1 );
-                }
-                finally
-                {
-                    stack.pop();
-                }
+                value = value.#_handleFold( visited, [...stack, key], depth + 1 );
             }
 
             return !isNull( key ) ? { [key]: value } : {};
@@ -5014,31 +5164,32 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             if ( value instanceof this.constructor )
             {
-                const visited = pVisited || new Set();
-                const stack = pStack || [];
-                const depth = pDepth || 0;
+                const { visited, stack, depth } = initializeRecursionArgs( pVisited, pStack, pDepth );
 
-                if ( detectCycles( stack, 5, 5 ) || visited.has( value ) || depth > 32 )
+                if ( detectCycles( stack, 5, 5 ) || depth > 32 )
                 {
-                    return [key, value];
+                    return [key, [value?.key, value?.value, value?.parent], this.parent];
                 }
 
-                visited.add( value );
-                stack.push( key );
-
-                try
-                {
-                    value = value.toArray( visited, stack, depth + 1 );
-                }
-                finally
-                {
-                    stack.pop();
-                }
+                value = attempt( () => value.toArray( visited, [...stack, key], depth + 1 ) );
             }
 
             return [key, value, this.parent];
         }
     }
+
+    ObjectEntry.foldEntry = function( pEntry )
+    {
+        let key = pEntry?.key || pEntry[0] || _mt_str;
+        let value = pEntry?.value || pEntry[1] || null;
+
+        if ( value instanceof ObjectEntry )
+        {
+            value = value.fold();
+        }
+
+        return { key, value };
+    };
 
     ObjectEntry.foldEntries = function( pEntries )
     {
@@ -5048,14 +5199,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         for( let entry of entries )
         {
-            let key = entry?.key || entry[0] || _mt_str;
-            let value = entry?.value || entry[1] || null;
-
-            if ( value instanceof ObjectEntry )
-            {
-                value = value.fold();
-            }
-
+            const { key, value } = ObjectEntry.foldEntry( entry );
             results.push( [key, value, (entry?.parent || entry[2] || null)] );
         }
 
@@ -5064,7 +5208,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     ObjectEntry.unwrapValues = function( pObject )
     {
-        let entries = isNonNullObj( pObject ) && !isArray( pObject ) ? objectEntries( pObject ) : isArray( pObject ) ? [...pObject] : [];
+        let entries = isNonNullObj( pObject ) && !isKeyValueArray( pObject ) ? objectEntries( pObject ) : isArray( pObject ) ? [...pObject] : [pObject];
 
         let results = [];
 
@@ -5073,32 +5217,26 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         for( let entry of entries )
         {
-            let key = entry?.key || entry[0] || _mt_str;
+            const key = entry?.key || entry[0] || _mt_str;
+
             let value = entry?.value || entry[1] || null;
 
-            if ( value instanceof ObjectEntry )
+            if ( !(isNull( key ) || isNull( value ) || key === _mt_str) )
             {
-                if ( detectCycles( stack, 5, 5 ) || visited.has( value ) )
+                if ( value instanceof ObjectEntry && value.isValid() )
                 {
-                    results.push( [key, value] );
-                    continue;
-                }
+                    if ( detectCycles( stack, 5, 5 ) )
+                    {
+                        results.push( [key, value, value?.parent] );
+                        results.push( [value?.key, value?.value, value?.parent] );
+                        continue;
+                    }
 
-                visited.add( value );
-
-                stack.push( key );
-
-                try
-                {
-                    value = value.toArray( visited, stack, 0 );
-                }
-                finally
-                {
-                    stack.pop();
+                    value = attempt( () => value.toArray( visited, [...stack, key], 0 ) );
                 }
             }
 
-            results.push( [key, value] );
+            results.push( [key, value, pObject] );
         }
 
         return results;
@@ -5120,7 +5258,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     ObjectEntry.toObject = function( pEntries )
     {
-        let entries = !isNull( pEntries ) && isArray( pEntries ) ? [...(pEntries || [])] : objectEntries( pEntries );
+        let entries = !isNull( pEntries ) && isKeyValueArray( pEntries ) ? [...(pEntries || [])] : objectEntries( pEntries );
 
         let obj = {};
 
@@ -5128,14 +5266,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             for( let entry of entries )
             {
-                let key = entry?.key || entry[0] || _mt_str;
-                let value = entry?.value || entry[1] || null;
-
-                if ( value instanceof ObjectEntry )
-                {
-                    value = value.fold();
-                }
-
+                const { key, value } = ObjectEntry.foldEntry( entry );
                 obj[key] = value;
             }
         }
@@ -5143,9 +5274,48 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return obj;
     };
 
+    ObjectEntry.getKey = ( entry ) => isNull( entry ) ? _mt_str : entry?.key || entry[0] || _mt_str;
+    ObjectEntry.getValue = ( entry ) => isNull( entry ) ? null : entry?.value || entry[1] || null;
+
+    ObjectEntry.iterate = function( pObject, pVisitor, pOptions = {}, pVisited = new Set(), pStack = [] )
+    {
+        const options = populateOptions( pOptions, {} );
+
+        const visitor = resolveVisitor( pVisitor, options );
+
+        const entries = objectEntries( pObject );
+
+        const recursive = options.recursive || false;
+
+        const { visited, stack } = initializeRecursionArgs( pVisited, pStack, 0 );
+
+        for( let entry of entries )
+        {
+            const key = ObjectEntry.getKey( entry );
+            const value = ObjectEntry.getValue( entry );
+
+            const quit = visitor.visit( entry, key, value, options );
+
+            if ( quit )
+            {
+                break;
+            }
+
+            if ( recursive && isNonNullObj( value ) )
+            {
+                ObjectEntry.iterate( value, visitor, options, visited, [...stack, key] );
+            }
+
+            visited.add( value );
+        }
+
+        visited.add( pObject );
+    };
+
     const crypto = $scope().crypto || ((isDeno() && _ud !== typeof Deno) ? Deno.crypto : attempt( () => require( "node:crypto" ) )) || attempt( () => require( "crypto" ) );
 
     const UNIQUE_OBJECT_ID = Symbol.for( "__BOCK__UNIQUE_OBJECT_ID__" ) || Symbol( "__BOCK__UNIQUE_OBJECT_ID__" );
+    const OBJECT_CREATED = Symbol.for( "__BOCK__OBJECT_CREATED__" ) || Symbol( "__BOCK__OBJECT_CREATED__" );
 
     if ( crypto )
     {
@@ -5183,6 +5353,31 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             // objects won't have a UNIQUE_OBJECT_ID unless they already do
         }
+    }
+
+    try
+    {
+        Object.defineProperty( Object.prototype,
+                               OBJECT_CREATED,
+                               {
+                                   configurable: false,
+                                   writable: false,
+                                   enumerable: false,
+                                   value: new Date().getTime()
+                               } );
+
+        Object.defineProperty( Error.prototype,
+                               OBJECT_CREATED,
+                               {
+                                   configurable: false,
+                                   writable: false,
+                                   enumerable: false,
+                                   value: new Date()
+                               } );
+    }
+    catch( ex )
+    {
+        GLOBAL_INSTANCE.handleError( ex, exposeModule, "Could not define OBJECT_CREATED property on Object and Error prototypes" );
     }
 
     /**
@@ -5361,21 +5556,21 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return processEntries( entries, pObject );
     }
 
-    const TYPE_DETECTORS =
+    const TYPE_DETECTORS = freeze(
         [
-            { name: "literal", method: isObjectLiteral },
-            { name: "class_instance", method: isClassInstance },
             { name: "map", method: isMap },
             { name: "set", method: isSet },
             { name: "array", method: isArray },
-            { name: "global_type", method: isGlobalType }
-        ];
 
-    function calculateObjectType( pObject )
+            { name: "class_instance", method: isClassInstance },
+            { name: "global_type", method: isGlobalType }
+        ] );
+
+    function calculateObjectType( pObject, pTypeDetectors = TYPE_DETECTORS )
     {
         let objectType = _mt_str;
 
-        let typeDetectors = [...TYPE_DETECTORS];
+        let typeDetectors = [...new Set( [...(pTypeDetectors || []), ...TYPE_DETECTORS] )];
 
         while ( _mt_str === objectType && typeDetectors.length > 0 )
         {
@@ -5388,30 +5583,58 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             }
         }
 
-        return objectType;
+        return objectType || "literal";
     }
 
-    function getEntries( pObject )
+    function getDefaultEntries( pObject )
     {
-        if ( !isNonNullObj( pObject ) )
-        {
-            return [];
-        }
-
-        if ( pObject instanceof ObjectEntry )
-        {
-            return [pObject];
-        }
-
         let entries = [];
 
-        entries = isArray( pObject ) ? pObject.map( ( e, i ) => [i, e] ) : Object.entries( pObject || {} );
+        [...Object.getOwnPropertyNames( pObject ),
+         ...Object.getOwnPropertySymbols( pObject )].forEach( ( key ) =>
+                                                              {
+                                                                  const value = pObject[key];
+                                                                  const entry = [key, value];
+                                                                  if ( isValidEntry( entry ) )
+                                                                  {
+                                                                      entries.push( entry );
+                                                                  }
+                                                              } );
+        return entries;
+    }
 
-        const objectType = calculateObjectType( pObject );
+    function initializeEntries( pObject )
+    {
+        return isArray( pObject ) ?
+               pObject.map( ( e, i ) => [i, e] ) :
+               isMap( pObject ) ?
+                   [...pObject.entries()] :
+               isSet( pObject ) ?
+               ([...pObject.values()].map( ( e, i ) => [i, e] )) :
+               Object.entries( pObject || {} );
+    }
+
+    function initializeRecursionArgs( pVisited, pStack, pDepth, pOptions )
+    {
+        const options = Object.assign( {}, { ...(pOptions || {}) } );
+
+        return {
+            visited: pVisited || options?.visited || new Set(),
+            stack: [...(pStack || options?.stack || [])],
+            depth: pDepth || options?.depth || 0
+        };
+    }
+
+    function getEntriesForType( pObjectType, pObject, pEntries )
+    {
+        let entries = pEntries || [];
+
+        const objectType = pObjectType || "literal";
 
         switch ( objectType )
         {
             case "literal":
+                entries = Object.entries( pObject || {} ) || pEntries || [];
                 break;
 
             case "class_instance":
@@ -5436,18 +5659,39 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 break;
 
             default:
-                [...Object.getOwnPropertyNames( pObject ),
-                 ...Object.getOwnPropertySymbols( pObject )].forEach( ( key ) =>
-                                                                      {
-                                                                          const value = pObject[key];
-                                                                          const entry = [key, value];
-                                                                          if ( isValidEntry( entry ) )
-                                                                          {
-                                                                              entries.push( entry );
-                                                                          }
-                                                                      } );
+                entries = getDefaultEntries( pObject );
                 break;
         }
+
+        return entries;
+    }
+
+    function getEntries( pObject, pVisited = new Set(), pStack = [], pDepth = 0 )
+    {
+        if ( !isNonNullObj( pObject ) )
+        {
+            return [];
+        }
+
+        if ( pObject instanceof ObjectEntry )
+        {
+            return [pObject];
+        }
+
+        let entries = initializeEntries( pObject );
+
+        const { visited, stack, depth } = initializeRecursionArgs( pVisited, pStack, pDepth );
+
+        if ( isInfiniteLoop( pObject, visited, stack, depth ) )
+        {
+            return entries;
+        }
+
+        const objectType = calculateObjectType( pObject );
+
+        entries = getEntriesForType( objectType, pObject, entries );
+
+        visited.add( pObject );
 
         return processEntries( entries, pObject );
     }
@@ -5460,6 +5704,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         const populateEntry = e => isValidEntry( e ) ? entries.push( e ) : no_op();
 
+        function updateEntries( pEntries )
+        {
+            if ( pEntries && isArray( pEntries ) && pEntries.length > 0 )
+            {
+                pEntries.forEach( populateEntry );
+            }
+        }
+
         if ( objects.length === 1 )
         {
             let object = objects[0];
@@ -5471,7 +5723,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     return [pObject];
                 }
 
-                attempt( () => getEntries( object ) ).forEach( populateEntry );
+                const items = attempt( () => getEntries( object ) );
+
+                updateEntries( items );
 
                 entries = attempt( () => processEntries( entries, object || pObject ) );
             }
@@ -5480,7 +5734,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             for( let object of objects )
             {
-                objectEntries( object ).forEach( populateEntry );
+                const items = objectEntries( object );
+                updateEntries( items );
             }
         }
 
@@ -5501,6 +5756,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return [...(new Set( keys.filter( e => null != e && isStr( e ) ) ))];
     }
 
+    const isTerminal = ( obj, lastObj ) => (obj === lastObj) ||
+                                           obj === Object ||
+                                           obj?.constructor === Object ||
+                                           obj.constructor === Array ||
+                                           obj === Array;
+
     function propertyDescriptors( pObject, pSearchPrototypeChain = true )
     {
         let obj = pObject;
@@ -5515,15 +5776,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         while ( isNonNullObj( obj ) && !iterationCap.reached )
         {
-            lastObj = obj;
-
             objectProperties = Object.getOwnPropertyDescriptors( obj || {} );
 
             descriptors = mergeObjects( descriptors, objectProperties );
 
+            lastObj = obj;
+
             obj = pSearchPrototypeChain ? Object.getPrototypeOf( obj ) || obj?.constructor?.prototype : null;
 
-            obj = (obj === lastObj) || obj === Object || obj?.constructor === Object ? null : obj;
+            obj = (obj === lastObj || isTerminal( obj, lastObj )) ? null : obj;
         }
 
         return descriptors;
@@ -5540,23 +5801,26 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     function toNodePathArray( pPropertyPath )
     {
-        const removeOptionalSyntax = e => String( e ).trim().replace( /\?$/, _mt_str );
+        const removeOptionalSyntax = e => isStr( e ) ? String( e ).trim().replaceAll( /\?+/g, _mt_str ) : isArray( e ) ? e.map( removeOptionalSyntax ) : e;
 
-        const toDotNotation = e => isStr( e ) ? bracketsToDots( e, { numericIndexOnly: false } ).trim().split( _dot ) : e;
+        const toDotNotation = e => isStr( e ) ? bracketsToDots( e, { numericIndexOnly: false } ).trim().split( _dot ) : isArray( e ) ? e.map( toDotNotation ) : e;
 
-        const removeHashSign = e => e.trim().replace( /^#/, _mt_str );
+        const removeHashSign = e => isStr( e ) ? String( e ).trim().replace( /^#/, _mt_str ) : isArray( e ) ? e.map( removeHashSign ) : e;
 
-        let propertyPath = arguments.length > 1 ? [...arguments].join( _dot ) : pPropertyPath;
+        const isValidArgument = e => isStr( e ) && e.trim().length > 0;
+        const isValidPathElement = e => isValidArgument( e ) && /[^.\s#]+/.test( e );
 
-        let arr = isArray( propertyPath ) ? propertyPath.flat().map( toDotNotation ).flat() : propertyPath;
+        let propertyPath = arguments.length > 1 ? [...arguments].filter( isValidArgument ) : pPropertyPath;
 
-        arr = (isStr( arr ) ? bracketsToDots( arr, { numericIndexOnly: false } ).split( _dot ) : (isArray( arr ) ? arr : [String( arr )]).flat()).flat();
+        let arr = isArray( propertyPath ) ? propertyPath.map( toDotNotation ).flat() : propertyPath;
 
-        arr = arr.flat().map( toDotNotation ).map( removeOptionalSyntax );
+        arr = (isStr( arr ) ? bracketsToDots( arr, { numericIndexOnly: false } ).split( _dot ) : (isArray( arr ) ? arr.map( toDotNotation ).flat() : [String( arr )]).filter( isValidArgument )).flat();
 
-        arr = arr.flat().filter( e => isStr( e ) ).map( removeHashSign );
+        arr = arr.map( toDotNotation ).flat().map( removeOptionalSyntax ).flat();
 
-        return arr.map( removeOptionalSyntax );
+        arr = arr.map( removeHashSign ).flat().filter( isValidArgument ).map( e => e.trim().replaceAll( /^\.+|\.+$/g, _mt_str ) ).filter( isValidArgument );
+
+        return arr.filter( isValidPathElement );
     }
 
     function _property( pObject, pPropertyPath, pValue )
@@ -5566,14 +5830,13 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return pObject;
         }
 
+        let keys = toNodePathArray( pPropertyPath );
+
         let mutator = (arguments.length > 2 || !isNull( pValue )) ? ( object, key, value ) =>
         {
             object[key] = (keys.length > 0) ? {} : (value || pValue);
             return object[key];
-
         } : null;
-
-        let keys = toNodePathArray( pPropertyPath );
 
         let value = pObject;
 
@@ -5636,86 +5899,803 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return attempt( () => _property( pObject, pPropertyPath, pValue ) );
     }
 
+    const CLASS_SYMBOL =
+        {
+            ID: Symbol( "_bock_id" ),
+            NAME: Symbol( "_bock_name" ),
+            DESCRIPTION: Symbol( "_bock_description" ),
+        };
+
+    class Identified
+    {
+        constructor( pId )
+        {
+            this[CLASS_SYMBOL.ID] = pId;
+        }
+
+        get id()
+        {
+            return this[CLASS_SYMBOL.ID];
+        }
+    }
+
+    class Identifiable extends Identified
+    {
+        constructor( pId )
+        {
+            super( pId );
+        }
+
+        set id( pId )
+        {
+            this[CLASS_SYMBOL.ID] = pId;
+        }
+    }
+
+    class Named extends Identified
+    {
+        constructor( pId, pName )
+        {
+            super( pId );
+            this[CLASS_SYMBOL.NAME] = pName;
+        }
+
+        get name()
+        {
+            return this[CLASS_SYMBOL.NAME];
+        }
+    }
+
+    class Nameable extends Named
+    {
+        #identifiable;
+
+        constructor( pId, pName )
+        {
+            super( pId, pName );
+            this.#identifiable = new Identifiable( pId );
+        }
+
+        get id()
+        {
+            return this.#identifiable.id;
+        }
+
+        set id( pId )
+        {
+            this.#identifiable.id = pId;
+        }
+
+        set name( pName )
+        {
+            this[CLASS_SYMBOL.NAME] = pName;
+        }
+    }
+
+    class Described extends Named
+    {
+        constructor( pId, pName, pDescription )
+        {
+            super( pId, pName );
+
+            this[CLASS_SYMBOL.DESCRIPTION] = pDescription;
+        }
+
+        get description()
+        {
+            return this[CLASS_SYMBOL.DESCRIPTION];
+        }
+    }
+
+    class Describable extends Described
+    {
+        #identifiable;
+        #nameable;
+
+        constructor( pId, pName, pDescription )
+        {
+            super( pId, pName, pDescription );
+
+            this.#identifiable = new Identifiable( pId );
+            this.#nameable = new Nameable( pId, pName );
+        }
+
+        set description( pDescription )
+        {
+            this[CLASS_SYMBOL.DESCRIPTION] = pDescription;
+        }
+
+        set name( pName )
+        {
+            this.#nameable.name = pName;
+        }
+
+        get name()
+        {
+            return this.#nameable.name;
+        }
+
+        set id( pId )
+        {
+            this.#identifiable.id = pId;
+        }
+
+        get id()
+        {
+            return this.#identifiable.id;
+        }
+    }
+
+    class MergeRule extends Described
+    {
+        constructor( pId, pName, pDescription )
+        {
+            super( pId, pName, pDescription );
+        }
+
+        resolveTarget( pObject, pKey )
+        {
+            const obj = isNonNullObj( pObject ) ? pObject || {} : {};
+            const key = isStr( pKey ) || isNum( pKey ) || isSymbol( pKey ) ? pKey : String( pKey || _mt_str );
+            return { obj, key };
+        }
+
+        equals( pOther )
+        {
+            return isNonNullObj( pOther ) &&
+                   this.id === pOther?.id &&
+                   this.name === pOther?.name;
+        }
+    }
+
+    MergeRule.resolveRule = ( pRulesMap, pId, pName ) => (pRulesMap || {})[pId || _mt_str] || (pRulesMap || {})[pName || pId || _mt_str];
+
+    class MergeDirection extends MergeRule
+    {
+        constructor( pId, pName, pDescription )
+        {
+            super( pId, pName, pDescription );
+        }
+
+        order( ...pObjects )
+        {
+            const objects = [...(pObjects || [])];
+            return (this === MergeDirection.LEFT_TO_RIGHT || "ltr" === this[CLASS_SYMBOL.ID]) ? objects : objects.reverse();
+        }
+
+        equals( pOther )
+        {
+            return (pOther instanceof this.constructor) && super.equals( pOther );
+        }
+    }
+
+    MergeDirection.LEFT_TO_RIGHT = new MergeDirection( "ltr", "LeftToRight", "Merge the leftmost objects into the rightmost object" );
+    MergeDirection.RIGHT_TO_LEFT = new MergeDirection( "rtl", "RightToLeft", "Merge the rightmost objects into the leftmost object" );
+
+    MergeDirection.LTR = MergeDirection.LEFT_TO_RIGHT;
+    MergeDirection.RTL = MergeDirection.RIGHT_TO_LEFT;
+
+    MergeDirection.DEFAULT = MergeDirection.LEFT_TO_RIGHT;
+
+    MergeDirection.resolveDirection = ( pDirection ) =>
+    {
+        if ( pDirection instanceof MergeDirection )
+        {
+            return pDirection;
+        }
+
+        if ( isStr( pDirection ) )
+        {
+            const key = String( pDirection || _mt_str ).trim().toUpperCase();
+
+            if ( ["LTR", "RTL", "LEFT_TO_RIGHT", "RIGHT_TO_LEFT"].includes( key ) )
+            {
+                return MergeDirection.resolveDirection( MergeDirection[key] );
+            }
+        }
+
+        return MergeDirection.DEFAULT;
+    };
+
+    class MergeStringsRule extends MergeRule
+    {
+        #separator = (_comma + _spc);
+        #replacement = (_semicolon + _spc);
+
+        constructor( pId, pName, pDescription, pSeparator, pReplacement )
+        {
+            super( pId, pName, pDescription );
+
+            this.#separator = isStr( pSeparator ) ? pSeparator || _mt_str : this.#separator;
+            this.#replacement = isStr( pReplacement ) ? pReplacement || _mt_str : this.#replacement;
+        }
+
+        get separator()
+        {
+            return String( this.#separator );
+        }
+
+        set separator( pSeparator )
+        {
+            this.#separator = isStr( pSeparator ) ? pSeparator || _mt_str : this.#separator;
+        }
+
+        get replacement()
+        {
+            return String( this.#replacement );
+        }
+
+        set replacement( pReplacement )
+        {
+            this.#replacement = isStr( pReplacement ) ? pReplacement || _mt_str : this.#replacement;
+        }
+
+        equals( pOther )
+        {
+            return (pOther instanceof this.constructor) && super.equals( pOther );
+        }
+
+        mergeStrings( ...pStrings )
+        {
+            const strings = [...(pStrings || [])].filter( isStr );
+
+            let value = strings;
+
+            if ( strings.length <= 0 )
+            {
+                return _mt_str;
+            }
+
+            switch ( this[CLASS_SYMBOL.ID] )
+            {
+                case "concat":
+                    value = (strings.map( e => e.includes( this.separator ) ? e.replaceAll( this.separator, this.replacement ) : e ).join( this.separator ));
+                    break;
+
+                case "split":
+                    value = [...new Set( strings )];
+                    break;
+
+                case "onn":
+                    value = strings.filter( e => !isNull( e ) && e.trim().length > 0 );
+                // do not break;
+                // fall through
+
+                case "ow":
+                    value = strings[0] || _mt_str;
+                    break;
+            }
+
+            return value;
+        }
+    }
+
+    MergeStringsRule.CONCAT = new MergeStringsRule( "concatenate", "concatenate", "Concatenate strings into a single string, separated by a comma" );
+    MergeStringsRule.SPLIT = new MergeStringsRule( "split", "split", "Convert strings into an array of strings, storing unique elements from each object" );
+    MergeStringsRule.OVERWRITE = new MergeStringsRule( "ow", "overwrite", "Replace the value of the target object with the value of the source object" );
+    MergeStringsRule.OVERWRITE_NON_NULL = new MergeStringsRule( "onn", "overwrite_non_null", "Replace the value of the target object with the value of the source object if it is not null or empty" );
+
+    MergeStringsRule.RULES =
+        {
+            "concatenate": MergeStringsRule.CONCAT,
+            "split": MergeStringsRule.SPLIT,
+            "ow": MergeStringsRule.OVERWRITE,
+            "overwrite": MergeStringsRule.OVERWRITE,
+
+            "onn": MergeStringsRule.OVERWRITE_NON_NULL,
+            "overwrite_non_null": MergeStringsRule.OVERWRITE_NON_NULL,
+
+            DEFAULT: MergeStringsRule.OVERWRITE_NON_NULL,
+        };
+
+    MergeStringsRule.DEFAULT = MergeStringsRule.RULES.DEFAULT;
+
+    MergeStringsRule.resolveRule = ( pId, pName ) => MergeRule.resolveRule( MergeStringsRule.RULES, pId, pName ) || MergeStringsRule.DEFAULT;
+
+    class MergeNumbersRule extends MergeRule
+    {
+        #operator = function( pA, pB ) { return pA; };
+
+        constructor( pId, pName, pDescription, pOperator )
+        {
+            super( pId, pName, pDescription );
+            this.#operator = isFunc( pOperator ) && pOperator.length === 2 ? pOperator : this.#operator;
+        }
+
+        get operator()
+        {
+            return isFunc( this.#operator ) ? this.#operator : function( pA, pB ) { return pA; };
+        }
+
+        mergeNumbers( ...pNumbers )
+        {
+            let value = 0;
+
+            const numbers = [...(pNumbers || [])].filter( isNumeric ).map( e => parseFloat( e ) ).filter( e => !isNaN( e ) || !isFinite( e ) );
+
+            while ( numbers.length > 1 )
+            {
+                value = this.operator.call( this, numbers.shift(), numbers.shift() );
+            }
+
+            while ( numbers.length > 0 )
+            {
+                value = this.operator.call( this, value, numbers.shift() );
+            }
+
+            return value;
+        }
+    }
+
+    MergeNumbersRule.REPLACE = new MergeNumbersRule( "ow", "overwrite", "set the target value to the the source value", function( a, b ) { return a; } );
+    MergeNumbersRule.PRESERVE = new MergeNumbersRule( "keep", "preserve", "leave the target value as-is; ignore the source value", function( a, b ) { return b; } );
+
+    MergeNumbersRule.ADD = new MergeNumbersRule( "+", "add", "set the target value to the sum of the source value and the target value", function( a, b ) { return a + b; } );
+    MergeNumbersRule.SUBTRACT = new MergeNumbersRule( "-", "subtract", "set the target value to the difference of the source value and the target value", function( a, b ) { return a - b; } );
+    MergeNumbersRule.MULTIPLY = new MergeNumbersRule( "*", "multiply", "set the target value to the product of the source value and the target value", function( a, b ) { return a * b; } );
+    MergeNumbersRule.DIVIDE = new MergeNumbersRule( "/", "divide", "set the target value to the quotient of the source value and the target value", function( a, b ) { return a / b; } );
+
+    MergeNumbersRule.DEFAULT = MergeNumbersRule.REPLACE;
+
+    class MergeArraysRule extends MergeRule
+    {
+        constructor( pId, pName, pDescription )
+        {
+            super( pId, pName, pDescription );
+        }
+
+        equals( pOther )
+        {
+            return (pOther instanceof this.constructor) && super.equals( pOther );
+        }
+
+        mergeArrays( ...pArrays )
+        {
+            let arr = [...(pArrays || [])].map( e => isArray( e ) ? e : isNull( e ) ? [] : [e] );
+
+            switch ( this[CLASS_SYMBOL.ID] )
+            {
+                case "concat":
+                    arr = arr.flat();
+                    break;
+
+                case "unique":
+                    arr = [...new Set( arr.flat() )];
+                    break;
+
+                case "onn":
+                    arr = arr.filter( e => !isNull( e ) && e.length > 0 );
+                // do not break;
+                // fall through
+
+                case "ow":
+                    arr = arr[0];
+                    break;
+
+                case "elements":
+                    break;
+            }
+
+            return [...arr];
+        }
+    }
+
+    MergeArraysRule.CONCAT = new MergeArraysRule( "concat", "concatenate", "Concatenate arrays into a single array" );
+    MergeArraysRule.UNIQUE = new MergeArraysRule( "unique", "concat_unique", "Concatenate arrays into a single array, preserving only unique elements" );
+    MergeArraysRule.OVERWRITE = new MergeArraysRule( "ow", "overwrite", "Replace the value of the target object with the value of the source object" );
+    MergeArraysRule.OVERWRITE_NON_NULL = new MergeArraysRule( "onn", "overwrite_non_null", "Replace the value of the target object with the value of the source object if it is not null or empty" );
+    MergeArraysRule.MERGE_ELEMENTS = new MergeArraysRule( "elements", "merge_elements", "Merge the elements of the source arrays into the target array" );
+
+    MergeArraysRule.RULES =
+        {
+            "concat": MergeArraysRule.CONCAT,
+            "concatenate": MergeArraysRule.CONCAT,
+
+            "unique": MergeArraysRule.UNIQUE,
+            "concat_unique": MergeArraysRule.UNIQUE,
+
+            "ow": MergeArraysRule.OVERWRITE,
+            "overwrite": MergeArraysRule.OVERWRITE,
+
+            "onn": MergeArraysRule.OVERWRITE_NON_NULL,
+            "overwrite_non_null": MergeArraysRule.OVERWRITE_NON_NULL,
+
+            "elements": MergeArraysRule.MERGE_ELEMENTS,
+            "merge_elements": MergeArraysRule.MERGE_ELEMENTS,
+
+            DEFAULT: MergeArraysRule.OVERWRITE_NON_NULL
+        };
+
+    MergeArraysRule.DEFAULT = MergeArraysRule.RULES.DEFAULT;
+
+    MergeArraysRule.resolveRule = ( pId, pName ) => MergeRule.resolveRule( MergeArraysRule.RULES, pId, pName ) || MergeArraysRule.DEFAULT;
+
+    class Recursion extends EventTarget
+    {
+        #id;
+        #stack;
+        #visited;
+        #depth;
+
+        constructor( pId, pVisited, pStack, pDepth )
+        {
+            super();
+
+            this.#id = pId || Recursion.nextId();
+
+            this.#stack = pStack || [];
+            this.#visited = pVisited || new Set();
+            this.#depth = pDepth || 0;
+        }
+
+        get id()
+        {
+            return this.#id;
+        }
+
+        get stack()
+        {
+            return this.#stack || [];
+        }
+
+        get visited()
+        {
+            return this.#visited;
+        }
+
+        get depth()
+        {
+            return this.#depth;
+        }
+
+        asObject()
+        {
+            return {
+                id: this.#id,
+                stack: this.#stack,
+                visited: this.#visited,
+                depth: this.#depth,
+            };
+        }
+
+        isInfiniteLoop( pObject )
+        {
+            return detectCycles( this.stack ) || this.depth > MAX_STACK_SIZE;
+        }
+
+        update( pObject, pKey )
+        {
+            this.#stack.push( pKey );
+            this.#visited.add( pObject );
+            this.#depth++;
+
+            return this;
+        }
+
+        popKey()
+        {
+            return this.#stack.pop();
+        }
+
+        equals( pOther )
+        {
+            return (pOther instanceof this.constructor) && pOther?.id === this.id;
+        }
+    }
+
+    Recursion._ID = 1;
+    Recursion.nextId = () =>
+    {
+        const id = Recursion._ID++;
+
+        if ( id > 999_999_999 )
+        {
+            Recursion._ID = 1;
+        }
+
+        return id;
+    };
+
+    Recursion.start = ( pVisited, pStack, pDepth ) => new Recursion( Recursion.nextId(), pVisited, pStack, pDepth );
+
+    class ObjectMerger extends EventTarget
+    {
+        #options;
+
+        #direction = MergeDirection.LEFT_TO_RIGHT;
+
+        #arrayRule = MergeArraysRule.DEFAULT;
+        #stringRule = MergeStringsRule.DEFAULT;
+        #numberRule = MergeNumbersRule.DEFAULT;
+
+        #recursions = new Map();
+
+        constructor( pDirection, pArrayRule, pStringRule, pNumberRule, pOptions )
+        {
+            super();
+
+            this.#options = pOptions || {};
+
+            this.#direction = this.resolveDirection( pDirection );
+
+            this.#arrayRule = this.resolveArrayRule( pArrayRule );
+            this.#stringRule = this.resolveStringRule( pStringRule );
+            this.#numberRule = this.resolveNumberRule( pNumberRule );
+        }
+
+        resolveRule( pRule )
+        {
+            if ( isNonNullObj( pRule ) )
+            {
+                if ( pRule instanceof MergeRule )
+                {
+                    return pRule;
+                }
+            }
+            return null;
+        }
+
+        resolveStringRule( pStringRule )
+        {
+            const rule = this.resolveRule( pStringRule );
+
+            if ( rule instanceof MergeStringsRule )
+            {
+                return rule;
+            }
+
+            if ( isStr( pStringRule ) )
+            {
+                return MergeStringsRule.resolveRule( pStringRule );
+            }
+
+            return MergeStringsRule.RULES.DEFAULT;
+        }
+
+        resolveArrayRule( pArrayRule )
+        {
+            const rule = this.resolveRule( pArrayRule );
+
+            if ( rule instanceof MergeArraysRule )
+            {
+                return rule;
+            }
+
+            if ( isStr( pArrayRule ) )
+            {
+                return MergeArraysRule.resolveRule( pArrayRule );
+            }
+
+            return MergeArraysRule.RULES.DEFAULT;
+        }
+
+        resolveNumberRule( pNumberRule )
+        {
+            const rule = this.resolveRule( pNumberRule );
+
+            if ( rule instanceof MergeNumbersRule )
+            {
+                return rule;
+            }
+
+            if ( isStr( pNumberRule ) )
+            {
+                switch ( pNumberRule.trim().toLowerCase() )
+                {
+                    case "+":
+                    case "add":
+                        return MergeNumbersRule.ADD;
+
+                    case "-":
+                    case "subtract":
+                        return MergeNumbersRule.SUBTRACT;
+
+                    case "*":
+                    case "multiply":
+                        return MergeNumbersRule.MULTIPLY;
+
+                    case "/":
+                    case "divide":
+                        return MergeNumbersRule.DIVIDE;
+
+                    case "ow":
+                    case "overwrite":
+                        return MergeNumbersRule.REPLACE;
+
+                    case "keep":
+                    case "preserve":
+                        return MergeNumbersRule.PRESERVE;
+                }
+            }
+            return MergeNumbersRule.DEFAULT;
+        }
+
+        resolveDirection( pDirection )
+        {
+            return MergeDirection.resolveDirection( pDirection ) || MergeDirection.DEFAULT;
+        }
+
+        get direction()
+        {
+            return this.resolveDirection( this.#direction );
+        }
+
+        get arrayRule()
+        {
+            return this.resolveArrayRule( this.#arrayRule );
+        }
+
+        get stringRule()
+        {
+            return this.resolveStringRule( this.#stringRule );
+        }
+
+        get numberRule()
+        {
+            return this.resolveNumberRule( this.#numberRule );
+        }
+
+        merge( ...pObjects )
+        {
+            let obj = null;
+
+            const objects = this.direction.order( ...([...(pObjects || [])]) );
+
+            const numObjects = objects.length;
+
+            const recursion = this.resolveRecursion();
+            this.#recursions.set( recursion.id, recursion );
+
+            let key = 0;
+
+            while ( objects.length && !recursion.isInfiniteLoop( obj ) && key < numObjects )
+            {
+                const left = obj || objects.shift();
+                const right = objects.shift() || {};
+
+                obj = this.mergeLtr( left, right, recursion.update( obj, String( key ) ) ) || right;
+
+                key += 1;
+            }
+
+            this.#recursions.delete( recursion.id );
+
+            return obj;
+        }
+
+        mergeLtr( pObjectA, pObjectB, pRecursion )
+        {
+            const me = this;
+
+            const left = isNonNullObj( pObjectA ) ? { ...pObjectA } : null;
+            const right = isNonNullObj( pObjectB ) ? { ...pObjectB } : null;
+
+            if ( isNonNullObj( right ) && isNonNullObj( left ) )
+            {
+                const recursion = this.resolveRecursion( pRecursion );
+
+                const entries = objectEntries( left );
+
+                while ( entries.length && !recursion.isInfiniteLoop( left ) )
+                {
+                    const entry = entries.shift();
+
+                    const key = ObjectEntry.getKey( entry );
+                    const value = ObjectEntry.getValue( entry );
+
+                    right[key] = attempt( () => (me || this).mergeValues( value, right[key], recursion.update( left, key ) ) );
+
+                    recursion.popKey();
+                }
+            }
+
+            return right || left;
+        }
+
+        mergeRtl( pObjectA, pObjectB, pRecursion )
+        {
+            return this.mergeLtr( pObjectB, pObjectA, pRecursion );
+        }
+
+        mergeStrings( pObjectA, pObjectB )
+        {
+            return this.stringRule.mergeStrings( pObjectA, pObjectB );
+        }
+
+        mergeNumbers( pObjectA, pObjectB )
+        {
+            return this.numberRule.mergeNumbers( pObjectA, pObjectB );
+        }
+
+        mergeArrays( pObjectA, pObjectB, pRecursion )
+        {
+            if ( this.arrayRule.equals( MergeArraysRule.MERGE_ELEMENTS ) )
+            {
+
+            }
+
+            return this.arrayRule.mergeArrays( pObjectA, pObjectB );
+        }
+
+        mergeValues( pValueA, pValueB, pRecursion )
+        {
+            const me = this;
+
+            const recursion = this.resolveRecursion( pRecursion );
+
+            if ( isNull( pValueB ) )
+            {
+                return pValueA;
+            }
+
+            if ( isNull( pValueA ) )
+            {
+                return pValueB;
+            }
+
+            if ( isArray( pValueA ) || isArray( pValueB ) )
+            {
+                const valueA = isArray( pValueA ) ? [...pValueA] : [pValueA];
+                const valueB = isArray( pValueB ) ? [...pValueB] : [pValueB];
+
+                return attempt( () => me.mergeArrays( valueA, valueB, recursion ) );
+            }
+
+            if ( isNonNullObj( pValueA ) || isNonNullObj( pValueB ) )
+            {
+                return attempt( () => (me || this).mergeLtr( pValueA, pValueB, recursion ) );
+            }
+
+            if ( isNumeric( pValueA ) && isNumeric( pValueB ) )
+            {
+                let value = attempt( () => (me || this).mergeNumbers( pValueA, pValueB ) );
+
+                if ( !isNaN( value ) && isFinite( value ) )
+                {
+                    return value;
+                }
+            }
+
+            if ( isStr( pValueA ) || isStr( pValueB ) )
+            {
+                return attempt( () => (me || this).mergeStrings( String( pValueA ), String( pValueB ), recursion ) );
+            }
+
+            return pValueA;
+        }
+
+        resolveRecursion( pRecursion )
+        {
+            let recur = (pRecursion instanceof Recursion) ? pRecursion : this.#recursions.get( pRecursion );
+
+            if ( recur instanceof Recursion )
+            {
+                return recur;
+            }
+
+            if ( this.#recursions.size )
+            {
+                const values = [...this.#recursions.values()].sort( ( a, b ) => (a[OBJECT_CREATED] || 0) - (b[OBJECT_CREATED] || 0) );
+                recur = values[0];
+            }
+
+            recur = (recur instanceof Recursion) ? recur : Recursion.start();
+
+            this.#recursions.set( recur.id, recur );
+
+            return recur;
+        }
+    }
+
+
     function mergeOptions( pOptions, ...pDefaults )
     {
-        const maxMergeDepth = 12;
+        const defaults = [...(pDefaults || [{}])].filter( isNonNullObj );
 
-        let obj = {};
-
-        let arr = [...(pDefaults || [])].filter( isNonNullObj );
-
-        arr.unshift( pOptions || {} );
-
-        arr = arr.filter( isNonNullObj ).map( e => localCopy( e ) );
-
-        function merge( pDepth, pObj, pValue, pKey )
-        {
-            const kee = (_mt_str + (pKey || pObj || "value"));
-
-            const o = isObj( pObj ) ? (pObj || { [kee]: pValue }) : { [kee]: pObj || {} };
-
-            const val = localCopy( isObj( pValue ) ? (pValue || { [kee]: pValue }) : { [kee]: pValue } );
-
-            if ( pDepth > maxMergeDepth )
-            {
-                return val || o;
-            }
-
-            const kvPairs = objectEntries( val );
-
-            for( const [k, v] of kvPairs )
-            {
-                if ( null === v || _ud === typeof v || (isObj( v ) && Object.keys( v || {} ).length === 0) )
-                {
-                    continue;
-                }
-
-                if ( !(k in o) || null === o[k] || _ud === typeof o[k] || (isObj( o[k] ) && Object.keys( o[k] || {} ).length === 0) )
-                {
-                    o[k] = v;
-                }
-                else if ( isObj( v ) && isObj( o[k] ) )
-                {
-                    o[k] = merge( ++pDepth, o[k], v, k );
-                }
-                else
-                {
-                    o[k] = (isObj( o[k] ) ? merge( ++pDepth, o[k], { [k]: v }, k ) : v);
-                }
-            }
-
-            return o;
-        }
-
-        for( let i = arr.length; i--; )
-        {
-            let entries = objectEntries( arr[i] );
-
-            for( const [key, value] of entries )
-            {
-                let mergeDepth = 0;
-
-                if ( null === value || _ud === typeof value )
-                {
-                    continue;
-                }
-
-                if ( !(key in obj) || null === obj[key] || _ud === typeof obj[key] || Object.keys( obj[key] || {} ).length === 0 )
-                {
-                    obj[key] = value;
-                }
-                else if ( isObj( value ) && isObj( obj[key] ) )
-                {
-                    obj[key] = merge( ++mergeDepth, obj[key], value, key );
-                }
-                else
-                {
-                    obj[key] = (isObj( obj[key] ) ? merge( ++mergeDepth, obj[key], { [key]: value }, key ) : value);
-                }
-            }
-        }
-
-        return obj;
+        return {
+            ...defaults.reduce( ( p, c ) => ({ ...p, ...c }), {} ),
+            ...(pOptions || {}),
+        };
     }
 
     const mergeObjects = mergeOptions;
@@ -5868,6 +6848,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             resolveLogLevel,
             resolveType,
 
+            TRANSIENT_PROPERTIES,
+            resolveTransientProperties,
+
             EMPTY_OBJECT,
             EMPTY_ARRAY,
 
@@ -5904,6 +6887,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     isPromise,
                     isError,
                     isAsyncFunction,
+                    isMap,
+                    isSet,
+                    isObjectLiteral,
+                    isClass,
+                    isClassInstance,
+                    isGlobalType,
+                    isLogger: ToolBocksModule.isLogger,
+                    isVisitor: Visitor.isVisitor
                 },
 
             S_DEFAULT_ERROR_MESSAGE,

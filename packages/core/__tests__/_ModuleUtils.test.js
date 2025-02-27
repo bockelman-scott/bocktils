@@ -27,8 +27,6 @@ const
         functionToString,
         objectToString,
         errorToString,
-        isPromise,
-        isThenable,
         canBind,
         resolveMethod,
         attempt,
@@ -41,7 +39,6 @@ const
         isReadOnly,
         bracketsToDots,
         toNodePathArray,
-        isObjectLiteral,
         detectCycles,
         executeCallback,
         propertyDescriptors,
@@ -81,6 +78,74 @@ const
         isRejected,
         classes: moduleUtilsClasses,
     } = moduleUtils;
+
+let {
+    isStr,
+    isFunc,
+    isObj,
+    isArray,
+    isDate,
+    isRegExp,
+    isNum,
+    isBig,
+    isBool,
+    isSymbol,
+    isNull,
+    isUndefined,
+    isPrimitive,
+    isThenable,
+    isPromise,
+    isError,
+    isAsyncFunction,
+    isMap,
+    isSet,
+    isObjectLiteral,
+    isClass,
+    isClassInstance,
+    isGlobalType,
+    isLogger,
+    isVisitor,
+} = TYPES_CHECKS;
+
+class TestClass
+{
+    #args;
+
+    constructor( ...pArgs )
+    {
+        this.#args = [...pArgs];
+    }
+
+    get args()
+    {
+        return [...this.#args];
+    }
+
+    get map()
+    {
+        return new Map();
+    }
+}
+
+async function foo()
+{
+    return "abc";
+}
+
+const thenable =
+    {
+        then: function( resolve, reject )
+        {
+            resolve( "abc" );
+        }
+    };
+
+const map = new Map();
+map.set( "a", 1 );
+map.set( "b", 2 );
+map.set( "c", 3 );
+
+const aSet = new Set( map.values() );
 
 describe( "Sanity-check", () =>
 {
@@ -293,11 +358,556 @@ describe( "Sanity-check", () =>
 // NOTE: these are basic checks; use TypeUtils for more useful type checks
 describe( "TYPES_CHECK functionality", () =>
 {
-    test( "", () =>
+
+
+    test( "isNum", () =>
     {
-        //TODO
+        expect( isNum( "abc" ) ).toBe( false );
+        expect( isNum( 321 ) ).toBe( true );
+        expect( isNum( 321n ) ).toBe( true );
+        expect( isNum( 1 / 0 ) ).toBe( false );
+        expect( isNum( Infinity ) ).toBe( false );
+        expect( isNum( 2 ** 1024 ) ).toBe( false );
+        expect( isNum( 2 ** 128 ) ).toBe( true );
+        expect( isNum( ["a", "b", "c"] ) ).toBe( false );
+        expect( isNum( ["a", "b", "c"].length ) ).toBe( true );
+        expect( isNum( { a: 1 } ) ).toBe( false );
+        expect( isNum( null ) ).toBe( false );
+        expect( isNum( undefined ) ).toBe( false );
+        expect( isNum( true ) ).toBe( false );
+        expect( isNum( false ) ).toBe( false );
+        expect( isNum( Symbol( "abc" ) ) ).toBe( false );
+        expect( isNum( new Date() ) ).toBe( false );
+        expect( isNum( new Date().getTime() ) ).toBe( true );
+        expect( isNum( +(new Date()) ) ).toBe( true ); // coerced
+    } );
+
+    test( "isBig", () =>
+    {
+        expect( isBig( "abc" ) ).toBe( false );
+        expect( isBig( 321 ) ).toBe( false );
+        expect( isBig( 321n ) ).toBe( true );
+        expect( isBig( ["a", "b", "c"] ) ).toBe( false );
+        expect( isBig( ["a", "b", "c"].length ) ).toBe( false );
+        expect( isBig( { a: 1 } ) ).toBe( false );
+        expect( isBig( null ) ).toBe( false );
+        expect( isBig( undefined ) ).toBe( false );
+        expect( isBig( true ) ).toBe( false );
+        expect( isBig( false ) ).toBe( false );
+        expect( isBig( Symbol( "abc" ) ) ).toBe( false );
+        expect( isBig( new Date() ) ).toBe( false );
+        expect( isBig( new Date().getTime() ) ).toBe( false );
+        expect( isBig( +(new Date()) ) ).toBe( false ); // coerced
+        expect( isBig( 2 ** 128 ) ).toBe( false );
+    } );
+
+    test( "isStr", () =>
+    {
+        expect( isStr( "abc" ) ).toBe( true );
+        expect( isStr( 321 ) ).toBe( false );
+        expect( isStr( ["a", "b", "c"] ) ).toBe( false );
+        expect( isStr( { a: 1 } ) ).toBe( false );
+        expect( isStr( null ) ).toBe( false );
+        expect( isStr( undefined ) ).toBe( false );
+        expect( isStr( true ) ).toBe( false );
+        expect( isStr( false ) ).toBe( false );
+        expect( isStr( Symbol( "abc" ) ) ).toBe( false );
+        expect( isStr( String( 321 ) ) ).toBe( true );
+    } );
+
+    test( "isFunc", () =>
+    {
+        expect( isFunc( "abc" ) ).toBe( false );
+        expect( isFunc( 321 ) ).toBe( false );
+        expect( isFunc( ["a", "b", "c"] ) ).toBe( false );
+        expect( isFunc( { a: 1 } ) ).toBe( false );
+        expect( isFunc( null ) ).toBe( false );
+        expect( isFunc( undefined ) ).toBe( false );
+        expect( isFunc( true ) ).toBe( false );
+        expect( isFunc( false ) ).toBe( false );
+        expect( isFunc( Symbol( "abc" ) ) ).toBe( false );
+        expect( isFunc( [].push ) ).toBe( true );
+        expect( isFunc( () => true ) ).toBe( true );
+        expect( isFunc( function() {} ) ).toBe( true );
+        expect( isFunc( TestClass ) ).toBe( true );
+        expect( isFunc( TestClass?.constructor ) ).toBe( true );
+        expect( isFunc( new TestClass() ) ).toBe( false );
+        expect( isFunc( new TestClass().args ) ).toBe( false );
+        expect( isFunc( Object ) ).toBe( true );
+    } );
+
+    test( "isObj", () =>
+    {
+        expect( isObj( "abc" ) ).toBe( false );
+        expect( isObj( 321 ) ).toBe( false );
+        expect( isObj( ["a", "b", "c"] ) ).toBe( true );
+        expect( isObj( { a: 1 } ) ).toBe( true );
+        expect( isObj( null ) ).toBe( true );
+        expect( isObj( undefined ) ).toBe( false );
+        expect( isObj( true ) ).toBe( false );
+        expect( isObj( false ) ).toBe( false );
+        expect( isObj( Symbol( "abc" ) ) ).toBe( false );
+        expect( isObj( [].push ) ).toBe( false );
+        expect( isObj( () => true ) ).toBe( false );
+        expect( isObj( function() {} ) ).toBe( false );
+        expect( isObj( TestClass ) ).toBe( false );
+        expect( isObj( TestClass?.constructor ) ).toBe( false );
+        expect( isObj( new TestClass() ) ).toBe( true );
+        expect( isObj( new TestClass().args ) ).toBe( true );
+        expect( isObj( Object ) ).toBe( false );
+    } );
+
+    test( "isArray", () =>
+    {
+        expect( isArray( "abc" ) ).toBe( false );
+        expect( isArray( 321 ) ).toBe( false );
+        expect( isArray( ["a", "b", "c"] ) ).toBe( true );
+        expect( isArray( [] ) ).toBe( true );
+        expect( isArray( Object.entries( {} ) ) ).toBe( true );
+
+        expect( isArray( new Map().keys() ) ).toBe( false ); // it's an iterator;
+        expect( isArray( new Set().values() ) ).toBe( false ); // it's an iterator
+
+        expect( isArray( [...(new Map().keys())] ) ).toBe( true );
+        expect( isArray( [...(new Set( ["a", "b", "c"] ))] ) ).toBe( true );
+
+        expect( isArray( { a: 1 } ) ).toBe( false );
+        expect( isArray( null ) ).toBe( false );
+        expect( isArray( undefined ) ).toBe( false );
+        expect( isArray( true ) ).toBe( false );
+        expect( isArray( false ) ).toBe( false );
+        expect( isArray( Symbol( "abc" ) ) ).toBe( false );
+        expect( isArray( [].push ) ).toBe( false );
+        expect( isArray( () => true ) ).toBe( false );
+        expect( isArray( function() {} ) ).toBe( false );
+        expect( isArray( TestClass ) ).toBe( false );
+        expect( isArray( TestClass?.constructor ) ).toBe( false );
+        expect( isArray( new TestClass() ) ).toBe( false );
+        expect( isArray( new TestClass().args ) ).toBe( true );
+        expect( isArray( Object ) ).toBe( false );
+
+    } );
+
+    test( "isDate", () =>
+    {
+        expect( isDate( "abc" ) ).toBe( false );
+        expect( isDate( 321 ) ).toBe( false );
+        expect( isDate( ["a", "b", "c"] ) ).toBe( false );
+        expect( isDate( { a: 1 } ) ).toBe( false );
+        expect( isDate( null ) ).toBe( false );
+        expect( isDate( undefined ) ).toBe( false );
+        expect( isDate( true ) ).toBe( false );
+        expect( isDate( false ) ).toBe( false );
+        expect( isDate( Symbol( "abc" ) ) ).toBe( false );
+        expect( isDate( new Date() ) ).toBe( true );
+
+        const error = resolveError( new Error( "TEST" ) );
+        const when = error.occurred;
+
+        expect( isDate( when ) ).toBe( true );
+
+    } );
+
+    test( "isRegExp", () =>
+    {
+        expect( isRegExp( "abc" ) ).toBe( false );
+        expect( isRegExp( 321 ) ).toBe( false );
+        expect( isRegExp( ["a", "b", "c"] ) ).toBe( false );
+        expect( isRegExp( { a: 1 } ) ).toBe( false );
+        expect( isRegExp( null ) ).toBe( false );
+        expect( isRegExp( undefined ) ).toBe( false );
+        expect( isRegExp( true ) ).toBe( false );
+        expect( isRegExp( false ) ).toBe( false );
+        expect( isRegExp( Symbol( "abc" ) ) ).toBe( false );
+        expect( isRegExp( /\.?/g ) ).toBe( true );
+        expect( isRegExp( new RegExp( "\.?", "g" ) ) ).toBe( true );
+    } );
+
+    test( "isBool", () =>
+    {
+        expect( isBool( "abc" ) ).toBe( false );
+        expect( isBool( 321 ) ).toBe( false );
+        expect( isBool( ["a", "b", "c"] ) ).toBe( false );
+        expect( isBool( { a: 1 } ) ).toBe( false );
+        expect( isBool( null ) ).toBe( false );
+        expect( isBool( undefined ) ).toBe( false );
+        expect( isBool( true ) ).toBe( true );
+        expect( isBool( false ) ).toBe( true );
+        expect( isBool( Symbol( "abc" ) ) ).toBe( false );
+        expect( isBool( String( 321 ) ) ).toBe( false );
+        expect( isBool( 3 > 2 ) ).toBe( true );
+        expect( isBool( new Boolean( true ) ) ).toBe( false );
+    } );
+
+    test( "isSymbol", () =>
+    {
+        expect( isSymbol( "abc" ) ).toBe( false );
+        expect( isSymbol( 321 ) ).toBe( false );
+        expect( isSymbol( ["a", "b", "c"] ) ).toBe( false );
+        expect( isSymbol( { a: 1 } ) ).toBe( false );
+        expect( isSymbol( null ) ).toBe( false );
+        expect( isSymbol( undefined ) ).toBe( false );
+        expect( isSymbol( true ) ).toBe( false );
+        expect( isSymbol( false ) ).toBe( false );
+        expect( isSymbol( Symbol( "abc" ) ) ).toBe( true );
+        expect( isSymbol( String( 321 ) ) ).toBe( false );
+        expect( isSymbol( Symbol.for( "abc" ) ) ).toBe( true );
+        expect( isSymbol( Symbol.asyncIterator ) ).toBe( true );
+    } );
+
+    test( "isNull", () =>
+    {
+        expect( isNull( "abc" ) ).toBe( false );
+        expect( isNull( 321 ) ).toBe( false );
+        expect( isNull( ["a", "b", "c"] ) ).toBe( false );
+        expect( isNull( { a: 1 } ) ).toBe( false );
+        expect( isNull( null ) ).toBe( true );
+        expect( isNull( undefined ) ).toBe( true );
+        expect( isNull( true ) ).toBe( false );
+        expect( isNull( false ) ).toBe( false );
+        expect( isNull( Symbol( "abc" ) ) ).toBe( false );
+        expect( isNull( String( 321 ) ) ).toBe( false );
+        expect( isNull( [].shift() ) ).toBe( true );
+    } );
+
+    test( "isUndefined", () =>
+    {
+        let xyz;
+
+        expect( isUndefined( "abc" ) ).toBe( false );
+        expect( isUndefined( 321 ) ).toBe( false );
+        expect( isUndefined( ["a", "b", "c"][3] ) ).toBe( true );
+        expect( isUndefined( { a: 1 }["b"] ) ).toBe( true );
+        expect( isUndefined( null ) ).toBe( false );
+        expect( isUndefined( undefined ) ).toBe( true );
+        expect( isUndefined( true ) ).toBe( false );
+        expect( isUndefined( false ) ).toBe( false );
+        expect( isUndefined( Symbol( "abc" ) ) ).toBe( false );
+        expect( isUndefined( String( 321 ) ) ).toBe( false );
+        expect( isUndefined( [].shift() ) ).toBe( true );
+        expect( isUndefined( xyz ) ).toBe( true );
+    } );
+
+    test( "isPrimitive", () =>
+    {
+        expect( isPrimitive( "abc" ) ).toBe( true );
+        expect( isPrimitive( 321 ) ).toBe( true );
+        expect( isPrimitive( ["a", "b", "c"] ) ).toBe( false );
+        expect( isPrimitive( { a: 1 } ) ).toBe( false );
+        expect( isPrimitive( null ) ).toBe( false );
+        expect( isPrimitive( undefined ) ).toBe( false );
+        expect( isPrimitive( true ) ).toBe( true );
+        expect( isPrimitive( false ) ).toBe( true );
+        expect( isPrimitive( Symbol( "abc" ) ) ).toBe( true );
+        expect( isPrimitive( String( 321 ) ) ).toBe( true );
+        expect( isPrimitive( 3 > 2 ) ).toBe( true );
+        expect( isPrimitive( new Boolean( true ) ) ).toBe( false );
+        expect( isPrimitive( TestClass ) ).toBe( false );
+        expect( isPrimitive( new TestClass() ) ).toBe( false );
+        expect( isPrimitive( function() {} ) ).toBe( false );
+        expect( isPrimitive( [].push ) ).toBe( false );
+    } );
+
+    test( "isThenable", () =>
+    {
+        expect( isThenable( "abc" ) ).toBe( false );
+        expect( isThenable( 321 ) ).toBe( false );
+        expect( isThenable( ["a", "b", "c"] ) ).toBe( false );
+        expect( isThenable( { a: 1 } ) ).toBe( false );
+        expect( isThenable( null ) ).toBe( false );
+        expect( isThenable( undefined ) ).toBe( false );
+        expect( isThenable( true ) ).toBe( false );
+        expect( isThenable( false ) ).toBe( false );
+        expect( isThenable( Symbol( "abc" ) ) ).toBe( false );
+        expect( isThenable( String( 321 ) ) ).toBe( false );
+        expect( isThenable( foo() ) ).toBe( true );
+        expect( isThenable( thenable ) ).toBe( true );
+    } );
+
+    test( "isPromise", () =>
+    {
+        expect( isPromise( "abc" ) ).toBe( false );
+        expect( isPromise( 321 ) ).toBe( false );
+        expect( isPromise( ["a", "b", "c"] ) ).toBe( false );
+        expect( isPromise( { a: 1 } ) ).toBe( false );
+        expect( isPromise( null ) ).toBe( false );
+        expect( isPromise( undefined ) ).toBe( false );
+        expect( isPromise( true ) ).toBe( false );
+        expect( isPromise( false ) ).toBe( false );
+        expect( isPromise( Symbol( "abc" ) ) ).toBe( false );
+        expect( isPromise( String( 321 ) ) ).toBe( false );
+
+        expect( isPromise( foo() ) ).toBe( true );
+        expect( isPromise( thenable ) ).toBe( false );
+    } );
+
+    test( "isError", () =>
+    {
+        expect( isError( "abc" ) ).toBe( false );
+        expect( isError( 321 ) ).toBe( false );
+        expect( isError( ["a", "b", "c"] ) ).toBe( false );
+        expect( isError( { a: 1 } ) ).toBe( false );
+        expect( isError( null ) ).toBe( false );
+        expect( isError( undefined ) ).toBe( false );
+        expect( isError( true ) ).toBe( false );
+        expect( isError( false ) ).toBe( false );
+        expect( isError( Symbol( "abc" ) ) ).toBe( false );
+        expect( isError( String( 321 ) ) ).toBe( false );
+
+        expect( isError( new Error( "TEST" ) ) ).toBe( true );
+        expect( isError( resolveError( new Error( "TEST" ) ) ) ).toBe( true );
+
+        try
+        {
+            xyz += 1 / 0;
+        }
+        catch( ex )
+        {
+            expect( isError( ex ) ).toBe( true );
+        }
+    } );
+
+    test( "isAsyncFunction", () =>
+    {
+        expect( isAsyncFunction( "abc" ) ).toBe( false );
+        expect( isAsyncFunction( 321 ) ).toBe( false );
+        expect( isAsyncFunction( ["a", "b", "c"] ) ).toBe( false );
+        expect( isAsyncFunction( { a: 1 } ) ).toBe( false );
+        expect( isAsyncFunction( null ) ).toBe( false );
+        expect( isAsyncFunction( undefined ) ).toBe( false );
+        expect( isAsyncFunction( true ) ).toBe( false );
+        expect( isAsyncFunction( false ) ).toBe( false );
+        expect( isAsyncFunction( Symbol( "abc" ) ) ).toBe( false );
+        expect( isAsyncFunction( String( 321 ) ) ).toBe( false );
+
+        expect( isAsyncFunction( () => true ) ).toBe( false );
+        expect( isAsyncFunction( async() => true ) ).toBe( true );
+        expect( isAsyncFunction( async function() {} ) ).toBe( true );
+        // expect( isAsyncFunction( async function*() {} ) ).toBe( true );
+        // expect( isAsyncFunction( async function*() { yield 1; } ) ).toBe( true );
+
+        expect( isAsyncFunction( foo ) ).toBe( true );
+        expect( isAsyncFunction( function() {} ) ).toBe( false );
+
+    } );
+
+    test( "isMap", () =>
+    {
+        expect( isMap( "abc" ) ).toBe( false );
+        expect( isMap( 321 ) ).toBe( false );
+        expect( isMap( ["a", "b", "c"] ) ).toBe( false );
+        expect( isMap( { a: 1 } ) ).toBe( false );
+        expect( isMap( null ) ).toBe( false );
+        expect( isMap( undefined ) ).toBe( false );
+        expect( isMap( true ) ).toBe( false );
+        expect( isMap( false ) ).toBe( false );
+        expect( isMap( Symbol( "abc" ) ) ).toBe( false );
+        expect( isMap( String( 321 ) ) ).toBe( false );
+
+        expect( isMap( new Map() ) ).toBe( true );
+        expect( isMap( Map ) ).toBe( false );
+
+        expect( isMap( new TestClass().map ) ).toBe( true );
+        expect( isMap( map ) ).toBe( true );
+
+        expect( isMap( new Set() ) ).toBe( false );
+        expect( isMap( Set ) ).toBe( false );
+    } );
+
+    test( "isSet", () =>
+    {
+        expect( isSet( "abc" ) ).toBe( false );
+        expect( isSet( 321 ) ).toBe( false );
+        expect( isSet( ["a", "b", "c"] ) ).toBe( false );
+        expect( isSet( { a: 1 } ) ).toBe( false );
+        expect( isSet( null ) ).toBe( false );
+        expect( isSet( undefined ) ).toBe( false );
+        expect( isSet( true ) ).toBe( false );
+        expect( isSet( false ) ).toBe( false );
+        expect( isSet( Symbol( "abc" ) ) ).toBe( false );
+        expect( isSet( String( 321 ) ) ).toBe( false );
+
+        expect( isSet( new Map() ) ).toBe( false );
+        expect( isSet( Map ) ).toBe( false );
+
+        expect( isSet( new TestClass().map ) ).toBe( false );
+        expect( isSet( map ) ).toBe( false );
+
+        expect( isSet( new Set() ) ).toBe( true );
+        expect( isSet( Set ) ).toBe( false );
+
+        expect( isSet( aSet ) ).toBe( true );
+    } );
+
+    test( "isClass", () =>
+    {
+        expect( isClass( "abc" ) ).toBe( false );
+        expect( isClass( 321 ) ).toBe( false );
+        expect( isClass( ["a", "b", "c"] ) ).toBe( false );
+        expect( isClass( { a: 1 } ) ).toBe( false );
+        expect( isClass( null ) ).toBe( false );
+        expect( isClass( undefined ) ).toBe( false );
+        expect( isClass( true ) ).toBe( false );
+        expect( isClass( false ) ).toBe( false );
+        expect( isClass( Symbol( "abc" ) ) ).toBe( false );
+        expect( isClass( String( 321 ) ) ).toBe( false );
+
+        expect( isClass( TestClass ) ).toBe( true );
+        expect( isClass( new TestClass() ) ).toBe( false );
+
+        expect( isClass( function() {} ) ).toBe( false );
+        expect( isClass( async function() {} ) ).toBe( false );
+        expect( isClass( foo ) ).toBe( false );
+
+        expect( isClass( ToolBocksModule ) ).toBe( true );
+        expect( isClass( new ToolBocksModule() ) ).toBe( false );
+
+        expect( isClass( ModuleEvent ) ).toBe( true );
+        expect( isClass( IterationCap ) ).toBe( true );
+        expect( isClass( StatefulListener ) ).toBe( true );
+        expect( isClass( ExecutionMode ) ).toBe( true );
+        expect( isClass( ExecutionEnvironment ) ).toBe( true );
+        expect( isClass( Visitor ) ).toBe( true );
+
+    } );
+
+    test( "isClassInstance", () =>
+    {
+        expect( isClassInstance( "abc" ) ).toBe( false );
+        expect( isClassInstance( 321 ) ).toBe( false );
+        expect( isClassInstance( ["a", "b", "c"] ) ).toBe( false );
+        expect( isClassInstance( { a: 1 } ) ).toBe( false );
+        expect( isClassInstance( null ) ).toBe( false );
+        expect( isClassInstance( undefined ) ).toBe( false );
+        expect( isClassInstance( true ) ).toBe( false );
+        expect( isClassInstance( false ) ).toBe( false );
+        expect( isClassInstance( Symbol( "abc" ) ) ).toBe( false );
+        expect( isClassInstance( String( 321 ) ) ).toBe( false );
+
+
+        expect( isClassInstance( TestClass ) ).toBe( false );
+        expect( isClassInstance( new TestClass() ) ).toBe( true );
+
+        expect( isClassInstance( function() {} ) ).toBe( false );
+        expect( isClassInstance( async function() {} ) ).toBe( false );
+        expect( isClassInstance( foo ) ).toBe( false );
+
+        expect( isClassInstance( moduleUtils ) ).toBe( true );
+
+        expect( isClassInstance( ToolBocksModule ) ).toBe( false );
+        expect( isClassInstance( new ToolBocksModule() ) ).toBe( true );
+
+        expect( isClassInstance( ModuleEvent ) ).toBe( false );
+        expect( isClassInstance( IterationCap ) ).toBe( false );
+        expect( isClassInstance( StatefulListener ) ).toBe( false );
+        expect( isClassInstance( ExecutionMode ) ).toBe( false );
+        expect( isClassInstance( ExecutionEnvironment ) ).toBe( false );
+        expect( isClassInstance( Visitor ) ).toBe( false );
+
+        expect( isClassInstance( new ModuleEvent() ) ).toBe( true );
+        expect( isClassInstance( new IterationCap() ) ).toBe( true );
+        expect( isClassInstance( new StatefulListener() ) ).toBe( true );
+        expect( isClassInstance( getExecutionEnvironment() ) ).toBe( true );
+        expect( isClassInstance( resolveVisitor() ) ).toBe( true );
+
+    } );
+
+    test( "isGlobalType", () =>
+    {
+        expect( isGlobalType( "abc" ) ).toBe( false );
+        expect( isGlobalType( 321 ) ).toBe( false );
+        expect( isGlobalType( ["a", "b", "c"] ) ).toBe( true ); // it's an Array
+        expect( isGlobalType( { a: 1 } ) ).toBe( false );
+        expect( isGlobalType( null ) ).toBe( false );
+        expect( isGlobalType( undefined ) ).toBe( false );
+        expect( isGlobalType( true ) ).toBe( false );
+        expect( isGlobalType( false ) ).toBe( false );
+        expect( isGlobalType( Symbol( "abc" ) ) ).toBe( false ); // it's a symbol primitive
+        expect( isGlobalType( String( 321 ) ) ).toBe( false );
+
+        expect( isGlobalType( new ObjectEntry( "a", 1, {} ) ) ).toBe( true ); // extends Array
+        expect( isGlobalType( new IterationCap( 32 ) ) ).toBe( false );
+
+        expect( isGlobalType( TestClass ) ).toBe( false );
+        expect( isGlobalType( new TestClass() ) ).toBe( false );
+        expect( isGlobalType( function() {} ) ).toBe( false );
+        expect( isGlobalType( async function() {} ) ).toBe( false );
+        expect( isGlobalType( foo ) ).toBe( false );
+
+        expect( isGlobalType( new Error( "TEST" ) ) ).toBe( true );
+        expect( isGlobalType( new Map() ) ).toBe( true );
+        expect( isGlobalType( new Set() ) ).toBe( true );
+        expect( isGlobalType( foo() ) ).toBe( true );
+
+        expect( isGlobalType( new Boolean( false ) ) ).toBe( true );
+        expect( isGlobalType( new String( "abc" ) ) ).toBe( true );
+        expect( isGlobalType( new Number( 93 ) ) ).toBe( true );
+
+    } );
+
+    test( "isLogger", () =>
+    {
+        expect( isLogger( "abc" ) ).toBe( false );
+        expect( isLogger( 321 ) ).toBe( false );
+        expect( isLogger( ["a", "b", "c"] ) ).toBe( false );
+        expect( isLogger( { a: 1 } ) ).toBe( false );
+        expect( isLogger( null ) ).toBe( false );
+        expect( isLogger( undefined ) ).toBe( false );
+        expect( isLogger( true ) ).toBe( false );
+        expect( isLogger( false ) ).toBe( false );
+        expect( isLogger( Symbol( "abc" ) ) ).toBe( false );
+        expect( isLogger( String( 321 ) ) ).toBe( false );
+
+        expect( isLogger( console ) ).toBe( true );
+    } );
+
+    test( "isVisitor", () =>
+    {
+        expect( isVisitor( "abc" ) ).toBe( false );
+        expect( isVisitor( 321 ) ).toBe( false );
+        expect( isVisitor( ["a", "b", "c"] ) ).toBe( false );
+        expect( isVisitor( { a: 1 } ) ).toBe( false );
+        expect( isVisitor( null ) ).toBe( false );
+        expect( isVisitor( undefined ) ).toBe( false );
+        expect( isVisitor( true ) ).toBe( false );
+        expect( isVisitor( false ) ).toBe( false );
+        expect( isVisitor( Symbol( "abc" ) ) ).toBe( false );
+        expect( isVisitor( String( 321 ) ) ).toBe( false );
+
+        const visitor = new Visitor( function( pVisited ) {} );
+
+        expect( isVisitor( visitor ) ).toBe( true );
+        expect( isVisitor( resolveVisitor( visitor ) ) ).toBe( true );
+        expect( isVisitor( resolveVisitor( function( pVisited ) {} ) ) ).toBe( true );
+        expect( isVisitor( resolveVisitor() ) ).toBe( true );
+
+    } );
+
+} );
+
+describe( "mergeOptions", () =>
+{
+    test( "mergeOptions", () =>
+    {
+        const options = { a: 1, b: 2, c: 3 };
+        const options2 = { a: 10, b: 20, d: 40, e: 55 };
+        const options3 = { a: 100, b: 200, d: 400 };
+
+        let merged = mergeOptions( options, options2, options3 );
+
+        expect( merged ).toEqual( { a: 1, b: 2, d: 400, e: 55, c: 3 } );
+
+        merged = mergeOptions( options2, options, options3 );
+
+        expect( merged ).toEqual( { a: 10, b: 20, c: 3, d: 40, e: 55 } );
+
+        merged = mergeOptions( options3, options2, options );
+
+        expect( merged ).toEqual( { a: 100, b: 200, d: 400, e: 55, c: 3 } );
+
     } );
 } );
+
 
 describe( "ExecutionEnvironment", () =>
 {
@@ -413,7 +1023,7 @@ describe( "Resolvers", () =>
 
     test( "resolveMethod returns the object's member function", () =>
     {
-        class TestClass
+        class ResolvableClass
         {
             #something = "test";
 
@@ -428,9 +1038,9 @@ describe( "Resolvers", () =>
             }
         }
 
-        TestClass.prototype.anotherMethod = () => "another";
+        ResolvableClass.prototype.anotherMethod = () => "another";
 
-        const testClass = new TestClass();
+        const testClass = new ResolvableClass();
 
         expect( typeof resolveMethod( "testMethod", testClass ) ).toBe( "function" );
         expect( resolveMethod( "testMethod", testClass ) ).toBe( testClass.testMethod );
@@ -446,8 +1056,8 @@ describe( "Resolvers", () =>
 
         expect( typeof resolveMethod( testClass.anotherMethod, testClass ) ).toBe( "function" );
 
-        expect( resolveMethod( testClass.testMethod, testClass ).call( new TestClass( "Hello" ) ) ).toEqual( "Hello" );
-        expect( resolveMethod( testClass.anotherMethod, testClass ).call( new TestClass( "World" ) ) ).toEqual( "another" );
+        expect( resolveMethod( testClass.testMethod, testClass ).call( new ResolvableClass( "Hello" ) ) ).toEqual( "Hello" );
+        expect( resolveMethod( testClass.anotherMethod, testClass ).call( new ResolvableClass( "World" ) ) ).toEqual( "another" );
 
     } );
 
@@ -689,7 +1299,7 @@ describe( "isObjectLiteral", () =>
 
         expect( isObjectLiteral( obj ) ).toBe( true );
 
-        class TestClass
+        class NonLiteralClass
         {
             #attribute;
 
@@ -704,7 +1314,7 @@ describe( "isObjectLiteral", () =>
             }
         }
 
-        expect( isObjectLiteral( new TestClass( "test" ) ) ).toBe( false );
+        expect( isObjectLiteral( new NonLiteralClass( "test" ) ) ).toBe( false );
     } );
 } );
 
@@ -827,7 +1437,7 @@ describe( "objectEntries - ObjectEntry", () =>
     test( "objectEntries returns private properties if there is an accessor",
           () =>
           {
-              class TestClass
+              class SecureClass
               {
                   #hidden = "private";
                   #obscured = "obscured";
@@ -856,7 +1466,7 @@ describe( "objectEntries - ObjectEntry", () =>
                   }
               }
 
-              const testClass = new TestClass();
+              const testClass = new SecureClass();
 
               const entries = objectEntries( testClass );
 
@@ -878,7 +1488,7 @@ describe( "objectEntries - ObjectEntry", () =>
               expect( entries[4]?.value ).not.toEqual( "topSecret" );
 
               expect( entries[4]?.key ).toEqual( "class" );
-              expect( entries[4]?.value ).toEqual( "TestClass" );
+              expect( entries[4]?.value ).toEqual( "SecureClass" );
 
               expect( entries.map( e => e.key ).includes( "topSecret" ) ).toBe( false );
               expect( entries.map( e => e.key ).includes( "obscured" ) ).toBe( true );

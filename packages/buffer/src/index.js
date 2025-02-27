@@ -33,7 +33,7 @@ const {
         objectEntries,
         objectKeys,
         objectValues,
-        mergeOptions,
+        populateOptions,
         attempt,
         classes
     } = constants;
@@ -176,7 +176,7 @@ const {
     {
         File = function( pData, pFileName, pOptions )
         {
-            const options = mergeOptions( FileOptions, pOptions );
+            const options = populateOptions( pOptions, FileOptions );
 
             this.data = pData;
             this.fileName = pFileName;
@@ -632,7 +632,7 @@ const {
             isFile
         };
 
-    mod = mergeOptions( mod, more );
+    mod = { ...mod, ...more };
 
     mod.Buffer = mod.Buffer || $scope().Buffer || Buffer;
 

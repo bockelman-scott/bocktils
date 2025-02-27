@@ -206,7 +206,7 @@ const $scope = constants?.$scope || function()
         {
             Array.isArray = function( pArg )
             {
-                return !(_ud === typeof pArg || null == pArg) && "[object Array]" === {}.toString.call( pArg );
+                return !(_ud === typeof pArg || null == pArg) && "[object Array]" === objectToString.call( pArg );
             };
         }
         catch( ex )
@@ -2663,7 +2663,7 @@ const $scope = constants?.$scope || function()
          */
         constructor( ...pFilters )
         {
-            super( ([].concat( varargs( ...(pFilters || [Filters.IDENTITY]) ) ).map( e => new Transformer( TRANSFORMATIONS.FILTER, e ) )) );
+            super( ...([...(varargs( ...(pFilters || [Filters.IDENTITY]) ).map( e => new Transformer( TRANSFORMATIONS.FILTER, e ) ))]) );
         }
 
         applyFilters( pArr )
@@ -2700,7 +2700,7 @@ const $scope = constants?.$scope || function()
          */
         constructor( ...pMappers )
         {
-            super( ([].concat( varargs( ...(pMappers || [Mappers.IDENTITY]) ) )).map( e => new Transformer( TRANSFORMATIONS.MAP, e ) ) );
+            super( ...([...(varargs( ...(pMappers || [Mappers.IDENTITY]) )).map( e => new Transformer( TRANSFORMATIONS.MAP, e ) )]) );
         }
 
         applyMappers( pArr )
@@ -2733,7 +2733,7 @@ const $scope = constants?.$scope || function()
          */
         constructor( ...pComparators )
         {
-            super( [].concat( varargs( ...(pComparators || [Comparators.NONE]) ) ).filter( Filters.COMPARATORS ).map( e => new Transformer( TRANSFORMATIONS.SORT, e ) ) );
+            super( ...([...(varargs( ...(pComparators || [Comparators.NONE]) )).filter( Filters.COMPARATORS ).map( e => new Transformer( TRANSFORMATIONS.SORT, e ) )]) );
 
             this.#comparators = ([].concat( ...(pComparators || [Comparators.NONE]) )).filter( Filters.COMPARATORS );
         }
@@ -3631,7 +3631,7 @@ const $scope = constants?.$scope || function()
      * @typedef {Object} RangeOptions
      *
      * @property {boolean} [inclusive=false] Whether the range includes both the starting value AND the ending value
-     * @property {RANGE_INCREMENT_OPTION} [increment_rule=RANGE_INCREMENT_OPTION.INCREMENT] The rule to determine how to generate the next value in the range
+     * @property {RANGE_INCREMENT_OPTION|number} [increment_rule=RANGE_INCREMENT_OPTION.INCREMENT] The rule to determine how to generate the next value in the range
      */
 
     /**

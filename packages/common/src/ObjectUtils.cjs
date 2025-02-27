@@ -3194,6 +3194,182 @@ const $scope = constants?.$scope || function()
         return bytes;
     };
 
+    const mergeJson = function( ...pObjects )
+    {
+        const objects = filteredArgs( _isValidInput, ...pObjects ).map( _toObject ).filter( isNonNullObject );
+
+        return (objects.length > 1) ? mergeOptions( objects[0], ...objects.slice( 1 ) ) : (objects[0] || {});
+    };
+
+    const JSON_MERGE_OPTIONS =
+        {
+            mappers: [],
+            filters: [],
+            returnJson: false
+        };
+
+    class JsonMerger
+    {
+        #options;
+
+        #mappers = [];
+        #filters = [];
+
+        #returnJson = false;
+
+        constructor( pFilters, pMappers, pOptions = JSON_MERGE_OPTIONS )
+        {
+            this.#options = { ...pOptions || {} };
+
+            this.#filters = this.initializeFilters( pFilters, asArray( this.#options.filters ) );
+            this.#mappers = this.initializeMappers( pMappers, asArray( this.#options.mappers ) );
+
+            this.#returnJson = !!this.#options.returnJson;
+        }
+
+        get options()
+        {
+            return populateOptions( this.#options, {} );
+        }
+
+        get mappers()
+        {
+            return [...(asArray( this.#mappers ))];
+        }
+
+        get filters()
+        {
+            return [...(asArray( this.#filters ))];
+        }
+
+        initializeFilters( ...pFilters )
+        {
+            const filters = flatArgs( ...pFilters || [] );
+            return filters.filter( Filters.IS_FILTER );
+        }
+
+        addFilter( pFilter )
+        {
+            if ( Filters.IS_FILTER( pFilter ) )
+            {
+                this.#filters.push( pFilter );
+            }
+        }
+
+        initializeMappers( ...pMappers )
+        {
+            const mappers = flatArgs( ...pMappers || [] );
+            return mappers.filter( Filters.IS_MAPPER );
+        }
+
+        addMapper( pMapper )
+        {
+            if ( Filters.IS_MAPPER( pMapper ) )
+            {
+                this.#mappers.push( pMapper );
+            }
+        }
+
+        get returnJson()
+        {
+            return !!this.#returnJson;
+        }
+
+        _skip( pObject, pStack )
+        {
+            return !isNonNullObject( pObject ) || !isPopulated( pObject ) || detectCycles( asArray( pStack || [] ), 5, 3 );
+        }
+
+        _processEntries( pObject, pCallback, pVisited = new VisitedSet(), pStack = [] )
+        {
+            const visited = pVisited || new VisitedSet();
+
+            const stack = pStack || [];
+
+            let result = {}; // { ...pObject };
+
+            if ( this._skip( pObject, stack ) )
+            {
+                return result;
+            }
+
+            const callback = isFunction( pCallback ) ? pCallback : function( pEntry ) { return pEntry; };
+
+            const entries = objectEntries( pObject );
+
+            for( const entry of entries )
+            {
+                let key = entry.key || entry[0];
+                let value = entry.value || entry[1];
+
+                const updatedEntry = attempt( () => callback( entry, key, value ) );
+
+                value = updatedEntry?.value || updatedEntry?.[1];
+
+                key = updatedEntry?.key || updatedEntry?.[0] || key;
+
+                if ( !isBlank( key ) && isNonNullValue( value ) )
+                {
+                    result[key] = value;
+                }
+
+                const child = result[key];
+
+                if ( isNonNullObject( child ) && (child instanceof ObjectEntry) && !visited.has( child ) )
+                {
+                    visited.add( child );
+                    result[key] = this._processEntries( child, callback, visited, stack.concat( key ) );
+                }
+            }
+
+            return ObjectEntry.toObject( ObjectEntry.unwrapValues( result ) );
+        }
+
+        _filterEntries( pObject, pFilter, pVisited = new VisitedSet(), pStack = [] )
+        {
+            const filter = Filters.IS_FILTER( pFilter ) ? pFilter : Filters.IDENTITY;
+
+            const callback = ( entry ) =>
+            {
+                if ( entry instanceof ObjectEntry )
+                {
+                    return (entry.meetsCriteria( filter ) ? entry : null);
+                }
+                return (filter( entry ) ? entry : null);
+            };
+
+            return this._processEntries( pObject, callback, pVisited, pStack );
+        }
+
+        _mapEntries( pObject, pMapper, pVisited = new VisitedSet(), pStack = [] )
+        {
+            const mapper = Filters.IS_MAPPER( pMapper ) ? pMapper : Mappers.IDENTITY;
+
+            const callback = ( entry ) => entry instanceof ObjectEntry ? entry.map( mapper ) : mapper( entry );
+
+            return this._processEntries( pObject, callback, pVisited, pStack );
+        }
+
+        merge( ...pObjects )
+        {
+            const merged = mergeJson( ...pObjects );
+
+            let result = { ...merged };
+
+            for( const mapper of this.#mappers )
+            {
+                result = this._mapEntries( result, mapper );
+            }
+
+            for( const filter of this.#filters )
+            {
+                result = this._filterEntries( result, filter );
+            }
+
+            return this.returnJson ? asJson( result ) : result;
+        }
+    }
+
     let mod =
         {
             dependencies,

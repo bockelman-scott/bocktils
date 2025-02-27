@@ -13,8 +13,6 @@ const { isArray } = typeUtils;
 
 const { asInt } = stringUtils;
 
-const { JsonMerger } = classes;
-
 const objA =
     {
         node_0:
@@ -162,112 +160,5 @@ describe( "cherryPick", () =>
                                         } );
 
               console.log( picked );
-          } );
-} );
-
-
-describe( "mergeJson", () =>
-{
-    test( "mergeJson lets you combine 2 objects",
-          () =>
-          {
-              let merged = mergeJson( addresses, people );
-
-              expect( Object.keys( addresses ).length ).toEqual( 3 );
-
-              expect( Object.keys( people ).length ).toEqual( 4 );
-
-              expect( Object.keys( merged ).length ).toEqual( 4 );
-
-              expect( merged.Apex41.age ).toEqual( 32 );
-          } );
-} );
-
-describe( "JsonMerger", () =>
-{
-    test( "JsonMerger is used to merge one or more JSON objects",
-          () =>
-          {
-              const noArgs = new JsonMerger();
-
-              let merged = noArgs.merge( addresses, people );
-
-              expect( Object.keys( addresses ).length ).toEqual( 3 );
-
-              expect( Object.keys( people ).length ).toEqual( 4 );
-
-              expect( Object.keys( merged ).length ).toEqual( 4 );
-
-              expect( merged.Apex41.age ).toEqual( 32 );
-          } );
-
-    test( "JsonMerger is used to filter the results of merging one or more JSON objects",
-          () =>
-          {
-              const filter = function( pEntry )
-              {
-                  const entry = pEntry instanceof ObjectEntry ? pEntry : isArray( pEntry ) ? new ObjectEntry( pEntry ) : pEntry;
-
-                  if ( "Lombard" === entry?.city && asInt( entry?.age ) > 25 )
-                  {
-                      return entry;
-                  }
-
-                  return null;
-              };
-
-              const filtering = new JsonMerger( [filter] );
-
-              const merged = filtering.merge( addresses, people );
-
-              console.log( merged );
-
-              expect( Object.keys( addresses ).length ).toEqual( 3 );
-
-              expect( Object.keys( people ).length ).toEqual( 4 );
-
-              expect( Object.keys( merged ).length ).toEqual( 1 );
-
-              expect( merged.Apex41.age ).toEqual( 32 );
-          } );
-
-    test( "JsonMerger is used to map the results of merging one or more JSON objects",
-          () =>
-          {
-              const mapper = function( pEntry )
-              {
-                  let entry = pEntry instanceof ObjectEntry ? pEntry : isArray( pEntry ) ? new ObjectEntry( pEntry ) : pEntry;
-
-                  if ( entry?.city )
-                  {
-                      entry.city = "Bloomington";
-                  }
-                  if ( entry?.state )
-                  {
-                      entry.state = "IN";
-                  }
-                  if ( entry?.zip )
-                  {
-                      entry.zip = "47405";
-                  }
-
-                  return entry;
-              };
-
-              const mapping = new JsonMerger( [], [mapper] );
-
-              const merged = mapping.merge( addresses, people );
-
-              console.log( merged );
-
-              expect( Object.keys( addresses ).length ).toEqual( 3 );
-
-              expect( Object.keys( people ).length ).toEqual( 4 );
-
-              expect( Object.keys( merged ).length ).toEqual( 4 );
-
-              expect( merged.Apex41.city ).toEqual( "Bloomington" );
-              expect( merged.Apex41.state ).toEqual( "IN" );
-              expect( merged.Apex41.zip ).toEqual( "47405" );
           } );
 } );
