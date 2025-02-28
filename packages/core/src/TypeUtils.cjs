@@ -169,7 +169,10 @@ const $scope = constants?.$scope || function()
         objectMethods,
 
         isPromise = ( pArg ) => (pArg && (pArg.constructor === Promise || pArg === Promise || pArg instanceof Promise)),
-        isThenable = ( pArg ) => (pArg && (pArg.then && ("function" === typeof pArg.then)))
+        isThenable = ( pArg ) => (pArg && (pArg.then && ("function" === typeof pArg.then))),
+
+        is2dArray: _is2dArray,
+        isKeyValueArray: _isKeyValueArray,
 
     } = moduleUtils;
 
@@ -1637,6 +1640,10 @@ const $scope = constants?.$scope || function()
      * @alias module:TypeUtils.isTypedArray
      */
     const isTypedArray = ( pObj ) => (([...TYPED_ARRAYS].filter( e => isObject( pObj ) && pObj instanceof e ))?.length || 0) > 0;
+
+    const is2dArray = ( pArray ) => isArray( pArray ) && pArray.length > 0 && pArray.every( elem => isArray( elem ) );
+
+    const isKeyValueArray = ( pArray ) => is2dArray( pArray ) && pArray.every( elem => elem.length >= 2 && elem.length <= 3 && isString( elem[0] ) );
 
     /**
      * Returns true if the specified value is iterable.<br>
@@ -4886,6 +4893,8 @@ const $scope = constants?.$scope || function()
             isBoolean,
             isArray,
             isTypedArray,
+            is2dArray,
+            isKeyValueArray,
             isIterable,
             isAsyncIterable,
             isLikeArray,

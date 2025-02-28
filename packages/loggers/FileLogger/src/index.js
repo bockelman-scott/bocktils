@@ -4,12 +4,6 @@ const loggingUtils = require( "@toolbocks/logging" );
 
 const fileUtils = require( "@toolbocks/files" );
 
-/*
- const fs = require( "node:fs" );
- const fsAsync = require( "node:fs/promises" );
- const path = require( "node:path" );
- */
-
 const { constants, typeUtils, stringUtils, arrayUtils, localeUtils } = core;
 
 const {
@@ -52,7 +46,6 @@ const $scope = constants?.$scope || function()
     const modName = "FileLogger";
 
     const {
-        classes,
         _mt_str,
         _hyphen,
         _underscore,
@@ -61,15 +54,16 @@ const $scope = constants?.$scope || function()
         _fun,
         lock,
         populateOptions,
-        mergeOptions,
         no_op,
         IterationCap,
         isLogger,
         MILLIS_PER,
         MESSAGES_LOCALE,
         getMessagesLocale,
+        S_ERR_PREFIX,
         attempt,
         asyncAttempt,
+        moduleUtils,
     } = constants;
 
     const {
@@ -80,10 +74,11 @@ const $scope = constants?.$scope || function()
         isDate,
         isFunction,
         isNonNullObject,
-        firstMatchingType
+        firstMatchingType,
+        resolveMoment,
     } = typeUtils;
 
-    const { ToolBocksModule } = classes;
+    const { ToolBocksModule } = moduleUtils;
 
     const { asString, asInt, asFloat, isBlank, ucase, toBool } = stringUtils;
 
@@ -91,9 +86,7 @@ const $scope = constants?.$scope || function()
 
     const {
         resolvePath,
-        getFileName,
         getFileExtension,
-        getDirectoryName,
         exists,
         readFolder,
         stat,
@@ -121,6 +114,7 @@ const $scope = constants?.$scope || function()
      */
     const dependencies =
         {
+            moduleUtils,
             constants,
             typeUtils,
             stringUtils,
@@ -161,11 +155,9 @@ const $scope = constants?.$scope || function()
 
     const ZERO = "0";
 
-    const resolveMoment = ( pNow ) => isDate( pNow ) ? pNow || new Date() : new Date();
-
     const getMidnight = ( pDate ) => new Date( resolveMoment( pDate ) ).setHours( 23, 59, 59, 999 );
 
-    let modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+    let toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
     const messagesLocale = MESSAGES_LOCALE || getMessagesLocale();
 
@@ -216,21 +208,26 @@ const $scope = constants?.$scope || function()
             return Math.min( Math.max( TIMESTAMP_RESOLUTION.YEAR, asInt( this.#timestampResolution, DEFAULTS.TIMESTAMP_RESOLUTION ) ), TIMESTAMP_RESOLUTION.MILLISECOND );
         }
 
+        // noinspection OverlyComplexFunctionJS
         generateTimestamp( pDateOrFileInfo, pResolution = DEFAULTS.TIMESTAMP_RESOLUTION )
         {
             let date = isDate( pDateOrFileInfo ) ? pDateOrFileInfo : (pDateOrFileInfo instanceof FileObject ? pDateOrFileInfo.created : null);
 
-            if ( !isNull( date ) && isDate( date ) )
+            if ( isDate( date ) )
             {
                 const resolution = asInt( pResolution, 0 ) || this.timestampResolution;
 
                 const fullYear = resolution > 0 ? asString( date.getFullYear(), true ).padStart( 4, ZERO ) : _mt_str;
+
                 const month = resolution > 1 ? asString( date.getMonth() + 1, true ).padStart( 2, ZERO ) : _mt_str;
                 const day = resolution > 2 ? asString( date.getDate(), true ).padStart( 2, ZERO ) : _mt_str;
+
                 const hour = resolution > 3 ? asString( date.getHours(), true ).padStart( 2, ZERO ) : _mt_str;
                 const minute = resolution > 4 ? asString( date.getMinutes(), true ).padStart( 2, ZERO ) : _mt_str;
                 const second = resolution > 5 ? asString( date.getSeconds(), true ).padStart( 2, ZERO ) : _mt_str;
+
                 const millisecond = resolution > 6 ? asString( date.getMilliseconds(), true ).padStart( 3, ZERO ) : _mt_str;
+
                 return `${fullYear}${month}${day}${hour}${minute}${second}${millisecond}`;
             }
 
@@ -291,7 +288,7 @@ const $scope = constants?.$scope || function()
             return this.generateFileName();
         }
 
-        [Symbol.species]()
+        static get [Symbol.species]()
         {
             return this;
         }
@@ -1012,7 +1009,7 @@ const $scope = constants?.$scope || function()
         constructor( pFileLoggerOptions = DEFAULTS.FILE_LOGGER_OPTIONS,
                      pOtherOptions = DEFAULT_LOGGER_OPTIONS )
         {
-            super( mergeOptions( pFileLoggerOptions, pOtherOptions, DEFAULTS.FILE_LOGGER_OPTIONS ) );
+            super( populateOptions( pFileLoggerOptions, pOtherOptions, DEFAULTS.FILE_LOGGER_OPTIONS ) );
 
             const options = populateOptions( pFileLoggerOptions || super.options || {}, DEFAULTS.FILE_LOGGER_OPTIONS );
             const otherOptions = populateOptions( pOtherOptions || super.options || {}, DEFAULT_LOGGER_OPTIONS );
@@ -1043,7 +1040,7 @@ const $scope = constants?.$scope || function()
 
             this._initializeDirectory();
 
-            let { filename, filePath } = this.calculateFilePath();
+            let { filename, filePath } = this.calculateFileNameAndFilePath();
 
             this._initializeLogFile( filename, filePath, 0 );
 
@@ -1053,8 +1050,8 @@ const $scope = constants?.$scope || function()
 
             this._initializeRetention( now );
 
-            this.#lastRotationDate = null;
-            this.#lastRetentionPolicyRunDate = null;
+            this.#lastRotationDate = options?.lastRotationDate || otherOptions?.lastRotationDate || null;
+            this.#lastRetentionPolicyRunDate = options?.lastRetentionPolicyRunDate || otherOptions?.lastRetentionPolicyRunDate || null;
         }
 
         get options()
@@ -1101,17 +1098,20 @@ const $scope = constants?.$scope || function()
 
         get filepath()
         {
-            return asString( this.#currentFilePath, true ) || this.calculateFilePath().filePath;
+            return asString( this.#currentFilePath, true ) || this.calculateFileNameAndFilePath().filePath;
         }
 
         get filename()
         {
-            return asString( this.#currentFilename, true ) || this.calculateFilePath().filename;
+            return asString( this.#currentFilename, true ) || this.calculateFileNameAndFilePath().filename;
         }
 
         get timestampFormatter()
         {
-            return this.#timestampFormatter;
+            return this.#timestampFormatter ||
+                {
+                    format: ( pDate ) => pDate.toLocaleString( [this.locale], options )
+                };
         }
 
         get asynchronous()
@@ -1126,12 +1126,12 @@ const $scope = constants?.$scope || function()
 
         get filter()
         {
-            return this.#filter || super.filter;
+            return resolveFilter( this.#filter || super.filter, this.options ) || Filters.IDENTITY;
         }
 
         get formatter()
         {
-            return this.#formatter || super.logFormatter;
+            return resolveFormatter( this.#formatter || this.options.logFormatter || this.otherOptions.logFormatter || super.logFormatter || LogFormatter.DEFAULT ) || LogFormatter.DEFAULT;
         }
 
         get logFormatter()
@@ -1141,12 +1141,12 @@ const $scope = constants?.$scope || function()
 
         get retentionPolicy()
         {
-            return this.#retentionPolicy;
+            return this.#retentionPolicy || LogFileRetentionPolicy.DEFAULT;
         }
 
         get rotationPolicy()
         {
-            return this.#rotationPolicy;
+            return this.#rotationPolicy || LogFileRotationPolicy.DEFAULT;
         }
 
         get suspended()
@@ -1178,12 +1178,44 @@ const $scope = constants?.$scope || function()
 
                 if ( !directoryExists )
                 {
-                    konsole.error( "Unable to create usable log directory", this.#directory, "This logger will be disabled" );
+                    konsole.error( "Unable to create usable log directory", this.#directory, "This logger will be disabled", this );
 
                     this.#level = LogLevel.OFF;
+
                     this.disable();
                 }
             }
+        }
+
+        verifyLogFile( pFilePath, pFileName )
+        {
+            let needsToBeCreated = false;
+
+            const stats = attempt( () => statSync( pFilePath ) );
+
+            if ( stats && stats.isFile() )
+            {
+                try
+                {
+                    accessSync( pFilePath, fsConstants.F_OK );
+
+                    this.#currentFilename = pFileName;
+                    this.#currentFilePath = pFilePath;
+
+                    konsole.info( "Logging to", pFilePath, "is", this.enabled ? "enabled" : "disabled" );
+                }
+                catch( ex )
+                {
+                    needsToBeCreated = true;
+                    konsole.warn( "Unable to access log file", pFilePath, ex );
+                }
+            }
+            else
+            {
+                return true;
+            }
+
+            return needsToBeCreated;
         }
 
         _initializeLogFile( pFileName, pFilePath, pRetries )
@@ -1193,13 +1225,16 @@ const $scope = constants?.$scope || function()
             const {
                 filename = asString( pFileName || this.#currentFilename, true ),
                 filePath = asString( pFilePath || this.#currentFilePath, true )
-            } = this.calculateFilePath();
+            } = this.calculateFileNameAndFilePath();
 
             if ( retries > 2 )
             {
-                konsole.error( "Unable to create log file", filePath, "after", retries, "retries. This logger is disabled" );
+                konsole.error( "Unable to create log file", filePath, "after", retries, "attempts.", "This logger is disabled", this );
+
                 this.#level = LogLevel.OFF;
+
                 this.disable();
+
                 return false;
             }
 
@@ -1209,31 +1244,7 @@ const $scope = constants?.$scope || function()
 
             if ( !needsToBeCreated )
             {
-                const stats = statSync( filePath );
-
-                if ( stats.isFile() )
-                {
-                    try
-                    {
-                        accessSync( filePath, fsConstants.F_OK );
-
-                        this.#currentFilename = filename;
-                        this.#currentFilePath = filePath;
-
-                        needsToBeCreated = false;
-
-                        konsole.info( "Logging to", filePath, "is", this.enabled ? "enabled" : "disabled" );
-                    }
-                    catch( ex )
-                    {
-                        needsToBeCreated = true;
-                        konsole.warn( "Unable to access log file", filePath, ex );
-                    }
-                }
-                else
-                {
-                    needsToBeCreated = true;
-                }
+                needsToBeCreated = this.verifyLogFile( filePath, filename );
             }
 
             if ( needsToBeCreated )
@@ -1244,7 +1255,7 @@ const $scope = constants?.$scope || function()
                 {
                     const fileCreationDate = new Date().toLocaleString( this.locale );
 
-                    writeTextFileSync( filePath, "********** LOG FILE CREATED AT " + fileCreationDate + " **********\n\n", { encoding: "utf8" } );
+                    writeTextFileSync( filePath, "********** LOG FILE CREATED: " + fileCreationDate + " **********\n\n", { encoding: "utf8" } );
 
                     needsToBeCreated = !exists( filePath );
 
@@ -1269,7 +1280,7 @@ const $scope = constants?.$scope || function()
             return !needsToBeCreated;
         }
 
-        calculateFilePath( pDateOrFileInfo = null, pResolution = DEFAULTS.TIMESTAMP_RESOLUTION )
+        calculateFileNameAndFilePath( pDateOrFileInfo = null, pResolution = DEFAULTS.TIMESTAMP_RESOLUTION )
         {
             const pattern = this.filePattern;
 
@@ -1357,11 +1368,23 @@ const $scope = constants?.$scope || function()
                 this.#stream.end( () =>
                                   {
                                       konsole.log( "Closed log file:", (me || this).filepath );
+
+                                      if ( me?.#stream )
+                                      {
+                                          me.#stream.removeAllListeners();
+                                      }
+
+                                      me.#stream = null; // Prevent further writes
+
+                                      me.suspended = true;
                                   } );
 
-                this.#stream.removeAllListeners();
+                if ( this.#stream )
+                {
+                    this.#stream.removeAllListeners();
 
-                this.#stream = null; // Prevent further writes
+                    this.#stream = null; // Prevent further writes
+                }
 
                 this.suspended = true;
             }
@@ -1373,19 +1396,28 @@ const $scope = constants?.$scope || function()
         {
             const me = this;
 
-            if ( this.isOpen() )
-            {
-                (me || this).flush().then( no_op ).catch( ex => konsole.error( ex ) );
+            attempt( () => (me || this).flush().then( no_op ).catch( ex => konsole.error( ex ) ) );
 
+            if ( (me || this).#stream )
+            {
                 (me || this).#stream.end( () =>
                                           {
                                               konsole.log( "Force closed the log file:", (me || this).filepath, "Some messages may have been lost", this.#queue );
+
+                                              if ( me?.#stream )
+                                              {
+                                                  attempt( () => me.#stream.removeAllListeners() );
+                                              }
+
+                                              me.#stream = null;  // Prevent further writes
+
+                                              me.suspended = true;
                                           } );
 
                 (me || this).#stream = null; // Prevent further writes
-
-                (me || this).suspended = true;
             }
+
+            (me || this).suspended = true;
         }
 
         async writeLogRecord( pLogRecord )
@@ -1431,9 +1463,9 @@ const $scope = constants?.$scope || function()
                     {
                         konsole.error( "An error occurred while writing to the log file:", (me || this).filepath, err );
 
-                        (me || this)._close().then( no_op ).catch( ex => konsole.error( ex ) );
-
                         (me || this).#queue.enqueue( msg );
+
+                        (me || this)._close().then( no_op ).catch( ex => konsole.error( ex ) );
                     }
                 } );
             }
@@ -1463,7 +1495,7 @@ const $scope = constants?.$scope || function()
 
                 konsole.log( "Rotated log file due to maximum size reached:", (me || this).filepath );
 
-                this.suspended = false;
+                this.suspended = !this.isOpen();
             }
         }
 
@@ -1481,44 +1513,37 @@ const $scope = constants?.$scope || function()
             }
         }
 
-        info( ...pData )
+        _logIf( pLevel, ...pData )
         {
-            if ( this.enabled && this.level.isEnabled( LogLevel.INFO ) )
+            if ( this.enabled && this.level.isEnabled( pLevel ) )
             {
                 this._log( ...pData ).then( no_op ).catch( ex => konsole.error( ex ) );
             }
+        }
+
+        info( ...pData )
+        {
+            this._logIf( LogLevel.INFO, ...pData );
         }
 
         warn( ...pData )
         {
-            if ( this.enabled && this.level.isEnabled( LogLevel.WARN ) )
-            {
-                this._log( ...pData ).then( no_op ).catch( ex => konsole.error( ex ) );
-            }
+            this._logIf( LogLevel.WARN, ...pData );
         }
 
         error( ...pData )
         {
-            if ( this.enabled && this.level.isEnabled( LogLevel.ERROR ) )
-            {
-                this._log( ...pData ).then( no_op ).catch( ex => konsole.error( ex ) );
-            }
+            this._logIf( LogLevel.ERROR, ...pData );
         }
 
         debug( ...pData )
         {
-            if ( this.enabled && this.level.isEnabled( LogLevel.DEBUG ) )
-            {
-                this._log( ...pData ).then( no_op ).catch( ex => konsole.error( ex ) );
-            }
+            this._logIf( LogLevel.DEBUG, ...pData );
         }
 
         trace( ...pData )
         {
-            if ( this.enabled && this.level.isEnabled( LogLevel.TRACE ) )
-            {
-                this._log( ...pData ).then( no_op ).catch( ex => konsole.error( ex ) );
-            }
+            this._logIf( LogLevel.TRACE, ...pData );
         }
 
         async flush()
@@ -1542,6 +1567,75 @@ const $scope = constants?.$scope || function()
             }
         }
 
+        nextAvailableArchiveFilePath( pPath, pExt, pSep, pCounter )
+        {
+            const sep = asString( pSep, true ) || _underscore;
+
+            const ext = asString( pExt, true ) || ".log";
+
+            const counter = asString( asInt( pCounter, 1 ), true ) || "1";
+
+            let path = asString( pPath, true );
+
+            path = path.replace( new RegExp( ("\\." + ext.replace( /^\.+/, _mt_str ) + RX_EOS) ), _mt_str );
+
+            path = path.replace( new RegExp( sep + "\\d{1,3}$|" + sep + counter + RX_EOS ), _mt_str );
+
+            return path + sep + counter + (ext || ".log");
+        }
+
+        async calculateArchiveFilePath( pThis, pTimestampResolution )
+        {
+            const me = pThis || this;
+
+            const filePattern = me.filePattern;
+
+            const filepath = me.filepath;
+
+            const sep = filePattern.separator || _underscore;
+
+            const fileInfo = FileObject.from( filepath );
+
+            const archivedFilePath = me.calculateFileNameAndFilePath( fileInfo, asInt( pTimestampResolution, filePattern.timestampResolution ) );
+
+            let archivedPath = resolvePath( archivedFilePath.filePath );
+
+            let extension = filePattern.extension || getFileExtension( archivedPath );
+
+            let fileExists = await exists( archivedPath );
+
+            let counter = 1;
+
+            const iterationCap = new IterationCap( 99 );
+
+            while ( fileExists && !iterationCap.reached )
+            {
+                archivedPath = this.nextAvailableArchiveFilePath( archivedPath, extension, sep, counter++ );
+
+                fileExists = await exists( archivedPath );
+            }
+
+            return archivedPath;
+        }
+
+        resetRotationTimer( pThis, pTimestampResolution, pResetInterval )
+        {
+            const me = pThis || this;
+
+            const rotationHandler = async function() { await me.rotateLogFile.call( me, me, pTimestampResolution, pResetInterval ); };
+
+            if ( !(isNull( me._rotationTimerId ) || asInt( me._rotationTimerId ) === 0 || !!pResetInterval) )
+            {
+                clearTimeout( me._rotationTimerId );
+            }
+
+            const policy = me.rotationPolicy || DEFAULTS.FILE_ROTATION_POLICY;
+
+            me._rotationTimerId = setTimeout( rotationHandler, policy.milliseconds );
+
+            return me._rotationTimerId;
+        }
+
         async rotateLogFile( pThis, pTimestampResolution, pResetInterval = true )
         {
             const me = pThis || this;
@@ -1552,57 +1646,35 @@ const $scope = constants?.$scope || function()
 
             const filename = me.filename;
 
-            const fileInfo = FileObject.from( filepath );
 
-            const archivedFilePath = me.calculateFilePath( fileInfo, asInt( pTimestampResolution, filePattern.timestampResolution ) );
-
-            let archivedPath = resolvePath( archivedFilePath.filePath );
-
-            let fileExists = await exists( archivedPath );
-
-            let counter = 1;
-
-            while ( fileExists )
-            {
-                const sep = filePattern.separator || _underscore;
-
-                let extension = filePattern.extension || getFileExtension( archivedPath );
-
-                archivedPath = archivedPath.replace( new RegExp( ("\\." + extension.replace( /^\.+/, _mt_str ) + RX_EOS) ), _mt_str );
-
-                archivedPath = archivedPath.replace( new RegExp( sep + "\\d{1,3}$|" + sep + counter + RX_EOS ), _mt_str );
-
-                archivedPath += sep + (asString( counter++ ).trim()) + (extension || ".log");
-
-                fileExists = await exists( archivedPath );
-            }
+            const archivedPath = await me.calculateArchiveFilePath( (me || this),
+                                                                    asInt( pTimestampResolution,
+                                                                           filePattern.timestampResolution ) );
 
             await me.flush().then( no_op ).catch( ex => konsole.error( ex ) );
 
             await me._close();
 
+
             await rename( filepath, archivedPath );
 
-            konsole.info( "Rotating log file:", me.filepath, "copied to:", archivedPath );
+
+            const now = new Date();
+
+            konsole.info( "Rotating log file:", me.filepath, "copied to:", archivedPath, now );
+
+            this.#lastRotationDate = now;
+
 
             await me._initializeLogFile( filename, filepath, 0 );
 
             await me._open();
 
-            const rotationHandler = async function() { await me.rotateLogFile.call( me, me, pTimestampResolution, pResetInterval ); };
 
-            if ( isNull( me._rotationTimerId ) || asInt( me._rotationTimerId ) === 0 || !!pResetInterval )
+            if ( !!pResetInterval )
             {
-                clearTimeout( me._rotationTimerId );
-
-                const policy = me.rotationPolicy || DEFAULTS.FILE_ROTATION_POLICY;
-
-                me._rotationTimerId = setTimeout( rotationHandler, policy.milliseconds );
+                me.resetRotationTimer( me, pTimestampResolution, pResetInterval );
             }
-
-            const now = new Date();
-
-            this.#lastRotationDate = now;
 
             const runRetention = (isNull( me._retentionTimerId )) || (isDate( me.lastRetentionPolicyRunDate ) && (me.lastRetentionPolicyRunDate.getTime() - now.getTime()) > MILLIS_PER.DAY);
 
@@ -1715,8 +1787,6 @@ const $scope = constants?.$scope || function()
             TIMESTAMP_RESOLUTION,
             DEFAULTS: lock( DEFAULTS ),
             RETENTION_OPERATION,
-            resolveRetentionOperation,
-            resolveArchiver,
             resolveError,
             resolveSource,
             resolveFormatter,
@@ -1731,7 +1801,7 @@ const $scope = constants?.$scope || function()
             messagesLocale
         };
 
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 

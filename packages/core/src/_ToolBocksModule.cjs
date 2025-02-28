@@ -5211,9 +5211,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         for( let entry of entries )
         {
-            const key = entry?.key || entry[0] || _mt_str;
+            const key = ObjectEntry.getKey( entry );
 
-            let value = entry?.value || entry[1] || null;
+            let value = ObjectEntry.getValue( entry );
 
             if ( !(isNull( key ) || isNull( value ) || key === _mt_str) )
             {
@@ -6081,6 +6081,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     isFunc,
                     isObj,
                     isArray,
+                    is2dArray,
+                    isKeyValueArray,
                     isDate,
                     isRegExp,
                     isNum,

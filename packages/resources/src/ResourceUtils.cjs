@@ -12,20 +12,28 @@
  * <br>
  */
 
-/*
+/**
  * Import the core modules of the ToolBocks&trade; library.
  * These modules provide a number of essential utility functions
  * and foundational features provided by the ToolBocks&trade; framework.
  * <br>
+ * @type {ToolBocksModule|Object}
  */
 const core = require( "@toolbocks/core" );
+
+/**
+ * Import the file system utilities for execution-environment agnostic functionality
+ * @type {ToolBocksModule|Object}
+ */
+const fileUtils = require( "@toolbocks/files" );
 
 /**
  * Import the JSON related modules which expose functions for working with JSON data,<br>
  * even structures that might contain circular references or self-references.
  * <br>
+ * @type {ToolBocksModule|Object}
  */
-const jsonModule = require( "@toolbocks/json" );
+const jsonUtils = require( "@toolbocks/json" );
 
 /**
  * We define a number of variables that will be assigned according to the current execution environment.
@@ -140,10 +148,7 @@ defaultPath = path.resolve( currentDirectory, "../messages/defaults.json" );
 
 /*## environment-specific:browser end ##*/
 
-
 const { constants, typeUtils, stringUtils, arrayUtils, localeUtils } = core;
-
-const { jsonUtils } = jsonModule;
 
 /* define a variable for typeof undefined **/
 const { _ud = "undefined" } = constants;
@@ -173,11 +178,12 @@ const $scope = constants?.$scope || function()
     const modName = "ResourceUtils";
 
     const {
-        classes,
         _mt_str,
         _spc,
         _hyphen,
         _underscore,
+        _equals,
+        _colon,
         _dot,
         _lf,
         _str,
@@ -205,6 +211,7 @@ const $scope = constants?.$scope || function()
         getMessagesLocale,
         isFulfilled,
         isRejected,
+        moduleUtils,
     } = constants;
 
     const {
@@ -216,6 +223,8 @@ const $scope = constants?.$scope || function()
         isFunction,
         isObject,
         isArray,
+        is2dArray,
+        isKeyValueArray,
         isClass,
         isNonNullObject,
         isNonNullValue,
@@ -225,14 +234,25 @@ const $scope = constants?.$scope || function()
         isAssignableTo
     } = typeUtils;
 
-    const { ToolBocksModule } = classes;
+    const {
+        ToolBocksModule,
+        ObjectEntry,
+        objectEntries,
+        objectKeys,
+        attempt,
+        asyncAttempt,
+        resolveError
+    } = moduleUtils;
 
-    const { asString, asInt, asFloat, isBlank, lcase, ucase, toUnixPath, toBool } = stringUtils;
+    const { asString, asInt, asFloat, isBlank, isJson, lcase, ucase, toUnixPath, toBool } = stringUtils;
 
     const { varargs, flatArgs, asArray, unique, Filters, AsyncBoundedQueue } = arrayUtils;
 
     const { DEFAULT_LOCALE, DEFAULT_LOCALE_STRING, resolveLocale, LocaleResourcesBase } = localeUtils;
 
+    const { asJson, parseJson } = jsonUtils;
+
+    const { resolvePath, readTextFile, writeTextFile } = fileUtils;
     /**
      * This is a dictionary of this module's dependencies.
      * <br>
@@ -245,6 +265,7 @@ const $scope = constants?.$scope || function()
      */
     const dependencies =
         {
+            moduleUtils,
             constants,
             typeUtils,
             stringUtils,
@@ -252,9 +273,9 @@ const $scope = constants?.$scope || function()
             localeUtils
         };
 
-    let modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+    let toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
-    const executionEnvironment = modulePrototype.executionEnvironment;
+    const executionEnvironment = toolBocksModule.executionEnvironment;
 
     const isNodeJs = executionEnvironment.isNode();
     const isDeno = executionEnvironment.isDeno();
@@ -278,12 +299,17 @@ const $scope = constants?.$scope || function()
 
         get defaults()
         {
-            return (this.hasValidDefaults() ? lock( this.#defaults ) : null);
+            return (this.hasValidDefaults() ? lock( this.#defaults ) : lock( new Map() ));
         }
 
         set defaults( pDefaults )
         {
-            this.#defaults = Properties.isProperties( pDefaults ) && this !== pDefaults ? pDefaults : null;
+            this.#defaults = Properties.isProperties( pDefaults ) && this !== pDefaults ? pDefaults : new Map();
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
         }
 
         [Symbol.iterator]()
@@ -297,8 +323,7 @@ const $scope = constants?.$scope || function()
 
             if ( this.hasValidDefaults() )
             {
-                const me = this;
-                this.#defaults.forEach( ( v, k ) => !(me || this).has( k ) ? arr.push( [k, v] ) : no_op );
+                this.defaults.forEach( ( v, k ) => !super.has( k ) ? arr.push( [k, v] ) : no_op );
             }
 
             return lock( [...arr] );
@@ -310,8 +335,7 @@ const $scope = constants?.$scope || function()
 
             if ( this.hasValidDefaults() )
             {
-                const me = this;
-                this.#defaults.forEach( ( v, k ) => !(me || this).has( k ) ? arr.push( k ) : no_op );
+                this.defaults.forEach( ( v, k ) => !super.has( k ) ? arr.push( k ) : no_op );
             }
 
             return lock( [...arr] );
@@ -323,8 +347,7 @@ const $scope = constants?.$scope || function()
 
             if ( this.hasValidDefaults() )
             {
-                const me = this;
-                this.#defaults.forEach( ( v, k ) => !(me || this).has( k ) ? arr.push( v ) : no_op );
+                this.defaults.forEach( ( v, k ) => !super.has( k ) ? arr.push( v ) : no_op );
             }
 
             return lock( [...arr] );
@@ -352,7 +375,7 @@ const $scope = constants?.$scope || function()
 
             if ( isNull( value ) && this.hasValidDefaults() )
             {
-                value = this.#defaults.get( pKey );
+                value = this.defaults.get( pKey );
             }
 
             return value;
@@ -360,19 +383,89 @@ const $scope = constants?.$scope || function()
 
         has( pKey )
         {
-            return super.has( pKey ) || (this.hasValidDefaults() && this.#defaults.has( pKey ));
+            return super.has( pKey ) || (this.hasValidDefaults() && this.defaults.has( pKey ));
         }
 
         hasValidDefaults()
         {
-            return Properties.isProperties( this.#defaults ) && (this.#defaults !== this);
+            return Properties.isProperties( this.#defaults ) && (this.#defaults !== this) && (this.#defaults.size > 0);
         }
 
+        load( pSource, pOptions )
+        {
+            const options = populateOptions( pOptions, DEFAULT_PROPERTIES_OPTIONS );
+
+            let source = pSource;
+
+            if ( isString( source ) )
+            {
+                source = Properties.fromPropertiesString( source, options );
+            }
+            else if ( isArray( source ) )
+            {
+                if ( isKeyValueArray( source ) )
+                {
+                    source = Properties.from2dArray( options, source );
+                }
+                else
+                {
+                    source = Properties.fromLines( source, options );
+                }
+            }
+            else if ( isMap( source ) )
+            {
+                source = Properties.fromObject( source, options );
+            }
+
+            if ( Properties.isProperties( source ) )
+            {
+                source.forEach( ( v, k ) => this.set( k, v ) );
+            }
+
+            return this;
+        }
     }
 
     Properties.isProperties = function( pObject )
     {
         return isNonNullObject( pObject ) && (isMap( pObject ) || pObject instanceof Properties);
+    };
+
+    const DEFAULT_PROPERTIES_OPTIONS =
+        {
+            assignment: _equals,
+            trim: true,
+        };
+
+    Properties.from2dArray = function( pOptions, pKvPairs )
+    {
+        const options = populateOptions( pOptions, DEFAULT_PROPERTIES_OPTIONS );
+
+        let kvPairs = asArray( pKvPairs );
+
+        if ( options.trim )
+        {
+            kvPairs = kvPairs.map( e => e.map( e => e.trim() ) );
+        }
+
+        const map = new Map( kvPairs );
+
+        const properties = new Properties();
+
+        return properties.load( map, options );
+    };
+
+    Properties.fromLines = function( pArr, pOptions )
+    {
+        const options = populateOptions( pOptions, DEFAULT_PROPERTIES_OPTIONS );
+
+        let arr = asArray( pArr );
+
+        arr = arr.map( e => e.trim() ).filter( e => !isBlank( e ) && (e.includes( options.assignment )) );
+
+        let kvPairs = arr.map( e => e.split( options.assignment ) );
+
+        return Properties.from2dArray( options, kvPairs );
     };
 
     /**
@@ -389,17 +482,51 @@ const $scope = constants?.$scope || function()
      */
     Properties.fromPropertiesString = function( pString, pOptions )
     {
+        if ( isString( pString ) )
+        {
+            const options = populateOptions( pOptions, DEFAULT_PROPERTIES_OPTIONS );
 
+            let arr = asString( pString, true ).replace( /\\[\r\n]\s*/, _mt_str ).split( /[\r\n]+/ );
+
+            arr = arr.map( e => e.replace( /^\s*/, _mt_str ).replace( /\s*$/, _mt_str ) );
+
+            arr = arr.filter( e => !isBlank( e ) && !(e.startsWith( "#" ) || e.startsWith( "!" )) );
+
+            return Properties.fromLines( arr, options );
+        }
     };
 
     Properties.fromObject = function( pObject, pOptions )
     {
+        let properties = new Properties();
 
+        if ( isNonNullObject( pObject ) )
+        {
+            const options = populateOptions( pOptions, DEFAULT_PROPERTIES_OPTIONS );
+
+            if ( isMap( pObject ) )
+            {
+                const map = new Map( pObject );
+                map.forEach( ( v, k ) => properties.set( k, v ) );
+            }
+            else if ( isArray( pObject ) || isString( pObject ) )
+            {
+                properties = properties.load( pObject, options );
+            }
+            else
+            {
+                const filtered = objectEntries( pObject ).filter( e => isString( ObjectEntry.getKey( e ) ) && isString( ObjectEntry.getValue( e ) ) );
+                properties = properties.load( ObjectEntry.unwrapValues( filtered ), options );
+            }
+        }
+
+        return properties;
     };
 
     Properties.fromJsonString = function( pJson, pOptions )
     {
-
+        const obj = attempt( () => parseJson( pJson ) );
+        return Properties.fromObject( obj, pOptions );
     };
 
     /**
@@ -415,7 +542,26 @@ const $scope = constants?.$scope || function()
      */
     Properties.fromFile = async function( pFilePath, pOptions )
     {
+        const options = populateOptions( pOptions, DEFAULT_PROPERTIES_OPTIONS );
 
+        const filePath = resolvePath( pFilePath );
+
+        const contents = await asyncAttempt( () => readTextFile( filePath ) );
+
+        if ( isString( contents ) )
+        {
+            return (isJson( contents )) ?
+                   Properties.fromJsonString( contents, options ) :
+                   Properties.fromPropertiesString( contents, options );
+        }
+
+        const message = `Failed to read properties file: ${filePath}`;
+
+        let error = resolveError( new Error( message ) );
+
+        toolBocksModule.reportError( error, message, S_ERROR, Properties.fromFile, [pFilePath, pOptions] );
+
+        return new Properties();
     };
 
     /**
@@ -425,7 +571,6 @@ const $scope = constants?.$scope || function()
     {
 
     };
-
 
     /**
      * Represents the default configuration options for the application or library.
@@ -444,7 +589,6 @@ const $scope = constants?.$scope || function()
             paths: null,
             locales: null
         };
-
 
     /**
      * Returns true if the value is a valid resource value
@@ -1058,7 +1202,7 @@ const $scope = constants?.$scope || function()
         #locale;
         #localeCode;
 
-        #resources = {};
+        #resources = new Properties();
 
         constructor( pLocale, ...pResources )
         {
@@ -1085,7 +1229,7 @@ const $scope = constants?.$scope || function()
                     {
                         const key = elem.key.toString();
 
-                        this.#resources[key] = elem;
+                        this.#resources.set( key, elem );
 
                         this.expandTree( key, elem );
                     }
@@ -1106,20 +1250,24 @@ const $scope = constants?.$scope || function()
 
                 const keys = pKey.split( _dot );
 
-                while ( keys.length > 1 && null != obj )
+                while ( keys.length > 1 && (isMap( obj ) || Properties.isProperties( obj )) )
                 {
                     let key = keys.shift();
 
-                    obj[key] = obj[key] || {};
+                    obj.set( key, obj.get( key ) || new Properties() );
 
                     const remaining = keys.length > 0 ? keys.join( _dot ) : null;
 
                     if ( remaining )
                     {
-                        obj[key][remaining] = obj[key][remaining] || pElem;
+                        const node = obj.get( key );
+                        if ( isMap( node ) || Properties.isProperties( node ) )
+                        {
+                            node.set( remaining, pElem );
+                        }
                     }
 
-                    obj = obj[key];
+                    obj = obj.get( key );
                 }
             }
         }
@@ -1136,12 +1284,12 @@ const $scope = constants?.$scope || function()
 
         get entries()
         {
-            return lock( Object.entries( this.resources ) );
+            return lock( [...(this.resources.entries() || [])] );
         }
 
         get keys()
         {
-            return lock( Object.keys( this.resources ) );
+            return lock( [...(this.resources.keys() || [])] );
         }
 
         isResource( pObject )
@@ -1155,7 +1303,7 @@ const $scope = constants?.$scope || function()
 
             const k = asString( resourceKey.toString(), true );
 
-            let obj = this.resources[k];
+            let obj = this.resources.get( k );
 
             if ( !isNull( obj ) && this.isResource( obj ) )
             {
@@ -1166,10 +1314,10 @@ const $scope = constants?.$scope || function()
 
             obj = this.resources;
 
-            while ( keys.length > 0 && null != obj )
+            while ( keys.length > 0 && (isMap( obj ) || Properties.isProperties( obj )) )
             {
                 let key = keys.shift();
-                obj = obj[key];
+                obj = obj.get( key );
 
                 if ( !isNull( obj ) && this.isResource( obj ) )
                 {
@@ -1195,10 +1343,10 @@ const $scope = constants?.$scope || function()
 
             let obj = this.resources;
 
-            while ( keys.length > 0 && null != obj )
+            while ( keys.length > 0 && (isMap( obj ) || Properties.isProperties( obj )) )
             {
                 let key = keys.shift();
-                obj = obj[key];
+                obj = obj.get( key );
             }
 
             if ( isNull( obj ) )
@@ -1216,7 +1364,7 @@ const $scope = constants?.$scope || function()
     {
         #defaultMap;
 
-        #defaultResources = {};
+        #defaultResources = new Properties();
 
         constructor( pLocale, pDefaultMap, ...pResources )
         {
@@ -1224,7 +1372,7 @@ const $scope = constants?.$scope || function()
 
             this.#defaultMap = ResourceMap.FILTER( pDefaultMap ) ? pDefaultMap : new ResourceMap( DEFAULT_LOCALE, { ...pDefaultMap, ...pResources } );
 
-            this.#defaultResources = this.#defaultMap?.resources || { ...pResources };
+            this.#defaultResources = this.#defaultMap?.resources; // || { ...pResources };
         }
 
         static get [Symbol.species]()
@@ -1239,7 +1387,7 @@ const $scope = constants?.$scope || function()
 
         get resources()
         {
-            return { ...(this.#defaultResources || this.defaultMap.resources), ...super.resources };
+            return new Properties(); //{ ...(this.#defaultResources || this.defaultMap.resources), ...super.resources };
         }
 
         get entries()
@@ -1293,7 +1441,7 @@ const $scope = constants?.$scope || function()
     class ResourceBundle extends LocaleResourcesBase
     {
         #resourceMaps = {};
-        #resources = {};
+        #resources = new Properties();
 
         constructor( ...pResourceMaps )
         {
@@ -1314,9 +1462,9 @@ const $scope = constants?.$scope || function()
                     continue;
                 }
 
-                const resources = { ...(rsrcMap.resources || {}) };
+                const resources = Properties.from2dArray( [(rsrcMap.resources.entries() || [])] );
 
-                if ( Object.keys( resources ).length <= 0 )
+                if ( objectKeys( resources ).length <= 0 )
                 {
                     continue;
                 }
@@ -1490,17 +1638,13 @@ const $scope = constants?.$scope || function()
 
             for( let p of paths )
             {
-                if ( isNodeJs )
-                {
-                    promises.push( fsAsync.readFile( path.resolve( p ), "utf8" ) );
-                }
-                else if ( isDeno )
-                {
-                    promises.push( await Deno.readTextFile( p ) );
-                }
-                else if ( isBrowser )
+                if ( isBrowser )
                 {
                     promises.push( fetch( p ).then( response => response.text() ) );
+                }
+                else
+                {
+                    promises.push( readTextFile( resolvePath( p ) ) );
                 }
             }
 
@@ -1717,7 +1861,7 @@ const $scope = constants?.$scope || function()
         };
 
 
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 

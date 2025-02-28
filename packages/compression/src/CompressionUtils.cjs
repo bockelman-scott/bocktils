@@ -46,7 +46,7 @@ const fileUtils = require( "@toolbocks/files" );
 const admZip = require( "adm-zip" );
 
 const fs = require( "node:fs" );
-const fsAsync = require( "node:fs/promises" );
+
 const { pipeline } = require( "node:stream/promises" );
 const { Readable } = require( "node:stream" );
 
@@ -111,12 +111,18 @@ const {
         resolvePath,
         removeExtension,
         replaceExtension,
+        lstat,
         exists,
+        readFile,
+        writeFile,
+        opendir,
         makeDirectory,
         asyncMakeDirectory,
         removeDirectory,
         asyncRemoveDirectory,
+        readLink,
         link,
+        unlink,
         asyncLink,
         isSymbolicLink,
         resolveDirectoryPath,
@@ -1171,7 +1177,7 @@ const {
 
         static async fromFile( pFilePath )
         {
-            const buffer = await fsAsync.readFile( pFilePath );
+            const buffer = await readFile( pFilePath );
             return CompressionFormat.fromBuffer( buffer );
         }
     }
@@ -1378,7 +1384,7 @@ const {
 
         try
         {
-            const buffer = isBuffer( pInputPath ) ? Buffer.from( pInputPath ) : await fsAsync.readFile( pInputPath );
+            const buffer = isBuffer( pInputPath ) ? Buffer.from( pInputPath ) : await readFile( pInputPath );
 
             const entries = !isBlank( pPwd ) ? getEntries( buffer, pPwd ) : getEntries( buffer, _mt_str );
 
@@ -1440,7 +1446,7 @@ const {
 
         try
         {
-            const dir = fsAsync.opendir( resolvePath( pInputPath ) );
+            const dir = opendir( resolvePath( pInputPath ) );
 
             if ( dir )
             {
@@ -1473,7 +1479,7 @@ const {
 
     async function pkUnzipBuffer( pInput, pOutput, pOutputType, pPwd )
     {
-        const buffer = isBuffer( pInput ) ? Buffer.from( pInput ) : await fsAsync.readFile( pInput );
+        const buffer = isBuffer( pInput ) ? Buffer.from( pInput ) : await readFile( pInput );
 
         const entries = getEntries( buffer, pPwd );
 
@@ -1496,7 +1502,7 @@ const {
                         const name = entry.name || ("zipEntry" + ((n++ > 0) ? ("_" + n) : ""));
                         const data = asArray( entry.getData() );
                         const outPath = resolvePath( [output, name] );
-                        await fsAsync.writeFile( outPath, data ).catch( ex => toolbocksModule.reportError( ex, "writing file", S_ERROR, pkUnzipBuffer, outPath, data ) );
+                        await writeFile( outPath, data ).catch( ex => toolbocksModule.reportError( ex, "writing file", S_ERROR, pkUnzipBuffer, outPath, data ) );
                     }
 
                     break;
@@ -1611,7 +1617,7 @@ const {
                 break;
 
             case PIPE.BUFFER:
-                let buffer = isTypedArray( pInputPath ) ? Buffer.copyBytesFrom( pInputPath ) : isBuffer( pInputPath ) ? Buffer.from( pInputPath ) : await fsAsync.readFile( pInputPath );
+                let buffer = isTypedArray( pInputPath ) ? Buffer.copyBytesFrom( pInputPath ) : isBuffer( pInputPath ) ? Buffer.from( pInputPath ) : await readFile( pInputPath );
 
                 zipper = new admZip( buffer, { fs: fs } );
 
@@ -1673,7 +1679,7 @@ const {
             case PIPE.DIRECTORY:
                 if ( !(await isDirectory( outputFilePath )) )
                 {
-                    await fsAsync.mkdir( getDirectoryName( outputPath ), { recursive: true } );
+                    await asyncMakeDirectory( getDirectoryName( outputPath ), { recursive: true } );
                 }
 
                 outputFilePath = resolvePath( [outputPath, getFileName( replaceExtension( getFileName( inputPath ), extension ) )] );
@@ -1725,8 +1731,8 @@ const {
 
         if ( isBuffer( outputPath ) )
         {
-            inputPath = isString( inputPath ) ? resolvePath( inputPath ) : isBuffer( inputPath ) ? Buffer.from( inputPath ) : await fsAsync.readFile( inputPath );
-            inputPath = await isFile( inputPath ) ? await fsAsync.readFile( inputPath ) : inputPath;
+            inputPath = isString( inputPath ) ? resolvePath( inputPath ) : isBuffer( inputPath ) ? Buffer.from( inputPath ) : await readFile( inputPath );
+            inputPath = await isFile( inputPath ) ? await readFile( inputPath ) : inputPath;
 
             const stream = Readable.from( inputPath );
             await streamToBuffer( outputPath( stream ) );
@@ -1806,7 +1812,7 @@ const {
             }
             else
             {
-                outputPath = isBuffer( outputPath ) ? Buffer.from( outputPath ) : await fsAsync.readFile( outputPath );
+                outputPath = isBuffer( outputPath ) ? Buffer.from( outputPath ) : await readFile( outputPath );
             }
 
             return await handleZlibOperation( {
@@ -1859,7 +1865,7 @@ const {
             }
             else
             {
-                outputPath = isBuffer( outputPath ) ? Buffer.from( outputPath ) : await fsAsync.readFile( outputPath );
+                outputPath = isBuffer( outputPath ) ? Buffer.from( outputPath ) : await readFile( outputPath );
             }
 
             return await handleZlibOperation( {
@@ -1913,21 +1919,21 @@ const {
                     {
                         const errorSource = modName + "CompressionOptions::deleteFunction";
 
-                        const stats = await fsAsync.lstat( target );
+                        const stats = await lstat( target );
 
                         if ( !isNull( stats ) )
                         {
                             if ( stats.isDirectory() )
                             {
-                                return await fsAsync.rmdir( target, { recursive: pRecursive || recurse } ).catch( ex => toolbocksModule.reportError( ex, "deleting directory", S_ERROR, errorSource, pPath, pRecursive ) );
+                                return await asyncRemoveDirectory( target, { recursive: pRecursive || recurse } ).catch( ex => toolbocksModule.reportError( ex, "deleting directory", S_ERROR, errorSource, pPath, pRecursive ) );
                             }
                             else if ( stats.isSymbolicLink() )
                             {
                                 try
                                 {
-                                    const realPath = await fsAsync.readlink( target, DEFAULT_ENCODING );
+                                    const realPath = await readlink( target, DEFAULT_ENCODING );
                                     const absolutePath = (resolvePath( realPath ));
-                                    await fsAsync.unlink( absolutePath );
+                                    await unlink( absolutePath );
                                 }
                                 catch( ex )
                                 {
@@ -1938,7 +1944,7 @@ const {
 
                         try
                         {
-                            return await fsAsync.unlink( target );
+                            return await unlink( target );
                         }
                         catch( ex )
                         {
@@ -2106,7 +2112,7 @@ const {
                         exists = await this.checkFilePath( dirname );
                         if ( !exists )
                         {
-                            await fsAsync.mkdir( dirname, { recursive: true } );
+                            await asyncMakeDirectory( dirname, { recursive: true } );
                             exists = await this.checkFilePath( dirname );
                         }
                     }
