@@ -1,3 +1,4 @@
+const moduleUtils = require( "./_ToolBocksModule.cjs" );
 const constants = require( "./Constants.cjs" );
 const typeUtils = require( "./TypeUtils.cjs" );
 const stringUtils = require( "./StringUtils.cjs" );
@@ -37,6 +38,7 @@ const $scope = constants?.$scope || function()
 
     let mod =
         {
+            moduleUtils,
             constants,
             typeUtils,
             stringUtils,
@@ -46,6 +48,7 @@ const $scope = constants?.$scope || function()
             guidUtils,
             dependencies:
                 {
+                    moduleUtils,
                     constants,
                     typeUtils,
                     stringUtils,

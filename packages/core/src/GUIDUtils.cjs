@@ -23,6 +23,12 @@ const crypto = $scope().crypto || require( "crypto" );
         return $scope()[INTERNAL_NAME];
     }
 
+    const { _mt_str, populateOptions, lock, moduleUtils } = constants;
+
+    const { asString, isBlank, asInt } = stringUtils;
+
+    const { ToolBocksModule } = moduleUtils;
+
     /**
      * An array of this module's dependencies
      * which are re-exported with this module,
@@ -31,16 +37,11 @@ const crypto = $scope().crypto || require( "crypto" );
      */
     const dependencies =
         {
+            moduleUtils,
             constants,
             typeUtils,
             stringUtils
         };
-
-    const { _mt_str, populateOptions, lock, classes } = constants;
-
-    const { asString, isBlank, asInt } = stringUtils;
-
-    const { ToolBocksModule } = classes;
 
     const modName = "GUIDUtils";
 

@@ -19,15 +19,7 @@ const {
         return $scope()[INTERNAL_NAME];
     }
 
-    const dependencies =
-        {
-            constants,
-            typeUtils,
-            stringUtils,
-            localeUtils
-        };
-
-    const { _mt_str, _spc, _dot, _comma, _minus, _latin = "latn", S_ERROR, lock, classes } = constants;
+    const { _mt_str, _spc, _dot, _comma, _minus, _latin = "latn", S_ERROR, lock, moduleUtils } = constants;
 
     const { isString, isNumber, isObject, isNull, isHex, isOctal } = typeUtils;
 
@@ -35,15 +27,24 @@ const {
 
     const { resolveLocale } = localeUtils;
 
+    const dependencies =
+        {
+            moduleUtils,
+            constants,
+            typeUtils,
+            stringUtils,
+            localeUtils
+        };
+
     const modName = "NumberParser";
 
-    const { ToolBocksModule } = classes;
+    const { ToolBocksModule } = moduleUtils;
 
-    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+    const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
     const calculateErrorSourceName = function( pModule = modName, pFunction )
     {
-        return modulePrototype.calculateErrorSourceName( pModule, pFunction );
+        return toolBocksModule.calculateErrorSourceName( pModule, pFunction );
     };
 
     const getReForDec = function( pDecimalSeparator )
@@ -217,7 +218,7 @@ const {
             {
                 const msg = `NumberParser does not support numbering systems other than '${_latin}'`;
 
-                modulePrototype.reportError( new Error( msg ), msg, S_ERROR, calculateErrorSourceName( modName, "parse" ), pString );
+                toolBocksModule.reportError( new Error( msg ), msg, S_ERROR, calculateErrorSourceName( modName, "parse" ), pString );
 
                 let n = 0;
 
@@ -259,7 +260,7 @@ const {
             }
             catch( ex )
             {
-                modulePrototype.reportError( new Error( ex ), ex.message, S_ERROR, calculateErrorSourceName( modName, "parse->parseFloat" ), pString, s );
+                toolBocksModule.reportError( new Error( ex ), ex.message, S_ERROR, calculateErrorSourceName( modName, "parse->parseFloat" ), pString, s );
             }
 
             if ( isNaN( num ) )
@@ -299,7 +300,7 @@ const {
             NumberParser
         };
 
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 

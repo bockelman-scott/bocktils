@@ -55,25 +55,6 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
-    /**
-     * This is a dictionary of this module's dependencies.
-     * <br>
-     * It is exported as a property of this module,
-     * allowing us to just import this module<br>
-     * and then import or use the other utilities<br>
-     * as properties of this module.
-     * <br>
-     * @dict
-     * @type {Object}
-     * @alias module:ArrayUtils#dependencies
-     */
-    const dependencies =
-        {
-            constants,
-            typeUtils,
-            stringUtils
-        };
-
     /*
      * Create local variables for the imported values and functions we use.
      */
@@ -102,10 +83,30 @@ const $scope = constants?.$scope || function()
         lock,
         attempt,
         asyncAttempt,
-        classes
+        moduleUtils
     } = constants;
 
-    const { ModuleEvent, ToolBocksModule } = classes;
+    const { ModuleEvent, ToolBocksModule } = moduleUtils;
+
+    /**
+     * This is a dictionary of this module's dependencies.
+     * <br>
+     * It is exported as a property of this module,
+     * allowing us to just import this module<br>
+     * and then import or use the other utilities<br>
+     * as properties of this module.
+     * <br>
+     * @dict
+     * @type {Object}
+     * @alias module:ArrayUtils#dependencies
+     */
+    const dependencies =
+        {
+            moduleUtils,
+            constants,
+            typeUtils,
+            stringUtils
+        };
 
     /*
      * If the environment does not define CustomEvent,<br>

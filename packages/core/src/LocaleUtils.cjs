@@ -31,15 +31,6 @@ const {
         return $scope()[INTERNAL_NAME];
     }
 
-    // Capture the dependencies for re-export with this module
-    const dependencies =
-        {
-            constants,
-            typeUtils,
-            stringUtils,
-            arrayUtils
-        };
-
     // Create local aliases for values imported from other modules
     const {
         _mt_str,
@@ -54,7 +45,7 @@ const {
         S_ERROR,
         lock,
         objectValues,
-        classes
+        moduleUtils
     } = constants;
 
     const {
@@ -84,13 +75,23 @@ const {
 
     const modName = "LocaleUtils";
 
-    const { ToolBocksModule } = classes;
+    const { ToolBocksModule } = moduleUtils;
 
-    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+    // Capture the dependencies for re-export with this module
+    const dependencies =
+        {
+            moduleUtils,
+            constants,
+            typeUtils,
+            stringUtils,
+            arrayUtils
+        };
+
+    const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
     const calculateErrorSourceName = function( pModule = modName, pFunction )
     {
-        return modulePrototype.calculateErrorSourceName( pModule, pFunction );
+        return toolBocksModule.calculateErrorSourceName( pModule, pFunction );
     };
 
     // The locale assumed if no Locale is provided to this module's functions
@@ -190,7 +191,7 @@ const {
             }
             catch( ex )
             {
-                modulePrototype.reportError( ex, (elem + " is not a supported locale or locale specifier"), S_WARN, calculateErrorSourceName( modName, "resolveLocale" ), elem );
+                toolBocksModule.reportError( ex, (elem + " is not a supported locale or locale specifier"), S_WARN, calculateErrorSourceName( modName, "resolveLocale" ), elem );
             }
 
             if ( locale instanceof Intl.Locale )
@@ -378,7 +379,7 @@ const {
         }
         catch( ex )
         {
-            modulePrototype.reportError( ex, ex.message, S_ERROR, calculateErrorSourceName( modName, "getWeekData" ), locale );
+            toolBocksModule.reportError( ex, ex.message, S_ERROR, calculateErrorSourceName( modName, "getWeekData" ), locale );
         }
 
         if ( weekData )
@@ -592,7 +593,6 @@ const {
         }
     }
 
-
     let mod =
         {
             dependencies,
@@ -652,7 +652,7 @@ const {
             LocaleResourcesBase
         };
 
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 

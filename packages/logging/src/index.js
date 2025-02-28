@@ -1,3 +1,12 @@
+/**
+ * @fileOverview
+ *
+ * @module LoggingUtils
+ *
+ * @author Scott Bockelman
+ * @license MIT
+ */
+
 const core = require( "@toolbocks/core" );
 
 const { constants, typeUtils, stringUtils, arrayUtils } = core;
@@ -21,28 +30,7 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
-    /**
-     * This is a dictionary of this module's dependencies.
-     * <br>
-     * It is exported as a property of this module,
-     * allowing us to just import this module<br>
-     * and then import or use the other utilities<br>
-     * as properties of this module.
-     * <br>
-     * @dict
-     * @type {Object}
-     * @alias module:ArrayUtils#dependencies
-     */
-    const dependencies =
-        {
-            constants,
-            typeUtils,
-            stringUtils,
-            arrayUtils
-        };
-
     const {
-        classes,
         _mt_str,
         _spc,
         _comma,
@@ -59,10 +47,33 @@ const $scope = constants?.$scope || function()
         S_ERROR = "error",
         no_op,
         ignore,
-        resolveError
+        resolveError,
+        moduleUtils
     } = constants;
 
-    const { ModuleEvent, ToolBocksModule, ExecutionMode, StatefulListener, StackTrace } = classes;
+    const { ModuleEvent, ToolBocksModule, ExecutionMode, StatefulListener, StackTrace, objectToString } = moduleUtils;
+
+
+    /**
+     * This is a dictionary of this module's dependencies.
+     * <br>
+     * It is exported as a property of this module,
+     * allowing us to just import this module<br>
+     * and then import or use the other utilities<br>
+     * as properties of this module.
+     * <br>
+     * @dict
+     * @type {Object}
+     * @alias module:LoggingUtils#dependencies
+     */
+    const dependencies =
+        {
+            moduleUtils,
+            constants,
+            typeUtils,
+            stringUtils,
+            arrayUtils
+        };
 
     if ( _ud === typeof CustomEvent )
     {
@@ -81,7 +92,7 @@ const $scope = constants?.$scope || function()
         isError,
         firstError,
         isEvent,
-        firstMatchingType
+        firstMatchingType,
     } = typeUtils;
 
     const { asString, asInt, isBlank, lcase, ucase, trimLeadingCharacters } = stringUtils;
@@ -89,7 +100,7 @@ const $scope = constants?.$scope || function()
     const { asArray, varargs, Filters, concatenateConsecutiveStrings, unique } = arrayUtils;
 
 
-    const modulePrototype = new ToolBocksModule( "LoggingUtils", INTERNAL_NAME );
+    const toolBocksModule = new ToolBocksModule( "LoggingUtils", INTERNAL_NAME );
 
     class LogLevel
     {
@@ -1370,7 +1381,7 @@ const $scope = constants?.$scope || function()
         };
 
     // makes the properties of mod available as properties and methods of the modulePrototype
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
 
     // Exports this module
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;

@@ -62,23 +62,6 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
         return $scope()[INTERNAL_NAME];
     }
 
-    /**
-     * This is a dictionary of this module's dependencies.
-     * <br>
-     * It is exported as a property of this module,
-     * allowing us to just import this module<br>
-     * and then import or use the other utilities<br>
-     * as properties of this module.
-     * <br>
-     * @dict
-     * @type {Object}
-     * @alias module:Constants#dependencies
-     */
-    const dependencies =
-        {
-            moduleUtils
-        };
-
     const
         {
             ModuleEvent,
@@ -149,6 +132,23 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
         } = moduleUtils;
 
     const { PromiseResult } = moduleUtilsClasses || {};
+
+    /**
+     * This is a dictionary of this module's dependencies.
+     * <br>
+     * It is exported as a property of this module,
+     * allowing us to just import this module<br>
+     * and then import or use the other utilities<br>
+     * as properties of this module.
+     * <br>
+     * @dict
+     * @type {Object}
+     * @alias module:Constants#dependencies
+     */
+    const dependencies =
+        {
+            moduleUtils
+        };
 
     if ( _ud === typeof CustomEvent )
     {

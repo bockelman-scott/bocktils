@@ -47,18 +47,6 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
-    /**
-     * An array of this module's dependencies
-     * which are re-exported with this module,
-     * so if you want to, you can just import the leaf module
-     * and then use the other utilities as properties of that module
-     */
-    const dependencies =
-        {
-            constants,
-            typeUtils
-        };
-
     const
         {
             _mt_str,
@@ -108,17 +96,29 @@ const $scope = constants?.$scope || function()
             IllegalArgumentError,
             funcToString,
             populateOptions,
-            mergeOptions,
             attempt,
             lock,
-            classes
+            moduleUtils,
         } = constants;
 
-    const { ModuleEvent, ToolBocksModule } = classes;
+    const { ModuleEvent, ToolBocksModule } = moduleUtils;
+
+    /**
+     * An array of this module's dependencies
+     * which are re-exported with this module,
+     * so if you want to, you can just import the leaf module
+     * and then use the other utilities as properties of that module
+     */
+    const dependencies =
+        {
+            moduleUtils,
+            constants,
+            typeUtils
+        };
 
     const modName = "StringUtils";
 
-    let modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+    let toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
     const
         {
@@ -640,7 +640,7 @@ const $scope = constants?.$scope || function()
         const options = _aso( pOptions );
         const trim = pTrim || options.trim;
 
-        const me = modulePrototype || exposeModule || asString;
+        const me = toolBocksModule || exposeModule || asString;
 
         const input = _resolveInput.call( pValue, pValue ) || pValue;
 
@@ -1496,7 +1496,7 @@ const $scope = constants?.$scope || function()
     {
         const msg = ["asInt cannot return values greater than", Number.MAX_SAFE_INTEGER, "or less than", Number.MIN_SAFE_INTEGER, _dot, _spc, (pInput || "the specified value"), "cannot be converted to an Integer"].join( _spc );
 
-        modulePrototype.reportError( new IllegalArgumentError( msg ), msg, S_WARN, (modName + _colon + _colon + (pSource || AS_INT)) );
+        toolBocksModule.reportError( new IllegalArgumentError( msg ), msg, S_WARN, (modName + _colon + _colon + (pSource || AS_INT)) );
     }
 
     function _isIntegerOutOfRange( pValue )
@@ -2298,7 +2298,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            modulePrototype.reportError( ex, "trying to interpret " + asString( pNum ) + " as a number", S_WARN, (modName + _colon + _colon + "isValidNumber") );
+            toolBocksModule.reportError( ex, "trying to interpret " + asString( pNum ) + " as a number", S_WARN, (modName + _colon + _colon + "isValidNumber") );
         }
 
         // create a local variable to control the rest of the logic
@@ -2746,7 +2746,7 @@ const $scope = constants?.$scope || function()
                     }
                     catch( ex )
                     {
-                        modulePrototype.reportError( ex, "trying to execute " + asString( func?.name || funcToString.call( func ) ) + " as a number", S_WARN, (modName + _colon + _colon + "tidy") );
+                        toolBocksModule.reportError( ex, "trying to execute " + asString( func?.name || funcToString.call( func ) ) + " as a number", S_WARN, (modName + _colon + _colon + "tidy") );
                     }
                 }
 
@@ -2814,7 +2814,7 @@ const $scope = constants?.$scope || function()
             }
             catch( ex )
             {
-                modulePrototype.reportError( ex, ex.message, S_WARN, (modName + _colon + _colon + "repeat") );
+                toolBocksModule.reportError( ex, ex.message, S_WARN, (modName + _colon + _colon + "repeat") );
             }
             return s;
         }
@@ -3001,7 +3001,7 @@ const $scope = constants?.$scope || function()
             classes: { ModuleEvent, ToolBocksModule, CustomEvent },
         };
 
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 

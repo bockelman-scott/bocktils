@@ -67,23 +67,6 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
-    /**
-     * This is a dictionary of this module's dependencies.
-     * <br>
-     * It is exported as a property of this module,
-     * allowing us to just import this module<br>
-     * and then import or use the other utilities<br>
-     * as properties of this module.
-     * <br>
-     * @dict
-     * @type {Object}
-     * @alias module:TypeUtils#dependencies
-     */
-    const dependencies =
-        {
-            constants
-        };
-
     const
         {
             _str,
@@ -120,6 +103,7 @@ const $scope = constants?.$scope || function()
             BUILTIN_TYPE_NAMES,
 
             moduleUtils
+
         } = constants;
 
     const {
@@ -177,6 +161,24 @@ const $scope = constants?.$scope || function()
     } = moduleUtils;
 
     /**
+     * This is a dictionary of this module's dependencies.
+     * <br>
+     * It is exported as a property of this module,
+     * allowing us to just import this module<br>
+     * and then import or use the other utilities<br>
+     * as properties of this module.
+     * <br>
+     * @dict
+     * @type {Object}
+     * @alias module:TypeUtils#dependencies
+     */
+    const dependencies =
+        {
+            moduleUtils,
+            constants
+        };
+
+    /**
      * Represents the name of the module<br>
      * This name is used when error events are emitted to indicate the source of the error.
      * @type {string}
@@ -192,7 +194,7 @@ const $scope = constants?.$scope || function()
      * <br>
      * @type {ToolBocksModule}
      */
-    let modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+    let toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
     /**
      * This is an array of the 'valid' JavaScript primitive types.<br>
@@ -508,7 +510,7 @@ const $scope = constants?.$scope || function()
     // poly-fill for isArray; probably obsolete with modern environments
     if ( _fun !== typeof Array.isArray )
     {
-        modulePrototype.attempt( () => Array.isArray = _isArr );
+        toolBocksModule.attempt( () => Array.isArray = _isArr );
     }
 
     /**
@@ -1509,7 +1511,7 @@ const $scope = constants?.$scope || function()
             {
                 const msg = `Non-Integer value passed to ${modName}::toBinary to specify precision; value will be truncated`;
 
-                modulePrototype.reportError( new IllegalArgumentError( msg, { value: pValue } ), msg, S_WARN, modName + "::toBinary", { value: pValue } );
+                toolBocksModule.reportError( new IllegalArgumentError( msg, { value: pValue } ), msg, S_WARN, modName + "::toBinary", { value: pValue } );
 
                 s = s.replace( /\.\d+$/, _mt_str );
             }
@@ -2466,7 +2468,7 @@ const $scope = constants?.$scope || function()
                 }
                 catch( ex )
                 {
-                    modulePrototype.reportError( ex, "attempting to call instanceof without a class or callable", S_WARN, modName + "::instanceOfAny" );
+                    toolBocksModule.reportError( ex, "attempting to call instanceof without a class or callable", S_WARN, modName + "::instanceOfAny" );
                 }
             }
         }
@@ -2661,7 +2663,7 @@ const $scope = constants?.$scope || function()
             }
             catch( ex )
             {
-                modulePrototype.reportError( ex, "attempting to call a function to filter an array", S_WARN, modName + "::firstMatchingType", pType?.name );
+                toolBocksModule.reportError( ex, "attempting to call a function to filter an array", S_WARN, modName + "::firstMatchingType", pType?.name );
             }
         }
         else
@@ -3124,7 +3126,7 @@ const $scope = constants?.$scope || function()
                 return !isNaN( date ) && isDate( date ) ? date : null;
             }
 
-            modulePrototype.reportError( new Error( "unable to parse date" ), "attempting to parse date", S_WARN, modName + "::castToDate", value );
+            toolBocksModule.reportError( new Error( "unable to parse date" ), "attempting to parse date", S_WARN, modName + "::castToDate", value );
 
             return null;
 
@@ -3393,7 +3395,7 @@ const $scope = constants?.$scope || function()
                 let newIterable = [...this.#iterable].reverse();
                 return new this.constructor( newIterable );
             }
-            modulePrototype.reportError( new Error( "cannot reverse this iterator" ), "attempting to reverse an iterator", S_ERROR, modName + "::_Iterable::reverseIterator" );
+            toolBocksModule.reportError( new Error( "cannot reverse this iterator" ), "attempting to reverse an iterator", S_ERROR, modName + "::_Iterable::reverseIterator" );
             return this.#iterated.reverse();
         }
     }
@@ -4371,7 +4373,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            modulePrototype.handleError( ex, toTypedArray, pArray );
+            toolBocksModule.handleError( ex, toTypedArray, pArray );
         }
 
         return pArray;
@@ -4704,7 +4706,7 @@ const $scope = constants?.$scope || function()
                 break;
         }
 
-        modulePrototype.handleError( new Error( `Unable to resolve bit string: ${pBitString}` ), resolveBitString, pBitString );
+        toolBocksModule.handleError( new Error( `Unable to resolve bit string: ${pBitString}` ), resolveBitString, pBitString );
 
         return _mt_str;
     }
@@ -4852,6 +4854,7 @@ const $scope = constants?.$scope || function()
 
             flattened,
 
+            TYPES_CHECKS,
             isUndefined,
             isDefined,
             isNull,
@@ -4926,6 +4929,14 @@ const $scope = constants?.$scope || function()
             floatToBits,
             invertBits,
             resolveBitString,
+            resolveVisitor,
+            resolveError,
+            resolveEvent,
+            resolveObject,
+            resolveLogLevel,
+            resolveType,
+            resolveMethod,
+            canBind,
             twosComplement,
             clamp,
             resolveMoment,
@@ -4952,6 +4963,9 @@ const $scope = constants?.$scope || function()
             setProperty,
             toNodePathArray,
             collapse,
+
+            errorToString,
+            propertyDescriptors,
 
             /**
              * The classes exported with this module.<br>
@@ -4988,7 +5002,7 @@ const $scope = constants?.$scope || function()
             Result
         };
 
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 

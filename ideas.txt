@@ -1,6 +1,6 @@
 RereadableResponse
 internalClone
-internal tex, json, etc properties
+internal text, json, etc properties
 toWebApiResponse
 toAxiosResponse
 toNodejsResponse
