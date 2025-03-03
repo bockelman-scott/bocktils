@@ -184,6 +184,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         } = (dependencies || {});
 
+    const ENDIAN =
+        {
+            BIG: "big",
+            LITTLE: "little"
+        };
+
     /**
      * This is a function that just does nothing.<br>
      * This is useful when you need a default for a missing argument or expected function.<br>
@@ -1009,11 +1015,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     const isKeyValueArray = ( pArray ) => is2dArray( pArray ) && pArray.every( row => row.length >= 2 && row.length <= 3 && isStr( row[0] ) );
 
     /**
-     * Returns a non-null object. Returns the specified object if meets the criteria of being a non-null object.<br>
+     * Returns a non-null object.<br>
+     * Returns the specified object if it meets the criteria of being a non-null object.<br>
      * @param {*} pObject The object to return if it is actually a non-null object
      * @param {boolean} [pAcceptArray=false] Whether to treat an array as an object for this purpose
      * @returns {Object} The object specified if it is a non-null object or an empty object; never returns null.
-     * @private
      */
     const resolveObject = ( pObject, pAcceptArray = false ) => isNonNullObj( pObject ) ? (!!pAcceptArray || !isArray( pObject ) ? pObject : {}) : {};
 
@@ -1190,18 +1196,27 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         #name;
         #traceEnabled;
 
+        #options;
+
         /**
          * Constructs an instance of the ExecutionMode class.<br>
          * <br>
          *
          * @param {string} pName - The name of the mode.
+         *
          * @param {boolean} [pTraceEnabled=false] - Optional flag to enable or disable tracing. Defaults to false.
-         * @return {Object} A new instance of the class with the specified name and trace settings.
+         *
+         * @param {object} [pOptions] Any aritrary object that might need to be associated with a particular mode.
+         *
+         * @return {ExecutionMode} A new instance of the class with the specified name and trace settings.
          */
-        constructor( pName, pTraceEnabled = false )
+        constructor( pName, pTraceEnabled = false, pOptions = {} )
         {
             this.#name = _spcToChar( _ucase( _asStr( pName || S_NONE ).trim() ) );
+
             this.#traceEnabled = !!pTraceEnabled;
+
+            this.#options = populateOptions( pOptions || {}, {} );
         }
 
         /**
@@ -1964,6 +1979,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return populateOptions( {}, this.#options );
         }
 
+        mergeOptions( pOptions )
+        {
+            this.#options = populateOptions( pOptions || this.#options, this.options || {} );
+            return this.options;
+        }
+
         get occurred()
         {
             this.#occurred = this.#occurred || new Date();
@@ -2004,6 +2025,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return this.#detail || super.detail || super.data;
         }
 
+        mergeData( pData )
+        {
+            this.#detail = populateOptions( pData?.detail || pData, this.detail );
+            return this.detail;
+        }
+
         trace( pMsg )
         {
             konsole.trace( pMsg, this );
@@ -2034,9 +2061,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @param {*} [pOptions] - Configuration options to be associated with the new `ToolBocksModuleEvent` if applicable.
      *
      * @returns {CustomEvent|ToolBocksModuleEvent} - Returns the resolved event.
-     *                                               If the input event is already
-     *                                               a `CustomEvent` or `ToolBocksModuleEvent`,
-     *                                               it is returned directly.
+     *                                               <br>
+     *                                               <br>
+     *                                               If the specified event is already
+     *                                               a `CustomEvent` or `ToolBocksModuleEvent`,<br>
+     *                                               the specified options and data are merged with the existing
+     *                                               properties and then the updated object is returned.
+     *                                               <br>
+     *                                               <br>
      *                                               Otherwise, a new `ToolBocksModuleEvent`
      *                                               is created and returned.
      */
@@ -2044,14 +2076,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     {
         const evt = pEvent || $scope()?.event;
 
-        if ( evt instanceof CustomEvent || evt instanceof ToolBocksModuleEvent )
+        if ( evt instanceof ToolBocksModuleEvent )
         {
+            evt.mergeOptions( pOptions );
+            evt.mergeData( pData );
             return evt;
-        }
-
-        if ( evt instanceof Event )
-        {
-            return new ToolBocksModuleEvent( evt, pData, pOptions );
         }
 
         return new ToolBocksModuleEvent( evt, pData, pOptions );
@@ -2371,7 +2400,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      *
      * @returns {string} A concatenated string representation of the arguments.
      */
-    const asPhrase = ( ...pArgs ) => [...pArgs].flat( Infinity ).map( e => (_asStr( e )).trim() ).join( _spc );
+    const asPhrase = ( ...pArgs ) => [...pArgs].flat( Infinity ).map( e => String( e ) ).join( _spc );
 
     /**
      * Defines the default value to use in recursive functions to bail out before causing a stack overflow.<br>
@@ -5839,11 +5868,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         while ( keys.length > 0 && isNonNullObj( value ) )
         {
             const key = String( keys.shift() ).trim().replace( /^#/, _mt_str );
-            value = isArray( value ) && /^\d+$/.test( key ) ? value[Number( key )] : value[key];
 
             if ( isFunc( mutator ) )
             {
-                value = mutator( key, value );
+                value = mutator( value, key, pValue );
+            }
+            else
+            {
+                value = isArray( value ) && /^\d+$/.test( key ) ? value[Number( key )] : value[key];
             }
         }
 
@@ -5894,6 +5926,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     {
         return attempt( () => _property( pObject, pPropertyPath, pValue ) );
     }
+
+    const hasProperty = ( pObject, pPropertyPath ) => !isNull( getProperty( pObject, pPropertyPath ) );
 
     function mergeOptions( pOptions, ...pDefaults )
     {
@@ -6017,6 +6051,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             ToolBocksModule: ToolBocksModule,
             CustomEvent,
 
+            ENDIAN,
+
             _ud,
             _obj,
             _fun,
@@ -6139,6 +6175,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             toNodePathArray,
             getProperty,
             setProperty,
+            hasProperty,
             populateOptions,
             mergeOptions,
             merge: mergeOptions,

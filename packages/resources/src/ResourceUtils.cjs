@@ -35,119 +35,6 @@ const fileUtils = require( "@toolbocks/files" );
  */
 const jsonUtils = require( "@toolbocks/json" );
 
-/**
- * We define a number of variables that will be assigned according to the current execution environment.
- * <br>
- * <br>
- * The intention is to seamlessly support browsers, Workers, Node.js, and Deno where possible.<br>
- * This reduces the need to learn or use a different library for every use case.<br>
- */
-
-/**
- * Represent the synchronous or callback-required API for working with a file system.<br>
- * In NOde.js, this is "fs", in Deno, this is the "Deno" global,
- * in browsers and workers, this is implemented via XmlHttpRequest (though discouraged and deprecated)
- *
- * @type {Object}
- */
-let fs;
-
-/**
- * Represent the asynchronous API for working with a file system.<br>
- * In Node.js, this is "fs/promises", in Deno, this is the "Deno" global,
- * in browsers and workers, this is implemented via the Fetch API
- *
- * @type {Object}
- */
-let fsAsync;
-
-/**
- * Represents the functionality related to resolving file paths and file names.
- * In Node.js, this is the node: path module.  In Deno, this is @TODO
- * In browsers, this is... @TODO
- *
- * @type {Object|function}
- */
-let path;
-
-/**
- * Represents the path of the current working directory.
- * This variable typically holds the absolute path of the directory
- * where the program is being executed.
- *
- * This value may be used for file system operations or to determine
- * the relative locations of other files and directories.
- *
- * Note: Ensure proper handling when manipulating or joining paths
- * to avoid errors related to file system operations.
- *
- * @type {string}
- */
-let currentDirectory;
-
-/**
- * Represents the root directory of the project.
- * This variable is used as a reference point for resolving
- * file and folder paths relative to the project's base directory.
- *
- * @type {string}
- */
-let projectRootDirectory;
-
-/**
- * Represents the default file system path <i>or URL</i> used as the base directory
- * for finding and loading resources.<br>
- *
- * @type {string}
- */
-let defaultPath;
-
-/**
- * An object containing default messages used for various notifications,
- * alerts, or informational purposes throughout an application or library.
- * <br>
- * <br>
- * These messages serve as pre-defined text that can be reused in
- * different parts of the codebase to ensure consistency.<br>
- * <br>
- *
- * This object typically includes strings
- * representing basic concepts relevant to the application or library,
- * rather than feature-specific messages
- *
- * @type {Object.<string, string>}
- */
-let defaultMessages;
-
-/**
- * Represents the default locale used in the application for internationalization or localization purposes.
- * <br>
- * <br>
- * This variable typically stores a string value that adheres to IETF BCP 47 language tag standards,
- * such as "en-US" for American English or "fr-FR" for French in France,
- * but can also be assigned to an instance of Intl.Locale.
- * <br>
- * Usages of the value will convert between the string and object accordingly.
- * <br>
- * @type {string|Intl.Locale}
- */
-let defaultLocale;
-
-
-/*## environment-specific:node start ##*/
-fs = require( "node:fs" );
-fsAsync = require( "node:fs/promises" );
-path = require( "node:path" );
-currentDirectory = path.dirname( __filename );
-projectRootDirectory = path.resolve( currentDirectory, "../../../" );
-defaultPath = path.resolve( currentDirectory, "../messages/defaults.json" );
-// defaultMessages = require( defaultPath );
-/*## environment-specific:node end ##*/
-
-/*## environment-specific:browser start ##*/
-
-/*## environment-specific:browser end ##*/
-
 const { constants, typeUtils, stringUtils, arrayUtils, localeUtils } = core;
 
 /* define a variable for typeof undefined **/
@@ -161,7 +48,6 @@ const $scope = constants?.$scope || function()
 {
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };
-
 
 // noinspection FunctionTooLongJS
 (function exposeModule()
@@ -252,7 +138,73 @@ const $scope = constants?.$scope || function()
 
     const { asJson, parseJson } = jsonUtils;
 
-    const { resolvePath, readTextFile, writeTextFile } = fileUtils;
+    const { resolvePath, getDirectoryName, readTextFile, writeTextFile } = fileUtils;
+
+
+    /**
+     * Represents the path of the current working directory.
+     * This variable typically holds the absolute path of the directory
+     * where the program is being executed.
+     *
+     * This value may be used for file system operations or to determine
+     * the relative locations of other files and directories.
+     *
+     * Note: Ensure proper handling when manipulating or joining paths
+     * to avoid errors related to file system operations.
+     *
+     * @type {string}
+     */
+    let currentDirectory = getDirectoryName( __filename );
+    ;
+
+    /**
+     * Represents the root directory of the project.
+     * This variable is used as a reference point for resolving
+     * file and folder paths relative to the project's base directory.
+     *
+     * @type {string}
+     */
+    let projectRootDirectory = resolvePath( currentDirectory, "../../../" );
+
+    /**
+     * Represents the default file system path <i>or URL</i> used as the base directory
+     * for finding and loading resources.<br>
+     *
+     * @type {string}
+     */
+    let defaultPath = resolvePath( currentDirectory, "../properties/messages.properties" );
+
+    /**
+     * An object containing default messages used for various notifications,
+     * alerts, or informational purposes throughout an application or library.
+     * <br>
+     * <br>
+     * These messages serve as pre-defined text that can be reused in
+     * different parts of the codebase to ensure consistency.<br>
+     * <br>
+     *
+     * This object typically includes strings
+     * representing basic concepts relevant to the application or library,
+     * rather than feature-specific messages
+     *
+     * @type {Object.<string, string>}
+     */
+    let defaultMessages;
+
+    /**
+     * Represents the default locale used in the application for internationalization or localization purposes.
+     * <br>
+     * <br>
+     * This variable typically stores a string value that adheres to IETF BCP 47 language tag standards,
+     * such as "en-US" for American English or "fr-FR" for French in France,
+     * but can also be assigned to an instance of Intl.Locale.
+     * <br>
+     * Usages of the value will convert between the string and object accordingly.
+     * <br>
+     * @type {string|Intl.Locale}
+     */
+    let defaultLocale = getMessagesLocale();
+
     /**
      * This is a dictionary of this module's dependencies.
      * <br>
@@ -277,34 +229,99 @@ const $scope = constants?.$scope || function()
 
     const executionEnvironment = toolBocksModule.executionEnvironment;
 
-    const isNodeJs = executionEnvironment.isNode();
-    const isDeno = executionEnvironment.isDeno();
     const isBrowser = executionEnvironment.isBrowser();
 
-    if ( isBrowser )
-    {
-        defaultPath = path.resolve( "../messages/defaults.json" );
-    }
-
+    /**
+     * This class <i>roughly approximates</i> the structure and functionality of the java.utils.properties class.
+     * <br>
+     * @see {@link https://docs.oracle.com/javase/8/docs/api/java/util/Properties.html}
+     * <br>
+     * <br>
+     * This class holds a set of key/value pairs where both the key and value are strings.<br>
+     * Additionally, instances of this class can be nested
+     * to provide fallback or default values for properties
+     * that are not overridden for a specific context.
+     * <br>
+     * <br>
+     * @class
+     * @extends Map
+     *
+     */
     class Properties extends Map
     {
+        #name = "Properties";
+        #locale = DEFAULT_LOCALE;
+
+        /**
+         * Nested instance holding default values for keys not defined in this instance
+         * @type {Map|Properties}
+         */
         #defaults;
 
-        constructor( pDefaults )
+        /**
+         * Constructs a new instance of the Properties class
+         * and initializes the default/fallback properties if specified.
+         * <br>
+         * <br>
+         *
+         * @param {string} [pName='Properties']  An optional name to identify this instance
+         *
+         * @param {Properties|Map} [pDefaults] - The default values to use when retrieving values.
+         *                                       This should be another instance of the Properties class or a Map.
+         *
+         * @param {Intl.Locale|string} [pLocale=DEFAULT_LOCALE] Optional locale with which these properties are associated
+         *
+         * @return {Properties}
+         */
+        constructor( pName, pDefaults, pLocale )
         {
             super();
 
-            this.#defaults = isNonNullObject( pDefaults ) && (isMap( pDefaults ) || pDefaults instanceof this.constructor) ? pDefaults : null;
+            this.#name = pName || this.#name;
+
+            this.#defaults = (isNonNullObject( pDefaults ) &&
+                              (isMap( pDefaults ) || pDefaults instanceof this.constructor)) ? this.#initializeDefaults( pDefaults ) : new Properties();
+
+            this.#locale = pLocale || this.#locale;
         }
 
+        /**
+         * Generates the default properties object
+         * to provide the fallback values
+         * for keys not defined for this specific instance
+         *
+         * @private
+         */
+        #initializeDefaults( pDefaults )
+        {
+            const properties = new Properties();
+
+            let map = Properties.isProperties( pDefaults ) && this !== pDefaults ? pDefaults : properties;
+
+            this.#defaults = properties.load( map );
+
+            return properties;
+        }
+
+        /**
+         * Returns a read-only copy of the Properties object providing the default, or fallback, values
+         * for this instance
+         *
+         * @returns {Properties} a read-only copy of the Properties object providing the default, or fallback, values
+         */
         get defaults()
         {
-            return (this.hasValidDefaults() ? lock( this.#defaults ) : lock( new Map() ));
+            return (this.hasValidDefaults() ? lock( this.#defaults ) : lock( new Properties() ));
         }
 
+        /**
+         * Sets the specified defaults to be the defaults, or fallback, properties for this instance
+         *
+         * @param pDefaults
+         */
         set defaults( pDefaults )
         {
-            this.#defaults = Properties.isProperties( pDefaults ) && this !== pDefaults ? pDefaults : new Map();
+            this.#defaults = this.#initializeDefaults( pDefaults );
         }
 
         static get [Symbol.species]()
@@ -317,81 +334,184 @@ const $scope = constants?.$scope || function()
             return lock( this.entries() );
         }
 
+        /**
+         * Returns all available key/value pairs,
+         * including those that are defined in the default/fallback properties.
+         * <br>
+         *
+         * @returns {Array.<Array.<string>>}
+         */
         entries()
         {
-            let arr = super.entries();
+            let arr = [...(super.entries() || [])];
 
             if ( this.hasValidDefaults() )
             {
-                this.defaults.forEach( ( v, k ) => !super.has( k ) ? arr.push( [k, v] ) : no_op );
+                this.defaults.forEach( ( v, k ) => !super.has( k ) ? arr.push( [asString( k ), asString( v )] ) : no_op );
             }
 
             return lock( [...arr] );
         }
 
+        /**
+         * Returns all defined keys,
+         * including those that are defined in the default/fallback properties.
+         * <br>
+         *
+         * @returns {Array.<string>}
+         */
         keys()
         {
-            const arr = super.keys();
+            const arr = [...(super.keys() || [])];
 
             if ( this.hasValidDefaults() )
             {
-                this.defaults.forEach( ( v, k ) => !super.has( k ) ? arr.push( k ) : no_op );
+                this.defaults.forEach( ( v, k ) => !super.has( k ) ? arr.push( asString( k ) ) : no_op );
             }
 
             return lock( [...arr] );
         }
 
+        /**
+         * Returns all defined values,
+         * including those that are defined in the default/fallback properties.
+         * <br>
+         *
+         * @returns {Array.<string>}
+         */
         values()
         {
-            const arr = super.values();
+            const arr = [...(super.values() || [])];
 
             if ( this.hasValidDefaults() )
             {
-                this.defaults.forEach( ( v, k ) => !super.has( k ) ? arr.push( v ) : no_op );
+                this.defaults.forEach( ( v, k ) => !super.has( k ) ? arr.push( asString( v ) ) : no_op );
             }
 
             return lock( [...arr] );
         }
 
-        clear()
+        /**
+         * Removes only the key/value pairs specific to this instance,
+         * <i>preserving</i> those in the defaults, or backing, map/properties
+         *
+         * @return {void}
+         */
+        clearOverrides()
         {
             super.clear();
+        }
+
+        /**
+         * Removes only the default, or backing/fallback, key/value pairs,
+         * preserving the key/values specific to this instance
+         *
+         * @return {void}
+         */
+        clearDefaults()
+        {
+            this.#defaults = new Properties();
+        }
+
+        /**
+         * Removes <b>ALL<b> key/value pairs,
+         * including those in the defaults, or backing, map/properties
+         *
+         * @return {void}
+         */
+        clear()
+        {
+            this.clearOverrides();
 
             if ( this.hasValidDefaults() )
             {
-                this.#defaults.clear();
+                this.clearDefaults();
             }
         }
 
+        /**
+         * Executes the specified function once for each key-value pair in this collection.
+         * <br>
+         *
+         * @param {Function} pFunction A function to execute for each key-value pair.
+         *                             It is called with three arguments:
+         *                             the value of the current element,
+         *                             the key of the current element,
+         *                             and the collection object being traversed.
+         *
+         * @param {*} [pThis] Optional. Value to use as `this` when executing `pFunction`.
+         *
+         * @return {void} Does not return a value.
+         */
         forEach( pFunction, pThis )
         {
             const me = this;
-            this.entries().forEach( e => pFunction.call( pThis || me || this, e[1], e[0], this ) );
+            this.entries().forEach( e => pFunction.call( pThis || me || this, asString( e[1] ), asString( e[0] ), this ) );
         }
 
+        /**
+         * Retrieves the value associated with the specified key.<br>
+         * <br>
+         * The value may be retrieved from the defaults
+         * if it is not present in the entries specific to this collection.
+         *
+         * @param {string} pKey - The key whose associated value is to be returned
+         * @return {string} The value associated with the specified key
+         *
+         */
         get( pKey )
         {
             let value = super.get( pKey );
 
-            if ( isNull( value ) && this.hasValidDefaults() )
+            if ( (isNull( value ) || isBlank( value )) && this.hasValidDefaults() )
             {
                 value = this.defaults.get( pKey );
             }
 
-            return value;
+            return asString( value );
         }
 
+        /**
+         * Returns true if the specified key corresponds to a non-empty value available in this collection.
+         *
+         * @param {string} pKey the key to evaluate
+         * @returns {boolean|*} true if the specified key corresponds to a non-empty value available in this collection
+         */
         has( pKey )
         {
             return super.has( pKey ) || (this.hasValidDefaults() && this.defaults.has( pKey ));
         }
 
+        /**
+         * Returns true if this collection is populated
+         * with a non-null/non-empty set of defaults, or fallback, properties
+         *
+         * @returns {*|boolean} true if this collection is populated
+         * with a non-null/non-empty set of defaults, or fallback, properties
+         *
+         */
         hasValidDefaults()
         {
-            return Properties.isProperties( this.#defaults ) && (this.#defaults !== this) && (this.#defaults.size > 0);
+            return Properties.isProperties( this.#defaults ) &&
+                   (this.#defaults !== this) &&
+                   (this.#defaults.size > 0);
         }
 
-        load( pSource, pOptions )
+        /**
+         * Populates this instance with key/value pairs.<br>
+         * <br>
+         * The source can be the contents of a properties file,
+         * an array of strings, each representing a key/value pair,
+         * a 2d array (an array of key/pairs),
+         * a Map, or another Properties object
+         *
+         * @param {string|Array.<string>|Array.<Array.<string>>|Map|Properties} pSource The source from which to load key/value data
+         *
+         * @param pOptions
+         *
+         * @returns {Properties} this instance, now populated with the key/value pairs found in the specified source
+         */
+        load( pSource, pOptions = DEFAULT_PROPERTIES_OPTIONS )
         {
             const options = populateOptions( pOptions, DEFAULT_PROPERTIES_OPTIONS );
 
@@ -405,7 +525,7 @@ const $scope = constants?.$scope || function()
             {
                 if ( isKeyValueArray( source ) )
                 {
-                    source = Properties.from2dArray( options, source );
+                    source = Properties.from2dArray( source, options );
                 }
                 else
                 {
@@ -419,25 +539,94 @@ const $scope = constants?.$scope || function()
 
             if ( Properties.isProperties( source ) )
             {
-                source.forEach( ( v, k ) => this.set( k, v ) );
+                source.forEach( ( v, k ) => this.set( asString( k ), asString( v ) ) );
             }
 
             return this;
         }
+
+        /**
+         * Returns a string representing the instance specific key/value pairs available.
+         * That is, this method excludes the defaults.
+         * This string is formatted as suitable for saving as a *.properties file
+         */
+        toString()
+        {
+            let str = _mt_str;
+
+            const entries = [...(super.entries() || [])];
+
+            entries.forEach( e => str += `${e[0]}=${e[1]}\n` );
+
+            return str;
+        }
+
+        [Symbol.toPrimitive]( pHint )
+        {
+            return this.toString();
+        }
+
+        /**
+         * Writes the instance-specific properties to the file specified.
+         * The file will not contain properties defined in the defaults.
+         *
+         * @param pFilePath
+         * @returns {Promise<*>}
+         */
+        async writeToFile( pFilePath )
+        {
+            const s = this.toString();
+            return await asyncAttempt( async() => await writeTextFile( resolvePath( pFilePath ), s ) );
+        }
     }
 
+    /**
+     * Returns true if the specified value is a Map or an instance of Properties
+     */
     Properties.isProperties = function( pObject )
     {
         return isNonNullObject( pObject ) && (isMap( pObject ) || pObject instanceof Properties);
     };
 
+    /**
+     * @typedef {object} PropertiesLoadOptions Options that control how to load properties files
+     *
+     * @property {string} [assignment='='] The character to be interpreted as the assignment operator of a value to a key
+     * @property {boolean} [trim=true] Whether to remove leading and trailing whitespace from values
+     */
+
+    /**
+     * These are the default options used when loading properties
+     *
+     * @type {PropertiesLoadOptions}
+     */
     const DEFAULT_PROPERTIES_OPTIONS =
         {
             assignment: _equals,
             trim: true,
         };
 
-    Properties.from2dArray = function( pOptions, pKvPairs )
+    /*
+     * Returns true if the string is either a valid key or valid line in a properties file
+     */
+    const isValidPropertyKey = e => isString( e ) && !isBlank( e ) && !(e.startsWith( "#" ) || e.startsWith( "!" ));
+
+    /*
+     * Returns true if the string represents a valid line in a properties file
+     */
+    const isValidPropertyFileEntry = e => isValidPropertyKey( e ) && (e.includes( _equals ) || e.includes( _colon ));
+
+    /**
+     * Returns a new instance of Properties populated with the key/value pairs in the specified array.
+     * @param {Array<Array.<string>>} pKvPairs An array of arrays,
+     *                                         where each element is a 2-element array
+     *                                         containing the key and its associated value
+     *
+     * @param {PropertiesLoadOptions} [pOptions=DEFAULT_PROPERTIES_OPTIONS] An object defining properties
+     *                                                                      that control how to handle the input data.
+     *
+     */
+    Properties.from2dArray = function( pKvPairs, pOptions = DEFAULT_PROPERTIES_OPTIONS )
     {
         const options = populateOptions( pOptions, DEFAULT_PROPERTIES_OPTIONS );
 
@@ -455,32 +644,53 @@ const $scope = constants?.$scope || function()
         return properties.load( map, options );
     };
 
-    Properties.fromLines = function( pArr, pOptions )
+    /**
+     * Returns a new instance of Properties
+     * populated with the data in an array of strings,
+     * where each string is formatted as either key=value or key:value.
+     *
+     * @param {Array.<string>} pArr An array of strings,
+     * each representing a key/value pair,
+     * formatted as either key=value or key:value.
+     *
+     * @param {PropertiesLoadOptions} pOptions An object defining the assignment operator to expect and whether to trim values.
+     *
+     * @returns {Properties} a new instance of Properties
+     * populated with the data in an array of strings,
+     * where each string is formatted as either key=value or key:value.
+     *
+     */
+    Properties.fromLines = function( pArr, pOptions = DEFAULT_PROPERTIES_OPTIONS )
     {
         const options = populateOptions( pOptions, DEFAULT_PROPERTIES_OPTIONS );
 
-        let arr = asArray( pArr );
+        let arr = asArray( pArr ).filter( e => isString( e ) );
 
         arr = arr.map( e => e.trim() ).filter( e => !isBlank( e ) && (e.includes( options.assignment )) );
 
         let kvPairs = arr.map( e => e.split( options.assignment ) );
 
-        return Properties.from2dArray( options, kvPairs );
+        return Properties.from2dArray( kvPairs, options );
     };
 
     /**
-     * Parses a string input containing key-value pairs and converts it into an object representation.
+     * Returns a new instance of Properties loaded with the key/value pairs found by
+     * parsing the specified string.<br>
+     * <br>
      *
      * The input string should contain key-value pairs separated by newlines,
-     * where each pair is formatted as either "key=value" or "key:value", as determined in the options.
+     * where each pair is formatted as either "key=value" or "key:value", as specified in the options.
      *
      * @function
      * @name Properties.fromPropertiesString
+     *
      * @param {string} pString - The string containing key-value pairs to be parsed.
-     * @param pOptions
-     * @returns {Properties} A key-value object constructed from the parsed string input.
+     *
+     * @param {PropertiesLoadOptions} pOptions An object specifying the assignment operator and whether to trim values.
+     *
+     * @returns {Properties} A Properties object populated from the parsed string input.
      */
-    Properties.fromPropertiesString = function( pString, pOptions )
+    Properties.fromPropertiesString = function( pString, pOptions = DEFAULT_PROPERTIES_OPTIONS )
     {
         if ( isString( pString ) )
         {
@@ -490,12 +700,20 @@ const $scope = constants?.$scope || function()
 
             arr = arr.map( e => e.replace( /^\s*/, _mt_str ).replace( /\s*$/, _mt_str ) );
 
-            arr = arr.filter( e => !isBlank( e ) && !(e.startsWith( "#" ) || e.startsWith( "!" )) );
+            arr = arr.filter( isValidPropertyFileEntry );
 
             return Properties.fromLines( arr, options );
         }
     };
 
+    /**
+     * Returns a new instance of Properties,
+     * populated with the key/value pairs found in the specified object.
+     *
+     * @param {Map|Properties|Object} pObject An object from which to populate the properties
+     * @param {PropertiesLoadOptions} pOptions An object specifying the assignment operator and whether to trim values.
+     * @returns {Properties} a new instance of Properties, populated with the key/value pairs found in the specified object.
+     */
     Properties.fromObject = function( pObject, pOptions )
     {
         let properties = new Properties();
@@ -507,7 +725,7 @@ const $scope = constants?.$scope || function()
             if ( isMap( pObject ) )
             {
                 const map = new Map( pObject );
-                map.forEach( ( v, k ) => properties.set( k, v ) );
+                map.forEach( ( v, k ) => properties.set( asString( k, true ), asString( v ) ) );
             }
             else if ( isArray( pObject ) || isString( pObject ) )
             {
@@ -515,18 +733,38 @@ const $scope = constants?.$scope || function()
             }
             else
             {
-                const filtered = objectEntries( pObject ).filter( e => isString( ObjectEntry.getKey( e ) ) && isString( ObjectEntry.getValue( e ) ) );
-                properties = properties.load( ObjectEntry.unwrapValues( filtered ), options );
+                const stringsOnly = e => isString( ObjectEntry.getKey( e ) ) &&
+                                         isString( ObjectEntry.getValue( e ) );
+
+                const entries = objectEntries( pObject ); // TODO: collapse to a.b.c=value form
+
+                const filtered = entries.filter( stringsOnly ).filter( e => !isBlank( ObjectEntry.getKey( e ) ) );
+
+                const unwrappedValues = ObjectEntry.unwrapValues( filtered );
+
+                properties = properties.load( unwrappedValues, options );
             }
         }
 
         return properties;
     };
 
-    Properties.fromJsonString = function( pJson, pOptions )
+    /**
+     * Returns a new instance of Properties, populated with the values found in the JSON data provided.<br>
+     * Parses a JSON-formatted string and converts it into a Properties object.<br>
+     * <br>
+     *
+     * @function
+     * @param {string} pJson - The JSON-formatted string to parse.
+     * @param {PropertiesLoadOptions} pOptions
+     *
+     * @returns {Properties} The Properties object created from the JSON string.
+     */
+    Properties.fromJsonString = function( pJson, pOptions = DEFAULT_PROPERTIES_OPTIONS )
     {
-        const obj = attempt( () => parseJson( pJson ) );
-        return Properties.fromObject( obj, pOptions );
+        const options = populateOptions( pOptions, DEFAULT_PROPERTIES_OPTIONS );
+        const obj = isJson( pJson ) ? attempt( () => parseJson( pJson ) ) : Properties.isProperties( pJson ) ? pJson : {};
+        return Properties.fromObject( obj, options );
     };
 
     /**
@@ -538,7 +776,7 @@ const $scope = constants?.$scope || function()
      *
      * @param {string} pFilePath - The path to the properties file to be loaded.
      * @param pOptions
-     * @returns {Properties} An object representing the key-value pairs from the file.
+     * @returns {Properties} a new instance of Properties, populated with the key/value pairs defined in the file
      */
     Properties.fromFile = async function( pFilePath, pOptions )
     {
@@ -565,11 +803,53 @@ const $scope = constants?.$scope || function()
     };
 
     /**
+     * Fetches properties content from an HTTP(S) endpoint
+     * and returns a new instance of Properties populated from that content
      *
+     * @param {string|Request} pUrl the URL (or a Request Object) from which to retrieve the properties content
+     * @param {PropertiesLoadOptions} [pOptions=DEFAULT_PROPERTIES_OPTIONS] an object defining how to interpret and transform the content
      */
-    Properties.fromUrl = async function( pUrl, pOptions )
+    Properties.fromUrl = async function( pUrl, pOptions = DEFAULT_PROPERTIES_OPTIONS )
     {
 
+    };
+
+    Properties.from = function( pSource, pOptions )
+    {
+        if ( isString( pSource ) )
+        {
+            if ( isValidPropertyFileEntry( pSource ) )
+            {
+                return Properties.fromPropertiesString( pSource, pOptions );
+            }
+
+            return Properties.fromFile( pSource, pOptions );
+        }
+        else if ( isMap( pSource ) )
+        {
+            return Properties.fromObject( pSource, pOptions );
+        }
+        else if ( isArray( pSource ) )
+        {
+            if ( isKeyValueArray( pSource ) )
+            {
+                return Properties.from2dArray( pSource, pOptions );
+            }
+            else
+            {
+                return Properties.fromLines( pSource, pOptions );
+            }
+        }
+        else if ( isJson( pSource ) )
+        {
+            return Properties.fromJsonString( pSource, pOptions );
+        }
+        else if ( isNonNullObject( pSource ) )
+        {
+            return Properties.fromObject( pSource, pOptions );
+        }
+
+        return new Properties();
     };
 
     /**
@@ -587,7 +867,8 @@ const $scope = constants?.$scope || function()
         {
             resourceLoader: null,
             paths: null,
-            locales: null
+            locales: null,
+            loadOnCreate: false,
         };
 
     /**
@@ -876,19 +1157,19 @@ const $scope = constants?.$scope || function()
     class Resource extends LocaleResourcesBase
     {
         /**
-         *
+         * The key used to store and retrieve this Resource
          * @type {ResourceKey}
          */
         #key;
 
         /**
-         *
-         * @type {string|Resource|*}
+         * The value represented by this Resource
+         * @type {string|*}
          */
         #value;
 
         /**
-         *
+         * An optional Resource to use to return a value if this instance's value is missing
          * @type {Resource}
          */
         #backedBy;
@@ -939,6 +1220,11 @@ const $scope = constants?.$scope || function()
             return false;
         }
 
+        /**
+         * Returns the nested/default value if it is defined.
+         *
+         * @returns {Resource} the nested/default value if it is defined.
+         */
         get backedBy()
         {
             return this._copyValue( this.#backedBy );
@@ -1136,6 +1422,11 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    /**
+     * Returns true if the specified object is an instance of Resource
+     * @param {*} pObject the value to evaluate
+     * @returns {boolean} true if the specified object is an instance of Resource
+     */
     function isResource( pObject )
     {
         return isNonNullObject( pObject ) && instanceOfAny( pObject, Resource );
@@ -1197,393 +1488,6 @@ const $scope = constants?.$scope || function()
         return null;
     };
 
-    class ResourceMap extends LocaleResourcesBase
-    {
-        #locale;
-        #localeCode;
-
-        #resources = new Properties();
-
-        constructor( pLocale, ...pResources )
-        {
-            super();
-
-            this.#locale = resolveLocale( pLocale ) || DEFAULT_LOCALE;
-            this.#localeCode = this.#locale?.baseName || DEFAULT_LOCALE_STRING;
-
-            const me = this;
-
-            let arr = asArray( varargs( ...pResources ) );
-
-            const mapper = e => (isObject( e ) && (e instanceof me.constructor)) ? e.resources : e;
-
-            arr = arr.filter( e => !isNull( e ) ).map( mapper ).flat();
-
-            for( let elem of arr )
-            {
-                if ( !isNull( elem ) )
-                {
-                    const rsrc = (instanceOfAny( elem, Resource )) ? elem : Resource.from( elem );
-
-                    if ( !isNull( rsrc ) && instanceOfAny( rsrc, Resource ) )
-                    {
-                        const key = elem.key.toString();
-
-                        this.#resources.set( key, elem );
-
-                        this.expandTree( key, elem );
-                    }
-                }
-            }
-        }
-
-        static get [Symbol.species]()
-        {
-            return this;
-        }
-
-        expandTree( pKey, pElem )
-        {
-            if ( pKey.includes( _dot ) )
-            {
-                let obj = this.#resources;
-
-                const keys = pKey.split( _dot );
-
-                while ( keys.length > 1 && (isMap( obj ) || Properties.isProperties( obj )) )
-                {
-                    let key = keys.shift();
-
-                    obj.set( key, obj.get( key ) || new Properties() );
-
-                    const remaining = keys.length > 0 ? keys.join( _dot ) : null;
-
-                    if ( remaining )
-                    {
-                        const node = obj.get( key );
-                        if ( isMap( node ) || Properties.isProperties( node ) )
-                        {
-                            node.set( remaining, pElem );
-                        }
-                    }
-
-                    obj = obj.get( key );
-                }
-            }
-        }
-
-        get locale()
-        {
-            return this.#locale || DEFAULT_LOCALE;
-        }
-
-        get resources()
-        {
-            return lock( this.#resources );
-        }
-
-        get entries()
-        {
-            return lock( [...(this.resources.entries() || [])] );
-        }
-
-        get keys()
-        {
-            return lock( [...(this.resources.keys() || [])] );
-        }
-
-        isResource( pObject )
-        {
-            return isResource( pObject );
-        }
-
-        getResource( pKey )
-        {
-            const resourceKey = new ResourceKey( pKey );
-
-            const k = asString( resourceKey.toString(), true );
-
-            let obj = this.resources.get( k );
-
-            if ( !isNull( obj ) && this.isResource( obj ) )
-            {
-                return obj;
-            }
-
-            let keys = k.split( _dot );
-
-            obj = this.resources;
-
-            while ( keys.length > 0 && (isMap( obj ) || Properties.isProperties( obj )) )
-            {
-                let key = keys.shift();
-                obj = obj.get( key );
-
-                if ( !isNull( obj ) && this.isResource( obj ) )
-                {
-                    break;
-                }
-            }
-
-            obj = obj || (this.isResource( resourceKey.defaultValue ) ? resourceKey.defaultValue : null);
-
-            return !isNull( obj ) ? immutableCopy( obj ) : null;
-        }
-
-        get( pKey )
-        {
-            let resource = this.getResource( pKey );
-
-            if ( !isNull( resource ) && this.isResource( resource ) )
-            {
-                return immutableCopy( isValidResourceValue( resource.value ) ? resource.value : resource );
-            }
-
-            let keys = asString( pKey, true ).split( _dot );
-
-            let obj = this.resources;
-
-            while ( keys.length > 0 && (isMap( obj ) || Properties.isProperties( obj )) )
-            {
-                let key = keys.shift();
-                obj = obj.get( key );
-            }
-
-            if ( isNull( obj ) )
-            {
-                return asString( pKey, true );
-            }
-
-            return immutableCopy( isValidResourceValue( obj?.value ) ? obj?.value : obj );
-        }
-    }
-
-    ResourceMap.FILTER = e => !isNull( e ) && (instanceOfAny( e, ResourceMap, ResourceCollection ));
-
-    class ResourceCollection extends ResourceMap
-    {
-        #defaultMap;
-
-        #defaultResources = new Properties();
-
-        constructor( pLocale, pDefaultMap, ...pResources )
-        {
-            super( pLocale, ...pResources );
-
-            this.#defaultMap = ResourceMap.FILTER( pDefaultMap ) ? pDefaultMap : new ResourceMap( DEFAULT_LOCALE, { ...pDefaultMap, ...pResources } );
-
-            this.#defaultResources = this.#defaultMap?.resources; // || { ...pResources };
-        }
-
-        static get [Symbol.species]()
-        {
-            return this;
-        }
-
-        get defaultMap()
-        {
-            return this.#defaultMap || this;
-        }
-
-        get resources()
-        {
-            return new Properties(); //{ ...(this.#defaultResources || this.defaultMap.resources), ...super.resources };
-        }
-
-        get entries()
-        {
-            const defaultEntries = this.defaultMap.entries();
-            const superEntries = super.entries();
-
-            return unique( [
-                               ...defaultEntries,
-                               ...superEntries
-                           ].flat() );
-        }
-
-        get keys()
-        {
-            const defaultKeys = this.defaultMap.keys();
-            const superKeys = super.keys();
-
-            return unique( [
-                               ...defaultKeys,
-                               ...superKeys
-                           ].flat() );
-        }
-
-        getResource( pKey )
-        {
-            const resource = super.getResource( pKey );
-
-            if ( isNull( resource ) )
-            {
-                return this.defaultMap.getResource( pKey );
-            }
-
-            return resource;
-        }
-
-        get( pKey )
-        {
-            const resource = this.getResource( pKey );
-
-            if ( !isNull( resource ) && this.isResource( resource ) )
-            {
-                return resource.value || resource;
-            }
-            return resource?.value || resource || asString( pKey, true );
-        }
-    }
-
-    ResourceCollection.FILTER = e => !isNull( e ) && (instanceOfAny( e, ResourceCollection ));
-
-    class ResourceBundle extends LocaleResourcesBase
-    {
-        #resourceMaps = {};
-        #resources = new Properties();
-
-        constructor( ...pResourceMaps )
-        {
-            super();
-
-            const NOT_NULL = e => !isNull( e );
-
-            const mapper = e => (instanceOfAny( e, ResourceMap, ResourceCollection ) ? e : isResource( e ) ? new ResourceMap( e.locale, e ) : isArray( e ) ? new ResourceMap( DEFAULT_LOCALE, ...(asArray( e )) ) : null);
-
-            let arrMaps = flatArgs( ...pResourceMaps ).filter( NOT_NULL ).map( mapper );
-
-            arrMaps = arrMaps.filter( e => !isNull( e ) && ResourceMap.FILTER( e ) );
-
-            for( let rsrcMap of arrMaps )
-            {
-                if ( isNull( rsrcMap ) || !ResourceMap.FILTER( rsrcMap ) )
-                {
-                    continue;
-                }
-
-                const resources = Properties.from2dArray( [(rsrcMap.resources.entries() || [])] );
-
-                if ( objectKeys( resources ).length <= 0 )
-                {
-                    continue;
-                }
-
-                const keys = this.buildLocaleKeyPermutations( rsrcMap.locale );
-
-                for( let key of keys )
-                {
-                    let map = this.initializeMapEntry( this.#resourceMaps, key, [] );
-                    map.push( rsrcMap );
-
-                    this.appendMapEntry( this.#resources, key, resources );
-                }
-            }
-        }
-
-        static get [Symbol.species]()
-        {
-            return this;
-        }
-
-        get resourceMaps()
-        {
-            return { ...(this.#resourceMaps || {}) };
-        }
-
-        getResourceMaps( pLocale )
-        {
-            const locale = resolveLocale( pLocale );
-
-            const keys = this.buildLocaleKeyPermutations( locale );
-
-            const maps = this.resourceMaps;
-
-            const arr = [];
-
-            for( let key of keys )
-            {
-                const a = maps[key];
-                if ( a && a.length > 0 )
-                {
-                    arr.push( a );
-                }
-            }
-
-            return arr.flat();
-        }
-
-        get resources()
-        {
-            return { ...this.#resources };
-        }
-
-        getResource( pLocale, pKey )
-        {
-            const locale = resolveLocale( pLocale );
-
-            const maps = this.getResourceMaps( locale );
-
-            let resource = null;
-
-            for( let map of maps )
-            {
-                resource = map.getResource( pKey );
-                if ( !isNull( resource ) && isResource( resource ) )
-                {
-                    break;
-                }
-            }
-
-            return resource;
-        }
-
-        get( pLocale, pKey )
-        {
-            const locale = resolveLocale( pLocale );
-
-            let resource = this.getResource( locale, pKey );
-
-            if ( !isNull( resource ) && isResource( resource ) )
-            {
-                return resource.value || resource;
-            }
-
-            let value = null;
-
-            let resourceKeys = asString( pKey, true ).split( _dot );
-
-            const localeKeys = this.buildLocaleKeyPermutations( locale ) || [];
-
-            for( let localeKey of localeKeys )
-            {
-                let obj = this.resources[localeKey];
-
-                if ( isNull( obj ) )
-                {
-                    continue;
-                }
-
-                while ( resourceKeys.length > 0 && null != obj )
-                {
-                    let key = resourceKeys.shift();
-                    obj = obj[key];
-                }
-
-                if ( !isNull( obj ) )
-                {
-                    value = obj?.value;
-                }
-
-                if ( _ud !== typeof value && null !== value )
-                {
-                    break;
-                }
-            }
-
-            return value;
-        }
-    }
 
     /**
      * A utility class for loading resources such as text files, JSON, or properties files.<br>
@@ -1632,8 +1536,6 @@ const $scope = constants?.$scope || function()
         {
             const paths = flatArgs( ...pPaths );
 
-            const strings = [];
-
             const promises = [];
 
             for( let p of paths )
@@ -1648,81 +1550,35 @@ const $scope = constants?.$scope || function()
                 }
             }
 
-            const results = await Promise.allSettled( promises );
-
-            for( const result of results )
-            {
-                if ( isFulfilled( result ) )
-                {
-                    strings.push( result.value );
-                }
-            }
-
-            return asArray( strings ).filter( e => !isBlank( e ) );
+            return promises;
         }
 
-        /**
-         * Returns promise resolving to a JSON object.<br>
-         * <br>
-         * Fetches JSON data from the specified paths, parses it,
-         * and merges multiple JSON strings into a single object.
-         *
-         * @param {...string} pPaths - Paths or URLs from which JSON data will be fetched.
-         * @return {Promise<Object>} A promise resolving to a JSON object.
-         *                           If multiple JSON strings are fetched, they are merged;
-         *                           if only one JSON string is fetched, it is parsed.
-         *                           Returns an empty object if no JSON strings are fetched.
-         */
-        async fetchJson( ...pPaths )
+        load( pTarget )
         {
-            const jsonStrings = await this.fetch( ...pPaths );
+            const target = pTarget || new ResourceCache( this );
 
-            if ( jsonStrings.length > 0 )
-            {
-                if ( jsonStrings.length > 1 )
-                {
-                    return jsonUtils.merge( ...jsonStrings );
-                }
-                else
-                {
-                    return jsonUtils.parse( jsonStrings[0] );
-                }
-            }
+            const strings = [];
 
-            return {};
+            this.fetch( ...this.#paths ).then( async( promises ) =>
+                                               {
+                                                   const results = await Promise.allSettled( promises );
+
+                                                   for( const result of results )
+                                                   {
+                                                       if ( isFulfilled( result ) )
+                                                       {
+                                                           strings.push( result.value );
+
+                                                           const props = Properties.from( result.value );
+                                                           const properties = new ResourceFamily( props?.name, props );
+                                                           target.addResourceFamily( properties );
+                                                       }
+                                                   }
+                                               } );
+
+
+            return strings;
         }
-
-        loadFromJson( pJson )
-        {
-
-        }
-
-        async fetchProperties( ...pPaths )
-        {
-            const properties = await this.fetch( ...pPaths );
-
-            const obj = {};
-
-            for( const property of properties )
-            {
-                const lines = property.split( _lf );
-
-                for( const line of lines )
-                {
-                    const [key, value] = line.split( "=" ).map( e => e.trim() );
-
-                    obj[key] = value;
-                }
-            }
-
-            return obj;
-        }
-
-        loadFromProperties( pProperties )
-        {
-
-        }
-
     }
 
     DEFAULT_OPTIONS.resourceLoader = new ResourceLoader( DEFAULT_OPTIONS.paths, DEFAULT_OPTIONS.locales, DEFAULT_OPTIONS );
@@ -1744,90 +1600,134 @@ const $scope = constants?.$scope || function()
         return new ResourceLoader( options.paths, options.locales, options );
     };
 
-    class HierarchicalKey extends Array
+    /**
+     * Represents a set of resources particular to a specific purpose<br>
+     * <br>
+     * An example might be for the error messages specific to a particular module or feature.<br>
+     * <br>
+     * The persistent values might be in several files,
+     * either all starting with the same base name
+     * or being stored in the same folder or table.<br>
+     * <br>
+     * For instance, you might have
+     * error_messages.properties,
+     * error_messages_es_MX.properties,
+     * error_messages_de.properties, etc.,
+     * all of which would belong to the "error_messages" resource family.
+     * <br>
+     * <br>
+     */
+    class ResourceFamily
     {
-        constructor( ...pArgs )
+        #baseName = "messages";
+        #properties = new Properties();
+
+        constructor( pBaseName, ...pProperties )
         {
-            super( ...pArgs );
+            this.#baseName = asString( pBaseName, true );
+            this.#properties = this.processProperties( ...pProperties );
         }
 
-        static get [Symbol.species]()
+        processProperties( ...pProperties )
         {
-            return this;
+            let properties = new Properties();
+
+            const objects = asArray( varargs( ...pProperties ) ).filter( e => isNonNullObject( e ) ).reverse();
+            for( const obj of objects )
+            {
+                properties = new Properties( obj?.name, properties, obj?.locale ).load( Properties.from( obj ) );
+            }
+
+            return properties;
         }
     }
 
-    HierarchicalKey.parse = function( pHierarchicalKey )
-    {
-        let hKey = [];
-
-        if ( isNonNullObject( pHierarchicalKey ) )
-        {
-            if ( pHierarchicalKey instanceof HierarchicalKey )
-            {
-                return pHierarchicalKey;
-            }
-
-            if ( isArray( pHierarchicalKey ) )
-            {
-                if ( pHierarchicalKey.every( e => e instanceof ResourceKey ) )
-                {
-                    return new HierarchicalKey( ...pHierarchicalKey );
-                }
-
-                hKey.push( new ResourceKey( ...pHierarchicalKey ) );
-
-                hKey = hKey.concat( ...([...pHierarchicalKey].map( e => e instanceof ResourceKey ? e : new ResourceKey( e ) )) );
-            }
-            else
-            {
-                let entries = { ...pHierarchicalKey }.entries();
-
-                for( const entry of entries )
-                {
-                    let [key, value] = entry;
-
-                    let pushed = false;
-
-                    if ( key instanceof ResourceKey )
-                    {
-                        hKey.push( key );
-                        pushed = true;
-                    }
-
-                    if ( value instanceof ResourceKey )
-                    {
-                        hKey.push( value );
-                        pushed = true;
-                    }
-
-                    if ( !pushed )
-                    {
-                        hKey.push( new ResourceKey( key, value ) );
-                        pushed = true;
-                    }
-                }
-            }
-
-            return new HierarchicalKey( ...(asArray( [...hKey].flat() )) );
-        }
-
-        throw new IllegalArgumentError( "Invalid HierarchicalKey", { hierarchicalKey: pHierarchicalKey } );
-    };
 
     class ResourceCache
     {
         #resourceLoader;
-
-        #resourceCollections = {};
-
+        #resourceFamilies;
         #options;
 
         constructor( pResourceLoader, pOptions = DEFAULT_OPTIONS )
         {
             this.#options = populateOptions( pOptions, DEFAULT_OPTIONS );
             this.#resourceLoader = ResourceLoader.resolve( pResourceLoader, this.#options );
-            this.#resourceCollections = {};
+            this.#resourceFamilies = new Map();
+
+            if ( this.#options?.loadOnCreate )
+            {
+                if ( this.#resourceLoader )
+                {
+                    this.#resourceLoader.load( this );
+                }
+            }
+        }
+
+        addResourceFamily( pResourceFamily )
+        {
+            this.#resourceFamilies.set( pResourceFamily.baseName, pResourceFamily );
+        }
+
+        load( ...pSource )
+        {
+            const sources = asArray( varargs( ...pSource ) );
+
+            for( const source of sources )
+            {
+                if ( source instanceof ResourceFamily )
+                {
+                    this.addResourceFamily( source );
+                }
+                else if ( isString( source ) )
+                {
+                    if ( isValidPropertyFileEntry( source ) )
+                    {
+                        const props = Properties.from( source );
+                        this.addResourceFamily( new ResourceFamily( props.name, props ) );
+                    }
+                }
+                else if ( isNonNullObject( source ) )
+                {
+                    const props = Properties.from( source );
+                    this.addResourceFamily( new ResourceFamily( props.name, props ) );
+                }
+            }
+        }
+
+        getResourceFamily( pBaseName )
+        {
+            return this.#resourceFamilies.get( pBaseName );
+        }
+
+        getResource( ...pKey )
+        {
+            let resourceFamily;
+
+            let keys = asArray( varargs( ...pKey ) );
+
+            while( keys.length > 0 )
+            {
+                const key = keys.shift();
+                resourceFamily = this.getResourceFamily( key );
+                if ( resourceFamily )
+                {
+                    return resourceFamily.getResource( keys.split( 1 ) );
+                }
+            }
+
+            keys = asArray( varargs( ...pKey ) );
+            const values = [];
+            for( const family of this.#resourceFamilies.values() )
+            {
+                 let value = family.getResource( keys.split( 1 ) );
+                 if ( value )
+                 {
+                     values.push( value );
+                 }
+            }
+
+            return values.length > 1 ? values : values.length > 0 ? values[0] : null;
         }
 
         static get [Symbol.species]()
@@ -1845,11 +1745,7 @@ const $scope = constants?.$scope || function()
                     Properties,
                     Resource,
                     ResourceKey,
-                    ResourceMap,
-                    ResourceCollection,
-                    ResourceBundle,
                     ResourceLoader,
-                    HierarchicalKey,
                     ResourceCache
                 },
             DEFAULT_LOCALE,

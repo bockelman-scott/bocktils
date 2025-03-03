@@ -17,6 +17,7 @@
 // import the only dependency for this module
 const moduleUtils = require( "./_ToolBocksModule.cjs" );
 
+// noinspection FunctionTooLongJS
 /**
  * This module is constructed by an Immediately Invoked Function Expression (IIFE).
  * see: <a href="https://developer.mozilla.org/en-US/docs/Glossary/IIFE">MDN: IIFE</a> for more information on this design pattern
@@ -66,6 +67,7 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
         {
             ModuleEvent,
             ToolBocksModule,
+            ENDIAN,
             TYPES_CHECKS,
             getExecutionEnvironment,
             getGlobalLogger,
@@ -101,6 +103,7 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
             objectKeys,
             getProperty,
             setProperty,
+            hasProperty,
             populateOptions,
             mergeOptions,
             merge = mergeOptions,
@@ -601,7 +604,7 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
              */
             TRAILING_WHITESPACE: _rxTrailingWhitespace,
             /**
-             * Regular expression for matching a toen for variable interpolation<br>
+             * Regular expression for matching a token for variable interpolation<br>
              * for example that might be found in a template string<br>
              *
              * @constant {RegExp} VARIABLE_TOKEN
@@ -635,8 +638,39 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
         {
             decimal_point: ".",
             grouping_separator: ",",
-            currency_symbol: /\$|USD/
+            currency_symbol: /\$|USD/,
+            currency: "USD"
         } );
+
+    /**
+     * Returns the string representing the specified Locale,
+     * or the default locale if no Locale is provided or the string is empty
+     * <br>
+     * <br>
+     * @param {Intl.Locale|string} pLocale - The Locale or string to resolve
+     * @returns the string representing the specified Locale,
+     * or the default locale if no Locale is provided or the string is empty
+     *
+     * @alias module:Constants.resolveLocaleString
+     */
+    function resolveLocaleString( pLocale )
+    {
+        if ( pLocale instanceof Intl.Locale )
+        {
+            return pLocale?.baseName || _defaultLocaleString;
+        }
+
+        if ( null == pLocale || _mt_str === pLocale )
+        {
+            const numberFormat = new Intl.NumberFormat();
+            const resolvedOptions = numberFormat.resolvedOptions();
+            const locale = resolvedOptions?.locale;
+
+            return (_mt_str + locale?.baseName) || _defaultLocaleString;
+        }
+
+        return (_mt_str + pLocale) || _defaultLocaleString;
+    }
 
     /**
      * Returns an object defining the {@link NumberFormattingSymbols}
@@ -651,7 +685,7 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
      */
     const calculateNumberFormattingSymbols = function( pLocale, pCurrency )
     {
-        let localeString = (pLocale instanceof Intl.Locale) ? (pLocale?.baseName || _defaultLocaleString) : (null == pLocale) || (_mt_str === pLocale) ? (_mt_str + ((((new Intl.NumberFormat()).resolvedOptions())?.locale)?.baseName) || _defaultLocaleString) : (_mt_str + pLocale);
+        let localeString = resolveLocaleString( pLocale );
 
         let currency = (null == pCurrency) || (_mt_str === pCurrency) ? _defaultCurrency : (_mt_str + (pCurrency || _defaultCurrency));
 
@@ -759,11 +793,24 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
 
     let mod =
         {
+            /**
+             * Returns the global object representing the execution context.<br>
+             * In a browser, this is typically the window or worker or service worker,
+             * while in Node.js or other environments, it is either 'global' or the globalThis.
+             *
+             * @alias module:Constants.$scope
+             */
             $scope,
 
             dependencies,
 
+            /**
+             * This is the 'base' module upon which all other ToolBocks&trade; modules depend and extend.
+             * @alias module:Constants.moduleUtils
+             */
             moduleUtils,
+
+            ENDIAN,
 
             /**
              * The classes exported with this module.<br>
@@ -783,6 +830,10 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
              */
             classes:
                 {
+                    /**
+                     * This class is a wrapper for the results object passed into the resolve callback for Promises.allSettled
+                     * @alias module:Constants#classes#PromiseResult
+                     */
                     PromiseResult,
 
                     /**
@@ -872,14 +923,76 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
                      */
                     StackTrace,
 
+                    /**
+                     * Defines or redefines the built-in CustomEvent class
+                     * used to dispatch custom events as ModuleEvent instances
+                     * <br>
+                     * @alias module:Constants#classes#CustomEvent
+                     */
                     CustomEvent,
 
+                    /**
+                     * This class extends EventTarget
+                     * and provides the ability to attach an event handler
+                     * that is not just a function, but rather an object that can hold state
+                     * and perhaps respond accordingly.
+                     * <br>
+                     * <br>
+                     * This class should be extended by your own classes rather than instantiated directly.
+                     * <br>
+                     * <br>
+                     * Common examples might include a logger, a stream-based parser, or a retry counter
+                     *
+                     * @alias module:Constants#classes#StatefulListener
+                     *
+                     */
                     StatefulListener,
 
+                    /**
+                     * This class collects and exposes several properties of the current runtime.
+                     * <br>
+                     * <br>
+                     * Code that is designed to work across environments can interrogate an instance of this object,
+                     * available as a property of any other module, to run environment-specific alternatives.
+                     * <br>
+                     *
+                     * @alias module:Constants#classes#ExecutionEnvironment
+                     */
                     ExecutionEnvironment,
 
+                    /**
+                     * A singleton instance of this class is available
+                     * to determine the levels of verbosity available or expected
+                     * for selected behaviors and/or errors that may be encountered at runtime.
+                     * <br>
+                     * <br>
+                     * In general, this is the object that specifies
+                     * if we are running in production, development, testing, or some other capacity
+                     * that would determine how some code is executed or logged.
+                     * <br>
+                     * <br>
+                     * This library defines 5 different modes,
+                     * however, you are free to define others
+                     * or even to extend the class to capture other options
+                     * you want to vary between modes.
+                     * <br>
+                     * <br>
+                     *
+                     * @alias module:Constants#classes#ExecutionMode
+                     */
                     ExecutionMode,
 
+                    /**
+                     * This is the base class (and model for) implementations of the Visitor pattern.
+                     * <br>
+                     * <br>
+                     * While it is possible to pass your own handler function to the constructor,
+                     * it is more common and recommended to extend the class and override the visit method.
+                     * <br>
+                     * <br>
+                     *
+                     * @alias module:Constants#classes#Visitor
+                     */
                     Visitor
                 },
 
@@ -1134,8 +1247,22 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
              */
             _colon,
 
+            /**
+             * The pipe character<br>
+             * Value: | <br>
+             * @const
+             * @type {string}
+             * @alias module:Constants#_pipe
+             */
             _pipe,
 
+            /**
+             * The question mark character, often used in URLs to append a query string<br>
+             * Value: ? <br>
+             * @const
+             * @type {string}
+             * @alias module:Constants#_question
+             */
             _question,
 
             /**
@@ -1174,10 +1301,33 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
              */
             _asterisk,
 
+            /**
+             * The ampersand character, sometimes used in place of the word 'and' and also used to start HTML entity codes<br>
+             * Value: & <br>
+             * @const
+             * @type {string}
+             * @alias module:Constants#_ampersand
+             */
             _ampersand,
 
+            /**
+             * The 'equals' sign, used in mathematics to indicate equality,<br>
+             * but also used to assign values to variables or separate key/value pairs in external text<br>
+             * <br>
+             * Value: = <br>
+             * @const
+             * @type {string}
+             * @alias module:Constants#_equals
+             */
             _equals,
 
+            /**
+             * Also the equals signs character, used to assign values to variables or separate key/value pairs in external text<br>
+             * Value: = <br>
+             * @const
+             * @type {string}
+             * @alias module:Constants#_assignment
+             */
             _assignment,
 
             /**
@@ -1769,7 +1919,7 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
 
             /**
              * An array of strings that are interpreted as 'true'<br>
-             * when encountered in JSON or other configuration contexts
+             * when encountered in configuration contexts
              *
              * @const
              * @type {Array<string>}
@@ -1838,7 +1988,7 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
             RESERVED_WORDS,
 
             /**
-             * The constructor, and <i>Type</i> for async functions.<br>
+             * The constructor, and <i>Type</i>, for async functions.<br>
              * @const
              * @type {function}
              * @alias module:Constants#AsyncFunction
@@ -2048,14 +2198,44 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
              */
             DEFAULT_MAX_STACK_DEPTH,
 
+            /**
+             * An object whose properties are some common useful regular expressions.
+             * @alias module:Constants#REG_EXP
+             */
             REG_EXP,
-            REG_EXP_DOT,
-            REG_EXP_LEADING_DOT,
-            REG_EXP_TRAILING_DOT,
+
+            /**
+             * This constant defines the default properties for
+             * the decimal separator, grouping separator, and currency symbol (regular expression).
+             * <br>
+             * <br>
+             * @alias module:Constants#DEFAULT_NUMBER_FORMATTING_SYMBOLS
+             */
             DEFAULT_NUMBER_FORMATTING_SYMBOLS,
 
+            /**
+             * This object defines <i>rudimentary</i> methods for checking the type of a variable.
+             * <br>
+             * <br>
+             * These are used in this module and the base class,
+             * but your code should use those defined in the TypeUtils module,
+             * which depends on this module.
+             * <br>
+             * @alias module:Constants#TYPES_CHECKS
+             */
             TYPES_CHECKS,
 
+            /**
+             * This class is used to wrap the 2d arrays returned from the objectEntries function.
+             * <br>
+             * <br>
+             * In addition to capturing and exposing the key and value as properties,
+             * this object also captures and exposes the parent object,
+             * has methods for validating or converting the value,
+             * and static methods for iterating an object graph (that takes a Visitor)
+             *
+             * @alias module:Constants#ObjectEntry
+             */
             ObjectEntry,
 
             /**
@@ -2109,22 +2289,152 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
              * @param {string|Error} pMessage A string to use as the message property of the returned Error or an Error whose message will be used instead
              * @returns {__Error} an Error (actually an instance of __Error), which provides an environment-agnostic stack trace)
              *
-             * @alias module:Constants#resolveError
+             * @alias module:Constants.resolveError
              */
             resolveError,
+
+            /**
+             * Returns an instance of the ModuleEvent custom event class
+             * from the arguments specified in the constructor.
+             * <br>
+             * <br>
+             * The constructor can take up to 3 arguments:
+             * <br>
+             *
+             * @param {Event|CustomEvent|ToolBocksModuleEvent|string} pEvent - The object to be resolved as an Event
+             *                                                                 <br>
+             *                                                                 If not provided,
+             *                                                                 the function will attempt
+             *                                                                 to retrieve the event
+             *                                                                 from the current scope.
+             *
+             * @param {*} [pData] - Optional data to be associated with the new `ToolBocksModuleEvent`.
+             *
+             * @param {*} [pOptions] - Configuration options to be associated with the new `ToolBocksModuleEvent`.
+             *
+             * @returns {CustomEvent|ToolBocksModuleEvent} - Returns the resolved event.
+             *                                               <br>
+             *                                               <br>
+             *                                               If the specified event is already
+             *                                               a `CustomEvent` or `ToolBocksModuleEvent`,<br>
+             *                                               the specified options and data are merged with the existing
+             *                                               properties and then the updated object is returned.
+             *                                               <br>
+             *                                               <br>
+             *                                               Otherwise, a new `ToolBocksModuleEvent`
+             *                                               is created and returned.
+             */
             resolveEvent,
+
+            /**
+             * Returns a non-null object.<br>
+             * Returns the specified object if it meets the criteria of being a non-null object.<br>
+             * @param {*} pObject The object to return if it is actually a non-null object<br>
+             * @param {boolean} [pAcceptArray=false] Whether to treat an array as an object for this purpose<br>
+             * @returns {Object} The object specified if it is a non-null object, otherwise an empty object; <b>never returns null</b>.
+             *
+             * @alias module:Constants.resolveObject
+             */
             resolveObject,
+
+            /**
+             * Returns a valid log level based on the specified value.<br>
+             * The method maps the input to a predefined set of log levels,
+             * corresponding to the methods of ILogger types.<br>
+             *
+             * @param {string|number} pLevel - the name or numeric value representing a log level.<br>
+             *                                 This can be a string (log level name) or a number (log level index).<br>
+             *                                 Valid strings are case-insensitive
+             *                                 and should correspond to predefined log levels.
+             *                                 Valid numbers are between 0 and 6,
+             *                                 corresponding to the following log levels:
+             *                                 0 = NONE, 1 = LOG, 2 = ERROR, 3 = WARN, 4 = INFO, 5 = DEBUG, 6 = TRACE
+             *
+             *
+             * @return {string} The resolved log level.<br>
+             *                  If the input is invalid or does not match any predefined log level,
+             *                  the default value, "error", is returned.
+             *
+             * @alias module:Constants.resolveLogLevel
+             */
             resolveLogLevel,
-            resolveType,
+
+            /**
+             * Returns a valid function
+             * based on the specified parameters.<br>
+             * <br>
+             *
+             * @param {Function|string} pMethod - The method to be resolved.
+             *                                    It can be a function or a string representing a method name.
+             *                                    <br>
+             * @param {object|Function} pThis - The context or object that may expose the method
+             *                                  if `pMethod` is a string
+             *                                  or function to which the method is bound
+             *                                  or could be bound.
+             *                                  <br>
+             *
+             * @returns {Function} - Returns the specified function
+             *                       or a fallback function
+             *                       if the method cannot be resolved.
+             *                       <br>
+             *                       <br>
+             *                       The fallback method just returns the method or context passed.<br>
+             *                       It is not particularly useful in most scenarios,
+             *                       but eliminates the need for proliferating try/catch blocks
+             *                       in library code that executes user-provided functions or methods.
+             *
+             * @alias module:Constants.resolveMethod
+             */
             resolveMethod,
+
+            /**
+             * Returns true if the specified function can be bound to a specified object or function context.
+             * <br>
+             * <br>
+             * The function checks if the provided function is a valid function<br>
+             * and if the context is an object or a function to which the method can be bound.<br>
+             * <br>
+             * <br>
+             * @param {Function} pMethod - The function to evaluate.
+             *
+             * @param {Object|Function} pThis - The context to which the function is or could be bound.
+             *
+             * @returns {boolean} true if the method is a function
+             *                    and the context is an object or a function to which the method is or can be bound,
+             *                    otherwise false.
+             *
+             * @alias module:Constants.canBind
+             */
             canBind,
+
+            /**
+             * Binds a method to a specific context and optionally pre-sets additional arguments.<br>
+             * <br>
+             * This function attempts to resolve and bind the given method to the provided context.<br>
+             * If binding is not possible, it returns the unresolved method.<br>
+             *
+             * @param {Function|string} pMethod - The method to bind,
+             *                                    either as a function
+             *                                    or a string representing the method name.
+             *                                    <br>
+             *
+             * @param {Object} pThis - The context (this) to which to bind the method.
+             *
+             * @param {...*} pArgs - Optional arguments to preset for the method.
+             *
+             * @return {Function} The bound method if binding is successful; otherwise, the unresolved method.
+             *
+             * @alias module:Constants.bindMethod
+             */
+            bindMethod,
+
             isPromise,
             isThenable,
+
             attempt,
             attemptMethod,
             asyncAttempt,
             asyncAttemptMethod,
-            bindMethod,
             fireAndForget,
 
             isFulfilled,
@@ -2167,6 +2477,7 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
 
             getProperty,
             setProperty,
+            hasProperty,
 
             /**
              * Returns an object corresponding to a set of default options with one or more properties
@@ -2336,12 +2647,7 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
             COMPARE_EQUAL,
             COMPARE_GREATER_THAN,
             COMPARE_LESS_THAN,
-            compareNullable,
-
-            __testLogger: function( ...pTestData )
-            {
-                (this.logger || modulePrototype.logger).warn( ...pTestData );
-            }
+            compareNullable
         };
 
     // makes the properties of mod available as properties and methods of the modulePrototype

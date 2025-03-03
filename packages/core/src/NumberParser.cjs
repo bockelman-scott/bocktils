@@ -21,7 +21,7 @@ const {
 
     const { _mt_str, _spc, _dot, _comma, _minus, _latin = "latn", S_ERROR, lock, moduleUtils } = constants;
 
-    const { isString, isNumber, isObject, isNull, isHex, isOctal } = typeUtils;
+    const { isString, isNumber, isObject, isNull, isHex, isOctal, isBinary, isDecimal } = typeUtils;
 
     const { asString, lcase, isBlank } = stringUtils;
 
@@ -163,7 +163,7 @@ const {
 
             s = s.slice( 0, indexOfDecimalPoint );
 
-            s = s.replace( /\d/g, "" );
+            s = s.replace( /\d/g, _mt_str );
 
             let minusSign = s.slice( 0, 1 );
 
@@ -235,7 +235,7 @@ const {
             }
 
             // remove leading zeroes, unless the value appears to be a hexadecimal or octal value
-            if ( !(isHex( s ) || isOctal( s )) )
+            if ( isDecimal( s ) )
             {
                 s = s.replace( /^0+/, _mt_str );
             }
@@ -243,7 +243,7 @@ const {
             const rxDecimalPoint = getReForDec( this.decimalSeparator );
 
             // remove any character that is not a digit, the decimal separator or a minus sign (or if hex, x, or octal, o)
-            const re = new RegExp( "[^E\\d" + (isHex( s ) ? "x" : _mt_str) + (isOctal( s ) ? "o" : _mt_str) + rxDecimalPoint + this.negativeSign + "]", "g" );
+            const re = new RegExp( "[^E\\d" + (isHex( s ) ? "x" : _mt_str) + (isOctal( s ) ? "o" : _mt_str) + (isBinary( s ) ? "b" : _mt_str) + rxDecimalPoint + this.negativeSign + "]", "gi" );
 
             s = s.replace( re, _mt_str );
 

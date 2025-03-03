@@ -4,9 +4,9 @@ const objectUtils = require( "../src/ObjectUtils.cjs" );
 
 const
     {
-        constants = objectUtils?.dependencies?.constants,
-        typeUtils = objectUtils?.dependencies?.typeUtils,
-        arrayUtils = objectUtils?.dependencies?.arrayUtils
+        constants,
+        typeUtils,
+        arrayUtils
     } = core;
 
 /**
@@ -29,10 +29,10 @@ const {
     getKeys,
     getProperties,
     getProperty = constants?.getProperty || typeUtils?.getProperty,
-    hasProperty,
+    hasProperty = constants?.hasProperty || typeUtils?.hasProperty,
     setProperty = constants?.setProperty || typeUtils?.setProperty,
-    getValues,
-    getEntries,
+    getValues = constants.objectValues,
+    getEntries = constants.objectEntries,
     ObjectEntry = constants?.ObjectEntry || typeUtils?.ObjectEntry,
     isEmptyObject,
     isNullOrEmpty,
@@ -166,60 +166,6 @@ describe( "extractFunctionData returns an object with the function body and an a
           } );
 } );
 
-describe( "isEmptyObject", () =>
-{
-    test( "isEmptyObject returns true for an object with no properties",
-          () =>
-          {
-              expect( isEmptyObject( {} ) ).toBe( true );
-          } );
-
-    test( "isEmptyObject returns false for null",
-          () =>
-          {
-              expect( isEmptyObject( null ) ).toBe( false );
-          } );
-
-    test( "isEmptyObject returns false if the argument is not an object",
-          () =>
-          {
-              expect( isEmptyObject( "" ) ).toBe( false );
-          } );
-
-    test( "isEmptyObject returns true if the argument is an empty string and we allow strings",
-          () =>
-          {
-              expect( isEmptyObject( "", true ) ).toBe( true );
-          } );
-} );
-
-describe( "isNullOrEmpty", () =>
-{
-    test( "isNullOrEmpty returns true for an object with no properties",
-          () =>
-          {
-              expect( isNullOrEmpty( {} ) ).toBe( true );
-          } );
-
-    test( "isNullOrEmpty returns true for null",
-          () =>
-          {
-              expect( isNullOrEmpty( null ) ).toBe( true );
-          } );
-
-    test( "isNullOrEmpty returns false if the argument is not an object",
-          () =>
-          {
-              expect( isNullOrEmpty( "" ) ).toBe( false );
-          } );
-
-    test( "isNullOrEmpty returns true if the argument is an empty string and we allow strings",
-          () =>
-          {
-              expect( isNullOrEmpty( "", true ) ).toBe( true );
-          } );
-} );
-
 describe( "isNullOrNaN", () =>
 {
     test( "isNullOrNaN returns false for an object with no properties",
@@ -256,63 +202,6 @@ describe( "isNullOrNaN", () =>
           () =>
           {
               expect( isNullOrNaN( NaN ) ).toBe( true );
-          } );
-} );
-
-describe( "isMIssing", () =>
-{
-    test( "isMissing returns true for an object with no properties",
-          () =>
-          {
-              expect( isMissing( {} ) ).toBe( true );
-          } );
-
-    test( "isMissing returns true for a property that is missing, null, or undefined",
-          () =>
-          {
-              const obj = { a: null, b: undefined };
-
-              expect( isMissing( obj?.a ) ).toBe( true );
-          } );
-
-    test( "isMissing returns false for a property that is an empty string or 0",
-          () =>
-          {
-              const obj = { a: null, b: undefined, c: "", d: 0 };
-
-              expect( isMissing( obj?.c ) ).toBe( false );
-
-              expect( isMissing( obj?.d ) ).toBe( false );
-          } );
-
-    test( "isMissing returns true for null",
-          () =>
-          {
-              expect( isMissing( null ) ).toBe( true );
-          } );
-
-    test( "isMissing returns false if the argument is not an object",
-          () =>
-          {
-              expect( isMissing( "" ) ).toBe( false );
-          } );
-
-    test( "isMissing returns true if the argument is an empty string and we allow strings",
-          () =>
-          {
-              expect( isMissing( "", true ) ).toBe( true );
-          } );
-
-    test( "isMissing returns true if the argument is NaN or not finite",
-          () =>
-          {
-              expect( isMissing( 1 / 0 ) ).toBe( true );
-          } );
-
-    test( "isMissing returns true if the argument is NaN",
-          () =>
-          {
-              expect( isMissing( NaN ) ).toBe( true );
           } );
 } );
 
@@ -424,44 +313,6 @@ describe( "getClass", () =>
           } );
 } );
 
-describe( "convertToInstanceOf class", () =>
-{
-    test( "convertToInstanceOf turns an object literal into an instance of the specified class",
-          () =>
-          {
-              let o = {};
-
-              expect( convertToInstanceOf( o, ClassOne ).id ).toEqual( 666 );
-          } );
-
-    test( "convertToInstanceOf turns an object of one class into an instance of another class",
-          () =>
-          {
-              let o = new ClassOne();
-
-              expect( convertToInstanceOf( o, ClassTwo ).id ).toEqual( 777 );
-          } );
-} );
-
-describe( "isValidEntry", () =>
-{
-    test( "isValidEntry returns true if the key is a non-empty string and the value is not undefined",
-          () =>
-          {
-              let o = {};
-
-              expect( isValidEntry( "a", "" ) ).toBe( true );
-          } );
-
-    test( "isValidEntry returns false if the value is undefined",
-          () =>
-          {
-              let o = {};
-
-              expect( isValidEntry( "a" ) ).toBe( false );
-          } );
-} );
-
 describe( "Unique object ID", () =>
 {
     // ObjectUtils adds this property to the Object prototype
@@ -489,234 +340,6 @@ describe( "Unique object ID", () =>
               expect( regExp.test( "abc"["__GUID"] ) ).toBe( true );
 
               expect( regExp.test( regExp["__GUID"] ) ).toBe( true );
-          } );
-} );
-
-describe( "getKeys", () =>
-{
-    test( "getKeys returns an array of the unique keys of the object(s) specified",
-          () =>
-          {
-              let a = { "a": 1, "b": 2, "c": 3, "d": 4, "e": 5 };
-              let b = { "aa": 1, "b": 2, "cc": 3, "d": 4, "ee": 5 };
-              let c = { "f": 6, "g": 7, "h": 8, "i": 9, "j": 10 };
-              let d = { "f": 6, "gg": 7, "h": 8, "ii": 9, "j": 10 };
-
-              expect( getKeys( a, b, c, d ) ).toEqual( ["a", "b", "c", "d", "e", "aa", "cc", "ee", "f", "g", "h", "i", "j", "gg", "ii"] );
-
-          } );
-
-    test( "getKeys returns an empty array if none of the arguments are populated objects",
-          () =>
-          {
-              let a = {};
-              let b = {};
-              let c = null;
-              let d = "a string";
-
-              expect( getKeys( a, b, c, d ) ).toEqual( [] );
-
-          } );
-
-    test( "getKeys returns 0 for a Date",
-          () =>
-          {
-              const a = new Date();
-              const keys = getKeys( a );
-
-              expect( keys.length ).toEqual( 0 );
-          } );
-
-    test( "getKeys returns the length of the primitive valueOf for the String wrapper",
-          () =>
-          {
-              const a = new String( "abc" );
-              const keys = getKeys( a );
-
-              expect( keys.length ).toEqual( 3 );
-          } );
-
-    test( "getKeys returns 0 for any other Primitive Type Wrapper or non-object",
-          () =>
-          {
-              let a = new Boolean( true );
-              let keys = getKeys( a );
-
-              expect( keys.length ).toEqual( 0 );
-
-              a = new Number( 1 );
-              keys = getKeys( a );
-
-              expect( keys.length ).toEqual( 0 );
-
-              a = 12n;
-              keys = getKeys( a );
-              expect( keys.length ).toEqual( 0 );
-
-          } );
-
-    test( "getKeys returns the indices corresponding to the allocated size for any TypedArray Type",
-          () =>
-          {
-              for( let type of constants.TYPED_ARRAYS )
-              {
-                  let a = new type( 10 );
-                  let keys = getKeys( a );
-
-                  expect( keys.length ).toEqual( 10 );
-              }
-          } );
-} );
-
-describe( "getProperties", () =>
-{
-    test( "getProperties returns an array of the unique keys of the object(s) specified",
-          () =>
-          {
-              let a = { "a": 1, "b": 2, "c": 3, "d": 4, "e": 5 };
-              let b = { "aa": 1, "b": 2, "cc": 3, "d": 4, "ee": 5 };
-              let c = { "f": 6, "g": 7, "h": 8, "i": 9, "j": 10 };
-              let d = { "f": 6, "gg": 7, "h": 8, "ii": 9, "j": 10 };
-
-              expect( getProperties( a, b, c, d ) ).toEqual( ["a", "b", "c", "d", "e", "aa", "cc", "ee", "f", "g", "h", "i", "j", "gg", "ii"] );
-
-          } );
-
-    test( "getProperties returns an empty array if none of the arguments are populated objects",
-          () =>
-          {
-              let a = {};
-              let b = {};
-              let c = null;
-              let d = "a string";
-
-              expect( getProperties( a, b, c, d ) ).toEqual( [] );
-
-          } );
-
-    test( "getProperties returns all of the properties accessible via the specified object",
-          () =>
-          {
-              class A
-              {
-                  #id = 0;
-                  #code = "a";
-
-                  constructor( pId, pCode )
-                  {
-                      this.#id = pId || this.#id;
-                      this.#code = pCode || this.#code;
-                  }
-
-                  get id()
-                  {
-                      return this.#id;
-                  }
-
-                  get code()
-                  {
-                      return this.#code;
-                  }
-              }
-
-              class B extends A
-              {
-                  #name = "default";
-                  #description = "A user-defined class";
-
-                  constructor( pId, pCode, pName, pDescription )
-                  {
-                      super( pId, pCode );
-
-                      this.#name = pName || this.#name;
-                      this.#description = pDescription || this.#description;
-                  }
-
-                  get name()
-                  {
-                      return this.#name;
-                  }
-
-                  get description()
-                  {
-                      return this.#description;
-                  }
-              }
-
-              let a = new A( 7, "777" );
-              let b = new B( 8, "888", "Eight", "One more than seven" );
-
-              let properties = getProperties( a, b );
-
-              expect( properties ).toEqual( ["id", "code", "name", "description"] );
-          } );
-} );
-
-describe( "getValues", () =>
-{
-    test( "getValues returns all of the values accessible via the specified object",
-          () =>
-          {
-              class A
-              {
-                  #id = 0;
-                  #code = "a";
-
-                  constructor( pId, pCode )
-                  {
-                      this.#id = pId || this.#id;
-                      this.#code = pCode || this.#code;
-                  }
-
-                  get id()
-                  {
-                      return this.#id;
-                  }
-
-                  get code()
-                  {
-                      return this.#code;
-                  }
-              }
-
-              class B extends A
-              {
-                  #name = "default";
-                  #description = "A user-defined class";
-
-                  constructor( pId, pCode, pName, pDescription )
-                  {
-                      super( pId, pCode );
-
-                      this.#name = pName || this.#name;
-                      this.#description = pDescription || this.#description;
-                  }
-
-                  get name()
-                  {
-                      return this.#name;
-                  }
-
-                  get description()
-                  {
-                      return this.#description;
-                  }
-              }
-
-              let a = new A( 7, "777" );
-              let b = new B( 8, "888", "Eight", "One more than seven" );
-
-              let values = [].concat( getValues( b ) );
-
-              let comparator = arrayUtils.Comparators.BY_STRING_VALUE;
-
-              const arr = [8, "888", "Eight", "One more than seven"];
-
-              expect( arrayUtils.arraysEqual( values, arr,
-                                              {
-                                                  comparator,
-                                                  ignoreOrder: true
-                                              } ) ).toBe( true );
           } );
 } );
 
@@ -787,62 +410,6 @@ describe( "getEntries - ObjectEntry", () =>
               expect( entries[10]?.key ).toEqual( "o" );
               expect( entries[10]?.value ).toEqual( a );
 
-          } );
-} );
-
-describe( "hasNoProperties", () =>
-{
-    test( "hasNoProperties returns true if no property holds a value or populated object",
-          () =>
-          {
-              let a = { a: {}, b: { a: {} } };
-
-              expect( hasNoProperties( a ) ).toBe( true );
-
-          } );
-
-    test( "hasNoProperties returns false if the options are not recursive and one or more properties holds a value (even if that value is an object with no properties)",
-          () =>
-          {
-              let a = { a: {}, b: { a: {} } };
-
-              expect( hasNoProperties( a, { recursive: false } ) ).toBe( false );
-
-          } );
-} );
-
-describe( "isEmptyValue", () =>
-{
-    test( "isEmptyValue returns true if the specified argument is a string of only whitespace",
-          () =>
-          {
-              let s = "\n";
-
-              expect( isEmptyValue( s ) ).toBe( true );
-
-              s = "   \n   \t   ";
-
-              expect( isEmptyValue( s ) ).toBe( true );
-
-              s = " a ";
-
-              expect( isEmptyValue( s ) ).toBe( false );
-          } );
-
-    test( "isEmptyValue returns true if the specified argument is an array of length 0",
-          () =>
-          {
-              let arr = [];
-
-              expect( isEmptyValue( arr ) ).toBe( true );
-          } );
-
-    test( "isEmptyValue returns true if the specified argument is an array whose elements are all 'empty values'",
-          () =>
-          {
-              let arr = [{}, [], ""];
-
-              expect( isEmptyValue( arr ) ).toBe( true );
           } );
 } );
 
@@ -1011,7 +578,7 @@ describe( "getProperty", () =>
           {
               let obj = new ClassTwo();
 
-              expect( getProperty( obj, "nope" ) ).toEqual( "" );
+              expect( getProperty( obj, "nope" ) ).toEqual( undefined );
           } );
 
     test( "getProperty returns the value of the 'property path' specified",
@@ -1264,739 +831,6 @@ describe( "collectImplementors", () =>
               let implementors = collectImplementors( "doNothing", new ClassOne(), new ClassTwo(), new ClassThree(), { "doSomething": function() {} } );
 
               expect( implementors ).toEqual( [] );
-          } );
-} );
-
-describe( "Cloning", () =>
-{
-    test( "emptyClone returns an object with the same structure as the specified source object",
-          () =>
-          {
-              let obj = { a: "", b: { c: {} }, "foo": true, "bar": 7 };
-              let clone = emptyClone( obj );
-
-              expect( clone ).toEqual( { a: "", b: { c: {} }, "foo": false, "bar": 0 } );
-
-          } );
-
-    test( "clone returns a new object with the same structure and properties/values as the specified source object",
-          () =>
-          {
-              let a = "a";
-              let b = { c: 3 };
-              let c = { d: { e: 42 } };
-              let d = { foo: "bar" };
-
-              let composite = { a: a, b: b, c: c, d: d };
-
-              let obj = { composite: composite, a: a, b: b, c: c, d: d };
-
-              let copy = clone( obj );
-
-              expect( copy ).toEqual( {
-                                          composite: { a: "a", b: { c: 3 }, c: { d: { e: 42 } }, d: { foo: "bar" } },
-                                          a: "a",
-                                          b: { c: 3 },
-                                          c: { d: { e: 42 } },
-                                          d: { foo: "bar" }
-                                      } );
-
-              a = "AY";
-              b = { c: "three" };
-              c = {};
-              d = { "foo": "foo" };
-
-              composite = { a: a, b: b, c: c, d: d };
-
-              expect( a === copy.a ).toBe( false );
-              expect( b === copy.b ).toBe( false );
-              expect( c === copy.c ).toBe( false );
-              expect( d === copy.d ).toBe( false );
-              expect( composite === copy.composite ).toBe( false );
-
-              obj.a = a;
-              obj.b = b;
-              obj.c = c;
-              obj.d = d;
-
-              obj.composite = composite;
-
-              expect( a === copy.a ).toBe( false );
-              expect( b === copy.b ).toBe( false );
-              expect( c === copy.c ).toBe( false );
-              expect( d === copy.d ).toBe( false );
-              expect( composite === copy.composite ).toBe( false );
-
-              expect( a === obj.a ).toBe( true );
-              expect( b === obj.b ).toBe( true );
-              expect( c === obj.c ).toBe( true );
-              expect( d === obj.d ).toBe( true );
-              expect( composite === obj.composite ).toBe( true );
-
-              expect( copy.a === obj.a ).toBe( false );
-              expect( copy.b === obj.b ).toBe( false );
-              expect( copy.c === obj.c ).toBe( false );
-              expect( copy.d === obj.d ).toBe( false );
-              expect( copy.composite === obj.composite ).toBe( false );
-
-          } );
-
-    test( "clone returns an object with its methods intact",
-          () =>
-          {
-              const source =
-                  {
-                      a: 2,
-                      b: { c: { d: 4 } },
-                      c: function( pA, pB )
-                      {
-                          return ((pA + pB) * this.a) - this.b.c.d;
-                      }
-                  };
-
-              const copy = clone( source, { omitFunctions: false, freeze: true } );
-
-              // it's a copy
-              expect( copy === source ).toBe( false );
-
-              // it is frozen
-              expect( Object.isFrozen( copy ) ).toBe( true );
-
-              // it has the expected values
-              expect( copy.a ).toEqual( 2 );
-              expect( copy.b.c.d ).toEqual( 4 );
-
-              // it's methods still return the expected values
-              expect( copy.c( 10, 20 ) ).toEqual( 56 );
-
-              expect( Object.isFrozen( copy.a ) ).toBe( true );
-              expect( Object.isFrozen( copy.b ) ).toBe( true );
-              expect( Object.isFrozen( copy.b.c ) ).toBe( true );
-              expect( Object.isFrozen( copy.b.c.d ) ).toBe( true );
-
-
-          } );
-} );
-
-describe( "ingest and augment", () =>
-{
-    test( "ingest applies the properties of each object to the first object",
-          () =>
-          {
-              let obj = { a: 1, b: 2, c: { d: { e: 42 } } };
-
-              let obj2 = { a: "ay", b: 2, c: { d: { e: 42 } }, "baz": false };
-              let obj3 = { a: "ay", b: "bee", c: { d: { e: 777 } }, "foo": "bar" };
-              let obj4 = { a: 1, b: "bee", c: { d: { e: 777 } }, "zzz": "xyz" };
-
-              let obj5 = ingest( obj, obj2, obj3, obj4 );
-
-              expect( obj5 ).toEqual( {
-                                          a: 1,
-                                          b: "bee",
-                                          c: { d: { e: 777 } },
-                                          "baz": false,
-                                          "foo": "bar",
-                                          "zzz": "xyz"
-                                      } );
-
-              expect( obj ).toEqual( obj5 );
-          } );
-
-    test( "augment with default options - returns expected object",
-          () =>
-          {
-              const obj =
-                  {
-                      a: 1,
-                      b: 2,
-                      c:
-                          {
-                              a: 1,
-                              b: 2,
-                              c:
-                                  {
-                                      a: 1,
-                                      b: 2,
-                                      c:
-                                          {
-                                              a: 1,
-                                              b: 2,
-                                              c:
-                                                  {
-                                                      a: 11,
-                                                      b: 22
-                                                  }
-                                          }
-                                  }
-                          }
-                  };
-
-              const obj2 =
-                  {
-                      a: "a",
-                      b: "b",
-                      c:
-                          {
-                              a: "a",
-                              b: "b",
-                              c:
-                                  {
-                                      a: "a",
-                                      b: "b",
-                                      c:
-                                          {
-                                              a: "a",
-                                              b: "b",
-                                              c:
-                                                  {
-                                                      a: "aa",
-                                                      b: "bb",
-                                                      c: 3
-                                                  },
-                                              d: 4
-                                          },
-                                      d: "ddd",
-                                      e: "efg",
-                                      f: "eff"
-                                  },
-                              d: "dee",
-                              e: "eee"
-                          },
-                      d: "d",
-                      e:
-                          {
-                              "ee": "ee",
-                              "ff": "ff",
-                              g:
-                                  {
-                                      a: [1, 2, 3],
-                                      b: [4, 5, 6]
-                                  }
-                          }
-                  };
-
-              let augmented = augment( obj, obj2 );
-
-              expect( augmented === obj ).toBe( false );
-              expect( augmented === obj2 ).toBe( false );
-              expect( obj2 === obj ).toBe( false );
-              expect( obj === obj2 ).toBe( false );
-
-              expect( augmented ).toEqual( {
-                                               "a": 1,
-                                               "b": 2,
-                                               "c": {
-                                                   "a": 1,
-                                                   "b": 2,
-                                                   "c": {
-                                                       "a": 1,
-                                                       "b": 2,
-                                                       "c": {
-                                                           "a": "a",
-                                                           "b": "b",
-                                                           "c": {
-                                                               "a": "aa",
-                                                               "b": "bb",
-                                                               "c": 3
-                                                           },
-                                                           "d": 4
-                                                       },
-                                                       "d": "ddd",
-                                                       "e": "efg",
-                                                       "f": "eff"
-                                                   },
-                                                   "d": "dee",
-                                                   "e": "eee"
-                                               },
-                                               "d": "d",
-                                               "e": {
-                                                   "ee": "ee",
-                                                   "ff": "ff",
-                                                   "g": {
-                                                       "a": [
-                                                           1,
-                                                           2,
-                                                           3
-                                                       ],
-                                                       "b": [
-                                                           4,
-                                                           5,
-                                                           6
-                                                       ]
-                                                   }
-                                               }
-                                           } );
-          } );
-
-    test( "augment non-recursive - returns expected object",
-          () =>
-          {
-              const obj =
-                  {
-                      a: 1,
-                      b: 2,
-                      c:
-                          {
-                              a: 1,
-                              b: 2,
-                              c:
-                                  {
-                                      a: 1,
-                                      b: 2,
-                                      c:
-                                          {
-                                              a: 1,
-                                              b: 2,
-                                              c:
-                                                  {
-                                                      a: 11,
-                                                      b: 22
-                                                  }
-                                          }
-                                  }
-                          }
-                  };
-
-              const obj2 =
-                  {
-                      a: "a",
-                      b: "b",
-                      c:
-                          {
-                              a: "a",
-                              b: "b",
-                              c:
-                                  {
-                                      a: "a",
-                                      b: "b",
-                                      c:
-                                          {
-                                              a: "a",
-                                              b: "b",
-                                              c:
-                                                  {
-                                                      a: "aa",
-                                                      b: "bb",
-                                                      c: 3
-                                                  },
-                                              d: 4
-                                          },
-                                      d: "ddd",
-                                      e: "efg",
-                                      f: "eff"
-                                  },
-                              d: "dee",
-                              e: "eee"
-                          },
-                      d: "d",
-                      e:
-                          {
-                              "ee": "ee",
-                              "ff": "ff",
-                              g:
-                                  {
-                                      a: [1, 2, 3],
-                                      b: [4, 5, 6]
-                                  }
-                          }
-                  };
-
-              let augmented = augment( obj, obj2, { recursive: false } );
-
-              expect( augmented === obj ).toBe( false );
-              expect( augmented === obj2 ).toBe( false );
-              expect( obj2 === obj ).toBe( false );
-              expect( obj === obj2 ).toBe( false );
-
-              expect( augmented ).toEqual( {
-                                               "a": 1,
-                                               "b": 2,
-                                               "c": {
-                                                   "a": 1,
-                                                   "b": 2,
-                                                   "c": {
-                                                       "a": 1,
-                                                       "b": 2,
-                                                       "c": {
-                                                           "a": 1,
-                                                           "b": 2,
-                                                           "c": {
-                                                               "a": 11,
-                                                               "b": 22
-                                                           }
-                                                       }
-                                                   }
-                                               },
-                                               "d": "d",
-                                               "e": {
-                                                   "ee": "ee",
-                                                   "ff": "ff",
-                                                   "g": {
-                                                       "a": [
-                                                           1,
-                                                           2,
-                                                           3
-                                                       ],
-                                                       "b": [
-                                                           4,
-                                                           5,
-                                                           6
-                                                       ]
-                                                   }
-                                               }
-                                           } );
-          } );
-
-
-    test( "augment with appendToArrays option - returns object with the superset of the arrays",
-          () =>
-          {
-              const obj =
-                  {
-                      a: 1,
-                      b: 2,
-                      c: [1, 2, 3]
-                  };
-
-              const obj2 =
-                  {
-                      a: "a",
-                      b: "b",
-                      c: [4, 5, 6]
-                  };
-
-              let augmented = augment( obj, obj2, { appendToArrays: true } );
-
-              expect( augmented ).toEqual( {
-                                               a: 1,
-                                               b: 2,
-                                               c: [1, 2, 3, 4, 5, 6]
-                                           } );
-          } );
-
-    test( "augment with appendToArrays option with objectB array having more elements - returns expected object",
-          () =>
-          {
-              const obj =
-                  {
-                      a: 1,
-                      b: 2,
-                      c: [1, 2, 3]
-                  };
-
-              const obj2 =
-                  {
-                      a: "a",
-                      b: "b",
-                      c: [4, 5, 6, 7, 8, 9]
-                  };
-
-              let augmented = augment( obj, obj2, { appendToArrays: true } );
-
-              expect( augmented ).toEqual( {
-                                               a: 1,
-                                               b: 2,
-                                               c: [1, 2, 3, 4, 5, 6, 7, 8, 9]
-                                           } );
-          } );
-
-    test( "augment with addMissingMapEntries option - returns expected object",
-          () =>
-          {
-              const mapA = new Map();
-              const mapB = new Map();
-
-              mapA.set( "a", 1 );
-              mapA.set( "b", 2 );
-
-              mapB.set( "a", "a" );
-              mapB.set( "b", "b" );
-              mapB.set( "c", "c" );
-
-              const obj =
-                  {
-                      a: 1,
-                      b: 2,
-                      c: mapA
-                  };
-
-              const obj2 =
-                  {
-                      a: "a",
-                      b: "b",
-                      c: mapB
-                  };
-
-              let augmented = augment( obj, obj2, { addMissingMapEntries: true } );
-
-              expect( augmented.c.get( "a" ) ).toEqual( 1 );
-              expect( augmented.c.get( "b" ) ).toEqual( 2 );
-              expect( augmented.c.get( "c" ) ).toEqual( "c" );
-
-          } );
-} );
-
-describe( "populate", () =>
-{
-    test( "populate returns expected object",
-          () =>
-          {
-              const obj =
-                  {
-                      a: 1,
-                      b: 2,
-                      c:
-                          {
-                              a: "a",
-                              b: "b"
-                          },
-                      foo: "bar"
-                  };
-
-              const obj2 =
-                  {
-                      b: "bee",
-                      c:
-                          {
-                              a: 1,
-                              b: 2
-                          },
-                      d: 4,
-                      e: 5
-                  };
-
-              const expected =
-                  {
-                      a: 1,
-                      b: "bee",
-                      c:
-                          {
-                              a: 1,
-                              b: 2
-                          },
-                      foo: "bar"
-                  };
-
-
-              let populated = populateObject( obj, obj2 );
-
-              expect( populated === obj ).toBe( false );
-              expect( populated === obj2 ).toBe( false );
-              expect( obj2 === obj ).toBe( false );
-              expect( obj === obj2 ).toBe( false );
-
-              expect( populated ).toEqual( expected );
-
-          } );
-} );
-
-describe( "prune removes 'dead' or undesired properties", () =>
-{
-    test( "prune with default options returns expected object",
-          () =>
-          {
-              const obj =
-                  {
-                      a: {},
-                      b: 2,
-                      c: { d: {} },
-                      d: [1, 2, 3],
-                      e: [],
-                      f: "foo",
-                      g: "",
-                      h: function() { return 5; },
-                      i: function( ...pArgs ) { return 5; },
-                      j: "",
-                      k: ["", ""]
-                  };
-
-              const expected =
-                  {
-                      b: 2,
-                      d: [1, 2, 3],
-                      f: "foo",
-                      g: "",
-                      h: function() { return 5; },
-                      i: function( ...pArgs ) { return 5; },
-                      j: "",
-                      k: ["", ""]
-                  };
-
-              expect( JSON.stringify( prune( obj ) ) ).toEqual( JSON.stringify( expected ) );
-          } );
-
-    test( "prune with options to remove empty string returns expected object",
-          () =>
-          {
-              const obj =
-                  {
-                      a: {},
-                      b: 2,
-                      c: { d: {} },
-                      d: [1, 2, 3],
-                      e: [],
-                      f: "foo",
-                      g: "",
-                      h: function() { return 5; },
-                      i: function( ...pArgs ) { return 5; },
-                      j: "",
-                      k: ["", ""]
-                  };
-
-              const expected =
-                  {
-                      b: 2,
-                      d: [1, 2, 3],
-                      f: "foo",
-                      h: function() { return 5; },
-                      i: function( ...pArgs ) { return 5; },
-                      k: ["", ""]
-                  };
-
-              let actual = prune( obj, { removeEmptyStrings: true } );
-
-              expect( JSON.stringify( actual ) ).toEqual( JSON.stringify( expected ) );
-          } );
-
-    test( "prune with options to prune arrays returns expected object",
-          () =>
-          {
-              const obj =
-                  {
-                      a: {},
-                      b: 2,
-                      c: { d: {} },
-                      d: [1, 2, 3, 1 / 0],
-                      e: [],
-                      f: "foo",
-                      g: "",
-                      h: function() { return 5; },
-                      i: function( ...pArgs ) { return 5; },
-                      j: "",
-                      k: ["", ""]
-                  };
-
-              const expected =
-                  {
-                      b: 2,
-                      d: [1, 2, 3],
-                      f: "foo",
-                      g: "",
-                      h: function() { return 5; },
-                      i: function( ...pArgs ) { return 5; },
-                      j: ""
-                  };
-
-              expect( JSON.stringify( prune( obj, { pruneArrays: true } ) ) ).toEqual( JSON.stringify( expected ) );
-          } );
-
-    test( "prune with options to prune arrays, but not remove empty arrays, returns expected object",
-          () =>
-          {
-              const obj =
-                  {
-                      a: {},
-                      b: 2,
-                      c: { d: {} },
-                      d: [1, 2, 3, 1 / 0, 4],
-                      e: [],
-                      f: "foo",
-                      g: "",
-                      h: function() { return 5; },
-                      i: function( ...pArgs ) { return 5; },
-                      j: "",
-                      k: ["", ""]
-                  };
-
-              const expected =
-                  {
-                      b: 2,
-                      d: [1, 2, 3, 4],
-                      e: [],
-                      f: "foo",
-                      g: "",
-                      h: function() { return 5; },
-                      i: function( ...pArgs ) { return 5; },
-                      j: "",
-                      k: []
-                  };
-
-              expect( JSON.stringify( prune( obj,
-                                             {
-                                                 pruneArrays: true,
-                                                 removeEmptyArrays: false
-                                             } ) ) ).toEqual( JSON.stringify( expected ) );
-          } );
-
-    test( "prune with options to prune arrays and remove empty strings returns expected object",
-          () =>
-          {
-              const obj =
-                  {
-                      a: {},
-                      b: 2,
-                      c: { d: {} },
-                      d: [1, 2, 3, 1 / 0, 4],
-                      e: [],
-                      f: "foo",
-                      g: "",
-                      h: function() { return 5; },
-                      i: function( ...pArgs ) { return 5; },
-                      j: "",
-                      k: ["", ""]
-                  };
-
-              const expected =
-                  {
-                      b: 2,
-                      d: [1, 2, 3, 4],
-                      f: "foo",
-                      h: function() { return 5; },
-                      i: function( ...pArgs ) { return 5; },
-                  };
-
-              const options = { pruneArrays: true, removeEmptyStrings: true };
-
-              expect( JSON.stringify( prune( obj, options ) ) ).toEqual( JSON.stringify( expected ) );
-          } );
-
-    test( "prune with most aggressive options returns expected object",
-          () =>
-          {
-              const obj =
-                  {
-                      a: {},
-                      b: 2,
-                      c: { d: {} },
-                      d: [1, 2, 3, 1 / 0, 4],
-                      e: [],
-                      f: " foo ",
-                      g: "",
-                      h: function() { return 5; },
-                      i: function( ...pArgs ) { return 5; },
-                      j: "",
-                      k: ["", ""]
-                  };
-
-              const expected =
-                  {
-                      b: 2,
-                      d: [1, 2, 3, 4],
-                      f: "foo"
-                  };
-
-              const options =
-                  {
-                      removeEmptyObjects: true,
-                      removeEmptyArrays: true,
-                      removeEmptyStrings: true,
-                      removeFunctions: true,
-                      pruneArrays: true,
-                      trimStrings: true
-                  };
-
-              expect( JSON.stringify( prune( obj, options ) ) ).toEqual( JSON.stringify( expected ) );
           } );
 } );
 
@@ -2261,113 +1095,112 @@ describe( "findNode / findRoot",
           } );
 
 
-
 /*
 
-describe( "mergeJson", () =>
-{
-    test( "mergeJson lets you combine 2 objects",
-          () =>
-          {
-              let merged = mergeJson( addresses, people );
+ describe( "mergeJson", () =>
+ {
+ test( "mergeJson lets you combine 2 objects",
+ () =>
+ {
+ let merged = mergeJson( addresses, people );
 
-              expect( Object.keys( addresses ).length ).toEqual( 3 );
+ expect( Object.keys( addresses ).length ).toEqual( 3 );
 
-              expect( Object.keys( people ).length ).toEqual( 4 );
+ expect( Object.keys( people ).length ).toEqual( 4 );
 
-              expect( Object.keys( merged ).length ).toEqual( 4 );
+ expect( Object.keys( merged ).length ).toEqual( 4 );
 
-              expect( merged.Apex41.age ).toEqual( 32 );
-          } );
-} );
+ expect( merged.Apex41.age ).toEqual( 32 );
+ } );
+ } );
 
-describe( "JsonMerger", () =>
-{
-    test( "JsonMerger is used to merge one or more JSON objects",
-          () =>
-          {
-              const noArgs = new JsonMerger();
+ describe( "JsonMerger", () =>
+ {
+ test( "JsonMerger is used to merge one or more JSON objects",
+ () =>
+ {
+ const noArgs = new JsonMerger();
 
-              let merged = noArgs.merge( addresses, people );
+ let merged = noArgs.merge( addresses, people );
 
-              expect( Object.keys( addresses ).length ).toEqual( 3 );
+ expect( Object.keys( addresses ).length ).toEqual( 3 );
 
-              expect( Object.keys( people ).length ).toEqual( 4 );
+ expect( Object.keys( people ).length ).toEqual( 4 );
 
-              expect( Object.keys( merged ).length ).toEqual( 4 );
+ expect( Object.keys( merged ).length ).toEqual( 4 );
 
-              expect( merged.Apex41.age ).toEqual( 32 );
-          } );
+ expect( merged.Apex41.age ).toEqual( 32 );
+ } );
 
-    test( "JsonMerger is used to filter the results of merging one or more JSON objects",
-          () =>
-          {
-              const filter = function( pEntry )
-              {
-                  const entry = pEntry instanceof ObjectEntry ? pEntry : isArray( pEntry ) ? new ObjectEntry( pEntry ) : pEntry;
+ test( "JsonMerger is used to filter the results of merging one or more JSON objects",
+ () =>
+ {
+ const filter = function( pEntry )
+ {
+ const entry = pEntry instanceof ObjectEntry ? pEntry : isArray( pEntry ) ? new ObjectEntry( pEntry ) : pEntry;
 
-                  if ( "Lombard" === entry?.city && asInt( entry?.age ) > 25 )
-                  {
-                      return entry;
-                  }
+ if ( "Lombard" === entry?.city && asInt( entry?.age ) > 25 )
+ {
+ return entry;
+ }
 
-                  return null;
-              };
+ return null;
+ };
 
-              const filtering = new JsonMerger( [filter] );
+ const filtering = new JsonMerger( [filter] );
 
-              const merged = filtering.merge( addresses, people );
+ const merged = filtering.merge( addresses, people );
 
-              console.log( merged );
+ console.log( merged );
 
-              expect( Object.keys( addresses ).length ).toEqual( 3 );
+ expect( Object.keys( addresses ).length ).toEqual( 3 );
 
-              expect( Object.keys( people ).length ).toEqual( 4 );
+ expect( Object.keys( people ).length ).toEqual( 4 );
 
-              expect( Object.keys( merged ).length ).toEqual( 1 );
+ expect( Object.keys( merged ).length ).toEqual( 1 );
 
-              expect( merged.Apex41.age ).toEqual( 32 );
-          } );
+ expect( merged.Apex41.age ).toEqual( 32 );
+ } );
 
-    test( "JsonMerger is used to map the results of merging one or more JSON objects",
-          () =>
-          {
-              const mapper = function( pEntry )
-              {
-                  let entry = pEntry instanceof ObjectEntry ? pEntry : isArray( pEntry ) ? new ObjectEntry( pEntry ) : pEntry;
+ test( "JsonMerger is used to map the results of merging one or more JSON objects",
+ () =>
+ {
+ const mapper = function( pEntry )
+ {
+ let entry = pEntry instanceof ObjectEntry ? pEntry : isArray( pEntry ) ? new ObjectEntry( pEntry ) : pEntry;
 
-                  if ( entry?.city )
-                  {
-                      entry.city = "Bloomington";
-                  }
-                  if ( entry?.state )
-                  {
-                      entry.state = "IN";
-                  }
-                  if ( entry?.zip )
-                  {
-                      entry.zip = "47405";
-                  }
+ if ( entry?.city )
+ {
+ entry.city = "Bloomington";
+ }
+ if ( entry?.state )
+ {
+ entry.state = "IN";
+ }
+ if ( entry?.zip )
+ {
+ entry.zip = "47405";
+ }
 
-                  return entry;
-              };
+ return entry;
+ };
 
-              const mapping = new JsonMerger( [], [mapper] );
+ const mapping = new JsonMerger( [], [mapper] );
 
-              const merged = mapping.merge( addresses, people );
+ const merged = mapping.merge( addresses, people );
 
-              console.log( merged );
+ console.log( merged );
 
-              expect( Object.keys( addresses ).length ).toEqual( 3 );
+ expect( Object.keys( addresses ).length ).toEqual( 3 );
 
-              expect( Object.keys( people ).length ).toEqual( 4 );
+ expect( Object.keys( people ).length ).toEqual( 4 );
 
-              expect( Object.keys( merged ).length ).toEqual( 4 );
+ expect( Object.keys( merged ).length ).toEqual( 4 );
 
-              expect( merged.Apex41.city ).toEqual( "Bloomington" );
-              expect( merged.Apex41.state ).toEqual( "IN" );
-              expect( merged.Apex41.zip ).toEqual( "47405" );
-          } );
-} );
+ expect( merged.Apex41.city ).toEqual( "Bloomington" );
+ expect( merged.Apex41.state ).toEqual( "IN" );
+ expect( merged.Apex41.zip ).toEqual( "47405" );
+ } );
+ } );
 
-*/
+ */

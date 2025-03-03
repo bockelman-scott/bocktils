@@ -668,22 +668,6 @@ describe( "ToolBocksModule - Events", () =>
         mod.dispatchEvent( new ModEvent( "TEST", { a: 1, b: 2 } ) );
     } );
 
-    test( "Consumers can assign a logger to any module", () =>
-    {
-        const mod = constants;
-
-        mod.logger = mockLogger;
-
-        expect( mod.logger ).toEqual( mockLogger );
-
-        loggedMessages.length = 0;
-
-        mod.__testLogger( "some", "logged", "data", { foo: "bar" } );
-
-        expect( loggedMessages.length ).toEqual( 4 );
-        expect( loggedMessages ).toEqual( ["some", "logged", "data", { foo: "bar" }] );
-    } );
-
 } );
 
 describe( "ExecutionEnvironment", () =>

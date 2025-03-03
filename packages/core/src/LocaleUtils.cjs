@@ -57,6 +57,7 @@ const {
         isArray,
         isFunction,
         isDate,
+        isMap,
     } = typeUtils;
 
     const
@@ -525,7 +526,7 @@ const {
 
         initializeMap( pMap )
         {
-            let property = isObject( pMap ) ? pMap || {} : isString( pMap ) ? this[pMap] || {} : {};
+            let property = isMap( pMap ) ? pMap || new Map() : isString( pMap ) ? this[pMap] || {} : {};
             this[pMap] = this[pMap] || property;
             return this[pMap];
         }

@@ -2,7 +2,9 @@ const core = require( "@toolbocks/core" );
 
 const commonUtils = require( "@toolbocks/common" );
 
-const { constants, typeUtils, stringUtils, arrayUtils, objectUtils } = commonUtils;
+const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
+
+const { objectUtils } = commonUtils;
 
 /** define a variable for typeof undefined **/
 const { _ud = "undefined" } = constants;
@@ -38,7 +40,7 @@ const $scope = constants?.$scope || function()
             objectUtils
         };
 
-    let { _str, _fun, _num, _big, _bool, _symbol, _obj, populateOptions, lock, deepFreeze, classes } = constants;
+    let { _str, _fun, _num, _big, _bool, _symbol, _obj, populateOptions, lock, deepFreeze } = constants;
 
     let { isNull, isString, isArray, isObject, isDate, isFunction } = typeUtils;
 
@@ -46,11 +48,9 @@ const $scope = constants?.$scope || function()
 
     let { asArray, Mappers } = arrayUtils;
 
-    let { detectCycles, getKeys, getEntries } = objectUtils;
-
     const modName = "ObjectFunctor";
 
-    const { ToolBocksModule } = classes;
+    const { ToolBocksModule, ObjectEntry, detectCycles, objectKeys, objectEntries } = moduleUtils;
 
     const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
 
@@ -111,8 +111,9 @@ const $scope = constants?.$scope || function()
                     }
                     else
                     {
-                        // unwrap any argument that is an ObjectFunctor
-                        let obj = pObject instanceof this.constructor ? pObject.#value : pObject;
+                        // unwrap any argument that is not a POJO or primitive
+                        let obj = isFunction( pObject?.valueOf ) ? pObject.valueOf() : (pObject instanceof this.constructor) ? pObject?.#value : pObject;
+
                         while ( obj instanceof this.constructor )
                         {
                             obj = obj.#value;
@@ -128,14 +129,14 @@ const $scope = constants?.$scope || function()
                         }
                         else
                         {
-                            const entries = getEntries( obj );
+                            const entries = objectEntries( obj );
 
                             let newObj = {};
 
                             for( let entry of entries )
                             {
-                                const key = entry.key || entry[0];
-                                const value = entry.value || entry[1];
+                                const key = ObjectEntry.getKey( entry );
+                                const value = ObjectEntry.getValue( entry );
 
                                 const keys = stack.concat( key );
 
@@ -187,9 +188,9 @@ const $scope = constants?.$scope || function()
                     }
                     else if ( isArray( val ) )
                     {
-                        val = val.map( e => deepFreeze( e instanceof this.constructor ? e.valueOf() : e ) );
+                        val = val.map( e => deepFreeze( isFunction( e?.valueOf ) ? e.valueOf() : e ) );
                     }
-                    else if ( val instanceof this.constructor )
+                    else if ( isFunction( val?.valueOf ) )
                     {
                         val = deepFreeze( val.valueOf() );
                     }
@@ -197,14 +198,14 @@ const $scope = constants?.$scope || function()
                     {
                         let obj = {};
 
-                        const entries = getEntries( val );
+                        const entries = objectEntries( val );
 
                         for( let entry of entries )
                         {
-                            const key = entry.key || entry[0];
-                            const value = entry.value || entry[1];
+                            const key = ObjectEntry.getKey( entry );
+                            const value = ObjectEntry.getValue( entry );
 
-                            obj[key] = deepFreeze( value instanceof this.constructor ? value.valueOf() : value );
+                            obj[key] = deepFreeze( isFunction( value?.valueOf ) ? value.valueOf() : value );
                         }
 
                         val = deepFreeze( obj );
@@ -254,7 +255,7 @@ const $scope = constants?.$scope || function()
                         }
                         else
                         {
-                            len = getKeys( val || {} ).length;
+                            len = objectKeys( val || {} ).length;
                         }
                     }
                     break;

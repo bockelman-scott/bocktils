@@ -1,9 +1,37 @@
-// noinspection AssignmentToForLoopParameterJS
-
 /**
- * Defines several useful functions for manipulating Strings.
- * DEPENDS ON Constants.cjs
- */
+ * @fileOverview
+ * This module defines a number of useful functions for working with strings.
+ * <br>
+ * The primary motivation for this module is to provide null-safe versions
+ * of functions that exist as methods of the JavaScript String class.
+ * <br>
+ * <br>
+ * The most commonly used function is the asString function
+ * that converts almost any value into a string,
+ * so that it is then safe to call any existing String method on the result.
+ * <br>
+ * <br>
+ * This module also exposes functions for converting numeric strings into numbers,
+ * configuration values representing boolean options into boolean values,
+ * and for preparing strings for use with C/C++ addons or WASM code.
+ * <br>
+ * <br>
+ *
+ * There are also functions to find duplicated substrings,<br>
+ * interpolate strings that cannot be predefined as `template strings`,<br>
+ * determine whether a string is valid JSON,<br>
+ * and shorthand functions for performing multiple checks on the same string,<br>
+ * such as includesAny, startsWithAny, endsWithAny, etc.<br>
+ * which take a variable number of arguments for the search strings.
+ * <br>
+ *
+ *
+ * @module StringUtils
+ *
+ * @author Scott Bockelman
+ * @license MIT
+ *
+ * */
 
 /** import the Constants we depend upon using require for maximum compatibility with Node versions */
 const constants = require( "./Constants.cjs" );
@@ -14,15 +42,7 @@ const typeUtils = require( "./TypeUtils.cjs" );
 /**
  * Defines a string to represent the type, undefined
  */
-const { _ud = "undefined" } = constants;
-
-/**
- * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
- */
-const $scope = constants?.$scope || function()
-{
-    return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
-};
+const { _ud = "undefined", $scope } = constants;
 
 // noinspection FunctionTooLongJS
 /**
@@ -46,6 +66,13 @@ const $scope = constants?.$scope || function()
     {
         return $scope()[INTERNAL_NAME];
     }
+
+    /**
+     * An alias for the static String.fromCharCode method.
+     *
+     * @type {(...codes: number[]) => string}
+     */
+    const fromCode = String.fromCharCode;
 
     const
         {
@@ -81,6 +108,8 @@ const $scope = constants?.$scope || function()
             _obj,
             _symbol,
             _zero,
+
+            ENDIAN,
 
             BUILTIN_TYPES,
             ERROR_TYPES,
@@ -136,6 +165,7 @@ const $scope = constants?.$scope || function()
             isArray,
             isLikeArray,
             isTypedArray,
+            isIterable,
             isMap,
             isSet,
             isFunction,
@@ -148,12 +178,12 @@ const $scope = constants?.$scope || function()
             firstMatchingType,
             clamp,
             NVL,
-            calculateTypedArrayClass,
             toTypedArray,
         } = typeUtils;
 
     /**
-     * These are the default values assumed for number formatting, when calling methods such as asInt or asFloat
+     * These are the default values assumed for number formatting,
+     * when calling methods such as asInt or asFloat
      * @type {Readonly<{decimal_point: string, currency_symbol: RegExp, grouping_separator: string}>}
      */
     const DEFAULT_NUMBER_SYMBOLS = DEFAULT_NUMBER_FORMATTING_SYMBOLS || lock(
@@ -218,6 +248,8 @@ const $scope = constants?.$scope || function()
      * @property {Object|function|null} [dateFormatter=null],
      * @property {Array.<function>} [transformations=[]]
      * @property {boolean} [checkForByteArray=false]
+     * @property {object} [decoder]
+     * @property {object} [encoder]
      *
      */
 
@@ -225,6 +257,8 @@ const $scope = constants?.$scope || function()
      * These are the default options for the {@link #asString} function.
      *
      * @type {AsStringOptions}
+     * @constant DEFAULT_AS_STRING_OPTIONS
+     *
      */
     const DEFAULT_AS_STRING_OPTIONS =
         {
@@ -247,11 +281,25 @@ const $scope = constants?.$scope || function()
 
     const isTransformer = ( e ) => (isFunction( e ) && e.length > 0) || (isNonNullObject( e ) && isFunction( e?.transform ));
 
+    const resolveTransformer = ( e ) => isTransformer( e ) ? firstMatchingType( _fun, e.transform, e, ( s ) => s ) : ( s ) => s;
+
+    /**
+     * Invokes each function, or transformer's transform method,
+     * on the specified string
+     * and returns the resulting string.
+     *
+     * @param {string} pString the string to transform
+     * @param {...(function|{transform:function(string)})} pTransformations one or more objects with a transform method
+     *                                                                      or one or more functions
+     *                                                                      that take a string
+     *                                                                      and return a string
+     * @returns {string} the transformed string
+     */
     function applyTransformations( pString, ...pTransformations )
     {
         let s = (_mt_str + pString);
 
-        let transformers = isNull( pTransformations ) ? [] : (isArray( pTransformations ) ? (pTransformations.length === 0 ? [] : [...pTransformations]) : [pTransformations]);
+        let transformers = [...(pTransformations || [])];
 
         transformers = transformers.flat().filter( isTransformer );
 
@@ -264,24 +312,40 @@ const $scope = constants?.$scope || function()
                 continue;
             }
 
-            const transform = (isNonNullObject( transformer ) && isFunction( transformer?.transform ) ? transformer.transform : transformer);
+            const transform = resolveTransformer( transformer );
 
             s = attempt( () => transform.call( transformer, s, prior ) ) || prior;
+
+            prior = s || prior;
         }
 
         return s;
     }
 
-    function _transform( pString, ...pTransformations )
-    {
-        return applyTransformations( pString, ...pTransformations );
-    }
+    const _transform = ( pString, ...pTransformations ) => applyTransformations( pString, ...pTransformations );
 
+    /**
+     * Returns the source code that defined the specified function.
+     * <br>
+     * @param {function|string} pFunction - the function whose source is to be returned
+     * @returns {string}  the source code that defined the specified function<br>
+     *                    If the specified value is not a function,
+     *                    returns that string or the empty string
+     */
     function getFunctionSource( pFunction )
     {
         return isFunction( pFunction ) ? funcToString.call( pFunction, pFunction ) : isString( pFunction ) ? asString( pFunction, true ) : _mt_str;
     }
 
+    /**
+     * Converts the specified string into an array of bytes representing its characters.
+     * <br>
+     * Supports Unicode characters.
+     *
+     * @param {string} pStr - the string to convert into an array of bytes
+     *
+     * @returns {Array.<number>|TypedArray} an array of bytes representing the characters in the specified string
+     */
     function asUtf8ByteArray( pStr )
     {
         const bytes = [];
@@ -317,12 +381,37 @@ const $scope = constants?.$scope || function()
         return bytes;
     }
 
+    /**
+     * Returns the number of bytes expected in each element of the specified TypedArray
+     * <br>
+     * <br>
+     *
+     * @param {TypedArray} pByteArray An instance of a TypedArray or the TypedArray subclass itself
+     *
+     * @returns {number} the number of bytes expected in each element of the specified TypedArray
+     */
     function bytesPerElement( pByteArray )
     {
         const byteArrayClass = getClass( pByteArray );
         return asInt( byteArrayClass?.BYTES_PER_ELEMENT, 0 ) || asInt( getClassName( byteArrayClass || pByteArray ).replaceAll( /\D/g, _mt_str ) ) / 8;
     }
 
+    /**
+     * Returns the specified encoder
+     * or an instance of TextEncoder
+     * if it is available and appropriate
+     * for the TypedArray class specified
+     * <br>
+     * <br>
+     * @param {TextEncoder|{encode:function(string)}} pTextEncoder the object to evaluate as a text encoder
+     *
+     * @param {function|object} pByteArrayClass the TypedArray class (or an instance of a TypedArray) for which the encoder is intended
+     *
+     * @returns {TextEncoder|*|{encode: (function(*): *)}|{encode: (function(string): *[])}} An object whose 'encode' method
+     *                                                                                       can be used to convert text
+     *                                                                                       to the bytes required by
+     *                                                                                       the specified array
+     */
     function resolveTextEncoder( pTextEncoder, pByteArrayClass )
     {
         const byteArrayClass = isClass( pByteArrayClass ) ? pByteArrayClass : getClass( pByteArrayClass );
@@ -351,56 +440,108 @@ const $scope = constants?.$scope || function()
         return encoder;
     }
 
+    /**
+     * Returns an array of bytes representing the specified string,
+     * or string representation of the specified value.
+     * <br>
+     * <br>
+     * This method attempts to use the built-in TextEncoder if it is available,
+     * but will fall back to an object that uses the asUtf8ByteArray function encode the string.
+     * <br>
+     * <br>
+     *
+     * @param {string|*} pString The string to convert to a byte array.<br>
+     *                           If another type of value is specified,
+     *                           it will be converted to a string, if possible,
+     *                           and the resulting string will be converted
+     *                           to a byte array and returned.
+     *
+     * @param {TextEncoder|{encode:function(string)}} pTextEncoder An object with an encode method to convert each character to one or more bytes
+     *
+     * @param {function|object} [pByteArrayClass=Uint8Array] The subclass of TypedArray to return
+     *
+     * @param {...(function|{transform:function(string)})} pTransformers one or more objects with a transform method
+     *                                                                   or one or more functions
+     *                                                                   that take a string
+     *                                                                   and return a string
+     *
+     * @returns {TypedArray|Uint8Array}
+     */
     const toByteArray = function( pString, pTextEncoder, pByteArrayClass = Uint8Array, ...pTransformers )
     {
-        let s = asString( pString );
-
-        let byteArrayClass = isClass( pByteArrayClass ) ? pByteArrayClass || Uint8Array : Uint8Array;
-
-        s = applyTransformations( s, ...pTransformers );
+        const byteArrayClass = isClass( pByteArrayClass ) ? pByteArrayClass || Uint8Array : Uint8Array;
 
         const encoder = resolveTextEncoder( pTextEncoder, byteArrayClass );
 
-        return new byteArrayClass( encoder.encode( s ) );
+        const s = applyTransformations( asString( pString ), ...pTransformers );
+
+        if ( byteArrayClass && encoder && isFunction( encoder?.encode ) )
+        {
+            return new byteArrayClass( encoder.encode( s ) );
+        }
+
+        return asUtf8ByteArray( s );
     };
 
+    /**
+     * Converts the specified array of bytes into a string, if possible
+     * <br>
+     *
+     * @param {Array.<number>|TypedArray} pBytes An array of bytes representing text characters.
+     *                                           May include Unicode characters.
+     *
+     * @returns {string} The string represented by the bytes provided
+     */
     function fromUtf8ByteArray( pBytes )
     {
         let s = _mt_str;
 
-        for( let i = 0, n = pBytes.length; i < n; i++ )
+        let bytes = isArray( pBytes ) || isTypedArray( pBytes ) || isIterable( pBytes ) ? [...(pBytes || [])] : [pBytes];
+        bytes = bytes.flat();
+
+        for( let i = 0, n = bytes.length; i < n; i++ )
         {
-            let byte = pBytes[i];
+            let byte = bytes[i];
 
             if ( (byte & 0x80) === 0x00 )
             {
                 // 1-byte character
-                s += String.fromCharCode( byte );
+                s += fromCode( byte );
             }
             else if ( (byte & 0xe0) === 0xc0 )
             {
                 // 2-byte character
-                s += String.fromCharCode( ((byte & 0x1f) << 6) | (pBytes[++i] & 0x3f) );
+                s += fromCode( ((byte & 0x1f) << 6) | (pBytes[++i] & 0x3f) );
             }
             else if ( (byte & 0xf0) === 0xe0 )
             {
                 // 3-byte character
-                s += String.fromCharCode( ((byte & 0x0f) << 12) | ((pBytes[++i] & 0x3f) << 6) | (pBytes[++i] & 0x3f) );
+                s += fromCode( ((byte & 0x0f) << 12) | ((pBytes[++i] & 0x3f) << 6) | (pBytes[++i] & 0x3f) );
             }
             else if ( (byte & 0xf8) === 0xf0 )
             {
                 // 4-byte character (surrogate pair)
                 let codePoint = ((byte & 0x07) << 18) | ((pBytes[++i] & 0x3f) << 12) | ((pBytes[++i] & 0x3f) << 6) | (pBytes[++i] & 0x3f);
                 codePoint -= 0x10000;
-                s += String.fromCharCode( 0xD800 + (codePoint >> 10) );
-                s += String.fromCharCode( 0xDC00 + (codePoint & 0x3FF) );
+                s += fromCode( 0xD800 + (codePoint >> 10) );
+                s += fromCode( 0xDC00 + (codePoint & 0x3FF) );
             }
         }
 
         return s;
     }
 
-    function _toUint8Array( pTypedArray )
+    /**
+     * Converts the specified TypedArray into a Uint8Array.
+     *
+     * @param {TypedArray||Array.<number>} pTypedArray The array to convert
+     *
+     * @param {string} pEndianness Indicates the endianness to use when writing the bytes; can be ENDIAN.BIG or ENDIAN.LITTLE
+     *
+     * @returns {Uint8Array} an instance of Uint8Array populated with the bytes found in the specified array,
+     *                       splitting or truncating values that would otherwise overflow
+     */
+    function _toUint8Array( pTypedArray, pEndianness = ENDIAN.LITTLE )
     {
         if ( isNull( pTypedArray ) )
         {
@@ -433,11 +574,13 @@ const $scope = constants?.$scope || function()
 
         if ( bytes >= 8 )
         {
+            const isLittleEndian = isBlank( asString( pEndianness, true ) ) || "little" === lcase( asString( pEndianness, true ) );
+
             const view = new DataView( uint8Array.buffer );  // Use DataView for 64-bit
 
             for( let i = 0; i < length; i++ )
             {
-                view.setFloat64( i * 8, typedArray[i], true ); // Little-endian (adjust if needed)
+                view.setFloat64( i * 8, typedArray[i], isLittleEndian ); // Little-endian (adjust if needed)
             }
 
             return uint8Array;
@@ -455,6 +598,22 @@ const $scope = constants?.$scope || function()
         return uint8Array;
     }
 
+    /**
+     * Returns the specified decoder
+     * or an instance of TextDecoder
+     * if it is available and appropriate
+     * for the TypedArray class specified
+     * <br>
+     * <br>
+     * @param {TextDecoder|{decode:function(string)}} pTextDecoder the object to evaluate as a text decoder
+     *
+     * @param {function|object} pByteArrayClass the TypedArray class (or an instance of a TypedArray)
+     *                                          for which the decoder is intended
+     *
+     * @returns {TextEncoder|*|{decode: (function(*): *)}|{decode: (function(string): *[])}} An object whose 'decode' method
+     *                                                                                       can be used to convert an array of bytes
+     *                                                                                       to a string
+     */
     function resolveTextDecoder( pTextDecoder, pByteArrayClass )
     {
         const byteArrayClass = isClass( pByteArrayClass ) ? pByteArrayClass : getClass( pByteArrayClass );
@@ -481,6 +640,22 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    /**
+     * Returns the string represented by the bytes in the specified array.
+     * <br>
+     * <br>
+     *
+     * @param {TypedArray|Array.<number>} pByteArray the array of bytes to convert into a string
+     *
+     * @param {TextDecoder|{decode:function}} pTextDecoder An object with a decode method to convert the bytes into characters
+     *
+     * @param {...(function|{transform:function(string)})} pTransformers one or more objects with a transform method
+     *                                                     or one or more functions
+     *                                                     that take a string and return a string
+     *
+     *
+     * @returns {string} the string represented by the bytes in the specified array
+     */
     const fromByteArray = function( pByteArray, pTextDecoder, ...pTransformers )
     {
         let array = isTypedArray( pByteArray ) || (isArray( pByteArray ) && pByteArray.every( e => isNumeric( e ) && toDecimal( e ) <= 255 ));
@@ -495,6 +670,9 @@ const $scope = constants?.$scope || function()
 
         return s;
     };
+
+
+    //// AS STRING HELPERS ////
 
     function _handleFunctionInput( pValue, pTrim, pOptions )
     {
@@ -539,6 +717,15 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    /**
+     * Returns the name of the function specified, if it is not anonymous
+     *
+     * @param {function|string} pFunction The function or source code of the function whose name is to be returned
+     *
+     * @param {object} pOptions An object with properties defining what to do if no name is available
+     *
+     * @returns {string}
+     */
     function getFunctionName( pFunction, pOptions )
     {
         const options = _aso( pOptions );
@@ -549,7 +736,7 @@ const $scope = constants?.$scope || function()
                    pFunction?.constructor?.name ||
                    (options.returnFunctionSource ?
                     getFunctionSource( pFunction ) :
-                    _getClassOrFunctionNameFromSource( getFunctionSource( pFunction, options ), options ));
+                    _getClassOrFunctionNameFromSource( getFunctionSource( pFunction ), options ));
         }
 
         if ( isString( pFunction ) )
@@ -758,6 +945,50 @@ const $scope = constants?.$scope || function()
         return String( toDecimal( value, options ) );
     }
 
+    function _asStringFromType( pIn, pTrim, pOptions )
+    {
+        let s;
+
+        // return a value based on the type pf the argument
+        switch ( typeof pIn )
+        {
+            case _str:
+                s = pTrim ? pIn.trim() : pIn;
+
+                if ( pOptions.assumeNumeric )
+                {
+                    s = (_mt_str + _handleNumericString( pIn, pOptions ));
+                }
+                break;
+
+            // numeric values are converted to the string representation of their float value
+            case _num:
+            case _big:
+                s = _handleNumericString( pIn, pOptions ) || _zero;
+                break;
+
+            // booleans are converted to either the string "true" or the string "false"
+            case _bool:
+                s = pIn ? S_TRUE : S_FALSE;
+                break;
+
+            // objects are a special case...
+            case _obj:
+                s = _handleObjectInput( pIn, pTrim, pOptions );
+                break;
+
+            case _fun:
+                s = _handleFunctionInput( pIn, pTrim, pOptions );
+                break;
+
+            default:
+                s = _mt_str;
+                break;
+        }
+
+        return s;
+    }
+
     /**
      * Returns a string representation of the argument passed,<br>
      * optionally removing leading and trailing whitespace<br>
@@ -776,12 +1007,12 @@ const $scope = constants?.$scope || function()
      *                                      attempts to parse the number as a float
      *                                      and then return a string representation of the resulting value
      *                   if the argument is an object,
-     *                                   if the object is an Array, joins the asString value of each element
+     *                                   if the object is an Array, joins the asString( value ) of each element
      *                                   if the object is one of the built-in JavaScript types,
-     *                                      returns a asString of its canonical string representation
+     *                                      returns asString called on its canonical string representation
      *                                   if the object defines a toJson method, returns the result of calling that method on the object
      *                                   otherwise, attempts to call JSON.stringify passing the object as the argument
-     *                  if the argument is a function, attempts to execute that function and return its result(s) as a asString
+     *                  if the argument is a function, attempts to execute that function and return its result(s) as a string
      *                  in all other cases, returns an empty string
      *
      *                  if this function is called with 2 arguments and the second argument is truthy,
@@ -791,49 +1022,12 @@ const $scope = constants?.$scope || function()
     {
         const options = _aso( pOptions );
 
-        let s;
-
         let trim = pTrim || options.trim;
-        options.trim = trim;
 
+        options.trim = trim;
         let input = _resolveInput.call( this, pStr );
 
-        // return a value based on the type pf the argument
-        switch ( typeof input )
-        {
-            case _str:
-                s = trim ? input.trim() : input;
-
-                if ( options.assumeNumeric )
-                {
-                    s = (_mt_str + _handleNumericString( input, options ));
-                }
-                break;
-
-            // numeric values are converted to the string representation of their float value
-            case _num:
-            case _big:
-                s = _handleNumericString( input, options ) || _zero;
-                break;
-
-            // booleans are converted to either the string "true" or the string "false"
-            case _bool:
-                s = input ? S_TRUE : S_FALSE;
-                break;
-
-            // objects are a special case...
-            case _obj:
-                s = _handleObjectInput( input, pTrim, options );
-                break;
-
-            case _fun:
-                s = _handleFunctionInput( input, pTrim, options );
-                break;
-
-            default:
-                s = _mt_str;
-                break;
-        }
+        let s = _asStringFromType( input, trim, options, pTrim );
 
         // if the string is the null-terminator (perhaps the string came from a C-API)
         if ( _z === s )
@@ -841,11 +1035,14 @@ const $scope = constants?.$scope || function()
             return _mt_str;
         }
 
+        s = s.replace( _z, _mt_str );
+
         const transformations = ([].concat( ...(options?.transformations || []) )).flat().filter( isTransformer );
 
         return _transform( _mt_str + ((true === trim) ? ((_mt_str + s).trim()) : s), ...transformations );
     };
 
+    // add the asString function as a method of String,Number, and Boolean primitive wrappers
     String.prototype.asString = asString;
     Number.prototype.asString = asString;
     Boolean.prototype.asString = asString;
@@ -857,7 +1054,26 @@ const $scope = constants?.$scope || function()
      */
     const toCString = function( pString )
     {
-        return Buffer.from( `${pString}\0`, "ucs2" );
+        let s = asString( pString );
+
+        if ( _ud !== typeof Buffer )
+        {
+            return Buffer.from( `${s}\0`, "ucs2" );
+        }
+
+        const bytes = new Uint8Array( (s.length * 2) + 1 ); // 2 bytes per code unit, plus one for the null terminator
+
+        for( let i = 0; i < s.length; i++ )
+        {
+            const charCode = s.charCodeAt( i );
+            bytes[i * 2] = charCode & 0xFF; // Low byte
+            bytes[i * 2 + 1] = (charCode >> 8) & 0xFF; // High byte
+        }
+
+        // add the null terminator
+        bytes[bytes.length - 1] = _z;
+
+        return bytes;
     };
 
     /**
@@ -870,9 +1086,14 @@ const $scope = constants?.$scope || function()
      */
     const fromCString = function( pCString, pLen = -1 )
     {
-        let buffer = Buffer.from( pCString, "ucs2" );
+        let buffer = null;
 
-        let s = buffer.toString();
+        if ( _ud !== typeof Buffer )
+        {
+            buffer = Buffer.from( pCString, "ucs2" );
+        }
+
+        let s = buffer ? buffer.toString() : isArray( pCString ) || isTypedArray( pCString ) ? fromByteArray( pCString ) : asString( pCString );
 
         // remove the null terminators;
         // Unicode characters may occupy either one or 2 bytes,
@@ -907,12 +1128,7 @@ const $scope = constants?.$scope || function()
      * @returns {*|boolean}
      * @private
      */
-    const _containsPlaceholders = function( pMsg )
-    {
-        return pMsg.includes( "{" ) &&
-               pMsg.includes( "}" ) &&
-               (/\{\d+}/.test( pMsg ));
-    };
+    const _containsPlaceholders = ( pMsg ) => /\{\d+}/.test( pMsg );
 
     /**
      * Returns a string that contains typical java-like message format placeholders, such as {0}. {1}, etc.
@@ -928,9 +1144,9 @@ const $scope = constants?.$scope || function()
 
         if ( _containsPlaceholders( msg ) )
         {
-            const substitutions = Array.isArray( pData ) ? pData : [pData];
+            const substitutions = isArray( pData ) ? pData : [pData];
 
-            msg = msg.replace( /{\d+}/g, match => substitutions[parseInt( match.slice( 1, -1 ) )] );
+            msg = msg.replace( /\{\d+}/g, match => substitutions[asInt( match.slice( 1, -1 ) )] );
         }
 
         return msg;
@@ -944,9 +1160,7 @@ const $scope = constants?.$scope || function()
      */
     const formatMessage = function( pMsg, ...pData )
     {
-        let msg = asString( pMsg, false );
-
-        return _replaceIndexPlaceholders( msg, ...pData );
+        return _replaceIndexPlaceholders( asString( pMsg, false ), ...pData );
     };
 
     function hasUnresolvedVariables( pString )
@@ -1120,7 +1334,7 @@ const $scope = constants?.$scope || function()
      */
     const isAllCaps = function( pStr, pOptions )
     {
-        const options = Object.assign( Object.assign( {}, DEFAULT_IS_CAPS_OPTIONS ), pOptions || {} );
+        const options = populateOptions( pOptions, DEFAULT_IS_CAPS_OPTIONS );
 
         const str = asString( pStr, options.allowWhitespace );
 
@@ -1168,10 +1382,7 @@ const $scope = constants?.$scope || function()
         return arr.length - 1;
     };
 
-    function findPosition( pStr, pOf )
-    {
-        return (_str === typeof pOf) ? pStr.indexOf( pOf ) : asInt( pOf, pStr?.length );
-    }
+    const findPosition = ( pStr, pOf ) => (_str === typeof pOf) ? pStr.indexOf( pOf ) : asInt( pOf, pStr?.length );
 
     /**
      * Returns the text to the left of the FIRST occurrence of pOf (or if pOf is a number, the index specified by pOf)
@@ -1218,10 +1429,7 @@ const $scope = constants?.$scope || function()
         return sliceToPosition( pos, s, pOf );
     };
 
-    function findLastPosition( pStr, pOf )
-    {
-        return (_str === typeof pOf) ? pStr.lastIndexOf( pOf ) : asInt( pOf, pStr?.length );
-    }
+    const findLastPosition = ( pStr, pOf ) => (_str === typeof pOf) ? pStr.lastIndexOf( pOf ) : asInt( pOf, pStr?.length );
 
     /**
      * Returns the text to the left of the LAST occurrence of pOf (or if pOf is a number, the index specified by pOf)
@@ -1499,10 +1707,7 @@ const $scope = constants?.$scope || function()
         toolBocksModule.reportError( new IllegalArgumentError( msg ), msg, S_WARN, (modName + _colon + _colon + (pSource || AS_INT)) );
     }
 
-    function _isIntegerOutOfRange( pValue )
-    {
-        return pValue > Number.MAX_SAFE_INTEGER || pValue < Number.MIN_SAFE_INTEGER;
-    }
+    const _isIntegerOutOfRange = ( pValue ) => pValue > Number.MAX_SAFE_INTEGER || pValue < Number.MIN_SAFE_INTEGER;
 
     function _resolveAsArguments( pAsFloat, pValue, pDefault = 0, pOptions = calculateDecimalSymbols() )
     {
@@ -1527,6 +1732,54 @@ const $scope = constants?.$scope || function()
         return { input, dflt, options, type, zero, one };
     }
 
+    function _asIntFromObj( pIn, pDefault, pOptions )
+    {
+        let val = isPrimitiveWrapper( pIn ) || isFunction( pIn?.valueOf ) ? pIn.valueOf() : (Number( pIn || {} ));
+
+        if ( isDate( pIn ) || isFunction( pIn?.getTime ) )
+        {
+            val = asInt( pIn.getTime() );
+        }
+        else if ( isFunction( pIn?.valueOf ) )
+        {
+            val = asInt( pIn.valueOf(), pDefault, pOptions );
+        }
+
+        return val;
+    }
+
+    function _asIntFromType( pIn, pDefault, pOptions )
+    {
+        let val = null;
+
+        const type = typeof pIn;
+
+        switch ( type )
+        {
+            case _num:
+            case _big:
+                val = !isNanOrInfinite( pIn ) ? parseInt( pIn.toFixed( 0 ) ) : asInt( pDefault, 0, pOptions );
+                break;
+
+            case _str:
+                val = (isNumeric( pIn ) ? parseInt( toDecimal( pIn, (pOptions.decimal_point || _dot) ) ) : asInt( pDefault, 0, pOptions ));
+                break;
+
+            case _bool:
+                val = pIn ? 1 : 0;
+                break;
+
+            case _obj:
+                val = isNonNullObject( pIn ) ? _asIntFromObj( pIn, pDefault, pOptions ) : asInt( pDefault, 0, pOptions );
+                break;
+
+            default:
+                break;
+        }
+
+        return val;
+    }
+
     /**
      * Returns an integer value represented or implied by the value provided
      * @param {any} pValue a number or string representing a number
@@ -1541,61 +1794,82 @@ const $scope = constants?.$scope || function()
             input,
             dflt,
             options,
-            type,
-            zero,
-            one
+            type
         } = _resolveAsArguments( false, _resolveInput.call( this, pValue ), pDefault, pOptions );
 
         if ( [_num, _big].includes( type ) && _isIntegerOutOfRange( input ) )
         {
             _warnIntegerOutOfRange( input );
-            return asInt( dflt, zero, options );
+            return asInt( dflt, 0, options );
         }
 
-        let val = dflt;
+        let val = attempt( () => _asIntFromType( input, dflt, options ) );
+
+        if ( isNull( val ) || isNanOrInfinite( val ) )
+        {
+            val = asInt( dflt, 0, options );
+        }
+
+        if ( _isIntegerOutOfRange( val ) )
+        {
+            _warnIntegerOutOfRange( val );
+            val = asInt( dflt, 0, options );
+        }
+
+        return val || 0;
+    };
+
+    String.prototype.asInt = asInt;
+    Number.prototype.asInt = asInt;
+    Boolean.prototype.asInt = asInt;
+
+    function _asFloatFromObj( pIn, pDefault, pOptions )
+    {
+        let val = isPrimitiveWrapper( pIn ) || isFunction( pIn?.valueOf ) ? pIn.valueOf() : (Number( pIn || {} ));
+
+        if ( isDate( pIn ) || isFunction( pIn?.getTime ) )
+        {
+            val = asFloat( pIn.getTime() );
+        }
+        else if ( isFunction( pIn?.valueOf ) )
+        {
+            val = asFloat( pIn.valueOf(), pDefault, pOptions );
+        }
+
+        return val;
+    }
+
+    function _asFloatFromType( pIn, pDefault, pOptions )
+    {
+        let val = null;
+
+        const type = typeof pIn;
 
         switch ( type )
         {
             case _num:
             case _big:
-                val = !isNanOrInfinite( input ) ? parseInt( (input).toFixed( 0 ) ) : asInt( dflt, zero, options );
+                val = !isNanOrInfinite( pIn ) ? parseFloat( pIn ) : asFloat( pDefault, 0.0, pOptions );
                 break;
 
             case _str:
-                val = (isNumeric( input ) ? parseInt( toDecimal( input, (options.decimal_point || _dot) ) ) : asInt( dflt, zero, options ));
+                val = (isNumeric( pIn ) ? parseFloat( toDecimal( pIn, (pOptions.decimal_point || _dot) ) ) : asFloat( pDefault, 0.0, pOptions ));
                 break;
 
             case _bool:
-                return input ? one : zero;
+                val = pIn ? 1.0 : 0.0;
+                break;
 
             case _obj:
-                if ( isDate( input ) || isFunction( input?.getTime ) )
-                {
-                    val = asInt( input.getTime() );
-                }
+                val = isNonNullObject( pIn ) ? _asFloatFromObj( pIn, val, pDefault, pOptions ) : asFloat( pDefault, 0.0, pOptions );
                 break;
 
             default:
                 break;
         }
 
-        if ( isNanOrInfinite( val ) )
-        {
-            val = asInt( dflt, zero, options );
-        }
-
-        if ( _isIntegerOutOfRange( val ) )
-        {
-            _warnIntegerOutOfRange( val );
-            val = asInt( dflt, zero, options );
-        }
-
-        return val || zero;
-    };
-
-    String.prototype.asInt = asInt;
-    Number.prototype.asInt = asInt;
-    Boolean.prototype.asInt = asInt;
+        return val;
+    }
 
     /**
      * Returns a floating-point value represented or implied by the value provided
@@ -1609,60 +1883,26 @@ const $scope = constants?.$scope || function()
         const {
             input,
             dflt,
-            options,
-            type,
-            zero,
-            one
+            options
         } = _resolveAsArguments( true, _resolveInput.call( this, pValue ), pDefault, pOptions );
 
-        let val = dflt;
+        let val = attempt( () => _asFloatFromType( input, dflt, options ) );
 
-        switch ( type )
+        if ( isNull( val ) || isNanOrInfinite( val ) )
         {
-            case _num:
-            case _big:
-                val = !isNanOrInfinite( input ) ? parseFloat( input ) : asFloat( dflt, zero, options );
-                break;
-
-            case _str:
-                val = (isNumeric( input ) ? parseFloat( toDecimal( input, (options.decimal_point || _dot) ) ) : asFloat( dflt, zero, options ));
-                break;
-
-            case _bool:
-                return input ? one : zero;
-
-            case _obj:
-                if ( isDate( input ) || isFunction( input?.getTime ) )
-                {
-                    val = asFloat( input.getTime() );
-                }
-                break;
-
-            default:
-                break;
+            val = asFloat( dflt, 0.0, options );
         }
 
-        if ( isNanOrInfinite( val ) )
-        {
-            val = asFloat( dflt, zero, options );
-        }
-
-        return val || zero;
+        return val || 0.0;
     };
 
     String.prototype.asFloat = asFloat;
     Number.prototype.asFloat = asFloat;
     Boolean.prototype.asFloat = asFloat;
 
-    const asPositiveInt = function( pStr )
-    {
-        return Math.max( 0, asInt( pStr ) );
-    };
+    const asPositiveInt = ( pStr ) => Math.max( 0, asInt( pStr ) );
 
-    const asPositiveFloat = function( pStr )
-    {
-        return Math.max( 0.0, asFloat( pStr ) );
-    };
+    const asPositiveFloat = ( pStr ) => Math.max( 0.0, asFloat( pStr ) );
 
     const toNumberWithinRange = function( pStr, pMin, pMax, converter, pOptions = calculateDecimalSymbols() )
     {
@@ -1899,43 +2139,25 @@ const $scope = constants?.$scope || function()
     const isTrue = evaluateBoolean;
     const toBool = evaluateBoolean;
 
-    Boolean.prototype.evaluate = evaluateBoolean;
-    String.prototype.toBool = evaluateBoolean;
-
-    Boolean.evaluate = evaluateBoolean;
-    String.toBool = evaluateBoolean;
+    Boolean.prototype.evaluate = Boolean.evaluate = evaluateBoolean;
+    String.prototype.toBool = String.toBool = evaluateBoolean;
 
     /**
      * This function converts all (carriage return + line feed) sequences to line feed only sequences
-     * @returns {string} a string where new lines are delimited by line feed characters only (without an extraneous carriage return character)
+     *
      * @param {String} s a string representing a path or path-like value whose line feeds will be converted
+     *
+     * @returns {string} a string where new lines are delimited by line feed characters only
+     * (without an extraneous carriage return character)
      */
-    const toUnixLinebreaks = function( s )
-    {
-        let val = asString( s );
-
-        let out = (asString( val )).replace( /(\r\n)/g, _lf );
-
-        out = out.replaceAll( /(\n\r)/g, _lf );
-
-        out = out.replaceAll( /[\n\r]/g, _lf );
-
-        return out;
-    };
+    const toUnixLinebreaks = ( s ) => (asString( s )).replaceAll( /(\r\n)/g, _lf ).replaceAll( /(\n\r)/g, _lf ).replaceAll( /[\n\r]/g, _lf );
 
     /**
      * This function converts all line-feed only sequences to (carriage return + line feed) sequences
      * @returns {string} a string where new lines are delimited by (carriage return + line feed) characters
      * @param {string} s - a string representing a path or path-like value whose line feeds will be converted
      */
-    const toWindowsLinebreaks = function( s )
-    {
-        let val = asString( s );
-
-        val = toUnixLinebreaks( val );
-
-        return (asString( val )).replace( /\n/g, _crlf );
-    };
+    const toWindowsLinebreaks = ( s ) => toUnixLinebreaks( asString( s ) ).replaceAll( /\n/g, _crlf );
 
     /**
      * Returns a filepath formatted for Linux or Unix
@@ -2365,10 +2587,7 @@ const $scope = constants?.$scope || function()
      * @param pStr a string or value that can be converted to a string using asString
      * @returns {string} the string representation of the specified argument in all lowercase characters
      */
-    const lcase = function( pStr )
-    {
-        return asString( pStr, false ).toLowerCase();
-    };
+    const lcase = ( pStr ) => asString( pStr, false ).toLowerCase();
 
     /**
      * Returns the string representation of the specified argument in all uppercase characters.
@@ -2376,10 +2595,7 @@ const $scope = constants?.$scope || function()
      * @param pStr a string or value that can be converted to a string using asString
      * @returns {string} the string representation of the specified argument in all uppercase characters
      */
-    const ucase = function( pStr )
-    {
-        return asString( pStr, false ).toUpperCase();
-    };
+    const ucase = ( pStr ) => asString( pStr, false ).toUpperCase();
 
     const MC_OPTIONS =
         {

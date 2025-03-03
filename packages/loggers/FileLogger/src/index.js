@@ -49,6 +49,7 @@ const $scope = constants?.$scope || function()
         _mt_str,
         _hyphen,
         _underscore,
+        _spc,
         _dot,
         _lf,
         _fun,
@@ -58,6 +59,7 @@ const $scope = constants?.$scope || function()
         IterationCap,
         isLogger,
         MILLIS_PER,
+        DEFAULT_LOCALE,
         MESSAGES_LOCALE,
         getMessagesLocale,
         S_ERR_PREFIX,
@@ -78,9 +80,9 @@ const $scope = constants?.$scope || function()
         resolveMoment,
     } = typeUtils;
 
-    const { ToolBocksModule } = moduleUtils;
+    const { ToolBocksModule, asPhrase } = moduleUtils;
 
-    const { asString, asInt, asFloat, isBlank, ucase, toBool } = stringUtils;
+    const { asString, asInt, asFloat, isBlank, ucase, capitalize, toBool, formatMessage } = stringUtils;
 
     const { varargs, asArray, Filters, AsyncBoundedQueue } = arrayUtils;
 
@@ -159,7 +161,137 @@ const $scope = constants?.$scope || function()
 
     let toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
+    const MSG_STEMS =
+        {
+            the: "the",
+            log_file: "log file",
+            the_log_file: [this.THE, this.LOG_FILE].join( _spc ),
+            retention_policy: "retention policy",
+            unable: "unable to",
+            deleting: "deleting",
+            deleted: "deleted",
+            create: "create",
+            creating: "creating",
+            created: "created",
+            access: "access",
+            open: "open",
+            closing: "closing",
+            closed: "closed",
+            logging_to: "logging to",
+            logger_disabled: "This logger is disabled",
+            logger_enabled: "This logger is enabled",
+            invalid_archiver: "No valid archiver is defined for",
+            rotating: "rotating",
+            archiving: "archiving",
+            archived: "archived",
+            max_size_exceeded: "due to maximum size reached",
+            expired: "expired",
+            invalid: "invalid",
+            removed: "removed",
+            moved: "moved",
+            directory: "directory",
+            file: "file",
+            path: "path",
+            files: "files",
+            trying: "trying",
+            default: "default",
+            successfully: "successfully",
+            with_result: "with result",
+            failed: "failed",
+            //"Some messages may have been lost"
+            msgs_lost: "Some messages may have been lost",
+        };
+
+    const MSG_INFO =
+        {
+            closed: asPhrase( capitalize( MSG_STEMS.closed ), MSG_STEMS.the_log_file, ", {0}" ),
+            deleted: asPhrase( capitalize( MSG_STEMS.deleted ), MSG_STEMS.the_log_file, ", {0}" ),
+            created: asPhrase( capitalize( MSG_STEMS.created ), MSG_STEMS.the_log_file, ", {0}" ),
+            logging_to: asPhrase( capitalize( MSG_STEMS.logging_to ), "{0}", ", {1}" ),
+
+            rotating: asPhrase( capitalize( MSG_STEMS.rotating ), MSG_STEMS.the_log_file, ", {0} copied to: ", "{1}" ),
+            // "Log file retention policy executed. Removed ", removed.length, " files, moved ", moved.length, " files.", removed, moved
+            retention_policy_executed: asPhrase( capitalize( MSG_STEMS.log_file ), MSG_STEMS.retention_policy, "executed. Removed {0} file(s), moved {1} file(s)." ),
+        };
+
+    const MSG_ERRORS =
+        {
+            //"An error occurred while deleting the log file"
+            deleting: asPhrase( S_ERR_PREFIX, MSG_STEMS.deleting, MSG_STEMS.the_log_file ),
+            // "No valid archiver is defined for the log file retention policy"
+            invalid_archiver: asPhrase( MSG_STEMS.invalid_archiver, MSG_STEMS.the_log_file, MSG_STEMS.retention_policy ),
+            // "Archived expired log file:", pathname, isNull( result ) ? "successfully" : "with result", result
+            archived_expired: asPhrase( capitalize( MSG_STEMS.archived ), MSG_STEMS.expired, MSG_STEMS.log_file ),
+            // "An error occurred while archiving expired log file:", path, ex.message, ex
+            archiving: asPhrase( S_ERR_PREFIX, MSG_STEMS.archiving, MSG_STEMS.expired, MSG_STEMS.log_file, "{0}" ),
+            // "Unable to create log directory", this.#directory, "Trying default log file path", DEFAULTS.FILE_PATH
+            create_directory: asPhrase( capitalize( MSG_STEMS.unable ), MSG_STEMS.create, MSG_STEMS.the_log_file, MSG_STEMS.directory ),
+            // "Trying default log file path"
+            retry_create_directory: asPhrase( capitalize( MSG_STEMS.trying ), MSG_STEMS.the, MSG_STEMS.default, MSG_STEMS.file, MSG_STEMS.path ),
+            // "Logging to", pFilePath, "is", this.enabled ? "enabled" : "disabled"
+            logging_enabled: asPhrase( capitalize( MSG_STEMS.logging_to ), "{0}", "is", "{1}" ),
+            //
+            creating_file: asPhrase( S_ERR_PREFIX, MSG_STEMS.creating, MSG_STEMS.the_log_file, MSG_STEMS.file ),
+            // "Unable to create log file", filePath, "after", retries, "attempts.", "This logger is disabled", this
+            create_file: asPhrase( capitalize( MSG_STEMS.unable ), MSG_STEMS.create, MSG_STEMS.the_log_file, "after", "{0}", "attempts.", "This logger is disabled" ),
+            access_file: asPhrase( capitalize( MSG_STEMS.unable ), MSG_STEMS.access, MSG_STEMS.the_log_file, ". ", "This logger is disabled" ),
+            open_file: asPhrase( capitalize( MSG_STEMS.unable ), MSG_STEMS.open, MSG_STEMS.the_log_file, ", ", "{0}" ),
+
+            force_closed: asPhrase( capitalize( MSG_STEMS.closed ), MSG_STEMS.the_log_file, ", {0}. ", MSG_STEMS.msgs_lost ),
+
+            invalid_retention_policy: asPhrase( capitalize( MSG_STEMS.invalid ), MSG_STEMS.retention_policy ),
+
+            //"An error occurred while writing to log file:", (me || this).filepath, err
+            writing: asPhrase( S_ERR_PREFIX, "writing to", MSG_STEMS.the_log_file, "{0}" ),
+        };
+
+    const MESSAGES =
+        {
+            STEMS: MSG_STEMS,
+            ERRORS: MSG_ERRORS,
+            INFO: MSG_INFO,
+        };
+
     const messagesLocale = MESSAGES_LOCALE || getMessagesLocale();
+
+    toolBocksModule.setResourceCache = function( pResourceCache )
+    {
+        this.resourceCache = pResourceCache;
+    };
+
+    toolBocksModule.getResourceCache = function( pResourceCache )
+    {
+        return this.resourceCache;
+    };
+
+    toolBocksModule.setMessagesLocale = function( pMessagesLocale )
+    {
+        this.messagesLocale = pMessagesLocale;
+    };
+
+    toolBocksModule.getMessage = function( pKey, ...pArgs )
+    {
+        let cache = this.resourceCache || new Map();
+
+        const messagesLocale = this.messagesLocale || getMessagesLocale();
+
+        let message;
+        /*
+         let message = cache.getMessage( messagesLocale, pKey, ...pArgs );
+
+         if ( isBlank( message ) )
+         {
+         message = cache.getMessage( DEFAULT_LOCALE, pKey, ...pArgs );
+         }
+         */
+
+        if ( isBlank( message ) )
+        {
+            message = MESSAGES.ERRORS[pKey] || MESSAGES.INFO[pKey] || MESSAGES.STEMS[pKey] || pKey;
+        }
+
+        return formatMessage( message, ...pArgs );
+    };
 
     class LogFilePattern
     {
@@ -471,11 +603,11 @@ const $scope = constants?.$scope || function()
                 {
                     await rm( filePath, { force: true } );
                     deleted.push( filePath );
-                    konsole.info( "Deleted log file", filePath );
+                    konsole.info( toolBocksModule.getMessage( MESSAGES.INFO.deleted, filePath ), filePath );
                 }
                 catch( ex )
                 {
-                    konsole.error( "An error occurred while deleting log file", filePath, file, ex );
+                    konsole.error( toolBocksModule.getMessage( MESSAGES.ERRORS.deleting, filePath ), ex );
                 }
             }
 
@@ -499,7 +631,7 @@ const $scope = constants?.$scope || function()
 
             if ( isNull( archiver ) )
             {
-                konsole.error( "No valid archiver is defined for the log file retention policy", this, pArchiver );
+                konsole.error( toolBocksModule.getMessage( MESSAGES.ERRORS.invalid_archiver ), this, pArchiver );
 
                 return [];
             }
@@ -1661,7 +1793,7 @@ const $scope = constants?.$scope || function()
 
             const now = new Date();
 
-            konsole.info( "Rotating log file:", me.filepath, "copied to:", archivedPath, now );
+            konsole.info( toolBocksModule.getMessage( MESSAGES.INFO.rotating, me.filepath, archivedPath ), now );
 
             this.#lastRotationDate = now;
 
@@ -1719,7 +1851,7 @@ const $scope = constants?.$scope || function()
 
             if ( !isFunction( runPolicy ) )
             {
-                konsole.error( "Invalid retention policy", policy, "for logger", me );
+                konsole.error( toolBocksModule.getMessage( MESSAGES.ERRORS.invalid_retention_policy ), policy, me );
             }
 
             const retentionFunction = async function() { await asyncAttempt( () => runPolicy.call( me, directory, me ) ); };
@@ -1739,9 +1871,9 @@ const $scope = constants?.$scope || function()
 
             const { removed, moved } = await asyncAttempt( async() => await policy.run( directory, (me || this) ) );
 
-            const logMsg = ["Log file retention policy executed. Removed ", removed.length, " files, moved ", moved.length, " files.", removed, moved];
+            const logMsg = toolBocksModule.getMessage( MESSAGES.INFO.retention_policy_executed, removed.length, moved.length );
 
-            konsole.info( ...logMsg );
+            konsole.info( logMsg, removed, moved );
 
             const logger = isLogger( pLogger ) ? (pLogger || me || this) : (me || this);
 

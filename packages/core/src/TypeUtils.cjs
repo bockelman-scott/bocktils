@@ -129,7 +129,6 @@ const $scope = constants?.$scope || function()
         resolveEvent,
         resolveObject,
         resolveLogLevel,
-        resolveType,
         resolveMethod,
         resolveTransientProperties,
 
@@ -4934,7 +4933,6 @@ const $scope = constants?.$scope || function()
             resolveEvent,
             resolveObject,
             resolveLogLevel,
-            resolveType,
             resolveMethod,
             canBind,
             twosComplement,
