@@ -1886,7 +1886,9 @@ const { _ud = "undefined", $scope } = constants;
             DEFAULT_MAX_DEPTH: MAX_RECURSION,
             containsInterpolatableContent,
             pendingInterpolation,
-            buildPathExpression
+            buildPathExpression,
+            tracePathTo,
+            findNode
         };
 
     mod = modulePrototype.extend( mod );

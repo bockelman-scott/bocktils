@@ -71,13 +71,27 @@ const {
         Mappers
     } = arrayUtils;
 
+    const {
+        DEFAULT_REPLACER,
+        DEFAULT_REVIVER,
+        DEFAULT_OPTIONS_FOR_JSON,
+        DEFAULT_EXCLUSIONS,
+        DEFAULT_MAX_RUNTIME,
+        DEFAULT_MAX_DEPTH,
+        containsInterpolatableContent,
+        pendingInterpolation,
+        buildPathExpression,
+        asJson,
+        parseJson,
+        tracePathTo,
+        findNode
+    } = jsonInterpolationUtils;
+
     const modName = "JsonUtils";
 
     const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
 
     const calculateErrorSourceName = ( pModule = modName, pFunction ) => modulePrototype.calculateErrorSourceName( pModule, pFunction );
-
-    const { DEFAULT_REPLACER: replacer, asJson, parseJson } = jsonInterpolationUtils;
 
     const _isValidInput = ( pValue ) => !isNull( pValue ) && (isString( pValue ) || isObject( pValue ));
 
@@ -359,10 +373,20 @@ const {
             parseJson,
             stringify: asJson,
             parse: parseJson,
-            DEFAULT_REPLACER: replacer,
+            DEFAULT_REPLACER,
+            DEFAULT_REVIVER,
+            DEFAULT_OPTIONS_FOR_JSON,
+            DEFAULT_EXCLUSIONS,
+            DEFAULT_MAX_RUNTIME,
+            DEFAULT_MAX_DEPTH,
+            containsInterpolatableContent,
+            pendingInterpolation,
+            buildPathExpression,
             toObjectLiteral,
             bruteForceJson,
-            cherryPick
+            cherryPick,
+            tracePathTo,
+            findNode
         };
 
     mod = modulePrototype.extend( mod );

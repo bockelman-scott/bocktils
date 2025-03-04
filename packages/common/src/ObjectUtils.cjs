@@ -3,16 +3,13 @@
  * This module exposes useful methods for working with objects, collections of objects, and classes.
  * Dependencies: Constants, TypeUtils, StringUtils, ArrayUtils, and GUIDUtils
  */
-const core = require( "../../core/src/CoreUtils.cjs" );
+const core = require( "@toolbocks/core" );
 
 const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils, guidUtils, functionUtils } = core;
 
-const {
-    _ud = "undefined", $scope = constants?.$scope || function()
-    {
-        return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-    }
-} = constants;
+const jsonUtils = require( "@toolbocks/json" );
+
+const { _ud = "undefined", $scope } = constants;
 
 /**
  * This is the Immediately Invoked Function Expression (IIFE) that builds and returns the module
@@ -42,12 +39,11 @@ const {
             stringUtils,
             arrayUtils,
             guidUtils,
+            jsonUtils,
             functionUtils
-
         };
 
     const {
-        IllegalArgumentError,
         IterationCap,
         detectCycles,
         bracketsToDots,
@@ -91,6 +87,14 @@ const {
         extractFunctionBody,
         extractFunctionParameters,
     } = functionUtils;
+
+    const {
+        asJson,
+        parseJson,
+        tracePathTo,
+        findNode,
+        cherryPick
+    } = jsonUtils;
 
     const modName = "ObjectUtils";
 
@@ -175,125 +179,6 @@ const {
             varargs,
             immutableVarArgs
         } = arrayUtils;
-
-    const tracePathTo = function( pNode, pRoot, pPath = [], pStack = [], pVisited = [] )
-    {
-        let stack = asArray( pStack || [] );
-
-        if ( detectCycles( stack, 5, 5 ) )
-        {
-            modulePrototype.reportError( new Error( `Entered an infinite loop at ${stack.join( _dot )}` ), `iterating a cyclically-connected graph`, S_ERROR, (modName + "::detectCycles"), stack );
-            return [];
-        }
-
-        let paths = isString( pPath ) ? [...(pPath.split( _dot ).flat())] : isArray( pPath ) ? pPath || [] : [];
-
-        if ( identical( pNode, pRoot ) )
-        {
-            return paths;
-        }
-
-        let target = isNull( pNode ) ? (_mt_str === pNode ? pNode : (isNull( pRoot ) ? null : pRoot)) : pNode;
-
-        if ( identical( target, pRoot ) )
-        {
-            return paths;
-        }
-
-        let root = isNull( pRoot ) ? $scope() : (isPopulated( pRoot ) || isFunction( pRoot )) ? pRoot : $scope();
-
-        if ( isNull( target ) || root === target )
-        {
-            return paths;
-        }
-
-        const scope = $scope();
-
-        const visited = asArray( pVisited || [] );
-
-        let found = false;
-
-        const predicate = entry =>
-        {
-            return entry.value !== root &&
-                   entry.value !== scope &&
-                   !visited.includes( entry.value )
-                   && isPopulated( entry.value,
-                                   {
-                                       minimumKeys: 1,
-                                       acceptArrays: true,
-                                       validTypes: [_obj, _num, _big, _str, _bool]
-                                   } );
-        };
-
-        if ( root === scope || root === target )
-        {
-            return paths;
-        }
-
-        const entries = getEntries( root ).filter( predicate );
-
-        for( let entry of entries )
-        {
-            let key = asString( entry.key || entry[0] );
-
-            let value = entry.value || entry[1];
-
-            if ( isNull( value ) )
-            {
-                continue;
-            }
-
-            visited.push( value );
-
-            if ( value === target || same( value, target ) )
-            {
-                paths.push( key );
-                found = true;
-                break;
-            }
-
-            if ( isPopulated( value ) )
-            {
-                let result = tracePathTo( target, value, paths.concat( key ), stack.concat( key ), visited );
-
-                if ( (result?.length || 0) > 0 )
-                {
-                    paths = asArray( result ).map( e => isString( e ) ? e.split( _dot ) : e ).flat();
-                    found = true;
-                    break;
-                }
-            }
-        }
-
-        if ( found )
-        {
-            return paths;
-        }
-
-        return (found ? paths : []);
-    };
-
-    const findNode = function( pRoot, ...pPaths )
-    {
-        let paths = toNonBlankStrings( ...pPaths );
-
-        let node = pRoot || $scope();
-
-        while ( isPopulated( node ) && paths.length )
-        {
-            const property = paths.shift();
-
-            if ( isBlank( property ) )
-            {
-                continue;
-            }
-
-            node = node?.[property];
-        }
-
-        return (paths.length <= 0) ? node : null;
-    };
 
     const canCompareObject = function( pObject, pStrict, pClass )
     {
@@ -1595,7 +1480,6 @@ const {
     let mod =
         {
             dependencies,
-            guidUtils,
             classes: { IterationCap, ObjectEntry },
             no_op,
             instanceOfAny,
@@ -1639,7 +1523,8 @@ const {
             findNode,
             tracePathTo,
             lock,
-            deepFreeze
+            deepFreeze,
+            cherryPick
         };
 
     mod = modulePrototype.extend( mod );
