@@ -22,6 +22,7 @@
  */
 
 /* import dependencies */
+const moduleUtils = require( "./_ToolBocksModule.cjs" );
 const constants = require( "./Constants.cjs" );
 const typeUtils = require( "./TypeUtils.cjs" );
 const stringUtils = require( "./StringUtils.cjs" );
@@ -55,6 +56,21 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
+    const {
+        ModuleEvent,
+        ToolBocksModule,
+        IllegalArgumentError,
+        objectKeys,
+        objectValues,
+        objectEntries,
+        populateOptions,
+        localCopy,
+        immutableCopy,
+        lock,
+        attempt,
+        asyncAttempt,
+    } = moduleUtils;
+
     /*
      * Create local variables for the imported values and functions we use.
      */
@@ -70,23 +86,9 @@ const $scope = constants?.$scope || function()
         _bool,
         _symbol,
         S_WARN,
-        S_TRUE,
         ignore,
         AsyncFunction,
-        IllegalArgumentError,
-        objectKeys,
-        objectValues,
-        objectEntries,
-        populateOptions,
-        localCopy,
-        immutableCopy,
-        lock,
-        attempt,
-        asyncAttempt,
-        moduleUtils
     } = constants;
-
-    const { ModuleEvent, ToolBocksModule } = moduleUtils;
 
     /**
      * This is a dictionary of this module's dependencies.
@@ -198,7 +200,7 @@ const $scope = constants?.$scope || function()
      * <br>
      * @type {ToolBocksModule}
      */
-    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+    const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
     // poly-fill for isArray; probably obsolete with modern environments
     if ( !isFunction( Array.isArray ) )
@@ -212,7 +214,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            modulePrototype.reportError( ex, "extending the built-in Array class", S_WARN, modName + "::isArray" );
+            toolBocksModule.reportError( ex, "extending the built-in Array class", S_WARN, modName + "::isArray" );
         }
     }
 
@@ -503,7 +505,7 @@ const $scope = constants?.$scope || function()
         }
         catch( error )
         {
-            modulePrototype.reportError( error, `Error executing function: ${pFunc?.name}`, S_WARN, `${modName}::asArray` );
+            toolBocksModule.reportError( error, `Error executing function: ${pFunc?.name}`, S_WARN, `${modName}::asArray` );
         }
         return [pFunc];
     };
@@ -643,7 +645,7 @@ const $scope = constants?.$scope || function()
 
         const error = new IllegalArgumentError( msg );
 
-        modulePrototype.reportError( error, advice, S_WARN, modulePrototype.calculateErrorSourceName( modName, pFunctionName ),
+        toolBocksModule.reportError( error, advice, S_WARN, toolBocksModule.calculateErrorSourceName( modName, pFunctionName ),
                                      {
                                          "pNumMatches": pNumMatches,
                                          "numFilters": pNumFilters
@@ -2522,7 +2524,7 @@ const $scope = constants?.$scope || function()
                     }
                     catch( ex )
                     {
-                        modulePrototype.reportError( ex, "performing transformation", S_WARN, modName + "::TransformerChain::transform" );
+                        toolBocksModule.reportError( ex, "performing transformation", S_WARN, modName + "::TransformerChain::transform" );
                     }
                 }
                 else
@@ -2541,7 +2543,7 @@ const $scope = constants?.$scope || function()
                         }
                         catch( ex )
                         {
-                            modulePrototype.reportError( ex, "performing transformation", S_WARN, modName + "::TransformerChain::transform" );
+                            toolBocksModule.reportError( ex, "performing transformation", S_WARN, modName + "::TransformerChain::transform" );
                         }
                     }
                 }
@@ -4016,7 +4018,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            modulePrototype.reportError( ex, "extending the Array prototype", S_WARN, modName );
+            toolBocksModule.reportError( ex, "extending the Array prototype", S_WARN, modName );
         }
     }
 
@@ -4032,7 +4034,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            modulePrototype.reportError( ex, "extending the Set prototype", S_WARN, modName );
+            toolBocksModule.reportError( ex, "extending the Set prototype", S_WARN, modName );
         }
     }
 
@@ -4077,7 +4079,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            modulePrototype.reportError( ex, "extending the Array prototype", S_WARN, modName );
+            toolBocksModule.reportError( ex, "extending the Array prototype", S_WARN, modName );
         }
     }
 
@@ -4123,7 +4125,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            modulePrototype.reportError( ex, "extending the Array prototype", S_WARN, modName );
+            toolBocksModule.reportError( ex, "extending the Array prototype", S_WARN, modName );
         }
     }
 
@@ -4554,7 +4556,7 @@ const $scope = constants?.$scope || function()
             }
             catch( ex )
             {
-                modulePrototype.reportError( ex, "attempting to take from an exhausted Queue", S_WARN, modName + "::AsyncBoundedQueue::take" );
+                toolBocksModule.reportError( ex, "attempting to take from an exhausted Queue", S_WARN, modName + "::AsyncBoundedQueue::take" );
             }
 
             return elem || null;
@@ -5287,8 +5289,8 @@ const $scope = constants?.$scope || function()
                 }
         };
 
-    // makes the properties of mod available as properties and methods of the modulePrototype
-    mod = modulePrototype.extend( mod );
+    // makes the properties of mod available as properties and methods of the toolBocksModule
+    mod = toolBocksModule.extend( mod );
 
     // Exports this module
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;

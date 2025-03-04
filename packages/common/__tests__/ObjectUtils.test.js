@@ -4,67 +4,50 @@ const objectUtils = require( "../src/ObjectUtils.cjs" );
 
 const
     {
+        moduleUtils,
         constants,
         typeUtils,
-        arrayUtils
+        functionUtils
     } = core;
 
 /**
  * Defines a string to represent the type, undefined
  */
-const { _ud = "undefined" } = constants;
-
-/**
- * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
- */
-const $scope = constants?.$scope || function()
-{
-    return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
-};
+const { _ud = "undefined", $scope } = constants;
 
 objectUtils.disableLogging();
 
+const { detectCycles, } = moduleUtils;
+
+const { arrayToObject } = typeUtils;
+
 const {
-    detectCycles = constants?.detectCycles,
-    getKeys,
-    getProperties,
-    getProperty = constants?.getProperty || typeUtils?.getProperty,
-    hasProperty = constants?.hasProperty || typeUtils?.hasProperty,
-    setProperty = constants?.setProperty || typeUtils?.setProperty,
-    getValues = constants.objectValues,
-    getEntries = constants.objectEntries,
-    ObjectEntry = constants?.ObjectEntry || typeUtils?.ObjectEntry,
-    isEmptyObject,
-    isNullOrEmpty,
+    getProperty = moduleUtils?.getProperty || typeUtils?.getProperty,
+    hasProperty = moduleUtils?.hasProperty || typeUtils?.hasProperty,
+    setProperty = moduleUtils?.setProperty || typeUtils?.setProperty,
+    getEntries = moduleUtils?.objectEntries,
+    ObjectEntry = moduleUtils?.ObjectEntry || typeUtils?.ObjectEntry,
     isNullOrNaN = typeUtils?.isNullOrNaN,
-    isMissing,
     getClass = typeUtils?.getClass,
     getClassName = typeUtils?.getClassName,
-    convertToInstanceOf,
-    isValidEntry,
-    hasNoProperties,
-    isEmptyValue,
     isPopulatedObject = typeUtils?.isPopulated,
     isValidObject,
     firstValidObject,
     firstPopulatedObject,
     identical,
     same,
-    arrayToObject,
     findImplementor,
     collectImplementors,
-    emptyClone,
-    clone,
-    ingest,
-    augment,
-    populateObject,
-    prune,
     toLiteral,
-    findNode,
-    findRoot,
-    tracePathTo,
-
+    findNode
 } = objectUtils;
+
+const {
+    getFunctionSource,
+    extractFunctionData,
+    extractFunctionBody,
+    extractFunctionParameters,
+} = functionUtils;
 
 describe( "detectCycles prevents infinite recursion", () =>
 {
@@ -97,8 +80,6 @@ describe( "detectCycles prevents infinite recursion", () =>
 
 describe( "extractFunctionData returns an object with the function body and an array its parameters", () =>
 {
-    const { extractFunctionData, extractFunctionBody, extractFunctionParameters } = objectUtils;
-
     function TestFunction( pArgA, pArgB )
     {
         let { x, y, z } = {};
@@ -778,10 +759,10 @@ describe( "arrayToObject", () =>
           () =>
           {
               let arr = [{ a: 1, b: 2 }];
-              let obj = arrayToObject( arr, "b" );
+              let obj = arrayToObject( arr );
 
               expect( obj ).toEqual( {
-                                         "2": {
+                                         "0": {
                                              "a": 1,
                                              "b": 2
                                          }

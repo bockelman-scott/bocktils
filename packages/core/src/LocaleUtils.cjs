@@ -5,6 +5,8 @@
  * and other functionality
  * specific to a particular Locale
  */
+const moduleUtils = require( "./_ToolBocksModule.cjs" );
+
 const constants = require( "./Constants.cjs" );
 const typeUtils = require( "./TypeUtils.cjs" );
 const stringUtils = require( "./StringUtils.cjs" );
@@ -31,6 +33,12 @@ const {
         return $scope()[INTERNAL_NAME];
     }
 
+    const {
+        ToolBocksModule,
+        lock,
+        objectValues
+    } = moduleUtils;
+
     // Create local aliases for values imported from other modules
     const {
         _mt_str,
@@ -43,9 +51,6 @@ const {
         _fun,
         S_WARN,
         S_ERROR,
-        lock,
-        objectValues,
-        moduleUtils
     } = constants;
 
     const {
@@ -75,8 +80,6 @@ const {
     const { asArray, flatArgs, unique, Filters } = arrayUtils;
 
     const modName = "LocaleUtils";
-
-    const { ToolBocksModule } = moduleUtils;
 
     // Capture the dependencies for re-export with this module
     const dependencies =

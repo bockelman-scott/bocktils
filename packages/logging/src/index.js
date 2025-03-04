@@ -9,16 +9,9 @@
 
 const core = require( "@toolbocks/core" );
 
-const { constants, typeUtils, stringUtils, arrayUtils } = core;
+const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
-const { _ud = "undefined" } = constants;
-
-const konsole = console;
-
-const $scope = constants?.$scope || function()
-{
-    return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-};
+const { _ud = "undefined", konsole = console, $scope } = constants;
 
 // noinspection FunctionTooLongJS
 (function exposeModule()
@@ -31,6 +24,19 @@ const $scope = constants?.$scope || function()
     }
 
     const {
+        ModuleEvent,
+        ToolBocksModule,
+        ExecutionMode,
+        StatefulListener,
+        StackTrace,
+        objectToString,
+        resolveError,
+        lock,
+        populateOptions,
+
+    } = moduleUtils;
+
+    const {
         _mt_str,
         _spc,
         _comma,
@@ -40,19 +46,12 @@ const $scope = constants?.$scope || function()
         _fun,
         _lf,
         _crlf,
-        lock,
         funcName,
-        populateOptions,
         _defaultLocaleString = "en-US",
         S_ERROR = "error",
         no_op,
-        ignore,
-        resolveError,
-        moduleUtils
+        ignore
     } = constants;
-
-    const { ModuleEvent, ToolBocksModule, ExecutionMode, StatefulListener, StackTrace, objectToString } = moduleUtils;
-
 
     /**
      * This is a dictionary of this module's dependencies.
@@ -98,7 +97,6 @@ const $scope = constants?.$scope || function()
     const { asString, asInt, isBlank, lcase, ucase, trimLeadingCharacters } = stringUtils;
 
     const { asArray, varargs, Filters, concatenateConsecutiveStrings, unique } = arrayUtils;
-
 
     const toolBocksModule = new ToolBocksModule( "LoggingUtils", INTERNAL_NAME );
 

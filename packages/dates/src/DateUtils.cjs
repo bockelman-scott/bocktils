@@ -4,15 +4,9 @@ const core = require( "@toolbocks/core" );
  * Establish separate constants for each of the utilities imported
  * @see ../src/CoreUtils.cjs
  */
-const { constants, typeUtils, stringUtils, arrayUtils, localeUtils } = core;
+const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils, localeUtils } = core;
 
-const {
-    _ud = "undefined",
-    $scope = (core?.$scope || constants?.$scope || function()
-    {
-        return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-    })
-} = constants;
+const { _ud = "undefined", $scope } = constants;
 
 // noinspection FunctionTooLongJS
 (function exposeModule()
@@ -26,6 +20,7 @@ const {
 
     const dependencies =
         {
+            moduleUtils,
             constants,
             typeUtils,
             stringUtils,
@@ -33,8 +28,7 @@ const {
         };
 
     const {
-        classes,
-        _mt_str,
+        ToolBocksModule,
         lock,
         populateOptions,
         mergeOptions,
@@ -45,7 +39,9 @@ const {
         op_false,
         objectEntries,
         attemptMethod
-    } = constants;
+    } = moduleUtils;
+
+    const { _mt_str } = constants;
 
     const {
         Result,
@@ -72,8 +68,6 @@ const {
     const { asArray, varargs, Filters } = arrayUtils;
 
     const { resolveLocale, getNameOfDay, getAbbrOfDay, getNameOfMonth, getAbbrOfMonth } = localeUtils;
-
-    const { ToolBocksModule } = classes;
 
     const modName = "DateUtils";
 

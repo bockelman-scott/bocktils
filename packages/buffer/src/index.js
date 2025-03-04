@@ -7,15 +7,9 @@ const core = require( "@toolbocks/core" );
 /**
  * Establish separate constants for each of the common utilities imported
  */
-const { constants, typeUtils, stringUtils, arrayUtils } = core;
+const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
-const {
-    _ud = "undefined",
-    $scope = constants?.$scope || function()
-    {
-        return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
-    }
-} = constants;
+const { _ud = "undefined", $scope } = constants;
 
 // noinspection OverlyComplexFunctionJS,FunctionTooLongJS
 (function exposeModule()
@@ -27,18 +21,17 @@ const {
         return $scope()[INTERNAL_NAME];
     }
 
+    const { _mt_str } = constants;
+
     const {
-        _mt_str,
+        ToolBocksModule,
         lock,
         objectEntries,
         objectKeys,
         objectValues,
         populateOptions,
-        attempt,
-        classes
-    } = constants;
-
-    const { ToolBocksModule } = classes;
+        attempt
+    } = moduleUtils;
 
     const modName = "BufferUtils";
 

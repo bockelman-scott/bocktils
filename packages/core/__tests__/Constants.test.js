@@ -2,12 +2,24 @@
 // let jester = require( "jest" );
 // jester.run( __filename );
 
+const moduleUtils = require( "../src/_ToolBocksModule.cjs" );
+
 /** import the Constants.cjs we are testing */
 const constants = require( "../src/Constants.cjs" );
 
-const { classes, mergeOptions } = constants;
+const { _affirmatives } = constants;
 
-const { ExecutionEnvironment } = classes;
+const {
+    ExecutionEnvironment,
+    getExecutionEnvironment,
+    IllegalArgumentError,
+    IterationCap,
+    populateOptions,
+    isReadOnly,
+    localCopy,
+    immutableCopy,
+    deepFreeze
+} = moduleUtils;
 
 describe( "Affirmatives", () =>
 {
@@ -51,7 +63,7 @@ describe( "populateOptions", () =>
 
     test( "populateOptions overwrites defaults", () =>
     {
-        expect( constants.populateOptions( options, defaults ) ).toEqual(
+        expect( populateOptions( options, defaults ) ).toEqual(
             {
                 a: 10,
                 b: 2,
@@ -63,26 +75,26 @@ describe( "populateOptions", () =>
 
     test( "populateOptions always returns an object", () =>
     {
-        expect( constants.populateOptions( null ) ).toEqual( {} );
+        expect( populateOptions( null ) ).toEqual( {} );
     } );
 
     test( "populateOptions can handle null", () =>
     {
-        expect( constants.populateOptions( null, defaults ) ).toEqual( defaults );
+        expect( populateOptions( null, defaults ) ).toEqual( defaults );
     } );
 
     test( "populateOptions can handle unexpected arguments", () =>
     {
-        expect( constants.populateOptions( [1, 2, 3], [4, 5, 6] ) ).toEqual( { "0": 1, "1": 2, "2": 3 } );
+        expect( populateOptions( [1, 2, 3], [4, 5, 6] ) ).toEqual( { "0": 1, "1": 2, "2": 3 } );
     } );
 
     test( "populateOptions can handle unexpected defaults", () =>
     {
-        expect( constants.populateOptions( [4, 5, 6], { "0": 1, "1": 2, "2": 3 } ) ).toEqual( {
-                                                                                                  "0": 4,
-                                                                                                  "1": 5,
-                                                                                                  "2": 6
-                                                                                              } );
+        expect( populateOptions( [4, 5, 6], { "0": 1, "1": 2, "2": 3 } ) ).toEqual( {
+                                                                                        "0": 4,
+                                                                                        "1": 5,
+                                                                                        "2": 6
+                                                                                    } );
     } );
 
 } );
@@ -94,7 +106,7 @@ describe( "localCopy", () =>
 
     function f( pObject, ...pArgs )
     {
-        let localArray = constants.localCopy( pArgs );
+        let localArray = localCopy( pArgs );
         localArray.push( "f", "g", "h" );
 
         let doubledArray = [...pArgs];
@@ -103,7 +115,7 @@ describe( "localCopy", () =>
         let shadowedArray = pArgs;
         shadowedArray.push( "z" );
 
-        let localObject = constants.localCopy( pObject );
+        let localObject = localCopy( pObject );
         localObject.a = 11;
         localObject.c = 42;
 
@@ -122,7 +134,7 @@ describe( "localCopy", () =>
 
     function g( pObject )
     {
-        const localObject = constants.localCopy( pObject );
+        const localObject = localCopy( pObject );
 
         const spreadObject = { ...pObject };
 
@@ -142,7 +154,7 @@ describe( "localCopy", () =>
 
         const alias = arr;
 
-        const copy = constants.localCopy( arr );
+        const copy = localCopy( arr );
 
         expect( copy ).toEqual( arr );
 
@@ -214,7 +226,7 @@ describe( "immutableCopy", () =>
 
     function f( pObject, ...pArgs )
     {
-        let localArray = constants.immutableCopy( pArgs );
+        let localArray = immutableCopy( pArgs );
         try
         {
             localArray.push( "f", "g", "h" );
@@ -230,7 +242,7 @@ describe( "immutableCopy", () =>
         let shadowedArray = pArgs;
         shadowedArray.push( "z" );
 
-        let localObject = constants.immutableCopy( pObject );
+        let localObject = immutableCopy( pObject );
 
         try
         {
@@ -273,7 +285,7 @@ describe( "immutableCopy", () =>
 
         const alias = arr;
 
-        const copy = constants.immutableCopy( arr );
+        const copy = immutableCopy( arr );
 
         expect( copy ).toEqual( arr );
         expect( Object.isFrozen( copy ) ).toBe( true );
@@ -340,8 +352,6 @@ describe( "ignore", () =>
 
 describe( "isReadOnly", () =>
 {
-    const isReadOnly = constants.isReadOnly;
-
     test( "isReadOnly returns true for frozen or sealed objects", () =>
     {
         let obj = { a: 1, b: 2, letters: ["A", "B", "C"] };
@@ -383,7 +393,7 @@ describe( "deepFreeze", () =>
 
     function f( pObject, ...pArgs )
     {
-        let localArray = constants.deepFreeze( pArgs );
+        let localArray = deepFreeze( pArgs );
         try
         {
             localArray.push( "f", "g", "h" );
@@ -399,7 +409,7 @@ describe( "deepFreeze", () =>
         let shadowedArray = pArgs;
         shadowedArray.push( "z" );
 
-        let localObject = constants.deepFreeze( pObject );
+        let localObject = deepFreeze( pObject );
 
         try
         {
@@ -442,7 +452,7 @@ describe( "deepFreeze", () =>
 
         const alias = arr;
 
-        const copy = constants.deepFreeze( arr );
+        const copy = deepFreeze( arr );
 
         expect( copy ).toEqual( arr );
         expect( Object.isFrozen( copy ) ).toBe( true );
@@ -515,8 +525,6 @@ describe( "IterationCap", () =>
     {
         let count = 0;
 
-        let IterationCap = constants.IterationCap;
-
         const iterationCap = new IterationCap( 5 );
 
         while ( !iterationCap.reached )
@@ -530,8 +538,6 @@ describe( "IterationCap", () =>
 
 describe( "Errors", () =>
 {
-    const IllegalArgumentError = constants.classes.IllegalArgumentError;
-
     const loggedMessages = [];
 
     const mockLogger =
@@ -672,8 +678,6 @@ describe( "ToolBocksModule - Events", () =>
 
 describe( "ExecutionEnvironment", () =>
 {
-    const { getExecutionEnvironment } = constants;
-
     test( "ExecutionEnvironment provides information about the context in which the code is running ", () =>
     {
         let executionEnvironment = new ExecutionEnvironment();

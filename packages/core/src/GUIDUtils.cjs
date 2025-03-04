@@ -1,3 +1,4 @@
+const moduleUtils = require( "./_ToolBocksModule.cjs" );
 const constants = require( "./Constants.cjs" );
 const typeUtils = require( "./TypeUtils.cjs" );
 const stringUtils = require( "./StringUtils.cjs" );
@@ -23,11 +24,11 @@ const crypto = $scope().crypto || require( "crypto" );
         return $scope()[INTERNAL_NAME];
     }
 
-    const { _mt_str, populateOptions, lock, moduleUtils } = constants;
+    const { ToolBocksModule, populateOptions, clamp, lock } = moduleUtils;
+
+    const { _mt_str } = constants;
 
     const { asString, isBlank, asInt } = stringUtils;
-
-    const { ToolBocksModule } = moduleUtils;
 
     /**
      * An array of this module's dependencies
@@ -45,7 +46,7 @@ const crypto = $scope().crypto || require( "crypto" );
 
     const modName = "GUIDUtils";
 
-    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+    const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
     const MAX_CACHED_VALUES = 10_000;
     const DEFAULT_CACHED_VALUES = 1_000;
@@ -66,7 +67,7 @@ const crypto = $scope().crypto || require( "crypto" );
 
             if ( this.#options.preload )
             {
-                let num = Math.max( 10, Math.min( MAX_CACHED_VALUES, asInt( this.#options.numPreload, DEFAULT_CACHED_VALUES ) || DEFAULT_CACHED_VALUES ) );
+                let num = clamp( asInt( this.#options.numPreload, DEFAULT_CACHED_VALUES ) || DEFAULT_CACHED_VALUES, 10, MAX_CACHED_VALUES );
 
                 for( let i = num; i--; )
                 {
@@ -82,7 +83,7 @@ const crypto = $scope().crypto || require( "crypto" );
 
         get options()
         {
-            return Object.assign( {}, this.#options || RandomUUIDOptions );
+            return populateOptions( this.#options || RandomUUIDOptions );
         }
 
         uuid()
@@ -132,7 +133,7 @@ const crypto = $scope().crypto || require( "crypto" );
             }
         };
 
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 

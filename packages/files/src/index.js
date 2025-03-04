@@ -108,7 +108,7 @@ const bufferUtils = require( "@toolbocks/buffer" );
 /**
  * These modules are imported from toolbocks/core
  */
-const { constants, typeUtils, stringUtils, arrayUtils } = core;
+const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
 /* define a variable for typeof undefined **/
 const { _ud = "undefined", konsole = console } = constants;
@@ -138,6 +138,19 @@ const $scope = constants?.$scope || function()
     let _deno = null;
     let _node = null;
 
+    const {
+        ToolBocksModule,
+        lock,
+        populateOptions,
+        mergeOptions,
+        Visitor,
+        resolveVisitor,
+        attempt,
+        asyncAttempt,
+        objectKeys,
+        IllegalArgumentError
+    } = moduleUtils;
+
     /*
      * Create local variables for the imported values and functions we use.
      */
@@ -148,22 +161,10 @@ const $scope = constants?.$scope || function()
         _slash,
         _backslash,
         no_op,
-        ignore,
-        lock,
-        populateOptions,
-        mergeOptions,
-        Visitor,
-        resolveVisitor,
-        attempt,
-        asyncAttempt,
-        objectKeys,
-        classes,
-        IllegalArgumentError
+        ignore
     } = constants;
 
     const _pathSep = _slash;
-
-    const { ToolBocksModule } = classes;
 
     const {
         isDefined,
@@ -828,7 +829,7 @@ const $scope = constants?.$scope || function()
         };
 
     // update the constants from the execution environment if they are available
-    fsConstants = lock( _isNode ? mergeOptions( fsConstants, (fs.constants || fs_constants || fsConstants) ) : fsConstants );
+    fsConstants = lock( _isNode ? populateOptions( fsConstants, (fs.constants || fs_constants || fsConstants) ) : fsConstants );
 
     const MILLIS_PER_SECOND = 1000;
     const MILLIS_PER_MINUTE = 60 * MILLIS_PER_SECOND;

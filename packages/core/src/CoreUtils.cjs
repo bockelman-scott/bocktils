@@ -6,6 +6,7 @@ const arrayUtils = require( "./ArrayUtils.cjs" );
 const localeUtils = require( "./LocaleUtils.cjs" );
 const numberParser = require( "./NumberParser.cjs" );
 const guidUtils = require( "./GUIDUtils.cjs" );
+const functionUtils = require( "./FunctionUtils.cjs" );
 
 const { _ud = "undefined" } = constants;
 
@@ -23,9 +24,7 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
-    const { classes } = constants;
-
-    const { ModuleEvent, ToolBocksModule } = classes;
+    const { ModuleEvent, ToolBocksModule } = moduleUtils;
 
     if ( _ud === typeof CustomEvent )
     {
@@ -34,7 +33,7 @@ const $scope = constants?.$scope || function()
 
     const { NumberParser } = numberParser;
 
-    const modulePrototype = new ToolBocksModule( "CoreUtils", INTERNAL_NAME );
+    const toolBocksModule = new ToolBocksModule( "CoreUtils", INTERNAL_NAME );
 
     let mod =
         {
@@ -46,6 +45,7 @@ const $scope = constants?.$scope || function()
             localeUtils,
             NumberParser,
             guidUtils,
+            functionUtils,
             dependencies:
                 {
                     moduleUtils,
@@ -55,11 +55,12 @@ const $scope = constants?.$scope || function()
                     arrayUtils,
                     localeUtils,
                     numberParser,
-                    guidUtils
+                    guidUtils,
+                    functionUtils
                 }
         };
 
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 

@@ -4,11 +4,9 @@ const core = require( "@toolbocks/core" );
 
 const fileLogger = require( "../src/index.js" );
 
-const { constants, arrayUtils } = core;
+const { moduleUtils, arrayUtils } = core;
 
-const { classes } = constants;
-
-const { ExecutionMode } = classes;
+const { ExecutionMode } = moduleUtils;
 
 const { asArray } = arrayUtils;
 

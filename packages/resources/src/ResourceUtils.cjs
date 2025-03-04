@@ -35,19 +35,10 @@ const fileUtils = require( "@toolbocks/files" );
  */
 const jsonUtils = require( "@toolbocks/json" );
 
-const { constants, typeUtils, stringUtils, arrayUtils, localeUtils } = core;
+const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils, localeUtils } = core;
 
 /* define a variable for typeof undefined **/
-const { _ud = "undefined" } = constants;
-
-/**
- * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
- * @type {function():Object}
- */
-const $scope = constants?.$scope || function()
-{
-    return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-};
+const { _ud = "undefined", $scope } = constants;
 
 // noinspection FunctionTooLongJS
 (function exposeModule()
@@ -62,6 +53,28 @@ const $scope = constants?.$scope || function()
     }
 
     const modName = "ResourceUtils";
+
+    const {
+        ToolBocksModule,
+        ObjectEntry,
+        objectEntries,
+        objectKeys,
+        attempt,
+        asyncAttempt,
+        resolveError,
+        getMessagesLocale,
+        isFulfilled,
+        isRejected,
+        asPhrase,
+        lock,
+        populateOptions,
+        mergeOptions,
+        immutableCopy,
+        no_op,
+        IterationCap,
+        isLogger,
+
+    } = moduleUtils;
 
     const {
         _mt_str,
@@ -79,14 +92,6 @@ const $scope = constants?.$scope || function()
         _symbol,
         _obj,
         _fun,
-        asPhrase,
-        lock,
-        populateOptions,
-        mergeOptions,
-        immutableCopy,
-        no_op,
-        IterationCap,
-        isLogger,
         S_ENABLED,
         S_DISABLED,
         S_ERROR,
@@ -94,10 +99,6 @@ const $scope = constants?.$scope || function()
         S_ERR_PREFIX,
         MILLIS_PER,
         MESSAGES_LOCALE,
-        getMessagesLocale,
-        isFulfilled,
-        isRejected,
-        moduleUtils,
     } = constants;
 
     const {
@@ -119,16 +120,6 @@ const $scope = constants?.$scope || function()
         instanceOfAny,
         isAssignableTo
     } = typeUtils;
-
-    const {
-        ToolBocksModule,
-        ObjectEntry,
-        objectEntries,
-        objectKeys,
-        attempt,
-        asyncAttempt,
-        resolveError
-    } = moduleUtils;
 
     const { asString, asInt, asFloat, isBlank, isJson, lcase, ucase, toUnixPath, toBool } = stringUtils;
 
@@ -1706,7 +1697,7 @@ const $scope = constants?.$scope || function()
 
             let keys = asArray( varargs( ...pKey ) );
 
-            while( keys.length > 0 )
+            while ( keys.length > 0 )
             {
                 const key = keys.shift();
                 resourceFamily = this.getResourceFamily( key );
@@ -1720,11 +1711,11 @@ const $scope = constants?.$scope || function()
             const values = [];
             for( const family of this.#resourceFamilies.values() )
             {
-                 let value = family.getResource( keys.split( 1 ) );
-                 if ( value )
-                 {
-                     values.push( value );
-                 }
+                let value = family.getResource( keys.split( 1 ) );
+                if ( value )
+                {
+                    values.push( value );
+                }
             }
 
             return values.length > 1 ? values : values.length > 0 ? values[0] : null;

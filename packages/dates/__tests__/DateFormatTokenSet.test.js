@@ -1,8 +1,8 @@
-const commonUtils = require( "@toolbocks/common" );
+const core = require( "@toolbocks/core" );
 
 const tokenSet = require( "../src/DateFormatTokenSet.cjs" );
 
-const { stringUtils, objectUtils } = commonUtils;
+const { moduleUtils, stringUtils } = core;
 
 const dateUtils = require( "../src/DateUtils.cjs" );
 

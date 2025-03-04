@@ -5,13 +5,17 @@
  * This module exposes methods for parsing strings as Date objects.
  */
 
+/**
+ * Import core dependencies
+ * @type {{}}
+ */
 const core = require( "@toolbocks/core" );
 
 /**
  * Establish separate constants for each of the common utilities imported
  * @see ../src/CoreUtils.cjs
  */
-const { constants, typeUtils, stringUtils, arrayUtils, localeUtils } = core;
+const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils, localeUtils } = core;
 
 const dateUtils = require( "./DateUtils.cjs" );
 
@@ -19,14 +23,7 @@ const tokenSetUtils = require( "./DateFormatTokenSet.cjs" );
 
 const dateFormatUtils = require( "./DateFormatter.cjs" );
 
-const {
-    _ud = "undefined",
-    $scope = core?.$scope || constants?.$scope || function()
-    {
-        return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-    }
-} = constants;
-
+const { _ud = "undefined", $scope } = constants;
 
 // noinspection FunctionTooLongJS
 (function exposeModule()
@@ -40,6 +37,7 @@ const {
 
     const dependencies =
         {
+            moduleUtils,
             constants,
             typeUtils,
             stringUtils,
@@ -48,9 +46,9 @@ const {
             dateFormatUtils
         };
 
-    const { _mt_str, _str, _num, _obj, no_op, _hyphen, _minus, _underscore, _colon, mergeOptions, classes } = constants;
+    const { ToolBocksModule, mergeOptions } = moduleUtils;
 
-    const { ToolBocksModule } = classes;
+    const { _mt_str, _str, _num, _obj, no_op, _hyphen, _minus, _underscore, _colon } = constants;
 
     const {
         isNull,
@@ -89,7 +87,7 @@ const {
         DateBuffer,
         numDaysInMonth,
         calculateNthOccurrenceOfDay,
-        merge = constants.merge,
+        merge = moduleUtils.merge,
         rxTz = () => /((GMT|UTC)([+-])?(\d{1,2})?:?(\d{2})?)|(((\w+ )*)(Time)?$)/gd,
         Now = () => new Date()
     } = dateUtils;
@@ -623,7 +621,7 @@ const {
 
                 const token = tokens[i] || this.tokenSet.getToken( segment ) || new TokenLiteral( segment );
 
-                buffer = merge( (token.parse( segment, buffer ) || buffer), buffer );
+                buffer = mergeOptions( (token.parse( segment, buffer ) || buffer), buffer );
             }
 
             const currentDate = new Date();

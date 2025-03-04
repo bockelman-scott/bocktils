@@ -4,9 +4,9 @@ const core = require( "@toolbocks/core" );
 
 const fileUtils = require( "../src/index.js" );
 
-const { constants, typeUtils, stringUtils, arrayUtils } = core;
+const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
-const { Visitor } = constants;
+const { Visitor } = moduleUtils;
 
 const { isFunction } = typeUtils;
 

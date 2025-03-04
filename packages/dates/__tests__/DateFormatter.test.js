@@ -2,7 +2,7 @@ const core = require( "@toolbocks/core" );
 
 const dateFormatterModule = require( "../src/DateFormatter.cjs" );
 
-const { constants } = core;
+const { moduleUtils, constants } = core;
 
 const { DateFormatter } = dateFormatterModule;
 

@@ -71,19 +71,10 @@
 
 const core = require( "@toolbocks/core" );
 
-const { constants, typeUtils, stringUtils, arrayUtils } = core;
+const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
 /* define a variable for typeof undefined **/
-const { _ud = "undefined" } = constants;
-
-/**
- * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
- * @type {function():Object}
- */
-const $scope = constants?.$scope || function()
-{
-    return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-};
+const { _ud = "undefined", $scope } = constants;
 
 (function exposeModule()
 {
@@ -108,11 +99,22 @@ const $scope = constants?.$scope || function()
      */
     const dependencies =
         {
+            moduleUtils,
             constants,
             typeUtils,
             stringUtils,
             arrayUtils
         };
+
+    const {
+        ModuleEvent,
+        ToolBocksModule,
+        populateOptions,
+        localCopy,
+        immutableCopy,
+        lock,
+        IllegalArgumentError,
+    } = moduleUtils;
 
     /*
      * Create local variables for the imported values and functions we use.
@@ -128,18 +130,8 @@ const $scope = constants?.$scope || function()
         _bool,
         _symbol,
         S_WARN,
-        ignore,
-        AsyncFunction,
-        EMPTY_ARRAY,
-        populateOptions,
-        localCopy,
-        immutableCopy,
-        lock,
-        IllegalArgumentError,
-        classes
+        ignore
     } = constants;
-
-    const { ModuleEvent, ToolBocksModule } = classes;
 
     const {
         isNull,

@@ -68,73 +68,13 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
             ModuleEvent,
             ToolBocksModule,
             ENDIAN,
-            TYPES_CHECKS,
-            getExecutionEnvironment,
-            getGlobalLogger,
-            setGlobalLogger,
-            exportModule,
-            requireModule,
-            importModule,
-            calculateErrorSourceName,
             no_op,
             op_true,
             op_false,
             op_identity,
-            isPromise,
-            isThenable,
-            canBind,
-            resolveMethod,
-            attempt,
-            attemptMethod,
-            asyncAttempt,
-            asyncAttemptMethod,
-            bindMethod,
-            fireAndForget,
-            asPhrase,
-            isReadOnly,
-            bracketsToDots,
-            toNodePathArray,
-            isObjectLiteral,
-            detectCycles,
-            executeCallback,
-            ObjectEntry = moduleUtils?.classes?.ObjectEntry,
-            objectEntries,
-            objectValues,
-            objectKeys,
-            getProperty,
-            setProperty,
-            hasProperty,
-            populateOptions,
-            mergeOptions,
-            merge = mergeOptions,
             lock,
-            deepFreeze,
-            localCopy,
-            immutableCopy,
-            sleep,
-            StackTrace,
-            __Error,
-            IllegalArgumentError,
-            resolveError,
-            resolveEvent,
-            resolveObject,
-            resolveLogLevel,
-            resolveType,
-            IterationCap,
-            StatefulListener,
-            ExecutionMode,
-            ExecutionEnvironment,
-            Visitor,
-            resolveVisitor,
-            CURRENT_MODE,
-            ARGUMENTS,
-            getMessagesLocale,
-            isFulfilled,
-            isRejected,
-            classes: moduleUtilsClasses,
+            getMessagesLocale
         } = moduleUtils;
-
-    const { PromiseResult } = moduleUtilsClasses || {};
 
     /**
      * This is a dictionary of this module's dependencies.
@@ -404,10 +344,10 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
                  "while",
                  "with"] ),
             clamp = ( pNum, pMin, pMax ) => Math.min( Math.max( pNum, pMin ), pMax ),
-            funcToString = Function.prototype.toString,
+            functionToString = Function.prototype.toString,
             funcName = function( pFunction )
             {
-                return (_fun === typeof pFunction ? pFunction?.name || funcToString.call( pFunction, pFunction ) : (_mt_str + pFunction));
+                return (_fun === typeof pFunction ? pFunction?.name || functionToString.call( pFunction, pFunction ) : (_mt_str + pFunction));
             },
             MESSAGES_LOCALE = getMessagesLocale()
         } = (moduleUtils || $scope() || {});
@@ -454,6 +394,19 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
             DAY: 24 * 60 * 60 * 1000 * 1000 * 1000,
             WEEK: 7 * 24 * 60 * 60 * 1000 * 1000 * 1000
         };
+
+    /**
+     * An array of the Number constants
+     * @type {string[]}
+     */
+    const NumberProperties = ["EPSILON",
+                              "MAX_SAFE_INTEGER",
+                              "MAX_VALUE",
+                              "MIN_SAFE_INTEGER",
+                              "MIN_VALUE",
+                              "NaN",
+                              "NEGATIVE_INFINITY",
+                              "POSITIVE_INFINITY"];
 
     /**
      * Returns true if the specified object implements the ILogger interface.<br>
@@ -728,69 +681,6 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
         return lock( symbols ) || DEFAULT_NUMBER_FORMATTING_SYMBOLS;
     };
 
-    const COMPARE_LESS_THAN = -1;
-    const COMPARE_EQUAL = 0;
-    const COMPARE_GREATER_THAN = 1;
-
-    const compare = ( pFirst, pSecond, pNullsFirst = true ) =>
-    {
-        let comp = COMPARE_EQUAL;
-
-        if ( _fun === typeof pFirst.lessThan )
-        {
-            comp = pFirst.lessThan( pSecond, pNullsFirst ) ? COMPARE_LESS_THAN : COMPARE_EQUAL;
-        }
-
-        if ( COMPARE_EQUAL === comp && (_fun === typeof pSecond.lessThan) )
-        {
-            comp = pSecond.lessThan( pFirst, pNullsFirst ) ? COMPARE_GREATER_THAN : COMPARE_EQUAL;
-        }
-
-        if ( COMPARE_EQUAL === comp )
-        {
-            return pFirst < pSecond ? COMPARE_LESS_THAN : (pFirst > pSecond ? COMPARE_GREATER_THAN : COMPARE_EQUAL);
-        }
-
-        return comp;
-    };
-
-    const compareTo = ( pFirst, pSecond, pNullsFirst = true ) =>
-    {
-        let comp = COMPARE_EQUAL;
-
-        if ( _fun === typeof pFirst.compareTo )
-        {
-            comp = pFirst.compareTo( pSecond, pNullsFirst );
-        }
-
-        if ( COMPARE_EQUAL === comp && _fun === typeof pSecond.compareTo )
-        {
-            comp = pSecond.compareTo( pFirst, pNullsFirst );
-            if ( COMPARE_EQUAL !== comp )
-            {
-                return -comp;
-            }
-        }
-
-        return compare( pFirst, pSecond, pNullsFirst ) || COMPARE_EQUAL;
-    };
-
-    const compareNullable = ( pFirst, pSecond, pNullsFirst = true ) =>
-    {
-        const secondIsNull = _ud === typeof pSecond || null === pSecond;
-
-        if ( _ud === typeof pFirst || null === pFirst )
-        {
-            return secondIsNull ? COMPARE_EQUAL : (pNullsFirst ? COMPARE_LESS_THAN : COMPARE_GREATER_THAN);
-        }
-        else if ( secondIsNull )
-        {
-            return (pNullsFirst ? COMPARE_GREATER_THAN : COMPARE_LESS_THAN);
-        }
-
-        return compareTo( pFirst, pSecond, pNullsFirst ) || compare( pFirst, pSecond, pNullsFirst );
-    };
-
     let mod =
         {
             /**
@@ -813,189 +703,13 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
             ENDIAN,
 
             /**
-             * The classes exported with this module.<br>
+             * The string returned by the typeof operator when applied to a variable that is <i>undefined</i>
              * <br>
-             * Classes:<br>
-             * <ul>
-             * <li><i>ModuleEvent</i>: A CustomEvent that can be emitted from a module function</li>
-             * <li><i>ToolBocksModule</i>: The base class for all ToolBocks&trade; modules</li>
-             * <li><i>__Error</i>: A subclass of Error used when throwing or reporting errors from modules<br>
-             *                     that also supports an execution-agnostic StackTrace</li>
-             * <li><i>IllegalArgumentError</i>: A subclass of the __Error class<br>
-             *                                  specifically intended for reporting when expected arguments to functions or methods are missing or invalid</li>
-             * <li><i>IterationCap</i>: A class to make it easy to limit iterations when other conditions may fail to terminate the loop</li>
-             * <li><i>StackTrace</i>: A utility class for capturing and managing stack traces in any execution environment</li>
-             * </ul>
-             * @alias module:Constants#classes
+             * Value: "undefined"
+             * @const
+             * @type {string}
+             * @alias module:Constants#_ud
              */
-            classes:
-                {
-                    /**
-                     * This class is a wrapper for the results object passed into the resolve callback for Promises.allSettled
-                     * @alias module:Constants#classes#PromiseResult
-                     */
-                    PromiseResult,
-
-                    /**
-                     * This class defines a Custom Event modules use to communicate with interested consumers.<br>
-                     * @see <a href="https://developer.mozilla.org/en-US/docs/Web/API/CustomEvent/CustomEvent">MDN: CustomEvent</a>
-                     * <br>
-                     * Use the 'detail' property to share data with event handlers.<br>
-                     * @class
-                     * @alias module:Constants#classes#ModuleEvent
-                     */
-                    ModuleEvent,
-
-                    /**
-                     * This is the base class for all ToolBocks&trade; modules.
-                     * <br>
-                     * It extends EventTarget to allow module functions to emit events
-                     * <br>when errors or other <i>interesting</i> events occur.
-                     * <br><br>
-                     * Consuming code can add event listeners to react appropriately.
-                     * <br>
-                     * An example would be to use event handlers to log errors,<br>
-                     * allowing the consumer code to use whatever mechanism is desired for logging,<br>
-                     * rather than this library spewing unnecessarily to the console.
-                     * <br>
-                     * <br>
-                     * Module documentation will list all the events (other than "error") for which a consumer might listen.
-                     * <br>
-                     * @class
-                     * @alias module:Constants#classes#ToolBocksModule
-                     */
-                    ToolBocksModule,
-
-                    /**
-                     * This class allows custom Errors to be defined.
-                     * <br>
-                     * This class and its subclasses also provide a stack trace regardless of browser or environment.
-                     * <br>
-                     * @class
-                     * @extends Error
-                     * @see {@link #StackTrace}
-                     * @alias module:Constants#classes#__Error
-                     */
-                    __Error,
-
-                    /**
-                     * This subclass of Error is useful when validating function arguments.
-                     * <br>
-                     * The message property is overwritten to include the prefix 'IllegalArgumentException',<br>
-                     * so that if only the message is logged, the type of error is not obscured.
-                     * <br>
-                     * @class
-                     * @extends __Error
-                     * @alias module:Constants#classes#IllegalArgumentError
-                     */
-                    IllegalArgumentError,
-
-                    /**
-                     * This class allows us to easily cap an iteration,<br>
-                     * such as a 'for' loop or a 'while' loop.
-                     * <br><br>
-                     * If there is any chance that an iteration might never complete,<br>
-                     * use an instance of IterationCap to limit the iteration to a finite number of executions<br>
-                     * <br>
-                     * @example
-                     * const iterationCap = new IterationCap( 10 );
-                     *
-                     * while ( someConditionIsTrue() && !iterationCap.reached )
-                     * {
-                     *        possiblyChangeCondition();
-                     * }
-                     *
-                     * In this example, the condition might never become false, however...
-                     * <br>
-                     * The loop will exit after 10 attempts to change the condition.
-                     * <br>
-                     * @class
-                     * @alias module:Constants#classes#IterationCap
-                     */
-                    IterationCap,
-
-                    /**
-                     * This class provides cross-environment functionality related to an error's stack (trace)
-                     * <br><br>
-                     * For more robust functionality, consider <a href="https://github.com/stacktracejs/stacktrace.js">GitHub: stacktrace.js</a>
-                     * @class
-                     * @alias module:Constants#classes#StackTrace
-                     */
-                    StackTrace,
-
-                    /**
-                     * Defines or redefines the built-in CustomEvent class
-                     * used to dispatch custom events as ModuleEvent instances
-                     * <br>
-                     * @alias module:Constants#classes#CustomEvent
-                     */
-                    CustomEvent,
-
-                    /**
-                     * This class extends EventTarget
-                     * and provides the ability to attach an event handler
-                     * that is not just a function, but rather an object that can hold state
-                     * and perhaps respond accordingly.
-                     * <br>
-                     * <br>
-                     * This class should be extended by your own classes rather than instantiated directly.
-                     * <br>
-                     * <br>
-                     * Common examples might include a logger, a stream-based parser, or a retry counter
-                     *
-                     * @alias module:Constants#classes#StatefulListener
-                     *
-                     */
-                    StatefulListener,
-
-                    /**
-                     * This class collects and exposes several properties of the current runtime.
-                     * <br>
-                     * <br>
-                     * Code that is designed to work across environments can interrogate an instance of this object,
-                     * available as a property of any other module, to run environment-specific alternatives.
-                     * <br>
-                     *
-                     * @alias module:Constants#classes#ExecutionEnvironment
-                     */
-                    ExecutionEnvironment,
-
-                    /**
-                     * A singleton instance of this class is available
-                     * to determine the levels of verbosity available or expected
-                     * for selected behaviors and/or errors that may be encountered at runtime.
-                     * <br>
-                     * <br>
-                     * In general, this is the object that specifies
-                     * if we are running in production, development, testing, or some other capacity
-                     * that would determine how some code is executed or logged.
-                     * <br>
-                     * <br>
-                     * This library defines 5 different modes,
-                     * however, you are free to define others
-                     * or even to extend the class to capture other options
-                     * you want to vary between modes.
-                     * <br>
-                     * <br>
-                     *
-                     * @alias module:Constants#classes#ExecutionMode
-                     */
-                    ExecutionMode,
-
-                    /**
-                     * This is the base class (and model for) implementations of the Visitor pattern.
-                     * <br>
-                     * <br>
-                     * While it is possible to pass your own handler function to the constructor,
-                     * it is more common and recommended to extend the class and override the visit method.
-                     * <br>
-                     * <br>
-                     *
-                     * @alias module:Constants#classes#Visitor
-                     */
-                    Visitor
-                },
-
             _ud,
 
             /**
@@ -1539,6 +1253,12 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
              */
             BIN_DIGITS_MAP,
 
+            /**
+             * The string value of the number, 0
+             * @const
+             * @type {string}
+             * @alias module:Constants#_zero
+             */
             _zero,
 
             /**
@@ -2180,7 +1900,7 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
             /**
              * A regular expression that matches the character sequence often used as interpolation placeholders in template strings<br>
              * <br>
-             * That is, this regular expression matches the ${foo} in the template `This is a $[foo} library`
+             * That is, this regular expression matches the ${foo} in the template `This is a ${foo} library`
              * @const
              * @type {RegExp}
              * @alias module:Constants#_rxVariableToken
@@ -2214,235 +1934,6 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
             DEFAULT_NUMBER_FORMATTING_SYMBOLS,
 
             /**
-             * This object defines <i>rudimentary</i> methods for checking the type of a variable.
-             * <br>
-             * <br>
-             * These are used in this module and the base class,
-             * but your code should use those defined in the TypeUtils module,
-             * which depends on this module.
-             * <br>
-             * @alias module:Constants#TYPES_CHECKS
-             */
-            TYPES_CHECKS,
-
-            /**
-             * This class is used to wrap the 2d arrays returned from the objectEntries function.
-             * <br>
-             * <br>
-             * In addition to capturing and exposing the key and value as properties,
-             * this object also captures and exposes the parent object,
-             * has methods for validating or converting the value,
-             * and static methods for iterating an object graph (that takes a Visitor)
-             *
-             * @alias module:Constants#ObjectEntry
-             */
-            ObjectEntry,
-
-            /**
-             * This class allows us to easily cap an iteration,<br>
-             * such as a 'for' loop or a 'while' loop.
-             * <br><br>
-             * If there is any chance that an iteration might never complete,<br>
-             * use an instance of IterationCap to limit the iteration to a finite number of executions<br>
-             * <br>
-             * @example
-             * const iterationCap = new IterationCap( 10 );
-             *
-             * while ( someConditionIsTrue() && !iterationCap.reached )
-             * {
-             *        possiblyChangeCondition();
-             * }
-             *
-             * In this example, the condition might never become false, however...
-             * <br>
-             * The loop will exit after 10 attempts to change the condition.<br>
-             * @class
-             *
-             * @alias module:Constants#IterationCap
-             */
-            IterationCap,
-
-            /**
-             * This subclass of Error is useful when validating function arguments.
-             * <br>
-             * The message property is overwritten to include the prefix 'IllegalArgumentException',<br>
-             * so that if only the message is logged, the type of error is not obscured.
-             * <br>
-             * @class
-             * @extends __Error
-             * @alias module:Constants#IllegalArgumentError
-             */
-            IllegalArgumentError,
-
-            /**
-             * Returns an instance of the custom __Error class from the arguments specified.
-             * <br><br>
-             * If the first argument is already an instance of __Error, just returns that instance.
-             * <br>
-             * If the first argument is an instance of Error, constructs a new __Error,
-             * using the provided error's name and setting this instance's cause to the specified error.
-             * <br><br>
-             * If a string is specified for the second argument, that string is used as the message for the returned Error.
-             * <br>
-             * @type {function}
-             * @param {Error|string} pError  An Error or a string with which to create a new Error
-             * @param {string|Error} pMessage A string to use as the message property of the returned Error or an Error whose message will be used instead
-             * @returns {__Error} an Error (actually an instance of __Error), which provides an environment-agnostic stack trace)
-             *
-             * @alias module:Constants.resolveError
-             */
-            resolveError,
-
-            /**
-             * Returns an instance of the ModuleEvent custom event class
-             * from the arguments specified in the constructor.
-             * <br>
-             * <br>
-             * The constructor can take up to 3 arguments:
-             * <br>
-             *
-             * @param {Event|CustomEvent|ToolBocksModuleEvent|string} pEvent - The object to be resolved as an Event
-             *                                                                 <br>
-             *                                                                 If not provided,
-             *                                                                 the function will attempt
-             *                                                                 to retrieve the event
-             *                                                                 from the current scope.
-             *
-             * @param {*} [pData] - Optional data to be associated with the new `ToolBocksModuleEvent`.
-             *
-             * @param {*} [pOptions] - Configuration options to be associated with the new `ToolBocksModuleEvent`.
-             *
-             * @returns {CustomEvent|ToolBocksModuleEvent} - Returns the resolved event.
-             *                                               <br>
-             *                                               <br>
-             *                                               If the specified event is already
-             *                                               a `CustomEvent` or `ToolBocksModuleEvent`,<br>
-             *                                               the specified options and data are merged with the existing
-             *                                               properties and then the updated object is returned.
-             *                                               <br>
-             *                                               <br>
-             *                                               Otherwise, a new `ToolBocksModuleEvent`
-             *                                               is created and returned.
-             */
-            resolveEvent,
-
-            /**
-             * Returns a non-null object.<br>
-             * Returns the specified object if it meets the criteria of being a non-null object.<br>
-             * @param {*} pObject The object to return if it is actually a non-null object<br>
-             * @param {boolean} [pAcceptArray=false] Whether to treat an array as an object for this purpose<br>
-             * @returns {Object} The object specified if it is a non-null object, otherwise an empty object; <b>never returns null</b>.
-             *
-             * @alias module:Constants.resolveObject
-             */
-            resolveObject,
-
-            /**
-             * Returns a valid log level based on the specified value.<br>
-             * The method maps the input to a predefined set of log levels,
-             * corresponding to the methods of ILogger types.<br>
-             *
-             * @param {string|number} pLevel - the name or numeric value representing a log level.<br>
-             *                                 This can be a string (log level name) or a number (log level index).<br>
-             *                                 Valid strings are case-insensitive
-             *                                 and should correspond to predefined log levels.
-             *                                 Valid numbers are between 0 and 6,
-             *                                 corresponding to the following log levels:
-             *                                 0 = NONE, 1 = LOG, 2 = ERROR, 3 = WARN, 4 = INFO, 5 = DEBUG, 6 = TRACE
-             *
-             *
-             * @return {string} The resolved log level.<br>
-             *                  If the input is invalid or does not match any predefined log level,
-             *                  the default value, "error", is returned.
-             *
-             * @alias module:Constants.resolveLogLevel
-             */
-            resolveLogLevel,
-
-            /**
-             * Returns a valid function
-             * based on the specified parameters.<br>
-             * <br>
-             *
-             * @param {Function|string} pMethod - The method to be resolved.
-             *                                    It can be a function or a string representing a method name.
-             *                                    <br>
-             * @param {object|Function} pThis - The context or object that may expose the method
-             *                                  if `pMethod` is a string
-             *                                  or function to which the method is bound
-             *                                  or could be bound.
-             *                                  <br>
-             *
-             * @returns {Function} - Returns the specified function
-             *                       or a fallback function
-             *                       if the method cannot be resolved.
-             *                       <br>
-             *                       <br>
-             *                       The fallback method just returns the method or context passed.<br>
-             *                       It is not particularly useful in most scenarios,
-             *                       but eliminates the need for proliferating try/catch blocks
-             *                       in library code that executes user-provided functions or methods.
-             *
-             * @alias module:Constants.resolveMethod
-             */
-            resolveMethod,
-
-            /**
-             * Returns true if the specified function can be bound to a specified object or function context.
-             * <br>
-             * <br>
-             * The function checks if the provided function is a valid function<br>
-             * and if the context is an object or a function to which the method can be bound.<br>
-             * <br>
-             * <br>
-             * @param {Function} pMethod - The function to evaluate.
-             *
-             * @param {Object|Function} pThis - The context to which the function is or could be bound.
-             *
-             * @returns {boolean} true if the method is a function
-             *                    and the context is an object or a function to which the method is or can be bound,
-             *                    otherwise false.
-             *
-             * @alias module:Constants.canBind
-             */
-            canBind,
-
-            /**
-             * Binds a method to a specific context and optionally pre-sets additional arguments.<br>
-             * <br>
-             * This function attempts to resolve and bind the given method to the provided context.<br>
-             * If binding is not possible, it returns the unresolved method.<br>
-             *
-             * @param {Function|string} pMethod - The method to bind,
-             *                                    either as a function
-             *                                    or a string representing the method name.
-             *                                    <br>
-             *
-             * @param {Object} pThis - The context (this) to which to bind the method.
-             *
-             * @param {...*} pArgs - Optional arguments to preset for the method.
-             *
-             * @return {Function} The bound method if binding is successful; otherwise, the unresolved method.
-             *
-             * @alias module:Constants.bindMethod
-             */
-            bindMethod,
-
-            isPromise,
-            isThenable,
-
-            attempt,
-            attemptMethod,
-            asyncAttempt,
-            asyncAttemptMethod,
-            fireAndForget,
-
-            isFulfilled,
-            isRejected,
-
-            asPhrase,
-
-            /**
              * A function that does nothing.<br>
              * Useful when you want to pass a function to a method<br>
              * that might otherwise use some default behavior<br>
@@ -2471,143 +1962,9 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
 
             op_identity,
 
-            bracketsToDots,
-
-            toNodePathArray,
-
-            getProperty,
-            setProperty,
-            hasProperty,
-
-            /**
-             * Returns an object corresponding to a set of default options with one or more properties
-             * overridden or added by the properties of the specified object, 'pOptions'
-             *
-             * @type {function(Object,Object): Object}
-             *
-             * @param {Object} pOptions  An object whose properties should be used
-             * @param {Object} pDefaults An object holding defaults for the properties to be used
-             * @returns {Object} An object combining the defaults with the specified options
-             *
-             * @alias module:Constants#populateOptions
-             */
-            populateOptions,
-
-            mergeOptions,
-
-            merge,
-
-            /**
-             * Returns true if the specified value is immutable.<br>
-             * <br>
-             * Examples of immutable values include:<br>
-             * <ul>
-             * <li>Objects that are frozen or sealed</li>
-             * <li>Properties of Objects that are defined as writable:false</li>
-             * <li>Strings, Numbers, Booleans, and Symbols<li>
-             * <li>null values, and undefined values</li>
-             * </ul>
-             * <br>
-             * @param {*} pObject Any object or value that might be immutable
-             * @returns {boolean} true if the specified value is immutable
-             *
-             * @alias module:Constants#isReadOnly
-             */
-            isReadOnly,
-
-            isObjectLiteral,
-
-            detectCycles,
-
-            executeCallback,
-
-            objectEntries,
-
-            objectValues,
-
-            objectKeys,
-
-            /**
-             * Returns a local (mutable) copy of the value specified.
-             *
-             * @param {*} pObject The value to copy
-             *
-             * @param {CopyOptions} pOptions An object specifying how to handle undefined and null values
-             * as well as whether and how deep to copy an object or array value
-             *
-             * @param {Array<*>} [pStack=[]] USED INTERNALLY TO PREVENT INFINITE RECURSION,<br>
-             *                               DO NOT SPECIFY A VALUE FROM CLIENT CODE
-             *
-             * @returns {*} A copy of the value specified, mutable if the type is normally mutable
-             */
-            localCopy,
-
-            /**
-             * Returns an <i>immutable</i> copy of the value specified.
-             *
-             * @param {*} pObject The value to copy
-             * @param {CopyOptions} pOptions An object specifying how to handle undefined and null values
-             * as well as whether and how deep to copy an object or array value
-             * @param {Array<*>} [pStack=[]] USED INTERNALLY TO PREVENT INFINITE RECURSION,<br>
-             *                               DO NOT SPECIFY A VALUE FROM CLIENT CODE
-             * @returns {*} an immutable copy of the value specified
-             *
-             * @alias module:Constants#immutableCopy
-             */
-            immutableCopy,
-
-            /**
-             * Calls {@link Object.freeze} on any defined non-null value provided<br>
-             * and returns the <b>same</b> object or value, now <i>frozen</i>
-             * <br>
-             * @param {*} pObject An object or array (or any other value) you want to freeze
-             * @param {CopyOptions} pOptions An object describing how to handle undefined and null values
-             *
-             * @returns {*} The value specified, now immutable
-             */
-            lock,
-
-            /**
-             * Returns a read-only copy of an object,
-             * whose properties are also recursively copied and frozen
-             * @param {Object} pObject The object to freeze
-             * @param {Array<*>} [pStack=[]] USED INTERNALLY TO PREVENT INFINITE RECURSION,
-             *                               DO NOT SPECIFY A VALUE FROM CLIENT CODE
-             *
-             * @returns {Object} A new object that is a read-only copy of the specified object
-             * whose properties are also read-only copies of the specified object's properties
-             *
-             * @alias module:Constants#deepFreeze
-             */
-            deepFreeze,
-
-            /**
-             * Suspends the execution of an asynchronous function for a specified number of milliseconds.
-             *
-             * @param {number} pMilliseconds - The number of milliseconds to pause execution.
-             *
-             * @return {Promise<void>} A promise that resolves after the specified delay.
-             *
-             * @type {function(number):Promise<void>}
-             *
-             * @alias module:Constants#sleep
-             */
-            sleep,
-
-            Visitor,
-
-            resolveVisitor,
-
             calculateNumberFormattingSymbols,
 
             clamp,
-
-            /**
-             * Shorthand for Function.prototype.toString<br>
-             * @type {function}
-             * @alias module:Constants#funcToString
-             */
-            funcToString,
 
             /**
              * Returns the name or source for the specified Function<br>
@@ -2620,34 +1977,9 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
              */
             funcName,
 
-            calculateErrorSourceName,
-
-            getExecutionEnvironment,
-
-            CURRENT_MODE,
-
-            ARGUMENTS,
-
-            getMessagesLocale,
-
             MESSAGES_LOCALE,
 
-            isLogger,
-
-            getGlobalLogger,
-
-            setGlobalLogger,
-
-            exportModule,
-
-            requireModule,
-
-            importModule,
-
-            COMPARE_EQUAL,
-            COMPARE_GREATER_THAN,
-            COMPARE_LESS_THAN,
-            compareNullable
+            NumberProperties
         };
 
     // makes the properties of mod available as properties and methods of the modulePrototype

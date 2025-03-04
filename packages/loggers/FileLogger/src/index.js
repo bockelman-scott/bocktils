@@ -4,7 +4,7 @@ const loggingUtils = require( "@toolbocks/logging" );
 
 const fileUtils = require( "@toolbocks/files" );
 
-const { constants, typeUtils, stringUtils, arrayUtils, localeUtils } = core;
+const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils, localeUtils } = core;
 
 const {
     AsyncLogger,
@@ -20,16 +20,7 @@ const {
 } = loggingUtils;
 
 /* define a variable for typeof undefined **/
-const { _ud = "undefined", konsole = console } = constants;
-
-/**
- * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
- * @type {function():Object}
- */
-const $scope = constants?.$scope || function()
-{
-    return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-};
+const { _ud = "undefined", konsole = console, $scope } = constants;
 
 // noinspection FunctionTooLongJS
 (function exposeModule()
@@ -46,6 +37,19 @@ const $scope = constants?.$scope || function()
     const modName = "FileLogger";
 
     const {
+        ToolBocksModule,
+        asPhrase,
+        lock,
+        populateOptions,
+        IterationCap,
+        isLogger,
+        getMessagesLocale,
+        attempt,
+        asyncAttempt,
+
+    } = moduleUtils;
+
+    const {
         _mt_str,
         _hyphen,
         _underscore,
@@ -53,19 +57,10 @@ const $scope = constants?.$scope || function()
         _dot,
         _lf,
         _fun,
-        lock,
-        populateOptions,
         no_op,
-        IterationCap,
-        isLogger,
         MILLIS_PER,
-        DEFAULT_LOCALE,
         MESSAGES_LOCALE,
-        getMessagesLocale,
-        S_ERR_PREFIX,
-        attempt,
-        asyncAttempt,
-        moduleUtils,
+        S_ERR_PREFIX
     } = constants;
 
     const {
@@ -79,8 +74,6 @@ const $scope = constants?.$scope || function()
         firstMatchingType,
         resolveMoment,
     } = typeUtils;
-
-    const { ToolBocksModule, asPhrase } = moduleUtils;
 
     const { asString, asInt, asFloat, isBlank, ucase, capitalize, toBool, formatMessage } = stringUtils;
 

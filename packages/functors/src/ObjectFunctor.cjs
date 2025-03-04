@@ -7,15 +7,7 @@ const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 const { objectUtils } = commonUtils;
 
 /** define a variable for typeof undefined **/
-const { _ud = "undefined" } = constants;
-
-/**
- * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
- */
-const $scope = constants?.$scope || function()
-{
-    return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
-};
+const { _ud = "undefined", $scope } = constants;
 
 /**
  * This is the Immediately Invoked Function Expression (IIFE) that builds and returns the module
@@ -33,6 +25,7 @@ const $scope = constants?.$scope || function()
 
     const dependencies =
         {
+            moduleUtils,
             constants,
             typeUtils,
             stringUtils,
@@ -40,17 +33,26 @@ const $scope = constants?.$scope || function()
             objectUtils
         };
 
-    let { _str, _fun, _num, _big, _bool, _symbol, _obj, populateOptions, lock, deepFreeze } = constants;
+    const {
+        ToolBocksModule,
+        ObjectEntry,
+        detectCycles,
+        objectKeys,
+        objectEntries,
+        populateOptions,
+        lock,
+        deepFreeze
+    } = moduleUtils;
 
-    let { isNull, isString, isArray, isObject, isDate, isFunction } = typeUtils;
+    const { _str, _fun, _num, _big, _bool, _symbol, _obj } = constants;
 
-    let { asString } = stringUtils;
+    const { isNull, isString, isArray, isObject, isDate, isFunction } = typeUtils;
 
-    let { asArray, Mappers } = arrayUtils;
+    const { asString } = stringUtils;
+
+    const { asArray, Mappers } = arrayUtils;
 
     const modName = "ObjectFunctor";
-
-    const { ToolBocksModule, ObjectEntry, detectCycles, objectKeys, objectEntries } = moduleUtils;
 
     const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
 

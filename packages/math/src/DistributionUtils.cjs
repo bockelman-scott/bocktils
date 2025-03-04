@@ -2,19 +2,10 @@ const core = require( "@toolbocks/core" );
 
 const mathUtils = require( "./MathUtils.cjs" );
 
-const { constants, typeUtils, stringUtils, arrayUtils } = (core || mathUtils?.dependencies);
+const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = (core || mathUtils?.dependencies);
 
 /* define a variable for typeof undefined **/
-const { _ud = "undefined" } = constants;
-
-/**
- * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
- * @type {function():Object}
- */
-const $scope = constants?.$scope || function()
-{
-    return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-};
+const { _ud = "undefined", $scope } = constants;
 
 (function exposeModule()
 {
@@ -27,36 +18,20 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
-    /**
-     * This is a dictionary of this module's dependencies.
-     * <br>
-     * It is exported as a property of this module,
-     * allowing us to just import this module<br>
-     * and then use the other utilities as properties of this module.
-     * <br>
-     * @dict
-     * @type {Object}
-     */
-    const dependencies =
-        {
-            constants,
-            typeUtils,
-            stringUtils,
-            arrayUtils,
-            mathUtils
-        };
-
     const {
-        classes,
-        _mt_str,
-        S_ERROR,
-        S_WARN,
+        ToolBocksModule,
         IllegalArgumentError,
         reportError,
         calculateErrorSourceName,
         lock,
         populateOptions,
         IterationCap
+    } = moduleUtils;
+
+    const {
+        _mt_str,
+        S_ERROR,
+        S_WARN,
     } = constants;
 
     const {
@@ -104,7 +79,26 @@ const $scope = constants?.$scope || function()
 
     const { RoundingMode } = MathUtilsClasses;
 
-    const { ToolBocksModule } = classes;
+
+    /**
+     * This is a dictionary of this module's dependencies.
+     * <br>
+     * It is exported as a property of this module,
+     * allowing us to just import this module<br>
+     * and then use the other utilities as properties of this module.
+     * <br>
+     * @dict
+     * @type {Object}
+     */
+    const dependencies =
+        {
+            moduleUtils,
+            constants,
+            typeUtils,
+            stringUtils,
+            arrayUtils,
+            mathUtils
+        };
 
     /**
      * This is the name of this module
@@ -122,7 +116,7 @@ const $scope = constants?.$scope || function()
      * <br>
      * @type {ToolBocksModule}
      */
-    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+    const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
     const MAX_TOLERANCE = 0.00000000000005;
 
@@ -356,7 +350,7 @@ const $scope = constants?.$scope || function()
 
         ErrorClass = isClass( ErrorClass ) ? ErrorClass || Error : Error;
 
-        reportError.call( modulePrototype,
+        reportError.call( toolBocksModule,
                           new ErrorClass( pMsg ),
                           pMsg,
                           lcase( pLevel || S_WARN ),
@@ -1146,7 +1140,7 @@ const $scope = constants?.$scope || function()
                 newOptions.precision = asInt( precision ) + 1;
                 newOptions.allowedRecursions = asInt( allowedRecursions ) - 1;
 
-                distribution = distributionFunction.call( modulePrototype, total, distribution, numEntries, modelDistribution, newOptions );
+                distribution = distributionFunction.call( toolBocksModule, total, distribution, numEntries, modelDistribution, newOptions );
 
                 recalculate( distribution );
             }
@@ -1395,7 +1389,6 @@ const $scope = constants?.$scope || function()
         let arr = new Array( numEntries ).fill( per ).map( asFloat );
 
 
-
         let differenceRounding = 6;
 
         let iterations = 0;
@@ -1570,7 +1563,7 @@ const $scope = constants?.$scope || function()
             catch( ex )
             {
                 const errorSourceName = calculateErrorSourceName( modName, distributionToArray );
-                reportError.call( modulePrototype, ex, ex.message, S_ERROR, errorSourceName, new ErrorInfo( [pDistribution], errorSourceName, DEFAULT_DISTRIBUTION_OPTIONS, 0, 0, 0, 0 ) );
+                reportError.call( toolBocksModule, ex, ex.message, S_ERROR, errorSourceName, new ErrorInfo( [pDistribution], errorSourceName, DEFAULT_DISTRIBUTION_OPTIONS, 0, 0, 0, 0 ) );
             }
 
             return result;
@@ -1626,7 +1619,7 @@ const $scope = constants?.$scope || function()
 
         let distribution = new Distribution( new Map(), options );
 
-        const errorSourceName = calculateErrorSourceName( modulePrototype, transformDistribution );
+        const errorSourceName = calculateErrorSourceName( toolBocksModule, transformDistribution );
 
         const errorInfo = new ErrorInfo( [...arguments], errorSourceName, options, 0, 0, 0, 0 );
 
@@ -1759,6 +1752,7 @@ const $scope = constants?.$scope || function()
 
     let mod =
         {
+            dependencies,
             generateEvenDistribution,
             generateEvenDistributionAsync,
             transformDistribution,
@@ -1769,7 +1763,7 @@ const $scope = constants?.$scope || function()
             numSegmentsPerKey,
         };
 
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 

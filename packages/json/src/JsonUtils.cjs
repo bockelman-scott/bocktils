@@ -1,6 +1,6 @@
 const core = require( "@toolbocks/core" );
 
-const { constants, typeUtils, stringUtils, arrayUtils } = core;
+const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
 const jsonInterpolationUtils = require( "./JsonInterpolationUtils.cjs" );
 
@@ -23,12 +23,20 @@ const {
 
     const dependencies =
         {
+            moduleUtils,
             constants,
             typeUtils,
             stringUtils,
             arrayUtils,
             jsonInterpolationUtils
         };
+
+    const {
+        ToolBocksModule,
+        detectCycles,
+        objectEntries,
+        populateOptions
+    } = moduleUtils;
 
     const {
         _mt_str,
@@ -40,26 +48,16 @@ const {
         _num,
         _big,
         _bool,
-        S_WARN,
-        attempt,
-        detectCycles,
-        ObjectEntry,
-        objectEntries,
-        populateOptions,
-        mergeOptions,
-        classes
+        S_WARN
     } = constants;
 
     const {
         isNull,
         isString,
         isObject,
-        isFunction,
         isNonNullObject,
         isNonNullValue,
-        isPopulated,
-        toObjectLiteral,
-        VisitedSet
+        toObjectLiteral
     } = typeUtils;
 
     const { asString, isBlank, isJson, toBool } = stringUtils;
@@ -74,8 +72,6 @@ const {
     } = arrayUtils;
 
     const modName = "JsonUtils";
-
-    const { ToolBocksModule } = classes;
 
     const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
 

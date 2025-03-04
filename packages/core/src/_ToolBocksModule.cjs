@@ -4,41 +4,127 @@
  * @author Scott Bockelman
  * @license MIT
  *
- * <p>This module is the 'bootstrap' module for all modules in the ToolBocks&trade; packages.</p>
- * <p>This module defines a base class that all the other modules extend<br>
- * allowing their functions to report errors as events (instead of throwing),<br>
- * allowing consumer code to add event listeners for error and other 'interesting' events,<br>
- * and/or to set either a global logger or per-module loggers.</p>
+ * <p>
+ *     This module is the 'bootstrap' module for all modules
+ *     in the <b>ToolBocks</b>&trade; packages.
+ *     <br>
+ * </p>
  * <br>
- *
- * <p>Other useful functionality defined in this module includes:<br>
+ * <p>
+ *     This module defines the base class
+ *     that all the other modules extend,
+ *     <br>
+ *     allowing their functions to report errors as events (instead of throwing),
+ *     <br>
+ *     and for consumer code to add event listeners for such errors
+ *     and/or other 'interesting' events,
+ *     <br>
+ *     <br>
+ *     You can also set either a global logger or per-module loggers,
+ *     <br>
+ *     which will write to the destination(s) of your choice
+ *     when or if an error event is dispatched.
+ *     <br>
+ *     Some common loggers are available in the <i>@toolbocks/loggers</i> package(s).
+ *     <br>
+ * </p>
+ * <br>
+ * <p>
+ *     Other useful functionality defined in the base module includes:
+ *     <br>
  * <ul>
- * <li>the ability to cap any iteration to a maximum number of loops</li>
- * <li>the ability to create "deep" local and/or immutable copies of objects</li>
- * <li> and the ability to reliably process options passed to functions that have default options</li>
+ * <li>
+ *     the ability to detect (and escape) infinite recursion, or 'cycles',
+ *     <br>
+ *     across one or more function calls or within an object hierarchy
+ *     <br>
+ * </li>
+ * <li>
+ *     the ability to cap any iteration to a maximum number of loops,
+ *     <br>
+ *     regardless of the status of the loop condition
+ *     <br>
+ * </li>
+ * <li>
+ *     the ability to create "deep",
+ *     and optionally immutable, copies of objects
+ *     <br>
+ * </li>
+ * <li>
+ *     and the ability to reliably merge options
+ *     passed to functions that also have default options
+ *     <br>
+ * </li>
  * </ul>
- * <br>
  * </p>
  *
+ * <br>
+ *
+ * <p>
+ *     Other common functions exported with this module
+ *     <br>
+ *     include 4 variations of a function to <b>attempt</b> an operation.
+ *     <br>
+ *     <br>
+ *     These functions provide a more concise way
+ *     to execute code that might throw an error.
+ *     <br>
+ *     <br>
+ *     Any errors that are encountered
+ *     are handled internally by notifying event handlers.
+ *     <br>
+ *     <br>
+ *     <br>
+ *     The <b>objectEntries</b>, <b>objectKeys</b>, and <b>objectValues</b> functions
+ *     <br>
+ *     provide a common and concise way to get the properties of any object,
+ *     <br>
+ *     regardless of whether it is a Map, a Set, an object literal, an array,
+ *     or an instance of a class with private properties.
+ *     <br>
+ *     <br>
+ *     If a property has an accessor or is publicly accessible,
+ *     it will be included in the collection.
+ *     <br>
+ *     <br>
+ *     Likewise, <b>getProperty</b>, <b>setProperty</b>, and <b>hasProperty</b>
+ *     <br>
+ *     all provide the ability to access or modify any property
+ *     that is not read-only.
+ *     <br>
+ *     <br>
+ *     Finally, this module exports a number of useful classes,
+ *     <br>
+ *     for interrogating the runtime,
+ *     creating custom events and custom errors,
+ *     inspecting an error's stack trace (regardless of runtime),
+ *     and supporting the "Gang of Four" Visitor pattern,
+ *     as well as a few other helpful functions,
+ *     many of which can also be imported from other core modules.
+ *     <br>
+ * </p>
+ * <br>
  * @see ToolBocksModule
  * @see ToolBocksModuleEvent
+ *
  * @see {@link __Error},
  * @see IllegalArgumentError
  * @see StackTrace
+ *
  * @see IterationCap
  *
  * <br>
  */
+
+// defines a variable for typeof undefined
+const _ud = "undefined";
 
 /**
  * An alias for the console object available in most environments.<br>
  * We create an alias for console to reduce lint complaints.<br>
  * @type {ILogger|console|Console|{}}
  */
-const konsole = console || {};
-
-// defines a variable for typeof undefined
-const _ud = "undefined";
+const konsole = _ud === typeof console ? {} : console || {};
 
 /**
  * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
@@ -47,22 +133,40 @@ const _ud = "undefined";
 const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === typeof globalThis ? {} : globalThis || {}) : (global || (_ud === typeof globalThis ? this || {} : globalThis || this || {}) || this || {})) : (self || (_ud === typeof globalThis ? this || {} : globalThis || this || {})));
 
 /**
- * ENV is a function that provides access to the application's environment variables.
- * It determines the environment variables based on the runtime context (Node.js, Deno, or a fallback).
+ * ENV is an object that provides access to the application's environment variables.
+ * <br>
+ * <br>
+ * Environment variables are found
+ * based on the runtime context (Node.js, Deno, etc.)
+ * <br>
+ * <br>
+ * In Node.js, the environment variables defined in `process.env` are returned.
+ * <br>
+ * <br>
+ * In Deno, environment variables are retrieved using `Deno.env.toObject()`.
+ * <br>
+ * <br>
+ * In other environments, if a scoped variable named `__BOCK_MODULE_ENVIRONMENT__`
+ * <br>
+ * can be found, it will be assumed to be an object literal of key/value pairs representing environment variables.
+ * <br>
+ * <br>
+ * If no variables or objects are found, the default is to return an execution mode object (`{ "MODE": "DEV" }`).
+ * <br>
+ * <br>
  *
- * - In Node.js, it fetches the environment variables using `process.env`.
- * - In Deno, it retrieves the environment variables using `Deno.env.toObject()`.
- * - As a fallback, it uses a scoped variable (`__BOCK_MODULE_ENVIRONMENT__`) or defaults to a development mode object (`{ "MODE": "DEV" }`).
- * - Handles runtime-specific changes and ensures compatibility across different environments.
- * - Logs an error to the console if it encounters an issue while accessing environment variables.
+ * @type {Object}
  *
- * Note: The behavior of this function is influenced by the runtime's availability and capabilities.
+ * The object is populated using an IIFE (Immediately Invoked Function Expression)
+ * that accepts one argument and returns the _ENV object.
+ * <br>
+ * <br>
+ * @param {Object} [pScope=$scope()] - The global scope or an object that provides access
+ *                                     to the environment information in the absence of the process or Deno objects.
  *
- * @function
- * @param {Object} [pScope=$scope()] - A scoping function or object that provides access to the environment information in the absence of process or Deno.
- * @returns {Object} An object containing the current environment variables or a default fallback configuration.
+ * @returns {Object} An object containing the current environment variables.
  */
-const ENV = (function( pScope = $scope() )
+const _ENV = (function( pScope = $scope() )
 {
     let scp = pScope || $scope();
 
@@ -85,21 +189,30 @@ const ENV = (function( pScope = $scope() )
     }
     else
     {
-        environment = (scp || {})["__BOCK_MODULE_ENVIRONMENT__"] || { "MODE": "DEV" };
+        environment = (scp || {})["__BOCK_MODULE_ENVIRONMENT__"] || scp?.navigator || { "MODE": "DEV" };
     }
 
-    return environment;
+    return environment || {};
 });
 
 /**
- * Represents the command-line arguments passed to the application.
- * Aggregates arguments from different runtime environments, such as Node.js and Deno.
+ * This variable is dynamically populated based on the runtime environment.
+ * <br>
+ * The value is an array representing the command-line arguments passed to the application.
+ * <br>
+ * Arguments are aggregated based on the detected runtime environment, such as Node.js, Deno, or a browser or Worker.
+ * <br>
+ * <br>
+ * - In a Node.js environment: `process.argv` is used.
+ * <br>
+ * <br>
+ * - In a Deno environment: `Deno.args` is used,
+ * <br>
+ * <br>
+ * Otherwise, the value is an empty array.
+ * <br>
  *
- * - In a Node.js environment: It utilizes `process.argv`, which is an array containing the command-line arguments passed when the Node.js process was launched.
- * - In a Deno environment: It utilizes `Deno.args`, which is an array containing the list of command-line arguments.
- * - If none of the recognized runtime environments are detected, it defaults to an empty array.
- *
- * This variable is dynamically populated based on the available runtime environment.
+ * @type {Array.<string>}
  */
 const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !== typeof Deno ? Deno?.args || [] : []))];
 
@@ -108,7 +221,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
  * This module is constructed by an Immediately Invoked Function Expression (IIFE).
  * see: <a href="https://developer.mozilla.org/en-US/docs/Glossary/IIFE">MDN: IIFE</a> for more information on this design pattern
  */
-(function exposeModule( pEnvironment = (ENV || {}), ...pArgs )
+(function exposeModule( pEnvironment = (_ENV || {}), ...pArgs )
 {
     // defines a key we can use to store this module in global scope
     const INTERNAL_NAME = "__BOCK__MODULE_PROTOTYPE__";
@@ -184,6 +297,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         } = (dependencies || {});
 
+    const DEFAULT_LOCALE_STRING = "en-US";
+
     const ENDIAN =
         {
             BIG: "big",
@@ -192,7 +307,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     /**
      * This is a function that just does nothing.<br>
-     * This is useful when you need a default for a missing argument or expected function.<br>
+     * This is useful when you need a default or placeholder for a missing argument or expected function.<br>
      */
     const no_op = () => {};
 
@@ -264,6 +379,31 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @returns {string} a string representing the error specified (usually the error type and message)
      */
     const errorToString = Error.prototype.toString;
+
+    /**
+     * @typedef {Object} ILogger
+     * @property {function(...*)} log A function that takes one or more arguments and 'logs' them with log level, 'log'
+     * @property {function(...*)} info A function that takes one or more arguments and 'logs' them with log level, 'info'
+     * @property {function(...*)} warn A function that takes one or more arguments and 'logs' them with log level, 'warn'
+     * @property {function(...*)} debug A function that takes one or more arguments and 'logs' them with log level, 'debug'
+     * @property {function(...*)} error A function that takes one or more arguments and 'logs' them with log level, 'error'
+     */
+
+    /**
+     * Defines a logger that implements the expected methods, but does not do anything.<br>
+     * This is used when logging is disabled,<br>
+     * which might be desirable if consumers prefer to handle errors via event listeners instead.<br>
+     * @type {ILogger}
+     */
+    const MockLogger =
+        {
+            log: no_op,
+            info: no_op,
+            warn: no_op,
+            debug: no_op,
+            error: no_op,
+            trace: no_op
+        };
 
     /*
      * The following functions are used in the base module,
@@ -547,13 +687,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     /**
      * Converts the input into a string representation.
      * If the input is already a string, it is returned as-is.
-     * Otherwise, attempts to create a string based on the input's `type`, `name`, or a default fallback.
      *
      * @function
      * @param {*} e - The input value to be converted to a string.
      * @returns {string} The string representation of the input.
      */
-    const _asStr = e => isStr( e ) ? e : String( e?.type || e?.name || (_mt_str + String( e )) );
+    const _asStr = e => isStr( e ) ? e : (isFunc( e?.valueOf ) ? String( e.valueOf() ) : String( (_mt_str + String( e )) ));
 
     /**
      * Converts the input value to a lowercase string.
@@ -585,7 +724,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      *                                       Defaults to an underscore (_)
      * @returns {string} A new string with all whitespace replaced by the specified character.
      */
-    const _spcToChar = ( pStr, pChar = _underscore ) => pStr.replaceAll( /\s+/g, (isStr( pChar ) ? pChar || _underscore : _underscore) );
+    const _spcToChar = ( pStr, pChar = _underscore ) => _asStr( pStr ).replaceAll( /\s+/g, (isStr( pChar ) ? pChar || _underscore : _underscore) );
 
     /**
      * Returns a value not less than a minimum value and not greater than a maximum value.<br>
@@ -1179,7 +1318,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * Represents the environment variables configured for the current runtime
      * @type {{key:string,value:string}}
      */
-    const ENVIRONMENT = resolveObject( pEnvironment || ENV, false );
+    const ENVIRONMENT = resolveObject( pEnvironment || _ENV, false );
 
     /**
      * The ExecutionMode class represents a mode of execution,
@@ -1438,6 +1577,20 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     const isBrowser = () => ( !isNode() && !isDeno() && (_ud !== typeof window) && (_ud !== typeof document) && (_ud !== typeof navigator));
 
     /**
+     *
+     */
+    function getRuntimeLocale()
+    {
+        const format = new Intl.DateTimeFormat() || new Intl.NumberFormat();
+
+        const resolvedOptions = format?.resolvedOptions();
+
+        return resolvedOptions?.locale || new Intl.Locale( DEFAULT_LOCALE_STRING );
+    }
+
+    const runtimeLocaleString = () => getRuntimeLocale()?.baseName || DEFAULT_LOCALE_STRING;
+
+    /**
      * Returns the Locale string, such as "en-US",
      * representing the language and region
      * that will be used to resolve messages
@@ -1455,11 +1608,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const getMessagesLocale = function( pEnvironment = ENVIRONMENT )
     {
-        const environment = resolveObject( pEnvironment || ENV, false );
+        const environment = resolveObject( pEnvironment || _ENV, false );
 
-        let locale = environment?.LC_ALL || environment?.LC_MESSAGES || environment?.LANG || Intl.DateTimeFormat().resolvedOptions().locale;
+        let locale = environment?.LC_ALL || environment?.LC_MESSAGES || environment?.LANG || getRuntimeLocale();
 
-        return _mt_str + (isStr( locale ) ? locale : locale?.basename || Intl.DateTimeFormat().resolvedOptions().locale);
+        return _mt_str + (isStr( locale ) ? locale : (locale?.basename || runtimeLocaleString()));
     };
 
     /**
@@ -1474,8 +1627,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     class ExecutionEnvironment
     {
-        #globalScope;
-
         #process;
 
         #versions;
@@ -1506,9 +1657,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         // noinspection OverlyComplexFunctionJS
         constructor( pGlobalScope )
         {
-            this.#globalScope = pGlobalScope || $scope();
+            const globalScope = pGlobalScope || $scope();
 
-            this.#DenoGlobal = _ud === typeof Deno && _ud === typeof this.#globalScope?.Deno ? null : (_ud !== typeof Deno ? Deno : null) || this.#globalScope?.Deno;
+            this.#DenoGlobal = _ud === typeof Deno && _ud === typeof globalScope?.Deno ? null : (_ud !== typeof Deno ? Deno : null) || globalScope?.Deno;
 
             this.#process = _ud !== typeof process ? process : this.#DenoGlobal || null;
 
@@ -1516,19 +1667,19 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             this.#version = this.#versions?.node || this.#versions?.deno;
 
-            this.#console = (_ud !== typeof console && isFunc( console?.log )) ? console : null;
+            this.#console = (_ud !== typeof console && isFunc( console?.log )) ? console : MockLogger;
 
             this.#window = _ud !== typeof window ? window : null;
 
-            this.#document = _ud !== typeof document ? document : _ud === typeof window ? null : window.document;
+            this.#document = _ud !== typeof document ? document : _ud === typeof window ? null : window?.document;
 
-            this.#navigator = _ud !== typeof navigator ? navigator : null;
+            this.#navigator = _ud !== typeof navigator ? navigator : (_ud !== typeof window ? window?.navigator : null);
 
-            this.#userAgent = _ud !== typeof navigator ? navigator?.userAgent : _ud === typeof window ? null : window?.navigator?.userAgent;
+            this.#userAgent = this.#navigator?.userAgent || (_ud === typeof window ? null : window?.navigator?.userAgent);
 
-            this.#location = _ud !== typeof location ? location : null;
+            this.#location = _ud !== typeof location ? location : (_ud === typeof window ? null : window?.location);
 
-            this.#history = _ud !== typeof history ? history : null;
+            this.#history = _ud !== typeof history ? history : (_ud === typeof window ? null : window?.history);
 
             this.#performance = _ud !== typeof performance ? performance : null;
 
@@ -1539,7 +1690,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             this.#ENV = { ...ENVIRONMENT };
             this.#ARGUMENTS = lock( ARGUMENTS );
 
-            this.#localeCode = this.#navigator?.language || getMessagesLocale( this.#ENV ) || "en-US";
+            this.#localeCode = this.#navigator?.language || getMessagesLocale( this.#ENV ) || DEFAULT_LOCALE_STRING;
 
             this.#mode = CURRENT_MODE;
         }
@@ -1551,7 +1702,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         get globalScope()
         {
-            return this.#globalScope || $scope();
+            return $scope();
         }
 
         get process()
@@ -1576,7 +1727,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         get console()
         {
-            return this.#console;
+            return this.#console || konsole || MockLogger;
         }
 
         get fetch()
@@ -1601,12 +1752,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         get navigator()
         {
-            return this.#navigator;
+            return this.#navigator || (_ud !== typeof window ? window?.navigator : (_ud !== typeof navigator ? navigator : null));
         }
 
         get localeCode()
         {
-            return this.isBrowser() ? (this.navigator?.language || this.#localeCode || getMessagesLocale( this.ENV ) || "en-US") : this.#localeCode || getMessagesLocale( this.ENV ) || "en-US";
+            return this.isBrowser() ? (this.navigator?.language || this.#localeCode || getMessagesLocale( this.ENV ) || DEFAULT_LOCALE_STRING) : this.#localeCode || getMessagesLocale( this.ENV ) || DEFAULT_LOCALE_STRING;
         }
 
         get userAgent()
@@ -1721,16 +1872,21 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         cacheModule( pModuleName, pModulePath, pModule )
         {
-            const moduleName = _asStr( pModuleName || pModulePath ).trim();
-
-            this.ModuleCache[moduleName] = this.ModuleCache[moduleName] || pModule;
-
-            if ( this.isDeno() )
+            if ( isNonNullObj( pModule ) || isFunc( pModule ) )
             {
-                const modulePath = _asStr( pModulePath || pModuleName ).trim();
+                const moduleName = _asStr( pModuleName || pModulePath || pModule?.moduleName || pModule?.name ).trim();
 
-                asyncAttempt( async() => await Deno.cache( modulePath ) ).then( no_op ).catch( no_op );
+                this.ModuleCache[moduleName] = this.ModuleCache[moduleName] || pModule;
+
+                if ( this.isDeno() )
+                {
+                    const modulePath = _asStr( pModulePath || pModuleName ).trim();
+
+                    asyncAttempt( async() => await Deno.cache( modulePath ) ).then( no_op ).catch( no_op );
+                }
             }
+
+            return pModule;
         }
     }
 
@@ -1917,6 +2073,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return { type, data, options };
     };
 
+    const CustomEventClass = _ud === typeof CustomEvent ? Event : CustomEvent;
+
     /**
      * This class defines a Custom Event that can be used to communicate with interested consumers.<br>
      * <br>
@@ -1928,7 +2086,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * Note: ToolBocks modules use instances of this event to communicate when errors have occurred rather than writing to the console.<br>
      * @class
      */
-    class ToolBocksModuleEvent extends Event
+    class ToolBocksModuleEvent extends CustomEventClass
     {
         #type;
         #detail;
@@ -2097,31 +2255,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     {
         return new Promise( resolve => setTimeout( resolve, pMilliseconds ) );
     }
-
-    /**
-     * @typedef {Object} ILogger
-     * @property {function(...*)} log A function that takes one or more arguments and 'logs' them with log level, 'log'
-     * @property {function(...*)} info A function that takes one or more arguments and 'logs' them with log level, 'info'
-     * @property {function(...*)} warn A function that takes one or more arguments and 'logs' them with log level, 'warn'
-     * @property {function(...*)} debug A function that takes one or more arguments and 'logs' them with log level, 'debug'
-     * @property {function(...*)} error A function that takes one or more arguments and 'logs' them with log level, 'error'
-     */
-
-    /**
-     * Defines a logger that implements the expected methods, but does not do anything.<br>
-     * This is used when logging is disabled,<br>
-     * which might be desirable if consumers prefer to handle errors via event listeners instead.<br>
-     * @type {ILogger}
-     */
-    const MockLogger =
-        {
-            log: no_op,
-            info: no_op,
-            warn: no_op,
-            debug: no_op,
-            error: no_op,
-            trace: no_op
-        };
 
     /**
      * This is a helper function used by the detectCycles function
@@ -2529,10 +2662,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         if ( isObj( pError ) )
         {
             is = _isValidStr( pError?.name || pError?.message || pError?.stack );
-            is &= _asStr( pError?.name || pError?.message ).includes( "Error" );
+            is = is && (_asStr( pError?.name || pError?.message ).includes( "Error" ));
         }
 
-        return !!is;
+        return is;
     };
 
     /**
@@ -3133,7 +3266,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const calculateErrorSourceName = function( pModule, pFunction )
     {
-        const modName = isObj( pModule ) ? _asStr( pModule?.moduleName || pModule?.name ) : isStr( pModule ) ? pModule : _unknown;
+        const modName = isObj( pModule ) ? _asStr( pModule?.moduleName || pModule?.name || pModule ) : isStr( pModule ) ? pModule : _unknown;
         const funName = isFunc( pFunction ) ? _asStr( pFunction?.name || "anonymous" ) : isStr( pFunction ) ? pFunction : _unknown;
 
         return _asStr( modName || pModule ) + (_colon + _colon) + _asStr( funName || pFunction );
@@ -6045,13 +6178,87 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     IterationCap.MAX_CAP = MAX_ITERATIONS;
 
+    const COMPARE_LESS_THAN = -1;
+    const COMPARE_EQUAL = 0;
+    const COMPARE_GREATER_THAN = 1;
+
+    const resolveComparator = ( pComparator ) => isFunc( pComparator?.compare ) ? pComparator : isFunc( pComparator ) ? { compare: pComparator } : { compare: ( a, b ) => null };
+
+    const compare = ( pFirst, pSecond, pNullsFirst = true ) =>
+    {
+        let comp = COMPARE_EQUAL;
+
+        if ( isFunc( pFirst?.lessThan ) )
+        {
+            comp = pFirst.lessThan( pSecond, pNullsFirst ) ? COMPARE_LESS_THAN : COMPARE_EQUAL;
+        }
+
+        if ( COMPARE_EQUAL === comp && (isFunc( pSecond?.lessThan )) )
+        {
+            comp = pSecond.lessThan( pFirst, pNullsFirst ) ? COMPARE_GREATER_THAN : COMPARE_EQUAL;
+        }
+
+        if ( COMPARE_EQUAL === comp )
+        {
+            return pFirst < pSecond ? COMPARE_LESS_THAN : (pFirst > pSecond ? COMPARE_GREATER_THAN : COMPARE_EQUAL);
+        }
+
+        return comp;
+    };
+
+    const compareTo = ( pFirst, pSecond, pNullsFirst = true ) =>
+    {
+        let comp = COMPARE_EQUAL;
+
+        if ( isFunc( pFirst?.compareTo ) )
+        {
+            comp = pFirst.compareTo( pSecond, pNullsFirst );
+        }
+
+        if ( COMPARE_EQUAL === comp && isFunc( pSecond?.compareTo ) )
+        {
+            comp = pSecond.compareTo( pFirst, pNullsFirst );
+            if ( COMPARE_EQUAL !== comp )
+            {
+                return -comp;
+            }
+        }
+
+        return compare( pFirst, pSecond, pNullsFirst ) || COMPARE_EQUAL;
+    };
+
+    const compareNullable = ( pFirst, pSecond, pNullsFirst = true, pComparator = { compare: compareTo } ) =>
+    {
+        if ( isNull( pFirst ) )
+        {
+            return isNull( pSecond ) ? COMPARE_EQUAL : (pNullsFirst ? COMPARE_LESS_THAN : COMPARE_GREATER_THAN);
+        }
+        else if ( isNull( pSecond ) )
+        {
+            return (pNullsFirst ? COMPARE_GREATER_THAN : COMPARE_LESS_THAN);
+        }
+
+        const comparator = resolveComparator( pComparator );
+
+        if ( isFunc( comparator?.compare ) )
+        {
+            return comparator.compare( pFirst, pSecond, pNullsFirst );
+        }
+
+        return null;
+    };
+
     const mod =
         {
             ModuleEvent: ToolBocksModuleEvent,
-            ToolBocksModule: ToolBocksModule,
+            ToolBocksModule,
             CustomEvent,
 
-            ENDIAN,
+            CURRENT_MODE,
+            ARGUMENTS,
+
+            EMPTY_OBJECT,
+            EMPTY_ARRAY,
 
             _ud,
             _obj,
@@ -6085,17 +6292,27 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             S_ERR_PREFIX,
             S_DEFAULT_OPERATION,
 
+            S_DEFAULT_ERROR_MESSAGE,
+
+            ATTEMPT_FAILED,
+            NOT_A_FUNCTION,
+
+            TRANSIENT_PROPERTIES,
+
+            ENDIAN,
+
+            detectCycles,
+
             resolveError,
             resolveEvent,
             resolveObject,
+            resolveMethod,
             resolveLogLevel,
             resolveType,
-
-            TRANSIENT_PROPERTIES,
             resolveTransientProperties,
+            resolveVisitor,
 
-            EMPTY_OBJECT,
-            EMPTY_ARRAY,
+            DEFAULT_COPY_OPTIONS: lock( DEFAULT_COPY_OPTIONS ),
 
             AsyncFunction,
 
@@ -6103,6 +6320,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             op_true,
             op_false,
             op_identity,
+
+            sleep,
 
             functionToString,
             objectToString,
@@ -6142,74 +6361,64 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     isVisitor: Visitor.isVisitor
                 },
 
-            S_DEFAULT_ERROR_MESSAGE,
-            ATTEMPT_FAILED,
-            NOT_A_FUNCTION,
+            isObjectLiteral,
+            isReadOnly,
+
+            populateOptions,
+            mergeOptions,
 
             canBind,
-            resolveMethod,
+            bindMethod,
 
             attempt,
             attemptMethod,
             asyncAttempt,
             asyncAttemptMethod,
 
-            bindMethod,
-
             fireAndForget,
-
             executeCallback,
-
-            detectCycles,
 
             asPhrase,
 
-            isReadOnly,
-
-            propertyDescriptors,
-            isObjectLiteral,
             objectEntries,
+
             objectValues,
             objectKeys,
             objectMethods,
+
+            propertyDescriptors,
+
             toNodePathArray,
             getProperty,
             setProperty,
             hasProperty,
-            populateOptions,
-            mergeOptions,
-            merge: mergeOptions,
+
             lock,
             deepFreeze,
-            DEFAULT_COPY_OPTIONS: lock( DEFAULT_COPY_OPTIONS ),
+
             localCopy,
             immutableCopy,
 
-            ObjectEntry,
+            compareNullable,
 
-            ExecutionMode,
-            ExecutionEnvironment,
-            SourceInfo,
-            StackTrace,
             __Error,
+            ExecutionEnvironment,
+            ExecutionMode,
             IllegalArgumentError,
             IterationCap,
+            SourceInfo,
+            StackTrace,
             StatefulListener,
+            ObjectEntry,
             Visitor,
-
-            resolveVisitor,
-
-            CURRENT_MODE,
-            ARGUMENTS,
 
             isLogger: ToolBocksModule.isLogger,
             calculateErrorSourceName,
 
             getExecutionEnvironment: function()
             {
-                return new ExecutionEnvironment();
+                return GLOBAL_INSTANCE.executionEnvironment;
             },
-
             getMessagesLocale,
 
             isFulfilled,
@@ -6226,25 +6435,24 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             exportModule,
             requireModule,
             importModule: requireModule,
-            sleep,
 
             classes:
                 {
                     Args,
-                    ModuleArgs,
                     CmdLineArgs,
-                    ExecutionMode,
                     ExecutionEnvironment,
-                    ObjectEntry,
-                    PromiseResult,
-                    ModuleEvent: ToolBocksModuleEvent,
-                    ToolBocksModule,
-                    SourceInfo,
-                    StackTrace,
+                    ExecutionMode,
                     __Error,
                     IllegalArgumentError,
                     IterationCap,
+                    ModuleArgs,
+                    ModuleEvent: ToolBocksModuleEvent,
+                    ObjectEntry,
+                    PromiseResult,
+                    SourceInfo,
+                    StackTrace,
                     StatefulListener,
+                    ToolBocksModule,
                     Visitor
                 }
         };
@@ -6252,4 +6460,4 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     // adds the module to module.exports (if it exists) and then returns the module
     return exportModule( mod, INTERNAL_NAME );
 
-}( ENV, ...CMD_LINE_ARGS ));
+}( _ENV, ...CMD_LINE_ARGS ));

@@ -7,17 +7,11 @@
 
 const core = require( "@toolbocks/core" );
 
-const { constants, typeUtils, stringUtils, arrayUtils, localeUtils } = core;
+const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils, localeUtils } = core;
 
 const tokenSetUtils = require( "./DateFormatTokenSet.cjs" );
 
-const {
-    _ud = "undefined",
-    $scope = core?.$scope || constants?.$scope || function()
-    {
-        return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-    }
-} = constants;
+const { _ud = "undefined", $scope } = constants;
 
 (function exposeModule()
 {
@@ -30,6 +24,7 @@ const {
 
     const dependencies =
         {
+            moduleUtils,
             constants,
             typeUtils,
             stringUtils,
@@ -37,9 +32,9 @@ const {
             localeUtils
         };
 
-    const { _mt_str, _mt_chr, lock, classes } = constants;
+    const { ToolBocksModule, lock } = moduleUtils;
 
-    const { ToolBocksModule } = classes;
+    const { _mt_str, _mt_chr } = constants;
 
     const modulePrototype = new ToolBocksModule( "DateFormatter", INTERNAL_NAME );
 

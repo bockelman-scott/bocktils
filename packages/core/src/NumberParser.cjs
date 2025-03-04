@@ -1,3 +1,4 @@
+const moduleUtils = require( "./_ToolBocksModule.cjs" );
 const constants = require( "./Constants.cjs" );
 const typeUtils = require( "./TypeUtils.cjs" );
 const stringUtils = require( "./StringUtils.cjs" );
@@ -19,7 +20,9 @@ const {
         return $scope()[INTERNAL_NAME];
     }
 
-    const { _mt_str, _spc, _dot, _comma, _minus, _latin = "latn", S_ERROR, lock, moduleUtils } = constants;
+    const { ToolBocksModule, lock } = moduleUtils;
+
+    const { _mt_str, _spc, _dot, _comma, _minus, _latin = "latn", S_ERROR } = constants;
 
     const { isString, isNumber, isObject, isNull, isHex, isOctal, isBinary, isDecimal } = typeUtils;
 
@@ -37,8 +40,6 @@ const {
         };
 
     const modName = "NumberParser";
-
-    const { ToolBocksModule } = moduleUtils;
 
     const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 

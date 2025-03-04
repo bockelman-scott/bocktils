@@ -33,6 +33,9 @@
  *
  * */
 
+/** import the base module we depend upon using require for maximum compatibility with Node versions */
+const moduleUtils = require( "./_ToolBocksModule.cjs" );
+
 /** import the Constants we depend upon using require for maximum compatibility with Node versions */
 const constants = require( "./Constants.cjs" );
 
@@ -73,6 +76,16 @@ const { _ud = "undefined", $scope } = constants;
      * @type {(...codes: number[]) => string}
      */
     const fromCode = String.fromCharCode;
+
+    const {
+        ModuleEvent,
+        ToolBocksModule,
+        IllegalArgumentError,
+        functionToString,
+        populateOptions,
+        attempt,
+        lock,
+    } = moduleUtils;
 
     const
         {
@@ -122,15 +135,7 @@ const { _ud = "undefined", $scope } = constants;
             _rxFunction = /^(async )*function/,
             _rxClass = /^class/,
 
-            IllegalArgumentError,
-            funcToString,
-            populateOptions,
-            attempt,
-            lock,
-            moduleUtils,
         } = constants;
-
-    const { ModuleEvent, ToolBocksModule } = moduleUtils;
 
     /**
      * An array of this module's dependencies
@@ -334,7 +339,7 @@ const { _ud = "undefined", $scope } = constants;
      */
     function getFunctionSource( pFunction )
     {
-        return isFunction( pFunction ) ? funcToString.call( pFunction, pFunction ) : isString( pFunction ) ? asString( pFunction, true ) : _mt_str;
+        return isFunction( pFunction ) ? functionToString.call( pFunction, pFunction ) : isString( pFunction ) ? asString( pFunction, true ) : _mt_str;
     }
 
     /**
@@ -1720,12 +1725,12 @@ const { _ud = "undefined", $scope } = constants;
 
         let input = _resolveInput.call( this, pValue );
 
-        input = isNull( input ) ? pAsFloat ? asFloat( dflt, zero, options ) : asInt( dflt, zero, options ) : input;
-
         if ( isPrimitiveWrapper( input ) )
         {
             input = input.valueOf();
         }
+
+        input = isNull( input ) ? pAsFloat ? asFloat( dflt, zero, options ) : asInt( dflt, zero, options ) : input;
 
         const type = typeof input;
 
@@ -1740,9 +1745,11 @@ const { _ud = "undefined", $scope } = constants;
         {
             val = asInt( pIn.getTime() );
         }
-        else if ( isFunction( pIn?.valueOf ) )
+        else if ( isFunction( pIn?.valueOf ) || isFunction( pIn?.deref ) )
         {
-            val = asInt( pIn.valueOf(), pDefault, pOptions );
+            let value = isFunction( pIn?.deref ) ? pIn.deref() : pIn.valueOf();
+
+            val = (!isObject( value ) ? asInt( value, pDefault, pOptions ) : val);
         }
 
         return val;
@@ -2962,7 +2969,7 @@ const { _ud = "undefined", $scope } = constants;
                     }
                     catch( ex )
                     {
-                        toolBocksModule.reportError( ex, "trying to execute " + asString( func?.name || funcToString.call( func ) ) + " as a number", S_WARN, (modName + _colon + _colon + "tidy") );
+                        toolBocksModule.reportError( ex, "trying to execute " + asString( func?.name || functionToString.call( func ) ) + " as a number", S_WARN, (modName + _colon + _colon + "tidy") );
                     }
                 }
 

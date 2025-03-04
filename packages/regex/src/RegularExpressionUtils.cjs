@@ -11,20 +11,12 @@ const core = require( "@toolbocks/core" );
  * Establish separate constants for each of the common utilities imported
  * @see ../src/CommonUtils.cjs
  */
-const { constants, typeUtils, stringUtils, arrayUtils } = core;
+const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
 /**
  * Defines a string to represent the type, undefined
  */
-const { _ud = "undefined" } = constants;
-
-/**
- * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
- */
-const $scope = constants?.$scope || function()
-{
-    return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
-};
+const { _ud = "undefined", $scope } = constants;
 
 /**
  * This immediately invoked function expression (IIFE)
@@ -48,6 +40,16 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
+    const { ToolBocksModule, lock, IllegalArgumentError } = moduleUtils;
+
+    const { _mt_str, _mt_chr, _slash, _str, _obj, _fun } = constants;
+
+    const { isString, isRegExp, isObject, isFunction } = typeUtils;
+
+    const { asString, asInt, isBlank, lcase, ucase } = stringUtils;
+
+    const { asArray, varargs, unique } = arrayUtils;
+
     /**
      * An array of this module's dependencies
      * which are re-exported with this module,
@@ -56,28 +58,16 @@ const $scope = constants?.$scope || function()
      */
     const dependencies =
         {
+            moduleUtils,
             constants,
             typeUtils,
             stringUtils,
             arrayUtils
         };
 
-    /**
-     * The following variable declarations are used
-     */
-    const { _mt_str, _mt_chr, _slash, _str, _obj, _fun, lock, classes, IllegalArgumentError } = constants;
-
-    const { isString, isRegExp, isObject, isFunction } = typeUtils;
-
-    const { asString, asInt, isBlank, lcase, ucase } = stringUtils;
-
-    const { asArray, varargs, unique } = arrayUtils;
-
     const modName = "RegularExpressionUtils";
 
-    const { ToolBocksModule } = classes;
-
-    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+    const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
     /**
      * Constants for regular expression flags
@@ -891,7 +881,7 @@ const $scope = constants?.$scope || function()
             MatchesHelper
         };
 
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 

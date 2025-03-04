@@ -16,7 +16,7 @@ const {
     concatenateConsecutiveStrings
 } = arrayUtils;
 
-const { constants, stringUtils } = dependencies;
+const { moduleUtils, constants, stringUtils } = dependencies;
 
 const exampleArray = ["a", "b", "c", 1, 2, 3, 4, 5, {}, ["a", "b", "c", 1, 2, 3, 4, 5, {}], new Date(), true, false, null, undefined, function() {}, Object.create( null )];
 

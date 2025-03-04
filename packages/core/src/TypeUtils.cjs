@@ -783,8 +783,9 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isCustomObject
      */
-    const isCustomObject = ( pObj ) => isObject( pObj ) && pObj.prototype !== null && pObj.prototype !== Object && (pObj.constructor === null || pObj.constructor !== Object) && !isPrimitiveWrapper( pObj );
+    const isCustomObject = ( pObj ) => isNonNullObject( pObj ) && pObj.prototype !== null && pObj.prototype !== Object && (pObj.constructor === null || pObj.constructor !== Object) && !isPrimitiveWrapper( pObj );
 
+    const isWeakRef = ( pObj ) => isNonNullObject( pObj ) && (pObj instanceof WeakRef || isFunction( pObj?.deref ));
 
     /**
      * Returns true if the specified value is an object that represents an Error.<br>
@@ -2185,8 +2186,13 @@ const $scope = constants?.$scope || function()
             return pObject instanceof Map;
         }
 
-        if ( isObject( pObject ) )
+        if ( isNonNullObject( pObject ) )
         {
+            if ( pObject instanceof WeakMap )
+            {
+                return true;
+            }
+
             const entries = objectEntries( pObject );
 
             const strings = entries.filter( entry => isString( entry.key ) && !(entry.key.startsWith( "[object" )) );
@@ -2201,6 +2207,8 @@ const $scope = constants?.$scope || function()
 
         return false;
     };
+
+    const isWeakMap = ( pObj ) => pObj instanceof WeakMap;
 
     /**
      * Returns true if the specified value is an instance of {@link Set}<br>
@@ -2225,6 +2233,11 @@ const $scope = constants?.$scope || function()
             return pObject instanceof Set;
         }
 
+        if ( pObject instanceof WeakSet )
+        {
+            return true;
+        }
+
         if ( isLikeArray( pObject, true ) || pObject?.length >= 0 )
         {
             const length = pObject.length;
@@ -2234,6 +2247,8 @@ const $scope = constants?.$scope || function()
 
         return false;
     };
+
+    const isWeakSet = ( pObj ) => pObj instanceof WeakSet;
 
     const MIN_DATE_TIME = -30610202964000; // Approx. year -271821
     const MAX_DATE_TIME = 7258140000000;  // Approx. year 2262
@@ -4864,6 +4879,7 @@ const $scope = constants?.$scope || function()
             isObject,
             isCustomObject,
             isNonNullObject,
+            isWeakRef,
             isNullOrNaN,
             isValidObject,
             isPopulated,
@@ -4902,7 +4918,9 @@ const $scope = constants?.$scope || function()
             isLikeArray,
             isSpreadable,
             isMap,
+            isWeakMap,
             isSet,
+            isWeakSet,
             isDate,
             isRegExp,
             isClass,
@@ -4956,6 +4974,8 @@ const $scope = constants?.$scope || function()
             alignToBytes,
             calculateTypedArrayClass,
             toTypedArray,
+            arrayToObject,
+            toArrayLiteral,
             toObjectLiteral,
             getProperty,
             setProperty,

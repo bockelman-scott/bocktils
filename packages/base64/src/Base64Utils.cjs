@@ -8,7 +8,7 @@ const core = require( "@toolbocks/core" );
  * Establish separate constants for each of the common utilities imported
  * @see ../src/CommonUtils.cjs
  */
-const { constants, typeUtils, stringUtils, arrayUtils } = core;
+const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
 const {
     _ud = "undefined", $scope = constants?.$scope || function()
@@ -30,6 +30,14 @@ const {
     const DEBUG = false;
 
     const {
+        ModuleEvent,
+        ToolBocksModule,
+        IterationCap,
+        populateOptions,
+        lock
+    } = moduleUtils;
+
+    const {
         _mt_str,
         _rxNullTerminator,
         _slash,
@@ -37,23 +45,12 @@ const {
         _comma,
         _ALPHABET_ENGLISH_UCASE,
         _ALPHABET_ENGLISH_LCASE,
-        _DIGIT_CHARACTERS,
-        IterationCap,
-        populateOptions,
-        lock,
-        classes
+        _DIGIT_CHARACTERS
     } = constants;
-
-    const { ModuleEvent, ToolBocksModule } = classes;
-
-    if ( _ud === typeof CustomEvent )
-    {
-        CustomEvent = ModuleEvent;
-    }
 
     const modName = "Base64Utils";
 
-    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+    const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
     const { isNull, isString, isEmptyString, isFunction } = typeUtils;
 
@@ -463,7 +460,7 @@ const {
             toBinary: decode
         };
 
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 

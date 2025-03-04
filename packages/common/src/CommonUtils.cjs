@@ -4,7 +4,7 @@ const objectUtils = require( "./ObjectUtils.cjs" );
 
 const jsonUtils = require( "@toolbocks/json" );
 
-const { constants, typeUtils, stringUtils, arrayUtils, localeUtils, NumberParser, guidUtils } = core;
+const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils, localeUtils, NumberParser, guidUtils } = core;
 
 const { _ud = "undefined" } = constants;
 
@@ -22,9 +22,7 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
-    const { classes } = constants;
-
-    const { ModuleEvent, ToolBocksModule } = classes;
+    const { ModuleEvent, ToolBocksModule } = moduleUtils;
 
     if ( _ud === typeof CustomEvent )
     {

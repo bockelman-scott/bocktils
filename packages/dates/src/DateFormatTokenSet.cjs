@@ -9,18 +9,11 @@ const core = require( "@toolbocks/core" );
  * Establish separate constants for each of the common utilities imported
  * @see ../src/CoreUtils.cjs
  */
-const { constants, typeUtils, stringUtils, arrayUtils, localeUtils } = core;
+const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils, localeUtils } = core;
 
 const dateUtils = require( "./DateUtils.cjs" );
-const RepetitionRules = require( "adm-zip/util/constants" );
 
-const {
-    _ud = "undefined",
-    $scope = core?.$scope || constants?.$scope || function()
-    {
-        return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-    }
-} = constants;
+const { _ud = "undefined", $scope } = constants;
 
 // noinspection FunctionTooLongJS
 (function exposeModule()
@@ -34,6 +27,7 @@ const {
 
     const dependencies =
         {
+            moduleUtils,
             constants,
             typeUtils,
             stringUtils,
@@ -43,18 +37,20 @@ const {
         };
 
     const {
-        classes,
-        _mt_str,
-        _spc,
-        _colon,
-        _slash,
-        _hyphen,
+        ToolBocksModule,
         populateOptions,
         mergeOptions,
         merge,
         lock,
         COMPARE_EQUAL,
         compareNullable
+    } = moduleUtils;
+
+    const {
+        _mt_str,
+        _spc,
+        _colon,
+        _slash,
     } = constants;
 
     const { isNull, isString, isNumber, clamp } = typeUtils;
@@ -78,8 +74,6 @@ const {
         getFirstDayOfWeek,
         FORMATS,
     } = localeUtils;
-
-    const { ToolBocksModule } = classes;
 
     const modName = "DateFormatTokenSet";
 
@@ -2221,20 +2215,20 @@ const {
 
                 if ( left.characters.length > 2 || ["E"].includes( left.characters[0] ) || ["h", "H", "K", "k", "G", "a"].includes( right.characters[0] ) )
                 {
-                    results.push( new TokenLiteral( _spc, RepetitionRules.NONE, this ) );
+                    results.push( new TokenLiteral( _spc, REPETITION_RULES.NONE, this ) );
                 }
                 else if ( ["L", "M", "D", "d", "y"].includes( left.characters[0] ) )
                 {
                     if ( ["L", "M", "D", "d", "y"].includes( right.characters[0] ) )
                     {
-                        results.push( new TokenLiteral( _slash, RepetitionRules.NONE, this ) );
+                        results.push( new TokenLiteral( _slash, REPETITION_RULES.NONE, this ) );
                     }
                 }
                 else if ( ["h", "H", "K", "k", "m", "s", "S"].includes( left.characters[0] ) )
                 {
                     if ( ["h", "H", "K", "k", "m", "s", "S"].includes( right.characters[0] ) )
                     {
-                        results.push( new TokenLiteral( _colon, RepetitionRules.NONE, this ) );
+                        results.push( new TokenLiteral( _colon, REPETITION_RULES.NONE, this ) );
                     }
                 }
             }

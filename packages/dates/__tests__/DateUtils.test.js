@@ -1,14 +1,8 @@
-const commonUtils = require( "@toolbocks/common" );
+const core = require( "@toolbocks/core" );
 
 const dateUtils = require( "../src/DateUtils.cjs" );
 
-const {
-    constants = dateUtils?.dependencies?.constants,
-    typeUtils = dateUtils?.dependencies?.typeUtils,
-    stringUtils = dateUtils?.dependencies?.stringUtils,
-    arrayUtils = dateUtils?.dependencies?.arrayUtils,
-    objectUtils = dateUtils?.dependencies?.objectUtils
-} = commonUtils;
+const { moduleUtils, stringUtils, arrayUtils } = core;
 
 const sum = function( ...pArgs )
 {
@@ -18,8 +12,6 @@ const sum = function( ...pArgs )
 
 const
     {
-        classes,
-
         DateConstants,
 
         US_HOLIDAYS,
@@ -81,8 +73,6 @@ const
         isHoliday
 
     } = dateUtils;
-
-const { DatesIterable } = classes;
 
 const today = new Date();
 const yesterday = new Date( today.getTime() - ONE_DAY );

@@ -1,8 +1,10 @@
+const moduleUtils = require( "../src/_ToolBocksModule.cjs" );
+
 const constants = require( "../src/Constants.cjs" );
 
-const { classes, _num, _str, _bool, _obj, _fun, _symbol, _big, _ud, lock, attempt, asyncAttempt } = constants;
+const { _num, _str, _bool, _obj, _fun, _symbol, _big, _ud } = constants;
 
-const { ModuleEvent } = classes;
+const { ModuleEvent, lock, attempt, asyncAttempt } = moduleUtils;
 
 const typeUtils = require( "../src/TypeUtils.cjs" );
 

@@ -5,7 +5,7 @@
  */
 const core = require( "../../core/src/CoreUtils.cjs" );
 
-const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils, guidUtils } = core;
+const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils, guidUtils, functionUtils } = core;
 
 const {
     _ud = "undefined", $scope = constants?.$scope || function()
@@ -36,12 +36,31 @@ const {
      */
     const dependencies =
         {
+            moduleUtils,
             constants,
             typeUtils,
             stringUtils,
             arrayUtils,
-            guidUtils
+            guidUtils,
+            functionUtils
+
         };
+
+    const {
+        IllegalArgumentError,
+        IterationCap,
+        detectCycles,
+        bracketsToDots,
+        populateOptions,
+        functionToString,
+        lock,
+        deepFreeze,
+        ObjectEntry,
+        objectEntries,
+        localCopy,
+        immutableCopy,
+
+    } = moduleUtils;
 
     let
         {
@@ -57,35 +76,21 @@ const {
             _dot,
             _spc,
             _comma,
-            _underscore,
             _semicolon,
             ignore,
-            IllegalArgumentError,
-            IterationCap,
-            BUILTIN_TYPES,
-            REG_EXP_DOT,
-            REG_EXP_LEADING_DOT,
-            REG_EXP_TRAILING_DOT,
             S_ERROR,
             S_WARN,
-            S_TRACE,
             no_op,
-            detectCycles,
-            bracketsToDots,
-            populateOptions,
-            funcToString,
-            lock,
-            deepFreeze,
-            ObjectEntry,
-            objectEntries,
-            localCopy,
-            immutableCopy,
-            classes,
-            EMPTY_ARRAY = Object.freeze( [] ),
-            EMPTY_OBJECT = Object.freeze( {} )
         } = constants;
 
     const { ModuleEvent, ToolBocksModule, getProperty, setProperty } = moduleUtils;
+
+    const {
+        getFunctionSource,
+        extractFunctionData,
+        extractFunctionBody,
+        extractFunctionParameters,
+    } = functionUtils;
 
     const modName = "ObjectUtils";
 
@@ -154,7 +159,6 @@ const {
             toProperCase,
             leftOfLast,
             rightOf,
-            getFunctionSource
         } = stringUtils;
 
     let
@@ -171,60 +175,6 @@ const {
             varargs,
             immutableVarArgs
         } = arrayUtils;
-
-    const S_LENGTH = "length";
-
-    if ( isUndefined( CustomEvent ) )
-    {
-        CustomEvent = ModuleEvent;
-    }
-
-    /**
-     * An array of the Number constants
-     * @type {string[]}
-     */
-    const NumberProperties = ["EPSILON",
-                              "MAX_SAFE_INTEGER",
-                              "MAX_VALUE",
-                              "MIN_SAFE_INTEGER",
-                              "MIN_VALUE",
-                              "NaN",
-                              "NEGATIVE_INFINITY",
-                              "POSITIVE_INFINITY"];
-
-
-    const rxFunctionSignature = lock( /^(\(?\s*((async(\s+))?\s*function))\s*?([$_\w]+[$_\w]*)?\s*\((\s*(([$_\w]+[$_\w]*\s*,?)\s*)*(\.{3}([$_\w]+[$_\w]*\s*,?)*\s*)*)(?<!,\s*)\)/ );
-
-    const extractFunctionData = function( pFunction )
-    {
-        let s = isFunction( pFunction ) || isString( pFunction ) ? getFunctionSource( pFunction ) : _mt_str;
-
-        let rx = new RegExp( rxFunctionSignature );
-
-        let body = asString( s.replace( rx, _mt_str ), true );
-
-        body = asString( leftOfLast( rightOf( body, "{" ), "}" ), true );
-
-        const matches = rx.exec( s );
-
-        let params = asArray( (matches && matches.length >= 7) ? asArray( asString( matches[6], true ).split( "," ) ) : [] );
-
-        params = params.map( e => asString( e, true ) ).filter( Filters.NON_BLANK );
-
-        return { body, params };
-    };
-
-    const extractFunctionBody = function( pFunction )
-    {
-        const { body } = extractFunctionData( pFunction );
-        return body;
-    };
-
-    const extractFunctionParameters = function( pFunction )
-    {
-        const { params } = extractFunctionData( pFunction );
-        return params;
-    };
 
     const tracePathTo = function( pNode, pRoot, pPath = [], pStack = [], pVisited = [] )
     {
@@ -554,85 +504,6 @@ const {
     Object.prototype.equals = function( pObject )
     {
         return same( this, pObject, true, getClass( this ) );
-    };
-
-    const arrayToObject = function( pArr, pKeyProperty = _mt_str )
-    {
-        let arr = asArray( pArr );
-
-        let keyProperty = asString( pKeyProperty, true );
-
-        let useKeyProperty = !isBlank( keyProperty );
-
-        if ( 1 === arr?.length && (isObject( arr[0] ) && !isArray( arr[0] )) )
-        {
-            if ( useKeyProperty )
-            {
-                let value = arr[0] || {};
-                let key = value[keyProperty];
-
-                let obj = {};
-                obj[key] = value;
-
-                return obj || { [keyProperty]: value };
-            }
-            return arr[0];
-        }
-
-        let obj = {};
-
-        let key = _mt_str;
-        let value = _mt_str;
-
-        for( let i = 0, n = arr.length; i < n; i++ )
-        {
-            let elem = arr[i];
-
-            switch ( typeof elem )
-            {
-                case _ud:
-                    break;
-
-                case _str:
-                case _num:
-                case _big:
-                case _bool:
-                    key = asString( i, true );
-                    value = elem;
-                    break;
-
-                case _fun:
-                    key = asKey( asString( elem.name, true ).trim() || asString( funcToString.call( elem ), true ).trim() ) || ("Function_" + asString( i ));
-
-                    if ( key in obj )
-                    {
-                        key = ("Function_" + asString( i ));
-                    }
-
-                    value = elem;
-
-                    break;
-
-                case _obj:
-                    if ( isArray( obj ) )
-                    {
-                        key = "Array_" + asString( i );
-                        value = arrayToObject( elem, keyProperty );
-                    }
-                    else
-                    {
-                        key = (useKeyProperty ? elem[keyProperty] : (elem?.id || elem?.key || ("Object_" + asString( i ))));
-                        key = asString( key, true ) || asString( (elem?.id || elem?.name || elem?.key || ("Object_" + asString( i ))), true );
-
-                        value = elem;
-                    }
-                    break;
-            }
-
-            obj[key] = obj[key] || value;
-        }
-
-        return obj;
     };
 
     /**
@@ -1762,12 +1633,8 @@ const {
             same,
             findImplementor,
             collectImplementors,
-            arrayToObject,
             evaluateBoolean,
             toBool,
-            extractFunctionData,
-            extractFunctionBody,
-            extractFunctionParameters,
             invertProperties,
             findNode,
             tracePathTo,

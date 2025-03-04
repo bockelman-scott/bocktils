@@ -2,7 +2,7 @@ const core = require( "@toolbocks/core" );
 
 const dateParserModule = require( "../src/DateParser.cjs" );
 
-const { constants } = core;
+const { moduleUtils, constants } = core;
 
 const { DateParser, TimeZone } = dateParserModule;
 

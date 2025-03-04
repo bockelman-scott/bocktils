@@ -49,15 +49,9 @@
  */
 const core = require( "@toolbocks/core" );
 
-const { constants, typeUtils, stringUtils, arrayUtils } = core;
+const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
-const {
-    _ud = "undefined",
-    $scope = constants?.$scope || function()
-    {
-        return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-    }
-} = constants;
+const { _ud = "undefined", $scope } = constants;
 
 (function exposeModule()
 {
@@ -77,11 +71,22 @@ const {
 
     const dependencies =
         {
+            moduleUtils,
             constants,
             typeUtils,
             stringUtils,
             arrayUtils
         };
+
+    const {
+        ToolBocksModule,
+        IterationCap,
+        populateOptions,
+        lock,
+        detectCycles,
+        objectEntries,
+        ObjectEntry
+    } = moduleUtils;
 
     const
         {
@@ -98,14 +103,7 @@ const {
             _big,
             S_WARN,
             S_ERROR,
-            IterationCap,
-            populateOptions,
-            ignore,
-            lock,
-            detectCycles,
-            objectEntries,
-            ObjectEntry,
-            classes
+            ignore
         } = constants;
 
     const
@@ -135,8 +133,6 @@ const {
     const { asArray, pruneArray, unique, toNonBlankStrings } = arrayUtils;
 
     const modName = "JsonInterpolationUtils";
-
-    const { ToolBocksModule } = classes;
 
     const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
 

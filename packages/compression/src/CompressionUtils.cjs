@@ -32,7 +32,7 @@ const core = require( "@toolbocks/core" );
  * Establish separate constants for each of the common utilities imported
  * @see ../src/CoreUtils.cjs
  */
-const { constants, typeUtils, stringUtils, arrayUtils } = core;
+const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
 const bufferUtils = require( "@toolbocks/buffer" );
 
@@ -53,12 +53,7 @@ const { Readable } = require( "node:stream" );
 const zlib = require( "node:zlib" );
 const crypto = require( "node:crypto" );
 
-const {
-    _ud = "undefined", $scope = constants?.$scope || function()
-    {
-        return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-    }
-} = constants;
+const { _ud = "undefined", $scope } = constants;
 
 (function exposeModule()
 {
@@ -70,6 +65,16 @@ const {
     }
 
     const {
+        ToolBocksModule,
+        populateOptions,
+        no_op,
+        lock,
+        resolveError,
+        attempt,
+        asyncAttempt
+    } = moduleUtils;
+
+    const {
         _mt_str,
         _dot,
         _str,
@@ -77,16 +82,9 @@ const {
         _big,
         _bool,
         _obj,
-        resolveError,
         S_ERROR,
-        S_WARN,
-        populateOptions,
-        no_op,
-        lock,
-        moduleUtils
+        S_WARN
     } = constants;
-
-    const { ToolBocksModule, attempt, asyncAttempt } = moduleUtils;
 
     const {
         isNull,

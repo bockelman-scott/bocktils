@@ -1,18 +1,10 @@
 /** import dependencies **/
 const core = require( "@toolbocks/core" );
 
-const { constants, typeUtils, stringUtils } = core;
+const { moduleUtils, constants, typeUtils, stringUtils } = core;
 
 /** define a variable for typeof undefined **/
-const { _ud = "undefined" } = constants;
-
-/**
- * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
- */
-const $scope = constants?.$scope || function()
-{
-    return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
-};
+const { _ud = "undefined", $scope } = constants;
 
 (function exposeModule()
 {
@@ -27,22 +19,23 @@ const $scope = constants?.$scope || function()
 
     const dependencies =
         {
+            moduleUtils,
             constants,
             typeUtils,
             stringUtils
         };
 
-    const { _mt_str, _fun, _obj, no_op, ignore, populateOptions, S_WARN, S_ERROR, classes } = constants;
+    const { ModuleEvent, ToolBocksModule, populateOptions } = moduleUtils;
+
+    const { _mt_str, _fun, _obj, no_op, ignore, S_WARN, S_ERROR } = constants;
 
     const { isNull, isBoolean, isFunction, isObject, getClassName, firstMatchingType } = typeUtils;
 
     const { asString, capitalize, uncapitalize } = stringUtils;
 
-    const { ModuleEvent, ToolBocksModule } = classes;
-
     const modName = "EventUtils";
 
-    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+    const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
     const S_ON = "on";
     const S_ABORT = "abort";
@@ -51,7 +44,7 @@ const $scope = constants?.$scope || function()
     {
         const msg = "No handler found for event," + pEvt.type + ", Fired on" + pEvt.target;
 
-        modulePrototype.reportError( new Error( msg ), msg, S_WARN, modName + "::NO_HANDLER" );
+        toolBocksModule.reportError( new Error( msg ), msg, S_WARN, modName + "::NO_HANDLER" );
 
         return false;
     };
@@ -369,7 +362,7 @@ const $scope = constants?.$scope || function()
             {
                 const msg = "Could not replace event handler for event type, " + asString( pEventName ) + ", for target, " + (target?.name || typeof target);
 
-                modulePrototype.reportError( ex, msg, S_ERROR, modName + "::replaceEventHandler" );
+                toolBocksModule.reportError( ex, msg, S_ERROR, modName + "::replaceEventHandler" );
             }
         }
     };
@@ -591,7 +584,7 @@ const $scope = constants?.$scope || function()
             killEvent
         };
 
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 
