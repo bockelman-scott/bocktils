@@ -4,9 +4,7 @@ const core = require( "@toolbocks/core" );
  * Establish separate constants for each of the common utilities imported
  * @see ../src/CoreUtils.cjs
  */
-const { constants } = core;
-
-const { moduleUtils } = constants;
+const { moduleUtils } = core;
 
 const
     {
@@ -146,6 +144,63 @@ map.set( "b", 2 );
 map.set( "c", 3 );
 
 const aSet = new Set( map.values() );
+
+class TestLogger
+{
+    #loggedMessages = [];
+
+    constructor()
+    {
+    }
+
+    log( ...pMessage )
+    {
+        const method = "log";
+        this.#loggedMessages.push( "[" + method.toUpperCase() + "]: " + (pMessage.join( " " )) );
+    }
+
+    error( ...pMessage )
+    {
+        const method = "error";
+        this.#loggedMessages.push( "[" + method.toUpperCase() + "]: " + (pMessage.join( " " )) );
+    }
+
+    warn( ...pMessage )
+    {
+        const method = "warn";
+        this.#loggedMessages.push( "[" + method.toUpperCase() + "]: " + (pMessage.join( " " )) );
+    }
+
+    info( ...pMessage )
+    {
+        const method = "info";
+        this.#loggedMessages.push( "[" + method.toUpperCase() + "]: " + (pMessage.join( " " )) );
+    }
+
+    debug( ...pMessage )
+    {
+        const method = "debug";
+        this.#loggedMessages.push( "[" + method.toUpperCase() + "]: " + (pMessage.join( " " )) );
+    }
+
+    trace( ...pMessage )
+    {
+        const method = "trace";
+        this.#loggedMessages.push( "[" + method.toUpperCase() + "]: " + (pMessage.join( " " )) );
+    }
+
+    get messages()
+    {
+        return this.#loggedMessages;
+    }
+
+    filteredMessages( pFilter )
+    {
+        return this.#loggedMessages.filter( pFilter );
+    }
+}
+
+ToolBocksModule.setGlobalLogger( new TestLogger() );
 
 describe( "Sanity-check", () =>
 {
@@ -358,7 +413,6 @@ describe( "Sanity-check", () =>
 // NOTE: these are basic checks; use TypeUtils for more useful type checks
 describe( "TYPES_CHECK functionality", () =>
 {
-
 
     test( "isNum", () =>
     {
@@ -683,8 +737,6 @@ describe( "TYPES_CHECK functionality", () =>
         expect( isAsyncFunction( () => true ) ).toBe( false );
         expect( isAsyncFunction( async() => true ) ).toBe( true );
         expect( isAsyncFunction( async function() {} ) ).toBe( true );
-        // expect( isAsyncFunction( async function*() {} ) ).toBe( true );
-        // expect( isAsyncFunction( async function*() { yield 1; } ) ).toBe( true );
 
         expect( isAsyncFunction( foo ) ).toBe( true );
         expect( isAsyncFunction( function() {} ) ).toBe( false );
@@ -908,32 +960,110 @@ describe( "mergeOptions", () =>
     } );
 } );
 
+// ARGUMENTS
+// ENV
 
 describe( "ExecutionEnvironment", () =>
 {
-    test( "", () =>
+    test( "ExecutionEnvironment reflects correct runtime", () =>
     {
-        //TODO
-
-        // ARGUMENTS
-        // ENV
-
+        const executionEnvironment = getExecutionEnvironment();
+        console.log( executionEnvironment.toString() );
     } );
 } );
 
 describe( "Global Logging", () =>
 {
-    test( "", () =>
+    test( "getGlobalLogger and log some messages", () =>
     {
-        //TODO
+        const logger = ToolBocksModule.getGlobalLogger();
+
+        expect( logger instanceof TestLogger ).toBe( true );
+
+        logger.log( "A log message", "with data" );
+        logger.info( "An info message", "with data" );
+        logger.warn( "A warning message", "with data" );
+        logger.error( "An error message", "with data" );
+        logger.debug( "A debug message", "with data" );
+        logger.trace( "A trace message", "with data" );
+
+        expect( logger.filteredMessages( ( e ) => e.includes( "LOG" ) ).length ).toBe( 1 );
+        expect( logger.filteredMessages( ( e ) => e.includes( "INFO" ) ).length ).toBe( 1 );
+        expect( logger.filteredMessages( ( e ) => e.includes( "WARN" ) ).length ).toBe( 1 );
+        expect( logger.filteredMessages( ( e ) => e.includes( "ERROR" ) ).length ).toBe( 1 );
+        expect( logger.filteredMessages( ( e ) => e.includes( "DEBUG" ) ).length ).toBe( 1 );
+        expect( logger.filteredMessages( ( e ) => e.includes( "TRACE" ) ).length ).toBe( 1 );
+
+        expect( logger.filteredMessages( ( e ) => e.includes( "with data" ) ).length ).toBe( 6 );
+
     } );
+
+    test( "disable globalLogging", () =>
+    {
+        let logger = ToolBocksModule.getGlobalLogger();
+
+        expect( logger instanceof TestLogger ).toBe( true );
+
+        moduleUtils.reportError( new Error( "TEST" ) );
+
+        ToolBocksModule.disableGlobalLogger();
+
+        logger = ToolBocksModule.getGlobalLogger();
+
+        expect( logger instanceof TestLogger ).toBe( false );
+
+        moduleUtils.reportError( new Error( "TEST_2" ) );
+
+        ToolBocksModule.enableGlobalLogger();
+
+        logger = ToolBocksModule.getGlobalLogger();
+
+        expect( logger instanceof TestLogger ).toBe( true );
+
+        expect( logger.filteredMessages( ( e ) => e.includes( "TEST" ) ).length ).toBe( 1 );
+
+        expect( logger.filteredMessages( ( e ) => e.includes( "TEST_2" ) ).length ).toBe( 0 );
+
+    } );
+
+
 } );
 
 describe( "export/require/import modules", () =>
 {
-    test( "", () =>
+    test( "exportModule returns a ToolBocksModule", () =>
     {
-        //TODO
+        let mod =
+            {
+                someFunction: function()
+                {
+                    return 1;
+                }
+            };
+
+        mod = exportModule( mod );
+
+        expect( mod instanceof ToolBocksModule ).toBe( true );
+        expect( mod.someFunction() ).toBe( 1 );
+
+        // called without arguments returns a clone of the base class
+        mod = exportModule();
+        expect( mod instanceof ToolBocksModule ).toBe( true );
+        expect( mod.moduleName ).toEqual( "ToolBocksModule" );
+    } );
+
+    test( "requireModule asynchronously loads a module", async() =>
+    {
+        let mod = await requireModule( "../../base64/src/Base64Utils.cjs" );
+
+        expect( mod instanceof ToolBocksModule ).toBe( true );
+        expect( typeof mod.isValidBase64 ).toBe( "function" );
+
+        // requireModule wraps the imported module in a ToolBocksModule
+        mod = await requireModule( "node:fs" );
+        expect( mod instanceof ToolBocksModule ).toBe( true );
+        expect( typeof mod.existsSync ).toBe( "function" );
+        expect( typeof mod.getMessagesLocale ).toBe( "function" );
     } );
 } );
 

@@ -30,7 +30,6 @@ const {
     const DEBUG = false;
 
     const {
-        ModuleEvent,
         ToolBocksModule,
         IterationCap,
         populateOptions,
@@ -48,15 +47,17 @@ const {
         _DIGIT_CHARACTERS
     } = constants;
 
-    const modName = "Base64Utils";
-
-    const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
-
     const { isNull, isString, isEmptyString, isFunction } = typeUtils;
 
     const { asString, asInt, ucase, lcase } = stringUtils;
 
     const { asArray } = arrayUtils;
+
+
+    const modName = "Base64Utils";
+
+    const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
+
 
     const BASE64 = "base64";
 
@@ -442,11 +443,11 @@ const {
         return data.map( e => String.fromCharCode( e ) ).join( _mt_str ).replace( _rxNullTerminator, _mt_str );
     }
 
-
     let mod =
         {
             dependencies:
                 {
+                    moduleUtils,
                     constants,
                     stringUtils,
                     arrayUtils

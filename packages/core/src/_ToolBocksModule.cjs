@@ -224,7 +224,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 (function exposeModule( pEnvironment = (_ENV || {}), ...pArgs )
 {
     // defines a key we can use to store this module in global scope
-    const INTERNAL_NAME = "__BOCK__MODULE_PROTOTYPE__";
+    const INTERNAL_NAME = "__BOCK__MODULE_BASE_MODULE__";
 
     // if we've already executed this code, just return the module
     if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
@@ -551,6 +551,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @returns {boolean} true if the specified value is an instance of Map or a subclass of Map.
      */
     const isMap = pObj => isObj( pObj ) && pObj instanceof Map;
+
     /**
      * Returns true if the specified value is an instance of Set or a subclass of Set
      *
@@ -1887,6 +1888,39 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             }
 
             return pModule;
+        }
+
+        toString()
+        {
+            let s = "EXECUTION ENVIRONMENT\n";
+
+            s += "Runtime: ";
+            s += isNode() ? "Node.js" : isDeno() ? "Deno" : isBrowser() ? "Browser" : _unknown;
+            s += isNode() || isDeno() ? (", Version: " + this.version) : _mt_str;
+            s += isBrowser() ? (": " + this.userAgent) : _mt_str;
+            s += "\n";
+
+            s += (this.operatingSystem ? ("OS: " + (this.operatingSystem) + "\n") : _mt_str);
+
+            s += (this.localeCode ? ("Locale: " + (this.localeCode) + "\n") : _mt_str);
+
+            s += (this.mode ? ("Mode: " + (this.mode.name) + "\n") : _mt_str);
+
+            if ( isNonNullObj( this.ENV ) && Object.keys( this.ENV ).length > 0 )
+            {
+                s += "ENV: \n";
+                s += JSON.stringify( this.ENV, null, 4 );
+                s += "\n";
+            }
+
+            if ( isNonNullObj( this.ARGUMENTS ) && Object.keys( this.ARGUMENTS ).length > 0 )
+            {
+                s += "ARGUMENTS: \n";
+                s += JSON.stringify( this.ARGUMENTS, null, 4 );
+                s += "\n";
+            }
+
+            return s + "\n\n";
         }
     }
 
@@ -3885,8 +3919,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             super();
 
-            this.#moduleName = (isStr( pModuleName )) ? pModuleName || modName : (isObj( pModuleName ) ? pModuleName?.moduleName || pModuleName?.name : _mt_str) || modName;
-            this.#cacheKey = (isStr( pCacheKey )) ? pCacheKey || INTERNAL_NAME : (isObj( pModuleName ) ? pModuleName?.cacheKey || pModuleName?.name : _mt_str);
+            this.#moduleName = (isStr( pModuleName )) ? pModuleName : (isObj( pModuleName ) ? pModuleName?.moduleName || pModuleName?.name || pModuleName?.cacheKey : _mt_str) || modName;
+            this.#cacheKey = (isStr( pCacheKey )) ? pCacheKey : (isObj( pModuleName ) ? pModuleName?.cacheKey || pModuleName?.moduleName || pModuleName?.name : _mt_str) || INTERNAL_NAME;
+
+            this.#moduleName = this.#moduleName || this.#cacheKey || modName;
+            this.#cacheKey = this.#cacheKey || this.#moduleName || this.__GUID || INTERNAL_NAME;
 
             this.#traceEnabled = !!pTraceEnabled;
 
@@ -3900,8 +3937,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             }
 
             // cache this module to avoid unnecessary reconstruction
-            MODULE_CACHE[this.#moduleName] = this;
-            MODULE_CACHE[this.#cacheKey] = this;
+            if ( this.#moduleName && isStr( this.#moduleName ) )
+            {
+                MODULE_CACHE[this.#moduleName] = MODULE_CACHE[this.#moduleName] || this;
+            }
+            if ( this.#cacheKey && isStr( this.#cacheKey ) )
+            {
+                MODULE_CACHE[this.#cacheKey] = MODULE_CACHE[this.#cacheKey] || this;
+            }
 
             const me = this;
 
@@ -4240,7 +4283,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          */
         static getGlobalLogger()
         {
-            return ToolBocksModule.#globalLogger;
+            return ToolBocksModule.#globalLoggingEnabled ? ToolBocksModule.#globalLogger : MockLogger;
         }
 
         /**
@@ -4659,18 +4702,20 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     function exportModule( pObject, pCacheKey )
     {
-        let mod = pObject;
+        let mod = (isNonNullObj( pObject ) || isClass( pObject ) ? pObject : {}) || {};
+
+        const cacheKey = isStr( pCacheKey ) && _mt_str !== _asStr( pCacheKey ).trim() ? _asStr( pCacheKey ).trim() : mod?.moduleName || mod?.__GUID;
 
         if ( isNonNullObj( mod ) && (mod instanceof ToolBocksModule) )
         {
-            return mod.expose( mod, pCacheKey );
+            return mod.expose( mod, cacheKey );
         }
 
-        let toolbocksModule = new ToolBocksModule( mod, pCacheKey );
+        let toolbocksModule = new ToolBocksModule( mod, cacheKey );
 
         mod = toolbocksModule.extend( mod || pObject );
 
-        return mod.expose( mod, pCacheKey );
+        return mod.expose( mod, cacheKey );
     }
 
     // make the function available as a static method
@@ -4722,8 +4767,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             mod = await Promise.resolve( mod );
         }
 
-        if ( null != mod && mod instanceof ToolBocksModule )
+        if ( null != mod )
         {
+            mod = (mod instanceof ToolBocksModule) ? mod : exportModule( mod, pModulePath );
+
             GLOBAL_INSTANCE.dispatchEvent( new ToolBocksModuleEvent( "load", mod, { module_path: pModulePath } ) );
         }
 
