@@ -6466,7 +6466,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             {
                 return GLOBAL_INSTANCE.executionEnvironment;
             },
+            getRuntimeLocale,
             getMessagesLocale,
+
+            runtimeLocaleString,
 
             isFulfilled,
             isRejected,

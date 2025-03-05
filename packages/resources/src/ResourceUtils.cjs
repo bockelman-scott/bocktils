@@ -6,7 +6,7 @@
  *
  * <p>This module exposes classes for working with externalized strings.</p>
  * <br>
- * In addition to providing the ability to localize text to support various languages,
+ * In addition to providing the ability to localize text to support various languages and locales,
  * these classes also provide the ability to override text based on other factors,<br>
  * such as a specific customer or release of an application.<br>
  * <br>
@@ -51,8 +51,6 @@ const { _ud = "undefined", $scope } = constants;
     {
         return $scope()[INTERNAL_NAME];
     }
-
-    const modName = "ResourceUtils";
 
     const {
         ToolBocksModule,
@@ -121,15 +119,25 @@ const { _ud = "undefined", $scope } = constants;
         isAssignableTo
     } = typeUtils;
 
-    const { asString, asInt, asFloat, isBlank, isJson, lcase, ucase, toUnixPath, toBool } = stringUtils;
+    const { asString, asInt, asFloat, isBlank, isJson, lcase, ucase, toUnixPath, toBool, endsWithAny } = stringUtils;
 
     const { varargs, flatArgs, asArray, unique, Filters, AsyncBoundedQueue } = arrayUtils;
 
-    const { DEFAULT_LOCALE, DEFAULT_LOCALE_STRING, resolveLocale, LocaleResourcesBase } = localeUtils;
+    const {
+        DEFAULT_LOCALE,
+        DEFAULT_LOCALE_STRING,
+        isLocale,
+        resolveLocale,
+        LocaleResourcesBase,
+        parseLocale
+    } = localeUtils;
 
     const { asJson, parseJson } = jsonUtils;
 
-    const { resolvePath, getDirectoryName, readTextFile, writeTextFile } = fileUtils;
+    const { resolvePath, getDirectoryName, getFileName, getFileExtension, readTextFile, writeTextFile } = fileUtils;
+
+
+    const modName = "ResourceUtils";
 
 
     /**
@@ -223,12 +231,14 @@ const { _ud = "undefined", $scope } = constants;
     const isBrowser = executionEnvironment.isBrowser();
 
     /**
-     * This class <i>roughly approximates</i> the structure and functionality of the java.utils.properties class.
+     * This class <i>roughly approximates</i> the structure and functionality of the java.utils.Properties class.
      * <br>
      * @see {@link https://docs.oracle.com/javase/8/docs/api/java/util/Properties.html}
      * <br>
      * <br>
-     * This class holds a set of key/value pairs where both the key and value are strings.<br>
+     * This class holds a set of key/value pairs where both the key and value are strings.
+     * <br>
+     * <br>
      * Additionally, instances of this class can be nested
      * to provide fallback or default values for properties
      * that are not overridden for a specific context.
@@ -767,7 +777,7 @@ const { _ud = "undefined", $scope } = constants;
      *
      * @param {string} pFilePath - The path to the properties file to be loaded.
      * @param pOptions
-     * @returns {Properties} a new instance of Properties, populated with the key/value pairs defined in the file
+     * @returns {Promise<Properties>} a new instance of Properties, populated with the key/value pairs defined in the file
      */
     Properties.fromFile = async function( pFilePath, pOptions )
     {
@@ -814,7 +824,7 @@ const { _ud = "undefined", $scope } = constants;
                 return Properties.fromPropertiesString( pSource, pOptions );
             }
 
-            return Properties.fromFile( pSource, pOptions );
+            return Properties.fromFile( pSource, pOptions ).then( p => p || new Properties() );
         }
         else if ( isMap( pSource ) )
         {
@@ -864,7 +874,7 @@ const { _ud = "undefined", $scope } = constants;
 
     /**
      * Returns true if the value is a valid resource value
-     * by verifying if it is either a non-null value or a non-null object.
+     * by verifying that it is either a non-null value or a non-null object.
      * <br>
      *
      * @param {any} pValue - The value to be checked for validity as a resource value.
@@ -1127,13 +1137,75 @@ const { _ud = "undefined", $scope } = constants;
         }
 
         /**
+         * Returns a number greater than or equal to 0
+         * representing how similar this key is to the other.
+         * <br>
+         *
+         * @param {ResourceKey|string} pOther
+         *
+         * @param {boolean} [pCaseSensitive=true]
+         */
+        distance( pOther, pCaseSensitive = true )
+        {
+            if ( pOther === this )
+            {
+                return 0;
+            }
+
+            let other = (pOther instanceof this.constructor ? pOther.toString() : asString( pOther, true )).trim();
+            let me = (this.toString()).trim();
+
+            if ( !pCaseSensitive )
+            {
+                other = other.toLowerCase();
+                me = me.toLowerCase();
+            }
+
+            if ( me === other )
+            {
+                return 0;
+            }
+
+            let arrOther = other.split( _dot );
+            let arrMe = me.split( _dot );
+
+            let d = 1;
+
+            for( let i = 0, n = Math.min( arrOther.length, arrMe.length ); i < n; i++ )
+            {
+                const s = arrOther[i];
+
+                if ( s !== arrMe[i] )
+                {
+                    d++;
+
+                    for( let j = 0; j < n; j++ )
+                    {
+                        if ( (arrMe[j] === s) )
+                        {
+                            break;
+                        }
+                        else
+                        {
+                            d += Math.abs( j - i );
+                        }
+                    }
+                }
+            }
+
+            return d;
+        }
+
+        /**
          * Returns a copy of this instance as a new object.
          *
          * @returns {ResourceKey} A copy of this instance as a new object.
          */
         clone()
         {
-            return new (this.constructor[Symbol.species] || this.constructor)( ...this.components );
+            const copy = new (this.constructor[Symbol.species] || this.constructor)( ...this.components );
+            copy.defaultValue = this.defaultValue;
+            return copy;
         }
     }
 
@@ -1369,7 +1441,7 @@ const { _ud = "undefined", $scope } = constants;
          * If the value is not valid, returns the value of the backing instance.<br>
          * <br>
          *
-         * @return {*} A copy of the value of this represented by this instance
+         * @return {*} A copy of the value represented by this instance
          */
         get value()
         {
@@ -1411,6 +1483,26 @@ const { _ud = "undefined", $scope } = constants;
         {
             return asString( this.value );
         }
+
+        equals( pOther )
+        {
+            if ( this === pOther )
+            {
+                return true;
+            }
+
+            if ( isNull( pOther ) )
+            {
+                return false;
+            }
+
+            if ( this.isAssignableTo( pOther, this.constructor ) )
+            {
+                return this.toString() === pOther.toString();
+            }
+
+            return false;
+        }
     }
 
     /**
@@ -1451,7 +1543,7 @@ const { _ud = "undefined", $scope } = constants;
         }
         else if ( isString( elem ) )
         {
-            return Resource.from( elem.split( "=" ) );
+            return new Resource( ...(elem.split( "=" ) || []) );
         }
         else if ( isObject( elem ) && !isNull( elem ) )
         {
@@ -1469,41 +1561,192 @@ const { _ud = "undefined", $scope } = constants;
             }
             else
             {
-                const entries = asArray( Object.entries( elem ) ).filter( e => e.length >= 2 );
+                const entries = asArray( objectEntries( elem ) ).filter( e => e.isValid() );
                 if ( !isNull( entries ) && entries.length > 0 )
                 {
-                    return Resource.from( entries[0] );
+                    return Resource.from( entries[0].toArray() );
                 }
             }
         }
         return null;
     };
 
+    /**
+     * @typedef {object} ResourceLoaderOptions An object the defines how to generate paths to properties files or URLs
+     *
+     * @property {boolean} [includeLocaleRegions=true] When true, try to load from files including a region component in its filename
+     *
+     * @property {boolean} [includeLocaleScript=false] When true, try to load from files including a script component in its filename
+     *
+     * @property {boolean} [includeLocaleVariants=false] When true, try to load from files including a variant component in its filename
+     *
+     * @property {string} [extension=".properties"] The extension expected for files defining resources.
+     *
+     * @property {string} [separator=-] The character between locale parts in a properties filepath
+     */
+
+    /**
+     * These are the default options for the construction of a ResourceLoader
+     * @type {ResourceLoaderOptions}
+     */
+    const DEFAULT_LOADER_OPTIONS =
+        {
+            includeLocaleRegions: true,
+            includeLocaleScript: false,
+            includeLocaleVariants: false,
+            extension: ".properties",
+            separator: _hyphen,
+        };
 
     /**
      * A utility class for loading resources such as text files, JSON, or properties files.<br>
      * Works in diverse runtime environments like Node.js, Deno, and browsers.<br>
      * @class
      */
-    class ResourceLoader
+    class ResourceLoader extends LocaleResourcesBase
     {
         #paths;
         #locales;
         #options;
 
+        #includeLocaleRegions = true;
+        #includeLocaleScript = false;
+        #includeLocaleVariants = false;
+
+        #extension = ".properties";
+
+        #separator = _hyphen;
+
         /**
          * Constructs an instance of the ResourceLoader class
          *
-         * @param {Array|string} pPaths - The paths to be processed. Can be a single string or an array of strings. Defaults to [defaultPath] if not provided.
+         * @param {Array|string} pPaths - The paths to be processed.
+         * Can be a single string or an array of strings.
+         * Defaults to [defaultPath] if not provided.
+         * If a path ends with a path separator, it is assumed to be a directory, and all the properties file in the directory will be 'fetched;
+         * Directory paths are compatible only when running in a server environment.
          * @param {Array<string|Intl.Locale>|string|Intl.Locale} pLocales - The locales to be used. Can be a single string or an array of strings. Defaults to [MESSAGES_LOCALE] if not provided.
-         * @param {Object} pOptions - Optional configuration options. Defaults to an empty object if not provided.
+         * @param {ResourceLoaderOptions} pOptions - Optional configuration options. Defaults to an empty object if not provided.
          * @return {ResourceLoader} An instance of this class.
          */
-        constructor( pPaths, pLocales, pOptions )
+        constructor( pPaths, pLocales, pOptions = DEFAULT_LOADER_OPTIONS )
         {
+            super();
+
             this.#paths = asArray( pPaths || [defaultPath] ).flat();
             this.#locales = asArray( pLocales || [MESSAGES_LOCALE] ).flat();
-            this.#options = populateOptions( pOptions, {} );
+            this.#options = populateOptions( pOptions, DEFAULT_LOADER_OPTIONS );
+
+            this.#includeLocaleRegions = this.#options.includeLocaleRegions;
+            this.#includeLocaleScript = this.#options.includeLocaleScript;
+            this.#includeLocaleVariants = this.#options.includeLocaleVariants;
+            this.#extension = this.#options.extension;
+            this.#separator = this.#options.separator || _hyphen;
+        }
+
+        static isDirectoryPath( pPath )
+        {
+            return isString( pPath ) && endsWithAny( asString( pPath, true ), "/", "\\" );
+        }
+
+        get paths()
+        {
+            return unique( [...(this.#paths || [])].filter( p => !isBlank( p ) && ( !isBrowser() || !ResourceLoader.isDirectoryPath( p )) ) );
+        }
+
+        get locales()
+        {
+            return unique( [...(this.#locales || [DEFAULT_LOCALE])].map( e => resolveLocale( e ) ).filter( e => isLocale( e ) ) );
+        }
+
+        get includeLocaleRegions()
+        {
+            return this.#includeLocaleRegions;
+        }
+
+        get includeLocaleScript()
+        {
+            return this.#includeLocaleScript;
+        }
+
+        get includeLocaleVariants()
+        {
+            return this.#includeLocaleVariants;
+        }
+
+        get extension()
+        {
+            return this.#extension;
+        }
+
+        calculateFetchPaths()
+        {
+            let fetchPaths = [];
+
+            let paths = this.paths;
+
+            let locales = this.locales;
+
+            for( const p of paths )
+            {
+                if ( ResourceLoader.isDirectoryPath( p ) )
+                {
+                    fetchPaths.push( p );
+                }
+                else
+                {
+                    let path = asString( p, true );
+
+                    let extension = getFileExtension( path ) || this.extension;
+
+                    let root = path.replace( new RegExp( extension + "$" ), _mt_str );
+
+                    for( const l of locales )
+                    {
+                        const { localeCode, language, script, region, variant } = parseLocale( l );
+
+                        fetchPaths.push( root + extension );
+
+                        fetchPaths.push( root + this.#separator + language + extension );
+
+                        if ( this.includeLocaleScript )
+                        {
+                            fetchPaths.push( root + this.#separator + language + this.#separator + script + extension );
+                            if ( this.includeLocaleRegions )
+                            {
+                                fetchPaths.push( root + this.#separator + language + this.#separator + script + this.#separator + region + extension );
+                                if ( this.includeLocaleVariants )
+                                {
+                                    fetchPaths.push( root + this.#separator + language + this.#separator + script + this.#separator + region + this.#separator + variant + extension );
+                                }
+                            }
+                        }
+
+                        if ( this.includeLocaleRegions )
+                        {
+                            fetchPaths.push( root + this.#separator + language + this.#separator + region + extension );
+                            if ( this.includeLocaleVariants )
+                            {
+                                fetchPaths.push( root + this.#separator + language + this.#separator + region + this.#separator + variant + extension );
+                            }
+                        }
+
+                        if ( this.includeLocaleVariants )
+                        {
+                            fetchPaths.push( root + this.#separator + language + this.#separator + variant + extension );
+                        }
+
+                        fetchPaths.push( root + localeCode + extension );
+                    }
+                }
+            }
+
+            return unique( fetchPaths );
+        }
+
+        get options()
+        {
+            return populateOptions( this.#options, {} );
         }
 
         static get [Symbol.species]()
@@ -1519,29 +1762,61 @@ const { _ud = "undefined", $scope } = constants;
          * <br>
          * Works in Node.js, Deno, or a Browser.<br>
          * <br>
-         * @param {...string} pPaths - One or more paths to the files or resources to be fetched and read.
+
          * @return {Promise<Array<string>>} A promise that resolves to an array of strings
          *                                  containing the contents of the specified files or resources.
          */
         async fetch( ...pPaths )
         {
-            const paths = flatArgs( ...pPaths );
+            const paths = unique( flatArgs( ...(pPaths || this.calculateFetchPaths()) ) );
 
             const promises = [];
 
             for( let p of paths )
             {
+                const path = asString( p, true );
+
+                const prefix = "[" + path + "]\n";
+
                 if ( isBrowser )
                 {
-                    promises.push( fetch( p ).then( response => response.text() ) );
+                    if ( !ResourceLoader.isDirectoryPath( path ) )
+                    {
+                        promises.push( async() =>
+                                       {
+                                           const response = await fetch( p );
+                                           if ( response?.ok )
+                                           {
+                                               return (prefix + await (response.text()));
+                                           }
+                                           return _mt_str;
+                                       } );
+                    }
+                }
+                else if ( ResourceLoader.isDirectoryPath( path ) )
+                {
+                    //TODO
                 }
                 else
                 {
-                    promises.push( readTextFile( resolvePath( p ) ) );
+                    promises.push( async() =>
+                                   {
+                                       const contents = await asyncAttempt( () => readTextFile( resolvePath( p ) ) );
+                                       if ( !isBlank( contents ) )
+                                       {
+                                           return (prefix + contents);
+                                       }
+                                       return _mt_str;
+                                   } );
                 }
             }
 
             return promises;
+        }
+
+        processContents( pContents )
+        {
+
         }
 
         load( pTarget )
@@ -1550,22 +1825,21 @@ const { _ud = "undefined", $scope } = constants;
 
             const strings = [];
 
-            this.fetch( ...this.#paths ).then( async( promises ) =>
-                                               {
-                                                   const results = await Promise.allSettled( promises );
+            this.fetch( ...this.calculateFetchPaths() ).then( async( promises ) =>
+                                                              {
+                                                                  const results = await Promise.allSettled( promises );
 
-                                                   for( const result of results )
-                                                   {
-                                                       if ( isFulfilled( result ) )
-                                                       {
-                                                           strings.push( result.value );
+                                                                  for( const result of results )
+                                                                  {
+                                                                      if ( isFulfilled( result ) )
+                                                                      {
+                                                                          strings.push( result.value );
 
-                                                           const props = Properties.from( result.value );
-                                                           const properties = new ResourceFamily( props?.name, props );
-                                                           target.addResourceFamily( properties );
-                                                       }
-                                                   }
-                                               } );
+
+
+                                                                      }
+                                                                  }
+                                                              } );
 
 
             return strings;

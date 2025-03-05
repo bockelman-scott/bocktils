@@ -36,7 +36,10 @@ const {
     const {
         ToolBocksModule,
         lock,
-        objectValues
+        objectValues,
+        runtimeLocaleString,
+        getRuntimeLocale,
+        getMessagesLocale
     } = moduleUtils;
 
     // Create local aliases for values imported from other modules
@@ -79,8 +82,6 @@ const {
 
     const { asArray, flatArgs, unique, Filters } = arrayUtils;
 
-    const modName = "LocaleUtils";
-
     // Capture the dependencies for re-export with this module
     const dependencies =
         {
@@ -90,6 +91,8 @@ const {
             stringUtils,
             arrayUtils
         };
+
+    const modName = "LocaleUtils";
 
     const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
@@ -125,6 +128,7 @@ const {
     const DEFAULTS = lock(
         {
             LOCALE_STRING: DEFAULT_LOCALE_STRING,
+            LANGUAGE: "en",
             MONTH_NAMES: lock( ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"] ),
             MONTH_NAMES_SHORT: lock( ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] ),
             MONTH_LETTERS: lock( ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"] ),
@@ -172,20 +176,27 @@ const {
     const isLocale = ( pValue ) => (pValue instanceof Intl.Locale) || (isString( pValue ) && !isBlank( pValue ) && (/^[A-Z]{2}$|^[A-Z]{2}(-[^\d\\\/ \s]+)+$/i).test( pValue ));
 
     /**
-     * Returns an Intl.Locale object corresponding to the specified locale string or Intl.Locale
+     * Returns an Intl.Locale object corresponding to the first valid locale string or Intl.Locale specified
+     * or the runtime locale if no valid arguments are provided
+     *
      * @param {...(string|Intl.Locale|{locale:(string|Intl.Locale)})} pLocales one or more strings representing a Locale
      * or instances of Intl.Locale
      * or an object with a locale property
      * that is either a string representing a Locale
      * or an Intl.Locale
      *
-     * @returns {Readonly<Intl.Locale>} An Intl.Locale object corresponding to the first valid locale string or Intl.Locale specified
+     * @returns {Readonly<Intl.Locale>} An Intl.Locale object
+     *                                  corresponding to the first valid
+     *                                  locale string or Intl.Locale specified
+     *                                  or the runtime locale if no valid arguments are provided
      */
     const resolveLocale = function( ...pLocales )
     {
         let locale = null;
 
-        let locales = flatArgs( pLocales ).filter( e => !isNull( e ) && isLocale( e ) );
+        let locales = flatArgs( pLocales ).filter( e => !isNull( e ) );
+
+        locales = locales.map( e => isString( e ) ? e.replaceAll(/_/g, _hyphen) : e ).filter(isLocale);
 
         for( let elem of locales )
         {
@@ -204,7 +215,7 @@ const {
             }
         }
 
-        return lock( locale || DEFAULT_LOCALE );
+        return lock( locale || getRuntimeLocale() );
     };
 
     /**
@@ -222,6 +233,23 @@ const {
         let locale = resolveLocale( pLocale );
 
         return locale === DEFAULT_LOCALE || asString( locale?.baseName ).startsWith( DEFAULT_LOCALE_STRING );
+    }
+
+    /**
+     * Returns true if the specified locale is the runtime locale
+     * @param pLocale {string|Intl.Locale} the locale to test
+     * @returns {boolean} true if the specified locale is the runtime locale
+     */
+    function isRuntimeLocale( pLocale )
+    {
+        if ( isString( pLocale ) )
+        {
+            return lcase( runtimeLocaleString() ) === lcase( pLocale );
+        }
+
+        let locale = resolveLocale( pLocale );
+
+        return locale === getRuntimeLocale() || asString( locale?.baseName ).startsWith( runtimeLocaleString() );
     }
 
     /**
@@ -246,6 +274,18 @@ const {
         return localeA === localeB || localeA?.baseName === localeB?.baseName;
     }
 
+    /**
+     * Returns true if the specified locales (or locale strings) represent the same <i>language</i>.
+     * <br>
+     * <br>
+     * Compares the base language of the provided locales.
+     * <br>
+     *
+     * @param {string|Intl.Locale} pLocaleA - The first locale to compare.
+     * @param {string|Intl.Locale} pLocaleB - The second locale to compare.
+     *
+     * @return {boolean} Returns true if the base language of both locales is the same, otherwise false.
+     */
     function isSameLanguage( pLocaleA, pLocaleB )
     {
         let localeA = resolveLocale( pLocaleA );
@@ -259,8 +299,48 @@ const {
         return asString( asString( localeA?.baseName ).split( _hyphen )[0] ) === asString( asString( localeB?.baseName ).split( _hyphen )[0] );
     }
 
+    /**
+     * Returns true if the specified locale uses the default language.
+     * <br>
+     * <br>
+     *
+     * @function
+     * @param {string|Intl.Locale} pLocale - The locale to be evaluated
+     *
+     * @returns {boolean} - Returns true if the specified locale uses the default language
+     *
+     */
     const isDefaultLanguage = ( pLocale ) => isDefaultLocale( pLocale ) || isSameLanguage( DEFAULT_LOCALE, pLocale );
 
+
+    /**
+     * Returns true if the specified locale uses the same language as the runtime locale.
+     * <br>
+     * <br>
+     *
+     * @function
+     * @param {string|Intl.Locale} pLocale - The locale to be evaluated
+     *
+     * @returns {boolean} - Returns true if the specified locale uses the same language as the runtime
+     *
+     */
+    const isRuntimeLanguage = ( pLocale ) => isRuntimeLocale( pLocale ) || isSameLanguage( getRuntimeLocale(), pLocale );
+
+    /**
+     * Returns an array of month names or abbreviations,
+     * formatted according to the specified locale and format.
+     *
+     * @function getMonthDisplayValues
+     *
+     * @param {string|Intl.Locale} pLocale - The Intl.Locale or locale identifier (e.g., "en-US")
+     *                                       to be used for formatting month names.
+     *
+     * @param {string} pFormat - The desired format for the month names.
+     *                           Possible values include "long", "short", or "narrow".
+     *
+     * @returns {string[]} An array containing month names or abbreviations
+     *                     formatted according to the specified locale and format.
+     */
     const getMonthDisplayValues = function( pLocale, pFormat )
     {
         const locale = resolveLocale( pLocale ) || DEFAULT_LOCALE;
@@ -277,16 +357,93 @@ const {
         return SAMPLE_MONTH_DATES.map( date => asString( dateTimeFormat.format( date ).replace( /\d+/g, _mt_str ), true ) );
     };
 
+    /**
+     * Returns an array of the full names of the months for a given locale.
+     * <br>
+     * <br>
+     * The elements of the array are in chronological order and indexed according to the value return by Date.getMonth
+     *
+     *
+     * @function
+     *
+     * @param {string|Intl.Locale} pLocale - An instance of Intl.Locale or a locale string
+     *                                       with a BCP 47 language tag representing the locale.
+     *
+     * @returns {Array<string>} An array containing the full names of the months for the specified locale.
+     */
     const getMonthNames = ( pLocale ) => getMonthDisplayValues( pLocale, FORMAT_LONG );
 
+    /**
+     * Returns the full name of the month represented by the specified date for the specified locale.
+     * <br>
+     * <br>
+     *
+     * @function
+     *
+     * @param {Date} pDate - The date from which to extract the month
+     *
+     * @param {string|Intl.Locale} pLocale - An instance of Intl.Locale or a locale string
+     *                                       with a BCP 47 language tag representing the locale.
+     *
+     * @returns {Array<string>} The full name of the month of the date for the specified locale.
+     */
     const getMonthName = ( pDate, pLocale ) => isDate( pDate ) ? asArray( getMonthNames( resolveLocale( pLocale ) ) )[pDate.getMonth()] : isLocale( pDate ) ? getMonthNames( pDate, pLocale ) : _mt_str;
 
+    /**
+     * Returns an array of abbreviated month names for a given locale.
+     * <br>
+     * Also known as the "short" names of the months.
+     * <br>
+     *
+     * @param {string|Intl.Locale} pLocale - The locale or locale identifier (e.g., "en-US") to determine the month abbreviations.
+     *
+     * @returns {string[]} An array of abbreviated month names, formatted according to the specified locale.
+     */
     const getMonthAbbreviations = ( pLocale ) => getMonthDisplayValues( pLocale, FORMAT_SHORT );
 
+    /**
+     * Returns the short name of the month represented by the specified date for the specified locale.
+     * <br>
+     * <br>
+     *
+     * @function
+     *
+     * @param {Date} pDate - The date from which to extract the month
+     *
+     * @param {string|Intl.Locale} pLocale - An instance of Intl.Locale or a locale string
+     *                                       with a BCP 47 language tag representing the locale.
+     *
+     * @returns {Array<string>} The short name of the month of the date for the specified locale.
+     */
     const getMonthAbbr = ( pDate, pLocale ) => isDate( pDate ) ? asArray( getMonthAbbreviations( resolveLocale( pLocale ) ) )[pDate.getMonth()] : isLocale( pDate ) ? getMonthAbbreviations( pDate, pLocale ) : _mt_str;
 
+    /**
+     * Returns an array of 1 or 2 character month signifiers for a given locale.
+     * <br>
+     * Also known as the "narrow" names of the months.
+     * <br>
+     *
+     * @param {string|Intl.Locale} pLocale - The locale or locale identifier (e.g., "en-US") to determine the month signifiers.
+     *
+     * @returns {string[]} An array of one or two character month signifiers, formatted according to the specified locale.
+     */
     const getMonthLetters = ( pLocale ) => getMonthDisplayValues( pLocale, FORMAT_NARROW );
 
+    /**
+     * Returns the "narrow" name of the month represented by the specified date for the specified locale.
+     * <br>
+     * <br>
+     * This is typically a 1 or 2 character string
+     *
+     * @function
+     *
+     * @param {Date} pDate - The date from which to extract the month
+     *
+     * @param {string|Intl.Locale} pLocale - An instance of Intl.Locale or a locale string
+     *                                       with a BCP 47 language tag representing the locale.
+     *
+     * @returns {Array<string>} The narrow name of the month of the date for the specified locale.
+     */
     const getMonthLtr = ( pDate, pLocale ) => isDate( pDate ) ? asArray( getMonthLetters( resolveLocale( pLocale ) ) )[pDate.getMonth()] : isLocale( pDate ) ? getMonthLetters( pDate, pLocale ) : _mt_str;
 
     const getDayDisplayValues = function( pLocale, pFormat )
@@ -458,6 +615,59 @@ const {
         return lock( arr );
     };
 
+    function parseLocale( pLocale )
+    {
+        const locale = resolveLocale( pLocale );
+        const localeCode = locale?.baseName || DEFAULT_LOCALE_STRING;
+
+        // language ["-" script] ["-" region] *("-" variant)
+        const localeParts = localeCode.split( _hyphen );
+
+        const language = locale?.language || (localeParts.length > 0 ? localeParts[0] : DEFAULTS.LANGUAGE);
+        const script = locale?.script || (localeParts.length > 1 ? localeParts[1] : _mt_str);
+        const region = locale?.region || (localeParts.length > 2 ? localeParts[2] : _mt_str);
+
+        const variant = localeParts.length > 3 ? localeParts[3] : _mt_str;
+
+        return { locale, localeCode, language, script, region, variant };
+    }
+
+
+    function buildLocaleKeyPermutations( pLocale )
+    {
+        const { localeCode, language, script, region, variant } = parseLocale( pLocale );
+
+        let keys = [localeCode];
+
+        if ( !isNull( language ) )
+        {
+            const langScriptKey = !isBlank( script ) ? language + _hyphen + script : _mt_str;
+            const langRegionKey = !isBlank( region ) ? language + _hyphen + region : _mt_str;
+            const langVariantKey = !isBlank( variant ) ? language + _hyphen + variant : _mt_str;
+
+            const langRegionVariantKey = !(isBlank( region ) || isBlank( variant )) ? language + _hyphen + region + _hyphen + variant : _mt_str;
+            const langScriptVariantKey = !(isBlank( script ) || isBlank( variant )) ? language + _hyphen + script + _hyphen + variant : _mt_str;
+            const langScriptRegionKey = !(isBlank( script ) || isBlank( region )) ? language + _hyphen + script + _hyphen + region : _mt_str;
+            const langScriptRegionVariantKey = !(isBlank( script ) || isBlank( region ) || isBlank( variant )) ? language + _hyphen + script + _hyphen + region + _hyphen + variant : _mt_str;
+
+            keys =
+                [
+                    localeCode,
+                    language,
+                    region,
+                    langRegionKey,
+                    langVariantKey,
+                    langRegionVariantKey,
+                    langScriptKey,
+                    langScriptRegionKey,
+                    langScriptVariantKey,
+                    langScriptRegionVariantKey
+                ];
+        }
+
+        return unique( keys.filter( e => isString( e ) && !isBlank( e ) ) );
+    }
+
     class LocaleResourcesBase
     {
         constructor()
@@ -478,53 +688,12 @@ const {
 
         parseLocale( pLocale )
         {
-            const locale = resolveLocale( pLocale );
-            const localeCode = locale?.baseName || DEFAULT_LOCALE_STRING;
-
-            // language ["-" script] ["-" region] *("-" variant)
-            const localeParts = localeCode.split( _hyphen );
-
-            const language = localeParts.length > 0 ? localeParts[0] : null;
-            const script = localeParts.length > 1 ? localeParts[1] : _mt_str;
-            const region = localeParts.length > 2 ? localeParts[2] : _mt_str;
-            const variant = localeParts.length > 3 ? localeParts[3] : _mt_str;
-
-            return { locale, localeCode, language, script, region, variant };
+            return parseLocale( pLocale );
         }
 
         buildLocaleKeyPermutations( pLocale )
         {
-            const { localeCode, language, script, region, variant } = this.parseLocale( pLocale );
-
-            let keys = [localeCode];
-
-            if ( !isNull( language ) )
-            {
-                const langScriptKey = !isBlank( script ) ? language + _hyphen + script : _mt_str;
-                const langRegionKey = !isBlank( region ) ? language + _hyphen + region : _mt_str;
-                const langVariantKey = !isBlank( variant ) ? language + _hyphen + variant : _mt_str;
-
-                const langRegionVariantKey = !(isBlank( region ) || isBlank( variant )) ? language + _hyphen + region + _hyphen + variant : _mt_str;
-                const langScriptVariantKey = !(isBlank( script ) || isBlank( variant )) ? language + _hyphen + script + _hyphen + variant : _mt_str;
-                const langScriptRegionKey = !(isBlank( script ) || isBlank( region )) ? language + _hyphen + script + _hyphen + region : _mt_str;
-                const langScriptRegionVariantKey = !(isBlank( script ) || isBlank( region ) || isBlank( variant )) ? language + _hyphen + script + _hyphen + region + _hyphen + variant : _mt_str;
-
-                keys =
-                    [
-                        localeCode,
-                        langScriptRegionVariantKey,
-                        langRegionVariantKey,
-                        langRegionKey,
-                        langScriptRegionKey,
-                        langScriptVariantKey,
-                        langVariantKey,
-                        langScriptKey,
-                        language,
-                        region
-                    ];
-            }
-
-            return unique( keys.filter( e => isString( e ) && !isBlank( e ) ) );
+            return buildLocaleKeyPermutations( pLocale );
         }
 
         initializeMap( pMap )
@@ -653,7 +822,9 @@ const {
             deriveDecimalSymbols,
             calculateDecimalSymbols,
             toCanonicalNumericFormat,
-            LocaleResourcesBase
+            LocaleResourcesBase,
+            parseLocale,
+            buildLocaleKeyPermutations
         };
 
     mod = toolBocksModule.extend( mod );

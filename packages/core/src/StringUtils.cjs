@@ -1,3 +1,5 @@
+// noinspection AssignmentToForLoopParameterJS
+
 /**
  * @fileOverview
  * This module defines a number of useful functions for working with strings.
@@ -85,6 +87,7 @@ const { _ud = "undefined", $scope } = constants;
         populateOptions,
         attempt,
         lock,
+        runtimeLocaleString
     } = moduleUtils;
 
     const
@@ -150,10 +153,6 @@ const { _ud = "undefined", $scope } = constants;
             typeUtils
         };
 
-    const modName = "StringUtils";
-
-    let toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
-
     const
         {
             isUndefined,
@@ -185,6 +184,10 @@ const { _ud = "undefined", $scope } = constants;
             NVL,
             toTypedArray,
         } = typeUtils;
+
+    const modName = "StringUtils";
+
+    let toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
     /**
      * These are the default values assumed for number formatting,
@@ -860,7 +863,7 @@ const { _ud = "undefined", $scope } = constants;
                 // we want to use the asJson function, which can handle circular references
                 let stringify = firstMatchingType( _fun, me.asJson, me.stringify, ($scope()["__BOCK_JSON_UTILS__"] || $scope()["__BOCK_JSON_INTERPOLATION__"])?.asJson, $scope().asJson, JSON.stringify );
 
-                s = isFunction( input.toJson ) ? input.toJson() : attempt( () => stringify.call( me, input, options ), input, options ) || input?.name || input?.constructor?.name || input?.prototype?.name || _mt_str;
+                s = isFunction( input?.toJson ) ? input.toJson() : attempt( () => stringify.call( me, input, options ), input, options ) || input?.name || input?.constructor?.name || input?.prototype?.name || _mt_str;
             }
         }
 
@@ -880,7 +883,7 @@ const { _ud = "undefined", $scope } = constants;
 
         const trim = pTrim || options.trim;
 
-        let input = _resolveInput.call( pValue, pValue ) || pValue;
+        const input = pValue;
 
         let s = _mt_str;
 
@@ -1554,7 +1557,7 @@ const { _ud = "undefined", $scope } = constants;
     {
         let locale = NVL( pLocale, _defaultLocale );
 
-        locale = (locale instanceof Intl.Locale) ? (locale?.baseName || _defaultLocaleString) : isNull( locale ) || isBlank( locale ) ? asString( (((new Intl.NumberFormat()).resolvedOptions())?.locale)?.baseName ) || _defaultLocaleString : asString( locale );
+        locale = (locale instanceof Intl.Locale) ? (locale?.baseName || _defaultLocaleString) : isNull( locale ) || isBlank( locale ) ? asString( runtimeLocaleString() ) || _defaultLocaleString : asString( locale );
 
         let currency = isNull( pCurrency ) || isBlank( pCurrency ) ? _defaultCurrency : asString( pCurrency || _defaultCurrency );
 
@@ -3219,9 +3222,10 @@ const { _ud = "undefined", $scope } = constants;
             formatMessage,
             interpolate,
             getFunctionSource,
+            toByteArray,
             asUtf8ByteArray,
             fromUtf8ByteArray,
-            classes: { ModuleEvent, ToolBocksModule, CustomEvent },
+            classes: { ModuleEvent, ToolBocksModule },
         };
 
     mod = toolBocksModule.extend( mod );

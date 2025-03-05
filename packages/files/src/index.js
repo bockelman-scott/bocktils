@@ -932,8 +932,8 @@ const $scope = constants?.$scope || function()
      */
     function getFileExtension( pFilePath )
     {
-        const { fileName, extension } = getFilePathData( pFilePath );
-        return asString( extension, true ) || asString( _dot + rightOfLast( fileName, _dot ), true );
+        const { fileName, extension } = attempt( () => getFilePathData( pFilePath ) );
+        return asString( extension, true ) || asString( _dot + rightOfLast( (fileName || pFilePath), _dot ), true );
     }
 
     /**
@@ -945,8 +945,8 @@ const $scope = constants?.$scope || function()
      */
     function getFileName( pFilePath )
     {
-        const { filePath, fileName } = getFilePathData( pFilePath );
-        return asString( (fileName || rightOfLast( filePath, _slash )), true );
+        const { filePath, fileName } = attempt( () => getFilePathData( pFilePath ) );
+        return asString( (fileName || rightOfLast( (filePath || pFilePath), _slash )), true );
     }
 
     /**
@@ -957,8 +957,8 @@ const $scope = constants?.$scope || function()
      */
     function getDirectoryName( pFilePath )
     {
-        const { filePath, dirName } = getFilePathData( pFilePath );
-        return asString( dirName, true ) || asString( leftOfLast( filePath, _slash ), true );
+        const { filePath, dirName } = attempt( () => getFilePathData( pFilePath ) );
+        return asString( dirName, true ) || asString( leftOfLast( (filePath || pFilePath), _slash ), true );
     }
 
     /**
