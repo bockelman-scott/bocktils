@@ -196,7 +196,7 @@ const {
 
         let locales = flatArgs( pLocales ).filter( e => !isNull( e ) );
 
-        locales = locales.map( e => isString( e ) ? e.replaceAll(/_/g, _hyphen) : e ).filter(isLocale);
+        locales = locales.map( e => isString( e ) ? e.replaceAll( /_/g, _hyphen ) : e ).filter( isLocale );
 
         for( let elem of locales )
         {
@@ -296,7 +296,38 @@ const {
             return true;
         }
 
-        return asString( asString( localeA?.baseName ).split( _hyphen )[0] ) === asString( asString( localeB?.baseName ).split( _hyphen )[0] );
+        const languageA = lcase( asString( localeA?.language, true ) || asString( asString( localeA?.baseName ).split( _hyphen )[0] ) );
+        const languageB = lcase( asString( localeB?.language, true ) || asString( asString( localeB?.baseName ).split( _hyphen )[0] ) );
+
+        return languageA === languageB;
+    }
+
+    /**
+     * Returns true if the specified locales (or locale strings) represent the same <i>region</i>.
+     * <br>
+     * <br>
+     * Compares the region, if specified of the provided locales.
+     * <br>
+     *
+     * @param {string|Intl.Locale} pLocaleA - The first locale to compare.
+     * @param {string|Intl.Locale} pLocaleB - The second locale to compare.
+     *
+     * @return {boolean} Returns true if the region of both locales is the same, otherwise false.
+     */
+    function isSameRegion( pLocaleA, pLocaleB )
+    {
+        let localeA = resolveLocale( pLocaleA );
+        let localeB = resolveLocale( pLocaleB );
+
+        if ( isSameLocale( localeA, localeB ) )
+        {
+            return true;
+        }
+
+        const regionA = lcase( asString( localeA?.region, true ) || asString( asString( localeA?.baseName ).split( _hyphen )[1] ) );
+        const regionB = lcase( asString( localeB?.region, true ) || asString( asString( localeB?.baseName ).split( _hyphen )[1] ) );
+
+        return regionA === regionB;
     }
 
     /**
@@ -787,8 +818,11 @@ const {
             resolveLocale,
             isDefaultLocale,
             isDefaultLanguage,
+            isRuntimeLocale,
+            isRuntimeLanguage,
             isSameLocale,
             isSameLanguage,
+            isSameRegion,
             getMonthNames,
             getNameOfMonth: getMonthName,
             getMonthAbbreviations,
