@@ -25,3 +25,7 @@ staging
 dist
 ctrf
 
+
+test_data/large_test_decoded.mp4
+
+test_data/test_decoded.png
