@@ -164,7 +164,6 @@ const { _ud = "undefined", $scope } = constants;
      * @type {string}
      */
     let currentDirectory = getDirectoryName( __filename );
-    ;
 
     /**
      * Represents the root directory of the project.
@@ -797,8 +796,8 @@ const { _ud = "undefined", $scope } = constants;
         {
             assignment: _equals,
             trim: true,
-            name: _mt_str,
-            locale: DEFAULT_LOCALE
+            name: null,
+            locale: null
         };
 
 
@@ -1004,25 +1003,15 @@ const { _ud = "undefined", $scope } = constants;
 
             if ( isPropertyFileHeader( pString ) )
             {
-                const {
-                    filePath,
-                    dirName,
-                    fileName,
-                    extension,
-                    family,
-                    name,
-                    localeString
-                } = Properties.nameFromPrefix( pString );
+                const { family, name, localeString } = Properties.nameFromPrefix( pString );
 
                 options.family = family || options.family;
-
-                nm = asString( name, true );
-                options.name = nm || options.name;
 
                 loc = resolveLocale( localeString );
                 options.locale = loc || options.locale;
 
-
+                nm = asString( name, true ) || options.name;
+                options.name = nm || options.name;
             }
 
             let arr = asString( pString, true ).replace( /^\[[^]]+]\s+/, _mt_str ).split( /\r?\n/ );
@@ -1164,7 +1153,7 @@ const { _ud = "undefined", $scope } = constants;
         const options = populateOptions( pOptions, DEFAULT_PROPERTIES_OPTIONS );
 
         let name = options.name;
-        let locale = resolveLocale( options.locale );
+        let locale = options.locale;
 
         options.name = name || options.name;
         options.locale = locale || options.locale;
@@ -2197,14 +2186,41 @@ const { _ud = "undefined", $scope } = constants;
             return promises;
         }
 
-        processContents( pContents )
-        {
-
-        }
-
         load( pTarget )
         {
             const target = pTarget || new ResourceCache( this );
+
+            const processContents = function( pContents, pResourceCache )
+            {
+                const resourceCache = pResourceCache || target;
+                const contents = pContents || _mt_str;
+
+                const opts = {};
+                let resourceFamily;
+
+                const lines = contents.split( "\n" );
+                if ( isPropertyFileHeader( lines[0] ) )
+                {
+                    const { family, name, localeString } = Properties.nameFromPrefix( lines[0] );
+                    opts.family = family;
+                    opts.name = name;
+                    opts.locale = resolveLocale( localeString );
+
+                    resourceFamily = resourceCache.getResourceFamily( family );
+                }
+
+                const properties = Properties.from( contents, opts );
+
+                resourceFamily = resourceFamily || new ResourceFamily( opts.family, properties );
+
+                resourceFamily.addProperties( properties );
+                if ( isLocale( opts.locale ) )
+                {
+                    resourceFamily.addLocaleProperties( opts.locale, properties );
+                }
+
+                resourceCache.addResourceFamily( resourceFamily );
+            };
 
             const strings = [];
 
@@ -2216,14 +2232,12 @@ const { _ud = "undefined", $scope } = constants;
                                                                   {
                                                                       if ( isFulfilled( result ) )
                                                                       {
-                                                                          strings.push( result.value );
-
-
+                                                                          const contents = result.value;
+                                                                          strings.push( contents );
+                                                                          processContents( contents, target );
                                                                       }
                                                                   }
                                                               } );
-
-
             return strings;
         }
     }
@@ -2282,6 +2296,20 @@ const { _ud = "undefined", $scope } = constants;
         get baseName()
         {
             return this.#baseName || this.#properties?.name || _mt_str;
+        }
+
+        addProperties( ...pProperties )
+        {
+            this.#properties = this.processProperties( ...([this.#properties, ...(pProperties || [])]) );
+        }
+
+        addLocaleProperties( pLocale, ...pProperties )
+        {
+            const props = this.#propertiesByLocale.get( pLocale );
+
+            const filtered = [...(pProperties || [])].filter( p => isNonNullObject( p ) && p.locale === pLocale );
+
+            //
         }
 
         processProperties( pLocale, ...pProperties )
@@ -2344,7 +2372,10 @@ const { _ud = "undefined", $scope } = constants;
 
         addResourceFamily( pResourceFamily )
         {
-            this.#resourceFamilies.set( pResourceFamily.baseName, pResourceFamily );
+            if( pResourceFamily instanceof ResourceFamily )
+            {
+                this.#resourceFamilies.set( pResourceFamily.baseName, pResourceFamily || this.#resourceFamilies.get( pResourceFamily.baseName ) );
+            }
         }
 
         load( ...pSource )
@@ -2433,7 +2464,6 @@ const { _ud = "undefined", $scope } = constants;
             getMessagesLocale,
 
         };
-
 
     mod = toolBocksModule.extend( mod );
 
