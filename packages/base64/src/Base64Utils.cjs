@@ -361,6 +361,8 @@ const {
 
     const decode = function( pBase64, pSpec = DEFAULT_VARIANT )
     {
+        // const start = Date.now();
+
         if ( isNull( pBase64 ) || !isValidBase64( asString( pBase64, true ) ) )
         {
             return [];
@@ -400,7 +402,18 @@ const {
             {
                 data.push( (block >> ((2 - k) * 8)) & 0xFF );
             }
+
+/*
+            if ( i % 1_000 === 0 )
+            {
+                console.log( "Still working...", i, "Time elapsed:", Date.now() - start, "ms" );
+            }
+*/
         }
+
+        // const end = Date.now();
+
+        // console.log( "Decoded in:", (end - start), "ms" );
 
         return numPaddingChars > 0 ? data.slice( 0, data.length - numPaddingChars ) : data;
     };
