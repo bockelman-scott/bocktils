@@ -105,6 +105,7 @@ const { _ud = "undefined", $scope } = constants;
         isNumeric,
         isInteger,
         isString,
+        isEmptyString,
         isDate,
         isFunction,
         isObject,
@@ -115,12 +116,25 @@ const { _ud = "undefined", $scope } = constants;
         isNonNullObject,
         isNonNullValue,
         isMap,
+        isPromise,
         firstMatchingType,
         instanceOfAny,
         isAssignableTo
     } = typeUtils;
 
-    const { asString, asInt, asFloat, isBlank, isJson, lcase, ucase, toUnixPath, toBool, endsWithAny } = stringUtils;
+    const {
+        asString,
+        asInt,
+        asFloat,
+        isBlank,
+        isJson,
+        lcase,
+        ucase,
+        toUnixPath,
+        toBool,
+        endsWithAny,
+        leftOf
+    } = stringUtils;
 
     const { varargs, flatArgs, asArray, unique, Filters, AsyncBoundedQueue } = arrayUtils;
 
@@ -129,6 +143,8 @@ const { _ud = "undefined", $scope } = constants;
         DEFAULT_LOCALE_STRING,
         isLocale,
         isDefaultLocale,
+        isDefaultLanguage,
+        isDefaultRegion,
         resolveLocale,
         LocaleResourcesBase,
         parseLocale
@@ -239,6 +255,22 @@ const { _ud = "undefined", $scope } = constants;
 
     const isBrowser = executionEnvironment.isBrowser();
 
+    const rxFileHeader = /^\[[^]]+]\s+/;
+
+    const extractFileHeader = function( pString )
+    {
+        if ( isString( pString ) && !isBlank( pString ) )
+        {
+            const s = leftOf( asString( pString, true ), /\r?\n/ );
+
+            const matches = rxFileHeader.exec( s );
+
+            return matches ? matches[0] : _mt_str;
+        }
+
+        return _mt_str;
+    };
+
     /**
      * This class <i>roughly approximates</i> the structure and functionality of the java.utils.Properties class.
      * <br>
@@ -304,9 +336,9 @@ const { _ud = "undefined", $scope } = constants;
         {
             super();
 
-            this.#name = asString( pName || this.#name, true );
+            this.#family = this.calculateFamilyName( pName, pLocale );
 
-            this.#family = (asString( pName, true ).split( /[_-]/ )[0]) || this.#name;
+            this.#name = asString( pName || this.#name, true ) || this.calculateName( pName, pLocale ) || this.#family;
 
             const hasDefaults = isNonNullObject( pDefaults ) &&
                                 (isMap( pDefaults ) || pDefaults instanceof this.constructor) &&
@@ -331,24 +363,61 @@ const { _ud = "undefined", $scope } = constants;
             Properties.register( this, this.name );
         }
 
+        calculateFamilyName( pName, pLocale )
+        {
+            let nm = asString( (asString( pName, true ) || this.#name) || this.#name, true );
+
+            let locale = resolveLocale( pLocale || this.#locale ) || DEFAULT_LOCALE;
+
+            let separator = nm.includes( _underscore ) ? _underscore : _hyphen;
+
+            let parts = nm.replace( locale.toString(), _mt_str ).split( /[_-]/ );
+
+            parts = parts.filter( e => !isBlank( e ) );
+            parts = parts.filter( e => lcase( e ) !== lcase( asString( locale.language, true ) ) );
+            parts = parts.filter( e => lcase( e ) !== lcase( asString( locale.region, true ) ) );
+            parts = parts.filter( e => lcase( e ) !== lcase( asString( locale.script, true ) ) );
+
+            return parts.join( separator );
+        }
+
+        calculateName( pName, pLocale )
+        {
+            let nm = asString( (asString( pName, true ) || this.#name) || this.#name, true );
+
+            let locale = resolveLocale( pLocale || this.#locale ) || DEFAULT_LOCALE;
+
+            let separator = nm.includes( _underscore ) ? _underscore : _hyphen;
+
+            let parts = nm.replace( locale.toString(), _mt_str ).split( /[_-]/ );
+
+            parts = parts.filter( e => !isBlank( e ) );
+            parts = parts.filter( e => lcase( e ) !== lcase( asString( locale.language, true ) ) );
+            parts = parts.filter( e => lcase( e ) !== lcase( asString( locale.region, true ) ) );
+            parts = parts.filter( e => lcase( e ) !== lcase( asString( locale.script, true ) ) );
+
+            return parts.join( separator ) + (_hyphen + locale.toString());
+        }
+
+
+        get name()
+        {
+            return asString( this.#name, true ) || ((asString( this.#family, true ) || "Properties") + (isNonNullObject( this.#locale ) ? (_hyphen + this.#locale.toString()) : _mt_str));
+        }
+
         get family()
         {
-            return this.#family || asString( this.#name, true ).split( /[_-]/ )[0] || this.#name;
+            return this.#family || this.calculateFamilyName( this.#name, this.#locale );
         }
 
         get locale()
         {
-            return this.#locale || DEFAULT_LOCALE;
+            return resolveLocale( this.#locale ) || DEFAULT_LOCALE;
         }
 
         get additionalKeys()
         {
             return [...(this.#additionalKeys || [])];
-        }
-
-        get name()
-        {
-            return asString( this.#name, true ) || ((asString( this.#family, true ) || "Properties") + (isNonNullObject( this.#locale ) ? (_hyphen + this.#locale.toString()) : _mt_str));
         }
 
         /**
@@ -362,15 +431,15 @@ const { _ud = "undefined", $scope } = constants;
         {
             const name = pDefaults?.name || (this.#name + _underscore + "defaults");
 
-            const locale = pDefaults?.locale || this.#locale;
+            const locale = resolveLocale( pDefaults?.locale ) || this.locale;
 
             const properties = new Properties( name, locale );
 
             let map = Properties.isProperties( pDefaults ) && this !== pDefaults ? pDefaults : properties;
 
-            this.#defaults = properties.load( map );
+            this.#defaults = (map instanceof this.constructor) ? lock( map ) : properties.load( map );
 
-            return properties;
+            return this.#defaults || properties;
         }
 
         /**
@@ -391,7 +460,7 @@ const { _ud = "undefined", $scope } = constants;
          */
         set defaults( pDefaults )
         {
-            this.#defaults = this.#initializeDefaults( pDefaults );
+            this.#defaults = lock( this.#initializeDefaults( pDefaults ) );
         }
 
         static get [Symbol.species]()
@@ -696,11 +765,11 @@ const { _ud = "undefined", $scope } = constants;
         {
             const locale = pProperties?.locale;
 
-            const name = asString( pProperties?.name, true ) || ("Properties-" + (isNonNullObject( locale )) ? locale.toString() : DEFAULT_LOCALE_STRING);
+            const name = asString( pProperties?.name, true ) || pProperties.calculateName( pProperties?.name || pProperties?.family, pProperties?.locale );
 
             const parts = name.split( /[_-]/ ).filter( e => e.length > 0 );
 
-            let base = asString( parts[0], true );
+            let base = pProperties?.family || asString( parts[0], true );
             let language = lcase( asString( locale?.language, true ) || (parts.length > 1 ? asString( parts[1], true ) : DEFAULT_LOCALE_STRING) );
             let region = lcase( asString( locale?.region, true ) || (parts.length > 2 ? asString( parts[2], true ) : _mt_str) );
 
@@ -738,14 +807,14 @@ const { _ud = "undefined", $scope } = constants;
 
             if ( 0 !== delta )
             {
-                return delta;
+                return isDefaultLanguage( langA ) ? -1 : isDefaultLanguage( langB ) ? 1 : delta;
             }
 
             delta = regionA.localeCompare( regionB );
 
             if ( 0 !== delta )
             {
-                return delta;
+                return isDefaultRegion( regionA ) ? -1 : isDefaultRegion( regionB ) ? 1 : delta;
             }
 
             delta = (partsA.length || 0) - (partsB.length || 0);
@@ -801,7 +870,7 @@ const { _ud = "undefined", $scope } = constants;
         };
 
 
-    const isPropertyFileHeader = ( content ) => isString( content ) && /^\[[^]]+]\s+/.test( asString( content, true ) );
+    const isPropertyFileHeader = ( content ) => isString( content ) && rxFileHeader.test( asString( content, true ) );
 
     /*
      * Returns true if the string is either a valid key or valid line in a properties file
@@ -820,9 +889,11 @@ const { _ud = "undefined", $scope } = constants;
                                                     !isBlank( content ) &&
                                                     (isPropertyFileHeader( content ) || isValidPropertyFileEntry( content ));
 
+    Properties.extractFileHeader = extractFileHeader;
+
     Properties.nameFromPrefix = function( pPrefix )
     {
-        if ( isString( pPrefix ) && isPropertyFileHeader() )
+        if ( isString( pPrefix ) && isPropertyFileHeader( pPrefix ) )
         {
             let prefix = asString( pPrefix, true );
 
@@ -870,8 +941,18 @@ const { _ud = "undefined", $scope } = constants;
             const localePart = _hyphen + part;
 
             localeString += localePart;
+        }
 
-            name += localePart;
+        localeString = localeString.replace( /^[_-]+/, _mt_str ).replace( /[_-]+$/, _mt_str );
+
+        if ( isLocale( localeString ) )
+        {
+            let locale = attempt( () => resolveLocale( localeString ) );
+
+            if ( isNonNullObject( locale ) && (locale.toString() === localeString || localeString.startsWith( locale.baseName )) )
+            {
+                name += _hyphen + localeString;
+            }
         }
 
         return { filePath, dirName, fileName, extension, family, name, localeString };
@@ -913,7 +994,6 @@ const { _ud = "undefined", $scope } = constants;
 
         return attempt( () => resolveLocale( locale ) );
     };
-
 
     /**
      * Returns a new instance of Properties populated with the key/value pairs in the specified array.
@@ -965,7 +1045,7 @@ const { _ud = "undefined", $scope } = constants;
 
         let arr = asArray( pArr ).filter( e => isString( e ) );
 
-        arr = arr.map( e => e.trim() ).filter( e => !isBlank( e ) && (e.includes( options.assignment )) );
+        arr = arr.map( e => e.trim() ).filter( e => !isBlank( e ) && isValidPropertyFileEntry( e ) );
 
         let kvPairs = arr.map( e => e.split( options.assignment ) );
 
@@ -995,30 +1075,32 @@ const { _ud = "undefined", $scope } = constants;
         {
             const options = populateOptions( pOptions, DEFAULT_PROPERTIES_OPTIONS );
 
+            const str = asString( pString, options.trim );
+
             let nm = options.name;
             let loc = resolveLocale( options.locale );
 
             options.name = nm || options.name;
             options.locale = loc || options.locale;
 
-            if ( isPropertyFileHeader( pString ) )
+            if ( isPropertyFileHeader( str ) )
             {
-                const { family, name, localeString } = Properties.nameFromPrefix( pString );
+                const { family, name, localeString } = Properties.nameFromPrefix( str );
 
                 options.family = family || options.family;
 
-                loc = resolveLocale( localeString );
-                options.locale = loc || options.locale;
+                loc = isLocale( localeString ) ? resolveLocale( localeString ) : loc;
+                options.locale = resolveLocale( loc || options.locale );
 
-                nm = asString( name, true ) || options.name;
+                nm = asString( name, true ) || options.name || ((family || options.family) + _hyphen + (loc || options.locale).toString());
                 options.name = nm || options.name;
             }
 
-            let arr = asString( pString, true ).replace( /^\[[^]]+]\s+/, _mt_str ).split( /\r?\n/ );
+            let arr = asString( str, true ).replace( rxFileHeader, _mt_str ).split( /\r?\n/ );
 
             arr = arr.map( e => e.replace( /^\s*/, _mt_str ).replace( /\s*$/, _mt_str ) );
 
-            arr = arr.filter( isValidPropertiesContent );
+            arr = arr.filter( isValidPropertyFileEntry );
 
             return Properties.fromLines( arr, options );
         }
@@ -1037,15 +1119,22 @@ const { _ud = "undefined", $scope } = constants;
         const options = populateOptions( pOptions, DEFAULT_PROPERTIES_OPTIONS );
 
         let properties = Properties.isProperties( pObject ) ?
-                         new Properties( asString( pObject?.name, true ) || options.name, resolveLocale( pObject?.locale || options.locale ) ) :
+                         new Properties( asString( (pObject?.name || options?.name), true ) || options.name,
+                                         resolveLocale( pObject?.locale || options.locale ) || options.locale ) :
                          new Properties( options.name, options.locale );
 
         if ( isNonNullObject( pObject ) )
         {
+            if ( Properties.isProperties( pObject ) )
+            {
+                properties.defaults = pObject;
+                return properties;
+            }
+
             if ( isMap( pObject ) )
             {
                 const map = new Map( pObject );
-                map.forEach( ( v, k ) => properties.set( asString( k, true ), asString( v ) ) );
+                map.forEach( ( k, v ) => properties.set( asString( k, true ), asString( v, options.trim ) ) );
             }
             else if ( isArray( pObject ) || isString( pObject ) )
             {
@@ -1056,7 +1145,9 @@ const { _ud = "undefined", $scope } = constants;
                 const stringsOnly = e => isString( ObjectEntry.getKey( e ) ) &&
                                          isString( ObjectEntry.getValue( e ) );
 
-                const entries = objectEntries( pObject ); // TODO: collapse to a.b.c=value form
+                const entries = objectEntries( pObject ).filter( e => !isNull( e ) && e.isValid() );
+
+                // TODO: collapse to a.b.c=value form
 
                 const filtered = entries.filter( stringsOnly ).filter( e => !isBlank( ObjectEntry.getKey( e ) ) );
 
@@ -1084,7 +1175,18 @@ const { _ud = "undefined", $scope } = constants;
     {
         const options = populateOptions( pOptions, DEFAULT_PROPERTIES_OPTIONS );
 
-        const json = isString( pJson ) ? asString( pJson, true ).replace( /^\[[^]]+]\s+/, _mt_str ) : pJson;
+        const fileHeader = isString( pJson ) ? extractFileHeader( pJson ) : _mt_str;
+
+        if ( !isBlank( fileHeader ) )
+        {
+            const { family, name, localeString } = Properties.nameFromPrefix( fileHeader );
+
+            options.family = family || options.family;
+            options.name = asString( name, true ) || options.name;
+            options.locale = isLocale( localeString ) ? resolveLocale( localeString ) : options.locale;
+        }
+
+        const json = isString( pJson ) ? asString( pJson, true ).replace( rxFileHeader, _mt_str ).trim() : pJson;
 
         const obj = isJson( json ) ? attempt( () => parseJson( json ) ) : Properties.isProperties( pJson ) ? pJson : {};
 
@@ -1131,9 +1233,9 @@ const { _ud = "undefined", $scope } = constants;
 
         let error = resolveError( new Error( message ) );
 
-        toolBocksModule.reportError( error, message, S_ERROR, Properties.fromFile, [pFilePath, pOptions] );
+        toolBocksModule.reportError( error, message, S_ERROR, Properties.fromFile, [pFilePath, pOptions, filePath, options, prefix, contents] );
 
-        return new Properties();
+        return new Properties( options.name, options.locale );
     };
 
     /**
@@ -1162,36 +1264,36 @@ const { _ud = "undefined", $scope } = constants;
         {
             if ( isValidPropertiesContent( pSource ) )
             {
-                return Properties.fromPropertiesString( pSource, pOptions );
+                return Properties.fromPropertiesString( pSource, options );
             }
 
-            return Properties.fromFile( pSource, pOptions );
+            return isBrowser() ? Properties.fromUrl( pSource, options ) : Properties.fromFile( pSource, options );
         }
         else if ( isMap( pSource ) )
         {
-            return Properties.fromObject( pSource, pOptions );
+            return Properties.fromObject( pSource, options );
         }
         else if ( isArray( pSource ) )
         {
             if ( isKeyValueArray( pSource ) )
             {
-                return Properties.from2dArray( pSource, pOptions );
+                return Properties.from2dArray( pSource, options );
             }
             else
             {
-                return Properties.fromLines( pSource, pOptions );
+                return Properties.fromLines( pSource, options );
             }
         }
         else if ( isJson( pSource ) )
         {
-            return Properties.fromJsonString( pSource, pOptions );
+            return Properties.fromJsonString( pSource, options );
         }
         else if ( isNonNullObject( pSource ) )
         {
-            return Properties.fromObject( pSource, pOptions );
+            return Properties.fromObject( pSource, options );
         }
 
-        return new Properties();
+        return new Properties( options.name, options.locale );
     };
 
     /**
@@ -2214,6 +2316,7 @@ const { _ud = "undefined", $scope } = constants;
                 resourceFamily = resourceFamily || new ResourceFamily( opts.family, properties );
 
                 resourceFamily.addProperties( properties );
+
                 if ( isLocale( opts.locale ) )
                 {
                     resourceFamily.addLocaleProperties( opts.locale, properties );
@@ -2303,26 +2406,47 @@ const { _ud = "undefined", $scope } = constants;
             this.#properties = this.processProperties( ...([this.#properties, ...(pProperties || [])]) );
         }
 
-        addLocaleProperties( pLocale, ...pProperties )
+        processProperties( ...pProperties )
         {
-            const props = this.#propertiesByLocale.get( pLocale );
-
-            const filtered = [...(pProperties || [])].filter( p => isNonNullObject( p ) && p.locale === pLocale );
-
-            //
-        }
-
-        processProperties( pLocale, ...pProperties )
-        {
-            // the innermost nested default properties
-            let properties = new Properties();
-
             // gather the arguments and filter out any "garbage"
             let objects = asArray( varargs( ...pProperties ) ).filter( e => Properties.isProperties( e ) );
+            objects = objects.filter( e => lcase( asString( e?.name, true ) ).startsWith( lcase( asString( this.baseName, true ) ) ) );
 
-            const locale = resolveLocale( pLocale );
+            const map = new Map();
 
-            objects = objects.filter( e => resolveLocale( e?.locale ) === locale );
+            for( const p of objects )
+            {
+                const locale = resolveLocale( p.locale ) || DEFAULT_LOCALE;
+                const keys = this.generateKeysForLocale( locale );
+
+                for( const key of keys )
+                {
+                    let localeProperties = asArray( map.get( key ) || [] ) || [];
+                    localeProperties.push( p );
+                    map.set( key, localeProperties );
+                }
+            }
+
+            for( const [key, localeProperties] of map )
+            {
+                // order the Properties such that the more specific properties appear AFTER less-specific properties
+                let arr = Properties.sort( localeProperties );
+
+                let properties = new Properties( key );
+
+                for( const p of arr )
+                {
+                    // create a new Properties object with the prior instance as its defaults
+                    // because we have ordered the properties by specificity,
+                    // the more specific properties will be constructed with the lesser specific properties as their defaults
+                    properties = new Properties( p.name || key, properties, p?.locale ).load( Properties.from( p ) );
+                }
+
+                this.#propertiesByLocale.set( key, properties );
+            }
+
+            // the innermost nested default properties
+            let properties = new Properties();
 
             // order the Properties such that the more specific properties appear AFTER less-specific properties
             objects = Properties.sort( objects );
@@ -2331,13 +2455,7 @@ const { _ud = "undefined", $scope } = constants;
             for( const obj of objects )
             {
                 // take the name from the Properties object, but fallback to a generated name if it is missing
-                const name = obj?.name || this.baseName + _hyphen + obj?.locale?.toString() || _mt_str;
-
-                // skip any Properties that do not belong to this 'family'
-                if ( !name.startsWith( this.baseName ) )
-                {
-                    continue;
-                }
+                const name = obj?.name || (this.baseName + _hyphen + obj?.locale?.toString()) || _mt_str;
 
                 // create a new Properties object with the prior instance as its defaults
                 // because we have ordered the properties by specificity,
@@ -2347,18 +2465,93 @@ const { _ud = "undefined", $scope } = constants;
 
             return properties;
         }
+
+        generateKeysForLocale( pLocale )
+        {
+            const locale = resolveLocale( pLocale ) || DEFAULT_LOCALE;
+            return [locale, locale.language, locale.language + _hyphen + locale.region, locale.language + _hyphen + locale.script + _hyphen + locale.region];
+        }
+
+        bestMatch( pLocale, pKey )
+        {
+            const locale = resolveLocale( pLocale ) || DEFAULT_LOCALE;
+
+            const keys = this.generateKeysForLocale( locale ).reverse();
+
+            const resourceKey = pKey instanceof ResourceKey ? pKey : new ResourceKey( pKey );
+
+            const propertyKey = asString( resourceKey.toString() || pKey, true ) || asString( pKey, true );
+
+            let propertyValue = resourceKey.defaultValue || null;
+
+            for( const key of keys )
+            {
+                const properties = this.#propertiesByLocale.get( key );
+
+                if ( !isNull( properties ) && Properties.isProperties( properties ) && properties.has( propertyKey ) )
+                {
+                    propertyValue = properties.get( propertyKey );
+
+                    if ( !isNull( propertyValue ) && !isEmptyString( propertyValue ) )
+                    {
+                        break;
+                    }
+                }
+            }
+
+            return propertyValue || resourceKey.defaultValue || null;
+        }
+
+        get( pLocale, pKey )
+        {
+            const locale = resolveLocale( pLocale ) || DEFAULT_LOCALE;
+            return this.bestMatch( locale, pKey );
+        }
+
+        getProperties( pLocale )
+        {
+            let properties = [];
+
+            if ( isNull( pLocale ) )
+            {
+                this.#propertiesByLocale.values().forEach( p => properties.push( p ) );
+                properties.push( this.#properties );
+                properties = [...(new Set( properties ))];
+            }
+            else
+            {
+                const locale = resolveLocale( pLocale ) || DEFAULT_LOCALE;
+
+                const keys = this.generateKeysForLocale( locale );
+
+                for( const key of keys )
+                {
+                    properties.push( this.#propertiesByLocale.get( key ) );
+                }
+            }
+
+            properties = properties.filter( e => isNonNullObject( e ) && Properties.isProperties( e ) );
+            properties = Properties.sort( properties );
+
+            return properties;
+        }
+
     }
 
     class ResourceCache
     {
         #resourceLoader;
+
         #resourceFamilies;
+
         #options;
 
         constructor( pResourceLoader, pOptions = DEFAULT_OPTIONS )
         {
             this.#options = populateOptions( pOptions, DEFAULT_OPTIONS );
+
             this.#resourceLoader = ResourceLoader.resolve( pResourceLoader, this.#options );
+
             this.#resourceFamilies = new Map();
 
             if ( this.#options?.loadOnCreate )
@@ -2370,73 +2563,127 @@ const { _ud = "undefined", $scope } = constants;
             }
         }
 
+        get resourceLoader()
+        {
+            return ResourceLoader.resolve( this.#resourceLoader, this.#options );
+        }
+
+        get resourceFamilies()
+        {
+            return lock( new Map( this.#resourceFamilies || new Map() ) );
+        }
+
+        get options()
+        {
+            return populateOptions( this.#options, DEFAULT_OPTIONS );
+        }
+
         addResourceFamily( pResourceFamily )
         {
-            if( pResourceFamily instanceof ResourceFamily )
+            let existing;
+            let properties;
+
+            let family = pResourceFamily?.family;
+            let name = pResourceFamily?.baseName || pResourceFamily?.name || family;
+
+            if ( pResourceFamily instanceof ResourceFamily )
             {
-                this.#resourceFamilies.set( pResourceFamily.baseName, pResourceFamily || this.#resourceFamilies.get( pResourceFamily.baseName ) );
+                existing = this.#resourceFamilies.get( name );
+
+                if ( existing && existing instanceof ResourceFamily )
+                {
+                    properties = asArray( pResourceFamily.getProperties() );
+                }
             }
+            else if ( Properties.isProperties( pResourceFamily ) )
+            {
+                let props = pResourceFamily instanceof Properties ?
+                            pResourceFamily :
+                            new Properties().load( pResourceFamily );
+
+                family = props.family || family;
+                name = props?.name || name;
+
+                existing = this.#resourceFamilies.get( family ) ||
+                           this.#resourceFamilies.get( name ) ||
+                           new ResourceFamily( (family || name), ...([props]) );
+
+                properties = asArray( props ) || [props];
+            }
+
+            if ( existing && existing instanceof ResourceFamily )
+            {
+                existing.addProperties( ...properties );
+            }
+
+            this.#resourceFamilies.set( family || name, existing || pResourceFamily );
         }
 
         load( ...pSource )
         {
+            const me = this;
+
             const sources = asArray( varargs( ...pSource ) );
+
+            function addFamilyFromSource( pSource )
+            {
+                const props = Properties.from( pSource );
+
+                if ( isNonNullObject( props ) )
+                {
+                    if ( !isPromise( props ) )
+                    {
+                        me.addResourceFamily( new ResourceFamily( props.name, props ) );
+                    }
+                    else
+                    {
+                        (async function()
+                        {
+                            await Promise.resolve( props ).then( p => me.addResourceFamily( new ResourceFamily( p?.name, p ) ) );
+                        }());
+                    }
+                }
+            }
 
             for( const source of sources )
             {
-                if ( source instanceof ResourceFamily )
+                if ( source instanceof ResourceFamily || Properties.isProperties( source ) )
                 {
                     this.addResourceFamily( source );
                 }
                 else if ( isString( source ) )
                 {
-                    if ( isValidPropertiesContent( source ) )
-                    {
-                        const props = Properties.from( source );
-                        this.addResourceFamily( new ResourceFamily( props.name, props, props.locale ) );
-                    }
+                    addFamilyFromSource.call( this, source );
                 }
                 else if ( isNonNullObject( source ) )
                 {
-                    const props = Properties.from( source );
-                    this.addResourceFamily( new ResourceFamily( props.name, props, props.locale ) );
+                    addFamilyFromSource.call( this, source );
                 }
             }
         }
 
         getResourceFamily( pBaseName )
         {
-            return this.#resourceFamilies.get( pBaseName );
+            return this.#resourceFamilies.get( pBaseName ) || new ResourceFamily( pBaseName );
         }
 
-        getResource( ...pKey )
+        getResource( pResourceFamilyName, pLocale, pKey )
         {
-            let resourceFamily;
+            let resourceFamily = this.getResourceFamily( pResourceFamilyName );
 
-            let keys = asArray( varargs( ...pKey ) );
+            let locale = resolveLocale( pLocale ) || DEFAULT_LOCALE;
 
-            while ( keys.length > 0 )
-            {
-                const key = keys.shift();
-                resourceFamily = this.getResourceFamily( key );
-                if ( resourceFamily )
-                {
-                    return resourceFamily.getResource( keys.split( 1 ) );
-                }
-            }
+            let resourceKey = pKey instanceof ResourceKey ? pKey : new ResourceKey( pKey );
 
-            keys = asArray( varargs( ...pKey ) );
-            const values = [];
-            for( const family of this.#resourceFamilies.values() )
-            {
-                let value = family.getResource( keys.split( 1 ) );
-                if ( value )
-                {
-                    values.push( value );
-                }
-            }
+            let resourceValue = resourceKey.defaultValue || null;
 
-            return values.length > 1 ? values : values.length > 0 ? values[0] : null;
+            return resourceFamily.get( locale, resourceKey ) || resourceValue;
+        }
+
+        getProperties( pResourceFamilyName, pLocale )
+        {
+            let resourceFamily = this.getResourceFamily( pResourceFamilyName );
+            return resourceFamily.getProperties( pLocale );
         }
 
         static get [Symbol.species]()
