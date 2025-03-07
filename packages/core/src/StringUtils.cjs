@@ -1390,7 +1390,7 @@ const { _ud = "undefined", $scope } = constants;
         return arr.length - 1;
     };
 
-    const findPosition = ( pStr, pOf ) => (_str === typeof pOf) ? pStr.indexOf( pOf ) : asInt( pOf, pStr?.length );
+    const findPosition = ( pStr, pOf ) => (_str === typeof pOf) ? pStr.indexOf( pOf ) : (isRegExp( pOf ) ? asInt( pStr.search( pOf ), -1 ) : asInt( pOf, pStr?.length ));
 
     /**
      * Returns the text to the left of the FIRST occurrence of pOf (or if pOf is a number, the index specified by pOf)
