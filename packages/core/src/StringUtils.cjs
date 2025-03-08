@@ -2591,6 +2591,50 @@ const { _ud = "undefined", $scope } = constants;
         return false;
     };
 
+
+    /**
+     * Returns true if the specified string is allowed as a file name
+     *
+     * @param {string} pStr the string to evaluate
+     *
+     * @returns {boolean} true if the string could be used as a file name
+     */
+    const isLegalFileName = function( pStr )
+    {
+        if ( isString( pStr ) && !isBlank( pStr ) )
+        {
+            return !/[*?><:|"\\\/]/.test( pStr );
+        }
+        return false;
+    };
+
+
+    /**
+     * Returns true if the specified string is very likely to be a filepath
+     *
+     * @param {string} pStr the string to evaluate
+     *
+     * @returns {boolean} true if the string is very likely to represent a filepath or URL
+     */
+    const isFilePath = function( pStr )
+    {
+        if ( isString( pStr ) && !isBlank( pStr ) )
+        {
+            if ( /[*?><|"]/.test( pStr ) )
+            {
+                return false;
+            }
+
+            if ( /[\\\/\w._-]+/.test( pStr ) )
+            {
+                const parts = pStr.split( /\\\//g );
+                return isLegalFileName( parts[parts.length - 1] );
+            }
+        }
+
+        return false;
+    };
+
     /**
      * Returns the string representation of the specified argument in all lowercase characters.
      * Shorthand for asString( pStr, false ).toLowerCase();
@@ -3201,6 +3245,8 @@ const { _ud = "undefined", $scope } = constants;
             isValidJsonArray,
             isValidJson,
             isJson,
+            isLegalFileName,
+            isFilePath,
             lcase,
             ucase,
             toCamelCase,

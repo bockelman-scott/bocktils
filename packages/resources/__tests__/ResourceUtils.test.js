@@ -201,7 +201,7 @@ describe( "Properties", () =>
           } );
 
 
-    test( "Properties load",
+    test( "Properties load - from String",
           () =>
           {
               let properties = new Properties();
@@ -214,8 +214,27 @@ test.key.5=valor de ensayo cinco`;
               properties.load( source );
 
               expect( properties.size ).toEqual( 4 );
+
+              source =`test.key.4=valor de ensayo quatro`;
+
+              properties.load( source );
+
+              expect( properties.size ).toEqual( 5 );
+
+              expect( properties.get( "test.key.1" ) ).toEqual( "valor de ensayo uno" );
+              expect( properties.get( "test.key.2" ) ).toEqual( "valor de ensayo dos" );
+              expect( properties.get( "test.key.3" ) ).toEqual( "valor de ensayo tres" );
+              expect( properties.get( "test.key.4" ) ).toEqual( "valor de ensayo quatro" );
+              expect( properties.get( "test.key.5" ) ).toEqual( "valor de ensayo cinco" );
           } );
 
+    test( "Properties load - from File",
+          async () =>
+          {
+              let properties = await Properties.fromFile( "../packages/resources/messages/messages.properties" );
+
+              console.log( properties.toString() );
+          } );
 });
 
 describe( "ResourceKey", () =>

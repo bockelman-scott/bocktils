@@ -306,6 +306,28 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         };
 
     /**
+     * Returns true if EXACTLY one condition is true.
+     * Evaluates ALL conditions, dpes not shortcut.
+     *
+     * @param {...*} pConditions One or more expressions that evaluate to a boolean, true or false
+     *
+     * @returns {boolean} true if EXACTLY one condition is true.
+     */
+    const Xor = ( ...pConditions ) =>
+    {
+        let conditions = [...(pConditions || [])];
+        conditions = conditions.filter( c => true === c );
+        return 1 === conditions.length;
+    };
+
+    const Nand = ( ...pConditions ) =>
+    {
+        let conditions = [...(pConditions || [])];
+        conditions = conditions.filter( c => true === c );
+        return conditions.length > 1 && conditions.length < [...(pConditions || [])].length;
+    };
+
+    /**
      * This is a function that just does nothing.<br>
      * This is useful when you need a default or placeholder for a missing argument or expected function.<br>
      */
@@ -6362,6 +6384,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             DEFAULT_COPY_OPTIONS: lock( DEFAULT_COPY_OPTIONS ),
 
             AsyncFunction,
+
+            Xor,
+            Nand,
 
             no_op,
             op_true,

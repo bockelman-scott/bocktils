@@ -53,6 +53,8 @@ const { _ud = "undefined", $scope } = constants;
     }
 
     const {
+        Xor,
+        Nand,
         ToolBocksModule,
         ObjectEntry,
         objectEntries,
@@ -134,7 +136,12 @@ const { _ud = "undefined", $scope } = constants;
         toUnixPath,
         toBool,
         endsWithAny,
-        leftOf
+        leftOf,
+        rightOf,
+        leftOfLast,
+        rightOfLast,
+        isFilePath,
+        isLegalFileName
     } = stringUtils;
 
     const { varargs, flatArgs, asArray, unique, Filters, AsyncBoundedQueue } = arrayUtils;
@@ -256,7 +263,7 @@ const { _ud = "undefined", $scope } = constants;
 
     const _isBrowser = executionEnvironment.isBrowser();
 
-    const rxFileHeader = /^\[[^]]+]\s+/;
+    const rxFileHeader = /^\s*\[[^\]]+]\s*/;
 
     const extractFileHeader = function( pString )
     {
@@ -880,7 +887,7 @@ const { _ud = "undefined", $scope } = constants;
     /*
      * Returns true if the string represents a valid line in a properties file
      */
-    const isValidPropertyFileEntry = e => isValidPropertyKey( e ) && (e.includes( _equals ) || e.includes( _colon ));
+    const isValidPropertyFileEntry = e => isValidPropertyKey( e ) && Xor( e.includes( _equals ), e.includes( _colon ) );
 
     /*
      * Returns true if the content has a [tag] or contains at least one valid property
@@ -895,9 +902,13 @@ const { _ud = "undefined", $scope } = constants;
     {
         if ( isString( pPrefix ) && isPropertyFileHeader( pPrefix ) )
         {
-            let prefix = asString( pPrefix, true );
+            let prefix = leftOf( asString( pPrefix, true ), /\r?\n/ );
 
             prefix = prefix.replace( /^\[/, _mt_str ).replace( /]$/, _mt_str ).trim();
+
+            prefix = prefix.includes( "/" ) ? (rightOfLast( prefix, "/" ) || prefix) : (prefix.includes( "\\" ) ? rightOfLast( prefix, "\\" ) || prefix : prefix) || prefix;
+
+            prefix = (prefix.includes( _dot ) ? leftOf( prefix, _dot ) : prefix);
 
             const parts = prefix.split( /[_\/\\-]/ );
 
@@ -1077,8 +1088,9 @@ const { _ud = "undefined", $scope } = constants;
 
             const str = asString( pString, options.trim );
 
-            let nm = options.name;
-            let loc = resolveLocale( options.locale );
+            let nm = options.name || Properties.nameFromPrefix( str );
+
+            let loc = resolveLocale( options.locale || Properties.localeFromPath( str ) );
 
             options.name = nm || options.name;
             options.locale = loc || options.locale;
@@ -1275,13 +1287,19 @@ const { _ud = "undefined", $scope } = constants;
         }
         else if ( isArray( pSource ) )
         {
-            if ( isKeyValueArray( pSource ) )
+            const arr = asArray( pSource );
+
+            if ( isKeyValueArray( arr ) )
             {
-                return Properties.from2dArray( pSource, options );
+                return Properties.from2dArray( arr, options );
             }
-            else
+            else if ( arr.every( isValidPropertiesContent ) )
             {
-                return Properties.fromLines( pSource, options );
+                return Properties.fromLines( arr, options );
+            }
+            else if ( arr.every( isFilePath ) )
+            {
+                //
             }
         }
         else if ( isJson( pSource ) )
