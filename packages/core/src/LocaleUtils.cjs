@@ -804,6 +804,7 @@ const {
                 {
                     LocaleResourcesBase
                 },
+            DEFAULT_LOCALE,
             DEFAULT_LOCALE_STRING,
             DEFAULTS,
             FORMATS:

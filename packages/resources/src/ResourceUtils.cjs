@@ -119,7 +119,8 @@ const { _ud = "undefined", $scope } = constants;
         isPromise,
         firstMatchingType,
         instanceOfAny,
-        isAssignableTo
+        isAssignableTo,
+        toIterable
     } = typeUtils;
 
     const {
@@ -253,7 +254,7 @@ const { _ud = "undefined", $scope } = constants;
 
     const executionEnvironment = toolBocksModule.executionEnvironment;
 
-    const isBrowser = executionEnvironment.isBrowser();
+    const _isBrowser = executionEnvironment.isBrowser();
 
     const rxFileHeader = /^\[[^]]+]\s+/;
 
@@ -332,7 +333,7 @@ const { _ud = "undefined", $scope } = constants;
          *
          * @return {Properties}
          */
-        constructor( pName, pLocale = DEFAULT_LOCALE, pDefaults = new Properties(), ...pAdditionalKeys )
+        constructor( pName, pLocale = DEFAULT_LOCALE, pDefaults = new Map(), ...pAdditionalKeys )
         {
             super();
 
@@ -345,7 +346,7 @@ const { _ud = "undefined", $scope } = constants;
                                 pDefaults !== this &&
                                 pDefaults?.size > 0;
 
-            this.#defaults = hasDefaults ? this.#initializeDefaults( pDefaults ) : new Properties();
+            this.#defaults = hasDefaults ? this.#initializeDefaults( pDefaults ) : new Map();
 
             this.#locale = resolveLocale( pLocale || this.#locale );
 
@@ -359,8 +360,6 @@ const { _ud = "undefined", $scope } = constants;
 
                 this.#name += (_hyphen + additionalKeys.join( _hyphen ));
             }
-
-            Properties.register( this, this.name );
         }
 
         calculateFamilyName( pName, pLocale )
@@ -437,7 +436,7 @@ const { _ud = "undefined", $scope } = constants;
 
             let map = Properties.isProperties( pDefaults ) && this !== pDefaults ? pDefaults : properties;
 
-            this.#defaults = (map instanceof this.constructor) ? lock( map ) : properties.load( map );
+            this.#defaults = (map instanceof this.constructor) ? lock( map ) : isMap( map ) ? map.forEach( ( v, k ) => properties.set( k, v ) ) : properties;
 
             return this.#defaults || properties;
         }
@@ -463,6 +462,11 @@ const { _ud = "undefined", $scope } = constants;
             this.#defaults = lock( this.#initializeDefaults( pDefaults ) );
         }
 
+        get size()
+        {
+            return unique( [...(super.keys() || []), ...(this.defaults?.keys() || [])] ).length;
+        }
+
         static get [Symbol.species]()
         {
             return this;
@@ -470,7 +474,7 @@ const { _ud = "undefined", $scope } = constants;
 
         [Symbol.iterator]()
         {
-            return lock( this.entries() );
+            return toIterable( lock( [...this.entries()] ) );
         }
 
         /**
@@ -588,6 +592,13 @@ const { _ud = "undefined", $scope } = constants;
             this.entries().forEach( e => pFunction.call( pThis || me || this, asString( e[1] ), asString( e[0] ), this ) );
         }
 
+        set( pKey, pValue )
+        {
+            const key = asString( pKey, true );
+
+            return super.set( key, asString( pValue ) );
+        }
+
         /**
          * Retrieves the value associated with the specified key.<br>
          * <br>
@@ -600,14 +611,16 @@ const { _ud = "undefined", $scope } = constants;
          */
         get( pKey )
         {
-            let value = super.get( pKey );
+            const key = asString( pKey, true );
+
+            let value = super.get( key );
 
             if ( (isNull( value ) || isBlank( value )) && this.hasValidDefaults() )
             {
-                value = this.defaults.get( pKey );
+                value = this.defaults.get( key );
             }
 
-            return asString( value );
+            return isNonNullValue( value ) && !isEmptyString( value ) ? asString( value ) : (pKey instanceof ResourceKey ? pKey.defaultValue : _mt_str);
         }
 
         /**
@@ -618,7 +631,8 @@ const { _ud = "undefined", $scope } = constants;
          */
         has( pKey )
         {
-            return super.has( pKey ) || (this.hasValidDefaults() && this.defaults.has( pKey ));
+            const key = asString( pKey, true );
+            return super.has( key ) || (this.hasValidDefaults() && this.defaults.has( key ));
         }
 
         /**
@@ -725,28 +739,14 @@ const { _ud = "undefined", $scope } = constants;
         }
     }
 
+    const DEFAULT_PROPERTIES = new Properties();
+
     /**
      * Returns true if the specified value is a Map or an instance of Properties
      */
     Properties.isProperties = function( pObject )
     {
         return isNonNullObject( pObject ) && (isMap( pObject ) || pObject instanceof Properties);
-    };
-
-    Properties.REGISTRY = new Map();
-
-    Properties.register = function( pProperties, pName )
-    {
-        const name = pProperties?.name || asString( pName, true );
-        const properties = Properties.REGISTRY.get( name ) || pProperties;
-        Properties.REGISTRY.set( name, properties );
-        return Properties.REGISTRY.get( name ) || pProperties;
-    };
-
-    Properties.unregister = function( pProperties, pName )
-    {
-        const name = pProperties?.name || asString( pName, true );
-        Properties.REGISTRY.delete( name );
     };
 
     Properties.comparator = function( pA, pB )
@@ -1134,7 +1134,7 @@ const { _ud = "undefined", $scope } = constants;
             if ( isMap( pObject ) )
             {
                 const map = new Map( pObject );
-                map.forEach( ( k, v ) => properties.set( asString( k, true ), asString( v, options.trim ) ) );
+                map.forEach( ( v, k ) => properties.set( asString( k, true ), asString( v, options.trim ) ) );
             }
             else if ( isArray( pObject ) || isString( pObject ) )
             {
@@ -1267,7 +1267,7 @@ const { _ud = "undefined", $scope } = constants;
                 return Properties.fromPropertiesString( pSource, options );
             }
 
-            return isBrowser() ? Properties.fromUrl( pSource, options ) : Properties.fromFile( pSource, options );
+            return _isBrowser() ? Properties.fromUrl( pSource, options ) : Properties.fromFile( pSource, options );
         }
         else if ( isMap( pSource ) )
         {
@@ -1302,12 +1302,12 @@ const { _ud = "undefined", $scope } = constants;
      * <br>
      * This object contains properties that define the initial settings.
      *
-     * @typedef {Object} DEFAULT_OPTIONS
+     * @typedef {Object} DEFAULT_RESOURCE_CACHE_OPTIONS
      * @property {Object|null} resourceLoader - Specifies the resource loader instance or null if not provided.
      * @property {Object|null} paths - Holds path configurations or null if undefined.
      * @property {Object|null} locales - Specifies locale settings or null if not set.
      */
-    const DEFAULT_OPTIONS =
+    const DEFAULT_RESOURCE_CACHE_OPTIONS =
         {
             resourceLoader: null,
             paths: null,
@@ -1363,7 +1363,7 @@ const { _ud = "undefined", $scope } = constants;
             // process the components argument into a flat array
             const arr = asArray( varargs( ...pComponents ) ).flat();
 
-            // define a mapping function to transform the components into a single string
+            // define a mapping function to transform the components into suitable strings
             this.#mappingFunction = function( e )
             {
                 // process each component according to its type
@@ -1395,7 +1395,7 @@ const { _ud = "undefined", $scope } = constants;
                         case _num:
                         case _big:
                         case _bool:
-                            // other scalar value should just be coerced to strings
+                            // other scalar values should just be coerced to strings
                             return asString( e );
 
                         case _symbol:
@@ -1639,6 +1639,11 @@ const { _ud = "undefined", $scope } = constants;
             return d;
         }
 
+        isValid()
+        {
+            return this.components.length > 0 && this.components.every( e => !isBlank( asString( e, true ) ) );
+        }
+
         /**
          * Returns a copy of this instance as a new object.
          *
@@ -1650,6 +1655,19 @@ const { _ud = "undefined", $scope } = constants;
             copy.defaultValue = this.defaultValue;
             return copy;
         }
+    }
+
+    /**
+     * Returns true if the value is a valid resource key
+     * by verifying that it is either a non-empty string or an instance of ResourceKey.
+     * <br>
+     *
+     * @param {any} pKey - The value to be checked for validity as a resource key.
+     * @return {boolean} - Returns true if the value is a non-empty string or an instance of ResourceKey, otherwise returns false.
+     */
+    function isValidResourceKey( pKey )
+    {
+        return (isString( pKey ) && !isBlank( asString( pKey, true ) )) || (pKey instanceof ResourceKey && pKey.isValid());
     }
 
     /**
@@ -1733,7 +1751,8 @@ const { _ud = "undefined", $scope } = constants;
          */
         get backedBy()
         {
-            return this._copyValue( this.#backedBy );
+            const validResourceFunction = this.getValidResourceFunction( this.constructor );
+            return validResourceFunction.call( this, this.#backedBy ) ? this._copyValue( this.#backedBy ) : new Resource( _mt_str, _mt_str );
         }
 
         /**
@@ -1748,7 +1767,7 @@ const { _ud = "undefined", $scope } = constants;
          * @return {function(*):boolean} A filter function that returns true
          *                               if the specified value is an instance of the specified class or this class
          */
-        isValidResource( pClass )
+        getValidResourceFunction( pClass )
         {
             const thisClass = this.constructor || this.constructor[Symbol.species];
 
@@ -1759,16 +1778,9 @@ const { _ud = "undefined", $scope } = constants;
             return e => !isNull( e ) && instanceOfAny( e, thisClass );
         }
 
-        /**
-         * Returns true if the specified value is a valid resource value.
-         *
-         * @param {any} pValue - The value to validate
-         *
-         * @return {boolean} true if the provided value is a valid resource value, otherwise false.
-         */
-        isValidResourceValue( pValue )
+        isValid()
         {
-            return isValidResourceValue( pValue );
+            return isValidResourceValue( this.value ) && isValidResourceKey( this.key );
         }
 
         /**
@@ -1846,15 +1858,15 @@ const { _ud = "undefined", $scope } = constants;
         {
             let value = pValue;
 
-            if ( this.isValidResourceValue( pValue ) )
+            if ( isValidResourceValue( pValue ) )
             {
                 if ( this.isAssignableTo( pValue, this.constructor ) )
                 {
-                    value = this.isValidResourceValue( pValue.value ) ? this._copyValue( pValue.value ) : this.isValidResourceValue( pKey?.defaultValue ) ? this._copyValue( pKey.defaultValue ) : this._copyValue( pValue );
+                    value = isValidResourceValue( pValue.value ) ? this._copyValue( pValue.value ) : isValidResourceValue( pKey?.defaultValue ) ? this._copyValue( pKey.defaultValue ) : this._copyValue( pValue );
                 }
                 else if ( pValue instanceof ResourceKey )
                 {
-                    value = this.isValidResourceValue( pValue.defaultValue ) ? this._copyValue( pValue.defaultValue ) : this.isValidResourceValue( pKey?.defaultValue ) ? this._copyValue( pKey.defaultValue ) : this._copyValue( pValue );
+                    value = isValidResourceValue( pValue.defaultValue ) ? this._copyValue( pValue.defaultValue ) : isValidResourceValue( pKey?.defaultValue ) ? this._copyValue( pKey.defaultValue ) : this._copyValue( pValue );
                 }
             }
 
@@ -1873,8 +1885,8 @@ const { _ud = "undefined", $scope } = constants;
          */
         get key()
         {
-            const key = new ResourceKey( this.#key || this.#backedBy?.key );
-            key.defaultValue = (this.#key || this.#backedBy?.key)?.defaultValue;
+            const key = new ResourceKey( this.#key || this.#backedBy?.key || _mt_str );
+            key.defaultValue = (this.#key || this.#backedBy?.key)?.defaultValue || this.value;
             return key;
         }
 
@@ -1888,7 +1900,8 @@ const { _ud = "undefined", $scope } = constants;
          */
         get value()
         {
-            return this.isValidResourceValue( this.#value ) ? this._copyValue( this.#value ) : this._copyValue( this.#backedBy?.value );
+            return isValidResourceValue( this.#value ) ?
+                   this._copyValue( this.#value ) : (isValidResourceValue( this.#backedBy?.value ) ? this._copyValue( this.#backedBy?.value ) : this.key?.defaultValue || this.#backedBy?.key?.defaultValue || null);
         }
 
         /**
@@ -1899,7 +1912,7 @@ const { _ud = "undefined", $scope } = constants;
          */
         toString()
         {
-            return this.key.toString() + "=" + asString( this.value );
+            return this.isValid() ? (asString( this.key.toString() ) + "=" + asString( this.value )) : _mt_str;
         }
 
         /**
@@ -2123,7 +2136,7 @@ const { _ud = "undefined", $scope } = constants;
 
         get paths()
         {
-            return unique( [...(this.#paths || [])].filter( p => !isBlank( p ) && ( !isBrowser() || !ResourceLoader.isDirectoryPath( p )) ) );
+            return unique( [...(this.#paths || [])].filter( p => !isBlank( p ) && ( !_isBrowser || !ResourceLoader.isDirectoryPath( p )) ) );
         }
 
         get locales()
@@ -2250,7 +2263,7 @@ const { _ud = "undefined", $scope } = constants;
 
                 const prefix = "[" + path + "]\n";
 
-                if ( isBrowser )
+                if ( _isBrowser )
                 {
                     if ( !ResourceLoader.isDirectoryPath( path ) )
                     {
@@ -2345,7 +2358,7 @@ const { _ud = "undefined", $scope } = constants;
         }
     }
 
-    DEFAULT_OPTIONS.resourceLoader = new ResourceLoader( DEFAULT_OPTIONS.paths, DEFAULT_OPTIONS.locales, DEFAULT_OPTIONS );
+    DEFAULT_RESOURCE_CACHE_OPTIONS.resourceLoader = new ResourceLoader( DEFAULT_RESOURCE_CACHE_OPTIONS.paths, DEFAULT_RESOURCE_CACHE_OPTIONS.locales, DEFAULT_RESOURCE_CACHE_OPTIONS );
 
     ResourceLoader.resolve = function( pResourceLoader, pOptions )
     {
@@ -2546,9 +2559,9 @@ const { _ud = "undefined", $scope } = constants;
 
         #options;
 
-        constructor( pResourceLoader, pOptions = DEFAULT_OPTIONS )
+        constructor( pResourceLoader, pOptions = DEFAULT_RESOURCE_CACHE_OPTIONS )
         {
-            this.#options = populateOptions( pOptions, DEFAULT_OPTIONS );
+            this.#options = populateOptions( pOptions, DEFAULT_RESOURCE_CACHE_OPTIONS );
 
             this.#resourceLoader = ResourceLoader.resolve( pResourceLoader, this.#options );
 
@@ -2575,7 +2588,7 @@ const { _ud = "undefined", $scope } = constants;
 
         get options()
         {
-            return populateOptions( this.#options, DEFAULT_OPTIONS );
+            return populateOptions( this.#options, DEFAULT_RESOURCE_CACHE_OPTIONS );
         }
 
         addResourceFamily( pResourceFamily )
@@ -2702,14 +2715,31 @@ const { _ud = "undefined", $scope } = constants;
                     Resource,
                     ResourceKey,
                     ResourceLoader,
+                    ResourceFamily,
                     ResourceCache
                 },
             DEFAULT_LOCALE,
             DEFAULT_LOCALE_STRING,
-            resolveLocale,
+            DEFAULT_LOADER_OPTIONS,
+            DEFAULT_PROPERTIES_OPTIONS,
+            DEFAULT_RESOURCE_CACHE_OPTIONS,
             MESSAGES_LOCALE,
+            resolveLocale,
             getMessagesLocale,
-
+            LocaleResourcesBase,
+            Properties,
+            Resource,
+            ResourceKey,
+            ResourceLoader,
+            ResourceFamily,
+            ResourceCache,
+            rxFileHeader,
+            extractFileHeader,
+            isValidPropertyKey,
+            isValidPropertyFileEntry,
+            isValidPropertiesContent,
+            isValidResourceValue,
+            isValidResourceKey
         };
 
     mod = toolBocksModule.extend( mod );
