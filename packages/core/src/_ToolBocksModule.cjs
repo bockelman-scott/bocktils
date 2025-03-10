@@ -216,7 +216,7 @@ const _ENV = (function( pScope = $scope() )
  */
 const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !== typeof Deno ? Deno?.args || [] : []))];
 
-// noinspection OverlyNestedFunctionJS,FunctionTooLongJS
+// noinspection OverlyNestedFunctionJS,FunctionTooLongJS,OverlyComplexFunctionJS
 /**
  * This module is constructed by an Immediately Invoked Function Expression (IIFE).
  * see: <a href="https://developer.mozilla.org/en-US/docs/Glossary/IIFE">MDN: IIFE</a> for more information on this design pattern
@@ -307,7 +307,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     /**
      * Returns true if EXACTLY one condition is true.
-     * Evaluates ALL conditions, dpes not shortcut.
+     * Evaluates ALL conditions, does not shortcut.
      *
      * @param {...*} pConditions One or more expressions that evaluate to a boolean, true or false
      *
@@ -316,15 +316,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     const Xor = ( ...pConditions ) =>
     {
         let conditions = [...(pConditions || [])];
-        conditions = conditions.filter( c => true === c );
+        conditions = conditions.filter( c => !!c );
         return 1 === conditions.length;
     };
 
     const Nand = ( ...pConditions ) =>
     {
         let conditions = [...(pConditions || [])];
-        conditions = conditions.filter( c => true === c );
-        return conditions.length > 1 && conditions.length < [...(pConditions || [])].length;
+        conditions = conditions.filter( c => !!c );
+        return conditions.length < [...(pConditions || [])].length;
     };
 
     /**
@@ -1368,7 +1368,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          *
          * @param {boolean} [pTraceEnabled=false] - Optional flag to enable or disable tracing. Defaults to false.
          *
-         * @param {object} [pOptions] Any aritrary object that might need to be associated with a particular mode.
+         * @param {object} [pOptions] Any arbitrary object that might need to be associated with a particular mode.
          *
          * @return {ExecutionMode} A new instance of the class with the specified name and trace settings.
          */
@@ -1916,11 +1916,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             let s = "EXECUTION ENVIRONMENT\n";
 
-            s += "Runtime: ";
-            s += isNode() ? "Node.js" : isDeno() ? "Deno" : isBrowser() ? "Browser" : _unknown;
-            s += isNode() || isDeno() ? (", Version: " + this.version) : _mt_str;
-            s += isBrowser() ? (": " + this.userAgent) : _mt_str;
-            s += "\n";
+            s += this.printRuntime( s );
 
             s += (this.operatingSystem ? ("OS: " + (this.operatingSystem) + "\n") : _mt_str);
 
@@ -1928,12 +1924,16 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             s += (this.mode ? ("Mode: " + (this.mode.name) + "\n") : _mt_str);
 
-            if ( isNonNullObj( this.ENV ) && Object.keys( this.ENV ).length > 0 )
-            {
-                s += "ENV: \n";
-                s += JSON.stringify( this.ENV, null, 4 );
-                s += "\n";
-            }
+            s += this.printEnvironmentVariables();
+
+            s += this.printModuleArguments( s );
+
+            return s + "\n\n";
+        }
+
+        printModuleArguments()
+        {
+            let s = _mt_str;
 
             if ( isNonNullObj( this.ARGUMENTS ) && Object.keys( this.ARGUMENTS ).length > 0 )
             {
@@ -1942,7 +1942,32 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 s += "\n";
             }
 
-            return s + "\n\n";
+            return s;
+        }
+
+        printEnvironmentVariables()
+        {
+            let s = _mt_str;
+
+            if ( isNonNullObj( this.ENV ) && Object.keys( this.ENV ).length > 0 )
+            {
+                s += "ENV: \n";
+                s += JSON.stringify( this.ENV, null, 4 );
+                s += "\n";
+            }
+
+            return s;
+        }
+
+        printRuntime()
+        {
+            let s = "Runtime: ";
+
+            s += isNode() ? "Node.js" : isDeno() ? "Deno" : isBrowser() ? "Browser" : _unknown;
+            s += isNode() || isDeno() ? (", Version: " + this.version) : _mt_str;
+            s += isBrowser() ? (": " + this.userAgent) : _mt_str;
+
+            return s + "\n";
         }
     }
 
@@ -1995,52 +2020,88 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     };
 
     /**
-     * This class is a wrapper that represents the result of a promise.<br>
+     * This class is a wrapper that represents the results of a collection of settled promises.<br>
      * Provides information about the status,
      * resolved value,
-     * or the rejection reason of the promise.
+     * or the rejection reason of each settled promise.
      *
      * @class
      */
-    class PromiseResult
+    class PromiseResult extends Array
     {
-        #result;
-        #status;
-        #value;
-        #reason;
-
-        constructor( pResult, pStatus, pValue, pReason )
+        /**
+         *
+         * @param {Array.<{status:string,value:*,reason:string}>} pResult
+         */
+        constructor( pResult )
         {
-            this.#result = pResult || { status: pStatus, value: pValue, reason: pReason };
-            this.#status = pResult?.status || pStatus || "pending";
-            this.#value = pResult?.value || pValue;
-            this.#reason = pResult?.reason || pReason;
+            super( ...(pResult || [pResult]) );
         }
 
-        get status()
+        getStatus( pIndex = 0 )
         {
-            return (_mt_str + this.#status).trim();
+            return (this.length > pIndex ? this[pIndex]?.status : _unknown) || "rejected";
         }
 
-        get value()
+        getValue( pIndex = 0 )
         {
-            return this.#value;
+            return (this.length > pIndex ? this[pIndex]?.value : this) || this;
         }
 
-        get reason()
+        getReason( pIndex = 0 )
         {
-            return this.#reason;
+            return (this.length > pIndex ? (this[pIndex]?.reason || _mt_str) : _unknown) || "no such promise";
         }
 
-        isFulfilled()
+        get allFulfilled()
         {
-            return isFulfilled( this.#result ) || "fulfilled" === this.status;
-        };
+            return this.every( isFulfilled );
+        }
 
-        isRejected()
+        get anyFulfilled()
         {
-            return isRejected( this.#result ) || "rejected" === this.status;
-        };
+            return this.some( isFulfilled );
+        }
+
+        get allRejected()
+        {
+            return this.every( isRejected );
+        }
+
+        get anyRejected()
+        {
+            return this.some( isRejected );
+        }
+
+        get fulfilled()
+        {
+            return this.filter( isFulfilled ).map( e => e?.value );
+        }
+
+        get rejected()
+        {
+            return this.filter( isRejected ).map( e => e?.reason );
+        }
+
+        get pending()
+        {
+            return this.filter( e => !isFulfilled( e ) && !isRejected( e ) );
+        }
+
+        forEachFulfilled( pCallback, pThis )
+        {
+            (this.fulfilled || []).forEach( pCallback, pThis );
+        }
+
+        forEachRejected( pCallback, pThis )
+        {
+            (this.rejected || []).forEach( pCallback, pThis );
+        }
+
+        forEachPending( pCallback, pThis )
+        {
+            (this.pending || []).forEach( pCallback, pThis );
+        }
     }
 
     /**
@@ -5687,11 +5748,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return collection;
     }
 
-    function getPrivatePropertyNames( pObject )
-    {
-        return getPrivates( pObject, [], ( collection, entry ) => collection.push( entry[0] ) );
-    }
-
     function getPrivateEntries( pObject )
     {
         return getPrivates( pObject, [], ( collection, entry ) => collection.push( entry ) );
@@ -6251,7 +6307,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     const COMPARE_EQUAL = 0;
     const COMPARE_GREATER_THAN = 1;
 
-    const resolveComparator = ( pComparator ) => isFunc( pComparator?.compare ) ? pComparator : isFunc( pComparator ) ? { compare: pComparator } : { compare: ( a, b ) => null };
+    const resolveComparator = ( pComparator ) => isFunc( pComparator?.compare ) ? pComparator : isFunc( pComparator ) ? { compare: pComparator } : { compare: ( a, b ) => 0 };
 
     const compare = ( pFirst, pSecond, pNullsFirst = true ) =>
     {

@@ -8,6 +8,8 @@ const { moduleUtils } = core;
 
 const
     {
+        Xor,
+        Nand,
         ModuleEvent,
         ToolBocksModule,
         TYPES_CHECKS,
@@ -207,6 +209,12 @@ describe( "Sanity-check", () =>
     test( "Exported classes, variables, and functions are defined", () =>
     {
         expect( moduleUtils ).toBeDefined();
+
+        expect( Xor ).toBeDefined();
+        expect( typeof Xor ).toBe( "function" );
+
+        expect( Nand ).toBeDefined();
+        expect( typeof Nand ).toBe( "function" );
 
         expect( ModuleEvent ).toBeDefined();
         expect( typeof ModuleEvent ).toBe( "function" );
@@ -410,10 +418,72 @@ describe( "Sanity-check", () =>
     } );
 } );
 
+describe( "Extended Boolean Operators", () =>
+{
+    test( "Xor (exclusive OR) returns true if and only if exactly one value is true", () =>
+    {
+        expect( Xor( true, false ) ).toBe( true );
+        expect( Xor( false, true ) ).toBe( true );
+        expect( Xor( true, true ) ).toBe( false );
+        expect( Xor( false, false ) ).toBe( false );
+
+        expect( Xor( 1, 0 ) ).toBe( true );
+        expect( Xor( 0, 1 ) ).toBe( true );
+        expect( Xor( 1, 1 ) ).toBe( false );
+        expect( Xor( 0, 0 ) ).toBe( false );
+
+        function foo()
+        {
+            return 1 < 0;
+        }
+
+        function bar()
+        {
+            return 1 > 0;
+        }
+
+        expect( Xor( foo(), bar() ) ).toBe( true );
+
+    } );
+
+    test( "Nand (NOT AND) returns true if !( a && b && c && ... n )", () =>
+    {
+        expect( Nand( true, false ) ).toBe( !(true && false) );
+        expect( Nand( false, true ) ).toBe( !(true && false) );
+        expect( Nand( true, true ) ).toBe( !(true && true) );
+        expect( Nand( false, false ) ).toBe( !(false && false) );
+
+        expect( Nand( 1, 0 ) ).toBe( true );
+        expect( Nand( 0, 1 ) ).toBe( true );
+        expect( Nand( 1, 1 ) ).toBe( false );
+        expect( Nand( 0, 0 ) ).toBe( true );
+
+        function foo()
+        {
+            return 1 < 0;
+        }
+
+        function bar()
+        {
+            return 1 > 0;
+        }
+
+        function baz( b )
+        {
+            return b;
+        }
+
+        expect( Nand( foo(), bar() ) ).toBe( true );
+        expect( Nand( foo(), bar(), baz(true) ) ).toBe( true );
+        expect( Nand( foo(), bar(), baz(false) ) ).toBe( true );
+        expect( Nand( bar(), baz(true), baz(true) ) ).toBe( false );
+
+    } );
+} );
+
 // NOTE: these are basic checks; use TypeUtils for more useful type checks
 describe( "TYPES_CHECK functionality", () =>
 {
-
     test( "isNum", () =>
     {
         expect( isNum( "abc" ) ).toBe( false );
