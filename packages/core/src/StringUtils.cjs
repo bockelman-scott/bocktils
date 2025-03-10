@@ -2608,7 +2608,6 @@ const { _ud = "undefined", $scope } = constants;
         return false;
     };
 
-
     /**
      * Returns true if the specified string is very likely to be a filepath
      *
@@ -2627,7 +2626,7 @@ const { _ud = "undefined", $scope } = constants;
 
             if ( /[\\\/\w._-]+/.test( pStr ) )
             {
-                const parts = pStr.split( /\\\//g );
+                const parts = pStr.split( /[\\\/]/g );
                 return isLegalFileName( parts[parts.length - 1] );
             }
         }
