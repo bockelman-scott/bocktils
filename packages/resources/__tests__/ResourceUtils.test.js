@@ -19,7 +19,7 @@ const {
     ResourceFamily,
     ResourceCache,
     executionEnvironment,
-    rxFileHeader,
+    RX_PROPERTIES_FILE_HDR,
     extractFileHeader,
     isValidPropertyKey,
     isValidPropertyFileEntry,
@@ -28,6 +28,15 @@ const {
     isValidResourceKey
 } = resourceUtils;
 
+const filePaths =
+    [
+        "../packages/resources/messages/messages.properties",
+        "../packages/resources/messages/messages_es.properties",
+        "../packages/resources/messages/messages_es-MX.properties",
+        "../packages/resources/messages/messages_es-SP.properties"
+    ];
+
+const baseFile = filePaths[0];
 
 describe( "DEFAULTS", () =>
 {
@@ -200,13 +209,12 @@ describe( "Properties", () =>
               expect( properties.size ).toEqual( 6 );
           } );
 
-
     test( "Properties load - from String",
           () =>
           {
               let properties = new Properties();
 
-              let source =`test.key.1=valor de ensayo uno
+              let source = `test.key.1=valor de ensayo uno
 test.key.2=valor de ensayo dos
 test.key.3=valor de ensayo tres
 test.key.5=valor de ensayo cinco`;
@@ -215,7 +223,7 @@ test.key.5=valor de ensayo cinco`;
 
               expect( properties.size ).toEqual( 4 );
 
-              source =`test.key.4=valor de ensayo quatro`;
+              source = `test.key.4=valor de ensayo quatro`;
 
               properties.load( source );
 
@@ -228,14 +236,77 @@ test.key.5=valor de ensayo cinco`;
               expect( properties.get( "test.key.5" ) ).toEqual( "valor de ensayo cinco" );
           } );
 
-    test( "Properties load - from File",
+    test( "Properties async load - from String",
           async () =>
           {
-              let properties = await Properties.fromFile( "../packages/resources/messages/messages.properties" );
+              let properties = new Properties();
 
-              console.log( properties.toString() );
+              let source = `test.key.1=valor de prueba uno
+test.key.2=valor de prueba dos
+test.key.3=valor de prueba tres
+test.key.5=valor de prueba cinco`;
+
+              properties = await properties.asyncLoad( source );
+
+              expect( properties.size ).toEqual( 4 );
+
+              source = `test.key.4=valor de prueba quatro`;
+
+              properties = await properties.asyncLoad( source );
+
+              expect( properties.size ).toEqual( 5 );
+
+              expect( properties.get( "test.key.1" ) ).toEqual( "valor de prueba uno" );
+              expect( properties.get( "test.key.2" ) ).toEqual( "valor de prueba dos" );
+              expect( properties.get( "test.key.3" ) ).toEqual( "valor de prueba tres" );
+              expect( properties.get( "test.key.4" ) ).toEqual( "valor de prueba quatro" );
+              expect( properties.get( "test.key.5" ) ).toEqual( "valor de prueba cinco" );
           } );
-});
+
+    test( "Properties load - from File",
+          async() =>
+          {
+              let properties = await Properties.fromFile( baseFile );
+
+              expect( properties.name ).toEqual( "messages" );
+              expect( properties.locale ).toEqual( DEFAULT_LOCALE );
+              expect( properties.family ).toEqual( "messages" );
+              expect( properties.size ).toEqual( 4 );
+
+              expect( properties.get( "test.key.3" ) ).toEqual( "test value three" );
+          } );
+
+    test( "Properties load - from multiple files",
+          async() =>
+          {
+              const properties = await (Properties.from( filePaths ));
+
+              expect( properties instanceof Promise ).toBe( false );
+              expect( properties instanceof Properties ).toBe( true );
+              expect( properties.size ).toEqual( 5 );
+
+              // console.log( properties.entries() );
+          } );
+
+    test( "Properties load - synchronous behavior when there are multiple files",
+          () =>
+          {
+              let properties = (Properties.from( filePaths ));
+
+              if ( properties instanceof Promise )
+              {
+                  (async function()
+                  {
+                      properties = await properties;
+                  }());
+              }
+
+              expect( properties instanceof Promise ).toBe( true );
+          } );
+
+
+
+} );
 
 describe( "ResourceKey", () =>
 {

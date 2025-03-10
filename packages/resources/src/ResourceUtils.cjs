@@ -61,6 +61,7 @@ const { _ud = "undefined", $scope } = constants;
         objectKeys,
         attempt,
         asyncAttempt,
+        PromiseResult,
         resolveError,
         getMessagesLocale,
         isFulfilled,
@@ -257,27 +258,111 @@ const { _ud = "undefined", $scope } = constants;
             localeUtils
         };
 
+    // this is the module that will be exported
     let toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
+    // this is the current runtime (Browser, Deno, Node.js, etc)
     const executionEnvironment = toolBocksModule.executionEnvironment;
 
+    // are we in a webpage
     const _isBrowser = executionEnvironment.isBrowser();
 
-    const rxFileHeader = /^\s*\[[^\]]+]\s*/;
+    /**
+     * A regular expression that will match a properties file header
+     * <br>
+     * <br>
+     * A properties file header is expected to appear on the first line,<br>
+     * start and end with brackets ([])<br>
+     * and contain either the name, family name, or file path
+     * of the content.<br>
+     * <br>
+     * <br>
+     * Example: [../resources/messages/error_messages.properties]
+     * <br>
+     * <br>
+     * Example 2: [error_messages]
+     * <br>
+     * @const
+     */
+    const RX_PROPERTIES_FILE_HDR = /^\s*\[[^\]]+]\s*/;
 
+    /**
+     * Extracts and returns the header portion of the specified string (representing properties file content)
+     * <br>
+     * <br>
+     *
+     * This function checks if the input is a non-blank string,<br>
+     * gets the content before the first newline,<br>
+     * and attempts to match it against a predefined file header regular expression.
+     * <br>
+     * <br>
+     * If a match is found, the matched header is returned;<br>
+     * otherwise, it returns an empty string.
+     * <br>
+     *
+     * @param {string} pString - The file content
+     *
+     * @returns {string} The extracted file header or an empty string
+     *                   if the input does not contain a header or is not a string.
+     */
     const extractFileHeader = function( pString )
     {
         if ( isString( pString ) && !isBlank( pString ) )
         {
             const s = leftOf( asString( pString, true ), /\r?\n/ );
 
-            const matches = rxFileHeader.exec( s );
+            const matches = RX_PROPERTIES_FILE_HDR.exec( s );
 
             return matches ? matches[0] : _mt_str;
         }
 
         return _mt_str;
     };
+
+    /**
+     * Calculates the resource family name based on the specified name and locale information.
+     * <br>
+     * <br>
+     *
+     * @param {string} pName - The name or path string to be used for extracting the family name.
+     * @param {string|Intl.Locale} pLocale - The locale to remove from the input string.
+     *
+     * @return {string} - The resource family name based on the input and locale.
+     */
+    function calculateFamilyName( pName, pLocale )
+    {
+        let nm = asString( asString( pName, true ), true );
+
+        let locale = resolveLocale( pLocale ) || DEFAULT_LOCALE;
+
+        let separator = nm.includes( _underscore ) ? _underscore : _hyphen;
+
+        let parts = nm.replace( (_hyphen + locale.toString()), _mt_str ).split( /[_-]/ );
+
+        parts = parts.filter( e => !isBlank( e ) );
+        parts = parts.filter( e => lcase( e ) !== lcase( asString( locale.language, true ) ) );
+        parts = parts.filter( e => lcase( e ) !== lcase( asString( locale.region, true ) ) );
+        parts = parts.filter( e => lcase( e ) !== lcase( asString( locale.script, true ) ) );
+
+        return parts.join( separator );
+    }
+
+    /**
+     * Calculates and returns a name for a specific set of properties
+     * <br>
+     * by appending the specified locale string to the resource family name
+     * <br>
+     *
+     * @param {string} pName - The input string to be processed, usually a file path or a properties file header.
+     * @param {string} pLocale - The locale to include in the name.
+     *
+     * @return {string} The concatenated result of the calculated family name and the resolved locale.
+     */
+    function calculateName( pName, pLocale )
+    {
+        let locale = resolveLocale( pLocale ) || DEFAULT_LOCALE;
+        return calculateFamilyName( pName, locale ) + (_hyphen + locale.toString());
+    }
 
     /**
      * This class <i>roughly approximates</i> the structure and functionality of the java.utils.Properties class.
@@ -299,19 +384,46 @@ const { _ud = "undefined", $scope } = constants;
      */
     class Properties extends Map
     {
+        /**
+         * The name of the specific set of properties added to this instance.
+         *
+         * @type {string}
+         */
         #name = "Properties";
 
+        /**
+         * The name of the set of properties represented by this instance and its defaults<br>
+         * (and any properties for which this instance provides defaults).
+         *
+         * @type {string}
+         */
         #family = "Properties";
 
+        /**
+         * The locale with which these properties are associated.
+         * <br>
+         * <br>
+         * It is a typical use of Properties
+         * to provide translated text for languages
+         * other than the default language.
+         * <br>
+         *
+         * @type {Intl.Locale}
+         */
         #locale = DEFAULT_LOCALE;
 
         /**
-         * Nested instance holding default values for keys not defined in this instance
+         * Nested instance holding default values for keys not defined in this instance.
+         * <br>
+         * <br>
+         * One use of this mechanism is to provide customer or release-specific labels or help topics
+         * by storing the original or out-of-the-box properties as defaults
+         * to a customer and/or release-specific set of properties, defining only the properties that vary.
+         * <br>
+         *
          * @type {Map|Properties}
          */
         #defaults;
-
-        #additionalKeys;
 
         /**
          * Constructs a new instance of the Properties class
@@ -336,75 +448,42 @@ const { _ud = "undefined", $scope } = constants;
          *
          * @param {Intl.Locale|string} [pLocale=DEFAULT_LOCALE] The locale with which these properties are associated
          *
-         * @param {...string} [pAdditionalKeys] Zero or more additional strings to uniquely identify this instance
-         *
          * @return {Properties}
          */
-        constructor( pName, pLocale = DEFAULT_LOCALE, pDefaults = new Map(), ...pAdditionalKeys )
+        constructor( pName, pLocale = DEFAULT_LOCALE, pDefaults = new Map() )
         {
             super();
 
             this.#family = this.calculateFamilyName( pName, pLocale );
 
-            this.#name = asString( pName || this.#name, true ) || this.calculateName( pName, pLocale ) || this.#family;
+            this.#name = asString( pName || this.#name, true ) ||
+                         this.calculateName( pName, pLocale ) ||
+                         this.#family;
 
             const hasDefaults = isNonNullObject( pDefaults ) &&
                                 (isMap( pDefaults ) || pDefaults instanceof this.constructor) &&
                                 pDefaults !== this &&
                                 pDefaults?.size > 0;
 
-            this.#defaults = hasDefaults ? this.#initializeDefaults( pDefaults ) : new Map();
-
             this.#locale = resolveLocale( pLocale || this.#locale );
 
+            const me = this;
+
+            this.#defaults = hasDefaults ? attempt( () => (me || this).#initializeDefaults( pDefaults ) ) : new Map();
+
             this.#name += !isDefaultLocale( this.#locale ) ? (_hyphen + this.#locale.toString()) : _mt_str;
-
-            const additionalKeys = flatArgs( varargs( ...pAdditionalKeys ) ).filter( e => isString( e ) && !isBlank( e ) );
-
-            if ( additionalKeys.length > 0 )
-            {
-                this.#additionalKeys = [...(additionalKeys || [])];
-
-                this.#name += (_hyphen + additionalKeys.join( _hyphen ));
-            }
         }
 
         calculateFamilyName( pName, pLocale )
         {
-            let nm = asString( (asString( pName, true ) || this.#name) || this.#name, true );
-
-            let locale = resolveLocale( pLocale || this.#locale ) || DEFAULT_LOCALE;
-
-            let separator = nm.includes( _underscore ) ? _underscore : _hyphen;
-
-            let parts = nm.replace( locale.toString(), _mt_str ).split( /[_-]/ );
-
-            parts = parts.filter( e => !isBlank( e ) );
-            parts = parts.filter( e => lcase( e ) !== lcase( asString( locale.language, true ) ) );
-            parts = parts.filter( e => lcase( e ) !== lcase( asString( locale.region, true ) ) );
-            parts = parts.filter( e => lcase( e ) !== lcase( asString( locale.script, true ) ) );
-
-            return parts.join( separator );
+            return calculateFamilyName( (asString( pName, true ) || this.#name), resolveLocale( pLocale || this.#locale ) ) || this.#family || this.#name;
         }
 
         calculateName( pName, pLocale )
         {
-            let nm = asString( (asString( pName, true ) || this.#name) || this.#name, true );
-
             let locale = resolveLocale( pLocale || this.#locale ) || DEFAULT_LOCALE;
-
-            let separator = nm.includes( _underscore ) ? _underscore : _hyphen;
-
-            let parts = nm.replace( locale.toString(), _mt_str ).split( /[_-]/ );
-
-            parts = parts.filter( e => !isBlank( e ) );
-            parts = parts.filter( e => lcase( e ) !== lcase( asString( locale.language, true ) ) );
-            parts = parts.filter( e => lcase( e ) !== lcase( asString( locale.region, true ) ) );
-            parts = parts.filter( e => lcase( e ) !== lcase( asString( locale.script, true ) ) );
-
-            return parts.join( separator ) + (_hyphen + locale.toString());
+            return this.calculateFamilyName( pName, locale ) + (_hyphen + locale.toString());
         }
-
 
         get name()
         {
@@ -421,11 +500,6 @@ const { _ud = "undefined", $scope } = constants;
             return resolveLocale( this.#locale ) || DEFAULT_LOCALE;
         }
 
-        get additionalKeys()
-        {
-            return [...(this.#additionalKeys || [])];
-        }
-
         /**
          * Generates the default properties object
          * to provide the fallback values
@@ -437,13 +511,19 @@ const { _ud = "undefined", $scope } = constants;
         {
             const name = pDefaults?.name || (this.#name + _underscore + "defaults");
 
-            const locale = resolveLocale( pDefaults?.locale ) || this.locale;
+            const locale = resolveLocale( pDefaults?.locale || this.locale ) || this.locale;
 
             const properties = new Properties( name, locale );
 
             let map = Properties.isProperties( pDefaults ) && this !== pDefaults ? pDefaults : properties;
 
-            this.#defaults = (map instanceof this.constructor) ? lock( map ) : isMap( map ) ? map.forEach( ( v, k ) => properties.set( k, v ) ) : properties;
+            this.#defaults = (map instanceof this.constructor) ?
+                             lock( map ) :
+                             (isMap( map ) ?
+                              map.forEach( ( v, k ) => properties.set( k, v ) ) :
+                              (isString( map ) ?
+                               Properties.from( map, { name, locale }, () => {} ) :
+                               properties));
 
             return this.#defaults || properties;
         }
@@ -466,9 +546,18 @@ const { _ud = "undefined", $scope } = constants;
          */
         set defaults( pDefaults )
         {
-            this.#defaults = lock( this.#initializeDefaults( pDefaults ) );
+            const me = this;
+            this.#defaults = lock( attempt( () => (me || this).#initializeDefaults( pDefaults ) ) ) || new Properties();
         }
 
+        /**
+         * Returns the size of the collection
+         * by calculating the <i>unique</i> keys from both
+         * the current instance and keys defined in the default Properties.
+         * <br>
+         *
+         * @return {number} The total count of unique keys available in the collection.
+         */
         get size()
         {
             return unique( [...(super.keys() || []), ...(this.defaults?.keys() || [])] ).length;
@@ -479,6 +568,11 @@ const { _ud = "undefined", $scope } = constants;
             return this;
         }
 
+        /**
+         * Returns an iterator for the current object that allows traversal of its entries.
+         *
+         * @return {Iterator} An iterator providing access to the object's entries in sequence.
+         */
         [Symbol.iterator]()
         {
             return toIterable( lock( [...this.entries()] ) );
@@ -599,11 +693,24 @@ const { _ud = "undefined", $scope } = constants;
             this.entries().forEach( e => pFunction.call( pThis || me || this, asString( e[1] ), asString( e[0] ), this ) );
         }
 
+        /**
+         * Adds or Updates a value in this instance for the specified key.
+         *
+         * @param {string|ResourceKey} pKey The key used to identify the value.
+         *
+         * @param {*|null} pValue The value to be set.<br>
+         *                        If it is not provided and the key is an instance of ResourceKey,<br>
+         *                        the ResourceKey's default value is used.<br>
+         *                        <br>
+         *                        The stored value will be converted to a string.<br>
+         *
+         * @return {boolean} Returns true if the value was successfully set, otherwise false.
+         */
         set( pKey, pValue )
         {
             const key = asString( pKey, true );
 
-            return super.set( key, asString( pValue ) );
+            return super.set( key, asString( pValue || (pKey instanceof ResourceKey ? pKey.defaultValue : _mt_str) ) );
         }
 
         /**
@@ -631,10 +738,14 @@ const { _ud = "undefined", $scope } = constants;
         }
 
         /**
-         * Returns true if the specified key corresponds to a non-empty value available in this collection.
+         * Returns true if the specified key
+         * corresponds to a non-empty value
+         * available in this instance or its defaults.
          *
          * @param {string} pKey the key to evaluate
-         * @returns {boolean|*} true if the specified key corresponds to a non-empty value available in this collection
+         *
+         * @returns {boolean|*} true if the specified key corresponds to a non-empty value
+         *                      available in this collection
          */
         has( pKey )
         {
@@ -669,9 +780,12 @@ const { _ud = "undefined", $scope } = constants;
          *
          * @param pOptions
          *
+         * @param {function(Properties,Array.<Properties>):void} pCallback
+         *
+         *
          * @returns {Properties} this instance, now populated with the key/value pairs found in the specified source
          */
-        load( pSource, pOptions = DEFAULT_PROPERTIES_OPTIONS )
+        load( pSource, pOptions = DEFAULT_PROPERTIES_OPTIONS, pCallback = no_op )
         {
             const options = populateOptions( pOptions, DEFAULT_PROPERTIES_OPTIONS );
 
@@ -708,7 +822,24 @@ const { _ud = "undefined", $scope } = constants;
                 source.forEach( ( v, k ) => this.set( asString( k ), asString( v ) ) );
             }
 
+            if ( isFunction( pCallback ) )
+            {
+                attempt( () => pCallback( this, [this] ) );
+            }
+
             return this;
+        }
+
+        async asyncLoad( pSource, pOptions = DEFAULT_PROPERTIES_OPTIONS, pCallback = no_op )
+        {
+            const me = this;
+
+            const options = populateOptions( pOptions, DEFAULT_PROPERTIES_OPTIONS );
+
+            return await (async function()
+            {
+                return me.load( pSource, options, pCallback );
+            }());
         }
 
         /**
@@ -746,7 +877,36 @@ const { _ud = "undefined", $scope } = constants;
         }
     }
 
-    const DEFAULT_PROPERTIES = new Properties();
+    const DEFAULT_PROPERTIES = lock( new Properties() );
+
+    const _buildDefaultProperties = ( pOptions ) => new Properties( pOptions?.name, pOptions?.locale );
+
+    const _buildNestedProperties = function( pRootProperties, ...pProperties )
+    {
+        let properties = Properties.from( (pRootProperties || _buildDefaultProperties()) );
+
+        let objects = flatArgs( varargs( ...pProperties ) ).filter( e => Properties.isProperties( e ) );
+
+        // order the Properties such that the more specific properties appear AFTER less-specific properties
+        objects = Properties.sort( objects.map( e => Properties.from( e ) ) );
+
+        // build up the nested set of properties
+        for( const obj of objects )
+        {
+            // take the name from the Properties object, but fallback to a generated name if it is missing
+            const name = asString( obj?.name, true ) ||
+                         asString( obj?.family, true ) ||
+                         (asString( this.baseName, true ) + _hyphen + asString( obj?.locale?.toString(), true )) ||
+                         _mt_str;
+
+            // create a new Properties object with the prior instance as its defaults
+            // because we have ordered the properties by specificity,
+            // the more specific properties will be constructed with the lesser specific properties as their defaults
+            properties = new Properties( name, obj?.locale, properties ).load( Properties.from( obj ) );
+        }
+
+        return properties;
+    };
 
     /**
      * Returns true if the specified value is a Map or an instance of Properties
@@ -770,61 +930,64 @@ const { _ud = "undefined", $scope } = constants;
 
         function localeData( pProperties )
         {
-            const locale = pProperties?.locale;
+            const locale = resolveLocale( pProperties?.locale );
 
-            const name = asString( pProperties?.name, true ) || pProperties.calculateName( pProperties?.name || pProperties?.family, pProperties?.locale );
+            const family = asString( pProperties?.family, true ) || pProperties.calculateFamilyName( pProperties?.name, locale );
+
+            const name = asString( pProperties?.name, true ) || pProperties.calculateName( pProperties?.name || pProperties?.family, locale );
 
             const parts = name.split( /[_-]/ ).filter( e => e.length > 0 );
 
-            let base = pProperties?.family || asString( parts[0], true );
             let language = lcase( asString( locale?.language, true ) || (parts.length > 1 ? asString( parts[1], true ) : DEFAULT_LOCALE_STRING) );
             let region = lcase( asString( locale?.region, true ) || (parts.length > 2 ? asString( parts[2], true ) : _mt_str) );
 
-            return { locale, name, parts, base, language, region };
+            return { locale, family, name, language, region, parts };
         }
 
-        return compareNullable( pA, pB, false, ( a, b ) =>
+        function compareByFamily( pFamilyA, pFamilyB, pNameA, pNameB )
         {
-            const {
-                locale: localeA,
-                name: nameA,
-                parts: partsA,
-                base: baseA,
-                language: langA,
-                region: regionA
-            } = localeData( a );
+            let delta = lcase( asString( pFamilyA, true ) ).localeCompare( lcase( asString( pFamilyB, true ) ) );
 
-            const {
-                locale: localeB,
-                name: nameB,
-                parts: partsB,
-                base: baseB,
-                language: langB,
-                region: regionB
-            } = localeData( b );
+            if ( 0 === delta && !(isBlank( pNameA ) || isBlank( pNameB )) )
+            {
+                delta = compareByName( pNameA, pNameB );
+            }
 
-            let delta = baseA.localeCompare( baseB );
+            return delta;
+        }
+
+        function compareByName( pNameA, pNameB )
+        {
+            return lcase( asString( pNameA, true ) ).localeCompare( lcase( asString( pNameB, true ) ) );
+        }
+
+        function compareLanguage( pLanguageA, pLanguageB )
+        {
+            let delta = lcase( asString( pLanguageA, true ) ).localeCompare( lcase( asString( pLanguageB, true ) ) );
 
             if ( 0 !== delta )
             {
-                return delta;
+                delta = isDefaultLanguage( pLanguageA ) ? -1 : (isDefaultLanguage( pLanguageB ) ? 1 : delta);
             }
 
-            delta = langA.localeCompare( langB );
+            return delta;
+        }
+
+        function compareRegion( pRegionA, pRegionB )
+        {
+            let delta = pRegionA.localeCompare( pRegionB );
 
             if ( 0 !== delta )
             {
-                return isDefaultLanguage( langA ) ? -1 : isDefaultLanguage( langB ) ? 1 : delta;
+                delta = isDefaultRegion( pRegionA ) ? -1 : isDefaultRegion( pRegionB ) ? 1 : delta;
             }
 
-            delta = regionA.localeCompare( regionB );
+            return delta;
+        }
 
-            if ( 0 !== delta )
-            {
-                return isDefaultRegion( regionA ) ? -1 : isDefaultRegion( regionB ) ? 1 : delta;
-            }
-
-            delta = (partsA.length || 0) - (partsB.length || 0);
+        function compareParts( partsA, partsB )
+        {
+            let delta = (partsA.length || 0) - (partsB.length || 0);
 
             if ( delta > 0 )
             {
@@ -841,6 +1004,51 @@ const { _ud = "undefined", $scope } = constants;
                 const partB = partsB[i];
 
                 delta = partA.localeCompare( partB );
+
+                if ( 0 !== delta )
+                {
+                    break;
+                }
+            }
+
+            return delta;
+        }
+
+        return compareNullable( pA, pB, false, ( a, b ) =>
+        {
+            const {
+                locale: localeA,
+                family: familyA,
+                name: nameA,
+                language: langA,
+                region: regionA,
+                parts: partsA
+            } = localeData( a );
+
+            const {
+                locale: localeB,
+                family: familyB,
+                name: nameB,
+                language: langB,
+                region: regionB,
+                parts: partsB
+            } = localeData( b );
+
+            let delta = 0;
+
+            let comparisons =
+                [
+                    () => compareByFamily( familyA, familyB, nameA, nameB ),
+                    () => compareByName( nameA, nameB ),
+                    () => compareLanguage( langA, langB ),
+                    () => compareRegion( regionA, regionB ),
+                    () => compareParts( partsA, partsB )
+                ];
+
+            while ( delta === 0 && comparisons.length > 0 )
+            {
+                const comparison = comparisons.shift();
+                delta = comparison();
             }
 
             return delta;
@@ -876,21 +1084,57 @@ const { _ud = "undefined", $scope } = constants;
             locale: null
         };
 
+    /**
+     * Returns true if the specified string appears to be the header for a properties file.<br>
+     * <br>
+     * That is, if the first line matches something like [file/path/or/properties/file_name.properties],
+     * this functions will return true.<br>
+     * <br>
+     *
+     * @param {string} content the string to evaluate
+     *
+     * @returns {boolean}  true if the specified string appears to be the header for a properties file
+     */
+    const isPropertyFileHeader = ( content ) => isString( content ) && RX_PROPERTIES_FILE_HDR.test( asString( content, true ) );
 
-    const isPropertyFileHeader = ( content ) => isString( content ) && rxFileHeader.test( asString( content, true ) );
-
-    /*
+    /**
      * Returns true if the string is either a valid key or valid line in a properties file
+     * <br>
+     * <br>
+     * That is, if the string is not blank
+     * and does not start with a character indicating it is a comment,
+     * this function returns true.
+     * <br>
+     * <br>
+     * @param {string} e the string to evaluate (often an array element being passed to this as a filter)
+     *
+     * @returns {boolean} true if the string is either a valid key or valid line in a properties file
      */
     const isValidPropertyKey = e => isString( e ) && !isBlank( e ) && !(asString( e, true ).startsWith( "#" ) || asString( e, true ).startsWith( "!" ));
 
-    /*
+    /**
      * Returns true if the string represents a valid line in a properties file
+     * <br>
+     * <br>
+     * That is, if the string has a valid key (see #isValidPropertyKey)
+     * <br>
+     * <br>
+     * Note the use of Xor to expect <i>either</i> a colon or an equals sign, but not both.
+     * <br>
+     *
+     * @param {string} e the string to evaluate (often an array element being passed to this as a filter)
+     *
+     * @returns {boolean} true if the string is either a valid line in a properties file
      */
-    const isValidPropertyFileEntry = e => isValidPropertyKey( e ) && Xor( e.includes( _equals ), e.includes( _colon ) );
+    const isValidPropertyFileEntry = e => isValidPropertyKey( e ) && Xor( e.includes( _equals ), e.includes( _colon ) ) && /[^=:]+[=:][^\r\n=:]+\r?(\n|$)+/.test( e );
 
-    /*
-     * Returns true if the content has a [tag] or contains at least one valid property
+    /**
+     * Returns true if the content has a [file header] or contains at least one valid property
+     * <br>
+     * <br>
+     * @param {string} content the string to evaluate
+     *
+     * @returns {boolean} true if the content has a [file header] or contains at least one valid property
      */
     const isValidPropertiesContent = ( content ) => isString( content ) &&
                                                     !isBlank( content ) &&
@@ -898,6 +1142,20 @@ const { _ud = "undefined", $scope } = constants;
 
     Properties.extractFileHeader = extractFileHeader;
 
+    /**
+     * Returns the name of the Properties from properties file header, or 'prefix', or 'preamble'
+     *
+     * @namespace Properties
+     *
+     * @type {function}
+     *
+     * @property {Function} nameFromPrefix
+     *
+     * @param {string} pPrefix the string from which to extract or calculate the name
+     *
+     * @returns {object} the filePath, dirName, fileName, extension, family, name, and localeString
+     *                   of a Properties object or file calculated from a properties file header, 'prefix', or 'preamble'
+     */
     Properties.nameFromPrefix = function( pPrefix )
     {
         if ( isString( pPrefix ) && isPropertyFileHeader( pPrefix ) )
@@ -926,9 +1184,25 @@ const { _ud = "undefined", $scope } = constants;
                 localeString
             };
         }
+
         return Properties.nameFromPath( pPrefix );
     };
 
+
+    /**
+     * Returns the name of the Properties from a filepath or filename
+     *
+     * @namespace Properties
+     *
+     * @type {function}
+     *
+     * @property {Function} nameFromPath
+     *
+     * @param {string} pFilePath the filepath string from which to extract or calculate the name
+     *
+     * @returns {object} the filePath, dirName, fileName, extension, family, name, and localeString
+     *                   of a Properties object or file calculated from a filepath or filename
+     */
     Properties.nameFromPath = function( pFilePath )
     {
         let path = asString( pFilePath, true ).replace( /^\[/, _mt_str ).replace( /]$/, _mt_str ).trim();
@@ -969,6 +1243,14 @@ const { _ud = "undefined", $scope } = constants;
         return { filePath, dirName, fileName, extension, family, name, localeString };
     };
 
+    /**
+     * Returns the locale derived from a filepath or URL.
+     * <br>
+     *
+     * @param {string} pFilePath The filepath or URL from which to derive the Locale
+     *
+     * @returns {Intl.Locale} The locale derived from the specified filepath or URL
+     */
     Properties.localeFromPath = function( pFilePath )
     {
         let locale = DEFAULT_LOCALE;
@@ -1008,6 +1290,7 @@ const { _ud = "undefined", $scope } = constants;
 
     /**
      * Returns a new instance of Properties populated with the key/value pairs in the specified array.
+     *
      * @param {Array<Array.<string>>} pKvPairs An array of arrays,
      *                                         where each element is a 2-element array
      *                                         containing the key and its associated value
@@ -1015,8 +1298,12 @@ const { _ud = "undefined", $scope } = constants;
      * @param {PropertiesLoadOptions} [pOptions=DEFAULT_PROPERTIES_OPTIONS] An object defining properties
      *                                                                      that control how to handle the input data.
      *
+     * @param {function(Properties,Array.<Properties>):void} pCallback
+     *
+     * @returns {Properties} A new instance of Properties, populated with the key/value pairs in the specified array.
+     *
      */
-    Properties.from2dArray = function( pKvPairs, pOptions = DEFAULT_PROPERTIES_OPTIONS )
+    Properties.from2dArray = function( pKvPairs, pOptions = DEFAULT_PROPERTIES_OPTIONS, pCallback = no_op )
     {
         const options = populateOptions( pOptions, DEFAULT_PROPERTIES_OPTIONS );
 
@@ -1031,7 +1318,7 @@ const { _ud = "undefined", $scope } = constants;
 
         const properties = new Properties( options.name, options.locale );
 
-        return properties.load( map, options );
+        return properties.load( map, options, pCallback );
     };
 
     /**
@@ -1045,12 +1332,14 @@ const { _ud = "undefined", $scope } = constants;
      *
      * @param {PropertiesLoadOptions} pOptions An object defining the assignment operator to expect and whether to trim values.
      *
+     * @param {function(Properties,Array.<Properties>):void} pCallback
+     *
      * @returns {Properties} a new instance of Properties
      * populated with the data in an array of strings,
      * where each string is formatted as either key=value or key:value.
      *
      */
-    Properties.fromLines = function( pArr, pOptions = DEFAULT_PROPERTIES_OPTIONS )
+    Properties.fromLines = function( pArr, pOptions = DEFAULT_PROPERTIES_OPTIONS, pCallback = no_op )
     {
         const options = populateOptions( pOptions, DEFAULT_PROPERTIES_OPTIONS );
 
@@ -1060,7 +1349,7 @@ const { _ud = "undefined", $scope } = constants;
 
         let kvPairs = arr.map( e => e.split( options.assignment ) );
 
-        return Properties.from2dArray( kvPairs, options );
+        return Properties.from2dArray( kvPairs, options, pCallback );
     };
 
     /**
@@ -1078,9 +1367,11 @@ const { _ud = "undefined", $scope } = constants;
      *
      * @param {PropertiesLoadOptions} pOptions An object specifying the assignment operator and whether to trim values.
      *
+     * @param {function(Properties,Array.<Properties>):void}  pCallback
+     *
      * @returns {Properties} A Properties object populated from the parsed string input.
      */
-    Properties.fromPropertiesString = function( pString, pOptions = DEFAULT_PROPERTIES_OPTIONS )
+    Properties.fromPropertiesString = function( pString, pOptions = DEFAULT_PROPERTIES_OPTIONS, pCallback = no_op )
     {
         if ( isString( pString ) )
         {
@@ -1108,13 +1399,13 @@ const { _ud = "undefined", $scope } = constants;
                 options.name = nm || options.name;
             }
 
-            let arr = asString( str, true ).replace( rxFileHeader, _mt_str ).split( /\r?\n/ );
+            let arr = asString( str, true ).replace( RX_PROPERTIES_FILE_HDR, _mt_str ).split( /\r?\n/ );
 
             arr = arr.map( e => e.replace( /^\s*/, _mt_str ).replace( /\s*$/, _mt_str ) );
 
             arr = arr.filter( isValidPropertyFileEntry );
 
-            return Properties.fromLines( arr, options );
+            return Properties.fromLines( arr, options, pCallback );
         }
     };
 
@@ -1139,7 +1430,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             if ( Properties.isProperties( pObject ) )
             {
-                properties.defaults = pObject;
+                properties.defaults = properties.hasValidDefaults() ? properties.defaults : pObject;
                 return properties;
             }
 
@@ -1173,11 +1464,14 @@ const { _ud = "undefined", $scope } = constants;
     };
 
     /**
-     * Returns a new instance of Properties, populated with the values found in the JSON data provided.<br>
-     * Parses a JSON-formatted string and converts it into a Properties object.<br>
+     * Returns a new instance of Properties, populated with the values found in the JSON data provided.
+     * <br>
+     * <br>
+     * Parses a JSON-formatted string and converts it into a Properties object.
      * <br>
      *
      * @function
+     *
      * @param {string} pJson - The JSON-formatted string to parse.
      * @param {PropertiesLoadOptions} pOptions
      *
@@ -1198,7 +1492,7 @@ const { _ud = "undefined", $scope } = constants;
             options.locale = isLocale( localeString ) ? resolveLocale( localeString ) : options.locale;
         }
 
-        const json = isString( pJson ) ? asString( pJson, true ).replace( rxFileHeader, _mt_str ).trim() : pJson;
+        const json = isString( pJson ) ? asString( pJson, true ).replace( RX_PROPERTIES_FILE_HDR, _mt_str ).trim() : pJson;
 
         const obj = isJson( json ) ? attempt( () => parseJson( json ) ) : Properties.isProperties( pJson ) ? pJson : {};
 
@@ -1206,19 +1500,29 @@ const { _ud = "undefined", $scope } = constants;
     };
 
     /**
-     * Reads properties from a file and returns them as an object.
-     *
+     * Reads properties from a file and returns them as an instance of a Properties object.
+     * <br>
+     * <br>
      * This method parses the specified file and loads its contents as key-value
      * pairs, assuming the format is compatible with traditional properties file
      * syntax. It can handle standard features such as comments and empty lines.
      *
      * @param {string} pFilePath - The path to the properties file to be loaded.
+     *
      * @param pOptions
+     *
      * @returns {Promise<Properties>} a new instance of Properties, populated with the key/value pairs defined in the file
      */
-    Properties.fromFile = async function( pFilePath, pOptions )
+    Properties.fromFile = async function( pFilePath, pOptions = DEFAULT_PROPERTIES_OPTIONS )
     {
         const options = populateOptions( pOptions, DEFAULT_PROPERTIES_OPTIONS );
+
+        const isMultipleFiles = (isArray( pFilePath ) && (asArray( pFilePath ).every( isFilePath )));
+
+        if ( isMultipleFiles )
+        {
+            return await Properties.asyncFrom( pFilePath, options );
+        }
 
         const filePath = resolvePath( pFilePath );
 
@@ -1228,7 +1532,7 @@ const { _ud = "undefined", $scope } = constants;
 
         if ( isString( contents ) && !isBlank( contents ) )
         {
-            contents = prefix + contents.replace( prefix, _mt_str );
+            contents = prefix + contents.replace( RX_PROPERTIES_FILE_HDR, _mt_str ).replace( prefix, _mt_str );
 
             const { family, name, localeString } = Properties.nameFromPath( filePath );
 
@@ -1262,56 +1566,222 @@ const { _ud = "undefined", $scope } = constants;
 
     };
 
-    Properties.from = function( pSource, pOptions )
+    /**
+     * Fetches properties content from one or more HTTP(S) endpoints
+     * and returns a new instance of Properties populated from that content
+     *
+     * @param {Array.<string|Request>} pUrls the URLs (or a Request Objects) from which to retrieve the properties content
+     *
+     * @returns {Properties} a new instance of Properties populated from that content retrieved from the various URLs
+     */
+    Properties.fromMultipleUrls = async function( ...pUrls )
     {
-        const options = populateOptions( pOptions, DEFAULT_PROPERTIES_OPTIONS );
+        let properties = new Properties();
 
-        let name = options.name;
-        let locale = options.locale;
+        let arr = asArray( pUrls );
 
-        options.name = name || options.name;
-        options.locale = locale || options.locale;
+        let promises = arr.map( e => Properties.fromUrl( e, DEFAULT_PROPERTIES_OPTIONS ) );
 
-        if ( isString( pSource ) )
+        const result = await Promise.allSettled( promises );
+
+        if ( result )
         {
-            if ( isValidPropertiesContent( pSource ) )
-            {
-                return Properties.fromPropertiesString( pSource, options );
-            }
+            let props = [...result].filter( e => e?.status === "fulfilled" ).map( e => e.value );
+            props = props.filter( e => e instanceof Properties );
+            props = Properties.sort( ...props );
 
-            return _isBrowser() ? Properties.fromUrl( pSource, options ) : Properties.fromFile( pSource, options );
+            properties = _buildNestedProperties( properties, ...props );
         }
-        else if ( isMap( pSource ) )
-        {
-            return Properties.fromObject( pSource, options );
-        }
-        else if ( isArray( pSource ) )
-        {
-            const arr = asArray( pSource );
 
-            if ( isKeyValueArray( arr ) )
-            {
-                return Properties.from2dArray( arr, options );
-            }
-            else if ( arr.every( isValidPropertiesContent ) )
-            {
-                return Properties.fromLines( arr, options );
-            }
-            else if ( arr.every( isFilePath ) )
-            {
-                //
-            }
+        return properties || new Properties();
+    };
+
+    function handleStringInput( pSource, pOptions, pCallback = no_op )
+    {
+        if ( isValidPropertiesContent( pSource ) )
+        {
+            return Properties.fromPropertiesString( pSource, pOptions, pCallback );
         }
         else if ( isJson( pSource ) )
         {
-            return Properties.fromJsonString( pSource, options );
+            return Properties.fromJsonString( pSource, pOptions, pCallback );
+        }
+        else
+        {
+            return _isBrowser() ?
+                   Properties.fromUrl( pSource, pOptions, pCallback ) :
+                   Properties.fromFile( pSource, pOptions, pCallback );
+        }
+    }
+
+    function handleObjectInput( pSource, pOptions, pCallback )
+    {
+        return Properties.fromObject( pSource, pOptions, pCallback );
+    }
+
+    function handleArrayInput( pSource, pOptions, pCallback )
+    {
+        const options = !isFunction( pOptions ) ? populateOptions( pOptions, DEFAULT_PROPERTIES_OPTIONS ) : DEFAULT_PROPERTIES_OPTIONS;
+
+        let callback = (isFunction( pOptions ) ? (isFunction( pCallback ) ? pCallback : pOptions) : pCallback) || no_op;
+
+        const arr = asArray( pSource );
+
+        if ( isKeyValueArray( arr ) )
+        {
+            return Properties.from2dArray( arr, options, callback );
+        }
+        else if ( arr.every( isValidPropertiesContent ) )
+        {
+            return Properties.fromLines( arr, options, callback );
+        }
+        else if ( arr.every( isFilePath ) )
+        {
+            let properties = new Properties( options.name, options.locale );
+
+            let promises = arr.map( e => Properties.fromFile( e, options ) );
+
+            return Promise.allSettled( promises ).then( ( result ) =>
+                                                        {
+                                                            if ( result )
+                                                            {
+                                                                let props = [...result].filter( e => e?.status === "fulfilled" ).map( e => e.value );
+                                                                props = props.filter( e => e instanceof Properties );
+                                                                props = Properties.sort( ...props );
+
+                                                                properties = _buildNestedProperties( properties, ...props );
+
+                                                                if ( isFunction( callback ) )
+                                                                {
+                                                                    attempt( () => callback( properties, props ) );
+                                                                }
+
+                                                                return properties;
+                                                            }
+                                                        } );
+        }
+    }
+
+    /**
+     * Returns a new instance of Properties from the specified source,
+     * <br>
+     * which can be a string,
+     * a 2d array,
+     * an array of properties-file lines,
+     * another instance of Properties,
+     * a Map,
+     * a filepath or URL,
+     * an array of URLs or filenames,
+     * or just about anything else
+     * that could reasonably be expected to resolve
+     * to a set of Properties.
+     * <br>
+     *
+     *
+     * @param {*} pSource The source of the properties data
+     * @param {object} pOptions
+     * @param {function(Properties,Array.<Properties>):void} pCallback
+     *
+     * @returns {Properties|null} an instance of Properties
+     */
+    Properties.from = function( pSource, pOptions, pCallback = no_op )
+    {
+        if ( pSource instanceof Properties )
+        {
+            return pSource;
+        }
+
+        if ( pSource instanceof Promise )
+        {
+            return pSource.then( e => Properties.from( e, pOptions, pCallback ) );
+        }
+
+        const options = !isFunction( pOptions ) ? populateOptions( pOptions, DEFAULT_PROPERTIES_OPTIONS ) : DEFAULT_PROPERTIES_OPTIONS;
+
+        let callback = (isFunction( pOptions ) ? (isFunction( pCallback ) ? pCallback : pOptions) : pCallback) || no_op;
+
+        let returnValue = pSource instanceof Properties ? pSource : null;
+
+        if ( isString( pSource ) )
+        {
+            returnValue = handleStringInput( pSource, options, callback );
+        }
+        else if ( isArray( pSource ) )
+        {
+            returnValue = handleArrayInput( pSource, options, callback );
         }
         else if ( isNonNullObject( pSource ) )
         {
-            return Properties.fromObject( pSource, options );
+            returnValue = handleObjectInput( pSource, options, callback );
         }
 
-        return new Properties( options.name, options.locale );
+        return returnValue || _buildDefaultProperties( options );
+    };
+
+    /**
+     * Returns a Promise that will resolve to a new instance of Properties from the specified source,
+     * <br>
+     * <br>
+     * which can be a string,
+     * a 2d array,
+     * an array of properties-file lines,
+     * another instance of Properties,
+     * a Map,
+     * a filepath or URL,
+     * an array of URLs or filenames,
+     * or just about anything else
+     * that could reasonably be expected to resolve
+     * to a set of Properties.
+     * <br>
+     *
+     * @param {*} pSource The source(s) of the properties data
+     *
+     * @param {object} pOptions
+     *
+     * @param {function(Properties,Array.<Properties>):void} pCallback
+     *
+     * @returns {Promise<Properties|null>} A Promise that resolves to an instance of Properties
+     *
+     * */
+    Properties.asyncFrom = async function( pSource, pOptions, pCallback = no_op )
+    {
+        const options = !isFunction( pOptions ) ? populateOptions( pOptions, DEFAULT_PROPERTIES_OPTIONS ) : DEFAULT_PROPERTIES_OPTIONS;
+
+        let callback = (isFunction( pOptions ) ? (isFunction( pCallback ) ? pCallback : pOptions) : pCallback) || no_op;
+
+        if ( pSource instanceof Properties )
+        {
+            return pSource;
+        }
+
+        let properties = new Properties( options.name, options.locale );
+
+        if ( isArray( pSource ) && (asArray( pSource ).every( isFilePath )) )
+        {
+            let arr = asArray( pSource ).filter( isFilePath );
+
+            let promises = arr.map( e => Properties.fromFile( e, options ) );
+
+            await Promise.allSettled( promises ).then( ( result ) =>
+                                                       {
+                                                           if ( result && isFunction( callback ) )
+                                                           {
+                                                               let props = [...result].filter( e => e?.status === "fulfilled" ).map( e => e.value );
+                                                               props = props.filter( e => e instanceof Properties );
+                                                               props = Properties.sort( ...props );
+
+                                                               properties = _buildNestedProperties( properties, ...props );
+
+                                                               attempt( () => callback( properties, props ) );
+
+                                                               return properties;
+                                                           }
+                                                       } );
+
+            return properties;
+        }
+
+        return Properties.from( pSource, options, callback );
     };
 
     /**
@@ -1347,7 +1817,9 @@ const { _ud = "undefined", $scope } = constants;
     }
 
     /**
-     * This class is used to encapsulate the keys used to retrieve values from collections of resources.<br>
+     * This class is used to encapsulate the keys
+     * used to retrieve values from collections of resources.
+     * <br>
      * <br>
      *
      * This class allows you to...<br>
@@ -1476,16 +1948,20 @@ const { _ud = "undefined", $scope } = constants;
          */
         get defaultValue()
         {
-            if ( isValidResourceValue( this.#defaultValue ) )
+            const _defaultValue = this.#defaultValue;
+
+            if ( isValidResourceValue( _defaultValue ) )
             {
-                if ( this.#defaultValue instanceof Resource )
+                if ( _defaultValue instanceof Resource )
                 {
-                    return isValidResourceValue( this.#defaultValue?.value ) ? this.#defaultValue?.value : this.#defaultValue;
+                    return isValidResourceValue( _defaultValue?.value ) ? _defaultValue?.value : _defaultValue;
                 }
-                else if ( this.isAssignableTo( this.#defaultValue, this.constructor ) )
+                else if ( this.isAssignableTo( _defaultValue, this.constructor ) )
                 {
-                    return isValidResourceValue( this.#defaultValue?.#defaultValue ) ? this.#defaultValue?.#defaultValue : this.#defaultValue;
+                    return isValidResourceValue( _defaultValue?.#defaultValue ) ? _defaultValue?.#defaultValue : _defaultValue;
                 }
+
+                return _defaultValue;
             }
 
             return this.toString();
@@ -1657,6 +2133,12 @@ const { _ud = "undefined", $scope } = constants;
             return d;
         }
 
+        /**
+         * Returns true if this instance can be treated as a non-empty string.
+         * <br>
+         * @return {boolean} Returns true if the components array is not empty
+         *                   and all elements are non-empty strings; otherwise, false.
+         */
         isValid()
         {
             return this.components.length > 0 && this.components.every( e => !isBlank( asString( e, true ) ) );
@@ -1695,6 +2177,8 @@ const { _ud = "undefined", $scope } = constants;
      * <br>
      * The resource can also optionally reference another resource as a fallback.<br>
      * <br>
+     * @class
+     * @extends LocaleResourcesBase
      */
     class Resource extends LocaleResourcesBase
     {
@@ -1751,6 +2235,7 @@ const { _ud = "undefined", $scope } = constants;
          *
          * @param {any} pValue - The value to be checked for assignability.
          * @param {Function} pClass - The class to check against. If not provided, defaults to the class of the current instance.
+         *
          * @return {boolean} Returns true if the value is assignable to the class, otherwise false.
          */
         isAssignableTo( pValue, pClass )
@@ -1796,6 +2281,11 @@ const { _ud = "undefined", $scope } = constants;
             return e => !isNull( e ) && instanceOfAny( e, thisClass );
         }
 
+        /**
+         * Returns true if the resource value is valid and has a valid key.
+         *
+         * @return {boolean} Returns true if both the resource value and key are valid; otherwise, false.
+         */
         isValid()
         {
             return isValidResourceValue( this.value ) && isValidResourceKey( this.key );
@@ -1958,6 +2448,13 @@ const { _ud = "undefined", $scope } = constants;
             return asString( this.value );
         }
 
+        /**
+         * Returns true if the other object is the same as this object
+         *
+         * @param {Resource} pOther The Resource to compare
+         *
+         * @returns {boolean} true if the other object is the same as this object
+         */
         equals( pOther )
         {
             if ( this === pOther )
@@ -1978,6 +2475,16 @@ const { _ud = "undefined", $scope } = constants;
             return false;
         }
 
+        /**
+         * Returns a numeric value representing how close this resource is to a requested resource.
+         * <br>
+         * <br>
+         * The lower the number, the closer the match.
+         * <br>
+         * @param {Resource} pOther The requested Resource
+         *
+         * @returns {number} A value representing how close this resource is to the requested resource
+         */
         distance( pOther )
         {
             if ( this === pOther )
@@ -1997,6 +2504,11 @@ const { _ud = "undefined", $scope } = constants;
             return Number.MAX_SAFE_INTEGER;
         }
 
+        /**
+         * Creates and returns a copy of the current instance.
+         *
+         * @return {Object} A new instance that is a copy of the current one.
+         */
         clone()
         {
             return new (this.constructor[Symbol.species] || this.constructor)( this.key, this.value );
@@ -2348,11 +2860,6 @@ const { _ud = "undefined", $scope } = constants;
 
                 resourceFamily.addProperties( properties );
 
-                if ( isLocale( opts.locale ) )
-                {
-                    resourceFamily.addLocaleProperties( opts.locale, properties );
-                }
-
                 resourceCache.addResourceFamily( resourceFamily );
             };
 
@@ -2429,7 +2936,7 @@ const { _ud = "undefined", $scope } = constants;
 
         get baseName()
         {
-            return this.#baseName || this.#properties?.name || _mt_str;
+            return asString( this.#baseName, true ) || asString( this.#properties?.name, true ) || _mt_str;
         }
 
         addProperties( ...pProperties )
@@ -2439,9 +2946,11 @@ const { _ud = "undefined", $scope } = constants;
 
         processProperties( ...pProperties )
         {
+            const me = this;
+
             // gather the arguments and filter out any "garbage"
             let objects = asArray( varargs( ...pProperties ) ).filter( e => Properties.isProperties( e ) );
-            objects = objects.filter( e => lcase( asString( e?.name, true ) ).startsWith( lcase( asString( this.baseName, true ) ) ) );
+            objects = objects.filter( e => lcase( asString( (e?.name || e?.family), true ) ).startsWith( lcase( asString( (me || this).baseName, true ) ) ) );
 
             const map = new Map();
 
@@ -2460,17 +2969,17 @@ const { _ud = "undefined", $scope } = constants;
 
             for( const [key, localeProperties] of map )
             {
+                let properties = new Properties( key );
+
                 // order the Properties such that the more specific properties appear AFTER less-specific properties
                 let arr = Properties.sort( localeProperties );
-
-                let properties = new Properties( key );
 
                 for( const p of arr )
                 {
                     // create a new Properties object with the prior instance as its defaults
                     // because we have ordered the properties by specificity,
                     // the more specific properties will be constructed with the lesser specific properties as their defaults
-                    properties = new Properties( p.name || key, properties, p?.locale ).load( Properties.from( p ) );
+                    properties = new Properties( p.name || key, p?.locale, properties ).load( Properties.from( p ) );
                 }
 
                 this.#propertiesByLocale.set( key, properties );
@@ -2486,12 +2995,12 @@ const { _ud = "undefined", $scope } = constants;
             for( const obj of objects )
             {
                 // take the name from the Properties object, but fallback to a generated name if it is missing
-                const name = obj?.name || (this.baseName + _hyphen + obj?.locale?.toString()) || _mt_str;
+                const name = asString( obj?.name, true ) || (asString( this.baseName, true ) + _hyphen + asString( obj?.locale?.toString(), true )) || _mt_str;
 
                 // create a new Properties object with the prior instance as its defaults
                 // because we have ordered the properties by specificity,
                 // the more specific properties will be constructed with the lesser specific properties as their defaults
-                properties = new Properties( name, properties, obj?.locale ).load( Properties.from( obj ) );
+                properties = new Properties( name, obj?.locale, properties ).load( Properties.from( obj ) );
             }
 
             return properties;
@@ -2616,10 +3125,11 @@ const { _ud = "undefined", $scope } = constants;
 
             let family = pResourceFamily?.family;
             let name = pResourceFamily?.baseName || pResourceFamily?.name || family;
+            let locale = pResourceFamily?.locale || DEFAULT_LOCALE;
 
             if ( pResourceFamily instanceof ResourceFamily )
             {
-                existing = this.#resourceFamilies.get( name );
+                existing = this.#resourceFamilies.get( name ) || this.#resourceFamilies.get( family );
 
                 if ( existing && existing instanceof ResourceFamily )
                 {
@@ -2658,7 +3168,7 @@ const { _ud = "undefined", $scope } = constants;
 
             function addFamilyFromSource( pSource )
             {
-                const props = Properties.from( pSource );
+                const props = Properties.from( pSource, me.options );
 
                 if ( isNonNullObject( props ) )
                 {
@@ -2670,7 +3180,7 @@ const { _ud = "undefined", $scope } = constants;
                     {
                         (async function()
                         {
-                            await Promise.resolve( props ).then( p => me.addResourceFamily( new ResourceFamily( p?.name, p ) ) );
+                            await Promise.resolve( props ).then( p => me.addResourceFamily( new ResourceFamily( asString( p?.family, true ) || asString( p?.name ), p ) ) );
                         }());
                     }
                 }
@@ -2693,12 +3203,19 @@ const { _ud = "undefined", $scope } = constants;
             }
         }
 
-        getResourceFamily( pBaseName )
+        /**
+         * Returns the specified ResourceFamily if it exists and is loaded.
+         *
+         * @param {string} pFamilyName The name associated with the resources you want
+         *
+         * @returns {*|ResourceFamily} The specified ResourceFamily if it exists and is loaded.
+         */
+        getResourceFamily( pFamilyName )
         {
-            return this.#resourceFamilies.get( pBaseName ) || new ResourceFamily( pBaseName );
+            return this.#resourceFamilies.get( pFamilyName ) || new ResourceFamily( pFamilyName );
         }
 
-        getResource( pResourceFamilyName, pLocale, pKey )
+        getResource( pResourceFamilyName, pKey, pLocale = DEFAULT_LOCALE )
         {
             let resourceFamily = this.getResourceFamily( pResourceFamilyName );
 
@@ -2711,10 +3228,57 @@ const { _ud = "undefined", $scope } = constants;
             return resourceFamily.get( locale, resourceKey ) || resourceValue;
         }
 
+        /**
+         * Retrieves the properties for a specific resource family and locale.
+         *
+         * @param {string} pResourceFamilyName - The name of the resource family
+         *                                       for which to retrieve properties.
+         *
+         * @param {string} pLocale - The locale for the properties to be retrieved.
+         *
+         * @return {Object} The properties object for the specified resource family and locale.
+         */
         getProperties( pResourceFamilyName, pLocale )
         {
             let resourceFamily = this.getResourceFamily( pResourceFamilyName );
-            return resourceFamily.getProperties( pLocale );
+            const locale = resolveLocale( pLocale ) || DEFAULT_LOCALE;
+            return resourceFamily.getProperties( locale );
+        }
+
+        getPropertyValue( pResourceFamilyName, pLocale = DEFAULT_LOCALE, pKey )
+        {
+            const resourceFamily = this.getResourceFamily( pResourceFamilyName );
+            const locale = resolveLocale( pLocale ) || DEFAULT_LOCALE;
+            const resourceKey = pKey instanceof ResourceKey ? pKey : new ResourceKey( pKey );
+            return resourceFamily.get( locale, resourceKey );
+        }
+
+        get( pResourceFamilyName, pKey, pLocale = DEFAULT_LOCALE )
+        {
+            const locale = resolveLocale( pLocale ) || DEFAULT_LOCALE;
+            const resourceKey = pKey instanceof ResourceKey ? pKey : new ResourceKey( pKey );
+            return this.getResource( asString( pResourceFamilyName, true ), locale, resourceKey );
+        }
+
+        guess( ...pKey )
+        {
+            const keys = [...(asArray( varargs( ...pKey ) ) || [])];
+
+            for( const family of (this.resourceFamilies?.values() || []) )
+            {
+                if ( family instanceof ResourceFamily )
+                {
+                    for( const key of keys )
+                    {
+                        const resourceKey = key instanceof ResourceKey ? pKey : new ResourceKey( key );
+                        const resourceValue = family.get( DEFAULT_LOCALE, resourceKey );
+                        if ( !isNull( resourceValue ) && !isEmptyString( resourceValue ) )
+                        {
+                            return resourceValue;
+                        }
+                    }
+                }
+            }
         }
 
         static get [Symbol.species]()
@@ -2751,7 +3315,7 @@ const { _ud = "undefined", $scope } = constants;
             ResourceLoader,
             ResourceFamily,
             ResourceCache,
-            rxFileHeader,
+            rxFileHeader: RX_PROPERTIES_FILE_HDR,
             extractFileHeader,
             isValidPropertyKey,
             isValidPropertyFileEntry,
