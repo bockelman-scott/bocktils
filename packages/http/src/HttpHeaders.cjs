@@ -24,7 +24,7 @@ const httpConstants = require( "./HttpConstants.cjs" );
  * Establish separate constants for each of the common utilities imported
  * @see ../src/CommonUtils.cjs
  */
-const { constants, typeUtils, stringUtils, arrayUtils } = core;
+const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
 const {
     _ud = "undefined", $scope = constants?.$scope || function()
@@ -57,6 +57,7 @@ const {
      */
     const dependencies =
         {
+            moduleUtils,
             constants,
             typeUtils,
             stringUtils,
@@ -64,9 +65,9 @@ const {
             httpConstants
         };
 
-    const { classes, attempt } = constants;
+    const { ToolBocksModule, attempt, ObjectEntry, objectEntries, lock } = moduleUtils;
 
-    const { ToolBocksModule } = classes;
+    const { _mt_str } = constants;
 
     const
         {
@@ -84,7 +85,7 @@ const {
 
     const modName = "HttpHeaders";
 
-    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+    const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
 
     function isWebApiHeadersObject( pObject )
@@ -146,7 +147,7 @@ const {
 
         if ( isWebApiHeadersObject( pOptions ) || isMap( pOptions ) )
         {
-            return processHeadersArray( pOptions.entries() );
+            return processHeadersArray( [...(pOptions.entries() || [])] );
         }
 
         if ( isArray( pOptions ) )
@@ -160,9 +161,8 @@ const {
 
             const entries = Object.entries( pOptions ).filter( ( [key, value] ) => isHeader( key ) );
 
-            for( const entry of entries )
+            for( const [key, value] of entries )
             {
-                const [key, value] = entry;
                 options[key] = value;
             }
 
@@ -222,6 +222,35 @@ const {
         {
             attempt( () => super.set( pKey, pValue ) );
         }
+
+        toLiteral()
+        {
+            let literal = {};
+            objectEntries( this ).forEach( ( [key, value] ) => literal[key] = value );
+            return lock( literal );
+        }
+
+        toString()
+        {
+            let s = _mt_str;
+
+            const entries = objectEntries( this );
+
+            for( const entry of entries )
+            {
+                const key = asString( ObjectEntry.getKey( entry ), true );
+                const value = asString( ObjectEntry.getValue( entry ) );
+
+                s += (key + ":" + value + "\n");
+            }
+
+            return s;
+        }
+
+        [Symbol.toPrimitive]()
+        {
+            return this.toLiteral();
+        }
     }
 
     class HttpResponseHeaders extends HttpRequestHeaders
@@ -250,7 +279,7 @@ const {
             processRequestHeaderOptions
         };
 
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 

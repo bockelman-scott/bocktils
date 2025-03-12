@@ -30,7 +30,7 @@ const httpHeaders = require( "./HttpHeaders.cjs" );
  * Establish separate constants for each of the common utilities imported
  * @see ../src/CommonUtils.cjs
  */
-const { constants, typeUtils, stringUtils, arrayUtils } = core;
+const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
 const {
     _ud = "undefined", $scope = constants?.$scope || function()
@@ -63,13 +63,23 @@ const {
      */
     const dependencies =
         {
+            moduleUtils,
             constants,
             typeUtils,
             stringUtils,
             arrayUtils,
+            bufferUtils,
             httpConstants,
             httpHeaders
         };
+
+    const {
+        ToolBocksModule,
+        populateOptions,
+        lock,
+        localCopy,
+        attempt
+    } = moduleUtils;
 
     const {
         _mt_str,
@@ -78,14 +88,7 @@ const {
         _dot,
         _ampersand,
         _equals,
-        classes,
-        populateOptions,
-        lock,
-        localCopy,
-        attempt
     } = constants;
-
-    const { ToolBocksModule } = classes;
 
     const
         {
@@ -107,7 +110,16 @@ const {
 
     const { asArray } = arrayUtils;
 
-    const { VERBS, MODES, PRIORITY, HttpVerb, isHeader } = httpConstants;
+    const {
+        VERBS,
+        MODES,
+        PRIORITY,
+        HttpVerb,
+        HttpContentType,
+        HttpStatus,
+        HttpHeader,
+        isHeader
+    } = httpConstants;
 
     const { HttpRequestHeaders } = httpHeaders;
 
@@ -131,56 +143,56 @@ const {
 
     const modName = "HttpRequest";
 
-    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+    const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
 
-    const executionEnvironment = modulePrototype.executionEnvironment;
+    const executionEnvironment = toolBocksModule.executionEnvironment;
 
     const _isNode = executionEnvironment.isNode();
     const _isDeno = executionEnvironment.isDeno();
     const _isBrowser = executionEnvironment.isBrowser();
 
-/*
- interface ReadableStream<R = any> {
- readonly locked: boolean;
- cancel(reason?: any): Promise<void>;
- getReader(options: { mode: "byob" }): ReadableStreamBYOBReader;
- getReader(): ReadableStreamDefaultReader<R>;
- getReader(options?: ReadableStreamGetReaderOptions): ReadableStreamReader<R>;
- pipeThrough<T>(transform: ReadableWritablePair<T, R>, options?: StreamPipeOptions): ReadableStream<T>;
- pipeTo(destination: WritableStream<R>, options?: StreamPipeOptions): Promise<void>;
- tee(): [ReadableStream<R>, ReadableStream<R>];
- values(options?: { preventCancel?: boolean }): AsyncIterableIterator<R>;
- [Symbol.asyncIterator](): AsyncIterableIterator<R>;
- }
- const ReadableStream: {
- prototype: ReadableStream;
- from<T>(iterable: Iterable<T> | AsyncIterable<T>): ReadableStream<T>;
- new(underlyingSource: UnderlyingByteSource, strategy?: QueuingStrategy<Uint8Array>): ReadableStream<Uint8Array>;
- new<R = any>(underlyingSource?: UnderlyingSource<R>, strategy?: QueuingStrategy<R>): ReadableStream<R>;
- };
+    /*
+     interface ReadableStream<R = any> {
+     readonly locked: boolean;
+     cancel(reason?: any): Promise<void>;
+     getReader(options: { mode: "byob" }): ReadableStreamBYOBReader;
+     getReader(): ReadableStreamDefaultReader<R>;
+     getReader(options?: ReadableStreamGetReaderOptions): ReadableStreamReader<R>;
+     pipeThrough<T>(transform: ReadableWritablePair<T, R>, options?: StreamPipeOptions): ReadableStream<T>;
+     pipeTo(destination: WritableStream<R>, options?: StreamPipeOptions): Promise<void>;
+     tee(): [ReadableStream<R>, ReadableStream<R>];
+     values(options?: { preventCancel?: boolean }): AsyncIterableIterator<R>;
+     [Symbol.asyncIterator](): AsyncIterableIterator<R>;
+     }
+     const ReadableStream: {
+     prototype: ReadableStream;
+     from<T>(iterable: Iterable<T> | AsyncIterable<T>): ReadableStream<T>;
+     new(underlyingSource: UnderlyingByteSource, strategy?: QueuingStrategy<Uint8Array>): ReadableStream<Uint8Array>;
+     new<R = any>(underlyingSource?: UnderlyingSource<R>, strategy?: QueuingStrategy<R>): ReadableStream<R>;
+     };
 
- ReadableStreamDefaultReader.read()
- Returns a promise providing access to the next chunk in the stream's internal queue.
-
-
- interface ReadableStream extends EventEmitter {
- readable: boolean;
- read(size?: number): string | Buffer;
- setEncoding(encoding: BufferEncoding): this;
- pause(): this;
- resume(): this;
- isPaused(): boolean;
- pipe<T extends WritableStream>(destination: T, options?: { end?: boolean | undefined }): T;
- unpipe(destination?: WritableStream): this;
- unshift(chunk: string | Uint8Array, encoding?: BufferEncoding): void;
- wrap(oldStream: ReadableStream): this;
- [Symbol.asyncIterator](): AsyncIterableIterator<string | Buffer>;
- }
+     ReadableStreamDefaultReader.read()
+     Returns a promise providing access to the next chunk in the stream's internal queue.
 
 
+     interface ReadableStream extends EventEmitter {
+     readable: boolean;
+     read(size?: number): string | Buffer;
+     setEncoding(encoding: BufferEncoding): this;
+     pause(): this;
+     resume(): this;
+     isPaused(): boolean;
+     pipe<T extends WritableStream>(destination: T, options?: { end?: boolean | undefined }): T;
+     unpipe(destination?: WritableStream): this;
+     unshift(chunk: string | Uint8Array, encoding?: BufferEncoding): void;
+     wrap(oldStream: ReadableStream): this;
+     [Symbol.asyncIterator](): AsyncIterableIterator<string | Buffer>;
+     }
 
- */
+
+
+     */
 
 
     if ( _ud === typeof ReadableStream )
@@ -222,8 +234,8 @@ const {
 
     const FORBIDDEN_RESPONSE_HEADER_NAMES = ["Set-Cookie", "Set-Cookie2"];
 
-    const FORBIDDEN_REQUEST_HEADERS = [].concat( ...FORBIDDEN_REQUEST_HEADER_NAMES ).concat( ...FORBIDDEN_REQUEST_HEADER_NAMES.map( e => e.toLowerCase() ) );
-    const FORBIDDEN_RESPONSE_HEADERS = [].concat( ...FORBIDDEN_RESPONSE_HEADER_NAMES ).concat( ...FORBIDDEN_RESPONSE_HEADER_NAMES.map( e => e.toLowerCase() ) );
+    const FORBIDDEN_REQUEST_HEADERS = lock( [...FORBIDDEN_REQUEST_HEADER_NAMES, ...(FORBIDDEN_REQUEST_HEADER_NAMES.map( e => e.toLowerCase() ))] );
+    const FORBIDDEN_RESPONSE_HEADERS = lock( [...FORBIDDEN_RESPONSE_HEADER_NAMES, ...(FORBIDDEN_RESPONSE_HEADER_NAMES.map( e => e.toLowerCase() ))] );
 
     let MIME_TYPES_BY_EXTENSION = new Map();
 
@@ -259,7 +271,7 @@ const {
 
     if ( _ud === typeof document )
     {
-        document = (_ud !== typeof window) ? window?.document : (_ud !== typeof __dirname ? __dirname : { URL: _mt_str });
+        document = (_ud !== typeof window) ? window?.document : (_ud !== typeof __dirname ? { URL: __dirname } : { URL: _mt_str });
     }
 
     const URL_ENCODINGS = lock(
@@ -437,12 +449,11 @@ const {
 
         if ( isRelativeUrl( url ) )
         {
-
             let base = calculateBaseUrl( pBase ).replaceAll( /\\/gi, "/" );
 
             const dirs = base.split( "/" );
 
-            while ( url.startsWith( "../" ) && !isBlank( base ) )
+            while ( url.startsWith( "../" ) && !isBlank( base ) && dirs.length > 0 )
             {
                 url = url.slice( 3 );
                 base = base.replace( new RegExp( dirs.pop() + "\\/?$" ), _mt_str );
@@ -818,7 +829,6 @@ const {
 
     const VALID_REQUEST_CREDENTIALS_OPTIONS = lock( Object.values( REQUEST_CREDENTIALS_OPTIONS ) );
 
-
     const REDIRECT_OPTIONS = lock(
         {
             FOLLOW: "follow",
@@ -1060,12 +1070,26 @@ const {
                     HttpUrl,
                     SearchParams,
                     HttpRequestOptions,
-                    HttpRequest
+                    HttpRequest,
+                    HttpRequestHeaders,
+                    HttpVerb,
+                    HttpHeader,
+                    HttpContentType,
+                    HttpStatus,
                 },
-
+            URL_COMPONENTS,
+            VALID_URL_COMPONENTS,
+            MIME_TYPES_BY_EXTENSION,
             REQUEST_CACHE_OPTIONS,
             VALID_REQUEST_CACHE_OPTIONS,
             REDIRECT_OPTIONS,
+            VALID_REDIRECT_OPTIONS,
+            REQUEST_CREDENTIALS_OPTIONS,
+            VALID_REQUEST_CREDENTIALS_OPTIONS,
+            FORBIDDEN_REQUEST_HEADERS,
+            FORBIDDEN_RESPONSE_HEADERS,
+            DEFAULT_EXPIRATION_HEADER,
+            REQUEST_BODY_TYPES,
             isUrl,
             isAbsoluteUrl,
             isRelativeUrl,
@@ -1079,9 +1103,19 @@ const {
             isFormData,
             isURLSearchParams,
             isReadableStream,
+
+            HttpUrl,
+            SearchParams,
+            HttpRequestOptions,
+            HttpRequest,
+            HttpRequestHeaders,
+            HttpVerb,
+            HttpHeader,
+            HttpContentType,
+            HttpStatus,
         };
 
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 

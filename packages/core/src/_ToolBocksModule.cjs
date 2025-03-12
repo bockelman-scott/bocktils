@@ -2130,7 +2130,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
         else if ( isStr( pEventName ) )
         {
-            return pEventName.trim();
+            return (_mt_str + pEventName).trim();
         }
         else if ( isObj( pEventName ) )
         {
@@ -6430,6 +6430,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             resolveError,
             resolveEvent,
+            resolveEventType,
             resolveObject,
             resolveMethod,
             resolveLogLevel,

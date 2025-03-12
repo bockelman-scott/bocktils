@@ -19,7 +19,7 @@ const core = require( "@toolbocks/core" );
  * Establish separate constants for each of the common utilities imported
  * @see ../src/CommonUtils.cjs
  */
-const { constants, typeUtils, stringUtils, arrayUtils } = core;
+const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
 const {
     _ud = "undefined", $scope = constants?.$scope || function()
@@ -52,6 +52,7 @@ const {
      */
     const dependencies =
         {
+            moduleUtils,
             constants,
             typeUtils,
             stringUtils,
@@ -59,16 +60,14 @@ const {
         };
 
 
-    const { classes, lock } = constants;
-
-    const { ModuleEvent, ToolBocksModule } = classes;
+    const { ModuleEvent, ToolBocksModule, ObjectEntry, objectEntries, lock } = moduleUtils;
 
     const { asString, asInt, lcase, ucase, capitalize } = stringUtils;
 
 
     const modName = "HttpConstants";
 
-    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+    const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
 
     /**
@@ -723,7 +722,7 @@ const {
             isContentType,
         };
 
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 
