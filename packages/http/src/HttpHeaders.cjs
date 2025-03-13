@@ -159,11 +159,11 @@ const {
         {
             let options = {};
 
-            const entries = Object.entries( pOptions ).filter( ( [key, value] ) => isHeader( key ) );
+            const entries = objectEntries( pOptions ).filter( ( entry ) => isHeader( ObjectEntry.getKey( entry ) ) );
 
-            for( const [key, value] of entries )
+            for( const entry of entries )
             {
-                options[key] = value;
+                options[ObjectEntry.getKey( entry )] = ObjectEntry.getValue( entry ) || _mt_str;
             }
 
             return options;

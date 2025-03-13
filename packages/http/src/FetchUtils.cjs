@@ -70,7 +70,7 @@ const {
 
     const { _mt_str, _fun, _underscore, S_ON } = constants;
 
-    const { isNull, isNonNullObject, isFunction, firstMatchingType } = typeUtils;
+    const { isNull, isNonNullObject, isFunction, isPromise, firstMatchingType } = typeUtils;
 
     const { asString, asInt, isBlank, lcase, ucase, capitalize } = stringUtils;
 
@@ -259,7 +259,7 @@ const {
     /**
      * Constants defining the possible readyStates of the XmlHttpRequest component this class might use
      */
-    const XmlHttpRequestReadStates =
+    const XmlHttpRequestReadyStates =
         {
             READY_STATE_COMPLETE: 4,
             READY_STATE_INTERACTIVE: 3,
@@ -270,7 +270,73 @@ const {
             READY_STATE_USER_CANCELLED: -2
         };
 
+    const isResponseReady = function( pReadyState, pResponse )
+    {
+        if ( asInt( pReadyState ) === XmlHttpRequestReadyStates.READY_STATE_COMPLETE )
+        {
+            return isNonNullObject( pResponse ) && pResponse.ok;
+        }
+        return false;
+    };
+
     const KEYCODE_ABORT = 27;
+
+    class PendingRequest extends EventTarget
+    {
+        #httpRequest;
+        #httpResponse;
+        #promise;
+        #fetchData;
+
+        constructor( pRequest, pPromise, pData )
+        {
+            super();
+
+            this.#httpRequest = lock( HttpRequest.resolve( pRequest ) );
+
+            this.#fetchData = pData || {};
+
+            if ( isPromise( pPromise ) )
+            {
+                const me = this;
+
+                this.#promise = attempt( () => Promise.resolve( pPromise ) );
+
+                pPromise.then( ( pResponse ) =>
+                               {
+                                   me.#httpResponse = new HttpResponse( cloneResponse( pResponse ) );
+
+                                   const event = new ModuleEvent( "Response",
+                                                                  {
+                                                                      response: pResponse,
+                                                                      request: pRequest
+                                                                  }, pRequest?.options );
+
+                                   return me.dispatchEvent( event );
+                               } );
+            }
+        }
+
+        get httpRequest()
+        {
+            return lock( HttpRequest.resolve( this.#httpRequest ) );
+        }
+
+        get httpResponse()
+        {
+            if ( isNull( this.#httpResponse ) )
+            {
+                return this.promise.then( ( pResponse ) => new HttpResponse( cloneResponse( pResponse ) ) );
+            }
+
+            return new HttpResponse( cloneResponse( this.#httpResponse ) );
+        }
+
+        get promise()
+        {
+            return isPromise( this.#promise ) ? this.#promise : Promise.resolve( this.#httpResponse || fetch( this.httpRequest ) );
+        }
+    }
 
     /**
      * @typedef {object} FetcherOptions An object whose properties control
@@ -427,6 +493,35 @@ const {
                 }
         };
 
+    const getMsXmlParser = function()
+    {
+        let p = null;
+        let s = Fetcher.installedParser;
+        if ( s )
+        {
+            p = new ActiveXObject( s );
+        }
+        if ( isNull( p ) )
+        {
+            let arr = MicrosoftXmlParsers;
+            for( let i = 0, n = arr.length; (i < n && null == p); i++ )
+            {
+                try
+                {
+                    s = arr[i];
+                    p = new ActiveXObject( s );
+                }
+                catch( ex )
+                {
+                    // ignore
+                    p = null;
+                }
+            }
+            Fetcher.installedParser = String( s );
+        }
+        return p;
+    };
+
     /**
      * This class is used for making HTTP requests and handling their response(s).
      * <br>
@@ -445,6 +540,10 @@ const {
         #pendingRequests = new Map();
 
         #lastRequestToken = 0;
+
+        #lastRequestId = 0;
+
+        #requestTokensByUrl = new Map();
 
         #eventHandlers = new Map();
 
@@ -474,6 +573,8 @@ const {
         #securityTokenId = _mt_str;
         #securityTokenValue = _mt_str;
 
+        #installedParser = null;
+
         constructor( pOptions = DEFAULT_FETCHER_OPTIONS )
         {
             super();
@@ -502,6 +603,11 @@ const {
             return this.#lastRequestToken;
         }
 
+        get lastRequestId()
+        {
+            return this.#lastRequestId;
+        }
+
         get eventHandlers()
         {
             return this.#eventHandlers;
@@ -515,6 +621,11 @@ const {
         get requiresAuthentication()
         {
             return this.#requiresAuthentication;
+        }
+
+        get installedParser()
+        {
+            return this.#installedParser;
         }
 
         addEventHandlers( pOptions )
@@ -686,70 +797,162 @@ const {
                                            timeout );
         }
 
+        assignRequestToken( pRequest )
+        {
+            let token = ++this.#lastRequestToken;
+
+            if ( isNonNullObject( pRequest ) )
+            {
+                pRequest.token = token;
+                this.#requestTokensByUrl.set( pRequest.url, token );
+            }
+
+            return token;
+        }
+
         #fetch( pRequestOrUrl, pMethod, pRequestBody, pCallback, pOptions = DEFAULT_REQUEST_OPTIONS )
         {
+            const me = this;
+
             const options = populateOptions( pOptions, DEFAULT_REQUEST_OPTIONS, DEFAULT_FETCHER_OPTIONS );
 
             const requestOptions = this.calculateRequestOptions( pRequestBody, pMethod, options );
 
-            new HttpRequest( pRequestBody, requestOptions );
+            const request = new HttpRequest( pRequestOrUrl, requestOptions );
 
+            const token = this.assignRequestToken( request );
+
+            const sync = options.synchronous && this.#allowSynchronousFetch;
+
+            const ignoreCache = options.ignoreCache || (VERBS.GET !== ucase( asString( pMethod ) ));
+
+            const callback = isFunction( pCallback ) ? pCallback.bind( me ) : no_op;
+
+            const fetchData = { me, token, request, ignoreCache, callback };
+
+            let response = null;
+
+            const cb = function( pResponse, pReadyState, pFetcher, pData )
+            {
+                const data = pData || fetchData || { me, token, request, ignoreCache, callback };
+
+                const fetcher = pFetcher || data?.me || me;
+
+                const req = data?.request || request;
+
+                const lastToken = fetcher.lastRequestToken;
+
+                const lastRequestToken = fetcher.#requestTokensByUrl.get( req?.url );
+
+                const responseToken = data?.token || token;
+
+                if ( isResponseReady( pReadyState ) && (responseToken >= lastToken || responseToken >= lastRequestToken) )
+                {
+                    response = pResponse;
+                }
+
+                const func = data?.callback || callback;
+
+                if ( isFunction( func ) )
+                {
+                    attempt( () => func( response, pReadyState, fetcher, data ) );
+                }
+
+                return response;
+            };
+
+            this.#lastRequestId = request?.id || 0;
+
+            if ( sync )
+            {
+                let xmlHttp = null;
+                if ( _ud === typeof XMLHttpRequest )
+                {
+                    this.#installedParser = getMsXmlParser();
+                    xmlHttp = this.#installedParser;
+                }
+                xmlHttp = xmlHttp || ((_ud === typeof XMLHttpRequest) ? null : new XMLHttpRequest());
+
+                if ( xmlHttp )
+                {
+                    xmlHttp.onreadystatechange = function()
+                    {
+                        attempt( () => cb( xmlHttp.response, xmlHttp.readyState, me, fetchData ) );
+                    };
+                }
+            }
+            else
+            {
+                response = (async function doFetch()
+                {
+                    const promise = fetch( request, requestOptions );
+
+                    me.pendingRequests.set( request, new PendingRequest( request, promise, fetchData ) );
+
+                    return await promise;
+                }()).then( ( pResponse ) => attempt( () => cb( pResponse,
+                                                               XmlHttpRequestReadyStates.READY_STATE_COMPLETE,
+                                                               me,
+                                                               fetchData ) ) );
+            }
+
+            return response;
         }
 
-        async makeGetRequest()
+        async makeGetRequest( pRequestOrUrl, pCallback, pOptions = DEFAULT_REQUEST_OPTIONS )
         {
-
+            return this.#fetch( pRequestOrUrl, VERBS.GET, null, pCallback, pOptions );
         }
 
-        doGet()
+        doGet( pRequestOrUrl, pCallback, pOptions = DEFAULT_REQUEST_OPTIONS )
         {
+            return this.#fetch( pRequestOrUrl, VERBS.GET, null, pCallback, pOptions );
         }
 
-        async postRequest()
+        async postRequest( pRequestOrUrl, pPostData, pCallback, pOptions = DEFAULT_REQUEST_OPTIONS )
         {
-
+            return this.#fetch( pRequestOrUrl, VERBS.POST, pPostData, pCallback, pOptions );
         }
 
-        doPost()
+        doPost( pRequestOrUrl, pPostData, pCallback, pOptions = DEFAULT_REQUEST_OPTIONS )
         {
-
+            return this.#fetch( pRequestOrUrl, VERBS.POST, pPostData, pCallback, pOptions );
         }
 
-        async putRequest()
+        async putRequest( pRequestOrUrl, pPutData, pCallback, pOptions = DEFAULT_REQUEST_OPTIONS )
         {
-
+            return this.#fetch( pRequestOrUrl, VERBS.PUT, pPutData, pCallback, pOptions );
         }
 
-        doPut()
+        doPut( pRequestOrUrl, pPutData, pCallback, pOptions = DEFAULT_REQUEST_OPTIONS )
         {
-
+            return this.#fetch( pRequestOrUrl, VERBS.PUT, pPutData, pCallback, pOptions );
         }
 
-        async patchRequest()
+        async patchRequest( pRequestOrUrl, pPatchData, pCallback, pOptions = DEFAULT_REQUEST_OPTIONS )
         {
-
+            return this.#fetch( pRequestOrUrl, VERBS.PATCH, pPatchData, pCallback, pOptions );
         }
 
-        doPatch()
+        doPatch( pRequestOrUrl, pPatchData, pCallback, pOptions = DEFAULT_REQUEST_OPTIONS )
         {
-
+            return this.#fetch( pRequestOrUrl, VERBS.PATCH, pPatchData, pCallback, pOptions );
         }
 
-        async headRequest()
+        async headRequest( pRequestOrUrl, pCallback, pOptions = DEFAULT_REQUEST_OPTIONS )
         {
-
+            return this.#fetch( pRequestOrUrl, VERBS.HEAD, null, pCallback, pOptions );
         }
 
-        async optionsRequest()
+        async optionsRequest( pRequestOrUrl, pCallback, pOptions = DEFAULT_REQUEST_OPTIONS )
         {
-
+            return this.#fetch( pRequestOrUrl, VERBS.OPTIONS, null, pCallback, pOptions );
         }
 
-        doOptions()
+        doOptions( pRequestOrUrl, pCallback, pOptions = DEFAULT_REQUEST_OPTIONS )
         {
-
+            return this.#fetch( pRequestOrUrl, VERBS.OPTIONS, null, pCallback, pOptions );
         }
-
     }
 
 

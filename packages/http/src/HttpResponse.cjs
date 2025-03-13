@@ -23,12 +23,11 @@ const httpConstants = require( "./HttpConstants.cjs" );
 const httpHeaders = require( "./HttpHeaders.cjs" );
 
 
-
 /**
  * Establish separate constants for each of the common utilities imported
  * @see ../src/CommonUtils.cjs
  */
-const { constants, typeUtils, stringUtils, arrayUtils } = core;
+const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
 const {
     _ud = "undefined", $scope = constants?.$scope || function()
@@ -61,6 +60,7 @@ const {
      */
     const dependencies =
         {
+            moduleUtils,
             constants,
             typeUtils,
             stringUtils,
@@ -69,14 +69,7 @@ const {
             httpHeaders
         };
 
-    const { classes, attempt } = constants;
-
-    const { ToolBocksModule } = classes;
-
-
-    const modName = "HttpResponse";
-
-    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+    const { ToolBocksModule } = moduleUtils;
 
     const
         {
@@ -92,15 +85,42 @@ const {
 
     const { isHeader } = httpConstants;
 
+
+    const modName = "HttpResponse";
+
+    const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
+
+
+    class HttpResponse extends EventTarget
+    {
+        #response;
+
+        #url;
+
+        #headers;
+        #body;
+        #bodyUsed;
+
+        #status;
+        #statusText;
+        #ok;
+
+        #type;
+
+        constructor( pResponse, pOptions )
+        {
+            super();
+        }
+    }
+
     let mod =
         {
             dependencies,
             classes:
-                {
-                },
+                {},
         };
 
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 

@@ -103,6 +103,7 @@ const {
             isArrayBuffer,
             isSharedArrayBuffer,
             isDataView,
+            toObjectLiteral,
         } = typeUtils;
 
 
@@ -656,7 +657,6 @@ const {
             this.#href = parsed.href;
         }
 
-
         get url()
         {
             return !isNull( this.#url ) ? isObject( this.#url ) ? this.#url : this : new HttpUrl( this.#href );
@@ -728,6 +728,16 @@ const {
         get href()
         {
             return asString( this.#href || this.#url, true );
+        }
+
+        toString()
+        {
+            return this.href;
+        }
+
+        [Symbol.toPrimitive]( pHint )
+        {
+            return this.href;
         }
     }
 
@@ -918,6 +928,28 @@ const {
                      pSignal = null,
                      pTimeout = -1 )
         {
+            if ( pBody instanceof this.constructor )
+            {
+                this.#body = this.#body = (((new HttpVerb( this.#method )).forbidBody()) ? null : pBody.body);
+
+                this.#headers = new HttpRequestHeaders( pBody.headers );
+
+                this.#cache = pBody.cache;
+                this.#credentials = pBody.credentials;
+                this.#integrity = pBody.integrity;
+                this.#keepalive = pBody.keepalive;
+                this.#method = pBody.method;
+                this.#mode = pBody.mode;
+                this.#priority = pBody.priority;
+                this.#redirect = pBody.redirect;
+                this.#referrer = pBody.referrer;
+                this.#referrerPolicy = pBody.referrerPolicy;
+                this.#signal = pBody.signal;
+                this.#timeout = pBody.timeout;
+
+                return this;
+            }
+
             this.#method = pMethod;
             this.#headers = pHeaders;
 
@@ -1056,11 +1088,63 @@ const {
                                        options.timeout );
     };
 
-    class HttpRequest
+    class HttpRequest extends EventTarget
     {
+        #id = 0;
+        #options;
 
+        #url;
+
+        #request;
+        #response;
+        #body;
+
+        constructor( pRequestOrUrl, pOptions = new HttpRequestOptions() )
+        {
+            super();
+
+            this.#id = this.#id || this.constructor.nextId();
+            this.#options = new HttpRequestOptions( pOptions );
+
+            this.#url = isString( pRequestOrUrl ) ? new HttpUrl( pRequestOrUrl ) : pRequestOrUrl;
+
+            this.response = null;
+
+            this.error = null;
+        }
     }
 
+    HttpRequest.resolve = function( pRequestOrUrl, pOptions )
+    {
+        const options = populateOptions( pOptions, toObjectLiteral( new HttpRequestOptions( pRequestOrUrl?.options ) ) );
+
+        if ( pRequestOrUrl instanceof HttpRequest )
+        {
+            return pRequestOrUrl;
+        }
+        else if ( isString( pRequestOrUrl ) )
+        {
+            return new HttpRequest( pRequestOrUrl, options );
+        }
+        else if ( isFunction( pRequestOrUrl?.toString ) )
+        {
+            return new HttpRequest( asString( pRequestOrUrl.toString(), true ), options );
+        }
+    };
+
+    HttpRequest.ID = 0;
+    HttpRequest.MIN_ID = 1;
+    HttpRequest.MAX_ID = 999_999;
+    HttpRequest.nextId = function()
+    {
+        HttpRequest.ID += 1;
+        if ( HttpRequest.ID > HttpRequest.MAX_ID )
+        {
+            HttpRequest.ID = HttpRequest.MIN_ID;
+        }
+
+        return HttpRequest.ID;
+    };
 
     let mod =
         {
