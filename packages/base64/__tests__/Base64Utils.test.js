@@ -42,45 +42,45 @@ test( "encode/decode a binary file",
 
           expect( encoded ).toEqual( base64Text );
 
+          /*
+           const end = Date.now();
+
+           console.log( `Time to encode/decode a small binary file: ${end - start} ms` );
+           */
+      }, 60_000 );
+
 /*
-          const end = Date.now();
+ test( "encode/decode a very large binary file",
+ async() =>
+ {
+ const start = Date.now();
 
-          console.log( `Time to encode/decode a small binary file: ${end - start} ms` );
-*/
-      } );
+ const data = await fsAsync.readFile( largeTestFilePath );
 
-/*
-test( "encode/decode a very large binary file",
-      async() =>
-      {
-          const start = Date.now();
+ const base64Text = encode( data );
 
-          const data = await fsAsync.readFile( largeTestFilePath );
-
-          const base64Text = encode( data );
-
-          console.log( `Base64 text length: ${base64Text.length}` );
+ console.log( `Base64 text length: ${base64Text.length}` );
 
 
-          const decoded = decode( base64Text );
+ const decoded = decode( base64Text );
 
-          expect( decoded.length ).toEqual( data.length );
+ expect( decoded.length ).toEqual( data.length );
 
-          await fsAsync.writeFile( path.resolve( testDataDir, "large_test_decoded.mp4" ), Buffer.from( decoded ) );
+ await fsAsync.writeFile( path.resolve( testDataDir, "large_test_decoded.mp4" ), Buffer.from( decoded ) );
 
-          let encoded = encode( decoded );
+ let encoded = encode( decoded );
 
-          expect( encoded ).toEqual( base64Text );
+ expect( encoded ).toEqual( base64Text );
 
 
-          const end = Date.now();
+ const end = Date.now();
 
-          console.log( `Time to encode/decode a large binary file: ${end - start} ms` );
+ console.log( `Time to encode/decode a large binary file: ${end - start} ms` );
 
-          expect( true ).toBe( true );
+ expect( true ).toBe( true );
 
-      }, 1_250_000 );
-*/
+ }, 1_250_000 );
+ */
 
 
 test( "isValidBase64 returns false for invalid Base64 content",
