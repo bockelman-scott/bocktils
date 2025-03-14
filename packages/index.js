@@ -1,15 +1,28 @@
 const core = require( "@toolbocks/core" );
-const commonUtils = require( "@toolbocks/common" );
-const jsonUtils = require( "@toolbocks/json" );
-const dateUtils = require( "@toolbocks/dates" );
 const base64Utils = require( "@toolbocks/base64" );
+const bufferUtils = require( "@toolbocks/buffer" );
 const compressionUtils = require( "@toolbocks/compression" );
-const eventUtils = require( "@toolbocks/events" );
+const dateUtils = require( "@toolbocks/dates" );
+// const eventUtils = require( "@toolbocks/events" );
+const fileUtils = require( "@toolbocks/files" );
 const functorUtils = require( "@toolbocks/functors" );
+// const httpUtils = require( "@toolbocks/http" );
+const jsonUtils = require( "@toolbocks/json" );
+const logUtils = require( "@toolbocks/logging" );
 const mathUtils = require( "@toolbocks/math" );
 const regexUtils = require( "@toolbocks/regex" );
+const commonUtils = require( "@toolbocks/common" );
 
-const { constants, typeUtils, stringUtils, arrayUtils, localeUtils, NumberParser, guidUtils, } = core;
+const {
+    moduleUtils,
+    constants,
+    typeUtils,
+    stringUtils,
+    arrayUtils,
+    localeUtils,
+    NumberParser,
+    guidUtils,
+} = core;
 
 /** define a variable for typeof undefined **/
 const { _ud = "undefined" } = constants;
@@ -38,30 +51,37 @@ const $scope = constants?.$scope || function()
 
     const modName = "ToolBocks";
 
-    let { classes } = constants;
-
-    const { ToolBocksModule } = classes;
+    const { ToolBocksModule } = moduleUtils;
 
     const { funcUtils, objectUtils } = commonUtils;
 
     const dependencies =
         {
+            moduleUtils,
             constants,
             typeUtils,
             stringUtils,
             arrayUtils,
             localeUtils,
             NumberParser,
-            guidUtils,
-            objectUtils,
-            funcUtils,
-            jsonUtils,
-            dateUtils,
             base64Utils,
+            bufferUtils,
             compressionUtils,
-            eventUtils,
+            dateUtils,
+            /*
+             eventUtils,
+             */
+            funcUtils,
+            fileUtils,
             functorUtils,
+            guidUtils,
+            /*
+             httpUtils,
+             */
+            jsonUtils,
+            logUtils,
             mathUtils,
+            objectUtils,
             regexUtils
         };
 
@@ -70,6 +90,7 @@ const $scope = constants?.$scope || function()
     let mod =
         {
             dependencies,
+            moduleUtils,
             constants,
             typeUtils,
             stringUtils,
@@ -83,11 +104,13 @@ const $scope = constants?.$scope || function()
             dateUtils,
             base64Utils,
             compressionUtils,
-            eventUtils,
+            /*
+             eventUtils,
+             */
             functorUtils,
             mathUtils,
             regexUtils
-        }
+        };
 
     mod = modulePrototype.extend( mod );
 

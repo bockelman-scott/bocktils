@@ -2,7 +2,7 @@
 
 const core = require( "@toolbocks/core" );
 
-const { constants, typeUtils, stringUtils, arrayUtils } = core;
+const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
 /** define a variable for typeof undefined **/
 const { _ud = "undefined" } = constants;
@@ -34,6 +34,7 @@ const $scope = constants?.$scope || function()
      */
     const dependencies =
         {
+            moduleUtils,
             constants,
             typeUtils,
             stringUtils,
@@ -61,8 +62,7 @@ const $scope = constants?.$scope || function()
         localCopy,
         immutableCopy,
         lock,
-        IllegalArgumentError,
-        classes
+        IllegalArgumentError
     } = constants;
 
     const {
@@ -87,23 +87,18 @@ const $scope = constants?.$scope || function()
 
     const { asInt, asFloat } = stringUtils;
 
-    const { ModuleEvent, ToolBocksModule } = classes;
-
-    if ( _ud === typeof CustomEvent )
-    {
-        CustomEvent = ModuleEvent;
-    }
+    const { ToolBocksModule } = moduleUtils;
 
     const modName = "IteratorUtils";
 
-    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+    const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
     let mod =
         {
             dependencies
         };
 
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 }());

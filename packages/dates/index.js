@@ -1,12 +1,10 @@
 const core = require( "@toolbocks/core" );
 
-const commonUtils = require( "@toolbocks/common" );
-
 /**
  * Establish separate constants for each of the common utilities imported
  * @see ../src/CommonUtils.cjs
  */
-const { constants, typeUtils, stringUtils, arrayUtils, funcUtils, localeUtils } = commonUtils;
+const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils, funcUtils, localeUtils } = core;
 
 const dateUtils = require( "./src/DateUtils.cjs" );
 const dateFormatTokenUtils = require( "./src/DateFormatTokenSet.cjs" );
@@ -43,16 +41,9 @@ const $scope = core?.$scope || constants?.$scope || function()
             dateParserUtils
         };
 
-    const { classes } = constants;
-
     const { Result, isDate } = typeUtils;
 
-    const { ModuleEvent, ToolBocksModule } = classes;
-
-    if ( _ud === typeof CustomEvent )
-    {
-        CustomEvent = ModuleEvent;
-    }
+    const { ToolBocksModule } = moduleUtils;
 
     const
         {

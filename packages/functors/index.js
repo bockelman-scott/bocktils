@@ -1,6 +1,6 @@
-const commonUtils = require( "@toolbocks/common" );
+const core = require( "@toolbocks/core" );
 
-const { constants, typeUtils, stringUtils, arrayUtils, objectUtils } = commonUtils;
+const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
 const objectFunctorUtils = require( "./src/ObjectFunctor.cjs" );
 
@@ -35,20 +35,20 @@ const $scope = constants?.$scope || function()
 
     const dependencies =
         {
+            moduleUtils,
             constants,
             typeUtils,
             stringUtils,
             arrayUtils,
-            objectUtils,
             ObjectFunctor,
             iteratorUtils
         };
 
     const modName = "FunctorUtils";
 
-    const { ToolBocksModule } = classes;
+    const { ToolBocksModule } = moduleUtils;
 
-    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+    const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
     let mod =
         {
@@ -57,7 +57,7 @@ const $scope = constants?.$scope || function()
             iteratorUtils,
         };
 
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 

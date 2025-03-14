@@ -4,7 +4,7 @@ const commonUtils = require( "@toolbocks/common" );
 
 const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
-const { objectUtils } = commonUtils;
+// const { objectUtils } = commonUtils;
 
 /** define a variable for typeof undefined **/
 const { _ud = "undefined", $scope } = constants;
@@ -29,8 +29,7 @@ const { _ud = "undefined", $scope } = constants;
             constants,
             typeUtils,
             stringUtils,
-            arrayUtils,
-            objectUtils
+            arrayUtils
         };
 
     const {
@@ -54,7 +53,7 @@ const { _ud = "undefined", $scope } = constants;
 
     const modName = "ObjectFunctor";
 
-    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+    const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
     class ObjectFunctor
     {
@@ -313,7 +312,7 @@ const { _ud = "undefined", $scope } = constants;
             ObjectFunctor
         };
 
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 
