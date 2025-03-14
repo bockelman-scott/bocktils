@@ -2190,7 +2190,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return { type, data, options };
     };
 
-    const CustomEventClass = _ud === typeof CustomEvent ? Event : CustomEvent;
+    const CustomEventClass = (_ud === typeof CustomEvent) ? Event : CustomEvent;
 
     /**
      * This class defines a Custom Event that can be used to communicate with interested consumers.<br>
@@ -5218,7 +5218,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
         else
         {
-            clone = cloneObject( pObject, pOptions, pStack );
+            clone = attempt( () => cloneObject( pObject, pOptions, pStack ) ) || clone;
         }
 
         if ( !!!pOptions?.includeClassNames )
@@ -5226,7 +5226,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             delete clone["class"];
         }
 
-        return isFunc( pFreezeFunction ) ? attempt( () => pFreezeFunction( clone ) ) : clone;
+        return isFunc( pFreezeFunction ) ? attempt( () => pFreezeFunction( clone ) || clone ) : clone;
     }
 
     const CopyHandlers = new Map();
@@ -5274,7 +5274,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         const handler = CopyHandlers.get( typeof pObject ) || CopyHandlers.get( _asterisk );
 
-        return handler( pObject, resolvedOptions, maybeFreeze, stack );
+        return attempt( () => handler( pObject, resolvedOptions, maybeFreeze, stack ) );
     };
 
     _copy.CopyHandlers = CopyHandlers;
