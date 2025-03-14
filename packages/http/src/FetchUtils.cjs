@@ -62,13 +62,14 @@ const {
         clamp,
         asyncAttempt,
         attempt,
+        resolveError,
         resolveEvent,
         resolveEventType,
         ObjectEntry,
         objectEntries
     } = moduleUtils;
 
-    const { _mt_str, _fun, _underscore, S_ON } = constants;
+    const { _mt_str, _fun, _colon, _underscore, S_ON, S_ERROR } = constants;
 
     const { isNull, isNonNullObject, isFunction, isPromise, firstMatchingType } = typeUtils;
 
@@ -832,7 +833,7 @@ const {
 
             let response = null;
 
-            const cb = function( pResponse, pReadyState, pFetcher, pData )
+            let cb = function( pResponse, pReadyState, pFetcher, pData )
             {
                 const data = pData || fetchData || { me, token, request, ignoreCache, callback };
 
@@ -849,16 +850,18 @@ const {
                 if ( isResponseReady( pReadyState ) && (responseToken >= lastToken || responseToken >= lastRequestToken) )
                 {
                     response = pResponse;
+
+                    const func = data?.callback || callback;
+
+                    if ( isFunction( func ) )
+                    {
+                        attempt( () => func( response, pReadyState, fetcher, data ) );
+                    }
+
+                    return response;
                 }
 
-                const func = data?.callback || callback;
-
-                if ( isFunction( func ) )
-                {
-                    attempt( () => func( response, pReadyState, fetcher, data ) );
-                }
-
-                return response;
+                return null;
             };
 
             this.#lastRequestId = request?.id || 0;
@@ -875,10 +878,46 @@ const {
 
                 if ( xmlHttp )
                 {
-                    xmlHttp.onreadystatechange = function()
+                    xmlHttp.onreadystatechange = xmlHttp.onload = function( pEvt )
                     {
-                        attempt( () => cb( xmlHttp.response, xmlHttp.readyState, me, fetchData ) );
+                        const evt = resolveEvent( pEvt );
+                        const readyState = XmlHttpRequestReadyStates.get( xmlHttp?.readyState );
+
+                        if ( evt?.type === "load" || XmlHttpRequestReadyStates.READY_STATE_COMPLETE === readyState )
+                        {
+                            attempt( () => cb( xmlHttp.response, xmlHttp.readyState, me, fetchData ) );
+                            xmlHttp.onreadystatechange = xmlHttp.onload = null;
+                            xmlHttp = null;
+                            cb = no_op;
+                        }
                     };
+
+                    xmlHttp.onerror = function( pEvt )
+                    {
+                        const evt = resolveEvent( pEvt );
+
+                        const errorMessage = me._buildErrorMessage( evt, me, request, xmlHttp );
+
+                        const error = resolveError( new Error( errorMessage ) );
+
+                        toolBocksModule.reportError( error, error.message, S_ERROR, me.#fetch, request, xmlHttp, me );
+
+                        xmlHttp.onreadystatechange = xmlHttp.onload = null;
+                        xmlHttp = null;
+
+                        cb = no_op;
+                    };
+
+                    xmlHttp.open( request.method, request.url, false );
+
+                    for( const [key, value] of request.headers )
+                    {
+                        xmlHttp.setRequestHeader( key, value );
+                    }
+
+                    xmlHttp.send( request.body || null );
+
+                    return xmlHttp.response;
                 }
             }
             else
@@ -897,6 +936,49 @@ const {
             }
 
             return response;
+        }
+
+        _buildErrorMessage( pEvt, pFetcher, pRequest, pParser )
+        {
+            const evt = resolveEvent( pEvt );
+
+            const fetcher = pFetcher || this;
+
+            const parser = pParser || this.installedParser || fetcher;
+
+            const req = pRequest || fetcher.#pendingRequests.get( fetcher.lastRequestToken )?.request;
+
+            let s = (evt?.type || "Fetch Error") + _colon;
+
+            if ( evt?.lengthComputable )
+            {
+                s += " retrieved " + evt?.loaded + " of " + (evt?.total || "an unknown number of") + " bytes";
+            }
+            else
+            {
+                s += " could not retrieve response";
+            }
+
+            if ( req && !isBlank( req.url ) )
+            {
+                s += " from " + (req?.url || "an unknown or invalid URL") + (pRequest?.id ? " ( ID: " + pRequest?.id + ")" : _mt_str);
+            }
+
+            if ( pFetcher )
+            {
+                s += " using " + parser ? asString( parser ) : fetcher ? fetcher.constructor.name : this.constructor.name;
+
+                s += "\n";
+
+                if ( pFetcher.lastRequestToken )
+                {
+                    s += "Last Request Token: " + pFetcher.lastRequestToken + "\n";
+                    s += "Last Request ID: " + pFetcher.lastRequestId + "\n";
+                    s += (pRequest && pRequest.token) ? "Request Token: " + pRequest?.token + "\n" : _mt_str;
+                }
+            }
+
+            return s;
         }
 
         async makeGetRequest( pRequestOrUrl, pCallback, pOptions = DEFAULT_REQUEST_OPTIONS )

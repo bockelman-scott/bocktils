@@ -75,7 +75,9 @@ const {
             isObject,
             isArray,
             isMap,
-            isFunction
+            isFunction,
+            isNonNullObject,
+            isString
         } = typeUtils;
 
     const { asString, isBlank } = stringUtils;
@@ -90,17 +92,17 @@ const {
 
     function isWebApiHeadersObject( pObject )
     {
-        return ( !isNull( pObject ) &&
-                 isFunction( pObject?.append ) &&
-                 isFunction( pObject?.delete ) &&
-                 isFunction( pObject?.entries ) &&
-                 isFunction( pObject?.forEach ) &&
-                 isFunction( pObject?.get ) &&
-                 isFunction( pObject?.getSetCookie ) &&
-                 isFunction( pObject?.has ) &&
-                 isFunction( pObject?.keys ) &&
-                 isFunction( pObject?.set ) &&
-                 isFunction( pObject?.values ));
+        return (isNonNullObject( pObject ) &&
+                isFunction( pObject?.append ) &&
+                isFunction( pObject?.delete ) &&
+                isFunction( pObject?.entries ) &&
+                isFunction( pObject?.forEach ) &&
+                isFunction( pObject?.get ) &&
+                isFunction( pObject?.getSetCookie ) &&
+                isFunction( pObject?.has ) &&
+                isFunction( pObject?.keys ) &&
+                isFunction( pObject?.set ) &&
+                isFunction( pObject?.values ));
     }
 
     function processHeadersArray( pOptions )
@@ -153,6 +155,11 @@ const {
         if ( isArray( pOptions ) )
         {
             return processHeadersArray( pOptions );
+        }
+
+        if ( isString( pOptions ) )
+        {
+            return processHeadersArray( pOptions.split( /\r?\n/ ) );
         }
 
         if ( isObject( pOptions ) )

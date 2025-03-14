@@ -1088,6 +1088,11 @@ const {
                                        options.timeout );
     };
 
+    const cloneRequest = function( pRequest )
+    {
+        return isNull( pRequest ) ? null : isFunction( pRequest?.clone ) ? pRequest.clone() : localCopy( pRequest );
+    };
+
     class HttpRequest extends EventTarget
     {
         #id = 0;
@@ -1104,13 +1109,29 @@ const {
             super();
 
             this.#id = this.#id || this.constructor.nextId();
+
             this.#options = new HttpRequestOptions( pOptions );
 
-            this.#url = isString( pRequestOrUrl ) ? new HttpUrl( pRequestOrUrl ) : pRequestOrUrl;
+            this.#url = isString( pRequestOrUrl ) ? new HttpUrl( pRequestOrUrl ) : new HttpUrl( pRequestOrUrl?.url || pRequestOrUrl?.href );
+
+            this.#request = this.resolveRequest( pRequestOrUrl );
 
             this.response = null;
 
             this.error = null;
+        }
+
+        resolveRequest( pRequestOrUrl )
+        {
+            if ( _ud !== typeof Request )
+            {
+                if ( pRequestOrUrl instanceof Request )
+                {
+                    return cloneRequest( pRequestOrUrl );
+                }
+
+                return new Request( this.#url );
+            }
         }
     }
 
@@ -1121,6 +1142,10 @@ const {
         if ( pRequestOrUrl instanceof HttpRequest )
         {
             return pRequestOrUrl;
+        }
+        else if ( _ud !== typeof Request && pRequestOrUrl instanceof Request )
+        {
+            return new HttpRequest( pRequestOrUrl, options );
         }
         else if ( isString( pRequestOrUrl ) )
         {
@@ -1187,6 +1212,7 @@ const {
             isFormData,
             isURLSearchParams,
             isReadableStream,
+            cloneRequest,
 
             HttpUrl,
             SearchParams,

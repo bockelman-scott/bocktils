@@ -255,71 +255,6 @@ const {
                                                  HttpContentType[key] = new HttpContentType( TYPES[key], value );
                                              } );
 
-    /**
-     * Represents an HTTP status with its numeric code and textual name.
-     * <br>
-     * Provides methods to query the category, such as informational, success, redirection, client error, or server error.<br>
-     * <br>
-     * @class
-     */
-    class HttpStatus extends ModuleEvent
-    {
-        #code;
-        #name;
-
-        constructor( pCode, pText )
-        {
-            super();
-
-            this.#code = asInt( pCode );
-            this.#name = asString( pText, true );
-        }
-
-        get code()
-        {
-            return asInt( this.#code );
-        }
-
-        get name()
-        {
-            return asString( this.#name, true );
-        }
-
-        isInformational()
-        {
-            return this.code >= 100 && this.code < 200;
-        }
-
-        isSuccess()
-        {
-            return this.code >= 200 && this.code < 300;
-        }
-
-        isRedirection()
-        {
-            return this.code >= 300 && this.code < 400;
-        }
-
-        isError()
-        {
-            return this.code >= 400;
-        }
-
-        isServerError()
-        {
-            return this.code >= 500;
-        }
-
-        isClientError()
-        {
-            return this.code >= 400 && this.code < 500;
-        }
-
-        isOK()
-        {
-            return this.code === 200;
-        }
-    }
 
     /**
      * A collection of HTTP status codes mapped to their respective numeric values.<br>
@@ -352,6 +287,8 @@ const {
      */
     const STATUS_CODES =
         {
+            UNKNOWN: 0,
+
             CONTINUE: 100,
             SWITCHING_PROTOCOLS: 101,
             PROCESSING: 102,
@@ -432,12 +369,82 @@ const {
 
     const STATUS_TEXT_ARRAY = [];
 
-    STATUS_CODES.forEach( ( code, name ) =>
-                          {
-                              STATUS_TEXT[code] = name;
-                              STATUS_TEXT_ARRAY[code] = name;
-                              HttpStatus[name] = new HttpStatus( code, capitalize( name ).replace( /http/i, "HTTP" ) );
-                          } );
+    /**
+     * Represents an HTTP status with its numeric code and textual name.
+     * <br>
+     * Provides methods to query the category, such as informational, success, redirection, client error, or server error.<br>
+     * <br>
+     * @class
+     */
+    class HttpStatus extends ModuleEvent
+    {
+        #code;
+        #name;
+
+        constructor( pCode, pText )
+        {
+            super();
+
+            this.#code = asInt( pCode );
+            this.#name = asString( pText || STATUS_TEXT[asString( this.#code )], true );
+        }
+
+        get code()
+        {
+            return asInt( this.#code );
+        }
+
+        get name()
+        {
+            return asString( this.#name, true );
+        }
+
+        isInformational()
+        {
+            return this.code >= 100 && this.code < 200;
+        }
+
+        isSuccess()
+        {
+            return this.code >= 200 && this.code < 300;
+        }
+
+        isRedirection()
+        {
+            return this.code >= 300 && this.code < 400;
+        }
+
+        isError()
+        {
+            return this.code >= 400;
+        }
+
+        isServerError()
+        {
+            return this.code >= 500;
+        }
+
+        isClientError()
+        {
+            return this.code >= 400 && this.code < 500;
+        }
+
+        isOK()
+        {
+            return this.code === 200;
+        }
+    }
+
+    objectEntries( STATUS_CODES ).forEach( ( entry ) =>
+                                           {
+                                               const name = ObjectEntry.getKey( entry );
+                                               const code = ObjectEntry.getValue( entry );
+
+                                               STATUS_TEXT[asString( code, true )] = name;
+                                               STATUS_TEXT_ARRAY[asInt( code )] = name;
+
+                                               HttpStatus[name] = new HttpStatus( code, capitalize( name ).replace( /http/i, "HTTP" ) );
+                                           } );
 
     /**
      * Represents an HTTP header with a name, description, and category.<br>
