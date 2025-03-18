@@ -495,8 +495,8 @@ const { _ud = "undefined", $scope } = constants;
      * Converts the specified array of bytes into a string, if possible
      * <br>
      *
-     * @param {Array.<number>|TypedArray} pBytes An array of bytes representing text characters.
-     *                                           May include Unicode characters.
+     * @param {Array.<number>|TypedArray|Uint8Array} pBytes An array of bytes representing text characters.
+     *                                                      May include Unicode characters.
      *
      * @returns {string} The string represented by the bytes provided
      */
@@ -857,12 +857,14 @@ const { _ud = "undefined", $scope } = constants;
         {
             s = input?.name || input?.constructor?.name || input?.prototype?.name || _mt_str;
 
+            // noinspection JSUnresolvedReference
             if ( isGenericObjectString( s ) )
             {
                 // this is a bit of a hack, but if the JsonUtils are also loaded,
                 // we want to use the asJson function, which can handle circular references
                 let stringify = firstMatchingType( _fun, me.asJson, me.stringify, ($scope()["__BOCK_JSON_UTILS__"] || $scope()["__BOCK_JSON_INTERPOLATION__"])?.asJson, $scope().asJson, JSON.stringify );
 
+                // noinspection JSUnresolvedReference
                 s = isFunction( input?.toJson ) ? input.toJson() : attempt( () => stringify.call( me, input, options ), input, options ) || input?.name || input?.constructor?.name || input?.prototype?.name || _mt_str;
             }
         }
@@ -1101,7 +1103,8 @@ const { _ud = "undefined", $scope } = constants;
             buffer = Buffer.from( pCString, "ucs2" );
         }
 
-        let s = buffer ? buffer.toString() : isArray( pCString ) || isTypedArray( pCString ) ? fromByteArray( pCString ) : asString( pCString );
+        // noinspection JSCheckFunctionSignatures
+        let s = (buffer && isFunction( buffer.toString )) ? buffer.toString() : isArray( pCString ) || isTypedArray( pCString ) ? fromByteArray( pCString ) : asString( pCString );
 
         // remove the null terminators;
         // Unicode characters may occupy either one or 2 bytes,

@@ -1,3 +1,5 @@
+// noinspection JSCheckFunctionSignatures
+
 const moduleUtils = require( "./_ToolBocksModule.cjs" );
 const constants = require( "./Constants.cjs" );
 const typeUtils = require( "./TypeUtils.cjs" );

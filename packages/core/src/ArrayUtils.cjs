@@ -1,3 +1,5 @@
+// noinspection JSCheckFunctionSignatures
+
 /**
  * @fileOverview
  * This module provides several useful functions for working with arrays and array-like values<br>
@@ -63,6 +65,7 @@ const $scope = constants?.$scope || function()
         objectKeys,
         objectValues,
         objectEntries,
+        objectToString,
         populateOptions,
         localCopy,
         immutableCopy,
@@ -170,7 +173,6 @@ const $scope = constants?.$scope || function()
     const {
         DEFAULT_AS_STRING_OPTIONS,
         asString,
-        isEmpty,
         isBlank,
         asInt,
         asFloat,
@@ -287,6 +289,33 @@ const $scope = constants?.$scope || function()
             removeInfinity: false,
         };
 
+    const sanitize = ( pArr ) =>
+    {
+        let arr = (isArray( pArr ) || isSpreadable( pArr ) ? [...(pArr || [])] : [pArr || _mt_str]) || [];
+        return (arr || []).filter( e => !(_ud === typeof e || null == e || isEmptyString( e )) );
+    };
+
+    const homogenize = ( pArr, pType ) =>
+    {
+        const type = pType?.type || pType;
+        let arr = (isArray( pArr ) || isSpreadable( pArr ) ? [...(pArr || [])] : [pArr || _mt_str]) || [];
+        return (arr || []).filter( e => (type === typeof e || (isClass( type ) && (e instanceof type))) );
+    };
+
+    function _flatten( pArr, pOptions )
+    {
+        const flatten = !!pOptions?.flatten;
+
+        let flattenLevel = (pOptions?.flatten?.level);
+
+        if ( isNaN( flattenLevel ) || flattenLevel <= 0 )
+        {
+            flattenLevel = Infinity;
+        }
+
+        return ((flatten && pArr.flat) ? pArr.flat( flattenLevel ) : pArr) || [];
+    }
+
     /**
      * This is an internal function<br>
      * that performs post-processing on an array<br>
@@ -309,20 +338,11 @@ const $scope = constants?.$scope || function()
 
         let arr = isArray( pArr ) ? pArr : (isSpreadable( pArr ) ? [...(pArr || [])] : [pArr || _mt_str]);
 
-        const flatten = !!options?.flatten;
+        arr = _flatten( arr, options );
 
-        let flattenLevel = (options?.flatten?.level);
+        arr = (options?.sanitize ? sanitize( arr ) : (arr || [])) || [];
 
-        if ( isNaN( flattenLevel ) || flattenLevel <= 0 )
-        {
-            flattenLevel = Infinity;
-        }
-
-        arr = ((flatten && arr.flat) ? arr.flat( flattenLevel ) : arr) || [];
-
-        arr = (options?.sanitize ? (arr || []).filter( e => !(_ud === typeof e || null == e || (isString( e ) && isEmpty( e ))) ) : (arr || [])) || [];
-
-        arr = (options?.type ? (arr || []).filter( e => (options?.type === typeof e || (isClass( options?.type ) && (e instanceof options?.type))) ) : (arr || [])) || [];
+        arr = (options?.type ? homogenize( arr, options?.type ) : (arr || [])) || [];
 
         arr = (options.removeNaN ? (arr || []).filter( e => !isNumber( e ) || !isNaN( e ) ) : (arr || [])) || [];
 
@@ -654,6 +674,7 @@ const $scope = constants?.$scope || function()
 
     let Filters;
 
+    // noinspection GrazieInspection
     /**
      * This is a collection of functions that can be used as filters
      * <i>and functions that return a filter</i><br>
@@ -3728,6 +3749,7 @@ const $scope = constants?.$scope || function()
             increment_rule: RANGE_INCREMENT_OPTION.SEQUENCE_LENGTH,
         };
 
+    // noinspection FunctionTooLongJS
     /**
      * Returns an iterable that produces values from pFrom to pTo (exclusive by default)<br>
      * <br>
@@ -5195,14 +5217,14 @@ const $scope = constants?.$scope || function()
         {
             dependencies,
             ARRAY_METHODS,
-            fromIterable,
             varargs,
             immutableVarArgs,
-            asArray,
             asArgs,
             flatArgs,
             filteredArgs,
             flatFilteredArgs,
+            asArray,
+            fromIterable,
             unique,
             pruneArray,
             hasElements,
@@ -5212,6 +5234,14 @@ const $scope = constants?.$scope || function()
             lastPopulatedArray,
             sortArray,
             copyArray,
+            sanitize: function( pArr )
+            {
+                return asArray( pArr, { sanitize: true } );
+            },
+            homogenize: function( pArr, pType )
+            {
+                return asArray( pArr, { type: pType, sanitize: true } );
+            },
             calculateLength,
             arraysEqual,
             includesAny,
@@ -5273,7 +5303,7 @@ const $scope = constants?.$scope || function()
             concatenateConsecutiveStrings,
             /**
              * @namespace
-             * The classes this module defines and exposes
+             *
              * @const
              * @alias module:ArrayUtils#classes
              */

@@ -44,7 +44,7 @@ const $scope = constants?.$scope || function()
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };
 
-// noinspection FunctionTooLongJS
+// noinspection FunctionTooLongJS,JSUnresolvedReference
 /**
  * This module is constructed by an Immediately Invoked Function Expression (IIFE).
  * see: <a href="https://developer.mozilla.org/en-US/docs/Glossary/IIFE">MDN: IIFE</a> for more information on this design pattern
@@ -152,10 +152,7 @@ const $scope = constants?.$scope || function()
         objectMethods,
 
         isPromise = ( pArg ) => (pArg && (pArg.constructor === Promise || pArg === Promise || pArg instanceof Promise)),
-        isThenable = ( pArg ) => (pArg && (pArg.then && ("function" === typeof pArg.then))),
-
-        is2dArray: _is2dArray,
-        isKeyValueArray: _isKeyValueArray,
+        isThenable = ( pArg ) => (pArg && (pArg.then && ("function" === typeof pArg.then)))
 
     } = moduleUtils;
 
@@ -1896,7 +1893,7 @@ const $scope = constants?.$scope || function()
             countDeadBranches
         } = resolveIsPopulatedArgs( pOptions );
 
-        let populated = false;
+        let populated;
 
         let minKeys = Math.max( 0, mandatoryKeys.length );
         let minLength = Math.max( minKeys, parseInt( minimumLength || "1" ) );
@@ -2358,8 +2355,10 @@ const $scope = constants?.$scope || function()
      */
     const parseDate = ( input, dateParser ) =>
     {
+        // noinspection JSUnresolvedReference
         if ( isFunction( dateParser ) || isFunction( dateParser?.parse || dateParser?.parseDate ) )
         {
+            // noinspection JSUnresolvedReference
             return attempt( () => (dateParser.parse || dateParser.parseDate || dateParser).call( dateParser, input ) );
         }
         return null;
@@ -2537,6 +2536,7 @@ const $scope = constants?.$scope || function()
     {
         if ( isObject( pObject ) )
         {
+            // noinspection JSUnresolvedReference
             return Object.getPrototypeOf( pObject ) || pObject?.__proto__ || pObject?.constructor?.prototype || pObject?.prototype || pObject?.constructor;
         }
         if ( isClass( pObject ) )
@@ -2754,7 +2754,6 @@ const $scope = constants?.$scope || function()
      * or the class itself if the specified value <i>is</i> a class (function)
      * <br>
      * @param {Object|function} pObject An instance of some class or a function that is a class
-     * @param {Object} pOptions An object to pass options to the isClass method of TypeUtils
      *
      * @returns {function} The class of which the object is an instance
      *                     or the class itself if the object is a class function
@@ -3350,7 +3349,8 @@ const $scope = constants?.$scope || function()
 
             if ( isIterable( this.#iterable ) )
             {
-                this.#iterator = this.#iterable[Symbol.iterator]();
+                const me = this;
+                this.#iterator = attempt( () => (me || this).#iterable[Symbol.iterator]() );
             }
         }
 
@@ -3392,7 +3392,12 @@ const $scope = constants?.$scope || function()
                     const value = this.#iterable[--this.#index];
                     return { value, done: false };
                 }
-                return this.#iterated[--this.#index];
+                return this.#iterated?.length >= this.#index ?
+                    {
+                        value: this.#iterated[--this.#index],
+                        done: false
+                    } :
+                    { done: true };
             }
             return { done: true };
         }
@@ -3415,7 +3420,7 @@ const $scope = constants?.$scope || function()
     }
 
     /**
-     * A wrapper class to adapt a synchronous iterator into an asynchronous iterator wrapper.<br>
+     * A wrapper class to adapt a synchronous iterator into an asynchronous iterator.<br>
      * Provides asynchronous iteration capabilities for iterables or iterators.<br>
      */
     class _AsyncIterator
@@ -3471,6 +3476,43 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    function _objToIterable( pArrayLike )
+    {
+        if ( pArrayLike instanceof Map )
+        {
+            return new _Iterable( [...pArrayLike.entries()] );
+        }
+        else if ( pArrayLike instanceof Set )
+        {
+            return new _Iterable( [...(pArrayLike.values())] );
+        }
+        else if ( isDate( pArrayLike ) )
+        {
+            return new _Iterable( [pArrayLike] );
+        }
+        else if ( isArray( pArrayLike ) || isIterable( pArrayLike ) )
+        {
+            return new _Iterable( pArrayLike );
+        }
+        else
+        {
+            const newObject = {};
+
+            const entries = objectEntries( pArrayLike );
+
+            for( let entry of entries )
+            {
+                const key = ObjectEntry.getKey( entry );
+
+                const value = ObjectEntry.getValue( entry );
+
+                newObject[key] = toIterable( value );
+            }
+
+            return new _Iterable( Object.entries( newObject ) );
+        }
+    }
+
     /**
      * Returns an _Iterable for the specified value
      *
@@ -3485,7 +3527,7 @@ const $scope = constants?.$scope || function()
      */
     const toIterable = function( pArrayLike, pAsync = false )
     {
-        let iterable = null;
+        let iterable;
 
         switch ( typeof pArrayLike )
         {
@@ -3515,43 +3557,7 @@ const $scope = constants?.$scope || function()
                 break;
 
             case _obj:
-                if ( isArray( pArrayLike ) )
-                {
-                    iterable = new _Iterable( pArrayLike );
-                }
-                else if ( pArrayLike instanceof Map )
-                {
-                    iterable = new _Iterable( [...pArrayLike.entries()] );
-                }
-                else if ( pArrayLike instanceof Set )
-                {
-                    iterable = new _Iterable( [...(pArrayLike.values())] );
-                }
-                else if ( isDate( pArrayLike ) )
-                {
-                    iterable = new _Iterable( [pArrayLike] );
-                }
-                else if ( isIterable( pArrayLike ) )
-                {
-                    iterable = new _Iterable( pArrayLike );
-                }
-                else
-                {
-                    const newObject = {};
-
-                    const entries = Object.entries( pArrayLike );
-
-                    for( let entry of entries )
-                    {
-                        const key = entry[0];
-
-                        const value = entry[1];
-
-                        newObject[key] = toIterable( value );
-                    }
-
-                    iterable = new _Iterable( Object.entries( newObject ) );
-                }
+                iterable = _objToIterable( pArrayLike );
                 break;
 
             default:
@@ -4293,6 +4299,7 @@ const $scope = constants?.$scope || function()
         return Math.max( Math.abs( pMinValue ), Math.abs( pMaxValue ) ) <= 2 ** 31 ? Float32Array : Float64Array;
     }
 
+    // noinspection OverlyComplexFunctionJS
     /**
      * Returns the appropriate TypedArray <b>class</b>
      * based on the provided array-like input.
@@ -4594,6 +4601,7 @@ const $scope = constants?.$scope || function()
         // in case the environment does not allow extending the built-in types
     }
 
+    // noinspection JSUnresolvedReference
     ObjectEntry.prototype.compareTo = function( pOther, pOptions = COMPARE_OPTIONS )
     {
         if ( this === pOther || pOther?.__GUID === this.__GUID )
@@ -4601,6 +4609,7 @@ const $scope = constants?.$scope || function()
             return 0;
         }
 
+        // noinspection JSUnresolvedReference
         let comp = compare( (this.key || this[0]), (pOther?.key || pOther?.[0]) );
 
         return 0 === comp ? compare( this, pOther, pOptions ) : comp;

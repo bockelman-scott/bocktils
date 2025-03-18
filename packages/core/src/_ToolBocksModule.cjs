@@ -1,3 +1,5 @@
+// noinspection JSCheckFunctionSignatures,JSUnresolvedReference
+
 /**
  * @fileoverview
  * @name ToolBocksModule
@@ -2192,6 +2194,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     const CustomEventClass = (_ud === typeof CustomEvent) ? Event : CustomEvent;
 
+    // noinspection JSClosureCompilerSyntax
     /**
      * This class defines a Custom Event that can be used to communicate with interested consumers.<br>
      * <br>
@@ -2202,6 +2205,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * <br>
      * Note: ToolBocks modules use instances of this event to communicate when errors have occurred rather than writing to the console.<br>
      * @class
+     * @extends Event
      */
     class ToolBocksModuleEvent extends CustomEventClass
     {
@@ -3800,6 +3804,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     Visitor.isVisitor = ( pVisitor ) => (pVisitor instanceof Visitor || isFunc( pVisitor?.visit ));
 
+    // noinspection JSClosureCompilerSyntax
     /**
      * This subclass of Visitor allows using any function as a visitor.<br>
      * <br>
@@ -3876,6 +3881,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
     }
 
+    // noinspection JSClosureCompilerSyntax
     /**
      * This subclass of Visitor is a no op visitor.<br>
      * Instances of this class can be used when a Visitor is expected,

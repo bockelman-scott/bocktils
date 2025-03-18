@@ -16,9 +16,11 @@ const { _ud = "undefined", $scope } = constants;
 {
     const INTERNAL_NAME = "__BOCK__BUFFER_UTILS__";
 
-    if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
+    let scp = $scope();
+
+    if ( scp && (null != scp[INTERNAL_NAME]) )
     {
-        return $scope()[INTERNAL_NAME];
+        return scp[INTERNAL_NAME];
     }
 
     const { _mt_str } = constants;
@@ -35,13 +37,11 @@ const { _ud = "undefined", $scope } = constants;
 
     const modName = "BufferUtils";
 
-    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+    const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
-    const executionEnvironment = modulePrototype.executionEnvironment;
+    const executionEnvironment = toolBocksModule.executionEnvironment;
 
     const _isNode = executionEnvironment.isNode();
-    const _isDeno = executionEnvironment.isDeno();
-    const _isBrowser = executionEnvironment.isBrowser();
 
     const {
         isDefined,
@@ -72,7 +72,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             return true;
         }
-        const buffer = $scope().Buffer;
+        const buffer = scp.Buffer;
         return (_ud !== typeof buffer && isFunction( buffer?.isBuffer ) && buffer.isBuffer( buffer.from( [0x62, 0x75, 0x66, 0x66, 0x65, 0x72] ) ));
     }
 
@@ -88,7 +88,7 @@ const { _ud = "undefined", $scope } = constants;
         }
         catch( ex )
         {
-            modulePrototype.handleError( ex, exposeModule, "node:buffer" );
+            toolBocksModule.handleError( ex, exposeModule, "node:buffer" );
         }
     }
 
@@ -113,25 +113,25 @@ const { _ud = "undefined", $scope } = constants;
             {
                 const nodeUtil = require( "node:util" );
 
-                TextEncoder = nodeUtil?.TextEncoder || $scope().TextEncoder;
-                TextDecoder = nodeUtil?.TextDecoder || $scope().TextDecoder;
+                TextEncoder = nodeUtil?.TextEncoder || scp.TextEncoder;
+                TextDecoder = nodeUtil?.TextDecoder || scp.TextDecoder;
 
-                $scope().TextEncoder = $scope().TextEncoder || TextEncoder;
-                $scope().TextDecoder = $scope().TextDecoder || TextDecoder;
+                scp.TextEncoder = scp.TextEncoder || TextEncoder;
+                scp.TextDecoder = scp.TextDecoder || TextDecoder;
 
                 TextEncoderDefined = isTextEncoderDefined();
                 TextDecoderDefined = isTextDecoderDefined();
             }
             catch( ex )
             {
-                modulePrototype.handleError( ex, exposeModule, "node:util TextEncoder/TextDecoder" );
+                toolBocksModule.handleError( ex, exposeModule, "node:util TextEncoder/TextDecoder" );
             }
         }
     }
 
     if ( _ud === typeof ReadableStream )
     {
-        ReadableStream = $scope().ReadableStream || attempt( () => (_isNode ? require( "stream" ).Readable : ReadableStream) );
+        ReadableStream = scp.ReadableStream || attempt( () => (_isNode ? require( "stream" ).Readable : ReadableStream) );
     }
 
     function resolveEncoding( pEncoding )
@@ -146,18 +146,18 @@ const { _ud = "undefined", $scope } = constants;
     let mod;
 
     let {
-        Buffer = $scope()?.Buffer || nodeBuffer.Buffer || Uint8Array,
-        Blob = $scope()?.Blob || Uint8Array,
-        File = $scope()?.File,
-        atob = $scope()?.atob,
-        btoa = $scope()?.btoa,
-        BlobOptions = $scope()?.BlobOptions || { type: "application/octet-stream" },
-        FileOptions = $scope()?.FileOptions || { type: "application/octet-stream" },
-        isAscii = $scope()?.isAscii,
-        isUtf8 = $scope()?.isUtf8,
-        SlowBuffer = $scope()?.SlowBuffer || Uint8Array,
-        transcode = $scope()?.transcode || Uint8Array.prototype.transcode,
-        TranscodeEncoding = $scope()?.TranscodeEncoding || utf8,
+        Buffer = scp?.Buffer || nodeBuffer.Buffer || Uint8Array,
+        Blob = scp?.Blob || Uint8Array,
+        File = scp?.File,
+        atob = scp?.atob,
+        btoa = scp?.btoa,
+        BlobOptions = scp?.BlobOptions || { type: "application/octet-stream" },
+        FileOptions = scp?.FileOptions || { type: "application/octet-stream" },
+        isAscii = scp?.isAscii,
+        isUtf8 = scp?.isUtf8,
+        SlowBuffer = scp?.SlowBuffer || Uint8Array,
+        transcode = scp?.transcode || Uint8Array.prototype.transcode,
+        TranscodeEncoding = scp?.TranscodeEncoding || utf8,
     } = nodeBuffer || {};
 
     BufferDefined = (_ud !== typeof Buffer) && isBufferDefined();
@@ -208,9 +208,9 @@ const { _ud = "undefined", $scope } = constants;
 
         objectEntries( mod ).forEach( ( [key, value] ) =>
                                       {
-                                          if ( _ud !== typeof $scope()[key] )
+                                          if ( _ud === typeof scp[key] )
                                           {
-                                              $scope()[key] = value;
+                                              scp[key] = value;
                                           }
                                       } );
     }
@@ -294,7 +294,7 @@ const { _ud = "undefined", $scope } = constants;
 
             decode()
             {
-                return (isTextEncoderDefined()) ? new TextDecoder().decode( this.uInt8Array ) : String.fromCharCode.apply( String, this.uInt8Array );
+                return (isTextDecoderDefined()) ? new TextDecoder().decode( this.uInt8Array ) : String.fromCharCode.apply( String, this.uInt8Array );
             }
 
             write( pString, pEncoding )
@@ -317,7 +317,7 @@ const { _ud = "undefined", $scope } = constants;
             {
                 const encoding = resolveEncoding( pEncoding );
 
-                if ( TextEncoderDefined && encoding === utf8 )
+                if ( TextDecoderDefined && encoding === utf8 )
                 {
                     return new TextDecoder().decode( this.uInt8Array );
                 }
@@ -567,7 +567,7 @@ const { _ud = "undefined", $scope } = constants;
     if ( !isBufferDefined() )
     {
         Buffer = mod.Buffer || mod.__Buffer;
-        $scope().Buffer = $scope().Buffer || Buffer;
+        scp.Buffer = scp.Buffer || Buffer;
     }
 
     /**
@@ -605,20 +605,20 @@ const { _ud = "undefined", $scope } = constants;
             TextDecoderDefined,
             BTOA_DEFINED,
             ATOB_DEFINED,
-            btoa: BTOA_DEFINED ? btoa || $scope().btoa : ( pString ) => Buffer.from( pString ).toString( base64 ),
-            atob: ATOB_DEFINED ? atob || $scope().atob : ( pString ) => Buffer.from( pString, base64 ).toString(),
-            TextEncoder: TextEncoderDefined ? TextEncoder || $scope().TextEncoder : {},
-            TextDecoder: TextDecoderDefined ? TextDecoder || $scope().TextDecoder : {},
-            File: File || $scope().File,
-            Blob: Blob || $scope().Blob,
-            BlobOptions: BlobOptions || $scope().BlobOptions,
-            FileOptions: FileOptions || $scope().FileOptions,
-            isAscii: isAscii || $scope().isAscii,
-            isUtf8: isUtf8 || $scope().isUtf8,
-            SlowBuffer: SlowBuffer || $scope().SlowBuffer,
-            transcode: transcode || $scope().transcode,
-            TranscodeEncoding: TranscodeEncoding || $scope().TranscodeEncoding,
-            ReadableStream: (_ud !== typeof ReadableStream) && isFunction( ReadableStream ) ? ReadableStream : $scope().ReadableStream,
+            btoa: BTOA_DEFINED ? btoa || scp.btoa : ( pString ) => Buffer.from( pString ).toString( base64 ),
+            atob: ATOB_DEFINED ? atob || scp.atob : ( pString ) => Buffer.from( pString, base64 ).toString(),
+            TextEncoder: TextEncoderDefined ? TextEncoder || scp.TextEncoder : {},
+            TextDecoder: TextDecoderDefined ? TextDecoder || scp.TextDecoder : {},
+            File: File || scp.File,
+            Blob: Blob || scp.Blob,
+            BlobOptions: BlobOptions || scp.BlobOptions,
+            FileOptions: FileOptions || scp.FileOptions,
+            isAscii: isAscii || scp.isAscii,
+            isUtf8: isUtf8 || scp.isUtf8,
+            SlowBuffer: SlowBuffer || scp.SlowBuffer,
+            transcode: transcode || scp.transcode,
+            TranscodeEncoding: TranscodeEncoding || scp.TranscodeEncoding,
+            ReadableStream: (_ud !== typeof ReadableStream) && isFunction( ReadableStream ) ? ReadableStream : scp.ReadableStream,
             arrayFromBuffer,
             typedArrayFromBuffer,
             isBlob,
@@ -627,9 +627,11 @@ const { _ud = "undefined", $scope } = constants;
 
     mod = { ...mod, ...more };
 
-    mod.Buffer = mod.Buffer || $scope().Buffer || Buffer;
+    mod.Buffer = mod.Buffer || scp.Buffer || Buffer;
 
-    mod = modulePrototype.extend( mod );
+    scp = null;
+
+    mod = toolBocksModule.extend( mod );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 

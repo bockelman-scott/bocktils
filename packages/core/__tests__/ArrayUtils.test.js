@@ -949,7 +949,7 @@ describe( "Mappers", () =>
 
               let expected = ["a", 1, true, "b", {}, ["a", "b"], function( a, b ) {}];
 
-              expect( arraysEqual( expected, arr.map( arrayUtils.Mappers.IDENTITY ) ) ).toBe( true );
+              expect( arraysEqual( expected, arr.map( Mappers.IDENTITY ) ) ).toBe( true );
           } );
 
     test( "The Mappers.TO_STRING function returns a new array with each element converted to a string",
@@ -959,7 +959,7 @@ describe( "Mappers", () =>
 
               const expected = ["a", "1", "true", "b", "{}", "ab", ""];
 
-              const actual = arr.map( arrayUtils.Mappers.TO_STRING );
+              const actual = arr.map( Mappers.TO_STRING );
 
               expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
@@ -983,7 +983,7 @@ describe( "Mappers", () =>
 
               const expected = ["a", "1", "true", "b", "{}", "a,b", ""];
 
-              const actual = arr.map( arrayUtils.Mappers.TO_STRING_WITH_OPTIONS( opts ) );
+              const actual = arr.map( Mappers.TO_STRING_WITH_OPTIONS( opts ) );
 
               expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
@@ -1008,7 +1008,7 @@ describe( "Mappers", () =>
 
               const expected = ["a", "1", "true", "b", "{}", "a,b", "Function"];
 
-              const actual = arr.map( arrayUtils.Mappers.TO_STRING_WITH_OPTIONS( opts ) );
+              const actual = arr.map( Mappers.TO_STRING_WITH_OPTIONS( opts ) );
 
               expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
@@ -1033,7 +1033,7 @@ describe( "Mappers", () =>
 
               const expected = ["a", "1", "true", "b", "{}", "a,b", "xyz"];
 
-              const actual = arr.map( arrayUtils.Mappers.TO_STRING_WITH_OPTIONS( opts ) );
+              const actual = arr.map( Mappers.TO_STRING_WITH_OPTIONS( opts ) );
 
               expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
@@ -1069,7 +1069,7 @@ describe( "Mappers", () =>
 
               const expected = ["a", "1", "true", "b", "{}", "a~b", "09/23/2024"];
 
-              const actual = arr.map( arrayUtils.Mappers.TO_STRING_WITH_OPTIONS( opts ) );
+              const actual = arr.map( Mappers.TO_STRING_WITH_OPTIONS( opts ) );
 
               expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
@@ -1082,7 +1082,7 @@ describe( "Mappers", () =>
 
               const expected = [0, 1, 1, 0, 0, 0, 0, 7, 3, 4095, 15, NaN];
 
-              const actual = arr.map( arrayUtils.Mappers.TO_NUMBER );
+              const actual = arr.map( Mappers.TO_NUMBER );
 
               expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
@@ -1095,7 +1095,7 @@ describe( "Mappers", () =>
 
               const expected = [0, 1, 1, 0, 0, 0, 0, 7, 3, 4095, 15, 0];
 
-              const actual = arr.map( arrayUtils.Mappers.TO_VALID_NUMBER );
+              const actual = arr.map( Mappers.TO_VALID_NUMBER );
 
               expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
@@ -1107,7 +1107,7 @@ describe( "Mappers", () =>
 
               const expected = ["a", "1", "true", "abc", "{}", "abcde", "", "0"];
 
-              const actual = arr.map( arrayUtils.Mappers.TRIMMED );
+              const actual = arr.map( Mappers.TRIMMED );
 
               expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
@@ -1120,7 +1120,7 @@ describe( "Mappers", () =>
 
               const expected = [" a foo", "1foo", "truefoo", "abc foo", "{}foo", "abcde foo", "foo", "0foo"];
 
-              const actual = arr.map( arrayUtils.Mappers.APPEND( "foo" ) );
+              const actual = arr.map( Mappers.APPEND( "foo" ) );
 
               expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
@@ -1132,7 +1132,7 @@ describe( "Mappers", () =>
 
               const expected = ["bar a ", "bar1", "bartrue", "barabc ", "bar{}", "barabcde ", "bar", "bar0"];
 
-              const actual = arr.map( arrayUtils.Mappers.PREPEND( "bar" ) );
+              const actual = arr.map( Mappers.PREPEND( "bar" ) );
 
               expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
@@ -1144,7 +1144,7 @@ describe( "Mappers", () =>
 
               const expected = [" ** ", "1", "true", "**bc ", "{}", "**bcde ", "", "0"];
 
-              const actual = arr.map( arrayUtils.Mappers.REPLACE( /a/g, "**" ) );
+              const actual = arr.map( Mappers.REPLACE( /a/g, "**" ) );
 
               expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
@@ -1157,7 +1157,7 @@ describe( "Mappers", () =>
 
               const expected = [];
 
-              const actual = arr.map( arrayUtils.Mappers.TO_LOWERCASE );
+              const actual = arr.map( Mappers.TO_LOWERCASE );
 
               expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
@@ -1170,7 +1170,7 @@ describe( "Mappers", () =>
 
               const expected = ["abc", "abc", "def", "1", "true"];
 
-              const actual = arr.map( arrayUtils.Mappers.TO_LOWERCASE );
+              const actual = arr.map( Mappers.TO_LOWERCASE );
 
               expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
@@ -1183,7 +1183,7 @@ describe( "Mappers", () =>
 
               const expected = ["ABC", "ABC", "DEF", "1", "TRUE"];
 
-              const actual = arr.map( arrayUtils.Mappers.TO_UPPERCASE );
+              const actual = arr.map( Mappers.TO_UPPERCASE );
 
               expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
@@ -1196,7 +1196,7 @@ describe( "Mappers", () =>
 
               const expected = ["abc", "def", "12", "true", "xyz"];
 
-              const actual = arr.map( arrayUtils.Mappers.chain( arrayUtils.Mappers.TO_STRING, arrayUtils.Mappers.TRIMMED, arrayUtils.Mappers.TO_LOWERCASE ) );
+              const actual = arr.map( Mappers.chain( Mappers.TO_STRING, Mappers.TRIMMED, Mappers.TO_LOWERCASE ) );
 
               expect( arraysEqual( expected, actual ) ).toBe( true );
           } );

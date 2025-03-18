@@ -1,3 +1,5 @@
+// noinspection JSCheckFunctionSignatures
+
 /**
  * Provides functionality related to
  * parsing and formatting numbers and dates,
@@ -560,12 +562,15 @@ const {
 
         try
         {
+            // noinspection JSUnresolvedReference
             if ( isFunction( locale.getWeekInfo ) )
             {
+                // noinspection JSUnresolvedReference
                 weekData = Object.assign( locale.getWeekInfo() || locale.weekInfo || {} );
             }
             else
             {
+                // noinspection JSUnresolvedReference
                 weekData = Object.assign( locale.weekInfo || weekData || {} );
             }
         }
