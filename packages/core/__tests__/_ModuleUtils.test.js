@@ -1155,7 +1155,7 @@ describe( "Trivial Functions", () =>
     test( "no_op does nothing (and likes it!)", () =>
     {
         let result = no_op( 42 );
-        expect( result ).toBe( undefined );
+        expect( result ).toBe( no_op );
     } );
 
     test( "op_true returns true", () =>

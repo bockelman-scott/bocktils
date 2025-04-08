@@ -331,9 +331,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     /**
      * This is a function that just does nothing.<br>
-     * This is useful when you need a default or placeholder for a missing argument or expected function.<br>
+     * This is useful when you need a default or placeholder
+     * for a missing argument or expected function.<br>
+     * <br>
+     * Note that this function returns itself,
+     * so if you need a function that returns false or no value,
+     * use op_false.<br>
+     * <br>
      */
-    const no_op = () => {};
+    const no_op = () => { return no_op; };
 
     /**
      * A constant function that always returns the boolean value, true.
