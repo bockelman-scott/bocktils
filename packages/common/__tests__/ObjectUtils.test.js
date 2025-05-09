@@ -39,7 +39,8 @@ const {
     findImplementor,
     collectImplementors,
     toLiteral,
-    findNode
+    findNode,
+    invertProperties
 } = objectUtils;
 
 const {
@@ -146,6 +147,25 @@ describe( "extractFunctionData returns an object with the function body and an a
               expect( params ).toEqual( extractFunctionParameters( anObject ) );
           } );
 } );
+
+describe( "invertProperties", () =>
+{
+    test( "invertProperties",
+          () =>
+          {
+              let OBJ =
+                  {
+                      "A": "apple",
+                      "B": "banana",
+                      C : "cherry",
+                      D : "daikon radish"
+                  };
+
+                  let INVERTED = invertProperties( OBJ );
+
+                  expect( INVERTED["apple"] ).toEqual( "A" );
+          } );
+});
 
 describe( "isNullOrNaN", () =>
 {

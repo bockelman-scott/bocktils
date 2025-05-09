@@ -438,7 +438,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     /*
      * The following functions are used in the base module,
      * because more sophisticated functions to detect and convert types
-     * are exposed in a separate TypeUtil module.
+     * are exposed in a separate TypeUtils module.
      *
      * External code should prefer those functions over these rudimentary checks.
      */
@@ -791,8 +791,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     /**
      * A constant string representing the default error message
-     * used when a call to the functions, attempt or asyncAttempt
-     * fail.
+     * used when a call to the function, attempt or asyncAttempt, fail.
      * <br>
      *
      */
@@ -800,8 +799,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     /**
      * A constant string representing the default error message
-     * used when the value passed to the functions, attempt or asyncAttempt
-     * is not an executable construct.
+     * used when the value passed to the function, attempt or asyncAttempt, is not a function.
      * <br>
      */
     const NOT_A_FUNCTION = "The specified value is not a function";
@@ -873,6 +871,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 handleAttempt.traceFunctionCall( pFunction, ...pArgs );
             }
 
+            handleAttempt.lastError = null;
+            delete handleAttempt.lastError;
+
             try
             {
                 return !isAsyncFunction( pFunction ) ?
@@ -881,12 +882,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             }
             catch( ex )
             {
+                handleAttempt.lastError = ex;
                 handleAttempt.handleError( ex, pFunction, ...pArgs );
             }
         }
         else
         {
             const error = new Error( NOT_A_FUNCTION );
+            handleAttempt.lastError = error;
             handleAttempt.handleError( error, pFunction, ...pArgs );
         }
 
@@ -959,6 +962,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     handleAttempt.handleError = function( pError, pFunction, ...pArgs )
     {
+        handleAttempt.lastError = pError;
         konsole.error( (pError instanceof Error ? ATTEMPT_FAILED : NOT_A_FUNCTION), pError?.message || pFunction?.name || _mt_str, pError || {}, pFunction || {}, ...pArgs );
     };
 
@@ -986,7 +990,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     }
 
     /**
-     * Executes specified function asynchronously with the provided arguments
+     * Executes a specified function asynchronously with the provided arguments
      * and handles the execution using the handleAttempt function,
      * consuming any errors that may occur
      * by calling the 'handleAttempt.handleError' function
@@ -999,6 +1003,16 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     async function asyncAttempt( pFunction, ...pArgs )
     {
         return await asyncHandleAttempt( pFunction, ...pArgs );
+    }
+
+    function getLastError()
+    {
+        return handleAttempt.lastError;
+    }
+
+    async function getLastAsynchronousError()
+    {
+        return Promise.resolve( handleAttempt.lastError );
     }
 
     /**
@@ -1192,6 +1206,23 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @returns {Object} The object specified if it is a non-null object or an empty object; never returns null.
      */
     const resolveObject = ( pObject, pAcceptArray = false ) => isNonNullObj( pObject ) ? (!!pAcceptArray || !isArray( pObject ) ? pObject : {}) : {};
+
+    const isWritable = function( pObj, pPropertyName )
+    {
+        let hasProperty = ({}).hasOwnProperty.call( pObj, pPropertyName );
+
+        if ( hasProperty )
+        {
+            let descriptor = Object.getOwnPropertyDescriptor( pObj, pPropertyName );
+
+            if ( descriptor )
+            {
+                return ((descriptor.writable && descriptor.enumerable) || (isFunc( descriptor.set )));
+            }
+        }
+
+        return false;
+    };
 
     /**
      * Alias for Object.freeze
@@ -4047,6 +4078,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             {
                 const error = resolveError( pError, pError?.message );
 
+                handleAttempt.lastError = error;
+
                 (me || this).reportError( error, error?.message, S_ERROR, (me || this).calculateErrorSourceName( (me || this), pContext || handleAttempt ), ...pExtra );
             };
         }
@@ -4739,6 +4772,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 const error = resolveError( pError, (pFunction || func)?.name );
 
                 result.exceptions.push( error );
+
+                handleAttempt.lastError = handle.lastError = error;
 
                 thiz.reportError( error, error?.message, S_ERROR, thiz.calculateErrorSourceName( thiz, (pFunction || func) ), ...pArgs );
             };
@@ -6510,6 +6545,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             canBind,
             bindMethod,
+
+            isWritable,
 
             attempt,
             attemptMethod,

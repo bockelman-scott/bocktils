@@ -699,9 +699,9 @@ const $scope = constants?.$scope || function()
             }
         },
 
-        writeFile = _isNode ? fs.writeFile : _deno?.writeFile,
+        writeFile = _isNode ? fsAsync.writeFile : _deno?.writeFile,
 
-        writeTextFile = _isNode ? fs.writeFile : _deno?.writeTextFile,
+        writeTextFile = _isNode ? fsAsync.writeFile : _deno?.writeTextFile,
 
         realpath = _isNode ? fs.realpath : _deno?.realPath,
 
@@ -740,7 +740,7 @@ const $scope = constants?.$scope || function()
 
         create = _isNode ? async function( pPath, pOptions )
         {
-            fs.writeFile( resolvePath( pPath ), _mt_str, populateOptions( pOptions, { encoding: "utf8" } ) );
+            fsAsync.writeFile( resolvePath( pPath ), _mt_str, populateOptions( pOptions, { encoding: "utf8" } ) );
         } : _deno?.create,
 
         makeTempDir = _isNode ? fsAsync.mkdtemp : _deno?.makeTempDir,

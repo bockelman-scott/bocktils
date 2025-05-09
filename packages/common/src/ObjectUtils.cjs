@@ -19,7 +19,7 @@ const { _ud = "undefined", $scope } = constants;
     // defines a key we can use to store this module in global scope
     const INTERNAL_NAME = "__BOCK__OBJECT_UTILS__";
 
-    // if we've already executed this code, just return the module
+    // if we've already executed this code, return the module
     if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
     {
         return $scope()[INTERNAL_NAME];
@@ -28,7 +28,7 @@ const { _ud = "undefined", $scope } = constants;
     /**
      * An array of this module's dependencies
      * which are re-exported with this module,
-     * so if you want to, you can just import the leaf module
+     * so if you want to, you can import the leaf module
      * and then use the other utilities as properties of that module
      */
     const dependencies =
@@ -55,7 +55,7 @@ const { _ud = "undefined", $scope } = constants;
         objectEntries,
         localCopy,
         immutableCopy,
-
+        attempt
     } = moduleUtils;
 
     let
@@ -177,7 +177,8 @@ const { _ud = "undefined", $scope } = constants;
             toTrimmedNonBlankStrings,
             toKeys,
             varargs,
-            immutableVarArgs
+            immutableVarArgs,
+            flatArgs
         } = arrayUtils;
 
     const canCompareObject = function( pObject, pStrict, pClass )
@@ -475,7 +476,7 @@ const { _ud = "undefined", $scope } = constants;
     {
         let obj = {};
 
-        const entries = getEntries( pObject );
+        const entries = objectEntries( pObject );
 
         for( let entry of entries )
         {
@@ -647,14 +648,14 @@ const { _ud = "undefined", $scope } = constants;
 
         resolveTarget( pObject, pKey )
         {
-            const obj = isNonNullObj( pObject ) ? pObject || {} : {};
-            const key = isString( pKey ) || isNum( pKey ) || isSymbol( pKey ) ? pKey : String( pKey || _mt_str );
+            const obj = isNonNullObject( pObject ) ? pObject || {} : {};
+            const key = isString( pKey ) || isNumber( pKey ) || isSymbol( pKey ) ? pKey : String( pKey || _mt_str );
             return { obj, key };
         }
 
         equals( pOther )
         {
-            return isNonNullObj( pOther ) &&
+            return isNonNullObject( pOther ) &&
                    this.id === pOther?.id &&
                    this.name === pOther?.name;
         }
@@ -1037,7 +1038,7 @@ const { _ud = "undefined", $scope } = constants;
 
         resolveRule( pRule )
         {
-            if ( isNonNullObj( pRule ) )
+            if ( isNonNullObject( pRule ) )
             {
                 if ( pRule instanceof MergeRule )
                 {
@@ -1179,10 +1180,10 @@ const { _ud = "undefined", $scope } = constants;
         {
             const me = this;
 
-            const left = isNonNullObj( pObjectA ) ? { ...pObjectA } : null;
-            const right = isNonNullObj( pObjectB ) ? { ...pObjectB } : null;
+            const left = isNonNullObject( pObjectA ) ? { ...pObjectA } : null;
+            const right = isNonNullObject( pObjectB ) ? { ...pObjectB } : null;
 
-            if ( isNonNullObj( right ) && isNonNullObj( left ) )
+            if ( isNonNullObject( right ) && isNonNullObject( left ) )
             {
                 const recursion = this.resolveRecursion( pRecursion );
 
@@ -1253,7 +1254,7 @@ const { _ud = "undefined", $scope } = constants;
                 return attempt( () => me.mergeArrays( valueA, valueB, recursion ) );
             }
 
-            if ( isNonNullObj( pValueA ) || isNonNullObj( pValueB ) )
+            if ( isNonNullObject( pValueA ) || isNonNullObject( pValueB ) )
             {
                 return attempt( () => (me || this).mergeLtr( pValueA, pValueB, recursion ) );
             }
