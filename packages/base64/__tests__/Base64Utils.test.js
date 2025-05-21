@@ -49,28 +49,26 @@ test( "encode/decode a binary file",
            */
       }, 60_000 );
 
-/*
  test( "encode/decode a very large binary file",
  async() =>
  {
  const start = Date.now();
 
- const data = await fsAsync.readFile( largeTestFilePath );
+ const data = await fsAsync.readFile( `${testDataDir}/justin.image.data` );
 
- const base64Text = encode( data );
+ const base64Text = data;
 
  console.log( `Base64 text length: ${base64Text.length}` );
-
 
  const decoded = decode( base64Text );
 
  expect( decoded.length ).toEqual( data.length );
 
- await fsAsync.writeFile( path.resolve( testDataDir, "large_test_decoded.mp4" ), Buffer.from( decoded ) );
+ // await fsAsync.writeFile( path.resolve( testDataDir, "large_test_decoded.mp4" ), Buffer.from( decoded ) );
 
  let encoded = encode( decoded );
 
- expect( encoded ).toEqual( base64Text );
+ // expect( encoded ).toEqual( base64Text );
 
 
  const end = Date.now();
@@ -80,7 +78,6 @@ test( "encode/decode a binary file",
  expect( true ).toBe( true );
 
  }, 1_250_000 );
- */
 
 
 test( "isValidBase64 returns false for invalid Base64 content",

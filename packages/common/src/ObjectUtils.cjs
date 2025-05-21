@@ -356,8 +356,8 @@ const { _ud = "undefined", $scope } = constants;
             return false;
         }
 
-        const firstID = asString( pFirst?.getUniqueObjectInstanceId() || pFirst?.GUID );
-        const secondID = asString( pSecond?.getUniqueObjectInstanceId() || pSecond?.GUID );
+        const firstID = asString( pFirst?.getUniqueObjectInstanceId() || pFirst?.__GUID );
+        const secondID = asString( pSecond?.getUniqueObjectInstanceId() || pSecond?.__GUID );
 
         if ( !(isBlank( firstID ) || isBlank( secondID )) && same( firstID, secondID, pStrict, String, true, stack ) )
         {

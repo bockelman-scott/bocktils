@@ -2266,6 +2266,8 @@ const $scope = constants?.$scope || function()
                                             date.getTime() >= MIN_DATE_TIME &&
                                             date.getTime() <= MAX_DATE_TIME;
 
+    const isDateString = ( pStr ) => attempt( () => isString( pStr ) && !isBlankString( pStr ) ? isValidDateInstance( new Date( pStr.trim() ) ) : isNumber( pStr ) ? isValidDateInstance( new Date( pStr ) ) : isValidDateInstance( pStr ) );
+
     const canBeDateTime = function( pObj )
     {
         let date = isObject( pObj ) && pObj instanceof Number
@@ -4931,6 +4933,7 @@ const $scope = constants?.$scope || function()
             isSet,
             isWeakSet,
             isDate,
+            isDateString,
             isRegExp,
             isClass,
             isUserDefinedClass,
