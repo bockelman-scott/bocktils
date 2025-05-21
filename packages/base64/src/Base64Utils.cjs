@@ -232,6 +232,10 @@ const {
 
         let str = asString( pStr, true ).replaceAll( /[\r\n]+/g, _mt_str );
 
+        let parts = str.split( _comma ); //remove any preamble
+
+        str = parts[parts.length - 1];
+
         str = asString( str, true ).replaceAll( new RegExp( "\\\\r|\\\\n", "g" ), _mt_str );
 
         for( let i = 0, n = replacements.length; i < n; i++ )
@@ -403,12 +407,12 @@ const {
                 data.push( (block >> ((2 - k) * 8)) & 0xFF );
             }
 
-/*
-            if ( i % 1_000 === 0 )
-            {
-                console.log( "Still working...", i, "Time elapsed:", Date.now() - start, "ms" );
-            }
-*/
+            /*
+             if ( i % 1_000 === 0 )
+             {
+             console.log( "Still working...", i, "Time elapsed:", Date.now() - start, "ms" );
+             }
+             */
         }
 
         // const end = Date.now();
@@ -465,6 +469,8 @@ const {
                     stringUtils,
                     arrayUtils
                 },
+            SUPPORTED_VARIANTS,
+            DEFAULT_VARIANT,
             isValidBase64,
             cleanBase64,
             encode,
