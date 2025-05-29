@@ -167,7 +167,7 @@ describe( "FileObject", () =>
 
         sorted = sorted.map( e => (e.toString() + "\n") );
 
-        expect( sorted.length ).toEqual( 12 );
+        expect( sorted.length ).toEqual( 13 );
 
         expect( sorted[11].replace( /\n+$/, "" ).endsWith( "all_bones_mp3_zip.data" ) ).toBe( true );
 
@@ -176,9 +176,9 @@ describe( "FileObject", () =>
 
         sorted = sorted.map( e => (e.toString() + "\n") );
 
-        expect( sorted.length ).toEqual( 12 );
+        expect( sorted.length ).toEqual( 13 );
 
-        expect( sorted[0].replace( /\n+$/, "" ).endsWith( "all_bones_mp3_zip.data" ) ).toBe( true );
+        expect( sorted[0].replace( /\n+$/, "" ).endsWith( "justin.image.data" ) ).toBe( true );
 
 
         return Promise.resolve( true );
@@ -230,7 +230,7 @@ describe( "LogFileRetentionPolicy", () =>
 
         expect( files.length ).toEqual( 12 );
 
-        expect( files.every( e => e instanceof FileObject) ).toBe( true );
+        expect( files.every( e => e instanceof FileObject ) ).toBe( true );
 
 
         return Promise.resolve( true );

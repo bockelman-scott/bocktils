@@ -1759,6 +1759,33 @@ const $scope = constants?.$scope || function()
             countDeadBranches: true
         };
 
+    const IS_POPULATED_ARRAY_OPTIONS =
+        {
+            acceptedTypes: [_obj],
+            minimumLength: 1,
+            acceptArrays: true,
+            mandatoryKeys: [],
+            countDeadBranches: true
+        };
+
+    const STRICT_POPULATED_OPTIONS =
+        {
+            acceptedTypes: [_obj],
+            minimumLength: 1,
+            acceptArrays: false,
+            mandatoryKeys: [],
+            countDeadBranches: false
+        };
+
+    const LAX_POPULATED_OPTIONS =
+        {
+            acceptedTypes: [_obj, _fun],
+            minimumLength: 1,
+            acceptArrays: true,
+            mandatoryKeys: [],
+            countDeadBranches: true
+        };
+
     function resolveAcceptedTypes( pOptions )
     {
         const options = populateOptions( pOptions, DEFAULT_IS_POPULATED_OPTIONS );
@@ -4864,6 +4891,14 @@ const $scope = constants?.$scope || function()
         return String( parseInt( toDecimal( num ), 2 ) ).replace( /^0b/, _mt_str );
     };
 
+    // returns true if val is of the type (or one of the types) specified
+    const $is = ( val, type ) => (null !== val) && ((_str === typeof type) ? (type === typeof val) : (isArray( type ) ? [...(type || [])].includes( typeof val ) : (_fun === typeof type && val instanceof type)));
+
+    const $isFun = ( val ) => $is( val, _fun )
+        , $isStr = ( val ) => $is( val, _str )
+        , $isNum = ( val ) => $is( val, _num )
+        , $isObj = ( val ) => $is( val, _obj );
+
     /**
      * This is the module itself, exported from this function
      */
@@ -4894,6 +4929,8 @@ const $scope = constants?.$scope || function()
             isNullOrNaN,
             isValidObject,
             isPopulated,
+            isPopulatedObject,
+            isPopulatedArray,
             isError,
             isEvent,
             firstError,

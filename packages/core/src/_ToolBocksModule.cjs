@@ -1374,7 +1374,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      *
      * @type {CmdLineArgs}
      */
-    const ARGUMENTS = new CmdLineArgs( CMD_LINE_ARGS || (_ud === typeof process ? process.argv : (_ud !== typeof Deno ? Deno.args : [])) );
+    const ARGUMENTS = new CmdLineArgs( CMD_LINE_ARGS || (_ud !== typeof process ? process.argv : (_ud !== typeof Deno ? Deno.args : [])) );
 
     /**
      * Represents the environment variables configured for the current runtime
@@ -1489,6 +1489,69 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                                                    {
                                                        ExecutionMode[key] = value;
                                                    } );
+
+    ExecutionMode.from = function( pArg )
+    {
+        let arg = isNumeric( pArg ) ? asInt( pArg ) : asString( pArg );
+
+        if ( isNumber( arg ) )
+        {
+            switch ( asInt( arg ) )
+            {
+                case 0:
+                    return ExecutionMode.MODES.NONE;
+
+                case 1:
+                    return ExecutionMode.MODES.PROD;
+
+                case 2:
+                    return ExecutionMode.MODES.DEV;
+
+                case 3:
+                    return ExecutionMode.MODES.DEBUG;
+
+                case 4:
+                    return ExecutionMode.MODES.TEST;
+
+                case 5:
+                    return ExecutionMode.MODES.TRACE;
+
+                default:
+                    return ExecutionMode.MODES.DEFAULT;
+            }
+        }
+        else if ( isString( arg ) )
+        {
+            if ( (/prod/i).test( arg ) )
+            {
+                return ExecutionMode.MODES.PROD;
+            }
+
+            if ( (/dev/i).test( arg ) )
+            {
+                return ExecutionMode.MODES.DEV;
+            }
+
+            if ( (/debug/i).test( arg ) )
+            {
+                return ExecutionMode.MODES.DEBUG;
+            }
+
+            if ( (/test|qa/i).test( arg ) )
+            {
+                return ExecutionMode.MODES.TEST;
+            }
+
+            if ( (/trace|verbose/i).test( arg ) )
+            {
+                return ExecutionMode.MODES.TRACE;
+            }
+
+            return Execution.MODES.DEFAULT;
+        }
+
+        return Execution.MODES.DEFAULT;
+    };
 
     /**
      * This constant represents the default execution mode
@@ -2211,6 +2274,24 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const resolveEventOptions = function( pEventName, pData, pOptions )
     {
+        if ( pEventName instanceof ToolBocksModuleEvent )
+        {
+            return {
+                type: resolveEventType( pEventName?.type ),
+                data: (pEventName?.detail || pEventName?.data),
+                options: populateOptions( pOptions, (pEventName?.detail || pEventName?.data || pData) )
+            };
+        }
+
+        if ( _ud !== typeof CustomEvent && pEventName instanceof CustomEvent )
+        {
+            return {
+                type: resolveEventType( pEventName?.type ),
+                data: (pEventName?.detail || pEventName?.data),
+                options: populateOptions( pOptions, (pEventName?.detail || pEventName?.data || pData) )
+            };
+        }
+
         const options =
             {
                 ...(pOptions || {}),
@@ -2274,7 +2355,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             this.#type = type || "ToolBocksModuleEvent";
 
-            this.#detail = data?.detail || data || options?.detail || options || {};
+            this.#detail = data?.detail || data || pData || options?.detail || options || {};
 
             this.#traceEnabled = !!options.traceEnabled;
 
@@ -2341,9 +2422,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return this.#detail || super.detail || super.data;
         }
 
+        get details()
+        {
+            return this.detail;
+        }
+
         mergeData( pData )
         {
-            this.#detail = populateOptions( pData?.detail || pData, this.detail );
+            this.#detail = populateOptions( (pData?.detail || pData), this.detail );
             return this.detail;
         }
 
@@ -4677,6 +4763,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 this.#executionEnvironment = new ExecutionEnvironment( this.globalScope );
             }
             return this.#executionEnvironment;
+        }
+
+        get executionMode()
+        {
+            return this.executionEnvironment.mode;
         }
 
         attempt( pFunction, ...pArgs )

@@ -1083,7 +1083,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             {
                 me.log( logRecord );
             };
-            func.then( noop ).catch( konsole.error );
+            func.then( no_op ).catch( konsole.error );
         }
 
         info( ...pArgs )

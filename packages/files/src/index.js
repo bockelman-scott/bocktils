@@ -189,7 +189,7 @@ const $scope = constants?.$scope || function()
 
     const { varargs, asArgs, flatArgs, asArray, unique, includesAll, Filters, AsyncBoundedQueue } = arrayUtils;
 
-    const {
+    let {
         Buffer = $scope().Buffer,
         File = $scope().File,
         Blob = $scope().Blob,
@@ -257,6 +257,12 @@ const $scope = constants?.$scope || function()
         defaultPath = currentDirectory;
 
         WriteStream = _ud === typeof WritableStream ? null : WritableStream;
+
+        File = File || $scope().File;
+        Blob = Blob || $scope().Blob;
+
+        TextEncoder = TextEncoder || $scope().TextEncoder;
+        TextDecoder = TextDecoder || $scope().TextDecoder;
     }
 
     /*## environment-specific:browser end ##*/
@@ -491,7 +497,8 @@ const $scope = constants?.$scope || function()
             constants,
             typeUtils,
             stringUtils,
-            arrayUtils
+            arrayUtils,
+            bufferUtils
         };
 
     /**

@@ -130,7 +130,7 @@ describe( "Months", () =>
 
               expect( germanMonths ).toEqual( ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"] );
 
-              expect( spanishMonths ).toEqual( ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sept", "oct", "nov", "dic"] );
+              expect( spanishMonths ).toEqual( ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"] );
 
           } );
 
@@ -287,8 +287,8 @@ describe( "Other", () =>
 
               amPmStrings = localeUtils.getAmPmStrings( mexicanLocale );
 
-              expect( amPmStrings[0] ).toEqual( "a. m." );
-              expect( amPmStrings[1] ).toEqual( "p. m." );
+              expect( amPmStrings[0] ).toEqual( "a.m." );
+              expect( amPmStrings[1] ).toEqual( "p.m." );
           } );
 
     test( "getWeekData returns an object describing various aspects of a locale's rules for weeks",

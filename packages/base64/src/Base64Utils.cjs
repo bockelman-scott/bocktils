@@ -33,7 +33,8 @@ const {
         ToolBocksModule,
         IterationCap,
         populateOptions,
-        lock
+        lock,
+        attempt
     } = moduleUtils;
 
     const {
@@ -49,7 +50,7 @@ const {
 
     const { isNull, isString, isEmptyString, isFunction } = typeUtils;
 
-    const { asString, asInt, ucase, lcase } = stringUtils;
+    const { isBlank, asString, asInt, ucase, lcase } = stringUtils;
 
     const { asArray } = arrayUtils;
 
@@ -196,26 +197,6 @@ const {
     };
 
     /**
-     * Returns true if the specified string is valid base64 encoded content
-     * @param pString {string} a string to evaluate
-     * @param pRfcSpec
-     * @returns {boolean} true if the specified string is valid base64 encoded content
-     */
-    const isValidBase64 = function( pString, pRfcSpec = DEFAULT_VARIANT )
-    {
-        const str = asString( pString );
-
-        const rx = makeBlackList( pRfcSpec );
-
-        if ( !rx.test( str ) )
-        {
-            return (requiresPadding( pRfcSpec ) ? 0 === str?.length % 4 : !isEmptyString( str ));
-        }
-
-        return false;
-    };
-
-    /**
      * Returns a valid base64 encoded string by replacing spaces with '+'
      * and ensuring that the number of characters is a multiple of 4
      * @param pStr {string} a base64 encoded value
@@ -230,11 +211,21 @@ const {
 
         replacements = ((replacements?.length || 0) <= 0) || asArray( replacements[0] || [] ).length !== 2 ? [[/ /g, "+"]] : replacements;
 
-        let str = asString( pStr, true ).replaceAll( /[\r\n]+/g, _mt_str );
+        let str = asString( pStr, true ).replaceAll( /[\r\n]+/g, _mt_str ).trim();
 
-        let parts = str.split( _comma ); //remove any preamble
+        const rxDataProtocol = /^data:/;
+        const rxPreamble = /^[^;]+;base64,/;
 
-        str = parts[parts.length - 1];
+        // remove any preamble
+        if ( str.startsWith( "data:" ) || rxDataProtocol.test( str ) )
+        {
+            str = asString( str.replace( rxDataProtocol, _mt_str ), true );
+        }
+
+        if ( rxPreamble.test( str ) )
+        {
+            str = str.replace( rxDataProtocol, _mt_str ).replace( rxPreamble, _mt_str ).trim();
+        }
 
         str = asString( str, true ).replaceAll( new RegExp( "\\\\r|\\\\n", "g" ), _mt_str );
 
@@ -246,7 +237,9 @@ const {
 
             const replaceString = replacement[1] || DEFAULT_CHAR_62;
 
-            str = str.replace( searchExpression, replaceString );
+            str = (searchExpression instanceof RegExp && searchExpression.global) ?
+                  str.replaceAll( searchExpression, replaceString ) :
+                  str.replace( searchExpression, replaceString );
         }
 
         if ( PADDING.MANDATORY === options.padding )
@@ -267,6 +260,37 @@ const {
         }
 
         return str.trim();
+    };
+
+    /**
+     * Returns true if the specified string is valid base64 encoded content
+     * @param pString {string} a string to evaluate
+     * @param pRfcSpec
+     * @param pCleanPriorToTest
+     * @returns {boolean} true if the specified string is valid base64 encoded content
+     */
+    const isValidBase64 = function( pString, pRfcSpec = DEFAULT_VARIANT, pCleanPriorToTest = false )
+    {
+        const str = asString( pString );
+
+        const rx = makeBlackList( pRfcSpec );
+
+        if ( !rx.test( str ) )
+        {
+            return (requiresPadding( pRfcSpec ) ? 0 === str?.length % 4 : !isBlank( str ));
+        }
+
+        if ( !!pCleanPriorToTest )
+        {
+            const cleaned = asString( attempt( () => cleanBase64( str ) ), true );
+
+            if ( !rx.test( cleaned ) )
+            {
+                return (requiresPadding( pRfcSpec ) ? 0 === str?.length % 4 : !isBlank( str ));
+            }
+        }
+
+        return false;
     };
 
     function resolveEncoding( pEncoding )

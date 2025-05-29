@@ -704,6 +704,11 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
              */
             moduleUtils,
 
+            /**
+             * The ToolBockModule custom event class
+             */
+            ModuleEvent,
+
             ENDIAN,
 
             /**

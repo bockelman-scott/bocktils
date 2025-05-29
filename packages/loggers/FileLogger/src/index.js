@@ -1032,7 +1032,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
      * @property {LogLevel|string|number} level The finest-grained LogLevel this logger will log.<br>
      *                                          <br>
      *                                          For example, specifying LogLevel.WARN will allow this Logger
-     *                                          to log messages marked as warnings or errors,<br>
+     *                                          to log messages marked as warnings or errors, <br>
      *                                          but messages marked as informational, debugging, or trace<br>
      *                                          will be ignored
      *

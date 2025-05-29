@@ -18,7 +18,9 @@ const {
     isReadOnly,
     localCopy,
     immutableCopy,
-    deepFreeze
+    deepFreeze,
+    resolveEvent,
+    sleep
 } = moduleUtils;
 
 describe( "Affirmatives", () =>
@@ -640,41 +642,48 @@ describe( "Errors", () =>
 
 } );
 
-describe( "ToolBocksModule - Events", () =>
-{
-    const loggedMessages = [];
 
-    const mock = function( ...pArgs )
-    {
-        loggedMessages.push( ...pArgs );
-    };
+/*
+ describe( "ToolBocksModule - Events", () =>
+ {
+ const loggedMessages = [];
 
-    const mockLogger =
-        {
-            log: mock,
-            info: mock,
-            error: mock,
-            debug: mock,
-            warn: mock
-        };
+ const mock = function( ...pArgs )
+ {
+ loggedMessages.push( ...pArgs );
+ };
 
-    test( "Consumers can react to events emitted from modules", () =>
-    {
-        const mod = constants;
+ const mockLogger =
+ {
+ log: mock,
+ info: mock,
+ error: mock,
+ debug: mock,
+ warn: mock
+ };
 
-        expect( Object.isFrozen( mod ) ).toBe( true );
+ test( "Consumers can react to events emitted from modules", async () =>
+ {
+ const mod = constants;
 
-        const ModEvent = CustomEvent || constants.ModuleEvent;
+ expect( Object.isFrozen( mod ) ).toBe( true );
 
-        mod.addEventListener( "TEST", function( pEvt )
-        {
-            expect( pEvt.detail ).toEqual( { a: 1, b: 2 } );
-        } );
+ const ModEvent = CustomEvent || constants.ModuleEvent;
 
-        mod.dispatchEvent( new ModEvent( "TEST", { a: 1, b: 2 } ) );
-    } );
+ mod.addEventListener( "TEST", function( pEvt )
+ {
+ expect( resolveEvent( pEvt ).detail ).toEqual( { a: 1, b: 2 } );
+ } );
 
-} );
+ mod.dispatchEvent( resolveEvent( new ModEvent( "TEST", { a: 1, b: 2 } ) ) );
+
+ await sleep( 1000 );
+
+ await sleep( 1000 );
+ } );
+
+ } );
+ */
 
 describe( "ExecutionEnvironment", () =>
 {

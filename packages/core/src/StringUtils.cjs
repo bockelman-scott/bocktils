@@ -1052,7 +1052,9 @@ const { _ud = "undefined", $scope } = constants;
         return _transform( _mt_str + ((true === trim) ? ((_mt_str + s).trim()) : s), ...transformations );
     };
 
-    // add the asString function as a method of String,Number, and Boolean primitive wrappers
+    const _toStr = asString;
+
+    // add the asString function as a method of String, Number, and Boolean primitive wrappers
     String.prototype.asString = asString;
     Number.prototype.asString = asString;
     Boolean.prototype.asString = asString;
@@ -1836,6 +1838,8 @@ const { _ud = "undefined", $scope } = constants;
     Number.prototype.asInt = asInt;
     Boolean.prototype.asInt = asInt;
 
+    const _toInt = asInt;
+
     function _asFloatFromObj( pIn, pDefault, pOptions )
     {
         let val = isPrimitiveWrapper( pIn ) || isFunction( pIn?.valueOf ) ? pIn.valueOf() : (Number( pIn || {} ));
@@ -1846,7 +1850,19 @@ const { _ud = "undefined", $scope } = constants;
         }
         else if ( isFunction( pIn?.valueOf ) )
         {
-            val = asFloat( pIn.valueOf(), pDefault, pOptions );
+            const value = pIn.valueOf();
+
+            if ( isNumeric( value ) )
+            {
+                val = attempt( () => toDecimal( value ) );
+            }
+
+            if ( isNumber( val ) )
+            {
+                return val;
+            }
+
+            val = asFloat( pDefault, 0.0, pOptions );
         }
 
         return val;
@@ -1912,6 +1928,8 @@ const { _ud = "undefined", $scope } = constants;
     String.prototype.asFloat = asFloat;
     Number.prototype.asFloat = asFloat;
     Boolean.prototype.asFloat = asFloat;
+
+    const _toFloat = asFloat;
 
     const asPositiveInt = ( pStr ) => Math.max( 0, asInt( pStr ) );
 
@@ -2260,7 +2278,7 @@ const { _ud = "undefined", $scope } = constants;
         // replace relative reference to the current directory
         while ( filepath.startsWith( thisDir ) && filepath.length >= thisDir.length )
         {
-            // just remove the current directory reference, because we are going to prepend the base directory it represents
+            // we remove the current directory reference, because we are going to prepend the base directory it represents
             filepath = filepath.length > thisDir.length ? filepath.slice( thisDir.length ) : _mt_str;
         }
 
@@ -2289,6 +2307,42 @@ const { _ud = "undefined", $scope } = constants;
 
         return toUnixPath( filepath );
     };
+
+    const _trim = ( s ) => asString( s, true ).trim();
+
+    // returns true if the specified value contains only whitespace characters
+    const _isMt = ( s ) => _mt === _trim( s );
+
+    // convert the specified string to all lowercase
+    const _lcase = ( s ) => _toStr( s ).toLowerCase();
+
+    const _ucase = ( s ) => _toStr( s ).toUpperCase();
+
+    const _lct = ( s ) => _lcase( _trim( s ) );
+
+    const _uct = ( s ) => _ucase( _toStr( s ) );
+
+    const _cap = ( s ) => _uct( _trim( s ).slice( 0, 1 ) ) + _lct( _trim( s ).slice( 1 ) );
+
+    const _rtOf = ( pStr, w ) =>
+    {
+        let s = _toStr( pStr );
+        let pos = (_num === typeof w) ? w : s.lastIndexOf( _toStr( w ) );
+        return (pos >= 0 && pos < (s.length - 1)) ? s.slice( -(pos + 1) ) : _mt;
+    };
+
+    const _rp = ( r ) => (asString( r || _mt ) || _mt);
+
+    const _rplA = ( s, rx, r = _mt ) => asString( s ).replaceAll( _reg( rx, "g" ), _rp( r || _mt ) );
+
+    const _rpl = ( s, rx, r = _mt ) => asString( s ).replace( _reg( rx, (_rtOf( (rx || /~/), _pathSep )) ), _rp( r || _mt ) );
+
+    const $ln = ( e ) => asInt( (e ? (e.length || 0) : 0) ) || 0;
+
+    // returns the Nth element of a collection or the Nth character of a string
+    const $nth = ( pArr, pIdx = 0, pDefault = null ) => (null != pArr) && ($ln( isArray( pArr ) || isString( pArr ) ? [...(pArr || [])] : [pArr] ) > pIdx ? [...(pArr || [])][pIdx] : pDefault);
+
+    const $last = ( pArr, pDefault = null ) => (isArray( pArr ) || isString( pArr )) ? $nth( [...(pArr)], $ln( pArr ) - 1, pDefault ) : pDefault;
 
     /**
      * Returns true if the specified value is a string and is not the empty string (unless the third argument is true)
@@ -3092,6 +3146,44 @@ const { _ud = "undefined", $scope } = constants;
         }
     }
 
+    const rxProtocol = /^(ht|f)?tp(s)*:\/\//;
+
+    const extractProtocol = ( str ) => _trim( _rpl( _trim( ((/^(sm|ht|f)?tp(s)*:\/\//.exec( _trim( str ) ) || [])[0]) || _mt ), /:\/\// ) );
+
+    const cleanUrl = function( pStr, pPreserveTrailingSlash = true, pPreserveProtocol = true, pPreserveCase = true )
+    {
+        const url = asString( pStr, true );
+
+        const protocol = extractProtocol( url );
+
+        const rx = new RegExp( "^" + protocol + "://", "i" );
+
+        url = url.replace( rx, _mt_str );
+
+        const arr = url.split( /[\/\\]/ ).map( e = asString( e, true ) ).filter( e => !isBlank( e ) );
+
+        url = asString( arr.join( "/" ), true );
+
+        if ( pPreserveProtocol )
+        {
+            url = protocol + url;
+        }
+
+        if ( pPreserveTrailingSlash )
+        {
+            if ( !(url.endsWith( "/" )) )
+            {
+                url += "/";
+            }
+        }
+        else
+        {
+            url = url.replace( /\/$/, _mt_str );
+        }
+
+        return pPreserveCase ? url : lcase( url );
+    };
+
     const lengthPriorityComparator = ( pLongestFirst ) => ( a, b ) =>
     {
         let comp = a.length - b.length;
@@ -3201,8 +3293,11 @@ const { _ud = "undefined", $scope } = constants;
             DEFAULT_AS_STRING_OPTIONS,
             DEFAULT_NUMBER_SYMBOLS,
             asString,
+            _toStr,
             isEmpty,
+            isNotEmpty: s => !isEmpty( s ),
             isBlank,
+            isNotBlank: s => !isBlank( s ),
             isUnpopulated,
             isAllCaps,
             isNoCaps,
@@ -3219,7 +3314,9 @@ const { _ud = "undefined", $scope } = constants;
             deriveDecimalSymbols,
             toCanonicalNumericFormat,
             asInt,
+            _toInt,
             asFloat,
+            _toFloat,
             asPositiveInt,
             asPositiveFloat,
             toIntWithinRange,
@@ -3265,6 +3362,8 @@ const { _ud = "undefined", $scope } = constants;
             toUnixPath,
             isRelativePath,
             toAbsolutePath,
+            extractProtocol,
+            cleanUrl,
             toCString,
             fromCString,
             formatMessage,
@@ -3273,6 +3372,18 @@ const { _ud = "undefined", $scope } = constants;
             toByteArray,
             asUtf8ByteArray,
             fromUtf8ByteArray,
+            _trim,
+            _isMt,
+            _lcase,
+            _ucase,
+            _lct,
+            _uct,
+            _cap,
+            _rpl,
+            _rplA,
+            $ln,
+            $nth,
+            $last,
             classes: { ModuleEvent, ToolBocksModule },
         };
 

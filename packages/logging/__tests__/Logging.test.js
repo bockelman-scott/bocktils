@@ -1,5 +1,9 @@
 const core = require( "@toolbocks/core" );
 
+const { moduleUtils } = core;
+
+const { ModuleEvent } = moduleUtils;
+
 const logging = require( "@toolbocks/logging" );
 
 const {
@@ -81,7 +85,7 @@ describe( "LogRecord", () =>
 
     test( "LogRecord from Event", () =>
     {
-        const event = new CustomEvent( "custom_event", { message: "This is a custom event" } );
+        const event = new ModuleEvent( "custom_event", { message: "This is a custom event" } );
 
         const record = new LogRecord( event );
 

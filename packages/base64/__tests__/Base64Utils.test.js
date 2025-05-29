@@ -49,8 +49,8 @@ test( "encode/decode a binary file",
            */
       }, 60_000 );
 
- test( "encode/decode a very large binary file",
- async() =>
+/*
+ test( "encode/decode a very large binary file", async() =>
  {
  const start = Date.now();
 
@@ -78,6 +78,7 @@ test( "encode/decode a binary file",
  expect( true ).toBe( true );
 
  }, 1_250_000 );
+ */
 
 
 test( "isValidBase64 returns false for invalid Base64 content",

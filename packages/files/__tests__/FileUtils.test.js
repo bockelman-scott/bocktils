@@ -199,7 +199,7 @@ describe( "FileUtils::findFiles", () =>
 
         let mapped = (found.map( ( entry ) => entry.filepath ));
 
-        expect( mapped.length ).toBe( 15 );
+        expect( mapped.length ).toBe( 17 );
 
         mapped = mapped.map( ( entry ) => path.relative( packagesDirectory, entry ) );
 
@@ -210,6 +210,7 @@ describe( "FileUtils::findFiles", () =>
                                       "common\\package.json",
                                       "compression\\package.json",
                                       "core\\package.json",
+                                      "database\\package.json",
                                       "dates\\package.json",
                                       "events\\package.json",
                                       "files\\package.json",
@@ -218,6 +219,7 @@ describe( "FileUtils::findFiles", () =>
                                       "logging\\package.json",
                                       "math\\package.json",
                                       "regex\\package.json",
+                                      "secrets\\package.json",
                                       "loggers\\FileLogger\\package.json"
                                   ] );
     } );
@@ -232,7 +234,7 @@ describe( "FileUtils::findFiles", () =>
 
         let mapped = (found.map( ( entry ) => entry.filepath ));
 
-        expect( mapped.length ).toBe( 15 );
+        expect( mapped.length ).toBe( 17 );
 
         mapped = mapped.map( ( entry ) => path.relative( packagesDirectory, entry ) );
 
@@ -243,6 +245,7 @@ describe( "FileUtils::findFiles", () =>
                                       "common\\package.json",
                                       "compression\\package.json",
                                       "core\\package.json",
+                                      "database\\package.json",
                                       "dates\\package.json",
                                       "events\\package.json",
                                       "files\\package.json",
@@ -251,6 +254,7 @@ describe( "FileUtils::findFiles", () =>
                                       "logging\\package.json",
                                       "math\\package.json",
                                       "regex\\package.json",
+                                      "secrets\\package.json",
                                       "loggers\\FileLogger\\package.json"
                                   ] );
     } );
@@ -265,7 +269,7 @@ describe( "FileUtils::findFiles", () =>
 
         let mapped = (found.map( ( entry ) => entry.filepath ));
 
-        expect( mapped.length ).toBe( 15 );
+        expect( mapped.length ).toBe( 17 );
 
         mapped = mapped.map( ( entry ) => path.relative( packagesDirectory, entry ) );
 
@@ -275,6 +279,7 @@ describe( "FileUtils::findFiles", () =>
                                       "common\\package.json",
                                       "compression\\package.json",
                                       "core\\package.json",
+                                      "database\\package.json",
                                       "dates\\package.json",
                                       "events\\package.json",
                                       "files\\package.json",
@@ -284,7 +289,8 @@ describe( "FileUtils::findFiles", () =>
                                       "logging\\package.json",
                                       "math\\package.json",
                                       "package.json",
-                                      "regex\\package.json"
+                                      "regex\\package.json",
+                                      "secrets\\package.json",
                                   ] );
     } );
 } );
