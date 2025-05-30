@@ -92,8 +92,9 @@ const { _ud = "undefined", $scope } = constants;
 
     const
         {
-            _mt_str,
-            _mt_chr,
+            _mt_str = "",
+            _mt_chr = "",
+            _mt = _mt_str,
             _dblqt,
             _sglqt,
             _spc,
@@ -102,6 +103,7 @@ const { _ud = "undefined", $scope } = constants;
             _hyphen,
             _apos,
             _underscore,
+            _tilde = "~",
             _tab,
             _z,
             _unixPathSep,
@@ -2331,11 +2333,46 @@ const { _ud = "undefined", $scope } = constants;
         return (pos >= 0 && pos < (s.length - 1)) ? s.slice( -(pos + 1) ) : _mt;
     };
 
+    const _reg = ( rx, pFlags ) =>
+    {
+        if ( _str === typeof rx )
+        {
+            let x = (rx || _tilde);
+            if ( pFlags )
+            {
+                try
+                {
+                    x = new RegExp( x.replaceAll( /\\/g, "\\" ), pFlags );
+                    return (x instanceof RegExp) ? x : (rx || _tilde);
+                }
+                catch( ex )
+                {
+                    // ignored
+                }
+            }
+            return x || (rx || _tilde);
+        }
+        else if ( rx instanceof RegExp )
+        {
+            let exp = rx || /~/;
+
+            let validFlags = e => ["d", "g", "i", "m", "s", "u", "v", "y"].includes( e );
+
+            let arr = [...((_rtOf( exp.toString(), _unixPathSep ) || _mt).split( _mt ))].sort().map( _lcase ).filter( validFlags );
+
+            arr.push( isArray( pFlags ) ? pFlags : ((pFlags || _mt).split( _mt )) );
+
+            let flags = [...(new Set( arr.flat().map( _lcase ) ))].filter( validFlags ).join( _mt );
+
+            return _isMt( flags ) ? new RegExp( exp ) : new RegExp( exp, flags );
+        }
+    };
+
     const _rp = ( r ) => (asString( r || _mt ) || _mt);
 
     const _rplA = ( s, rx, r = _mt ) => asString( s ).replaceAll( _reg( rx, "g" ), _rp( r || _mt ) );
 
-    const _rpl = ( s, rx, r = _mt ) => asString( s ).replace( _reg( rx, (_rtOf( (rx || /~/), _pathSep )) ), _rp( r || _mt ) );
+    const _rpl = ( s, rx, r = _mt ) => asString( s ).replace( _reg( rx, (_rtOf( (rx || /~/), _unixPathSep )) ), _rp( r || _mt ) );
 
     const $ln = ( e ) => asInt( (e ? (e.length || 0) : 0) ) || 0;
 
@@ -3146,13 +3183,13 @@ const { _ud = "undefined", $scope } = constants;
         }
     }
 
-    const rxProtocol = /^(ht|f)?tp(s)*:\/\//;
-
-    const extractProtocol = ( str ) => _trim( _rpl( _trim( ((/^(sm|ht|f)?tp(s)*:\/\//.exec( _trim( str ) ) || [])[0]) || _mt ), /:\/\// ) );
+    const extractProtocol = ( str ) => _trim( _rpl( _trim( ((/^(sm|ht|f)?tp(s)*:\/\//.exec( _trim( str ) ) || [])[0]) || _mt_str ), /:\/\// ) );
 
     const cleanUrl = function( pStr, pPreserveTrailingSlash = true, pPreserveProtocol = true, pPreserveCase = true )
     {
-        const url = asString( pStr, true );
+        let url = asString( pStr, true );
+
+        let original = asString( url, true );
 
         const protocol = extractProtocol( url );
 
@@ -3160,16 +3197,18 @@ const { _ud = "undefined", $scope } = constants;
 
         url = url.replace( rx, _mt_str );
 
-        const arr = url.split( /[\/\\]/ ).map( e = asString( e, true ) ).filter( e => !isBlank( e ) );
+        const arr = url.split( /[\/\\]/ ).map( e => asString( e, true ) ).filter( e => !isBlank( e ) );
 
         url = asString( arr.join( "/" ), true );
 
         if ( pPreserveProtocol )
         {
-            url = protocol + url;
+            url = (protocol.replace( /:\/\/$/, _mt_str ) + "://") + url;
         }
 
-        if ( pPreserveTrailingSlash )
+        const preserveTrailingSlash = pPreserveTrailingSlash && original.endsWith( "/" );
+
+        if ( preserveTrailingSlash )
         {
             if ( !(url.endsWith( "/" )) )
             {

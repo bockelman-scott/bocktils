@@ -13,7 +13,8 @@ const {
     toCanonicalNumericFormat,
     findDuplicatedSubstrings,
     findCommonSubstrings,
-    includesAll
+    includesAll,
+    cleanUrl
 } = stringUtils;
 
 const repoName = "bocktils";
@@ -1860,6 +1861,53 @@ describe( "findDuplicatedSubstrings", () =>
 
 } );
 
+describe( "cleanUrl", () =>
+{
+    test( "cleanUrl preserves protocol", () =>
+    {
+        let url = "https://some.domain.com/some_page/1/2/3?a=b#xyz";
+
+        let clean = cleanUrl( url );
+
+        expect( clean ).toEqual( url );
+    } );
+
+    test( "cleanUrl preserves case", () =>
+    {
+        let url = "https://Some.Domain.com/Some_Page/1/2/3?a=b#xyz";
+
+        let clean = cleanUrl( url );
+
+        expect( clean ).toEqual( url );
+    } );
+
+    test( "cleanUrl can change to lower case", () =>
+    {
+        let url = "https://some.domain.com/Some_Page/1/2/3?a=b#xyz";
+
+        let clean = cleanUrl( url, true, true, false );
+
+        expect( clean ).toEqual( "https://some.domain.com/some_page/1/2/3?a=b#xyz" );
+    } );
+
+    test( "cleanUrl can discard protocol", () =>
+    {
+        let url = "https://some.domain.com/Some_Page/1/2/3?a=b#xyz";
+
+        let clean = cleanUrl( url, true, false, true );
+
+        expect( clean ).toEqual( "some.domain.com/Some_Page/1/2/3?a=b#xyz" );
+    } );
+
+    test( "cleanUrl can discard a trailing slash", () =>
+    {
+        let url = "https://some.domain.com/Some_Page/";
+
+        let clean = cleanUrl( url, false );
+
+        expect( clean ).toEqual( "https://some.domain.com/Some_Page" );
+    } );
+} );
 
 describe( "findCommonSubstrings", () =>
 {
