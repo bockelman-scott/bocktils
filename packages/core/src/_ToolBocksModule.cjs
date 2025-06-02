@@ -3963,13 +3963,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             super( pFunction, pOptions );
 
+            const me = this;
+
             if ( isFunc( pFunction ) )
             {
-                this.#func = function( pVisited )
+                this.#func = function( pVisited, ...pExtra )
                 {
                     try
                     {
-                        return pFunction( pVisited );
+                        return pFunction.call( (me || this), pVisited, ...pExtra );
                     }
                     catch( ex )
                     {
@@ -3977,14 +3979,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                                                                       {
                                                                           error: ex,
                                                                           message: ex.message,
-                                                                          visited: pVisited
+                                                                          visited: pVisited,
+                                                                          args: [...(asArray( pExtra || [] ) || [])]
                                                                       }, populateOptions( {
                                                                                               detail: pVisited,
                                                                                               data: pVisited,
                                                                                               error: ex
                                                                                           }, this.options ) ) );
                     }
-                };
+                }.bind( me || this );
             }
         }
 
@@ -5707,33 +5710,44 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         const visitor = resolveVisitor( pVisitor, options );
 
-        const entries = objectEntries( pObject );
-
         const recursive = options.recursive || false;
 
         const { visited, stack } = initializeRecursionArgs( pVisited, pStack, 0 );
 
-        for( let entry of entries )
+        if ( pObject )
         {
-            const key = ObjectEntry.getKey( entry );
-            const value = ObjectEntry.getValue( entry );
+            const entries = objectEntries( pObject );
 
-            const quit = visitor.visit( entry, key, value, options );
-
-            if ( quit )
+            if ( entries && entries.length )
             {
-                break;
+                for( let entry of entries )
+                {
+                    if( isNull( entry ) )
+                    {
+                        continue;
+                    }
+
+                    const key = ObjectEntry.getKey( entry );
+                    const value = ObjectEntry.getValue( entry );
+
+                    const quit = visitor.visit( entry, key, value, options );
+
+                    if ( quit )
+                    {
+                        break;
+                    }
+
+                    if ( recursive && isNonNullObj( value ) && !detectCycles( stack, 5, 5 ) )
+                    {
+                        ObjectEntry.iterate( value, visitor, options, visited, [...stack, key] );
+                    }
+
+                    visited.add( value );
+                }
             }
 
-            if ( recursive && isNonNullObj( value ) && !detectCycles( stack, 5, 5 ) )
-            {
-                ObjectEntry.iterate( value, visitor, options, visited, [...stack, key] );
-            }
-
-            visited.add( value );
+            visited.add( pObject );
         }
-
-        visited.add( pObject );
 
         return visitor;
     };

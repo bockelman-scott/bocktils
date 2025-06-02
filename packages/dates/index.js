@@ -67,7 +67,9 @@ const $scope = core?.$scope || constants?.$scope || function()
             earliest,
             latest,
             daysBetween,
-            workDaysBetween
+            workDaysBetween,
+            numDaysInMonth,
+            numDaysInYear
         } = dateUtils;
 
     const
@@ -154,6 +156,9 @@ const $scope = core?.$scope || constants?.$scope || function()
             getAmPmStrings,
 
             getFirstDayOfWeek,
+
+            numDaysInMonth,
+            numDaysInYear,
 
             FORMATS,
 
