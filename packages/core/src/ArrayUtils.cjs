@@ -62,6 +62,7 @@ const $scope = constants?.$scope || function()
         ModuleEvent,
         ToolBocksModule,
         IllegalArgumentError,
+        ObjectEntry,
         objectKeys,
         objectValues,
         objectEntries,
@@ -4834,6 +4835,39 @@ const $scope = constants?.$scope || function()
         return !!pAsStrings ? arr.map( e => asString( e ) ) : arr;
     };
 
+    const concatMaps = ( ...pMaps ) =>
+    {
+        const maps = asArray( varargs( ...pMaps ) );
+
+        if ( maps.length < 2 )
+        {
+            return new Map( (maps[0] || new Map()).entries() );
+        }
+
+        const result = new Map();
+
+        for( let map of maps )
+        {
+            if ( isNull( map ) || map.size <= 0 )
+            {
+                continue;
+            }
+
+            objectEntries( map ).forEach( entry =>
+                                          {
+                                              const key = ObjectEntry.getKey( entry );
+                                              const value = ObjectEntry.getValue( entry );
+
+                                              if ( isNull( result.get( key ) ) )
+                                              {
+                                                  result.set( key, value );
+                                              }
+                                          } );
+        }
+
+        return result;
+    };
+
     const ArrayOperators =
         {
             "+":
@@ -5301,6 +5335,7 @@ const $scope = constants?.$scope || function()
             range,
             combineConsecutive,
             concatenateConsecutiveStrings,
+            concatMaps,
             /**
              * @namespace
              *
