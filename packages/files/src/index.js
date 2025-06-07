@@ -96,6 +96,7 @@ let projectRootDirectory;
  */
 let defaultPath;
 
+const Mimetics = require( "mimetics" );
 /**
  * The toolbocks/core package provides the building blocks
  * upon which other ToolBocks modules depend.<br>
@@ -198,6 +199,12 @@ const $scope = constants?.$scope || function()
         arrayFromBuffer,
         typedArrayFromBuffer
     } = bufferUtils;
+
+    const MIMETICS_CONSTANTS = Mimetics.CONSTANTS;
+    const MIMETICS_ERRORS = Mimetics.ERRORS;
+    const MIMETICS = Mimetics.default;
+
+    const mimetics = new Mimetics();
 
     const modName = "FileUtils";
 
@@ -2206,7 +2213,8 @@ const $scope = constants?.$scope || function()
             }
             else if ( !isNull( this.#fileHandle ) && this.notMe( this.#fileHandle ) )
             {
-                closeSync( this.#fileHandle?.fd );
+                closeSync( this.#fileHandle?.fd ).then( r => r );
+
                 emit = true;
             }
 
@@ -3648,6 +3656,20 @@ const $scope = constants?.$scope || function()
 
     FileObject.collect = findFiles;
 
+    const supportedMimeTypes =
+        [];
+
+    const supportedExtensions =
+        [];
+
+    const calculateMimeType = async function( pBinaryData )
+    {
+        if ( isNonNullObject( pBinaryData ) || isArray( pBinaryData ) )
+        {
+            return await asyncAttempt( async() => await mimetics.fromBuffer( pBinaryData ) );
+        }
+    };
+
     let mod =
         {
             dependencies,
@@ -3761,7 +3783,16 @@ const $scope = constants?.$scope || function()
 
             fs_constants,
             fsConstants,
-            importNodeModules
+            importNodeModules,
+
+            MIMETICS_ERRORS,
+            MIMETICS_CONSTANTS,
+            Mimetics,
+            mimetics,
+            calculateMimeType,
+
+            supportedMimeTypes,
+            supportedExtensions
         };
 
     mod = modulePrototype.extend( mod );

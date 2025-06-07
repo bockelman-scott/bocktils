@@ -73,6 +73,7 @@ const $scope = constants?.$scope || function()
         lock,
         attempt,
         asyncAttempt,
+        sleep
     } = moduleUtils;
 
     /*
@@ -4835,6 +4836,108 @@ const $scope = constants?.$scope || function()
         return !!pAsStrings ? arr.map( e => asString( e ) ) : arr;
     };
 
+    class ThrottledIterator extends EventTarget
+    {
+        #iterable;
+        #delay;
+        #operation;
+        #results;
+
+        constructor( pIterable, pDelay, pOperation, pBuffer )
+        {
+            super();
+
+            this.#iterable = isIterable( pIterable ) ? pIterable : asArray( pIterable );
+            this.#delay = Math.min( 2_000, Math.max( 100, asInt( pDelay ) ) );
+            this.#operation = isFunction( pOperation ) ? pOperation : null;
+            this.#results = pBuffer || [];
+        }
+
+        get iterable()
+        {
+            return this.#iterable;
+        }
+
+        get delay()
+        {
+            return Math.min( 2_000, Math.max( 100, asInt( this.#delay, 100 ) ) );
+        }
+
+        get operation()
+        {
+            if ( isFunction( this.#operation ) )
+            {
+                return this.#operation;
+            }
+            else
+            {
+                const me = this;
+
+                let op = async function( pItem, pIndex, pIterable, pResults )
+                {
+                    const data = {
+                        item: pItem,
+                        index: pIndex,
+                        iterable: pIterable,
+                        results: pResults
+                    };
+
+                    const options = {
+                        iterator: me,
+                        delay: me.delay,
+                        iterable: me.iterable,
+                        results: me.results
+                    };
+
+                    const event = new ModuleEvent( "Iteration", data, options );
+
+                    toolBocksModule.dispatchEvent( event, data, options );
+                };
+
+                return op.bind( this );
+            }
+        }
+
+        get results()
+        {
+            return this.#results;
+        }
+
+        async iterate()
+        {
+            const pause = this.delay;
+
+            let operation = this.operation;
+
+            let isAsync = isAsyncFunction( operation );
+
+            let counter = 0;
+
+            const items = this.iterable || [];
+
+            for( let item of items )
+            {
+                await asyncAttempt( async() => await sleep( pause ) );
+
+                if ( item )
+                {
+                    if ( isAsync )
+                    {
+                        await asyncAttempt( async() => await operation( item, counter, items, this.results ) );
+                    }
+                    else
+                    {
+                        attempt( () => operation( item, counter, items, this.results ) );
+                    }
+                }
+
+                counter++;
+            }
+
+            return this.results;
+        }
+    }
+
     const concatMaps = ( ...pMaps ) =>
     {
         const maps = asArray( varargs( ...pMaps ) );
@@ -5336,6 +5439,7 @@ const $scope = constants?.$scope || function()
             combineConsecutive,
             concatenateConsecutiveStrings,
             concatMaps,
+            ThrottledIterator,
             /**
              * @namespace
              *
@@ -5350,7 +5454,8 @@ const $scope = constants?.$scope || function()
                     MapperChain,
                     ComparatorChain,
                     BoundedQueue,
-                    AsyncBoundedQueue
+                    AsyncBoundedQueue,
+                    ThrottledIterator
                 }
         };
 

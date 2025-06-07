@@ -122,6 +122,9 @@ const { _ud = "undefined", $scope } = constants;
             isNonNullValue,
             isPopulated,
             toIterable,
+            toObjectLiteral,
+            getClass,
+            getClassName,
             instanceOfAny,
             ComparatorFactory,
             Finder,
@@ -691,11 +694,11 @@ const { _ud = "undefined", $scope } = constants;
                 const key = entry.key || entry[0];
                 const value = entry.value || entry[1];
 
-                if ( isNonNullValue( value ) && objectUtils.same( pValue, value ) )
+                if ( isNonNullValue( value ) && value.equals( pValue ) )
                 {
-                    if ( isNull( pRoot ) || objectUtils.same( pRoot, value?.root ) )
+                    if ( isNull( pRoot ) || ( pRoot?.equals( value?.root ) ) )
                     {
-                        if ( isNull( pCurrent ) || isNull( value?.current ) || objectUtils.same( pCurrent, value?.current ) )
+                        if ( isNull( pCurrent ) || isNull( value?.current ) || pCurrent?.equals( value?.current ) )
                         {
                             V = value;
 
@@ -1431,7 +1434,7 @@ const { _ud = "undefined", $scope } = constants;
 
         if ( isClass( pFunction ) )
         {
-            name = asString( objectUtils.getClassName( pFunction ) || name ) || name;
+            name = asString( getClassName( pFunction ) || name ) || name;
         }
 
         return JSON.stringify( {
@@ -1515,7 +1518,7 @@ const { _ud = "undefined", $scope } = constants;
     {
         if ( obj instanceof Set || obj instanceof Map )
         {
-            return objectUtils.toLiteral( obj );
+            return toObjectLiteral( obj );
         }
 
         if ( isPopulated( obj ) || isArray( obj ) )
@@ -1563,7 +1566,7 @@ const { _ud = "undefined", $scope } = constants;
 
         if ( isPopulated( pObject ) )
         {
-            const entries = objectUtils.getEntries( pObject );
+            const entries = objectEntries( pObject );
 
             if ( (entries?.length || 0) > 0 )
             {

@@ -228,7 +228,7 @@ describe( "LogFileRetentionPolicy", () =>
 
         const files = await retentionPolicy.findExpiredFiles( testSubDirectory, new Date() );
 
-        expect( files.length ).toEqual( 12 );
+        expect( files.length ).toEqual( 13 );
 
         expect( files.every( e => e instanceof FileObject ) ).toBe( true );
 

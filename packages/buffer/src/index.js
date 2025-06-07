@@ -72,7 +72,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             return true;
         }
-        const buffer = scp.Buffer;
+        const buffer = scp.Buffer || (_ud !== typeof Buffer ? Buffer : { from: () => null });
         return (_ud !== typeof buffer && isFunction( buffer?.isBuffer ) && buffer.isBuffer( buffer.from( [0x62, 0x75, 0x66, 0x66, 0x65, 0x72] ) ));
     }
 
@@ -189,6 +189,11 @@ const { _ud = "undefined", $scope } = constants;
         };
     }
 
+    function isBuffer( pObject )
+    {
+        return isArray( pObject ) || isTypedArray( pObject ) || (BufferDefined && pObject instanceof Buffer);
+    }
+
     if ( BufferDefined )
     {
         mod = {
@@ -203,7 +208,8 @@ const { _ud = "undefined", $scope } = constants;
             isUtf8,
             SlowBuffer,
             transcode,
-            TranscodeEncoding
+            TranscodeEncoding,
+            isBuffer
         };
 
         objectEntries( mod ).forEach( ( [key, value] ) =>
@@ -547,6 +553,11 @@ const { _ud = "undefined", $scope } = constants;
             Buffer = __Buffer;
         }
 
+        isBuffer = function( pObject )
+        {
+            return isArray( pObject ) || isTypedArray( pObject ) || (pObject instanceof __Buffer) || (_ud !== Buffer && pObject instanceof Buffer);
+        };
+
         mod = {
             Buffer,
             __Buffer,
@@ -560,7 +571,8 @@ const { _ud = "undefined", $scope } = constants;
             isUtf8,
             SlowBuffer,
             transcode,
-            TranscodeEncoding
+            TranscodeEncoding,
+            isBuffer
         };
     }
 

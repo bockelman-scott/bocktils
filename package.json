@@ -9,7 +9,8 @@
     "@dotenvx/dotenvx": "^1.44.1",
     "@toolbocks/all": "file:packages",
     "adm-zip": "^0.5.16",
-    "lerna": "^8.1.9"
+    "lerna": "^8.1.9",
+    "mimetics": "^1.0.4"
   },
   "type": "commonjs",
   "devDependencies": {
