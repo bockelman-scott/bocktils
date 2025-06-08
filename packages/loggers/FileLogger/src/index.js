@@ -46,7 +46,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         getMessagesLocale,
         attempt,
         asyncAttempt,
-
+        resolveError
     } = moduleUtils;
 
     const {
@@ -70,9 +70,10 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         isString,
         isDate,
         isFunction,
+        isError,
         isNonNullObject,
         firstMatchingType,
-        resolveMoment,
+        resolveMoment
     } = typeUtils;
 
     const { asString, asInt, asFloat, isBlank, ucase, capitalize, toBool, formatMessage } = stringUtils;
@@ -923,7 +924,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         return FileRotationInterval.DEFAULT;
     };
 
-    const MAX_LOG_FILE_SIZE_KB = 100;
+    const MAX_LOG_FILE_SIZE_KB = 500;
 
     class LogFileRotationPolicy
     {
@@ -1576,7 +1577,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         {
             let open = this.isOpen() || await this._open();
 
-            const msg = isString( pString ) ? pString : asArray( pString ).join( _mt_str );
+            const msg = isString( pString ) ? pString : asArray( pString ).join( _spc );
 
             if ( open && !this.suspended )
             {
@@ -1618,7 +1619,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
                 await (me || this).rotateLogFile( (me || this), TIMESTAMP_RESOLUTION.MILLISECOND, false );
 
-                konsole.log( "Rotated log file due to maximum size reached:", (me || this).filepath );
+                konsole.log( "Rotated log file due to maximum size (" + asString( policy.maxBytes ) + " bytes)" + " reached:", (me || this).filepath, " Size before rotation:", fileSize );
 
                 this.suspended = !this.isOpen();
             }
@@ -1626,7 +1627,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
         async _log( ...pData )
         {
-            const arr = asArray( varargs( ...pData ) );
+            const arr = asArray( varargs( ...pData ) ).filter( e => !isString( e ) || !isBlank( e ) );
 
             if ( 1 === arr.length && arr[0] instanceof LogRecord )
             {
@@ -1634,7 +1635,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             }
             else
             {
-                this._writeToLog( arr.join( _mt_str ) ).then( no_op ).catch( ex => konsole.error( ex ) );
+                this._writeToLog( arr.join( _spc ) ).then( no_op ).catch( ex => konsole.error( ex ) );
             }
         }
 
@@ -1642,7 +1643,18 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         {
             if ( this.enabled && this.level.isEnabled( pLevel ) )
             {
-                this._log( ...pData ).then( no_op ).catch( ex => konsole.error( ex ) );
+                const arr = asArray( varargs( ...pData ) ).filter( e => !isString( e ) || !isBlank( e ) );
+
+                if ( 1 === arr.length && arr[0] instanceof LogRecord )
+                {
+                    this._log( ...pData ).then( no_op ).catch( ex => konsole.error( ex ) );
+                }
+                else
+                {
+                    const msg = asString( asArray( arr ).filter( e => isString( e ) && !isBlank( e ) ).join( _spc ), true );
+                    const logRecord = new LogRecord( msg, pLevel, (arr.find( isError ) || null), null, ...pData );
+                    this._log( logRecord ).then( no_op ).catch( ex => konsole.error( ex ) );
+                }
             }
         }
 

@@ -287,7 +287,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                 this.#level = pLevel instanceof LogLevel || isNumeric( pLevel ) ? LogLevel.resolveLevel( pLevel, { level: LogLevel.ERROR } ) : LogLevel.ERROR;
                 this.#error = resolveError( pMessage, pError?.message || pError ) || pError;
                 this.#source = resolveSource( pSource, pMessage );
-                this.#data = asArray( varargs( ...pData ) );
+                this.#data = asArray( varargs( ...pData ) ).filter( e => !isString( e ) || !isBlank( e ) );
             }
             else if ( isEvent( pMessage ) || isEvent( pSource ) )
             {
@@ -301,7 +301,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                 this.#level = LogLevel.resolveLevel( detail.level || type || S_ERROR ) || S_ERROR;
                 this.#error = resolveError( isError( pError ) ? pError : evt?.error, pError?.message );
                 this.#source = resolveSource( pSource || detail.source || target?.name, this.#error || pMessage || pSource );
-                this.#data = asArray( varargs( ...pData ) || asArray( detail.data ) );
+                this.#data = asArray( varargs( ...pData ) || asArray( detail.data ) ).filter( e => !isString( e ) || !isBlank( e ) );
             }
             else
             {
@@ -309,11 +309,11 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                 this.#level = LogLevel.resolveLevel( pLevel, { level: (isError( pError ) ? LogLevel.ERROR : LogLevel.DEFAULT) } );
                 this.#error = (isError( pError ) || isError( pMessage )) ? resolveError( firstError( pError, pMessage ), (pError?.message || pMessage?.message || this.#message) ) : null;
                 this.#source = resolveSource( pSource, pError );
-                this.#data = asArray( varargs( ...pData ) );
+                this.#data = asArray( varargs( ...pData ) ).filter( e => !isString( e ) || !isBlank( e ) );
             }
         }
 
-        [Symbol.species]()
+        get [Symbol.species]()
         {
             return this;
         }

@@ -5722,7 +5722,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             {
                 for( let entry of entries )
                 {
-                    if( isNull( entry ) )
+                    if ( isNull( entry ) )
                     {
                         continue;
                     }
@@ -6657,6 +6657,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             attemptMethod,
             asyncAttempt,
             asyncAttemptMethod,
+
+            getLastError,
+            getLastAsynchronousError,
 
             fireAndForget,
             executeCallback,

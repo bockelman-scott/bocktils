@@ -3657,16 +3657,36 @@ const $scope = constants?.$scope || function()
     FileObject.collect = findFiles;
 
     const supportedMimeTypes =
-        [];
+        [
+            "application/json",
+            "application/xml",
+            "text/xml",
+            "text/html",
+            "text/plain",
+            "text/csv",
+            "application/zip",
+            "image/png",
+            "image/svg+xml"
+        ];
 
     const supportedExtensions =
-        [];
+        [
+            "json",
+            "xml",
+            "xml",
+            "html",
+            "text",
+            "csv",
+            "zip",
+            "png",
+            "svg"
+        ];
 
     const calculateMimeType = async function( pBinaryData )
     {
         if ( isNonNullObject( pBinaryData ) || isArray( pBinaryData ) )
         {
-            return await asyncAttempt( async() => await mimetics.fromBuffer( pBinaryData ) );
+            return await asyncAttempt( async() => await mimetics( pBinaryData ) );
         }
     };
 

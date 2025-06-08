@@ -2713,6 +2713,11 @@ const { _ud = "undefined", $scope } = constants;
     {
         if ( isString( pStr ) && !isBlank( pStr ) )
         {
+            if ( pStr.length > 260 )
+            {
+                return false;
+            }
+
             if ( /[*?><|"]/.test( pStr ) )
             {
                 return false;
