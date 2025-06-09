@@ -757,6 +757,19 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const _spcToChar = ( pStr, pChar = _underscore ) => _asStr( pStr ).replaceAll( /\s+/g, (isStr( pChar ) ? pChar || _underscore : _underscore) );
 
+    const _asInt = ( pVal ) =>
+    {
+        if ( pVal && isNumeric( pVal ) )
+        {
+            let val = attempt( () => parseInt( pVal ) );
+            if ( isNum( val ) )
+            {
+                return val;
+            }
+        }
+        return 0;
+    };
+
     /**
      * Returns a value not less than a minimum value and not greater than a maximum value.<br>
      * <br>
@@ -1492,11 +1505,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     ExecutionMode.from = function( pArg )
     {
-        let arg = isNumeric( pArg ) ? asInt( pArg ) : asString( pArg );
+        let arg = isNumeric( pArg ) ? _asInt( pArg ) : _asStr( pArg );
 
         if ( isNumber( arg ) )
         {
-            switch ( asInt( arg ) )
+            switch ( _asInt( arg ) )
             {
                 case 0:
                     return ExecutionMode.MODES.NONE;
@@ -1520,7 +1533,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     return ExecutionMode.MODES.DEFAULT;
             }
         }
-        else if ( isString( arg ) )
+        else if ( isStr( arg ) )
         {
             if ( (/prod/i).test( arg ) )
             {
@@ -1632,8 +1645,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * overridden or added by the properties of the specified pOptions
      *
      * @param {Object} pOptions  An object whose properties should be used
-     * @param {Object} pDefaults An object holding defaults for the properties to be used
-     * @returns {Object} An object combining the defaults with the specified options
+     * @param {...Object} pDefaults One or more objects holding defaults for the properties to be used
+     * @returns {Object} A new object combining the defaults with the specified options
      */
     function populateOptions( pOptions, ...pDefaults )
     {
@@ -6525,6 +6538,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return null;
     };
 
+    const $ln = ( pVal ) => pVal?.length || 0;
+
     const mod =
         {
             ModuleEvent: ToolBocksModuleEvent,
@@ -6686,6 +6701,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             immutableCopy,
 
             compareNullable,
+
+            $ln,
 
             __Error,
             ExecutionEnvironment,

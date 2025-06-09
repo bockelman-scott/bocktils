@@ -73,7 +73,8 @@ const $scope = constants?.$scope || function()
         lock,
         attempt,
         asyncAttempt,
-        sleep
+        sleep,
+        $ln
     } = moduleUtils;
 
     /*
@@ -673,6 +674,52 @@ const $scope = constants?.$scope || function()
                                          "numFilters": pNumFilters
                                      } );
     }
+
+    /**
+     * Returns the last non-null element of the specified array
+     * or null if the arr is empty or missing
+     * @param {Array.<*>} pArr
+     * @returns {*|null}
+     */
+    const last = ( pArr ) =>
+    {
+        let arr = asArray( pArr || [] ) || [];
+        return arr.findLast( e => isNonNullValue( e ) ) || null;
+    };
+
+    /**
+     * Returns the first non-null element of the specified array
+     * or null if the arr is empty or missing
+     * @param {Array.<*>} pArr
+     * @returns {*|null}
+     */
+    const first = ( pArr ) =>
+    {
+        let arr = asArray( pArr || [] ) || [];
+        return arr.find( e => isNonNullValue( e ) ) || null;
+    };
+
+    /**
+     * Returns the Nth element of the specified array
+     * or a default value if the arr is empty or missing or the index >= the length of the array
+     * @param {Array.<*>} pArr
+     * @param {number} pIdx - the index (or n) of the array from which to find/return an element
+     * @param {*} pDefault the value to return if the array is empty or the index, n, is >= the length of the array, or the element at n is null or undefined
+     * @returns {*|null}
+     */
+    const $nth = ( pArr, pIdx = 0, pDefault = null ) =>
+    {
+        let arr = asArray( pArr || [] ) || [];
+
+        let idx = asInt( pIdx );
+
+        if ( (idx >= 0) && (idx < $ln( arr )) )
+        {
+            return arr[idx] || pDefault;
+        }
+
+        return pDefault;
+    };
 
     let Filters;
 
@@ -4709,7 +4756,7 @@ const $scope = constants?.$scope || function()
 
         const dflt = (_ud === typeof pDefault || null == pDefault) ? null : isNonNullValue( pDefault ) ? pDefault : null;
 
-        return arr.at( idx ) || dflt;
+        return idx >= 0 ? arr.at( idx ) || dflt : dflt;
     };
 
     const toPercentages = function( pArr, pOptions = DEFAULT_AS_ARRAY_OPTIONS )
@@ -5396,6 +5443,9 @@ const $scope = constants?.$scope || function()
             arrLenGtEq,
             arrLenLt,
             arrLenLtEq,
+            last,
+            first,
+            $nth,
             TRANSFORMATIONS: lock( TRANSFORMATIONS ),
             Filters: lock( Filters ),
             Mappers: lock( Mappers ),

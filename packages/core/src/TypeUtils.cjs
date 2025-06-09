@@ -1613,7 +1613,7 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isNonNullValue
      */
-    const isNonNullValue = ( pValue ) => (false === pValue || 0 === pValue || _mt_str === pValue || isNotNull( pValue, false ));
+    const isNonNullValue = ( pValue ) => (false === pValue || 0 === pValue || _mt_str === pValue || isNonNullObject( pValue ) || isNotNull( pValue, false ));
 
     /**
      * Returns true if the specified value is an array
