@@ -140,6 +140,7 @@ const $scope = constants?.$scope || function()
         isUndefined,
         isNull,
         isNonNullValue,
+        isNonNullObject,
         isString,
         isEmptyString,
         isPrimitive,
@@ -4883,20 +4884,103 @@ const $scope = constants?.$scope || function()
         return !!pAsStrings ? arr.map( e => asString( e ) ) : arr;
     };
 
+    class RateLimits
+    {
+        #example = "x-ratelimit-limit: 10 10;w=1,60;w=60,15000;w=3600,360000;w=86400";
+
+        #requestsPerSecond = 10;
+        #requestsPerMinute = 250;
+        #requestsPerHour = 15_000;
+        #requestsPerDay = 360_000;
+
+        constructor( ...pArgs )
+        {
+
+        }
+    }
+
+    RateLimits.fromHeaders = function( pHeaders )
+    {
+
+    };
+
+    RateLimits.from = function( pObject )
+    {
+
+    };
+
+    /**
+     * Instances of this class are used to iterate a collection or Iterable at a controlled rate.
+     * <br><br>
+     * This rate can be a fixed delay or a variable rate based on the values of a #RateLimits object.
+     * <br><br>
+     * This is most useful when each iteration performs asynchronous work or makes network calls.
+     * <br><br>
+     */
     class ThrottledIterator extends EventTarget
     {
         #iterable;
+
+        #rateLimits;
         #delay;
+
+        #lastRequestTimestamp;
+
         #operation;
         #results;
 
-        constructor( pIterable, pDelay, pOperation, pBuffer )
+        /**
+         * Constructs an instance of ThrottledIterator to iterate the specified collection or Iterable.
+         *
+         * @param {Array.<*>|Iterable.<*>} pIterable an iterable object,
+         *                                           such as an Array, for which an operation will be performed
+         *                                           on each item.
+         *
+         * @param {RateLimits|number} pRateLimits either a number to define a fixed rate
+         *                                        or an instance of #RateLimits to calculate delays
+         *
+         * @param {Function} pOperation a function to invoke on each iteration.<br>
+         *                              This function should have the following signature:
+         *                              [async ] function( pItem, pIndex, pIterable, pBuffer )
+         *                              <br><br>
+         *                              where the first parameter will receive the current item,
+         *                              pIndex will receive a number indicating the current iteration (or index of the Iterable)
+         *                              pIterable is the iterable itself,
+         *                              and pBuffer is an array or object that the specified operation expects to update.
+         *                              <br><br>
+         *                              pBuffer is optional if the operation does not need to produce results
+         *                              or the operation is modifying an object in the scope of its closure
+         *
+         * @param {Array.<*>|Object} pBuffer an array or object that the specified operation expects to update.
+         *                                   <br><br>
+         *                                   pBuffer is optional if the operation does not need to produce results
+         *                                   or the operation is modifying an object in the scope of its closure
+         */
+        constructor( pIterable, pRateLimits, pOperation, pBuffer )
         {
             super();
 
+            // the thing to iterate (an array or any object that implements Symbol[@iterator]
             this.#iterable = isIterable( pIterable ) ? pIterable : asArray( pIterable );
-            this.#delay = Math.min( 2_000, Math.max( 100, asInt( pDelay ) ) );
+
+            // this object can be constructed with a set of rate limits to control the interval between iterations
+            // or a single numeric value setting a fixed delay (in milliseconds) between iterations
+            if ( isNonNullObject( pRateLimits ) )
+            {
+                // using the rate limits for vaiable delays
+                this.#rateLimits = RateLimits.from( pRateLimits );
+                this.#delay = this.calculateDelay( this.#rateLimits || {} );
+            }
+            else if ( isNumeric( pRateLimits ) )
+            {
+                // using the numeric value for a fixed delay between iterations
+                this.#delay = Math.min( 2_000, Math.max( 100, asInt( pRateLimits ) ) );
+            }
+
+            // the function to execute for each iteration
             this.#operation = isFunction( pOperation ) ? pOperation : null;
+
+            // a buffer or array or object or whatever else the operation may modify
             this.#results = pBuffer || [];
         }
 
@@ -4905,9 +4989,48 @@ const $scope = constants?.$scope || function()
             return this.#iterable;
         }
 
+        calculateDelay( pRateLimits, pResponseHeaders )
+        {
+            return 100; // TODO
+        }
+
         get delay()
         {
             return Math.min( 2_000, Math.max( 100, asInt( this.#delay, 100 ) ) );
+        }
+
+        get rateLimits()
+        {
+            return RateLimits.from( this.#rateLimits || {} );
+        }
+
+        get lastRequestTimestamp()
+        {
+            return this.#lastRequestTimestamp || Date.now();
+        }
+
+        get iterationsPerSecond()
+        {
+            const limits = this.#rateLimits || this.rateLimits;
+            return limits.requestsPerSecond;
+        }
+
+        get iterationsPerMinute()
+        {
+            const limits = this.#rateLimits || this.rateLimits;
+            return limits.requestsPerMinute;
+        }
+
+        get iterationsPerHour()
+        {
+            const limits = this.#rateLimits || this.rateLimits;
+            return limits.requestsPerHour;
+        }
+
+        get iterationsPerDay()
+        {
+            const limits = this.#rateLimits || this.rateLimits;
+            return limits.requestsPerDay;
         }
 
         get operation()
@@ -4960,10 +5083,12 @@ const $scope = constants?.$scope || function()
 
             let counter = 0;
 
+            // TODO: check for asyncIterator and use "for await of"
             const items = this.iterable || [];
 
             for( let item of items )
             {
+                // wait the configured or calcuated amount of time before executing the operation
                 await asyncAttempt( async() => await sleep( pause ) );
 
                 if ( item )
@@ -4977,6 +5102,8 @@ const $scope = constants?.$scope || function()
                         attempt( () => operation( item, counter, items, this.results ) );
                     }
                 }
+
+                this.#lastRequestTimestamp = Date.now();
 
                 counter++;
             }

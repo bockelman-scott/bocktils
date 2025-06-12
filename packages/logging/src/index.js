@@ -944,6 +944,11 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             return this.#level;
         }
 
+        set level( pLevel )
+        {
+            this.#level = LogLevel.resolveLevel( pLevel || this.#level, this.options ) || this.#level || LogLevel.DEFAULT;
+        }
+
         get logFormatterOptions()
         {
             return populateOptions( this.#logFormatterOptions, DEFAULT_LOG_FORMATTER_OPTIONS );
