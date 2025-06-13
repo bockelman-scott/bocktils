@@ -853,9 +853,15 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
      *
      * @property {ExecutionMode} [mode=ExecutionMode.CURRENT] The execution mode that determines debugging related behaviors<br>
      *
+     * @property {boolean} echoToConsole When true, anything written to the logger is also written to the console
+     *
      */
 
-    const DEFAULT_LOGGER_OPTIONS =
+    /**
+     * Default set of options for constructing a Logger
+     * @type {LoggerOptions}
+     */
+    const DEFAULT_LOGGER_OPTIONS = lock(
         {
             asynchronous: false,
             buffered: false,
@@ -865,11 +871,11 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             logFormatterOptions: DEFAULT_LOG_FORMATTER_OPTIONS,
             logFormatter: DEFAULT_LOG_FORMATTER,
             mode: ExecutionMode.CURRENT || ExecutionMode.DEFAULT
-        };
+        } );
 
     function resolveFormatter( pLogFormatter, pOptions = DEFAULT_LOG_FORMATTER_OPTIONS )
     {
-        const options = populateOptions( pOptions, DEFAULT_LOG_FORMATTER_OPTIONS );
+        const options = populateOptions( pOptions || {}, DEFAULT_LOG_FORMATTER_OPTIONS );
 
         if ( isNull( pLogFormatter ) )
         {
@@ -909,15 +915,17 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         #logFormatterOptions = DEFAULT_LOG_FORMATTER_OPTIONS;
         #logFormatter = DEFAULT_LOG_FORMATTER;
 
+        #echoToConsole = false;
+
         #enabled = true;
 
         constructor( pOptions = DEFAULT_LOGGER_OPTIONS, ...pLoggers )
         {
             super( pOptions?.name, populateOptions( pOptions, DEFAULT_LOGGER_OPTIONS ) );
 
-            const options = populateOptions( pOptions, DEFAULT_LOGGER_OPTIONS );
+            const options = populateOptions( pOptions || {}, DEFAULT_LOGGER_OPTIONS || {} );
 
-            this.#options = options;
+            this.#options = lock( options );
 
             this.#loggers = asArray( varargs( ...pLoggers ) );
 
@@ -931,11 +939,13 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
             this.#logFormatterOptions = populateOptions( options.logFormatterOptions || {}, DEFAULT_LOG_FORMATTER_OPTIONS );
             this.#logFormatter = resolveFormatter( options.logFormatter || new LogFormatter( this.#logFormatterOptions ) ) || new LogFormatter( this.#logFormatterOptions );
+
+            this.#echoToConsole = this.#options.echoToConsole;
         }
 
         get options()
         {
-            return populateOptions( this.#options || {}, DEFAULT_LOGGER_OPTIONS );
+            return lock( populateOptions( this.#options || {}, DEFAULT_LOGGER_OPTIONS ) );
         }
 
         get level()
@@ -1008,56 +1018,49 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             return this.#bufferTimer;
         }
 
+        get echoToConsole()
+        {
+            return this.#echoToConsole;
+        }
+
         isEnabledFor( pLevel )
         {
-            return this.level.isEnabled( pLevel );
+            const thisLevel = LogLevel.resolveLevel( this.level );
+            const evalLevel = LogLevel.resolveLevel( pLevel );
+
+            return thisLevel.isEnabled( evalLevel );
         }
 
         log( pLogRecord, ...pExtra )
         {
-            try
-            {
-                if ( this.traceEnabled || this.mode?.traceEnabled )
-                {
-                    konsole.trace( "Logger::log", pLogRecord, ...pExtra );
-                }
-            }
-            catch( ex )
-            {
-                // ignore this
-            }
+            this._traceIf( pLogRecord, pExtra );
 
-            let logRecord = pLogRecord instanceof LogRecord ? pLogRecord : new LogRecord( pLogRecord );
-
-            let level = LogLevel.getLevel( logRecord?.level || S_ERROR ) || this.level;
-
-            let methodName = lcase( (level instanceof LogLevel) ? level.name || asString( level ) : lcase( asString( level, true ) ) );
+            let { logRecord, level, methodName } = this._resolveLogArgs( pLogRecord );
 
             if ( this.isEnabledFor( level ) )
             {
-                const extraData = asArray( varargs( ...pExtra ) );
-                if ( extraData?.length > 0 )
-                {
-                    logRecord.addData( ...extraData );
-                }
+                logRecord = this._addData( logRecord, pExtra );
 
                 for( let logger of [...(this.loggers), this] )
                 {
-                    if ( (this === logger && this.loggers.length > 0) || (isFunction( logger?.isEnabledFor ) && !logger.isEnabledFor( level )) )
+                    if ( (this === logger && this.loggers.length > 0) || Logger.isDisabled( logger, level ) )
                     {
                         continue;
                     }
 
-                    if ( isFunction( logger?.["writeLogRecord"] ) )
+                    const loggerFunction = logger?.["writeLogRecord"];
+
+                    if ( isFunction( loggerFunction ) )
                     {
                         try
                         {
-                            if ( isAsyncFunction( logger?.["writeLogRecord"] ) )
+                            if ( isAsyncFunction( loggerFunction ) )
                             {
                                 logger.writeLogRecord( logRecord ).then( no_op ).catch( konsole.error );
                             }
                             else
                             {
+                                // noinspection JSIgnoredPromiseFromCall
                                 logger.writeLogRecord( logRecord );
                             }
                         }
@@ -1077,6 +1080,73 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                         }
                     }
                 }
+
+                this._echo( methodName, logRecord );
+            }
+        }
+
+        _resolveLogArgs( pLogRecord )
+        {
+            let logRecord = pLogRecord instanceof LogRecord ? pLogRecord : new LogRecord( pLogRecord );
+
+            let level = LogLevel.getLevel( logRecord?.level || this.level || S_ERROR ) || this.level;
+
+            let methodName = lcase( (level instanceof LogLevel) ? level.name || asString( level ) : lcase( asString( level, true ) ) );
+
+            return { logRecord, level, methodName };
+        }
+
+        static isDisabled( pLogger, pLevel )
+        {
+            let level = LogLevel.resolveLevel( pLevel );
+            return isFunction( pLogger?.isEnabledFor ) && !pLogger.isEnabledFor( level );
+        }
+
+        _addData( pLogRecord, ...pData )
+        {
+            const logRecord = ( !isNull( pLogRecord ) && pLogRecord instanceof LogRecord) ?
+                              pLogRecord :
+                              new LogRecord( pLogRecord, this.level, null, null, ...pData );
+
+            const extraData = asArray( varargs( ...pData ) );
+
+            if ( extraData?.length > 0 )
+            {
+                logRecord.addData( ...extraData );
+            }
+
+            return logRecord;
+        }
+
+        _echo( pMethod, pLogRecord )
+        {
+            if ( this.#echoToConsole )
+            {
+                try
+                {
+                    let format = this.logFormatter?.formatForConsole || this.logFormatter?.format;
+                    format = isFunction( format ) && format.length >= 1 ? format : ( pArg ) => asString( pArg );
+                    konsole[pMethod].call( konsole, (format.call( (this.logFormatter || this), pLogRecord )) );
+                }
+                catch( ex )
+                {
+                    //ignored
+                }
+            }
+        }
+
+        _traceIf( pLogRecord, pExtra )
+        {
+            try
+            {
+                if ( this.traceEnabled || this.mode?.traceEnabled )
+                {
+                    konsole.trace( "Logger::log", pLogRecord, ...pExtra );
+                }
+            }
+            catch( ex )
+            {
+                // ignore this
             }
         }
 
@@ -1235,7 +1305,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                 }
                 catch( ex )
                 {
-                    // ignored; but we don;t want a bug in a superclass to affect us.
+                    // ignored; but we don't want a bug in a superclass to affect us.
                 }
 
                 if ( this.asynchronous )
