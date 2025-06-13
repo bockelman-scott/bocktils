@@ -4967,7 +4967,7 @@ const $scope = constants?.$scope || function()
             // or a single numeric value setting a fixed delay (in milliseconds) between iterations
             if ( isNonNullObject( pRateLimits ) )
             {
-                // using the rate limits for vaiable delays
+                // using the rate limits for variable delays
                 this.#rateLimits = RateLimits.from( pRateLimits );
                 this.#delay = this.calculateDelay( this.#rateLimits || {} );
             }
@@ -5075,7 +5075,9 @@ const $scope = constants?.$scope || function()
 
         async iterate()
         {
-            const pause = this.delay;
+            const items = this.iterable || [];
+
+            let pause = this.delay;
 
             let operation = this.operation;
 
@@ -5084,8 +5086,6 @@ const $scope = constants?.$scope || function()
             let counter = 0;
 
             // TODO: check for asyncIterator and use "for await of"
-            const items = this.iterable || [];
-
             for( let item of items )
             {
                 // wait the configured or calcuated amount of time before executing the operation
