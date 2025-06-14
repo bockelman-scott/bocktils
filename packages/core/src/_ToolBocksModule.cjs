@@ -737,7 +737,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     const _lcase = e => _asStr( e ).toLowerCase();
 
     /**
-     * Converts the input value to an uppercase.
+     * Converts the input value to all uppercase.
      *
      * The provided value is first cast to a string using the `_asStr` function,
      * and then converted to lowercase.
@@ -1489,9 +1489,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     ExecutionMode.MODES =
         {
-            NONE: freeze( new ExecutionMode( S_NONE, false ) ),
+            NONE: freeze( new ExecutionMode( _ucase( S_NONE ), false ) ),
             PROD: freeze( new ExecutionMode( "PRODUCTION", false ) ),
+            PRODUCTION: freeze( new ExecutionMode( "PRODUCTION", false ) ),
             DEV: freeze( new ExecutionMode( "DEVELOPMENT", false ) ),
+            DEVELOPMENT: freeze( new ExecutionMode( "DEVELOPMENT", false ) ),
             DEBUG: freeze( new ExecutionMode( "DEBUG", true ) ),
             TEST: freeze( new ExecutionMode( "TEST", true ) ),
             TRACE: freeze( new ExecutionMode( "TRACE", true ) )
@@ -1566,6 +1568,27 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return Execution.MODES.DEFAULT;
     };
 
+    ExecutionMode.calculate = function()
+    {
+        if ( _ud !== typeof process )
+        {
+            const execMode = _asStr( process.env["EXECUTION_MODE"], true ) || _mt_str;
+
+            if ( "PRODUCTION" === _ucase( execMode ) )
+            {
+                return ExecutionMode.MODES.PROD;
+            }
+
+            if ( _mt_str !== execMode.trim() )
+            {
+                return ExecutionMode[_ucase( execMode )] || ExecutionMode.MODES.DEFAULT;
+            }
+
+            return ExecutionMode.MODES.DEFAULT;
+        }
+        return ExecutionMode.MODES.DEFAULT;
+    };
+
     /**
      * This constant represents the default execution mode
      * if no mode is defined when the module is loaded.
@@ -1584,10 +1607,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * This constant represents the current ExecutionMode.<br>
      * The ExecutionMode can be set in the Environment
      * or passed on the command line when the application using this module is executed.
+     * <br><br>
+     * A value passed on the command line takes precedence over any environment variables set.
      * <br>
      * @type {ExecutionMode}
      */
-    const CURRENT_MODE = freeze( ExecutionMode.MODES[ENVIRONMENT["MODE"]] || ExecutionMode.MODES[ARGUMENTS.get( "mode", ExecutionMode.DEFAULT )] || ExecutionMode.DEFAULT );
+    const CURRENT_MODE = freeze( ExecutionMode.MODES[ARGUMENTS.get( "mode", "~~" )] ||
+                                 ExecutionMode.MODES[ENVIRONMENT["EXECUTION_MODE"]] ||
+                                 ExecutionMode.calculate() ||
+                                 ExecutionMode.DEFAULT );
 
     /**
      * This static member is set to the current execution mode.<br>
@@ -1830,7 +1858,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             this.#localeCode = this.#navigator?.language || getMessagesLocale( this.#ENV ) || DEFAULT_LOCALE_STRING;
 
-            this.#mode = CURRENT_MODE;
+            this.#mode = ExecutionMode.calculate() || CURRENT_MODE;
         }
 
         clone()
