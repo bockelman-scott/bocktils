@@ -1572,7 +1572,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     {
         if ( _ud !== typeof process )
         {
-            const execMode = _asStr( process.env["EXECUTION_MODE"], true ) || _mt_str;
+            const execMode = _asStr( process.env["EXECUTION-MODE"], true ) || _mt_str;
 
             if ( "PRODUCTION" === _ucase( execMode ) )
             {
@@ -1613,7 +1613,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @type {ExecutionMode}
      */
     const CURRENT_MODE = freeze( ExecutionMode.MODES[ARGUMENTS.get( "mode", "~~" )] ||
-                                 ExecutionMode.MODES[ENVIRONMENT["EXECUTION_MODE"]] ||
+                                 ExecutionMode.MODES[ENVIRONMENT["EXECUTION-MODE"]] ||
                                  ExecutionMode.calculate() ||
                                  ExecutionMode.DEFAULT );
 
