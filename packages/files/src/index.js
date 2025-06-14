@@ -96,7 +96,7 @@ let projectRootDirectory;
  */
 let defaultPath;
 
-const Mimetics = require( "mimetics" );
+// const Mimetics = require( "mimetics" );
 /**
  * The toolbocks/core package provides the building blocks
  * upon which other ToolBocks modules depend.<br>
@@ -200,12 +200,14 @@ const $scope = constants?.$scope || function()
         typedArrayFromBuffer
     } = bufferUtils;
 
+/*
     const MIMETICS_CONSTANTS = Mimetics.CONSTANTS;
     const MIMETICS_ERRORS = Mimetics.ERRORS;
     const MIMETICS = Mimetics.default;
 
     const mimetics = new Mimetics();
 
+*/
     const modName = "FileUtils";
 
     let modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
@@ -3686,7 +3688,7 @@ const $scope = constants?.$scope || function()
     {
         if ( isNonNullObject( pBinaryData ) || isArray( pBinaryData ) )
         {
-            return await asyncAttempt( async() => await mimetics( pBinaryData ) );
+            // return await asyncAttempt( async() => await mimetics( pBinaryData ) );
         }
     };
 
@@ -3805,10 +3807,12 @@ const $scope = constants?.$scope || function()
             fsConstants,
             importNodeModules,
 
+/*
             MIMETICS_ERRORS,
             MIMETICS_CONSTANTS,
             Mimetics,
             mimetics,
+*/
             calculateMimeType,
 
             supportedMimeTypes,
