@@ -459,6 +459,7 @@ const { _ud = "undefined", $scope } = constants;
     const TWELVE_HOURS = MILLIS_PER_HOUR * 12;
 
     const ONE_DAY = MILLIS_PER_DAY;
+    const ONE_WEEK = (7 * ONE_DAY);
 
     const Months = lock(
         {
@@ -2123,6 +2124,7 @@ const { _ud = "undefined", $scope } = constants;
             EIGHT_HOURS,
             TWELVE_HOURS,
             ONE_DAY,
+            ONE_WEEK,
             TIME_UNITS,
             TIME_UNITS_BY_ID,
             TIME_UNITS_BY_NAME,
