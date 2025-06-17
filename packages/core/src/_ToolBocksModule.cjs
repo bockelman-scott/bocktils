@@ -4197,6 +4197,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             {
                 MODULE_CACHE[this.#moduleName] = MODULE_CACHE[this.#moduleName] || this;
             }
+
             if ( this.#cacheKey && isStr( this.#cacheKey ) )
             {
                 MODULE_CACHE[this.#cacheKey] = MODULE_CACHE[this.#cacheKey] || this;
@@ -4561,10 +4562,37 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             ToolBocksModule.#globalLoggingEnabled = true;
         }
 
+        logMessage( ...pMsg )
+        {
+            if ( this.#loggingEnabled || ToolBocksModule.#globalLoggingEnabled )
+            {
+                const writer = this.logger || konsole;
+                attempt( () => writer.log( ...pMsg ) );
+            }
+        }
+
+        logWarning( ...pMsg )
+        {
+            if ( this.#loggingEnabled || ToolBocksModule.#globalLoggingEnabled )
+            {
+                const writer = this.logger || konsole;
+                attempt( () => writer.warn( ...pMsg ) );
+            }
+        }
+
+        logError( ...pMsg )
+        {
+            if ( this.#loggingEnabled || ToolBocksModule.#globalLoggingEnabled )
+            {
+                const writer = this.logger || konsole;
+                attempt( () => writer.error( ...pMsg ) );
+            }
+        }
+
         /**
          * Notifies event handlers listening for the "error" event of the error encountered.
          * <br><br>
-         * Also, optionally, writes to the logger defined, if logging is enabled.
+         * Writes to the defined logger, if logging is enabled.
          * <br>
          * <br>
          * The event object passed to the event handlers includes a detail property with<br>
