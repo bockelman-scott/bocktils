@@ -5046,6 +5046,7 @@ const $scope = constants?.$scope || function()
                 let op = async function( pItem, pIndex, pIterable, pResults )
                 {
                     const data = {
+
                         item: pItem,
                         index: pIndex,
                         iterable: pIterable,
@@ -5059,9 +5060,9 @@ const $scope = constants?.$scope || function()
                         results: me.results
                     };
 
-                    const event = new ModuleEvent( "Iteration", data, options );
+                    const event = new ModuleEvent( "iteration", data, options );
 
-                    toolBocksModule.dispatchEvent( event, data, options );
+                    me.dispatchEvent( event, data, options );
                 };
 
                 return op.bind( this );
@@ -5075,6 +5076,8 @@ const $scope = constants?.$scope || function()
 
         async iterate()
         {
+            const me = this;
+
             const items = this.iterable || [];
 
             let pause = this.delay;
@@ -5088,11 +5091,21 @@ const $scope = constants?.$scope || function()
             // TODO: check for asyncIterator and use "for await of"
             for( let item of items )
             {
-                // wait the configured or calcuated amount of time before executing the operation
+                // wait the configured or calculated amount of time before executing the operation
                 await asyncAttempt( async() => await sleep( pause ) );
 
                 if ( item )
                 {
+                    me.dispatchEvent( new ModuleEvent( "iteration",
+                                                       {
+                                                           operation: operation,
+                                                           item,
+                                                           index: counter,
+                                                           iterable: items,
+                                                           results: me.results
+                                                       } ) );
+
+
                     if ( isAsync )
                     {
                         await asyncAttempt( async() => await operation( item, counter, items, this.results ) );
