@@ -4930,6 +4930,8 @@ const $scope = constants?.$scope || function()
         #operation;
         #results;
 
+        #notify = false;
+
         /**
          * Constructs an instance of ThrottledIterator to iterate the specified collection or Iterable.
          *
@@ -4956,8 +4958,10 @@ const $scope = constants?.$scope || function()
          *                                   <br><br>
          *                                   pBuffer is optional if the operation does not need to produce results
          *                                   or the operation is modifying an object in the scope of its closure
+         *
+         * @param {boolean} [pNotify=false] Whether to dispatch an event on each iteration
          */
-        constructor( pIterable, pRateLimits, pOperation, pBuffer )
+        constructor( pIterable, pRateLimits, pOperation, pBuffer, pNotify = false )
         {
             super();
 
@@ -4983,11 +4987,18 @@ const $scope = constants?.$scope || function()
 
             // a buffer or array or object or whatever else the operation may modify
             this.#results = pBuffer || [];
+
+            this.#notify = !!pNotify;
         }
 
         get iterable()
         {
             return this.#iterable;
+        }
+
+        get notify()
+        {
+            return !!this.#notify;
         }
 
         calculateDelay( pRateLimits, pResponseHeaders )
@@ -5061,9 +5072,11 @@ const $scope = constants?.$scope || function()
                         results: me.results
                     };
 
-                    const event = new ModuleEvent( "iteration", data, options );
-
-                    me.dispatchEvent( event, data, options );
+                    if ( me.notify )
+                    {
+                        const event = new ModuleEvent( "iteration", data, options );
+                        me.dispatchEvent( event, data, options );
+                    }
                 };
 
                 return op.bind( this );
@@ -5097,15 +5110,17 @@ const $scope = constants?.$scope || function()
 
                 if ( item )
                 {
-                    me.dispatchEvent( new ModuleEvent( "iteration",
-                                                       {
-                                                           operation: operation,
-                                                           item,
-                                                           index: counter,
-                                                           iterable: items,
-                                                           results: me.results
-                                                       } ) );
-
+                    if ( me.notify )
+                    {
+                        me.dispatchEvent( new ModuleEvent( "iteration",
+                                                           {
+                                                               operation: operation,
+                                                               item,
+                                                               index: counter,
+                                                               iterable: items,
+                                                               results: me.results
+                                                           } ) );
+                    }
 
                     if ( isAsync )
                     {
