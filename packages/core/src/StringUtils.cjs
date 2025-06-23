@@ -826,7 +826,7 @@ const { _ud = "undefined", $scope } = constants;
 
             const date = input || pValue;
 
-            s = attempt( () => formatter.call( thiz, date, options ), options ) || date.toISOString();
+            s = attempt( () => formatter.call( thiz, date, options ), options ) || date.toISOString() || s;
         }
 
         return s;
@@ -876,6 +876,36 @@ const { _ud = "undefined", $scope } = constants;
         return trim ? (_mt_str + (s || _mt_str)).trim() : s;
     }
 
+    function _handleObjectMethods( pValue, pTrim, pOptions )
+    {
+        let s = _mt_str;
+
+        let input = pValue || pOptions?.value || {};
+
+        if ( isNonNullObject( input ) )
+        {
+            if ( isFunction( input?.asString ) )
+            {
+                s = attempt( () => input.asString() );
+            }
+            else if ( isFunction( input?.toJSON ) )
+            {
+                s = attempt( () => input.toJSON() );
+            }
+            else if ( isFunction( input?.toJson ) )
+            {
+                s = attempt( () => input.toJson() );
+            }
+        }
+
+        if ( !!(pTrim || pOptions?.trim) )
+        {
+            s = (_mt_str + s).trim();
+        }
+
+        return s;
+    }
+
     function _handleObjectInput( pValue, pTrim, pOptions )
     {
         if ( isNull( pValue ) )
@@ -883,24 +913,24 @@ const { _ud = "undefined", $scope } = constants;
             return _mt_str;
         }
 
-        const options = _aso( pOptions );
+        const options = _aso( pOptions ) || {};
 
-        const trim = pTrim || options.trim;
+        const trim = !!(pTrim || options.trim);
 
-        const input = pValue;
-
-        let s = _mt_str;
+        const input = pValue || options?.value;
 
         if ( isTypedArray( input ) )
         {
             return fromByteArray( input, options?.decoder, options?.transformations );
         }
 
+        let s = _mt_str;
+
         // if the argument is an array, recursively call this function on each element
         // and join the results on the joinOn option or the empty character
         if ( isArray( input ) )
         {
-            const arr = [...input];
+            const arr = [...(input || [])];
 
             if ( options.checkForByteArray && arr.every( e => isNumeric( e ) && toDecimal( e ) ) <= 255 )
             {
@@ -908,9 +938,10 @@ const { _ud = "undefined", $scope } = constants;
             }
             else
             {
-                s = [].concat( ...(input || []) ).map( e => asString( e, trim, options ) ).join( (asString( options.joinOn ) || _mt_chr) );
+                s = arr.map( e => asString( e, trim, options ) ).join( (asString( options.joinOn ) || _mt_chr) );
             }
-            return s;
+
+            return trim ? (_mt_str + s).trim() : s;
         }
 
         // handle ObjectWrapper types
@@ -932,13 +963,15 @@ const { _ud = "undefined", $scope } = constants;
             return input.toString();
         }
 
-        // if the object defines a toString method, we try that
+        // if the object defines a variation of the toString method, we try those
         if ( isFunction( input?.toString ) )
         {
-            return _handleToStringMethod( input, trim, options );
+            return attempt( () => _handleToStringMethod( input, trim, options ) );
         }
-
-        return Object.toString.call( input, input );
+        else
+        {
+            return attempt( () => _handleObjectMethods( input, trim, options ) ) || Object.toString.call( input, input );
+        }
     }
 
     function _handleNumericString( pInput, pOptions )
@@ -1032,11 +1065,16 @@ const { _ud = "undefined", $scope } = constants;
      */
     const asString = function( pStr, pTrim = false, pOptions = DEFAULT_AS_STRING_OPTIONS )
     {
+        if ( _ud === typeof pStr || null === pStr )
+        {
+            return _mt_str;
+        }
+
         const options = _aso( pOptions );
 
-        let trim = pTrim || options.trim;
-
+        let trim = !!(pTrim || options.trim);
         options.trim = trim;
+
         let input = _resolveInput.call( this, pStr );
 
         let s = _asStringFromType( input, trim, options, pTrim );
@@ -3190,9 +3228,20 @@ const { _ud = "undefined", $scope } = constants;
 
     const extractProtocol = ( str ) => _trim( _rpl( _trim( ((/^(sm|ht|f)?tp(s)*:\/\//.exec( _trim( str ) ) || [])[0]) || _mt_str ), /:\/\// ) );
 
+    const filePathToUrl = function( pStr )
+    {
+        // TODO
+        return pStr;
+    };
+
     const cleanUrl = function( pStr, pPreserveTrailingSlash = true, pPreserveProtocol = true, pPreserveCase = true )
     {
         let url = asString( pStr, true );
+
+        if ( _lct( url ).startsWith( "file:" ) )
+        {
+            return filePathToUrl( pStr );
+        }
 
         let original = asString( url, true );
 

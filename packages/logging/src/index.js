@@ -297,11 +297,11 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                 let detail = evt?.detail || evt?.data || evt;
                 let target = evt?.target || evt;
 
-                this.#message = asString( detail.message || (isString( evt ) ? asString( evt ) : type) ) || _mt_str;
-                this.#level = LogLevel.resolveLevel( detail.level || type || S_ERROR ) || S_ERROR;
+                this.#message = evt?.message || asString( detail?.message || (isString( evt ) ? asString( evt ) : type) ) || _mt_str;
+                this.#level = LogLevel.resolveLevel( detail?.level || type || S_ERROR ) || S_ERROR;
                 this.#error = resolveError( isError( pError ) ? pError : evt?.error, pError?.message );
-                this.#source = resolveSource( pSource || detail.source || target?.name, this.#error || pMessage || pSource );
-                this.#data = asArray( varargs( ...pData ) || asArray( detail.data ) ).filter( e => !isString( e ) || !isBlank( e ) );
+                this.#source = resolveSource( pSource || detail?.source || target?.name, this.#error || pMessage || pSource );
+                this.#data = asArray( varargs( ...(pData || asArray( detail?.data || detail )) ) ).filter( e => !isString( e ) || !isBlank( e ) );
             }
             else
             {

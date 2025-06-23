@@ -2344,7 +2344,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         const optionsDetail = options?.detail || options;
 
-        let data = (isObj( pData ) ? (pData?.detail || pData) : optionsDetail) || optionsDetail;
+        let data = (isObj( pData ) ? (pData?.detail || pData?.data || pData) : optionsDetail) || optionsDetail;
 
         data = data?.detail || data?.data || data || options?.detail || options || options?.data || options || {};
 
@@ -2396,7 +2396,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             this.#type = type || "ToolBocksModuleEvent";
 
-            this.#detail = data?.detail || data || pData || options?.detail || options || {};
+            this.#detail = data?.detail || data?.data || data || pData || options?.detail || options || {};
 
             this.#traceEnabled = !!options.traceEnabled;
 
@@ -2452,6 +2452,28 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return this.#type || super.type;
         }
 
+        get message()
+        {
+            let s = asString( "An event of type, " + asString( this.type || this ) + ", occurred " + asString( this.occurred ) );
+
+            if ( isNonNullObject( this.detail ) )
+            {
+                const entries = objectEntries( this.detail );
+                if ( entries && $ln( entries ) > 0 )
+                {
+                    s += ", with details: \n";
+                    for( let entry of entries )
+                    {
+                        const key = asString( ObjectEntry.getKey( entry ), true );
+                        const value = ObjectEntry.getValue( entry );
+
+                        s += key + ": " + attempt( () => asString( value ) ) + "\n";
+                    }
+                }
+            }
+            return asString( s );
+        }
+
         /**
          * Returns the data included with this event,
          * <br>
@@ -2470,7 +2492,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         mergeData( pData )
         {
-            this.#detail = populateOptions( (pData?.detail || pData), this.detail );
+            this.#detail = populateOptions( (pData?.detail || pData?.data || pData), this.detail );
             return this.detail;
         }
 

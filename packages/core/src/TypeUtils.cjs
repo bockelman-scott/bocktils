@@ -4136,6 +4136,11 @@ const $scope = constants?.$scope || function()
         return obj;
     }
 
+    function asObject( pObject )
+    {
+        return isNonNullObject( pObject ) || isLikeArray( pObject ) ? pObject : attempt( () => JSON.parse( String( pObject ) ) );
+    }
+
     /**
      * Applies Array.flat to each of the variable number of values
      * @param {...*} pArgs One or more values, treated as an array of arrays, each of which will be flattened
@@ -5026,6 +5031,7 @@ const $scope = constants?.$scope || function()
             arrayToObject,
             toArrayLiteral,
             toObjectLiteral,
+            asObject,
             getProperty,
             setProperty,
             toNodePathArray,

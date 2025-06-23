@@ -63,17 +63,19 @@ const { _ud = "undefined", $scope } = constants;
         return evtName;
     }
 
-    function resolveEvent( pEvt )
+    const resolveEvent = function( pEvent, pData, pOptions )
     {
-        const evt = pEvt || $scope()?.event;
+        const evt = pEvent || $scope()?.event;
 
-        if ( evt instanceof Event )
+        if ( evt instanceof ModuleEvent )
         {
-            return new ModuleEvent( evt );
+            evt.mergeOptions( pOptions );
+            evt.mergeData( pData );
+            return evt;
         }
 
-        return new ModuleEvent( asString( evt, true ) );
-    }
+        return new ModuleEvent( evt, pData, pOptions );
+    };
 
     function isHandlerFunction( pObject )
     {

@@ -4305,7 +4305,7 @@ const $scope = constants?.$scope || function()
 
         get values()
         {
-            return [...(asArray( this.#arr ))];
+            return [...(asArray( this.#arr || [] ))];
         }
 
         get limit()
@@ -4354,7 +4354,7 @@ const $scope = constants?.$scope || function()
 
         isQueued( pElem )
         {
-            return this.#arr.includes( pElem );
+            return asArray( this.#arr ).includes( pElem );
         }
 
         includes( pElem )
@@ -4531,7 +4531,7 @@ const $scope = constants?.$scope || function()
         {
             while ( this.canTake() )
             {
-                await new Promise( resolve => setTimeout( resolve, 100 ) );
+                await sleep( 10 );
                 yield this.take();
             }
         }
@@ -4553,7 +4553,7 @@ const $scope = constants?.$scope || function()
      */
     class AsyncBoundedQueue extends BoundedQueue
     {
-        constructor( pSize, pArr )
+        constructor( pSize, pArr = [] )
         {
             super( pSize, pArr );
         }
@@ -4585,7 +4585,7 @@ const $scope = constants?.$scope || function()
 
         get limit()
         {
-            return Promise.resolve( super.limit );
+            return super.limit;
         }
 
         async getLimit()
@@ -4646,22 +4646,22 @@ const $scope = constants?.$scope || function()
 
         async getState()
         {
-            return this.state;
+            return Promise.resolve( this.state );
         }
 
         async dequeue()
         {
-            return super.dequeue();
+            return Promise.resolve( super.dequeue() );
         }
 
         async pop()
         {
-            return super.pop();
+            return Promise.resolve( super.pop() );
         }
 
         async flush()
         {
-            return super.flush();
+            return Promise.resolve( super.flush() );
         }
 
         async clear()
@@ -4671,12 +4671,12 @@ const $scope = constants?.$scope || function()
 
         async shrink( pNewLimit, pEvictNewest )
         {
-            return super.shrink( pNewLimit, pEvictNewest );
+            return Promise.resolve( super.shrink( pNewLimit, pEvictNewest ) );
         }
 
         async extend( pNewLimit, ...pElems )
         {
-            return super.extend( pNewLimit, ...pElems );
+            return Promise.resolve( super.extend( pNewLimit, ...pElems ) );
         }
 
         * [Symbol.iterator]()
@@ -4696,6 +4696,7 @@ const $scope = constants?.$scope || function()
 
                 if ( can )
                 {
+                    await sleep( 10 );
                     yield await this.take();
                 }
                 else
