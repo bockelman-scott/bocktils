@@ -1,11 +1,12 @@
 /**
  * @fileOverview
- * This module defines a facade for the Web API Headers object<br>
+ * This module defines a facade for the Web API Response object<br>
  * intended to encapsulate and hide the differences
- * between the way Node.js, Deno, browsers, and other execution environments model HTTP Headers.<br>
+ * between the way Node.js, Deno, browsers,
+ * and other execution environments model an HTTP Response.<br>
  * <br>
  *
- * @module HttpRequest
+ * @module HttpResponse
  *
  * @author Scott Bockelman
  * @license MIT
@@ -75,19 +76,20 @@ const {
             httpRequest
         };
 
-    const { ToolBocksModule, populateOptions, localCopy, attempt } = moduleUtils;
+    const { ToolBocksModule, populateOptions, localCopy, attempt, asyncAttempt } = moduleUtils;
 
-    const { _str, _num, _big, _mt_str, S_ERR_PREFIX } = constants;
+    const { _mt_str, _str, _num, _big, S_ERR_PREFIX } = constants;
 
     const
         {
             isNull,
             isObject,
+            isNonNullObject,
+            isString,
             isArray,
             isMap,
             isFunction,
-            isString,
-            isNonNullObject,
+            isAsyncFunction
         } = typeUtils;
 
 
@@ -107,12 +109,16 @@ const {
 
     const cloneResponse = function( pResponse )
     {
-        return isNull( pResponse ) ? null : isFunction( pResponse?.clone ) ? pResponse.clone() : localCopy( pResponse );
+        let res = pResponse?.response || pResponse;
+
+        return isNull( res ) ? null : isFunction( res?.clone ) ? res.clone() : localCopy( res );
     };
 
     const cloneHeaders = function( pHeaders )
     {
-        return new HttpResponseHeaders( isNull( pHeaders ) ? new HttpResponseHeaders() : isFunction( pHeaders?.clone ) ? pHeaders.clone() : localCopy( pHeaders ) );
+        let headers = pHeaders?.headers || pHeaders;
+
+        return new HttpResponseHeaders( isNull( headers ) ? new HttpResponseHeaders() : isFunction( headers?.clone ) ? headers.clone() : localCopy( headers ) );
     };
 
     const DEFAULT_RESPONSE_OPTIONS =
@@ -128,12 +134,16 @@ const {
         #headers;
         #bodyUsed;
 
+        #data;
+
         #status;
         #ok;
 
         #type;
 
         #options;
+
+        #resolvedBody;
 
         #text;
         #json;
@@ -148,14 +158,15 @@ const {
 
             const options = populateOptions( pOptions, DEFAULT_RESPONSE_OPTIONS );
 
-            const res = pResponse || options?.response;
+            const res = this.resolveResponse( pResponse, options );
+
             const req = res?.request || options?.request;
 
-            this.#response = cloneResponse( this.resolveResponse( res, options ) );
+            this.#response = cloneResponse( res );
 
             this.#status = this.resolveStatus( this.#response, options );
 
-            this.#ok = this.#status.isOK();
+            this.#ok = this.#status.isOk();
 
             this.#request = isNonNullObject( req ) ? cloneRequest( req ) : null;
 
@@ -171,32 +182,66 @@ const {
                                              options );
         }
 
+        _resolveBody( pResponse, pOptions )
+        {
+            const options = populateOptions( (pOptions || pResponse?.options),
+                                             DEFAULT_RESPONSE_OPTIONS );
+
+            const res = pResponse?.response || pResponse || options?.response || options;
+
+            let body = res?.data || res?.body || options?.body || options?.data;
+
+            if ( isNull( body ) )
+            {
+                body = options?.body || options?.data || {};
+            }
+
+            if ( isFunction( body ) )
+            {
+                if ( isAsyncFunction( body ) )
+                {
+                    // cannot handle async in synchronous context
+                    // we'll check for Promise
+                }
+                body = attempt( () => body.call( res, body ) );
+            }
+
+            return body || {};
+        }
+
         resolveResponse( pResponse, pOptions )
         {
             const options = populateOptions( pOptions, DEFAULT_RESPONSE_OPTIONS );
 
-            const res = pResponse || options?.response;
+            const res = pResponse?.response || pResponse || options?.response;
+
+            let response = res;
 
             if ( isNonNullObject( res ) )
             {
-                this.#response = cloneResponse( res );
+                response = cloneResponse( res );
             }
-            else if ( _ud !== typeof Response )
+            else
             {
-                this.#response = new Response( options?.body || _mt_str, options );
-            }
-            else if ( !isNull( options?.body ) )
-            {
-                this.#response =
-                    {
-                        body: options?.body,
-                        status: options?.status || (!isNull( options?.body ) ? STATUS_CODES.OK : STATUS_CODES.NOT_FOUND),
-                        statusText: options?.statusText,
-                        type: options?.type
-                    };
+                const body = this._resolveBody( res || options, options );
+
+                if ( _ud !== typeof Response )
+                {
+                    response = new Response( body || res?.data || {}, options );
+                }
+                else if ( !isNull( body ) )
+                {
+                    response =
+                        {
+                            body: body || options?.body || options?.data,
+                            status: options?.status || (!isNull( body ) ? STATUS_CODES.OK : STATUS_CODES.NOT_FOUND),
+                            statusText: options?.statusText,
+                            type: options?.type
+                        };
+                }
             }
 
-            return this.#response;
+            return response;
         }
 
         get options()
@@ -211,9 +256,10 @@ const {
 
         resolveStatus( pResponse, pOptions )
         {
-            const options = populateOptions( pOptions, DEFAULT_RESPONSE_OPTIONS );
+            const options = populateOptions( pOptions || pResponse?.options,
+                                             DEFAULT_RESPONSE_OPTIONS );
 
-            const res = pResponse || options?.response || options;
+            const res = pResponse?.response || pResponse || options?.response || options;
 
             if ( isNull( res ) )
             {
@@ -229,7 +275,7 @@ const {
 
                 this.#status = new HttpStatus( code, msg );
 
-                this.#ok = this.#status.isOK();
+                this.#ok = this.#status.isOk();
             }
             else
             {
@@ -249,7 +295,7 @@ const {
                         break;
                 }
 
-                this.#ok = this.#status.isOK();
+                this.#ok = this.#status.isOk();
             }
 
             return this.#status || new HttpStatus();
@@ -257,11 +303,16 @@ const {
 
         async body()
         {
+            if ( isNull( this.#resolvedBody ) || isBlank( this.#resolvedBody ) )
+            {
+
+            }
+
             const res = cloneResponse( this.#response );
 
             if ( isFunction( res.body ) && !res.bodyUsed )
             {
-                return res.body();
+                return await asyncAttempt( async() => await res.body() );
             }
 
             ////

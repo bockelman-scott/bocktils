@@ -62,6 +62,8 @@ const {
 
     const { ModuleEvent, ToolBocksModule, ObjectEntry, objectEntries, lock } = moduleUtils;
 
+    const {_str } = constants;
+
     const { asString, asInt, lcase, ucase, capitalize } = stringUtils;
 
 
@@ -69,42 +71,6 @@ const {
 
     const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
-
-    /**
-     * Represents an HTTP verb and provides utility methods related to it.
-     * @class
-     */
-    class HttpVerb extends ModuleEvent
-    {
-        #verb;
-
-        /**
-         * Constructs an instance of the class to represent the specified verb.
-         *
-         * @param {string} pVerb - The verb to be assigned to the instance.
-         * @return {HttpVerb} A new instance of the class representing the specified verb.
-         */
-        constructor( pVerb )
-        {
-            super();
-            this.#verb = pVerb;
-        }
-
-        /**
-         * Returns true if this verb (method) requires a body in the request.
-         *
-         * @return {boolean} Returns true if the HTTP verb is POST, PUT, or PATCH; otherwise, false.
-         */
-        requiresBody()
-        {
-            return (this.#verb === "POST") || (this.#verb === "PUT") || (this.#verb === "PATCH");
-        }
-
-        forbidBody()
-        {
-            return (this.#verb === "GET") || (this.#verb === "HEAD") || (this.#verb === "OPTIONS") || (this.#verb === "DELETE");
-        }
-    }
 
     /**
      * An object that defines common HTTP request methods as key-value pairs.<br>
@@ -137,11 +103,46 @@ const {
             TRACE: "TRACE"
         };
 
+    /**
+     * Represents an HTTP verb and provides utility methods related to it.
+     * @class
+     */
+    class HttpVerb extends ModuleEvent
+    {
+        #verb;
+
+        /**
+         * Constructs an instance of the class to represent the specified verb.
+         *
+         * @param {string} pVerb - The verb to be assigned to the instance.
+         * @return {HttpVerb} A new instance of the class representing the specified verb.
+         */
+        constructor( pVerb )
+        {
+            super();
+            this.#verb = ucase( pVerb );
+        }
+
+        /**
+         * Returns true if this verb (method) requires a body in the request.
+         *
+         * @return {boolean} Returns true if the HTTP verb is POST, PUT, or PATCH; otherwise, false.
+         */
+        requiresBody()
+        {
+            return ["POST", "PUT", "PATCH"].includes( ucase( this.#verb ) );
+        }
+
+        forbidBody()
+        {
+            return ["GET", "HEAD", "OPTIONS", "DELETE"].includes( ucase( this.#verb ) );
+        }
+    }
+
     Object.entries( VERBS ).forEach( ( [key, value] ) =>
                                      {
                                          HttpVerb[key] = new HttpVerb( value );
                                      } );
-
 
     const MODES = lock(
         {
@@ -157,43 +158,6 @@ const {
                                AUTO: "auto"
                            } );
 
-    /**
-     * Represents an HTTP content type (or mime-type).
-     *
-     * @class
-     */
-    class HttpContentType
-    {
-        #type;
-        #contentType;
-
-        /**
-         * Constructs a new object representing a specified type and MIME type.
-         *
-         * @param {string} pType - The common name of the type.
-         * @param {string} pMimeType - The MIME type text to use in a request header.
-         */
-        constructor( pType, pMimeType )
-        {
-            this.#type = pType;
-            this.#contentType = pMimeType;
-        }
-
-        get type()
-        {
-            return asString( this.#type, true );
-        }
-
-        get contentType()
-        {
-            return asString( this.#contentType, true );
-        }
-
-        toString()
-        {
-            return this.contentType;
-        }
-    }
 
     /**
      * An object representing various content types commonly used in web development.<br>
@@ -250,11 +214,48 @@ const {
             ECMASCRIPT: "ecmascript"
         };
 
+    /**
+     * Represents an HTTP content type (or mime-type).
+     *
+     * @class
+     */
+    class HttpContentType
+    {
+        #type;
+        #contentType;
+
+        /**
+         * Constructs a new object representing a specified type and MIME type.
+         *
+         * @param {string} pType - The common name of the type.
+         * @param {string} pMimeType - The MIME type text to use in a request header.
+         */
+        constructor( pType, pMimeType )
+        {
+            this.#type = pType;
+            this.#contentType = pMimeType;
+        }
+
+        get type()
+        {
+            return asString( this.#type, true );
+        }
+
+        get contentType()
+        {
+            return asString( this.#contentType, true );
+        }
+
+        toString()
+        {
+            return this.contentType;
+        }
+    }
+
     Object.entries( CONTENT_TYPES ).forEach( ( [key, value] ) =>
                                              {
                                                  HttpContentType[key] = new HttpContentType( TYPES[key], value );
                                              } );
-
 
     /**
      * A collection of HTTP status codes mapped to their respective numeric values.<br>
@@ -414,6 +415,11 @@ const {
             return this.code >= 300 && this.code < 400;
         }
 
+        isRedirect()
+        {
+            return this.isRedirection();
+        }
+
         isError()
         {
             return this.code >= 400;
@@ -429,7 +435,7 @@ const {
             return this.code >= 400 && this.code < 500;
         }
 
-        isOK()
+        isOk()
         {
             return this.code === 200;
         }
@@ -450,10 +456,10 @@ const {
      * Represents an HTTP header with a name, description, and category.<br>
      * <br>
      * This class is designed to handle basic properties of an HTTP header,
-     * such as its name, description (value), and category.
+     * such as its name, description, and category.
      * <br>
      */
-    class HttpHeader
+    class HttpHeaderDefinition
     {
         #name;
         #description;
@@ -464,6 +470,35 @@ const {
             this.#name = asString( pName, true );
             this.#description = asString( pValue, true );
             this.#category = asString( pCategory, true );
+        }
+
+        get name()
+        {
+            return asString( this.#name, true );
+        }
+
+        get description()
+        {
+            return asString( this.#description || this.name, true );
+        }
+
+        get category()
+        {
+            return asString( this.#category, true );
+        }
+
+        toString()
+        {
+            return this.name;
+        }
+
+        [Symbol.toPrimitive]( pHint )
+        {
+            if ( _str === lcase( asString( pHint, true ) ) )
+            {
+                return this.toString();
+            }
+            return this.toString()
         }
     }
 
@@ -682,14 +717,41 @@ const {
                                                 const categoryName = ucase( category );
                                                 Object.entries( headers ).forEach( ( [header, description] ) =>
                                                                                    {
-                                                                                       HttpHeader[header] = new HttpHeader( header, description, categoryName );
+                                                                                       HttpHeaderDefinition[header] = new HttpHeaderDefinition( header, description, categoryName );
                                                                                    }
                                                 );
                                             } );
 
+    class HttpHeader
+        {
+            #definition;
+            #value;
+
+            constructor( pDefinition, pValue )
+            {
+                this.#definition = pDefinition;
+                this.#value = pValue;
+            }
+
+            get definition()
+            {
+                return this.#definition;
+            }
+
+            get value()
+            {
+                return this.#value;
+            }
+
+            get name()
+            {
+                return this.definition?.name || asString( this.definition );
+            }
+        }
+
     const isVerb = ( pVerb ) => pVerb instanceof HttpVerb || Object.values( VERBS ).map( lcase ).includes( lcase( asString( pVerb, true ) ) );
 
-    const isHeader = ( pHeader ) => pHeader instanceof HttpHeader || Object.keys( HttpHeader ).map( lcase ).includes( lcase( asString( pHeader, true ) ) );
+    const isHeader = ( pHeader ) => pHeader instanceof HttpHeaderDefinition || Object.keys( HttpHeaderDefinition ).map( lcase ).includes( lcase( asString( pHeader, true ) ) );
 
     const isContentType = ( pContentType ) => pContentType instanceof HttpContentType || Object.keys( HttpContentType ).map( lcase ).includes( lcase( asString( pContentType, true ) ) );
 
@@ -699,7 +761,7 @@ const {
 
     HttpVerb.isVerb = isVerb;
 
-    HttpHeader.isHeader = isHeader;
+    HttpHeaderDefinition.isHeader = isHeader;
 
     let mod =
         {
@@ -707,7 +769,7 @@ const {
             classes:
                 {
                     HttpVerb,
-                    HttpHeader,
+                    HttpHeaderDefinition,
                     HttpStatus,
                     HttpContentType,
                 },
@@ -721,7 +783,7 @@ const {
             TYPES,
             HTTP_HEADERS,
             HttpVerb,
-            HttpHeader,
+            HttpHeaderDefinition,
             HttpStatus,
             HttpContentType,
             isVerb,

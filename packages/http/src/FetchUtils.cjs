@@ -84,7 +84,7 @@ const {
         HttpVerb,
         HttpContentType,
         HttpStatus,
-        HttpHeader
+        HttpHeaderDefinition
     } = httpConstants;
 
     const { HttpRequestHeaders } = httpHeaders;

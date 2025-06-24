@@ -278,9 +278,9 @@ describe( "LogFileRotationPolicy", () =>
 
         expect( defaultPolicy.interval ).toEqual( new FileRotationInterval( 1, FileRotationIntervalUnit.DAY ) );
 
-        expect( defaultPolicy.maxSize ).toEqual( 500 );
+        expect( defaultPolicy.maxSize ).toEqual( 25_000 );
 
-        expect( defaultPolicy.maxBytes ).toEqual( 500 * 1_024 );
+        expect( defaultPolicy.maxBytes ).toEqual( 25_000 * 1_024 );
 
         expect( defaultPolicy.milliseconds ).toEqual( 86_400_000 );
 

@@ -924,7 +924,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         return FileRotationInterval.DEFAULT;
     };
 
-    const MAX_LOG_FILE_SIZE_KB = 500;
+    const MAX_LOG_FILE_SIZE_KB = 25_000;  // 25MBs
 
     class LogFileRotationPolicy
     {

@@ -1065,17 +1065,17 @@ const { _ud = "undefined", $scope } = constants;
      */
     const asString = function( pStr, pTrim = false, pOptions = DEFAULT_AS_STRING_OPTIONS )
     {
-        if ( _ud === typeof pStr || null === pStr )
-        {
-            return _mt_str;
-        }
-
         const options = _aso( pOptions );
 
         let trim = !!(pTrim || options.trim);
         options.trim = trim;
 
         let input = _resolveInput.call( this, pStr );
+
+        if ( _ud === typeof input || null === input )
+        {
+            return _mt_str;
+        }
 
         let s = _asStringFromType( input, trim, options, pTrim );
 

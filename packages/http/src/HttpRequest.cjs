@@ -1,9 +1,15 @@
 /**
  * @fileOverview
- * This module defines a facade for the Web API Headers object<br>
+ * This module defines a facade for the Web API Request object<br>
  * intended to encapsulate and hide the differences
- * between the way Node.js, Deno, browsers, and other execution environments model HTTP Headers.<br>
+ * between the way Node.js, Deno, browsers, and other execution environments model an HTTP Request.<br>
  * <br>
+ *
+ * This facade also allows assigning an ID, a priority, and rate-limit group
+ * to each request to help control the order in which requests are handled,
+ * any queuing or waiting related to API rate limits,
+ * and/or the ability to choose to ignore responses
+ * to superseded requests that may occur in response to repeated events
  *
  * @module HttpRequest
  *
@@ -78,10 +84,14 @@ const {
         populateOptions,
         lock,
         localCopy,
-        attempt
+        attempt,
+        asyncAttempt
     } = moduleUtils;
 
     const {
+        _str,
+        _obj,
+        _fun,
         _mt_str,
         _spc,
         _slash,
@@ -96,6 +106,7 @@ const {
             isString,
             isObject,
             isNonNullObject,
+            isError,
             isArray,
             isMap,
             isFunction,
@@ -107,7 +118,7 @@ const {
         } = typeUtils;
 
 
-    const { asString, asInt, isBlank, startsWithAny } = stringUtils;
+    const { asString, asInt, isBlank, startsWithAny, cleanUrl } = stringUtils;
 
     const { asArray } = arrayUtils;
 
@@ -118,7 +129,7 @@ const {
         HttpVerb,
         HttpContentType,
         HttpStatus,
-        HttpHeader,
+        HttpHeaderDefinition,
         isHeader
     } = httpConstants;
 
@@ -925,7 +936,8 @@ const {
                      pRedirect = REDIRECT_OPTIONS.FOLLOW,
                      pReferrer = "about:client",
                      pReferrerPolicy = REFERRER_POLICY_OPTIONS.NO_REFERRER_WHEN_DOWNGRADE,
-                     pSignal = null,
+                     pAbortController = new AbortController(),
+                     pSignal = pAbortController?.signal || null,
                      pTimeout = -1 )
         {
             if ( pBody instanceof this.constructor )
@@ -944,7 +956,8 @@ const {
                 this.#redirect = pBody.redirect;
                 this.#referrer = pBody.referrer;
                 this.#referrerPolicy = pBody.referrerPolicy;
-                this.#signal = pBody.signal;
+                this.#abortController = pBody.abortController || new AbortController();
+                this.#signal = pBody.signal || this.#abortController?.signal;
                 this.#timeout = pBody.timeout;
 
                 return this;
@@ -1112,13 +1125,15 @@ const {
 
             this.#options = new HttpRequestOptions( pOptions );
 
-            this.#url = isString( pRequestOrUrl ) ? new HttpUrl( pRequestOrUrl ) : new HttpUrl( pRequestOrUrl?.url || pRequestOrUrl?.href );
+            this.#url = isString( pRequestOrUrl ) ? new HttpUrl( pRequestOrUrl ) : new HttpUrl( pRequestOrUrl?.url || pRequestOrUrl?.href || asString( pRequestOrUrl ) );
 
             this.#request = this.resolveRequest( pRequestOrUrl );
 
-            this.response = null;
+            this.#response = this.#request?.response || this.#options?.response;
 
-            this.error = null;
+            this.error = this.#request?.error || this.#options?.error || this.#response?.error || (isError( this.#response ) ? this.#response : null);
+
+            this.#body = this.#request?.body || this.#request?.data;
         }
 
         resolveRequest( pRequestOrUrl )
@@ -1130,8 +1145,37 @@ const {
                     return cloneRequest( pRequestOrUrl );
                 }
 
-                return new Request( this.#url );
+                switch ( typeof pRequestOrUrl )
+                {
+                    case _str:
+                        return new Request( pRequestOrUrl || this.#url );
+                    case _obj:
+                        return new Request( pRequestOrUrl?.url || this.#url );
+                    case _fun:
+                        return new Request( attempt( () => pRequestOrUrl() ) || this.#url );
+                    default:
+                        return {};
+                }
             }
+
+            if ( isNonNullObject( pRequestOrUrl ) )
+            {
+                return pRequestOrUrl;
+            }
+
+            if ( isFunction )
+            {
+                return attempt( () => pRequestOrUrl() );
+            }
+
+            if( isString( pRequestOrUrl ) )
+            {
+                return {
+                    url: asString( pRequestOrUrl, true ),
+
+                }
+            }
+
         }
     }
 
@@ -1182,7 +1226,7 @@ const {
                     HttpRequest,
                     HttpRequestHeaders,
                     HttpVerb,
-                    HttpHeader,
+                    HttpHeaderDefinition,
                     HttpContentType,
                     HttpStatus,
                 },
@@ -1220,7 +1264,7 @@ const {
             HttpRequest,
             HttpRequestHeaders,
             HttpVerb,
-            HttpHeader,
+            HttpHeaderDefinition,
             HttpContentType,
             HttpStatus,
         };

@@ -4925,7 +4925,7 @@ const $scope = constants?.$scope || function()
         #rateLimits;
         #delay;
 
-        #lastRequestTimestamp;
+        #lastIterationTimestamp;
 
         #operation;
         #results;
@@ -5016,9 +5016,9 @@ const $scope = constants?.$scope || function()
             return RateLimits.from( this.#rateLimits || {} );
         }
 
-        get lastRequestTimestamp()
+        get lastIterationTimestamp()
         {
-            return this.#lastRequestTimestamp || Date.now();
+            return this.#lastIterationTimestamp || Date.now();
         }
 
         get iterationsPerSecond()
@@ -5057,20 +5057,9 @@ const $scope = constants?.$scope || function()
 
                 let op = async function( pItem, pIndex, pIterable, pResults )
                 {
-                    const data = {
+                    const data = { item: pItem, index: pIndex };
 
-                        item: pItem,
-                        index: pIndex,
-                        iterable: pIterable,
-                        results: pResults
-                    };
-
-                    const options = {
-                        iterator: me,
-                        delay: me.delay,
-                        iterable: me.iterable,
-                        results: me.results
-                    };
+                    const options = { delay: me.delay };
 
                     if ( me.notify )
                     {
@@ -5110,29 +5099,27 @@ const $scope = constants?.$scope || function()
 
                 if ( item )
                 {
-                    if ( me.notify )
+                    if ( this.notify )
                     {
-                        me.dispatchEvent( new ModuleEvent( "iteration",
-                                                           {
-                                                               operation: operation,
-                                                               item,
-                                                               index: counter,
-                                                               iterable: items,
-                                                               results: me.results
-                                                           } ) );
+                        this.dispatchEvent( new ModuleEvent( "iteration",
+                                                             {
+                                                                 item,
+                                                                 index: counter,
+                                                                 timestamp: Date.now()
+                                                             } ) );
                     }
 
                     if ( isAsync )
                     {
-                        await asyncAttempt( async() => await operation( item, counter, items, this.results ) );
+                        await asyncAttempt( async() => await operation( item, counter, items, (me || this).results ) );
                     }
                     else
                     {
-                        attempt( () => operation( item, counter, items, this.results ) );
+                        attempt( () => operation( item, counter, items, (me || this).results ) );
                     }
                 }
 
-                this.#lastRequestTimestamp = Date.now();
+                this.#lastIterationTimestamp = Date.now();
 
                 counter++;
             }

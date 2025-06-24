@@ -3099,9 +3099,9 @@ const $scope = constants?.$scope || function()
         {
             let value = pValue || this.value;
 
-            value = isPrimitiveWrapper( value ) ? attempt( () => value.valueOf() ) : value;
+            value = isString( value ) ? value : isPrimitiveWrapper( value ) ? attempt( () => value.valueOf() ) : value;
 
-            value = isDate( value ) ? this.castDateToString( value ) || value : value;
+            value = isString( value ) ? value : isDate( value ) ? this.castDateToString( value ) || value : value;
 
             value = isFunction( value ) ? attempt( () => functionToString.call( value, value ) ) : value;
 
@@ -3109,18 +3109,18 @@ const $scope = constants?.$scope || function()
 
             value = isNumeric( value ) ? String( toDecimal( value ) ) : value;
 
-            value = isFunction( value?.asString ) ? attempt( () => value.asString() ) : value;
+            value = isString( value ) ? value : isFunction( value?.asString ) ? attempt( () => value.asString() ) : value;
 
             const prior = value || pValue || this.value;
 
-            value = isFunction( value?.toString ) ? attempt( () => value.toString() ) : value;
+            value = isString( value ) ? value : isFunction( value?.toString ) ? attempt( () => value.toString() ) : value;
 
-            if ( "[object Object]" === String( value ) )
+            if ( /\[object\s*]/.test( String( value ) ) || ("[object Object]" === String( value )) )
             {
                 value = attempt( () => JSON.stringify( prior || {} ) ) || "{}";
             }
 
-            return _mt_str + String( value );
+            return isString( value ) ? value : _mt_str + String( value );
         }
 
         castDateToString( pDate, pDateFormatter )

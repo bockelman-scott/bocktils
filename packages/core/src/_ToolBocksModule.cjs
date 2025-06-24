@@ -1395,6 +1395,346 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const ENVIRONMENT = resolveObject( pEnvironment || _ENV, false );
 
+
+    /**
+     * This is a helper function used by the detectCycles function
+     * used to prevent infinite loops when recursive calls
+     * do not have a natural or dependable base case.
+     * <br>
+     * @param {Array} pStack an array that is appended with each iteration of a recursive function.<br>
+     *                       If this array contains repeated sequences of a specified length,
+     *                       we assume we have entered an infinite loop.<br>
+     *
+     * @param {number} pIteration
+     * @param {number} pStackLength
+     * @param {number} pRunLength
+     * @param {Array}  pBuffer an array to hold the calculated 'runs' of a sequence
+     * @private
+     */
+    function _calculateRuns( pStack, pIteration, pStackLength, pRunLength, pBuffer )
+    {
+        for( let i = 0, n = pStackLength; i < n; i += pRunLength )
+        {
+            let start = i + pIteration;
+
+            const end = Math.min( start + pRunLength, pStackLength );
+
+            const seq = String( _mt_str + (pStack.slice( start, end ).join( "*" )) ).trim();
+
+            pBuffer.push( seq );
+        }
+    }
+
+    /**
+     * Synchronously executes a specified callback function with the provided arguments.<br>
+     *
+     * @param {Function} pCallback - The callback function to be executed.
+     *                               If the callback is an asynchronous function,
+     *                               it is executed using the "fire and forget" mechanism.
+     *
+     * @param {...*} pArgs - Optional arguments to be passed to the callback function.
+     *
+     * @return {void} This function does not return any value.<br>
+     *                The callback is responsible for any desired side effects.
+     */
+    function executeCallback( pCallback, ...pArgs )
+    {
+        if ( isFunc( pCallback ) )
+        {
+            const args = [...(pArgs || [])];
+
+            if ( isAsyncFunction( pCallback ) )
+            {
+                fireAndForget( pCallback, ...(args || []) );
+            }
+            else
+            {
+                attempt( pCallback, ...(args || []) );
+            }
+        }
+    }
+
+    /**
+     * Returns true if the executing code appears to have entered an infinite loop.<br>
+     * <br>
+     * Common scenarios in which this might occur include parsing or generating JSON
+     * containing self-references or circular references,
+     * iterating an object's entries if the object contains
+     * self-references or circular references,
+     * or executing other recursive code where the base case is unexpectedly never reached.<br>
+     * <br>
+     * This function attempts to detect potential infinite loops
+     * by inspecting the contents of an array passed as the first argument.<br>
+     * <br>
+     * The first argument is an array that holds strings indicative of some operation or step that has been called recursively.
+     * <br>
+     * <br>
+     * The second argument is the number of contiguous operations that,
+     * if repeated as a sequence, might indicate an infinite loop
+     * <br>
+     * <br>
+     * The third argument is the number of times
+     * a sequence of contiguous operations must be found
+     * before being considered to be in an infinite loop
+     * <br>
+     * <br>
+     * Example: ["a", "b", "c", "d", "e", "b", "c", "a", "b", "c", "d", "a", "b", "c", "d"] - starts to repeat at index 7, and repeats 2 times
+     *
+     * @param {Array<string>} pStack an array of operations or paths representing a sequence of function calls or elements processed
+     *
+     * @param {Number} pRunLength the number of contiguous elements to consider a sequence
+     *
+     * @param {Number} pMaxRepetitions the maximum number of times a sequence of run-length operations can appear before being considered a repeating/infinite loop
+     *
+     * @param pOnDetected {function} (optional) function to call when a cycle has been detected, defaults to a no-op
+     *
+     * @returns true if cycles are detected
+     */
+    const detectCycles = function( pStack, pRunLength = 5, pMaxRepetitions = 3, pOnDetected = no_op )
+    {
+        /**
+         * The list of operations that have occurred thus far
+         * @type {Array.<string>}
+         */
+        const _stack = [...(pStack || [])];
+
+        /**
+         * The current length of the stack
+         * @type {number}
+         */
+        const stackLength = _stack.length;
+
+        /**
+         * The length of a single repeating sequence to recognize
+         * @type {number}
+         */
+        let runLength = pRunLength || 3;
+
+        /**
+         * The maximum number of times a sequence can repeat before this function will return true
+         * @type {number}
+         */
+        const maxRepeats = pMaxRepetitions || 3;
+
+        // if the list of operations
+        // isn't even as long as it would have to be
+        // to contain > maximum repetitions, return false
+        if ( stackLength < (runLength * maxRepeats) )
+        {
+            return false;
+        }
+
+        /**
+         * an array to hold the sequences
+         *
+         * @type {Array.<string>}
+         */
+        let runs = [];
+
+        /**
+         * Using a nested loop algorithm...
+         *
+         * To account for the possibility
+         * that there is a repeating sequence that is LONGER than the runLength specified,
+         * we have an outer loop that increases the runLength by 1
+         *
+         * In the next-most inner loop,
+         * we stagger the start index into the array by 1
+         * each time we iterate the next-most-outer loop
+         *
+         * Within the innermost loop,
+         * we get the number of elements for each sequence
+         * and create a string we can compare to other sequences
+         * then compare and count repetitions, returning true if we reach or exceed
+         * the maximum number of repetitions of a sequence
+         */
+
+        const threshold = (stackLength / maxRepeats);
+
+        while ( runLength <= threshold )
+        {
+            for( let j = 0, m = stackLength; j < m; j++ )
+            {
+                _calculateRuns( _stack, j, stackLength, runLength, runs );
+
+                if ( runs.length < maxRepeats )
+                {
+                    return false;
+                }
+
+                let repetitions = 1; // the first instance counts
+
+                for( let i = 0, n = runs.length - 1; i < n; i++ )
+                {
+                    repetitions += ((runs[i] === runs[i + 1]) ? 1 : 0);
+                }
+
+                if ( repetitions >= maxRepeats )
+                {
+                    executeCallback( pOnDetected, _stack, runs, repetitions, runLength, maxRepeats );
+
+                    return true;
+                }
+
+                runs.length = 0;
+            }
+
+            runLength += 1;
+        }
+
+        return false;
+    };
+
+    class Merger
+    {
+        #objects;
+
+        constructor( ...pObjects )
+        {
+            let arr = [...(pObjects || [])].filter( isNonNullObj );
+            this.#objects = arr.reverse();
+        }
+
+        get merged()
+        {
+            let visited = new Map();
+            let stack = [];
+
+            let arr = [...(this.#objects || [])].filter( isNonNullObj );
+
+            if ( 1 === arr.length )
+            {
+                return Object.assign( {}, arr[0] || {} );
+            }
+
+            let obj = {};
+
+            while ( arr.length )
+            {
+                obj = this.merge( obj, arr.shift(), visited, stack );
+            }
+
+            const result = Object.assign( {}, obj );
+
+            attempt( () => delete result["__unique_object_id__"] );
+
+            return result;
+        }
+
+        resolveObject( pObj )
+        {
+            return isNull( pObj ) ? {} : !isObj( pObj ) ? { value: pObj } : pObj;
+        }
+
+        calculateValue( pValue, pDefault )
+        {
+            if ( isNull( pValue ) )
+            {
+                return pDefault;
+            }
+            return isObj( pValue ) ? isArray( pValue ) ? [...pValue] : isMap( pValue ) ? new Map( pValue ) : isSet( pValue ) ? new Set( pValue ) : isRegExp( pValue ) ? pValue : isDate( pValue ) ? new Date( pValue ) : Object.assign( {}, pValue ) : pValue;
+        }
+
+        merge( pObjA, pObjB, pVisited = new Map(), pStack = [] )
+        {
+            let visited = pVisited || new Map();
+            let stack = pStack || [];
+
+            const source = this.resolveObject( pObjB );
+            const target = this.resolveObject( pObjA );
+
+            if ( detectCycles( stack, 3, 3 ) )
+            {
+                let o = Object.assign( {}, visited.get( target.__GUID ) || visited.get( source.__GUID ) || target || source );
+                attempt( () => delete o["__unique_object_id__"] );
+                return o;
+            }
+
+            visited.set( source.__GUID, source );
+            visited.set( target.__GUID, target );
+
+            stack.push( source.__GUID );
+            stack.push( target.__GUID );
+
+            let obj = Object.assign( {}, target );
+
+            const entries = Object.entries( source );
+
+            for( let entry of entries )
+            {
+                let key = _asStr( entry[0] ).trim();
+                let value = entry[1];
+
+                if ( key && !isNull( value ) && !(key.startsWith( "__" )) )
+                {
+                    let existing = obj[key];
+
+                    if ( isNull( existing ) )
+                    {
+                        const calculated = this.calculateValue( value, existing );
+
+                        if ( isNonNullObj( calculated ) )
+                        {
+                            attempt( () => delete calculated["__unique_object_id__"] );
+                        }
+
+                        obj[key] = calculated;
+                    }
+                    else
+                    {
+                        switch ( typeof existing )
+                        {
+                            case _obj:
+                                if ( isArray( existing ) )
+                                {
+                                    existing = [...(existing || [])];
+
+                                    if ( isArray( value ) )
+                                    {
+                                        for( let i = value.length; i--; )
+                                        {
+                                            const calculated = this.calculateValue( value[i], existing[i] );
+
+                                            if ( isNonNullObj( calculated ) )
+                                            {
+                                                attempt( () => delete calculated["__unique_object_id__"] );
+                                            }
+
+                                            existing[i] = calculated;
+                                        }
+                                    }
+                                    obj[key] = [...existing];
+                                }
+                                else
+                                {
+                                    obj[key] = this.merge( obj[key], value, visited, stack.concat( obj[key].__GUID ).concat( value.__GUID ) );
+                                }
+
+                                break;
+
+                            case _fun:
+                                if ( isFunc( value ) )
+                                {
+                                    obj[key] = value.bind( obj );
+                                }
+                                break;
+
+                            default:
+                                obj[key] = this.calculateValue( value, obj[key] );
+                                break;
+                        }
+                    }
+                }
+            }
+
+            const result = Object.assign( {}, obj );
+
+            attempt( () => delete result["__unique_object_id__"] );
+
+            return result;
+        }
+    }
+
     /**
      * The ExecutionMode class represents a mode of execution,
      * such as "Production", "Development", "Testing", etc.
@@ -1505,6 +1845,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                                                        ExecutionMode[key] = value;
                                                    } );
 
+    // noinspection OverlyComplexFunctionJS
     ExecutionMode.from = function( pArg )
     {
         let arg = isNumeric( pArg ) ? _asInt( pArg ) : _asStr( pArg );
@@ -1667,7 +2008,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const MODULE_OBJECT = (_ud !== typeof module) ? module : { exports: {} };
 
-
     /**
      * Returns an object corresponding to a set of default options with one or more properties
      * overridden or added by the properties of the specified pOptions
@@ -1678,16 +2018,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     function populateOptions( pOptions, ...pDefaults )
     {
-        let sources = [...(pDefaults || [])].map( e => resolveObject( e || {}, true ) );
-
-        if ( isNonNullObj( pOptions ) )
-        {
-            sources.push( resolveObject( pOptions || pDefaults || {}, true ) );
-        }
-
-        sources = sources.filter( e => isNonNullObj( e ) );
-
-        return Object.assign( {}, ...sources );
+        return (((new Merger( pOptions, ...pDefaults )).merged) || pOptions || {});
     }
 
     /**
@@ -2454,9 +2785,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         get message()
         {
-            let s = asString( "An event of type, " + asString( this.type || this ) + ", occurred " + asString( this.occurred ) );
+            let s = _asStr( "An event of type, " + _asStr( this.type || this ) + ", occurred" );
 
-            if ( isNonNullObject( this.detail ) )
+            if ( !isNull( this.detail ) && isObj( this.detail ) )
             {
                 const entries = objectEntries( this.detail );
                 if ( entries && $ln( entries ) > 0 )
@@ -2464,14 +2795,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     s += ", with details: \n";
                     for( let entry of entries )
                     {
-                        const key = asString( ObjectEntry.getKey( entry ), true );
+                        const key = _asStr( ObjectEntry.getKey( entry ) ).trim();
                         const value = ObjectEntry.getValue( entry );
 
-                        s += key + ": " + attempt( () => asString( value ) ) + "\n";
+                        s += key + ": " + attempt( () => _asStr( value ) ) + "\n";
                     }
                 }
             }
-            return asString( s );
+            return _asStr( s );
         }
 
         /**
@@ -2560,197 +2891,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     function sleep( pMilliseconds )
     {
+        // noinspection DynamicallyGeneratedCodeJS
         return new Promise( resolve => setTimeout( resolve, pMilliseconds ) );
     }
-
-    /**
-     * This is a helper function used by the detectCycles function
-     * used to prevent infinite loops when recursive calls
-     * do not have a natural or dependable base case.
-     * <br>
-     * @param {Array} pStack an array that is appended with each iteration of a recursive function.<br>
-     *                       If this array contains repeated sequences of a specified length,
-     *                       we assume we have entered an infinite loop.<br>
-     *
-     * @param {number} pIteration
-     * @param {number} pStackLength
-     * @param {number} pRunLength
-     * @param {Array}  pBuffer an array to hold the calculated 'runs' of a sequence
-     * @private
-     */
-    function _calculateRuns( pStack, pIteration, pStackLength, pRunLength, pBuffer )
-    {
-        for( let i = 0, n = pStackLength; i < n; i += pRunLength )
-        {
-            let start = i + pIteration;
-
-            const end = Math.min( start + pRunLength, pStackLength );
-
-            const seq = String( _mt_str + (pStack.slice( start, end ).join( "*" )) ).trim();
-
-            pBuffer.push( seq );
-        }
-    }
-
-    /**
-     * Synchronously executes a specified callback function with the provided arguments.<br>
-     *
-     * @param {Function} pCallback - The callback function to be executed.
-     *                               If the callback is an asynchronous function,
-     *                               it is executed using the "fire and forget" mechanism.
-     *
-     * @param {...*} pArgs - Optional arguments to be passed to the callback function.
-     *
-     * @return {void} This function does not return any value.<br>
-     *                The callback is responsible for any desired side effects.
-     */
-    function executeCallback( pCallback, ...pArgs )
-    {
-        if ( isFunc( pCallback ) )
-        {
-            const args = [...(pArgs || [])];
-
-            if ( isAsyncFunction( pCallback ) )
-            {
-                fireAndForget( pCallback, ...(args || []) );
-            }
-            else
-            {
-                attempt( pCallback, ...(args || []) );
-            }
-        }
-    }
-
-    /**
-     * Returns true if the executing code appears to have entered an infinite loop.<br>
-     * <br>
-     * Common scenarios in which this might occur include parsing or generating JSON
-     * containing self-references or circular references,
-     * iterating an object's entries if the object contains
-     * self-references or circular references,
-     * or executing other recursive code where the base case is unexpectedly never reached.<br>
-     * <br>
-     * This function attempts to detect potential infinite loops
-     * by inspecting the contents of an array passed as the first argument.<br>
-     * <br>
-     * The first argument is an array that holds strings indicative of some operation or step that has been called recursively.
-     * <br>
-     * <br>
-     * The second argument is the number of contiguous operations that,
-     * if repeated as a sequence, might indicate an infinite loop
-     * <br>
-     * <br>
-     * The third argument is the number of times
-     * a sequence of contiguous operations must be found
-     * before being considered to be in an infinite loop
-     * <br>
-     * <br>
-     * Example: ["a", "b", "c", "d", "e", "b", "c", "a", "b", "c", "d", "a", "b", "c", "d"] - starts to repeat at index 7, and repeats 2 times
-     *
-     * @param {Array<string>} pStack an array of operations or paths representing a sequence of function calls or elements processed
-     *
-     * @param {Number} pRunLength the number of contiguous elements to consider a sequence
-     *
-     * @param {Number} pMaxRepetitions the maximum number of times a sequence of run-length operations can appear before being considered a repeating/infinite loop
-     *
-     * @param pOnDetected {function} (optional) function to call when a cycle has been detected, defaults to a no-op
-     *
-     * @returns true if cycles are detected
-     */
-    const detectCycles = function( pStack, pRunLength = 5, pMaxRepetitions = 3, pOnDetected = no_op )
-    {
-        /**
-         * The list of operations that have occurred thus far
-         * @type {Array.<string>}
-         */
-        const _stack = [...(pStack || [])];
-
-        /**
-         * The current length of the stack
-         * @type {number}
-         */
-        const stackLength = _stack.length;
-
-        /**
-         * The length of a single repeating sequence to recognize
-         * @type {number}
-         */
-        let runLength = pRunLength || 3;
-
-        /**
-         * The maximum number of times a sequence can repeat before this function will return true
-         * @type {number}
-         */
-        const maxRepeats = pMaxRepetitions || 3;
-
-        // if the list of operations
-        // isn't even as long as it would have to be
-        // to contain > maximum repetitions, return false
-        if ( stackLength < (runLength * maxRepeats) )
-        {
-            return false;
-        }
-
-        /**
-         * an array to hold the sequences
-         *
-         * @type {Array.<string>}
-         */
-        let runs = [];
-
-        /**
-         * Using a nested loop algorithm...
-         *
-         * To account for the possibility
-         * that there is a repeating sequence that is LONGER than the runLength specified,
-         * we have an outer loop that increases the runLength by 1
-         *
-         * In the next-most inner loop,
-         * we stagger the start index into the array by 1
-         * each time we iterate the next-most-outer loop
-         *
-         * Within the innermost loop,
-         * we get the number of elements for each sequence
-         * and create a string we can compare to other sequences
-         * then compare and count repetitions, returning true if we reach or exceed
-         * the maximum number of repetitions of a sequence
-         */
-
-        const threshold = (stackLength / maxRepeats);
-
-        while ( runLength <= threshold )
-        {
-            for( let j = 0, m = stackLength; j < m; j++ )
-            {
-                _calculateRuns( _stack, j, stackLength, runLength, runs );
-
-                if ( runs.length < maxRepeats )
-                {
-                    return false;
-                }
-
-                let repetitions = 1; // the first instance counts
-
-                for( let i = 0, n = runs.length - 1; i < n; i++ )
-                {
-                    repetitions += ((runs[i] === runs[i + 1]) ? 1 : 0);
-                }
-
-                if ( repetitions >= maxRepeats )
-                {
-                    executeCallback( pOnDetected, _stack, runs, repetitions, runLength, maxRepeats );
-
-                    return true;
-                }
-
-                runs.length = 0;
-            }
-
-            runLength += 1;
-        }
-
-        return false;
-    };
 
     /**
      * Default options for the bracketsToDots function,
@@ -5228,7 +5371,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const cloneArray = ( array, options, stack ) =>
     {
-        let clone = [...array];
+        let clone = [...array].map( e =>
+                                    {
+                                        if ( isNonNullObj( e ) )
+                                        {
+                                            attempt( () => delete e["__unique_object_id__"] );
+                                        }
+                                        return e;
+                                    } );
 
         if ( detectCycles( stack, 5, 5 ) )
         {
@@ -5312,6 +5462,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         if ( detectCycles( stack, 5, 5 ) )
         {
+            attempt( () => delete clone["__unique_object_id__"] );
             return clone;
         }
 
@@ -5360,6 +5511,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             delete clone["class"];
         }
 
+        attempt( () => delete clone["__unique_object_id__"] );
+
         return clone;
     };
 
@@ -5373,7 +5526,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     function handleCopyUndefined( pObject, pOptions, pFreezeFunction )
     {
-        const undefinedReplacement = pOptions.undefinedReplacement ?? null;
+        let undefinedReplacement = pOptions.undefinedReplacement ?? null;
+
+        if ( isNonNullObj( undefinedReplacement ) )
+        {
+            undefinedReplacement = Object.assign( {}, undefinedReplacement );
+            attempt( () => delete undefinedReplacement["__unique_object_id__"] );
+        }
+
         return pFreezeFunction( undefinedReplacement );
     }
 
@@ -5387,7 +5547,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     function handleCopyNull( pObject, pOptions, pFreezeFunction )
     {
-        const nullReplacement = pOptions.nullReplacement ?? EMPTY_OBJECT;
+        let nullReplacement = pOptions.nullReplacement ?? EMPTY_OBJECT;
+
+        if ( isNonNullObj( nullReplacement ) )
+        {
+            nullReplacement = Object.assign( {}, nullReplacement );
+            attempt( () => delete nullReplacement["__unique_object_id__"] );
+        }
+
         return pFreezeFunction( nullReplacement );
     }
 
@@ -5399,7 +5566,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     function handleCopyString( pString )
     {
-        return String( _mt_str + pString );
+        return String( _mt_str + _asStr( pString ) );
     }
 
     function handleCopyNumber( pNumber )
@@ -5455,8 +5622,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         if ( !!!pOptions?.includeClassNames )
         {
-            delete clone["class"];
+            attempt( () => delete clone["class"] );
         }
+
+        attempt( () => delete clone["__unique_object_id__"] );
 
         return isFunc( pFreezeFunction ) ? attempt( () => pFreezeFunction( clone ) || clone ) : clone;
     }
