@@ -6962,6 +6962,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             ObjectEntry,
             Visitor,
 
+            Merger,
+            mergeObjects: function( ...pObjects )
+            {
+                return attempt( () => (new Merger( ...pObjects )).merged );
+            },
+
             isLogger: ToolBocksModule.isLogger,
             calculateErrorSourceName,
 
@@ -7001,6 +7007,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     ModuleArgs,
                     ModuleEvent: ToolBocksModuleEvent,
                     ObjectEntry,
+                    Merger,
                     PromiseResult,
                     SourceInfo,
                     StackTrace,
