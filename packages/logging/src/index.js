@@ -440,7 +440,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             return this.toString();
         }
 
-        [Symbol.toStringTag]()
+        get [Symbol.toStringTag]()
         {
             return this.toString();
         }

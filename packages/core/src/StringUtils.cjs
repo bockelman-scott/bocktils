@@ -2241,17 +2241,17 @@ const { _ud = "undefined", $scope } = constants;
         let path = asString( pPath, true );
 
         // replace any newline characters with a space character
-        path = path.replace( /(\r\n)|(\n)/g, _spc );
+        path = path.replaceAll( /(\r\n)|(\n)/g, _spc );
 
         // replace backslash with forward slash
         // and replace any duplicated path separators with a single separator
-        path = path.replace( /[\\\/]/g, "/" ).replace( /\/\//g, "/" );
+        path = path.replaceAll( /[\\\/]/g, "/" ).replace( /\/\//g, "/" );
 
         // escape any spaces in the path name
-        path = path.replace( / /g, "\ " );
+        path = path.replaceAll( / /g, "\ " );
 
         // replace any duplicated path separators with a single separator
-        path = path.replace( /\/\//g, "/" );
+        path = path.replaceAll( /\/\//g, "/" );
 
         return path.trim();
     };

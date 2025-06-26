@@ -1632,7 +1632,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             {
                 return pDefault;
             }
-            return isObj( pValue ) ? isArray( pValue ) ? [...pValue] : isMap( pValue ) ? new Map( pValue ) : isSet( pValue ) ? new Set( pValue ) : isRegExp( pValue ) ? pValue : isDate( pValue ) ? new Date( pValue ) : Object.assign( {}, pValue ) : pValue;
+            return isObj( pValue ) ? (isArray( pValue ) ? [...pValue] : isMap( pValue ) ? new Map( pValue ) : isSet( pValue ) ? new Set( pValue ) : isRegExp( pValue ) ? pValue : isDate( pValue ) ? new Date( pValue ) : pValue) : pValue;
         }
 
         merge( pObjA, pObjB, pVisited = new Map(), pStack = [] )
@@ -6011,6 +6011,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         return visitor;
     };
+
+    //TODO: replace with WeakMap strategy: https://docs.google.com/document/d/1siJ2KsSa32-n9d347UsAmYbzJKimQMwnlPwhFZACFjI/edit?tab=t.0
 
     const crypto = $scope().crypto || ((isDeno() && _ud !== typeof Deno) ? Deno.crypto : attempt( () => require( "node:crypto" ) )) || attempt( () => require( "crypto" ) );
 
