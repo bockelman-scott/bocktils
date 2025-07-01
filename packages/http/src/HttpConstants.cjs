@@ -14,6 +14,7 @@
  * Constants, TypeUtils, StringUtils, and ArrayUtils
  */
 const core = require( "@toolbocks/core" );
+const entityUtils = require( "../../common/src/EntityUtils.js" );
 
 /**
  * Establish separate constants for each of the common utilities imported
@@ -59,13 +60,25 @@ const {
             arrayUtils
         };
 
-
     const { ModuleEvent, ToolBocksModule, ObjectEntry, objectEntries, lock } = moduleUtils;
 
-    const {_str } = constants;
+    const { _str } = constants;
+
+    const { isNonNullObject, isString, isNumeric } = typeUtils;
 
     const { asString, asInt, lcase, ucase, capitalize } = stringUtils;
 
+    const
+        {
+            BockEntity,
+            BockIdentified,
+            BockNamed,
+            BockDescribed,
+            populateProperties,
+            overwriteProperties,
+            asObject,
+            same
+        } = entityUtils;
 
     const modName = "HttpConstants";
 
@@ -90,24 +103,24 @@ const {
      * - CONNECT: Represents an HTTP CONNECT request, typically used to establish a tunnel to the server.<br>
      * - TRACE: Represents an HTTP TRACE request, typically used for testing and diagnostic purposes.<br>
      */
-    const VERBS =
+    const VERBS = lock(
         {
-            GET: "GET",
-            POST: "POST",
-            PUT: "PUT",
-            PATCH: "PATCH",
-            HEAD: "HEAD",
-            OPTIONS: "OPTIONS",
-            DELETE: "DELETE",
-            CONNECT: "CONNECT",
-            TRACE: "TRACE"
-        };
+            GET: "GET", /* 0 */
+            POST: "POST", /* 1 */
+            PUT: "PUT", /* 2 */
+            PATCH: "PATCH", /* 3 */
+            HEAD: "HEAD", /* 4 */
+            OPTIONS: "OPTIONS", /* 6 */
+            DELETE: "DELETE", /* 7 */
+            CONNECT: "CONNECT", /* 8 */
+            TRACE: "TRACE" /* 9 */
+        } );
 
     /**
      * Represents an HTTP verb and provides utility methods related to it.
      * @class
      */
-    class HttpVerb extends ModuleEvent
+    class HttpVerb extends BockNamed
     {
         #verb;
 
@@ -119,8 +132,8 @@ const {
          */
         constructor( pVerb )
         {
-            super();
-            this.#verb = ucase( pVerb );
+            super( Object.values( VERBS ).map( lcase ).indexOf( lcase( asString( pVerb, true ) ) ), asString( pVerb, true ) );
+            this.#verb = ucase( asString( pVerb, true ) );
         }
 
         /**
@@ -128,12 +141,12 @@ const {
          *
          * @return {boolean} Returns true if the HTTP verb is POST, PUT, or PATCH; otherwise, false.
          */
-        requiresBody()
+        get requiresBody()
         {
             return ["POST", "PUT", "PATCH"].includes( ucase( this.#verb ) );
         }
 
-        forbidBody()
+        get forbidsBody()
         {
             return ["GET", "HEAD", "OPTIONS", "DELETE"].includes( ucase( this.#verb ) );
         }
@@ -141,8 +154,56 @@ const {
 
     Object.entries( VERBS ).forEach( ( [key, value] ) =>
                                      {
-                                         HttpVerb[key] = new HttpVerb( value );
+                                         HttpVerb[ucase( key )] = new HttpVerb( value );
                                      } );
+
+    HttpVerb.resolveHttpMethod = function( pMethod )
+    {
+        if ( isString( pMethod ) )
+        {
+            return ((VERBS.values()).map( ucase )).includes( ucase( pMethod ) ) ? pMethod : "GET";
+        }
+
+        if ( isNonNullObject( pMethod ) )
+        {
+            if ( pMethod instanceof HttpVerb )
+            {
+                return pMethod.name;
+            }
+        }
+
+        if ( isNumeric( pMethod ) )
+        {
+            const values = Object.values( VERBS );
+            const index = asInt( pMethod );
+
+            return index >= 0 && index < values.length ? values[index] : "GET";
+        }
+
+        return "GET";
+    };
+
+    HttpVerb.resolve = function( pVal )
+    {
+        if ( isNonNullObject( pVal ) )
+        {
+            if ( pVal instanceof HttpVerb )
+            {
+                return pVal;
+            }
+
+            const httpMethod = HttpVerb.resolveHttpMethod( pVal?.method );
+            return HttpVerb[httpMethod] || HttpVerb[ucase( httpMethod )];
+        }
+
+        if ( isString( pVal ) || isNumeric( pVal ) )
+        {
+            let httpMethod = HttpVerb.resolveHttpMethod( pVal );
+            return HttpVerb[httpMethod] || HttpVerb[ucase( httpMethod )];
+        }
+
+        return HttpVerb["GET"];
+    };
 
     const MODES = lock(
         {
@@ -157,6 +218,21 @@ const {
                                HIGH: "high",
                                AUTO: "auto"
                            } );
+
+    function calculatePriority( pRequest, pConfig )
+    {
+        let priority = pRequest?.priority || pConfig?.priority || PRIORITY.AUTO;
+        if ( isNumeric( priority ) )
+        {
+            priority = asInt( priority );
+            return priority < 0 ? PRIORITY.LOW : priority > 0 ? PRIORITY.HIGH : PRIORITY.AUTO;
+        }
+        else if ( isString( priority ) )
+        {
+            return PRIORITY[ucase( asString( priority, true ) )] || PRIORITY.AUTO;
+        }
+        return PRIORITY.AUTO;
+    }
 
 
     /**
@@ -363,12 +439,23 @@ const {
             INSUFFICIENT_STORAGE: 507,
             LOOP_DETECTED: 508,
             NOT_EXTENDED: 510,
-            NETWORK_AUTHENTICATION_REQUIRED: 511
+            NETWORK_AUTHENTICATION_REQUIRED: 511,
+
+            CLIENT_ERROR: 666
         };
 
-    const STATUS_TEXT = {};
+    /**
+     * Holds an object whose keys as the integer values of status values
+     * and whose values are the text associated with that status
+     * @type {Object}
+     */
+    const STATUS_TEXT_BY_CODE_STRING = {};
 
-    const STATUS_TEXT_ARRAY = [];
+    /**
+     *
+     * @type {*[]}
+     */
+    const STATUS_TEXT_BY_INT_VALUE = [];
 
     /**
      * Represents an HTTP status with its numeric code and textual name.
@@ -377,27 +464,20 @@ const {
      * <br>
      * @class
      */
-    class HttpStatus extends ModuleEvent
+    class HttpStatus extends BockNamed
     {
         #code;
-        #name;
 
         constructor( pCode, pText )
         {
-            super();
+            super( asInt( pCode ), asString( pText || STATUS_TEXT_BY_CODE_STRING[asString( pCode )], true ) );
 
             this.#code = asInt( pCode );
-            this.#name = asString( pText || STATUS_TEXT[asString( this.#code )], true );
         }
 
         get code()
         {
             return asInt( this.#code );
-        }
-
-        get name()
-        {
-            return asString( this.#name, true );
         }
 
         isInformational()
@@ -412,7 +492,16 @@ const {
 
         isRedirection()
         {
-            return this.code >= 300 && this.code < 400;
+            return this.code >= 300 &&
+                   this.code < 400 &&
+                   [
+                       STATUS_CODES.MOVED,
+                       STATUS_CODES.MOVED_PERMANENTLY,
+                       STATUS_CODES.FOUND,
+                       STATUS_CODES.SEE_OTHER,
+                       STATUS_CODES.TEMPORARY_REDIRECT,
+                       STATUS_CODES.PERMANENT_REDIRECT
+                   ].includes( this.code );
         }
 
         isRedirect()
@@ -439,6 +528,11 @@ const {
         {
             return this.code === 200;
         }
+
+        isValid()
+        {
+            return this.isOk() || [STATUS_CODES.OK, STATUS_CODES.ACCEPTED, STATUS_CODES.CREATED, STATUS_CODES.NO_CONTENT].includes( this.code );
+        }
     }
 
     objectEntries( STATUS_CODES ).forEach( ( entry ) =>
@@ -446,11 +540,35 @@ const {
                                                const name = ObjectEntry.getKey( entry );
                                                const code = ObjectEntry.getValue( entry );
 
-                                               STATUS_TEXT[asString( code, true )] = name;
-                                               STATUS_TEXT_ARRAY[asInt( code )] = name;
+                                               STATUS_TEXT_BY_CODE_STRING[asString( code, true )] = name;
+                                               STATUS_TEXT_BY_INT_VALUE[asInt( code )] = name;
 
                                                HttpStatus[name] = new HttpStatus( code, capitalize( name ).replace( /http/i, "HTTP" ) );
                                            } );
+
+    HttpStatus.fromResponse = function( pResponse )
+    {
+        let code = pResponse?.status || pResponse?.status?.code;
+        let text = pResponse.statusText || pResponse?.status?.name;
+
+        return new HttpStatus( code, text );
+    };
+
+    HttpStatus.fromCode = function( pCode )
+    {
+        const id = asInt( pCode, -1 );
+        const code = asString( pCode, true );
+
+        if ( id > 0 )
+        {
+            let text = STATUS_TEXT_BY_INT_VALUE[id];
+            return new HttpStatus( id, text );
+        }
+        else
+        {
+            return new HttpStatus( code, STATUS_TEXT_BY_CODE_STRING[code] );
+        }
+    };
 
     /**
      * Represents an HTTP header with a name, description, and category.<br>
@@ -498,7 +616,7 @@ const {
             {
                 return this.toString();
             }
-            return this.toString()
+            return this.toString();
         }
     }
 
@@ -723,31 +841,31 @@ const {
                                             } );
 
     class HttpHeader
+    {
+        #definition;
+        #value;
+
+        constructor( pDefinition, pValue )
         {
-            #definition;
-            #value;
-
-            constructor( pDefinition, pValue )
-            {
-                this.#definition = pDefinition;
-                this.#value = pValue;
-            }
-
-            get definition()
-            {
-                return this.#definition;
-            }
-
-            get value()
-            {
-                return this.#value;
-            }
-
-            get name()
-            {
-                return this.definition?.name || asString( this.definition );
-            }
+            this.#definition = pDefinition;
+            this.#value = pValue;
         }
+
+        get definition()
+        {
+            return this.#definition;
+        }
+
+        get value()
+        {
+            return this.#value;
+        }
+
+        get name()
+        {
+            return this.definition?.name || asString( this.definition );
+        }
+    }
 
     const isVerb = ( pVerb ) => pVerb instanceof HttpVerb || Object.values( VERBS ).map( lcase ).includes( lcase( asString( pVerb, true ) ) );
 
@@ -755,7 +873,7 @@ const {
 
     const isContentType = ( pContentType ) => pContentType instanceof HttpContentType || Object.keys( HttpContentType ).map( lcase ).includes( lcase( asString( pContentType, true ) ) );
 
-    const isHttpStatus = ( pStatus ) => pStatus instanceof HttpStatus || Object.keys( STATUS_TEXT ).map( lcase ).includes( lcase( asString( pStatus, true ) ) );
+    const isHttpStatus = ( pStatus ) => pStatus instanceof HttpStatus || Object.keys( STATUS_TEXT_BY_CODE_STRING ).map( lcase ).includes( lcase( asString( pStatus, true ) ) );
 
     HttpContentType.isContentType = isContentType;
 
@@ -770,12 +888,13 @@ const {
                 {
                     HttpVerb,
                     HttpHeaderDefinition,
+                    HttpHeader,
                     HttpStatus,
                     HttpContentType,
                 },
             STATUS_CODES,
-            STATUS_TEXT,
-            STATUS_TEXT_ARRAY,
+            STATUS_TEXT: STATUS_TEXT_BY_CODE_STRING,
+            STATUS_TEXT_ARRAY: STATUS_TEXT_BY_INT_VALUE,
             VERBS,
             MODES,
             PRIORITY,
@@ -784,11 +903,17 @@ const {
             HTTP_HEADERS,
             HttpVerb,
             HttpHeaderDefinition,
+            HttpHeader,
             HttpStatus,
             HttpContentType,
             isVerb,
             isHeader,
             isContentType,
+            resolveHttpMethod: function( pMethod )
+            {
+                return HttpVerb.resolveHttpMethod( pMethod );
+            },
+            calculatePriority
         };
 
     mod = toolBocksModule.extend( mod );

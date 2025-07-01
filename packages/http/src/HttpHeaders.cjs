@@ -17,6 +17,8 @@
  */
 const core = require( "@toolbocks/core" );
 
+const objectUtils = require( "../../common/src/ObjectUtils.js" );
+
 // import the HTTP constants
 const httpConstants = require( "./HttpConstants.cjs" );
 
@@ -82,13 +84,50 @@ const {
 
     const { asString, isBlank } = stringUtils;
 
-    const { isHeader } = httpConstants;
+    const { asObject } = objectUtils;
 
+    const { isHeader } = httpConstants;
 
     const modName = "HttpHeaders";
 
     const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
+    const DEFAULT_EXPIRATION_HEADER = "x-expiration-timestamp";
+
+    const FORBIDDEN_REQUEST_HEADER_NAMES =
+        [
+            "Accept-Charset",
+            "Accept-Encoding",
+            "Access-Control-Request-Headers",
+            "Access-Control-Request-Method",
+            "Connection",
+            "Content-Length",
+            "Cookie",
+            "Cookie2",
+            "Date",
+            "DNT",
+            "Expect",
+            "Host",
+            "Keep-Alive",
+            "Origin",
+            "Referer",
+            "Set-Cookie",
+            "TE",
+            "Trailer",
+            "Transfer-Encoding",
+            "Upgrade",
+            "Via",
+            "Sec-",
+            "Proxy-",
+            "X-HTTP-Method",
+            "X-HTTP-Method-Override",
+            "X-Method-Override"
+        ];
+
+    const FORBIDDEN_RESPONSE_HEADER_NAMES = ["Set-Cookie", "Set-Cookie2"];
+
+    const FORBIDDEN_REQUEST_HEADERS = lock( [...FORBIDDEN_REQUEST_HEADER_NAMES, ...(FORBIDDEN_REQUEST_HEADER_NAMES.map( e => e.toLowerCase() ))] );
+    const FORBIDDEN_RESPONSE_HEADERS = lock( [...FORBIDDEN_RESPONSE_HEADER_NAMES, ...(FORBIDDEN_RESPONSE_HEADER_NAMES.map( e => e.toLowerCase() ))] );
 
     function isWebApiHeadersObject( pObject )
     {
@@ -109,7 +148,9 @@ const {
     {
         let options = {};
 
-        for( const pair of pOptions )
+        let input = asObject( pOptions );
+
+        for( const pair of input )
         {
             if ( isArray( pair ) && (pair.length > 0) )
             {
@@ -133,15 +174,14 @@ const {
 
     function processRequestHeaderOptions( pOptions )
     {
-        /*
-         An object containing any HTTP headers that you want to pre-populate your Headers object with.
-         This can be a simple object literal with String values,
-         an array of name-value pairs, where each pair is a 2-element string array;
-         or an existing Headers object.
-
-         In the last case, the new Headers object copies its data from the existing Headers object.
+        /**
+         * An object containing any HTTP headers that you want to pre-populate your Headers object with.
+         * This can be a simple object literal with String values,
+         * an array of name-value pairs, where each pair is a 2-element array of strings,
+         * or an existing Headers object.
+         *
+         * In the last case, the new Headers object copies its data from the existing Headers object.
          */
-
         if ( isNull( pOptions ) )
         {
             return {};
@@ -200,7 +240,7 @@ const {
 
         delete( pKey )
         {
-            attempt( () => super.delete( pKey ) );
+            return attempt( () => super.delete( pKey ) );
         }
 
         get( pKey )
@@ -281,6 +321,10 @@ const {
                     HttpRequestHeaders,
                     HttpResponseHeaders
                 },
+            FORBIDDEN_REQUEST_HEADER_NAMES,
+            FORBIDDEN_RESPONSE_HEADER_NAMES,
+            FORBIDDEN_REQUEST_HEADERS,
+            FORBIDDEN_RESPONSE_HEADERS,
             HttpRequestHeaders,
             HttpResponseHeaders,
             processRequestHeaderOptions

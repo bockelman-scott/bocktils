@@ -4415,6 +4415,69 @@ const $scope = constants?.$scope || function()
             return null;
         }
 
+        indexOf( pElem )
+        {
+            let index = -1;
+
+            const arr = asArray( this.#arr || [] );
+
+            for( let i = 0, n = $ln( arr ); i < n; i++ )
+            {
+                const elem = arr[i];
+                if ( pElem === elem || (isFunction( elem.equals ) && elem.equals( pElem )) )
+                {
+                    index = i;
+                    break;
+                }
+                else if ( isNonNullValue( elem?.id ) && (asInt( elem?.id, -1 ) === asInt( pElem?.id, 2 )) )
+                {
+                    index = i;
+                    break;
+                }
+            }
+
+            return index;
+        }
+
+        lastIndexOf( pElem )
+        {
+            let index = -1;
+
+            const arr = asArray( this.#arr || [] );
+
+            for( let i = $ln( arr ); i--; )
+            {
+                const elem = arr[i];
+                if ( pElem === elem || (isFunction( elem.equals ) && elem.equals( pElem )) )
+                {
+                    index = i;
+                    break;
+                }
+                else if ( isNonNullValue( elem?.id ) && (asInt( elem?.id, -1 ) === asInt( pElem?.id, 2 )) )
+                {
+                    index = i;
+                    break;
+                }
+            }
+
+            return index;
+        }
+
+        findById( pId )
+        {
+            let id = asInt( pId );
+
+            for( let elem of asArray( this.#arr || [] ) )
+            {
+                if ( asInt( elem?.id ) === id )
+                {
+                    return elem;
+                }
+            }
+
+            return null;
+        }
+
         get state()
         {
             return {

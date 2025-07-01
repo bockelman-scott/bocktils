@@ -1478,6 +1478,11 @@ const { _ud = "undefined", $scope } = constants;
         }
     }
 
+    function asObject( pObject )
+    {
+        return isNonNullObject( pObject ) || isArray( pObject ) ? pObject : attempt( () => parseJson( asString( pObject, true ) ) );
+    }
+
     let mod =
         {
             dependencies,
@@ -1525,7 +1530,8 @@ const { _ud = "undefined", $scope } = constants;
             tracePathTo,
             lock,
             deepFreeze,
-            cherryPick
+            cherryPick,
+            asObject
         };
 
     mod = modulePrototype.extend( mod );

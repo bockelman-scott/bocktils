@@ -130,10 +130,18 @@ const {
         HttpContentType,
         HttpStatus,
         HttpHeaderDefinition,
-        isHeader
+        isHeader,
+        resolveHttpMethod
     } = httpConstants;
 
-    const { HttpRequestHeaders } = httpHeaders;
+    const
+        {
+            FORBIDDEN_REQUEST_HEADER_NAMES,
+            FORBIDDEN_RESPONSE_HEADER_NAMES,
+            FORBIDDEN_REQUEST_HEADERS,
+            FORBIDDEN_RESPONSE_HEADERS,
+            HttpRequestHeaders
+        } = httpHeaders;
 
     const {
         TextEncoder = (_ud === typeof TextDecoder) ? $scope().TextEncoder : TextEncoder,
@@ -209,45 +217,8 @@ const {
 
     if ( _ud === typeof ReadableStream )
     {
-        ReadableStream = $scope().ReadableStream || bufferUtils?.ReadableStream || (_isNode && isFunction( require ) ? require( "stream" ).Readable : null);
+        ReadableStream = attempt( () => $scope().ReadableStream || bufferUtils?.ReadableStream || (_isNode && isFunction( require ) ? require( "stream" ).Readable : null) );
     }
-
-    const DEFAULT_EXPIRATION_HEADER = "x-expiration-timestamp";
-
-    const FORBIDDEN_REQUEST_HEADER_NAMES =
-        [
-            "Accept-Charset",
-            "Accept-Encoding",
-            "Access-Control-Request-Headers",
-            "Access-Control-Request-Method",
-            "Connection",
-            "Content-Length",
-            "Cookie",
-            "Cookie2",
-            "Date",
-            "DNT",
-            "Expect",
-            "Host",
-            "Keep-Alive",
-            "Origin",
-            "Referer",
-            "Set-Cookie",
-            "TE",
-            "Trailer",
-            "Transfer-Encoding",
-            "Upgrade",
-            "Via",
-            "Sec-",
-            "Proxy-",
-            "X-HTTP-Method",
-            "X-HTTP-Method-Override",
-            "X-Method-Override"
-        ];
-
-    const FORBIDDEN_RESPONSE_HEADER_NAMES = ["Set-Cookie", "Set-Cookie2"];
-
-    const FORBIDDEN_REQUEST_HEADERS = lock( [...FORBIDDEN_REQUEST_HEADER_NAMES, ...(FORBIDDEN_REQUEST_HEADER_NAMES.map( e => e.toLowerCase() ))] );
-    const FORBIDDEN_RESPONSE_HEADERS = lock( [...FORBIDDEN_RESPONSE_HEADER_NAMES, ...(FORBIDDEN_RESPONSE_HEADER_NAMES.map( e => e.toLowerCase() ))] );
 
     let MIME_TYPES_BY_EXTENSION = new Map();
 
@@ -353,17 +324,21 @@ const {
      */
     const calculateBaseUrl = function( pFrom )
     {
+        const doc = (_ud === typeof document) ? { URL: __dirname } : document;
         const s = asString( pFrom || document.URL || _mt_str, true ).replaceAll( /[\s ]/gi, "+" ).replaceAll( /\\/gi, "/" );
         return asString( s.replace( /\?\w+$/, _mt_str ).replace( /#\w+$/, _mt_str ), true );
     };
 
     /**
-     * Returns the query string portion of a url or the empty string there is no query string
+     * Returns the query string portion of a url or the empty string if there is no query string
      * @param pUrl - url text on which to operate; if not specified, uses document.URL property in scope
      */
     const getQueryString = function( pUrl )
     {
-        const url = asString( asString( pUrl || document.URL || _mt_str, true ).replaceAll( /[\s ]/gi, "+" ).replaceAll( /\\/gi, "/" ), true );
+        const doc = (_ud === typeof document) ? { URL: __dirname } : document;
+
+        const url = asString( asString( pUrl || doc.URL || _mt_str, true ).replaceAll( /[\s ]/gi, "+" ).replaceAll( /\\/gi, "/" ), true );
+
         return asString( url.includes( "?" ) ? url.replace( /^[^?]+\??/, _mt_str ) : _mt_str, true );
     };
 
@@ -427,6 +402,7 @@ const {
                 if ( entry )
                 {
                     entry.push( ...flatArray );
+                    map.set( name, entry );
                 }
                 else
                 {
@@ -463,7 +439,7 @@ const {
         {
             let base = calculateBaseUrl( pBase ).replaceAll( /\\/gi, "/" );
 
-            const dirs = base.split( "/" );
+            const dirs = base.split( "/" ).filter( e => !isBlank( e ) && !(_dot === asString( e, true )) );
 
             while ( url.startsWith( "../" ) && !isBlank( base ) && dirs.length > 0 )
             {
@@ -471,17 +447,22 @@ const {
                 base = base.replace( new RegExp( dirs.pop() + "\\/?$" ), _mt_str );
             }
 
-            url = asString( (base || calculateBaseUrl()) + "/" + url );
+            url = cleanUrl( asString( (base || calculateBaseUrl()) + "/" + url ) );
         }
 
         return asString( url, true );
     };
 
+    /**
+     * Provides the same interface and behavior as the URL object.
+     * If URL is undefined in the execution context,
+     * this object will be assigned to the global namespace as URL
+     */
     class SearchParams extends Map
     {
         constructor( pParams )
         {
-            super();
+            super( pParams );
 
             if ( isString( pParams ) && !isBlank( pParams ) )
             {
@@ -494,8 +475,7 @@ const {
                     this.append( key, value );
                 }
             }
-
-            if ( isNonNullObject( pParams ) )
+            else if ( isNonNullObject( pParams ) )
             {
                 const entries = isFunction( pParams?.entries ) ? pParams.entries() : Object.entries( pParams );
 
@@ -510,19 +490,21 @@ const {
         {
             const name = asString( pName, true );
 
-            const value = isArray( pValue ) ? [...pValue] : [asString( pValue )];
-
-            const existing = super.get( name );
-
-            const flatArray = asArray( value ).flat().map( e => urlDecode( asString( e, true ) ) );
+            let existing = super.get( name );
 
             if ( existing )
             {
+                existing = isArray( existing ) ? existing : asArray( existing );
+
+                const value = isArray( pValue ) ? [...pValue] : [asString( pValue )];
+                const flatArray = asArray( value ).flat().map( e => urlDecode( asString( e, true ) ) );
+                existing = asArray( existing );
                 existing.push( ...flatArray );
+                this.set( name, existing );
             }
             else
             {
-                super.set( name, flatArray );
+                super.set( name, asArray( pValue ) );
             }
         }
 
@@ -612,8 +594,6 @@ const {
             {
                 this.set( key, values );
             }
-
-            return temp;
         }
 
         toString()
@@ -632,6 +612,16 @@ const {
         }
     }
 
+    if ( _ud === typeof URLSearchParams )
+    {
+        URLSearchParams = SearchParams;
+    }
+
+    /**
+     * Provides the same interface and behavior as the URL object.
+     * If URL is undefined in the execution context,
+     * this class will be assigned to the global namespace as URL
+     */
     class HttpUrl
     {
         #url;
@@ -651,7 +641,7 @@ const {
 
         constructor( pUrl )
         {
-            this.#url = pUrl;
+            this.#url = cleanUrl( isString( pUrl ) ? cleanUrl( asString( pUrl, true ) ) : (isNonNullObject( pUrl ) ? pUrl?.href || (isFunction( pUrl?.toString ) ? pUrl.toString() : asString( pUrl, true )) : _mt_str) );
 
             const parsed = HttpUrl.parse( pUrl );
 
@@ -668,9 +658,14 @@ const {
             this.#href = parsed.href;
         }
 
-        get url()
+        get URL()
         {
             return !isNull( this.#url ) ? isObject( this.#url ) ? this.#url : this : new HttpUrl( this.#href );
+        }
+
+        get url()
+        {
+            return cleanUrl( isString( this.#url ) ? cleanUrl( asString( this.#url, true ) ) : (isNonNullObject( this.#url ) ? this.#url?.href || (isFunction( this.#url?.toString ) ? this.#url.toString() : asString( this.#url, true )) : _mt_str) );
         }
 
         get protocol()
@@ -824,6 +819,11 @@ const {
         };
     }
 
+    if ( _ud === typeof URL )
+    {
+        URL = HttpUrl;
+    }
+
     function determinePort( pProtocol, pPort )
     {
         return pPort ? parseInt( pPort, 10 ) : PROTOCOL_PORTS[asString( pProtocol, true )] || PROTOCOL_PORTS.default;
@@ -904,26 +904,31 @@ const {
 
     class HttpRequestOptions
     {
-        #body;
+        #method;
+        #headers;
 
+        #body;
         #bodyAsTypedArray;
         #bodyAsArrayBuffer;
 
         #cache;
-        #credentials;
-        #headers;
-        #integrity;
-        #keepalive;
-        #method;
         #mode;
+
+        #keepalive;
+
+        #credentials;
+        #integrity;
         #priority;
         #redirect;
+
         #referrer;
         #referrerPolicy;
+
         #abortController;
         #signal;
         #timeout;
 
+        // noinspection OverlyComplexFunctionJS,FunctionTooLongJS
         constructor( pBody = _mt_str,
                      pCache = REQUEST_CACHE_OPTIONS.DEFAULT,
                      pCredentials = REQUEST_CREDENTIALS_OPTIONS.SAME_ORIGIN,
@@ -942,7 +947,7 @@ const {
         {
             if ( pBody instanceof this.constructor )
             {
-                this.#body = this.#body = (((new HttpVerb( this.#method )).forbidBody()) ? null : pBody.body);
+                this.#body = this.#body = (((new HttpVerb( this.#method )).forbidsBody) ? null : pBody.body);
 
                 this.#headers = new HttpRequestHeaders( pBody.headers );
 
@@ -979,12 +984,17 @@ const {
             this.#signal = pSignal;
             this.#timeout = pTimeout;
 
-            this.#body = (((new HttpVerb( this.#method )).forbidBody()) ? null : pBody); //////
+            this.#body = (((new HttpVerb( this.#method )).forbidsBody) ? null : pBody);
         }
 
         get body()
         {
             return this.#body;
+        }
+
+        get data()
+        {
+            return this.body;
         }
 
         get cache()
@@ -1109,6 +1119,8 @@ const {
     class HttpRequest extends EventTarget
     {
         #id = 0;
+        #priority = 0;
+
         #options;
 
         #url;
@@ -1121,9 +1133,11 @@ const {
         {
             super();
 
-            this.#id = this.#id || this.constructor.nextId();
+            this.#options = populateOptions( pOptions || {}, toObjectLiteral( new HttpRequestOptions( pOptions ) ) );
 
-            this.#options = new HttpRequestOptions( pOptions );
+            this.#id = this.options?.id || this.constructor.nextId();
+
+            this.#priority = asInt( this.options?.priority );
 
             this.#url = isString( pRequestOrUrl ) ? new HttpUrl( pRequestOrUrl ) : new HttpUrl( pRequestOrUrl?.url || pRequestOrUrl?.href || asString( pRequestOrUrl ) );
 
@@ -1136,52 +1150,154 @@ const {
             this.#body = this.#request?.body || this.#request?.data;
         }
 
-        resolveRequest( pRequestOrUrl )
+        get id()
         {
+            return asInt( this.#id );
+        }
+
+        get options()
+        {
+            return populateOptions( this.#options, toObjectLiteral( new HttpRequestOptions() ) );
+        }
+
+        get url()
+        {
+            return cleanUrl( asString( isNonNullObject( this.#url ) ? this.#url?.href || (isFunction( this.#url?.toString ) ? asString( this.#url.toString(), true ) : asString( this.#url )) : this.#url, true ) );
+        }
+
+        get URL()
+        {
+            if ( isNonNullObject( this.#url ) )
+            {
+                if ( _ud !== typeof URL )
+                {
+                    if ( this.#url instanceof URL )
+                    {
+                        return URL;
+                    }
+                    else
+                    {
+                        return URL.parse( cleanUrl( this.#url?.href || isFunction( this.#url?.toString ) ? asString( this.#url?.toString(), true ) : asString( this.#url ) ) );
+                    }
+                }
+            }
+            else if ( isString( this.#url ) )
+            {
+                if ( _ud !== typeof URL )
+                {
+                    return URL.parse( cleanUrl( asString( this.#url ) ) );
+                }
+                else
+                {
+                    return new HttpUrl( cleanUrl( asString( this.#url ) ) );
+                }
+            }
+        }
+
+        get request()
+        {
+            return this.resolveRequest( this.#request ) || this;
+        }
+
+        get response()
+        {
+            return this.#response;
+        }
+
+        get body()
+        {
+            return this.#body;
+        }
+
+        get priority()
+        {
+            return asInt( this.#priority );
+        }
+
+        resolveRequest( pRequestOrUrl, pConfig )
+        {
+            let req = null;
+
             if ( _ud !== typeof Request )
             {
-                if ( pRequestOrUrl instanceof Request )
+                req = this.requestFromW3cRequest( pRequestOrUrl, pConfig );
+            }
+
+            if ( isNull( req ) )
+            {
+                if ( isNonNullObject( pRequestOrUrl ) )
                 {
-                    return cloneRequest( pRequestOrUrl );
+                    let method = resolveHttpMethod( pRequestOrUrl?.method || pConfig?.method || pRequestOrUrl );
+
+                    if ( !(isNull( pRequestOrUrl?.url ) && pRequestOrUrl?.href) )
+                    {
+                        if ( isBlank( pRequestOrUrl.method ) )
+                        {
+                            pRequestOrUrl.method = asString( method, true ) || "GET";
+                        }
+                        return pRequestOrUrl;
+                    }
                 }
 
-                switch ( typeof pRequestOrUrl )
+                if ( isFunction( pRequestOrUrl ) )
                 {
-                    case _str:
-                        return new Request( pRequestOrUrl || this.#url );
-                    case _obj:
-                        return new Request( pRequestOrUrl?.url || this.#url );
-                    case _fun:
-                        return new Request( attempt( () => pRequestOrUrl() ) || this.#url );
-                    default:
-                        return {};
+                    return attempt( () => pRequestOrUrl( pConfig ) );
+                }
+
+                if ( isString( pRequestOrUrl ) )
+                {
+                    return {
+                        url: cleanUrl( asString( pRequestOrUrl, true ) ),
+                        href: cleanUrl( asString( pRequestOrUrl, true ) ),
+                        method: "GET"
+                    };
                 }
             }
 
-            if ( isNonNullObject( pRequestOrUrl ) )
+            return {};
+        }
+
+        requestFromW3cRequest( pRequestOrUrl, pConfig )
+        {
+            if ( pRequestOrUrl instanceof Request )
             {
-                return pRequestOrUrl;
+                return cloneRequest( pRequestOrUrl );
             }
 
-            if ( isFunction )
+            let config = populateOptions( pConfig || {}, {} );
+
+            let method = resolveHttpMethod( config?.method || isObject( pRequestOrUrl ) ? pRequestOrUrl?.method : _mt_str );
+
+            let req = pRequestOrUrl;
+
+            switch ( typeof pRequestOrUrl )
             {
-                return attempt( () => pRequestOrUrl() );
+                case _str:
+                    req = new Request( pRequestOrUrl || this.#url, pConfig );
+                    break;
+
+                case _obj:
+                    req = new Request( pRequestOrUrl?.url || this.#url, pConfig );
+                    break;
+
+                case _fun:
+                    req = new Request( attempt( () => pRequestOrUrl() ) || this.#url, pConfig );
+                    break;
+
+                default:
+                    req = {};
+                    break;
             }
 
-            if( isString( pRequestOrUrl ) )
-            {
-                return {
-                    url: asString( pRequestOrUrl, true ),
+            req.method = req.method || method;
 
-                }
-            }
-
+            return req;
         }
     }
 
     HttpRequest.resolve = function( pRequestOrUrl, pOptions )
     {
-        const options = populateOptions( pOptions, toObjectLiteral( new HttpRequestOptions( pRequestOrUrl?.options ) ) );
+        const options = populateOptions( pOptions || {}, toObjectLiteral( new HttpRequestOptions( pRequestOrUrl?.options || {} ) ) );
 
         if ( pRequestOrUrl instanceof HttpRequest )
         {

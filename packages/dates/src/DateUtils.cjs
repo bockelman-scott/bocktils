@@ -48,6 +48,7 @@ const { _ud = "undefined", $scope } = constants;
         isNull,
         isString,
         isDate,
+        isDateString,
         isNumber,
         isNumeric,
         isFunction,
@@ -78,6 +79,10 @@ const { _ud = "undefined", $scope } = constants;
     const rxTz = () => /((GMT|UTC)([+-])?(\d{1,2})?:?(\d{2})?)|(((\w+ )*)(Time)?$)/gd;
 
     let resolveDate = ( pDate ) => isDate( pDate ) ? pDate : isNumeric( pDate ) ? new Date( asInt( pDate ) ) : Now();
+
+    const asDate = ( pVal ) => resolveDate( ( !isNull( pVal ) && (isDate( pVal ) || isDateString( pVal ))) ? new Date( pVal || new Date() ) || new Date() : new Date() );
+
+    const daysAgo = ( pDays = 1 ) => new Date( new Date().getTime() - (ONE_DAY * Math.max( 1, asInt( pDays ) )) );
 
     const DATE_PARTS =
         {
