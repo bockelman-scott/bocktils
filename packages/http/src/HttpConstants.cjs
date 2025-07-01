@@ -445,15 +445,17 @@ const {
         };
 
     /**
-     * Holds an object whose keys as the integer values of status values
+     * Holds an object whose keys are the string values of statuses
      * and whose values are the text associated with that status
      * @type {Object}
      */
     const STATUS_TEXT_BY_CODE_STRING = {};
 
+
     /**
-     *
-     * @type {*[]}
+     * Holds an object whose keys are the integer values of statuses
+     * and whose values are the text associated with that status
+     * @type {Object}
      */
     const STATUS_TEXT_BY_INT_VALUE = [];
 
@@ -470,7 +472,7 @@ const {
 
         constructor( pCode, pText )
         {
-            super( asInt( pCode ), asString( pText || STATUS_TEXT_BY_CODE_STRING[asString( pCode )], true ) );
+            super( asInt( pCode ), asString( pText || STATUS_TEXT_BY_CODE_STRING[ucase( asString( pCode, true ) )], true ) );
 
             this.#code = asInt( pCode );
         }
@@ -509,6 +511,11 @@ const {
             return this.isRedirection();
         }
 
+        isUseCached()
+        {
+            return [STATUS_CODES.NOT_MODIFIED].includes( asInt( this.code ) );
+        }
+
         isError()
         {
             return this.code >= 400;
@@ -540,7 +547,7 @@ const {
                                                const name = ObjectEntry.getKey( entry );
                                                const code = ObjectEntry.getValue( entry );
 
-                                               STATUS_TEXT_BY_CODE_STRING[asString( code, true )] = name;
+                                               STATUS_TEXT_BY_CODE_STRING[ucase( asString( code, true ) )] = name;
                                                STATUS_TEXT_BY_INT_VALUE[asInt( code )] = name;
 
                                                HttpStatus[name] = new HttpStatus( code, capitalize( name ).replace( /http/i, "HTTP" ) );
@@ -566,7 +573,7 @@ const {
         }
         else
         {
-            return new HttpStatus( code, STATUS_TEXT_BY_CODE_STRING[code] );
+            return new HttpStatus( code, STATUS_TEXT_BY_CODE_STRING[ucase( code )] );
         }
     };
 

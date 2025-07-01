@@ -305,17 +305,17 @@ const {
         {
             if ( isNull( this.#resolvedBody ) || isBlank( this.#resolvedBody ) )
             {
-
+                return this.#resolvedBody;
             }
 
             const res = cloneResponse( this.#response );
 
             if ( isFunction( res.body ) && !res.bodyUsed )
             {
-                return await asyncAttempt( async() => await res.body() );
+                this.#resolvedBody = await asyncAttempt( async() => await res.body() );
             }
 
-            ////
+            return this.#resolvedBody;
         }
 
         get bodyUsed()
@@ -334,12 +334,10 @@ const {
 
             if ( isNonNullObject( res ) && isFunction( res?.arrayBuffer ) )
             {
-                this.#arrayBuffer = await res.arrayBuffer();
+                this.#arrayBuffer = await asyncAttempt( async() => await res.arrayBuffer() );
 
                 return this.#arrayBuffer;
             }
-
-            ///
         }
 
         async blob()
@@ -353,12 +351,10 @@ const {
 
             if ( isNonNullObject( res ) && isFunction( res?.blob ) )
             {
-                this.#blob = await res.blob();
+                this.#blob = await asyncAttempt( async() => await res.blob() );
 
                 return this.#blob;
             }
-
-            ///
         }
 
         async bytes()
@@ -372,12 +368,10 @@ const {
 
             if ( isNonNullObject( res ) && isFunction( res?.bytes ) )
             {
-                this.#bytes = await res.bytes();
+                this.#bytes = await asyncAttempt( async() => await res.bytes() );
 
                 return this.#bytes;
             }
-
-            ///
         }
 
         async formData()
@@ -391,13 +385,10 @@ const {
 
             if ( isNonNullObject( res ) && isFunction( res?.formData ) )
             {
-                this.#formData = await res.formData();
+                this.#formData = await asyncAttempt( async() => await res.formData() );
 
                 return this.#formData;
             }
-
-            ///
-
         }
 
         async json()
@@ -411,12 +402,10 @@ const {
 
             if ( isNonNullObject( res ) && isFunction( res?.json ) )
             {
-                this.#json = await res.json();
+                this.#json = await asyncAttempt( async() => await res.json() );
 
                 return this.#json;
             }
-
-            ///
         }
 
         async text()
@@ -430,13 +419,10 @@ const {
 
             if ( isNonNullObject( res ) && isFunction( res?.text ) )
             {
-                this.#text = await res.text();
+                this.#text = await asyncAttempt( async() => await res.text() );
 
                 return this.#text;
             }
-
-            ////
-
         }
 
         get headers()
@@ -461,12 +447,12 @@ const {
 
         get status()
         {
-            return this.#status?.code;
+            return this.#status?.code || this.#status;
         }
 
         get statusText()
         {
-            return this.#status?.name || _str;
+            return this.#status?.name || this.#response?.statusText || _mt_str;
         }
 
         get type()

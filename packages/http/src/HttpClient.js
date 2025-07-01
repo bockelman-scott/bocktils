@@ -1,36 +1,88 @@
+/**
+ * @overview
+ *
+ * This file defines classes for handling HTTP Requests,
+ * especially those to API endpoints that impose Rate Limits.
+ *
+ * Its dependencies are limited to those exposed by other @toolbocks modules or that are built in to node.js.
+ *
+ *
+ */
+
+/**
+ * Import the http package for its Agent class.
+ */
 const http = require( "http" );
+
+/**
+ * Import the https package for its Agent class.
+ */
 const https = require( "https" );
 
+/**
+ * Imports the @toolbocks/core modules for the utility functions required
+ */
 const core = require( "@toolbocks/core" );
+
+/**
+ * Imports the @toolbocks/date module for the utility functions required to manipulate Dates
+ */
 const datesModule = require( "@toolbocks/dates" );
+
+/**
+ * Imports the @toolbocks/json module for the utility functions necessary to more safely parse or render JSON.
+ */
 const jsonUtils = require( "@toolbocks/json" );
 
+/**
+ * Imports the EntityUtils module for the base classes available.
+ */
 const entityUtils = require( "../../common/src/EntityUtils.cjs" );
 
+/**
+ * Imports the HttpConstants that define common aspects of the HTTP protocol
+ */
 const httpConstants = require( "./HttpConstants.cjs" );
+
+/**
+ * Imports the HttpRequest mode for the request facade and associated utility functions required
+ */
 const httpRequestModule = require( "./HttpRequest.cjs" );
 
+/**
+ * Imports the core constants
+ */
 const { constants } = core;
 
+// Provides shorthand for the "undefined" Type
 const { _ud = "undefined" } = constants;
 
+/**
+ * Returns the global object / host for the current execution context, such as window or global.
+ */
 const $scope = constants?.$scope || function()
 {
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };
 
+/**
+ * This is the IIFE that defines the classes, variables, and functions that are exported as a module.
+ */
 // noinspection FunctionTooLongJS
 (function exposeModule()
 {
     const INTERNAL_NAME = "__BOCK_HTTP_CLIENT__";
 
+    // if this module has already been defined and exported, return that instance
     if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
     {
         return $scope()[INTERNAL_NAME];
     }
 
+    // import the specific modules from @toolbocks/core that are necessary for this module
     const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
+    // import the classes, variables, and function defined in moduleUtils that are used in this module
     const
         {
             ModuleEvent,
@@ -43,6 +95,7 @@ const $scope = constants?.$scope || function()
             resolveError,
             getLastError,
             lock,
+            localCopy,
             objectEntries,
             sleep,
             no_op,
@@ -50,11 +103,13 @@ const $scope = constants?.$scope || function()
 
         } = moduleUtils;
 
+    // if the current environment does not define CustomEvent, define it as our ModuleEvent class
     if ( _ud === typeof CustomEvent )
     {
         CustomEvent = ModuleEvent;
     }
 
+    // import the useful constants from the core constants
     const
         {
             _mt_str = "",
@@ -66,6 +121,7 @@ const $scope = constants?.$scope || function()
             MILLIS_PER
         } = constants;
 
+    // import the useful functions from the core module, TypeUtils
     const
         {
             isNull,
@@ -78,19 +134,26 @@ const $scope = constants?.$scope || function()
             isDate,
             isJson,
             isRegExp,
-            toObjectLiteral
+            toObjectLiteral,
+            clamp
         } = typeUtils;
 
-    const { asString, asInt, isBlank, cleanUrl, lcase } = stringUtils;
+    // import the useful functions from the core module, StringUtils
+    const { asString, asInt, isBlank, cleanUrl, lcase, ucase } = stringUtils;
 
+    // import the useful functions from the core module, ArrayUtils
     const { asArray, BoundedQueue } = arrayUtils;
 
+    // import the DateUtils module from the datesModule
     const { DateUtils } = datesModule;
 
+    // import the functions from DateUtils we use in this module
     const { asDate } = DateUtils;
 
+    // import the functions from the JSON Utilities that we use in this module
     const { parseJson, asJson } = jsonUtils;
 
+    // import the base classes required for the classes defined in this module, as well as related functions
     const
         {
             BockEntity,
@@ -103,6 +166,7 @@ const $scope = constants?.$scope || function()
             same
         } = entityUtils;
 
+    // import the functions, variables, and classes defined in the HttpConstants module that are used in this module
     const {
         VERBS,
         PRIORITY,
@@ -110,12 +174,30 @@ const $scope = constants?.$scope || function()
         calculatePriority,
         HttpStatus,
         STATUS_CODES,
-        STATUS_TEXT_BY_INT_VALUE,
-        STATUS_TEXT_BY_CODE_STRING
+        STATUS_TEXT,
+        STATUS_TEXT_ARRAY
     } = httpConstants;
 
+    // define module-level constants
+    const MIN_TIMEOUT_MILLISECONDS = 10_000; // 10 seconds
+    const MAX_TIMEOUT_MILLISECONDS = 60_000; // 60 seconds, or 1 minute
+    const DEFAULT_TIMEOUT_MILLISECONDS = 30_000; // 30 seconds
+
+    const MIN_CONTENT_LENGTH = 64_000; // 64 KBs
+    const DEFAULT_CONTENT_LENGTH = 256_000; // 256 KBs
+    const MAX_CONTENT_LENGTH = 200_000_000; // 200 MBs
+
+    const MIN_REDIRECTS = 3;
+    const MAX_REDIRECTS = 10;
+    const DEFAULT_REDIRECTS = 5;
+
+    // import the HttpRequest (facade) class we use to provide a uniform interface for HTTP Requests
     const { HttpRequest } = httpRequestModule;
 
+    /**
+     * This class is used to define the configuration of an Http (or Https) Agent.
+     * Notably, this class exposes properties for whether to use keepAlive, and if so, for how long.
+     */
     class HttpAgentConfig
     {
         #keepAlive = true;
@@ -174,19 +256,30 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    // creates an instance of configuration properties for the http and http agents using the class defaults
     const httpAgentConfig = new HttpAgentConfig();
+
+    // create a global instance of http.Agent
     const httpAgent = new http.Agent( httpAgentConfig.toObjectLiteral() );
+
+    // create a global instance of https.Agent
     const httpsAgent = new https.Agent( httpAgentConfig.toObjectLiteral() );
 
-
+    /**
+     * This function is used to ensure that no configuration has inadvertantly replaced the http and/or https agents with object literals.
+     * @param {Object} pConfig the configuration to examine and potentially repair, if necessary
+     * @returns {Object} the same configuration object specified,
+     * but with the http and http agent properties corrected, if necessary,
+     * to hold actual instances of http.Agent or https.Agent.
+     */
     function fixAgents( pConfig )
     {
-        if ( !(isNull( pConfig.httpAgent ) || pConfig.httpAgent instanceof http.Agent) )
+        if ( (isNull( pConfig.httpAgent ) || !(pConfig.httpAgent instanceof http.Agent)) )
         {
             pConfig.httpAgent = httpAgent || new http.Agent( httpAgentConfig.toObjectLiteral() );
         }
 
-        if ( !(isNull( pConfig.httpsAgent ) || pConfig.httpsAgent instanceof https.Agent) )
+        if ( (isNull( pConfig.httpsAgent ) || !(pConfig.httpsAgent instanceof https.Agent)) )
         {
             pConfig.httpsAgent = httpsAgent || new https.Agent( httpAgentConfig.toObjectLiteral() );
         }
@@ -194,17 +287,22 @@ const $scope = constants?.$scope || function()
         return pConfig;
     }
 
+    /**
+     * This class can be used to define the configuration expected for an instance of HttpClient (or one of its subclasses).
+     * Not all properties are relevant to all instances of HttpClient.
+     * This class is intended to provide values expected by either the Axios library or the Fetch API.
+     */
     class HttpClientConfig
     {
         #allowAbsoluteUrls = true;
-        #timeout = 30_000;
-        #maxContentLength = 200_000_000;
-        #maxBodyLength = 200_000_000;
-        #maxRedirects = 5;
+        #timeout = DEFAULT_TIMEOUT_MILLISECONDS;
+        #maxContentLength = MAX_CONTENT_LENGTH;
+        #maxBodyLength = MAX_CONTENT_LENGTH;
+        #maxRedirects = DEFAULT_REDIRECTS;
         #decompress = true;
 
-        #httpAgent;
-        #httpsAgent;
+        #httpAgent = httpAgent;
+        #httpsAgent = httpsAgent;
 
         // noinspection OverlyComplexFunctionJS
         constructor( pHttpAgent,
@@ -220,52 +318,52 @@ const $scope = constants?.$scope || function()
             this.#httpsAgent = isNonNullObject( pHttpsAgent ) && pHttpsAgent instanceof https.Agent ? pHttpsAgent : httpsAgent || new https.Agent( new HttpAgentConfig().toObjectLiteral() );
 
             this.#allowAbsoluteUrls = !!pAllowAbsoluteUrls;
-            this.#timeout = Math.min( Math.max( asInt( pTimeout ), 10_000 ), 60_000 );
-            this.#maxContentLength = Math.min( Math.max( asInt( pMaxContentLength ), 25_000 ), 200_000_000 );
-            this.#maxBodyLength = Math.min( Math.max( asInt( pMaxBodyLength ), 25_000 ), 200_000_000 );
-            this.#maxRedirects = Math.min( Math.max( asInt( pMaxRedirects ), 3, 10 ) );
+            this.#timeout = clamp( asInt( pTimeout ), MIN_TIMEOUT_MILLISECONDS, MAX_TIMEOUT_MILLISECONDS );
+            this.#maxContentLength = clamp( asInt( pMaxContentLength ), MIN_CONTENT_LENGTH, MAX_CONTENT_LENGTH );
+            this.#maxBodyLength = clamp( asInt( pMaxBodyLength ), MIN_CONTENT_LENGTH, MAX_CONTENT_LENGTH );
+            this.#maxRedirects = clamp( asInt( pMaxRedirects ), MIN_REDIRECTS, MAX_REDIRECTS );
 
             this.#decompress = !!pDecompress;
         }
 
         get allowAbsoluteUrls()
         {
-            return this.#allowAbsoluteUrls;
+            return !!this.#allowAbsoluteUrls;
         }
 
         get timeout()
         {
-            return this.#timeout;
+            return clamp( this.#timeout, MIN_TIMEOUT_MILLISECONDS, MAX_TIMEOUT_MILLISECONDS );
         }
 
         get maxContentLength()
         {
-            return this.#maxContentLength;
+            return clamp( asInt( this.#maxContentLength ), MIN_CONTENT_LENGTH, MAX_CONTENT_LENGTH );
         }
 
         get maxBodyLength()
         {
-            return this.#maxBodyLength;
+            return clamp( asInt( this.#maxBodyLength ), MIN_CONTENT_LENGTH, MAX_CONTENT_LENGTH );
         }
 
         get maxRedirects()
         {
-            return this.#maxRedirects;
+            return clamp( asInt( this.#maxRedirects ), MIN_REDIRECTS, MAX_REDIRECTS );
         }
 
         get decompress()
         {
-            return this.#decompress;
+            return !!this.#decompress;
         }
 
         get httpAgent()
         {
-            return this.#httpAgent;
+            return isNonNullObject( this.#httpAgent ) && (this.#httpAgent instanceof http.Agent) ? this.#httpAgent : httpAgent || new http.Agent( new HttpAgentConfig().toObjectLiteral() );
         }
 
         get httpsAgent()
         {
-            return this.#httpsAgent;
+            return isNonNullObject( this.#httpsAgent ) && (this.#httpsAgent instanceof http.Agent) ? this.#httpsAgent : httpsAgent || new https.Agent( new HttpAgentConfig().toObjectLiteral() );
         }
 
         toObjectLiteral()
@@ -279,24 +377,95 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    /**
+     * Defines the default HttpClient configuration object
+     * @type {HttpClientConfig}
+     */
     const DEFAULT_CONFIG = new HttpClientConfig( httpAgent, httpsAgent );
 
+    /**
+     * Returns an object literal holding the properties defined in the default HttpClientConfig
+     * @returns {Object} an object literal holding the properties defined in the default HttpClientConfig
+     */
     HttpClientConfig.getDefaultConfig = function()
     {
-        return toObjectLiteral( DEFAULT_CONFIG );
+        let cfg = toObjectLiteral( DEFAULT_CONFIG );
+        return fixAgents( cfg );
     };
 
+    /**
+     * This class can be used to define the configuration expected for an instance of HttpClient (or one of its subclasses)
+     * that will be used to communicate with a specific external API.
+     * Not all properties are relevant to all instances of HttpClient or every possible API.
+     * This class is intended to provide values expected by most APIs, including those that require frequent refresh of an access token.
+     * @extends HttpClientConfig
+     */
     class HttpClientApiConfig extends HttpClientConfig
     {
+        /**
+         * Holds the API KEY, a value commonly passed in the headers of a request to an API endpoint
+         */
         #apiKey;
+
+        /**
+         * Holds an access token, which may be either a String or an Object, such as a JWT
+         */
         #accessToken;
+
+        /**
+         * Holds a personal access token, used by many newer APIs to get an access token
+         */
         #personalAccessToken;
+
+        /**
+         * Holds the OAUTH/OAUTH2 Client ID, often used in conjunction with other keys,
+         * such as the personal access token to get an access token or to authenticate.
+         */
         #clientId;
+
+        /**
+         * Holds the OAUTH/OAUTH2 Client Secret, often used in conjunction with other keys,
+         * such as the personal access token to get an access token or to authenticate.
+         */
         #clientSecret;
+
+        /**
+         * Holds a value some APIs require on each request to help identify the tenant of a multitenant environment
+         */
         #orgId;
+
+        /**
+         * Holds a value some APIs require on each request to help identify the specific user making an API request
+         */
         #userId;
+
+        /**
+         * Holds the url to the endpoint that returns an access token for the API for which this configuration is used
+         */
         #accessTokenUrl;
 
+        /**
+         * Constructs an instance of an API-specific configuration
+         * to be used with an instance of HttpClient
+         * to interact with a specific API
+         *
+         * @param {http.Agent} pHttpAgent The http.Agent to use, defining the keepAlive characteristics for the HTTP connection(s)
+         * @param {https.Agent} pHttpsAgent  The https.Agent to use, defining the keepAlive characteristics for the SSL/HTTPS connection(s)
+         * @param {boolean} pAllowAbsoluteUrls Whether to allow absolute URLS or only relative URLs
+         * @param {number} pTimeout The time, in milliseconds, to wait for a response before assuming the request has been aborted or has failed
+         * @param {number} pMaxContentLength The maximum size, in bytes, any request can be for the associated HttpClient
+         * @param {number} pMaxBodyLength The maximum size, in bytes, the body of any request can be for the associated HttpClient
+         * @param {number} pMaxRedirects The maximum number of redirects the HttpClient will follow to return a response
+         * @param {number} pDecompress Whether to unzip or otherwise inflate compressed content/responses
+         * @param {String} pApiKey The API Key to use to authenticate to the external API and/or authorize the requests
+         * @param {String|Object} pAccessToken The Access Token to use to authenticate to the external API and/or authorize the requests
+         * @param {String} pPersonalAccessToken The Personal Access Token to use to get an access token
+         * @param {String} pClientId The Client ID to use in conjunction with an OAUTH/OAUTH2 to authenticate and/or get an access token
+         * @param {String} pClientSecret The Client Secret to use in conjunction with an OAUTH/OAUTH2 to authenticate and/or get an access token
+         * @param {String|URL} pAccessTokenUrl The URL (or url string/path) to the endpoint to get an access token
+         * @param {String} pOrgId The organization ID, if required, to pass to API endpoints for APIs/endpoint that expect one
+         * @param {String} pUserId The user ID, if required, to pass to API endpoints for APIs/endpoint that expect one
+         */
         // noinspection OverlyComplexFunctionJS
         constructor( pHttpAgent, pHttpsAgent, pAllowAbsoluteUrls, pTimeout, pMaxContentLength, pMaxBodyLength, pMaxRedirects, pDecompress, pApiKey, pAccessToken, pPersonalAccessToken, pClientId, pClientSecret, pAccessTokenUrl, pOrgId, pUserId )
         {
@@ -408,9 +577,8 @@ const $scope = constants?.$scope || function()
         }
 
         /**
-         * Returns an object with keys defined by the keys or property names of the specified Map or Object
-         * whose values are the values are the values of the properties of this instance
-         * whose names match the value of the property of the specified Map or Object.
+         * Returns an object that has translated the property names of this configuration
+         * into those expected by the target configuration or consumer of the configuration
          *
          * Example:
          *
@@ -480,18 +648,57 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    /**
+     * Returns an object literal holding the properties defined in the default HttpClientApiConfig
+     * @returns {Object} an object literal holding the properties defined in the default HttpClientApiConfig
+     * @param pApiKey
+     * @param pAccessToken
+     * @param pPersonalAccessToken
+     * @param pClientId
+     * @param pClientSecret
+     * @param pTokenUrl
+     * @param pOrgId
+     * @param pUserId
+     * @returns {Object}
+     */
     HttpClientApiConfig.getDefaultConfig = function( pApiKey, pAccessToken, pPersonalAccessToken, pClientId, pClientSecret, pTokenUrl, pOrgId, pUserId )
     {
         let cfg = HttpClientApiConfig.fromHttpClientConfig( DEFAULT_CONFIG, pApiKey, pAccessToken, pPersonalAccessToken, pClientId, pClientSecret, pTokenUrl, pOrgId, pUserId );
         return fixAgents( cfg );
     };
 
+    /**
+     * Combines the specified configuration with the default configuration
+     * @param {Object} pConfig the configuration to combine with the default configuration.
+     *                         When the specified configuration has a value for a property defined in the defauly=t configuration,
+     *                         the value in the specified configuration is returned in the resulting configuration object.
+     * @returns {Object} An object combining the specified configuration with the default configuration
+     */
     function resolveConfig( pConfig )
     {
         let cfg = populateOptions( toObjectLiteral( pConfig || {} ), toObjectLiteral( DEFAULT_CONFIG ) );
         return fixAgents( toObjectLiteral( cfg ) );
     }
 
+    /**
+     * Combines the specified configuration with the default configuration and the values (optionally) provided
+     * @param {Object} pConfig the configuration to combine with the default configuration.
+     *                         When the specified configuration has a value for a property defined in the defauly=t configuration,
+     *                         the value in the specified configuration is returned in the resulting configuration object.
+     *
+     *
+     *
+     * @param pApiKey
+     * @param pAccessToken
+     * @param pPersonalAccessToken
+     * @param pClientId
+     * @param pClientSecret
+     * @param pTokenUrl
+     * @param pOrgId
+     * @param pUserId
+     *
+     * @returns {Object} An object combining the specified configuration with the default configuration
+     */
     function resolveApiConfig( pConfig, pApiKey, pAccessToken, pPersonalAccessToken, pClientId, pClientSecret, pTokenUrl, pOrgId, pUserId )
     {
         let cfg = resolveConfig( pConfig );
@@ -509,9 +716,29 @@ const $scope = constants?.$scope || function()
         return fixAgents( toObjectLiteral( apiCfg ) );
     }
 
+    function cloneResponse( pResponse )
+    {
+        if ( isNonNullObject( pResponse ) )
+        {
+            if ( isFunction( pResponse.clone ) )
+            {
+                return pResponse.clone();
+            }
+            return localCopy( pResponse );
+        }
+        else if ( isString( pResponse ) )
+        {
+            if ( isJson( pResponse ) )
+            {
+                return attempt( () => parseJson( pResponse ) );
+            }
+        }
+        return pResponse;
+    }
+
     /**
      * This class provides both a wrapper for the information returned by an HTTP request
-     * and static methods to check the validity of the response.
+     * and static methods to check the validity of a response.
      */
     class ResponseData
     {
@@ -596,27 +823,39 @@ const $scope = constants?.$scope || function()
                 // See https://axios-http.com/docs/handling_errors, for example
                 this.response = source.response || pError?.response || source || pResponse || pError;
 
+                // assign the numeric value of the response status to this instance
                 this.status = asInt( this.response?.status || source.status || pResponse?.status );
 
+                // assign the string value of the response status to this instance
                 this.statusText = asString( this.response?.statusText || source.statusText || pResponse?.statusText || ResponseData.generateStatusText( asInt( this.status ) ), true );
 
+                // construct an instance of HttpStatus as a helper for evaluating the status
                 this.#httpStatus = HttpStatus.fromResponse( this.response ) || new HttpStatus( this.status, this.statusText );
 
+                // Assigns the data property of the response to this instance if there is one,
+                // such as would be the case when using the Axios framework, for example.
+                // Note that we do not try to assign the 'body' property of a response to this property, because that is often an async call and/or causes bodyUsed to be true
                 this.data = this.response?.data || source.data || pResponse?.data || pResponse; // could be pending ReadableStream
 
+                // Stores the configuration returned with the response
+                // or the configuration used to make the request for which this is the response
                 this.config = this.response?.config || source.config || pResponse?.config || pConfig;
 
+                // Stores the headers returned with the response or the request headers that were passed
                 this.headers = this.response?.headers || source.headers || pResponse.headers || source?.config?.headers || pResponse.config?.headers || this.config?.headers || pConfig?.headers || pConfig;
 
+                // Stores the request object associated with this response or synthesizes one
                 this.request = this.response?.request || source.request || pResponse.request ||
                     {
                         url: asString( pUrl, true ),
                         config: pConfig || {}
                     };
 
-                this.url = asString( pUrl, true ) || asString( this.response?.url || this.request?.url, true ) || _mt;
+                // Stores the url path from which the response actually came (in the case of redirects) or the url/path of the request
+                this.url = asString( this.response?.url || asString( pUrl, true ) || this.request?.url, true ) || _mt;
             }
 
+            // Stores an error object if the request was unsuccessful
             this.error = isNonNullObject( source.response || pResponse.response ) ? resolveError( pResponse || source ) || resolveError( pError ) : resolveError( pError );
         }
 
@@ -650,14 +889,17 @@ const $scope = constants?.$scope || function()
                      STATUS_CODES.PERMANENT_REDIRECT
                  ].includes( asInt( this.status ) ) )
             {
-                return !isBlank( this?.headers?.location || this.headers?.Location );
+                let loc = isFunction( this?.headers?.get ) ?
+                          this?.headers.get( "location" ) || this?.headers.get( "Location" ) :
+                          this?.headers?.location || this.headers?.Location;
+                return !isBlank( loc || this?.headers?.location || this.headers?.Location );
             }
             return false;
         }
 
         isUseCached()
         {
-            return [STATUS_CODES.NOT_MODIFIED].includes( asInt( this.status ) );
+            return (isNonNullObject( this?.httpStatus ) ? this?.httpStatus.isUseCached() : [STATUS_CODES.NOT_MODIFIED].includes( asInt( this.status ) )) || [STATUS_CODES.NOT_MODIFIED].includes( asInt( this.status ) );
         }
 
         isClientError()
@@ -687,7 +929,12 @@ const $scope = constants?.$scope || function()
 
         async body()
         {
-            return this.data;
+            if ( isNonNullObject( this.data ) )
+            {
+                return this.data;
+            }
+            const res = cloneResponse( this.response );
+            return await asyncAttempt( async() => await res.body );
         }
 
         async json()
@@ -706,17 +953,24 @@ const $scope = constants?.$scope || function()
                     return obj;
                 }
             }
-            return {};
+            const res = cloneResponse( this.response );
+            return await asyncAttempt( async() => await res.json() );
         }
 
         async text()
         {
-            return asString( this.data || _mt );
+            let txt = asString( this.data || _mt );
+            if ( !isBlank( txt ) )
+            {
+                return txt;
+            }
+            const res = cloneResponse( this.response );
+            return await asyncAttempt( async() => await res.text() );
         }
 
         clone()
         {
-            return new ResponseData( Object.assign( {}, this.response ),
+            return new ResponseData( Object.assign( {}, cloneResponse( this.response ) ),
                                      this.error || null,
                                      this.config,
                                      this.url );
@@ -724,7 +978,7 @@ const $scope = constants?.$scope || function()
 
         static fromResponse( pResponse, pConfig, pUrl )
         {
-            return new ResponseData( pResponse?.response || pResponse,
+            return new ResponseData( cloneResponse( pResponse?.response || pResponse ),
                                      (isNonNullObject( pResponse.response ) ? resolveError( pResponse ) : null),
                                      pConfig,
                                      pUrl );
@@ -732,7 +986,10 @@ const $scope = constants?.$scope || function()
 
         static fromError( pError, pConfig, pUrl )
         {
-            return new ResponseData( (pError?.response || pError), pError, pConfig, pUrl );
+            return new ResponseData( cloneResponse( pError?.response || pError ),
+                                     pError,
+                                     pConfig,
+                                     pUrl );
         }
 
         static fromObject( pObject, pConfig, pUrl )
@@ -745,14 +1002,14 @@ const $scope = constants?.$scope || function()
                 // In those cases, some of them return the response as a property of the error.
                 // See https://axios-http.com/docs/handling_errors, for example
 
-                let response = source.response || source || pObject;
+                let response = cloneResponse( source.response || source || pObject );
 
                 let responseData = new ResponseData( response,
                                                      (response?.error || source || pObject),
                                                      (pConfig || response.config),
                                                      (pUrl || response.request?.url) );
 
-                let entries = attempt( () => [...(objectEntries( pObject ) || [])] );
+                let entries = attempt( () => [...(objectEntries( source || pObject ) || [])] );
 
                 attempt( () => entries.forEach( ( entry ) =>
                                                 {
@@ -774,9 +1031,7 @@ const $scope = constants?.$scope || function()
         {
             const status = asInt( pStatus );
 
-            // TODO:
-
-            return _mt;
+            return STATUS_TEXT_ARRAY[status] || STATUS_TEXT[ucase( asString( pStatus, true ) )];
         }
     }
 
@@ -828,7 +1083,7 @@ const $scope = constants?.$scope || function()
         let res =
             {
                 status: pResponse?.status || STATUS_CODES.CLIENT_ERROR,
-                statusText: pResponse?.statusText || STATUS_TEXT_BY_INT_VALUE[asInt( pResponse?.status || STATUS_CODES.CLIENT_ERROR )] || STATUS_TEXT_BY_CODE_STRING[asString( pResponse?.status || STATUS_CODES.CLIENT_ERROR, true )],
+                statusText: pResponse?.statusText || STATUS_TEXT_ARRAY[asInt( pResponse?.status || STATUS_CODES.CLIENT_ERROR )] || STATUS_TEXT[asString( pResponse?.status || STATUS_CODES.CLIENT_ERROR, true )],
                 data: pResponse?.data || pResponse?.body || {},
                 headers: pResponse?.headers || pResponse?.config?.headers || pConfig?.headers || pConfig,
                 config: pResponse?.config || pConfig,
@@ -847,7 +1102,7 @@ const $scope = constants?.$scope || function()
         let obj =
             {
                 status: error?.status || errorResponse?.status || STATUS_CODES.CLIENT_ERROR,
-                statusText: error?.message || errorResponse?.statusText || STATUS_TEXT_BY_INT_VALUE[asInt( errorResponse?.status || STATUS_CODES.CLIENT_ERROR )] || STATUS_TEXT_BY_CODE_STRING[asString( errorResponse?.status || STATUS_CODES.CLIENT_ERROR, true )],
+                statusText: error?.message || errorResponse?.statusText || STATUS_TEXT_ARRAY[asInt( errorResponse?.status || STATUS_CODES.CLIENT_ERROR )] || STATUS_TEXT[ucase( asString( errorResponse?.status || STATUS_CODES.CLIENT_ERROR, true ) )],
                 data: errorResponse?.data || pError?.data || error?.details || errorResponse?.body || {},
                 headers: errorResponse?.headers || error?.headers || pConfig.headers,
                 config: errorResponse?.config || pConfig || {},
