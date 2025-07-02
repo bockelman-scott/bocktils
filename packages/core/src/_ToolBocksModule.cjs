@@ -770,6 +770,19 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return 0;
     };
 
+    const _asFloat = ( pVal ) =>
+    {
+        if ( pVal && isNumeric( pVal ) )
+        {
+            let val = attempt( () => parseFloat( pVal ) );
+            if ( isNum( val ) )
+            {
+                return val;
+            }
+        }
+        return 0;
+    };
+
     /**
      * Returns a value not less than a minimum value and not greater than a maximum value.<br>
      * <br>
@@ -794,6 +807,28 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @returns {number} A number within the specified range, or the original value if it's not a number.
      */
     const clamp = ( pNum, pMin, pMax ) => isNum( pNum ) ? Math.min( Math.max( pNum, pMin ), pMax ) : pNum;
+
+    /**
+     * Rounds a number to the nearest specified multiple.
+     *
+     * @param {number} pNum The number to be rounded. Can be positive, negative, or zero.
+     * @param {number} pMultiple The multiple to round to (e.g., 4, 5, 8, 10, 16, 32, 50, 100).
+     * Must be a non-zero number.
+     * @returns {number} The rounded number, or the original number if 'multiple' is zero.
+     */
+    function roundToNearestMultiple( pNum, pMultiple )
+    {
+        let num = _asFloat( pNum );
+
+        let multiple = _asInt( pMultiple );
+
+        if ( 0 === multiple )
+        {
+            return num;
+        }
+
+        return Math.round( pNum / pMultiple ) * pMultiple;
+    }
 
     /**
      * A constant string representing the default error message.<br>
@@ -6875,8 +6910,13 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             clamp,
             bracketsToDots,
 
+            roundToNearestMultiple,
+
             TYPES_CHECKS:
                 {
+                    GLOBAL_TYPES,
+                    ERROR_TYPES,
+                    PRIMITIVE_WRAPPER_TYPES,
                     isStr,
                     isFunc,
                     isObj,
@@ -6891,6 +6931,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     isSymbol,
                     isNull,
                     isUndefined,
+                    isNonNullObj,
                     isPrimitive,
                     isThenable,
                     isPromise,
@@ -6903,7 +6944,22 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     isClassInstance,
                     isGlobalType,
                     isLogger: ToolBocksModule.isLogger,
-                    isVisitor: Visitor.isVisitor
+                    isVisitor: Visitor.isVisitor,
+                    _isValidStr,
+                    _validTypes,
+                    isPrimitiveWrapper
+                },
+
+            TYPE_HELPERS:
+                {
+                    clamp,
+                    _asInt,
+                    _asFloat,
+                    _asStr,
+                    _lcase,
+                    _ucase,
+                    _spcToChar,
+                    roundToNearestMultiple
                 },
 
             isObjectLiteral,
