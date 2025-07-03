@@ -820,7 +820,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     {
         let num = _asFloat( pNum );
 
-        let multiple = _asInt( pMultiple );
+        let multiple = _asFloat( pMultiple );
 
         if ( 0 === multiple )
         {
@@ -828,6 +828,71 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
 
         return Math.round( pNum / pMultiple ) * pMultiple;
+    }
+
+    function calculatePercentComplete( pDone, pTotal )
+    {
+        let done = _asFloat( pDone );
+        let total = _asFloat( pTotal, 1.0 );
+
+        const minValue = 0.000001;
+
+        let ratio = Math.max( done, minValue ) / Math.max( total, minValue );
+
+        return roundToNearestMultiple( (ratio * 100), 0.5 );
+    }
+
+    function calculateElapsedTime( pSince, pUntil = new Date() )
+    {
+        return attempt( () => (new Date( pUntil || Date.now() ) - new Date( pSince ).getTime()) ) || 0;
+    }
+
+    function formatElapsedTime( pElapsedMilliseconds )
+    {
+        let totalSeconds = Math.floor( _asInt( pElapsedMilliseconds ) / 1_000 );
+        let hours = Math.floor( totalSeconds / 3600 );
+        let minutes = Math.floor( (totalSeconds % 3600) / 60 );
+        let seconds = totalSeconds % 60;
+
+        let hoursPart = (hours > 0) ? (_asStr( hours, true ).padStart( 2, "0" ) + ":") : "";
+        let minutesPart = (minutes > 0) ? ((hours > 0) ? (_asStr( minutes, true ).padStart( 2, "0" ) + ".") : (_asStr( minutes, true ) + ".")) : "";
+        let secondsPart = (minutes > 0 || hours > 0) ? _asStr( seconds, true ).padStart( 2, "0" ) : _asStr( seconds, true );
+
+        // If there are hours, or minutes, or seconds, or if it's a 0 duration that should show as "00.00"
+        if ( hours > 0 || minutes > 0 || seconds > 0 )
+        {
+            return hoursPart + minutesPart + secondsPart;
+        }
+
+        // Explicitly handle 0 elapsed time if you want "00.00" or just "00"
+        return "00.00"; // Or "00" if you want just the seconds part
+    }
+
+    function calculateEstimatedTimeRemaining( pDone, pTotal, pElapsedTime )
+    {
+        let done = _asFloat( pDone );
+        let total = _asFloat( pTotal, 1.0 );
+        let elapsed = _asFloat( pElapsedTime );
+
+        const minValue = 0.000001;
+
+        // Avoid division by zero by using a minimum value
+        done = Math.max( done, minValue );
+
+        // If nothing is done yet or elapsed time is 0, we can't estimate
+        if ( done <= minValue || elapsed <= 0 )
+        {
+            return Infinity;
+        }
+
+        // Calculate rate of progress (units per time)
+        let rate = done / elapsed;
+
+        // Calculate remaining work
+        let remaining = Math.max( total - done, 0 );
+
+        // Calculate estimated time remaining based on the current rate
+        return remaining / rate;
     }
 
     /**
@@ -6911,6 +6976,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             bracketsToDots,
 
             roundToNearestMultiple,
+            calculatePercentComplete,
+            calculateElapsedTime,
+            calculateEstimatedTimeRemaining,
+            formatElapsedTime,
 
             TYPES_CHECKS:
                 {
@@ -6959,7 +7028,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     _lcase,
                     _ucase,
                     _spcToChar,
-                    roundToNearestMultiple
+                    roundToNearestMultiple,
+                    calculatePercentComplete,
+                    calculateElapsedTime,
+                    calculateEstimatedTimeRemaining,
+                    formatElapsedTime
                 },
 
             isObjectLiteral,
