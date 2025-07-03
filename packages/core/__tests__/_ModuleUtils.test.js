@@ -76,6 +76,11 @@ const
         getMessagesLocale,
         isFulfilled,
         isRejected,
+        roundToNearestMultiple,
+        calculatePercentComplete,
+        calculateElapsedTime,
+        calculateEstimatedTimeRemaining,
+        formatElapsedTime,
         classes: moduleUtilsClasses,
     } = moduleUtils;
 
@@ -474,9 +479,9 @@ describe( "Extended Boolean Operators", () =>
         }
 
         expect( Nand( foo(), bar() ) ).toBe( true );
-        expect( Nand( foo(), bar(), baz(true) ) ).toBe( true );
-        expect( Nand( foo(), bar(), baz(false) ) ).toBe( true );
-        expect( Nand( bar(), baz(true), baz(true) ) ).toBe( false );
+        expect( Nand( foo(), bar(), baz( true ) ) ).toBe( true );
+        expect( Nand( foo(), bar(), baz( false ) ) ).toBe( true );
+        expect( Nand( bar(), baz( true ), baz( true ) ) ).toBe( false );
 
     } );
 } );
@@ -1761,19 +1766,161 @@ describe( "propertyDescriptors", () =>
           } );
 } );
 
-/*
+describe( "roundToNearestMultiple", () =>
+{
+    test( "Round to nearest integer",
+          () =>
+          {
+              const nearestInteger = roundToNearestMultiple( 123.456, 1 );
 
- describe( "executeCallback", () =>
- {
- test( "safely call a user-provided function", () =>
- {
- const callback = function()
- {
- throw new Error( "uh oh" );
- };
+              expect( nearestInteger ).toEqual( 123 );
+          } );
 
- expect( executeCallback( callback ) ).toBe( undefined );
- } );
- } );
+    test( "Round to nearest 0.5",
+          () =>
+          {
+              const nearestInteger = roundToNearestMultiple( 123.456, 0.5 );
 
- */
+              expect( nearestInteger ).toEqual( 123.5 );
+          } );
+
+    test( "Round to nearest multiple of 5",
+          () =>
+          {
+              const nearestInteger = roundToNearestMultiple( 123.456, 5 );
+
+              expect( nearestInteger ).toEqual( 125 );
+          } );
+
+    test( "Round to nearest multiple of 4",
+          () =>
+          {
+              const nearestInteger = roundToNearestMultiple( 123.456, 4 );
+
+              expect( nearestInteger ).toEqual( 124 );
+          } );
+
+    test( "Round to nearest multiple of 8",
+          () =>
+          {
+              const nearestInteger = roundToNearestMultiple( 123.456, 8 );
+
+              expect( nearestInteger ).toEqual( 120 );
+          } );
+
+    test( "Round to nearest multiple of 16",
+          () =>
+          {
+              const nearestInteger = roundToNearestMultiple( 123.456, 16 );
+
+              expect( nearestInteger ).toEqual( 128 );
+          } );
+
+    test( "Round to nearest multiple of 32",
+          () =>
+          {
+              const nearestInteger = roundToNearestMultiple( 123.456, 32 );
+
+              expect( nearestInteger ).toEqual( 128 );
+          } );
+} );
+
+describe( "calculatePercentComplete", () =>
+{
+    test( "When 5 of 10 are done, returns 50",
+          () =>
+          {
+              const percentComplete = calculatePercentComplete( 5, 10 );
+              expect( percentComplete ).toEqual( 50 );
+          } );
+
+    test( "When 0.123 of 4.567 are done, returns 2.5",
+          () =>
+          {
+              const percentComplete = calculatePercentComplete( 0.123, 4.567 );
+              expect( percentComplete ).toEqual( 2.5 );
+          } );
+
+    test( "When 0.5 of 1.0 are done, returns 50",
+          () =>
+          {
+              const percentComplete = calculatePercentComplete( 0.5, 1.0 );
+              expect( percentComplete ).toEqual( 50 );
+          } );
+
+    test( "When 0.5 of 2 are done, returns 25",
+          () =>
+          {
+              const percentComplete = calculatePercentComplete( 0.5, 2.0 );
+              expect( percentComplete ).toEqual( 25 );
+          } );
+} );
+
+describe( "calculateElapsedTime", () =>
+{
+    test( "Returns 0 milliseconds when since === until",
+          () =>
+          {
+              const date = new Date();
+              const elapsedTime = calculateElapsedTime( date, date );
+              expect( elapsedTime ).toEqual( 0 );
+          } );
+
+    test( "Returns 0 milliseconds when arguments are invalid",
+          () =>
+          {
+              const elapsedTime = calculateElapsedTime( "abc", "123" );
+              expect( elapsedTime ).toEqual( 0 );
+          } );
+
+    test( "Returns 1000 milliseconds after one second has passed",
+          () =>
+          {
+              const date = new Date();
+              const oneSecondLater = new Date( date.getTime() + 1_000 );
+              const elapsedTime = calculateElapsedTime( date, oneSecondLater );
+              expect( elapsedTime ).toEqual( 1_000 );
+          } );
+
+
+} );
+
+
+describe( "calculateEstimatedTimeRemaining", () =>
+{
+    test( "Returns 2300 milliseconds if it took 2300 milliseconds to complete 50%",
+          () =>
+          {
+              const timeRemaining = calculateEstimatedTimeRemaining( 5, 10, 2300 );
+              expect( timeRemaining ).toEqual( 2300 );
+          } );
+
+    test( "Returns 10_000 milliseconds if it took 2500 milliseconds to complete 20%",
+          () =>
+          {
+              const timeRemaining = calculateEstimatedTimeRemaining( 5, 25, 2500 );
+              expect( timeRemaining ).toEqual( 10_000 );
+          } );
+
+} );
+
+// formatElapsedTime
+describe( "formatElapsedTime", () =>
+{
+    test( "Returns '01:00' if exactly one hour has elapsed",
+          () =>
+          {
+              let elapsedMilliseconds = (60 * 60 * 1_000);
+              const formatted = formatElapsedTime( elapsedMilliseconds );
+              expect( formatted ).toEqual( "01:00" );
+          } );
+
+    test( "Returns '01:23.50' if one hour and 23 minutes and 50 seconds have elapsed",
+          () =>
+          {
+              let elapsedMilliseconds = ((60 * 60 * 1_000) + (60 * 23 * 1_000) + (50 * 1_000));
+              const formatted = formatElapsedTime( elapsedMilliseconds );
+              expect( formatted ).toEqual( "01:23.50" );
+          } );
+
+} );
