@@ -269,14 +269,14 @@ const {
     /**
      * An object representing different types of content or formats.
      *
-     * @property {string} PLAIN - Represents plain text format.
+     * @property {string} PLAIN - Represents a plain text format.
      * @property {string} TEXT - Represents textual content.
-     * @property {string} HTML - Represents HTML format.
-     * @property {string} CSS - Represents CSS format.
-     * @property {string} JAVASCRIPT - Represents JavaScript format.
+     * @property {string} HTML - Represents an HTML format.
+     * @property {string} CSS - Represents a CSS format.
+     * @property {string} JAVASCRIPT - Represents a JavaScript format.
      * @property {string} JS - Alias for the JavaScript format.
-     * @property {string} JSON - Represents JSON format.
-     * @property {string} ECMASCRIPT - Represents ECMAScript format.
+     * @property {string} JSON - Represents a JSON format.
+     * @property {string} ECMASCRIPT - Represents an ECMAScript format.
      */
     const TYPES =
         {
@@ -458,6 +458,62 @@ const {
      * @type {Object}
      */
     const STATUS_TEXT_BY_INT_VALUE = [];
+
+    const STATUS_ELIGIBLE_FOR_RETRY =
+        [
+            STATUS_CODES.TOO_MANY_REQUESTS,
+            STATUS_CODES.LOCKED,
+            STATUS_CODES.TOO_EARLY,
+            STATUS_CODES.REQUEST_TIMEOUT,
+            STATUS_CODES.SERVICE_UNAVAILABLE,
+            STATUS_CODES.GATEWAY_TIMEOUT
+        ];
+
+    /**
+     * Defaults for milliseconds to wait
+     * before retrying a request that failed
+     * with one of the STATUS_ELIGIBLE_FOR_RETRY codes
+     */
+    const DEFAULT_RETRY_DELAY =
+        {
+            /**
+             * When a request has exceeded an API rate limit,
+             * for HttpClients that are not rate-limit-aware,
+             * we try again after 100 milliseconds
+             */
+            [STATUS_CODES.TOO_MANY_REQUESTS]: 100,
+
+            /**
+             * When a request failed to update an existing resource
+             * because the resource is considered locked by the server,
+             * we try again after 1 second, to allow time for the lock holder to release the lock
+             */
+            [STATUS_CODES.LOCKED]: 1_000,
+
+            /**
+             * When a request has been made prior to the retry-after time,
+             * we try again in 500 milliseconds (unless we can read the retry-after header).
+             */
+            [STATUS_CODES.TOO_EARLY]: 500,
+
+            /**
+             * When a request fails due to the performance of the server,
+             * we can try again right away, so we wait 100 milliseconds.
+             */
+            [STATUS_CODES.REQUEST_TIMEOUT]: 100,
+
+            /**
+             * When a request fails because the server is (perhaps) temporarily offline,
+             * we wait for 1 second before trying again, to give the server time to recover.
+             */
+            [STATUS_CODES.SERVICE_UNAVAILABLE]: 1_000,
+
+            /**
+             * When a request fails because the server gateway is (perhaps) temporarily overloaded,
+             * we wait for 250 milliseconds before trying again, to give the gateway time to recover.
+             */
+            [STATUS_CODES.GATEWAY_TIMEOUT]: 250
+        };
 
     /**
      * Represents an HTTP status with its numeric code and textual name.
@@ -658,7 +714,7 @@ const {
      *   such as size, type, encoding, and language. <br>
      * - PROXIES: Headers pertinent to proxy servers and tracking the original client requests through proxies. <br>
      * - RANGE: Headers enabling ranges and partial requests to retrieve specific parts of large resources. <br>
-     * - REDIRECTION: Headers dealing with URL redirections and instructing user agents to perform subsequent actions. <br>
+     * - REDIRECTION: Headers dealing with URL redirections and instructing user agents to perform further actions. <br>
      */
     const HTTP_HEADERS =
         {
@@ -902,6 +958,8 @@ const {
             STATUS_CODES,
             STATUS_TEXT: STATUS_TEXT_BY_CODE_STRING,
             STATUS_TEXT_ARRAY: STATUS_TEXT_BY_INT_VALUE,
+            STATUS_ELIGIBLE_FOR_RETRY,
+            DEFAULT_RETRY_DELAY,
             VERBS,
             MODES,
             PRIORITY,

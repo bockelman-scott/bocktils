@@ -71,14 +71,16 @@ const {
     const _isNode = executionEnvironment.isNode();
 
     /**
-     * Constructs an options object for a storage event.
+     * Constructs an object to configure a storage event.
      *
      * @function buildStorageEventOptions
-     * @param {string} pKey - The key associated with the storage event. Defaults to an empty string if not provided.
-     * @param {string} pNewValue - The new value associated with the storage event. Defaults to an empty string if not provided.
-     * @param {string} pOldValue - The old value associated with the storage event. Defaults to an empty string if not provided.
-     * @param {string} pUrl - The URL of the document storing the associated data. Defaults to an empty string if not provided.
-     * @param {Object} pStorageArea - The storage object (e.g., localStorage or sessionStorage) associated with the event. Defaults to an empty object if not provided.
+     * @param {string} pKey             The key associated with the storage event. The default is an empty string if not provided.
+     * @param {string} pNewValue        The new value associated with the storage event. The default is an empty string if not provided.
+     * @param {string} pOldValue        The old value associated with the storage event. The default is an empty string if not provided.
+     * @param {string} pUrl             The URL of the document storing the associated data. The default is an empty string if not provided.
+     * @param {Object} pStorageArea     The storage object (e.g., localStorage or sessionStorage) associated with the event.
+     *                                  The default is an empty object if not provided.
+     *
      * @returns {Object} An object containing the specified storage event options.
      */
     const buildStorageEventOptions = ( pKey = _mt_str, pNewValue = _mt_str, pOldValue = _mt_str, pUrl = _mt_str, pStorageArea = {} ) =>

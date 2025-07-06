@@ -325,6 +325,7 @@ const {
             FORBIDDEN_RESPONSE_HEADER_NAMES,
             FORBIDDEN_REQUEST_HEADERS,
             FORBIDDEN_RESPONSE_HEADERS,
+            DEFAULT_EXPIRATION_HEADER,
             HttpRequestHeaders,
             HttpResponseHeaders,
             processRequestHeaderOptions

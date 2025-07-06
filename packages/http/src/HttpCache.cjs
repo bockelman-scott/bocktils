@@ -1,3 +1,5 @@
+// noinspection AiaStyle
+
 /**
  * @fileOverview
  * This module defines a facade and/or substitute for the Web CacheStorage API<br>
@@ -320,7 +322,7 @@ const {
     const DEFAULT_VERSION = 1;
 
     /**
-     * The default value indicating whether obsolete caches should be removed by default.<br>
+     * This is the default value indicating whether to delete obsolete caches.<br>
      * <br>
      * @constant DEFAULT_REMOVE_OBSOLETE_CACHES
      * @type {boolean}

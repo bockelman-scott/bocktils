@@ -365,9 +365,9 @@ const {
      *                                                    made by this instance
      *                                                    must originate with an authenticated user
      *
-     * @property {function} [isAuthenticated=op_true] A function that is called to verify the requesting user is authenticated
+     * @property {function} [isAuthenticated=op_true] A function called to verify the requesting user is authenticated
      *
-     * @property {function} [isExpiredSession=op_false] A function that is called to determine whether the requestor's authenticated session has expired
+     * @property {function} [isExpiredSession=op_false] A function called to determine whether the requestor's authenticated session has expired
      *
      * @property {boolean} [allowSynchronousFetch=false] Indicates whether this instance can make blocking calls to retrieve content synchronously
      *                                                   The default is false and setting it to true is <i>discouraged</i>
@@ -446,9 +446,9 @@ const {
      *
      * @property {boolean} [requiresAuthentication=false] Indicates whether a specific request requires an authenticated user
      *
-     * @property {function} [isAuthenticated=op_true] The function that is called to verify the requesting user is authenticated
+     * @property {function} [isAuthenticated=op_true] The function called to verify the requesting user is authenticated
      *
-     * @property {function} [isExpiredSession=op_false] The function that is called to determine whether the requestor's authenticated session has expired
+     * @property {function} [isExpiredSession=op_false] The function called to determine whether the requestor's authenticated session has expired
      *
      * @property {boolean} [synchronous=false] Indicates whether to make a blocking call
      *                                         to wait for the response before executing any other code
@@ -497,7 +497,7 @@ const {
     const getMsXmlParser = function()
     {
         let p = null;
-        let s = Fetcher.installedParser;
+        let s = Fetcher.InstalledParser;
         if ( s )
         {
             p = new ActiveXObject( s );
@@ -518,7 +518,8 @@ const {
                     p = null;
                 }
             }
-            Fetcher.installedParser = String( s );
+
+            Fetcher.InstalledParser = String( s );
         }
         return p;
     };
@@ -1036,6 +1037,11 @@ const {
             return this.#fetch( pRequestOrUrl, VERBS.OPTIONS, null, pCallback, pOptions );
         }
     }
+
+    Fetcher.fetchAll = async function()
+    {
+        // TODO
+    };
 
 
 }());

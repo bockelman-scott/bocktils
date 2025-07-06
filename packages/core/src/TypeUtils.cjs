@@ -2089,10 +2089,14 @@ const $scope = constants?.$scope || function()
     {
         const typeName = (isString( pType ) && JS_TYPES.includes( pType )) ?
                          (pType).trim().toLowerCase() :
-                         typeof pType;
+                         (isFunction( pType ) ? _fun : typeof pType);
 
         if ( JS_TYPES.includes( typeName ) && (typeof pValue) === typeName )
         {
+            if( _fun === typeName )
+            {
+                return isNonNullObject( pValue ) && isFunction( pType ) ? pValue instanceof pType : isFunction( pValue );
+            }
             return true;
         }
 

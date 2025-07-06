@@ -83,7 +83,6 @@ const {
     const
         {
             isNull,
-            isObject,
             isNonNullObject,
             isString,
             isArray,
@@ -92,8 +91,7 @@ const {
             isAsyncFunction
         } = typeUtils;
 
-
-    const { asString, isBlank, lcase, ucase } = stringUtils;
+    const { asString, asInt, isBlank, lcase, ucase, isJson } = stringUtils;
 
     const { asJson, parseJson } = jsonUtils;
 
@@ -101,7 +99,7 @@ const {
 
     const { HttpResponseHeaders } = httpHeaders;
 
-    const { cloneRequest } = httpRequest;
+    const { HttpRequest, cloneRequest } = httpRequest;
 
     const modName = "HttpResponse";
 
@@ -110,15 +108,17 @@ const {
     const cloneResponse = function( pResponse )
     {
         let res = pResponse?.response || pResponse;
-
-        return isNull( res ) ? null : isFunction( res?.clone ) ? res.clone() : localCopy( res );
+        return isNull( res ) ? null : (isNonNullObject( res ) ? (isFunction( res?.clone ) ? res.clone() : localCopy( res )) : isString( res ) ? parseJson( res ) : res);
     };
 
     const cloneHeaders = function( pHeaders )
     {
         let headers = pHeaders?.headers || pHeaders;
-
-        return new HttpResponseHeaders( isNull( headers ) ? new HttpResponseHeaders() : isFunction( headers?.clone ) ? headers.clone() : localCopy( headers ) );
+        return new HttpResponseHeaders( isNull( headers ) ?
+                                        new HttpResponseHeaders() :
+                                        isNonNullObject( headers ) ? (isFunction( headers?.clone ) ?
+                                                                      headers.clone() :
+                                                                      localCopy( headers )) : (isString( headers ) && isJson( headers ) ? parseJson( headers ) : {}) );
     };
 
     const DEFAULT_RESPONSE_OPTIONS =
@@ -160,9 +160,11 @@ const {
 
             const res = this.resolveResponse( pResponse, options );
 
-            const req = res?.request || options?.request;
+            const req = new HttpRequest( res?.request || options?.request );
 
             this.#response = cloneResponse( res );
+
+            this.#data = pResponse?.response?.data || pResponse?.data || this.#response?.data;
 
             this.#status = this.resolveStatus( this.#response, options );
 
@@ -479,11 +481,12 @@ const {
     {
         if ( _ud !== typeof Response && isFunction( Response?.redirect ) )
         {
-            return new HttpResponse( attempt( () => Response.redirect( pUrl, pStatus ) ) );
+            return new HttpResponse( attempt( () => Response.redirect( pUrl, asInt( pStatus ) ) ) );
         }
         return new HttpResponse( { url: pUrl, status: pStatus } );
     };
 
+    // noinspection JSUnresolvedReference
     HttpResponse.json = function( pData, pOptions )
     {
         let data = isNonNullObject( pData ) ? pData : isString( pData ) ? attempt( () => parseJson( pData ) ) : {};
@@ -516,7 +519,17 @@ const {
         {
             dependencies,
             classes:
-                {},
+                {
+                    HttpStatus,
+                    HttpResponseHeaders,
+                    HttpResponse
+                },
+            HttpStatus,
+            HttpResponseHeaders,
+            HttpResponse,
+            cloneResponse,
+            cloneHeaders,
+
         };
 
     mod = toolBocksModule.extend( mod );

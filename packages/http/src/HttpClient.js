@@ -1,10 +1,31 @@
+// noinspection GrazieInspection
+
 /**
  * @overview
  *
  * This file defines classes for handling HTTP Requests,
  * especially those to API endpoints that impose Rate Limits.
  *
- * Its dependencies are limited to those exposed by other @toolbocks modules or that are built in to node.js.
+ * Its dependencies are limited to those exposed by other @toolbocks modules
+ * or that are built in to node.js.
+ *
+ * The design goals are as follows:
+ *
+ * Clients of this module do not necessarily need to be aware of the rate-limiting details.
+ * Clients can pass one or more instances of the RateLimits class if desired, but this should be optional,
+ * and instead rely on the 'x-rate-limit' (and related) response headers
+ * to interactively configure and vary behavior for each HTTP request.
+ *
+ * The base class, HttpClient defines the interface for the clients/consumers.
+ *
+ * The base class defaults to using a default delegate.
+ * Subclasses can provide their own implementations of methods or fallback on the super class/default delegate.
+ *
+ * The default implementations will use fetch (or node:fetch), but subclasses using Axios are also expected.
+ * It should also be plausible to use other HTTP client libraries, including XmlHttpRequest.
+ *
+ *
+ *
  *
  *
  */
@@ -45,9 +66,19 @@ const entityUtils = require( "../../common/src/EntityUtils.cjs" );
 const httpConstants = require( "./HttpConstants.cjs" );
 
 /**
- * Imports the HttpRequest mode for the request facade and associated utility functions required
+ * Imports the HttpHeaders module for the Headers facade and associated utility functions required
+ */
+const httpHeaders = require( "./HttpHeaders.cjs" );
+
+/**
+ * Imports the HttpRequest module for the request facade and associated utility functions required
  */
 const httpRequestModule = require( "./HttpRequest.cjs" );
+
+/**
+ * Imports the HttpResponse module for the response facade and associated utility functions required
+ */
+const httpResponseModule = require( "./HttpResponse.cjs" );
 
 /**
  * Imports the core constants
@@ -65,8 +96,10 @@ const $scope = constants?.$scope || function()
     return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
 };
 
+// noinspection FunctionTooLongJS
 /**
  * This is the IIFE that defines the classes, variables, and functions that are exported as a module.
+ * Note that the exported module extends ToolBocksModule (from @toolbocks/core moduleUtils)
  */
 // noinspection FunctionTooLongJS
 (function exposeModule()
@@ -134,15 +167,19 @@ const $scope = constants?.$scope || function()
             isDate,
             isJson,
             isRegExp,
+            isPromise,
+            isThenable,
+            instanceOfAny,
+            firstMatchingType,
             toObjectLiteral,
             clamp
         } = typeUtils;
 
     // import the useful functions from the core module, StringUtils
-    const { asString, asInt, isBlank, cleanUrl, lcase, ucase } = stringUtils;
+    const { asString, asInt, toBool, isBlank, cleanUrl, lcase, ucase } = stringUtils;
 
     // import the useful functions from the core module, ArrayUtils
-    const { asArray, BoundedQueue } = arrayUtils;
+    const { asArray, TypedArray, BoundedQueue } = arrayUtils;
 
     // import the DateUtils module from the datesModule
     const { DateUtils } = datesModule;
@@ -175,7 +212,9 @@ const $scope = constants?.$scope || function()
         HttpStatus,
         STATUS_CODES,
         STATUS_TEXT,
-        STATUS_TEXT_ARRAY
+        STATUS_TEXT_ARRAY,
+        STATUS_ELIGIBLE_FOR_RETRY,
+        DEFAULT_RETRY_DELAY
     } = httpConstants;
 
     // define module-level constants
@@ -191,12 +230,20 @@ const $scope = constants?.$scope || function()
     const MAX_REDIRECTS = 10;
     const DEFAULT_REDIRECTS = 5;
 
+    const { HttpRequestHeaders, HttpResponseHeaders } = httpHeaders;
+
     // import the HttpRequest (facade) class we use to provide a uniform interface for HTTP Requests
-    const { HttpRequest } = httpRequestModule;
+    const { HttpRequest, cloneRequest } = httpRequestModule;
+
+    // import the HttpResponse (facade) class we use to provide a uniform interface for HTTP Responses
+    const { HttpResponse, cloneResponse } = httpResponseModule;
 
     /**
      * This class is used to define the configuration of an Http (or Https) Agent.
-     * Notably, this class exposes properties for whether to use keepAlive, and if so, for how long.
+     * Notably, this class exposes properties for whether to use keepAlive, and if so, the duration (in milliseconds).
+     * While these options are defined by creating instances of this class,
+     * they must be passed as POJOs (plain old JavaScript objects), for which purpose the toObjectLiteral method is provided.
+     * @class
      */
     class HttpAgentConfig
     {
@@ -206,16 +253,31 @@ const $scope = constants?.$scope || function()
         #maxTotalSockets = Infinity;
         #rejectUnauthorized = false;
 
+        /**
+         * Constructs an instance of the HttpAgentConfig class,
+         * used to define the options passed to the constructor or either http.Agent or https.Agent.
+         *
+         * @param {boolean} [pKeepAlive=true]               A boolean indicating whether connections
+         *                                                  should be kept alive for some period of time to be reused
+         *
+         * @param {number} [pKeepAliveMilliseconds=10000]   A number defining the length of time,
+         *                                                  in milliseconds, that connections should be kept alive,
+         *                                                  if keepAlive is true
+         *
+         * @param {number} [pMaxFreeSockets=256]
+         * @param {number} [pMaxTotalSockets=Infinity]
+         * @param {boolean} [pRejectUnauthorized=false]
+         */
         constructor( pKeepAlive = true,
                      pKeepAliveMilliseconds = 10_000,
                      pMaxFreeSockets = 256,
-                     pMaxTotalDockets = Infinity,
+                     pMaxTotalSockets = Infinity,
                      pRejectUnauthorized = false )
         {
             this.#keepAlive = !!pKeepAlive;
             this.#keepAliveMsecs = Math.max( 1_000, Math.min( asInt( pKeepAliveMilliseconds ), 300_000 ) );
             this.#maxFreeSockets = Math.max( Math.min( asInt( pMaxFreeSockets, 256 ) ) );
-            this.#maxTotalSockets = asInt( pMaxTotalDockets ) > 0 && asInt( pMaxTotalDockets ) > asInt( pMaxFreeSockets ) ? asInt( pMaxTotalDockets ) : Infinity;
+            this.#maxTotalSockets = asInt( pMaxTotalSockets ) > 0 && asInt( pMaxTotalSockets ) > asInt( pMaxFreeSockets ) ? asInt( pMaxTotalSockets ) : Infinity;
             this.#rejectUnauthorized = !!pRejectUnauthorized;
         }
 
@@ -245,42 +307,61 @@ const $scope = constants?.$scope || function()
             return !!this.#rejectUnauthorized;
         }
 
+        /**
+         * Returns an object literal whose properties are those of this instance.
+         * @returns {Object} an object literal whose properties are those of this instance.
+         */
         toObjectLiteral()
         {
             return toObjectLiteral( this );
         }
 
+        /**
+         * Returns a JSON representation of this instance
+         * @returns {String} a JSON representation of this instance
+         */
         toString()
         {
             return asJson( this );
         }
     }
 
-    // creates an instance of configuration properties for the http and http agents using the class defaults
+    // creates an instance of the HttpAgentConfig class
+    // to define configuration properties
+    // for the http and http agents using the class defaults
     const httpAgentConfig = new HttpAgentConfig();
 
-    // create a global instance of http.Agent
+    // create a global instance of http.Agent (and then convert it to an object literal)
     const httpAgent = new http.Agent( httpAgentConfig.toObjectLiteral() );
 
-    // create a global instance of https.Agent
+    // create a global instance of https.Agent (and then convert it to an object literal)
     const httpsAgent = new https.Agent( httpAgentConfig.toObjectLiteral() );
 
     /**
-     * This function is used to ensure that no configuration has inadvertantly replaced the http and/or https agents with object literals.
-     * @param {Object} pConfig the configuration to examine and potentially repair, if necessary
-     * @returns {Object} the same configuration object specified,
-     * but with the http and http agent properties corrected, if necessary,
-     * to hold actual instances of http.Agent or https.Agent.
+     * This function is used to ensure that no configuration
+     * has inadvertently replaced the http and/or https Agents with object literals.
+     *
+     * @param {Object} pConfig  the configuration to examine (and repair, if necessary)
+     *
+     * @returns {Object}        the same configuration object specified,
+     *                          but with the http and http agent properties corrected, if necessary,
+     *                          to hold actual instances of http.Agent or https.Agent.
      */
     function fixAgents( pConfig )
     {
         if ( (isNull( pConfig.httpAgent ) || !(pConfig.httpAgent instanceof http.Agent)) )
         {
+            // reset the property to be an instance of http.Agent
+            // we expect the variable, httpAgent, to hold an instance of http.Agent,
+            // but if it is null or undefined, a new instance is created
             pConfig.httpAgent = httpAgent || new http.Agent( httpAgentConfig.toObjectLiteral() );
         }
 
         if ( (isNull( pConfig.httpsAgent ) || !(pConfig.httpsAgent instanceof https.Agent)) )
         {
+            // reset the property to be an instance of https.Agent
+            // we expect the variable, httpsAgent, to hold an instance of https.Agent,
+            // but if it is null or undefined, a new instance is created
             pConfig.httpsAgent = httpsAgent || new https.Agent( httpAgentConfig.toObjectLiteral() );
         }
 
@@ -288,9 +369,19 @@ const $scope = constants?.$scope || function()
     }
 
     /**
-     * This class can be used to define the configuration expected for an instance of HttpClient (or one of its subclasses).
+     * This class can be used to define the configuration expected
+     * for an instance of HttpClient (or one of its subclasses).
+     * <br><br>
      * Not all properties are relevant to all instances of HttpClient.
-     * This class is intended to provide values expected by either the Axios library or the Fetch API.
+     * The specific properties that are used are dependent upon the underlying library (Fetch API, Axios, or XmlHttpRequest, for example).
+     * <br><br>
+     * This class is intended to provide values
+     * expected by either the Axios library, the Fetch API, or XmlHttpRequest.
+     * <br><br>
+     * As with HttpAgentConfig, this class implements a toObjectLiteral method
+     * to be used when passing the configuration to a class constructor or request method.
+     *
+     * @class
      */
     class HttpClientConfig
     {
@@ -304,15 +395,29 @@ const $scope = constants?.$scope || function()
         #httpAgent = httpAgent;
         #httpsAgent = httpsAgent;
 
+        /**
+         * Constructs an instance of HttpClientConfig,
+         * used to define properties used by the underlying framework
+         * when making HTTP or HTTPS requests.
+         *
+         * @param {http.Agent} pHttpAgent
+         * @param {https.Agent} pHttpsAgent
+         * @param {boolean} [pAllowAbsoluteUrls=true]
+         * @param {number} [pTimeout=30_000]
+         * @param {number} [pMaxContentLength=200_000_000]
+         * @param {number} [pMaxBodyLength=200_000_000]
+         * @param {number} [pMaxRedirects=5]
+         * @param {boolean} [pDecompress=true]
+         */
         // noinspection OverlyComplexFunctionJS
-        constructor( pHttpAgent,
-                     pHttpsAgent,
-                     pAllowAbsoluteUrls,
-                     pTimeout,
-                     pMaxContentLength,
-                     pMaxBodyLength,
-                     pMaxRedirects,
-                     pDecompress )
+        constructor( pHttpAgent = httpAgent,
+                     pHttpsAgent = httpAgent,
+                     pAllowAbsoluteUrls = true,
+                     pTimeout = DEFAULT_TIMEOUT_MILLISECONDS,
+                     pMaxContentLength = MAX_CONTENT_LENGTH,
+                     pMaxBodyLength = DEFAULT_TIMEOUT_MILLISECONDS,
+                     pMaxRedirects = DEFAULT_REDIRECTS,
+                     pDecompress = true )
         {
             this.#httpAgent = isNonNullObject( pHttpAgent ) && pHttpAgent instanceof http.Agent ? pHttpAgent : httpAgent || new http.Agent( new HttpAgentConfig().toObjectLiteral() );
             this.#httpsAgent = isNonNullObject( pHttpsAgent ) && pHttpsAgent instanceof https.Agent ? pHttpsAgent : httpsAgent || new https.Agent( new HttpAgentConfig().toObjectLiteral() );
@@ -366,11 +471,20 @@ const $scope = constants?.$scope || function()
             return isNonNullObject( this.#httpsAgent ) && (this.#httpsAgent instanceof http.Agent) ? this.#httpsAgent : httpsAgent || new https.Agent( new HttpAgentConfig().toObjectLiteral() );
         }
 
+        /**
+         * Returns an object literal whose properties are those of this instance.
+         * @returns {Object} an object literal whose properties are those of this instance.
+         */
         toObjectLiteral()
         {
-            return toObjectLiteral( this );
+            let literal = toObjectLiteral( this );
+            return fixAgents( literal );
         }
 
+        /**
+         * Returns a JSON representation of this instance
+         * @returns {String} a JSON representation of this instance
+         */
         toString()
         {
             return asJson( this );
@@ -394,10 +508,238 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * This class can be used to define the configuration expected for an instance of HttpClient (or one of its subclasses)
+     * This class is used to represent the values normally required to make an OAUTH/2 request to authenticate.
+     *
+     * @param {String} pClientId The Client ID to use in conjunction with an OAUTH/OAUTH2 to authenticate and/or get an access token
+     * @param {String} pClientSecret The Client Secret to use in conjunction with an OAUTH/OAUTH2 to authenticate and/or get an access token
+     *
+     * @class
+     */
+    class OauthSecrets
+    {
+        #clientId;
+        #clientSecret;
+
+        constructor( pClientId, pClientSecret )
+        {
+            this.#clientId = asString( pClientId, true );
+            this.#clientSecret = asString( pClientSecret, true );
+        }
+
+        get clientId()
+        {
+            return this.#clientId;
+        }
+
+        get clientSecret()
+        {
+            return this.#clientSecret;
+        }
+
+        toObjectLiteral()
+        {
+            return toObjectLiteral( this );
+        }
+
+        toString()
+        {
+            return asJson( this );
+        }
+    }
+
+    /**
+     * This class is used to represent values that some APIs require
+     * to distinguish between tenants and to grant user-specific permissions.
+     */
+    class TenantSecrets
+    {
+        #orgId;
+        #userId;
+
+        constructor( pOrgId, pUserId )
+        {
+            this.#orgId = asString( pOrgId, true );
+            this.#userId = asString( pUserId, true );
+        }
+
+        get orgId()
+        {
+            return this.#orgId;
+        }
+
+        get userId()
+        {
+            return this.#userId;
+        }
+
+        toObjectLiteral()
+        {
+            return toObjectLiteral( this );
+        }
+
+        toString()
+        {
+            return asJson( this );
+        }
+    }
+
+    /**
+     * This class represents the properties required for the simplest APIs.
+     *
+     * @param {String} pApiKey The API Key to use to authenticate to the external API and/or authorize the requests
+     * @param {String|Object} pAccessToken The Access Token to use to authenticate to the external API and/or authorize the requests
+     */
+    class ApiProperties
+    {
+        #apiKey;
+        #accessToken;
+
+        constructor( pApiKey, pAccessToken = pApiKey )
+        {
+            this.#apiKey = asString( pApiKey, true );
+            this.#accessToken = pAccessToken || this.#apiKey;
+        }
+
+        get apiKey()
+        {
+            return asString( this.#apiKey, true );
+        }
+
+        get accessToken()
+        {
+            return isNonNullObject( this.#accessToken ) ? this.#accessToken : (isString( this.#accessToken ) && !isBlank( this.#accessToken ) ? this.#accessToken : this.apiKey);
+        }
+
+        toObjectLiteral()
+        {
+            return toObjectLiteral( this );
+        }
+
+        toString()
+        {
+            return asJson( this );
+        }
+    }
+
+    /**
+     * This class represents the superset of properties required for known APIs.
+     *
+     * @param {ApiProperties|Object} pApiProperties     An instance of ApiProperties or an object
+     *                                                  defining the basic values required
+     *                                                  (that is, apiKey and accessToken)
+     *
+     * @param {String} pPersonalAccessToken             The _Personal_ Access Token
+     *                                                  to use to get or refresh an access token
+     *
+     * @param {OauthSecrets|Object} pOathSecrets        An instance of OauthSecrets
+     *                                                  or an object defining clientId and clientSecret
+     *
+     * @param {String|URL} pTokenUrl                    The URL (or url string/path) to the endpoint
+     *                                                  to get or refresh an access token
+     *
+     * @param {TenantSecrets|Object} pTenantSecrets     An instance of TenantSecrets or an object
+     *                                                  defining the orgId and userId values
+     *                                                  required to make API requests.
+     *
+     * @class
+     */
+    class ApiExtendedProperties extends ApiProperties
+    {
+        #basicProperties;
+        #personalAccessToken = _mt;
+        #oauthSecrets = {};
+        #tokenUrl = _mt;
+        #tenantSecrets = {};
+
+        constructor( pApiProperties, pPersonalAccessToken = _mt, pOauthSecrets = {}, pTokenUrl = _mt, pTenantSecrets = {} )
+        {
+            super( pApiProperties?.apiKey, pApiProperties?.accessToken );
+
+            this.#basicProperties = asObject( pApiProperties );
+
+            this.#personalAccessToken = asString( pPersonalAccessToken, true ) || _mt;
+
+            this.#oauthSecrets = asObject( pOauthSecrets ) || {};
+
+            this.#tokenUrl = (_ud !== typeof URL && pTokenUrl instanceof URL) ? cleanUrl( asString( pTokenUrl.href, true ) ) : cleanUrl( asString( pTokenUrl || _mt, true ) );
+
+            this.#tenantSecrets = asObject( pTenantSecrets );
+        }
+
+        get apiKey()
+        {
+            let key = _mt;
+            if ( isNonNullObject( this.#basicProperties ) )
+            {
+                key = this.#basicProperties?.apiKey || super.apiKey;
+            }
+            key = asString( key, true ) || super.apiKey;
+            return asString( key, true );
+        }
+
+        get accessToken()
+        {
+            let token;
+            if ( isNonNullObject( this.#basicProperties ) )
+            {
+                token = this.#basicProperties?.accessToken || super.accessToken;
+            }
+            return token || super.accessToken;
+        }
+
+        get personalAccessToken()
+        {
+            return asString( this.#personalAccessToken, true );
+        }
+
+        get clientId()
+        {
+            const secrets = this.#oauthSecrets;
+            return isNonNullObject( secrets ) ? (asString( secrets.clientId || secrets.id, true ) || _mt) : _mt;
+        }
+
+        get clientSecret()
+        {
+            const secrets = this.#oauthSecrets;
+            return isNonNullObject( secrets ) ? (asString( secrets.clientSecret || secrets.secret, true ) || _mt) : _mt;
+        }
+
+        get tenantSecrets()
+        {
+            return asObject( this.#tenantSecrets );
+        }
+
+        get orgId()
+        {
+            return asString( this.tenantSecrets?.orgId || _mt, true ) || _mt;
+        }
+
+        get userId()
+        {
+            return asString( this.tenantSecrets?.userId || _mt, true ) || _mt;
+        }
+
+        toObjectLiteral()
+        {
+            return toObjectLiteral( this );
+        }
+
+        toString()
+        {
+            return asJson( this );
+        }
+    }
+
+    /**
+     * This class can be used to define the configuration
+     * expected for an instance of HttpClient (or one of its subclasses)
      * that will be used to communicate with a specific external API.
-     * Not all properties are relevant to all instances of HttpClient or every possible API.
-     * This class is intended to provide values expected by most APIs, including those that require frequent refresh of an access token.
+     * <br><br>
+     *
+     * Not all properties are relevant to all instances of HttpClient or every possible API.<br>
+     * This class is intended to provide values expected by most APIs,
+     * including those that require frequent refreshing of an access token.
+     * @class
      * @extends HttpClientConfig
      */
     class HttpClientApiConfig extends HttpClientConfig
@@ -449,81 +791,33 @@ const $scope = constants?.$scope || function()
          * to be used with an instance of HttpClient
          * to interact with a specific API
          *
-         * @param {http.Agent} pHttpAgent The http.Agent to use, defining the keepAlive characteristics for the HTTP connection(s)
-         * @param {https.Agent} pHttpsAgent  The https.Agent to use, defining the keepAlive characteristics for the SSL/HTTPS connection(s)
-         * @param {boolean} pAllowAbsoluteUrls Whether to allow absolute URLS or only relative URLs
-         * @param {number} pTimeout The time, in milliseconds, to wait for a response before assuming the request has been aborted or has failed
-         * @param {number} pMaxContentLength The maximum size, in bytes, any request can be for the associated HttpClient
-         * @param {number} pMaxBodyLength The maximum size, in bytes, the body of any request can be for the associated HttpClient
-         * @param {number} pMaxRedirects The maximum number of redirects the HttpClient will follow to return a response
-         * @param {number} pDecompress Whether to unzip or otherwise inflate compressed content/responses
-         * @param {String} pApiKey The API Key to use to authenticate to the external API and/or authorize the requests
-         * @param {String|Object} pAccessToken The Access Token to use to authenticate to the external API and/or authorize the requests
-         * @param {String} pPersonalAccessToken The Personal Access Token to use to get an access token
-         * @param {String} pClientId The Client ID to use in conjunction with an OAUTH/OAUTH2 to authenticate and/or get an access token
-         * @param {String} pClientSecret The Client Secret to use in conjunction with an OAUTH/OAUTH2 to authenticate and/or get an access token
-         * @param {String|URL} pAccessTokenUrl The URL (or url string/path) to the endpoint to get an access token
-         * @param {String} pOrgId The organization ID, if required, to pass to API endpoints for APIs/endpoint that expect one
-         * @param {String} pUserId The user ID, if required, to pass to API endpoints for APIs/endpoint that expect one
+         * @param {HttpClientConfig|Object} pHttpClientConfig
+         * @param {ApiProperties|Object} pApiProperties
+         * @param {OauthSecrets|Object} pOauthSecrets
+         * @param {String} pPersonalAccessToken
+         * @param {String|URL} pAccessTokenUrl
+         * @param {TenantSecrets} pTenantSecrets
          */
         // noinspection OverlyComplexFunctionJS
-        constructor( pHttpAgent, pHttpsAgent, pAllowAbsoluteUrls, pTimeout, pMaxContentLength, pMaxBodyLength, pMaxRedirects, pDecompress, pApiKey, pAccessToken, pPersonalAccessToken, pClientId, pClientSecret, pAccessTokenUrl, pOrgId, pUserId )
+        constructor( pHttpClientConfig, pApiProperties, pOauthSecrets, pPersonalAccessToken, pAccessTokenUrl, pTenantSecrets )
         {
-            super( pHttpAgent, pHttpsAgent, pAllowAbsoluteUrls, pTimeout, pMaxContentLength, pMaxBodyLength, pMaxRedirects, pDecompress );
+            super( pHttpClientConfig?.httpAgent || httpAgent,
+                   pHttpClientConfig.httpsAgent || httpsAgent,
+                   toBool( pHttpClientConfig?.allowAbsoluteUrls ),
+                   clamp( asInt( pHttpClientConfig?.timeout ), MIN_TIMEOUT_MILLISECONDS, MAX_TIMEOUT_MILLISECONDS ),
+                   clamp( asInt( pHttpClientConfig?.maxContentLength ), MIN_CONTENT_LENGTH, MAX_CONTENT_LENGTH ),
+                   clamp( asInt( pHttpClientConfig?.maxBodyLength ), MIN_CONTENT_LENGTH, MAX_CONTENT_LENGTH ),
+                   clamp( asInt( pHttpClientConfig?.maxRedirects ), MIN_REDIRECTS, MAX_REDIRECTS ),
+                   toBool( pHttpClientConfig?.decompress ) );
 
-            this.#apiKey = pApiKey;
-            this.#accessToken = pAccessToken;
-            this.#personalAccessToken = pPersonalAccessToken;
-            this.#clientId = pClientId;
-            this.#clientSecret = pClientSecret;
-            this.#accessTokenUrl = pAccessTokenUrl;
-            this.#orgId = pOrgId;
-            this.#userId = pUserId;
-        }
-
-        // noinspection OverlyComplexFunctionJS
-        /**
-         * Creates a new instance from an existing instance of HttpClientConfig
-         *
-         * @param {HttpClientConfig} pHttpClientConfig An existing instance of HttpClientConfig from which to build an instance of HttpClientApiConfig
-         * @param {String} pApiKey The API KEY necessary to authenticate/authorize requests to the target API
-         * @param {String|Object} pAccessToken The Access Token (string or JWT) required to authenticate/authorize requests to the target API
-         * @param {String} pPersonalAccessToken The Personal Access Token required to get an Access Token
-         * @param {String} pClientId The client ID to use when getting an Access Token
-         * @param {String} pClientSecret The client Secret to use when getting an Access Token
-         * @param {String|URL} pAccessTokenUrl The URL to use to get or refresh the Access Token
-         * @param {String} pOrgId The organization ID value required with each request
-         * @param {String} pUserId The user ID value required with each request
-         */
-        static fromHttpClientConfig( pHttpClientConfig,
-                                     pApiKey,
-                                     pAccessToken,
-                                     pPersonalAccessToken,
-                                     pClientId,
-                                     pClientSecret,
-                                     pAccessTokenUrl,
-                                     pOrgId,
-                                     pUserId )
-        {
-            let cfg = new HttpClientApiConfig( pHttpClientConfig.httpAgent,
-                                               pHttpClientConfig.httpsAgent,
-                                               pHttpClientConfig.allowAbsoluteUrls,
-                                               pHttpClientConfig.timeout,
-                                               pHttpClientConfig.maxContentLength,
-                                               pHttpClientConfig.maxBodyLength,
-                                               pHttpClientConfig.maxRedirects,
-                                               pHttpClientConfig.decompress,
-                                               pApiKey,
-                                               pAccessToken,
-                                               pPersonalAccessToken,
-                                               pClientId,
-                                               pClientSecret,
-                                               pAccessTokenUrl,
-                                               pOrgId,
-                                               pUserId
-            );
-
-            return fixAgents( cfg );
+            this.#apiKey = asString( pApiProperties?.apiKey || pHttpClientConfig?.apiKey || asString( pApiProperties, true ), true );
+            this.#accessToken = asString( pApiProperties?.accessToken || pHttpClientConfig?.accessToken, true ) || this.#apiKey;
+            this.#personalAccessToken = asString( pPersonalAccessToken, true ) || asString( pHttpClientConfig?.personalAccessToken, true ) || this.#apiKey;
+            this.#clientId = pOauthSecrets?.clientId || pOauthSecrets?.id || pHttpClientConfig?.clientId || _mt;
+            this.#clientSecret = pOauthSecrets?.clientSecret || pOauthSecrets?.secret || pHttpClientConfig?.clientSecret || _mt;
+            this.#accessTokenUrl = cleanUrl( asString( pAccessTokenUrl, true ) );
+            this.#orgId = pTenantSecrets?.orgId || pHttpClientConfig?.orgId || _mt;
+            this.#userId = pTenantSecrets?.userId || pHttpClientConfig?.userId || _mt;
         }
 
         get apiKey()
@@ -566,9 +860,19 @@ const $scope = constants?.$scope || function()
             return cleanUrl( asString( this.#accessTokenUrl, true ) );
         }
 
+        get tokenUrl()
+        {
+            return cleanUrl( asString( this.#accessTokenUrl, true ) );
+        }
+
+        /**
+         * Returns an object literal whose properties are those of this instance.
+         * @returns {Object} an object literal whose properties are those of this instance.
+         */
         toObjectLiteral()
         {
-            return toObjectLiteral( this );
+            let literal = toObjectLiteral( this );
+            return fixAgents( literal );
         }
 
         toString()
@@ -582,10 +886,10 @@ const $scope = constants?.$scope || function()
          *
          * Example:
          *
-         * If the specified object looks like:
+         * If the specified map, or object, looks like:
          *
          * {
-         *     "api_key:"apiKey",
+         *     "api_key":"apiKey",
          *     "x-org-id":"orgId",
          *     "x-user-id":"userId"
          * }
@@ -650,90 +954,58 @@ const $scope = constants?.$scope || function()
 
     /**
      * Returns an object literal holding the properties defined in the default HttpClientApiConfig
-     * @returns {Object} an object literal holding the properties defined in the default HttpClientApiConfig
-     * @param pApiKey
-     * @param pAccessToken
+     *
+     * @param pApiProperties
+     * @param pOauthSecrets
      * @param pPersonalAccessToken
-     * @param pClientId
-     * @param pClientSecret
-     * @param pTokenUrl
-     * @param pOrgId
-     * @param pUserId
-     * @returns {Object}
+     * @param pAccessTokenUrl
+     * @param pTenantSecrets
+     *
+     * @returns {Object} an object literal holding the properties defined in the default HttpClientApiConfig
      */
-    HttpClientApiConfig.getDefaultConfig = function( pApiKey, pAccessToken, pPersonalAccessToken, pClientId, pClientSecret, pTokenUrl, pOrgId, pUserId )
+    HttpClientApiConfig.getDefaultConfig = function( pApiProperties,
+                                                     pOauthSecrets,
+                                                     pPersonalAccessToken,
+                                                     pAccessTokenUrl,
+                                                     pTenantSecrets )
     {
-        let cfg = HttpClientApiConfig.fromHttpClientConfig( DEFAULT_CONFIG, pApiKey, pAccessToken, pPersonalAccessToken, pClientId, pClientSecret, pTokenUrl, pOrgId, pUserId );
+        let cfg = new HttpClientApiConfig( HttpClientConfig.getDefaultConfig(), pApiProperties, pOauthSecrets, pPersonalAccessToken, pAccessTokenUrl, pTenantSecrets );
         return fixAgents( cfg );
     };
 
     /**
      * Combines the specified configuration with the default configuration
-     * @param {Object} pConfig the configuration to combine with the default configuration.
-     *                         When the specified configuration has a value for a property defined in the defauly=t configuration,
-     *                         the value in the specified configuration is returned in the resulting configuration object.
-     * @returns {Object} An object combining the specified configuration with the default configuration
+     * @param {Object} pConfig  the configuration to combine with the default configuration.
+     *                          <br><br>
+     *                          When the specified configuration has a value for a property defined in the default configuration,
+     *                          the value in the specified configuration is returned in the resulting configuration object.
+     *
+     * @returns {Object}        An object combining the specified configuration
+     *                          with the default configuration
      */
     function resolveConfig( pConfig )
     {
-        let cfg = populateOptions( toObjectLiteral( pConfig || {} ), toObjectLiteral( DEFAULT_CONFIG ) );
+        let cfg = populateOptions( toObjectLiteral( pConfig || {} ), (DEFAULT_CONFIG.toObjectLiteral()) );
         return fixAgents( toObjectLiteral( cfg ) );
     }
 
     /**
-     * Combines the specified configuration with the default configuration and the values (optionally) provided
-     * @param {Object} pConfig the configuration to combine with the default configuration.
-     *                         When the specified configuration has a value for a property defined in the defauly=t configuration,
-     *                         the value in the specified configuration is returned in the resulting configuration object.
+     * Combines the specified configuration
+     * with the default API configuration
      *
-     *
-     *
-     * @param pApiKey
-     * @param pAccessToken
-     * @param pPersonalAccessToken
-     * @param pClientId
-     * @param pClientSecret
-     * @param pTokenUrl
-     * @param pOrgId
-     * @param pUserId
+     * @param {Object} pApiConfig       The configuration to combine with the default configuration.
+     *                                  When the specified configuration has a value for a property defined in the default configuration,
+     *                                  the value in the specified configuration is returned in the resulting configuration object.
      *
      * @returns {Object} An object combining the specified configuration with the default configuration
      */
-    function resolveApiConfig( pConfig, pApiKey, pAccessToken, pPersonalAccessToken, pClientId, pClientSecret, pTokenUrl, pOrgId, pUserId )
+    function resolveApiConfig( pApiConfig )
     {
-        let cfg = resolveConfig( pConfig );
+        let cfg = resolveConfig( pApiConfig );
 
-        let apiCfg = HttpClientApiConfig.fromHttpClientConfig( cfg,
-                                                               pApiKey || cfg?.apiKey || pAccessToken || cfg?.accessToken,
-                                                               pAccessToken || cfg.accessToken,
-                                                               pPersonalAccessToken || cfg.personalAccessToken,
-                                                               pClientId || cfg?.clientId || cfg?.client?.id,
-                                                               pClientSecret || cfg?.clientSecret || cfg.client?.secret,
-                                                               pTokenUrl || cfg.tokenUrl,
-                                                               pOrgId || cfg?.orgId || cfg?.org?.id,
-                                                               pUserId || cfg?.userId || cfg?.user?.id );
+        cfg = populateOptions( cfg, HttpClientApiConfig.getDefaultConfig() );
 
-        return fixAgents( toObjectLiteral( apiCfg ) );
-    }
-
-    function cloneResponse( pResponse )
-    {
-        if ( isNonNullObject( pResponse ) )
-        {
-            if ( isFunction( pResponse.clone ) )
-            {
-                return pResponse.clone();
-            }
-            return localCopy( pResponse );
-        }
-        else if ( isString( pResponse ) )
-        {
-            if ( isJson( pResponse ) )
-            {
-                return attempt( () => parseJson( pResponse ) );
-            }
-        }
-        return pResponse;
+        return fixAgents( toObjectLiteral( cfg ) );
     }
 
     /**
@@ -770,7 +1042,7 @@ const $scope = constants?.$scope || function()
         /**
          * Holds the Response Headers returned
          * or if no headers were returned, the Request Header used to make the request.
-         * @type {Headers|HttpHeaders|Map<String,String>|Object}
+         * @type {Headers|HttpResponseHeaders|Map<String,String>|Object}
          */
         headers;
 
@@ -821,7 +1093,7 @@ const $scope = constants?.$scope || function()
             {
                 // Some frameworks return the response as a property of an error returned in place of a response.
                 // See https://axios-http.com/docs/handling_errors, for example
-                this.response = source.response || pError?.response || source || pResponse || pError;
+                this.response = new HttpResponse( source.response || pError?.response || source || pResponse || pError );
 
                 // assign the numeric value of the response status to this instance
                 this.status = asInt( this.response?.status || source.status || pResponse?.status );
@@ -834,25 +1106,27 @@ const $scope = constants?.$scope || function()
 
                 // Assigns the data property of the response to this instance if there is one,
                 // such as would be the case when using the Axios framework, for example.
-                // Note that we do not try to assign the 'body' property of a response to this property, because that is often an async call and/or causes bodyUsed to be true
-                this.data = this.response?.data || source.data || pResponse?.data || pResponse; // could be pending ReadableStream
+                this.data = (this.response?.data || source.data || pResponse?.data) || (this.response?.body || source.body || pResponse?.body) || pResponse; // might represent a Promise
 
                 // Stores the configuration returned with the response
                 // or the configuration used to make the request for which this is the response
                 this.config = this.response?.config || source.config || pResponse?.config || pConfig;
 
                 // Stores the headers returned with the response or the request headers that were passed
-                this.headers = this.response?.headers || source.headers || pResponse.headers || source?.config?.headers || pResponse.config?.headers || this.config?.headers || pConfig?.headers || pConfig;
-
-                // Stores the request object associated with this response or synthesizes one
-                this.request = this.response?.request || source.request || pResponse.request ||
-                    {
-                        url: asString( pUrl, true ),
-                        config: pConfig || {}
-                    };
+                this.headers = new HttpResponseHeaders( this.response?.headers || source.headers || pResponse.headers || source?.config?.headers || pResponse.config?.headers || this.config?.headers || pConfig?.headers || pConfig );
 
                 // Stores the url path from which the response actually came (in the case of redirects) or the url/path of the request
-                this.url = asString( this.response?.url || asString( pUrl, true ) || this.request?.url, true ) || _mt;
+                this.url = asString( this.response?.url || asString( pUrl, true ), true ) || _mt;
+
+                // Stores the request object associated with this response or synthesizes one
+                this.request = new HttpRequest( cloneRequest( this.response?.request || source.request || pResponse.request ||
+                                                                  {
+                                                                      url: this.url || asString( pUrl, true ),
+                                                                      config: pConfig || {}
+                                                                  } ) );
+
+                // Stores the url path from which the response actually came (in the case of redirects) or the url/path of the request
+                this.url = asString( this.response?.url || this.request?.url || asString( pUrl, true ), true ) || _mt;
             }
 
             // Stores an error object if the request was unsuccessful
@@ -1024,7 +1298,7 @@ const $scope = constants?.$scope || function()
 
         static resolveSource( pObject )
         {
-            return isNonNullObject( pObject ) ? pObject : (isString( pObject ) && isJson( pObject )) ? attempt( () => parseJson( pObject ) ) : {};
+            return isNonNullObject( pObject ) ? pObject : (isString( pObject ) && isJson( pObject )) ? attempt( () => parseJson( pObject ) ) : pObject || {};
         }
 
         static generateStatusText( pStatus )
@@ -1056,7 +1330,7 @@ const $scope = constants?.$scope || function()
         {
             if ( Object.hasOwn( pValue, "status" ) &&
                  Object.hasOwn( pValue, "headers" ) &&
-                 Object.hasOwn( pValue, "data" ) )
+                 (Object.hasOwn( pValue, "data" ) || Object.hasOwn( pValue, "body" )) )
             {
                 return new ResponseData( pValue,
                                          null,
@@ -1080,14 +1354,16 @@ const $scope = constants?.$scope || function()
 
     function populateResponseData( pResponse, pConfig, pUrl )
     {
+        let response = pResponse?.response || pResponse;
+
         let res =
             {
-                status: pResponse?.status || STATUS_CODES.CLIENT_ERROR,
-                statusText: pResponse?.statusText || STATUS_TEXT_ARRAY[asInt( pResponse?.status || STATUS_CODES.CLIENT_ERROR )] || STATUS_TEXT[asString( pResponse?.status || STATUS_CODES.CLIENT_ERROR, true )],
-                data: pResponse?.data || pResponse?.body || {},
-                headers: pResponse?.headers || pResponse?.config?.headers || pConfig?.headers || pConfig,
-                config: pResponse?.config || pConfig,
-                request: pResponse?.request || attempt( () => new Request( pUrl, pConfig ) )
+                status: response?.status || STATUS_CODES.CLIENT_ERROR,
+                statusText: response?.statusText || STATUS_TEXT_ARRAY[asInt( response?.status || STATUS_CODES.CLIENT_ERROR )] || STATUS_TEXT[asString( pResponse?.status || STATUS_CODES.CLIENT_ERROR, true )],
+                data: response?.data || response?.body || {},
+                headers: response?.headers || response?.config?.headers || pConfig?.headers || pConfig,
+                config: response?.config || pConfig,
+                request: response?.request || attempt( () => new Request( pUrl, pConfig ) )
             };
 
         return ResponseData.fromObject( res, pConfig, pUrl );
@@ -1126,7 +1402,7 @@ const $scope = constants?.$scope || function()
         }
     }
 
-    function resolveUrl( pUrl )
+    function resolveUrl( pUrl, pConfig )
     {
         if ( isNonNullObject( pUrl ) )
         {
@@ -1139,17 +1415,60 @@ const $scope = constants?.$scope || function()
                 return cleanUrl( asString( pUrl?.url || pUrl?.href || pUrl, true ) || asString( pUrl, true ) );
             }
         }
+
         if ( isString( pUrl ) )
         {
-            return cleanUrl( asString( pUrl, true ) );
+            return cleanUrl( asString( pUrl, true ) ) || pConfig?.url;
         }
 
-        return _mt;
+        return cleanUrl( pConfig?.url || _mt );
     }
 
-    function resolveBody( pBody, pConfig )
+    /**
+     * Returns the body data that was fetched or should be sent in a request.
+     * This function expects the body to be a property of the configuration object specified.
+     * The property is expected to be named either 'body' or 'data'.
+     * For subclasses using a delegate with other expectations, override the corresponding method of HttpClient.
+     *
+     * @param {Object|HttpClientConfig|RequestInit} pConfig An object with either a body or data property.
+     *
+     * @returns {String|ArrayBuffer|Blob|DataView|File|FormData|TypedArray|URLSearchParams|ReadableStream|null}
+     * The body to be sent to the server or the body received from the server (which may be an unfulfilled Promise)
+     *
+     * // override resolveBody for Axios, which will do this for us
+     */
+    async function resolveBody( pConfig )
     {
-        return pBody || pConfig?.body || pConfig?.data;
+        let body = (pConfig?.body || pConfig?.data);
+
+        if ( isString( body ) && !isBlank( body ) )
+        {
+            return body;
+        }
+
+        if ( instanceOfAny( body, ArrayBuffer, Blob, DataView, File, FormData, TypedArray, URLSearchParams, ReadableStream ) )
+        {
+            return body;
+        }
+
+        if ( isNumber( body ) )
+        {
+            return asString( body, true );
+        }
+
+        // override resolveBody for Axios, which will do this for us
+        if ( isNonNullObject( body ) )
+        {
+            return asJson( body );
+        }
+
+        if ( isPromise( body ) || isThenable( body ) )
+        {
+            body = await asyncAttempt( async() => await body );
+            return resolveBody( { body } );
+        }
+
+        return null;
     }
 
     class QueuedRequest
@@ -1174,7 +1493,7 @@ const $scope = constants?.$scope || function()
 
             this.#config = resolveConfig( pConfig );
 
-            this.#request = isString( pRequest ) ? (_ud !== typeof Request) ? new Request( pRequest, this.#config ) : new HttpRequest( pRequest, this.#config ) : pRequest;
+            this.#request = new HttpRequest( isString( pRequest ) ? (_ud !== typeof Request) ? new Request( pRequest, this.#config ) : new HttpRequest( pRequest, this.#config ) : pRequest );
 
             this.#url = cleanUrl( asString( this.#request?.url || asString( this.#config?.url, true ) || asString( pRequest || this.#request, true ), true ) );
 
@@ -1245,23 +1564,37 @@ const $scope = constants?.$scope || function()
         return id;
     };
 
+    const MAX_REQUEST_RETRIES = 10;
+    const DEFAULT_REQUEST_RETRIES = 5;
+
+    const DEFAULT_DELEGATE_OPTIONS =
+        {
+            maxRetries: DEFAULT_REQUEST_RETRIES
+        };
+
+    /**
+     * This class provides default implementations of HTTP request methods.
+     * The HttpClient class and subclasses can use or replace this delegate
+     * or override individual methods.
+     *
+     * Candidates for replacement of this delegate include *wrappers*
+     * around Axios, XmlHttpRequest, or the Fetch API
+     */
     class DefaultDelegate
     {
-        #options;
-        #config;
+        #options = DEFAULT_DELEGATE_OPTIONS;
+        #config = DEFAULT_CONFIG;
 
-        #queuedRequests = new BoundedQueue( 25 );
-
-        #timer;
-        #interval = 100;
-
-        constructor( pConfig = new HttpClientConfig(), pOptions = {} )
+        /**
+         * Constructs an instance of the default implementation of an HttpClient delegate
+         * @param {HttpClientConfig|HttpClientApiConfig|Object} pConfig
+         * @param {Object} pOptions
+         */
+        constructor( pConfig = new HttpClientConfig(), pOptions = DEFAULT_DELEGATE_OPTIONS )
         {
             this.#config = populateOptions( pConfig, toObjectLiteral( DEFAULT_CONFIG ) );
 
-            this.#options = populateOptions( pOptions || {}, {} );
-
-            this.#interval = asInt( this.config?.interval || this.#options?.interval, 100 );
+            this.#options = populateOptions( pOptions || {}, DEFAULT_DELEGATE_OPTIONS );
         }
 
         get config()
@@ -1281,9 +1614,9 @@ const $scope = constants?.$scope || function()
             return fixAgents( mergedConfig );
         }
 
-        resolveUrl( pUrl )
+        resolveUrl( pUrl, pConfig )
         {
-            return resolveUrl( pUrl );
+            return resolveUrl( pUrl, pConfig );
         }
 
         resolveConfig( pConfig, pRequest )
@@ -1303,21 +1636,41 @@ const $scope = constants?.$scope || function()
             return fixAgents( cfg );
         }
 
-        resolveBody( pBody, pConfig )
+        async resolveBody( pConfig )
         {
-            return resolveBody( pBody, pConfig );
+            return resolveBody( pConfig );
         }
 
-        async doFetch( pMethod, pUrl, pConfig, pBody, pRedirects = 0 )
+        get options()
         {
-            const method = resolveMethod( pMethod );
+            return populateOptions( this.#options, DEFAULT_DELEGATE_OPTIONS );
+        }
 
-            const url = this.resolveUrl( pUrl );
+        get maxRetries()
+        {
+            return clamp( this.options?.maxRetries, 0, MAX_REQUEST_RETRIES );
+        }
 
+        // noinspection FunctionTooLongJS
+        async doFetch( pUrl, pConfig, pRedirects = 0, pRetries = 0 )
+        {
             const cfg = this.resolveConfig( pConfig, pUrl );
-            cfg.method = pMethod || "GET";
 
-            const body = this.resolveBody( pBody, pConfig );
+            const method = resolveHttpMethod( cfg.method || "GET" );
+            cfg.method = method || "GET";
+
+            const url = this.resolveUrl( pUrl, cfg );
+            cfg.url = url;
+
+            let retries = asInt( pRetries, 0 ) || 0;
+
+            if ( retries >= asInt( this.maxRetries ) )
+            {
+                const error = new Error( "Maximum number of retries exceeded" );
+                return ResponseData.fromError( error, cfg, url );
+            }
+
+            const body = this.resolveBody( pConfig );
             cfg.body = cfg.data = body;
 
             const response = await asyncAttempt( async() => await fetch( url, cfg ) );
@@ -1328,9 +1681,19 @@ const $scope = constants?.$scope || function()
             {
                 let status = responseData.status;
 
-                if ( status >= 200 && status < 300 )
+                if ( ResponseData.isOk( responseData ) || (status >= 200 && status < 300) )
                 {
                     return responseData;
+                }
+                else if ( STATUS_ELIGIBLE_FOR_RETRY.includes( status ) )
+                {
+                    const delay = DEFAULT_REQUEST_RETRIES[status];
+
+                    await asyncAttempt( async() => await sleep( delay ) );
+
+                    const me = this;
+
+                    return await asyncAttempt( async() => await me.doFetch( url, cfg, pRedirects, ++retries ) );
                 }
                 else if ( status >= 300 && status < 400 )
                 {
@@ -1346,7 +1709,7 @@ const $scope = constants?.$scope || function()
 
                         if ( location && cleanUrl( asString( url, true ) ) !== location )
                         {
-                            return await me.doFetch( method, location, cfg, body, ++redirects );
+                            return await me.doFetch( location, cfg, ++redirects );
                         }
                     }
                     else
@@ -1366,40 +1729,15 @@ const $scope = constants?.$scope || function()
             throw new Error( "Failed to fetch data from " + url + ", Server returned: " + (responseData?.status || "no response") );
         }
 
-        async sendRequest( pMethod, pUrl, pConfig, pBody )
+        async sendRequest( pMethod, pUrl, pConfig )
         {
-            return await this.doFetch( pMethod, pUrl, pConfig, pBody );
-        }
-
-        async queueRequest( pMethod, pUrl, pConfig, pBody, pResolve, pReject )
-        {
-            const url = this.resolveUrl( pUrl );
-
-            const cfg = this.resolveConfig( pConfig, pUrl );
-            cfg.method = pMethod || "GET";
-
-            const body = this.resolveBody( pBody, pConfig );
-            cfg.body = cfg.data = body;
-
-            this.#queuedRequests.push( new QueuedRequest( url, cfg, pResolve, pReject ) );
-
-            if ( isNull( this.#timer ) )
-            {
-                const me = this;
-
-                const func = async function()
-                {
-                    return asyncAttempt( async() => await me.processQueue() );
-                };
-
-                this.#timer = setInterval( func, Math.max( 100, asInt( me.#interval ) ) );
-            }
+            return await this.doFetch( pUrl, pConfig );
         }
 
         async sendGetRequest( pUrl, pConfig )
         {
             const me = this;
-            return await asyncAttempt( async() => await me.doFetch( "GET", pUrl, pConfig, null ) );
+            return await asyncAttempt( async() => await me.doFetch( pUrl, pConfig ) );
         }
 
         async getRequestedData( pUrl, pConfig, pRedirects = 0 )
@@ -1416,9 +1754,9 @@ const $scope = constants?.$scope || function()
             {
                 let status = responseData.status;
 
-                if ( status >= 200 && status < 300 )
+                if ( ResponseData.isOk( status ) || (status >= 200 && status < 300) )
                 {
-                    return responseData.data;
+                    return responseData.data || responseData.body;
                 }
                 else if ( status >= 300 && status < 400 )
                 {
@@ -1428,9 +1766,9 @@ const $scope = constants?.$scope || function()
                     {
                         let headers = responseData.headers;
 
-                        let location = headers.location;
+                        let location = isFunction( headers?.get ) ? headers.get( "location" ) || headers.get( "Location" ) || headers?.location || headers?.Location : headers?.location || headers?.Location;
 
-                        if ( location && url !== location )
+                        if ( location && cleanUrl( url ) !== cleanUrl( location ) )
                         {
                             return await me.getRequestedData( location, cfg, ++redirects );
                         }
@@ -1440,126 +1778,50 @@ const $scope = constants?.$scope || function()
                         throw new Error( "Exceeded Maximum Number of Redirects (" + asInt( cfg.maxRedirects ) + ")" );
                     }
                 }
-                else if ( responseData.isError() || !isNull( attempt.lastError ) )
-                {
-                    throw responseData?.error || attempt.lastError || new Error( "Failed to fetch data from " + url + ", Server returned: " + (responseData?.status || "no response") );
-                }
-                else
-                {
-                    throw new Error( "Failed to fetch data from " + url + ", Server returned: " + (responseData?.status || "no response") );
-                }
             }
             throw new Error( "Failed to fetch data from " + url + ", Server returned: " + (responseData?.status || "no response") );
-        }
-
-        async queueGetRequest( pUrl, pConfig, pResolve, pReject )
-        {
-            return await this.queueRequest( "GET", pUrl, pConfig, null, pResolve, pReject );
         }
 
         async sendPostRequest( pUrl, pConfig, pBody )
         {
             const me = this;
-            return asyncAttempt( async() => await me.doFetch( "POST", pUrl, pConfig, (pBody || pConfig?.body || pConfig?.data) ) );
-        }
-
-        async queuePostRequest( pUrl, pConfig, pBody, pResolve, pReject )
-        {
-            return await this.queueRequest( "POST", pUrl, pConfig, pBody, pResolve, pReject );
+            return asyncAttempt( async() => await me.doFetch( pUrl, pConfig ) );
         }
 
         async sendDeleteRequest( pUrl, pConfig )
         {
             const me = this;
-            return asyncAttempt( async() => await me.doFetch( "DELETE", pUrl, pConfig, null ) );
-        }
-
-        async queueDeleteRequest( pUrl, pConfig, pResolve, pReject )
-        {
-            return await this.queueRequest( "DELETE", pUrl, pConfig, null, pResolve, pReject );
+            return asyncAttempt( async() => await me.doFetch( pUrl, pConfig ) );
         }
 
         async sendPutRequest( pUrl, pConfig, pBody )
         {
             const me = this;
-            return asyncAttempt( async() => await me.doFetch( "PUT", pUrl, pConfig, pBody ) );
-        }
-
-        async queuePutRequest( pUrl, pConfig, pBody, pResolve, pReject )
-        {
-            return await this.queueRequest( "PUT", pUrl, pConfig, pBody, pResolve, pReject );
+            return asyncAttempt( async() => await me.doFetch( pUrl, pConfig ) );
         }
 
         async sendPatchRequest( pUrl, pConfig, pBody )
         {
             const me = this;
-            return asyncAttempt( async() => await me.doFetch( "PATCH", pUrl, pConfig, pBody ) );
-        }
-
-        async queuePatchRequest( pUrl, pConfig, pBody, pResolve, pReject )
-        {
-            return await this.queueRequest( "PATCH", pUrl, pConfig, pBody, pResolve, pReject );
+            return asyncAttempt( async() => await me.doFetch( pUrl, pConfig ) );
         }
 
         async sendHeadRequest( pUrl, pConfig )
         {
             const me = this;
-            return asyncAttempt( async() => await me.doFetch( "HEAD", pUrl, pConfig, null ) );
+            return asyncAttempt( async() => await me.doFetch( pUrl, pConfig ) );
         }
 
         async sendOptionsRequest( pUrl, pConfig )
         {
             const me = this;
-            return asyncAttempt( async() => await me.doFetch( "OPTIONS", pUrl, pConfig, null ) );
+            return asyncAttempt( async() => await me.doFetch( pUrl, pConfig ) );
         }
 
         async sendTraceRequest( pUrl, pConfig )
         {
             const me = this;
-            return asyncAttempt( async() => await me.doFetch( "TRACE", pUrl, pConfig, null ) );
-        }
-
-        async processQueue()
-        {
-            const canTake = await asyncAttempt( async() => await this.#queuedRequests.canTake() );
-
-            if ( canTake )
-            {
-                const queuedRequest = this.#queuedRequests.take();
-
-                if ( queuedRequest )
-                {
-                    let url = queuedRequest.request?.url || resolveUrl( queuedRequest.request );
-                    let method = queuedRequest.method || queuedRequest.config?.method || "GET";
-                    let config = queuedRequest.config || queuedRequest.request?.config || {};
-
-                    let resolve = queuedRequest.resolve;
-                    let reject = queuedRequest.reject;
-
-                    let response = asyncAttempt( async() => await this.doFetch( method, url, config, this.resolveBody( config?.body || queuedRequest.request?.body ) ) );
-
-                    let responseData = new ResponseData( response, getLastError(), config, url );
-
-                    if ( ResponseData.isOk( responseData ) )
-                    {
-                        if ( isFunction( resolve ) )
-                        {
-                            return resolve( responseData );
-                        }
-                    }
-                    else if ( ResponseData.is( "Error", responseData ) )
-                    {
-                        if ( isFunction( reject ) )
-                        {
-                            return reject( responseData.error || responseData );
-                        }
-                    }
-                }
-            }
-            else
-            {
-                clearTimeout( this.#timer );
-            }
+            return asyncAttempt( async() => await me.doFetch( pUrl, pConfig ) );
         }
     }
 
@@ -1591,17 +1853,17 @@ const $scope = constants?.$scope || function()
 
         get options()
         {
-            return populateOptions( {}, this.#options || {} );
+            return populateOptions( {}, this.#options || DEFAULT_HTTP_CLIENT_OPTIONS );
         }
 
         get delegate()
         {
-            return this.#delegate || new DefaultDelegate( resolveConfig( this.config ), );
+            return this.#delegate || new DefaultDelegate( resolveConfig( this.config ), this.options );
         }
 
         async sendRequest( pMethod, pUrl, pConfig, pBody )
         {
-            let delegate = this.#delegate || new DefaultDelegate( this.config );
+            let delegate = this.delegate || new DefaultDelegate( this.config, this.options );
 
             if ( isFunction( delegate.sendRequest ) )
             {
@@ -1611,54 +1873,9 @@ const $scope = constants?.$scope || function()
             return null;
         }
 
-        /**
-         * The default behavior just sends the request.
-         * A delegate or decorated HttpClient might actually queue requests.
-         *
-         * @param pMethod
-         * @param pUrl
-         * @param pConfig
-         * @param pBody
-         * @param pResolve
-         * @param pReject
-         * @returns {Promise<*>}
-         */
-        async queueRequest( pMethod, pUrl, pConfig, pBody, pResolve, pReject )
-        {
-            const delegate = this.delegate;
-
-            if ( isFunction( this.delegate?.queueRequest ) )
-            {
-                return await asyncAttempt( async() => await delegate.queueRequest( pMethod, pUrl, pConfig, pBody, pResolve, pReject ) );
-            }
-
-            let response = await this.sendRequest( pUrl, pConfig, pBody, pResolve, pReject );
-            let responseData = new ResponseData( response, getLastError(), this.config, pUrl );
-
-            let callback = ResponseData.isOk( responseData ) ? isFunction( pResolve ) ? pResolve : no_op : isFunction( pReject ) ? pReject : no_op;
-
-            attempt( () => callback( responseData ) );
-        }
-
         async sendGetRequest( pUrl, pConfig )
         {
             return await this.#delegate.sendGetRequest( pUrl, pConfig );
-        }
-
-        async queueGetRequest( pUrl, pConfig, pResolve, pReject )
-        {
-            const delegate = isHttpClient( this.#delegate ) ? this.#delegate : new DefaultDelegate( this.config, this.options );
-
-            if ( isFunction( delegate?.queueGetRequest ) )
-            {
-                return await delegate.queueGetRequest( pUrl, pConfig, pResolve, pReject );
-            }
-            else if ( isFunction( delegate?.queueRequest ) )
-            {
-                return await delegate.queueRequest( "GET", pUrl, pConfig, null, pResolve, pReject );
-            }
-            const me = this;
-            await asyncAttempt( async() => await me.queueRequest( "GET", pUrl, pConfig, null, pResolve, pReject ) );
         }
 
         async sendPostRequest( pUrl, pConfig, pBody )
@@ -1667,43 +1884,9 @@ const $scope = constants?.$scope || function()
             return await delegate.sendPostRequest( pUrl, pConfig, pBody );
         }
 
-        async queuePostRequest( pUrl, pConfig, pBody, pResolve, pReject )
-        {
-            const delegate = isHttpClient( this.#delegate ) ? this.#delegate : new DefaultDelegate( this.config, this.options );
-
-            if ( isFunction( delegate?.queuePostRequest ) )
-            {
-                return await delegate.queuePostRequest( pUrl, pConfig, pBody, pResolve, pReject );
-            }
-            else if ( isFunction( delegate?.queueRequest ) )
-            {
-                return await delegate.queueRequest( "POST", pUrl, pConfig, null, pResolve, pReject );
-            }
-
-            const me = this;
-            await asyncAttempt( async() => await me.queueRequest( "POST", pUrl, pConfig, pBody, pResolve, pReject ) );
-        }
-
         async sendPutRequest( pUrl, pConfig, pBody )
         {
             return await this.#delegate.sendPutRequest( pUrl, pConfig, pBody );
-        }
-
-        async queuePutRequest( pUrl, pConfig, pBody, pResolve, pReject )
-        {
-            const delegate = isHttpClient( this.#delegate ) ? this.#delegate : new DefaultDelegate( this.config, this.options );
-
-            if ( isFunction( delegate.queuePutRequest ) )
-            {
-                return await delegate.queuePutRequest( pUrl, pConfig, pBody, pResolve, pReject );
-            }
-            else if ( isFunction( delegate?.queueRequest ) )
-            {
-                return await delegate.queueRequest( "PUT", pUrl, pConfig, null, pResolve, pReject );
-            }
-
-            const me = this;
-            await asyncAttempt( async() => await me.queueRequest( "PUT", pUrl, pConfig, pBody, pResolve, pReject ) );
         }
 
         async sendPatchRequest( pUrl, pConfig, pBody )
@@ -1711,43 +1894,9 @@ const $scope = constants?.$scope || function()
             return await this.#delegate.sendPatchRequest( pUrl, pConfig, pBody );
         }
 
-        async queuePatchRequest( pUrl, pConfig, pBody, pResolve, pReject )
-        {
-            const delegate = isHttpClient( this.#delegate ) ? this.#delegate : new DefaultDelegate( this.config, this.options );
-
-            if ( isFunction( delegate.queuePatchRequest ) )
-            {
-                return await delegate.queuePatchRequest( pUrl, pConfig, pBody, pResolve, pReject );
-            }
-            else if ( isFunction( delegate?.queueRequest ) )
-            {
-                return await delegate.queueRequest( "PATCH", pUrl, pConfig, null, pResolve, pReject );
-            }
-
-            const me = this;
-            await asyncAttempt( async() => await me.queueRequest( "PATCH", pUrl, pConfig, pBody, pResolve, pReject ) );
-        }
-
         async sendDeleteRequest( pUrl, pConfig )
         {
             return await this.#delegate.sendDeleteRequest( pUrl, pConfig );
-        }
-
-        async queueDeleteRequest( pUrl, pConfig, pResolve, pReject )
-        {
-            const delegate = isHttpClient( this.#delegate ) ? this.#delegate : new DefaultDelegate( this.config, this.options );
-
-            if ( isFunction( delegate.queueDeleteRequest ) )
-            {
-                return await delegate.queueDeleteRequest( pUrl, pConfig, pResolve, pReject );
-            }
-            else if ( isFunction( delegate?.queueRequest ) )
-            {
-                return await delegate.queueRequest( "DELETE", pUrl, pConfig, null, pResolve, pReject );
-            }
-
-            const me = this;
-            await asyncAttempt( async() => await me.queueRequest( "DELETE", pUrl, pConfig, null, pResolve, pReject ) );
         }
 
         async sendHeadRequest( pUrl, pConfig )
@@ -2433,7 +2582,7 @@ const $scope = constants?.$scope || function()
 
             let path = this.extractPath( parts );
 
-            let groupName = this.findGroupName( path, groupName, url );
+            let groupName = this.findGroupName( path );
 
             if ( isBlank( groupName ) )
             {
@@ -2544,7 +2693,7 @@ const $scope = constants?.$scope || function()
 
             this.#requestGroupMapper = this.options?.requestGroupMapper || RequestGroupMapper.DEFAULT;
 
-            this.#maxDelayBeforeQueueing = Math.max( 100, Math.min( 10_000, asInt( this.options?.maxDelayBeforeQueueing, 2_500 ) ) );
+            this.#maxDelayBeforeQueueing = clamp( asInt( this.options?.maxDelayBeforeQueueing, 2_500 ), 100, 10_000 );
 
             let arr = asArray( pRateLimits );
             arr.forEach( rateLimits =>
@@ -2609,7 +2758,7 @@ const $scope = constants?.$scope || function()
             return rateLimits.calculateDelay();
         }
 
-        async sendRequest( pMethod, pUrl, pConfig, pBody, pResolve, pReject )
+        async sendRequest( pUrl, pConfig, pResolve, pReject )
         {
             const me = this;
 
@@ -2617,6 +2766,7 @@ const $scope = constants?.$scope || function()
 
             const queue = this.requestQueue;
 
+            // noinspection JSValidateTypes,TypeScriptUMDGlobal
             return new Promise( ( resolve, reject ) =>
                                 {
                                     const group = me.getRateLimitsGroup( pUrl, me.requestGroupMapper, me.config, me.options );
@@ -2638,10 +2788,8 @@ const $scope = constants?.$scope || function()
                                         {
                                             const delegated = async function()
                                             {
-                                                delegate.sendRequest( pMethod,
-                                                                      pUrl,
+                                                delegate.sendRequest( pUrl,
                                                                       pConfig,
-                                                                      pBody,
                                                                       pResolve || resolve,
                                                                       pReject || reject );
                                             };
@@ -2652,37 +2800,33 @@ const $scope = constants?.$scope || function()
                                         sleep( delay ).then( sendFunction ).catch( reject ).finally( finallyFunction );
 
                                         // setTimeout for processing anything left in the queue
-
                                         setTimeout( finallyFunction, (delay * 2) );
                                     }
                                 } );
         }
 
-        // this
-
-        async queueRequest( pMethod, pUrl, pConfig, pBody, pResolve, pReject )
+        async queueRequest( pUrl, pConfig, pResolve, pReject )
         {
-            const config = resolveConfig( pConfig );
+            const cfg = this.resolveConfig( pConfig, pUrl );
 
-            const url = resolveUrl( pUrl || config?.url );
+            const method = resolveHttpMethod( cfg.method || "GET" );
+            cfg.method = method || "GET";
 
-            const method = resolveHttpMethod( pMethod );
+            const url = this.resolveUrl( pUrl, cfg );
+            cfg.url = url;
 
-            config.method = method;
-            config.url = url;
-
-            const request = HttpRequest.resolve( pUrl || url, config );
+            const request = HttpRequest.resolve( pUrl || url, cfg );
 
             request.method = method;
             request.url = cleanUrl( request.url, true ) || url;
-            request.priority = calculatePriority( request, config );
+            request.priority = calculatePriority( request, cfg );
 
-            config.priority = config.priority || request.priority;
+            cfg.priority = cfg.priority || request.priority;
 
             let resolve = isFunction( pResolve ) ? pResolve : no_op;
             let reject = isFunction( pReject ) ? pReject : no_op;
 
-            this.#queuedRequests.add( new QueuedRequest( request, config, resolve, reject ) );
+            this.#queuedRequests.add( new QueuedRequest( request, cfg, resolve, reject ) );
         }
 
         async sendGetRequest( pUrl, pConfig )
@@ -2692,7 +2836,7 @@ const $scope = constants?.$scope || function()
 
         async queueGetRequest( pUrl, pConfig, pResolve, pReject )
         {
-            return super.queueGetRequest( pUrl, pConfig, pResolve, pReject );
+            // TODO
         }
 
         async sendPostRequest( pUrl, pConfig, pBody )
@@ -2702,7 +2846,7 @@ const $scope = constants?.$scope || function()
 
         async queuePostRequest( pUrl, pConfig, pBody, pResolve, pReject )
         {
-            return super.queuePostRequest( pUrl, pConfig, pBody, pResolve, pReject );
+            // TODO
         }
 
         async sendPutRequest( pUrl, pConfig, pBody )
@@ -2712,7 +2856,7 @@ const $scope = constants?.$scope || function()
 
         async queuePutRequest( pUrl, pConfig, pBody, pResolve, pReject )
         {
-            return super.queuePutRequest( pUrl, pConfig, pBody, pResolve, pReject );
+            // TODO
         }
 
         async sendPatchRequest( pUrl, pConfig, pBody )
@@ -2722,17 +2866,17 @@ const $scope = constants?.$scope || function()
 
         async queuePatchRequest( pUrl, pConfig, pBody, pResolve, pReject )
         {
-            return super.queuePatchRequest( pUrl, pConfig, pBody, pResolve, pReject );
+            // TODO
         }
 
         async sendDeleteRequest( pUrl, pConfig )
         {
-            return super.sendDeleteRequest( pUrl, pConfig );
+            // TODO
         }
 
         async queueDeleteRequest( pUrl, pConfig, pResolve, pReject )
         {
-            return super.queueDeleteRequest( pUrl, pConfig, pResolve, pReject );
+            // TODO
         }
 
         async sendHeadRequest( pUrl, pConfig )

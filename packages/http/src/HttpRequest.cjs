@@ -140,25 +140,13 @@ const {
             FORBIDDEN_RESPONSE_HEADER_NAMES,
             FORBIDDEN_REQUEST_HEADERS,
             FORBIDDEN_RESPONSE_HEADERS,
+            DEFAULT_EXPIRATION_HEADER,
             HttpRequestHeaders
         } = httpHeaders;
 
     const {
-        TextEncoder = (_ud === typeof TextDecoder) ? $scope().TextEncoder : TextEncoder,
-        TextDecoder = (_ud === typeof TextDecoder) ? $scope().TextDecoder : TextDecoder,
         File = (_ud === typeof File) ? $scope().File : File,
-        Blob = (_ud === typeof Blob) ? $scope().Blob : Blob,
-        BlobOptions = (_ud === typeof BlobOptions) ? $scope().BlobOptions : BlobOptions,
-        FileOptions = (_ud === typeof FileOptions) ? $scope().FileOptions : FileOptions,
-        isAscii = $scope().isAscii,
-        isUtf8 = $scope().isUtf8,
-        SlowBuffer = (_ud === typeof SlowBuffer) ? $scope().SlowBuffer : SlowBuffer,
-        transcode = (_ud === typeof transcode) ? $scope().transcode : transcode,
-        TranscodeEncoding = (_ud === typeof TranscodeEncoding) ? $scope().TranscodeEncoding : TranscodeEncoding,
-        arrayFromBuffer,
-        typedArrayFromBuffer,
-        isBlob = typeUtils.isBlob,
-        isFile = typeUtils.isFile,
+        Blob = (_ud === typeof Blob) ? $scope().Blob : Blob
     } = bufferUtils;
 
     const modName = "HttpRequest";
@@ -325,7 +313,7 @@ const {
     const calculateBaseUrl = function( pFrom )
     {
         const doc = (_ud === typeof document) ? { URL: __dirname } : document;
-        const s = asString( pFrom || document.URL || _mt_str, true ).replaceAll( /[\s ]/gi, "+" ).replaceAll( /\\/gi, "/" );
+        const s = asString( pFrom || doc.URL || _mt_str, true ).replaceAll( /[\s ]/gi, "+" ).replaceAll( /\\/gi, "/" );
         return asString( s.replace( /\?\w+$/, _mt_str ).replace( /#\w+$/, _mt_str ), true );
     };
 
@@ -741,7 +729,7 @@ const {
             return this.href;
         }
 
-        [Symbol.toPrimitive]( pHint )
+        [Symbol.toPrimitive]()
         {
             return this.href;
         }
@@ -890,9 +878,10 @@ const {
 
     function processBodyAsString( pBody )
     {
-        return undefined;
+        return undefined; // TODO
     }
 
+    // TODO
     const processRequestBody = function( pBody, pType )
     {
         if ( isString( pBody ) )
@@ -908,8 +897,6 @@ const {
         #headers;
 
         #body;
-        #bodyAsTypedArray;
-        #bodyAsArrayBuffer;
 
         #cache;
         #mode;
@@ -928,14 +915,25 @@ const {
         #signal;
         #timeout;
 
+        #baseURL = _mt_str;
+        #requestTransformer = null;
+        #responseTransformer = null;
+        #params = null;
+        #paramsSerializer = null;
+        #responseType = null;
+        #responseEncoding = null;
+        #xsrfCookieName = _mt_str;
+        #xsrfHeaderName = _mt_str;
+        #proxy = null;
+
         // noinspection OverlyComplexFunctionJS,FunctionTooLongJS
-        constructor( pBody = _mt_str,
+        constructor( pMethod = VERBS.GET,
+                     pHeaders = new HttpRequestHeaders(),
+                     pBody = null,
                      pCache = REQUEST_CACHE_OPTIONS.DEFAULT,
                      pCredentials = REQUEST_CREDENTIALS_OPTIONS.SAME_ORIGIN,
-                     pHeaders = new HttpRequestHeaders(),
                      pIntegrity = _mt_str,
                      pKeepalive = false,
-                     pMethod = VERBS.GET,
                      pMode = MODES.SAME_ORIGIN,
                      pPriority = PRIORITY.AUTO,
                      pRedirect = REDIRECT_OPTIONS.FOLLOW,
@@ -943,7 +941,17 @@ const {
                      pReferrerPolicy = REFERRER_POLICY_OPTIONS.NO_REFERRER_WHEN_DOWNGRADE,
                      pAbortController = new AbortController(),
                      pSignal = pAbortController?.signal || null,
-                     pTimeout = -1 )
+                     pTimeout = -1,
+                     pBaseURL = _mt_str,
+                     pRequestTransformer = null,
+                     pResponseTransformer = null,
+                     pParams = null,
+                     pParamsSerializer = null,
+                     pResponseType = null,
+                     pResponseEncoding = null,
+                     pXsrfCookieName = _mt_str,
+                     pXsrfHeaderName = _mt_str,
+                     pProxy = null )
         {
             if ( pBody instanceof this.constructor )
             {
@@ -965,6 +973,18 @@ const {
                 this.#signal = pBody.signal || this.#abortController?.signal;
                 this.#timeout = pBody.timeout;
 
+                // these properties are relevant only to certain frameworks, such as Axios
+                this.#baseURL = pBody.baseURL || _mt_str;
+                this.#requestTransformer = pBody.requestTransformer || null;
+                this.#responseTransformer = pBody.responseTransformer || null;
+                this.#params = pBody.params || null;
+                this.#paramsSerializer = pBody.paramsSerializer || null;
+                this.#responseType = pBody.responseType || null;
+                this.#responseEncoding = pBody.responseEncoding || null;
+                this.#xsrfCookieName = pBody.xsrfCookieName || _mt_str;
+                this.#xsrfHeaderName = pBody.xsrfHeaderName || _mt_str;
+                this.#proxy = isNonNullObject( pBody.proxy ) ? pBody.proxy || null : null;
+
                 return this;
             }
 
@@ -985,6 +1005,18 @@ const {
             this.#timeout = pTimeout;
 
             this.#body = (((new HttpVerb( this.#method )).forbidsBody) ? null : pBody);
+
+            // these properties are relevant only to certain frameworks, such as Axios
+            this.#baseURL = pBaseURL || _mt_str;
+            this.#requestTransformer = pRequestTransformer || null;
+            this.#responseTransformer = pResponseTransformer || null;
+            this.#params = pParams || null;
+            this.#paramsSerializer = pParamsSerializer || null;
+            this.#responseType = pResponseType || null;
+            this.#responseEncoding = pResponseEncoding || null;
+            this.#xsrfCookieName = pXsrfCookieName || _mt_str;
+            this.#xsrfHeaderName = pXsrfHeaderName || _mt_str;
+            this.#proxy = isNonNullObject( pProxy ) ? pProxy || null : null;
         }
 
         get body()
@@ -1089,26 +1121,89 @@ const {
                 this.#timeout = this.timeout;
             }
         }
+
+        // these properties are relevant only to certain frameworks, such as Axios
+
+        get baseURL()
+        {
+            return this.#baseURL;
+        }
+
+        get requestTransformer()
+        {
+            return this.#requestTransformer;
+        }
+
+        get responseTransformer()
+        {
+            return this.#responseTransformer;
+        }
+
+        get params()
+        {
+            return this.#params;
+        }
+
+        get paramsSerializer()
+        {
+            return this.#paramsSerializer;
+        }
+
+        get responseType()
+        {
+            return this.#responseType;
+        }
+
+        get responseEncoding()
+        {
+            return this.#responseEncoding;
+        }
+
+        get xsrfCookieName()
+        {
+            return this.#xsrfCookieName;
+        }
+
+        get xsrfHeaderName()
+        {
+            return this.#xsrfHeaderName;
+        }
+
+        get proxy()
+        {
+            return this.#proxy;
+        }
     }
 
     HttpRequestOptions.fromOptions = function( pOptions )
     {
         const options = populateOptions( pOptions, new HttpRequestOptions() );
 
-        return new HttpRequestOptions( options.body,
+        return new HttpRequestOptions( options.method,
+                                       options.headers,
+                                       options.body,
                                        options.cache,
                                        options.credentials,
-                                       options.headers,
                                        options.integrity,
                                        options.keepalive,
-                                       options.method,
                                        options.mode,
                                        options.priority,
                                        options.redirect,
                                        options.referrer,
                                        options.referrerPolicy,
                                        options.signal,
-                                       options.timeout );
+                                       options.timeout,
+
+                                       options.baseUrl,
+                                       options.requestTransformer,
+                                       options.responseTransformer,
+                                       options.params,
+                                       options.paramsSerializer,
+                                       options.responseType,
+                                       options.responseEncoding,
+                                       options.xsrfCookieName,
+                                       options.xsrfHeaderName,
+                                       options.proxy );
     };
 
     const cloneRequest = function( pRequest )
@@ -1133,7 +1228,7 @@ const {
         {
             super();
 
-            this.#options = populateOptions( pOptions || {}, toObjectLiteral( new HttpRequestOptions( pOptions ) ) );
+            this.#options = populateOptions( pOptions || {}, toObjectLiteral( new HttpRequestOptions( VERBS.GET, new HttpRequestHeaders(), pOptions ) ) );
 
             this.#id = this.options?.id || this.constructor.nextId();
 
@@ -1268,7 +1363,7 @@ const {
 
             let method = resolveHttpMethod( config?.method || isObject( pRequestOrUrl ) ? pRequestOrUrl?.method : _mt_str );
 
-            let req = pRequestOrUrl;
+            let req;
 
             switch ( typeof pRequestOrUrl )
             {
@@ -1297,7 +1392,7 @@ const {
 
     HttpRequest.resolve = function( pRequestOrUrl, pOptions )
     {
-        const options = populateOptions( pOptions || {}, toObjectLiteral( new HttpRequestOptions( pRequestOrUrl?.options || {} ) ) );
+        const options = populateOptions( pOptions || {}, toObjectLiteral( new HttpRequestOptions( VERBS.GET, new HttpRequestHeaders(), pRequestOrUrl?.options || {} ) ) );
 
         if ( pRequestOrUrl instanceof HttpRequest )
         {

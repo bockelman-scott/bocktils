@@ -65,7 +65,16 @@ const {
             arrayUtils
         };
 
-    const { ModuleEvent, ToolBocksModule, ObjectEntry, objectEntries, lock, attempt, attemptAsync } = moduleUtils;
+    const {
+        ModuleEvent,
+        ToolBocksModule,
+        ObjectEntry,
+        objectEntries,
+        lock,
+        attempt,
+        attemptAsync,
+        resolveError
+    } = moduleUtils;
 
     const { _mt_str = "", _mt = _mt_str } = constants;
 
