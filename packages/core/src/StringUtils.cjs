@@ -2804,7 +2804,9 @@ const { _ud = "undefined", $scope } = constants;
 
         let s = asString( pString, false ) || _mt_str;
 
-        if ( !includesAny( s, options?.prefixes ) )
+        let prefixes = ["Mc", "Mac", "O'"].concat( options?.prefixes || [] ).flat();
+
+        if ( !includesAny( s, ...prefixes ) )
         {
             return s;
         }
@@ -2816,8 +2818,6 @@ const { _ud = "undefined", $scope } = constants;
         for( let i = 0, n = tokens.length; i < n; i++ )
         {
             let t = tokens[i];
-
-            let prefixes = ["Mc", "Mac", "O'"].concat( options?.prefixes || [] ).flat();
 
             let Mc = -1;
             let len = 0;
@@ -2919,6 +2919,11 @@ const { _ud = "undefined", $scope } = constants;
         out = handleMc( out ) || out;
 
         return out;
+    };
+
+    String.prototype.toProperCase = function()
+    {
+        return toProperCase( this );
     };
 
     /**
