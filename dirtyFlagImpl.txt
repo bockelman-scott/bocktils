@@ -1,0 +1,340 @@
+// Using a Symbol for the internal changed properties set
+// This makes it less likely to accidentally clash with user-defined properties
+const _changedProperties = Symbol('changedProperties');
+const _initialState = Symbol('initialState');
+
+class BockEntity extends EventTarget {
+    // Private field for the set of changed property names
+    [_changedProperties] = new Set();
+    // Private field for the initial state snapshot
+    [_initialState] = null;
+
+    constructor() {
+        super();
+        // The actual dirty tracking and initial state snapshot will happen
+        // when the object is created via a static factory method (like `from`)
+        // or explicitly after initial setup.
+    }
+
+    static get [Symbol.species]() {
+        return this;
+    }
+
+    // Static method to create a new instance and make it dirty-trackable
+    // This is the core factory for all entities
+    static createTrackedInstance(ctor, ...args) {
+        const instance = new ctor(...args); // Create the actual instance
+
+        // Create a Proxy handler
+        const handler = {
+            set: (target, prop, value, receiver) => {
+                // IMPORTANT: Exclude internal symbols or methods from dirty tracking
+                // You'll need to define what properties *shouldn't* mark dirty
+                if (typeof prop === 'symbol' || prop.startsWith('_') || prop.startsWith('#') || typeof value === 'function') {
+                    return Reflect.set(target, prop, value, receiver);
+                }
+
+                const oldValue = Reflect.get(target, prop, receiver);
+                const success = Reflect.set(target, prop, value, receiver);
+
+                if (success && oldValue !== value) {
+                    // Mark the specific property as changed
+                    instance[_changedProperties].add(prop);
+                    // Optionally, dispatch a 'propertyChanged' event
+                    // instance.dispatchEvent(new CustomEvent('propertyChanged', { detail: { prop, oldValue, newValue: value } }));
+                }
+                return success;
+            },
+            // You can add a deleteProperty trap as well
+            deleteProperty: (target, prop) => {
+                if (Reflect.has(target, prop)) {
+                    const success = Reflect.deleteProperty(target, prop);
+                    if (success) {
+                        instance[_changedProperties].add(prop); // Mark as changed (deleted)
+                        // Or a specific symbol for deleted properties
+                    }
+                    return success;
+                }
+                return false;
+            }
+        };
+
+        const proxiedInstance = new Proxy(instance, handler);
+
+        // Store the initial state of the *data* fields after construction
+        // This is crucial for knowing if a property has reverted to its original value.
+        // We use the `toObjectLiteral` of the *proxied* instance to get the public state.
+        proxiedInstance[_initialState] = proxiedInstance.toObjectLiteral();
+        proxiedInstance[_changedProperties].clear(); // Ensure it starts clean
+
+        return proxiedInstance;
+    }
+
+    // Method to reset dirty state
+    resetDirty(storeCurrentStateAsClean = true) {
+        this[_changedProperties].clear();
+        if (storeCurrentStateAsClean) {
+            // Snapshot the current effective state (from the proxy)
+            this[_initialState] = this.toObjectLiteral();
+        }
+        // console.log(`${this.constructor.name} dirty state reset.`);
+    }
+
+    // Check if the object itself has been explicitly marked dirty
+    // or if any properties have changed from their initial state
+    isDirty() {
+        // If the _changedProperties set is not empty, it's dirty
+        return this[_changedProperties].size > 0;
+    }
+
+    // Get the set of names of properties that have changed
+    getChangedProperties() {
+        // Return a copy to prevent external modification of the internal Set
+        return new Set(this[_changedProperties]);
+    }
+
+    // Get the initial state (snapshot)
+    getInitialState() {
+        // Return a deep clone of the initial state to prevent external modification
+        return JSON.parse(JSON.stringify(this[_initialState])); // Simple deep copy for plain objects
+    }
+
+    // Override toObjectLiteral to work with private fields via getters
+    toObjectLiteral() {
+        const obj = {};
+        // Iterate over public properties, including those from prototypes
+        for (const key in this) {
+            if (Object.prototype.hasOwnProperty.call(this, key)) {
+                // Ensure we don't copy the internal symbol properties
+                if (typeof key === 'string' && !key.startsWith('_') && !key.startsWith('#')) {
+                    obj[key] = this[key]; // This uses the getter for properties with them
+                }
+            }
+        }
+        // Manually add private fields via their public getters for serialization
+        // This assumes your getters like `id`, `name`, `code`, `description` are exposed.
+        if (this.id !== undefined) obj.id = this.id;
+        if (this.name !== undefined) obj.name = this.name;
+        if (this.code !== undefined) obj.code = this.code;
+        if (this.description !== undefined) obj.description = this.description;
+
+        return obj;
+    }
+
+    toJson() {
+        return attempt(() => asJson(this.toObjectLiteral()));
+    }
+
+    isIdentical(pOther) {
+        return (pOther === this) || (!isBlank(pOther?.__GUID) && (pOther?.__GUID === this.__GUID));
+    }
+
+    equals(pOther) {
+        if (this.isIdentical(pOther)) {
+            return true;
+        }
+
+        // Compare the current state (toObjectLiteral) with the other object's state
+        return same(this.toObjectLiteral(), pOther, true, getClass(this));
+    }
+
+    // Adapted from your original `from` for BaseEntity
+    static from(pSource) {
+        const source = asObject(pSource) || attempt(() => asJson(pSource)) || {};
+        const tempInstance = new this(); // Create a temp instance of the specific class
+        populateProperties(tempInstance, source); // Populate its properties
+        // Now, create and return the *proxied* version
+        return this.createTrackedInstance(this, ...Object.values(tempInstance.toObjectLiteral())); // Pass properties to constructor
+    }
+
+
+    // `clone` method revised to use the new `createTrackedInstance` pattern
+    clone() {
+        const species = this.constructor[Symbol.species];
+        // The 'from' method should correctly create a new instance of the species
+        // and ensure it's proxied and clean.
+        return species.from(this.toObjectLiteral());
+    }
+}
+
+class BockIdentified extends BockEntity {
+    #id = 0;
+
+    constructor(pId) {
+        super();
+        this.#id = asInt(pId);
+    }
+
+    get id() {
+        return asInt(this.#id);
+    }
+
+    set id(value) {
+        const newId = asInt(value);
+        if (this.#id !== newId) {
+            this.#id = newId;
+            // When a private field is set, you still need to explicitly mark the property name.
+            // The Proxy won't catch this.
+            this[_changedProperties].add('id'); // Mark 'id' as changed
+        }
+    }
+
+    equals(pOther) {
+        if (this.isIdentical(pOther)) {
+            return true;
+        }
+
+        // If IDs and types match, consider identical for this level
+        if (asInt(pOther?.id) === this.id && getClass(pOther) === getClass(this)) {
+            return true;
+        }
+
+        // Fallback to general comparison of object literals
+        return same(this.toObjectLiteral(), pOther, { strict: true, type: getClass(this) });
+    }
+
+    // Static `from` method specific to BockIdentified
+    static from(pObject) {
+        const source = asObject(pObject) || {};
+        // The arguments for the constructor are `id`
+        const instance = BockEntity.createTrackedInstance(
+            this,
+            source?.id || source.Id
+        );
+        // Populate additional public properties
+        populateProperties(instance, source);
+        instance.resetDirty(); // Ensure clean after population
+        return instance;
+    }
+}
+
+class BockNamed extends BockIdentified {
+    #name;
+
+    constructor(pId, pName) {
+        super(pId);
+        this.#name = asString(pName, true);
+    }
+
+    get name() {
+        return asString(this.#name, true);
+    }
+
+    set name(value) {
+        const newName = asString(value, true);
+        if (this.#name !== newName) {
+            this.#name = newName;
+            this[_changedProperties].add('name'); // Mark 'name' as changed
+        }
+    }
+
+    equals(pOther) {
+        return super.equals(pOther) &&
+            asString(pOther?.name, true) === asString(this.name, true);
+    }
+
+    static from(pObject) {
+        const source = asObject(pObject) || {};
+        // Arguments for BockNamed constructor are id, name
+        const instance = BockEntity.createTrackedInstance(
+            this,
+            source?.id || source?.Id,
+            source?.name || source?.Name
+        );
+        populateProperties(instance, source);
+        instance.resetDirty();
+        return instance;
+    }
+}
+
+class BockDescribed extends BockNamed {
+    #code;
+    #description;
+
+    constructor(pId, pName, pCode, pDescription) {
+        super(pId, pName);
+        this.#code = asString(pCode, true);
+        this.#description = asString(pDescription, true);
+    }
+
+    get code() {
+        return asString(this.#code, true);
+    }
+
+    set code(value) {
+        const newCode = asString(value, true);
+        if (this.#code !== newCode) {
+            this.#code = newCode;
+            this[_changedProperties].add('code');
+        }
+    }
+
+    get description() {
+        return asString(this.#description || this.code) || asString(this.code);
+    }
+
+    set description(value) {
+        const newDescription = asString(value, true);
+        if (this.#description !== newDescription) {
+            this.#description = newDescription;
+            this[_changedProperties].add('description');
+        }
+    }
+
+    equals(pOther) {
+        return super.equals(pOther) &&
+            asString(pOther?.code, true) === asString(this.code, true) &&
+            asString(pOther?.description, true) === asString(this.description, true);
+    }
+
+    static from(pObject) {
+        const source = asObject(pObject) || {};
+        const instance = BockEntity.createTrackedInstance(
+            this,
+            source?.id || source?.Id,
+            source?.name || source?.Name,
+            source?.code || source?.Code,
+            source?.description || source?.Description
+        );
+        populateProperties(instance, source);
+        instance.resetDirty();
+        return instance;
+    }
+}
+
+// --- Usage Example ---
+console.log('--- BockNamed ---');
+const namedEntity = BockNamed.from({ id: 1, name: 'Original Name', otherPublicProp: 'initial value' });
+console.log(`Initial: isDirty = ${namedEntity.isDirty()}, changed: ${Array.from(namedEntity.getChangedProperties())}`); // false, []
+
+namedEntity.name = 'Updated Name'; // Setter for #name calls add('name')
+console.log(`After name change: isDirty = ${namedEntity.isDirty()}, changed: ${Array.from(namedEntity.getChangedProperties())}`); // true, ['name']
+
+namedEntity.otherPublicProp = 'new value'; // Proxy catches this
+console.log(`After otherPublicProp change: isDirty = ${namedEntity.isDirty()}, changed: ${Array.from(namedEntity.getChangedProperties())}`); // true, ['name', 'otherPublicProp']
+
+namedEntity.name = 'Original Name'; // Revert name
+console.log(`After name revert: isDirty = ${namedEntity.isDirty()}, changed: ${Array.from(namedEntity.getChangedProperties())}`); // Still true if 'otherPublicProp' changed
+// To make it truly clean if all revert, `resetDirty` would be needed or more complex logic in `set`
+
+console.log('--- BockDescribed ---');
+const describedEntity = BockDescribed.from({
+    id: 10,
+    name: 'Product A',
+    code: 'PA001',
+    description: 'A new product'
+});
+console.log(`Initial: isDirty = ${describedEntity.isDirty()}, changed: ${Array.from(describedEntity.getChangedProperties())}`);
+
+describedEntity.description = 'An updated product description';
+console.log(`After description change: isDirty = ${describedEntity.isDirty()}, changed: ${Array.from(describedEntity.getChangedProperties())}`);
+
+describedEntity.resetDirty();
+console.log(`After reset: isDirty = ${describedEntity.isDirty()}, changed: ${Array.from(describedEntity.getChangedProperties())}`);
+
+const clonedDescribed = describedEntity.clone();
+console.log(`Cloned: isDirty = ${clonedDescribed.isDirty()}, changed: ${Array.from(clonedDescribed.getChangedProperties())}`);
+clonedDescribed.code = 'PA002';
+console.log(`Cloned after change: isDirty = ${clonedDescribed.isDirty()}, changed: ${Array.from(clonedDescribed.getChangedProperties())}`);
+
+
