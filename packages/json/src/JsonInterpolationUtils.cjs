@@ -151,7 +151,7 @@ const { _ud = "undefined", $scope } = constants;
 
     const DEFAULT_EXCLUSIONS = lock( ["constructor", "prototype", "toJson", "toObject", "global", "this", "arguments", "_arguments"] );
 
-    const MAX_RUN_TIME = 5_000;
+    const MAX_RUN_TIME = 10_000;
 
     const MAX_RECURSION = 32;
 
@@ -381,6 +381,7 @@ const { _ud = "undefined", $scope } = constants;
             filters: [],
             mappers: [],
             reference: null,
+            maxRunTime: 10_000
         };
 
     const isValidKey = function( pString )
@@ -696,7 +697,7 @@ const { _ud = "undefined", $scope } = constants;
 
                 if ( isNonNullValue( value ) && value.equals( pValue ) )
                 {
-                    if ( isNull( pRoot ) || ( pRoot?.equals( value?.root ) ) )
+                    if ( isNull( pRoot ) || (pRoot?.equals( value?.root )) )
                     {
                         if ( isNull( pCurrent ) || isNull( value?.current ) || pCurrent?.equals( value?.current ) )
                         {
@@ -1395,9 +1396,9 @@ const { _ud = "undefined", $scope } = constants;
         return ((now - startTime) > maxTime);
     };
 
-    function _resolveNullHandler( options )
+    function _resolveNullHandler( pOptions )
     {
-        return (isFunction( options.handleNull ) && options.handleNull.length >= 1) ? options.handleNull : DEFAULT_NULL_HANDLER;
+        return (isFunction( pOptions.handleNull ) && pOptions.handleNull.length >= 1) ? pOptions.handleNull : DEFAULT_NULL_HANDLER;
     }
 
     function _resolveRoot( ...pCandidates )
