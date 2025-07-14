@@ -2831,7 +2831,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             this.#traceEnabled = !!options.traceEnabled;
 
-            this.id = "Event_" + (options?.id || ((new Date().getTime())));
+            this.id = "Event_" + (options?.id || (Date.now()));
 
             this.#options = populateOptions( options, {} );
 
@@ -6165,7 +6165,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                                    configurable: false,
                                    writable: false,
                                    enumerable: false,
-                                   value: new Date().getTime()
+                                   value: new Date()
                                } );
 
         Object.defineProperty( Error.prototype,

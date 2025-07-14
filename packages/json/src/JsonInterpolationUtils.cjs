@@ -1385,7 +1385,7 @@ const { _ud = "undefined", $scope } = constants;
     {
         const options = populateOptions( (isDate( pOptions ) ? { startTime: pOptions } : pOptions), TIME_LIMIT_OPTIONS );
 
-        const now = new Date().getTime();
+        const now = Date.now();
 
         const startTime = options.startTime || now;
 
@@ -1640,7 +1640,7 @@ const { _ud = "undefined", $scope } = constants;
         // limit the depth of recursion
         const depth = asInt( pDepth, asInt( options?.depth ) );
 
-        options.startTime = options.startTime || new Date().getTime();
+        options.startTime = options.startTime || Date.now();
 
         // never allow this function to run longer than 5 seconds or to exceed a maximum recursion depth
         if ( _exceededTimeLimit( options ) || depth > MAX_RECURSION )
