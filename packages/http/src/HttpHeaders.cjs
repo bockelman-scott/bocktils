@@ -67,7 +67,7 @@ const {
             httpConstants
         };
 
-    const { ToolBocksModule, attempt, ObjectEntry, objectEntries, lock } = moduleUtils;
+    const { ToolBocksModule, ObjectEntry, populateOptions, attempt, objectEntries, lock } = moduleUtils;
 
     const { _mt_str } = constants;
 
@@ -82,7 +82,7 @@ const {
             isString
         } = typeUtils;
 
-    const { asString, isBlank } = stringUtils;
+    const { asString, isBlank, lcase } = stringUtils;
 
     const { asObject } = objectUtils;
 
@@ -146,9 +146,11 @@ const {
 
     function processHeadersArray( pOptions )
     {
-        let options = {};
+        let options = populateOptions( pOptions, {} );
 
         let input = asObject( pOptions );
+
+        let map = new Map();
 
         for( const pair of input )
         {
@@ -158,18 +160,28 @@ const {
 
                 if ( isHeader( key ) )
                 {
+                    let value = _mt_str;
+
+                    const existing = map.get( key ) || _mt_str;
+
                     if ( pair.length >= 2 )
                     {
-                        options[key] = pair[1];
+                        value = options[key] = pair[1];
                     }
                     else if ( pair.length === 1 )
                     {
-                        options[key] = key;
+                        value = options[key] = key;
+                    }
+
+                    if ( existing )
+                    {
+                        map.set( key, value + (existing ? ", " + existing : _mt_str) );
                     }
                 }
             }
         }
-        return options;
+
+        return map || options;
     }
 
     function processRequestHeaderOptions( pOptions )
@@ -184,7 +196,7 @@ const {
          */
         if ( isNull( pOptions ) )
         {
-            return {};
+            return new Map();
         }
 
         if ( isWebApiHeadersObject( pOptions ) || isMap( pOptions ) )
@@ -204,19 +216,31 @@ const {
 
         if ( isObject( pOptions ) )
         {
-            let options = {};
+            let options = isMap( pOptions ) ? new Map( pOptions ) : populateOptions( pOptions, {} );
+
+            let map = new Map();
 
             const entries = objectEntries( pOptions ).filter( ( entry ) => isHeader( ObjectEntry.getKey( entry ) ) );
 
             for( const entry of entries )
             {
-                options[ObjectEntry.getKey( entry )] = ObjectEntry.getValue( entry ) || _mt_str;
+                const key = ObjectEntry.getKey( entry );
+                const value = ObjectEntry.getValue( entry ) || _mt_str;
+
+                options[key] = value;
+
+                const existing = map.get( key ) || _mt_str;
+
+                if ( existing )
+                {
+                    map.set( key, value + (existing ? ", " + existing : _mt_str) );
+                }
             }
 
-            return options;
+            return map || options;
         }
 
-        return {};
+        return new Map();
     }
 
     class HttpRequestHeaders extends Map
@@ -228,7 +252,7 @@ const {
 
         append( pKey, pValue )
         {
-            if ( this.has( pKey ) )
+            if ( this.has( pKey ) || this.has( lcase( pKey ) ) )
             {
                 const value = this.get( pKey );
 
@@ -240,17 +264,17 @@ const {
 
         delete( pKey )
         {
-            return attempt( () => super.delete( pKey ) );
+            return attempt( () => super.delete( pKey ) ) || attempt( () => super.delete( lcase( pKey ) ) );
         }
 
         get( pKey )
         {
-            return attempt( () => super.get( pKey ) );
+            return attempt( () => super.get( pKey ) ) || attempt( () => super.get( lcase( pKey ) ) );
         }
 
         getSetCookie()
         {
-            const cookies = this.get( "Set-Cookie" );
+            const cookies = this.get( "Set-Cookie" ) || this.get( "set-cookie" );
 
             if ( !isBlank( cookies ) )
             {
@@ -262,7 +286,7 @@ const {
 
         has( pKey )
         {
-            return attempt( () => super.has( pKey ) );
+            return attempt( () => super.has( pKey ) ) || attempt( () => super.has( lcase( pKey ) ) );
         }
 
         set( pKey, pValue )

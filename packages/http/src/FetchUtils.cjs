@@ -127,7 +127,7 @@ const {
             TIMEOUT: "timeout"
         };
 
-    const isFetchEvent = ( pName ) => !isBlank( FetchEvents[ucase( asString( resolveEventType( pName ), true ) )] );
+    const isFetchEvent = ( pName ) => !isBlank( asString( FetchEvents[ucase( asString( resolveEventType( pName ), true ) )], true) );
 
     const isHandlerObject = function( pHandler, pEventName )
     {
@@ -251,7 +251,9 @@ const {
 
     /**
      * An array of ActiveX components that may be present in an end-users environment
-     * that can be used as a fallback when the use of fetch, the file system, or XmlHttpRequest are all unavailable.
+     * that can be used as a fallback when the use of fetch,
+     * the file system,
+     * or XmlHttpRequest are all unavailable.
      *
      * @type {string[]}
      */

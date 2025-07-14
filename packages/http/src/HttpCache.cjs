@@ -82,15 +82,21 @@ const {
 
     const {
         HttpRequest,
-        cloneRequest = function( pRequest ) { return isNull( pRequest ) ? null : isFunction( pRequest?.clone ) ? pRequest.clone() : pRequest; }
+        cloneRequest = function( pRequest )
+        {
+            return isNull( pRequest ) ? null : isFunction( pRequest?.clone ) ? pRequest.clone() : pRequest;
+        }
     } = httpRequest;
 
     const {
         HttpResponse,
-        cloneResponse = function( pResponse ) { return isNull( pResponse ) ? null : isFunction( pResponse?.clone ) ? pResponse.clone() : pResponse; }
+        cloneResponse = function( pResponse )
+        {
+            return isNull( pResponse ) ? null : isFunction( pResponse?.clone ) ? pResponse.clone() : pResponse;
+        }
     } = httpResponse;
 
-    const { Fetcher } = fetchUtils;
+    const { HttpClient, Fetcher } = fetchUtils;
 
     const executionEnvironment = modulePrototype.executionEnvironment;
 
