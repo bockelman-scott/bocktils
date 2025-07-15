@@ -4359,7 +4359,33 @@ const $scope = constants?.$scope || function()
 
         includes( pElem )
         {
-            return this.isQueued( pElem );
+            if ( isNonNullObject( pElem ) )
+            {
+                return this.isQueued( pElem );
+            }
+            else if ( isNumeric( pElem ) )
+            {
+                const arr = [...(asArray( this.#arr || [] ) || [])];
+                if ( arr.every( isNumeric ) )
+                {
+                    return arr.map( asFloat ).includes( asFloat( pElem ) );
+                }
+                else if ( arr.every( e => !isNull( e?.id ) && isNumeric( e?.id ) ) )
+                {
+                    return arr.map( e => asInt( e.id ) ).filter( isNonNullValue ).filter( e => e > 0 ).includes( asInt( pElem ) );
+                }
+            }
+            else
+            {
+                const arr = [...(asArray( this.#arr || [] ) || [])];
+
+                const type = typeof pElem;
+
+                if ( arr.every( e => typeof e === type || areCompatibleTypes( e, pElem ) ) )
+                {
+                    return attempt( () => arr.map( e => asString( e, true ) ).includes( asString( pElem, true ) ) );
+                }
+            }
         }
 
         toArray()
