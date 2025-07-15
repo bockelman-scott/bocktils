@@ -1143,6 +1143,46 @@ const $scope = constants?.$scope || function()
         return null;
     }
 
+    function extractFileNameFromHeader( pResponse, pDefaultName, pReplaceCharacters = false )
+    {
+        let fileName = asString( pDefaultName );
+
+        if ( isNonNullObject( pResponse ) )
+        {
+            // this function accepts either a response or headers object
+            const headers = new HttpResponseHeaders( pResponse.headers || pResponse );
+
+            const contentDisposition =
+                asString( headers.get( "content-disposition" ) || headers["content-disposition"] ||
+                          headers.get( "Content-Disposition" ) || headers["Content-Disposition"] ||
+                          attempt( () => pResponse["content-disposition"] || pResponse.get( "content-disposition" ) ) ||
+                          attempt( () => pResponse["Content-Disposition"] || pResponse.get( "Content-Disposition" ) )
+                    , true );
+
+            if ( !(isNull( contentDisposition ) || isBlank( contentDisposition )) )
+            {
+                const match = contentDisposition.match( /filename\*?=(?:['"](?:[^'"]*['"])*)?([^;]+)/i );
+
+                if ( match && match[1] )
+                {
+                    fileName = asString( decodeURIComponent( match[1].trim().replace( /^['"]|['"]$/g, "" ) ), true );
+                }
+
+                if ( !isBlank( fileName ) )
+                {
+                    let name = asString( fileName, true );
+
+                    if ( !!pReplaceCharacters )
+                    {
+                        name = asString( name, true ).replaceAll( /\s+/g, _underscore ).replaceAll( /"'`/g, _mt_str ).replaceAll(/[*?]/g, _mt_str);
+                    }
+                }
+            }
+        }
+
+        return asString( pDefaultName, true );
+    }
+
     class QueuedRequest
     {
         #id;
@@ -1509,11 +1549,16 @@ const $scope = constants?.$scope || function()
             return asyncAttempt( async() => await me.sendRequest( "POST", url, cfg ) );
         }
 
-        async sendDeleteRequest( pUrl, pConfig )
+        async upload( pUrl, pConfig, pBody )
+        {
+            return this.sendPostRequest( pUrl, pConfig, pBody );
+        }
+
+        async sendDeleteRequest( pUrl, pConfig, pBody )
         {
             const me = this;
 
-            const { cfg, url } = prepareRequestConfig( "DELETE", pConfig, pUrl, null );
+            const { cfg, url } = prepareRequestConfig( "DELETE", pConfig, pUrl, resolveBody( pBody, pConfig ) );
 
             return asyncAttempt( async() => await me.sendRequest( "DELETE", url, cfg ) );
         }
@@ -1722,6 +1767,11 @@ const $scope = constants?.$scope || function()
             return fetch( url, cfg );
         }
 
+        async upload( pUrl, pConfig, pBody )
+        {
+            return this.sendPostRequest( pUrl, pConfig, pBody );
+        }
+
         async sendPutRequest( pUrl, pConfig, pBody )
         {
             const delegate = this.delegate || new HttpFetchClient( this.config, this.options );
@@ -1760,15 +1810,15 @@ const $scope = constants?.$scope || function()
             return fetch( url, cfg );
         }
 
-        async sendDeleteRequest( pUrl, pConfig )
+        async sendDeleteRequest( pUrl, pConfig, pBody )
         {
             const delegate = this.delegate || new HttpFetchClient( this.config, this.options );
 
-            const { cfg, url } = prepareRequestConfig( "DELETE", pConfig, pUrl );
+            const { cfg, url } = prepareRequestConfig( "DELETE", pConfig, pUrl, resolveBody( pBody, pConfig ) );
 
             if ( isFunction( delegate.sendDeleteRequest ) )
             {
-                return await asyncAttempt( async() => await delegate.sendDeleteRequest( resolveUrl( url, cfg ), cfg ) );
+                return await asyncAttempt( async() => await delegate.sendDeleteRequest( resolveUrl( url, cfg ), cfg, resolveBody( pBody, pConfig ) ) );
             }
 
             if ( isFunction( delegate.sendRequest ) )
@@ -3168,6 +3218,11 @@ const $scope = constants?.$scope || function()
             return this.sendRequest( "POST", url, cfg );
         }
 
+        async upload( pUrl, pConfig, pBody )
+        {
+            return this.sendPostRequest( pUrl, pConfig, pBody );
+        }
+
         async sendPutRequest( pUrl, pConfig, pBody )
         {
             const { cfg, url } = prepareRequestConfig( "PUT", pConfig, pUrl, resolveBody( pBody, pConfig ) );
@@ -3182,9 +3237,9 @@ const $scope = constants?.$scope || function()
             return this.sendRequest( "PATCH", url, cfg );
         }
 
-        async sendDeleteRequest( pUrl, pConfig )
+        async sendDeleteRequest( pUrl, pConfig, pBody )
         {
-            const { cfg, url } = prepareRequestConfig( "DELETE", pConfig, pUrl );
+            const { cfg, url } = prepareRequestConfig( "DELETE", pConfig, pUrl, resolveBody( pBody, pConfig ) );
 
             return this.sendRequest( "DELETE", url, cfg );
         }

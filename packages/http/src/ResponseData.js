@@ -341,6 +341,11 @@ const {
             return [STATUS_CODES.TOO_MANY_REQUESTS, STATUS_CODES.TOO_EARLY].includes( asInt( this.status ) );
         }
 
+        get exceededRateLimit()
+        {
+            return this.isExceedsRateLimit();
+        }
+
         get redirectUrl()
         {
             if ( this.isRedirect() )
@@ -498,6 +503,11 @@ const {
     ResponseData.isResponseData = function( pResponseData )
     {
         return isNonNullObject( pResponseData ) && pResponseData instanceof ResponseData;
+    };
+
+    ResponseData.exceedsRateLimit = function( pResponseData )
+    {
+        return ResponseData.isResponseData( pResponseData ) && pResponseData.isExceedsRateLimit();
     };
 
     ResponseData.from = function( pValue, pConfig, pUrl )
