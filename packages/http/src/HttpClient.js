@@ -164,6 +164,7 @@ const $scope = constants?.$scope || function()
         {
             isNull,
             isNonNullObject,
+            isNonNullValue,
             isFunction,
             isError,
             isString,
@@ -1128,6 +1129,8 @@ const $scope = constants?.$scope || function()
         #url;
         #method;
 
+        #aborted = false;
+
         #resolve;
         #reject;
 
@@ -1149,6 +1152,16 @@ const $scope = constants?.$scope || function()
 
             this.#resolve = isFunction( pResolve ) ? pResolve : no_op;
             this.#reject = isFunction( pReject ) ? pReject : no_op;
+
+            this.abortController = this.#request.abortController || this.#config?.abortController || new AbortController();
+
+            this.abort = function( pWhy )
+            {
+                attempt( () => this.abortController.abort( pWhy ) );
+                this.#aborted = true;
+            };
+
+            this.#aborted = !!(this.#request.aborted || false);
         }
 
         get id()
@@ -2349,6 +2362,16 @@ const $scope = constants?.$scope || function()
             return map.values();
         }
 
+        increment()
+        {
+            let windows = this.getAllRequestWindows();
+
+            if ( isNonNullObject( windows ) )
+            {
+                windows.forEach( window => window.increment() );
+            }
+        }
+
         calculateDelay()
         {
             let delay = 10;
@@ -2559,6 +2582,11 @@ const $scope = constants?.$scope || function()
             }
         }
 
+        get queues()
+        {
+            return [this.#highPriorityQueue, this.#normalPriorityQueue, this.#lowPriorityQueue];
+        }
+
         add( pQueuedRequest, pPriority )
         {
             if ( isNonNullObject( pQueuedRequest ) )
@@ -2581,17 +2609,48 @@ const $scope = constants?.$scope || function()
                 const queue = this.getQueue( priority );
                 if ( queue )
                 {
-                    queue.remove( pQueuedRequest );
+                    if ( queue.includes( pQueuedRequest ) )
+                    {
+                        return queue.remove( pQueuedRequest );
+                    }
+                }
+
+                for( let q of this.queues )
+                {
+                    if ( q.includes( pQueuedRequest ) )
+                    {
+                        return q.remove( pQueuedRequest );
+                    }
                 }
             }
+            else if ( isNonNullValue( pQueuedRequest ) )
+            {
+                for( let q of this.queues )
+                {
+                    if ( q.includes( pQueuedRequest ) )
+                    {
+                        let request = q.findById( pQueuedRequest );
+                        if ( request )
+                        {
+                            return q.remove( pQueuedRequest );
+                        }
+                    }
+                }
+            }
+            return null;
         }
 
-        /*
-         abort( pQueuedRequest )
-         {
+        abort( pQueuedRequest )
+        {
+            // first remove it from the queue
+            let request = this.remove( pQueuedRequest ) || pQueuedRequest;
 
-         }
-         */
+            // try to abort it if possible
+            if ( request && isFunction( request.abort ) )
+            {
+                attempt( () => request.abort() );
+            }
+        }
 
         async processQueue( pQueue, pHttpClient )
         {
@@ -2608,7 +2667,7 @@ const $scope = constants?.$scope || function()
             {
                 let queuedRequest = await pQueue.take();
 
-                if ( queuedRequest )
+                if ( queuedRequest && !queuedRequest.aborted )
                 {
                     pHttpClient.sendRequest( resolveHttpMethod( queuedRequest.method ),
                                              cleanUrl( queuedRequest.url ),
@@ -2887,6 +2946,19 @@ const $scope = constants?.$scope || function()
             return limits;
         }
 
+        addRateLimits( ...pRateLimits )
+        {
+            let arr = [...(asArray( pRateLimits || [] ) || [])];
+            arr.forEach( rateLimits =>
+                         {
+                             const key = asString( rateLimits.group, true );
+                             if ( isNull( this.#rateLimitsMap.get( key ) ) )
+                             {
+                                 this.#rateLimitsMap.set( key, rateLimits );
+                             }
+                         } );
+        }
+
         calculateDelay( pGroup )
         {
             const rateLimits = this.getRateLimits( pGroup );
@@ -2916,6 +2988,8 @@ const $scope = constants?.$scope || function()
                                     }
                                     else
                                     {
+                                        const rateLimits = me.getRateLimits( group );
+
                                         const finallyFunction = async function()
                                         {
                                             queue.process( me );
@@ -2931,10 +3005,21 @@ const $scope = constants?.$scope || function()
                                                                                                       pReject || reject ) );
                                             };
 
-                                            return asyncAttempt( delegated ).then( pResolve || resolve ).catch( pReject || reject ).finally( finallyFunction );
+                                            attempt( () => rateLimits.increment() );
+
+                                            return asyncAttempt( delegated ).then( ( response ) =>
+                                                                                   {
+                                                                                       attempt( () => rateLimits.updateFromResponse( response?.headers, response ) );
+
+                                                                                       // Ensure the promise chain is resolved
+                                                                                       attempt( () => (pResolve || resolve)( response ) );
+
+                                                                                       return response; // pass to the next handler
+
+                                                                                   } ).catch( (pReject || reject || console.error) ).finally( finallyFunction );
                                         };
 
-                                        sleep( delay ).then( sendFunction ).catch( reject ).finally( finallyFunction );
+                                        sleep( delay ).then( sendFunction ).catch( (pReject || reject || console.error) ).finally( finallyFunction );
 
                                         // setTimeout for processing anything left in the queue
                                         setTimeout( finallyFunction, (delay * 2) );
@@ -2962,6 +3047,9 @@ const $scope = constants?.$scope || function()
 
             let resolve = isFunction( pResolve ) ? pResolve : no_op;
             let reject = isFunction( pReject ) ? pReject : no_op;
+
+            cfg.abortController = cfg.abortController || request.abortContoller || new AbortController();
+            request.abortContoller = request.abortContoller || cfg.abortController || new AbortController();
 
             this.#queuedRequests.add( new QueuedRequest( request, cfg, resolve, reject ) );
         }
