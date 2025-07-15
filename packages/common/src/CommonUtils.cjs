@@ -1,8 +1,10 @@
 const core = require( "@toolbocks/core" );
 
+const jsonUtils = require( "@toolbocks/json" );
+
 const objectUtils = require( "./ObjectUtils.cjs" );
 
-const jsonUtils = require( "@toolbocks/json" );
+const entityUtils = require( "./EntityUtils.js" );
 
 const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils, localeUtils, NumberParser, guidUtils } = core;
 
@@ -41,6 +43,7 @@ const $scope = constants?.$scope || function()
             NumberParser,
             guidUtils,
             objectUtils,
+            entityUtils,
             jsonUtils,
             dependencies:
                 {
@@ -51,6 +54,7 @@ const $scope = constants?.$scope || function()
                     localeUtils,
                     guidUtils,
                     objectUtils,
+                    entityUtils,
                     jsonUtils,
                 }
         };

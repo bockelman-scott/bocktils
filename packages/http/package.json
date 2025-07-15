@@ -1,0 +1,23 @@
+{
+  "name": "@toolbocks/http",
+  "version": "1.0.0",
+  "description": "Useful functions for working with HTTP requests, responses, and rate-limited API calls",
+  "main": "src/index.js",
+  "dependencies": {
+    "@toolbocks/core": "^1.0.0",
+    "@toolbocks/dates": "^1.0.0",
+    "@toolbocks/json": "^1.0.0",
+    "@toolbocks/common": "^1.0.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "scripts": {
+    "test": "jest",
+    "doc": "jsdoc -c ../../jsdoc.config.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bockelman-scott/bocktils.git"
+  }
+}
