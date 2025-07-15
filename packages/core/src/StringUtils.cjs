@@ -83,6 +83,8 @@ const { _ud = "undefined", $scope } = constants;
         ModuleEvent,
         ToolBocksModule,
         IllegalArgumentError,
+        ObjectEntry,
+        objectEntries,
         functionToString,
         populateOptions,
         attempt,
@@ -906,6 +908,57 @@ const { _ud = "undefined", $scope } = constants;
         return s;
     }
 
+    function _handleMapToString( pMap )
+    {
+        if ( isMap( pMap ) )
+        {
+            const entries = objectEntries( pMap );
+
+            if ( isNonNullObject( entries ) && isFunction( entries.forEach ) )
+            {
+                let numKeys = 0;
+
+                let s = "{";
+
+                entries.forEach( entry =>
+                                 {
+                                     const key = ObjectEntry.getKey( entry );
+                                     const value = ObjectEntry.getValue( entry );
+
+                                     s += "\"" + asString( key, true ) + "\": \"" + asString( value, true ) + "\",\n";
+
+                                     numKeys += 1;
+                                 } );
+
+                s = numKeys > 0 ? s.slice( -2 ) : s; // remove last comma + newline sequence
+
+                s += "}";
+
+                return s.trim();
+            }
+        }
+
+        return _mt_str;
+    }
+
+    function _handleArrayInput( pInput, pOptions )
+    {
+        const arr = [...(pInput || [])];
+
+        let s = _mt_str;
+
+        if ( pOptions.checkForByteArray && arr.every( e => isNumeric( e ) && toDecimal( e ) ) <= 255 )
+        {
+            s = fromUtf8ByteArray( arr.map( e => toDecimal( e ) ) );
+        }
+        else
+        {
+            s = arr.map( e => asString( e, pOptions?.trim, pOptions ) ).join( (asString( pOptions.joinOn ) || _mt_chr) );
+        }
+
+        return pOptions?.trim ? (_mt_str + s).trim() : s;
+    }
+
     function _handleObjectInput( pValue, pTrim, pOptions )
     {
         if ( isNull( pValue ) )
@@ -930,18 +983,7 @@ const { _ud = "undefined", $scope } = constants;
         // and join the results on the joinOn option or the empty character
         if ( isArray( input ) )
         {
-            const arr = [...(input || [])];
-
-            if ( options.checkForByteArray && arr.every( e => isNumeric( e ) && toDecimal( e ) ) <= 255 )
-            {
-                s = fromUtf8ByteArray( arr.map( e => toDecimal( e ) ) );
-            }
-            else
-            {
-                s = arr.map( e => asString( e, trim, options ) ).join( (asString( options.joinOn ) || _mt_chr) );
-            }
-
-            return trim ? (_mt_str + s).trim() : s;
+            return _handleArrayInput( input, options, s, trim );
         }
 
         // handle ObjectWrapper types
@@ -961,6 +1003,15 @@ const { _ud = "undefined", $scope } = constants;
         if ( input instanceof RegExp )
         {
             return input.toString();
+        }
+
+        if ( isMap( input ) )
+        {
+            let s = attempt( () => _handleMapToString( input ) );
+            if ( s !== _mt_str )
+            {
+                return s;
+            }
         }
 
         // if the object defines a variation of the toString method, we try those
@@ -998,9 +1049,9 @@ const { _ud = "undefined", $scope } = constants;
         switch ( typeof pIn )
         {
             case _str:
-                s = pTrim ? pIn.trim() : pIn;
+                s = pTrim ? (_mt_str + pIn).trim() : pIn;
 
-                if ( pOptions.assumeNumeric )
+                if ( pOptions.assumeNumeric && isNumeric( pIn ) )
                 {
                     s = (_mt_str + _handleNumericString( pIn, pOptions ));
                 }
