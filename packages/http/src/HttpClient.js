@@ -250,6 +250,10 @@ const $scope = constants?.$scope || function()
     // import the HttpResponse (facade) class we use to provide a uniform interface for HTTP Responses
     const { HttpResponse, cloneResponse } = httpResponseModule;
 
+    const modName = "HttpClientUtils";
+
+    let toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
+
     /**
      * This class is used to define the configuration of an Http (or Https) Agent.
      * Notably, this class exposes properties for whether to use keepAlive, and if so, the duration (in milliseconds).
@@ -1216,7 +1220,7 @@ const $scope = constants?.$scope || function()
     {
         const body = resolveBody( (pBody || pConfig?.body || pConfig?.data), pConfig );
 
-        const cfg = resolveConfig( pConfig, body );
+        const cfg = resolveApiConfig( pConfig, body );
 
         const url = (_ud !== typeof Request && pUrl instanceof Request) ? pUrl : resolveUrl( pUrl, cfg );
 
@@ -1346,7 +1350,7 @@ const $scope = constants?.$scope || function()
                 }
                 else if ( STATUS_ELIGIBLE_FOR_RETRY.includes( status ) )
                 {
-                    const delay = DEFAULT_REQUEST_RETRIES[status];
+                    let delay = Math.max( responseData.retryAfterMilliseconds, DEFAULT_RETRY_DELAY[status] );
 
                     await asyncAttempt( async() => await sleep( delay ) );
 
@@ -1364,7 +1368,7 @@ const $scope = constants?.$scope || function()
                     {
                         let headers = responseData.headers;
 
-                        let location = isFunction( headers?.get ) ? cleanUrl( asString( headers.get( "location" ) || headers.get( "Location" ), true ) || headers.location || headers.Location ) : cleanUrl( asString( headers.location || headers.Location, true ) );
+                        let location = responseData.redirectUrl || (isFunction( headers?.get ) ? cleanUrl( asString( headers.get( "location" ) || headers.get( "Location" ), true ) || headers.location || headers.Location ) : cleanUrl( asString( headers.location || headers.Location, true ) ));
 
                         if ( location && cleanUrl( asString( url, true ) ) !== location )
                         {
@@ -1442,6 +1446,16 @@ const $scope = constants?.$scope || function()
                         throw new Error( "Exceeded Maximum Number of Redirects (" + asInt( cfg.maxRedirects ) + ")" );
                     }
                 }
+                else if ( responseData.isExceedsRateLimit() )
+                {
+                    let retries = asInt( pRedirects );
+
+                    let delay = asInt( Math.max( 100, responseData.retryAfterMilliseconds, DEFAULT_RETRY_DELAY[status] ) );
+
+                    await asyncAttempt( async() => await sleep( delay ) );
+
+                    return await asyncAttempt( async() => await me.getRequestedData( url, cfg, ++retries ) );
+                }
             }
             throw new Error( "Failed to fetch data from " + url + ", Server returned: " + (responseData?.status || "no response") );
         }
@@ -1459,7 +1473,7 @@ const $scope = constants?.$scope || function()
         {
             const me = this;
 
-            const { cfg, url, method } = prepareRequestConfig( "DELETE", pConfig, pUrl, null );
+            const { cfg, url } = prepareRequestConfig( "DELETE", pConfig, pUrl, null );
 
             return asyncAttempt( async() => await me.sendRequest( "DELETE", url, cfg ) );
         }
@@ -1603,6 +1617,8 @@ const $scope = constants?.$scope || function()
                 {
                     let status = responseData.status;
 
+                    let headers = responseData.headers;
+
                     if ( ResponseData.isOk( status ) || (status >= 200 && status < 300) )
                     {
                         return responseData.data || responseData.body;
@@ -1613,13 +1629,11 @@ const $scope = constants?.$scope || function()
 
                         if ( redirects <= asInt( cfg.maxRedirects ) )
                         {
-                            let headers = responseData.headers;
-
-                            let location = isFunction( headers?.get ) ? headers.get( "location" ) || headers.get( "Location" ) || headers?.location || headers?.Location : headers?.location || headers?.Location;
+                            let location = responseData.redirectUrl || (headers["location"] || (isFunction( headers.get ) ? headers.get( "location" ) || headers.get( "Location" ) : _mt_str));
 
                             if ( location && cleanUrl( url ) !== cleanUrl( location ) )
                             {
-                                return await me.getRequestedData( location, cfg, ++redirects );
+                                return await asyncAttempt( async() => await me.getRequestedData( location, cfg, ++redirects ) );
                             }
                         }
                         else
@@ -1629,8 +1643,20 @@ const $scope = constants?.$scope || function()
                     }
                     else if ( responseData.isExceedsRateLimit() )
                     {
-                        //TODO: retry-after
-                        // other retry logic, see AxiosUtils
+                        let retries = asInt( pRedirects );
+
+                        if ( retries > cfg.maxRedirects )
+                        {
+                            throw new Error( "Failed to fetch data from " + url + ", Server returned: " + (responseData?.status || "no response") + ", " + asString( responseData.headers ) );
+                        }
+
+                        let delay = Math.max( responseData.retryAfterMilliseconds, DEFAULT_RETRY_DELAY[status], 100 );
+
+                        delay *= (retries + 1);
+
+                        await asyncAttempt( async() => await sleep( delay ) );
+
+                        return await asyncAttempt( async() => await me.getRequestedData( url, cfg, ++retries ) );
                     }
                 }
                 throw new Error( "Failed to fetch data from " + url + ", Server returned: " + (responseData?.status || "no response") );
@@ -2947,6 +2973,79 @@ const $scope = constants?.$scope || function()
             return this.sendRequest( "GET", url, cfg );
         }
 
+        async getRequestedData( pUrl, pConfig, pRedirects, pResolve, pReject )
+        {
+            const me = this;
+
+            const { cfg, url } = prepareRequestConfig( "GET", pConfig, pUrl, null );
+
+            const responseData = await asyncAttempt( async() => await me.sendRequest( url, cfg ) );
+
+            if ( ResponseData.isOk( responseData ) )
+            {
+                return await asyncAttempt( async() => await responseData.data || (isFunction( responseData.body ) ? await responseData.body() : responseData.body) );
+            }
+            else if ( ResponseData.is( "Error" ) || (isNonNullObject( responseData ) && responseData.isError()) )
+            {
+                const err = responseData?.error || getLastError();
+                throw resolveError( err, err?.message || responseData?.statusText );
+            }
+            else if ( isNonNullObject( responseData ) )
+            {
+                let retries = asInt( pRedirects );
+                if ( retries < Math.max( cfg.maxRedirects, 3 ) && responseData.isExceedsRateLimit() )
+                {
+                    // the sendRequest method should already be handling the rate limits, so
+                    // this is just a sort of fallback to make a last ditch attempt to get the data
+                    await sleep( (500 * (retries + 1)) + (Math.random() * 100) );
+                    return await asyncAttempt( async() => me.getRequestedData( url, cfg, ++retries, pResolve, pReject ) );
+                }
+            }
+
+            let redirects = asInt( pRedirects );
+
+            // noinspection JSValidateTypes,TypeScriptUMDGlobal
+            return new Promise( ( resolve, reject ) =>
+                                {
+                                    const group = me.getRateLimitsGroup( pUrl, me.requestGroupMapper, me.config, me.options );
+
+                                    const delay = me.calculateDelay( group );
+
+                                    if ( delay > asInt( me.maxDelayBeforeQueueing ) )
+                                    {
+                                        return me.queueRequest( "GET", url, cfg, (pResolve || resolve), (pReject || reject) );
+                                    }
+                                    else
+                                    {
+                                        const queue = me.requestQueue;
+
+                                        const finallyFunction = async function()
+                                        {
+                                            queue.process( me );
+                                        };
+
+                                        const sendFunction = async() =>
+                                        {
+                                            const delegated = async function()
+                                            {
+                                                return asyncAttempt( async() => me.getRequestedData( url,
+                                                                                                     cfg,
+                                                                                                     ++redirects,
+                                                                                                     pResolve || resolve,
+                                                                                                     pReject || reject ) );
+                                            };
+
+                                            return asyncAttempt( delegated ).then( pResolve || resolve ).catch( pReject || reject ).finally( finallyFunction );
+                                        };
+
+                                        sleep( delay ).then( sendFunction ).catch( reject ).finally( finallyFunction );
+
+                                        // setTimeout for processing anything left in the queue
+                                        setTimeout( finallyFunction, (delay * 2) );
+                                    }
+                                } );
+        }
+
         async sendPostRequest( pUrl, pConfig, pBody )
         {
             const { cfg, url } = prepareRequestConfig( "POST", pConfig, pUrl, resolveBody( pBody, pConfig ) );
@@ -2997,5 +3096,115 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    function createRateLimitedHttpClient( pHttpClient, pConfig, pOptions, ...pRateLimits )
+    {
+        let client = pHttpClient || new HttpFetchClient( pConfig, pOptions );
+
+        let options = populateOptions( pOptions, HttpClientApiConfig.getDefaultConfig() );
+
+        let cfg = resolveApiConfig( pConfig );
+
+        if ( isHttpClient( client ) )
+        {
+            return new RateLimitedHttpClient( cfg, options, client, ...pRateLimits );
+        }
+
+        return new RateLimitedHttpClient( cfg, options, new HttpFetchClient( cfg, options ), ...pRateLimits );
+    }
+
+    let mod =
+        {
+            dependencies:
+                {
+                    http,
+                    https,
+                    core,
+                    moduleUtils,
+                    sleep,
+                    constants,
+                    typeUtils,
+                    stringUtils,
+                    arrayUtils,
+                    datesModule,
+                    DateUtils,
+                    jsonUtils,
+                    entityUtils,
+                    BockNamed,
+                    httpConstants,
+                    HttpStatus,
+                    httpHeaders,
+                    httpRequestModule,
+                    HttpRequest,
+                    httpResponseModule,
+                    HttpResponse,
+                    responseDataModule,
+                    ResponseData
+                },
+            classes:
+                {
+                    ModuleEvent,
+                    ToolBocksModule,
+                    ObjectEntry,
+                    BoundedQueue,
+                    BockNamed,
+                    HttpStatus,
+                    HttpRequestHeaders,
+                    HttpResponseHeaders,
+                    HttpRequest,
+                    HttpResponse,
+                    ResponseData,
+                    HttpAgentConfig,
+                    HttpClientConfig,
+                    OauthSecrets,
+                    TenantSecrets,
+                    ApiProperties,
+                    ApiExtendedProperties,
+                    HttpClientApiConfig,
+                    QueuedRequest,
+                    RequestQueue,
+                    RequestInterval,
+                    RequestWindow,
+                    RateLimits,
+                    RequestGroupMapper,
+                    HttpClient,
+                    HttpFetchClient,
+                    RateLimitedHttpClient
+                },
+            HttpAgentConfig,
+            httpAgent,
+            httpsAgent,
+            fixAgents,
+
+            HttpClientConfig,
+            OauthSecrets,
+            TenantSecrets,
+            ApiProperties,
+            ApiExtendedProperties,
+
+            HttpClientApiConfig,
+            resolveConfig,
+            resolveApiConfig,
+
+            resolveUrl,
+            resolveBody,
+
+            isHttpClient,
+            prepareRequestConfig,
+
+            HttpClient,
+            HttpFetchClient,
+            RateLimitedHttpClient,
+
+            RequestInterval,
+            RequestWindow,
+            RateLimits,
+
+            RequestGroupMapper,
+            createRateLimitedHttpClient
+        };
+
+    mod = toolBocksModule.extend( mod );
+
+    return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 
 }());

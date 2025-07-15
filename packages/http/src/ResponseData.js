@@ -16,6 +16,11 @@
 const core = require( "@toolbocks/core" );
 
 /**
+ * Import the module for date manipulation
+ */
+const datesModule = require( "@toolbocks/dates" );
+
+/**
  * This statement imports JSON Utilities
  * that can handle circular references and internal references
  */
@@ -27,6 +32,11 @@ const jsonUtils = require( "@toolbocks/json" );
  */
 const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
+// import the DateUtils module from the datesModule
+const { DateUtils } = datesModule;
+
+// import the functions from DateUtils we use in this module
+const { asDate } = DateUtils;
 
 /**
  * Imports the HttpConstants that define common aspects of the HTTP protocol
@@ -80,7 +90,19 @@ const {
 
     const { _mt_str = "", _mt = _mt_str } = constants;
 
-    const { isNull, isNonNullObject, isError, isFunction, isString, isJson, firstMatchingType } = typeUtils;
+    const {
+        isNull,
+        isNonNullObject,
+        isError,
+        isFunction,
+        isString,
+        isJson,
+        isNumeric,
+        isNullOrNaN,
+        isDate,
+        isDateString,
+        firstMatchingType
+    } = typeUtils;
 
     const { asString, asInt, toBool, isBlank, cleanUrl, lcase, ucase, capitalize } = stringUtils;
 
@@ -329,6 +351,40 @@ const {
                        this.headers?.location || this.headers?.Location;
             }
             return _mt;
+        }
+
+        get retryAfterMilliseconds()
+        {
+            let millis = Math.max( 100, asInt( DEFAULT_RETRY_DELAY[this.status] ) );
+
+            millis = !isNullOrNaN( millis ) ? millis : 100;
+
+            const responseHeaders = new HttpResponseHeaders( this.headers || this.response?.headers );
+
+            let retryAfter = (responseHeaders.get( "Retry-After" ) || responseHeaders.get( "retry-after" ));
+
+            retryAfter = retryAfter || (responseHeaders.get( "X-Retry-After" ) || responseHeaders.get( "x-retry-after" ));
+
+            if ( isNumeric( retryAfter ) )
+            {
+                millis = asInt( Math.max( (retryAfter * 1_000), millis ) );
+            }
+            else if ( isDateString( retryAfter ) || isDate( retryAfter ) )
+            {
+                let nextDateTime = asDate( retryAfter );
+                if ( isDate( nextDateTime ) )
+                {
+                    millis = Math.max( millis, asInt( nextDateTime.getTime() - Date.now() ) );
+                }
+            }
+            else
+            {
+                millis = 256;
+            }
+
+            millis += (Math.random() * 128); // add some 'jitter'
+
+            return millis;
         }
 
         async body()

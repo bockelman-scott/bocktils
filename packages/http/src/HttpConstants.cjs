@@ -479,9 +479,9 @@ const {
             /**
              * When a request has exceeded an API rate limit,
              * for HttpClients that are not rate-limit-aware,
-             * we try again after 100 milliseconds
+             * we try again after 256 milliseconds
              */
-            [STATUS_CODES.TOO_MANY_REQUESTS]: 100,
+            [STATUS_CODES.TOO_MANY_REQUESTS]: 256,
 
             /**
              * When a request failed to update an existing resource

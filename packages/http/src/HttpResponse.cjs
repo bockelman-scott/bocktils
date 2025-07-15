@@ -204,8 +204,12 @@ const {
                 {
                     // cannot handle async in synchronous context
                     // we'll check for Promise
+                    body = asyncAttempt( async() => await body.call( res ) );
                 }
-                body = attempt( () => body.call( res, body ) );
+                else
+                {
+                    body = attempt( () => body.call( res, body ) );
+                }
             }
 
             return body || {};
@@ -238,7 +242,8 @@ const {
                             body: body || options?.body || options?.data,
                             status: options?.status || (!isNull( body ) ? STATUS_CODES.OK : STATUS_CODES.NOT_FOUND),
                             statusText: options?.statusText,
-                            type: options?.type
+                            type: options?.type,
+                            ...(pResponse || {})
                         };
                 }
             }
