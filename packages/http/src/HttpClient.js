@@ -135,6 +135,7 @@ const $scope = constants?.$scope || function()
             lock,
             localCopy,
             objectEntries,
+            mergeObjects,
             sleep,
             no_op,
             $ln,
@@ -990,6 +991,8 @@ const $scope = constants?.$scope || function()
         return fixAgents( cfg );
     };
 
+    const DEFAULT_API_CONFIG = HttpClientApiConfig.getDefaultConfig();
+
     /**
      * Combines the specified configuration with the default configuration
      * @param {Object} pConfig  the configuration to combine with the default configuration.
@@ -1031,6 +1034,30 @@ const $scope = constants?.$scope || function()
         cfg = populateOptions( cfg, HttpClientApiConfig.getDefaultConfig() );
 
         return fixAgents( toObjectLiteral( cfg ) );
+    }
+
+    function mergeConfig( pConfig, pDefaultConfig = DEFAULT_API_CONFIG )
+    {
+        const cfg = resolveApiConfig( pConfig, (pConfig?.body || pConfig?.data) );
+
+        const defaultApiConfig = pDefaultConfig || DEFAULT_API_CONFIG;
+
+        const mergedConfig = mergeObjects( cfg, defaultApiConfig, DEFAULT_CONFIG );
+
+        if ( pConfig?.signal )
+        {
+            mergedConfig.signal = pConfig?.signal;
+        }
+        else if ( pConfig?.abortController )
+        {
+            mergedConfig.signal = pConfig?.abortController?.signal;
+        }
+
+        // Apply shared agents unless pConfig specifically overrides them
+        mergedConfig.httpAgent = pConfig?.httpAgent || httpAgent;
+        mergedConfig.httpsAgent = pConfig?.httpsAgent || httpsAgent;
+
+        return fixAgents( mergedConfig ) || mergedConfig;
     }
 
     function isHttpClient( pDelegate )
@@ -3262,6 +3289,7 @@ const $scope = constants?.$scope || function()
             httpAgent,
             httpsAgent,
             fixAgents,
+            mergeConfig,
 
             HttpClientConfig,
             OauthSecrets,

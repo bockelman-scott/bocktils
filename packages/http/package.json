@@ -2,7 +2,7 @@
   "name": "@toolbocks/http",
   "version": "1.0.0",
   "description": "Useful functions for working with HTTP requests, responses, and rate-limited API calls",
-  "main": "src/index.js",
+  "main": "index.js",
   "dependencies": {
     "@toolbocks/core": "^1.0.0",
     "@toolbocks/dates": "^1.0.0",
