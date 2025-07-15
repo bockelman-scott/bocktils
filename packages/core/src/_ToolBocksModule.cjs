@@ -289,7 +289,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             S_CUSTOM = "custom",
 
-            S_ERR_PREFIX = `An ${S_ERROR} occurred while`,
+            S_ERR_PREFIX = `An ${S_ERROR} occurred`,
             S_DEFAULT_OPERATION = "executing script",
 
             EMPTY_OBJECT = Object.freeze( {} ),
@@ -3505,7 +3505,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             this.#type = this.getErrorTypeOrName( pMsgOrErr ).replace( /^__/, _mt_str );
             this.#name = this.getErrorTypeOrName( pMsgOrErr ).replace( /^__/, _mt_str );
 
-            this.#msg = super.message;
+            this.#msg = (isStr( pMsgOrErr ) ? pMsgOrErr : _mt_str) || super.message;
 
             this.#cause = this.determineCause( pMsgOrErr, this.#options?.cause );
 
@@ -3772,6 +3772,64 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
     }
 
+    function _handleMissingError( pError, pMessage )
+    {
+        const lastError = getLastError();
+
+        if ( isArray( pError ) || isArray( pMessage ) )
+        {
+            let errors = [];
+
+            if ( isArray( pError ) )
+            {
+                for( let i = 0, n = $ln( pError ); i < n; i++ )
+                {
+                    let err = pError[i];
+                    if ( isArray( pMessage ) )
+                    {
+                        errors.push( resolveError( err, pMessage[i] || _mt_str ) );
+                    }
+                    else
+                    {
+                        errors.push( resolveError( err, pMessage ) );
+                    }
+                }
+                return isError( errors[0] ) && errors[0] instanceof __Error ? errors[0] : new __Error( errors[0], {
+                    errors,
+                    message: pMessage || pError,
+                    cause: pError || pMessage
+                } );
+            }
+            else if ( isArray( pMessage ) )
+            {
+                for( let i = 0, n = $ln( pMessage ); i < n; i++ )
+                {
+                    let msg = pMessage[i];
+                    if ( isArray( pError ) )
+                    {
+                        errors.push( resolveError( msg, pError[i] || pError ) );
+                    }
+                    else
+                    {
+                        errors.push( resolveError( msg, pError ) );
+                    }
+                }
+                return isError( errors[0] ) && errors[0] instanceof __Error ? errors[0] : new __Error( errors[0], {
+                    errors,
+                    message: pError,
+                    cause: pError || pMessage
+                } );
+            }
+        }
+
+        if ( !isNull( lastError ) && isError( lastError ) )
+        {
+            return resolveError( lastError, lastError?.message || lastError );
+        }
+
+        return null;
+    }
+
     /**
      * Returns an instance of the custom __Error class from the arguments specified.
      * <br><br>
@@ -3790,7 +3848,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     {
         if ( !(isError( pError ) || isError( pMessage ) || (_isValidStr( pMessage ) || _isValidStr( pError ))) )
         {
-            return null;
+            return _handleMissingError( pError, pMessage );
         }
 
         const msg = _isValidStr( pMessage ) ? pMessage : _isValidStr( pError ) ? pError : pError?.message || pMessage?.message || DEFAULT_ERROR_MSG;
