@@ -51,6 +51,11 @@ const core = require( "@toolbocks/core" );
 const datesModule = require( "@toolbocks/dates" );
 
 /**
+ * Imports the file utilities used to resolve paths and manipulate files and filenames
+ */
+const fileUtils = require( "@toolbocks/files");
+
+/**
  * Imports the @toolbocks/json module for the utility functions necessary to more safely parse or render JSON.
  */
 const jsonUtils = require( "@toolbocks/json" );
@@ -184,7 +189,7 @@ const $scope = constants?.$scope || function()
         } = typeUtils;
 
     // import the useful functions from the core module, StringUtils
-    const { asString, asInt, toBool, isBlank, cleanUrl, lcase, ucase } = stringUtils;
+    const { asString, asInt, toBool, isBlank, cleanUrl, lcase, ucase, toUnixPath } = stringUtils;
 
     // import the useful functions from the core module, ArrayUtils
     const { asArray, TypedArray, BoundedQueue } = arrayUtils;
@@ -1174,7 +1179,7 @@ const $scope = constants?.$scope || function()
 
                     if ( !!pReplaceCharacters )
                     {
-                        name = asString( name, true ).replaceAll( /\s+/g, _underscore ).replaceAll( /"'`/g, _mt_str ).replaceAll(/[*?]/g, _mt_str);
+                        name = asString( name, true ).replaceAll( /\s+/g, _underscore ).replaceAll( /"'`/g, _mt_str ).replaceAll( /[*?]/g, _mt_str );
                     }
                 }
             }
@@ -1770,6 +1775,76 @@ const $scope = constants?.$scope || function()
         async upload( pUrl, pConfig, pBody )
         {
             return this.sendPostRequest( pUrl, pConfig, pBody );
+        }
+
+        async download( pUrl, pConfig, pOutputPath = "./", pFileName = _mt )
+        {
+            let outputPath = toUnixPath( asString( pOutputPath, true ) ) || "./";
+
+            try
+            {
+                const url = cleanUrl( resolveUrl( pUrl, pConfig || DEFAULT_API_CONFIG ) );
+
+                let config =
+                    mergeConfig( pConfig || DEFAULT_API_CONFIG,
+                                 mergeConfig( {
+                                                  method: "GET",
+                                                  url: url,
+                                                  responseType: "stream",
+                                                  Accept: "application/octet-stream",
+                                                  headers:
+                                                      {
+                                                          Accept: "application/octet-stream"
+                                                      }
+                                              }, pConfig || DEFAULT_API_CONFIG ) );
+
+                const response = this.sendRequest( config?.method || "GET",
+                                                   url,
+                                                   config,
+                                                   resolveBody( config.body || config.data, config ) );
+
+                if ( ResponseData.isOk( response ) )
+                {
+                    // get the fileName from the Content-Disposition header or use provided filename
+                    let defaultName = !isBlank( asString( pFileName, true ) ) ?
+                                      toUnixPath( asString( pFileName, true ) ) :
+                                      _mt;
+
+                    let fileName = asString( pFileName, true ) ||
+                                   extractFileNameFromHeader( response, defaultName );
+
+                    // append the fileName to the path
+                    const filePath = path.join( asString( outputPath, true ).replace( fileName, _mt ), fileName );
+
+                    // create a writable stream
+                    const fileStream = fs.createWriteStream( filePath );
+
+                    // pipe the response data stream to the file stream
+                    response.data.pipe( fileStream );
+
+                    // wait for the stream to complete
+                    await finished( fileStream );
+
+                    console.log( `Wrote: ${filePath}` );
+
+                    return filePath;
+                }
+            }
+            catch( ex )
+            {
+                toolBocksModule.reportError( ex, ex.message, "error", axiosDownload, ex.response?.status, ex.response );
+
+                console.error( ` *****ERROR*****\nFailed to download file: ${ex.message}`, ex );
+
+                if ( ex.response )
+                {
+                    console.error( ` *****ERROR*****\nResponse status: ${ex.response.status}` );
+                }
+
+                throw ex;
+            }
+
+            return _mt;
         }
 
         async sendPutRequest( pUrl, pConfig, pBody )
