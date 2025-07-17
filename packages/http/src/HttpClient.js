@@ -53,7 +53,7 @@ const datesModule = require( "@toolbocks/dates" );
 /**
  * Imports the file utilities used to resolve paths and manipulate files and filenames
  */
-const fileUtils = require( "@toolbocks/files");
+const fileUtils = require( "@toolbocks/files" );
 
 /**
  * Imports the @toolbocks/json module for the utility functions necessary to more safely parse or render JSON.
@@ -1069,11 +1069,12 @@ const $scope = constants?.$scope || function()
     {
         if ( isNonNullObject( pDelegate ) )
         {
-            return isFunction( pDelegate.sendGetRequest ) &&
-                   isFunction( pDelegate.sendPostRequest ) &&
-                   isFunction( pDelegate.sendPutRequest ) &&
-                   isFunction( pDelegate.sendPatchRequest ) &&
-                   isFunction( pDelegate.sendDeleteRequest );
+            return isFunction( pDelegate.sendRequest ) ||
+                   (isFunction( pDelegate.sendGetRequest ) &&
+                    isFunction( pDelegate.sendPostRequest ) &&
+                    isFunction( pDelegate.sendPutRequest ) &&
+                    isFunction( pDelegate.sendPatchRequest ) &&
+                    isFunction( pDelegate.sendDeleteRequest ));
 
         }
     }
