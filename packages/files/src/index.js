@@ -8,7 +8,7 @@
  * <br>
  * These functions and classes aim to provide an abstraction and execution-environment agnostic adapter
  * to allow (to the extent possible) the same code using these functions and/or classes to work without modification
- * in Node.js, Deno, Browsers and Workers.
+ * in Node.js, Deno, Browsers, and Workers.
  * <br>
  */
 
@@ -104,6 +104,9 @@ let defaultPath;
  */
 const core = require( "@toolbocks/core" );
 
+/**
+ * Import bufferUtils, if for no other reason than the side-effect of creating a globally-defined Buffer class
+ */
 const bufferUtils = require( "@toolbocks/buffer" );
 
 /**
@@ -159,6 +162,7 @@ const $scope = constants?.$scope || function()
         _mt_str,
         _dot,
         _colon,
+        _semicolon,
         _slash,
         _backslash,
         no_op,
@@ -166,6 +170,8 @@ const $scope = constants?.$scope || function()
     } = constants;
 
     const _pathSep = _slash;
+
+    let _pathDelimiter = _colon;
 
     const {
         isDefined,
@@ -200,23 +206,26 @@ const $scope = constants?.$scope || function()
         typedArrayFromBuffer
     } = bufferUtils;
 
-/*
-    const MIMETICS_CONSTANTS = Mimetics.CONSTANTS;
-    const MIMETICS_ERRORS = Mimetics.ERRORS;
-    const MIMETICS = Mimetics.default;
+    /*
+     const MIMETICS_CONSTANTS = Mimetics.CONSTANTS;
+     const MIMETICS_ERRORS = Mimetics.ERRORS;
+     const MIMETICS = Mimetics.default;
 
-    const mimetics = new Mimetics();
+     const mimetics = new Mimetics();
 
-*/
+     */
     const modName = "FileUtils";
 
-    let modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+    let toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
-    const executionEnvironment = modulePrototype.executionEnvironment;
+    const executionEnvironment = toolBocksModule.executionEnvironment;
 
     const _isNode = executionEnvironment.isNode();
     const _isDeno = executionEnvironment.isDeno();
     const _isBrowser = executionEnvironment.isBrowser();
+
+    const _isWindows = executionEnvironment.isWindows();
+    const _isLinux = executionEnvironment.isLinux();
 
     let WriteStream;
 
@@ -232,8 +241,8 @@ const $scope = constants?.$scope || function()
         stream = require( "node:stream" );
         path = require( "node:path" );
 
-        currentDirectory = path.dirname( __filename );
-        projectRootDirectory = path.resolve( currentDirectory, "../../../" );
+        currentDirectory = process.cwd() || __dirname;
+        projectRootDirectory = path.resolve( __dirname, "../../../" );
         defaultPath = path.resolve( currentDirectory, "../messages/defaults.json" );
 
         WriteStream = fs.WriteStream;
@@ -244,7 +253,17 @@ const $scope = constants?.$scope || function()
     if ( _isDeno )
     {
         _node = null;
-        _deno = executionEnvironment.DenoGlobal;
+
+        try
+        {
+            _deno = executionEnvironment.DenoGlobal;
+            currentDirectory = _deno.cwd();
+        }
+        catch( ex )
+        {
+            toolBocksModule.handleError( ex, "FileUtils::Deno.currentDirectory", executionEnvironment );
+            currentDirectory = currentDirectory || _pathSep;
+        }
 
         WriteStream = _ud === typeof WritableStream ? null : WritableStream;
     }
@@ -276,20 +295,23 @@ const $scope = constants?.$scope || function()
 
     /*## environment-specific:browser end ##*/
 
+    _pathDelimiter = _isWindows ? _semicolon : _colon;
+
     /**
      * Dynamically imports the `os`, `fs`, `fs/promises`, `stream`, and `path` Node.js modules<br>
      * and assigns them to variables, 'os', 'fs', 'fsAsync', 'stream', and 'path' respectively.<br>
      * <br>
-     * Also sets the 'currentDirectory' variable, using the `path` module
-     * and potentially available global variable, __filename.<br>
+     * Also sets the 'currentDirectory' variable
+     * <br>
      * <br>
      * Handles any errors during the module imports
      * by delegating to the `handleError` method,
      * which will emit an 'error' event for which you can listen.
      * <br>
      *
-     * @return {Promise<{object}>} A promise that resolves when the required Node.js modules are successfully imported
-     *                         or rejects if an error occurs.
+     * @return {Promise<{object}>}  A promise that resolves when
+     *                              the required Node.js modules are successfully imported
+     *                              or rejects if an error occurs.
      */
     async function importNodeModules()
     {
@@ -300,7 +322,7 @@ const $scope = constants?.$scope || function()
             fsAsync = require( "node:fs/promises" ) || fsAsync;
             stream = require( "node:stream" ) || stream;
             path = require( "node:path" ) || path;
-            currentDirectory = path.dirname( __filename ) || currentDirectory;
+            currentDirectory = process.cwd() || __dirname || currentDirectory;
 
             return Promise.resolve(
                 {
@@ -317,7 +339,338 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            modulePrototype.handleError( ex, exposeModule, os, fs, fsAsync, stream, path, currentDirectory, projectRootDirectory, defaultPath );
+            toolBocksModule.handleError( ex, exposeModule, os, fs, fsAsync, stream, path, currentDirectory, projectRootDirectory, defaultPath );
+        }
+    }
+
+    function isCompatiblePathModule( pPathModule )
+    {
+        if ( isNull( pPathModule ) || !(isNonNullObject( pPathModule ) || isFunction( pPathModule )) )
+        {
+            return false;
+        }
+
+        const requiredMethods = [
+            "resolve",
+            "join",
+            "basename",
+            "dirname",
+            "extname",
+            "isAbsolute",
+            "normalize",
+            "parse",
+            "format"
+        ];
+
+        for( const method of requiredMethods )
+        {
+            if ( !isFunction( pPathModule[method] ) )
+            {
+                return false;
+            }
+        }
+    }
+
+    function getCurrentDirectory()
+    {
+        if ( _isNode )
+        {
+            return process.cwd() || __dirname || currentDirectory;
+        }
+        else if ( _isDeno )
+        {
+            _deno = _deno || executionEnvironment.DenoGlobal;
+
+            try
+            {
+                return _deno.cwd();
+            }
+            catch( ex )
+            {
+                toolBocksModule.handleError( ex, "FileUtils::Deno.currentDirectory", executionEnvironment );
+                return currentDirectory || _pathSep;
+            }
+        }
+        else if ( _isBrowser )
+        {
+            return ((_ud !== typeof window) ? window.location?.pathname : _mt_str) || currentDirectory;
+        }
+    }
+
+    class PathUtils
+    {
+        #libraryModule;
+
+        #currentDirectory;
+
+        #sep = _pathSep;
+
+        #delimiter = _pathDelimiter;
+
+        constructor( pPathSeparator = _pathSep,
+                     pPathDelimiter = _pathDelimiter,
+                     pCurrentDirectory = attempt( () => getCurrentDirectory() ) || !_isBrowser ? pPathSeparator : _mt_str )
+        {
+            if ( _isNode )
+            {
+                this.#libraryModule = path || require( "node:path" );
+            }
+            else if ( _isDeno )
+            {
+                this.#libraryModule = _deno.path || path || this;
+            }
+            else if ( _isBrowser )
+            {
+                this.#libraryModule = this;
+            }
+
+            if ( !isCompatiblePathModule( this.#libraryModule ) )
+            {
+                this.#libraryModule = this;
+            }
+
+            this.#sep = pPathSeparator || _pathSep;
+            this.#delimiter = pPathDelimiter || _colon;
+            this.#currentDirectory = pCurrentDirectory || attempt( () => getCurrentDirectory() ) || currentDirectory || _pathSep;
+        }
+
+        get sep()
+        {
+            return this.#sep || _pathSep;
+        }
+
+        get pathSeparator()
+        {
+            return this.sep || _pathSep;
+        }
+
+        get delimiter()
+        {
+            return this.#delimiter || _colon;
+        }
+
+        get pathDelimiter()
+        {
+            return this.delimiter || _colon;
+        }
+
+        get currentDirectory()
+        {
+            return attempt( () => getCurrentDirectory() ) || this.#currentDirectory || currentDirectory || _pathSep;
+        }
+
+        get libraryModule()
+        {
+            return isCompatiblePathModule( this.#libraryModule ) ? this.#libraryModule : this;
+        }
+
+        isAbsolute( pPath )
+        {
+            const s = toUnixPath( asString( pPath, true ) );
+            return (s.startsWith( _pathSep ) || s.startsWith( _backslash ) || /^[A-Z]?:/.test( s ));
+        }
+
+        normalize( pPath )
+        {
+            let unixPath = toUnixPath( asString( pPath, true ) );
+
+            if ( isBlank( unixPath ) )
+            {
+                return _dot;
+            }
+
+            // Keep track if the original path had a root (e.g., '/', 'C:/')
+            const startsWithSeparator = unixPath.startsWith( this.sep );
+            const startsWithWindowsRoot = /^[A-Z]:\//i.test( unixPath );
+
+            let hasRoot = startsWithSeparator || startsWithWindowsRoot;
+
+            let root = (startsWithSeparator) ? this.sep : (startsWithWindowsRoot) ? unixPath.substring( 0, unixPath.indexOf( this.sep ) + 1 ) : _mt_str;
+
+            const parts = [];
+
+            const segments = unixPath.split( this.sep ).filter( e => !isBlank( e ) && e !== _dot );
+
+            for( const part of segments )
+            {
+                if ( part === ".." )
+                {
+                    // If there are parts to pop, and the path segment isn't itself '..'
+                    // (which would mean we're accumulating '..' for relative paths going above the CWD)
+                    if ( parts.length > 0 && parts[parts.length - 1] !== ".." )
+                    {
+                        parts.pop();
+                    }
+                    else if ( !hasRoot )
+                    {
+                        // If it started relative and we're at the beginning (parts is empty),
+                        // and we encounter '..', we need to keep it to signify going "up"
+                        // from the current directory.
+                        parts.push( part );
+                    }
+                }
+                else
+                {
+                    parts.push( part );
+                }
+            }
+
+            let normalizedPath = parts.join( this.sep );
+
+            // If the path was absolute (had a root), ensure the final path retains its root.
+            if ( hasRoot )
+            {
+                return toUnixPath( root + normalizedPath );
+            }
+
+            return (isBlank( normalizedPath )) ? _dot : normalizedPath;
+        }
+
+        resolve( ...pPathSegments )
+        {
+            let resolvedPath = _mt_str;
+
+            let foundAbsolute = false;
+
+            let initialPathHadRoot = false; // To track if the final resolved base path was absolute
+
+            const segments = flatArgs( pPathSegments ).filter( isString ).filter( e => !isBlank( e ) ).map( e => toUnixPath( e ) );
+
+            for( let i = segments.length - 1; i--; )
+            {
+                const segment = segments[i];
+
+                if ( isBlank( segment ) )
+                {
+                    continue;
+                }
+
+                if ( this.isAbsolute( segment ) )
+                {
+                    resolvedPath = segment;
+
+                    foundAbsolute = true;
+
+                    initialPathHadRoot = true; // Mark that an absolute segment was found
+
+                    break;
+                }
+
+                resolvedPath = isBlank( resolvedPath ) ? segment : (segment + this.sep + resolvedPath);
+            }
+
+            // If no absolute path was found among segments, prepend the currentDirectory.
+            if ( !foundAbsolute )
+            {
+                const normalizedCwd = toUnixPath( this.currentDirectory );
+
+                // path.resolve always assumes CWD is absolute.
+                resolvedPath = normalizedCwd + this.sep + resolvedPath;
+
+                // The result will be absolute due to CWD being absolute, so set the flag.
+                initialPathHadRoot = true;
+            }
+
+            // Now, pass the combined path to the normalize method for cleaning up '.', '..', and //
+            resolvedPath = this.normalize( resolvedPath );
+
+            // A final check to ensure absolute paths don't lose their root if they normalize to '.'
+            // e.g., path.resolve('/a/..') should be '/' not '.'
+            if ( isBlank( resolvedPath ) && initialPathHadRoot )
+            {
+                // Reconstruct the root from the initial resolvedPath or currentDirectory
+                const tempPath = toUnixPath( this.currentDirectory ); // Fallback to currentDirectory's root
+
+                if ( this.isAbsolute( tempPath ) )
+                {
+                    if ( tempPath.startsWith( this.sep ) )
+                    {
+                        return this.sep;
+                    }
+                    if ( /^[A-Z]:\//i.test( tempPath ) )
+                    {
+                        return tempPath.substring( 0, tempPath.indexOf( this.sep ) + 1 );
+                    }
+                }
+            }
+
+            return resolvedPath;
+        }
+
+        join( ...parts )
+        {
+            return flatArgs( parts ).filter( isString ).map( e => toUnixPath( e ) ).join( this.sep ).replaceAll( /\/\/+/g, this.sep );
+        }
+
+        basename( pPath )
+        {
+            const unixPath = toUnixPath( asString( pPath ) );
+
+            const lastIndexOfSeparator = unixPath.lastIndexOf( this.sep );
+
+            if ( lastIndexOfSeparator >= 0 )
+            {
+                return (unixPath.substring( lastIndexOfSeparator + 1 )) || unixPath;
+            }
+
+            return unixPath;
+        }
+
+        dirname( pPath )
+        {
+            const unixPath = toUnixPath( asString( pPath ) ).trim();
+
+            const lastIndexOfSeparator = unixPath.lastIndexOf( this.sep );
+
+            if ( lastIndexOfSeparator > 0 )
+            {
+                return (unixPath.substring( 0, lastIndexOfSeparator )) || _dot;
+            }
+
+            return _dot;
+        }
+
+        extname( pPath )
+        {
+            let unixPath = toUnixPath( asString( pPath ) ).trim();
+
+            const lastIndexOfDot = unixPath.lastIndexOf( _dot );
+
+            if ( lastIndexOfDot <= 0 || lastIndexOfDot >= unixPath.length - 1 )
+            {
+                return _mt_str;
+            }
+
+            return unixPath.substring( lastIndexOfDot );
+        }
+
+        parse( pPath )
+        {
+            const library = this.#libraryModule || path || this;
+
+            const base = library.basename( pPath );
+
+            const dir = library.dirname( pPath );
+
+            const ext = library.extname( pPath );
+
+            const name = base.substring( 0, Math.max( 0, base.length - ext.length ) ) || asString( base, true );
+
+            const root = pPath.startsWith( _pathSep ) ? _pathSep : _mt_str;
+
+            return { root, dir, base, ext, name };
+        }
+
+        format( pPathObject )
+        {
+            return toUnixPath( (pPathObject?.dir || ".") + _pathSep + (pPathObject?.base || _mt_str) );
+        }
+
+        fromDirEntry( pEntry )
+        {
+            return !isNull( pEntry ) ?
+                   ((pEntry?.parentPath || pEntry?.path) + _pathSep + pEntry?.name)
+                                     : _mt_str;
         }
     }
 
@@ -325,85 +678,35 @@ const $scope = constants?.$scope || function()
      * If the 'path' module is unavailable in the current execution environment,
      * we define our own methods as proxies
      */
-    if ( _ud === typeof path || isNull( path ) )
+    if ( _ud === typeof path || isNull( path ) || !isCompatiblePathModule( path ) )
     {
-        path = {
-
-            join: ( ...parts ) => flatArgs( parts ).map( e => toUnixPath( e ) ).join( _pathSep ).replaceAll( /\/\/+/g, _pathSep ),
-
-            basename: ( p ) => toUnixPath( asString( p ) ).substring( toUnixPath( p ).lastIndexOf( _pathSep ) + 1 ),
-
-            dirname: ( p ) => toUnixPath( asString( p ) ).substring( 0, toUnixPath( p ).lastIndexOf( _pathSep ) ) || _dot,
-
-            extname: ( p ) =>
-            {
-                let s = toUnixPath( asString( p ) );
-                const lastDot = s.lastIndexOf( _dot );
-                if ( lastDot === -1 || lastDot === s.length - 1 )
-                {
-                    return _mt_str;
-                }
-                return s.substring( lastDot );
-            },
-
-            resolve: ( ...pathSegments ) =>
-            {
-                let resolvedPath = _mt_str;
-                let segments = flatArgs( ...pathSegments ).map( e => toUnixPath( e ) );
-                for( const segment of segments )
-                {
-                    if ( segment.startsWith( _pathSep ) )
-                    {
-                        resolvedPath = segment;
-                    }
-                    else if ( isBlank( resolvedPath ) )
-                    {
-                        resolvedPath = segment;
-                    }
-                    else
-                    {
-                        resolvedPath += _pathSep + segment;
-                    }
-                }
-                return toUnixPath( resolvedPath );
-            },
-
-            isAbsolute: ( p ) =>
-            {
-                const s = toUnixPath( asString( p, true ) );
-                return (s.startsWith( _pathSep ) || s.startsWith( _backslash ) || /^[A-Z]?:/.test( s )) && !s.includes( ".." );
-            },
-
-            normalize: ( p ) => toUnixPath( p ).replace( /\/\/+/g, _pathSep ).replace( /\/$/, _mt_str ),
-
-            sep: _pathSep,
-
-            delimiter: _colon,
-
-            parse: ( pathString ) =>
-            {
-                const base = path.basename( pathString );
-                const dir = path.dirname( pathString );
-                const ext = path.extname( pathString );
-                const name = base.substring( 0, base.length - ext.length );
-                const root = pathString.startsWith( _pathSep ) ? _pathSep : _mt_str;
-                return {
-                    root: root,
-                    dir: dir,
-                    base: base,
-                    ext: ext,
-                    name: name
-                };
-            },
-
-            format: ( pathObject ) =>
-            {
-                return toUnixPath( pathObject.dir + _pathSep + pathObject.base );
-            },
-
-            fromDirEntry: ( pEntry ) => !isNull( pEntry ) ? ((pEntry?.parentPath || pEntry?.path) + _pathSep + pEntry?.name) : _mt_str
-        };
+        path = new PathUtils();
     }
+
+    PathUtils.instance = function()
+    {
+        if ( isCompatiblePathModule( path ) )
+        {
+            if ( !isFunction( path.fromDirEntry ) )
+            {
+                try
+                {
+                    path.fromDirEntry = function( pEntry )
+                    {
+                        return !isNull( pEntry ) ?
+                               ((pEntry?.parentPath || pEntry?.path) + _pathSep + pEntry?.name)
+                                                 : _mt_str;
+                    };
+                }
+                catch( ex )
+                {
+                    toolBocksModule.handleError( ex, "PathUtils::instance::extending_module", PathUtils );
+                }
+            }
+            return path;
+        }
+        return new PathUtils( _pathSep, _pathDelimiter, getCurrentDirectory() );
+    };
 
     /**
      * This class provides a stand-in for fs.Stats or the Deno FileInfo interface.<br>
@@ -529,6 +832,48 @@ const $scope = constants?.$scope || function()
         return `${prefix}_${timestamp}_${Math.random().toString( 36 ).substring( 2, 15 )}${extension}`;
     }
 
+    class BrowserWriteStream
+    {
+        #dataChunks = [];
+        #filePath;
+
+        constructor( pFilePath )
+        {
+            this.#filePath = resolvePath( pFilePath );
+        }
+
+        write( pChunk )
+        {
+            this.#dataChunks.push( pChunk );
+        }
+
+        close()
+        {
+            const blob = attempt( () => new Blob( this.#dataChunks ) );
+            const url = attempt( () => URL.createObjectURL( blob ) );
+
+            if ( !isNull( blob ) && !isBlank( url ) && (_ud !== typeof document) )
+            {
+                const a = document.createElement( "a" );
+
+                if ( a )
+                {
+                    a.href = url;
+
+                    a.download = (asString( this.#filePath, true ).split( "/" ).pop()) || true;
+
+                    document.body.appendChild( a );
+
+                    a.click();
+
+                    document.body.removeChild( a );
+                }
+
+                attempt( () => URL.revokeObjectURL( url ) );
+            }
+        }
+    }
+
     /*
      * Defines local variables for the synchronous functions found in the FileSystem API of the current execution environment.
      * Each function is declared with a default implementation
@@ -547,7 +892,7 @@ const $scope = constants?.$scope || function()
             }
             catch( ex )
             {
-                modulePrototype.handleError( ex, access, pPath );
+                toolBocksModule.handleError( ex, access, pPath );
             }
             return false;
         },
@@ -582,7 +927,14 @@ const $scope = constants?.$scope || function()
 
         createWriteStream = _isNode ? fs.createWriteStream : function( pPath, pOptions )
         {
-
+            if ( _isDeno )
+            {
+                // TODO
+            }
+            else
+            {
+                return new BrowserWriteStream( pPath );
+            }
         },
 
         writeFileSync = _isNode ? fs.writeFileSync : _deno?.writeFileSync,
@@ -590,7 +942,9 @@ const $scope = constants?.$scope || function()
         writeTextFileSync = _isNode ? function( pPath, pContent )
         {
             const filePath = resolvePath( pPath );
+
             fs.writeFileSync( filePath, asString( pContent ), { encoding: "utf8" } );
+
         } : _deno?.writeTextFileSync,
 
         chmodSync = _isNode ? fs.chmodSync : _deno?.chmodSync,
@@ -621,8 +975,15 @@ const $scope = constants?.$scope || function()
         makeTempFileSync = _isNode ? function( pPrefix = "temp", pExtension = ".tmp", pDirectory = null )
         {
             const tempFileName = generateTempFileName( pPrefix, pExtension );
-            writeFileSync( pDirectory || asString( os.tempDir() || executionEnvironment.tmpDirectoryName, true ), _mt_str, { flag: "w" } );
-            return tempFileName;
+
+            const directory = pDirectory || asString( os.tempDir() || executionEnvironment.tmpDirectoryName );
+
+            const tempFilePath = resolvePath( [directory, tempFileName] );
+
+            writeFileSync( tempFilePath, _mt_str, { flag: "w", encoding: "utf8" } );
+
+            return tempFilePath;
+
         } : function( pPrefix = "temp", pExtension = ".tmp", pDirectory = null )
                            {
                                return _deno?.makeTempFileSync( {
@@ -676,7 +1037,7 @@ const $scope = constants?.$scope || function()
             }
             catch( ex )
             {
-                modulePrototype.handleError( ex, access, pPath );
+                toolBocksModule.handleError( ex, access, pPath );
             }
             return false;
         },
@@ -706,9 +1067,11 @@ const $scope = constants?.$scope || function()
 
                 const entries = await _deno.readDir( filePath, pOptions );
 
+                let pathLib = PathUtils.instance();
+
                 for await ( const entry of entries )
                 {
-                    names.push( path.join( pPath, entry.name ) );
+                    names.push( pathLib.join( pPath, entry.name ) );
                 }
 
                 return names;
@@ -764,11 +1127,15 @@ const $scope = constants?.$scope || function()
         makeTempFile = _isNode ? async function( pPrefix = "temp", pExtension = ".tmp", pDirectory = null )
         {
             const tempFileName = generateTempFileName( pPrefix, pExtension );
-            await fsAsync.writeFile( pDirectory || asString( os.tempDir() || pDirectory ), _mt_str, {
-                encoding: "utf-8",
-                flag: "w"
-            } );
-            return tempFileName;
+
+            let directory = resolvePath( pDirectory || asString( os.tempDir() || pDirectory ) );
+
+            let tempFilePath = resolvePath( [directory, tempFileName] );
+
+            await fsAsync.writeFile( tempFilePath, _mt_str, { encoding: "utf-8", flag: "w" } );
+
+            return tempFilePath;
+
         } : _deno?.makeTempFile,
 
         mkdir = _isNode ? fsAsync.mkdir : _deno?.mkdir || _deno?.mkDir,
@@ -869,17 +1236,19 @@ const $scope = constants?.$scope || function()
             return p;
         }
 
+        const pathLib = PathUtils.instance();
+
         if ( isArray( pPath ) )
         {
-            p = attempt( () => path.resolve( ...(asArray( pPath ).flat()) ) );
+            p = attempt( () => pathLib.resolve( ...(asArray( pPath ).flat()) ) );
         }
         else if ( isDirectoryEntry( pPath ) )
         {
-            p = attempt( () => path.resolve( path.join( (pPath?.parentPath || pPath?.path || "./"), (pPath.name || _mt_str) ) ) );
+            p = attempt( () => pathLib.resolve( pathLib.join( (pPath?.parentPath || pPath?.path || "./"), (pPath.name || _mt_str) ) ) );
         }
         else
         {
-            p = attempt( () => path.resolve( toUnixPath( asString( pPath, true, { joinOn: _mt_str } ).trim() ) ) );
+            p = attempt( () => pathLib.resolve( toUnixPath( asString( pPath, true, { joinOn: _mt_str } ).trim() ) ) );
         }
 
         return p || (toUnixPath( asString( p, true ) ));
@@ -896,7 +1265,8 @@ const $scope = constants?.$scope || function()
      */
     function resolveDirectoryPath( pDirectoryPath )
     {
-        return toUnixPath( isString( pDirectoryPath ) ? attempt( () => path.resolve( toUnixPath( asString( pDirectoryPath, true ) ) ) ) : resolvePath( pDirectoryPath ) );
+        const pathLib = PathUtils.instance();
+        return toUnixPath( isString( pDirectoryPath ) ? attempt( () => pathLib.resolve( toUnixPath( asString( pDirectoryPath, true ) ) ) ) : resolvePath( pDirectoryPath ) );
     }
 
     /**
@@ -927,13 +1297,15 @@ const $scope = constants?.$scope || function()
      */
     function getFilePathData( pFilePath )
     {
+        let pathLib = PathUtils.instance();
+
         const filePath = resolvePath( pFilePath );
 
-        const fileName = asString( path.basename( filePath ) || rightOfLast( filePath, _slash ), true );
+        const fileName = asString( pathLib.basename( filePath ) || rightOfLast( filePath, _slash ), true );
 
-        const dirName = asString( path.dirname( filePath ) || leftOfLast( filePath, _slash ), true );
+        const dirName = asString( pathLib.dirname( filePath ) || leftOfLast( filePath, _slash ), true );
 
-        const extension = asString( path.extname( fileName ), true ) || (fileName.lastIndexOf( _dot ) > 0 ? fileName.slice( fileName.lastIndexOf( _dot ) ) : _mt_str);
+        const extension = asString( pathLib.extname( fileName ), true ) || (fileName.lastIndexOf( _dot ) > 0 ? fileName.slice( fileName.lastIndexOf( _dot ) ) : _mt_str);
 
         return { filePath, dirName, fileName, extension };
     }
@@ -1368,6 +1740,8 @@ const $scope = constants?.$scope || function()
          */
         constructor( pStats, pFilePath )
         {
+            let pathLib = PathUtils.instance();
+
             const object = isFileStats( pStats ) ? pStats : attempt( () => statSync( resolvePath( pFilePath || pStats ) ) );
 
             this.#stats = isNonNullObject( object ) ? { ...object } : {};
@@ -1382,7 +1756,7 @@ const $scope = constants?.$scope || function()
             this.#_isDirectory = isFunction( object?.isDirectory ) ? object?.isDirectory() : object?.isDirectory || false;
             this.#_isSymbolicLink = isFunction( object?.isSymbolicLink ) ? object?.isSymbolicLink() : object?.isSymbolicLink || object?.isSymLink || false;
 
-            this.#filePath = resolvePath( pFilePath || (asString( path.resolve( object?.parentPath || object?.path || _mt_str, object?.name || _mt_str ), true )) );
+            this.#filePath = resolvePath( pFilePath || (asString( pathLib.resolve( object?.parentPath || object?.path || _mt_str, object?.name || _mt_str ), true )) );
         }
 
         get size()
@@ -1529,18 +1903,19 @@ const $scope = constants?.$scope || function()
 
         if ( isBlank( filePath ) )
         {
-            modulePrototype.handleError( new IllegalArgumentError( "Path is required", {} ), FileStats.fromFilePath, pFilePath, filePath );
+            toolBocksModule.handleError( new IllegalArgumentError( "Path is required", {} ), FileStats.fromFilePath, pFilePath, filePath );
             return NO_ATTRIBUTES;
         }
 
         try
         {
-            const stats = await stat( resolvePath( path.normalize( filePath ) ) );
+            let pathLib = PathUtils.instance();
+            const stats = await stat( resolvePath( pathLib.normalize( filePath ) ) );
             return new FileStats( stats, filePath );
         }
         catch( ex )
         {
-            modulePrototype.handleError( ex, FileStats.fromFilePath, pFilePath );
+            toolBocksModule.handleError( ex, FileStats.fromFilePath, pFilePath );
         }
 
         return NO_ATTRIBUTES;
@@ -1560,7 +1935,7 @@ const $scope = constants?.$scope || function()
             return FileStats.fromFilePath( filePath );
         }
 
-        modulePrototype.reportError( new Error( `Unable to create FileStats from directory entry: ${pDirEntry}` ) );
+        toolBocksModule.reportError( new Error( `Unable to create FileStats from directory entry: ${pDirEntry}` ) );
 
         return {};
     };
@@ -1630,7 +2005,7 @@ const $scope = constants?.$scope || function()
      * <br>
      * <b>This function is <i>asynchronous</i></b>
      *
-     * @param {string} pPath - The path to check, normalized and resolved to an absolute path.
+     * @param {string} pPath - The path to check, (normalized and resolved to an absolute path).
      *
      * @return {Promise<boolean>} A promise that resolves to true if the path is a directory, otherwise false.
      */
@@ -1648,7 +2023,7 @@ const $scope = constants?.$scope || function()
     /**
      * Asynchronously checks whether the specified path refers to a symbolic link (symlink).<br>
      *
-     * @param {string} pPath - The path to check, normalized and resolved to an absolute path.
+     * @param {string} pPath - The path to check, (normalized and resolved to an absolute path).
      *
      * @return {Promise<boolean>} A promise that resolves to true if the path is a directory, otherwise false.
      */
@@ -1684,7 +2059,9 @@ const $scope = constants?.$scope || function()
 
         if ( exhaustive )
         {
-            const name = asString( path.basename( filepath ), true );
+            let pathLib = PathUtils.instance();
+
+            const name = asString( pathLib.basename( filepath ), true );
 
             while ( !isBlank( name ) && !name.startsWith( _dot ) && /(\.\w*)$/.test( name ) )
             {
@@ -1767,6 +2144,8 @@ const $scope = constants?.$scope || function()
 
     const resolveTempFileArguments = function( pPrefix = "temp", pExtension = ".tmp", pDirectory = null )
     {
+        let pathLib = PathUtils.instance();
+
         const tempDir = isNull( pDirectory ) ? getTempDirectory() : resolveDirectoryPath( pDirectory );
 
         const prefix = asString( pPrefix, true ) || "temp";
@@ -1774,13 +2153,13 @@ const $scope = constants?.$scope || function()
 
         const randomFileName = generateTempFileName( prefix, extension );
 
-        const filePath = path.join( tempDir, randomFileName );
+        const filePath = pathLib.join( tempDir, randomFileName );
 
         return {
             tempDir,
             prefix,
             extension,
-            filePath,
+            filePath
         };
     };
 
@@ -1801,7 +2180,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            modulePrototype.handleError( ex, createTempFile, pPrefix, pExtension, pDirectory );
+            toolBocksModule.handleError( ex, createTempFile, pPrefix, pExtension, pDirectory );
         }
 
         return getFileEntry( filePath );
@@ -1824,7 +2203,7 @@ const $scope = constants?.$scope || function()
         }
         catch( ex )
         {
-            modulePrototype.handleError( ex, asyncCreateTempFile, pPrefix, pExtension, pDirectory );
+            toolBocksModule.handleError( ex, asyncCreateTempFile, pPrefix, pExtension, pDirectory );
         }
 
         return await asyncGetFileEntry( filePath );
@@ -1850,7 +2229,7 @@ const $scope = constants?.$scope || function()
         else
         {
             const error = new Error( `File ${filePath} already exists` );
-            modulePrototype.handleError( error, createTextFile, pFilePath, pContent, pOverwrite );
+            toolBocksModule.handleError( error, createTextFile, pFilePath, pContent, pOverwrite );
         }
 
         return getFileEntry( filePath );
@@ -1880,7 +2259,7 @@ const $scope = constants?.$scope || function()
         else
         {
             const error = new Error( `File, ${filePath}, already exists` );
-            modulePrototype.handleError( error, asyncCreateTextFile, pFilePath, pContent, pOverwrite );
+            toolBocksModule.handleError( error, asyncCreateTextFile, pFilePath, pContent, pOverwrite );
         }
 
         return await asyncGetFileEntry( filePath );
@@ -1907,7 +2286,7 @@ const $scope = constants?.$scope || function()
                                                              attempt( () => unlinkSync( realPath ) );
                                                          }
                                                      }
-                                                 } ).catch( ( err ) => modulePrototype.handleError( err, deleteFile, pFilePath, filePath, realPath ) );
+                                                 } ).catch( ( err ) => toolBocksModule.handleError( err, deleteFile, pFilePath, filePath, realPath ) );
             }
 
             try
@@ -2022,7 +2401,9 @@ const $scope = constants?.$scope || function()
         {
             if ( await isMatchingFile( file, filter ) )
             {
-                const filePath = resolvePath( path.join( dirPath, file.name ) );
+                let pathLib = PathUtils.instance();
+
+                const filePath = resolvePath( pathLib.join( dirPath, file.name ) );
 
                 expectedDeletions.push( filePath );
 
@@ -2051,7 +2432,7 @@ const $scope = constants?.$scope || function()
         if ( deletedFiles.length < expectedDeletions.length )
         {
             const error = new Error( `Unable to delete all files matching filter` );
-            modulePrototype.handleError( error, asyncDeleteMatchingFiles, pDirPath, pFileNameFilter, pFollowLinks, deletedFiles, remaining, expectedDeletions );
+            toolBocksModule.handleError( error, asyncDeleteMatchingFiles, pDirPath, pFileNameFilter, pFollowLinks, deletedFiles, remaining, expectedDeletions );
         }
 
         return unique( deletedFiles );
@@ -2180,7 +2561,7 @@ const $scope = constants?.$scope || function()
 
         [Symbol.dispose]()
         {
-            this.close().then( no_op ).catch( modulePrototype.handleError );
+            this.close().then( no_op ).catch( toolBocksModule.handleError );
         }
 
         async close()
@@ -2998,9 +3379,11 @@ const $scope = constants?.$scope || function()
 
             if ( await asyncExists( dirPath ) && await isDirectory( dirPath ) )
             {
+                let pathLib = PathUtils.instance();
+
                 const files = await asyncAttempt( async() => await readFolder( dirPath ) );
 
-                return files.map( e => new FileObject( path.resolve( dirPath, e.name ), e, e ) );
+                return files.map( e => new FileObject( pathLib.resolve( dirPath, e.name ), e, e ) );
             }
 
             return [];
@@ -3513,6 +3896,8 @@ const $scope = constants?.$scope || function()
 
             const entries = await asyncAttempt( async() => await readFolder( dirPath ) );
 
+            let pathLib = PathUtils.instance();
+
             for await ( const entry of entries )
             {
                 if ( !entry )
@@ -3520,7 +3905,7 @@ const $scope = constants?.$scope || function()
                     continue;
                 }
 
-                const entryPath = resolvePath( path.resolve( path.join( dirPath, entry.name ) ) );
+                const entryPath = resolvePath( pathLib.resolve( pathLib.join( dirPath, entry.name ) ) );
 
                 if ( entry.isFile() || entry.isSymbolicLink() )
                 {
@@ -3577,9 +3962,11 @@ const $scope = constants?.$scope || function()
 
             const entries = await asyncAttempt( async() => await readFolder( dirPath ) );
 
+            let pathLib = PathUtils.instance();
+
             for await ( const entry of entries )
             {
-                const entryPath = resolvePath( path.resolve( path.join( dirPath, entry.name ) ) );
+                const entryPath = resolvePath( pathLib.resolve( pathLib.join( dirPath, entry.name ) ) );
 
                 let info = await FileObject.fromAsync( entryPath, entry, entry );
 
@@ -3700,7 +4087,8 @@ const $scope = constants?.$scope || function()
                     DirectoryEntry,
                     DirectoryExplorer,
                     FileStats,
-                    FileObject
+                    FileObject,
+                    PathUtils
                 },
             NO_ATTRIBUTES,
             exists,
@@ -3741,6 +4129,7 @@ const $scope = constants?.$scope || function()
             DirectoryExplorer,
             FileStats,
             FileObject,
+            PathUtils,
 
             access,
             accessSync,
@@ -3807,19 +4196,19 @@ const $scope = constants?.$scope || function()
             fsConstants,
             importNodeModules,
 
-/*
-            MIMETICS_ERRORS,
-            MIMETICS_CONSTANTS,
-            Mimetics,
-            mimetics,
-*/
+            /*
+             MIMETICS_ERRORS,
+             MIMETICS_CONSTANTS,
+             Mimetics,
+             mimetics,
+             */
             calculateMimeType,
 
             supportedMimeTypes,
             supportedExtensions
         };
 
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 
