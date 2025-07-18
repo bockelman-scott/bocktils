@@ -2093,7 +2093,7 @@ const $scope = constants?.$scope || function()
 
         if ( JS_TYPES.includes( typeName ) && (typeof pValue) === typeName )
         {
-            if( _fun === typeName )
+            if ( _fun === typeName )
             {
                 return isNonNullObject( pValue ) && isFunction( pType ) ? pValue instanceof pType : isFunction( pValue );
             }
@@ -4145,6 +4145,71 @@ const $scope = constants?.$scope || function()
         return isNonNullObject( pObject ) || isLikeArray( pObject ) ? pObject : attempt( () => JSON.parse( String( pObject ) ) );
     }
 
+    function asMap( pVal, pLocked )
+    {
+        let map = new Map();
+
+        switch ( typeof pVal )
+        {
+            case _ud:
+                return !!pLocked ? lock( map ) : map;
+
+            case _obj:
+                if ( isNull( pVal ) )
+                {
+                    break;
+                }
+                if ( isArray( pVal ) )
+                {
+                    if ( is2dArray( pVal ) )
+                    {
+                        map = new Map( pVal );
+                        break;
+                    }
+                    pVal.forEach( ( e, i ) =>
+                                  {
+                                      map.set( i, e );
+                                  } );
+                }
+                else
+                {
+                    objectEntries( pVal ).forEach( entry => map.set( ObjectEntry.getKey( entry ), ObjectEntry.getValue( entry ) ) );
+                }
+                break;
+
+            case _str:
+                map.set( "value", pVal );
+                map.set( pVal, pVal );
+                break;
+
+            case _num:
+            case _big:
+            case _bool:
+                map.set( "value", pVal );
+                map.set( pVal, pVal );
+                map.set( _toString( pVal ), pVal );
+                break;
+
+            case _fun:
+                map.set( "function", pVal );
+                map.execute = function( ...pArgs )
+                {
+                    return isAsyncFunction( pVal ) ? asyncAttempt( async() => pVal.call( map, ...pArgs ) ) : attempt( () => pVal.call( map, ...pArgs ) );
+                };
+                break;
+
+            case _symbol:
+                map.set( pVal, pVal );
+                map.set( pVal.toString(), pVal );
+                break;
+
+            default:
+                break;
+        }
+
+        return !!pLocked ? lock( map ) : map;
+    }
+
     /**
      * Applies Array.flat to each of the variable number of values
      * @param {...*} pArgs One or more values, treated as an array of arrays, each of which will be flattened
@@ -5036,6 +5101,7 @@ const $scope = constants?.$scope || function()
             toArrayLiteral,
             toObjectLiteral,
             asObject,
+            asMap,
             getProperty,
             setProperty,
             toNodePathArray,
