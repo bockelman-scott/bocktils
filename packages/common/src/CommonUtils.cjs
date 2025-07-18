@@ -4,7 +4,7 @@ const jsonUtils = require( "@toolbocks/json" );
 
 const objectUtils = require( "./ObjectUtils.cjs" );
 
-const entityUtils = require( "./EntityUtils.js" );
+const entityUtils = require( "./EntityUtils.cjs" );
 
 const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils, localeUtils, NumberParser, guidUtils } = core;
 
@@ -62,5 +62,4 @@ const $scope = constants?.$scope || function()
     mod = modulePrototype.extend( mod );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
-
 }());
