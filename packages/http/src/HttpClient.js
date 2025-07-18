@@ -185,6 +185,7 @@ const $scope = constants?.$scope || function()
             instanceOfAny,
             firstMatchingType,
             toObjectLiteral,
+            asMap,
             clamp
         } = typeUtils;
 
@@ -192,7 +193,7 @@ const $scope = constants?.$scope || function()
     const { asString, asInt, toBool, isBlank, cleanUrl, lcase, ucase, toUnixPath } = stringUtils;
 
     // import the useful functions from the core module, ArrayUtils
-    const { asArray, TypedArray, BoundedQueue } = arrayUtils;
+    const { asArray, concatMaps, TypedArray, BoundedQueue } = arrayUtils;
 
     // import the DateUtils module from the datesModule
     const { DateUtils } = datesModule;
@@ -2884,8 +2885,8 @@ const $scope = constants?.$scope || function()
 
         constructor( pMap, pExpressionMap, pApiPath = "api" )
         {
-            this.#map = pMap || new Map();
-            this.#expressionMap = pExpressionMap || new Map();
+            this.#map = asMap( pMap || new Map() );
+            this.#expressionMap = asMap( pExpressionMap || pMap || new Map() );
             this.#apiPath = asString( pApiPath, true );
         }
 
@@ -3058,6 +3059,23 @@ const $scope = constants?.$scope || function()
             return this.#requestGroupMapper || RequestGroupMapper.DEFAULT;
         }
 
+        addRequestGroupMappings( pRequestGroupMapper )
+        {
+            let newMapper = (pRequestGroupMapper instanceof RequestGroupMapper) ? pRequestGroupMapper : null;
+
+            if ( isNonNullObject( newMapper ) )
+            {
+                let oldMapper = this.requestGroupMapper || RequestGroupMapper.DEFAULT;
+
+                let apiPath = newMapper.apiPath || oldMapper.apiPath;
+
+                const newMap = concatMaps( oldMapper.map, newMapper.map );
+                const newExpMap = concatMaps( oldMapper.expressionMap, newMapper.expressionMap );
+
+                this.#requestGroupMapper = new RequestGroupMapper( newMap, newExpMap, apiPath );
+            }
+        }
+
         get maxDelayBeforeQueueing()
         {
             return Math.max( 100, Math.min( 10_000, asInt( this.#maxDelayBeforeQueueing, 2_500 ) ) );
@@ -3080,6 +3098,16 @@ const $scope = constants?.$scope || function()
             }
 
             group = isBlank( group ) ? asString( pRequestUrl?.url || pRequestUrl?.href || pRequestUrl, true ) : group;
+
+            group = group.replace( /[#?][\w_,.\/\\{}()-]+$/, _mt );
+            group = group.replace( /[#?][\w_,.\/\\{}()-]+$/, _mt );
+
+            let apiPath = pConfig?.apiPath || pOptions.apiPath || _mt;
+
+            if ( apiPath )
+            {
+                group = group.replace( new RegExp( "[\\w_,.\\/\\\\{}()-]+" + apiPath, "gi" ), _mt );
+            }
 
             return asString( group, true );
         }
