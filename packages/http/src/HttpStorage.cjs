@@ -31,6 +31,30 @@ const {
         return $scope()[INTERNAL_NAME];
     }
 
+    // import the specific modules from @toolbocks/core that are necessary for this module
+    const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
+
+    // import the classes, variables, and function defined in moduleUtils that are used in this module
+    const
+        {
+            ModuleEvent,
+            ToolBocksModule,
+            ObjectEntry,
+            IterationCap,
+            populateOptions,
+            attempt,
+            asyncAttempt,
+            resolveError,
+            getLastError,
+            lock,
+            localCopy,
+            objectEntries,
+            mergeObjects,
+            sleep,
+            no_op,
+            $ln,
+        } = moduleUtils;
+
     /**
      * This is a dictionary of this module's dependencies.
      * <br>
@@ -51,10 +75,7 @@ const {
             arrayUtils
         };
 
-    const { _mt_str, _asterisk, populateOptions, localCopy, classes, attempt, S_ERROR } = constants;
-
-    const { ToolBocksModule, ModuleEvent } = classes;
-
+    const { _mt_str, _asterisk, S_ERROR } = constants;
 
     const modName = "HttpStorage";
 

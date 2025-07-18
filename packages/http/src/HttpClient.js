@@ -171,6 +171,7 @@ const $scope = constants?.$scope || function()
             isNull,
             isNonNullObject,
             isNonNullValue,
+            isNullOrNaN,
             isFunction,
             isError,
             isString,
@@ -299,9 +300,9 @@ const $scope = constants?.$scope || function()
                      pRejectUnauthorized = false )
         {
             this.#keepAlive = !!pKeepAlive;
-            this.#keepAliveMsecs = Math.max( 1_000, Math.min( asInt( pKeepAliveMilliseconds ), 300_000 ) );
-            this.#maxFreeSockets = Math.max( Math.min( asInt( pMaxFreeSockets, 256 ) ) );
-            this.#maxTotalSockets = asInt( pMaxTotalSockets ) > 0 && asInt( pMaxTotalSockets ) > asInt( pMaxFreeSockets ) ? asInt( pMaxTotalSockets ) : Infinity;
+            this.#keepAliveMsecs = isNullOrNaN( pKeepAliveMilliseconds ) ? 1_000 : Math.max( 1_000, Math.min( asInt( pKeepAliveMilliseconds ), 300_000 ) );
+            this.#maxFreeSockets = isNullOrNaN( pMaxFreeSockets ) ? Infinity : (Math.max( Math.min( asInt( pMaxFreeSockets, 256 ) ) ));
+            this.#maxTotalSockets = isNullOrNaN( pMaxTotalSockets ) ? Infinity : (asInt( pMaxTotalSockets ) > 0 && asInt( pMaxTotalSockets ) > asInt( pMaxFreeSockets ) ? asInt( pMaxTotalSockets ) : Infinity);
             this.#rejectUnauthorized = !!pRejectUnauthorized;
         }
 
@@ -312,16 +313,30 @@ const $scope = constants?.$scope || function()
 
         get keepAliveMsecs()
         {
+            if ( isNullOrNaN( this.#keepAliveMsecs ) )
+            {
+                return 1_000;
+            }
+
             return Math.max( 1_000, Math.min( asInt( this.#keepAliveMsecs ), 300_000 ) );
         }
 
         get maxFreeSockets()
         {
+            if ( isNullOrNaN( this.#maxFreeSockets ) )
+            {
+                return Infinity;
+            }
+
             return Math.max( Math.min( asInt( this.#maxFreeSockets, 256 ) ) );
         }
 
         get maxTotalSockets()
         {
+            if ( isNullOrNaN( this.#maxTotalSockets ) )
+            {
+                return Infinity;
+            }
             const maxTotal = asInt( this.#maxTotalSockets );
             return asInt( maxTotal ) > 0 && asInt( maxTotal ) > asInt( this.maxFreeSockets ) ? asInt( maxTotal ) : Infinity;
         }
@@ -391,6 +406,11 @@ const $scope = constants?.$scope || function()
 
         return pConfig;
     }
+
+    HttpAgentConfig.getDefault = function()
+    {
+        return httpAgentConfig;
+    };
 
     /**
      * This class can be used to define the configuration expected
@@ -1255,7 +1275,7 @@ const $scope = constants?.$scope || function()
 
         get config()
         {
-            return populateOptions( this.#config, toObjectLiteral( new HttpClientConfig() ) );
+            return populateOptions( this.#config, toObjectLiteral( HttpClientApiConfig.getDefaultConfig() ) );
         }
 
         get request()
@@ -1339,9 +1359,10 @@ const $scope = constants?.$scope || function()
          * @param {HttpClientConfig|HttpClientApiConfig|Object} pConfig
          * @param {Object} pOptions
          */
-        constructor( pConfig = new HttpClientConfig(), pOptions = DEFAULT_DELEGATE_OPTIONS )
+        constructor( pConfig = HttpClientConfig.getDefaultConfig(), pOptions = DEFAULT_DELEGATE_OPTIONS )
         {
-            this.#config = populateOptions( pConfig, toObjectLiteral( DEFAULT_CONFIG ) );
+            this.#config = populateOptions( toObjectLiteral( pConfig || HttpClientConfig.getDefaultConfig() ),
+                                            toObjectLiteral( DEFAULT_CONFIG ) );
 
             this.#options = populateOptions( pOptions || {}, DEFAULT_DELEGATE_OPTIONS );
         }

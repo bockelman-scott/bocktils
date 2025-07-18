@@ -14,7 +14,7 @@
  * Constants, TypeUtils, StringUtils, and ArrayUtils
  */
 const core = require( "@toolbocks/core" );
-const entityUtils = require( "../../common/src/EntityUtils.js" );
+const entityUtils = require( "../../common/src/EntityUtils.cjs" );
 
 /**
  * Establish separate constants for each of the common utilities imported

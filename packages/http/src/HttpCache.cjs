@@ -38,6 +38,30 @@ const {
         return $scope()[INTERNAL_NAME];
     }
 
+    // import the specific modules from @toolbocks/core that are necessary for this module
+    const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
+
+    // import the classes, variables, and function defined in moduleUtils that are used in this module
+    const
+        {
+            ModuleEvent,
+            ToolBocksModule,
+            ObjectEntry,
+            IterationCap,
+            populateOptions,
+            attempt,
+            asyncAttempt,
+            resolveError,
+            getLastError,
+            lock,
+            localCopy,
+            objectEntries,
+            mergeObjects,
+            sleep,
+            no_op,
+            $ln,
+        } = moduleUtils;
+
     /**
      * This is a dictionary of this module's dependencies.
      * <br>
@@ -58,21 +82,15 @@ const {
             arrayUtils
         };
 
+
     const {
         _mt_str,
         _underscore,
-        no_op,
-        populateOptions,
-        classes,
-        asyncAttempt
     } = constants;
-
-    const { ToolBocksModule, ModuleEvent } = classes;
-
 
     const modName = "HttpCache";
 
-    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+    const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
     const { isNull, isFunction } = typeUtils;
 
@@ -98,7 +116,7 @@ const {
 
     const { HttpClient, Fetcher } = fetchUtils;
 
-    const executionEnvironment = modulePrototype.executionEnvironment;
+    const executionEnvironment = toolBocksModule.executionEnvironment;
 
     const _isNode = executionEnvironment.isNode();
 
@@ -554,7 +572,7 @@ const {
                         me.#removeOnCopy[baseName] = [...(me.preserveKeys)];
                     }
                 }
-            }).then( no_op ).catch( ( error ) => modulePrototype.handleError( error, me.removeObsoleteCaches, keys, preserveCaches, me.preserveKeys ) ) );
+            }).then( no_op ).catch( ( error ) => toolBocksModule.handleError( error, me.removeObsoleteCaches, keys, preserveCaches, me.preserveKeys ) ) );
 
             this.dispatchEvent( new ModuleEvent( "cacheRemoved", { removedCaches } ) );
 
@@ -697,7 +715,7 @@ const {
             DEFAULT_CACHE_STORAGE_OPTIONS,
         };
 
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 

@@ -17,7 +17,7 @@
  */
 const core = require( "@toolbocks/core" );
 
-const objectUtils = require( "../../common/src/ObjectUtils.js" );
+const objectUtils = require( "../../common/src/ObjectUtils.cjs" );
 
 // import the HTTP constants
 const httpConstants = require( "./HttpConstants.cjs" );
