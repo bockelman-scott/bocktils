@@ -67,7 +67,7 @@ const {
             httpConstants
         };
 
-    const { ToolBocksModule, ObjectEntry, populateOptions, attempt, objectEntries, lock } = moduleUtils;
+    const { ToolBocksModule, ObjectEntry, populateOptions, attempt, objectEntries, lock, $ln } = moduleUtils;
 
     const { _mt_str } = constants;
 
@@ -129,6 +129,22 @@ const {
     const FORBIDDEN_REQUEST_HEADERS = lock( [...FORBIDDEN_REQUEST_HEADER_NAMES, ...(FORBIDDEN_REQUEST_HEADER_NAMES.map( e => e.toLowerCase() ))] );
     const FORBIDDEN_RESPONSE_HEADERS = lock( [...FORBIDDEN_RESPONSE_HEADER_NAMES, ...(FORBIDDEN_RESPONSE_HEADER_NAMES.map( e => e.toLowerCase() ))] );
 
+    /**
+     * An object containing any HTTP headers that you want to pre-populate your Headers object with.
+     * This can be a simple object literal with String values,
+     * an array of name-value pairs, where each pair is a 2-element array of strings,
+     * or an existing Headers object.
+     *
+     * In the last case, the new Headers object copies its data from the existing Headers object.
+     */
+
+
+    /**
+     * Determines if the provided object is a valid Web API Headers object.
+     *
+     * @param {Object} pObject The object to check for Web API Headers compatibility.
+     * @return {boolean} Returns true if the object is a valid Web API Headers object, otherwise false.
+     */
     function isWebApiHeadersObject( pObject )
     {
         return (isNonNullObject( pObject ) &&
@@ -184,16 +200,34 @@ const {
         return map || options;
     }
 
-    function processRequestHeaderOptions( pOptions )
+    function processHeaderObject( pOptions )
     {
-        /**
-         * An object containing any HTTP headers that you want to pre-populate your Headers object with.
-         * This can be a simple object literal with String values,
-         * an array of name-value pairs, where each pair is a 2-element array of strings,
-         * or an existing Headers object.
-         *
-         * In the last case, the new Headers object copies its data from the existing Headers object.
-         */
+        let options = isMap( pOptions ) ? new Map( pOptions ) : populateOptions( pOptions, {} );
+
+        let map = new Map();
+
+        const entries = objectEntries( pOptions ).filter( ( entry ) => isHeader( ObjectEntry.getKey( entry ) ) );
+
+        for( const entry of entries )
+        {
+            const key = ObjectEntry.getKey( entry );
+            const value = ObjectEntry.getValue( entry ) || _mt_str;
+
+            options[key] = value;
+
+            const existing = map.get( key ) || _mt_str;
+
+            if ( existing )
+            {
+                map.set( key, value + (existing ? ", " + existing : _mt_str) );
+            }
+        }
+
+        return map || options;
+    }
+
+    function processHeaderOptions( pOptions )
+    {
         if ( isNull( pOptions ) )
         {
             return new Map();
@@ -201,7 +235,16 @@ const {
 
         if ( isWebApiHeadersObject( pOptions ) || isMap( pOptions ) )
         {
-            return processHeadersArray( [...(pOptions.entries() || [])] );
+            let entries = isFunction( pOptions.entries ) ? pOptions.entries() : Object.entries( pOptions );
+            let arr = [...(entries || objectEntries( pOptions ) || [])];
+            if ( $ln( arr ) <= 0 )
+            {
+                if ( isNonNullObject( pOptions ) )
+                {
+                    return processHeaderObject( pOptions );
+                }
+            }
+            return processHeadersArray( arr );
         }
 
         if ( isArray( pOptions ) )
@@ -216,28 +259,7 @@ const {
 
         if ( isObject( pOptions ) )
         {
-            let options = isMap( pOptions ) ? new Map( pOptions ) : populateOptions( pOptions, {} );
-
-            let map = new Map();
-
-            const entries = objectEntries( pOptions ).filter( ( entry ) => isHeader( ObjectEntry.getKey( entry ) ) );
-
-            for( const entry of entries )
-            {
-                const key = ObjectEntry.getKey( entry );
-                const value = ObjectEntry.getValue( entry ) || _mt_str;
-
-                options[key] = value;
-
-                const existing = map.get( key ) || _mt_str;
-
-                if ( existing )
-                {
-                    map.set( key, value + (existing ? ", " + existing : _mt_str) );
-                }
-            }
-
-            return map || options;
+            return processHeaderObject( pOptions );
         }
 
         return new Map();
@@ -247,7 +269,7 @@ const {
     {
         constructor( pOptions )
         {
-            super( Object.entries( processRequestHeaderOptions( pOptions ) ) );
+            super( Object.entries( processHeaderOptions( pOptions ) ) );
         }
 
         append( pKey, pValue )
@@ -352,7 +374,7 @@ const {
             DEFAULT_EXPIRATION_HEADER,
             HttpRequestHeaders,
             HttpResponseHeaders,
-            processRequestHeaderOptions
+            processRequestHeaderOptions: processHeaderOptions
         };
 
     mod = toolBocksModule.extend( mod );

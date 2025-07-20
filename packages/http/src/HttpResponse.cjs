@@ -76,7 +76,15 @@ const {
             httpRequest
         };
 
-    const { ToolBocksModule, populateOptions, localCopy, attempt, asyncAttempt } = moduleUtils;
+    const {
+        ToolBocksModule,
+        ObjectEntry,
+        objectEntries,
+        populateOptions,
+        localCopy,
+        attempt,
+        asyncAttempt
+    } = moduleUtils;
 
     const { _mt_str, _str, _num, _big, S_ERR_PREFIX } = constants;
 
@@ -88,7 +96,9 @@ const {
             isArray,
             isMap,
             isFunction,
-            isAsyncFunction
+            isAsyncFunction,
+            isScalar,
+            isObjectLiteral
         } = typeUtils;
 
     const { asString, asInt, isBlank, lcase, ucase, isJson } = stringUtils;
@@ -107,18 +117,110 @@ const {
 
     const cloneResponse = function( pResponse )
     {
-        let res = pResponse?.response || pResponse;
-        return isNull( res ) ? null : (isNonNullObject( res ) ? (isFunction( res?.clone ) ? res.clone() : localCopy( res )) : isString( res ) ? parseJson( res ) : res);
+        let res = pResponse;
+
+        if ( isNull( res ) )
+        {
+            return null;
+        }
+
+        // unwrap the response from any container
+        while ( res.response )
+        {
+            res = res.response;
+        }
+
+        if ( isNonNullObject( res ) )
+        {
+            if ( isFunction( res?.clone ) )
+            {
+                return new HttpResponse( attempt( () => res.clone() ) || res );
+            }
+            else
+            {
+                const obj = {};
+
+                const entries = attempt( () => objectEntries( res ) );
+
+                if ( entries && isFunction( entries.forEach ) )
+                {
+                    entries.forEach( entry =>
+                                     {
+                                         const key = ObjectEntry.getKey( entry );
+                                         const value = ObjectEntry.getValue( entry );
+
+                                         if ( isString( key ) && !isBlank( key ) && value )
+                                         {
+                                             if ( isScalar( value ) )
+                                             {
+                                                 obj[key] = value;
+                                             }
+                                             else if ( isFunction( value ) )
+                                             {
+                                                 obj[key] = value.bind( obj );
+                                             }
+                                             else
+                                             {
+                                                 if ( isFunction( value?.clone ) )
+                                                 {
+                                                     obj[key] = attempt( () => value.clone() );
+                                                 }
+                                                 else if ( "headers" === key )
+                                                 {
+                                                     obj[key] = new HttpResponseHeaders( cloneHeaders( value ) );
+                                                 }
+                                                 else if ( isObjectLiteral( value ) )
+                                                 {
+                                                     obj[key] = attempt( () => localCopy( value ) );
+                                                 }
+                                             }
+                                         }
+                                     } );
+                }
+
+                return new HttpResponse( obj );
+            }
+        }
     };
 
     const cloneHeaders = function( pHeaders )
     {
-        let headers = pHeaders?.headers || pHeaders;
-        return new HttpResponseHeaders( isNull( headers ) ?
-                                        new HttpResponseHeaders() :
-                                        isNonNullObject( headers ) ? (isFunction( headers?.clone ) ?
-                                                                      headers.clone() :
-                                                                      localCopy( headers )) : (isString( headers ) && isJson( headers ) ? parseJson( headers ) : {}) );
+        let headers = pHeaders || {};
+
+        // unwrap the headers from any container
+        while ( headers.headers )
+        {
+            headers = headers.headers;
+        }
+
+        if ( isNull( headers ) )
+        {
+            return new HttpResponseHeaders();
+        }
+
+        if ( headers instanceof HttpResponseHeaders )
+        {
+            return headers;
+        }
+
+        if ( isString( headers ) && isJson( headers ) )
+        {
+            headers = attempt( () => parseJson( headers ) );
+        }
+
+        if ( isNonNullObject( headers ) )
+        {
+            if ( isFunction( headers?.clone ) )
+            {
+                headers = attempt( () => headers.clone() ) || headers;
+            }
+            else
+            {
+                headers = attempt( () => localCopy( headers ) ) || headers;
+            }
+        }
+
+        return new HttpResponseHeaders( headers );
     };
 
     const DEFAULT_RESPONSE_OPTIONS =
@@ -156,25 +258,27 @@ const {
         {
             super();
 
+            const me = this;
+
             const options = populateOptions( pOptions, DEFAULT_RESPONSE_OPTIONS );
 
-            const res = this.resolveResponse( pResponse, options );
+            const res = attempt( () => me.resolveResponse( pResponse, options ) );
 
             const req = new HttpRequest( res?.request || options?.request );
 
-            this.#response = cloneResponse( res );
+            this.#headers = attempt( () => cloneHeaders( res?.headers || options?.headers || req?.headers ) );
 
-            this.#data = pResponse?.response?.data || pResponse?.data || this.#response?.data;
+            this.#response = (res instanceof this.constructor) ? res : attempt( () => cloneResponse( res ) );
 
             this.#status = this.resolveStatus( this.#response, options );
 
-            this.#ok = this.#status.isOk();
-
-            this.#request = isNonNullObject( req ) ? cloneRequest( req ) : null;
+            this.#ok = this.#ok || this.#status.isOk();
 
             this.#url = asString( res?.url || req?.url || options?.url, true );
 
-            this.#headers = cloneHeaders( res?.headers || options?.headers || req?.headers );
+            this.#request = isNonNullObject( req ) ? attempt( () => cloneRequest( req ) ) : options.request || new HttpRequest();
+
+            this.#data = pResponse?.response?.data || pResponse?.data || this.#response?.data;
 
             this.#options = populateOptions( {
                                                  response: cloneResponse( this.#response ),
@@ -189,9 +293,15 @@ const {
             const options = populateOptions( (pOptions || pResponse?.options),
                                              DEFAULT_RESPONSE_OPTIONS );
 
-            const res = pResponse?.response || pResponse || options?.response || options;
+            let res = pResponse?.response || pResponse || options?.response || options;
 
-            let body = res?.data || res?.body || options?.body || options?.data;
+            // unwrap the response for any containers
+            while ( res.response )
+            {
+                res = res.response;
+            }
+
+            let body = res?.data || res?.body || options?.body || options?.data || pResponse?.body || pResponse?.data;
 
             if ( isNull( body ) )
             {
@@ -219,21 +329,28 @@ const {
         {
             const options = populateOptions( pOptions, DEFAULT_RESPONSE_OPTIONS );
 
-            const res = pResponse?.response || pResponse || options?.response;
+            let response = pResponse?.response || pResponse || options?.response;
 
-            let response = res;
-
-            if ( isNonNullObject( res ) )
+            while ( response.response )
             {
-                response = cloneResponse( res );
+                response = response.response;
+            }
+
+            if ( isNonNullObject( response ) )
+            {
+                if ( response instanceof this.constructor )
+                {
+                    return response;
+                }
+                response = cloneResponse( response );
             }
             else
             {
-                const body = this._resolveBody( res || options, options );
+                const body = this._resolveBody( response || options, options );
 
                 if ( _ud !== typeof Response )
                 {
-                    response = new Response( body || res?.data || {}, options );
+                    response = new Response( body || options?.body || response?.data || options?.data || {}, options );
                 }
                 else if ( !isNull( body ) )
                 {
@@ -310,7 +427,7 @@ const {
 
         async body()
         {
-            if ( isNull( this.#resolvedBody ) || isBlank( this.#resolvedBody ) )
+            if ( !isNull( this.#resolvedBody ) )
             {
                 return this.#resolvedBody;
             }

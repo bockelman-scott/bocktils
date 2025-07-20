@@ -14,6 +14,19 @@
  * Constants, TypeUtils, StringUtils, and ArrayUtils
  */
 const core = require( "@toolbocks/core" );
+
+const jsonUtils = require( "@toolbocks/json" );
+
+/**
+ * Utility module for handling entity-related operations.
+ * Provides a set of helper functions that facilitate working with entities,
+ * including operations such as manipulation, validation, and transformation.
+ *
+ * The module is imported from the common library and serves as a shared utility
+ * for managing entity data across different parts of the application.
+ *
+ * @module entityUtils
+ */
 const entityUtils = require( "../../common/src/EntityUtils.cjs" );
 
 /**
@@ -57,16 +70,20 @@ const {
             constants,
             typeUtils,
             stringUtils,
-            arrayUtils
+            arrayUtils,
+            jsonUtils,
+            entityUtils
         };
 
-    const { ModuleEvent, ToolBocksModule, ObjectEntry, objectEntries, lock } = moduleUtils;
+    const { ModuleEvent, ToolBocksModule, ObjectEntry, objectEntries, lock, attempt } = moduleUtils;
 
     const { _str } = constants;
 
     const { isNonNullObject, isString, isNumeric } = typeUtils;
 
-    const { asString, asInt, lcase, ucase, capitalize } = stringUtils;
+    const { asString, asInt, lcase, ucase, capitalize, isJson } = stringUtils;
+
+    const { parseJson } = jsonUtils;
 
     const
         {
@@ -103,18 +120,22 @@ const {
      * - CONNECT: Represents an HTTP CONNECT request, typically used to establish a tunnel to the server.<br>
      * - TRACE: Represents an HTTP TRACE request, typically used for testing and diagnostic purposes.<br>
      */
-    const VERBS = lock(
-        {
-            GET: "GET", /* 0 */
-            POST: "POST", /* 1 */
-            PUT: "PUT", /* 2 */
-            PATCH: "PATCH", /* 3 */
-            HEAD: "HEAD", /* 4 */
-            OPTIONS: "OPTIONS", /* 6 */
-            DELETE: "DELETE", /* 7 */
-            CONNECT: "CONNECT", /* 8 */
-            TRACE: "TRACE" /* 9 */
-        } );
+    const VERBS = {
+        GET: "GET", /* 0 */
+        POST: "POST", /* 1 */
+        PUT: "PUT", /* 2 */
+        PATCH: "PATCH", /* 3 */
+        HEAD: "HEAD", /* 4 */
+        OPTIONS: "OPTIONS", /* 6 */
+        DELETE: "DELETE", /* 7 */
+        CONNECT: "CONNECT", /* 8 */
+        TRACE: "TRACE" /* 9 */
+    };
+
+    VERBS.indexOf = function( pVerb )
+    {
+        return Object.values( VERBS ).map( lcase ).indexOf( lcase( asString( pVerb, true ) ) );
+    };
 
     /**
      * Represents an HTTP verb and provides utility methods related to it.
@@ -132,7 +153,7 @@ const {
          */
         constructor( pVerb )
         {
-            super( Object.values( VERBS ).map( lcase ).indexOf( lcase( asString( pVerb, true ) ) ), asString( pVerb, true ) );
+            super( VERBS.indexOf( pVerb ), asString( pVerb, true ) );
             this.#verb = ucase( asString( pVerb, true ) );
         }
 
@@ -146,9 +167,14 @@ const {
             return ["POST", "PUT", "PATCH"].includes( ucase( this.#verb ) );
         }
 
+        get allowsBody()
+        {
+            return this.requiresBody || "DELETE" === ucase( this.#verb );
+        }
+
         get forbidsBody()
         {
-            return ["GET", "HEAD", "OPTIONS", "DELETE"].includes( ucase( this.#verb ) );
+            return ["GET", "HEAD", "OPTIONS", "TRACE"].includes( ucase( this.#verb ) );
         }
     }
 
@@ -161,26 +187,39 @@ const {
     {
         if ( isString( pMethod ) )
         {
-            return ((VERBS.values()).map( ucase )).includes( ucase( pMethod ) ) ? pMethod : "GET";
+            if ( VERBS.indexOf( pMethod ) )
+            {
+                return ((VERBS.values()).map( ucase )).includes( ucase( pMethod ) ) ? pMethod : VERBS.GET;
+            }
+
+            if ( isJson( pMethod ) )
+            {
+                return HttpVerb.resolveHttpMethod( attempt( () => parseJson( pMethod ) ) ) || VERBS.GET;
+            }
+
+            return ((VERBS.values()).map( ucase )).includes( ucase( pMethod ) ) ? pMethod : VERBS.GET;
         }
 
         if ( isNonNullObject( pMethod ) )
         {
             if ( pMethod instanceof HttpVerb )
             {
-                return pMethod.name;
+                return HttpVerb.resolveHttpMethod( pMethod.name );
             }
+
+            return attempt( () => HttpVerb.resolveHttpMethod( pMethod["method"] ) ) || VERBS.GET;
         }
 
         if ( isNumeric( pMethod ) )
         {
             const values = Object.values( VERBS );
+
             const index = asInt( pMethod );
 
-            return index >= 0 && index < values.length ? values[index] : "GET";
+            return HttpVerb.resolveHttpMethod( (index >= 0 && index < values.length) ? values[index] : VERBS.GET );
         }
 
-        return "GET";
+        return VERBS.GET;
     };
 
     HttpVerb.resolve = function( pVal )
@@ -192,7 +231,7 @@ const {
                 return pVal;
             }
 
-            const httpMethod = HttpVerb.resolveHttpMethod( pVal?.method );
+            const httpMethod = HttpVerb.resolveHttpMethod( pVal?.method || pVal );
             return HttpVerb[httpMethod] || HttpVerb[ucase( httpMethod )];
         }
 
@@ -202,7 +241,7 @@ const {
             return HttpVerb[httpMethod] || HttpVerb[ucase( httpMethod )];
         }
 
-        return HttpVerb["GET"];
+        return HttpVerb[VERBS.GET];
     };
 
     const MODES = lock(
@@ -930,7 +969,7 @@ const {
         }
     }
 
-    const isVerb = ( pVerb ) => pVerb instanceof HttpVerb || Object.values( VERBS ).map( lcase ).includes( lcase( asString( pVerb, true ) ) );
+    const isVerb = ( pVerb ) => pVerb instanceof HttpVerb || VERBS.indexOf( pVerb ) >= 0;
 
     const isHeader = ( pHeader ) => pHeader instanceof HttpHeaderDefinition || Object.keys( HttpHeaderDefinition ).map( lcase ).includes( lcase( asString( pHeader, true ) ) );
 
@@ -955,17 +994,17 @@ const {
                     HttpStatus,
                     HttpContentType,
                 },
-            STATUS_CODES,
-            STATUS_TEXT: STATUS_TEXT_BY_CODE_STRING,
-            STATUS_TEXT_ARRAY: STATUS_TEXT_BY_INT_VALUE,
-            STATUS_ELIGIBLE_FOR_RETRY,
-            DEFAULT_RETRY_DELAY,
-            VERBS,
-            MODES,
-            PRIORITY,
-            CONTENT_TYPES,
-            TYPES,
-            HTTP_HEADERS,
+            STATUS_CODES: lock( STATUS_CODES ),
+            STATUS_TEXT: lock( STATUS_TEXT_BY_CODE_STRING ),
+            STATUS_TEXT_ARRAY: lock( STATUS_TEXT_BY_INT_VALUE ),
+            STATUS_ELIGIBLE_FOR_RETRY: lock( STATUS_ELIGIBLE_FOR_RETRY ),
+            DEFAULT_RETRY_DELAY: lock( DEFAULT_RETRY_DELAY ),
+            VERBS: lock( VERBS ),
+            MODES: lock( MODES ),
+            PRIORITY: lock( PRIORITY ),
+            CONTENT_TYPES: lock( CONTENT_TYPES ),
+            TYPES: lock( TYPES ),
+            HTTP_HEADERS: lock( HTTP_HEADERS ),
             HttpVerb,
             HttpHeaderDefinition,
             HttpHeader,

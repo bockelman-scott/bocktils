@@ -2054,6 +2054,66 @@ const $scope = constants?.$scope || function()
                                 } );
     };
 
+
+    /**
+     * Determines whether the provided value is a scalar value.
+     *
+     * A scalar is a primitive data type such as string, number, bigint, boolean, or,
+     * conditionally,
+     * null, symbol, function, or 'boxed' primitives
+     * based on specific options.
+     *
+     * @function isScalar
+     *
+     * @param {any} pVal - The value to inspect and determine if it is scalar.
+     *
+     * @param {Object} [pOptions] - Additional options to influence the scalar determination.
+     *
+     * @param {boolean} [pOptions.nullIsScalar=false] - Determines if null should be considered a scalar value. Defaults to false.
+     * @param {boolean} [pOptions.symbolIsScalar=false] - Determines if a symbol should be considered a scalar value. Defaults to false.
+     * @param {boolean} [pOptions.functionIsScalar=false] - Determines if a function should be considered a scalar value. Defaults to false.
+     * @param {boolean} [pOptions.dateIsScalar=false] Determines if a Date should be considered a scalar value. Defaults to false.
+     * @param {boolean} [pOptions.boxedPrimitiveIsScalar=true] Determines if a function should be considered a scalar value. Defaults to true.
+     *
+     * @returns {boolean} Returns true if the given value is considered scalar; otherwise, false.
+     */
+    const isScalar = function( pVal, pOptions = { boxedPrimitiveIsScalar: true } )
+    {
+        const options = populateOptions( pOptions, {} );
+
+        if ( isNull( pVal ) )
+        {
+            return !!options.nullIsScalar;
+        }
+
+        if ( isFunction( pVal ) )
+        {
+            return !!options.functionIsScalar;
+        }
+
+        if ( isObject( pVal ) )
+        {
+            return isPrimitiveWrapper( pVal ) && options.boxedPrimitiveIsScalar;
+        }
+
+        switch ( typeof pVal )
+        {
+            case _str:
+            case _num:
+            case _big:
+            case _bool:
+                return true;
+
+            case _symbol:
+                return !!options.symbolIsScalar;
+
+            default:
+                break;
+        }
+
+        return !isObject( pVal ) && isNonNullValue( pVal );
+    };
+
     /**
      * Returns true if the specified value cannot be modified<br>
      *
@@ -5007,6 +5067,7 @@ const $scope = constants?.$scope || function()
             isPopulatedArray,
             isError,
             isEvent,
+            isScalar,
             firstError,
             isFunction,
             isAsyncFunction,
@@ -5098,6 +5159,7 @@ const $scope = constants?.$scope || function()
             calculateTypedArrayClass,
             toTypedArray,
             arrayToObject,
+            isObjectLiteral,
             toArrayLiteral,
             toObjectLiteral,
             asObject,

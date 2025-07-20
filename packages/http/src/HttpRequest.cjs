@@ -26,6 +26,8 @@ const core = require( "@toolbocks/core" );
 // import Buffer-support
 const bufferUtils = require( "@toolbocks/buffer" );
 
+const jsonUtils = require( "@toolbocks/json" );
+
 // import the HTTP constants
 const httpConstants = require( "./HttpConstants.cjs" );
 
@@ -81,6 +83,8 @@ const {
 
     const {
         ToolBocksModule,
+        ObjectEntry,
+        objectEntries,
         populateOptions,
         lock,
         localCopy,
@@ -118,9 +122,11 @@ const {
         } = typeUtils;
 
 
-    const { asString, asInt, isBlank, startsWithAny, cleanUrl } = stringUtils;
+    const { asString, asInt, isBlank, isJson, startsWithAny, cleanUrl } = stringUtils;
 
     const { asArray } = arrayUtils;
+
+    const { parseJson } = jsonUtils;
 
     const {
         VERBS,
@@ -764,6 +770,35 @@ const {
         return {};
     };
 
+    HttpUrl.resolveUrl = function( pUrl )
+    {
+        if ( isNull( pUrl ) )
+        {
+            return _slash;
+        }
+
+        if ( isString( pUrl ) )
+        {
+            if ( isUrl( pUrl ) )
+            {
+                return asString( pUrl, true );
+            }
+            else if ( isJson( pUrl ) )
+            {
+                const parsed = attempt( () => parseJson( pUrl ) );
+                return HttpUrl.resolveUrl( parsed );
+            }
+            return _slash;
+        }
+
+        if ( isNonNullObject( pUrl ) )
+        {
+            return pUrl?.url || pUrl?.href || pUrl?.location;
+        }
+
+        return _slash;
+    };
+
     const PROTOCOL_PORTS =
         {
             http: 80,
@@ -1208,7 +1243,54 @@ const {
 
     const cloneRequest = function( pRequest )
     {
-        return isNull( pRequest ) ? null : isFunction( pRequest?.clone ) ? pRequest.clone() : localCopy( pRequest );
+        if ( isNull( pRequest ) )
+        {
+            return null;
+        }
+
+        let req = pRequest || {};
+
+        // unwrap from any other container
+        while ( req.request )
+        {
+            req = req.request;
+        }
+
+        if ( isNonNullObject( req ) )
+        {
+            if ( isFunction( req?.clone ) )
+            {
+                return new HttpRequest( attempt( () => req.clone() ) || req );
+            }
+            else
+            {
+                let url = req.url || req.href || req.location;
+                let options = req.config || req.options || attempt( () => localCopy( req ) );
+                if ( _ud !== typeof Request )
+                {
+                    const request = new Request( url, options );
+                    return new HttpRequest( request, options );
+                }
+                return new HttpRequest( url, options );
+            }
+        }
+        else if ( isString( req ) )
+        {
+            if ( isUrl( req ) )
+            {
+                return new HttpRequest( asString( req, true ) );
+            }
+            else if ( isJson( req ) )
+            {
+                const parsed = attempt( () => parseJson( req ) );
+                if ( isNonNullObject( parsed ) )
+                {
+                    return cloneRequest( parsed );
+                }
+            }
+        }
+
+        return req;
     };
 
     class HttpRequest extends EventTarget
@@ -1228,15 +1310,22 @@ const {
         {
             super();
 
-            this.#options = populateOptions( pOptions || {}, toObjectLiteral( new HttpRequestOptions( VERBS.GET, new HttpRequestHeaders(), pOptions ) ) );
+            this.#request = pRequestOrUrl instanceof this.constructor ?
+                            pRequestOrUrl.request :
+                            cloneRequest( this.resolveRequest( pRequestOrUrl ) );
 
-            this.#id = this.options?.id || this.constructor.nextId();
+            this.#options = populateOptions( pOptions || {},
+                                             toObjectLiteral( new HttpRequestOptions( HttpVerb.resolveHttpMethod( this.#request?.method || VERBS.GET ),
+                                                                                      new HttpRequestHeaders( this.#request?.headers || pOptions?.headers || {} ),
+                                                                                      pOptions ) ) );
 
-            this.#priority = asInt( this.options?.priority );
+            this.#id = this.#request?.id || this.options?.id || this.constructor.nextId();
 
-            this.#url = isString( pRequestOrUrl ) ? new HttpUrl( pRequestOrUrl ) : new HttpUrl( pRequestOrUrl?.url || pRequestOrUrl?.href || asString( pRequestOrUrl ) );
+            this.#priority = asInt( this.#request?.priority || this.options?.priority );
 
-            this.#request = this.resolveRequest( pRequestOrUrl );
+            this.#url = isString( pRequestOrUrl ) && isUrl( pRequestOrUrl ) ?
+                        new HttpUrl( pRequestOrUrl ) :
+                        new HttpUrl( this.#request?.url || this.#request?.href || asString( pRequestOrUrl ) );
 
             this.#response = this.#request?.response || this.#options?.response;
 
@@ -1311,92 +1400,118 @@ const {
 
         resolveRequest( pRequestOrUrl, pConfig )
         {
-            let req = null;
+            // resolve arguments
+            let { req, config } = this.unwrapArguments( pRequestOrUrl, pConfig );
 
-            if ( _ud !== typeof Request )
+            // handle W3C standard
+            if ( _ud !== typeof Request && req instanceof Request )
             {
-                req = this.requestFromW3cRequest( pRequestOrUrl, pConfig );
+                return new Request( attempt( () => req.clone() ), config );
             }
 
             if ( isNull( req ) )
             {
-                if ( isNonNullObject( pRequestOrUrl ) )
+                if ( isNull( config ) )
                 {
-                    let method = resolveHttpMethod( pRequestOrUrl?.method || pConfig?.method || pRequestOrUrl );
-
-                    if ( !(isNull( pRequestOrUrl?.url ) && pRequestOrUrl?.href) )
-                    {
-                        if ( isBlank( pRequestOrUrl.method ) )
-                        {
-                            pRequestOrUrl.method = asString( method, true ) || "GET";
-                        }
-                        return pRequestOrUrl;
-                    }
+                    return null;
                 }
-
-                if ( isFunction( pRequestOrUrl ) )
-                {
-                    return attempt( () => pRequestOrUrl( pConfig ) );
-                }
-
-                if ( isString( pRequestOrUrl ) )
-                {
-                    return {
-                        url: cleanUrl( asString( pRequestOrUrl, true ) ),
-                        href: cleanUrl( asString( pRequestOrUrl, true ) ),
-                        method: "GET"
-                    };
-                }
+                req = config;
             }
 
-            return {};
+            if ( isNonNullObject( req ) )
+            {
+                return this._resolveRequestFromObject( req, config );
+            }
+
+            if ( isString( req ) )
+            {
+                if ( isJson( req ) )
+                {
+                    return this.resolveRequest( attempt( () => parseJson( req ) ), config );
+                }
+                return new HttpRequest( cleanUrl( asString( req, true ) ), HttpRequestOptions.fromOptions( config ) );
+            }
+
+            if ( isFunction( req ) )
+            {
+                return attempt( () => req.call( config, config ) );
+            }
+
+            return new HttpRequest( _slash, HttpRequestOptions.fromOptions( config ) );
         }
 
-        requestFromW3cRequest( pRequestOrUrl, pConfig )
+        unwrapArguments( pRequestOrUrl, pConfig )
         {
-            if ( pRequestOrUrl instanceof Request )
+            let req = pRequestOrUrl || pConfig?.request;
+            let config = pConfig || req?.config || req?.options;
+
+            // unwrap from any other containers
+            if ( isNonNullObject( req ) )
             {
-                return cloneRequest( pRequestOrUrl );
+                config = config || req?.config || req?.options;
+                while ( req.request )
+                {
+                    req = req.request;
+                    config = config || req?.config || req?.options;
+                }
+            }
+            return { req, config };
+        }
+
+        _resolveRequestFromObject( req, config )
+        {
+            let method = resolveHttpMethod( req.method || config?.method || req || config );
+            let url = HttpUrl.resolveUrl( req.url || config?.url || req.href || config?.href || req.location || config?.location || req || config );
+            let body = req.body || config?.body || req.data || config?.data;
+            let bodyUsed = false;
+            let headers = new HttpRequestHeaders( req.headers || config?.headers );
+            let mode = req.mode || config?.mode || "cors";
+            let redirect = req.redirect || config?.redirect || "follow";
+
+            let obj =
+                {
+                    url,
+                    method,
+                    body,
+                    bodyUsed,
+                    headers,
+                    mode,
+                    redirect
+                };
+
+            const entries = objectEntries( req );
+            attempt( () => entries.forEach( entry =>
+                                            {
+                                                const key = ObjectEntry.getKey( entry );
+                                                const value = ObjectEntry.getValue( entry );
+
+                                                if ( key && value )
+                                                {
+                                                    obj[key] = value || obj[key];
+                                                }
+                                            } ) );
+
+            const requestOptions = HttpRequestOptions.fromOptions( obj );
+
+            if ( _ud !== typeof Request )
+            {
+                return new Request( url, toObjectLiteral( requestOptions ) );
             }
 
-            let config = populateOptions( pConfig || {}, {} );
-
-            let method = resolveHttpMethod( config?.method || isObject( pRequestOrUrl ) ? pRequestOrUrl?.method : _mt_str );
-
-            let req;
-
-            switch ( typeof pRequestOrUrl )
-            {
-                case _str:
-                    req = new Request( pRequestOrUrl || this.#url, pConfig );
-                    break;
-
-                case _obj:
-                    req = new Request( pRequestOrUrl?.url || this.#url, pConfig );
-                    break;
-
-                case _fun:
-                    req = new Request( attempt( () => pRequestOrUrl() ) || this.#url, pConfig );
-                    break;
-
-                default:
-                    req = {};
-                    break;
-            }
-
-            req.method = req.method || method;
-
-            return req;
+            return new HttpRequest( obj.url || url, requestOptions );
         }
     }
 
     HttpRequest.resolve = function( pRequestOrUrl, pOptions )
     {
-        const options = populateOptions( pOptions || {}, toObjectLiteral( new HttpRequestOptions( VERBS.GET, new HttpRequestHeaders(), pRequestOrUrl?.options || {} ) ) );
+        const options = populateOptions( pOptions || {},
+                                         toObjectLiteral( new HttpRequestOptions( pRequestOrUrl?.method || VERBS.GET,
+                                                                                  new HttpRequestHeaders( pRequestOrUrl?.headers || pOptions?.headers ),
+                                                                                  pRequestOrUrl?.options || {} ) ) );
 
         if ( pRequestOrUrl instanceof HttpRequest )
         {
-            return pRequestOrUrl;
+            return new HttpRequest( pRequestOrUrl, options );
         }
         else if ( _ud !== typeof Request && pRequestOrUrl instanceof Request )
         {
@@ -1404,6 +1519,10 @@ const {
         }
         else if ( isString( pRequestOrUrl ) )
         {
+            if ( isJson( pRequestOrUrl ) )
+            {
+                return HttpRequest.resolve( attempt( () => parseJson( pRequestOrUrl ) ), options );
+            }
             return new HttpRequest( pRequestOrUrl, options );
         }
         else if ( isFunction( pRequestOrUrl?.toString ) )
