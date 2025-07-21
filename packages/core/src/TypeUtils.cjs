@@ -4200,9 +4200,31 @@ const $scope = constants?.$scope || function()
         return obj;
     }
 
+    let parseJson = function( pJson )
+    {
+        if ( isObject( pJson ) )
+        {
+            return pJson;
+        }
+
+        let s = _toString( isString( pJson ) ? pJson.trim() : _toString( pJson ).trim() );
+        s = s.replace( /^[\r\n]+/, _mt_str ).replace( /[\r\n]+$/, _mt_str ) || _mt_str;
+
+        if ( (s.startsWith( "{" ) && s.endsWith( "}" )) || ((s.startsWith( "[" ) && s.endsWith( "]" ))) )
+        {
+            return attempt( () => JSON.parse( s ) );
+        }
+
+        return { value: s, s };
+    };
+
+    toolBocksModule["parseJson"] = parseJson;
+
     function asObject( pObject )
     {
-        return isNonNullObject( pObject ) || isLikeArray( pObject ) ? pObject : attempt( () => JSON.parse( String( pObject ) ) );
+        return isNonNullObject( pObject ) || isLikeArray( pObject ) ?
+               pObject :
+               attempt( () => (toolBocksModule["parseJson"] || parseJson).call( toolBocksModule, pObject ) );
     }
 
     function asMap( pVal, pLocked )
