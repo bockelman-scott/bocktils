@@ -5,6 +5,12 @@
 const core = require( "@toolbocks/core" );
 
 /**
+ * This statement imports our safer JSON functions,
+ * which can handle cyclic dependencies and internal $ref
+ */
+const jsonUtils = require( "@toolbocks/json" );
+
+/**
  * Establish separate constants for each of the common utilities imported
  */
 const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
@@ -26,13 +32,18 @@ const { _ud = "undefined", $scope } = constants;
     const { _mt_str } = constants;
 
     const {
+        ModuleEvent,
         ToolBocksModule,
-        lock,
+        ObjectEntry,
         objectEntries,
         objectKeys,
         objectValues,
         populateOptions,
-        attempt
+        attempt,
+        asyncAttempt,
+        sleep,
+        lock,
+        $ln
     } = moduleUtils;
 
     const modName = "BufferUtils";
@@ -46,25 +57,30 @@ const { _ud = "undefined", $scope } = constants;
     const {
         isDefined,
         isNull,
+        isNonNullObject,
+        isScalar,
         isString,
         isNumber,
         isFunction,
         isArray,
         isTypedArray,
-        toDecimal
+        toDecimal,
+        clamp = moduleUtils?.clamp
     } = typeUtils;
 
     const { asString, asInt } = stringUtils;
 
     const { flatArgs, asArray, Mappers, Filters } = arrayUtils;
 
+    const { asJson, parseJson } = jsonUtils;
+
     const base64 = "base64";
 
-    const utf8 = "utf-8";
+    const UTF_8 = "utf-8";
 
-    const DEFAULT_TEXT_ENCODING = utf8;
+    const DEFAULT_TEXT_ENCODING = UTF_8;
 
-    const VALID_ENCODINGS = lock( ["ascii", "utf8", utf8, "utf16le", "utf-16le", "ucs2", "ucs-2", base64, "base64url", "latin1", "binary", "hex"] );
+    const VALID_ENCODINGS = lock( ["ascii", "utf8", UTF_8, "utf16le", "utf-16le", "ucs2", "ucs-2", base64, "base64url", "latin1", "binary", "hex"] );
 
     function isBufferDefined()
     {
@@ -146,9 +162,9 @@ const { _ud = "undefined", $scope } = constants;
     let mod;
 
     let {
-        Buffer = scp?.Buffer || nodeBuffer.Buffer || Uint8Array,
+        Buffer = scp?.Buffer || (_ud !== typeof Buffer ? Buffer : nodeBuffer.Buffer) || nodeBuffer.Buffer || Uint8Array,
         Blob = scp?.Blob || Uint8Array,
-        File = scp?.File,
+        File = scp?.File || Blob,
         atob = scp?.atob,
         btoa = scp?.btoa,
         BlobOptions = scp?.BlobOptions || { type: "application/octet-stream" },
@@ -157,7 +173,7 @@ const { _ud = "undefined", $scope } = constants;
         isUtf8 = scp?.isUtf8,
         SlowBuffer = scp?.SlowBuffer || Uint8Array,
         transcode = scp?.transcode || Uint8Array.prototype.transcode,
-        TranscodeEncoding = scp?.TranscodeEncoding || utf8,
+        TranscodeEncoding = scp?.TranscodeEncoding || UTF_8,
     } = nodeBuffer || {};
 
     BufferDefined = (_ud !== typeof Buffer) && isBufferDefined();
@@ -307,7 +323,7 @@ const { _ud = "undefined", $scope } = constants;
             {
                 const encoding = resolveEncoding( pEncoding );
 
-                if ( TextEncoderDefined && encoding === utf8 )
+                if ( TextEncoderDefined && encoding === UTF_8 )
                 {
                     this.#uInt8Array = new TextEncoder().encode( asString( pString ) );
                 }
@@ -323,7 +339,7 @@ const { _ud = "undefined", $scope } = constants;
             {
                 const encoding = resolveEncoding( pEncoding );
 
-                if ( TextDecoderDefined && encoding === utf8 )
+                if ( TextDecoderDefined && encoding === UTF_8 )
                 {
                     return new TextDecoder().decode( this.uInt8Array );
                 }
@@ -610,6 +626,199 @@ const { _ud = "undefined", $scope } = constants;
     const isBlob = ( pValue ) => (_ud !== typeof Blob && pValue instanceof Blob);
     const isFile = ( pValue ) => (_ud !== typeof File && pValue instanceof File);
 
+
+    const MIN_STREAMING_CHUNK_SIZE = 256;
+    const MAX_STREAMING_CHUNK_SIZE = (1_024 * 1_000);
+    const DEFAULT_STREAMING_CHUNK_SIZE = 1_024;
+
+    const MIN_STREAMING_DELAY_MILLISECONDS = 0; // no delay beyond what is experienced doe to backpressure
+    const MAX_STREAMING_DELAY_MILLISECONDS = 5_000; // this is a more than adequate delay for 99% of use cases, excessive even
+    const DEFAULT_STREAMING_DELAY_MILLISECONDS = 0; // no throttling by default
+
+    const DEFAULT_STREAMING_OPTIONS =
+        {
+            chunkSize: DEFAULT_STREAMING_CHUNK_SIZE,
+            delayMs: DEFAULT_STREAMING_DELAY_MILLISECONDS
+        };
+
+    /**
+     * @class Streamer
+     * @description Provides a static method to convert various JavaScript data types
+     * into a ReadableStream, compatible across Node.js, Deno, browser windows, and Web Workers.
+     */
+    class Streamer
+    {
+        #options;
+
+        #chunkSize;
+        #delayMs;
+
+        constructor( pOptions = DEFAULT_STREAMING_OPTIONS )
+        {
+            this.#options = populateOptions( pOptions || {}, DEFAULT_STREAMING_OPTIONS );
+
+            this.#chunkSize = clamp( asInt( this.#options.chunkSize, DEFAULT_STREAMING_CHUNK_SIZE ), MIN_STREAMING_CHUNK_SIZE, MAX_STREAMING_CHUNK_SIZE );
+
+            this.#delayMs = clamp( asInt( this.#options.delayMs, DEFAULT_STREAMING_DELAY_MILLISECONDS ), MIN_STREAMING_DELAY_MILLISECONDS, MAX_STREAMING_DELAY_MILLISECONDS );
+        }
+
+        get chunkSize()
+        {
+            return clamp( asInt( this.#chunkSize, DEFAULT_STREAMING_CHUNK_SIZE ), MIN_STREAMING_CHUNK_SIZE, MAX_STREAMING_CHUNK_SIZE );
+        }
+
+        get delayMs()
+        {
+            return clamp( asInt( this.#delayMs, DEFAULT_STREAMING_DELAY_MILLISECONDS ), MIN_STREAMING_DELAY_MILLISECONDS, MAX_STREAMING_DELAY_MILLISECONDS );
+        }
+
+        static _encodeData( pValue )
+        {
+            let encodedData;
+
+            const encoder = new TextEncoder();
+
+            if ( isString( pValue ) || isScalar( pValue ) )
+            {
+                // If the value is a string, encode it directly to UTF-8 bytes.
+                encodedData = encoder.encode( asString( pValue ) );
+            }
+            else if ( pValue instanceof ArrayBuffer || (_ud !== typeof Buffer && pValue instanceof Buffer) )
+            {
+                // If it's an ArrayBuffer, or (as in Node.js or Deno, a Buffer),
+                // we create a Uint8Array view.
+                encodedData = new Uint8Array( pValue );
+            }
+            else if ( pValue instanceof Uint8Array )
+            {
+                // If it's already a Uint8Array, use it directly.
+                encodedData = pValue;
+            }
+            else if ( isNonNullObject( pValue ) )
+            {
+                // For plain objects and arrays, stringify them to JSON first,
+                // then encode the JSON string.
+                encodedData = encoder.encode( asJson( pValue ) );
+            }
+            else
+            {
+                encodedData = encoder.encode( _mt_str );
+            }
+
+            return encodedData;
+        }
+
+        /**
+         * Converts a given value into a ReadableStream.
+         * The stream will contain the value encoded as UTF-8 bytes.
+         *
+         * @param {any} pValue The value to render as a ReadableStream.
+         * Can be a string, Buffer (Node.js/Deno), Object literal,
+         * Array, ArrayBuffer, Uint8Array, or any other primitive.
+         *
+         * @returns {ReadableStream} A ReadableStream that emits the encoded bytes of the input value.
+         */
+        asSingleChunkStream( pValue )
+        {
+            let encodedData = null;
+
+            try
+            {
+                encodedData = Streamer._encodeData( pValue );
+            }
+            catch( ex )
+            {
+                console.error( "Streamer: Failed to encode value:", ex );
+
+                return new ReadableStream( {
+                                               start( controller )
+                                               {
+                                                   controller.error( new Error( `Failed to encode value for streaming: ${ex.message}` ) );
+                                               }
+                                           } );
+            }
+
+            // Create a new ReadableStream.
+            // The 'start' method is called immediately when the stream is consumed.
+            return new ReadableStream( {
+                                           start( controller )
+                                           {
+                                               // If there's encoded data, enqueue it into the stream.
+                                               if ( encodedData )
+                                               {
+                                                   controller.enqueue( encodedData );
+                                               }
+                                               // Close the stream immediately after enqueuing the single chunk of data.
+                                               controller.close();
+                                           }
+                                       } );
+        }
+
+        asChunkedStream( pValue, pChunkSize = this.chunkSize, pDelayMs = this.delayMs )
+        {
+            let encodedData = attempt( Streamer._encodeData( pValue ) );
+
+            const chunkSize = clamp( asInt( pChunkSize, this.chunkSize ), MIN_STREAMING_CHUNK_SIZE, MAX_STREAMING_CHUNK_SIZE );
+            const delayMs = clamp( asInt( pDelayMs, this.delayMs ), MIN_STREAMING_DELAY_MILLISECONDS, MAX_STREAMING_DELAY_MILLISECONDS );
+
+            let offset = 0; // Keep track of the current position in the encoded data
+
+            return new ReadableStream( {
+                                           start( controller )
+                                           {
+                                               offset = Math.min( offset, $ln( encodedData ) );
+                                           },
+
+                                           /**
+                                            * The `pull` method is called repeatedly
+                                            * by the stream's internal queueing
+                                            * mechanism whenever it's ready to accept more data.
+                                            *
+                                            * It is implemented here as an async function,
+                                            * allowing for a configured delay.
+                                            * @param {ReadableStreamDefaultController} controller
+                                            */
+                                           async pull( controller )
+                                           {
+                                               const dataLength = $ln( encodedData );
+
+                                               if ( offset < dataLength )
+                                               {
+                                                   // Calculate the end of the current chunk
+                                                   const end = Math.min( offset + chunkSize, dataLength );
+
+                                                   // Extract the chunk
+                                                   const chunk = encodedData.slice( offset, end );
+
+                                                   // Enqueue the chunk
+                                                   controller.enqueue( chunk );
+
+                                                   // Update the offset for the next pull call
+                                                   offset = end;
+
+                                                   // If a delay is specified, wait before allowing the next pull call
+                                                   if ( delayMs > 0 )
+                                                   {
+                                                       await asyncAttempt( async() => await sleep( delayMs ) );
+                                                   }
+                                               }
+                                               else
+                                               {
+                                                   // If all data has been enqueued, close the stream
+                                                   controller.close();
+                                               }
+                                           },
+
+                                           cancel( pReason )
+                                           {
+                                               const event = new ModuleEvent( "StreamCancelled", { reason: pReason } );
+                                               toolBocksModule.dispatchEvent( event );
+                                           }
+                                       } );
+        }
+
+    }
+
     const more =
         {
             BufferDefined,
@@ -634,7 +843,17 @@ const { _ud = "undefined", $scope } = constants;
             arrayFromBuffer,
             typedArrayFromBuffer,
             isBlob,
-            isFile
+            isFile,
+            toReadableStream: function( pValue )
+            {
+                return new Streamer().asSingleChunkStream( pValue );
+            },
+            toThrottledReadableStream: function( pValue, pChunkSize, pDelayMs )
+            {
+                const streamer = new Streamer( { chunkSize: asInt( pChunkSize ), delayMs: asInt( pDelayMs ) } );
+                return streamer.asChunkedStream( pValue, pChunkSize, pDelayMs );
+            },
+            Streamer
         };
 
     mod = { ...mod, ...more };
