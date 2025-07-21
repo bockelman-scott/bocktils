@@ -1334,7 +1334,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             }
         }
 
-        return false;
+        return !isReadOnly( pObj );
     };
 
     /**
