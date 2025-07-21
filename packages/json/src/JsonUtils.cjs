@@ -33,9 +33,12 @@ const {
 
     const {
         ToolBocksModule,
+        ObjectEntry,
         detectCycles,
         objectEntries,
-        populateOptions
+        populateOptions,
+        isWritable,
+        attempt
     } = moduleUtils;
 
     const {
@@ -57,6 +60,7 @@ const {
         isObject,
         isNonNullObject,
         isNonNullValue,
+        isReadOnly,
         toObjectLiteral
     } = typeUtils;
 
@@ -89,9 +93,9 @@ const {
 
     const modName = "JsonUtils";
 
-    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+    const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
-    const calculateErrorSourceName = ( pModule = modName, pFunction ) => modulePrototype.calculateErrorSourceName( pModule, pFunction );
+    const calculateErrorSourceName = ( pModule = modName, pFunction ) => toolBocksModule.calculateErrorSourceName( pModule, pFunction );
 
     const _isValidInput = ( pValue ) => !isNull( pValue ) && (isString( pValue ) || isObject( pValue ));
 
@@ -154,7 +158,7 @@ const {
                     }
                     catch( ex )
                     {
-                        modulePrototype.reportError( ex, errorMessage, S_WARN, calculateErrorSourceName( modName, "bruteForceJson->" + exclusion?.name ), stack );
+                        toolBocksModule.reportError( ex, errorMessage, S_WARN, calculateErrorSourceName( modName, "bruteForceJson->" + exclusion?.name ), stack );
                     }
                 }
 
@@ -251,7 +255,7 @@ const {
                 else
                 {
                     let entries = objectEntries( obj );
-                    entries = entries.filter( entry => !isExcluded( entry.key || entry[0] ) );
+                    entries = entries.filter( entry => !isExcluded( ObjectEntry.getKey( entry ) ) );
 
                     let prependComma = false;
 
@@ -389,7 +393,12 @@ const {
             findNode
         };
 
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
+
+    if ( typeUtils && !isReadOnly( typeUtils ) && isWritable( typeUtils, "parseJson" ) )
+    {
+        attempt( () => typeUtils.parseJson = parseJson );
+    }
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 
