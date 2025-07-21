@@ -18,6 +18,9 @@
  */
 const core = require( "@toolbocks/core" );
 
+// provides utilities and classes for handling buffered or streamed data
+const bufferUtils = require( "@toolbocks/buffer" );
+
 // we need our JSON utilities
 const jsonUtils = require( "@toolbocks/json" );
 
@@ -71,6 +74,8 @@ const {
             typeUtils,
             stringUtils,
             arrayUtils,
+            jsonUtils,
+            bufferUtils,
             httpConstants,
             httpHeaders,
             httpRequest
@@ -81,12 +86,13 @@ const {
         ObjectEntry,
         objectEntries,
         populateOptions,
+        isWritable,
         localCopy,
         attempt,
         asyncAttempt
     } = moduleUtils;
 
-    const { _mt_str, _str, _num, _big, S_ERR_PREFIX } = constants;
+    const { _mt_str = "", _mt = _mt_str, _str, _num, _big, S_ERR_PREFIX, _slash = "/" } = constants;
 
     const
         {
@@ -98,12 +104,16 @@ const {
             isFunction,
             isAsyncFunction,
             isScalar,
-            isObjectLiteral
+            isObjectLiteral,
+            asObject,
+            isReadOnly
         } = typeUtils;
 
     const { asString, asInt, isBlank, lcase, ucase, isJson } = stringUtils;
 
     const { asJson, parseJson } = jsonUtils;
+
+    const { toReadableStream, toThrottledReadableStream } = bufferUtils;
 
     const { isHeader, STATUS_CODES, STATUS_TEXT, HttpStatus } = httpConstants;
 
@@ -115,80 +125,123 @@ const {
 
     const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
-    const cloneResponse = function( pResponse )
+    function cloneObjectAsResponse( pObject, pOptions )
     {
-        let res = pResponse;
+        let obj = {};
 
-        if ( isNull( res ) )
+        let options = asObject( pOptions || pObject ) || {};
+
+        const entries = attempt( () => objectEntries( pObject || options ) );
+
+        const data = pObject?.data || options.data;
+        const headers = pObject.headers || options.headers;
+        const status = pObject?.status || options.status;
+
+        if ( entries && isFunction( entries.forEach ) )
+        {
+            const processEntry = entry =>
+            {
+                const key = ObjectEntry.getKey( entry );
+                const value = ObjectEntry.getValue( entry );
+
+                if ( isString( key ) && !isBlank( key ) && value )
+                {
+                    if ( isScalar( value ) )
+                    {
+                        obj[key] = value;
+                    }
+                    else if ( isFunction( value ) )
+                    {
+                        obj[key] = value.bind( obj );
+                    }
+                    else
+                    {
+                        if ( isFunction( value?.clone ) )
+                        {
+                            obj[key] = attempt( () => value.clone() ) || value;
+                        }
+                        else if ( "headers" === key )
+                        {
+                            obj[key] = new HttpResponseHeaders( cloneHeaders( value ) );
+                        }
+                        else if ( isObjectLiteral( value ) )
+                        {
+                            obj[key] = attempt( () => localCopy( value ) );
+                        }
+                    }
+                }
+            };
+
+            entries.forEach( entry => attempt( () => processEntry( entry ) ) );
+        }
+        else
+        {
+            obj = { ...pOptions };
+        }
+
+        if ( _ud !== Response )
+        {
+            const body = data || obj.data || obj.body || obj;
+
+            let response = new Response( body, options );
+
+            response.status = status || obj.status || response.status;
+            response.data = data || obj.data || response.data;
+            response.headers = new HttpResponseHeaders( headers || obj.headers || response.headers );
+
+            return response;
+        }
+
+        return obj || options;
+    }
+
+    const cloneResponse = function( pResponse, pOptions )
+    {
+        if ( isNull( pResponse ) && isNull( pOptions ) )
         {
             return null;
         }
 
+        let options = populateOptions( pOptions, DEFAULT_RESPONSE_OPTIONS );
+
+        let res = asObject( pResponse || options?.response || options || {} ) || {};
+
+        let data = res.data || options.data;
+
+        let headers = cloneHeaders( res.headers || options.headers );
+
         // unwrap the response from any container
-        while ( res.response )
+        while ( isNonNullObject( res ) && isNonNullObject( res.response ) )
         {
             res = res.response;
+            data = data || res.data || options.data;
         }
 
         if ( isNonNullObject( res ) )
         {
             if ( isFunction( res?.clone ) )
             {
-                return new HttpResponse( attempt( () => res.clone() ) || res );
+                res = attempt( () => res.clone() ) || res;
             }
             else
             {
-                const obj = {};
-
-                const entries = attempt( () => objectEntries( res ) );
-
-                if ( entries && isFunction( entries.forEach ) )
-                {
-                    entries.forEach( entry =>
-                                     {
-                                         const key = ObjectEntry.getKey( entry );
-                                         const value = ObjectEntry.getValue( entry );
-
-                                         if ( isString( key ) && !isBlank( key ) && value )
-                                         {
-                                             if ( isScalar( value ) )
-                                             {
-                                                 obj[key] = value;
-                                             }
-                                             else if ( isFunction( value ) )
-                                             {
-                                                 obj[key] = value.bind( obj );
-                                             }
-                                             else
-                                             {
-                                                 if ( isFunction( value?.clone ) )
-                                                 {
-                                                     obj[key] = attempt( () => value.clone() );
-                                                 }
-                                                 else if ( "headers" === key )
-                                                 {
-                                                     obj[key] = new HttpResponseHeaders( cloneHeaders( value ) );
-                                                 }
-                                                 else if ( isObjectLiteral( value ) )
-                                                 {
-                                                     obj[key] = attempt( () => localCopy( value ) );
-                                                 }
-                                             }
-                                         }
-                                     } );
-                }
-
-                return new HttpResponse( obj );
+                res = attempt( () => cloneObjectAsResponse( res, options ) );
             }
         }
+
+        res.headers = new HttpResponseHeaders( headers );
+
+        res.data = data || res.data;
+
+        return res || { ...(options || {}) };
     };
 
     const cloneHeaders = function( pHeaders )
     {
-        let headers = pHeaders || {};
+        let headers = asObject( pHeaders || {} ) || {};
 
         // unwrap the headers from any container
-        while ( headers.headers )
+        while ( isNonNullObject( headers ) && isNonNullObject( headers.headers ) )
         {
             headers = headers.headers;
         }
@@ -229,12 +282,12 @@ const {
     class HttpResponse extends EventTarget
     {
         #response;
+
         #request;
 
         #url;
 
         #headers;
-        #bodyUsed;
 
         #data;
 
@@ -245,8 +298,6 @@ const {
 
         #options;
 
-        #resolvedBody;
-
         #text;
         #json;
         #formData;
@@ -254,41 +305,38 @@ const {
         #blob;
         #arrayBuffer;
 
-        constructor( pResponse, pOptions = DEFAULT_RESPONSE_OPTIONS )
+        constructor( pResponse, pOptions = DEFAULT_RESPONSE_OPTIONS, pUrl )
         {
             super();
 
             const me = this;
 
-            const options = populateOptions( pOptions, DEFAULT_RESPONSE_OPTIONS );
+            const options = populateOptions( pOptions || pResponse, DEFAULT_RESPONSE_OPTIONS );
 
-            const res = attempt( () => me.resolveResponse( pResponse, options ) );
+            options.url = options.url || pUrl || _slash;
 
-            const req = new HttpRequest( res?.request || options?.request );
+            const res = attempt( () => me.resolveResponse( pResponse || options, options ) );
 
-            this.#headers = attempt( () => cloneHeaders( res?.headers || options?.headers || req?.headers ) );
+            const req = attempt( () => HttpRequest.resolve( pResponse?.request || res?.request || options?.request, options ) );
 
-            this.#response = (res instanceof this.constructor) ? res : attempt( () => cloneResponse( res ) );
+            this.#headers = attempt( () => cloneHeaders( pResponse?.headers || res?.headers || options?.headers || req?.headers || new HttpResponseHeaders( options ) ) );
 
-            this.#status = this.resolveStatus( this.#response, options );
+            this.#response = attempt( () => cloneResponse( res || options ) );
 
-            this.#ok = this.#ok || this.#status.isOk();
+            this.#status = attempt( () => HttpStatus.fromResponse( res || options, options ) );
 
-            this.#url = asString( res?.url || req?.url || options?.url, true );
+            this.#ok = this.#ok || this.#status?.isOk();
 
-            this.#request = isNonNullObject( req ) ? attempt( () => cloneRequest( req ) ) : options.request || new HttpRequest();
+            this.#url = asString( res?.url || req?.url || options?.url || pUrl, true );
 
-            this.#data = pResponse?.response?.data || pResponse?.data || this.#response?.data;
+            this.#request = isNonNullObject( req ) ? attempt( () => cloneRequest( req ) ) : options.request || new HttpRequest( this.#url || options.url || pUrl, options );
 
-            this.#options = populateOptions( {
-                                                 response: cloneResponse( this.#response ),
-                                                 request: req,
-                                                 headers: cloneHeaders( this.#headers )
-                                             },
-                                             options );
+            this.#data = pResponse?.data || res.data || options.data;
+
+            this.#options = attempt( () => populateOptions( options, me ) ) || options;
         }
 
-        _resolveBody( pResponse, pOptions )
+        static _resolveBody( pResponse, pOptions )
         {
             const options = populateOptions( (pOptions || pResponse?.options),
                                              DEFAULT_RESPONSE_OPTIONS );
@@ -301,11 +349,11 @@ const {
                 res = res.response;
             }
 
-            let body = res?.data || res?.body || options?.body || options?.data || pResponse?.body || pResponse?.data;
+            let body = res?.data || options?.data || pResponse?.data || res?.body || options?.body || pResponse?.body;
 
             if ( isNull( body ) )
             {
-                body = options?.body || options?.data || {};
+                body = options?.data || options?.body || {};
             }
 
             if ( isFunction( body ) )
@@ -325,44 +373,70 @@ const {
             return body || {};
         }
 
-        resolveResponse( pResponse, pOptions )
+        resolveResponse( pResponse, pOptions, pUrl = pResponse?.url )
         {
-            const options = populateOptions( pOptions, DEFAULT_RESPONSE_OPTIONS );
+            const options = populateOptions( pOptions || pResponse || {}, DEFAULT_RESPONSE_OPTIONS );
 
-            let response = pResponse?.response || pResponse || options?.response;
+            let response = HttpResponse.unwrapResponse( pResponse, options );
 
-            while ( response.response )
-            {
-                response = response.response;
-            }
+            let uri = response?.url || pResponse?.url || options.url || asString( pUrl, true );
 
             if ( isNonNullObject( response ) )
             {
                 if ( response instanceof this.constructor )
                 {
-                    return response;
+                    response = HttpResponse.unwrapResponse( response.response || response );
                 }
-                response = cloneResponse( response );
             }
             else
             {
-                const body = this._resolveBody( response || options, options );
+                const body = HttpResponse._resolveBody( response || options, options ) || response?.data || options?.data || options?.body || {};
 
                 if ( _ud !== typeof Response )
                 {
-                    response = new Response( body || options?.body || response?.data || options?.data || {}, options );
+                    response = new Response( body, options );
                 }
-                else if ( !isNull( body ) )
+                else
                 {
                     response =
                         {
-                            body: body || options?.body || options?.data,
-                            status: options?.status || (!isNull( body ) ? STATUS_CODES.OK : STATUS_CODES.NOT_FOUND),
-                            statusText: options?.statusText,
-                            type: options?.type,
-                            ...(pResponse || {})
+                            body: body || options.body || options.data || null,
+                            status: options.status || (!isNull( body ) ? STATUS_CODES.OK : STATUS_CODES.NOT_FOUND),
+                            statusText: options.statusText,
+                            type: options.type,
+                            ...options
                         };
                 }
+            }
+
+            if ( isWritable( response, "url" ) )
+            {
+                attempt( () => response.url = response.url || pResponse?.url || uri );
+            }
+
+            if ( isWritable( response, "status" ) )
+            {
+                attempt( () => response.status = response.status || pResponse?.status || options.status );
+            }
+            if ( isWritable( response, "headers" ) )
+            {
+                attempt( () => response.headers = new HttpResponseHeaders( response.headers || pResponse.headers || options.headers ) );
+            }
+            if ( isWritable( response, "data" ) )
+            {
+                attempt( () => response.data = response.data || pResponse?.data || options.data );
+            }
+
+            return response || new HttpResponse( options );
+        }
+
+        static unwrapResponse( pResponse, pOptions )
+        {
+            let response = asObject( pResponse?.response || pResponse || pOptions.response || pOptions || {} ) || {};
+
+            while ( isNonNullObject( response ) && isNonNullObject( response.response ) )
+            {
+                response = response.response;
             }
 
             return response;
@@ -373,78 +447,40 @@ const {
             return populateOptions( this.#options || {}, DEFAULT_RESPONSE_OPTIONS );
         }
 
+        get response()
+        {
+            return this.resolveResponse( this.#response, this.options );
+        }
+
         clone()
         {
-            return new HttpResponse( cloneResponse( this.#response ), this.options );
+            return new HttpResponse( cloneResponse( this.response ), this.options );
         }
 
-        resolveStatus( pResponse, pOptions )
+        get data()
         {
-            const options = populateOptions( pOptions || pResponse?.options,
-                                             DEFAULT_RESPONSE_OPTIONS );
-
-            const res = pResponse?.response || pResponse || options?.response || options;
-
-            if ( isNull( res ) )
-            {
-                this.#ok = options?.ok || false;
-                this.#status = new HttpStatus( options?.status || STATUS_CODES.NOT_FOUND,
-                                               STATUS_TEXT[asString( options?.status || STATUS_CODES.NOT_FOUND )] );
-            }
-            else if ( isNonNullObject( pResponse || options?.response ) )
-            {
-                const code = res?.statusCode || res?.status || options?.status || STATUS_CODES.NOT_FOUND;
-
-                const msg = res?.statusMessage || res?.statusText || options?.statusText || STATUS_TEXT[asString( code )] || _mt_str;
-
-                this.#status = new HttpStatus( code, msg );
-
-                this.#ok = this.#status.isOk();
-            }
-            else
-            {
-                switch ( typeof res )
-                {
-                    case _str:
-                        this.#status = HttpStatus[ucase( res )] || new HttpStatus( res, res );
-                        break;
-
-                    case _num:
-                    case _big:
-                        this.#status = new HttpStatus( res, STATUS_TEXT[res] );
-                        break;
-
-                    default:
-                        this.#status = new HttpStatus( options?.status || STATUS_CODES.NOT_FOUND, STATUS_TEXT[asString( options?.status || STATUS_CODES.NOT_FOUND )] );
-                        break;
-                }
-
-                this.#ok = this.#status.isOk();
-            }
-
-            return this.#status || new HttpStatus();
+            return this.#data || this.options.data;
         }
 
-        async body()
+        get body()
         {
-            if ( !isNull( this.#resolvedBody ) )
-            {
-                return this.#resolvedBody;
-            }
-
-            const res = cloneResponse( this.#response );
-
-            if ( isFunction( res.body ) && !res.bodyUsed )
-            {
-                this.#resolvedBody = await asyncAttempt( async() => await res.body() );
-            }
-
-            return this.#resolvedBody;
+            const res = cloneResponse( this.response );
+            return res.bodyUsed ? toReadableStream( this.data ) : res.body || toReadableStream( this.data );
         }
 
         get bodyUsed()
         {
-            return this.#bodyUsed || this.#response?.bodyUsed || false;
+            return this.response?.bodyUsed || false;
+        }
+
+        get stream()
+        {
+            return toThrottledReadableStream( this.data, 2_048, 0 );
+        }
+
+        getThrottledStream( pChuckSize, pDelayMs )
+        {
+            return toThrottledReadableStream( this.data, pChuckSize, pDelayMs );
         }
 
         async arrayBuffer()
@@ -454,7 +490,7 @@ const {
                 return this.#arrayBuffer;
             }
 
-            const res = cloneResponse( this.#response );
+            const res = cloneResponse( this.response );
 
             if ( isNonNullObject( res ) && isFunction( res?.arrayBuffer ) )
             {
@@ -471,7 +507,7 @@ const {
                 return this.#blob;
             }
 
-            const res = cloneResponse( this.#response );
+            const res = cloneResponse( this.response );
 
             if ( isNonNullObject( res ) && isFunction( res?.blob ) )
             {
@@ -488,7 +524,7 @@ const {
                 return this.#bytes;
             }
 
-            const res = cloneResponse( this.#response );
+            const res = cloneResponse( this.response );
 
             if ( isNonNullObject( res ) && isFunction( res?.bytes ) )
             {
@@ -505,7 +541,7 @@ const {
                 return this.#formData;
             }
 
-            const res = cloneResponse( this.#response );
+            const res = cloneResponse( this.response );
 
             if ( isNonNullObject( res ) && isFunction( res?.formData ) )
             {
@@ -522,7 +558,7 @@ const {
                 return this.#json;
             }
 
-            const res = cloneResponse( this.#response );
+            const res = cloneResponse( this.response );
 
             if ( isNonNullObject( res ) && isFunction( res?.json ) )
             {
@@ -539,7 +575,7 @@ const {
                 return this.#text;
             }
 
-            const res = cloneResponse( this.#response );
+            const res = cloneResponse( this.response );
 
             if ( isNonNullObject( res ) && isFunction( res?.text ) )
             {
@@ -551,7 +587,7 @@ const {
 
         get headers()
         {
-            return this.#headers;
+            return new HttpResponseHeaders( this.#headers || this.response.headers );
         }
 
         get ok()
@@ -586,7 +622,7 @@ const {
 
         get url()
         {
-            return this.#url || this.#response?.url || this.#request?.url || this.options?.url || _mt_str;
+            return this.#url || this.response?.url || this.request?.url || this.options?.url || _mt_str;
         }
     }
 
@@ -626,13 +662,14 @@ const {
                                      } );
         }
 
-        return new HttpResponse( { body: asJson( data ), status: 200, statusText: "OK" },
+        return new HttpResponse( { body: asJson( data ), status: 200, statusText: "OK", data },
                                  {
                                      response: {
                                          type: "json",
                                          status: 200,
                                          statusText: "OK",
-                                         body: asJson( data )
+                                         body: asJson( data ),
+                                         data
                                      }
                                  } );
     };

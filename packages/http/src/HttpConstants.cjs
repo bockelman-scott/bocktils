@@ -75,13 +75,26 @@ const {
             entityUtils
         };
 
-    const { ModuleEvent, ToolBocksModule, ObjectEntry, objectEntries, lock, attempt } = moduleUtils;
+    const {
+        ModuleEvent,
+        ToolBocksModule,
+        IllegalArgumentError,
+        ObjectEntry,
+        objectEntries,
+        objectValues,
+        objectKeys,
+        lock,
+        attempt,
+        $ln
+    } = moduleUtils;
 
-    const { _str } = constants;
+    const { _mt_str = "", _mt = _mt_str, _str } = constants;
 
-    const { isNonNullObject, isString, isNumeric } = typeUtils;
+    const { isNull, isNonNullObject, isString, isNumeric, isArray } = typeUtils;
 
     const { asString, asInt, lcase, ucase, capitalize, isJson } = stringUtils;
+
+    const { asArray } = arrayUtils;
 
     const { parseJson } = jsonUtils;
 
@@ -135,6 +148,16 @@ const {
     VERBS.indexOf = function( pVerb )
     {
         return Object.values( VERBS ).map( lcase ).indexOf( lcase( asString( pVerb, true ) ) );
+    };
+
+    VERBS.values = function()
+    {
+        return Object.values( VERBS );
+    };
+
+    VERBS.keys = function()
+    {
+        return Object.keys( VERBS );
     };
 
     /**
@@ -496,7 +519,7 @@ const {
      * and whose values are the text associated with that status
      * @type {Object}
      */
-    const STATUS_TEXT_BY_INT_VALUE = [];
+    const STATUS_TEXT_BY_INT_VALUE = {};
 
     const STATUS_ELIGIBLE_FOR_RETRY =
         [
@@ -543,13 +566,13 @@ const {
 
             /**
              * When a request fails because the server is (perhaps) temporarily offline,
-             * we wait for 1 second before trying again, to give the server time to recover.
+             * we wait for 1 second before trying again to give the server time to recover.
              */
             [STATUS_CODES.SERVICE_UNAVAILABLE]: 1_000,
 
             /**
              * When a request fails because the server gateway is (perhaps) temporarily overloaded,
-             * we wait for 250 milliseconds before trying again, to give the gateway time to recover.
+             * we wait for 250 milliseconds before trying again to give the gateway time to recover.
              */
             [STATUS_CODES.GATEWAY_TIMEOUT]: 250
         };
@@ -567,7 +590,7 @@ const {
 
         constructor( pCode, pText )
         {
-            super( asInt( pCode ), asString( pText || STATUS_TEXT_BY_CODE_STRING[ucase( asString( pCode, true ) )], true ) );
+            super( asInt( pCode ), asString( pText || STATUS_TEXT_BY_CODE_STRING[ucase( asString( pCode, true ) )] || STATUS_TEXT_BY_INT_VALUE[asInt( pCode )], true ) );
 
             this.#code = asInt( pCode );
         }
@@ -626,6 +649,11 @@ const {
             return this.code >= 400 && this.code < 500;
         }
 
+        canRetry()
+        {
+            return (this.isError() && STATUS_ELIGIBLE_FOR_RETRY.includes( this.code ));
+        }
+
         isOk()
         {
             return this.code === 200;
@@ -639,8 +667,8 @@ const {
 
     objectEntries( STATUS_CODES ).forEach( ( entry ) =>
                                            {
-                                               const name = ObjectEntry.getKey( entry );
-                                               const code = ObjectEntry.getValue( entry );
+                                               const name = asString( ObjectEntry.getKey( entry ), true );
+                                               const code = asInt( ObjectEntry.getValue( entry ) );
 
                                                STATUS_TEXT_BY_CODE_STRING[ucase( asString( code, true ) )] = name;
                                                STATUS_TEXT_BY_INT_VALUE[asInt( code )] = name;
@@ -648,28 +676,91 @@ const {
                                                HttpStatus[name] = new HttpStatus( code, capitalize( name ).replace( /http/i, "HTTP" ) );
                                            } );
 
-    HttpStatus.fromResponse = function( pResponse )
+    HttpStatus.isStatusCode = function( pCode )
     {
-        let code = pResponse?.status || pResponse?.status?.code;
-        let text = pResponse.statusText || pResponse?.status?.name;
+        return asArray( objectValues( STATUS_CODES ) ).includes( asInt( pCode ) );
+    };
 
-        return new HttpStatus( code, text );
+    HttpStatus.isStatusText = function( pText )
+    {
+        return asArray( objectKeys( STATUS_CODES ) ).includes( asInt( pText ) );
+    };
+
+    HttpStatus.fromResponse = function( pResponse, pOptions )
+    {
+        let response = pResponse?.response || pResponse || pOptions?.response || pOptions;
+
+        let code = response?.status?.code || response?.status;
+        let text = response?.statusText || response?.status?.name;
+
+        if ( HttpStatus.isStatusCode( code ) || HttpStatus.isStatusText( text ) )
+        {
+            return new HttpStatus( code, text );
+        }
+
+        throw new IllegalArgumentError( "A valid Response object is required to calculate its status",
+                                        {
+                                            context: HttpStatus.fromResponse,
+                                            args: [pResponse, pOptions]
+                                        } );
     };
 
     HttpStatus.fromCode = function( pCode )
     {
-        const id = asInt( pCode, -1 );
-        const code = asString( pCode, true );
+        if ( isNonNullObject( pCode ) )
+        {
+            if ( pCode instanceof HttpStatus )
+            {
+                return pCode;
+            }
+            else
+            {
+                return HttpStatus.fromResponse( pCode );
+            }
+        }
 
-        if ( id > 0 )
+        if ( isNumeric( pCode ) )
         {
-            let text = STATUS_TEXT_BY_INT_VALUE[id];
-            return new HttpStatus( id, text );
+            const id = asInt( pCode, -1 );
+
+            if ( id >= 0 && HttpStatus.isStatusCode( id ) )
+            {
+                return new HttpStatus( id, STATUS_TEXT_BY_INT_VALUE[id] );
+            }
         }
-        else
+
+        if ( isString( pCode ) )
         {
-            return new HttpStatus( code, STATUS_TEXT_BY_CODE_STRING[ucase( code )] );
+            const name = STATUS_TEXT_BY_CODE_STRING[ucase( asString( pCode, true ) )];
+
+            const num = asInt( STATUS_CODES[ucase( name ).replace( /http/i, _mt_str )] );
+
+            if ( HttpStatus.isStatusCode( num ) || HttpStatus.isStatusText( name ) )
+            {
+                return new HttpStatus( num, name );
+            }
         }
+
+        if ( isArray( pCode ) && $ln( pCode ) > 0 )
+        {
+            let arr = asArray( pCode ).filter( e => !isNull( e ) );
+
+            let httpStatus = HttpStatus.fromCode( arr[0] );
+
+            while ( isNull( httpStatus ) && $ln( arr ) > 0 )
+            {
+                httpStatus = HttpStatus.fromCode( arr.shift() );
+            }
+
+            return httpStatus;
+        }
+
+        throw new IllegalArgumentError( "The specified value cannot interpreted as an HTTP Status",
+                                        {
+                                            context: HttpStatus.fromCode,
+                                            args: [pCode]
+                                        } );
+
     };
 
     /**
@@ -679,27 +770,18 @@ const {
      * such as its name, description, and category.
      * <br>
      */
-    class HttpHeaderDefinition
+    class HttpHeaderDefinition extends BockDescribed
     {
-        #name;
-        #description;
         #category;
 
-        constructor( pName, pValue, pCategory )
+        constructor( pName, pDescription, pCategory )
         {
-            this.#name = asString( pName, true );
-            this.#description = asString( pValue, true );
+            super( HttpHeaderDefinition.nextId(),
+                   asString( pName, true ),
+                   asString( pName, true ),
+                   asString( pDescription || pName, true ) );
+
             this.#category = asString( pCategory, true );
-        }
-
-        get name()
-        {
-            return asString( this.#name, true );
-        }
-
-        get description()
-        {
-            return asString( this.#description || this.name, true );
         }
 
         get category()
@@ -721,6 +803,19 @@ const {
             return this.toString();
         }
     }
+
+    HttpHeaderDefinition.NEXT_ID = 0;
+    HttpHeaderDefinition.nextId = function()
+    {
+        let id = HttpHeaderDefinition.NEXT_ID++;
+
+        if ( id > 999 )
+        {
+            HttpHeaderDefinition.NEXT_ID = id = 0;
+        }
+
+        return id;
+    };
 
     /**
      * HTTP_HEADERS is an object that categorizes and provides descriptions for various HTTP headers.<br>
@@ -932,6 +1027,9 @@ const {
                 }
         };
 
+    /**
+     * This statement assigns each defined HttpHeaderDefinition to a property of the HttpHeaderDefinition class.
+     */
     Object.entries( HTTP_HEADERS ).forEach( ( [category, headers] ) =>
                                             {
                                                 const categoryName = ucase( category );
@@ -942,6 +1040,9 @@ const {
                                                 );
                                             } );
 
+    /**
+     * Represents an HTTP header, encapsulating its definition and value.
+     */
     class HttpHeader
     {
         #definition;
@@ -969,13 +1070,30 @@ const {
         }
     }
 
+    /**
+     * Returns true if the specified value is a valid/known HTTP Verb (such as GET, POST, PUT, etc.)
+     *
+     * @param {string|HttpVerb} pVerb the value to evaluate.  This can be a string or an instance of HttpVerb.
+     *
+     * @returns {boolean} true if the specified value is a valid/known HTTP Verb (such as GET, POST, PUT, etc.)
+     */
     const isVerb = ( pVerb ) => pVerb instanceof HttpVerb || VERBS.indexOf( pVerb ) >= 0;
 
-    const isHeader = ( pHeader ) => pHeader instanceof HttpHeaderDefinition || Object.keys( HttpHeaderDefinition ).map( lcase ).includes( lcase( asString( pHeader, true ) ) );
+    /**
+     * Returns true if the specified value is a valid/known HTTP Header (or is a custom header, properly prefixed with 'X-')
+     * @param pHeader
+     * @returns {boolean|boolean|*}
+     */
+    const isHeader = ( pHeader ) => pHeader instanceof HttpHeaderDefinition || Object.keys( HttpHeaderDefinition ).map( lcase ).includes( lcase( asString( pHeader, true ) ) ) || ucase( asString( pHeader, true ) ).startsWith( "X-" );
 
+    /**
+     * Returns true if the specified value is a known content-type
+     * @param {String|HttpContentType} pContentType the value to evaluate
+     * @returns {boolean} true if the specified value is a known content-type
+     */
     const isContentType = ( pContentType ) => pContentType instanceof HttpContentType || Object.keys( HttpContentType ).map( lcase ).includes( lcase( asString( pContentType, true ) ) );
 
-    const isHttpStatus = ( pStatus ) => pStatus instanceof HttpStatus || Object.keys( STATUS_TEXT_BY_CODE_STRING ).map( lcase ).includes( lcase( asString( pStatus, true ) ) );
+    const isHttpStatus = ( pStatus ) => pStatus instanceof HttpStatus || HttpStatus.isStatusCode( pStatus ) || HttpStatus.isStatusText( pStatus );
 
     HttpContentType.isContentType = isContentType;
 

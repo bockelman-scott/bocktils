@@ -15,6 +15,9 @@
  */
 const core = require( "@toolbocks/core" );
 
+// provides utilities and classes for handling buffered or streamed data
+const bufferUtils = require( "@toolbocks/buffer" );
+
 /**
  * Import the module for date manipulation
  */
@@ -85,28 +88,37 @@ const {
         lock,
         localCopy,
         attempt,
-        asyncAttempt
+        asyncAttempt,
+        isWritable
     } = moduleUtils;
 
-    const { _mt_str = "", _mt = _mt_str } = constants;
+    const { _mt_str = "", _mt = _mt_str, _slash = "/" } = constants;
 
     const {
         isNull,
         isNonNullObject,
+        isNonNullValue,
         isError,
         isFunction,
+        isAsyncFunction,
         isString,
         isJson,
         isNumeric,
         isNullOrNaN,
         isDate,
         isDateString,
-        firstMatchingType
+        isReadOnly,
+        isPromise,
+        isScalar,
+        firstMatchingType,
+        asObject
     } = typeUtils;
 
     const { asString, asInt, toBool, isBlank, cleanUrl, lcase, ucase, capitalize } = stringUtils;
 
     const { parseJson, asJson } = jsonUtils;
+
+    const { toReadableStream, toThrottledReadableStream } = bufferUtils;
 
     // import the functions, variables, and classes defined in the HttpConstants module that are used in this module
     const {
@@ -147,6 +159,8 @@ const {
             typeUtils,
             stringUtils,
             arrayUtils,
+            jsonUtils,
+            bufferUtils,
             httpConstants,
             httpHeaders,
             httpRequestModule,
@@ -236,50 +250,111 @@ const {
          */
         constructor( pResponse, pError, pConfig, pUrl )
         {
-            const source = ResponseData.resolveSource( pResponse );
+            const source = ResponseData.resolveSource( pResponse?.response || pError?.response || pResponse || pError || pConfig || { url: pUrl, ...(pConfig || {}) } );
+
+            const config = asObject( pConfig || pResponse || pError || source ) || {};
+
+            if ( !isReadOnly( config ) && isWritable( config, "url" ) )
+            {
+                config.url = cleanUrl( config.url || source?.url || asString( pUrl, true ) );
+            }
 
             if ( isNonNullObject( source ) )
             {
+                let data = source.data || pResponse?.data || config.data;
+
+                let headers = source.headers || pResponse?.headers || config.headers;
+
+                let status = source.status || pResponse?.status || config.status;
+
                 // Some frameworks return the response as a property of an error returned in place of a response.
                 // See https://axios-http.com/docs/handling_errors, for example
-                this.response = new HttpResponse( source.response || pError?.response || source || pResponse || pError );
+                let res = source.response || pError?.response || source || pResponse || pError || config;
+
+                while ( isNonNullObject( res ) && isNonNullObject( res.response ) )
+                {
+                    res = res.response;
+                }
+
+                if ( isWritable( res, "data" ) )
+                {
+                    attempt( () => res.data = data || res.data || source.data || config.data );
+                }
+
+                if ( isWritable( res, "headers" ) )
+                {
+                    attempt( () => res.headers = headers || res.headers || source.headers || config.headers );
+                }
+
+                if ( isWritable( res, "status" ) )
+                {
+                    attempt( () => res.status = status || res.status || source.status || config.status );
+                }
+
+                this.response = attempt( () => new HttpResponse( (res || source || config),
+                                                                 (config || source || res),
+                                                                 (config.url || res.url || pUrl) ) ) || source || config;
 
                 // assign the numeric value of the response status to this instance
-                this.status = asInt( this.response?.status || source.status || pResponse?.status );
+                this.status = asInt( status || this.response?.status || res.status || source.status || config.status );
 
                 // assign the string value of the response status to this instance
-                this.statusText = asString( this.response?.statusText || source.statusText || pResponse?.statusText || ResponseData.generateStatusText( asInt( this.status ) ), true );
+                this.statusText = asString( this.response?.statusText || res?.statusText || source.statusText || ResponseData.generateStatusText( asInt( this.status ) ), true );
 
                 // construct an instance of HttpStatus as a helper for evaluating the status
-                this.#httpStatus = HttpStatus.fromResponse( this.response ) || new HttpStatus( this.status, this.statusText );
+                this.#httpStatus = attempt( () => HttpStatus.fromCode( this.status ) ) ||
+                                   attempt( () => HttpStatus.fromResponse( this.response ) ) ||
+                                   attempt( () => HttpStatus.fromCode( this.statusText ) ) ||
+                                   new HttpStatus( asInt( this.status ), asString( this.statusText || "UNKNOWN", true ) );
 
                 // Assigns the data property of the response to this instance if there is one,
                 // such as would be the case when using the Axios framework, for example.
-                this.data = (this.response?.data || source.data || pResponse?.data) || (this.response?.body || source.body || pResponse?.body) || pResponse; // might represent a Promise
+                this.data = (data || this.response?.data || res?.data || source?.data || config?.data);
 
                 // Stores the configuration returned with the response
                 // or the configuration used to make the request for which this is the response
-                this.config = this.response?.config || source.config || pResponse?.config || pConfig;
+                this.config = this.response?.config || config || source.config;
 
                 // Stores the headers returned with the response or the request headers that were passed
-                this.headers = new HttpResponseHeaders( this.response?.headers || source.headers || pResponse.headers || source?.config?.headers || pResponse.config?.headers || this.config?.headers || pConfig?.headers || pConfig );
+                this.headers = new HttpResponseHeaders( headers || this.response?.headers || res?.headers || source?.headers || source?.config?.headers || config?.headers || config );
 
                 // Stores the url path from which the response actually came (in the case of redirects) or the url/path of the request
-                this.url = asString( this.response?.url || asString( pUrl, true ), true ) || _mt;
+                this.url = asString( asString( this.response?.url, true ) || asString( config.url, true ) || asString( pUrl, true ), true ) || _slash;
 
                 // Stores the request object associated with this response or synthesizes one
-                this.request = new HttpRequest( cloneRequest( this.response?.request || source.request || pResponse.request ||
-                                                                  {
-                                                                      url: this.url || asString( pUrl, true ),
-                                                                      config: pConfig || {}
-                                                                  } ) );
+                try
+                {
+                    const req = attempt( () => this.response?.request ||
+                                               source.request ||
+                                               res.request ||
+                                               config.request ||
+                                               config ||
+                        {
+                            url: this.url || asString( pUrl, true ) || _slash,
+                            config: this.config || config || {},
+                            abortController: new AbortController()
+                        } );
+
+                    if ( isNonNullObject( req ) )
+                    {
+                        const cloned = attempt( () => cloneRequest( req ) );
+                        if ( isNonNullObject( cloned ) )
+                        {
+                            this.request = attempt( () => new HttpRequest( cloned ) );
+                        }
+                    }
+                }
+                catch( ex )
+                {
+                    // ignored
+                }
 
                 // Stores the url path from which the response actually came (in the case of redirects) or the url/path of the request
-                this.url = asString( this.response?.url || this.request?.url || asString( pUrl, true ), true ) || _mt;
+                this.url = asString( this.response?.url || this.request?.url || asString( pUrl, true ), true ) || _slash;
             }
 
             // Stores an error object if the request was unsuccessful
-            this.error = isNonNullObject( source.response || pResponse.response ) ? resolveError( pResponse || source ) || resolveError( pError ) : resolveError( pError );
+            this.error = isNonNullObject( source.response || pResponse.response ) ? resolveError( pResponse || source ) || resolveError( pError ) : resolveError( pError || pConfig?.error );
         }
 
         get httpStatus()
@@ -392,14 +467,31 @@ const {
             return millis;
         }
 
-        async body()
+        get body()
         {
-            if ( isNonNullObject( this.data ) )
+            if ( isNonNullObject( this.data ) || isNonNullValue( this.data ) )
             {
-                return this.data;
+                return toReadableStream( this.data );
             }
+
             const res = cloneResponse( this.response );
-            return await asyncAttempt( async() => await res.body );
+
+            return res.body;
+        }
+
+        get bodyUsed()
+        {
+            return this.response?.bodyUsed || false;
+        }
+
+        get stream()
+        {
+            return isNull( this.data ) ? this.body : toThrottledReadableStream( this.data, 2_048, 0 );
+        }
+
+        getThrottledStream( pChuckSize, pDelayMs )
+        {
+            return isNull( this.data ) ? this.body : toThrottledReadableStream( this.data, pChuckSize, pDelayMs );
         }
 
         async json()
@@ -418,24 +510,30 @@ const {
                     return obj;
                 }
             }
+
             const res = cloneResponse( this.response );
+
             return await asyncAttempt( async() => await res.json() );
         }
 
         async text()
         {
-            let txt = asString( this.data || _mt );
+            let txt = !isNull( this.data ) && isScalar( this.data ) ? asString( this.data || _mt ) : _mt;
+
+            txt = isBlank( txt ) && isNonNullObject( this.data ) ? asJson( this.data ) : _mt;
+
             if ( !isBlank( txt ) )
             {
-                return txt;
+                return asString( txt );
             }
+
             const res = cloneResponse( this.response );
             return await asyncAttempt( async() => await res.text() );
         }
 
         clone()
         {
-            return new ResponseData( Object.assign( {}, cloneResponse( this.response ) ),
+            return new ResponseData( cloneResponse( this.response ),
                                      this.error || null,
                                      this.config,
                                      this.url );
@@ -451,8 +549,22 @@ const {
 
         static fromError( pError, pConfig, pUrl )
         {
-            return new ResponseData( cloneResponse( pError?.response || pError ),
-                                     pError,
+            const response = attempt( () => cloneResponse( pError?.response || pError || pConfig ) ) || {};
+
+            let err = isError( pError ) ? pError : (isError( response?.error ) ? response?.error : isError( response ) ? response : isError( pConfig?.error ) ? pConfig.error : isError( pConfig ) ? pConfig : null);
+
+            err = isNull( err ) ? null : resolveError( err );
+
+            if ( !isError( err ) )
+            {
+                return new ResponseData( (response || pError || pConfig),
+                                         null,
+                                         (pConfig || pError || response),
+                                         response?.url || pError?.url || pConfig?.url || pUrl );
+            }
+
+            return new ResponseData( cloneResponse( response || pError || pConfig ),
+                                     resolveError( err || pError ),
                                      pConfig,
                                      pUrl );
         }
@@ -467,12 +579,28 @@ const {
                 // In those cases, some of them return the response as a property of the error.
                 // See https://axios-http.com/docs/handling_errors, for example
 
-                let response = cloneResponse( source.response || source || pObject );
+                const response = attempt( () => cloneResponse( source.response || source || pObject || pConfig ) ) || source.response || source;
+
+                const err = (isError( response?.error ) ? response?.error : isError( source ) ? source : isError( pObject ) ? pObject : isError( pConfig ) ? pConfig : null);
+
+                const config = asObject( pConfig || source?.config || response.config ) || {};
+
+                const url = pUrl || source.request?.url || response.url || response.request?.url || config.url;
+
+                const data = pObject?.data || source.data || response.data;
+
+                const headers = new HttpResponseHeaders( pObject?.headers || source.headers || response.headers );
+
+                const status = pObject?.status || response.status || config.status;
+
+                attempt( () => response.data = data || response.data );
+                attempt( () => response.headers = headers || response.headers );
+                attempt( () => response.status = status || response.status );
 
                 let responseData = new ResponseData( response,
-                                                     (response?.error || source || pObject),
-                                                     (pConfig || response.config),
-                                                     (pUrl || response.request?.url) );
+                                                     isError( err ) ? err : null,
+                                                     config,
+                                                     url );
 
                 let entries = attempt( () => [...(objectEntries( source || pObject ) || [])] );
 
@@ -495,7 +623,6 @@ const {
         static generateStatusText( pStatus )
         {
             const status = asInt( pStatus );
-
             return STATUS_TEXT_ARRAY[status] || STATUS_TEXT[ucase( asString( pStatus, true ) )];
         }
     }
@@ -528,10 +655,23 @@ const {
                  Object.hasOwn( pValue, "headers" ) &&
                  (Object.hasOwn( pValue, "data" ) || Object.hasOwn( pValue, "body" )) )
             {
-                return new ResponseData( pValue,
+                let value = asObject( pValue || pConfig ) || {};
+
+                let config = asObject( pConfig || pValue ) || {};
+
+                let data = value.data || config.data;
+
+                let headers = value.headers || config.headers;
+
+                let response = cloneResponse( value );
+
+                response.data = data || response.data;
+                response.headers = new HttpResponseHeaders( headers || response.headers );
+
+                return new ResponseData( response,
                                          null,
-                                         (pValue.config || pConfig || {}),
-                                         (pValue.request?.url || pValue.config?.url || pUrl || _mt) );
+                                         (value.config || config || {}),
+                                         (value.url || value.request?.url || value.config?.url || pUrl || _mt) );
             }
         }
 
@@ -550,41 +690,68 @@ const {
 
     function populateResponseData( pResponse, pConfig, pUrl )
     {
-        let response = pResponse?.response || pResponse;
+        let response = asObject( pResponse?.response || pResponse || pConfig ) || {};
+
+        let config = asObject( pConfig || response.config || response ) || {};
+
+        let data = response.data || pResponse?.data || config.data;
+
+        let headers = response.headers || pResponse?.headers || config.headers;
+
+        let status = response.status || pResponse?.status || config.status;
+
+        let url = response?.url || pResponse?.url || config?.url || asString( pUrl );
+
+        response = attempt( () => cloneResponse( response || pResponse, config ) ) || response;
+
+        headers = new HttpResponseHeaders( headers || response.headers || config.headers );
+
+        attempt( () => response.status = status || response.status || config.status );
+        attempt( () => response.data = data || response.data || config.data );
+        attempt( () => response.headers = headers || response.headers );
 
         let res =
             {
-                status: response?.status || STATUS_CODES.CLIENT_ERROR,
-                statusText: response?.statusText || STATUS_TEXT_ARRAY[asInt( response?.status || STATUS_CODES.CLIENT_ERROR )] || STATUS_TEXT[asString( pResponse?.status || STATUS_CODES.CLIENT_ERROR, true )],
-                data: response?.data || response?.body || {},
-                headers: response?.headers || response?.config?.headers || pConfig?.headers || pConfig,
-                config: response?.config || pConfig,
-                request: response?.request || attempt( () => new Request( pUrl, pConfig ) )
+                status: asInt( status || response.status || config.status || STATUS_CODES.CLIENT_ERROR ),
+                statusText: response.statusText || pResponse?.statusText || config.statusText || STATUS_TEXT_ARRAY[asInt( status || response.status || config.status )] || STATUS_TEXT[asString( status || response.status || pResponse?.status || STATUS_CODES.CLIENT_ERROR, true )],
+                data: data || response.data || config.data,
+                headers: headers || response?.headers || pResponse.headers || response?.config?.headers || config?.headers || config,
+                config: response?.config || config,
+                url: url || response.url || pResponse?.url || config.url || pUrl,
+                request: response?.request || config.request || attempt( () => new Request( response?.url || config?.url || asString( pUrl ), config ) ),
+                response: attempt( () => new HttpResponse( response, config, (response?.url || config?.url || asString( pUrl )) ) )
             };
 
-        return ResponseData.fromObject( res, pConfig, pUrl );
+        return new ResponseData( res, null, config, url );
     }
 
     function populateErrorResponse( pError, pConfig, pUrl )
     {
         let error = resolveError( pError, pConfig );
 
-        let errorResponse = pError?.response || error;
+        let config = asObject( pConfig || error ) || {};
+
+        let response = pError?.response || error?.response || error || config;
+
+        while ( isNonNullObject( response ) && isNonNullObject( response.response ) )
+        {
+            response = response.response;
+        }
 
         let obj =
             {
-                status: error?.status || errorResponse?.status || STATUS_CODES.CLIENT_ERROR,
-                statusText: error?.message || errorResponse?.statusText || STATUS_TEXT_ARRAY[asInt( errorResponse?.status || STATUS_CODES.CLIENT_ERROR )] || STATUS_TEXT[ucase( asString( errorResponse?.status || STATUS_CODES.CLIENT_ERROR, true ) )],
-                data: errorResponse?.data || pError?.data || error?.details || errorResponse?.body || {},
-                headers: errorResponse?.headers || error?.headers || pConfig.headers,
-                config: errorResponse?.config || pConfig || {},
+                status: error?.status || response?.status || config.status || STATUS_CODES.CLIENT_ERROR,
+                statusText: error?.message || response?.statusText || STATUS_TEXT_ARRAY[asInt( response?.status || STATUS_CODES.CLIENT_ERROR )] || STATUS_TEXT[ucase( asString( response?.status || STATUS_CODES.CLIENT_ERROR, true ) )],
+                data: response?.data || pError?.data || error?.details || response?.body || {},
+                headers: response?.headers || error?.headers || config.headers,
+                config: response?.config || config || {},
+                url: response?.url || config?.url || asString( pUrl ),
                 error,
-                errorResponse
+                response
             };
 
-        return ResponseData.fromError( obj, pConfig, pUrl );
+        return ResponseData.fromError( obj, config, obj.url || pUrl );
     }
-
 
     let mod =
         {

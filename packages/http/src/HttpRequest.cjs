@@ -1,8 +1,10 @@
 /**
  * @fileOverview
- * This module defines a facade for the Web API Request object<br>
+ *
+ * This module defines a facade for the Web API Request object
  * intended to encapsulate and hide the differences
- * between the way Node.js, Deno, browsers, and other execution environments model an HTTP Request.<br>
+ * between the way Node.js, Deno, browsers,
+ * and other execution environments model an HTTP Request.<br>
  * <br>
  *
  * This facade also allows assigning an ID, a priority, and rate-limit group
@@ -26,13 +28,14 @@ const core = require( "@toolbocks/core" );
 // import Buffer-support
 const bufferUtils = require( "@toolbocks/buffer" );
 
+// import our safer JSON parsing functions
 const jsonUtils = require( "@toolbocks/json" );
 
 // import the HTTP constants
 const httpConstants = require( "./HttpConstants.cjs" );
 
 //import the HttpHeaders utilities
-const httpHeaders = require( "./HttpHeaders.cjs" );
+const httpHeaderUtils = require( "./HttpHeaders.cjs" );
 
 /**
  * Establish separate constants for each of the common utilities imported
@@ -78,7 +81,7 @@ const {
             arrayUtils,
             bufferUtils,
             httpConstants,
-            httpHeaders
+            httpHeaderUtils
         };
 
     const {
@@ -89,7 +92,8 @@ const {
         lock,
         localCopy,
         attempt,
-        asyncAttempt
+        asyncAttempt,
+        $ln
     } = moduleUtils;
 
     const {
@@ -119,6 +123,7 @@ const {
             isSharedArrayBuffer,
             isDataView,
             toObjectLiteral,
+            asObject
         } = typeUtils;
 
 
@@ -148,7 +153,7 @@ const {
             FORBIDDEN_RESPONSE_HEADERS,
             DEFAULT_EXPIRATION_HEADER,
             HttpRequestHeaders
-        } = httpHeaders;
+        } = httpHeaderUtils;
 
     const {
         File = (_ud === typeof File) ? $scope().File : File,
@@ -159,55 +164,11 @@ const {
 
     const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
-
     const executionEnvironment = toolBocksModule.executionEnvironment;
 
     const _isNode = executionEnvironment.isNode();
     const _isDeno = executionEnvironment.isDeno();
     const _isBrowser = executionEnvironment.isBrowser();
-
-    /*
-     interface ReadableStream<R = any> {
-     readonly locked: boolean;
-     cancel(reason?: any): Promise<void>;
-     getReader(options: { mode: "byob" }): ReadableStreamBYOBReader;
-     getReader(): ReadableStreamDefaultReader<R>;
-     getReader(options?: ReadableStreamGetReaderOptions): ReadableStreamReader<R>;
-     pipeThrough<T>(transform: ReadableWritablePair<T, R>, options?: StreamPipeOptions): ReadableStream<T>;
-     pipeTo(destination: WritableStream<R>, options?: StreamPipeOptions): Promise<void>;
-     tee(): [ReadableStream<R>, ReadableStream<R>];
-     values(options?: { preventCancel?: boolean }): AsyncIterableIterator<R>;
-     [Symbol.asyncIterator](): AsyncIterableIterator<R>;
-     }
-     const ReadableStream: {
-     prototype: ReadableStream;
-     from<T>(iterable: Iterable<T> | AsyncIterable<T>): ReadableStream<T>;
-     new(underlyingSource: UnderlyingByteSource, strategy?: QueuingStrategy<Uint8Array>): ReadableStream<Uint8Array>;
-     new<R = any>(underlyingSource?: UnderlyingSource<R>, strategy?: QueuingStrategy<R>): ReadableStream<R>;
-     };
-
-     ReadableStreamDefaultReader.read()
-     Returns a promise providing access to the next chunk in the stream's internal queue.
-
-
-     interface ReadableStream extends EventEmitter {
-     readable: boolean;
-     read(size?: number): string | Buffer;
-     setEncoding(encoding: BufferEncoding): this;
-     pause(): this;
-     resume(): this;
-     isPaused(): boolean;
-     pipe<T extends WritableStream>(destination: T, options?: { end?: boolean | undefined }): T;
-     unpipe(destination?: WritableStream): this;
-     unshift(chunk: string | Uint8Array, encoding?: BufferEncoding): void;
-     wrap(oldStream: ReadableStream): this;
-     [Symbol.asyncIterator](): AsyncIterableIterator<string | Buffer>;
-     }
-
-
-
-     */
-
 
     if ( _ud === typeof ReadableStream )
     {
@@ -248,7 +209,7 @@ const {
 
     if ( _ud === typeof document )
     {
-        document = (_ud !== typeof window) ? window?.document : (_ud !== typeof __dirname ? { URL: __dirname } : { URL: _mt_str });
+        document = ((_ud !== typeof window) ? window?.document : $scope().document) || (_ud !== typeof __dirname ? { URL: __dirname } : { URL: _mt_str });
     }
 
     const URL_ENCODINGS = lock(
@@ -276,7 +237,7 @@ const {
         } );
 
     let FORM_ENCODINGS = localCopy( URL_ENCODINGS );
-    FORM_ENCODINGS[" "] = "%20";
+    FORM_ENCODINGS[_spc] = "%20";
     FORM_ENCODINGS = lock( FORM_ENCODINGS );
 
     const urlEncode = ( pString ) =>
@@ -318,7 +279,7 @@ const {
      */
     const calculateBaseUrl = function( pFrom )
     {
-        const doc = (_ud === typeof document) ? { URL: __dirname } : document;
+        const doc = (_ud === typeof document) ? { URL: __dirname || _mt_str } : document;
         const s = asString( pFrom || doc.URL || _mt_str, true ).replaceAll( /[\s ]/gi, "+" ).replaceAll( /\\/gi, "/" );
         return asString( s.replace( /\?\w+$/, _mt_str ).replace( /#\w+$/, _mt_str ), true );
     };
@@ -410,7 +371,7 @@ const {
     const isAbsoluteUrl = function( pUrl )
     {
         const url = escapeUrl( asString( pUrl, true ) );
-        return (/^(https?|ftps?|file):\/\//.test( url ) || /^(\w+\.)+/.test( url )) && !url.startsWith( _dot );
+        return (/^(http(s)?|(f|sm)tp(s)?|file):\/\//.test( url ) || /^(\w+\.)+/.test( url )) && !url.startsWith( _dot );
     };
 
     const isRelativeUrl = function( pUrl )
@@ -447,12 +408,14 @@ const {
         return asString( url, true );
     };
 
+    const SearchParamsBaseClass = _ud === typeof URLSearchParams ? Map : URLSearchParams;
+
     /**
      * Provides the same interface and behavior as the URL object.
      * If URL is undefined in the execution context,
      * this object will be assigned to the global namespace as URL
      */
-    class SearchParams extends Map
+    class SearchParams extends SearchParamsBaseClass
     {
         constructor( pParams )
         {
@@ -471,7 +434,7 @@ const {
             }
             else if ( isNonNullObject( pParams ) )
             {
-                const entries = isFunction( pParams?.entries ) ? pParams.entries() : Object.entries( pParams );
+                const entries = isFunction( pParams?.entries ) ? pParams.entries() : objectEntries( pParams );
 
                 for( const [key, value] of entries )
                 {
@@ -484,27 +447,28 @@ const {
         {
             const name = asString( pName, true );
 
+            const value = isArray( pValue ) ? pValue : [asString( pValue )];
+            const flatArray = asArray( value ).flat().map( e => urlDecode( asString( e, true ) ) );
+
             let existing = super.get( name );
 
             if ( existing )
             {
                 existing = isArray( existing ) ? existing : asArray( existing );
 
-                const value = isArray( pValue ) ? [...pValue] : [asString( pValue )];
-                const flatArray = asArray( value ).flat().map( e => urlDecode( asString( e, true ) ) );
                 existing = asArray( existing );
                 existing.push( ...flatArray );
                 this.set( name, existing );
             }
             else
             {
-                super.set( name, asArray( pValue ) );
+                super.set( name, flatArray );
             }
         }
 
         entries()
         {
-            const entries = super.entries();
+            const entries = super.entries() || objectEntries( this );
 
             let arr = [];
 
@@ -635,21 +599,30 @@ const {
 
         constructor( pUrl )
         {
-            this.#url = cleanUrl( isString( pUrl ) ? cleanUrl( asString( pUrl, true ) ) : (isNonNullObject( pUrl ) ? pUrl?.href || (isFunction( pUrl?.toString ) ? pUrl.toString() : asString( pUrl, true )) : _mt_str) );
+            this.#url = cleanUrl( isString( pUrl ) ?
+                                  cleanUrl( asString( pUrl, true ) ) :
+                                  (isNonNullObject( pUrl ) ?
+                                   pUrl?.href || (isFunction( pUrl?.toString ) ?
+                                                  pUrl.toString() :
+                                                  asString( pUrl, true )) :
+                                   _mt_str) );
 
-            const parsed = HttpUrl.parse( pUrl );
+            const parsed = attempt( () => HttpUrl.parse( pUrl ) );
 
-            this.#protocol = parsed.protocol;
-            this.#host = parsed.host;
-            this.#hostname = parsed.hostname;
-            this.#port = parsed.port;
-            this.#origin = parsed.origin;
-            this.#username = parsed.username;
-            this.#password = parsed.password;
-            this.#pathname = parsed.pathname;
-            this.#search = parsed.search;
-            this.#hash = parsed.hash;
-            this.#href = parsed.href;
+            if ( isNonNullObject( parsed ) )
+            {
+                this.#protocol = parsed.protocol;
+                this.#host = parsed.host;
+                this.#hostname = parsed.hostname;
+                this.#port = parsed.port;
+                this.#origin = parsed.origin;
+                this.#username = parsed.username;
+                this.#password = parsed.password;
+                this.#pathname = parsed.pathname;
+                this.#search = parsed.search;
+                this.#hash = parsed.hash;
+                this.#href = parsed.href;
+            }
         }
 
         get URL()
@@ -710,11 +683,12 @@ const {
 
         get searchParams()
         {
-            if ( isNonNullObject( this.#searchParams ) || this.#searchParams instanceof SearchParams )
+            if ( isNonNullObject( this.#searchParams ) && this.#searchParams instanceof SearchParams )
             {
                 return this.#searchParams;
             }
-            this.#searchParams = new SearchParams( parseQueryString( this.search.replace( /^\?/, _mt_str ) ) );
+
+            this.#searchParams = new SearchParams( parseQueryString( asString( this.search ).replace( /^\?/, _mt_str ) ) );
 
             return this.#searchParams;
         }
@@ -926,6 +900,14 @@ const {
 
     };
 
+    /**
+     * HttpRequestOptions is a utility class encapsulating properties and options
+     * for making HTTP requests.
+     *
+     * It is compatible with environments like the Fetch API
+     * and certain HTTP frameworks such as Axios,
+     * providing flexible configurations for requests.
+     */
     class HttpRequestOptions
     {
         #method;
@@ -969,14 +951,14 @@ const {
                      pCredentials = REQUEST_CREDENTIALS_OPTIONS.SAME_ORIGIN,
                      pIntegrity = _mt_str,
                      pKeepalive = false,
-                     pMode = MODES.SAME_ORIGIN,
+                     pMode = MODES.CORS,
                      pPriority = PRIORITY.AUTO,
                      pRedirect = REDIRECT_OPTIONS.FOLLOW,
                      pReferrer = "about:client",
                      pReferrerPolicy = REFERRER_POLICY_OPTIONS.NO_REFERRER_WHEN_DOWNGRADE,
                      pAbortController = new AbortController(),
                      pSignal = pAbortController?.signal || null,
-                     pTimeout = -1,
+                     pTimeout = 0,
                      pBaseURL = _mt_str,
                      pRequestTransformer = null,
                      pResponseTransformer = null,
@@ -988,57 +970,62 @@ const {
                      pXsrfHeaderName = _mt_str,
                      pProxy = null )
         {
+            // Here, we handle the edgiest (ugliest) of edge cases,
+            // where this constructor may be called with a Request and RequestInit.
+            // We treat the second argument as the intended options
             if ( pBody instanceof this.constructor )
             {
-                this.#body = this.#body = (((new HttpVerb( this.#method )).forbidsBody) ? null : pBody.body);
+                this.#body = (((new HttpVerb( this.#method )).forbidsBody) ? null : pBody.body || pBody.data) || pBody;
 
-                this.#headers = new HttpRequestHeaders( pBody.headers );
+                this.#headers = new HttpRequestHeaders( pBody.headers || pHeaders );
 
-                this.#cache = pBody.cache;
-                this.#credentials = pBody.credentials;
-                this.#integrity = pBody.integrity;
-                this.#keepalive = pBody.keepalive;
-                this.#method = pBody.method;
-                this.#mode = pBody.mode;
-                this.#priority = pBody.priority;
-                this.#redirect = pBody.redirect;
-                this.#referrer = pBody.referrer;
-                this.#referrerPolicy = pBody.referrerPolicy;
-                this.#abortController = pBody.abortController || new AbortController();
-                this.#signal = pBody.signal || this.#abortController?.signal;
-                this.#timeout = pBody.timeout;
+                this.#cache = pBody.cache || pCache;
+                this.#credentials = pBody.credentials || pCredentials;
+                this.#integrity = pBody.integrity || pIntegrity;
+                this.#keepalive = pBody.keepalive || pKeepalive;
+                this.#method = pBody.method || pMethod;
+                this.#mode = pBody.mode || pMode;
+                this.#priority = pBody.priority || pPriority;
+                this.#redirect = pBody.redirect || pRedirect;
+                this.#referrer = pBody.referrer || pReferrer;
+                this.#referrerPolicy = pBody.referrerPolicy || pReferrerPolicy;
+                this.#abortController = pBody.abortController || pAbortController || new AbortController();
+                this.#signal = pBody.signal || pSignal || this.#abortController?.signal;
+                this.#timeout = asInt( pBody.timeout || pTimeout );
 
                 // these properties are relevant only to certain frameworks, such as Axios
-                this.#baseURL = pBody.baseURL || _mt_str;
-                this.#requestTransformer = pBody.requestTransformer || null;
-                this.#responseTransformer = pBody.responseTransformer || null;
-                this.#params = pBody.params || null;
-                this.#paramsSerializer = pBody.paramsSerializer || null;
-                this.#responseType = pBody.responseType || null;
-                this.#responseEncoding = pBody.responseEncoding || null;
-                this.#xsrfCookieName = pBody.xsrfCookieName || _mt_str;
-                this.#xsrfHeaderName = pBody.xsrfHeaderName || _mt_str;
-                this.#proxy = isNonNullObject( pBody.proxy ) ? pBody.proxy || null : null;
+                this.#baseURL = pBody.baseURL || pBaseURL || _mt_str;
+                this.#requestTransformer = pBody.requestTransformer || pRequestTransformer || null;
+                this.#responseTransformer = pBody.responseTransformer || pResponseTransformer || null;
+                this.#params = pBody.params || pParams || null;
+                this.#paramsSerializer = pBody.paramsSerializer || pParamsSerializer || null;
+                this.#responseType = pBody.responseType || pResponseType || null;
+                this.#responseEncoding = pBody.responseEncoding || pResponseEncoding || null;
+                this.#xsrfCookieName = pBody.xsrfCookieName || pXsrfCookieName || _mt_str;
+                this.#xsrfHeaderName = pBody.xsrfHeaderName || pXsrfHeaderName || _mt_str;
+                this.#proxy = isNonNullObject( pBody.proxy ) ? pBody.proxy || null : isNonNullObject( pProxy ) ? pProxy || null : null;
 
                 return this;
             }
 
-            this.#method = pMethod;
-            this.#headers = pHeaders;
+            this.#method = resolveHttpMethod( pMethod );
+            this.#headers = new HttpRequestHeaders( pHeaders );
 
-            this.#cache = pCache;
+            this.#cache = pCache || REQUEST_CACHE_OPTIONS.DEFAULT;
 
-            this.#credentials = pCredentials;
-            this.#integrity = pIntegrity;
+            this.#credentials = pCredentials || REQUEST_CREDENTIALS_OPTIONS.SAME_ORIGIN;
+            this.#integrity = pIntegrity || _mt_str;
             this.#keepalive = pKeepalive;
-            this.#mode = pMode;
-            this.#priority = pPriority;
-            this.#redirect = pRedirect;
-            this.#referrer = pReferrer;
-            this.#referrerPolicy = pReferrerPolicy;
-            this.#signal = pSignal;
-            this.#timeout = pTimeout;
+            this.#mode = pMode || MODES.CORS;
+            this.#priority = pPriority || PRIORITY.AUTO;
+            this.#redirect = pRedirect || REDIRECT_OPTIONS.FOLLOW;
+            this.#referrer = pReferrer || "about:client";
+            this.#referrerPolicy = pReferrerPolicy || REFERRER_POLICY_OPTIONS.NO_REFERRER_WHEN_DOWNGRADE;
+            this.#abortController = pAbortController || new AbortController();
+            this.#signal = this.#abortController?.signal || null;
+            this.#timeout = asInt( pTimeout ) || 0;
 
+            // TODO: resolveBody
             this.#body = (((new HttpVerb( this.#method )).forbidsBody) ? null : pBody);
 
             // these properties are relevant only to certain frameworks, such as Axios
@@ -1131,7 +1118,7 @@ const {
 
         get signal()
         {
-            return !isNull( this.#signal ) ? this.#signal : this.abortController.signal;
+            return this.abortController.signal;
         }
 
         get timeout()
@@ -1293,9 +1280,32 @@ const {
         return req;
     };
 
+    function resolveRequestBody( pRequest, pConfig )
+    {
+        let req = asObject( pRequest || pConfig ) || {};
+        let config = asObject( pConfig || pRequest ) || {};
+
+        let data = config.data || config.body || req.data || req.body;
+
+        if ( isNonNullObject( req ) )
+        {
+            req = asObject( req );
+
+            while ( req.request )
+            {
+                data = req.body || req.data || data;
+
+                req = req.request;
+            }
+        }
+
+        return req.body || req.data || config.body || config.data || data;
+    }
+
     class HttpRequest extends EventTarget
     {
         #id = 0;
+
         #priority = 0;
 
         #options;
@@ -1303,35 +1313,59 @@ const {
         #url;
 
         #request;
-        #response;
         #body;
+
+        #response;
 
         constructor( pRequestOrUrl, pOptions = new HttpRequestOptions() )
         {
             super();
 
-            this.#request = pRequestOrUrl instanceof this.constructor ?
-                            pRequestOrUrl.request :
-                            cloneRequest( this.resolveRequest( pRequestOrUrl ) );
+            let config = toObjectLiteral( pOptions || (isNonNullObject( pRequestOrUrl ) ? pRequestOrUrl : new HttpRequestOptions()) ) || {};
 
-            this.#options = populateOptions( pOptions || {},
-                                             toObjectLiteral( new HttpRequestOptions( HttpVerb.resolveHttpMethod( this.#request?.method || VERBS.GET ),
-                                                                                      new HttpRequestHeaders( this.#request?.headers || pOptions?.headers || {} ),
-                                                                                      pOptions ) ) );
+            let uri = (isString( pRequestOrUrl ) && !isJson( pRequestOrUrl ) ? pRequestOrUrl : asObject( pRequestOrUrl )?.url) || config.url || config.href;
+
+            if ( pRequestOrUrl instanceof this.constructor )
+            {
+                let req = pRequestOrUrl.request || pRequestOrUrl;
+
+                while ( req.request )
+                {
+                    req = req.request;
+                }
+
+                this.#request = cloneRequest( req );
+            }
+            else if ( isString( uri ) && !isJson( uri ) && isUrl( uri ) )
+            {
+                this.#request = (_ud === typeof Request ?
+                    {
+                        url: uri,
+                        method: config.method,
+                        ...config
+                    } : new Request( uri, config ));
+            }
+            else
+            {
+                this.#request = cloneRequest( this.resolveRequest( pRequestOrUrl, pOptions ) );
+            }
+
+            this.#options = populateOptions( toObjectLiteral( config ),
+                                             toObjectLiteral( new HttpRequestOptions( HttpVerb.resolveHttpMethod( this.#request?.method || config.method || VERBS.GET ),
+                                                                                      new HttpRequestHeaders( this.#request?.headers || config.headers || {} ),
+                                                                                      config.body || config.data ) ) );
 
             this.#id = this.#request?.id || this.options?.id || this.constructor.nextId();
 
             this.#priority = asInt( this.#request?.priority || this.options?.priority );
 
-            this.#url = isString( pRequestOrUrl ) && isUrl( pRequestOrUrl ) ?
-                        new HttpUrl( pRequestOrUrl ) :
-                        new HttpUrl( this.#request?.url || this.#request?.href || asString( pRequestOrUrl ) );
+            this.#url = new HttpUrl( this.#request?.url || isString( pRequestOrUrl ) && isUrl( pRequestOrUrl ) ? pRequestOrUrl : uri );
 
             this.#response = this.#request?.response || this.#options?.response;
 
             this.error = this.#request?.error || this.#options?.error || this.#response?.error || (isError( this.#response ) ? this.#response : null);
 
-            this.#body = this.#request?.body || this.#request?.data;
+            this.#body = resolveRequestBody( this.#request, config );
         }
 
         get id()
@@ -1341,7 +1375,8 @@ const {
 
         get options()
         {
-            return populateOptions( this.#options, toObjectLiteral( new HttpRequestOptions() ) );
+            return populateOptions( toObjectLiteral( this.#options ),
+                                    toObjectLiteral( new HttpRequestOptions() ) );
         }
 
         get url()
@@ -1361,21 +1396,33 @@ const {
                     }
                     else
                     {
-                        return URL.parse( cleanUrl( this.#url?.href || isFunction( this.#url?.toString ) ? asString( this.#url?.toString(), true ) : asString( this.#url ) ) );
+                        return attempt( () => URL.parse( cleanUrl( this.#url?.href || isFunction( this.#url?.toString ) ? asString( this.#url?.toString(), true ) : asString( this.#url ) ) ) ) || new URL( _slash );
                     }
                 }
             }
-            else if ( isString( this.#url ) )
+            else if ( isString( this.#url ) && !isBlank( this.#url ) )
             {
                 if ( _ud !== typeof URL )
                 {
-                    return URL.parse( cleanUrl( asString( this.#url ) ) );
+                    return attempt( () => URL.parse( cleanUrl( asString( this.#url ) ) ) ) || new URL( _slash );
                 }
                 else
                 {
-                    return new HttpUrl( cleanUrl( asString( this.#url ) ) );
+                    if ( isJson( this.#url ) )
+                    {
+                        let obj = attempt( () => parseJson( this.#url ) );
+                        if ( isNonNullObject( obj ) )
+                        {
+                            return attempt( () => new HttpUrl( obj ) );
+                        }
+                    }
+                    else
+                    {
+                        return new HttpUrl( cleanUrl( asString( this.#url ) ) );
+                    }
                 }
             }
+            return new HttpUrl( _slash );
         }
 
         get request()
@@ -1398,10 +1445,95 @@ const {
             return asInt( this.#priority );
         }
 
+        _unwrapRequestArguments( pRequestOrUrl, pConfig )
+        {
+            let req = pRequestOrUrl || pConfig?.request || pConfig?.url;
+            let config = pConfig || req?.config || req?.options;
+
+            // unwrap from any other containers
+            if ( isNonNullObject( req ) )
+            {
+                config = config || req?.config || req?.options;
+                while ( req.request )
+                {
+                    req = req.request;
+                    config = config || req?.config || req?.options;
+                }
+            }
+            return { req, config };
+        }
+
+        _resolveRequestFromObject( pRequest, pConfig )
+        {
+            let req = asObject( pRequest || pConfig ) || {};
+            let cfg = asObject( pConfig || pRequest ) || {};
+
+            let method = resolveHttpMethod( req.method || cfg.method || req || cfg );
+
+            let uri = asString( req.url || cfg.url || req.href || cfg.href || req.location || cfg.location || req || cfg, true );
+
+            let url = !isBlank( uri ) && isUrl( uri ) ? HttpUrl.resolveUrl( uri ) : new HttpUrl();
+
+            let body = req.body || cfg?.body || req.data || cfg?.data;
+
+            let bodyUsed = false;
+
+            let headers = new HttpRequestHeaders( req.headers || cfg.headers || req || cfg );
+
+            let mode = req.mode || cfg.mode || "cors";
+
+            let redirect = req.redirect || cfg.redirect || "follow";
+
+            let obj =
+                {
+                    url,
+                    method,
+                    body,
+                    bodyUsed,
+                    headers,
+                    mode,
+                    redirect
+                };
+
+            let entries = attempt( () => objectEntries( req || cfg ) ) || attempt( () => objectEntries( cfg ) );
+
+            entries = ($ln( entries ) > 0) ? entries : attempt( () => objectEntries( cfg ) ) || [];
+
+            if ( $ln( entries ) > 0 )
+            {
+                attempt( () => entries.forEach( entry =>
+                                                {
+                                                    const key = ObjectEntry.getKey( entry );
+                                                    const value = ObjectEntry.getValue( entry );
+
+                                                    if ( key && value )
+                                                    {
+                                                        obj[key] = value || obj[key];
+                                                    }
+                                                } ) );
+            }
+
+            uri = cleanUrl( isNonNullObject( url ) ? url?.url || url?.href || url?.location : isString( url ) ? asString( url, true ) : _mt_str );
+
+            if ( isBlank( uri ) )
+            {
+                return HttpRequest.nullRequest( req, cfg );
+            }
+
+            const requestOptions = HttpRequestOptions.fromOptions( obj );
+
+            if ( _ud !== typeof Request )
+            {
+                return new Request( url, toObjectLiteral( requestOptions ) );
+            }
+
+            return new HttpRequest( obj.url || url, requestOptions );
+        }
+
         resolveRequest( pRequestOrUrl, pConfig )
         {
             // resolve arguments
-            let { req, config } = this.unwrapArguments( pRequestOrUrl, pConfig );
+            let { req, config } = this._unwrapRequestArguments( pRequestOrUrl, pConfig );
 
             // handle W3C standard
             if ( _ud !== typeof Request && req instanceof Request )
@@ -1420,16 +1552,21 @@ const {
 
             if ( isNonNullObject( req ) )
             {
+                if ( req instanceof this.constructor )
+                {
+                    return req.request || req;
+                }
                 return this._resolveRequestFromObject( req, config );
             }
 
-            if ( isString( req ) )
+            if ( isString( req ) && !isBlank( req ) )
             {
                 if ( isJson( req ) )
                 {
                     return this.resolveRequest( attempt( () => parseJson( req ) ), config );
                 }
-                return new HttpRequest( cleanUrl( asString( req, true ) ), HttpRequestOptions.fromOptions( config ) );
+                return new HttpRequest( cleanUrl( asString( req, true ) ),
+                                        HttpRequestOptions.fromOptions( config ) );
             }
 
             if ( isFunction( req ) )
@@ -1440,68 +1577,30 @@ const {
             return new HttpRequest( _slash, HttpRequestOptions.fromOptions( config ) );
         }
 
-        unwrapArguments( pRequestOrUrl, pConfig )
-        {
-            let req = pRequestOrUrl || pConfig?.request;
-            let config = pConfig || req?.config || req?.options;
-
-            // unwrap from any other containers
-            if ( isNonNullObject( req ) )
-            {
-                config = config || req?.config || req?.options;
-                while ( req.request )
-                {
-                    req = req.request;
-                    config = config || req?.config || req?.options;
-                }
-            }
-            return { req, config };
-        }
-
-        _resolveRequestFromObject( req, config )
-        {
-            let method = resolveHttpMethod( req.method || config?.method || req || config );
-            let url = HttpUrl.resolveUrl( req.url || config?.url || req.href || config?.href || req.location || config?.location || req || config );
-            let body = req.body || config?.body || req.data || config?.data;
-            let bodyUsed = false;
-            let headers = new HttpRequestHeaders( req.headers || config?.headers );
-            let mode = req.mode || config?.mode || "cors";
-            let redirect = req.redirect || config?.redirect || "follow";
-
-            let obj =
-                {
-                    url,
-                    method,
-                    body,
-                    bodyUsed,
-                    headers,
-                    mode,
-                    redirect
-                };
-
-            const entries = objectEntries( req );
-            attempt( () => entries.forEach( entry =>
-                                            {
-                                                const key = ObjectEntry.getKey( entry );
-                                                const value = ObjectEntry.getValue( entry );
-
-                                                if ( key && value )
-                                                {
-                                                    obj[key] = value || obj[key];
-                                                }
-                                            } ) );
-
-            const requestOptions = HttpRequestOptions.fromOptions( obj );
-
-            if ( _ud !== typeof Request )
-            {
-                return new Request( url, toObjectLiteral( requestOptions ) );
-            }
-
-            return new HttpRequest( obj.url || url, requestOptions );
-        }
     }
 
+    HttpRequest.nullRequest = function( pRequest, pOptions )
+    {
+        let req = asObject( pRequest || pOptions || {} );
+        let cfg = asObject( pOptions || pRequest || {} );
+
+        return new HttpRequest( req.url || cfg.url || _slash, cfg || req || {} );
+    };
+
+    /**
+     * Returns an instance of HttpRequest
+     * representing the given URL or request,
+     * while applying any new properties specified in the options passed.
+     *
+     * @param {String|Request|Object|HttpRequest} pRequestOrUrl An object or string
+     *                                                          where the object is either a Web API Request,
+     *                                                          HttpRequest, or has properties consistent
+     *                                                          with an HttpRequest, or the string is a URL
+     *                                                          from which a Request can be constructed.
+     *
+     * @param {Object|RequestInit|HttpRequestOptions} [pOptions=new HttpRequestOptions()] An object describing attributes of an HttpRequest.
+     *
+     */
     HttpRequest.resolve = function( pRequestOrUrl, pOptions )
     {
         const options = populateOptions( pOptions || {},
@@ -1509,13 +1608,9 @@ const {
                                                                                   new HttpRequestHeaders( pRequestOrUrl?.headers || pOptions?.headers ),
                                                                                   pRequestOrUrl?.options || {} ) ) );
 
-        if ( pRequestOrUrl instanceof HttpRequest )
+        if ( pRequestOrUrl instanceof HttpRequest || ((_ud !== typeof Request && pRequestOrUrl instanceof Request)) )
         {
-            return new HttpRequest( pRequestOrUrl, options );
-        }
-        else if ( _ud !== typeof Request && pRequestOrUrl instanceof Request )
-        {
-            return new HttpRequest( pRequestOrUrl, options );
+            return new HttpRequest( (pRequestOrUrl?.request || pRequestOrUrl), options );
         }
         else if ( isString( pRequestOrUrl ) )
         {
