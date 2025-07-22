@@ -86,39 +86,34 @@ const {
         ObjectEntry,
         objectEntries,
         populateOptions,
-        isWritable,
         localCopy,
         attempt,
         asyncAttempt,
         $ln
     } = moduleUtils;
 
-    const { _mt_str = "", _mt = _mt_str, _str, _num, _big, S_ERR_PREFIX, _slash = "/" } = constants;
+    const { _mt_str = "", _mt = _mt_str, S_ERR_PREFIX, _slash = "/" } = constants;
 
     const
         {
             isNull,
             isNonNullObject,
             isString,
-            isArray,
-            isMap,
             isFunction,
-            isAsyncFunction,
             isScalar,
             isObjectLiteral,
-            asObject,
-            isReadOnly
+            asObject
         } = typeUtils;
 
-    const { asString, asInt, isBlank, lcase, ucase, cleanUrl, isJson } = stringUtils;
+    const { asString, asInt, isBlank, cleanUrl, isJson } = stringUtils;
 
     const { asJson, parseJson } = jsonUtils;
 
     const { toReadableStream, toThrottledReadableStream } = bufferUtils;
 
-    const { isHeader, STATUS_CODES, STATUS_TEXT, HttpStatus } = httpConstants;
+    const { STATUS_CODES, HttpStatus } = httpConstants;
 
-    const { HttpHeaders, HttpRequestHeaders, HttpResponseHeaders } = httpHeaders;
+    const { HttpHeaders, HttpResponseHeaders } = httpHeaders;
 
     const { HttpUrl, HttpRequest, cloneRequest } = httpRequest;
 
@@ -329,9 +324,9 @@ const {
 
             const res = attempt( () => HttpResponse.resolveResponse( pResponse || options, options ) ) || pResponse || options;
 
-            this.#headers = attempt( () => cloneHeaders( res.headers || pResponse?.headers || options.headers || new HttpResponseHeaders( options ) ) );
+            this.#headers = attempt( () => (res.headers || pResponse?.headers || options.headers || new HttpResponseHeaders( options )) );
 
-            this.#response = attempt( () => cloneResponse( res || pResponse || options.response || options ) );
+            this.#response = attempt( () => (res || pResponse || options.response || options) );
 
             this.#status = HttpStatus.fromCode( res.status || pResponse?.status || options.status ) || attempt( () => HttpStatus.fromResponse( res || options.response || options, options ) );
 
@@ -339,45 +334,11 @@ const {
 
             this.#url = cleanUrl( asString( res?.url || options?.url || pUrl, true ) ) || _slash;
 
-            this.#request = isNonNullObject( options.request || res.request ) ? attempt( () => cloneRequest( options.request || res.request ) ) : options.request || new HttpRequest( HttpUrl.resolveUrl( this.#url || options.url || pUrl ), options );
+            this.#request = res.request || options.request || new HttpRequest( HttpUrl.resolveUrl( this.#url || options.url || pUrl ), options );
 
             this.#data = res.data || pResponse?.data || options.data;
 
             this.#options = attempt( () => populateOptions( options, me ) ) || options;
-        }
-
-        static _resolveBody( pResponse, pOptions )
-        {
-            const options = populateOptions( (pOptions || pResponse?.options),
-                                             (pResponse?.options || {}),
-                                             DEFAULT_RESPONSE_OPTIONS );
-
-            let res = HttpResponse.unwrapResponse( pResponse?.response || pResponse || options?.response || options, options );
-
-            let body = attempt( () => res?.data || options?.data || pResponse?.data );
-
-            body = attempt( () => body || cloneResponse( res )?.body || cloneResponse( pResponse )?.body );
-
-            if ( isNull( body ) )
-            {
-                body = options?.data || options?.body || {};
-            }
-
-            if ( isFunction( body ) )
-            {
-                if ( isAsyncFunction( body ) )
-                {
-                    // cannot handle async in synchronous context
-                    // we'll check for Promise
-                    body = asyncAttempt( async() => await body.call( res ) );
-                }
-                else
-                {
-                    body = attempt( () => body.call( res, body ) );
-                }
-            }
-
-            return body || {};
         }
 
         /**
@@ -391,16 +352,9 @@ const {
          */
         static resolveResponse( pResponse, pOptions )
         {
-            const options = populateOptions( pOptions || pResponse || {}, pResponse, DEFAULT_RESPONSE_OPTIONS );
+            const options = asObject( pOptions || DEFAULT_RESPONSE_OPTIONS );
 
             let response = HttpResponse.unwrapResponse( pResponse, options );
-
-            let uri = response?.url || pResponse?.url || options.url;
-
-            options.url = options.url || uri;
-            options.status = options.status || response.status || pResponse?.status || options.status;
-            options.headers = options.headers || new HttpResponseHeaders( response.headers || pResponse.headers || options.headers );
-            options.data = options.data || response.data || pResponse?.data || options.data;
 
             if ( _ud !== Response )
             {
@@ -410,11 +364,6 @@ const {
             if ( response instanceof this.constructor )
             {
                 return response.response || response;
-            }
-
-            if ( isWritable( response, "options" ) )
-            {
-                attempt( () => response.options = response.options || options );
             }
 
             return response;

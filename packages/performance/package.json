@@ -1,8 +1,8 @@
 {
-  "name": "@toolbocks/base64",
+  "name": "@toolbocks/performance",
   "version": "1.0.0",
-  "description": "Encode and Decode data to and from Base64. Compatible with any environment, as it includes a fallback implementation of the Base64 algorithms when native support is missing",
-  "main": "./src/Base64Utils.cjs",
+  "description": "A class used to measure performance statistics",
+  "main": "./src/index.js",
   "dependencies": {
     "@toolbocks/core": "^1.0.0"
   },

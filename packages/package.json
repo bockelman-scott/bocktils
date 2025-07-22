@@ -12,8 +12,10 @@
     "@toolbocks/dates": "^1.0.0",
     "@toolbocks/events": "^1.0.0",
     "@toolbocks/functors": "^1.0.0",
+    "@toolbocks/http": "^1.0.0",
     "@toolbocks/math": "^1.0.0",
     "@toolbocks/logging": "^1.0.0",
+    "@toolbocks/performance": "^1.0.0",
     "@toolbocks/regex": "^1.0.0"
   },
   "devDependencies": {

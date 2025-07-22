@@ -60,7 +60,6 @@ const httpRequestModule = require( "./HttpRequest.cjs" );
  * Imports the HttpResponse module for the response facade and associated utility functions required
  */
 const httpResponseModule = require( "./HttpResponse.cjs" );
-const url = require( "node:url" );
 
 const {
     _ud = "undefined", $scope = constants?.$scope || function()
@@ -86,9 +85,7 @@ const {
         objectEntries,
         populateOptions,
         resolveError,
-        getLastError,
         lock,
-        localCopy,
         attempt,
         asyncAttempt,
         isWritable,
@@ -103,22 +100,17 @@ const {
         isNonNullValue,
         isError,
         isFunction,
-        isAsyncFunction,
         isString,
-        isJson,
         isNumeric,
         isNullOrNaN,
         isDate,
         isDateString,
-        isReadOnly,
-        isPromise,
         isScalar,
-        firstMatchingType,
         asObject,
         clamp = moduleUtils.clamp
     } = typeUtils;
 
-    const { asString, asInt, toBool, isBlank, cleanUrl, lcase, ucase, capitalize } = stringUtils;
+    const { asString, asInt, isBlank, cleanUrl } = stringUtils;
 
     const { parseJson, asJson } = jsonUtils;
 
@@ -127,20 +119,16 @@ const {
     // import the functions, variables, and classes defined in the HttpConstants module that are used in this module
     const {
         VERBS,
-        PRIORITY,
         resolveHttpMethod,
-        calculatePriority,
         HttpStatus,
         STATUS_CODES,
         STATUS_TEXT,
-        STATUS_TEXT_ARRAY,
-        STATUS_ELIGIBLE_FOR_RETRY,
         DEFAULT_RETRY_DELAY
     } = httpConstants;
 
     const { HttpHeaders, HttpRequestHeaders, HttpResponseHeaders } = httpHeaders;
 
-    const { HttpRequest, cloneRequest } = httpRequestModule;
+    const { HttpRequest } = httpRequestModule;
 
     const { HttpResponse, cloneResponse } = httpResponseModule;
 
@@ -179,6 +167,74 @@ const {
         {
             //
         };
+
+    const OK_STATUSES = lock( [STATUS_CODES.OK, STATUS_CODES.NO_CONTENT, STATUS_CODES.ACCEPTED, STATUS_CODES.CREATED] );
+
+    const REDIRECT_STATUSES =
+        lock( [
+                  STATUS_CODES.MOVED,
+                  STATUS_CODES.MOVED_PERMANENTLY,
+                  STATUS_CODES.FOUND,
+                  STATUS_CODES.SEE_OTHER,
+                  STATUS_CODES.TEMPORARY_REDIRECT,
+                  STATUS_CODES.PERMANENT_REDIRECT
+              ] );
+
+    const CLIENT_ERROR_STATUSES =
+        lock( [
+                  STATUS_CODES.ERROR,
+                  STATUS_CODES.NOT_ACCEPTABLE,
+                  STATUS_CODES.LENGTH_REQUIRED,
+                  STATUS_CODES.PRECONDITION_FAILED,
+                  STATUS_CODES.REQUEST_ENTITY_TOO_LARGE,
+                  STATUS_CODES.REQUEST_URI_TOO_LONG,
+                  STATUS_CODES.UNSUPPORTED_MEDIA_TYPE,
+                  STATUS_CODES.REQUESTED_RANGE_NOT_SATISFIABLE,
+                  STATUS_CODES.EXPECTATION_FAILED,
+                  STATUS_CODES.MISDIRECTED_REQUEST,
+                  STATUS_CODES.UNPROCESSABLE_ENTITY,
+                  STATUS_CODES.REQUEST_HEADER_FIELDS_TOO_LARGE
+              ] );
+
+    const RATE_LIMIT_EXCEEDED_STATUSES =
+        lock( [
+                  STATUS_CODES.TOO_MANY_REQUESTS,
+                  STATUS_CODES.TOO_EARLY
+              ] );
+
+    const SKIP =
+        lock( [
+                  "response",
+                  "frameworkResponse",
+                  "options",
+                  "status",
+                  "statusText",
+                  "httpStatus",
+                  "data",
+                  "headers",
+                  "frameworkHeaders",
+                  "config",
+                  "url",
+                  "request",
+                  "error",
+                  "ok",
+                  "isError",
+                  "isRedirect",
+                  "isUseCached",
+                  "isClientError",
+                  "isExceedsRateLimit",
+                  "exceededRateLimit",
+                  "redirectUrl",
+                  "retryAfterMilliseconds",
+                  "body",
+                  "bodyUsed",
+                  "stream",
+                  "getThrottledStream",
+                  "json",
+                  "text",
+                  "clone",
+                  "_setPropertiesFromInstance"
+              ] );
 
     /**
      * This class provides both a wrapper for the information returned by an HTTP request
@@ -278,16 +334,15 @@ const {
             if ( pResponse instanceof this.constructor )
             {
                 constructed = attempt( () => me._setPropertiesFromInstance( pResponse, pConfig, pOptions ) );
-                this.originalResponseData = pResponse || me;
             }
 
             if ( !constructed )
             {
-                const options = asObject( populateOptions( pOptions || {}, pConfig || pResponse || {}, DEFAULT_RESPONSE_OPTIONS ) ) || {};
+                const options = asObject( populateOptions( (pOptions || {}), (pConfig || pResponse || {}), pResponse, DEFAULT_RESPONSE_OPTIONS ) ) || {};
 
                 const config = asObject( pConfig || pResponse || options ) || {};
 
-                const source = attempt( () => HttpResponse.resolveResponse( pResponse, config || options ) );
+                const source = attempt( () => HttpResponse.resolveResponse( pResponse, options ) );
 
                 // Some frameworks return the response as a property of an error returned in place of a response.
                 // See https://axios-http.com/docs/handling_errors, for example
@@ -316,13 +371,9 @@ const {
 
                 if ( isNonNullObject( source ) )
                 {
-                    let res = attempt( () => HttpResponse.resolveResponse( source.response || source || pResponse || config || options, config || options ) );
-
-                    res = attempt( () => HttpResponse.unwrapResponse( res ) );
-
-                    this.#response = attempt( () => new HttpResponse( (res || source || pResponse || config || options),
-                                                                      (options || config || source || res),
-                                                                      (config.url || res.url || options.url) ) ) || source || options.response || options || config;
+                    this.#response = attempt( () => new HttpResponse( (source || pResponse || config || options),
+                                                                      (options || config || source),
+                                                                      (config.url || options.url) ) ) || source || options.response || options || config;
 
                     // construct an instance of HttpStatus as a helper for evaluating the status
                     this.#httpStatus = attempt( () => HttpStatus.fromCode( this.status ) ) ||
@@ -340,44 +391,8 @@ const {
                     // Stores the url path from which the response actually came (in the case of redirects) or the url/path of the request
                     this.#url = cleanUrl( asString( asString( this.#response?.url || this.#frameworkResponse?.url, true ) || asString( options.url || config.url, true ) || _slash, true ) );
 
-                    // Stores the request object associated with this response or synthesizes one
-                    attempt( () => me.setRequest( res, config, options ) );
+                    this.#request = attempt( () => new HttpRequest( options.request || config.request || config, options ) );
                 }
-            }
-        }
-
-        setRequest( pResponse, pConfig, pOptions )
-        {
-            let config = pConfig || this.config;
-
-            let options = populateOptions( pOptions || Object.assign( {}, this.options ) || {}, this.options || {}, config );
-
-            let res = attempt( () => HttpResponse.resolveResponse( pResponse, options ) );
-
-            try
-            {
-                const req = attempt( () => res?.request ||
-                                           pResponse?.request ||
-                                           options?.request ||
-                                           config?.request ||
-                    {
-                        url: this.#url || _slash,
-                        config: config || options,
-                        abortController: (config.abortController || options.abortController || new AbortController())
-                    } );
-
-                if ( isNonNullObject( req ) )
-                {
-                    const cloned = attempt( () => cloneRequest( req ) );
-                    if ( isNonNullObject( cloned ) )
-                    {
-                        this.#request = attempt( () => new HttpRequest( cloned, options ) );
-                    }
-                }
-            }
-            catch( ex )
-            {
-                // ignored
             }
         }
 
@@ -444,9 +459,7 @@ const {
 
         get ok()
         {
-            return isNonNullObject( this.httpStatus ) ?
-                   this.httpStatus.isValid() :
-                   ([STATUS_CODES.OK, STATUS_CODES.NO_CONTENT, STATUS_CODES.ACCEPTED, STATUS_CODES.CREATED].includes( asInt( this.status ) ));
+            return isNonNullObject( this.httpStatus ) ? this.httpStatus.isValid() : (OK_STATUSES.includes( asInt( this.status ) ));
         }
 
         isError()
@@ -458,14 +471,7 @@ const {
         {
             if ( isNonNullObject( this.httpStatus ) ?
                  this.httpStatus.isRedirect() :
-                 [
-                     STATUS_CODES.MOVED,
-                     STATUS_CODES.MOVED_PERMANENTLY,
-                     STATUS_CODES.FOUND,
-                     STATUS_CODES.SEE_OTHER,
-                     STATUS_CODES.TEMPORARY_REDIRECT,
-                     STATUS_CODES.PERMANENT_REDIRECT
-                 ].includes( asInt( this.status ) ) )
+                 REDIRECT_STATUSES.includes( asInt( this.status ) ) )
             {
                 // noinspection JSUnresolvedReference
                 let loc = isFunction( this?.headers?.get ) ?
@@ -488,12 +494,12 @@ const {
             {
                 return this.httpStatus.isClientError();
             }
-            return [STATUS_CODES.ERROR, STATUS_CODES.NOT_ACCEPTABLE, STATUS_CODES.LENGTH_REQUIRED, STATUS_CODES.PRECONDITION_FAILED, STATUS_CODES.REQUEST_ENTITY_TOO_LARGE, STATUS_CODES.REQUEST_URI_TOO_LONG, STATUS_CODES.UNSUPPORTED_MEDIA_TYPE, STATUS_CODES.REQUESTED_RANGE_NOT_SATISFIABLE, STATUS_CODES.EXPECTATION_FAILED, STATUS_CODES.MISDIRECTED_REQUEST, STATUS_CODES.UNPROCESSABLE_ENTITY, STATUS_CODES.REQUEST_HEADER_FIELDS_TOO_LARGE].includes( asInt( this.status ) );
+            return CLIENT_ERROR_STATUSES.includes( asInt( this.status ) );
         }
 
         isExceedsRateLimit()
         {
-            return [STATUS_CODES.TOO_MANY_REQUESTS, STATUS_CODES.TOO_EARLY].includes( asInt( this.status ) );
+            return RATE_LIMIT_EXCEEDED_STATUSES.includes( asInt( this.status ) );
         }
 
         get exceededRateLimit()
@@ -521,9 +527,9 @@ const {
 
             const responseHeaders = new HttpResponseHeaders( this.headers || this.response?.headers );
 
-            let retryAfter = attempt( responseHeaders.get( "Retry-After" ) || responseHeaders.get( "retry-after" ) );
+            let retryAfter = attempt( () => responseHeaders.get( "Retry-After" ) ) || attempt( () => responseHeaders.get( "retry-after" ) );
 
-            retryAfter = retryAfter || attempt( responseHeaders.get( "X-Retry-After" ) || responseHeaders.get( "x-retry-after" ) );
+            retryAfter = retryAfter || attempt( () => responseHeaders.get( "X-Retry-After" ) ) || attempt( () => responseHeaders.get( "x-retry-after" ) );
 
             if ( isNumeric( retryAfter ) && !isDate( retryAfter ) )
             {
@@ -568,6 +574,7 @@ const {
             return !!this.response?.bodyUsed;
         }
 
+        // noinspection JSUnusedGlobalSymbols
         get stream()
         {
             return isNull( this.data ) ? this.body : toThrottledReadableStream( this.data || this.body, 2_048, 0 );
@@ -660,20 +667,25 @@ const {
 
                 attempt( () => me.#request = pResponseData.request || options.request || config.request );
 
-                const entries = attempt( () => objectEntries( pResponseData ) );
+                let entries = attempt( () => Object.entries( pResponseData ) );
 
                 if ( $ln( entries ) )
                 {
+                    entries = entries.filter( entry => !SKIP.includes( ObjectEntry.getKey( entry ) ) );
+
                     entries.forEach( entry =>
                                      {
                                          const key = ObjectEntry.getKey( entry );
                                          const value = ObjectEntry.getValue( entry );
 
-                                         if ( isString( key ) && !isBlank( key ) && !isNull( value ) )
+                                         if ( !SKIP.includes( key ) && !isFunction( value ) )
                                          {
-                                             if ( isNull( me[key] ) || isWritable( me, key ) )
+                                             if ( isString( key ) && !isBlank( key ) && !isNull( value ) )
                                              {
-                                                 attempt( () => me[key] = (me[key] || value) );
+                                                 if ( isNull( me[key] ) || isWritable( me, key ) )
+                                                 {
+                                                     attempt( () => me[key] = (me[key] || value) );
+                                                 }
                                              }
                                          }
                                      } );

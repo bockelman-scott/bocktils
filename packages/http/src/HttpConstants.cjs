@@ -118,7 +118,7 @@ const {
     /**
      * An object that defines common HTTP request methods as key-value pairs.<br>
      * <br>
-     * Each key is the HTTP method name in uppercase and its value is the same string representation.<br>
+     * Each key is the uppercase HTTP method name and its value is the same string representation.<br>
      * <br>
      *
      * Properties:<br>
@@ -295,7 +295,6 @@ const {
         }
         return PRIORITY.AUTO;
     }
-
 
     /**
      * An object representing various content types commonly used in web development.<br>
@@ -521,6 +520,8 @@ const {
      */
     const STATUS_TEXT_BY_INT_VALUE = {};
 
+    const OK_STATUSES = lock( [STATUS_CODES.OK, STATUS_CODES.ACCEPTED, STATUS_CODES.CREATED, STATUS_CODES.NO_CONTENT] );
+
     const STATUS_ELIGIBLE_FOR_RETRY =
         [
             STATUS_CODES.TOO_MANY_REQUESTS,
@@ -656,12 +657,12 @@ const {
 
         isOk()
         {
-            return this.code === 200;
+            return (200 === this.code);
         }
 
         isValid()
         {
-            return this.isOk() || [STATUS_CODES.OK, STATUS_CODES.ACCEPTED, STATUS_CODES.CREATED, STATUS_CODES.NO_CONTENT].includes( this.code );
+            return this.isOk() || OK_STATUSES.includes( this.code );
         }
     }
 

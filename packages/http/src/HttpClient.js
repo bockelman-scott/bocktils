@@ -232,11 +232,7 @@ const $scope = constants?.$scope || function()
         DEFAULT_RETRY_DELAY
     } = httpConstants;
 
-    const {
-        ResponseData,
-        populateResponseData,
-        populateErrorResponse
-    } = responseDataModule;
+    const { ResponseData } = responseDataModule;
 
     // define module-level constants
     const MIN_TIMEOUT_MILLISECONDS = 10_000; // 10 seconds
@@ -1438,15 +1434,15 @@ const $scope = constants?.$scope || function()
             if ( retries >= asInt( this.maxRetries ) )
             {
                 const error = new Error( "Maximum number of retries exceeded" );
-                return ResponseData.fromError( error, cfg, url );
+                return new ResponseData( error, cfg, cfg );
             }
 
-            const body = this.resolveBody( (cfg.body || cfg.data), pConfig );
+            const body = this.resolveBody( (cfg.data || cfg.body), pConfig );
             cfg.body = cfg.data = body || cfg.data || cfg.body;
 
             const response = await asyncAttempt( async() => await fetch( url, cfg ) );
 
-            let responseData = ResponseData.fromResponse( response, cfg, url );
+            let responseData = new ResponseData( response, cfg, cfg );
 
             if ( isNonNullObject( responseData ) )
             {
@@ -1524,7 +1520,7 @@ const $scope = constants?.$scope || function()
 
             const { cfg, url } = prepareRequestConfig( "GET", pConfig, pUrl, null );
 
-            const responseData = ResponseData.fromResponse( await asyncAttempt( async() => await me.sendGetRequest( url, cfg ) ) );
+            const responseData = new ResponseData( await asyncAttempt( async() => await me.sendGetRequest( url, cfg ) ) );
 
             if ( isNonNullObject( responseData ) )
             {
@@ -1724,7 +1720,7 @@ const $scope = constants?.$scope || function()
             {
                 let responseData = await asyncAttempt( async() => await delegate.sendGetRequest( url, cfg ) );
 
-                responseData = ResponseData.from( responseData );
+                responseData = responseData instanceof ResponseData ? responseData : new ResponseData( responseData );
 
                 if ( isNonNullObject( responseData ) )
                 {
