@@ -865,7 +865,7 @@ const { _ud = "undefined", $scope } = constants;
                 return this._streamAsChunkedStream( pValue, pChunkSize, pDelayMs );
             }
 
-            let encodedData = attempt( Streamer._encodeData( pValue ) );
+            let encodedData = attempt( () => Streamer._encodeData( pValue ) );
 
             const chunkSize = clamp( asInt( pChunkSize, this.chunkSize ), MIN_STREAMING_CHUNK_SIZE, MAX_STREAMING_CHUNK_SIZE );
             const delayMs = clamp( asInt( pDelayMs, this.delayMs ), MIN_STREAMING_DELAY_MILLISECONDS, MAX_STREAMING_DELAY_MILLISECONDS );
