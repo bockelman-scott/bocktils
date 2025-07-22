@@ -38,6 +38,7 @@ const { _ud = "undefined", $scope } = constants;
         objectEntries,
         objectKeys,
         objectValues,
+        resolveError,
         populateOptions,
         attempt,
         asyncAttempt,
@@ -708,6 +709,104 @@ const { _ud = "undefined", $scope } = constants;
             return encodedData;
         }
 
+        _streamToSingleChunkedStream( pValue )
+        {
+            if ( !(pValue instanceof ReadableStream) )
+            {
+                return this.asSingleChunkStream( pValue );
+            }
+
+            const me = this;
+
+            return new ReadableStream( {
+                                           async start( controller )
+                                           {
+                                               let encodedData;
+
+                                               if ( pValue instanceof ReadableStream )
+                                               {
+                                                   // If the value is already a ReadableStream, consume it fully first.
+                                                   // This buffers the entire content into memory.
+                                                   const reader = attempt( () => pValue.getReader() );
+
+                                                   const chunks = [];
+
+                                                   let totalLength = 0;
+
+                                                   try
+                                                   {
+                                                       while ( true )
+                                                       {
+                                                           const
+                                                               {
+                                                                   done,
+                                                                   value: chunk
+                                                               } = await asyncAttempt( async() => await reader.read() );
+
+                                                           if ( done )
+                                                           {
+                                                               break;
+                                                           }
+
+                                                           chunks.push( chunk );
+
+                                                           totalLength += $ln( chunk );
+                                                       }
+                                                   }
+                                                   catch( readError )
+                                                   {
+                                                       controller.error( new Error( `Error reading from input ReadableStream: ${readError.message}` ) );
+
+                                                       toolBocksModule.handleError( resolveError( readError ), me._streamToSingleChunkedStream, chunks, pValue );
+
+                                                       return;
+                                                   }
+                                                   finally
+                                                   {
+                                                       attempt( () => reader.releaseLock() );
+                                                   }
+
+                                                   // Concatenate all chunks into a single Uint8Array
+                                                   encodedData = new Uint8Array( totalLength );
+
+                                                   let offset = 0;
+
+                                                   for( const chunk of chunks )
+                                                   {
+                                                       encodedData.set( chunk, offset );
+
+                                                       offset += chunk.length;
+                                                   }
+                                               }
+
+                                               // Enqueue the single, potentially buffered, chunk
+                                               if ( encodedData )
+                                               {
+                                                   controller.enqueue( encodedData );
+                                               }
+
+                                               controller.close();
+                                           },
+
+                                           /**
+                                            * The `cancel` method is called if the consumer cancels the stream.
+                                            * If the original value was a ReadableStream, attempt to cancel it.
+                                            * @param {any} pReason The reason for cancellation.
+                                            */
+                                           async cancel( pReason )
+                                           {
+                                               if ( pValue instanceof ReadableStream )
+                                               {
+                                                   // Attempt to cancel the underlying source stream
+                                                   await asyncAttempt( async() => await pValue.cancel( pReason ).catch( e => console.error( "Error cancelling source stream:", e ) ) );
+
+                                                   const event = new ModuleEvent( "StreamCancelled", { reason: pReason } );
+                                                   toolBocksModule.dispatchEvent( event );
+                                               }
+                                           }
+                                       } );
+        }
+
         /**
          * Converts a given value into a ReadableStream.
          * The stream will contain the value encoded as UTF-8 bytes.
@@ -724,6 +823,11 @@ const { _ud = "undefined", $scope } = constants;
 
             try
             {
+                if ( pValue instanceof ReadableStream )
+                {
+                    return this._streamToSingleChunkedStream( pValue );
+                }
+
                 encodedData = Streamer._encodeData( pValue );
             }
             catch( ex )
@@ -756,6 +860,11 @@ const { _ud = "undefined", $scope } = constants;
 
         asChunkedStream( pValue, pChunkSize = this.chunkSize, pDelayMs = this.delayMs )
         {
+            if ( pValue instanceof ReadableStream )
+            {
+                return this._streamAsChunkedStream( pValue, pChunkSize, pDelayMs );
+            }
+
             let encodedData = attempt( Streamer._encodeData( pValue ) );
 
             const chunkSize = clamp( asInt( pChunkSize, this.chunkSize ), MIN_STREAMING_CHUNK_SIZE, MAX_STREAMING_CHUNK_SIZE );
@@ -817,6 +926,126 @@ const { _ud = "undefined", $scope } = constants;
                                        } );
         }
 
+        _streamAsChunkedStream( pValue, pChunkSize = this.chunkSize, pDelayMs = this.delayMs )
+        {
+            if ( !(pValue instanceof ReadableStream) )
+            {
+                return this.asChunkedStream( pValue, pChunkSize, pDelayMs );
+            }
+
+            const chunkSize = clamp( asInt( pChunkSize, this.chunkSize ), MIN_STREAMING_CHUNK_SIZE, MAX_STREAMING_CHUNK_SIZE );
+            const delayMs = clamp( asInt( pDelayMs, this.delayMs ), MIN_STREAMING_DELAY_MILLISECONDS, MAX_STREAMING_DELAY_MILLISECONDS );
+
+            // Variables for internal buffering when input is a ReadableStream
+            let sourceReader = null;
+            let internalBuffer = new Uint8Array( 0 );
+            let bufferOffset = 0;
+            let sourceStreamDone = false;
+
+            const me = this;
+
+            return new ReadableStream( {
+                                           /**
+                                            * The `start` method is called exactly once when the stream is constructed.
+                                            * It initializes the source of data.
+                                            * @param {ReadableStreamDefaultController} controller
+                                            */
+                                           async start( controller )
+                                           {
+                                               if ( pValue instanceof ReadableStream )
+                                               {
+                                                   sourceReader = attempt( () => pValue.getReader() );
+                                               }
+                                           },
+
+                                           /**
+                                            * The `pull` method is called repeatedly by the stream's internal queueing
+                                            * mechanism whenever it's ready to accept more data.
+                                            * It can be an async function, allowing for delays and reading from source streams.
+                                            * @param {ReadableStreamDefaultController} controller
+                                            */
+                                           async pull( controller )
+                                           {
+                                               // If the source is another ReadableStream, keep pulling from it until
+                                               // we have enough data in our internal buffer to form a chunk, or the source is exhausted.
+                                               if ( sourceReader && !sourceStreamDone )
+                                               {
+                                                   // While we don't have enough data for a chunk AND the source isn't done
+                                                   while ( (($ln( internalBuffer ) - bufferOffset) < chunkSize) && !sourceStreamDone )
+                                                   {
+                                                       try
+                                                       {
+                                                           const
+                                                               {
+                                                                   done,
+                                                                   value: newChunk
+                                                               } = await asyncAttempt( async() => await sourceReader.read() );
+
+                                                           if ( done )
+                                                           {
+                                                               sourceStreamDone = true;
+                                                               break;
+                                                           }
+
+                                                           // Append newChunk to internalBuffer
+                                                           const tempBuffer = new Uint8Array( ($ln( internalBuffer ) - bufferOffset) + $ln( newChunk ) );
+                                                           tempBuffer.set( internalBuffer.slice( bufferOffset ) ); // Copy unread part
+                                                           tempBuffer.set( newChunk, ($ln( internalBuffer ) - bufferOffset) ); // Append new chunk
+                                                           internalBuffer = tempBuffer;
+                                                           bufferOffset = 0; // Reset offset as buffer is now compacted
+                                                       }
+                                                       catch( readError )
+                                                       {
+                                                           controller.error( new Error( `Error reading from input ReadableStream during pull: ${readError.message}` ) );
+
+                                                           sourceStreamDone = true; // Mark source as done due to error
+
+                                                           toolBocksModule.handleError( resolveError( readError ), me._streamAsChunkedStream, pValue );
+
+                                                           return;
+                                                       }
+                                                   }
+                                               }
+
+                                               // Now, try to enqueue a chunk from the internal buffer
+                                               if ( ($ln( internalBuffer ) - bufferOffset) > 0 )
+                                               {
+                                                   const bytesAvailable = ($ln( internalBuffer ) - bufferOffset);
+                                                   const bytesToEnqueue = Math.min( chunkSize, bytesAvailable );
+                                                   const chunk = internalBuffer.slice( bufferOffset, bufferOffset + bytesToEnqueue );
+
+                                                   controller.enqueue( chunk );
+                                                   bufferOffset += bytesToEnqueue;
+
+                                                   if ( delayMs > 0 )
+                                                   {
+                                                       await asyncAttempt( async() => await sleep( delayMs ) );
+                                                   }
+                                               }
+                                               else if ( sourceStreamDone )
+                                               {
+                                                   // If the internal buffer is empty AND the source stream is done, close the output stream
+                                                   controller.close();
+                                               }
+                                           },
+
+                                           /**
+                                            * The `cancel` method is called if the consumer cancels the stream.
+                                            * If the original value was a ReadableStream, attempt to cancel it.
+                                            * @param {any} pReason The reason for cancellation.
+                                            */
+                                           async cancel( pReason )
+                                           {
+                                               if ( sourceReader )
+                                               {
+                                                   await asyncAttempt( async() => await sourceReader.cancel( pReason ).catch( e => toolBocksModule.handleError( resolveError( e ), me._streamAsChunkedStream, this.cancel ) ) );
+
+                                                   const event = new ModuleEvent( "StreamCancelled", { reason: pReason } );
+                                                   toolBocksModule.dispatchEvent( event );
+                                               }
+                                           }
+                                       } );
+        }
     }
 
     const more =
