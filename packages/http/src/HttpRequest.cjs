@@ -91,6 +91,7 @@ const {
         populateOptions,
         lock,
         localCopy,
+        mergeObjects,
         attempt,
         asyncAttempt,
         $ln
@@ -746,7 +747,7 @@ const {
 
     HttpUrl.resolveUrl = function( pUrl )
     {
-        if ( isNull( pUrl ) )
+        if ( isNull( pUrl ) || (isString( pUrl ) && isBlank( pUrl )) )
         {
             return _slash;
         }
@@ -767,7 +768,7 @@ const {
 
         if ( isNonNullObject( pUrl ) )
         {
-            return pUrl?.url || pUrl?.href || pUrl?.location;
+            return pUrl?.url || pUrl?.href || pUrl?.location || _slash;
         }
 
         return _slash;
@@ -1199,7 +1200,7 @@ const {
 
     HttpRequestOptions.fromOptions = function( pOptions )
     {
-        const options = populateOptions( pOptions, new HttpRequestOptions() );
+        const options = asObject( pOptions || new HttpRequestOptions() ) || new HttpRequestOptions();
 
         return new HttpRequestOptions( options.method,
                                        options.headers,
@@ -1302,6 +1303,18 @@ const {
         return req.body || req.data || config.body || config.data || data;
     }
 
+    function _unwrapRequest( pRequestOrUrl )
+    {
+        let req = pRequestOrUrl.request || pRequestOrUrl;
+
+        while ( req.request )
+        {
+            req = req.request;
+        }
+
+        return req;
+    }
+
     class HttpRequest extends EventTarget
     {
         #id = 0;
@@ -1321,39 +1334,39 @@ const {
         {
             super();
 
-            let config = toObjectLiteral( pOptions || (isNonNullObject( pRequestOrUrl ) ? pRequestOrUrl : new HttpRequestOptions()) ) || {};
+            let uri = (isString( pRequestOrUrl ) && !isJson( pRequestOrUrl ) ?
+                       cleanUrl( pRequestOrUrl ) :
+                       asObject( pRequestOrUrl )?.url || asObject( pOptions )?.url);
 
-            let uri = (isString( pRequestOrUrl ) && !isJson( pRequestOrUrl ) ? pRequestOrUrl : asObject( pRequestOrUrl )?.url) || config.url || config.href;
+            let config = new HttpRequestOptions( asObject( pOptions || (isNonNullObject( pRequestOrUrl ) ?
+                                                                        pRequestOrUrl :
+                                                                        new HttpRequestOptions()) ) );
 
             if ( pRequestOrUrl instanceof this.constructor )
             {
-                let req = pRequestOrUrl.request || pRequestOrUrl;
-
-                while ( req.request )
-                {
-                    req = req.request;
-                }
-
+                let req = _unwrapRequest( pRequestOrUrl );
                 this.#request = cloneRequest( req );
             }
             else if ( isString( uri ) && !isJson( uri ) && isUrl( uri ) )
             {
                 this.#request = (_ud === typeof Request ?
                     {
-                        url: uri,
-                        method: config.method,
-                        ...config
-                    } : new Request( uri, config ));
+                        url: uri || asObject( config ).url,
+                        method: asObject( config ).method || VERBS.GET,
+                        mode: asObject( config ).mode || MODES.CORS,
+                        data: asObject( config )?.data,
+                        body: asObject( config )?.data || resolveRequestBody( config, asObject( pOptions ) ),
+                        headers: asObject( config )?.headers || asObject( pOptions )?.headers || {}
+                    } : new Request( uri, asObject( config ) ));
             }
             else
             {
-                this.#request = cloneRequest( this.resolveRequest( pRequestOrUrl, pOptions ) );
+                this.#request = this.resolveRequest( pRequestOrUrl, pOptions );
             }
 
-            this.#options = populateOptions( toObjectLiteral( config ),
-                                             toObjectLiteral( new HttpRequestOptions( HttpVerb.resolveHttpMethod( this.#request?.method || config.method || VERBS.GET ),
-                                                                                      new HttpRequestHeaders( this.#request?.headers || config.headers || {} ),
-                                                                                      config.body || config.data ) ) );
+            this.#options = mergeObjects( config, (new HttpRequestOptions( HttpVerb.resolveHttpMethod( this.#request?.method || config.method || VERBS.GET ),
+                                                                           new HttpRequestHeaders( this.#request?.headers || config.headers || {} ),
+                                                                           config.body || config.data )) );
 
             this.#id = this.#request?.id || this.options?.id || this.constructor.nextId();
 
@@ -1427,7 +1440,7 @@ const {
 
         get request()
         {
-            return this.resolveRequest( this.#request ) || this;
+            return this.#request || this;
         }
 
         get response()
@@ -1474,7 +1487,7 @@ const {
 
             let url = !isBlank( uri ) && isUrl( uri ) ? HttpUrl.resolveUrl( uri ) : new HttpUrl();
 
-            let body = req.body || cfg?.body || req.data || cfg?.data;
+            let body = req.data || cfg?.data || req.body || cfg?.body;
 
             let bodyUsed = false;
 
@@ -1524,7 +1537,7 @@ const {
 
             if ( _ud !== typeof Request )
             {
-                return new Request( url, toObjectLiteral( requestOptions ) );
+                return new Request( url, asObject( requestOptions ) );
             }
 
             return new HttpRequest( obj.url || url, requestOptions );
@@ -1604,13 +1617,13 @@ const {
     HttpRequest.resolve = function( pRequestOrUrl, pOptions )
     {
         const options = populateOptions( pOptions || {},
-                                         toObjectLiteral( new HttpRequestOptions( pRequestOrUrl?.method || VERBS.GET,
-                                                                                  new HttpRequestHeaders( pRequestOrUrl?.headers || pOptions?.headers ),
-                                                                                  pRequestOrUrl?.options || {} ) ) );
+                                         (new HttpRequestOptions( pRequestOrUrl?.method || VERBS.GET,
+                                                                  new HttpRequestHeaders( pRequestOrUrl?.headers || pOptions?.headers ),
+                                                                  pRequestOrUrl?.options || {} )) );
 
         if ( pRequestOrUrl instanceof HttpRequest || ((_ud !== typeof Request && pRequestOrUrl instanceof Request)) )
         {
-            return new HttpRequest( (pRequestOrUrl?.request || pRequestOrUrl), options );
+            return new HttpRequest( _unwrapRequest( (pRequestOrUrl?.request || pRequestOrUrl), options ) );
         }
         else if ( isString( pRequestOrUrl ) )
         {
@@ -1620,9 +1633,9 @@ const {
             }
             return new HttpRequest( pRequestOrUrl, options );
         }
-        else if ( isFunction( pRequestOrUrl?.toString ) )
+        else
         {
-            return new HttpRequest( asString( pRequestOrUrl.toString(), true ), options );
+            return new HttpRequest( asString( pRequestOrUrl?.url, true ), options );
         }
     };
 

@@ -89,7 +89,8 @@ const {
         isWritable,
         localCopy,
         attempt,
-        asyncAttempt
+        asyncAttempt,
+        $ln
     } = moduleUtils;
 
     const { _mt_str = "", _mt = _mt_str, _str, _num, _big, S_ERR_PREFIX, _slash = "/" } = constants;
@@ -109,7 +110,7 @@ const {
             isReadOnly
         } = typeUtils;
 
-    const { asString, asInt, isBlank, lcase, ucase, isJson } = stringUtils;
+    const { asString, asInt, isBlank, lcase, ucase, cleanUrl, isJson } = stringUtils;
 
     const { asJson, parseJson } = jsonUtils;
 
@@ -117,9 +118,9 @@ const {
 
     const { isHeader, STATUS_CODES, STATUS_TEXT, HttpStatus } = httpConstants;
 
-    const { HttpResponseHeaders } = httpHeaders;
+    const { HttpHeaders, HttpRequestHeaders, HttpResponseHeaders } = httpHeaders;
 
-    const { HttpRequest, cloneRequest } = httpRequest;
+    const { HttpUrl, HttpRequest, cloneRequest } = httpRequest;
 
     const modName = "HttpResponse";
 
@@ -251,14 +252,25 @@ const {
             return new HttpResponseHeaders();
         }
 
-        if ( headers instanceof HttpResponseHeaders )
+        if ( headers instanceof HttpHeaders )
         {
-            return headers;
+            return new HttpResponseHeaders( headers );
         }
 
-        if ( isString( headers ) && isJson( headers ) )
+        if ( isString( headers ) )
         {
-            headers = attempt( () => parseJson( headers ) );
+            if ( isJson( headers ) )
+            {
+                headers = attempt( () => parseJson( headers ) );
+            }
+            else
+            {
+                const arr = asString( headers ).split( /[\r\n]/ );
+                if ( $ln( arr ) )
+                {
+                    return new HttpResponseHeaders( arr );
+                }
+            }
         }
 
         if ( isNonNullObject( headers ) )
@@ -311,27 +323,25 @@ const {
 
             const me = this;
 
-            const options = populateOptions( pOptions || pResponse, DEFAULT_RESPONSE_OPTIONS );
+            const options = populateOptions( pOptions || pResponse, pResponse, DEFAULT_RESPONSE_OPTIONS );
 
-            options.url = options.url || pUrl || _slash;
+            options.url = options.url || pUrl;
 
-            const res = attempt( () => me.resolveResponse( pResponse || options, options ) );
+            const res = attempt( () => HttpResponse.resolveResponse( pResponse || options, options ) ) || pResponse || options;
 
-            const req = attempt( () => HttpRequest.resolve( pResponse?.request || res?.request || options?.request, options ) );
+            this.#headers = attempt( () => cloneHeaders( res.headers || pResponse?.headers || options.headers || new HttpResponseHeaders( options ) ) );
 
-            this.#headers = attempt( () => cloneHeaders( pResponse?.headers || res?.headers || options?.headers || req?.headers || new HttpResponseHeaders( options ) ) );
+            this.#response = attempt( () => cloneResponse( res || pResponse || options.response || options ) );
 
-            this.#response = attempt( () => cloneResponse( res || options ) );
+            this.#status = HttpStatus.fromCode( res.status || pResponse?.status || options.status ) || attempt( () => HttpStatus.fromResponse( res || options.response || options, options ) );
 
-            this.#status = attempt( () => HttpStatus.fromResponse( res || options, options ) );
+            this.#ok = this.#ok || this.#status?.isOk() || res?.ok || pResponse?.ok;
 
-            this.#ok = this.#ok || this.#status?.isOk();
+            this.#url = cleanUrl( asString( res?.url || options?.url || pUrl, true ) ) || _slash;
 
-            this.#url = asString( res?.url || req?.url || options?.url || pUrl, true );
+            this.#request = isNonNullObject( options.request || res.request ) ? attempt( () => cloneRequest( options.request || res.request ) ) : options.request || new HttpRequest( HttpUrl.resolveUrl( this.#url || options.url || pUrl ), options );
 
-            this.#request = isNonNullObject( req ) ? attempt( () => cloneRequest( req ) ) : options.request || new HttpRequest( this.#url || options.url || pUrl, options );
-
-            this.#data = pResponse?.data || res.data || options.data;
+            this.#data = res.data || pResponse?.data || options.data;
 
             this.#options = attempt( () => populateOptions( options, me ) ) || options;
         }
@@ -339,17 +349,14 @@ const {
         static _resolveBody( pResponse, pOptions )
         {
             const options = populateOptions( (pOptions || pResponse?.options),
+                                             (pResponse?.options || {}),
                                              DEFAULT_RESPONSE_OPTIONS );
 
-            let res = pResponse?.response || pResponse || options?.response || options;
+            let res = HttpResponse.unwrapResponse( pResponse?.response || pResponse || options?.response || options, options );
 
-            // unwrap the response for any containers
-            while ( res.response )
-            {
-                res = res.response;
-            }
+            let body = attempt( () => res?.data || options?.data || pResponse?.data );
 
-            let body = res?.data || options?.data || pResponse?.data || res?.body || options?.body || pResponse?.body;
+            body = attempt( () => body || cloneResponse( res )?.body || cloneResponse( pResponse )?.body );
 
             if ( isNull( body ) )
             {
@@ -373,66 +380,49 @@ const {
             return body || {};
         }
 
-        resolveResponse( pResponse, pOptions, pUrl = pResponse?.url )
+        /**
+         * Unwraps the response object from any containers it may be wrapped in.
+         * This response will be converted into a Fetch API Response object.
+         *
+         * @param {Object|HttpResponse|Response} pResponse a response or an object with a response property
+         * @param {Object} pOptions  other values that should be considered or added to the response
+         *
+         * @returns {Response|Object}
+         */
+        static resolveResponse( pResponse, pOptions )
         {
-            const options = populateOptions( pOptions || pResponse || {}, DEFAULT_RESPONSE_OPTIONS );
+            const options = populateOptions( pOptions || pResponse || {}, pResponse, DEFAULT_RESPONSE_OPTIONS );
 
             let response = HttpResponse.unwrapResponse( pResponse, options );
 
-            let uri = response?.url || pResponse?.url || options.url || asString( pUrl, true );
+            let uri = response?.url || pResponse?.url || options.url;
 
-            if ( isNonNullObject( response ) )
-            {
-                if ( response instanceof this.constructor )
-                {
-                    response = HttpResponse.unwrapResponse( response.response || response );
-                }
-            }
-            else
-            {
-                const body = HttpResponse._resolveBody( response || options, options ) || response?.data || options?.data || options?.body || {};
+            options.url = options.url || uri;
+            options.status = options.status || response.status || pResponse?.status || options.status;
+            options.headers = options.headers || new HttpResponseHeaders( response.headers || pResponse.headers || options.headers );
+            options.data = options.data || response.data || pResponse?.data || options.data;
 
-                if ( _ud !== typeof Response )
-                {
-                    response = new Response( body, options );
-                }
-                else
-                {
-                    response =
-                        {
-                            body: body || options.body || options.data || null,
-                            status: options.status || (!isNull( body ) ? STATUS_CODES.OK : STATUS_CODES.NOT_FOUND),
-                            statusText: options.statusText,
-                            type: options.type,
-                            ...options
-                        };
-                }
+            if ( _ud !== Response )
+            {
+                response = response instanceof Response ? response : new Response( response.data || options.data || _mt, options );
             }
 
-            if ( isWritable( response, "url" ) )
+            if ( response instanceof this.constructor )
             {
-                attempt( () => response.url = response.url || pResponse?.url || uri );
+                return response.response || response;
             }
 
-            if ( isWritable( response, "status" ) )
+            if ( isWritable( response, "options" ) )
             {
-                attempt( () => response.status = response.status || pResponse?.status || options.status );
-            }
-            if ( isWritable( response, "headers" ) )
-            {
-                attempt( () => response.headers = new HttpResponseHeaders( response.headers || pResponse.headers || options.headers ) );
-            }
-            if ( isWritable( response, "data" ) )
-            {
-                attempt( () => response.data = response.data || pResponse?.data || options.data );
+                attempt( () => response.options = response.options || options );
             }
 
-            return response || new HttpResponse( options );
+            return response;
         }
 
         static unwrapResponse( pResponse, pOptions )
         {
-            let response = asObject( pResponse?.response || pResponse || pOptions.response || pOptions || {} ) || {};
+            let response = asObject( pResponse?.response || pResponse || pOptions?.response || pOptions || {} ) || {};
 
             while ( isNonNullObject( response ) && isNonNullObject( response.response ) )
             {
@@ -449,7 +439,7 @@ const {
 
         get response()
         {
-            return this.resolveResponse( this.#response, this.options );
+            return HttpResponse.resolveResponse( this.#response, this.options );
         }
 
         clone()
@@ -465,22 +455,22 @@ const {
         get body()
         {
             const res = cloneResponse( this.response );
-            return res.bodyUsed ? toReadableStream( this.data ) : res.body || toReadableStream( this.data );
+            return res.bodyUsed ? toReadableStream( this.data || _mt ) : res.body || toReadableStream( this.data || _mt );
         }
 
         get bodyUsed()
         {
-            return this.response?.bodyUsed || false;
+            return !!this.response?.bodyUsed;
         }
 
         get stream()
         {
-            return toThrottledReadableStream( this.data, 2_048, 0 );
+            return toThrottledReadableStream( this.data || this.body, 2_048, 0 );
         }
 
         getThrottledStream( pChuckSize, pDelayMs )
         {
-            return toThrottledReadableStream( this.data, pChuckSize, pDelayMs );
+            return toThrottledReadableStream( this.data || this.body, pChuckSize, pDelayMs );
         }
 
         async arrayBuffer()
@@ -587,17 +577,21 @@ const {
 
         get headers()
         {
-            return new HttpResponseHeaders( this.#headers || this.response.headers );
+            return new HttpResponseHeaders( this.#headers || this.response.headers || this.options.headers );
         }
 
         get ok()
         {
-            return this.#ok;
+            return this.#ok || (asInt( this.status, 0 ) >= 200 && asInt( this.status, 0 ) < 300);
         }
 
         get request()
         {
-            return cloneRequest( this.#request );
+            if ( isNonNullObject( this.#request || this.options.request ) )
+            {
+                return cloneRequest( this.#request || this.options.request );
+            }
+            return this.options;
         }
 
         get redirected()

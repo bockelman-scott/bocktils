@@ -19,6 +19,8 @@
  */
 const core = require( "@toolbocks/core" );
 
+const jsonUtils = require( "@toolbocks/json" );
+
 // import the HTTP constants
 const httpConstants = require( "./HttpConstants.cjs" );
 
@@ -100,9 +102,11 @@ const {
         } = typeUtils;
 
     // imports useful functions for safer string manipulation
-    const { asString, isBlank, lcase } = stringUtils;
+    const { asString, isBlank, isJson, lcase } = stringUtils;
 
     const { asArray } = arrayUtils;
+
+    const { asJson, parseJson } = jsonUtils;
 
     // imports useful constants and functions related to HTTP request and response headers
     const { isHeader } = httpConstants;
@@ -283,10 +287,40 @@ const {
 
             const existing = map.get( key ) || map.get( lcase( key ) ) || _mt_str;
 
-            map.set( key, ((existing ? existing + ", " : _mt_str) + value) || value );
+            map.set( key, ((existing ? (existing + ", ") : _mt_str) + value) || value );
         }
 
         return map;
+    }
+
+    function processWebApiHeaders( pOptions )
+    {
+        let entries = isFunction( pOptions.entries ) ? pOptions.entries() : objectEntries( pOptions );
+
+        let arr = [...(entries || objectEntries( pOptions ) || [])];
+
+        if ( $ln( arr ) <= 0 )
+        {
+            if ( isNonNullObject( pOptions ) && !isArray( pOptions ) )
+            {
+                return processHeaderObject( pOptions );
+            }
+            else
+            {
+                let headers = new HttpHeaders();
+
+                for( let entry of entries )
+                {
+                    if ( entry && $ln( entry ) )
+                    {
+                        headers.append( entry[0], entry[1] || entry[0] );
+                    }
+                }
+
+                return headers;
+            }
+        }
+        return processHeadersArray( arr );
     }
 
     /**
@@ -308,32 +342,7 @@ const {
 
         if ( isWebApiHeadersObject( pOptions ) || isMap( pOptions ) )
         {
-            let entries = isFunction( pOptions.entries ) ? pOptions.entries() : objectEntries( pOptions );
-
-            let arr = [...(entries || objectEntries( pOptions ) || [])];
-
-            if ( $ln( arr ) <= 0 )
-            {
-                if ( isNonNullObject( pOptions ) && !isArray( pOptions ) )
-                {
-                    return processHeaderObject( pOptions );
-                }
-                else
-                {
-                    let headers = new HttpHeaders();
-
-                    for( let entry of entries )
-                    {
-                        if ( entry && $ln( entry ) )
-                        {
-                            headers.append( entry[0], entry[1] || entry[0] );
-                        }
-                    }
-
-                    return headers;
-                }
-            }
-            return processHeadersArray( arr );
+            return processWebApiHeaders( pOptions );
         }
 
         if ( isArray( pOptions ) )
@@ -343,6 +352,15 @@ const {
 
         if ( isString( pOptions ) )
         {
+            if ( isJson( pOptions ) )
+            {
+                const obj = attempt( () => parseJson( pOptions ) );
+                if ( isNonNullObject( obj ) )
+                {
+                    return processHeaderObject( obj );
+                }
+            }
+
             return processHeadersArray( asString( pOptions, true ).split( /\r?\n/ ) );
         }
 
@@ -493,6 +511,11 @@ const {
             return asString( s );
         }
 
+        toJSON()
+        {
+            return asJson( this.toLiteral() );
+        }
+
         [Symbol.toPrimitive]()
         {
             return this.toLiteral();
@@ -525,6 +548,7 @@ const {
             dependencies,
             classes:
                 {
+                    HttpHeaders,
                     HttpRequestHeaders,
                     HttpResponseHeaders
                 },
