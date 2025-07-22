@@ -6945,7 +6945,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return null;
     };
 
-    const $ln = ( pVal ) => pVal?.length || 0;
+    const $ln = ( pVal ) => pVal?.length || pVal?.size || 0;
 
     const mod =
         {
