@@ -483,7 +483,7 @@ const $scope = constants?.$scope || function()
             const startsWithSeparator = unixPath.startsWith( this.sep );
             const startsWithWindowsRoot = /^[A-Z]:\//i.test( unixPath );
 
-            let hasRoot = startsWithSeparator || startsWithWindowsRoot;
+            let hadRoot = startsWithSeparator || startsWithWindowsRoot;
 
             let root = (startsWithSeparator) ? this.sep : (startsWithWindowsRoot) ? unixPath.substring( 0, unixPath.indexOf( this.sep ) + 1 ) : _mt_str;
 
@@ -501,7 +501,7 @@ const $scope = constants?.$scope || function()
                     {
                         parts.pop();
                     }
-                    else if ( !hasRoot )
+                    else if ( !hadRoot )
                     {
                         // If it started relative and we're at the beginning (parts is empty),
                         // and we encounter '..', we need to keep it to signify going "up"
@@ -518,7 +518,7 @@ const $scope = constants?.$scope || function()
             let normalizedPath = parts.join( this.sep );
 
             // If the path was absolute (had a root), ensure the final path retains its root.
-            if ( hasRoot )
+            if ( hadRoot && !normalizedPath.startsWith( root ) )
             {
                 return toUnixPath( root + normalizedPath );
             }

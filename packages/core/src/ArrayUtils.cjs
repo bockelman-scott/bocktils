@@ -4974,31 +4974,6 @@ const $scope = constants?.$scope || function()
         return !!pAsStrings ? arr.map( e => asString( e ) ) : arr;
     };
 
-    class RateLimits
-    {
-        #example = "x-ratelimit-limit: 10 10;w=1,60;w=60,15000;w=3600,360000;w=86400";
-
-        #requestsPerSecond = 10;
-        #requestsPerMinute = 250;
-        #requestsPerHour = 15_000;
-        #requestsPerDay = 360_000;
-
-        constructor( ...pArgs )
-        {
-
-        }
-    }
-
-    RateLimits.fromHeaders = function( pHeaders )
-    {
-
-    };
-
-    RateLimits.from = function( pObject )
-    {
-
-    };
-
     /**
      * Instances of this class are used to iterate a collection or Iterable at a controlled rate.
      * <br><br>

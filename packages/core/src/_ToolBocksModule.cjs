@@ -2827,7 +2827,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             this.#type = type || "ToolBocksModuleEvent";
 
-            this.#detail = data?.detail || data?.data || data || pData || options?.detail || options || {};
+            this.#detail = data?.detail || data?.data || data || pData || options?.detail || options?.data || {};
 
             this.#traceEnabled = !!options.traceEnabled;
 
