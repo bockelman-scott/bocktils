@@ -1102,6 +1102,45 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return handleAttempt( pFunction, ...pArgs );
     }
 
+    function attemptSilent( pFunction, ...pArgs )
+    {
+        if ( isFunc( pFunction ) )
+        {
+            if ( isAsyncFunction( pFunction ) )
+            {
+                try
+                {
+                    return (async function()
+                    {
+                        try
+                        {
+                            return await pFunction.call( $scope(), ...pArgs );
+                        }
+                        catch( ex )
+                        {
+                            // ignored, silently
+                        }
+                    }()).then( r => r ).catch( no_op );
+                }
+                catch( e2 )
+                {
+                    // ignored, silently
+                }
+            }
+            else
+            {
+                try
+                {
+                    return pFunction.call( $scope(), ...pArgs );
+                }
+                catch( ex )
+                {
+                    // ignored, silently
+                }
+            }
+        }
+    }
+
     /**
      * Executes a specified function asynchronously with the provided arguments
      * and handles the execution using the handleAttempt function,
@@ -1126,6 +1165,21 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     async function getLastAsynchronousError()
     {
         return Promise.resolve( handleAttempt.lastError );
+    }
+
+    async function asyncAttemptSilent( pFunction, ...pArgs )
+    {
+        if ( isFunc( pFunction ) )
+        {
+            try
+            {
+                return await pFunction.call( $scope(), ...pArgs );
+            }
+            catch( ex )
+            {
+                // ignored, silently
+            }
+        }
     }
 
     /**
@@ -2119,6 +2173,44 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     function populateOptions( pOptions, ...pDefaults )
     {
         return (((new Merger( pOptions, ...pDefaults )).merged) || pOptions || {});
+    }
+
+    /**
+     * Performs only a 1-level depth copy; shallow at depths beyond that.
+     * This is intended for more performance-sensitive usage where a deep copy is not necessary
+     * @param pOptions
+     * @param pDefaults
+     */
+    function resolveOptions( pOptions, ...pDefaults )
+    {
+        let sources = [...(pDefaults || [])].filter( isNonNullObj );
+
+        if ( isNonNullObj( pOptions ) )
+        {
+            sources.unshift( Object.assign( {}, pOptions || {} ) );
+        }
+
+        sources = sources.reverse();
+
+        let options = {};
+
+        for( let obj of sources )
+        {
+            const entries = objectEntries( obj );
+
+            entries.forEach( entry =>
+                             {
+                                 const key = ObjectEntry.getKey( entry );
+                                 const value = ObjectEntry.getValue( entry );
+
+                                 if ( key && (_ud !== typeof value) )
+                                 {
+                                     options[key] = (isNonNullObj( value ) ? Object.assign( {}, value ) : isBool( options[key] ) ? null === value ? false : !!value : value);
+                                 }
+                             } );
+        }
+
+        return Object.assign( {}, options );
     }
 
     /**
@@ -7096,6 +7188,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             isObjectLiteral,
             isReadOnly,
 
+            resolveOptions,
             populateOptions,
             mergeOptions,
 
@@ -7111,6 +7204,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             getLastError,
             getLastAsynchronousError,
+
+            attemptSilent,
+            asyncAttemptSilent,
 
             fireAndForget,
             executeCallback,

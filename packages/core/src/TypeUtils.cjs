@@ -761,9 +761,9 @@ const $scope = constants?.$scope || function()
             const options = populateOptions( pOptions, DEFAULT_IS_OBJECT_OPTIONS );
 
             return !((options.rejectNull && isNull( pObject )) ||
-                     (options.rejectArrays && _isArr( pObject )) ||
-                     (options.rejectPrimitiveWrappers && isPrimitiveWrapper( pObject )) ||
-                     ( !options.allowEmptyObjects && getKeys( pObject ).length <= 0));
+                   (options.rejectArrays && _isArr( pObject )) ||
+                   (options.rejectPrimitiveWrappers && isPrimitiveWrapper( pObject ))) ||
+                   ( !options.allowEmptyObjects && getKeys( pObject ).length <= 0);
         }
 
         return false;
@@ -4131,7 +4131,7 @@ const $scope = constants?.$scope || function()
 
     function toObjectLiteral( pObject, pOptions = DEFAULT_OBJECT_LITERAL_OPTIONS, pVisited = new ResolvedSet(), pStack = [] )
     {
-        if ( isNull( pObject ) || !isObject( pObject ) || isPrimitive( pObject ) || isObjectLiteral( pObject ) )
+        if ( isNull( pObject ) || !isObject( pObject ) || isPrimitiveWrapper( pObject ) || isObjectLiteral( pObject ) )
         {
             return pObject;
         }

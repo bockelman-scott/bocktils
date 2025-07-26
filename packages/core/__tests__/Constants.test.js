@@ -14,6 +14,7 @@ const {
     getExecutionEnvironment,
     IllegalArgumentError,
     IterationCap,
+    resolveOptions,
     populateOptions,
     isReadOnly,
     localCopy,
@@ -99,7 +100,164 @@ describe( "populateOptions", () =>
                                                                                     } );
     } );
 
+    test( "populateOptions can handle a series of deeply nested objects", () =>
+    {
+        const date = new Date();
+
+        const defaultsA =
+            {
+                a: { a: { a: { a: "1" } } },
+                b: { b: { b: { b: { b: 2 } } } },
+                c: 3,
+                d: { d: { d: { d: [0, 1, 2] } } },
+                e: { e: { e: { e: { e: { e: { e: { e: date } } } } } } },
+                f: "friendly",
+                g: "ghost"
+            };
+
+        const defaultsB =
+            {
+                a: { a: { a: "1" } },
+                b: { b: { b: { b: { b: 7 } } } },
+                c: 30,
+                d: { d: { d: { d: [3, 4, 5, 6] } } },
+                e: { e: { e: { e: { e: { e: { e: { e: date } } } } } } },
+                f: "scary",
+                g: "monster"
+            };
+
+        const options =
+            {
+                name: "Scott",
+                age: 37,
+                b: { b: { b: { b: { b: 75, bb: 57 } } } },
+                c: { c: 33 },
+                d: { d: { d: { d: [7, 8, 9, 0] } } },
+                e: { ...defaultsA },
+                f: "performance",
+                g: "nightmare"
+            };
+
+        let startTime = Date.now();
+
+        const opts = populateOptions( options, defaultsA, defaultsB );
+
+        let endTime = Date.now();
+
+        console.log( JSON.stringify( opts ) );
+
+        console.log( "\n\n\n", "Time required:", (endTime - startTime), "milliseconds\n\n" );
+
+    } );
+
 } );
+
+
+describe( "resolveOptions", () =>
+{
+    const defaults =
+        {
+            a: 1,
+            b: 2,
+            c: 3,
+            d: true
+        };
+
+    const options =
+        {
+            a: 10,
+            d: false,
+            e: 23
+        };
+
+    test( "resolveOptions overwrites defaults", () =>
+    {
+        expect( resolveOptions( options, defaults ) ).toEqual(
+            {
+                a: 10,
+                b: 2,
+                c: 3,
+                d: false,
+                e: 23
+            } );
+    } );
+
+    test( "resolveOptions always returns an object", () =>
+    {
+        expect( resolveOptions( null ) ).toEqual( {} );
+    } );
+
+    test( "resolveOptions can handle null", () =>
+    {
+        expect( resolveOptions( null, defaults ) ).toEqual( defaults );
+    } );
+
+    test( "resolveOptions can handle unexpected arguments", () =>
+    {
+        expect( resolveOptions( [1, 2, 3], [4, 5, 6] ) ).toEqual( { "0": 1, "1": 2, "2": 3 } );
+    } );
+
+    test( "resolveOptions can handle unexpected defaults", () =>
+    {
+        expect( resolveOptions( [4, 5, 6], { "0": 1, "1": 2, "2": 3 } ) ).toEqual( {
+                                                                                        "0": 4,
+                                                                                        "1": 5,
+                                                                                        "2": 6
+                                                                                    } );
+    } );
+
+    test( "resolveOptions can handle a series of deeply nested objects", () =>
+    {
+        const date = new Date();
+
+        const defaultsA =
+            {
+                a: { a: { a: { a: "1" } } },
+                b: { b: { b: { b: { b: 2 } } } },
+                c: 3,
+                d: { d: { d: { d: [0, 1, 2] } } },
+                e: { e: { e: { e: { e: { e: { e: { e: date } } } } } } },
+                f: "friendly",
+                g: "ghost"
+            };
+
+        const defaultsB =
+            {
+                a: { a: { a: "1" } },
+                b: { b: { b: { b: { b: 7 } } } },
+                c: 30,
+                d: { d: { d: { d: [3, 4, 5, 6] } } },
+                e: { e: { e: { e: { e: { e: { e: { e: date } } } } } } },
+                f: "scary",
+                g: "monster"
+            };
+
+        const options =
+            {
+                name: "Scott",
+                age: 37,
+                b: { b: { b: { b: { b: 75, bb: 57 } } } },
+                c: { c: 33 },
+                d: { d: { d: { d: [7, 8, 9, 0] } } },
+                e: { ...defaultsA },
+                f: "performance",
+                g: "nightmare"
+            };
+
+        let startTime = Date.now();
+
+        const opts = resolveOptions( options, defaultsA, defaultsB );
+
+        let endTime = Date.now();
+
+        console.log( JSON.stringify( opts ) );
+
+        console.log( "\n\n\n", "Time required:", (endTime - startTime), "milliseconds\n\n" );
+
+    } );
+
+} );
+
 
 describe( "localCopy", () =>
 {

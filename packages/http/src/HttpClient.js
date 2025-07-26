@@ -547,6 +547,8 @@ const $scope = constants?.$scope || function()
         return fixAgents( cfg );
     };
 
+    const DEFAULT_CONFIG_LITERAL = HttpClientConfig.getDefaultConfig();
+
     /**
      * This class is used to represent the values normally required to make an OAUTH/2 request to authenticate.
      *
@@ -1028,7 +1030,7 @@ const $scope = constants?.$scope || function()
      */
     function resolveConfig( pConfig, pBody = pConfig?.body )
     {
-        let cfg = populateOptions( toObjectLiteral( pConfig || {} ), (DEFAULT_CONFIG.toObjectLiteral()) );
+        let cfg = populateOptions( toObjectLiteral( pConfig || {} ), DEFAULT_CONFIG_LITERAL );
 
         if ( !isNull( pBody ) )
         {
@@ -1064,7 +1066,7 @@ const $scope = constants?.$scope || function()
 
         const defaultApiConfig = pDefaultConfig || DEFAULT_API_CONFIG;
 
-        const mergedConfig = mergeObjects( cfg, defaultApiConfig, DEFAULT_CONFIG );
+        const mergedConfig = mergeObjects( cfg, defaultApiConfig, DEFAULT_CONFIG_LITERAL );
 
         if ( pConfig?.signal )
         {
@@ -1358,19 +1360,19 @@ const $scope = constants?.$scope || function()
         constructor( pConfig = HttpClientConfig.getDefaultConfig(), pOptions = DEFAULT_DELEGATE_OPTIONS )
         {
             this.#config = populateOptions( toObjectLiteral( pConfig || HttpClientConfig.getDefaultConfig() ),
-                                            toObjectLiteral( DEFAULT_CONFIG ) );
+                                            DEFAULT_CONFIG_LITERAL );
 
             this.#options = populateOptions( pOptions || {}, DEFAULT_DELEGATE_OPTIONS );
         }
 
         get config()
         {
-            return fixAgents( toObjectLiteral( populateOptions( {}, this.#config || {}, toObjectLiteral( DEFAULT_CONFIG ) ) ) );
+            return fixAgents( toObjectLiteral( populateOptions( {}, this.#config || {}, DEFAULT_CONFIG_LITERAL ) ) );
         }
 
         mergeConfig( pConfig )
         {
-            let cfg = fixAgents( populateOptions( populateOptions( {}, this.config ), toObjectLiteral( DEFAULT_CONFIG ) ) );
+            let cfg = fixAgents( populateOptions( populateOptions( {}, this.config ), DEFAULT_CONFIG_LITERAL ) );
 
             let mergedConfig = populateOptions( pConfig || {}, cfg );
 
@@ -1656,7 +1658,7 @@ const $scope = constants?.$scope || function()
 
         get config()
         {
-            return populateOptions( {}, this.#config || {}, toObjectLiteral( DEFAULT_CONFIG ) );
+            return populateOptions( {}, this.#config || {}, DEFAULT_CONFIG_LITERAL );
         }
 
         get options()
