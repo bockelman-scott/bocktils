@@ -1080,12 +1080,16 @@ const {
      */
     const isVerb = ( pVerb ) => pVerb instanceof HttpVerb || VERBS.indexOf( pVerb ) >= 0;
 
+    HttpVerb.isVerb = isVerb;
+
     /**
      * Returns true if the specified value is a valid/known HTTP Header (or is a custom header, properly prefixed with 'X-')
      * @param pHeader
      * @returns {boolean|boolean|*}
      */
     const isHeader = ( pHeader ) => pHeader instanceof HttpHeaderDefinition || Object.keys( HttpHeaderDefinition ).map( lcase ).includes( lcase( asString( pHeader, true ) ) ) || ucase( asString( pHeader, true ) ).startsWith( "X-" );
+
+    HttpHeader.isHeader = isHeader;
 
     /**
      * Returns true if the specified value is a known content-type
@@ -1094,11 +1098,11 @@ const {
      */
     const isContentType = ( pContentType ) => pContentType instanceof HttpContentType || Object.keys( HttpContentType ).map( lcase ).includes( lcase( asString( pContentType, true ) ) );
 
-    const isHttpStatus = ( pStatus ) => pStatus instanceof HttpStatus || HttpStatus.isStatusCode( pStatus ) || HttpStatus.isStatusText( pStatus );
-
     HttpContentType.isContentType = isContentType;
 
-    HttpVerb.isVerb = isVerb;
+    const isHttpStatus = ( pStatus ) => pStatus instanceof HttpStatus || HttpStatus.isStatusCode( pStatus ) || HttpStatus.isStatusText( pStatus );
+
+    HttpStatus.isHttpStatats = isHttpStatus;
 
     HttpHeaderDefinition.isHeader = isHeader;
 
@@ -1132,6 +1136,7 @@ const {
             isVerb,
             isHeader,
             isContentType,
+            isHttpStatus,
             resolveHttpMethod: function( pMethod )
             {
                 return HttpVerb.resolveHttpMethod( pMethod );
