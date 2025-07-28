@@ -79,7 +79,7 @@ const { _ud = "undefined", $scope } = constants;
             no_op,
         } = constants;
 
-    const { ModuleEvent, ToolBocksModule, getProperty, setProperty } = moduleUtils;
+    const { ModuleEvent, ToolBocksModule, OBJECT_REGISTRY, getProperty, setProperty } = moduleUtils;
 
     const {
         getFunctionSource,
@@ -356,8 +356,8 @@ const { _ud = "undefined", $scope } = constants;
             return false;
         }
 
-        const firstID = asString( pFirst?.getUniqueObjectInstanceId() || pFirst?.__GUID );
-        const secondID = asString( pSecond?.getUniqueObjectInstanceId() || pSecond?.__GUID );
+        const firstID = asString( OBJECT_REGISTRY.getGuid( pFirst ) );
+        const secondID = asString( OBJECT_REGISTRY.getGuid( pSecond ) );
 
         if ( !(isBlank( firstID ) || isBlank( secondID )) && same( firstID, secondID, pStrict, String, true, stack ) )
         {

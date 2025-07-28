@@ -229,7 +229,7 @@ const { _ud = "undefined", $scope } = constants;
             signal: null
         };
 
-    function resolveOptions( pOptions )
+    function resolveEventOptions( pOptions )
     {
         return Object.assign( { ...DEFAULT_HANDLER_OPTIONS }, isBoolean( pOptions ) ? { capture: pOptions } : populateOptions( pOptions, DEFAULT_HANDLER_OPTIONS ) );
     }
@@ -341,7 +341,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             const evtName = resolveEventName( pEventName );
 
-            const options = resolveOptions( pOptions );
+            const options = resolveEventOptions( pOptions );
 
             const handler = buildHandler( resolveHandler( pHandler, evtName ), evtName, options, target );
 
@@ -386,7 +386,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             super();
 
-            this.#options = Object.assign( { ...DEFAULT_HANDLER_OPTIONS }, populateOptions( resolveOptions( pOptions ), DEFAULT_HANDLER_OPTIONS ) );
+            this.#options = Object.assign( { ...DEFAULT_HANDLER_OPTIONS }, populateOptions( resolveEventOptions( pOptions ), DEFAULT_HANDLER_OPTIONS ) );
 
             if ( !isNull( pObject ) && isObject( pObject ) )
             {
@@ -436,13 +436,13 @@ const { _ud = "undefined", $scope } = constants;
          */
         buildHandler( pObject, pEventName, pOptions = DEFAULT_HANDLER_OPTIONS, pThis )
         {
-            const options = Object.assign( { ...this.options }, populateOptions( resolveOptions( pOptions ), this.options ) );
+            const options = Object.assign( { ...this.options }, populateOptions( resolveEventOptions( pOptions ), this.options ) );
             return buildHandler( pObject, resolveEventName( pEventName ), options, firstMatchingType( _obj, pThis, this.delegate, this ) );
         }
 
         replaceEventHandler( pEventName, pHandler, pOptions )
         {
-            const options = Object.assign( { ...this.options }, populateOptions( resolveOptions( pOptions ), this.options ) );
+            const options = Object.assign( { ...this.options }, populateOptions( resolveEventOptions( pOptions ), this.options ) );
             replaceEventHandler( this, resolveEventName( pEventName ), pHandler, options );
         }
 
@@ -477,7 +477,7 @@ const { _ud = "undefined", $scope } = constants;
 
     Dispatcher.bindDispatcher = function( pObject, pDispatcher, pOptions )
     {
-        const opts = Object.assign( { ...DEFAULT_HANDLER_OPTIONS }, populateOptions( resolveOptions( pOptions ), DEFAULT_HANDLER_OPTIONS ) );
+        const opts = Object.assign( { ...DEFAULT_HANDLER_OPTIONS }, populateOptions( resolveEventOptions( pOptions ), DEFAULT_HANDLER_OPTIONS ) );
 
         const dispatcher = pDispatcher instanceof Dispatcher ? pDispatcher : new Dispatcher( opts );
 
@@ -496,7 +496,7 @@ const { _ud = "undefined", $scope } = constants;
 
         function resolveArguments( pOptions, pHandler, pEventName )
         {
-            const options = Object.assign( { ...opts }, populateOptions( resolveOptions( pOptions ), opts ) );
+            const options = Object.assign( { ...opts }, populateOptions( resolveEventOptions( pOptions ), opts ) );
 
             const eventName = resolveEventName( pEventName );
             const handler = dispatcher.buildHandler( pHandler, eventName, options, obj || dispatcher.delegate );
@@ -510,7 +510,7 @@ const { _ud = "undefined", $scope } = constants;
                 options,
                 handler,
                 eventName
-            } = resolveArguments( resolveOptions( pOptions ), pHandler, pEventName );
+            } = resolveArguments( resolveEventOptions( pOptions ), pHandler, pEventName );
             dispatcher.addEventListener( eventName, handler, options );
         };
 
@@ -520,7 +520,7 @@ const { _ud = "undefined", $scope } = constants;
                 options,
                 handler,
                 eventName
-            } = resolveArguments( resolveOptions( pOptions ), pHandler, pEventName );
+            } = resolveArguments( resolveEventOptions( pOptions ), pHandler, pEventName );
             dispatcher.removeEventListener( eventName, handler, options );
         };
 
@@ -535,7 +535,7 @@ const { _ud = "undefined", $scope } = constants;
                 options,
                 handler,
                 eventName
-            } = resolveArguments( resolveOptions( pOptions ), pHandler, pEventName );
+            } = resolveArguments( resolveEventOptions( pOptions ), pHandler, pEventName );
             dispatcher.replaceEventHandler.call( obj, eventName, handler, options );
         };
 
@@ -546,7 +546,7 @@ const { _ud = "undefined", $scope } = constants;
 
         obj.buildHandler = function( pObject, pEventName, pOptions )
         {
-            const options = Object.assign( { ...opts }, populateOptions( resolveOptions( pOptions ), DEFAULT_HANDLER_OPTIONS ) );
+            const options = Object.assign( { ...opts }, populateOptions( resolveEventOptions( pOptions ), DEFAULT_HANDLER_OPTIONS ) );
             return dispatcher.buildHandler.call( obj, (pObject || obj), resolveEventName( pEventName ), options, obj || dispatcher.delegate );
         };
 
@@ -575,7 +575,7 @@ const { _ud = "undefined", $scope } = constants;
             resolveEventName,
             resolveEventData,
             resolveHandler,
-            resolveOptions,
+            resolveOptions: resolveEventOptions,
             hasHandlerMethod,
             canHandle,
             buildHandler,

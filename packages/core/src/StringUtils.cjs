@@ -1051,9 +1051,14 @@ const { _ud = "undefined", $scope } = constants;
             case _str:
                 s = pTrim ? (_mt_str + pIn).trim() : pIn;
 
-                if ( pOptions.assumeNumeric && isNumeric( pIn ) )
+                if ( pOptions.assumeNumeric )
                 {
-                    s = (_mt_str + _handleNumericString( pIn, pOptions ));
+                    if ( isNumeric( pIn ) )
+                    {
+                        s = (_mt_str + _handleNumericString( pIn, pOptions ));
+                    }
+                    s = pIn.replaceAll(/[^\d,.-]/g,_mt_str);
+                    s = (_mt_str + _handleNumericString( s, pOptions ));
                 }
                 break;
 

@@ -119,7 +119,7 @@ const { _ud = "undefined", $scope } = constants;
         return formatter || new DateFormatter( isString( pFormat ) ? pFormat : pFormat?.pattern || pOptions?.pattern || (isString( pOptions ) ? pOptions : null), resolveLocale( pLocale, pOptions, pFormat ) );
     };
 
-    const resolveOptions = function( ...pOptions )
+    const resolveParserOptions = function( ...pOptions )
     {
         let options = null;
 
@@ -437,7 +437,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             this.#dateFormatter = resolveFormatter( pFormat, pLocale, pOptions );
 
-            this.#options = resolveOptions( pOptions, pFormat, pTokenSet, pLocale );
+            this.#options = resolveParserOptions( pOptions, pFormat, pTokenSet, pLocale );
 
             this.#pattern = resolveFormatPattern( pFormat, this.#dateFormatter, pOptions );
 

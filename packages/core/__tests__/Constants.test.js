@@ -66,7 +66,9 @@ describe( "populateOptions", () =>
 
     test( "populateOptions overwrites defaults", () =>
     {
-        expect( populateOptions( options, defaults ) ).toEqual(
+        const merged = populateOptions( options, defaults );
+
+        expect( merged ).toEqual(
             {
                 a: 10,
                 b: 2,
@@ -200,10 +202,10 @@ describe( "resolveOptions", () =>
     test( "resolveOptions can handle unexpected defaults", () =>
     {
         expect( resolveOptions( [4, 5, 6], { "0": 1, "1": 2, "2": 3 } ) ).toEqual( {
-                                                                                        "0": 4,
-                                                                                        "1": 5,
-                                                                                        "2": 6
-                                                                                    } );
+                                                                                       "0": 4,
+                                                                                       "1": 5,
+                                                                                       "2": 6
+                                                                                   } );
     } );
 
     test( "resolveOptions can handle a series of deeply nested objects", () =>

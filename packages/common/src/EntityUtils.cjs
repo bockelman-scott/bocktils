@@ -35,6 +35,7 @@ const {
 
     const {
         ToolBocksModule,
+        OBJECT_REGISTRY = $scope()["__BOCK_OBJECT_REGISTRY__"],
         populateOptions,
         objectEntries,
         getProperty,
@@ -233,8 +234,8 @@ const {
             }
         }
 
-        const firstID = asString( pFirst?.__GUID );
-        const secondID = asString( pSecond?.__GUID );
+        const firstID = asString( OBJECT_REGISTRY.getGuid( pFirst ) );
+        const secondID = asString( OBJECT_REGISTRY.getGuid( pSecond ) );
 
         if ( !(isBlank( firstID ) || isBlank( secondID )) && same( firstID, secondID, options, stack ) )
         {
@@ -551,7 +552,7 @@ const {
 
         isIdentical( pOther )
         {
-            return (pOther === this) || ( !isBlank( pOther?.__GUID ) && (pOther?.__GUID === this.__GUID));
+            return (pOther === this) || (OBJECT_REGISTRY.getGuid( pOther ) === OBJECT_REGISTRY.getGuid( this ));
         }
 
         equals( pOther )

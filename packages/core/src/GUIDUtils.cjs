@@ -24,7 +24,7 @@ const crypto = $scope().crypto || require( "crypto" );
         return $scope()[INTERNAL_NAME];
     }
 
-    const { ToolBocksModule, populateOptions, clamp, lock } = moduleUtils;
+    const { OBJECT_REGISTRY, ToolBocksModule, populateOptions, clamp, lock } = moduleUtils;
 
     const { _mt_str } = constants;
 
@@ -130,6 +130,10 @@ const crypto = $scope().crypto || require( "crypto" );
             uuid: function()
             {
                 return crypto.randomUUID( RandomUUIDOptions );
+            },
+            getGuid: function( pObject )
+            {
+                return OBJECT_REGISTRY.getGuid( pObject );
             }
         };
 

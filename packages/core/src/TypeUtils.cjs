@@ -28,6 +28,8 @@
  * @license MIT
  */
 
+const moduleUtils = require( "./_ToolBocksModule.cjs" );
+
 /* import the Constants.cjs we depend upon, using require for maximum compatibility with Node versions */
 const constants = require( "./Constants.cjs" );
 
@@ -69,6 +71,58 @@ const $scope = constants?.$scope || function()
 
     const
         {
+            ToolBocksModule,
+            ModuleEvent,
+
+            functionToString,
+            objectToString,
+            errorToString,
+
+            TYPES_CHECKS,
+
+            propertyDescriptors,
+
+            AsyncFunction,
+            ObjectEntry,
+            IllegalArgumentError,
+
+            TRANSIENT_PROPERTIES,
+
+            resolveVisitor,
+            resolveError,
+            resolveEvent,
+            resolveObject,
+            resolveLogLevel,
+            resolveMethod,
+            resolveTransientProperties,
+
+            canBind,
+
+            attempt,
+            asyncAttempt,
+            detectCycles,
+
+            isObjectLiteral,
+            toNodePathArray,
+            getProperty,
+            setProperty,
+            populateOptions,
+
+            lock,
+
+            OBJECT_REGISTRY = $scope()["__BOCK_OBJECT_REGISTRY__"],
+            objectEntries,
+            objectKeys,
+            objectValues,
+            objectMethods,
+
+            isPromise = ( pArg ) => (pArg && (pArg.constructor === Promise || pArg === Promise || pArg instanceof Promise)),
+            isThenable = ( pArg ) => (pArg && (pArg.then && ("function" === typeof pArg.then)))
+
+        } = moduleUtils;
+
+    const
+        {
             _str,
             _fun,
             _num,
@@ -102,59 +156,8 @@ const $scope = constants?.$scope || function()
             BUILTIN_TYPES,
             BUILTIN_TYPE_NAMES,
 
-            moduleUtils
-
         } = constants;
 
-    const {
-        ToolBocksModule,
-        ModuleEvent,
-
-        functionToString,
-        objectToString,
-        errorToString,
-
-        TYPES_CHECKS,
-
-        propertyDescriptors,
-
-        AsyncFunction,
-        ObjectEntry,
-        IllegalArgumentError,
-
-        TRANSIENT_PROPERTIES,
-
-        resolveVisitor,
-        resolveError,
-        resolveEvent,
-        resolveObject,
-        resolveLogLevel,
-        resolveMethod,
-        resolveTransientProperties,
-
-        canBind,
-
-        attempt,
-        asyncAttempt,
-        detectCycles,
-
-        isObjectLiteral,
-        toNodePathArray,
-        getProperty,
-        setProperty,
-        populateOptions,
-
-        lock,
-
-        objectEntries,
-        objectKeys,
-        objectValues,
-        objectMethods,
-
-        isPromise = ( pArg ) => (pArg && (pArg.constructor === Promise || pArg === Promise || pArg instanceof Promise)),
-        isThenable = ( pArg ) => (pArg && (pArg.then && ("function" === typeof pArg.then)))
-
-    } = moduleUtils;
 
     /**
      * This is a dictionary of this module's dependencies.
@@ -4051,7 +4054,7 @@ const $scope = constants?.$scope || function()
 
     function resolveObjectLiteralArguments( pOptions, pVisited, pStack )
     {
-        const options = populateOptions( pOptions, DEFAULT_OBJECT_LITERAL_OPTIONS );
+        const options = { ...DEFAULT_OBJECT_LITERAL_OPTIONS, ...(pOptions || {}) };
 
         const visited = pVisited || options?.visited || new ResolvedSet();
 
@@ -4059,16 +4062,6 @@ const $scope = constants?.$scope || function()
 
         return { options, visited, stack };
     }
-
-    const includeProperty = ( pKey, pValue, pOptions ) =>
-    {
-        const options = populateOptions( pOptions, DEFAULT_OBJECT_LITERAL_OPTIONS );
-        const transientProperties = resolveTransientProperties( options );
-
-        return ( !options.prune || isNonNullValue( pValue )) &&
-               ( !options.omitFunctions || !isFunction( pValue ))
-               && !transientProperties.includes( String( pKey ) );
-    };
 
     const processValue = ( pValue, pOptions ) => (pOptions?.trimStrings && isString( pValue )) ? String( pValue ).trim() : pValue;
 
@@ -4148,6 +4141,13 @@ const $scope = constants?.$scope || function()
         const entries = ObjectEntry.unwrapValues( pObject );
 
         const obj = {};
+
+        const includeProperty = ( pKey, pValue, pOptions ) =>
+        {
+            return ( !options.prune || isNonNullValue( pValue )) &&
+                   ( !options.omitFunctions || !isFunction( pValue ))
+                   && !transientProperties.includes( String( pKey ) );
+        };
 
         function updateObject( pKey, pValue, pOptions )
         {
@@ -4754,42 +4754,10 @@ const $scope = constants?.$scope || function()
         return comp;
     };
 
-    try
-    {
-        Object.prototype.compareTo = function( pOther )
-        {
-            if ( this === pOther || pOther.__GUID === this.__GUID )
-            {
-                return 0;
-            }
-
-            return compare( this, pOther );
-        };
-
-        Object.prototype.equals = function( pOther )
-        {
-            if ( isNull( pOther ) )
-            {
-                return false;
-            }
-
-            if ( this === pOther || pOther?.__GUID === this.__GUID )
-            {
-                return true;
-            }
-
-            return compare( this, pOther ) === 0;
-        };
-    }
-    catch( ex )
-    {
-        // in case the environment does not allow extending the built-in types
-    }
-
     // noinspection JSUnresolvedReference
     ObjectEntry.prototype.compareTo = function( pOther, pOptions = COMPARE_OPTIONS )
     {
-        if ( this === pOther || pOther?.__GUID === this.__GUID )
+        if ( this === pOther || OBJECT_REGISTRY.getGuid( pOther ) === (OBJECT_REGISTRY.getGuid( this )) )
         {
             return 0;
         }
@@ -4807,7 +4775,7 @@ const $scope = constants?.$scope || function()
             return false;
         }
 
-        if ( this === pOther || pOther?.__GUID === this.__GUID )
+        if ( this === pOther || OBJECT_REGISTRY.getGuid( pOther ) === (OBJECT_REGISTRY.getGuid( this )) )
         {
             return true;
         }

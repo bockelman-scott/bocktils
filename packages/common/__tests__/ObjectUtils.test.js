@@ -17,7 +17,7 @@ const { _ud = "undefined", $scope } = constants;
 
 objectUtils.disableLogging();
 
-const { detectCycles, } = moduleUtils;
+const { OBJECT_REGISTRY, detectCycles, } = moduleUtils;
 
 const { arrayToObject } = typeUtils;
 
@@ -157,15 +157,15 @@ describe( "invertProperties", () =>
                   {
                       "A": "apple",
                       "B": "banana",
-                      C : "cherry",
-                      D : "daikon radish"
+                      C: "cherry",
+                      D: "daikon radish"
                   };
 
-                  let INVERTED = invertProperties( OBJ );
+              let INVERTED = invertProperties( OBJ );
 
-                  expect( INVERTED["apple"] ).toEqual( "A" );
+              expect( INVERTED["apple"] ).toEqual( "A" );
           } );
-});
+} );
 
 describe( "isNullOrNaN", () =>
 {
@@ -314,10 +314,10 @@ describe( "getClass", () =>
           } );
 } );
 
-describe( "Unique object ID", () =>
+describe( "OBJECT_REGISTRY", () =>
 {
     // ObjectUtils adds this property to the Object prototype
-    test( "getUniqueObjectInstanceId() returns a value unique to the object",
+    test( "OBJECT_REGISTRY.getGuid returns a value unique to the object",
           () =>
           {
               let o = new ClassOne();
@@ -326,21 +326,10 @@ describe( "Unique object ID", () =>
 
               const regExp = /^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$/i;
 
-              expect( regExp.test( o.getUniqueObjectInstanceId() ) ).toBe( true );
-              expect( regExp.test( o2.getUniqueObjectInstanceId() ) ).toBe( true );
-              expect( regExp.test( o3.getUniqueObjectInstanceId() ) ).toBe( true );
+              expect( regExp.test( OBJECT_REGISTRY.getGuid( o ) ) ).toBe( true );
+              expect( regExp.test( OBJECT_REGISTRY.getGuid( o2 ) ) ).toBe( true );
+              expect( regExp.test( OBJECT_REGISTRY.getGuid( o3 ) ) ).toBe( true );
 
-              expect( o["__GUID"] ).toEqual( o.getUniqueObjectInstanceId() );
-              expect( o2["__GUID"] ).toEqual( o2.getUniqueObjectInstanceId() );
-              expect( o3["__GUID"] ).toEqual( o3.getUniqueObjectInstanceId() );
-
-              expect( regExp.test( []?.["__GUID"] ) ).toBe( true );
-
-              expect( regExp.test( new Date()["__GUID"] ) ).toBe( true );
-
-              expect( regExp.test( "abc"["__GUID"] ) ).toBe( true );
-
-              expect( regExp.test( regExp["__GUID"] ) ).toBe( true );
           } );
 } );
 
