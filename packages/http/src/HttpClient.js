@@ -30,6 +30,12 @@
  *
  */
 
+const fs = require( "fs" );
+
+const { finished } = require( "stream/promises" );
+
+const path = require( "node:path" );
+
 /**
  * Import the http package for its Agent class.
  */
@@ -122,6 +128,8 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
+    const konsole = console;
+
     // import the specific modules from @toolbocks/core that are necessary for this module
     const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
@@ -132,13 +140,20 @@ const $scope = constants?.$scope || function()
             ToolBocksModule,
             ObjectEntry,
             IterationCap,
+            resolveOptions,
             populateOptions,
             attempt,
+            attemptSilent,
             asyncAttempt,
+            asyncAttemptSilent,
             resolveError,
             getLastError,
             lock,
+            isWritable,
             localCopy,
+            immutableCopy,
+            objectKeys,
+            objectValues,
             objectEntries,
             mergeObjects,
             sleep,
@@ -162,6 +177,12 @@ const $scope = constants?.$scope || function()
             _semicolon = ";",
             _underscore = "_",
             _usc = _underscore,
+            _str,
+            _num,
+            _big,
+            _bool,
+            _fun,
+            _obj,
             MILLIS_PER
         } = constants;
 
@@ -172,13 +193,14 @@ const $scope = constants?.$scope || function()
             isNonNullObject,
             isNonNullValue,
             isNullOrNaN,
+            isPopulatedObject,
             isFunction,
             isError,
+            isArray = moduleUtils?.TYPES_CHECKS?.isArray,
             isString,
             isNumber,
             isNumeric,
             isDate,
-            isJson,
             isRegExp,
             isPromise,
             isThenable,
@@ -191,10 +213,10 @@ const $scope = constants?.$scope || function()
         } = typeUtils;
 
     // import the useful functions from the core module, StringUtils
-    const { asString, asInt, toBool, isBlank, cleanUrl, lcase, ucase, toUnixPath } = stringUtils;
+    const { asString, asInt, toBool, isBlank, isJson, cleanUrl, lcase, ucase, toUnixPath } = stringUtils;
 
     // import the useful functions from the core module, ArrayUtils
-    const { asArray, concatMaps, TypedArray, BoundedQueue } = arrayUtils;
+    const { asArray, concatMaps, unique, TypedArray, BoundedQueue } = arrayUtils;
 
     // import the DateUtils module from the datesModule
     const { DateUtils } = datesModule;
@@ -220,16 +242,21 @@ const $scope = constants?.$scope || function()
 
     // import the functions, variables, and classes defined in the HttpConstants module that are used in this module
     const {
+        CONTENT_TYPES,
         VERBS,
         PRIORITY,
         resolveHttpMethod,
         calculatePriority,
+        HttpVerb,
         HttpStatus,
+        HttpHeader,
         STATUS_CODES,
         STATUS_TEXT,
         STATUS_TEXT_ARRAY,
         STATUS_ELIGIBLE_FOR_RETRY,
-        DEFAULT_RETRY_DELAY
+        DEFAULT_RETRY_DELAY,
+        isVerb,
+        isHeader
     } = httpConstants;
 
     const { ResponseData } = responseDataModule;
@@ -240,7 +267,7 @@ const $scope = constants?.$scope || function()
     const DEFAULT_TIMEOUT_MILLISECONDS = 30_000; // 30 seconds
 
     const MIN_CONTENT_LENGTH = 64_000; // 64 KBs
-    const DEFAULT_CONTENT_LENGTH = 256_000; // 256 KBs
+    const DEFAULT_CONTENT_LENGTH = 2_000_000; // 2 MBs
     const MAX_CONTENT_LENGTH = 200_000_000; // 200 MBs
 
     const MIN_REDIRECTS = 3;
@@ -408,6 +435,7 @@ const $scope = constants?.$scope || function()
         return httpAgentConfig;
     };
 
+    // noinspection JSUnresolvedReference
     /**
      * This class can be used to define the configuration expected
      * for an instance of HttpClient (or one of its subclasses).
@@ -427,10 +455,22 @@ const $scope = constants?.$scope || function()
     {
         #allowAbsoluteUrls = true;
         #timeout = DEFAULT_TIMEOUT_MILLISECONDS;
-        #maxContentLength = MAX_CONTENT_LENGTH;
-        #maxBodyLength = MAX_CONTENT_LENGTH;
+        #maxContentLength = DEFAULT_CONTENT_LENGTH;
+        #maxBodyLength = DEFAULT_CONTENT_LENGTH;
         #maxRedirects = DEFAULT_REDIRECTS;
         #decompress = true;
+
+        #method;
+        #contentType;
+        #headers = {};
+        #accept;
+
+        #baseUrl;
+
+        #data = null;
+        #url = _mt;
+
+        #options = {};
 
         #httpAgent = httpAgent;
         #httpsAgent = httpsAgent;
@@ -448,17 +488,29 @@ const $scope = constants?.$scope || function()
          * @param {number} [pMaxBodyLength=200_000_000]
          * @param {number} [pMaxRedirects=5]
          * @param {boolean} [pDecompress=true]
+         * @param pMethod
+         * @param pHeaders
+         * @param pContentType
+         * @param pAccept
+         * @param pOptions
          */
         // noinspection OverlyComplexFunctionJS
         constructor( pHttpAgent = httpAgent,
                      pHttpsAgent = httpAgent,
                      pAllowAbsoluteUrls = true,
                      pTimeout = DEFAULT_TIMEOUT_MILLISECONDS,
-                     pMaxContentLength = MAX_CONTENT_LENGTH,
-                     pMaxBodyLength = DEFAULT_TIMEOUT_MILLISECONDS,
+                     pMaxContentLength = DEFAULT_CONTENT_LENGTH,
+                     pMaxBodyLength = DEFAULT_CONTENT_LENGTH,
                      pMaxRedirects = DEFAULT_REDIRECTS,
-                     pDecompress = true )
+                     pDecompress = true,
+                     pMethod,
+                     pHeaders = {},
+                     pContentType,
+                     pAccept,
+                     pOptions = {} )
         {
+            const me = this;
+
             this.#httpAgent = isNonNullObject( pHttpAgent ) && pHttpAgent instanceof http.Agent ? pHttpAgent : httpAgent || new http.Agent( new HttpAgentConfig().toObjectLiteral() );
             this.#httpsAgent = isNonNullObject( pHttpsAgent ) && pHttpsAgent instanceof https.Agent ? pHttpsAgent : httpsAgent || new https.Agent( new HttpAgentConfig().toObjectLiteral() );
 
@@ -469,6 +521,17 @@ const $scope = constants?.$scope || function()
             this.#maxRedirects = clamp( asInt( pMaxRedirects ), MIN_REDIRECTS, MAX_REDIRECTS );
 
             this.#decompress = !!pDecompress;
+
+            this.#method = asString( pMethod, true );
+            this.#contentType = asString( pContentType, true );
+            this.#headers = isNonNullObject( pHeaders ) ? attempt( () => me.parseHeaders( toObjectLiteral( pHeaders ) ) ) : isString( pHeaders ) ? attempt( () => me.parseHeaders( pHeaders ) ) : {};
+            this.#accept = asString( pAccept, true );
+
+            this.#data = null;
+
+            this.#options = resolveOptions( pOptions, {} );
+
+            attempt( () => me.processOptions( me.#options ) );
         }
 
         get allowAbsoluteUrls()
@@ -511,14 +574,300 @@ const $scope = constants?.$scope || function()
             return isNonNullObject( this.#httpsAgent ) && (this.#httpsAgent instanceof http.Agent) ? this.#httpsAgent : httpsAgent || new https.Agent( new HttpAgentConfig().toObjectLiteral() );
         }
 
+        validateStatus( pStatus )
+        {
+            let status = asInt( pStatus );
+            return status >= 200 && status < 500;
+        }
+
+        static ValidateStatus( pStatus )
+        {
+            let status = asInt( pStatus );
+            return status >= 200 && status < 500;
+        }
+
+        get baseUrl()
+        {
+            return cleanUrl( asString( this.#baseUrl, true ) );
+        }
+
+        set baseUrl( pUrl )
+        {
+            this.#baseUrl = cleanUrl( asString( pUrl, true ) );
+        }
+
+        get method()
+        {
+            let verb = asString( this.#method, true );
+            return isVerb( verb ) ? verb : _mt;
+        }
+
+        set method( pVerb )
+        {
+            if ( isVerb( pVerb ) )
+            {
+                this.#method = asString( pVerb, true );
+            }
+        }
+
+        get contentType()
+        {
+            return asString( this.#contentType, true );
+        }
+
+        set contentType( pContentType )
+        {
+            this.#contentType = asString( pContentType, true );
+        }
+
+        get headers()
+        {
+            return isNonNullObject( this.#headers ) ? Object.assign( {}, this.#headers ) : {};
+        }
+
+        set headers( pHeaders )
+        {
+            const me = this;
+            this.#headers = (isNonNullObject( pHeaders ) ?
+                             attempt( () => me.#processHeaders( toObjectLiteral( pHeaders ) ) ) :
+                             (isString( pHeaders ) ? attempt( () => me.parseHeaders( pHeaders ) ) : {}));
+        }
+
+        get accept()
+        {
+            return asString( this.#accept, true );
+        }
+
+        set accept( pAccept )
+        {
+            this.#accept = asString( pAccept, true );
+        }
+
+        get options()
+        {
+            return isNonNullObject( this.#options ) ? Object.assign( {}, this.#options ) : {};
+        }
+
+        set options( pOptions )
+        {
+            const me = this;
+            this.#options = populateOptions( pOptions, {} );
+            attempt( () => me.processOptions( me.#options ) );
+        }
+
+        get data()
+        {
+            return this.#data;
+        }
+
+        get url()
+        {
+            return asString( this.#url, true );
+        }
+
+        parseHeaders( pHeaders )
+        {
+            const me = this;
+
+            this.#headers = isNonNullObject( this.#headers ) ? toObjectLiteral( this.#headers ) : {};
+
+            if ( isString( pHeaders ) && !isBlank( pHeaders ) )
+            {
+                if ( isJson( pHeaders ) )
+                {
+                    const obj = attempt( () => parseJson( pHeaders ) );
+                    if ( isNonNullObject( obj ) )
+                    {
+                        attempt( () => me.parseHeaders( obj ) );
+                    }
+                }
+                else
+                {
+                    const arr = asArray( asString( pHeaders, true ).split( /(\r?\n)/ ) );
+                    for( let elem of arr )
+                    {
+                        const parts = elem.split( /:/ );
+                        if ( $ln( parts ) > 1 )
+                        {
+                            const key = parts[0];
+                            const value = parts[1];
+
+                            if ( !isBlank( key ) && isHeader( key ) && !isBlank( value ) )
+                            {
+                                this.#headers[key] = value || this.#headers[key];
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        processOptions( pOptions )
+        {
+            const me = this;
+
+            if ( isNonNullObject( pOptions ) )
+            {
+                const entries = objectEntries( pOptions );
+
+                if ( $ln( entries ) )
+                {
+                    entries.forEach( entry =>
+                                     {
+                                         const key = ObjectEntry.getKey( entry );
+                                         const value = ObjectEntry.getValue( entry );
+
+                                         if ( isString( key ) && !isBlank( key ) && isWritable( me, key ) )
+                                         {
+                                             if ( isNull( value ) )
+                                             {
+                                                 attemptSilent( () => delete me[key] );
+                                             }
+                                             else if ( "headers" === lcase( asString( key, true ) ) )
+                                             {
+                                                 attempt( () => me.#processHeaders( value ) );
+                                             }
+                                             else
+                                             {
+                                                 attemptSilent( () => me[key] = value || me[key] );
+                                             }
+                                         }
+                                     } );
+                }
+            }
+        }
+
+        merge( pConfig, pUrl, pParams )
+        {
+            const me = this;
+
+            let config = Object.assign( {}, toObjectLiteral( (me || this) ) );
+            config.headers = Object.assign( {}, toObjectLiteral( ((me || this).headers) || {} ) ) || {};
+
+            if ( !isNull( this.data ) )
+            {
+                attempt( () => me.copyDataTo( config ) );
+            }
+
+            if ( isNonNullObject( pConfig ) )
+            {
+                const entries = (objectEntries( pConfig ) || []);
+
+                entries.forEach( entry =>
+                                 {
+                                     const key = ObjectEntry.getKey( entry );
+                                     const value = ObjectEntry.getValue( entry );
+
+                                     if ( isString( key ) && !isBlank( key ) && isWritable( config, key ) )
+                                     {
+                                         if ( isNull( value ) )
+                                         {
+                                             attemptSilent( () => delete config[key] );
+                                         }
+                                         else if ( "headers" === lcase( asString( key, true ) ) )
+                                         {
+                                             this.#processHeaders( value, config, key );
+                                         }
+                                         else if ( isWritable( config, key ) )
+                                         {
+                                             attemptSilent( () => config[key] = value || config[key] );
+                                         }
+                                     }
+                                 } );
+            }
+
+            attempt( () => config.url = cleanUrl( asString( pUrl, true ) || config.url ) );
+
+            if ( pParams )
+            {
+                config = Object.assign( { "params": pParams }, config );
+            }
+
+            config.validateStatus = HttpClientConfig.ValidateStatus;
+
+            return config;
+        }
+
+        #processHeaders( pHeaders, pConfig, pKey )
+        {
+            if ( isNonNullObject( pHeaders ) )
+            {
+                const headerEntries = objectEntries( pHeaders );
+
+                if ( $ln( headerEntries ) )
+                {
+                    headerEntries.forEach( headerEntry =>
+                                           {
+                                               const headerKey = ObjectEntry.getKey( headerEntry );
+                                               const headerValue = ObjectEntry.getValue( headerEntry );
+
+                                               if ( isString( headerKey ) && !isBlank( headerKey ) && isHeader( asString( headerKey, true ) ) )
+                                               {
+                                                   if ( isNull( headerValue ) )
+                                                   {
+                                                       attemptSilent( () => delete pConfig.headers[headerKey] );
+                                                       attemptSilent( () => delete pConfig.headers[lcase( headerKey )] );
+                                                   }
+                                                   else
+                                                   {
+                                                       attempt( () => pConfig.headers[pKey] = pHeaders || pConfig.headers[pKey] );
+                                                   }
+                                               }
+                                           } );
+                }
+            }
+        }
+
+        copyDataTo( pConfig )
+        {
+            if ( isNonNullObject( pConfig ) && this.data )
+            {
+                switch ( typeof this.data )
+                {
+                    case _ud:
+                        attempt( () => delete pConfig["data"] );
+                        break;
+
+                    case _str:
+                        pConfig.data = asString( _mt + this.data );
+                        break;
+
+                    case _num:
+                    case _big:
+                    case _bool:
+                        pConfig.data = asString( this.data );
+                        break;
+
+                    case _obj:
+                        if ( isArray( this.data ) )
+                        {
+                            pConfig.data = [...(asArray( this.data ))];
+                        }
+                        else
+                        {
+                            pConfig.data = Object.assign( {}, this.data );
+                        }
+                        break;
+
+                    default:
+                        attempt( () => delete pConfig["data"] );
+                        break;
+                }
+            }
+        }
+
+        toLiteral()
+        {
+            return fixAgents( toObjectLiteral( this ) );
+        }
+
         /**
          * Returns an object literal whose properties are those of this instance.
          * @returns {Object} an object literal whose properties are those of this instance.
          */
         toObjectLiteral()
         {
-            let literal = toObjectLiteral( this );
-            return fixAgents( literal );
+            return this.toLiteral();
         }
 
         /**
@@ -530,6 +879,54 @@ const $scope = constants?.$scope || function()
             return asJson( this );
         }
     }
+
+
+    HttpClientConfig.fromJson = function( pJson )
+    {
+        let obj = {};
+
+        if ( isPopulatedObject( pJson ) )
+        {
+            obj = Object.assign( obj, pJson );
+        }
+        else if ( isString( pJson ) && isJson( pJson ) )
+        {
+            obj = attempt( () => parseJson( pJson ) ) || {};
+        }
+
+        // pMethod, pHeaders = {}, pContentType, pAccept, pOptions = {}
+        const config = new HttpClientConfig( (obj.httpAgent || httpAgent),
+                                             (obj.httpsAgent || httpsAgent),
+                                             !!obj.allowAbsoluteUrls,
+                                             asInt( obj.timeout || DEFAULT_TIMEOUT_MILLISECONDS ),
+                                             asInt( obj.maxContentLength || DEFAULT_CONTENT_LENGTH ),
+                                             asInt( obj.maxBodyLength || DEFAULT_CONTENT_LENGTH ),
+                                             asInt( obj.maxRedirects || MAX_REDIRECTS ),
+                                             (obj.method || _mt),
+                                             Object.assign( {}, obj.headers || {} ),
+                                             asString( obj.contentType || obj.ContentType || obj.content_type || _mt, true ),
+                                             asString( obj.accept || obj.Accept || _mt, true ),
+                                             Object.assign( {}, (obj.options || {}) ) );
+
+
+        const entries = objectEntries( obj );
+
+        if ( $ln( entries ) )
+        {
+            entries.forEach( entry =>
+                             {
+                                 const key = ObjectEntry.getKey( entry );
+                                 const value = ObjectEntry.getValue( entry );
+
+                                 if ( isString( key ) && !isBlank( key ) && isWritable( config, key ) )
+                                 {
+                                     attemptSilent( () => config[key] = value || config[key] );
+                                 }
+                             } );
+        }
+
+        return config;
+    };
 
     /**
      * Defines the default HttpClient configuration object
@@ -841,7 +1238,12 @@ const $scope = constants?.$scope || function()
          * @param {TenantSecrets} pTenantSecrets
          */
         // noinspection OverlyComplexFunctionJS
-        constructor( pHttpClientConfig, pApiProperties, pOauthSecrets, pPersonalAccessToken, pAccessTokenUrl, pTenantSecrets )
+        constructor( pHttpClientConfig,
+                     pApiProperties,
+                     pOauthSecrets,
+                     pPersonalAccessToken,
+                     pAccessTokenUrl,
+                     pTenantSecrets )
         {
             super( pHttpClientConfig?.httpAgent || httpAgent,
                    pHttpClientConfig.httpsAgent || httpsAgent,
@@ -850,7 +1252,12 @@ const $scope = constants?.$scope || function()
                    clamp( asInt( pHttpClientConfig?.maxContentLength ), MIN_CONTENT_LENGTH, MAX_CONTENT_LENGTH ),
                    clamp( asInt( pHttpClientConfig?.maxBodyLength ), MIN_CONTENT_LENGTH, MAX_CONTENT_LENGTH ),
                    clamp( asInt( pHttpClientConfig?.maxRedirects ), MIN_REDIRECTS, MAX_REDIRECTS ),
-                   toBool( pHttpClientConfig?.decompress ) );
+                   toBool( pHttpClientConfig?.decompress ),
+                   resolveHttpMethod( pHttpClientConfig?.method || VERBS.GET ),
+                   { ...(pHttpClientConfig?.headers || {}) },
+                   asString( pHttpClientConfig?.contentType, true ),
+                   asString( pHttpClientConfig?.accept, true ),
+                   { ...pHttpClientConfig?.options || {} } );
 
             this.#apiKey = asString( pApiProperties?.apiKey || pHttpClientConfig?.apiKey || asString( pApiProperties, true ), true );
             this.#accessToken = asString( pApiProperties?.accessToken || pHttpClientConfig?.accessToken, true ) || this.#apiKey;
@@ -1011,11 +1418,23 @@ const $scope = constants?.$scope || function()
                                                      pAccessTokenUrl,
                                                      pTenantSecrets )
     {
-        let cfg = new HttpClientApiConfig( HttpClientConfig.getDefaultConfig(), pApiProperties, pOauthSecrets, pPersonalAccessToken, pAccessTokenUrl, pTenantSecrets );
+        let cfg = new HttpClientApiConfig( HttpClientConfig.getDefaultConfig(),
+                                           pApiProperties,
+                                           pOauthSecrets,
+                                           pPersonalAccessToken,
+                                           pAccessTokenUrl,
+                                           pTenantSecrets );
         return fixAgents( cfg );
     };
 
     const DEFAULT_API_CONFIG = HttpClientApiConfig.getDefaultConfig();
+
+    const DEFAULT_DOWNLOAD_CONFIG = {
+        method: VERBS.GET,
+        responseType: "stream",
+        Accept: "application/octet-stream",
+        headers: { Accept: "application/octet-stream" }
+    };
 
     /**
      * Combines the specified configuration with the default configuration
@@ -1030,14 +1449,14 @@ const $scope = constants?.$scope || function()
      */
     function resolveConfig( pConfig, pBody = pConfig?.body )
     {
-        let cfg = populateOptions( toObjectLiteral( pConfig || {} ), DEFAULT_CONFIG_LITERAL );
+        let cfg = { ...DEFAULT_CONFIG_LITERAL, ...(toObjectLiteral( pConfig || {} )) };
 
         if ( !isNull( pBody ) )
         {
             cfg.data = cfg.body = (pBody || cfg.body || cfg.data);
         }
 
-        return fixAgents( toObjectLiteral( cfg ) );
+        return fixAgents( cfg );
     }
 
     /**
@@ -1055,9 +1474,9 @@ const $scope = constants?.$scope || function()
     {
         let cfg = resolveConfig( pApiConfig, pBody );
 
-        cfg = populateOptions( cfg, HttpClientApiConfig.getDefaultConfig() );
+        cfg = { ...(toObjectLiteral( HttpClientApiConfig.getDefaultConfig() )), ...cfg };
 
-        return fixAgents( toObjectLiteral( cfg ) );
+        return fixAgents( cfg );
     }
 
     function mergeConfig( pConfig, pDefaultConfig = DEFAULT_API_CONFIG )
@@ -1066,7 +1485,7 @@ const $scope = constants?.$scope || function()
 
         const defaultApiConfig = pDefaultConfig || DEFAULT_API_CONFIG;
 
-        const mergedConfig = mergeObjects( cfg, defaultApiConfig, DEFAULT_CONFIG_LITERAL );
+        const mergedConfig = { ...DEFAULT_CONFIG_LITERAL, ...(defaultApiConfig || {}), ...(cfg || {}) };
 
         if ( pConfig?.signal )
         {
@@ -1081,7 +1500,7 @@ const $scope = constants?.$scope || function()
         mergedConfig.httpAgent = pConfig?.httpAgent || httpAgent;
         mergedConfig.httpsAgent = pConfig?.httpsAgent || httpsAgent;
 
-        return fixAgents( mergedConfig ) || mergedConfig;
+        return fixAgents( mergedConfig );
     }
 
     function isHttpClient( pDelegate )
@@ -1201,6 +1620,8 @@ const $scope = constants?.$scope || function()
                     {
                         name = asString( name, true ).replaceAll( /\s+/g, _underscore ).replaceAll( /"'`/g, _mt_str ).replaceAll( /[*?]/g, _mt_str );
                     }
+
+                    return name || fileName;
                 }
             }
         }
@@ -1372,9 +1793,9 @@ const $scope = constants?.$scope || function()
 
         mergeConfig( pConfig )
         {
-            let cfg = fixAgents( populateOptions( populateOptions( {}, this.config ), DEFAULT_CONFIG_LITERAL ) );
+            let cfg = fixAgents( { ...DEFAULT_CONFIG_LITERAL, ...({ ...(this.config || {}) }) } );
 
-            let mergedConfig = populateOptions( pConfig || {}, cfg );
+            let mergedConfig = { ...cfg, ...(pConfig || {}) };
 
             mergedConfig.httpAgent = pConfig?.httpAgent || cfg?.httpAgent || httpAgent;
             mergedConfig.httpsAgent = pConfig?.httpsAgent || cfg?.httpsAgent || httpsAgent;
@@ -1389,7 +1810,7 @@ const $scope = constants?.$scope || function()
 
         resolveConfig( pConfig, pRequest )
         {
-            let cfg = fixAgents( this.mergeConfig( pConfig, this.config ) );
+            let cfg = fixAgents( this.mergeConfig( pConfig || this.config ) );
 
             if ( _ud !== typeof Request && pRequest instanceof Request )
             {
@@ -1399,7 +1820,7 @@ const $scope = constants?.$scope || function()
             }
             else if ( isNonNullObject( pRequest ) )
             {
-                cfg = this.mergeConfig( pRequest, cfg );
+                cfg = { ...cfg, ...(this.mergeConfig( pRequest )) };
             }
 
             return fixAgents( cfg );
@@ -1643,38 +2064,131 @@ const $scope = constants?.$scope || function()
     class HttpClient
     {
         #config;
+
         #options;
 
-        #delegate;
+        #delegates = new Map();
 
-        constructor( pConfig, pOptions, pDelegate )
+        constructor( pConfig, pOptions, pDelegates = new Map() )
         {
-            this.#config = populateOptions( pConfig, DEFAULT_CONFIG );
+            this.#config = { ...DEFAULT_CONFIG, ...(pConfig || {}) };
 
-            this.#options = populateOptions( pOptions || {}, DEFAULT_HTTP_CLIENT_OPTIONS );
+            this.#options = { ...DEFAULT_HTTP_CLIENT_OPTIONS, ...(pOptions || {}) };
 
-            this.#delegate = isHttpClient( pDelegate ) ? pDelegate : new HttpFetchClient( this.#config, this.#options );
+            this.#populateDelegates( pDelegates );
+        }
+
+        #populateDelegates( pDelegates )
+        {
+            const KEYS = asArray( objectKeys( VERBS ) );
+
+            const TYPES = asArray( objectValues( CONTENT_TYPES ) );
+
+            if ( isMap( pDelegates ) || isNonNullObject( pDelegates ) )
+            {
+                if ( isHttpClient( pDelegates ) )
+                {
+                    KEYS.forEach( verb =>
+                                  {
+                                      let map = this.#delegates.get( ucase( verb ) ) || this.#delegates.get( lcase( verb ) );
+
+                                      if ( isNull( map ) || !isMap( map ) )
+                                      {
+                                          map = new Map();
+                                          this.#delegates.set( ucase( verb ), map );
+                                          this.#delegates.set( lcase( verb ), map );
+                                      }
+
+                                      TYPES.forEach( type =>
+                                                     {
+                                                         map.set( type, pDelegates );
+                                                         map.set( lcase( type ), pDelegates );
+                                                         map.set( ucase( type ), pDelegates );
+                                                     } );
+                                  } );
+                }
+                else
+                {
+                    const entries = objectEntries( pDelegates );
+
+                    entries.forEach( entry =>
+                                     {
+                                         const key = ObjectEntry.getKey( entry );
+                                         const value = ObjectEntry.getValue( entry );
+
+                                         if ( isHttpClient( value ) )
+                                         {
+                                             if ( isString( key ) || key instanceof HttpVerb )
+                                             {
+                                                 let verb = asString( isString( key ) ? asString( key, true ) : key.name, true );
+
+                                                 if ( isVerb( verb ) || "*" === verb )
+                                                 {
+                                                     let map = this.#delegates.get( ucase( verb ) ) || this.#delegates.get( lcase( verb ) );
+
+                                                     if ( isNull( map ) || !isMap( map ) )
+                                                     {
+                                                         map = new Map();
+                                                         this.#delegates.set( lcase( verb ), map );
+                                                         this.#delegates.set( ucase( verb ), map );
+                                                     }
+
+                                                     TYPES.forEach( type =>
+                                                                    {
+                                                                        map.set( type, value );
+                                                                        map.set( lcase( type ), value );
+                                                                        map.set( ucase( type ), value );
+                                                                    } );
+                                                 }
+                                             }
+                                         }
+                                         else if ( isMap( value ) )
+                                         {
+
+                                         }
+                                     } );
+                }
+            }
+            /*
+             if ( this.#delegates.size < $ln( KEYS ) )
+             {
+             const fetchClient = new HttpFetchClient( this.#config, this.#options );
+             KEYS.forEach( verb =>
+             {
+             const delegate = this.#delegates.get( verb ) || this.#delegates.get( lcase( verb ) );
+             if ( isNull( delegate ) || !isHttpClient( delegate ) )
+             {
+             this.#delegates.set( ucase( verb ), fetchClient );
+             this.#delegates.set( lcase( verb ), fetchClient );
+             }
+             } );
+             }*/
         }
 
         get config()
         {
-            return populateOptions( {}, this.#config || {}, DEFAULT_CONFIG_LITERAL );
+            return { ...DEFAULT_CONFIG_LITERAL, ...(this.#config || {}) };
         }
 
         get options()
         {
-            return populateOptions( {}, this.#options || DEFAULT_HTTP_CLIENT_OPTIONS );
+            return { ...DEFAULT_HTTP_CLIENT_OPTIONS, ...(this.#options || {}) };
         }
 
-        get delegate()
+        getDelegate( pMethod, pConfig )
         {
-            const fetcher = this.#delegate || new HttpFetchClient( resolveConfig( this.config ), this.options );
-            return isHttpClient( fetcher ) ? fetcher : new HttpFetchClient( this.config, this.options );
+            const method = resolveHttpMethod( pMethod?.name || pMethod );
+
+            const byContentType = this.#delegates.get( method );
+
+            const fetcher = byContentType || new HttpFetchClient( resolveConfig( this.config ), this.options );
+
+            return isHttpClient( fetcher ) ? fetcher : new HttpFetchClient( resolveConfig( this.config ), this.options );
         }
 
         async sendRequest( pMethod, pUrl, pConfig, pBody )
         {
-            const delegate = this.delegate || new HttpFetchClient( this.config, this.options );
+            const delegate = this.getDelegate( pMethod || pConfig?.method ) || new HttpFetchClient( resolveConfig( this.config, pBody ), this.options );
 
             if ( isFunction( delegate.sendRequest ) )
             {
@@ -1686,11 +2200,37 @@ const $scope = constants?.$scope || function()
             return fetch( url, cfg );
         }
 
+        async #handleRedirect( pResponseData, pConfig, pRedirects )
+        {
+            const me = this;
+
+            let headers = { ...(pConfig?.headers), ...(pResponseData.headers) };
+
+            let redirects = asInt( pRedirects );
+
+            if ( redirects <= asInt( pConfig.maxRedirects ) )
+            {
+                let location = pResponseData.redirectUrl || (headers["location"] || (isFunction( headers.get ) ? headers.get( "location" ) || headers.get( "Location" ) : _mt_str));
+
+                if ( location && cleanUrl( pConfig.url ) !== cleanUrl( location ) )
+                {
+                    return await asyncAttempt( async() => await me.getRequestedData( location, pConfig, ++redirects ) );
+                }
+            }
+            else
+            {
+                throw new Error( "Exceeded Maximum Number of Redirects (" + asInt( pConfig.maxRedirects ) + ")" );
+            }
+        }
+
         async sendGetRequest( pUrl, pConfig )
         {
-            const delegate = this.delegate || new HttpFetchClient( this.config, this.options );
+            const delegate = this.getDelegate( VERBS.GET ) ||
+                             new HttpFetchClient( resolveConfig( this.config ), this.options );
 
-            const { cfg, url } = prepareRequestConfig( "GET", pConfig, pUrl );
+            const { cfg, url } = prepareRequestConfig( VERBS.GET,
+                                                       { ...(this.config || {}), ...(pConfig || {}) },
+                                                       pUrl );
 
             if ( isFunction( delegate.sendGetRequest ) )
             {
@@ -1699,7 +2239,7 @@ const $scope = constants?.$scope || function()
 
             if ( isFunction( delegate.sendRequest ) )
             {
-                return await asyncAttempt( async() => await delegate.sendRequest( "GET", url, cfg ) );
+                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.GET, url, cfg ) );
             }
 
             return fetch( url, cfg );
@@ -1709,9 +2249,14 @@ const $scope = constants?.$scope || function()
         {
             const me = this;
 
-            const delegate = this.delegate || new HttpFetchClient( this.config, this.options );
+            const delegate = this.getDelegate( VERBS.GET ) || new HttpFetchClient( this.config, this.options );
 
-            const { cfg, url } = prepareRequestConfig( "GET", pConfig, pUrl, null );
+            const resolvedCfg = { ...(this.config || {}), ...(pConfig || {}) };
+
+            const { cfg, url } = prepareRequestConfig( VERBS.GET,
+                                                       resolvedCfg,
+                                                       pUrl,
+                                                       null );
 
             if ( isFunction( delegate.getRequestedData ) )
             {
@@ -1728,29 +2273,13 @@ const $scope = constants?.$scope || function()
                 {
                     let status = responseData.status;
 
-                    let headers = responseData.headers;
-
                     if ( ResponseData.isOk( status ) || (status >= 200 && status < 300) )
                     {
                         return responseData.data || responseData.body;
                     }
                     else if ( status >= 300 && status < 400 )
                     {
-                        let redirects = asInt( pRedirects );
-
-                        if ( redirects <= asInt( cfg.maxRedirects ) )
-                        {
-                            let location = responseData.redirectUrl || (headers["location"] || (isFunction( headers.get ) ? headers.get( "location" ) || headers.get( "Location" ) : _mt_str));
-
-                            if ( location && cleanUrl( url ) !== cleanUrl( location ) )
-                            {
-                                return await asyncAttempt( async() => await me.getRequestedData( location, cfg, ++redirects ) );
-                            }
-                        }
-                        else
-                        {
-                            throw new Error( "Exceeded Maximum Number of Redirects (" + asInt( cfg.maxRedirects ) + ")" );
-                        }
+                        return this.#handleRedirect( responseData, cfg, asInt( pRedirects ) );
                     }
                     else if ( responseData.isExceedsRateLimit() )
                     {
@@ -1776,9 +2305,14 @@ const $scope = constants?.$scope || function()
 
         async sendPostRequest( pUrl, pConfig, pBody )
         {
-            const delegate = this.delegate || new HttpFetchClient( this.config, this.options );
+            const delegate = this.getDelegate( VERBS.POST, pConfig ) || new HttpFetchClient( resolveConfig( this.config, pBody ), this.options );
 
-            const { cfg, url } = prepareRequestConfig( "POST", pConfig, pUrl, resolveBody( pBody, pConfig ) );
+            const resolvedCfg = { ...(this.config || {}), ...(pConfig || {}) };
+
+            const { cfg, url } = prepareRequestConfig( VERBS.POST,
+                                                       resolvedCfg,
+                                                       pUrl,
+                                                       resolveBody( pBody, resolvedCfg ) );
 
             if ( isFunction( delegate.sendPostRequest ) )
             {
@@ -1787,7 +2321,7 @@ const $scope = constants?.$scope || function()
 
             if ( isFunction( delegate.sendRequest ) )
             {
-                return await asyncAttempt( async() => await delegate.sendRequest( "POST", url, cfg ) );
+                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.POST, url, cfg ) );
             }
 
             return fetch( url, cfg );
@@ -1804,22 +2338,17 @@ const $scope = constants?.$scope || function()
 
             try
             {
-                const url = cleanUrl( resolveUrl( pUrl, pConfig || DEFAULT_API_CONFIG ) );
+                const url = cleanUrl( resolveUrl( pUrl, { ...DEFAULT_API_CONFIG, ...(pConfig || this.config) } ) );
 
-                let config =
-                    mergeConfig( pConfig || DEFAULT_API_CONFIG,
-                                 mergeConfig( {
-                                                  method: "GET",
-                                                  url: url,
-                                                  responseType: "stream",
-                                                  Accept: "application/octet-stream",
-                                                  headers:
-                                                      {
-                                                          Accept: "application/octet-stream"
-                                                      }
-                                              }, pConfig || DEFAULT_API_CONFIG ) );
+                const headers = { Accept: "application/octet-stream" };
 
-                const response = this.sendRequest( config?.method || "GET",
+                let config = {
+                    ...DEFAULT_API_CONFIG,
+                    ...DEFAULT_DOWNLOAD_CONFIG,
+                    ...({ headers: headers, url: url })
+                };
+
+                const response = this.sendRequest( config?.method || VERBS.GET,
                                                    url,
                                                    config,
                                                    resolveBody( config.body || config.data, config ) );
@@ -1844,7 +2373,7 @@ const $scope = constants?.$scope || function()
                     response.data.pipe( fileStream );
 
                     // wait for the stream to complete
-                    await finished( fileStream );
+                    await asyncAttempt( async() => await finished( fileStream ) );
 
                     console.log( `Wrote: ${filePath}` );
 
@@ -1853,7 +2382,7 @@ const $scope = constants?.$scope || function()
             }
             catch( ex )
             {
-                toolBocksModule.reportError( ex, ex.message, "error", axiosDownload, ex.response?.status, ex.response );
+                toolBocksModule.reportError( ex, ex.message, "error", this, ex.response?.status, ex.response );
 
                 console.error( ` *****ERROR*****\nFailed to download file: ${ex.message}`, ex );
 
@@ -1870,9 +2399,14 @@ const $scope = constants?.$scope || function()
 
         async sendPutRequest( pUrl, pConfig, pBody )
         {
-            const delegate = this.delegate || new HttpFetchClient( this.config, this.options );
+            const delegate = this.getDelegate( VERBS.PUT ) || new HttpFetchClient( this.config, this.options );
 
-            const { cfg, url } = prepareRequestConfig( "PUT", pConfig, pUrl, resolveBody( pBody, pConfig ) );
+            const resolvedCfg = { ...(this.config || {}), ...(pConfig || {}) };
+
+            const { cfg, url } = prepareRequestConfig( VERBS.PUT,
+                                                       resolvedCfg,
+                                                       pUrl,
+                                                       resolveBody( pBody, resolvedCfg ) );
 
             if ( isFunction( delegate.sendPutRequest ) )
             {
@@ -1881,7 +2415,7 @@ const $scope = constants?.$scope || function()
 
             if ( isFunction( delegate.sendRequest ) )
             {
-                return await asyncAttempt( async() => await delegate.sendRequest( "PUT", url, cfg ) );
+                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.PUT, url, cfg ) );
             }
 
             return fetch( url, cfg );
@@ -1889,9 +2423,14 @@ const $scope = constants?.$scope || function()
 
         async sendPatchRequest( pUrl, pConfig, pBody )
         {
-            const delegate = this.delegate || new HttpFetchClient( this.config, this.options );
+            const delegate = this.getDelegate( VERBS.PATCH ) || new HttpFetchClient( this.config, this.options );
 
-            const { cfg, url } = prepareRequestConfig( "PATCH", pConfig, pUrl, resolveBody( pBody, pConfig ) );
+            const resolvedCfg = { ...(this.config || {}), ...(pConfig || {}) };
+
+            const { cfg, url } = prepareRequestConfig( VERBS.PATCH,
+                                                       resolvedCfg,
+                                                       pUrl,
+                                                       resolveBody( pBody, resolvedCfg ) );
 
             if ( isFunction( delegate.sendPatchRequest ) )
             {
@@ -1900,7 +2439,7 @@ const $scope = constants?.$scope || function()
 
             if ( isFunction( delegate.sendRequest ) )
             {
-                return await asyncAttempt( async() => await delegate.sendRequest( "PATCH", url, cfg ) );
+                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.PATCH, url, cfg ) );
             }
 
             return fetch( url, cfg );
@@ -1908,18 +2447,25 @@ const $scope = constants?.$scope || function()
 
         async sendDeleteRequest( pUrl, pConfig, pBody )
         {
-            const delegate = this.delegate || new HttpFetchClient( this.config, this.options );
+            const delegate = this.getDelegate( VERBS.DELETE ) || new HttpFetchClient( this.config, this.options );
 
-            const { cfg, url } = prepareRequestConfig( "DELETE", pConfig, pUrl, resolveBody( pBody, pConfig ) );
+            const resolvedCfg = { ...(this.config || {}), ...(pConfig || {}) };
+
+            const body = resolveBody( pBody, resolvedCfg );
+
+            const { cfg, url } = prepareRequestConfig( VERBS.DELETE,
+                                                       resolvedCfg,
+                                                       pUrl,
+                                                       body );
 
             if ( isFunction( delegate.sendDeleteRequest ) )
             {
-                return await asyncAttempt( async() => await delegate.sendDeleteRequest( resolveUrl( url, cfg ), cfg, resolveBody( pBody, pConfig ) ) );
+                return await asyncAttempt( async() => await delegate.sendDeleteRequest( resolveUrl( url, cfg ), cfg, resolveBody( body, cfg ) ) );
             }
 
             if ( isFunction( delegate.sendRequest ) )
             {
-                return await asyncAttempt( async() => await delegate.sendRequest( "DELETE", url, cfg ) );
+                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.DELETE, url, cfg ) );
             }
 
             return fetch( url, cfg );
@@ -1927,9 +2473,11 @@ const $scope = constants?.$scope || function()
 
         async sendHeadRequest( pUrl, pConfig )
         {
-            const delegate = this.delegate || new HttpFetchClient( this.config, this.options );
+            const delegate = this.getDelegate( VERBS.HEAD ) || new HttpFetchClient( this.config, this.options );
 
-            const { cfg, url } = prepareRequestConfig( "HEAD", pConfig, pUrl );
+            const resolvedCfg = { ...(this.config || {}), ...(pConfig || {}) };
+
+            const { cfg, url } = prepareRequestConfig( VERBS.HEAD, resolvedCfg, pUrl );
 
             if ( isFunction( delegate.sendHeadRequest ) )
             {
@@ -1938,7 +2486,7 @@ const $scope = constants?.$scope || function()
 
             if ( isFunction( delegate.sendRequest ) )
             {
-                return await asyncAttempt( async() => await delegate.sendRequest( "HEAD", url, cfg ) );
+                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.HEAD, url, cfg ) );
             }
 
             return fetch( url, cfg );
@@ -1946,9 +2494,11 @@ const $scope = constants?.$scope || function()
 
         async sendOptionsRequest( pUrl, pConfig )
         {
-            const delegate = this.delegate || new HttpFetchClient( this.config, this.options );
+            const delegate = this.getDelegate( VERBS.OPTIONS ) || new HttpFetchClient( this.config, this.options );
 
-            const { cfg, url } = prepareRequestConfig( "OPTIONS", pConfig, pUrl );
+            const resolvedCfg = { ...(this.config || {}), ...(pConfig || {}) };
+
+            const { cfg, url } = prepareRequestConfig( VERBS.OPTIONS, resolvedCfg, pUrl );
 
             if ( isFunction( delegate.sendOptionsRequest ) )
             {
@@ -1957,7 +2507,7 @@ const $scope = constants?.$scope || function()
 
             if ( isFunction( delegate.sendRequest ) )
             {
-                return await asyncAttempt( async() => await delegate.sendRequest( "OPTIONS", url, cfg ) );
+                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.OPTIONS, url, cfg ) );
             }
 
             return fetch( url, cfg );
@@ -1965,9 +2515,11 @@ const $scope = constants?.$scope || function()
 
         async sendTraceRequest( pUrl, pConfig )
         {
-            const delegate = this.delegate || new HttpFetchClient( this.config, this.options );
+            const delegate = this.getDelegate( VERBS.TRACE ) || new HttpFetchClient( this.config, this.options );
 
-            const { cfg, url } = prepareRequestConfig( "POST", pConfig, pUrl );
+            const resolvedCfg = { ...(this.config || {}), ...(pConfig || {}) };
+
+            const { cfg, url } = prepareRequestConfig( VERBS.TRACE, resolvedCfg, pUrl );
 
             if ( isFunction( delegate.sendTraceRequest ) )
             {
@@ -1976,7 +2528,7 @@ const $scope = constants?.$scope || function()
 
             if ( isFunction( delegate.sendRequest ) )
             {
-                return await asyncAttempt( async() => await delegate.sendRequest( "TRACE", url, cfg ) );
+                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.TRACE, url, cfg ) );
             }
 
             return fetch( url, cfg );
@@ -2164,14 +2716,19 @@ const $scope = constants?.$scope || function()
         constructor( pInterval, pNumAllowed, pOptions )
         {
             this.#opened = new Date();
+
             this.#interval = RequestInterval.resolve( pInterval );
+
             this.#numAllowed = asInt( pNumAllowed );
+
             this.#nextReset = this.#interval.calculateNextReset( this.#opened );
 
-            this.#options = populateOptions( pOptions || {}, DEFAULT_HTTP_CLIENT_RATE_LIMITED_OPTIONS );
+            this.#options = { ...DEFAULT_HTTP_CLIENT_RATE_LIMITED_OPTIONS, ...(pOptions || {}) };
+
             this.#maxDelayBeforeQueueing = Math.min( Math.max( 10, asInt( this.#options?.MAX_DELAY_BEFORE_QUEUE ) ), 5_000 );
 
             const me = this;
+
             setTimeout( me.timerFunction, this.#interval?.milliseconds );
         }
 
@@ -2231,7 +2788,7 @@ const $scope = constants?.$scope || function()
          */
         get options()
         {
-            return populateOptions( {}, this.#options || DEFAULT_HTTP_CLIENT_RATE_LIMITED_OPTIONS );
+            return { ...DEFAULT_HTTP_CLIENT_RATE_LIMITED_OPTIONS, ...(this.#options || {}) };
         }
 
         /**
@@ -2697,7 +3254,7 @@ const $scope = constants?.$scope || function()
         return { burst, perSecond, perMinute, perHour, perDay };
     };
 
-    RateLimits.fromHeaders = function( pHeaders )
+    RateLimits.fromHeaders = function( pHeaders, pResponse )
     {
         const headers = isNonNullObject( pHeaders ) ? new HttpResponseHeaders( pHeaders ) : isNonNullObject( pResponse ) ? new HttpResponseHeaders( pResponse.headers ) : new Map();
 
@@ -3393,7 +3950,7 @@ const $scope = constants?.$scope || function()
     {
         let client = pHttpClient || new HttpFetchClient( pConfig, pOptions );
 
-        let options = populateOptions( pOptions, HttpClientApiConfig.getDefaultConfig() );
+        let options = { ...(toObjectLiteral( HttpClientApiConfig.getDefaultConfig() )), ...(pOptions || {}) };
 
         let cfg = resolveApiConfig( pConfig );
 
@@ -3404,6 +3961,410 @@ const $scope = constants?.$scope || function()
 
         return new RateLimitedHttpClient( cfg, options, new HttpFetchClient( cfg, options ), ...pRateLimits );
     }
+
+
+    /**
+     * A class to throttle request frequency for LeadDocket REST API calls,
+     * ensuring adherence to defined rate limits
+     * and providing utilities to calculate delays and manage reset times.
+     *
+     * The throttler enforces the specified maximum number of requests allowed per time period.
+     * The time period and request max are configurable, with clamping for reasonable values.
+     *
+     * Key Features:
+     * - Rate limiting based on configurable maximum requests and reset periods.
+     * - Methods to calculate delays needed to stay within limits.
+     * - Tracks request history including the last request timestamp.
+     * - Determines reset intervals and time until the next reset.
+     */
+    class SimpleRequestThrottler
+    {
+        // Endpoints to which this applies
+        // Defaults to all endpoints
+        #endpoints = [/\w+/g];
+
+        // per minute
+        #rateLimitPeriod = 60_000;
+
+        // 250 requests per minute
+        #maxRequestsUntilReset = 250;
+
+        // the timestamp that THIS minute began
+        #lastResetTime = Date.now();
+
+        // the time at which the NEXT minute will start
+        #nextResetTime = Date.now() + 60_000;
+
+        // when was the last request made
+        #lastRequestExecuted = Date.now();
+
+        // how many have we made sp far during THIS minute?
+        #requestsSince = 0;
+
+        // the logger used to write messages to the console or another destination
+        #logger = konsole;
+
+        #debugLevel = 0;
+
+        /**
+         * Creates an instance of the request throttler.
+         *
+         * @param {number} [pMaxRequests=250]           Maximum number of requests allowed within the rate limit period.
+         * @param {number} [pPerMilliseconds=60000]     Duration of the rate limit period in milliseconds.
+         * @param {Object} [pLogger=console]            Logger instance used for logging, defaults to the console.
+         *
+         * @param {...string} [pEndPoints=[/\w+/g]]     One or more patterns (as RegExp)
+         *                                              the url must match for these rate limits to apply
+         *
+         * @return {SimpleRequestThrottler}             A new instance of the request throttler
+         *
+         * @constructor
+         */
+        constructor( pMaxRequests = 250, pPerMilliseconds = 60_000, pLogger = konsole, ...pEndPoints )
+        {
+            this.#rateLimitPeriod = Math.max( 1, asInt( pPerMilliseconds ) || 60_000 );
+
+            this.#maxRequestsUntilReset = Math.max( (asInt( pMaxRequests ) || 250), (asInt( this.#rateLimitPeriod ) / 250) );
+
+            this.#lastResetTime = Date.now();
+
+            this.#nextResetTime = (this.#lastResetTime + this.#rateLimitPeriod);
+
+            this.#logger = ToolBocksModule.isLogger( pLogger ) ? pLogger : console;
+
+            if ( pEndPoints )
+            {
+                const endpoints = asArray( pEndPoints ).filter( isRegExp );
+                this.#endpoints = [...(asArray( endpoints ).map( localCopy ))];
+            }
+        }
+
+        get debug()
+        {
+            return asInt( this.#debugLevel ) > 0;
+        }
+
+        set debugLevel( pLevel )
+        {
+            // this one goes to 11
+            this.#debugLevel = clamp( asInt( pLevel ), 0, 11 );
+        }
+
+        get debugLevel()
+        {
+            return clamp( asInt( this.#debugLevel ), 0, 11 );
+        }
+
+        get logger()
+        {
+            this.#logger = ToolBocksModule.isLogger( this.#logger ) ? this.#logger : konsole;
+        }
+
+        set logger( pLogger )
+        {
+            this.#logger = ToolBocksModule.isLogger( pLogger ) ? pLogger : this.logger || konsole;
+        }
+
+        get endpoints()
+        {
+            return [...(asArray( this.#endpoints ).map( immutableCopy ))];
+        }
+
+        addEndpoint( pRegExp )
+        {
+            if ( isRegExp( pRegExp ) )
+            {
+                this.#endpoints.push( pRegExp );
+                this.#endpoints = unique( this.#endpoints );
+            }
+        }
+
+        removeEndpoint( pRegExp )
+        {
+            // TODO;
+        }
+
+        /**
+         * Returns the configured rate limit period for requests in milliseconds.
+         *
+         * The value is clamped between 1,000 milliseconds (1 second) and
+         * 86,400,000 milliseconds (1 day) to ensure valid input.
+         *
+         * @return {number} The rate limit period in milliseconds.
+         */
+        get rateLimitPeriod()
+        {
+            // we only support requests-per-second, per-minute, per-hour, or per-day,
+            // so we clamp the value between 1,000 milliseconds (1 second) and 86,400,000 milliseconds (1 day)
+            return clamp( asInt( this.#rateLimitPeriod ), 1_000, 86_400_000 );
+        }
+
+        /**
+         * Returns the maximum number of requests that can be made until the reset period,
+         * clamped between a minimum value of 10 and a calculated upper limit based on the rate limit period.
+         *
+         * The method assumes:
+         * - At least 10 requests can be made per second for shorter rate periods (1 second).
+         * - For rate periods of 1 minute or greater, the maximum number of requests allowed per minute
+         *   is capped at 250, and scales accordingly with the length of the rate period.
+         *
+         * @return {number} The clamped maximum number of requests allowed until the reset period.
+         */
+        get maxRequestsUntilReset()
+        {
+            // This is kind of cryptic, so let's break this down.
+            // We assume that we can make at least 10 requests per-N,
+            // because the shortest rate period we support is 1 second,
+            // and we expect to be able to make 10 requests per second.
+            //
+            // However, if the rate period is 1 minute or more,
+            // we assume we can make no more than 250 requests per minute.
+            // Therefore, we divide the rate limit by the number of milliseconds in one minute
+            // and multiply that by 250 to get the upper limit.
+            // example:  if rate limit is 3,600,000 (one hour),
+            // 250 * (3,600,000 / 60,000) = 15,000 requests per hour, which adheres to the expectations
+
+            return clamp( asInt( this.#maxRequestsUntilReset ), 10, (250 * (asInt( this.#rateLimitPeriod ) / 60_000)) );
+        }
+
+        /**
+         * Returns the timestamp of the last executed request as an integer.
+         *
+         * The timestamp is derived from converting the stored date of the last request
+         * into milliseconds since the Unix epoch.
+         *
+         * @return {number} The timestamp of the last executed request in milliseconds.
+         */
+        get lastRequestExecuted()
+        {
+            const lastExecution = asInt( new Date( this.#lastRequestExecuted ).getTime() );
+
+            if ( this.debugLevel > 5 )
+            {
+                const me = this;
+                attempt( () => (me || this).#logger.log( "Last Request executed:", new Date( lastExecution ).toLocaleString() ) );
+            }
+
+            return lastExecution;
+        }
+
+        /**
+         * Sets the value of the last request was executed.
+         *
+         * @param {number|string|Date} pTimestamp -  The value to set for the last request executed.
+         *                                           Can be a timestamp (number), a date string, or a Date object.
+         *                                           If not provided, the current date and time will be used.
+         */
+        set lastRequestExecuted( pTimestamp )
+        {
+            this.#lastRequestExecuted = asInt( new Date( pTimestamp || Date.now() ).getTime() );
+        }
+
+        /**
+         * Returns the last reset time of the instance.
+         * The returned value is adjusted to ensure it is not later than the current time.
+         *
+         * @return {number} The last reset time as a timestamp in milliseconds,
+         *                  clamped to no later than the current system time.
+         */
+        get lastResetTime()
+        {
+            // it cannot have been later than now, so we take the minimum of the value and now
+            const lastReset = Math.min( asInt( this.#lastResetTime ), Date.now() );
+
+            if ( this.debugLevel > 5 )
+            {
+                const me = this;
+                attempt( () => (me || this).#logger.log( "Last Reset:", new Date( lastReset ).toLocaleString() ) );
+            }
+
+            return lastReset;
+        }
+
+        /**
+         * Returns the number of requests made since the last time this instance was reset.
+         *
+         * Ensures the value returned is not less than zero
+         * by taking the maximum of zero and the recorded value.
+         *
+         * @return {number} The count of requests, guaranteed to be zero or a positive integer.
+         */
+        get requestsSince()
+        {
+            // it cannot have been less than 0, so we take the maximum of 0 and the recorded value
+            const numRequests = Math.max( 0, asInt( this.#requestsSince ) );
+
+            if ( this.debugLevel > 5 )
+            {
+                const me = this;
+                attempt( () => (me || this).#logger.log( "Number of Request since last reset:", numRequests ) );
+            }
+
+            return numRequests;
+        }
+
+        /**
+         * Returns the next reset time for this instance.
+         *
+         * @return {number} The next reset time as an integer.
+         *                  If not previously set, the value is calculated dynamically.
+         *
+         *  @see SimpleRequestThrottler#calculateNextResetTime
+         */
+        get nextResetTime()
+        {
+            const nextReset = asInt( this.#nextResetTime ) || this.calculateNextResetTime();
+
+            if ( this.debugLevel > 5 )
+            {
+                const me = this;
+                attempt( () => (me || this).#logger.log( "Next Reset expected:", new Date( nextReset ).toLocaleString() ) );
+            }
+
+            return nextReset;
+        }
+
+        /**
+         * Calculates the next reset time for the instance.
+         * This is done by adding the rate limit period to the last reset time for the instance.
+         * Both the last reset time and rate limit period are expected to be in milliseconds.
+         *
+         * @return {number} The next reset time in milliseconds since epoch.
+         */
+        calculateNextResetTime()
+        {
+            // we reset every x milliseconds, where x is the rateLimitPeriod,
+            // so we add that many milliseconds to the last time this instance was reset
+            const nextReset = asInt( this.lastResetTime ) + asInt( this.rateLimitPeriod );
+
+            if ( this.debugLevel > 5 )
+            {
+                const me = this;
+                attempt( () => (me || this).#logger.log( "Next Reset will occur at:", new Date( nextReset ).toLocaleString() ) );
+            }
+
+            return nextReset;
+        }
+
+        /**
+         * Calculates the number of milliseconds remaining until the next reset time.
+         * If the next reset time has already passed, the method returns 0.
+         *
+         * @return {number} The number of milliseconds until the next reset, or 0 if the reset time is in the past.
+         */
+        get millisecondsUntilReset()
+        {
+            // if the next reset time has already passed, we return 0,
+            // because we cannot wait for less than 0 milliseconds unless we have a time machine
+            const millisUntilReset = Math.max( 0, this.nextResetTime - Date.now() );
+
+            if ( this.#debugLevel > 3 )
+            {
+                const me = this;
+                attempt( () => (me || this).#logger.log( "Milliseconds until next reset:", millisUntilReset ) );
+            }
+
+            return millisUntilReset;
+        }
+
+        /**
+         * Calculates and returns the delay (in milliseconds)
+         * needed to ensure compliance with the request rate limits.
+         *
+         * The method determines the delay based on the time elapsed since the last request,
+         * the maximum number of requests allowed within the given period,
+         * and the time remaining until the reset of the rate limit.
+         *
+         * The value returned ensures that the requests do not exceed defined thresholds
+         * while minimizing unnecessary delays.
+         *
+         * @return {number} The calculated delay in milliseconds to maintain compliance with rate limits.
+         */
+        calculateDelay()
+        {
+            // We set a default delay to avoid exceeding 10 requests per second
+            // because the API limits requests to <= 10 per second as well as <= 250 per minute.
+            //
+            // Rather than blindly assume we have to wait for 100 milliseconds,
+            // we check the time the last request was made.
+            //
+            // If the last request was made >= 100 milliseconds ago, we can make the next request "right away".
+            // However, for safety, we wait for 10 milliseconds in that case.
+
+            // The last request had to have occurred in the past, so now - that time cannot be less than 0
+            const elapsedTimeSinceLastRequest = Math.max( 0, asInt( Date.now() ) - asInt( this.lastRequestExecuted ) );
+
+            // if the last request was more than 100 milliseconds ago,
+            // we wait 10 milliseconds per request we have made instead (up to 100 milliseconds)
+            // this helps prevents exceeding the 'burst' limit
+            let delay = elapsedTimeSinceLastRequest >= 100 ? Math.min( 100, (10 * this.requestsSince) ) : 100;
+
+            // If we have not yet reached the request-per-N limit
+            // or the time since the last request was already more than N milliseconds ago,
+            // we return the default delay
+            if ( (this.requestsSince < this.maxRequestsUntilReset) || (elapsedTimeSinceLastRequest > this.#rateLimitPeriod) )
+            {
+                return delay;
+            }
+            else
+            {
+                delay = Math.max( delay, this.millisecondsUntilReset );
+
+                if ( this.debugLevel > 2 )
+                {
+                    const me = this;
+                    attempt( () => (me || this).#logger.log( "Calculated Delay before next Request:", delay, "milliseconds" ) );
+                }
+            }
+
+            return clamp( asInt( delay ), 10, this.rateLimitPeriod );
+        }
+
+        /**
+         * Increments the count of requests made by updating internal state.
+         * Resets the count if the time elapsed since the last reset exceeds the rate limit period.
+         * Updates the timestamp of the last executed request.
+         *
+         * @return {void} Does not return a value.
+         */
+        increment()
+        {
+            if ( (asInt( Date.now() ) - asInt( this.lastResetTime )) > asInt( this.rateLimitPeriod ) )
+            {
+                this.reset();
+            }
+
+            this.lastRequestExecuted = Date.now();
+            this.#requestsSince += 1;
+        }
+
+        /**
+         * Resets the internal state of the object by updating the last reset time, next reset time,
+         * last executed request time, and request count.
+         *
+         * @return {void} Does not return a value.
+         */
+        reset()
+        {
+            this.#lastResetTime = Date.now();
+            this.#nextResetTime = this.calculateNextResetTime();
+            this.lastRequestExecuted = this.#lastResetTime;
+            this.#requestsSince = 0;
+
+            if ( this.debugLevel > 9 )
+            {
+                const state =
+                    {
+                        lastReset: this.#lastResetTime,
+                        nextReset: this.#nextResetTime,
+                    };
+
+                const me = this;
+                attempt( () => (me || this).#logger.log( "Throttler State:", state ) );
+            }
+        }
+    }
+
 
     let mod =
         {
@@ -3461,13 +4422,13 @@ const $scope = constants?.$scope || function()
                     RequestGroupMapper,
                     HttpClient,
                     HttpFetchClient,
-                    RateLimitedHttpClient
+                    RateLimitedHttpClient,
+                    SimpleRequestThrottler
                 },
             HttpAgentConfig,
             httpAgent,
             httpsAgent,
             fixAgents,
-            mergeConfig,
 
             HttpClientConfig,
             OauthSecrets,
@@ -3478,6 +4439,8 @@ const $scope = constants?.$scope || function()
             HttpClientApiConfig,
             resolveConfig,
             resolveApiConfig,
+
+            mergeConfig,
 
             resolveUrl,
             resolveBody,
@@ -3494,7 +4457,9 @@ const $scope = constants?.$scope || function()
             RateLimits,
 
             RequestGroupMapper,
-            createRateLimitedHttpClient
+            createRateLimitedHttpClient,
+
+            SimpleRequestThrottler
         };
 
     mod = toolBocksModule.extend( mod );

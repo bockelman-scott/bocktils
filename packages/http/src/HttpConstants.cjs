@@ -324,7 +324,16 @@ const {
             JAVASCRIPT: "application/javascript",
             JS: "application/javascript",
             JSON: "application/json",
-            ECMASCRIPT: "application/ecmascript"
+            ECMASCRIPT: "application/ecmascript",
+            BINARY_STREAM: "application/octet-stream",
+            MS_WORD: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            MULTIPART: "multipart/form-data",
+            FORM_URLENCODED: "application/x-www-form-urlencoded",
+            XML: "text/xml",
+            CSV: "text/csv",
+            ZIP: "application/zip",
+            PNG: "image/png",
+            SVG: "image/svg+xml"
         };
 
     /**

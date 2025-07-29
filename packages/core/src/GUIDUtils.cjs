@@ -61,7 +61,7 @@ const crypto = $scope().crypto || require( "crypto" );
 
         constructor( pOptions )
         {
-            this.#options = lock( populateOptions( pOptions, RandomUUIDOptions ) );
+            this.#options = lock( { ...RandomUUIDOptions, ...(pOptions || {}) } );
 
             this.#cached = [];
 
@@ -83,7 +83,7 @@ const crypto = $scope().crypto || require( "crypto" );
 
         get options()
         {
-            return populateOptions( this.#options || RandomUUIDOptions );
+            return { ...RandomUUIDOptions, ...(this.#options || {}) };
         }
 
         uuid()

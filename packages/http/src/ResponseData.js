@@ -338,9 +338,11 @@ const {
 
             if ( !constructed )
             {
-                const options = asObject( populateOptions( (pOptions || {}), (pConfig || pResponse || {}), pResponse, DEFAULT_RESPONSE_OPTIONS ) ) || {};
+                const opts = { ...DEFAULT_RESPONSE_OPTIONS, ...(pResponse || (pConfig || pResponse || {})), ...(pConfig || pResponse || {}), ...(pOptions || {}) };
 
-                const config = asObject( pConfig || pResponse || options ) || {};
+                const options = { ...(asObject( opts ) || {}) };
+
+                const config = { ...(asObject( pConfig || pResponse || options ) || {}) };
 
                 const source = attempt( () => HttpResponse.resolveResponse( pResponse, options ) );
 
@@ -391,14 +393,18 @@ const {
                     // Stores the url path from which the response actually came (in the case of redirects) or the url/path of the request
                     this.#url = cleanUrl( asString( asString( this.#response?.url || this.#frameworkResponse?.url, true ) || asString( options.url || config.url, true ) || _slash, true ) );
 
-                    this.#request = attempt( () => new HttpRequest( options.request || config.request || config, options ) );
+                    this.#request = attempt( () => new HttpRequest( this.#response?.request || options.request || config.request || config, options ) );
                 }
             }
         }
 
         get options()
         {
-            return populateOptions( this.#options, (asObject( this.#config ) || {}), (asObject( this.#frameworkResponse ) || {}), this.#response || {} );
+            return {
+                ...(this.#options || {}),
+                ...(asObject( this.#config || {} ) || {}),
+                ...(asObject( this.#frameworkResponse ) || {}), ...(this.#response || {})
+            };
         }
 
         get response()
@@ -635,9 +641,9 @@ const {
 
             if ( isNonNullObject( pResponseData ) && pResponseData instanceof this.constructor )
             {
-                const options = asObject( populateOptions( pOptions || {}, pConfig || {}, pResponseData.config, pResponseData.options, DEFAULT_RESPONSE_OPTIONS ) ) || {};
+                const options = asObject( { ...DEFAULT_RESPONSE_OPTIONS, ...(pResponseData.options), ...(pResponseData.config), ...(pConfig || {}), ...(pOptions || {}) } ) || {};
 
-                const config = populateOptions( asObject( pConfig || options ) || {}, pResponseData.config || options );
+                const config = asObject( { ...(pResponseData.config || options), ...(pConfig || options) } );
 
                 const source = attempt( () => HttpResponse.resolveResponse( pResponseData.response, config || options ) );
 
@@ -653,7 +659,7 @@ const {
 
                 this.#error = isError( this.#error ) ? resolveError( this.#error ) : null;
 
-                this.#options = populateOptions( options, pResponseData.options );
+                this.#options = { ...(pResponseData.options || {}), ...(options || {}) };
 
                 this.#response = cloneResponse( pResponseData.response );
 
@@ -701,6 +707,20 @@ const {
     ResponseData.isResponseData = function( pResponseData )
     {
         return isNonNullObject( pResponseData ) && pResponseData instanceof ResponseData;
+    };
+
+    ResponseData.from = function( pObject, pConfig, pOptions )
+    {
+        if ( ResponseData.isResponseData( pObject ) )
+        {
+            return pObject;
+        }
+
+        let obj = { ...(pObject || {}) };
+
+        return new ResponseData( obj?.response || pConfig?.response || pOptions?.response || obj,
+                                 pConfig,
+                                 pOptions );
     };
 
     ResponseData.exceedsRateLimit = function( pResponseData )

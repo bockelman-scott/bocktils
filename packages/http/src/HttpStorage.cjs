@@ -125,7 +125,7 @@ const {
      */
     const resolveStorageEventOptions = ( pOptions ) =>
     {
-        return populateOptions( pOptions || {}, buildStorageEventOptions() || {} );
+        return { ...(buildStorageEventOptions() || {}), ...(pOptions || {}) };
     };
 
     /**

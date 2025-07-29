@@ -289,7 +289,7 @@ const { _ud = "undefined", $scope } = constants;
             encoder: null,
         };
 
-    const _aso = ( pOptions ) => populateOptions( pOptions, DEFAULT_AS_STRING_OPTIONS );
+    const _aso = ( pOptions ) => { return { ...DEFAULT_AS_STRING_OPTIONS, ...(pOptions || {}) }; };
 
     const isTransformer = ( e ) => (isFunction( e ) && e.length > 0) || (isNonNullObject( e ) && isFunction( e?.transform ));
 
@@ -1057,7 +1057,7 @@ const { _ud = "undefined", $scope } = constants;
                     {
                         s = (_mt_str + _handleNumericString( pIn, pOptions ));
                     }
-                    s = pIn.replaceAll(/[^\d,.-]/g,_mt_str);
+                    s = pIn.replaceAll( /[^\d,.-]/g, _mt_str );
                     s = (_mt_str + _handleNumericString( s, pOptions ));
                 }
                 break;
@@ -1346,7 +1346,7 @@ const { _ud = "undefined", $scope } = constants;
      */
     const validIdentifier = function( pStr, pOptions = DEFAULT_VALID_IDENTIFIER_OPTIONS )
     {
-        const options = populateOptions( pOptions, DEFAULT_VALID_IDENTIFIER_OPTIONS );
+        const options = { ...DEFAULT_VALID_IDENTIFIER_OPTIONS, ...(pOptions || {}) };
 
         let s = _replaceInvalidIdentifier( asString( pStr, true ).trim(), options );
 
@@ -1376,7 +1376,7 @@ const { _ud = "undefined", $scope } = constants;
      */
     const asKey = function( pStr, pOptions = DEFAULT_AS_KEY_OPTIONS )
     {
-        const options = populateOptions( pOptions, DEFAULT_AS_KEY_OPTIONS );
+        const options = { ...DEFAULT_AS_KEY_OPTIONS, ...(pOptions || {}) };
 
         let s = _replaceInvalidIdentifier( asString( pStr, true ), options );
 
@@ -1443,7 +1443,7 @@ const { _ud = "undefined", $scope } = constants;
      */
     const isAllCaps = function( pStr, pOptions )
     {
-        const options = populateOptions( pOptions, DEFAULT_IS_CAPS_OPTIONS );
+        const options = { ...DEFAULT_IS_CAPS_OPTIONS, ...(pOptions || {}) };
 
         const str = asString( pStr, options.allowWhitespace );
 
@@ -1620,7 +1620,7 @@ const { _ud = "undefined", $scope } = constants;
 
     const trimMatchingChars = function( pStr, pRegExpOrChar = _spc, pOptions = DEFAULT_TRIM_MATCHING_OPTIONS )
     {
-        const options = populateOptions( pOptions, DEFAULT_TRIM_MATCHING_OPTIONS );
+        const options = { ...DEFAULT_TRIM_MATCHING_OPTIONS, ...(pOptions || {}) };
 
         let s = asString( pStr );
 
@@ -1720,7 +1720,7 @@ const { _ud = "undefined", $scope } = constants;
 
     const deriveDecimalSymbols = function( pNumString, pOptions = calculateDecimalSymbols() )
     {
-        const options = populateOptions( pOptions, DEFAULT_NUMBER_SYMBOLS );
+        const options = { ...DEFAULT_NUMBER_SYMBOLS, ...(pOptions || {}) };
 
         let s = asString( pNumString );
 
@@ -1769,7 +1769,7 @@ const { _ud = "undefined", $scope } = constants;
      */
     function toCanonicalNumericFormat( pInput, pOptions = calculateDecimalSymbols() )
     {
-        const options = populateOptions( pOptions, DEFAULT_NUMBER_SYMBOLS );
+        const options = { ...DEFAULT_NUMBER_SYMBOLS, ...(pOptions || {}) };
 
         let s = asString( pInput );
 
@@ -2033,7 +2033,7 @@ const { _ud = "undefined", $scope } = constants;
 
     const toNumberWithinRange = function( pStr, pMin, pMax, converter, pOptions = calculateDecimalSymbols() )
     {
-        const options = populateOptions( pOptions, DEFAULT_NUMBER_SYMBOLS );
+        const options = { ...DEFAULT_NUMBER_SYMBOLS, ...(pOptions || {}) };
 
         const value = converter( pStr, 0, options );
 
@@ -2070,7 +2070,7 @@ const { _ud = "undefined", $scope } = constants;
 
         const length = arr.length;
 
-        const options = populateOptions( pOptions, { defaultToEnd: false, min: 0, max: length - 1 } );
+        const options = { ...({ defaultToEnd: false, min: 0, max: length - 1 }), ...(pOptions || {}) };
 
         const maxIndex = Math.min( asInt( options.max, length - 1 ), length - 1 );
 
@@ -2678,7 +2678,7 @@ const { _ud = "undefined", $scope } = constants;
             ...DEFAULT_NUMBER_SYMBOLS
         } );
 
-    const _ano = ( pOptions ) => populateOptions( pOptions, DEFAULT_VALID_NUMBER_OPTIONS );
+    const _ano = ( pOptions ) => { return { ...DEFAULT_VALID_NUMBER_OPTIONS, ...(pOptions || {}) }; };
 
     /**
      * Returns true if the argument is a number
@@ -2856,7 +2856,7 @@ const { _ud = "undefined", $scope } = constants;
      */
     const handleMc = function handleMc( pString, pOptions = MC_OPTIONS )
     {
-        const options = populateOptions( pOptions, MC_OPTIONS );
+        const options = { ...MC_OPTIONS, ...(pOptions || {}) };
 
         let s = asString( pString, false ) || _mt_str;
 
@@ -2918,7 +2918,7 @@ const { _ud = "undefined", $scope } = constants;
      */
     const toProperCase = function( pStr, pOptions = DEFAULT_PROPERCASE_OPTIONS )
     {
-        const options = populateOptions( pOptions, DEFAULT_PROPERCASE_OPTIONS );
+        const options = { ...DEFAULT_PROPERCASE_OPTIONS, ...(pOptions || {}) };
 
         let s = asString( pStr, false ) || _mt_str;
 
@@ -3147,7 +3147,7 @@ const { _ud = "undefined", $scope } = constants;
     {
         let str = asString( pString );
 
-        const options = populateOptions( pOptions, DEFAULT_TIDY_OPTIONS );
+        const options = { ...DEFAULT_TIDY_OPTIONS, ...(pOptions || {}) };
 
         for( const [key, operation] of Object.entries( CASE_OPERATIONS ) )
         {
@@ -3180,7 +3180,7 @@ const { _ud = "undefined", $scope } = constants;
      */
     const tidy = function( pString, pOptions = DEFAULT_TIDY_OPTIONS )
     {
-        const options = populateOptions( pOptions, DEFAULT_TIDY_OPTIONS );
+        const options = { ...DEFAULT_TIDY_OPTIONS, ...(pOptions || {}) };
 
         let str = asString( _resolveInput.call( this, pString ) || pString, options?.trim );
 
@@ -3352,7 +3352,7 @@ const { _ud = "undefined", $scope } = constants;
 
     function findDuplicatedSubstrings( pStr, pOptions = DEFAULT_SUBSTRING_OPTIONS )
     {
-        const options = populateOptions( pOptions, DEFAULT_SUBSTRING_OPTIONS );
+        const options = { ...DEFAULT_SUBSTRING_OPTIONS, ...(pOptions || {}) };
 
         const s = asString( isArray( pStr ) ? pStr.join( _mt_str ) : pStr );
 

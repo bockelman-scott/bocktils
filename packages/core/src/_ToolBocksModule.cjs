@@ -6592,14 +6592,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const cloneArray = ( array, options, stack ) =>
     {
-        let clone = [...array].map( e =>
-                                    {
-                                        if ( isNonNullObj( e ) )
-                                        {
-                                            attempt( () => delete e["__unique_object_id__"] );
-                                        }
-                                        return e;
-                                    } );
+        let clone = [...(array || [])];
 
         if ( detectCycles( stack, 5, 5 ) )
         {
@@ -6615,7 +6608,13 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         const entries = pEntries || objectEntries( pMap );
 
-        entries.forEach( ( entry ) => map.set( entry.key || entry[0], _copy( entry.value || entry[1], pOptions, [...(pStack || []), (entry.key || entry[0])] ) ) );
+        entries.forEach( ( entry ) =>
+                         {
+                             const key = ObjectEntry.getKey( entry );
+                             const value = ObjectEntry.getValue( entry );
+
+                             map.set( key, _copy( value, pOptions, [...(pStack || []), key] ) );
+                         } );
 
         return map;
     }
@@ -6626,8 +6625,13 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         const entries = pEntries || objectEntries( pSet );
 
-        entries.forEach( ( entry ) => set.add( _copy( (entry.value || entry[1]), pOptions, [...(pStack || []), (entry.key || entry[0])] ) ) );
+        entries.forEach( ( entry ) =>
+                         {
+                             const key = ObjectEntry.getKey( entry );
+                             const value = ObjectEntry.getValue( entry );
 
+                             set.add( _copy( value, pOptions, [...(pStack || []), key] ) );
+                         } );
         return set;
     }
 
@@ -6643,10 +6647,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         for( const entry of entries )
         {
-            const key = !isNull( entry ) ? (entry.key || entry[0]) : _mt_str;
-            const value = !isNull( entry ) ? (entry.value || entry[1]) : null;
+            const key = ObjectEntry.getKey( entry ) || _mt_str;
+            const value = ObjectEntry.getValue( entry ) || null;
 
-            if ( !isNull( key ) && !isNull( value ) )
+            if ( !isNull( key ) )
             {
                 const copiedValue = _copy( value, options, [...stack, key] );
                 clone[key] = (typeof copiedValue === _fun) ? copiedValue.bind( clone ) : copiedValue;
@@ -6677,7 +6681,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const cloneObject = ( pObject, pOptions = DEFAULT_COPY_OPTIONS, pStack = [] ) =>
     {
-        let clone = attempt( () => (isFunc( pObject.clone )) ? pObject.clone() : (isObjectLiteral( pObject ) ? { ...pObject } : pObject) ) || {};
+        let clone = attempt( () => (isFunc( pObject?.clone )) ? pObject.clone() : (isObjectLiteral( pObject ) ? { ...pObject } : pObject) ) || {};
 
         const stack = [...(pStack || [])];
 
@@ -6749,7 +6753,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         if ( isNonNullObj( undefinedReplacement ) )
         {
             undefinedReplacement = Object.assign( {}, undefinedReplacement );
-            attempt( () => delete undefinedReplacement["__unique_object_id__"] );
         }
 
         return pFreezeFunction( undefinedReplacement );
@@ -6770,7 +6773,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         if ( isNonNullObj( nullReplacement ) )
         {
             nullReplacement = Object.assign( {}, nullReplacement );
-            attempt( () => delete nullReplacement["__unique_object_id__"] );
         }
 
         return pFreezeFunction( nullReplacement );

@@ -196,7 +196,10 @@ const $scope = constants?.$scope || function()
             RateLimits,
 
             RequestGroupMapper,
-            createRateLimitedHttpClient
+            createRateLimitedHttpClient,
+
+            SimpleRequestThrottler
+
         } = HttpClientUtils;
 
     let mod =
@@ -255,7 +258,8 @@ const $scope = constants?.$scope || function()
                     RequestInterval,
                     RequestWindow,
                     RateLimits,
-                    RequestGroupMapper
+                    RequestGroupMapper,
+                    SimpleRequestThrottler
                 },
             FetchUtils,
             HttpCacheUtils,
@@ -367,6 +371,7 @@ const $scope = constants?.$scope || function()
             RateLimits,
             RequestGroupMapper,
             createRateLimitedHttpClient,
+            SimpleRequestThrottler,
             asJson,
             parseJson
         };

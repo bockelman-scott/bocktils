@@ -198,7 +198,7 @@ const {
             return null;
         }
 
-        let options = populateOptions( pOptions, DEFAULT_RESPONSE_OPTIONS );
+        let options = { ...DEFAULT_RESPONSE_OPTIONS, ...(pOptions || {}) };
 
         let res = asObject( pResponse || options?.response || options || {} ) || {};
 
@@ -383,7 +383,7 @@ const {
 
         get options()
         {
-            return populateOptions( this.#options || {}, DEFAULT_RESPONSE_OPTIONS );
+            return { ...DEFAULT_RESPONSE_OPTIONS, ...(this.#options || {}) };
         }
 
         get response()

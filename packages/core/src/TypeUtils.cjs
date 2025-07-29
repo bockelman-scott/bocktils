@@ -761,7 +761,7 @@ const $scope = constants?.$scope || function()
 
         if ( _obj === typeof pObject )
         {
-            const options = populateOptions( pOptions, DEFAULT_IS_OBJECT_OPTIONS );
+            const options = { ...DEFAULT_IS_OBJECT_OPTIONS, ...(pOptions || {}) };
 
             return !((options.rejectNull && isNull( pObject )) ||
                    (options.rejectArrays && _isArr( pObject )) ||
@@ -1578,7 +1578,7 @@ const $scope = constants?.$scope || function()
      */
     const isNonNullObject = function( pObject, pStrict = false, pOptions = IS_NON_NULL_OBJECT_OPTIONS, pStack = [] )
     {
-        const options = populateOptions( pOptions, IS_NON_NULL_OBJECT_OPTIONS );
+        const options = { ...IS_NON_NULL_OBJECT_OPTIONS, ...(pOptions || {}) };
 
         if ( !isNull( pObject, pStrict ) && isObject( pObject, options ) )
         {
@@ -1807,7 +1807,7 @@ const $scope = constants?.$scope || function()
 
     function resolveIsPopulatedArgs( pOptions = DEFAULT_IS_POPULATED_OPTIONS )
     {
-        const options = populateOptions( pOptions, DEFAULT_IS_POPULATED_OPTIONS );
+        const options = { ...DEFAULT_IS_POPULATED_OPTIONS, ...(pOptions || {}) };
 
         const acceptedTypes = resolveAcceptedTypes( options );
 
@@ -2082,7 +2082,7 @@ const $scope = constants?.$scope || function()
      */
     const isScalar = function( pVal, pOptions = { boxedPrimitiveIsScalar: true } )
     {
-        const options = populateOptions( pOptions, {} );
+        const options = { ...({ boxedPrimitiveIsScalar: true }), ...(pOptions || {}) };
 
         if ( isNull( pVal ) )
         {
@@ -3012,7 +3012,7 @@ const $scope = constants?.$scope || function()
 
         get options()
         {
-            return populateOptions( this.#options || {}, DEFAULT_CAST_OPTIONS );
+            return { ...DEFAULT_CAST_OPTIONS, ...(this.#options || {}) };
         }
 
         get numericFilter()
@@ -4032,7 +4032,7 @@ const $scope = constants?.$scope || function()
         const source = pSource || {};
         const target = pTarget || source;
 
-        const options = populateOptions( pOptions || {}, DEFAULT_OBJECT_LITERAL_OPTIONS );
+        const options = { ...DEFAULT_OBJECT_LITERAL_OPTIONS, ...(pOptions || {}) };
 
         if ( !options.omitFunctions )
         {
@@ -4594,7 +4594,8 @@ const $scope = constants?.$scope || function()
             return 0;
         }
 
-        const options = populateOptions( pOptions, COMPARE_OPTIONS );
+        const options = { ...COMPARE_OPTIONS, ...(pOptions || {}) };
+
         const nullsFirst = !!options.nullFirst;
 
         return (isNull( pA )) ? isNull( pB ) ? 0 : (nullsFirst ? -1 : 1) : (isNull( pB )) ? nullsFirst ? 1 : -1 : null;
@@ -4617,7 +4618,7 @@ const $scope = constants?.$scope || function()
 
         if ( 0 === comp )
         {
-            const options = populateOptions( pOptions, COMPARE_OPTIONS );
+            const options = { ...COMPARE_OPTIONS, ...(pOptions || {}) };
 
             const visited = pVisited || new VisitedSet();
             const stack = pStack || [];
@@ -4650,7 +4651,7 @@ const $scope = constants?.$scope || function()
             return 1;
         }
 
-        const options = populateOptions( pOptions, COMPARE_OPTIONS );
+        const options = { ...COMPARE_OPTIONS, ...(pOptions || {}) };
 
         let entriesA = objectEntries( pA );
         let entriesB = objectEntries( pB );
@@ -4700,7 +4701,7 @@ const $scope = constants?.$scope || function()
 
     function comparePrimitiveValues( pA, pB, pOptions = COMPARE_OPTIONS )
     {
-        const options = populateOptions( pOptions, COMPARE_OPTIONS );
+        const options = { ...COMPARE_OPTIONS, ...(pOptions || {}) };
 
         let comp = 0;
 
@@ -4720,7 +4721,7 @@ const $scope = constants?.$scope || function()
 
     const compare = function( pA, pB, pOptions = COMPARE_OPTIONS, pVisited = new VisitedSet(), pStack = [] )
     {
-        const options = populateOptions( pOptions, COMPARE_OPTIONS );
+        const options = { ...COMPARE_OPTIONS, ...(pOptions || {}) };
 
         let comp = compareForNullOrIdentity( pA, pB, options );
 
@@ -4797,7 +4798,7 @@ const $scope = constants?.$scope || function()
 
         constructor( pCompareOptions = COMPARE_OPTIONS )
         {
-            this.#options = lock( populateOptions( pCompareOptions, pCompareOptions ) );
+            this.#options = lock( { ...COMPARE_OPTIONS, ...(pCompareOptions || {}) } );
         }
 
         comparator()

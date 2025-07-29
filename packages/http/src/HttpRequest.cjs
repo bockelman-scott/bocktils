@@ -1388,8 +1388,7 @@ const {
 
         get options()
         {
-            return populateOptions( toObjectLiteral( this.#options ),
-                                    toObjectLiteral( new HttpRequestOptions() ) );
+            return { ...(toObjectLiteral( new HttpRequestOptions() )), ...(toObjectLiteral( this.#options )) };
         }
 
         get url()
@@ -1616,10 +1615,11 @@ const {
      */
     HttpRequest.resolve = function( pRequestOrUrl, pOptions )
     {
-        const options = populateOptions( pOptions || {},
-                                         (new HttpRequestOptions( pRequestOrUrl?.method || VERBS.GET,
-                                                                  new HttpRequestHeaders( pRequestOrUrl?.headers || pOptions?.headers ),
-                                                                  pRequestOrUrl?.options || {} )) );
+        const defaultOptions = new HttpRequestOptions( (pRequestOrUrl?.method || VERBS.GET),
+                                                       new HttpRequestHeaders( pRequestOrUrl?.headers || pOptions?.headers ),
+                                                       (pRequestOrUrl?.options || {}) );
+
+        const options = { ...(defaultOptions), ...(pOptions || {}) };
 
         if ( pRequestOrUrl instanceof HttpRequest || ((_ud !== typeof Request && pRequestOrUrl instanceof Request)) )
         {

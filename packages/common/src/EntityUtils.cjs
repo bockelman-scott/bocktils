@@ -137,7 +137,7 @@ const {
 
     const _sameString = function( pFirst, pSecond, pOptions )
     {
-        const options = populateOptions( pOptions || {}, DEFAULT_SAME_OBJECT_OPTIONS );
+        const options = { ...DEFAULT_SAME_OBJECT_OPTIONS, ...(pOptions || {}) };
 
         const caseSensitive = !!options.caseSensitive;
         const strict = !!options.strict;
@@ -171,7 +171,7 @@ const {
             return false;
         }
 
-        const options = populateOptions( pOptions || {}, DEFAULT_SAME_OBJECT_OPTIONS );
+        const options = { ...DEFAULT_SAME_OBJECT_OPTIONS, ...(pOptions || {}) };
 
         const first = [...(pFirst || [])].sort();
         const second = [...(pSecond || [])].sort();
@@ -209,7 +209,7 @@ const {
             return false;
         }
 
-        const options = populateOptions( pOptions || {}, DEFAULT_SAME_OBJECT_OPTIONS );
+        const options = { ...DEFAULT_SAME_OBJECT_OPTIONS, ...(pOptions || {}) };
 
         if ( isLikeArray( pFirst ) &&
              isLikeArray( pSecond ) &&
@@ -266,7 +266,7 @@ const {
             return true;
         }
 
-        const options = populateOptions( pOptions || {}, DEFAULT_SAME_OBJECT_OPTIONS );
+        const options = { ...DEFAULT_SAME_OBJECT_OPTIONS, ...(pOptions || {}) };
 
         const strict = !!options.strict;
         const type = options.type;
@@ -436,7 +436,7 @@ const {
 
             let listener = this.resolveListener( pListener );
 
-            let options = populateOptions( pOptions, { capture: false, once: false, passive: false, signal: null } );
+            let options = { ...{ capture: false, once: false, passive: false, signal: null }, ...(pOptions || {}) };
 
             this.#listeners.push( { target: this, type, listener, options } );
 
@@ -456,7 +456,7 @@ const {
 
             let listener = this.resolveListener( pListener );
 
-            let options = populateOptions( pOptions, { capture: false, once: false, passive: false, signal: null } );
+            let options = { ...{ capture: false, once: false, passive: false, signal: null }, ...(pOptions || {}) };
 
             let obj = { target: this, type, listener, options };
 

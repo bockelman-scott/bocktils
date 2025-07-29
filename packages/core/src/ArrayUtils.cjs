@@ -338,7 +338,7 @@ const $scope = constants?.$scope || function()
      */
     const processAsArrayOptions = function( pArr, pOptions )
     {
-        const options = populateOptions( pOptions, DEFAULT_AS_ARRAY_OPTIONS );
+        const options = { ...DEFAULT_AS_ARRAY_OPTIONS, ...(pOptions || {}) };
 
         let arr = isArray( pArr ) ? pArr : (isSpreadable( pArr ) ? [...(pArr || [])] : [pArr || _mt_str]);
 
@@ -374,7 +374,7 @@ const $scope = constants?.$scope || function()
 
     function fromIterable( pIterable, pOptions = DEFAULT_AS_ARRAY_OPTIONS )
     {
-        const options = populateOptions( pOptions, DEFAULT_AS_ARRAY_OPTIONS );
+        const options = { ...DEFAULT_AS_ARRAY_OPTIONS, ...(pOptions || {}) };
 
         const limit = Math.min( Math.max( asInt( pIterable?.size || pIterable?.length || 1, 1 ), asInt( options?.iterableLimit, (pIterable?.size || MAX_QUEUE_SIZE) ) ), MAX_QUEUE_SIZE );
 
@@ -432,7 +432,7 @@ const $scope = constants?.$scope || function()
      */
     const asArray = function( pValue, pOptions = DEFAULT_AS_ARRAY_OPTIONS, pRecursionCount = 0 )
     {
-        const options = populateOptions( pOptions, DEFAULT_AS_ARRAY_OPTIONS );
+        const options = { ...DEFAULT_AS_ARRAY_OPTIONS, ...(pOptions || {}) };
 
         if ( isArray( pValue ) || isTypedArray( pValue ) )
         {
@@ -1694,7 +1694,7 @@ const $scope = constants?.$scope || function()
              */
             TO_STRING_WITH_OPTIONS: function( pOptions = DEFAULT_AS_STRING_OPTIONS )
             {
-                const options = populateOptions( pOptions, DEFAULT_AS_STRING_OPTIONS );
+                const options = { ...DEFAULT_AS_ARRAY_OPTIONS, ...(pOptions || {}) };
                 return e => asString( e, options.trim, options );
             },
 
@@ -2934,7 +2934,7 @@ const $scope = constants?.$scope || function()
      */
     const isPopulatedArray = function( pArr, pOptions = DEFAULT_POPULATED_ARRAY_OPTIONS )
     {
-        const options = populateOptions( pOptions, DEFAULT_POPULATED_ARRAY_OPTIONS );
+        const options = { ...DEFAULT_POPULATED_ARRAY_OPTIONS, ...(pOptions || {}) };
 
         const minLength = Math.max( 1, asInt( options.minimumLength ) || 1 );
 
@@ -3490,7 +3490,7 @@ const $scope = constants?.$scope || function()
      */
     const preprocessArray = function( pArr, pOptions = DEFAULT_EQUALITY_OPTIONS )
     {
-        const options = populateOptions( pOptions, DEFAULT_EQUALITY_OPTIONS );
+        const options = { ...DEFAULT_EQUALITY_OPTIONS, ...(pOptions || {}) };
 
         let arr = [...(asArray( pArr || [] ))];
 
@@ -3550,7 +3550,7 @@ const $scope = constants?.$scope || function()
      */
     const arraysEqual = function( pArrA, pArrB, pOptions = DEFAULT_EQUALITY_OPTIONS )
     {
-        const options = populateOptions( pOptions, DEFAULT_EQUALITY_OPTIONS );
+        const options = { ...DEFAULT_EQUALITY_OPTIONS, ...(pOptions || {}) };
 
         let arrA = preprocessArray( [...(asArray( pArrA || [] ))], options );
         let arrB = preprocessArray( [...(asArray( pArrB || [] ))], options );
@@ -3735,7 +3735,7 @@ const $scope = constants?.$scope || function()
      */
     const _calculateIncrement = function( pValue, pOptions = DEFAULT_RANGE_OPTIONS )
     {
-        const options = populateOptions( pOptions, DEFAULT_RANGE_OPTIONS );
+        const options = { ...DEFAULT_RANGE_OPTIONS, ...(pOptions || {}) };
 
         const rule = options.increment_rule || RANGE_INCREMENT_OPTION.DERIVE;
 
@@ -3863,7 +3863,8 @@ const $scope = constants?.$scope || function()
         const boundsMapper = numeric ? toDecimal : asString;
         bounds = bounds.map( boundsMapper );
 
-        const options = populateOptions( pOptions, (numeric ? DEFAULT_NUMERIC_RANGE_OPTIONS : DEFAULT_CHARACTER_RANGE_OPTIONS) );
+        const defaultOptions = numeric ? DEFAULT_NUMERIC_RANGE_OPTIONS : DEFAULT_CHARACTER_RANGE_OPTIONS;
+        const options = { ...defaultOptions, ...(pOptions || {}) };
 
         const inclusive = !!options.inclusive;
 
@@ -4852,7 +4853,7 @@ const $scope = constants?.$scope || function()
 
     const toPercentages = function( pArr, pOptions = DEFAULT_AS_ARRAY_OPTIONS )
     {
-        let options = populateOptions( pOptions, DEFAULT_AS_ARRAY_OPTIONS );
+        const options = { ...DEFAULT_AS_ARRAY_OPTIONS, ...(pOptions || {}) };
 
         options.removeNaN = true;
         options.removeInfinity = true;
