@@ -357,7 +357,7 @@ const $scope = constants?.$scope || function()
 
             for( let v of this.values() )
             {
-                if ( isObject( v ) && (v === pValue || isFunction( this.#equalityFunction ) ? this.#equalityFunction( v, pValue ) : pValue === v) )
+                if ( isObject( v ) && (v === pValue || (isFunction( this.#equalityFunction ) ? this.#equalityFunction( v, pValue ) : pValue === v)) )
                 {
                     return true;
                 }
@@ -4024,6 +4024,9 @@ const $scope = constants?.$scope || function()
             omitFunctions: true,
             transientProperties: [],
             preserveArrays: true,
+            maxDepth: Infinity,
+            preserveUserDefinedClasses: false,
+            keyTransformer: ( key ) => key
         };
 
 
@@ -4052,7 +4055,7 @@ const $scope = constants?.$scope || function()
         }
     }
 
-    function resolveObjectLiteralArguments( pOptions, pVisited, pStack )
+    function resolveObjectLiteralArguments( pOptions, pVisited, pStack, pDepth = 0 )
     {
         const options = { ...DEFAULT_OBJECT_LITERAL_OPTIONS, ...(pOptions || {}) };
 
@@ -4060,7 +4063,10 @@ const $scope = constants?.$scope || function()
 
         const stack = [...(pStack || options?.stack || [])];
 
-        return { options, visited, stack };
+        let depth = isNumeric( pDepth ) ? toInteger( pDepth ) : 0;
+        depth = isNanOrInfinite( depth ) ? 0 : clamp( depth, 0, 256 );
+
+        return { options, visited, stack, depth };
     }
 
     const processValue = ( pValue, pOptions ) => (pOptions?.trimStrings && isString( pValue )) ? String( pValue ).trim() : pValue;
@@ -4122,14 +4128,23 @@ const $scope = constants?.$scope || function()
         }
     }
 
-    function toObjectLiteral( pObject, pOptions = DEFAULT_OBJECT_LITERAL_OPTIONS, pVisited = new ResolvedSet(), pStack = [] )
+    function toObjectLiteral( pObject,
+                              pOptions = DEFAULT_OBJECT_LITERAL_OPTIONS,
+                              pVisited = new ResolvedSet(),
+                              pStack = [],
+                              pDepth = 0 )
     {
         if ( isNull( pObject ) || !isObject( pObject ) || isPrimitiveWrapper( pObject ) || isObjectLiteral( pObject ) )
         {
             return pObject;
         }
 
-        const { options, visited, stack } = resolveObjectLiteralArguments( pOptions, pVisited, pStack );
+        const { options, visited, stack, depth } = resolveObjectLiteralArguments( pOptions, pVisited, pStack, pDepth );
+
+        if ( !isNanOrInfinite( options.depth ) && !isNanOrInfinite( depth ) && depth > options.depth )
+        {
+            return { ...(pObject || {}) };
+        }
 
         const transientProperties = resolveTransientProperties( options );
 
@@ -4144,8 +4159,8 @@ const $scope = constants?.$scope || function()
 
         const includeProperty = ( pKey, pValue, pOptions ) =>
         {
-            return ( !options.prune || isNonNullValue( pValue )) &&
-                   ( !options.omitFunctions || !isFunction( pValue ))
+            return ( !pOptions?.prune || isNonNullValue( pValue )) &&
+                   ( !pOptions?.omitFunctions || !isFunction( pValue ))
                    && !transientProperties.includes( String( pKey ) );
         };
 
@@ -4161,7 +4176,7 @@ const $scope = constants?.$scope || function()
 
         for( const entry of entries )
         {
-            const key = entry[0];
+            let key = entry[0];
 
             if ( transientProperties.includes( key ) || key.startsWith( "#" ) )
             {
@@ -4169,6 +4184,13 @@ const $scope = constants?.$scope || function()
             }
 
             const value = visited.resolveForNodePath( undefined, [...stack, key] ) || entry[1];
+
+            if ( !includeProperty( key, value, options ) )
+            {
+                continue;
+            }
+
+            key = isFunction( pOptions.keyTransformer ) ? pOptions.keyTransformer( key ) : key;
 
             if ( visited.has( value ) || detectCycles( stack, 5, 5 ) )
             {
@@ -4179,9 +4201,16 @@ const $scope = constants?.$scope || function()
                 continue;
             }
 
-            let newValue = (attempt( () => toObjectLiteral( value, options, visited, [...stack, key] ) ) || value);
+            if ( !options.recursive || (options.preserveUserDefinedClasses && isInstanceOfUserDefinedClass( value )) )
+            {
+                updateObject( key, value, options );
+            }
+            else
+            {
+                let newValue = (attempt( () => toObjectLiteral( value, options, visited, [...stack, key], (depth + 1) ) ) || value);
 
-            updateObject( key, newValue, options );
+                updateObject( key, newValue, options );
+            }
 
             if ( obj[key] )
             {
