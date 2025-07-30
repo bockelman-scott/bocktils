@@ -1579,19 +1579,19 @@ const $scope = constants?.$scope || function()
             return asString( body, true );
         }
 
-        // override resolveBody for Axios, which will do this for us
-        if ( isNonNullObject( body ) )
-        {
-            return asJson( body );
-        }
-
         if ( isPromise( body ) || isThenable( body ) )
         {
             body = await asyncAttempt( async() => await body );
             return resolveBody( { body }, pConfig );
         }
 
-        return null;
+        // override resolveBody for Axios, which will do this for us
+        if ( isNonNullObject( body ) )
+        {
+            return asJson( body );
+        }
+
+        return body;
     }
 
     function extractFileNameFromHeader( pResponse, pDefaultName, pReplaceCharacters = false )
@@ -1744,9 +1744,9 @@ const $scope = constants?.$scope || function()
             maxRetries: DEFAULT_REQUEST_RETRIES
         };
 
-    function prepareRequestConfig( pMethod, pConfig, pUrl, pBody )
+    async function prepareRequestConfig( pMethod, pConfig, pUrl, pBody )
     {
-        const body = resolveBody( (pBody || pConfig?.body || pConfig?.data), pConfig );
+        const body = await resolveBody( (pBody || pConfig?.body || pConfig?.data), pConfig );
 
         const cfg = resolveApiConfig( pConfig, body );
 
@@ -1754,7 +1754,7 @@ const $scope = constants?.$scope || function()
 
         if ( body )
         {
-            cfg.body = cfg.data = (body || resolveBody( body, cfg ));
+            cfg.body = cfg.data = (body || await resolveBody( body, cfg ));
         }
 
         cfg.method = resolveHttpMethod( pMethod || cfg.method ) || cfg.method;
@@ -1844,12 +1844,12 @@ const $scope = constants?.$scope || function()
         }
 
         // noinspection FunctionTooLongJS
-        async doFetch( pUrl, pConfig, pRedirects = 0, pRetries = 0 )
+        async doFetch( pUrl, pConfig, pRedirects = 0, pRetries = 0, pResolve, pReject )
         {
             const cfg = this.resolveConfig( pConfig, pUrl );
 
-            const method = resolveHttpMethod( cfg.method || "GET" );
-            cfg.method = method || "GET";
+            const method = resolveHttpMethod( cfg.method || VERBS.GET );
+            cfg.method = method || VERBS.GET;
 
             const url = this.resolveUrl( pUrl, cfg );
             cfg.url = url;
@@ -1885,7 +1885,7 @@ const $scope = constants?.$scope || function()
 
                     const me = this;
 
-                    return await asyncAttempt( async() => await me.doFetch( url, cfg, pRedirects, ++retries ) );
+                    return await asyncAttempt( async() => await me.doFetch( url, cfg, pRedirects, ++retries, pResolve, pReject ) );
                 }
                 else if ( status >= 300 && status < 400 )
                 {
@@ -1901,7 +1901,7 @@ const $scope = constants?.$scope || function()
 
                         if ( location && cleanUrl( asString( url, true ) ) !== location )
                         {
-                            return await me.doFetch( location, cfg, ++redirects, pRetries );
+                            return await me.doFetch( location, cfg, ++redirects, pRetries, pResolve, pReject );
                         }
                     }
                     else
@@ -1921,29 +1921,33 @@ const $scope = constants?.$scope || function()
             throw new Error( "Failed to fetch data from " + url + ", Server returned: " + (responseData?.status || "no response") );
         }
 
-        async sendRequest( pMethod, pUrl, pConfig )
+        async sendRequest( pMethod, pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
             const me = this;
 
-            const { cfg, url } = prepareRequestConfig( resolveHttpMethod( pMethod ), pConfig, pUrl );
+            const {
+                cfg,
+                url,
+                body
+            } = await prepareRequestConfig( resolveHttpMethod( pMethod ), pConfig, pUrl, await resolveBody( pBody, pConfig ) );
 
             return await me.doFetch( url, cfg );
         }
 
-        async sendGetRequest( pUrl, pConfig )
+        async sendGetRequest( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )
         {
             const me = this;
 
-            const { cfg, url } = prepareRequestConfig( "GET", pConfig, pUrl );
+            const { cfg, url } = await prepareRequestConfig( VERBS.GET, pConfig, pUrl );
 
-            return await asyncAttempt( async() => await me.sendRequest( "GET", url, cfg ) );
+            return await asyncAttempt( async() => await me.sendRequest( VERBS.GET, url, cfg, null, pRedirects, pRetries, pResolve, pReject ) );
         }
 
-        async getRequestedData( pUrl, pConfig, pRedirects = 0 )
+        async getRequestedData( pUrl, pConfig, pRedirects = 0, pRetries = 0, pResolve, pReject )
         {
             const me = this;
 
-            const { cfg, url } = prepareRequestConfig( "GET", pConfig, pUrl, null );
+            const { cfg, url } = await prepareRequestConfig( VERBS.GET, pConfig, pUrl, null );
 
             const responseData = new ResponseData( await asyncAttempt( async() => await me.sendGetRequest( url, cfg ) ) );
 
@@ -1989,13 +1993,13 @@ const $scope = constants?.$scope || function()
             throw new Error( "Failed to fetch data from " + url + ", Server returned: " + (responseData?.status || "no response") );
         }
 
-        async sendPostRequest( pUrl, pConfig, pBody )
+        async sendPostRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
             const me = this;
 
-            const { cfg, url } = prepareRequestConfig( "POST", pConfig, pUrl, pBody );
+            const { cfg, url } = await prepareRequestConfig( VERBS.POST, pConfig, pUrl, pBody );
 
-            return asyncAttempt( async() => await me.sendRequest( "POST", url, cfg ) );
+            return asyncAttempt( async() => await me.sendRequest( VERBS.POST, url, cfg, pBody, pRedirects, pRetries, pResolve, pReject ) );
         }
 
         async upload( pUrl, pConfig, pBody )
@@ -2003,58 +2007,61 @@ const $scope = constants?.$scope || function()
             return this.sendPostRequest( pUrl, pConfig, pBody );
         }
 
-        async sendDeleteRequest( pUrl, pConfig, pBody )
+        async sendDeleteRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
             const me = this;
 
-            const { cfg, url } = prepareRequestConfig( "DELETE", pConfig, pUrl, resolveBody( pBody, pConfig ) );
+            const {
+                cfg,
+                url
+            } = await prepareRequestConfig( VERBS.DELETE, pConfig, pUrl, await resolveBody( pBody, pConfig ) );
 
-            return asyncAttempt( async() => await me.sendRequest( "DELETE", url, cfg ) );
+            return asyncAttempt( async() => await me.sendRequest( VERBS.DELETE, url, cfg, pBody, pRedirects, pRetries, pResolve, pReject ) );
         }
 
-        async sendPutRequest( pUrl, pConfig, pBody )
+        async sendPutRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
             const me = this;
 
-            const { cfg, url } = prepareRequestConfig( "PUT", pConfig, pUrl, pBody );
+            const { cfg, url } = await prepareRequestConfig( VERBS.PUT, pConfig, pUrl, pBody );
 
-            return asyncAttempt( async() => await me.sendRequest( "PUT", url, cfg ) );
+            return asyncAttempt( async() => await me.sendRequest( VERBS.PUT, url, cfg, pBody, pRedirects, pRetries, pResolve, pReject ) );
         }
 
-        async sendPatchRequest( pUrl, pConfig, pBody )
+        async sendPatchRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
             const me = this;
 
-            const { cfg, url } = prepareRequestConfig( "PATCH", pConfig, pUrl, pBody );
+            const { cfg, url } = await prepareRequestConfig( VERBS.PATCH, pConfig, pUrl, pBody );
 
-            return asyncAttempt( async() => await me.sendRequest( "PATCH", url, cfg ) );
+            return asyncAttempt( async() => await me.sendRequest( VERBS.PATCH, url, cfg, pBody, pRedirects, pRetries, pResolve, pReject ) );
         }
 
-        async sendHeadRequest( pUrl, pConfig )
+        async sendHeadRequest( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )
         {
             const me = this;
 
-            const { cfg, url } = prepareRequestConfig( "HEAD", pConfig, pUrl, null );
+            const { cfg, url } = await prepareRequestConfig( VERBS.HEAD, pConfig, pUrl, null );
 
-            return asyncAttempt( async() => await me.sendRequest( "HEAD", url, cfg ) );
+            return asyncAttempt( async() => await me.sendRequest( VERBS.HEAD, url, cfg ) );
         }
 
-        async sendOptionsRequest( pUrl, pConfig )
+        async sendOptionsRequest( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )
         {
             const me = this;
 
-            const { cfg, url } = prepareRequestConfig( "OPTIONS", pConfig, pUrl, null );
+            const { cfg, url } = await prepareRequestConfig( VERBS.OPTIONS, pConfig, pUrl, null );
 
-            return asyncAttempt( async() => await me.sendRequest( "OPTIONS", url, cfg ) );
+            return asyncAttempt( async() => await me.sendRequest( VERBS.OPTIONS, url, cfg ) );
         }
 
-        async sendTraceRequest( pUrl, pConfig )
+        async sendTraceRequest( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )
         {
             const me = this;
 
-            const { cfg, url } = prepareRequestConfig( "TRACE", pConfig, pUrl, null );
+            const { cfg, url } = await prepareRequestConfig( VERBS.TRACE, pConfig, pUrl, null );
 
-            return asyncAttempt( async() => await me.sendRequest( "TRACE", url, cfg ) );
+            return asyncAttempt( async() => await me.sendRequest( VERBS.TRACE, url, cfg ) );
         }
     }
 
@@ -2232,7 +2239,7 @@ const $scope = constants?.$scope || function()
             return isHttpClient( delegate ) ? delegate : isHttpClient( this.#defaultDelegate ) ? this.#defaultDelegate : new HttpFetchClient( resolveConfig( this.config, pBody ), this.options );
         }
 
-        async sendRequest( pMethod, pUrl, pConfig, pBody )
+        async sendRequest( pMethod, pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
             const config = resolveConfig( this.config, pBody );
 
@@ -2244,10 +2251,10 @@ const $scope = constants?.$scope || function()
 
             if ( isFunction( delegate.sendRequest ) )
             {
-                return await asyncAttempt( async() => await delegate.sendRequest( method, uri, config, pBody ) );
+                return await asyncAttempt( async() => await delegate.sendRequest( method, uri, config, pBody, pRedirects, pRetries, pResolve, pReject ) );
             }
 
-            const { cfg, url } = prepareRequestConfig( method, config, uri );
+            const { cfg, url } = await prepareRequestConfig( method, config, uri, pBody );
 
             return fetch( url, cfg );
         }
@@ -2277,7 +2284,7 @@ const $scope = constants?.$scope || function()
             }
         }
 
-        async sendGetRequest( pUrl, pConfig )
+        async sendGetRequest( pUrl, pConfig, pRedirects = 0, pRetries = 0, pResolve, pReject )
         {
             const config = resolveConfig( { ...(this.config || {}), ...(pConfig || {}) } );
 
@@ -2285,22 +2292,22 @@ const $scope = constants?.$scope || function()
 
             const uri = resolveUrl( pUrl, config );
 
-            const { cfg, url } = prepareRequestConfig( VERBS.GET, config, uri );
+            const { cfg, url } = await prepareRequestConfig( VERBS.GET, config, uri );
 
             if ( isFunction( delegate.sendGetRequest ) )
             {
-                return await asyncAttempt( async() => await delegate.sendGetRequest( uri, cfg ) );
+                return await asyncAttempt( async() => await delegate.sendGetRequest( uri, cfg, pRedirects, pRetries, pResolve, pReject ) );
             }
 
             if ( isFunction( delegate.sendRequest ) )
             {
-                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.GET, uri, cfg ) );
+                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.GET, uri, cfg, null, pRedirects, pRetries, pResolve, pReject ) );
             }
 
             return fetch( url, cfg );
         }
 
-        async getRequestedData( pUrl, pConfig, pRedirects = 0 )
+        async getRequestedData( pUrl, pConfig, pRedirects = 0, pRetries = 0, pResolve, pReject )
         {
             const me = this;
 
@@ -2310,16 +2317,16 @@ const $scope = constants?.$scope || function()
 
             const uri = resolveUrl( pUrl, config );
 
-            const { cfg, url } = prepareRequestConfig( VERBS.GET, config, uri, null );
+            const { cfg, url } = await prepareRequestConfig( VERBS.GET, config, uri, null );
 
             if ( isFunction( delegate.getRequestedData ) )
             {
-                return await asyncAttempt( async() => await delegate.getRequestedData( url, cfg ) );
+                return await asyncAttempt( async() => await delegate.getRequestedData( url, cfg, pRedirects, pRetries, pResolve, pReject ) );
             }
 
             if ( isFunction( delegate.sendGetRequest ) )
             {
-                let responseData = await asyncAttempt( async() => await delegate.sendGetRequest( url, cfg ) );
+                let responseData = await asyncAttempt( async() => await delegate.sendGetRequest( url, cfg, pRedirects, pRetries, pResolve, pReject ) );
 
                 responseData = responseData instanceof ResponseData ? responseData : new ResponseData( responseData );
 
@@ -2357,7 +2364,7 @@ const $scope = constants?.$scope || function()
             }
         }
 
-        async sendPostRequest( pUrl, pConfig, pBody )
+        async sendPostRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
             const config = resolveConfig( { ...(this.config || {}), ...(pConfig || {}) } );
 
@@ -2365,22 +2372,27 @@ const $scope = constants?.$scope || function()
 
             const uri = resolveUrl( pUrl, config );
 
-            const { cfg, url } = prepareRequestConfig( VERBS.POST, config, uri, resolveBody( pBody, config ) );
+            const
+                {
+                    cfg,
+                    url,
+                    body
+                } = await prepareRequestConfig( VERBS.POST, config, uri, await resolveBody( pBody, config ) );
 
             if ( isFunction( delegate.sendPostRequest ) )
             {
-                return await asyncAttempt( async() => await delegate.sendPostRequest( url, cfg ) );
+                return await asyncAttempt( async() => await delegate.sendPostRequest( url, cfg, (body || pBody), pRedirects, pRetries, pResolve, pReject ) );
             }
 
             if ( isFunction( delegate.sendRequest ) )
             {
-                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.POST, url, cfg ) );
+                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.POST, url, cfg, (body || pBody), pRedirects, pRetries, pResolve, pReject ) );
             }
 
             return fetch( url, cfg );
         }
 
-        async sendPutRequest( pUrl, pConfig, pBody )
+        async sendPutRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
             const config = resolveConfig( { ...(this.config || {}), ...(pConfig || {}) } );
 
@@ -2388,22 +2400,27 @@ const $scope = constants?.$scope || function()
 
             const uri = resolveUrl( pUrl, config );
 
-            const { cfg, url } = prepareRequestConfig( VERBS.PUT, config, uri, resolveBody( pBody, config ) );
+            const
+                {
+                    cfg,
+                    url,
+                    body
+                } = await prepareRequestConfig( VERBS.PUT, config, uri, await resolveBody( pBody, config ) );
 
             if ( isFunction( delegate.sendPutRequest ) )
             {
-                return await asyncAttempt( async() => await delegate.sendPutRequest( url, cfg ) );
+                return await asyncAttempt( async() => await delegate.sendPutRequest( url, cfg, (body || pBody), pRedirects, pRetries, pResolve, pReject ) );
             }
 
             if ( isFunction( delegate.sendRequest ) )
             {
-                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.PUT, url, cfg ) );
+                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.PUT, url, cfg, (body || pBody), pRedirects, pRetries, pResolve, pReject ) );
             }
 
             return fetch( url, cfg );
         }
 
-        async sendPatchRequest( pUrl, pConfig, pBody )
+        async sendPatchRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
             const config = resolveConfig( { ...(this.config || {}), ...(pConfig || {}) } );
 
@@ -2411,22 +2428,27 @@ const $scope = constants?.$scope || function()
 
             const uri = resolveUrl( pUrl, config );
 
-            const { cfg, url } = prepareRequestConfig( VERBS.PATCH, config, uri, resolveBody( pBody, config ) );
+            const
+                {
+                    cfg,
+                    url,
+                    body
+                } = await prepareRequestConfig( VERBS.PATCH, config, uri, await resolveBody( pBody, config ) );
 
             if ( isFunction( delegate.sendPatchRequest ) )
             {
-                return await asyncAttempt( async() => await delegate.sendPatchRequest( resolveUrl( url, cfg ), cfg ) );
+                return await asyncAttempt( async() => await delegate.sendPatchRequest( url, cfg, (body || pBody), pRedirects, pRetries, pResolve, pReject ) );
             }
 
             if ( isFunction( delegate.sendRequest ) )
             {
-                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.PATCH, url, cfg ) );
+                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.PATCH, url, cfg, (body || pBody), pRedirects, pRetries, pResolve, pReject ) );
             }
 
             return fetch( url, cfg );
         }
 
-        async sendDeleteRequest( pUrl, pConfig, pBody )
+        async sendDeleteRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
             const config = resolveConfig( { ...(this.config || {}), ...(pConfig || {}) } );
 
@@ -2434,22 +2456,26 @@ const $scope = constants?.$scope || function()
 
             const uri = resolveUrl( pUrl, config );
 
-            const { cfg, url } = prepareRequestConfig( VERBS.DELETE, config, uri, resolveBody( pBody, config ) );
+            const {
+                cfg,
+                url,
+                body
+            } = await prepareRequestConfig( VERBS.DELETE, config, uri, await resolveBody( pBody, config ) );
 
             if ( isFunction( delegate.sendDeleteRequest ) )
             {
-                return await asyncAttempt( async() => await delegate.sendDeleteRequest( url, cfg, resolveBody( body, cfg ) ) );
+                return await asyncAttempt( async() => await delegate.sendDeleteRequest( url, cfg, body, pRedirects, pRetries, pResolve, pReject ) );
             }
 
             if ( isFunction( delegate.sendRequest ) )
             {
-                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.DELETE, url, cfg ) );
+                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.DELETE, url, cfg, body, pRedirects, pRetries, pResolve, pReject ) );
             }
 
             return fetch( url, cfg );
         }
 
-        async sendHeadRequest( pUrl, pConfig )
+        async sendHeadRequest( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )
         {
             const config = resolveConfig( { ...(this.config || {}), ...(pConfig || {}) } );
 
@@ -2457,7 +2483,7 @@ const $scope = constants?.$scope || function()
 
             const uri = resolveUrl( pUrl, config );
 
-            const { cfg, url } = prepareRequestConfig( VERBS.HEAD, config, uri );
+            const { cfg, url } = await prepareRequestConfig( VERBS.HEAD, config, uri );
 
             if ( isFunction( delegate.sendHeadRequest ) )
             {
@@ -2472,7 +2498,7 @@ const $scope = constants?.$scope || function()
             return fetch( url, cfg );
         }
 
-        async sendOptionsRequest( pUrl, pConfig )
+        async sendOptionsRequest( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )
         {
             const config = resolveConfig( { ...(this.config || {}), ...(pConfig || {}) } );
 
@@ -2480,11 +2506,11 @@ const $scope = constants?.$scope || function()
 
             const uri = resolveUrl( pUrl, config );
 
-            const { cfg, url } = prepareRequestConfig( VERBS.OPTIONS, config, uri );
+            const { cfg, url } = await prepareRequestConfig( VERBS.OPTIONS, config, uri );
 
             if ( isFunction( delegate.sendOptionsRequest ) )
             {
-                return await asyncAttempt( async() => await delegate.sendOptionsRequest( resolveUrl( url, cfg ), cfg ) );
+                return await asyncAttempt( async() => await delegate.sendOptionsRequest( url, cfg ) );
             }
 
             if ( isFunction( delegate.sendRequest ) )
@@ -2495,7 +2521,7 @@ const $scope = constants?.$scope || function()
             return fetch( url, cfg );
         }
 
-        async sendTraceRequest( pUrl, pConfig )
+        async sendTraceRequest( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )
         {
             const config = resolveConfig( { ...(this.config || {}), ...(pConfig || {}) } );
 
@@ -2503,11 +2529,11 @@ const $scope = constants?.$scope || function()
 
             const uri = resolveUrl( pUrl, config );
 
-            const { cfg, url } = prepareRequestConfig( VERBS.TRACE, config, uri );
+            const { cfg, url } = await prepareRequestConfig( VERBS.TRACE, config, uri );
 
             if ( isFunction( delegate.sendTraceRequest ) )
             {
-                return await asyncAttempt( async() => await delegate.sendTraceRequest( resolveUrl( url, cfg ), cfg ) );
+                return await asyncAttempt( async() => await delegate.sendTraceRequest( url, cfg ) );
             }
 
             if ( isFunction( delegate.sendRequest ) )
@@ -2526,16 +2552,19 @@ const $scope = constants?.$scope || function()
 
             const uri = resolveUrl( pUrl, config );
 
-            const body = resolveBody( pBody, config );
-
-            const { cfg, url } = prepareRequestConfig( config.method || VERBS.POST, config, uri, body );
+            const
+                {
+                    cfg,
+                    url,
+                    body
+                } = await prepareRequestConfig( config.method || VERBS.POST, config, uri, await resolveBody( pBody, config ) );
 
             if ( isFunction( delegate?.upload ) )
             {
-                return delegate.upload( url, cfg, body );
+                return delegate.upload( url, cfg, (body || pBody) );
             }
 
-            return this.sendPostRequest( url, cfg, body );
+            return this.sendPostRequest( url, cfg, (body || pBody) );
         }
 
         async download( pUrl, pConfig, pOutputPath = ".", pFileName = _mt )
@@ -2557,7 +2586,7 @@ const $scope = constants?.$scope || function()
             {
                 let cfg = { ...DEFAULT_API_CONFIG, ...DEFAULT_DOWNLOAD_CONFIG, ...(config || {}) };
 
-                const response = this.sendRequest( cfg.method || VERBS.GET, uri, cfg, resolveBody( cfg.body || cfg.data, cfg ) );
+                const response = await this.sendRequest( cfg.method || VERBS.GET, uri, cfg, await resolveBody( cfg.body || cfg.data, cfg ) );
 
                 if ( ResponseData.isOk( response ) )
                 {
@@ -3788,7 +3817,7 @@ const $scope = constants?.$scope || function()
             return rateLimits.calculateDelay();
         }
 
-        async sendRequest( pMethod, pUrl, pConfig, pResolve, pReject )
+        async sendRequest( pMethod, pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
             const me = this;
 
@@ -3807,7 +3836,7 @@ const $scope = constants?.$scope || function()
 
                                     if ( delay > asInt( me.maxDelayBeforeQueueing ) )
                                     {
-                                        return me.queueRequest( method, pUrl, pConfig, (pResolve || resolve), (pReject || reject) );
+                                        return me.queueRequest( method, pUrl, pConfig, pBody, (pResolve || resolve), (pReject || reject) );
                                     }
                                     else
                                     {
@@ -3824,6 +3853,9 @@ const $scope = constants?.$scope || function()
                                             {
                                                 return asyncAttempt( async() => delegate.sendRequest( pUrl,
                                                                                                       pConfig,
+                                                                                                      pBody,
+                                                                                                      pRedirects,
+                                                                                                      pRetries,
                                                                                                       pResolve || resolve,
                                                                                                       pReject || reject ) );
                                             };
@@ -3850,12 +3882,12 @@ const $scope = constants?.$scope || function()
                                 } );
         }
 
-        async queueRequest( pMethod, pUrl, pConfig, pResolve, pReject )
+        async queueRequest( pMethod, pUrl, pConfig, pBody, pResolve, pReject )
         {
             const cfg = this.resolveConfig( pConfig, pUrl );
 
-            const method = resolveHttpMethod( cfg.method || "GET" );
-            cfg.method = method || "GET";
+            const method = resolveHttpMethod( cfg.method || VERBS.GET );
+            cfg.method = method || VERBS.GET;
 
             const url = this.resolveUrl( pUrl, cfg );
             cfg.url = url;
@@ -3877,20 +3909,20 @@ const $scope = constants?.$scope || function()
             this.#queuedRequests.add( new QueuedRequest( request, cfg, resolve, reject ) );
         }
 
-        async sendGetRequest( pUrl, pConfig )
+        async sendGetRequest( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )
         {
-            const { cfg, url } = prepareRequestConfig( "GET", pConfig, pUrl );
+            const { cfg, url } = await prepareRequestConfig( VERBS.GET, pConfig, pUrl );
 
-            return this.sendRequest( "GET", url, cfg );
+            return this.sendRequest( VERBS.GET, url, cfg, null, pRedirects, pRetries, pResolve, pReject );
         }
 
-        async getRequestedData( pUrl, pConfig, pRedirects, pResolve, pReject )
+        async getRequestedData( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )
         {
             const me = this;
 
-            const { cfg, url } = prepareRequestConfig( "GET", pConfig, pUrl, null );
+            const { cfg, url } = await prepareRequestConfig( VERBS.GET, pConfig, pUrl, null );
 
-            const responseData = await asyncAttempt( async() => await me.sendRequest( url, cfg ) );
+            const responseData = await asyncAttempt( async() => await me.sendGetRequest( url, cfg, pRedirects, pRetries, pResolve, pReject ) );
 
             if ( ResponseData.isOk( responseData ) )
             {
@@ -3903,17 +3935,15 @@ const $scope = constants?.$scope || function()
             }
             else if ( isNonNullObject( responseData ) )
             {
-                let retries = asInt( pRedirects );
-                if ( retries < Math.max( cfg.maxRedirects, 3 ) && responseData.isExceedsRateLimit() )
+                let redirects = asInt( pRedirects );
+                if ( redirects < Math.max( cfg.maxRedirects, 3 ) && responseData.isExceedsRateLimit() )
                 {
                     // the sendRequest method should already be handling the rate limits, so
                     // this is just a sort of fallback to make a last ditch attempt to get the data
-                    await sleep( (500 * (retries + 1)) + (Math.random() * 100) );
-                    return await asyncAttempt( async() => me.getRequestedData( url, cfg, ++retries, pResolve, pReject ) );
+                    await sleep( (500 * (redirects + 1)) + (Math.random() * 100) );
+                    return await asyncAttempt( async() => me.getRequestedData( url, cfg, ++redirects, pRetries, pResolve, pReject ) );
                 }
             }
-
-            let redirects = asInt( pRedirects );
 
             // noinspection JSValidateTypes,TypeScriptUMDGlobal
             return new Promise( ( resolve, reject ) =>
@@ -3924,7 +3954,7 @@ const $scope = constants?.$scope || function()
 
                                     if ( delay > asInt( me.maxDelayBeforeQueueing ) )
                                     {
-                                        return me.queueRequest( "GET", url, cfg, (pResolve || resolve), (pReject || reject) );
+                                        return me.queueRequest( VERBS.GET, url, cfg, null, (pResolve || resolve), (pReject || reject) );
                                     }
                                     else
                                     {
@@ -3941,7 +3971,8 @@ const $scope = constants?.$scope || function()
                                             {
                                                 return asyncAttempt( async() => me.getRequestedData( url,
                                                                                                      cfg,
-                                                                                                     ++redirects,
+                                                                                                     0,
+                                                                                                     0,
                                                                                                      pResolve || resolve,
                                                                                                      pReject || reject ) );
                                             };
@@ -3957,11 +3988,16 @@ const $scope = constants?.$scope || function()
                                 } );
         }
 
-        async sendPostRequest( pUrl, pConfig, pBody )
+        async sendPostRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
-            const { cfg, url } = prepareRequestConfig( "POST", pConfig, pUrl, resolveBody( pBody, pConfig ) );
+            const
+                {
+                    cfg,
+                    url,
+                    body
+                } = await prepareRequestConfig( VERBS.POST, pConfig, pUrl, await resolveBody( pBody, pConfig ) );
 
-            return this.sendRequest( "POST", url, cfg );
+            return this.sendRequest( VERBS.POST, url, cfg, body, pRedirects, pRetries, pResolve, pReject );
         }
 
         async upload( pUrl, pConfig, pBody )
@@ -3969,46 +4005,60 @@ const $scope = constants?.$scope || function()
             return this.sendPostRequest( pUrl, pConfig, pBody );
         }
 
-        async sendPutRequest( pUrl, pConfig, pBody )
+        async sendPutRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
-            const { cfg, url } = prepareRequestConfig( "PUT", pConfig, pUrl, resolveBody( pBody, pConfig ) );
+            const {
+                cfg,
+                url,
+                body
+            } = await prepareRequestConfig( VERBS.PUT, pConfig, pUrl, await resolveBody( pBody, pConfig ) );
 
-            return this.sendRequest( "PUT", url, cfg );
+            return this.sendRequest( VERBS.PUT, url, cfg, body, pRedirects, pRetries, pResolve, pReject );
         }
 
-        async sendPatchRequest( pUrl, pConfig, pBody )
+        async sendPatchRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
-            const { cfg, url } = prepareRequestConfig( "PATCH", pConfig, pUrl, resolveBody( pBody, pConfig ) );
+            const
+                {
+                    cfg,
+                    url,
+                    body
+                } = await prepareRequestConfig( VERBS.PATCH, pConfig, pUrl, await resolveBody( pBody, pConfig ) );
 
-            return this.sendRequest( "PATCH", url, cfg );
+            return this.sendRequest( VERBS.PATCH, url, cfg, body, pRedirects, pRetries, pResolve, pReject );
         }
 
-        async sendDeleteRequest( pUrl, pConfig, pBody )
+        async sendDeleteRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
-            const { cfg, url } = prepareRequestConfig( "DELETE", pConfig, pUrl, resolveBody( pBody, pConfig ) );
+            const
+                {
+                    cfg,
+                    url,
+                    body
+                } = await prepareRequestConfig( VERBS.DELETE, pConfig, pUrl, await resolveBody( pBody, pConfig ) );
 
-            return this.sendRequest( "DELETE", url, cfg );
+            return this.sendRequest( VERBS.DELETE, url, cfg, body, pRedirects, pRetries, pResolve, pReject );
         }
 
-        async sendHeadRequest( pUrl, pConfig )
+        async sendHeadRequest( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )
         {
-            const { cfg, url } = prepareRequestConfig( "HEAD", pConfig, pUrl );
+            const { cfg, url } = await prepareRequestConfig( VERBS.HEAD, pConfig, pUrl );
 
-            return this.sendRequest( "HEAD", url, cfg );
+            return this.sendRequest( VERBS.HEAD, url, cfg );
         }
 
-        async sendOptionsRequest( pUrl, pConfig )
+        async sendOptionsRequest( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )
         {
-            const { cfg, url } = prepareRequestConfig( "OPTIONS", pConfig, pUrl );
+            const { cfg, url } = await prepareRequestConfig( VERBS.OPTIONS, pConfig, pUrl );
 
-            return this.sendRequest( "OPTIONS", url, cfg );
+            return this.sendRequest( VERBS.OPTIONS, url, cfg );
         }
 
-        async sendTraceRequest( pUrl, pConfig )
+        async sendTraceRequest( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )
         {
-            const { cfg, url } = prepareRequestConfig( "TRACE", pConfig, pUrl );
+            const { cfg, url } = await prepareRequestConfig( VERBS.TRACE, pConfig, pUrl );
 
-            return this.sendRequest( "TRACE", url, cfg );
+            return this.sendRequest( VERBS.TRACE, url, cfg );
         }
     }
 
@@ -4515,7 +4565,7 @@ const $scope = constants?.$scope || function()
             prepareRequestConfig,
 
             extractFileNameFromHeader,
-            
+
             HttpClient,
             HttpFetchClient,
             RateLimitedHttpClient,
