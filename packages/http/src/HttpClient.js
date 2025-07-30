@@ -863,6 +863,85 @@ const $scope = constants?.$scope || function()
             }
         }
 
+
+        /**
+         * Returns an object that has translated the property names of this configuration
+         * into those expected by the target configuration or consumer of the configuration
+         *
+         * Example:
+         *
+         * If the specified map, or object, looks like:
+         *
+         * {
+         *     "api_key":"apiKey",
+         *     "x-org-id":"orgId",
+         *     "x-user-id":"userId"
+         * }
+         *
+         * and this instance has the following values:
+         *
+         * {
+         *     apiKey: "yaddah-yaddah",
+         *     orgId:"4321",
+         *     userId:"9999"
+         * }
+         *
+         * The result is an object that looks like this:
+         *
+         * {
+         *     "api_key":"yaddah-yaddah",
+         *     "x-org-id":"4321",
+         *     "x-user-id":"9999"
+         * }
+         *
+         * @param {Map|Object} pMap A Map or Object describing how to map the values of this instance
+         *                          to a new Object with different property names
+         *
+         * @param pHeadersMap       A Map or Object describing how to map the values of the headers of this instance
+         *                          to a new Object with different property names
+         *
+         * @returns {Object} An object with the desired property names and values based on this instance
+         */
+        mapToTargetConfig( pMap, pHeadersMap = pMap )
+        {
+            const me = this;
+
+            const obj = {};
+
+            const entries = objectEntries( pMap );
+
+            entries.forEach( entry =>
+                             {
+                                 let key = asString( ObjectEntry.getKey( entry ) );
+                                 let value = asString( ObjectEntry.getValue( entry ) );
+
+                                 obj[key] = me[value];
+                             } );
+
+            const mappedValues = Object.values( pMap );
+
+            const myEntries = objectEntries( toObjectLiteral( me ) );
+
+            myEntries.forEach( entry =>
+                               {
+                                   let key = asString( ObjectEntry.getKey( entry ) );
+                                   if ( !mappedValues.includes( key ) )
+                                   {
+                                       let value = ObjectEntry.getValue( entry );
+                                       if ( !(isNull( value ) || (isString( value ) && isBlank( value )) || (isNumeric( value ) && asInt( value ) === 0)) )
+                                       {
+                                           obj[key] = value;
+                                       }
+                                   }
+                                   else if( "headers" === key )
+                                   {
+
+                                   }
+                               } );
+
+            return fixAgents( obj );
+        }
+
         toLiteral()
         {
             return fixAgents( toObjectLiteral( this ) );
@@ -886,7 +965,6 @@ const $scope = constants?.$scope || function()
             return asJson( this );
         }
     }
-
 
     HttpClientConfig.fromJson = function( pJson )
     {

@@ -4256,14 +4256,29 @@ const $scope = constants?.$scope || function()
                attempt( () => (toolBocksModule["parseJson"] || parseJson).call( toolBocksModule, pObject ) );
     }
 
-    function asMap( pVal, pLocked )
+    function asMap( pVal, pOptions = { recursive: true, locked: false, preserveUserDefinedClasses: true } )
     {
+        const options = { ...({ recursive: true, locked: false }), ...(pOptions || {}) };
+
+        const recursive = !!options.recursive;
+        const preserve = !!options.preserveUserDefinedClasses;
+        const locked = !!options.locked;
+
         let map = new Map();
+
+        function shouldRecurse( pValue, pRecursive = recursive )
+        {
+            if ( pRecursive && isNonNullObject( pValue ) )
+            {
+                return !preserve || !isInstanceOfUserDefinedClass( pValue );
+            }
+            return false;
+        }
 
         switch ( typeof pVal )
         {
             case _ud:
-                return !!pLocked ? lock( map ) : map;
+                return !!locked ? lock( map ) : map;
 
             case _obj:
                 if ( isNull( pVal ) )
@@ -4279,12 +4294,18 @@ const $scope = constants?.$scope || function()
                     }
                     pVal.forEach( ( e, i ) =>
                                   {
-                                      map.set( i, e );
+                                      map.set( i, shouldRecurse( e, recursive ) ? asMap( e, options ) : e );
                                   } );
                 }
                 else
                 {
-                    objectEntries( pVal ).forEach( entry => map.set( ObjectEntry.getKey( entry ), ObjectEntry.getValue( entry ) ) );
+                    objectEntries( pVal ).forEach( entry =>
+                                                   {
+                                                       const key = ObjectEntry.getKey( entry );
+                                                       const value = ObjectEntry.getValue( entry );
+
+                                                       map.set( key, shouldRecurse( value, recursive ) ? asMap( value, options ) : value );
+                                                   } );
                 }
                 break;
 
@@ -4318,7 +4339,7 @@ const $scope = constants?.$scope || function()
                 break;
         }
 
-        return !!pLocked ? lock( map ) : map;
+        return !!locked ? lock( map ) : map;
     }
 
     /**
