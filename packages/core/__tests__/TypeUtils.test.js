@@ -106,7 +106,8 @@ const
         alignToBytes,
         calculateTypedArrayClass,
         toTypedArray,
-        collapse
+        collapse,
+        toObjectLiteral
     } = typeUtils;
 
 const anAsyncFunction = async function()
@@ -3612,6 +3613,196 @@ describe( "firstMatchingType", () =>
               expect( firstMatchingType( B, [a, b, c] ) ).toEqual( b );
           } );
 } );
+
+describe( "toObjectLiteral", () =>
+{
+    test( "toObjectLiteral converts a Map, recursively",
+          () =>
+          {
+              const mapA = new Map();
+              mapA.set( "a", 1 );
+              mapA.set( "b", 2 );
+              mapA.set( "c", 3 );
+
+              const objA = toObjectLiteral( mapA );
+
+              expect( objA["a"] ).toEqual( mapA.get( "a" ) );
+              expect( objA["b"] ).toEqual( mapA.get( "b" ) );
+              expect( objA["c"] ).toEqual( mapA.get( "c" ) );
+
+              const mapB = new Map();
+              mapB.set( "aa", 11 );
+              mapB.set( "bb", 22 );
+              mapB.set( "cc", 33 );
+
+              mapA.set( "mapB", mapB );
+
+              const objB = toObjectLiteral( mapA );
+
+              expect( objB["a"] ).toEqual( mapA.get( "a" ) );
+              expect( objB["b"] ).toEqual( mapA.get( "b" ) );
+              expect( objB["c"] ).toEqual( mapA.get( "c" ) );
+
+              expect( objB["mapB"] ).not.toEqual( mapB );
+
+              expect( objB["mapB"]["aa"] ).toEqual( 11 );
+              expect( objB["mapB"]["bb"] ).toEqual( 22 );
+              expect( objB["mapB"]["cc"] ).toEqual( 33 );
+          } );
+
+    test( "toObjectLiteral converts a Map, non-recursively",
+          () =>
+          {
+              const mapA = new Map();
+              mapA.set( "a", 1 );
+              mapA.set( "b", 2 );
+              mapA.set( "c", 3 );
+
+              const objA = toObjectLiteral( mapA );
+
+              expect( objA["a"] ).toEqual( mapA.get( "a" ) );
+              expect( objA["b"] ).toEqual( mapA.get( "b" ) );
+              expect( objA["c"] ).toEqual( mapA.get( "c" ) );
+
+              const mapB = new Map();
+              mapB.set( "aa", 11 );
+              mapB.set( "bb", 22 );
+              mapB.set( "cc", 33 );
+
+              mapA.set( "mapB", mapB );
+
+              const objB = toObjectLiteral( mapA, { recursive: false } );
+
+              expect( objB["a"] ).toEqual( mapA.get( "a" ) );
+              expect( objB["b"] ).toEqual( mapA.get( "b" ) );
+              expect( objB["c"] ).toEqual( mapA.get( "c" ) );
+
+              expect( objB["mapB"] ).toEqual( mapB );
+
+              expect( objB["mapB"].get( "aa" ) ).toEqual( 11 );
+              expect( objB["mapB"].get( "bb" ) ).toEqual( 22 );
+              expect( objB["mapB"].get( "cc" ) ).toEqual( 33 );
+          } );
+
+    test( "toObjectLiteral can NOT read private fields with no accessors",
+          () =>
+          {
+              class TestAddress
+              {
+                  #line1;
+                  #line2;
+                  #city;
+                  #state;
+                  #zip;
+
+                  constructor( pLine1, pLine2, pCity, pState, pZip )
+                  {
+                      this.#line1 = pLine1;
+                      this.#line2 = pLine2;
+                      this.#city = pCity;
+                      this.#state = pState;
+                      this.#zip = pZip;
+                  }
+              }
+
+              class TestLiteral
+              {
+                  #name;
+                  #address;
+
+                  constructor( pName, pAddress )
+                  {
+                      this.#name = pName;
+                      this.#address = pAddress;
+                  }
+              }
+
+              const obj = new TestLiteral( "Justin", new TestAddress( "123 Main Street", "", "Chatanooga", "Tennessee", "98765" ) );
+
+              let literal = toObjectLiteral( obj );
+
+              expect( literal["name"] ).toBe( undefined );
+          }
+    );
+
+    test( "toObjectLiteral can read private fields that have accessors",
+          () =>
+          {
+              class TestAddress
+              {
+                  #line1;
+                  #line2;
+                  #city;
+                  #state;
+                  #zip;
+
+                  constructor( pLine1, pLine2, pCity, pState, pZip )
+                  {
+                      this.#line1 = pLine1;
+                      this.#line2 = pLine2;
+                      this.#city = pCity;
+                      this.#state = pState;
+                      this.#zip = pZip;
+                  }
+
+                  get line1()
+                  {
+                      return this.#line1;
+                  }
+
+                  get line2()
+                  {
+                      return this.#line2;
+                  }
+
+                  get city()
+                  {
+                      return this.#city;
+                  }
+
+                  get state()
+                  {
+                      return this.#state;
+                  }
+
+                  get zip()
+                  {
+                      return this.#zip;
+                  }
+              }
+
+              class TestLiteral
+              {
+                  #name;
+                  #address;
+
+                  constructor( pName, pAddress )
+                  {
+                      this.#name = pName;
+                      this.#address = pAddress;
+                  }
+
+                  get name()
+                  {
+                      return this.#name;
+                  }
+
+                  get address()
+                  {
+                      return this.#address;
+                  }
+              }
+
+              const obj = new TestLiteral( "Justin", new TestAddress( "123 Main Street", "", "Chattanooga", "Tennessee", "98765" ) );
+
+              let literal = toObjectLiteral( obj );
+
+              expect( literal["name"] ).toEqual( "Justin" );
+              expect( literal["address"]["city"] ).toEqual( "Chattanooga" );
+          }
+    );
+} );
+
 
 /*
 
