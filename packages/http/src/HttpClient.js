@@ -190,6 +190,7 @@ const $scope = constants?.$scope || function()
     const
         {
             isNull,
+            isObject,
             isNonNullObject,
             isNonNullValue,
             isNullOrNaN,
@@ -247,6 +248,7 @@ const $scope = constants?.$scope || function()
         PRIORITY,
         resolveHttpMethod,
         calculatePriority,
+        HttpContentType,
         HttpVerb,
         HttpStatus,
         HttpHeader,
@@ -274,7 +276,7 @@ const $scope = constants?.$scope || function()
     const MAX_REDIRECTS = 10;
     const DEFAULT_REDIRECTS = 5;
 
-    const { HttpRequestHeaders, HttpResponseHeaders } = httpHeaders;
+    const { HttpHeaders, HttpRequestHeaders, HttpResponseHeaders } = httpHeaders;
 
     // import the HttpRequest (facade) class we use to provide a uniform interface for HTTP Requests
     const { HttpRequest, cloneRequest } = httpRequestModule;
@@ -411,6 +413,11 @@ const $scope = constants?.$scope || function()
      */
     function fixAgents( pConfig )
     {
+        if ( isNull( pConfig ) || !isObject( pConfig ) )
+        {
+            return { httpAgent, httpsAgent };
+        }
+
         if ( (isNull( pConfig.httpAgent ) || !(pConfig.httpAgent instanceof http.Agent)) )
         {
             // reset the property to be an instance of http.Agent
@@ -1555,7 +1562,7 @@ const $scope = constants?.$scope || function()
      */
     async function resolveBody( pBody, pConfig )
     {
-        let body = isNonNullObject( pBody ) || (isString( pBody ) && !isBlank( pBody )) ? pBody : (pConfig?.body || pConfig?.data);
+        let body = isNonNullObject( pBody ) || (isString( pBody ) && !isBlank( pBody )) ? pBody : (pConfig?.data || pConfig?.body);
 
         if ( isString( body ) && !isBlank( body ) )
         {
@@ -1594,14 +1601,9 @@ const $scope = constants?.$scope || function()
         if ( isNonNullObject( pResponse ) )
         {
             // this function accepts either a response or headers object
-            const headers = new HttpResponseHeaders( pResponse.headers || pResponse );
+            const headers = pResponse.headers || pResponse;
 
-            const contentDisposition =
-                asString( headers.get( "content-disposition" ) || headers["content-disposition"] ||
-                          headers.get( "Content-Disposition" ) || headers["Content-Disposition"] ||
-                          attempt( () => pResponse["content-disposition"] || pResponse.get( "content-disposition" ) ) ||
-                          attempt( () => pResponse["Content-Disposition"] || pResponse.get( "Content-Disposition" ) )
-                    , true );
+            const contentDisposition = asString( HttpHeaders.getHeaderValue( headers, "Content-Disposition" ), true );
 
             if ( !(isNull( contentDisposition ) || isBlank( contentDisposition )) )
             {
@@ -1748,7 +1750,7 @@ const $scope = constants?.$scope || function()
 
         const cfg = resolveApiConfig( pConfig, body );
 
-        const url = (_ud !== typeof Request && pUrl instanceof Request) ? pUrl : resolveUrl( pUrl, cfg );
+        const url = (_ud !== typeof Request && pUrl instanceof Request) ? (pUrl?.url || pUrl) : resolveUrl( pUrl, cfg );
 
         if ( body )
         {
@@ -1783,12 +1785,12 @@ const $scope = constants?.$scope || function()
             this.#config = populateOptions( toObjectLiteral( pConfig || HttpClientConfig.getDefaultConfig() ),
                                             DEFAULT_CONFIG_LITERAL );
 
-            this.#options = populateOptions( pOptions || {}, DEFAULT_DELEGATE_OPTIONS );
+            this.#options = populateOptions( pOptions || {}, DEFAULT_DELEGATE_OPTIONS, DEFAULT_CONFIG_LITERAL );
         }
 
         get config()
         {
-            return fixAgents( toObjectLiteral( populateOptions( {}, this.#config || {}, DEFAULT_CONFIG_LITERAL ) ) );
+            return fixAgents( { ...(DEFAULT_CONFIG_LITERAL || {}), ...(this.#config || {}) } );
         }
 
         mergeConfig( pConfig )
@@ -1833,7 +1835,7 @@ const $scope = constants?.$scope || function()
 
         get options()
         {
-            return populateOptions( this.#options, DEFAULT_DELEGATE_OPTIONS );
+            return { ...DEFAULT_DELEGATE_OPTIONS, ...(this.#options || {}) };
         }
 
         get maxRetries()
@@ -1899,7 +1901,7 @@ const $scope = constants?.$scope || function()
 
                         if ( location && cleanUrl( asString( url, true ) ) !== location )
                         {
-                            return await me.doFetch( location, cfg, ++redirects );
+                            return await me.doFetch( location, cfg, ++redirects, pRetries );
                         }
                     }
                     else
@@ -1959,9 +1961,9 @@ const $scope = constants?.$scope || function()
 
                     if ( redirects <= asInt( cfg.maxRedirects ) )
                     {
-                        let headers = responseData.headers;
+                        let headers = responseData.headers || responseData;
 
-                        let location = isFunction( headers?.get ) ? headers.get( "location" ) || headers.get( "Location" ) || headers?.location || headers?.Location : headers?.location || headers?.Location;
+                        let location = HttpHeaders.getHeaderValue( headers, "Location" );
 
                         if ( location && cleanUrl( url ) !== cleanUrl( location ) )
                         {
@@ -2069,100 +2071,137 @@ const $scope = constants?.$scope || function()
 
         #delegates = new Map();
 
-        constructor( pConfig, pOptions, pDelegates = new Map() )
+        #defaultDelegate = new HttpFetchClient();
+
+        constructor( pConfig, pOptions, pDelegates = new Map(), pDefaultDelegate )
         {
             this.#config = { ...DEFAULT_CONFIG, ...(pConfig || {}) };
 
             this.#options = { ...DEFAULT_HTTP_CLIENT_OPTIONS, ...(pOptions || {}) };
 
-            this.#populateDelegates( pDelegates );
+            this.#defaultDelegate = isHttpClient( pDefaultDelegate ) ? pDefaultDelegate : isHttpClient( pDelegates ) ? pDelegates : new HttpFetchClient( resolveConfig( this.config ), this.options );
+
+            this.#populateDelegates( pDelegates, this.#defaultDelegate );
         }
 
-        #populateDelegates( pDelegates )
+        get defaultDelegate()
+        {
+            return this.#defaultDelegate || new HttpFetchClient( resolveConfig( this.config ), this.options );
+        }
+
+        set defaultDelegate( pDelegate )
+        {
+            this.#defaultDelegate = isHttpClient( pDelegate ) ? pDelegate : this.getDelegate( VERBS.GET, { ["content-type"]: "*" } );
+        }
+
+        /**
+         * Returns the Map<Type,Delegate> of delegates by Type for the specified Http Verb.
+         *
+         * @param {string|HttpVerb} pVerb       The verb, such as GET, POST, PUT, PATCH, or DELETE,
+         *                                      for which to get the corresponding map of delegates by Content Type
+         *
+         * @returns {Map<String,HttpClient>}    The map of delegates by Content-Type
+         */
+        #getMapByTypeForVerb( pVerb )
+        {
+            const verb = isString( pVerb ) ? asString( pVerb, true ) : isNonNullObject( pVerb ) && isFunction( pVerb.toString ) ? asString( pVerb.toString(), true ) : pVerb;
+
+            let map = this.#delegates.get( ucase( verb ) ) || this.#delegates.get( lcase( verb ) ) || this.#delegates.get( verb );
+
+            if ( isNull( map ) || !isMap( map ) )
+            {
+                map = new Map();
+                this.#delegates.set( ucase( verb ), map );
+                this.#delegates.set( lcase( verb ), map );
+            }
+
+            return map;
+        }
+
+        #updateMapByType( pTypes, pMapByType, pNewMap, pDefaultDelegate )
+        {
+            const defaultDelegate = isHttpClient( pDefaultDelegate ) ? pDefaultDelegate : this.#defaultDelegate || new HttpFetchClient( resolveConfig( this.config ), this.options );
+
+            let mapByType = isMap( pMapByType ) ? pMapByType : asMap( pMapByType );
+
+            let source = isMap( pNewMap ) || isNonNullObject( pNewMap ) ? asMap( pNewMap ) : new Map( mapByType );
+
+            unique( [...(asArray( pTypes || [] )), "*"] ).forEach( type =>
+                                                                   {
+                                                                       const delegate = source.get( type ) ||
+                                                                                        source.get( ucase( type ) ) ||
+                                                                                        source.get( lcase( type ) ) ||
+                                                                                        mapByType.get( type ) ||
+                                                                                        mapByType.get( ucase( type ) ) ||
+                                                                                        mapByType.get( lcase( type ) ) ||
+                                                                                        defaultDelegate;
+
+                                                                       mapByType.set( type, delegate );
+                                                                       mapByType.set( lcase( type ), delegate );
+                                                                       mapByType.set( ucase( type ), delegate );
+                                                                   } );
+
+        }
+
+        #populateMapByType( pTypes, pMapByType, pDelegate )
+        {
+            if ( isMap( pDelegate ) || ( !isHttpClient( pDelegate ) && isNonNullObject( pDelegate )) )
+            {
+                return this.#updateMapByType( pTypes, pMapByType, asMap( pDelegate ) );
+            }
+
+            let mapByType = isMap( pMapByType ) ? pMapByType : asMap( pMapByType );
+
+            let delegate = isHttpClient( pDelegate ) ? pDelegate : isMap( pDelegate ) ? (this.#defaultDelegate || null) : new HttpFetchClient();
+
+            unique( [...(asArray( pTypes || [] )), "*"] ).forEach( type =>
+                                                                   {
+                                                                       mapByType.set( type, delegate || mapByType.get( type ) );
+                                                                       mapByType.set( lcase( type ), delegate || mapByType.get( lcase( type ) ) );
+                                                                       mapByType.set( ucase( type ), delegate || mapByType.get( ucase( type ) ) );
+                                                                   } );
+        }
+
+        #populateDelegates( pDelegates, pDefaultDelegate )
         {
             const KEYS = asArray( objectKeys( VERBS ) );
-
             const TYPES = asArray( objectValues( CONTENT_TYPES ) );
 
             if ( isMap( pDelegates ) || isNonNullObject( pDelegates ) )
             {
                 if ( isHttpClient( pDelegates ) )
                 {
-                    KEYS.forEach( verb =>
-                                  {
-                                      let map = this.#delegates.get( ucase( verb ) ) || this.#delegates.get( lcase( verb ) );
-
-                                      if ( isNull( map ) || !isMap( map ) )
-                                      {
-                                          map = new Map();
-                                          this.#delegates.set( ucase( verb ), map );
-                                          this.#delegates.set( lcase( verb ), map );
-                                      }
-
-                                      TYPES.forEach( type =>
-                                                     {
-                                                         map.set( type, pDelegates );
-                                                         map.set( lcase( type ), pDelegates );
-                                                         map.set( ucase( type ), pDelegates );
-                                                     } );
-                                  } );
+                    asArray( [...KEYS, "*"] ).forEach( verb =>
+                                                       {
+                                                           let map = this.#getMapByTypeForVerb( verb );
+                                                           this.#populateMapByType( TYPES, map, pDelegates );
+                                                       } );
                 }
                 else
                 {
-                    const entries = objectEntries( pDelegates );
+                    const entries = asArray( objectEntries( asMap( pDelegates ) ) || [] );
 
                     entries.forEach( entry =>
                                      {
                                          const key = ObjectEntry.getKey( entry );
                                          const value = ObjectEntry.getValue( entry );
 
-                                         if ( isHttpClient( value ) )
+                                         if ( (isString( key ) || key instanceof HttpVerb) && (isVerb( asString( key, true ) ) || "*" === key) )
                                          {
-                                             if ( isString( key ) || key instanceof HttpVerb )
+                                             let mapByType = this.#getMapByTypeForVerb( key );
+
+                                             if ( isHttpClient( value ) )
                                              {
-                                                 let verb = asString( isString( key ) ? asString( key, true ) : key.name, true );
-
-                                                 if ( isVerb( verb ) || "*" === verb )
-                                                 {
-                                                     let map = this.#delegates.get( ucase( verb ) ) || this.#delegates.get( lcase( verb ) );
-
-                                                     if ( isNull( map ) || !isMap( map ) )
-                                                     {
-                                                         map = new Map();
-                                                         this.#delegates.set( lcase( verb ), map );
-                                                         this.#delegates.set( ucase( verb ), map );
-                                                     }
-
-                                                     TYPES.forEach( type =>
-                                                                    {
-                                                                        map.set( type, value );
-                                                                        map.set( lcase( type ), value );
-                                                                        map.set( ucase( type ), value );
-                                                                    } );
-                                                 }
+                                                 this.#populateMapByType( TYPES, mapByType, pDelegates );
                                              }
-                                         }
-                                         else if ( isMap( value ) )
-                                         {
-
+                                             else if ( isMap( value ) )
+                                             {
+                                                 this.#updateMapByType( TYPES, mapByType, value, pDefaultDelegate );
+                                             }
                                          }
                                      } );
                 }
             }
-            /*
-             if ( this.#delegates.size < $ln( KEYS ) )
-             {
-             const fetchClient = new HttpFetchClient( this.#config, this.#options );
-             KEYS.forEach( verb =>
-             {
-             const delegate = this.#delegates.get( verb ) || this.#delegates.get( lcase( verb ) );
-             if ( isNull( delegate ) || !isHttpClient( delegate ) )
-             {
-             this.#delegates.set( ucase( verb ), fetchClient );
-             this.#delegates.set( lcase( verb ), fetchClient );
-             }
-             } );
-             }*/
         }
 
         get config()
@@ -2175,27 +2214,40 @@ const $scope = constants?.$scope || function()
             return { ...DEFAULT_HTTP_CLIENT_OPTIONS, ...(this.#options || {}) };
         }
 
-        getDelegate( pMethod, pConfig )
+        getDelegate( pMethod, pConfig, pContentType )
         {
             const method = resolveHttpMethod( pMethod?.name || pMethod );
 
-            const byContentType = this.#delegates.get( method );
+            const type = HttpContentType.getContentType( pContentType || pConfig ) || "*";
 
-            const fetcher = byContentType || new HttpFetchClient( resolveConfig( this.config ), this.options );
+            const byContentType = this.#delegates.get( method ) ||
+                                  this.#delegates.get( ucase( method ) ) ||
+                                  this.#delegates.get( lcase( method ) ) ||
+                                  new Map();
 
-            return isHttpClient( fetcher ) ? fetcher : new HttpFetchClient( resolveConfig( this.config ), this.options );
+            const delegate = byContentType.get( type ) ||
+                             byContentType.get( lcase( type ) ) ||
+                             byContentType.get( ucase( type ) );
+
+            return isHttpClient( delegate ) ? delegate : isHttpClient( this.#defaultDelegate ) ? this.#defaultDelegate : new HttpFetchClient( resolveConfig( this.config, pBody ), this.options );
         }
 
         async sendRequest( pMethod, pUrl, pConfig, pBody )
         {
-            const delegate = this.getDelegate( pMethod || pConfig?.method ) || new HttpFetchClient( resolveConfig( this.config, pBody ), this.options );
+            const config = resolveConfig( this.config, pBody );
+
+            const method = resolveHttpMethod( pMethod || config.method );
+
+            const delegate = this.getDelegate( method, config ) || new HttpFetchClient( config, this.options );
+
+            const uri = resolveUrl( pUrl, config );
 
             if ( isFunction( delegate.sendRequest ) )
             {
-                return await asyncAttempt( async() => await delegate.sendRequest( pMethod, pUrl, pConfig, pBody ) );
+                return await asyncAttempt( async() => await delegate.sendRequest( method, uri, config, pBody ) );
             }
 
-            const { cfg, url } = prepareRequestConfig( resolveHttpMethod( pMethod ), pConfig, pUrl );
+            const { cfg, url } = prepareRequestConfig( method, config, uri );
 
             return fetch( url, cfg );
         }
@@ -2204,42 +2256,45 @@ const $scope = constants?.$scope || function()
         {
             const me = this;
 
-            let headers = { ...(pConfig?.headers), ...(pResponseData.headers) };
+            let config = pConfig || pResponseData?.config;
+
+            let headers = { ...(config?.headers), ...(pResponseData.headers) };
 
             let redirects = asInt( pRedirects );
 
-            if ( redirects <= asInt( pConfig.maxRedirects ) )
+            if ( redirects <= asInt( config.maxRedirects ) )
             {
-                let location = pResponseData.redirectUrl || (headers["location"] || (isFunction( headers.get ) ? headers.get( "location" ) || headers.get( "Location" ) : _mt_str));
+                let location = pResponseData.redirectUrl || HttpHeaders.getHeaderValue( headers || pResponseData?.headers, "Location" );
 
-                if ( location && cleanUrl( pConfig.url ) !== cleanUrl( location ) )
+                if ( location && cleanUrl( config.url ) !== cleanUrl( location ) )
                 {
-                    return await asyncAttempt( async() => await me.getRequestedData( location, pConfig, ++redirects ) );
+                    return await asyncAttempt( async() => await me.getRequestedData( location, config, ++redirects ) );
                 }
             }
             else
             {
-                throw new Error( "Exceeded Maximum Number of Redirects (" + asInt( pConfig.maxRedirects ) + ")" );
+                throw new Error( "Exceeded Maximum Number of Redirects (" + asInt( config.maxRedirects ) + ")" );
             }
         }
 
         async sendGetRequest( pUrl, pConfig )
         {
-            const delegate = this.getDelegate( VERBS.GET ) ||
-                             new HttpFetchClient( resolveConfig( this.config ), this.options );
+            const config = resolveConfig( { ...(this.config || {}), ...(pConfig || {}) } );
 
-            const { cfg, url } = prepareRequestConfig( VERBS.GET,
-                                                       { ...(this.config || {}), ...(pConfig || {}) },
-                                                       pUrl );
+            const delegate = this.getDelegate( VERBS.GET, config ) || new HttpFetchClient( config, this.options );
+
+            const uri = resolveUrl( pUrl, config );
+
+            const { cfg, url } = prepareRequestConfig( VERBS.GET, config, uri );
 
             if ( isFunction( delegate.sendGetRequest ) )
             {
-                return await asyncAttempt( async() => await delegate.sendGetRequest( resolveUrl( url, cfg ), cfg ) );
+                return await asyncAttempt( async() => await delegate.sendGetRequest( uri, cfg ) );
             }
 
             if ( isFunction( delegate.sendRequest ) )
             {
-                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.GET, url, cfg ) );
+                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.GET, uri, cfg ) );
             }
 
             return fetch( url, cfg );
@@ -2249,18 +2304,17 @@ const $scope = constants?.$scope || function()
         {
             const me = this;
 
-            const delegate = this.getDelegate( VERBS.GET ) || new HttpFetchClient( this.config, this.options );
+            const config = resolveConfig( { ...(this.config || {}), ...(pConfig || {}) } );
 
-            const resolvedCfg = { ...(this.config || {}), ...(pConfig || {}) };
+            const delegate = this.getDelegate( VERBS.GET, config ) || new HttpFetchClient( config, this.options );
 
-            const { cfg, url } = prepareRequestConfig( VERBS.GET,
-                                                       resolvedCfg,
-                                                       pUrl,
-                                                       null );
+            const uri = resolveUrl( pUrl, config );
+
+            const { cfg, url } = prepareRequestConfig( VERBS.GET, config, uri, null );
 
             if ( isFunction( delegate.getRequestedData ) )
             {
-                return await asyncAttempt( async() => await delegate.getRequestedData( resolveUrl( url, cfg ), cfg ) );
+                return await asyncAttempt( async() => await delegate.getRequestedData( url, cfg ) );
             }
 
             if ( isFunction( delegate.sendGetRequest ) )
@@ -2305,18 +2359,17 @@ const $scope = constants?.$scope || function()
 
         async sendPostRequest( pUrl, pConfig, pBody )
         {
-            const delegate = this.getDelegate( VERBS.POST, pConfig ) || new HttpFetchClient( resolveConfig( this.config, pBody ), this.options );
+            const config = resolveConfig( { ...(this.config || {}), ...(pConfig || {}) } );
 
-            const resolvedCfg = { ...(this.config || {}), ...(pConfig || {}) };
+            const delegate = this.getDelegate( VERBS.POST, config ) || new HttpFetchClient( config, this.options );
 
-            const { cfg, url } = prepareRequestConfig( VERBS.POST,
-                                                       resolvedCfg,
-                                                       pUrl,
-                                                       resolveBody( pBody, resolvedCfg ) );
+            const uri = resolveUrl( pUrl, config );
+
+            const { cfg, url } = prepareRequestConfig( VERBS.POST, config, uri, resolveBody( pBody, config ) );
 
             if ( isFunction( delegate.sendPostRequest ) )
             {
-                return await asyncAttempt( async() => await delegate.sendPostRequest( resolveUrl( url, cfg ), cfg ) );
+                return await asyncAttempt( async() => await delegate.sendPostRequest( url, cfg ) );
             }
 
             if ( isFunction( delegate.sendRequest ) )
@@ -2327,41 +2380,191 @@ const $scope = constants?.$scope || function()
             return fetch( url, cfg );
         }
 
-        async upload( pUrl, pConfig, pBody )
+        async sendPutRequest( pUrl, pConfig, pBody )
         {
-            return this.sendPostRequest( pUrl, pConfig, pBody );
+            const config = resolveConfig( { ...(this.config || {}), ...(pConfig || {}) } );
+
+            const delegate = this.getDelegate( VERBS.PUT, config ) || new HttpFetchClient( config, this.options );
+
+            const uri = resolveUrl( pUrl, config );
+
+            const { cfg, url } = prepareRequestConfig( VERBS.PUT, config, uri, resolveBody( pBody, config ) );
+
+            if ( isFunction( delegate.sendPutRequest ) )
+            {
+                return await asyncAttempt( async() => await delegate.sendPutRequest( url, cfg ) );
+            }
+
+            if ( isFunction( delegate.sendRequest ) )
+            {
+                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.PUT, url, cfg ) );
+            }
+
+            return fetch( url, cfg );
         }
 
-        async download( pUrl, pConfig, pOutputPath = "./", pFileName = _mt )
+        async sendPatchRequest( pUrl, pConfig, pBody )
         {
-            let outputPath = toUnixPath( asString( pOutputPath, true ) ) || "./";
+            const config = resolveConfig( { ...(this.config || {}), ...(pConfig || {}) } );
+
+            const delegate = this.getDelegate( VERBS.PATCH, config ) || new HttpFetchClient( config, this.options );
+
+            const uri = resolveUrl( pUrl, config );
+
+            const { cfg, url } = prepareRequestConfig( VERBS.PATCH, config, uri, resolveBody( pBody, config ) );
+
+            if ( isFunction( delegate.sendPatchRequest ) )
+            {
+                return await asyncAttempt( async() => await delegate.sendPatchRequest( resolveUrl( url, cfg ), cfg ) );
+            }
+
+            if ( isFunction( delegate.sendRequest ) )
+            {
+                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.PATCH, url, cfg ) );
+            }
+
+            return fetch( url, cfg );
+        }
+
+        async sendDeleteRequest( pUrl, pConfig, pBody )
+        {
+            const config = resolveConfig( { ...(this.config || {}), ...(pConfig || {}) } );
+
+            const delegate = this.getDelegate( VERBS.DELETE, config ) || new HttpFetchClient( config, this.options );
+
+            const uri = resolveUrl( pUrl, config );
+
+            const { cfg, url } = prepareRequestConfig( VERBS.DELETE, config, uri, resolveBody( pBody, config ) );
+
+            if ( isFunction( delegate.sendDeleteRequest ) )
+            {
+                return await asyncAttempt( async() => await delegate.sendDeleteRequest( url, cfg, resolveBody( body, cfg ) ) );
+            }
+
+            if ( isFunction( delegate.sendRequest ) )
+            {
+                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.DELETE, url, cfg ) );
+            }
+
+            return fetch( url, cfg );
+        }
+
+        async sendHeadRequest( pUrl, pConfig )
+        {
+            const config = resolveConfig( { ...(this.config || {}), ...(pConfig || {}) } );
+
+            const delegate = this.getDelegate( VERBS.HEAD, config ) || new HttpFetchClient( config, this.options );
+
+            const uri = resolveUrl( pUrl, config );
+
+            const { cfg, url } = prepareRequestConfig( VERBS.HEAD, config, uri );
+
+            if ( isFunction( delegate.sendHeadRequest ) )
+            {
+                return await asyncAttempt( async() => await delegate.sendHeadRequest( url, cfg ) );
+            }
+
+            if ( isFunction( delegate.sendRequest ) )
+            {
+                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.HEAD, url, cfg ) );
+            }
+
+            return fetch( url, cfg );
+        }
+
+        async sendOptionsRequest( pUrl, pConfig )
+        {
+            const config = resolveConfig( { ...(this.config || {}), ...(pConfig || {}) } );
+
+            const delegate = this.getDelegate( VERBS.OPTIONS, config ) || new HttpFetchClient( config, this.options );
+
+            const uri = resolveUrl( pUrl, config );
+
+            const { cfg, url } = prepareRequestConfig( VERBS.OPTIONS, config, uri );
+
+            if ( isFunction( delegate.sendOptionsRequest ) )
+            {
+                return await asyncAttempt( async() => await delegate.sendOptionsRequest( resolveUrl( url, cfg ), cfg ) );
+            }
+
+            if ( isFunction( delegate.sendRequest ) )
+            {
+                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.OPTIONS, url, cfg ) );
+            }
+
+            return fetch( url, cfg );
+        }
+
+        async sendTraceRequest( pUrl, pConfig )
+        {
+            const config = resolveConfig( { ...(this.config || {}), ...(pConfig || {}) } );
+
+            const delegate = this.getDelegate( VERBS.TRACE, config ) || new HttpFetchClient( config, this.options );
+
+            const uri = resolveUrl( pUrl, config );
+
+            const { cfg, url } = prepareRequestConfig( VERBS.TRACE, config, uri );
+
+            if ( isFunction( delegate.sendTraceRequest ) )
+            {
+                return await asyncAttempt( async() => await delegate.sendTraceRequest( resolveUrl( url, cfg ), cfg ) );
+            }
+
+            if ( isFunction( delegate.sendRequest ) )
+            {
+                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.TRACE, url, cfg ) );
+            }
+
+            return fetch( url, cfg );
+        }
+
+        async upload( pUrl, pConfig, pBody )
+        {
+            const config = resolveConfig( { ...(this.config || {}), ...(pConfig || {}) } );
+
+            const delegate = this.getDelegate( VERBS.GET, config ) || new HttpFetchClient( config, this.options );
+
+            const uri = resolveUrl( pUrl, config );
+
+            const body = resolveBody( pBody, config );
+
+            const { cfg, url } = prepareRequestConfig( config.method || VERBS.POST, config, uri, body );
+
+            if ( isFunction( delegate?.upload ) )
+            {
+                return delegate.upload( url, cfg, body );
+            }
+
+            return this.sendPostRequest( url, cfg, body );
+        }
+
+        async download( pUrl, pConfig, pOutputPath = ".", pFileName = _mt )
+        {
+            let outputPath = toUnixPath( asString( pOutputPath, true ) ) || ".";
+
+            const config = resolveConfig( { ...(this.config || {}), ...(pConfig || {}) } );
+
+            const uri = resolveUrl( pUrl, config );
+
+            const delegate = this.getDelegate( (config.method || VERBS.GET), config ) || new HttpFetchClient( config, this.options );
+
+            if ( isFunction( delegate?.download ) )
+            {
+                return asyncAttempt( async() => await delegate.download( uri, config, outputPath, pFileName ) );
+            }
 
             try
             {
-                const url = cleanUrl( resolveUrl( pUrl, { ...DEFAULT_API_CONFIG, ...(pConfig || this.config) } ) );
+                let cfg = { ...DEFAULT_API_CONFIG, ...DEFAULT_DOWNLOAD_CONFIG, ...(config || {}) };
 
-                const headers = { Accept: "application/octet-stream" };
-
-                let config = {
-                    ...DEFAULT_API_CONFIG,
-                    ...DEFAULT_DOWNLOAD_CONFIG,
-                    ...({ headers: headers, url: url })
-                };
-
-                const response = this.sendRequest( config?.method || VERBS.GET,
-                                                   url,
-                                                   config,
-                                                   resolveBody( config.body || config.data, config ) );
+                const response = this.sendRequest( cfg.method || VERBS.GET, uri, cfg, resolveBody( cfg.body || cfg.data, cfg ) );
 
                 if ( ResponseData.isOk( response ) )
                 {
                     // get the fileName from the Content-Disposition header or use provided filename
-                    let defaultName = !isBlank( asString( pFileName, true ) ) ?
-                                      toUnixPath( asString( pFileName, true ) ) :
-                                      _mt;
+                    let defaultName = toUnixPath( asString( pFileName, true ) ) || _mt;
 
-                    let fileName = asString( pFileName, true ) ||
-                                   extractFileNameFromHeader( response, defaultName );
+                    let fileName = asString( pFileName, true ) || extractFileNameFromHeader( response, defaultName );
 
                     // append the fileName to the path
                     const filePath = path.join( asString( outputPath, true ).replace( fileName, _mt ), fileName );
@@ -2395,143 +2598,6 @@ const $scope = constants?.$scope || function()
             }
 
             return _mt;
-        }
-
-        async sendPutRequest( pUrl, pConfig, pBody )
-        {
-            const delegate = this.getDelegate( VERBS.PUT ) || new HttpFetchClient( this.config, this.options );
-
-            const resolvedCfg = { ...(this.config || {}), ...(pConfig || {}) };
-
-            const { cfg, url } = prepareRequestConfig( VERBS.PUT,
-                                                       resolvedCfg,
-                                                       pUrl,
-                                                       resolveBody( pBody, resolvedCfg ) );
-
-            if ( isFunction( delegate.sendPutRequest ) )
-            {
-                return await asyncAttempt( async() => await delegate.sendPutRequest( resolveUrl( url, cfg ), cfg ) );
-            }
-
-            if ( isFunction( delegate.sendRequest ) )
-            {
-                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.PUT, url, cfg ) );
-            }
-
-            return fetch( url, cfg );
-        }
-
-        async sendPatchRequest( pUrl, pConfig, pBody )
-        {
-            const delegate = this.getDelegate( VERBS.PATCH ) || new HttpFetchClient( this.config, this.options );
-
-            const resolvedCfg = { ...(this.config || {}), ...(pConfig || {}) };
-
-            const { cfg, url } = prepareRequestConfig( VERBS.PATCH,
-                                                       resolvedCfg,
-                                                       pUrl,
-                                                       resolveBody( pBody, resolvedCfg ) );
-
-            if ( isFunction( delegate.sendPatchRequest ) )
-            {
-                return await asyncAttempt( async() => await delegate.sendPatchRequest( resolveUrl( url, cfg ), cfg ) );
-            }
-
-            if ( isFunction( delegate.sendRequest ) )
-            {
-                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.PATCH, url, cfg ) );
-            }
-
-            return fetch( url, cfg );
-        }
-
-        async sendDeleteRequest( pUrl, pConfig, pBody )
-        {
-            const delegate = this.getDelegate( VERBS.DELETE ) || new HttpFetchClient( this.config, this.options );
-
-            const resolvedCfg = { ...(this.config || {}), ...(pConfig || {}) };
-
-            const body = resolveBody( pBody, resolvedCfg );
-
-            const { cfg, url } = prepareRequestConfig( VERBS.DELETE,
-                                                       resolvedCfg,
-                                                       pUrl,
-                                                       body );
-
-            if ( isFunction( delegate.sendDeleteRequest ) )
-            {
-                return await asyncAttempt( async() => await delegate.sendDeleteRequest( resolveUrl( url, cfg ), cfg, resolveBody( body, cfg ) ) );
-            }
-
-            if ( isFunction( delegate.sendRequest ) )
-            {
-                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.DELETE, url, cfg ) );
-            }
-
-            return fetch( url, cfg );
-        }
-
-        async sendHeadRequest( pUrl, pConfig )
-        {
-            const delegate = this.getDelegate( VERBS.HEAD ) || new HttpFetchClient( this.config, this.options );
-
-            const resolvedCfg = { ...(this.config || {}), ...(pConfig || {}) };
-
-            const { cfg, url } = prepareRequestConfig( VERBS.HEAD, resolvedCfg, pUrl );
-
-            if ( isFunction( delegate.sendHeadRequest ) )
-            {
-                return await asyncAttempt( async() => await delegate.sendHeadRequest( resolveUrl( url, cfg ), cfg ) );
-            }
-
-            if ( isFunction( delegate.sendRequest ) )
-            {
-                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.HEAD, url, cfg ) );
-            }
-
-            return fetch( url, cfg );
-        }
-
-        async sendOptionsRequest( pUrl, pConfig )
-        {
-            const delegate = this.getDelegate( VERBS.OPTIONS ) || new HttpFetchClient( this.config, this.options );
-
-            const resolvedCfg = { ...(this.config || {}), ...(pConfig || {}) };
-
-            const { cfg, url } = prepareRequestConfig( VERBS.OPTIONS, resolvedCfg, pUrl );
-
-            if ( isFunction( delegate.sendOptionsRequest ) )
-            {
-                return await asyncAttempt( async() => await delegate.sendOptionsRequest( resolveUrl( url, cfg ), cfg ) );
-            }
-
-            if ( isFunction( delegate.sendRequest ) )
-            {
-                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.OPTIONS, url, cfg ) );
-            }
-
-            return fetch( url, cfg );
-        }
-
-        async sendTraceRequest( pUrl, pConfig )
-        {
-            const delegate = this.getDelegate( VERBS.TRACE ) || new HttpFetchClient( this.config, this.options );
-
-            const resolvedCfg = { ...(this.config || {}), ...(pConfig || {}) };
-
-            const { cfg, url } = prepareRequestConfig( VERBS.TRACE, resolvedCfg, pUrl );
-
-            if ( isFunction( delegate.sendTraceRequest ) )
-            {
-                return await asyncAttempt( async() => await delegate.sendTraceRequest( resolveUrl( url, cfg ), cfg ) );
-            }
-
-            if ( isFunction( delegate.sendRequest ) )
-            {
-                return await asyncAttempt( async() => await delegate.sendRequest( VERBS.TRACE, url, cfg ) );
-            }
-
-            return fetch( url, cfg );
         }
     }
 
@@ -4448,6 +4514,8 @@ const $scope = constants?.$scope || function()
             isHttpClient,
             prepareRequestConfig,
 
+            extractFileNameFromHeader,
+            
             HttpClient,
             HttpFetchClient,
             RateLimitedHttpClient,

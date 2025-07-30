@@ -98,7 +98,8 @@ const {
             isNonNullObject,
             isString,
             isScalar,
-            asObject
+            asObject,
+            toObjectLiteral
         } = typeUtils;
 
     // imports useful functions for safer string manipulation
@@ -522,6 +523,35 @@ const {
         }
     }
 
+    function getHeaderValue( pHeaders, pKey )
+    {
+        let key = asString( pKey, true ) || _mt;
+
+        if ( isBlank( key ) )
+        {
+            return _mt;
+        }
+
+        let headers = pHeaders?.headers || pHeaders;
+
+        if ( isNonNullObject( headers ) )
+        {
+            headers = isFunction( headers.toLiteral ) ? headers.toLiteral() : toObjectLiteral( headers, { keyTransformer: lcase } );
+
+            let value = headers[lcase( key )] || headers[key];
+
+            return ( !isNull( value ) && isArray( value )) ? value.join( ", " ) : value;
+        }
+
+        return isString( pHeaders ) ? asString( pHeaders, true ) : _mt;
+    }
+
+    HttpHeaders.getHeaderValue = getHeaderValue.bind( HttpHeaders );
+    HttpHeaders.prototype.getValue = function( pKey )
+    {
+        return getHeaderValue( this, pKey );
+    };
+
     class HttpRequestHeaders extends HttpHeaders
     {
         constructor( pOptions )
@@ -530,6 +560,8 @@ const {
         }
     }
 
+    HttpRequestHeaders.getHeaderValue = getHeaderValue.bind( HttpRequestHeaders );
+
     class HttpResponseHeaders extends HttpHeaders
     {
         constructor( pOptions )
@@ -537,6 +569,8 @@ const {
             super( pOptions );
         }
     }
+
+    HttpResponseHeaders.getHeaderValue = getHeaderValue.bind( HttpResponseHeaders );
 
     if ( _ud === typeof Headers )
     {
@@ -560,7 +594,8 @@ const {
             HttpHeaders,
             HttpRequestHeaders,
             HttpResponseHeaders,
-            processHeaderOptions
+            processHeaderOptions,
+            getHeaderValue
         };
 
     mod = toolBocksModule.extend( mod );

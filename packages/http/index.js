@@ -101,8 +101,10 @@ const $scope = constants?.$scope || function()
             FORBIDDEN_REQUEST_HEADERS,
             FORBIDDEN_RESPONSE_HEADERS,
             DEFAULT_EXPIRATION_HEADER,
+            HttpHeaders,
             HttpRequestHeaders,
-            HttpResponseHeaders
+            HttpResponseHeaders,
+            getHeaderValue
         } = HttpHeadersUtils;
 
     const
@@ -186,6 +188,7 @@ const $scope = constants?.$scope || function()
 
             isHttpClient,
             prepareRequestConfig,
+            extractFileNameFromHeader,
 
             HttpClient,
             HttpFetchClient,
@@ -304,8 +307,10 @@ const $scope = constants?.$scope || function()
             FORBIDDEN_REQUEST_HEADERS,
             FORBIDDEN_RESPONSE_HEADERS,
             DEFAULT_EXPIRATION_HEADER,
+            HttpHeaders,
             HttpRequestHeaders,
             HttpResponseHeaders,
+            getHeaderValue,
             URL_COMPONENTS,
             VALID_URL_COMPONENTS,
             MIME_TYPES_BY_EXTENSION,
@@ -363,6 +368,7 @@ const $scope = constants?.$scope || function()
             mergeConfig,
             isHttpClient,
             prepareRequestConfig,
+            extractFileNameFromHeader,
             HttpClient,
             HttpFetchClient,
             RateLimitedHttpClient,

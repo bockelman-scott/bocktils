@@ -2400,7 +2400,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
                 if ( match && !visited.has( name ) )
                 {
-                    const value = attempt( () => pObject[name] );
+                    const value = attempt( () => pObject[name] ) || attemptSilent( () => pObject[ ("#" + name) ] );
 
                     const entry = [name, value, pObject];
 

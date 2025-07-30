@@ -90,7 +90,7 @@ const {
 
     const { _mt_str = "", _mt = _mt_str, _str } = constants;
 
-    const { isNull, isNonNullObject, isString, isNumeric, isArray } = typeUtils;
+    const { isNull, isNonNullObject, isString, isNumeric, isArray, isFunction, toObjectLiteral } = typeUtils;
 
     const { asString, asInt, lcase, ucase, capitalize, isJson } = stringUtils;
 
@@ -176,7 +176,7 @@ const {
          */
         constructor( pVerb )
         {
-            super( VERBS.indexOf( pVerb ), asString( pVerb, true ) );
+            super( VERBS.indexOf( pVerb ), ucase( asString( pVerb, true ) ) );
             this.#verb = ucase( asString( pVerb, true ) );
         }
 
@@ -198,6 +198,16 @@ const {
         get forbidsBody()
         {
             return ["GET", "HEAD", "OPTIONS", "TRACE"].includes( ucase( this.#verb ) );
+        }
+
+        toString()
+        {
+            return ucase( this.name || this.#verb );
+        }
+
+        [Symbol.toPrimitive]( pHint )
+        {
+            return this.toString();
         }
     }
 
@@ -322,7 +332,7 @@ const {
             HTML: "text/html",
             CSS: "text/css",
             JAVASCRIPT: "application/javascript",
-            JS: "application/javascript",
+            JS: "text/javascript",
             JSON: "application/json",
             ECMASCRIPT: "application/ecmascript",
             BINARY_STREAM: "application/octet-stream",
@@ -334,30 +344,6 @@ const {
             ZIP: "application/zip",
             PNG: "image/png",
             SVG: "image/svg+xml"
-        };
-
-    /**
-     * An object representing different types of content or formats.
-     *
-     * @property {string} PLAIN - Represents a plain text format.
-     * @property {string} TEXT - Represents textual content.
-     * @property {string} HTML - Represents an HTML format.
-     * @property {string} CSS - Represents a CSS format.
-     * @property {string} JAVASCRIPT - Represents a JavaScript format.
-     * @property {string} JS - Alias for the JavaScript format.
-     * @property {string} JSON - Represents a JSON format.
-     * @property {string} ECMASCRIPT - Represents an ECMAScript format.
-     */
-    const TYPES =
-        {
-            PLAIN: "plain",
-            TEXT: "text",
-            HTML: "html",
-            CSS: "css",
-            JAVASCRIPT: "javascript",
-            JS: "javascript",
-            JSON: "json",
-            ECMASCRIPT: "ecmascript"
         };
 
     /**
@@ -398,9 +384,23 @@ const {
         }
     }
 
+    HttpContentType.getContentType = function( pConfig )
+    {
+        let config = isNonNullObject( pConfig ) ? pConfig : isString( pConfig ) ? { ["content-type"]: lcase( asString( pConfig, true ) ) } : "*";
+
+        let headers = { ...(toObjectLiteral( config?.headers || {}, { keyTransformer: lcase } ) || {}) } || {};
+
+        return asString( headers["content-type"] || headers["contenttype"] || config["content-type"] || config["contenttype"], true ) || "*";
+    };
+
+    function getHttpTypeString( pConfig )
+    {
+        return HttpContentType.getContentType( pConfig );
+    }
+
     Object.entries( CONTENT_TYPES ).forEach( ( [key, value] ) =>
                                              {
-                                                 HttpContentType[key] = new HttpContentType( TYPES[key], value );
+                                                 HttpContentType[key] = new HttpContentType( CONTENT_TYPES[key], value );
                                              } );
 
     /**
@@ -1135,7 +1135,7 @@ const {
             MODES: lock( MODES ),
             PRIORITY: lock( PRIORITY ),
             CONTENT_TYPES: lock( CONTENT_TYPES ),
-            TYPES: lock( TYPES ),
+            TYPES: lock( CONTENT_TYPES ),
             HTTP_HEADERS: lock( HTTP_HEADERS ),
             HttpVerb,
             HttpHeaderDefinition,
