@@ -1217,7 +1217,7 @@ const {
                                        options.signal,
                                        options.timeout,
 
-                                       options.baseUrl,
+                                       options.baseURL,
                                        options.requestTransformer,
                                        options.responseTransformer,
                                        options.params,
@@ -1239,7 +1239,7 @@ const {
         let req = pRequest || {};
 
         // unwrap from any other container
-        while ( req.request )
+        while ( isNonNullObject( req ) && isNonNullObject( req.request ) )
         {
             req = req.request;
         }

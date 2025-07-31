@@ -536,11 +536,7 @@ const {
 
         get request()
         {
-            if ( isNonNullObject( this.#request || this.options.request ) )
-            {
-                return cloneRequest( this.#request || this.options.request );
-            }
-            return this.options;
+            return (this.#request || this.options.request);
         }
 
         get redirected()
