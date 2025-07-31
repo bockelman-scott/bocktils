@@ -8,6 +8,8 @@ const { ModuleEvent, lock, attempt, asyncAttempt } = moduleUtils;
 
 const typeUtils = require( "../src/TypeUtils.cjs" );
 
+const stringUtils = require( "../src/StringUtils.cjs" );
+
 const
     {
         JS_TYPES,
@@ -107,8 +109,11 @@ const
         calculateTypedArrayClass,
         toTypedArray,
         collapse,
-        toObjectLiteral
+        toObjectLiteral,
+        transformObject
     } = typeUtils;
+
+const { toSnakeCase } = stringUtils;
 
 const anAsyncFunction = async function()
 {
@@ -3803,17 +3808,33 @@ describe( "toObjectLiteral", () =>
     );
 } );
 
+describe( "transformObject", () =>
+{
+    let obj =
+        {
+            "apiKey": "keyValue",
+            "accessToken": "tokenValue",
+            "headers":
+                {
+                    "apiKey": "keyValue",
+                    "accessToken": "tokenValue",
+                }
+        };
 
-/*
+    test( "transformObject can be used to change the names of the keys",
+          () =>
+          {
+              let transformed = transformObject( obj, { keyTransformer: toSnakeCase } );
 
- describe( "collapse", () =>
- {
- test( "collapse reduced an an object to a key/value map",
- () =>
- {
- const collapsed = collapse( geoObject );
+              // console.log( transformed );
 
- console.log( collapsed );
- } );
- } );
- */
+              expect( transformed["api_key"] ).toEqual( "keyValue" );
+              expect( transformed["apiKey"] ).toBe( undefined );
+
+              expect( transformed["headers"]["api_key"] ).toEqual( "keyValue" );
+              expect( transformed["headers"]["apiKey"] ).toBe( undefined );
+
+          } );
+
+
+} );

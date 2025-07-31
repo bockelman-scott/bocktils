@@ -1907,16 +1907,16 @@ describe( "cleanUrl", () =>
 
         expect( clean ).toEqual( "https://some.domain.com/Some_Page" );
     } );
-/*
-    test( "cleanUrl can handle file:// protocol", () =>
-    {
-        let url = "file://";
+    /*
+     test( "cleanUrl can handle file:// protocol", () =>
+     {
+     let url = "file://";
 
-        let clean = cleanUrl( url, false );
+     let clean = cleanUrl( url, false );
 
-        expect( clean ).toEqual( "" );
-    } );
-*/
+     expect( clean ).toEqual( "" );
+     } );
+     */
 
 } );
 

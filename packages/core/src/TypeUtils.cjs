@@ -74,6 +74,8 @@ const $scope = constants?.$scope || function()
             ToolBocksModule,
             ModuleEvent,
 
+            $ln,
+
             functionToString,
             objectToString,
             errorToString,
@@ -754,6 +756,11 @@ const $scope = constants?.$scope || function()
     {
         function getKeys( pObject )
         {
+            if ( isNull( pObject ) )
+            {
+                return [];
+            }
+
             return pObject instanceof Map ||
                    pObject instanceof Set ||
                    isFunction( pObject?.keys ) ? [...(pObject.keys() || [])] : [...(Object.keys( pObject || {} ) || [])];
@@ -2536,6 +2543,11 @@ const $scope = constants?.$scope || function()
      */
     const isClass = function( pFunction, pStrict = true )
     {
+        if ( isNull( pFunction ) )
+        {
+            return false;
+        }
+
         if ( isFunction( pFunction ) ||
              ( !pStrict && (BUILTIN_TYPE_NAMES.includes( pFunction?.name )
                             || BUILTIN_TYPES.includes( pFunction ))) )
@@ -2561,6 +2573,11 @@ const $scope = constants?.$scope || function()
      */
     const instanceOfAny = function( pObject, ...pClasses )
     {
+        if ( isNull( pObject ) )
+        {
+            return false;
+        }
+
         const classes = ([...(pClasses || [])]).filter( e => isClass( e, false ) );
 
         let is = false;
@@ -2676,6 +2693,11 @@ const $scope = constants?.$scope || function()
      */
     const isInstanceOfUserDefinedClass = function( pObject, pClass = null )
     {
+        if ( isNull( pObject ) || !(isObject( pObject ) || isFunction( pObject )) )
+        {
+            return false;
+        }
+
         let clazz = isClass( pClass ) ? (pClass || getConstructor( pObject ) || getProto( pObject )) : getConstructor( pObject ) || getProto( pObject )?.constructor || getProto( pObject );
 
         return isUserDefinedClass( clazz ) && (null === clazz || instanceOfAny( pObject, clazz ));
@@ -4016,6 +4038,12 @@ const $scope = constants?.$scope || function()
      */
     const isDataView = ( pValue ) => (_ud !== typeof DataView && pValue instanceof DataView);
 
+    const DEFAULT_TRANSFORMER_PROPERTIES =
+        {
+            recursive: true,
+            keyTransformer: ( pKey ) => pKey,
+            valueTransformer: ( pValue ) => pValue
+        };
 
     const DEFAULT_OBJECT_LITERAL_OPTIONS =
         {
@@ -4026,9 +4054,8 @@ const $scope = constants?.$scope || function()
             preserveArrays: true,
             maxDepth: Infinity,
             preserveUserDefinedClasses: false,
-            keyTransformer: ( key ) => key
+            ...DEFAULT_TRANSFORMER_PROPERTIES
         };
-
 
     function restoreMethods( pSource, pTarget, pOptions = DEFAULT_OBJECT_LITERAL_OPTIONS )
     {
@@ -4141,7 +4168,7 @@ const $scope = constants?.$scope || function()
 
         const { options, visited, stack, depth } = resolveObjectLiteralArguments( pOptions, pVisited, pStack, pDepth );
 
-        if ( !isNanOrInfinite( options.depth ) && !isNanOrInfinite( depth ) && depth > options.depth )
+        if ( !isNanOrInfinite( options.maxDepth ) && !isNanOrInfinite( depth ) && depth > options.maxDepth )
         {
             return { ...(pObject || {}) };
         }
@@ -4154,6 +4181,9 @@ const $scope = constants?.$scope || function()
         }
 
         const entries = ObjectEntry.unwrapValues( pObject );
+
+        const keyTransformer = isFunction( options.keyTransformer ) ? options.keyTransformer : ( pKey ) => pKey;
+        const valueTransformer = isFunction( options.valueTransformer ) ? options.valueTransformer : ( pValue ) => pValue;
 
         const obj = {};
 
@@ -4170,7 +4200,8 @@ const $scope = constants?.$scope || function()
 
             if ( includeProperty( pKey, pValue, pOptions ) )
             {
-                obj[pKey] = pValue;
+                let key = keyTransformer( pKey );
+                obj[key] = valueTransformer( pValue ) || pValue;
             }
         }
 
@@ -4189,8 +4220,6 @@ const $scope = constants?.$scope || function()
             {
                 continue;
             }
-
-            key = isFunction( pOptions.keyTransformer ) ? pOptions.keyTransformer( key ) : key;
 
             if ( visited.has( value ) || detectCycles( stack, 5, 5 ) )
             {
@@ -4229,6 +4258,48 @@ const $scope = constants?.$scope || function()
         return obj;
     }
 
+    function transformObject( pObject, pOptions = DEFAULT_TRANSFORMER_PROPERTIES )
+    {
+        const options = { ...DEFAULT_TRANSFORMER_PROPERTIES, ...(pOptions || {}) };
+
+        const recursive = !!options.recursive;
+        const keyTransformer = isFunction( options.keyTransformer ) ? options.keyTransformer : ( pKey ) => pKey;
+        const valueTransformer = isFunction( options.valueTransformer ) ? options.valueTransformer : ( pValue ) => pValue;
+
+        if ( isNull( pObject ) || !isObject( pObject ) )
+        {
+            return pObject;
+        }
+
+        let source = attempt( () => ({ ...(pObject || {}) }) );
+
+        let obj = {};
+
+        const entries = attempt( () => objectEntries( source ) );
+
+        if ( $ln( entries ) && isFunction( entries.forEach ) )
+        {
+            entries.forEach( entry =>
+                             {
+                                 let key = ObjectEntry.getKey( entry );
+                                 key = keyTransformer( key ) || key;
+
+                                 let value = ObjectEntry.getValue( entry );
+
+                                 if ( isObject( value ) && recursive && !isInstanceOfUserDefinedClass( value ) )
+                                 {
+                                     obj[key] = transformObject( value, options );
+                                 }
+                                 else
+                                 {
+                                     obj[key] = valueTransformer( value );
+                                 }
+                             } );
+        }
+
+        return obj || pObject;
+    }
+
     let parseJson = function( pJson )
     {
         if ( isObject( pJson ) )
@@ -4256,13 +4327,24 @@ const $scope = constants?.$scope || function()
                attempt( () => (toolBocksModule["parseJson"] || parseJson).call( toolBocksModule, pObject ) );
     }
 
-    function asMap( pVal, pOptions = { recursive: true, locked: false, preserveUserDefinedClasses: true } )
+    const DEFAULT_AS_MAP_OPTIONS =
+        {
+            recursive: true,
+            locked: false,
+            preserveUserDefinedClasses: true,
+            ...DEFAULT_TRANSFORMER_PROPERTIES
+        };
+
+    function asMap( pVal, pOptions = DEFAULT_AS_MAP_OPTIONS )
     {
-        const options = { ...({ recursive: true, locked: false }), ...(pOptions || {}) };
+        const options = { ...DEFAULT_AS_MAP_OPTIONS, ...(pOptions || {}) };
 
         const recursive = !!options.recursive;
         const preserve = !!options.preserveUserDefinedClasses;
         const locked = !!options.locked;
+
+        const keyTransformer = isFunction( options.keyTransformer ) ? options.keyTransformer : ( pKey ) => pKey;
+        const valueTransformer = isFunction( options.valueTransformer ) ? options.valueTransformer : ( pValue ) => pValue;
 
         let map = new Map();
 
@@ -4285,6 +4367,7 @@ const $scope = constants?.$scope || function()
                 {
                     break;
                 }
+
                 if ( isArray( pVal ) )
                 {
                     if ( is2dArray( pVal ) )
@@ -4292,6 +4375,7 @@ const $scope = constants?.$scope || function()
                         map = new Map( pVal );
                         break;
                     }
+
                     pVal.forEach( ( e, i ) =>
                                   {
                                       map.set( i, shouldRecurse( e, recursive ) ? asMap( e, options ) : e );
@@ -4301,32 +4385,39 @@ const $scope = constants?.$scope || function()
                 {
                     objectEntries( pVal ).forEach( entry =>
                                                    {
-                                                       const key = ObjectEntry.getKey( entry );
-                                                       const value = ObjectEntry.getValue( entry );
+                                                       let key = ObjectEntry.getKey( entry );
 
-                                                       map.set( key, shouldRecurse( value, recursive ) ? asMap( value, options ) : value );
+                                                       let value = ObjectEntry.getValue( entry );
+
+                                                       key = keyTransformer( key );
+
+                                                       map.set( key, shouldRecurse( value, recursive ) ? asMap( value, options ) : valueTransformer( value ) );
                                                    } );
                 }
                 break;
 
             case _str:
-                map.set( "value", pVal );
-                map.set( pVal, pVal );
+                const str = valueTransformer( pVal );
+
+                map.set( "value", str );
+                map.set( str, str );
+
                 break;
 
             case _num:
             case _big:
             case _bool:
-                map.set( "value", pVal );
-                map.set( pVal, pVal );
-                map.set( _toString( pVal ), pVal );
+                const num = valueTransformer( pVal );
+                map.set( "value", num );
+                map.set( num, num );
+                map.set( _toString( num ), num );
                 break;
 
             case _fun:
                 map.set( "function", pVal );
                 map.execute = function( ...pArgs )
                 {
-                    return isAsyncFunction( pVal ) ? asyncAttempt( async() => pVal.call( map, ...pArgs ) ) : attempt( () => pVal.call( map, ...pArgs ) );
+                    return isAsyncFunction( pVal ) ? asyncAttempt( async() => await pVal.call( map, ...pArgs ) ) : attempt( () => pVal.call( map, ...pArgs ) );
                 };
                 break;
 
@@ -5205,6 +5296,7 @@ const $scope = constants?.$scope || function()
             toObjectLiteral,
             asObject,
             asMap,
+            transformObject,
             getProperty,
             setProperty,
             toNodePathArray,
