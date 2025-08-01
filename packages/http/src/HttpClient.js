@@ -379,9 +379,9 @@ const $scope = constants?.$scope || function()
          * Returns an object literal whose properties are those of this instance.
          * @returns {Object} an object literal whose properties are those of this instance.
          */
-        toObjectLiteral()
+        toObjectLiteral( pOptions )
         {
-            return toObjectLiteral( this );
+            return toObjectLiteral( this, pOptions );
         }
 
         /**
@@ -666,11 +666,14 @@ const $scope = constants?.$scope || function()
     {
         #map;
         #literal;
+        #options = {};
 
-        constructor( pObject )
+        constructor( pObject, pOptions )
         {
-            this.#map = attempt( () => asMap( pObject || {} ) );
-            this.#literal = attempt( () => toObjectLiteral( pObject || {} ) );
+            this.#options = { ...(pOptions || {}) };
+
+            this.#map = attempt( () => asMap( pObject || {}, pOptions ) );
+            this.#literal = attempt( () => toObjectLiteral( pObject || {}, pOptions ) );
         }
 
         get map()
@@ -1167,7 +1170,7 @@ const $scope = constants?.$scope || function()
 
         /**
          * Constructs an instance of the default implementation of an HttpClient delegate
-         * @param {HttpClientConfig|HttpClientApiConfig|Object} pConfig
+         * @param {Object} pConfig
          * @param {Object} pOptions
          */
         constructor( pConfig = DEFAULT_CONFIG, pOptions = DEFAULT_DELEGATE_OPTIONS )
@@ -1249,8 +1252,11 @@ const $scope = constants?.$scope || function()
                 return new ResponseData( error, cfg, cfg );
             }
 
-            const body = this.resolveBody( (cfg.data || cfg.body), pConfig );
-            cfg.body = cfg.data = body || cfg.data || cfg.body;
+            const body = await this.resolveBody( (cfg.data || cfg.body), pConfig );
+            if ( body )
+            {
+                cfg.body = cfg.data = body || cfg.data || cfg.body;
+            }
 
             const response = await asyncAttempt( async() => await fetch( url, cfg ) );
 
@@ -1315,6 +1321,14 @@ const $scope = constants?.$scope || function()
             const { url, cfg } = await prepareRequestConfig( pUrl, resolveHttpMethod( pMethod ), pConfig, pBody );
 
             return await me.doFetch( url, cfg );
+        }
+
+        async request( pConfig )
+        {
+            const method = pConfig?.method || VERBS.GET;
+            const url = pConfig?.url || pConfig;
+            const body = pConfig?.body || pConfig?.data;
+            return await this.sendRequest( method, url, pConfig, ([VERBS.POST, VERBS.PUT, VERBS.PATCH, VERBS.DELETE].includes( method ) ? body : undefined) );
         }
 
         async sendGetRequest( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )
@@ -1474,7 +1488,7 @@ const $scope = constants?.$scope || function()
 
             this.#maxRedirects = asInt( this.#config.maxRedirects || this.#options.maxRedirects || 5, 5 );
 
-            this.#defaultDelegate = isHttpClient( pDefaultDelegate ) ? pDefaultDelegate : isHttpClient( pDelegates ) ? pDelegates : new HttpFetchClient( resolveConfig( this.config ), this.options );
+            this.#defaultDelegate = isHttpClient( pDefaultDelegate ) ? pDefaultDelegate : isHttpClient( pDelegates ) ? pDelegates : new HttpFetchClient( this.config, this.options );
 
             this.#populateDelegates( pDelegates, this.#defaultDelegate );
         }
@@ -1535,7 +1549,7 @@ const $scope = constants?.$scope || function()
 
         #updateMapByType( pTypes, pMapByType, pNewMap, pDefaultDelegate )
         {
-            const defaultDelegate = isHttpClient( pDefaultDelegate ) ? pDefaultDelegate : this.#defaultDelegate || new HttpFetchClient( resolveConfig( this.config ), this.options );
+            const defaultDelegate = isHttpClient( pDefaultDelegate ) ? pDefaultDelegate : this.#defaultDelegate || new HttpFetchClient( this.config, this.options );
 
             let mapByType = isMap( pMapByType ) ? pMapByType : asMap( pMapByType );
 
@@ -3404,9 +3418,9 @@ const $scope = constants?.$scope || function()
     {
         let client = pHttpClient || new HttpFetchClient( pConfig, pOptions );
 
-        let options = { ...(toObjectLiteral( HttpClientApiConfig.getDefaultConfig() )), ...(pOptions || {}) };
+        let options = { ...(pOptions || {}) };
 
-        let cfg = resolveApiConfig( pConfig );
+        let cfg = { ...(pConfig || {}) };
 
         if ( isHttpClient( client ) )
         {

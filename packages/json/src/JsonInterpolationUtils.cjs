@@ -1515,16 +1515,16 @@ const { _ud = "undefined", $scope } = constants;
         return jsonString;
     }
 
-    function _resolveObject( obj )
+    function _resolveObject( pObject, pOptions )
     {
-        if ( obj instanceof Set || obj instanceof Map )
+        if ( pObject instanceof Set || pObject instanceof Map )
         {
-            return toObjectLiteral( obj );
+            return toObjectLiteral( pObject, pOptions );
         }
 
-        if ( isPopulated( obj ) || isArray( obj ) )
+        if ( isPopulated( pObject ) || isArray( pObject ) )
         {
-            return obj;
+            return pObject;
         }
 
         return {};

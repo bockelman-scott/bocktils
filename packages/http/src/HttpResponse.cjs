@@ -366,7 +366,7 @@ const {
                 return response.response || response;
             }
 
-            return response;
+            return cloneResponse( response );
         }
 
         static unwrapResponse( pResponse, pOptions )
