@@ -711,47 +711,49 @@ describe( "'same' tests objects for semantic equality", () =>
           } );
 } );
 
-describe( "isIdenticalTo as added to Object.prototype", () =>
-{
-    test( "Object.isIdenticalTo returns true only if the other object is the exact same object",
-          () =>
-          {
-              let objA = { a: { b: { c: 666 } } };
-              let objB = { a: { b: { c: 666 } } };
+/*
+ describe( "isIdenticalTo as added to Object.prototype", () =>
+ {
+ test( "Object.isIdenticalTo returns true only if the other object is the exact same object",
+ () =>
+ {
+ let objA = { a: { b: { c: 666 } } };
+ let objB = { a: { b: { c: 666 } } };
 
-              expect( objA.isIdenticalTo( objB ) ).toBe( false );
-          } );
+ expect( objA.isIdenticalTo( objB ) ).toBe( false );
+ } );
 
-    test( "Object.isIdenticalTo returns when the other object is the exact same object",
-          () =>
-          {
-              let objA = { a: { b: { c: 666 } } };
-              let objB = objA;
+ test( "Object.isIdenticalTo returns when the other object is the exact same object",
+ () =>
+ {
+ let objA = { a: { b: { c: 666 } } };
+ let objB = objA;
 
-              expect( objA.isIdenticalTo( objB ) ).toBe( true );
-          } );
-} );
+ expect( objA.isIdenticalTo( objB ) ).toBe( true );
+ } );
+ } );
 
-describe( "equals method added to Object.prototype", () =>
-{
-    test( "Object.equals returns true if the other object has the same properties and values",
-          () =>
-          {
-              let objA = { a: { b: { c: 666 } } };
-              let objB = { a: { b: { c: 666 } } };
+ describe( "equals method added to Object.prototype", () =>
+ {
+ test( "Object.equals returns true if the other object has the same properties and values",
+ () =>
+ {
+ let objA = { a: { b: { c: 666 } } };
+ let objB = { a: { b: { c: 666 } } };
 
-              expect( objA.equals( objB ) ).toBe( true );
-          } );
+ expect( objA.equals( objB ) ).toBe( true );
+ } );
 
-    test( "Object.equals also returns true if the other object is the exact same object",
-          () =>
-          {
-              let objA = { a: { b: { c: 666 } } };
-              let objB = objA;
+ test( "Object.equals also returns true if the other object is the exact same object",
+ () =>
+ {
+ let objA = { a: { b: { c: 666 } } };
+ let objB = objA;
 
-              expect( objA.equals( objB ) ).toBe( true );
-          } );
-} );
+ expect( objA.equals( objB ) ).toBe( true );
+ } );
+ } );
+ */
 
 describe( "arrayToObject", () =>
 {

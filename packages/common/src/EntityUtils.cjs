@@ -324,17 +324,18 @@ const {
         return false;
     };
 
-    try
-    {
-        Object.prototype.equals = function( pObject )
-        {
-            return same( this, pObject, true, getClass( this ) );
-        };
-    }
-    catch( ex )
-    {
-        toolBocksModule.reportError( ex, ex.message, S_ERROR, modName + ":: ASSIGN::Object.prototype.equals", this );
-    }
+    /*
+     try
+     {
+     Object.prototype.equals = function( pObject )
+     {
+     return same( this, pObject, true, getClass( this ) );
+     };
+     }
+     catch( ex )
+     {
+     toolBocksModule.reportError( ex, ex.message, S_ERROR, modName + ":: ASSIGN::Object.prototype.equals", this );
+     }*/
 
     function populateProperties( pTarget, pSource, ...pOmit )
     {
@@ -540,14 +541,14 @@ const {
             return populateProperties( obj, source );
         }
 
-        toObjectLiteral()
+        toObjectLiteral( pOptions )
         {
-            return toObjectLiteral( this );
+            return toObjectLiteral( this, pOptions );
         }
 
-        toJson()
+        toJson( pOptions )
         {
-            return attempt( () => asJson( this.toObjectLiteral() ) );
+            return attempt( () => asJson( this.toObjectLiteral( pOptions ) ) );
         }
 
         isIdentical( pOther )

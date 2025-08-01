@@ -382,15 +382,17 @@ const { _ud = "undefined", $scope } = constants;
         return false;
     };
 
-    Object.prototype.isIdenticalTo = function( pOther, pStrict, pClass )
-    {
-        return canCompareObject( pOther, pStrict, pClass ) && (identical( this, pOther ));
-    };
+    /*
+     Object.prototype.isIdenticalTo = function( pOther, pStrict, pClass )
+     {
+     return canCompareObject( pOther, pStrict, pClass ) && (identical( this, pOther ));
+     };
 
-    Object.prototype.equals = function( pObject )
-    {
-        return same( this, pObject, true, getClass( this ) );
-    };
+     Object.prototype.equals = function( pObject )
+     {
+     return same( this, pObject, true, getClass( this ) );
+     };
+     */
 
     /**
      * Returns the first candidate object that has a method named pFunctionName
