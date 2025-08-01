@@ -290,7 +290,7 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
 
             PRIMITIVE_WRAPPER_TYPES = lock( [String, Number, Boolean, BigInt] ),
 
-            GLOBAL_TYPES = lock( [Object, Array, Function, Date, RegExp, Symbol, Math, JSON, Map, Set, Promise, ArrayBuffer, SharedArrayBuffer, DataView, WeakMap, WeakRef, WeakSet, ...PRIMITIVE_WRAPPER_TYPES] ),
+            GLOBAL_TYPES = lock( [Object, Array, Function, Date, RegExp, Symbol, Map, Set, Promise, ArrayBuffer, SharedArrayBuffer, DataView, WeakMap, WeakRef, WeakSet, ...PRIMITIVE_WRAPPER_TYPES] ),
 
             BUILTIN_TYPES = lock( [].concat( ...TYPED_ARRAYS ).concat( ...ERROR_TYPES ).concat( ...GLOBAL_TYPES ) ),
 

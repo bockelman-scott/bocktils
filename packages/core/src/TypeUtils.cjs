@@ -3188,6 +3188,11 @@ const $scope = constants?.$scope || function()
         {
             let value = pValue || this.value;
 
+            if ( false === pValue )
+            {
+                return "false";
+            }
+
             value = isString( value ) ? value : isPrimitiveWrapper( value ) ? attempt( () => value.valueOf() ) : value;
 
             value = isString( value ) ? value : isDate( value ) ? this.castDateToString( value ) || value : value;

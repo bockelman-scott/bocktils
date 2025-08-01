@@ -1152,6 +1152,7 @@ describe( "toBool", () =>
               expect( b ).toBe( true );
           } );
 
+/*
     test( "Boolean(true).evaluate === true",
           () =>
           {
@@ -1165,6 +1166,7 @@ describe( "toBool", () =>
               let b = (new Boolean( false )).evaluate();
               expect( b ).toBe( false );
           } );
+*/
 } );
 
 describe( "Line breaks", () =>

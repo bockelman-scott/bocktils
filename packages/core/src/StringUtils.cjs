@@ -2265,9 +2265,11 @@ const { _ud = "undefined", $scope } = constants;
 
     const isTrue = evaluateBoolean;
     const toBool = evaluateBoolean;
+/*
 
     Boolean.prototype.evaluate = Boolean.evaluate = evaluateBoolean;
     String.prototype.toBool = String.toBool = evaluateBoolean;
+*/
 
     /**
      * This function converts all (carriage return + line feed) sequences to line feed only sequences

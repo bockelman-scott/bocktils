@@ -53,6 +53,29 @@ const packagesDirectory = path.resolve( projectRootDirectory, "packages" );
 
 const tempDirectory = getTempDirectory();
 
+const PACKAGES =
+    [
+        "package.json",
+        "base64\\package.json",
+        "buffer\\package.json",
+        "common\\package.json",
+        "compression\\package.json",
+        "core\\package.json",
+        "database\\package.json",
+        "dates\\package.json",
+        "events\\package.json",
+        "files\\package.json",
+        "functors\\package.json",
+        "http\\package.json",
+        "json\\package.json",
+        "logging\\package.json",
+        "math\\package.json",
+        "performance\\package.json",
+        "regex\\package.json",
+        "secrets\\package.json",
+        "loggers\\FileLogger\\package.json"
+    ];
+
 describe( "FileUtils", () =>
 {
     test( "FileUtils can determine if a file exists", () =>
@@ -199,29 +222,11 @@ describe( "FileUtils::findFiles", () =>
 
         let mapped = (found.map( ( entry ) => entry.filepath ));
 
-        expect( mapped.length ).toBe( 17 );
+        expect( mapped.length ).toBe( 19 );
 
         mapped = mapped.map( ( entry ) => path.relative( packagesDirectory, entry ) );
 
-        expect( mapped ).toEqual( [
-                                      "package.json",
-                                      "base64\\package.json",
-                                      "buffer\\package.json",
-                                      "common\\package.json",
-                                      "compression\\package.json",
-                                      "core\\package.json",
-                                      "database\\package.json",
-                                      "dates\\package.json",
-                                      "events\\package.json",
-                                      "files\\package.json",
-                                      "functors\\package.json",
-                                      "json\\package.json",
-                                      "logging\\package.json",
-                                      "math\\package.json",
-                                      "regex\\package.json",
-                                      "secrets\\package.json",
-                                      "loggers\\FileLogger\\package.json"
-                                  ] );
+        expect( mapped ).toEqual( PACKAGES );
     } );
 
     test( "'findFiles' can take a Visitor", async() =>
@@ -234,29 +239,11 @@ describe( "FileUtils::findFiles", () =>
 
         let mapped = (found.map( ( entry ) => entry.filepath ));
 
-        expect( mapped.length ).toBe( 17 );
+        expect( mapped.length ).toBe( 19 );
 
         mapped = mapped.map( ( entry ) => path.relative( packagesDirectory, entry ) );
 
-        expect( mapped ).toEqual( [
-                                      "package.json",
-                                      "base64\\package.json",
-                                      "buffer\\package.json",
-                                      "common\\package.json",
-                                      "compression\\package.json",
-                                      "core\\package.json",
-                                      "database\\package.json",
-                                      "dates\\package.json",
-                                      "events\\package.json",
-                                      "files\\package.json",
-                                      "functors\\package.json",
-                                      "json\\package.json",
-                                      "logging\\package.json",
-                                      "math\\package.json",
-                                      "regex\\package.json",
-                                      "secrets\\package.json",
-                                      "loggers\\FileLogger\\package.json"
-                                  ] );
+        expect( mapped ).toEqual( PACKAGES );
     } );
 
     test( "'find' can perform depth-first searches", async() =>
@@ -269,7 +256,7 @@ describe( "FileUtils::findFiles", () =>
 
         let mapped = (found.map( ( entry ) => entry.filepath ));
 
-        expect( mapped.length ).toBe( 17 );
+        expect( mapped.length ).toBe( 19 );
 
         mapped = mapped.map( ( entry ) => path.relative( packagesDirectory, entry ) );
 
@@ -284,11 +271,13 @@ describe( "FileUtils::findFiles", () =>
                                       "events\\package.json",
                                       "files\\package.json",
                                       "functors\\package.json",
+                                      "http\\package.json",
                                       "json\\package.json",
                                       "loggers\\FileLogger\\package.json",
                                       "logging\\package.json",
                                       "math\\package.json",
                                       "package.json",
+                                      "performance\\package.json",
                                       "regex\\package.json",
                                       "secrets\\package.json",
                                   ] );

@@ -536,7 +536,7 @@ const $scope = constants?.$scope || function()
 
             const segments = flatArgs( pPathSegments ).filter( isString ).filter( e => !isBlank( e ) ).map( e => toUnixPath( e ) );
 
-            for( let i = segments.length - 1; i--; )
+            for( let i = segments.length; i--; )
             {
                 const segment = segments[i];
 

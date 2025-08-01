@@ -1402,7 +1402,7 @@ const { _ud = "undefined", $scope } = constants;
         return output;
     }
 
-    const pkZipFile = async function( pInputPath, pOutputPath, pOutputType, pPwd, pOptions )
+    const pkZipFile = async function( pInputPath, pOutputPath, pOutputType, pOptions, pPwd )
     {
         const options = populateOptions( pOptions, CompressionOptions.PKZIP );
 
