@@ -69,7 +69,7 @@ const { _ud = "undefined", $scope } = constants;
         clamp = moduleUtils?.clamp
     } = typeUtils;
 
-    const { asString, asInt } = stringUtils;
+    const { asString, asInt, lcase, isJson } = stringUtils;
 
     const { flatArgs, asArray, Mappers, Filters } = arrayUtils;
 
@@ -209,6 +209,11 @@ const { _ud = "undefined", $scope } = constants;
     function isBuffer( pObject )
     {
         return isArray( pObject ) || isTypedArray( pObject ) || (BufferDefined && pObject instanceof Buffer);
+    }
+
+    function isTypedBuffer( pObject )
+    {
+        return isTypedArray( pObject ) || (BufferDefined && pObject instanceof Buffer);
     }
 
     if ( BufferDefined )
@@ -1046,6 +1051,101 @@ const { _ud = "undefined", $scope } = constants;
                                            }
                                        } );
         }
+
+        #processCharacterChunks( pChunks, pDecoder, pParseJson )
+        {
+            let chunks = asArray( pChunks || [] ).filter( isNonNullObject ).filter( e => isTypedArray( e ) || e instanceof ArrayBuffer || isTypedBuffer( e ) );
+
+            let decoder = pDecoder || new TextDecoder();
+
+            let s = chunks.map( chunk => decoder.decode( chunk ) ).join( "" );
+            s += decoder.decode();
+
+            // If the content is JSON and pParseJson is true,
+            // we will convert the result into an object
+            if ( pParseJson && isJson( s ) )
+            {
+                try
+                {
+                    return parseJson( s );
+                }
+                catch( error )
+                {
+                    toolBocksModule.handleError( error, "Streamer.readStream", chunks, s );
+                    return s;
+                }
+            }
+            return s;
+        }
+
+        /**
+         * Reads a stream, converting its contents into either an object, string, or Uni8Array (or Buffer, if defined).
+         * The second argument specified what kind of data we expect to find in the stream (binary versus text)
+         * The third argument specified whether to parse a string that is expected to be JSON into an object.
+         * @param pStream
+         * @param pContentType
+         * @param pParseJson
+         * @returns {Promise<Object|String|Uint8Array>}
+         */
+        async readStream( pStream, pContentType, pParseJson = true )
+        {
+            let stream = pStream instanceof ReadableStream ? pStream : this.asChunkedStream( pStream );
+
+            let contentType = lcase( asString( pContentType, true ) );
+
+            // Determine whether we expect the stream to contain character data.
+            const isCharacterData = /(text\/.*|application\/(json|javascript|xml|xhtml\+xml)|charset=)/i.test( contentType );
+
+            let totalLength = 0;
+
+            const chunks = [];
+
+            try
+            {
+                for await ( const chunk of stream )
+                {
+                    chunks.push( chunk );
+                    totalLength += chunk.length;
+                }
+
+                // For character data, we will need the TextDecoder
+                if ( isCharacterData )
+                {
+                    // Extract the character set from the content type, defaulting to 'utf-8' if not found.
+                    const charsetMatch = contentType.match( /charset=([^;]+)/i );
+                    const charset = $ln( charsetMatch ) > 1 ? charsetMatch[1] : "utf-8";
+
+                    let decoder = new TextDecoder( charset );
+
+                    return attempt( () => this.#processCharacterChunks( chunks, decoder, !!pParseJson ) );
+                }
+                else
+                {
+                    // otherwise, we treat the chunks as binary data.
+                    // Combine all Uint8Array chunks into a single one.
+                    // We use a traditional loop here for better performance,
+                    // avoiding the creation of a new array on each iteration,
+                    // which is inefficient for large binary streams.
+
+                    const uint8Array = new Uint8Array( totalLength );
+
+                    let offset = 0;
+
+                    for( const chunk of chunks )
+                    {
+                        uint8Array.set( chunk, offset );
+                        offset += chunk.length;
+                    }
+
+                    return uint8Array;
+                }
+            }
+            catch( error )
+            {
+                toolBocksModule.handleError( error, "Streamer.readStream", chunks );
+                throw error;
+            }
+        }
     }
 
     const more =
@@ -1081,6 +1181,14 @@ const { _ud = "undefined", $scope } = constants;
             {
                 const streamer = new Streamer( { chunkSize: asInt( pChunkSize ), delayMs: asInt( pDelayMs ) } );
                 return streamer.asChunkedStream( pValue, pChunkSize, pDelayMs );
+            },
+            readStream: async function( pStream, pContentType, pParseJson )
+            {
+                const streamer = new Streamer( {
+                                                   chunkSize: DEFAULT_STREAMING_CHUNK_SIZE,
+                                                   delayMs: asInt( DEFAULT_STREAMING_DELAY_MILLISECONDS )
+                                               } );
+                return streamer.readStream( pStream, pContentType, pParseJson );
             },
             Streamer
         };
