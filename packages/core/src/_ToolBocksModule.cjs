@@ -955,9 +955,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         let minutes = Math.floor( (totalSeconds % 3600) / 60 );
         let seconds = totalSeconds % 60;
 
-        let hoursPart = (hours > 0) ? (_asStr( hours, true ).padStart( 2, "0" ) + ":") : "";
-        let minutesPart = (minutes > 0) ? ((hours > 0) ? (_asStr( minutes, true ).padStart( 2, "0" ) + ".") : (_asStr( minutes, true ) + ".")) : "";
-        let secondsPart = (minutes > 0 || hours > 0) ? _asStr( seconds, true ).padStart( 2, "0" ) : _asStr( seconds, true );
+        let hoursPart = (hours > 0) ? (_asStr( hours, true ).padStart( 2, "0" ) + ":") : "00:";
+        let minutesPart = (minutes > 0) ? ((hours > 0) ? (_asStr( minutes, true ).padStart( 2, "0" ) + ".") : (_asStr( minutes, true ) + ".")) : "00.";
+        let secondsPart = (minutes > 0 || hours > 0) ? _asStr( seconds, true ).padStart( 2, "0" ) : _asStr( seconds, true ) || "00";
 
         if ( hours > 0 || minutes > 0 || seconds > 0 )
         {
@@ -965,7 +965,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
 
         // Explicitly handle 0 elapsed time
-        return "00.00";
+        return "00:00.00";
     }
 
     function calculateEstimatedTimeRemaining( pDone, pTotal, pElapsedTime )
@@ -2400,7 +2400,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
                 if ( match && !visited.has( name ) )
                 {
-                    const value = attempt( () => pObject[name] ) || attemptSilent( () => pObject[ ("#" + name) ] );
+                    const value = attempt( () => pObject[name] ) || attemptSilent( () => pObject[("#" + name)] );
 
                     const entry = [name, value, pObject];
 
