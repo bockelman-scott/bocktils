@@ -398,6 +398,26 @@ const {
         }
     }
 
+    function calculateContentTypeForObject( pData )
+    {
+        let type = CONTENT_TYPES.JSON;
+
+        if ( isTypedArray( pData ) || isBuffer( pData ) )
+        {
+            type = CONTENT_TYPES.BINARY_STREAM;
+        }
+        else if ( _ud !== typeof FormData && pData instanceof FormData )
+        {
+            type = CONTENT_TYPES.MULTIPART;
+        }
+        else if ( _ud !== typeof URLSearchParams && pData instanceof URLSearchParams )
+        {
+            type = CONTENT_TYPES.FORM_URLENCODED;
+        }
+
+        return type;
+    }
+
     function calculateContentType( pRequest )
     {
         let type = _mt;
@@ -416,14 +436,7 @@ const {
             switch ( typeof data )
             {
                 case _str:
-                    if ( isJson( data ) )
-                    {
-                        type = CONTENT_TYPES.JSON;
-                    }
-                    else
-                    {
-                        type = CONTENT_TYPES.FORM_URLENCODED;
-                    }
+                    type = (isJson( asString( data, true ) )) ? CONTENT_TYPES.JSON : CONTENT_TYPES.FORM_URLENCODED;
                     break;
 
                 case _num:
@@ -437,19 +450,7 @@ const {
                     break;
 
                 case _obj:
-                    type = CONTENT_TYPES.JSON;
-                    if ( isTypedArray( data ) || isBuffer( data ) )
-                    {
-                        type = CONTENT_TYPES.BINARY_STREAM;
-                    }
-                    else if ( _ud !== typeof FormData && data instanceof FormData )
-                    {
-                        type = CONTENT_TYPES.MULTIPART;
-                    }
-                    else if ( _ud !== typeof URLSearchParams && data instanceof URLSearchParams )
-                    {
-                        type = CONTENT_TYPES.FORM_URLENCODED;
-                    }
+                    type = calculateContentTypeForObject( data );
                     break;
             }
         }
@@ -457,6 +458,7 @@ const {
         return type;
     }
 
+    HttpContentType.calculateContentTypeForObject = calculateContentTypeForObject;
     HttpContentType.calculateContentType = calculateContentType;
 
     HttpContentType.getContentType = function( pConfig )
@@ -474,11 +476,6 @@ const {
 
         return asString( type, true ) || "*";
     };
-
-    function getHttpTypeString( pConfig )
-    {
-        return HttpContentType.getContentType( pConfig );
-    }
 
     Object.entries( CONTENT_TYPES ).forEach( ( [key, value] ) =>
                                              {
@@ -620,7 +617,8 @@ const {
             STATUS_CODES.TOO_EARLY,
             STATUS_CODES.REQUEST_TIMEOUT,
             STATUS_CODES.SERVICE_UNAVAILABLE,
-            STATUS_CODES.GATEWAY_TIMEOUT
+            STATUS_CODES.GATEWAY_TIMEOUT,
+            STATUS_CODES.INTERNAL_SERVICE_ERROR
         ];
 
     /**

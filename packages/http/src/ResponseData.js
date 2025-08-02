@@ -769,6 +769,16 @@ const {
         return isNonNullObject( pResponseData ) && pResponseData instanceof ResponseData;
     };
 
+    ResponseData.isRedirected = function( pResponseData )
+    {
+        if ( ResponseData.isResponseData( pResponseData ) )
+        {
+            return pResponseData.isRedirect();
+        }
+
+        return REDIRECT_STATUSES.includes( asInt( pResponseData?.status ) );
+    };
+
     ResponseData.from = function( pObject, pConfig, pOptions )
     {
         if ( ResponseData.isResponseData( pObject ) )
@@ -785,7 +795,7 @@ const {
 
     ResponseData.exceedsRateLimit = function( pResponseData )
     {
-        return ResponseData.isResponseData( pResponseData ) && pResponseData.isExceedsRateLimit();
+        return (ResponseData.isResponseData( pResponseData ) && pResponseData.isExceedsRateLimit()) || RATE_LIMIT_EXCEEDED_STATUSES.includes( pResponseData?.status );
     };
 
     ResponseData.isOk = function( pResponseData )
