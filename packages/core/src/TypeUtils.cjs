@@ -4323,7 +4323,7 @@ const $scope = constants?.$scope || function()
         return { value: s, s };
     };
 
-    toolBocksModule["parseJson"] = parseJson;
+    toolBocksModule["parseJson"] = toolBocksModule["parseJson"] || parseJson;
 
     function asObject( pObject )
     {
