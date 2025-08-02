@@ -15,6 +15,8 @@
  */
 const core = require( "@toolbocks/core" );
 
+const bufferUtils = require( "@toolbocks/buffer" );
+
 const jsonUtils = require( "@toolbocks/json" );
 
 /**
@@ -88,13 +90,25 @@ const {
         $ln
     } = moduleUtils;
 
-    const { _mt_str = "", _mt = _mt_str, _str } = constants;
+    const { _mt_str = "", _mt = _mt_str, _str, _num, _big, _bool, _obj, _fun } = constants;
 
-    const { isNull, isNonNullObject, isString, isNumeric, isArray, isFunction, toObjectLiteral } = typeUtils;
+    const {
+        isNull,
+        isNonNullObject,
+        isString,
+        isNumeric,
+        isArray,
+        isFunction,
+        toObjectLiteral,
+        isTypedArray,
+        isPromise
+    } = typeUtils;
 
-    const { asString, asInt, lcase, ucase, capitalize, isJson } = stringUtils;
+    const { asString, isBlank, asInt, lcase, ucase, capitalize, isJson } = stringUtils;
 
     const { asArray } = arrayUtils;
+
+    const { isBuffer } = bufferUtils;
 
     const { parseJson } = jsonUtils;
 
@@ -384,13 +398,81 @@ const {
         }
     }
 
+    function calculateContentType( pRequest )
+    {
+        let type = _mt;
+
+        let request = (_ud !== typeof Request && pRequest instanceof Request) ? attempt( () => pRequest.clone() ) || pRequest : isNonNullObject( pRequest ) ? pRequest : { data: pRequest };
+
+        let data = attempt( () => request?.data || request?.body );
+
+        if ( isPromise( data ) )
+        {
+            data = {};
+        }
+
+        if ( data )
+        {
+            switch ( typeof data )
+            {
+                case _str:
+                    if ( isJson( data ) )
+                    {
+                        type = CONTENT_TYPES.JSON;
+                    }
+                    else
+                    {
+                        type = CONTENT_TYPES.FORM_URLENCODED;
+                    }
+                    break;
+
+                case _num:
+                case _big:
+                case _bool:
+                    type = CONTENT_TYPES.FORM_URLENCODED;
+                    break;
+
+                case _fun:
+                    type = CONTENT_TYPES.BINARY_STREAM;
+                    break;
+
+                case _obj:
+                    type = CONTENT_TYPES.JSON;
+                    if ( isTypedArray( data ) || isBuffer( data ) )
+                    {
+                        type = CONTENT_TYPES.BINARY_STREAM;
+                    }
+                    else if ( _ud !== typeof FormData && data instanceof FormData )
+                    {
+                        type = CONTENT_TYPES.MULTIPART;
+                    }
+                    else if ( _ud !== typeof URLSearchParams && data instanceof URLSearchParams )
+                    {
+                        type = CONTENT_TYPES.FORM_URLENCODED;
+                    }
+                    break;
+            }
+        }
+
+        return type;
+    }
+
+    HttpContentType.calculateContentType = calculateContentType;
+
     HttpContentType.getContentType = function( pConfig )
     {
-        let config = isNonNullObject( pConfig ) ? pConfig : isString( pConfig ) ? { ["content-type"]: lcase( asString( pConfig, true ) ) } : "*";
+        let config = isNonNullObject( pConfig ) ? pConfig : isString( pConfig ) ? { ["content-type"]: lcase( asString( pConfig, true ) ) } : _mt;
 
         let headers = { ...(toObjectLiteral( config?.headers || {}, { keyTransformer: lcase } ) || {}) } || {};
 
-        return asString( headers["content-type"] || headers["contenttype"] || config["content-type"] || config["contenttype"], true ) || "*";
+        let type = asString( headers["content-type"] || headers["contenttype"] || config["content-type"] || config["contenttype"], true ) || _mt;
+
+        if ( isBlank( type ) )
+        {
+            type = HttpContentType.calculateContentType( pConfig );
+        }
+
+        return asString( type, true ) || "*";
     };
 
     function getHttpTypeString( pConfig )
