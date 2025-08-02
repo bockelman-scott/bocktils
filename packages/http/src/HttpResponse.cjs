@@ -378,7 +378,7 @@ const {
                 response = response.response;
             }
 
-            return response;
+            return response || pResponse;
         }
 
         get options()

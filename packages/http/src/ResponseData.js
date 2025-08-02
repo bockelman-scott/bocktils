@@ -114,7 +114,7 @@ const {
 
     const { parseJson, asJson } = jsonUtils;
 
-    const { toReadableStream, toThrottledReadableStream } = bufferUtils;
+    const { Streamer, toReadableStream, toThrottledReadableStream, readStream } = bufferUtils;
 
     // import the functions, variables, and classes defined in the HttpConstants module that are used in this module
     const {
@@ -340,25 +340,29 @@ const {
             {
                 const opts = { ...DEFAULT_RESPONSE_OPTIONS, ...(pResponse || (pConfig || pResponse || {})), ...(pConfig || pResponse || {}), ...(pOptions || {}) };
 
-                const options = { ...(asObject( opts ) || {}) };
+                const config = { ...(pResponse?.config || {}), ...(asObject( pConfig || pResponse || opts ) || {}) };
 
-                const config = { ...(asObject( pConfig || pResponse || options ) || {}) };
+                const options = { ...(asObject( opts ) || config || {}) };
 
-                const source = attempt( () => HttpResponse.resolveResponse( pResponse, options ) );
+                const source = (_ud !== typeof Response && pResponse instanceof Response) ? pResponse : attempt( () => HttpResponse.resolveResponse( pResponse, options ) );
 
                 // Some frameworks return the response as a property of an error returned in place of a response.
                 // See https://axios-http.com/docs/handling_errors, for example
-                this.#frameworkResponse = pResponse?.response || pResponse || source.response || source;
+                this.#frameworkResponse = pResponse?.response || pResponse || source?.response || source;
 
-                this.#data = this.#frameworkResponse?.data || options.data;
+                this.#data = this.#frameworkResponse?.data || source?.data || options.data;
 
-                this.#frameworkHeaders = this.#frameworkResponse?.headers || options.headers || source.headers;
+                this.#frameworkHeaders = this.#frameworkResponse?.headers || source?.headers || options.headers;
 
-                this.#status = this.#frameworkResponse?.status || source.status || options.status;
+                this.#status = this.#frameworkResponse?.status || source?.status || options.status;
 
                 this.#error = isError( pResponse ) ? pResponse : isError( pConfig ) ? pConfig : isError( pOptions ) ? pOptions : null;
 
                 this.#error = isError( this.#error ) ? resolveError( this.#error ) : null;
+
+                // Stores the configuration returned with the response
+                // or the configuration used to make the request for which this is the response
+                this.#config = config || options;
 
                 this.#options = populateOptions( options,
                                                  {
@@ -367,7 +371,7 @@ const {
                                                      config,
                                                      error: this.#error,
                                                      status: this.#status,
-                                                     data: this.#data || options.data || config?.data,
+                                                     data: this.#data || config?.data || options.data,
                                                      headers: this.#frameworkHeaders || source?.headers || options.headers
                                                  } );
 
@@ -376,25 +380,24 @@ const {
                     this.#response = attempt( () => new HttpResponse( (source || pResponse || config || options),
                                                                       (options || config || source),
                                                                       (config.url || options.url) ) ) || source || options.response || options || config;
-
-                    // construct an instance of HttpStatus as a helper for evaluating the status
-                    this.#httpStatus = attempt( () => HttpStatus.fromCode( this.status ) ) ||
-                                       attempt( () => HttpStatus.fromResponse( this.response ) ) ||
-                                       attempt( () => HttpStatus.fromCode( this.statusText ) ) ||
-                                       attempt( () => new HttpStatus( asInt( this.status ), asString( this.statusText || this.options.statusText || "UNKNOWN", true ) ) );
-
-                    // Stores the configuration returned with the response
-                    // or the configuration used to make the request for which this is the response
-                    this.#config = config || options;
-
-                    // Stores the headers returned with the response or the request headers that were passed
-                    this.#headers = new HttpResponseHeaders( source.headers || this.#frameworkHeaders || options.headers );
-
-                    // Stores the url path from which the response actually came (in the case of redirects) or the url/path of the request
-                    this.#url = cleanUrl( asString( asString( this.#response?.url || this.#frameworkResponse?.url, true ) || asString( options.url || config.url, true ) || _slash, true ) );
-
-                    this.#request = attempt( () => new HttpRequest( this.#response?.request || options.request || config.request || config, options ) );
                 }
+                else
+                {
+                    this.#response = this.#frameworkResponse || pResponse;
+                }
+
+                // construct an instance of HttpStatus as a helper for evaluating the status
+                this.#httpStatus = attempt( () => HttpStatus.fromCode( this.status ) ) ||
+                                   attempt( () => HttpStatus.fromResponse( this.#response ) ) ||
+                                   attempt( () => HttpStatus.fromCode( this.statusText ) ) ||
+                                   attempt( () => new HttpStatus( asInt( this.status ), asString( this.statusText || this.options.statusText || "UNKNOWN", true ) ) );
+
+                // Stores the headers returned with the response or the request headers that were passed
+                this.#headers = new HttpResponseHeaders( source?.headers || this.frameworkHeaders || config.headers || options.headers );
+
+                // Stores the url path from which the response actually came (in the case of redirects) or the url/path of the request
+                this.#url = cleanUrl( asString( asString( this.#response?.url || this.#frameworkResponse?.url || config?.url || source?.url, true ) || asString( config.url || options.url, true ) || _slash, true ) );
+
             }
         }
 
@@ -420,27 +423,34 @@ const {
 
         get status()
         {
-            return asInt( this.#status || this.frameworkResponse?.status || this.response?.status || this.options.status );
+            return asInt( this.#status || this.frameworkResponse?.status || this.#response?.status || this.options.status );
         }
 
         get statusText()
         {
-            return STATUS_TEXT[asInt( this.status )] || this.options.statusText;
+            return asString( this.frameworkResponse?.statusText || STATUS_TEXT[asInt( this.status )] || this.options.statusText, true );
         }
 
         get data()
         {
-            return this.#data || this.frameworkResponse?.data || this.options.data || this.response?.data;
+            let content = this.#data || this.frameworkResponse?.data || this.response?.data || this.options.data;
+
+            if ( isNull( content ) || (isString( content ) && isBlank( content )) )
+            {
+                content = this.response ? this.response.body : content;
+            }
+
+            return content;
         }
 
         get headers()
         {
-            return new HttpResponseHeaders( this.#headers || this.frameworkHeaders || this.options.headers );
+            return new HttpResponseHeaders( this.#headers || this.frameworkHeaders || this.#frameworkResponse?.headers || this.config?.headers || this.options.headers );
         }
 
         get frameworkHeaders()
         {
-            return this.#frameworkHeaders || this.#response?.headers || this.options.headers;
+            return this.#frameworkHeaders || this.#frameworkResponse?.headers || this.#response?.headers || this.config?.headers || this.options.headers;
         }
 
         get config()
@@ -450,7 +460,8 @@ const {
 
         get request()
         {
-            return this.#request || this.options.request || this.config.request || this.config || this.options;
+            this.#request = this.#request || attempt( () => new HttpRequest( this.#response?.request || this?.frameworkResponse?.request || this.config.request || this.options.request || this.config, this.options ) );
+            return this.#request || this.config.request || this.options.request || this.config || this.options;
         }
 
         get error()
@@ -703,6 +714,55 @@ const {
             return false;
         }
     }
+
+    ResponseData.getRetryAfter = function( pResponse, pHeaders )
+    {
+        if ( pResponse instanceof ResponseData )
+        {
+            return asInt( clamp( Math.max( asInt( pResponse.retryAfterMilliseconds ), 256 ), 10, 30_000 ) );
+        }
+        else
+        {
+            let millis = 1_000;
+
+            let headers = pHeaders || pResponse?.headers || pResponse;
+
+            let responseHeaders = new HttpResponseHeaders( headers );
+
+            let retryAfter = attempt( () => responseHeaders.get( "Retry-After" ) ) || attempt( () => responseHeaders.get( "retry-after" ) );
+
+            retryAfter = retryAfter || attempt( () => responseHeaders.get( "X-Retry-After" ) ) || attempt( () => responseHeaders.get( "x-retry-after" ) );
+
+            retryAfter = retryAfter || attempt( () => headers["Retry-After"] ) || attempt( () => headers["retry-after"] );
+
+            retryAfter = retryAfter || attempt( () => headers["X-Retry-After"] ) || attempt( () => headers["x-retry-after"] );
+
+            if ( isNumeric( retryAfter ) && !isDate( retryAfter ) )
+            {
+                millis = clamp( asInt( Math.max( (retryAfter * 1_000), millis ) ), 100, 30_000 );
+            }
+            else if ( isDateString( retryAfter ) || isDate( retryAfter ) )
+            {
+                let nextDateTime = asDate( retryAfter );
+                if ( isDate( nextDateTime ) )
+                {
+                    millis = clamp( Math.max( millis, asInt( nextDateTime.getTime() - Date.now() ) ), 100, 30_000 );
+                }
+                else
+                {
+                    millis = clamp( 2 * millis, 100, 30_000 );
+                }
+            }
+            else
+            {
+                millis = 256;
+            }
+
+            millis += (Math.random() * 128); // add some 'jitter'
+
+            return millis;
+        }
+    };
 
     ResponseData.isResponseData = function( pResponseData )
     {

@@ -743,7 +743,7 @@ const {
         {
             const name = STATUS_TEXT_BY_CODE_STRING[ucase( asString( pCode, true ) )];
 
-            const num = asInt( STATUS_CODES[ucase( name ).replace( /http/i, _mt_str )] );
+            const num = asInt( STATUS_CODES[ucase( name ).replace( /http/i, _mt_str ).replace( /^_/, _mt_str )] );
 
             if ( HttpStatus.isStatusCode( num ) || HttpStatus.isStatusText( name ) )
             {

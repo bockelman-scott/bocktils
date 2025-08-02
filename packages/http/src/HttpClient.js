@@ -52,6 +52,11 @@ const https = require( "https" );
 const core = require( "@toolbocks/core" );
 
 /**
+ * Supports cross-platform handling of buffers or buffer-like data
+ */
+const bufferUtils = require( "@toolbocks/buffer" );
+
+/**
  * Imports the @toolbocks/date module for the utility functions required to manipulate Dates
  */
 const datesModule = require( "@toolbocks/dates" );
@@ -231,6 +236,8 @@ const $scope = constants?.$scope || function()
 
     // import the useful functions from the core module, ArrayUtils
     const { asArray, concatMaps, unique, TypedArray, BoundedQueue } = arrayUtils;
+
+    const { Streamer, toReadableStream, toThrottledReadableStream, readStream } = bufferUtils;
 
     // import the DateUtils module from the datesModule
     const { DateUtils } = datesModule;
@@ -1272,7 +1279,7 @@ const $scope = constants?.$scope || function()
                 }
                 else if ( STATUS_ELIGIBLE_FOR_RETRY.includes( status ) )
                 {
-                    let delay = Math.max( responseData.retryAfterMilliseconds, DEFAULT_RETRY_DELAY[status] );
+                    let delay = asInt( Math.max( responseData.retryAfterMilliseconds, DEFAULT_RETRY_DELAY[status] ) ) + 100;
 
                     await asyncAttempt( async() => await sleep( delay ) );
 
@@ -1352,9 +1359,22 @@ const $scope = constants?.$scope || function()
             {
                 let status = responseData.status;
 
+                let headers = responseData.headers || responseData;
+
                 if ( ResponseData.isOk( status ) || (status >= 200 && status < 300) )
                 {
-                    return responseData.data || responseData.body;
+                    let info = responseData.data || responseData.response?.body || responseData.body;
+
+                    if ( isPromise( info ) )
+                    {
+                        info = await asyncAttempt( async() => await info || await responseData.body );
+                    }
+
+                    if ( info instanceof ReadableStream )
+                    {
+                        const contentType = HttpHeaders.getHeaderValue( headers, "Content-Type" );
+                        return await readStream( info, contentType, true );
+                    }
                 }
                 else if ( status >= 300 && status < 400 )
                 {
@@ -1362,8 +1382,6 @@ const $scope = constants?.$scope || function()
 
                     if ( redirects <= asInt( me.maxRedirects || cfg.maxRedirects ) )
                     {
-                        let headers = responseData.headers || responseData;
-
                         let location = cleanUrl( HttpHeaders.getHeaderValue( headers, "Location" ) );
 
                         if ( location && cleanUrl( url ) !== cleanUrl( location ) )
@@ -3469,9 +3487,13 @@ const $scope = constants?.$scope || function()
         // how many have we made sp far during THIS minute?
         #requestsSince = 0;
 
+        // used to hold the current default delay value
+        #defaultDelay = 10;
+
         // the logger used to write messages to the console or another destination
         #logger = konsole;
 
+        // controls the verbosity of logging
         #debugLevel = 0;
 
         /**
@@ -3607,7 +3629,7 @@ const $scope = constants?.$scope || function()
         {
             const lastExecution = asInt( new Date( this.#lastRequestExecuted ).getTime() );
 
-            if ( this.debugLevel > 5 )
+            if ( this.debugLevel > 10 )
             {
                 const me = this;
                 attempt( () => (me || this).#logger.log( "Last Request executed:", new Date( lastExecution ).toLocaleString() ) );
@@ -3640,7 +3662,7 @@ const $scope = constants?.$scope || function()
             // it cannot have been later than now, so we take the minimum of the value and now
             const lastReset = Math.min( asInt( this.#lastResetTime ), Date.now() );
 
-            if ( this.debugLevel > 5 )
+            if ( this.debugLevel > 7 )
             {
                 const me = this;
                 attempt( () => (me || this).#logger.log( "Last Reset:", new Date( lastReset ).toLocaleString() ) );
@@ -3662,7 +3684,7 @@ const $scope = constants?.$scope || function()
             // it cannot have been less than 0, so we take the maximum of 0 and the recorded value
             const numRequests = Math.max( 0, asInt( this.#requestsSince ) );
 
-            if ( this.debugLevel > 5 )
+            if ( this.debugLevel > 8 )
             {
                 const me = this;
                 attempt( () => (me || this).#logger.log( "Number of Request since last reset:", numRequests ) );
@@ -3683,7 +3705,7 @@ const $scope = constants?.$scope || function()
         {
             const nextReset = asInt( this.#nextResetTime ) || this.calculateNextResetTime();
 
-            if ( this.debugLevel > 5 )
+            if ( this.debugLevel > 9 )
             {
                 const me = this;
                 attempt( () => (me || this).#logger.log( "Next Reset expected:", new Date( nextReset ).toLocaleString() ) );
@@ -3705,7 +3727,7 @@ const $scope = constants?.$scope || function()
             // so we add that many milliseconds to the last time this instance was reset
             const nextReset = asInt( this.lastResetTime ) + asInt( this.rateLimitPeriod );
 
-            if ( this.debugLevel > 5 )
+            if ( this.debugLevel > 8 )
             {
                 const me = this;
                 attempt( () => (me || this).#logger.log( "Next Reset will occur at:", new Date( nextReset ).toLocaleString() ) );
@@ -3726,13 +3748,47 @@ const $scope = constants?.$scope || function()
             // because we cannot wait for less than 0 milliseconds unless we have a time machine
             const millisUntilReset = Math.max( 0, this.nextResetTime - Date.now() );
 
-            if ( this.#debugLevel > 3 )
+            if ( this.#debugLevel > 9 )
             {
                 const me = this;
                 attempt( () => (me || this).#logger.log( "Milliseconds until next reset:", millisUntilReset ) );
             }
 
             return millisUntilReset;
+        }
+
+        get percentageUsed()
+        {
+            return Math.min( Math.ceil( this.requestsSince / this.maxRequestsUntilReset ) * 100, 100 );
+        }
+
+        calculateDefaultDelay( pElapsed )
+        {
+            const elapsed = asInt( pElapsed );
+
+            let curDefault = asInt( this.#defaultDelay );
+
+            if ( elapsed >= 100 || clamp( curDefault, 10, 100 ) >= 100 )
+            {
+                curDefault = 10;
+            }
+            else
+            {
+                const pctUsed = this.percentageUsed;
+
+                if ( this.debugLevel >= 7 )
+                {
+                    attempt( () => this.#logger.log( "Percentage Used:", pctUsed ) );
+                }
+
+                const delayToAdd = (pctUsed > 90 ? 64 : (pctUsed > 75 ? 32 : (pctUsed > 50 ? 24 : 10)));
+
+                curDefault += delayToAdd;
+            }
+
+            this.#defaultDelay = curDefault;
+
+            return clamp( asInt( this.#defaultDelay ), 10, 100 );
         }
 
         /**
@@ -3765,24 +3821,32 @@ const $scope = constants?.$scope || function()
             // if the last request was more than 100 milliseconds ago,
             // we wait 10 milliseconds per request we have made instead (up to 100 milliseconds)
             // this helps prevents exceeding the 'burst' limit
-            let delay = elapsedTimeSinceLastRequest >= 100 ? Math.min( 100, (10 * this.requestsSince) ) : 100;
+            let delay = clamp( asInt( this.#defaultDelay ), 10, 100 );
 
             // If we have not yet reached the request-per-N limit
             // or the time since the last request was already more than N milliseconds ago,
             // we return the default delay
             if ( (this.requestsSince < this.maxRequestsUntilReset) || (elapsedTimeSinceLastRequest > this.#rateLimitPeriod) )
             {
+                this.#defaultDelay = delay = this.calculateDefaultDelay( elapsedTimeSinceLastRequest, this.requestsSince );
+
+                if ( this.debugLevel > 6 )
+                {
+                    attempt( () => this.#logger.log( "Default Delay before next Request:", delay, "milliseconds" ) );
+                }
                 return delay;
             }
             else
             {
-                delay = Math.max( delay, this.millisecondsUntilReset );
+                delay = asInt( Math.max( delay, this.millisecondsUntilReset ) ) + 100; // add 100 milliseconds to let the server reset its counts
 
                 if ( this.debugLevel > 2 )
                 {
                     const me = this;
                     attempt( () => (me || this).#logger.log( "Calculated Delay before next Request:", delay, "milliseconds" ) );
                 }
+
+                this.#defaultDelay = 10;
             }
 
             return clamp( asInt( delay ), 10, this.rateLimitPeriod );
@@ -3819,7 +3883,7 @@ const $scope = constants?.$scope || function()
             this.lastRequestExecuted = this.#lastResetTime;
             this.#requestsSince = 0;
 
-            if ( this.debugLevel > 9 )
+            if ( this.debugLevel > 10 )
             {
                 const state =
                     {
