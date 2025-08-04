@@ -2139,7 +2139,10 @@ const $scope = constants?.$scope || function()
      */
     const isReadOnly = moduleUtils?.isReadOnly || function( pObject )
     {
-        return isPrimitive( pObject ) || isNull( pObject ) || (isObject( pObject ) && (isNull( pObject ) || Object.isFrozen( pObject ) || Object.isSealed( pObject )));
+        return isPrimitive( pObject ) ||
+               isNull( pObject ) ||
+               isPrimitiveWrapper( pObject ) ||
+               (isObject( pObject ) && (Object.isFrozen( pObject ) || Object.isSealed( pObject )));
     };
 
     /**
@@ -4938,6 +4941,62 @@ const $scope = constants?.$scope || function()
         return a.compareTo( b, pOptions );
     };
 
+    /**
+     * Represents a generic object with dynamic properties and proxies.
+     * This class allows for flexible property management and supports dynamic property access and mutation.
+     *
+     * Used in the #DuplicatesDetector to prevent holding entire Entities in memory when only a few properties are necessary to identify duplicates
+     */
+    class GenericObject
+    {
+        #id;
+        #properties = new Map();
+
+        constructor( pId, pObject, ...pProperties )
+        {
+            this.#id = pId || pObject?.id;
+
+            let obj = (isNonNullObject( pObject ) || isArray( pObject )) ? pObject : (isString( pObject ) ? attempt( () => parseJson( pObject ) ) : {});
+
+            let properties = ([...(pProperties || [])] || []).filter( isString ).map( e => e.trim() ).filter( e => !isBlankString( e ) );
+
+            let entries = objectEntries( obj );
+            entries = entries.filter( entry => ($ln( properties ) <= 0) || properties.includes( ObjectEntry.getKey( entry ) ) );
+            entries.forEach( entry => this.#properties.set( ObjectEntry.getKey( entry ), ObjectEntry.getValue( entry ) ) );
+
+            return new Proxy( this,
+                              {
+                                  get: ( pTarget = this, pProperty, pReceiver ) =>
+                                  {
+                                      if ( isString( pProperty ) &&
+                                           !isBlankString( pProperty ) &&
+                                           pTarget.#properties.has( pProperty ) )
+                                      {
+                                          return pTarget.#properties.get( pProperty );
+                                      }
+
+                                      // Fall back to the original object's properties/methods
+                                      return Reflect.get( pTarget, pProperty, pReceiver );
+                                  },
+                                  set: ( pTarget = this, pProperty, pValue, pReceiver ) =>
+                                  {
+                                      if ( isString( pProperty ) && !isBlank( pProperty ) )
+                                      {
+                                          pTarget.#properties.set( pProperty, pValue );
+                                          return true;
+                                      }
+
+                                      return Reflect.set( pTarget, pProperty, pValue, pReceiver );
+                                  }
+                              } );
+        }
+
+        getProperty( pProperty )
+        {
+            return this.#properties.get( pProperty );
+        }
+    }
+
     class ComparatorFactory
     {
         #options;
@@ -5321,6 +5380,7 @@ const $scope = constants?.$scope || function()
              */
             classes:
                 {
+                    GenericObject,
                     ComparatorFactory,
                     Finder,
                     VisitedSet,
@@ -5332,7 +5392,7 @@ const $scope = constants?.$scope || function()
                     BooleanOption,
                     Result
                 },
-
+            GenericObject,
             ComparatorFactory,
             Finder,
             VisitedSet,
