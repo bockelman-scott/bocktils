@@ -462,12 +462,6 @@ const { _ud = "undefined", $scope } = constants;
         return implementors;
     };
 
-    function getTypeHint( pTypeHint, pValue )
-    {
-        let type = lcase( asString( pTypeHint || typeof pValue ) );
-        return JS_TYPES.includes( type ) ? type : typeof pValue;
-    }
-
     /**
      * Returns an object whose keys are the values of the specified object's properties
      * and whose values are the keys pointing to those values in the original

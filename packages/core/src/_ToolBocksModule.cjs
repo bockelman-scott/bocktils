@@ -1475,22 +1475,89 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const resolveObject = ( pObject, pAcceptArray = false ) => isNonNullObj( pObject ) ? (!!pAcceptArray || !isArray( pObject ) ? pObject : {}) : {};
 
-    const isWritable = function( pObj, pPropertyName )
+    function isWritable( pObj, pPropertyName, pIncludeInherited = false )
     {
-        let hasProperty = ({}).hasOwnProperty.call( pObj, pPropertyName );
+        let propertyName = asString( pPropertyName, true );
+
+        if ( isNull( pObj ) || isBlank( propertyName ) )
+        {
+            return false;
+        }
+
+        let hasProperty = ({}).hasOwnProperty.call( pObj, propertyName );
 
         if ( hasProperty )
         {
-            let descriptor = Object.getOwnPropertyDescriptor( pObj, pPropertyName );
+            let descriptor = Object.getOwnPropertyDescriptor( pObj, propertyName );
 
             if ( descriptor )
             {
-                return ((descriptor.writable && descriptor.enumerable) || (isFunc( descriptor.set )));
+                return (descriptor.writable && descriptor.enumerable) || isFunction( descriptor.set );
             }
         }
 
-        return !isReadOnly( pObj );
-    };
+        if ( pIncludeInherited )
+        {
+            const proto = Object.getPrototypeOf( pObj );
+
+            if ( isNonNullObject( proto ) && Object !== proto )
+            {
+                return isWritable( proto, propertyName );
+            }
+        }
+
+        return false;
+    }
+
+    function populateProperties( pTarget, pSource, ...pOmit )
+    {
+        let target = pTarget || {};
+
+        if ( !isReadOnly( target ) )
+        {
+            let source = pSource || {};
+
+            let skip = [...(asArray( pOmit || [] ) || [])];
+
+            objectEntries( source ).forEach( entry =>
+                                             {
+                                                 let prop = ObjectEntry.getKey( entry );
+                                                 let value = ObjectEntry.getValue( entry );
+
+                                                 if ( ( !skip.includes( prop ) || isNull( target[prop] )) && isWritable( target, prop ) )
+                                                 {
+                                                     attemptSilent( () => (target[prop] = target[prop] || (isLikeArray( value ) ? [...(asArray( value || [] ) || [])] : value) || target[prop]) );
+                                                 }
+                                             } );
+        }
+
+        return target;
+    }
+
+    function overwriteProperties( pTarget, pSource, ...pOmit )
+    {
+        let target = pTarget || {};
+
+        if ( !isReadOnly( target ) )
+        {
+            let source = pSource || {};
+
+            let skip = [...(asArray( pOmit || [] ) || [])];
+
+            objectEntries( source ).forEach( entry =>
+                                             {
+                                                 let prop = ObjectEntry.getKey( entry );
+                                                 let value = ObjectEntry.getValue( entry );
+
+                                                 if ( !skip.includes( prop ) && (isNull( target[prop] ) || isWritable( target, prop )) )
+                                                 {
+                                                     attemptSilent( () => (target[prop] = (isLikeArray( value ) ? [...(asArray( value || [] ) || [])] : value) || target[prop]) );
+                                                 }
+                                             } );
+        }
+
+        return target;
+    }
 
     class UUIDGenerator
     {
@@ -2306,6 +2373,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     ObjectEntry.getKey = ( entry ) => isNull( entry ) ? _mt_str : entry?.key || entry[0] || _mt_str;
     ObjectEntry.getValue = ( entry ) => isNull( entry ) ? null : entry?.value || entry[1] || null;
+    ObjectEntry.getType = ( entry ) => isNull( entry ) ? _ud : entry?.type || typeof (ObjectEntry.getValue( entry ));
 
     ObjectEntry.iterate = function( pObject, pVisitor, pVisited = new Set(), pStack = [] )
     {
@@ -7454,8 +7522,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             canBind,
             bindMethod,
 
-            isWritable,
-
             attempt,
             attemptMethod,
             asyncAttempt,
@@ -7479,6 +7545,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             objectMethods,
 
             propertyDescriptors,
+
+            isWritable,
+            populateProperties,
+            overwriteProperties,
 
             toNodePathArray,
             getProperty,
