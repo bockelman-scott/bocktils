@@ -36,15 +36,19 @@ const {
     const {
         ToolBocksModule,
         OBJECT_REGISTRY = $scope()["__BOCK_OBJECT_REGISTRY__"],
+        ObjectEntry,
         populateOptions,
         objectEntries,
         getProperty,
         isWritable,
+        populateProperties,
+        overwriteProperties,
         lock,
         localCopy,
         resolveEvent,
         attempt,
         asyncAttempt,
+        attemptSilent,
         detectCycles,
         $ln,
         no_op
@@ -67,6 +71,7 @@ const {
             isObject,
             isNonNullObject,
             isClass,
+            isReadOnly,
             getClass,
             isError,
             isArray,
@@ -84,7 +89,6 @@ const {
             asObject
         } = typeUtils;
 
-
     const { asString, asInt, isBlank, lcase, ucase, toBool } = stringUtils;
 
     const { asArray, AsyncBoundedQueue } = arrayUtils;
@@ -100,8 +104,18 @@ const {
             strict: false,
             caseSensitive: true,
             type: null,
-            numericThreshold: 0.000000001
+            numericThreshold: 0.000000001,
+            ignored_properties: []
         };
+
+    function identical( pObjA, pObjB )
+    {
+        if ( isNonNullObject( pObjA ) && isNonNullObject( pObjB ) )
+        {
+            return (pObjB === pObjA) || (OBJECT_REGISTRY.getGuid( pObjB ) === OBJECT_REGISTRY.getGuid( pObjA ));
+        }
+        return false;
+    }
 
     const _compareNumbers = function( pFirst, pSecond )
     {
@@ -211,6 +225,8 @@ const {
 
         const options = { ...DEFAULT_SAME_OBJECT_OPTIONS, ...(pOptions || {}) };
 
+        const ignored = asArray( options.ignored_properties || [] ) || [];
+
         if ( isLikeArray( pFirst ) &&
              isLikeArray( pSecond ) &&
              _sameArray( pFirst, pSecond, options ) )
@@ -220,6 +236,10 @@ const {
 
         for( let p in pFirst )
         {
+            if ( ignored.includes( p ) )
+            {
+                continue;
+            }
             if ( !same( getProperty( pFirst, p ), getProperty( pSecond, p ), options, stack.concat( p ) ) )
             {
                 return false;
@@ -228,6 +248,10 @@ const {
 
         for( let p in pSecond )
         {
+            if ( ignored.includes( p ) )
+            {
+                continue;
+            }
             if ( !same( getProperty( pSecond, p ), getProperty( pFirst, p ), options, stack.concat( p ) ) )
             {
                 return false;
@@ -323,204 +347,6 @@ const {
 
         return false;
     };
-
-    /*
-     try
-     {
-     Object.prototype.equals = function( pObject )
-     {
-     return same( this, pObject, true, getClass( this ) );
-     };
-     }
-     catch( ex )
-     {
-     toolBocksModule.reportError( ex, ex.message, S_ERROR, modName + ":: ASSIGN::Object.prototype.equals", this );
-     }*/
-
-    function populateProperties( pTarget, pSource, ...pOmit )
-    {
-        let target = pTarget || {};
-        let source = pSource || {};
-
-        let skip = [...(asArray( pOmit || [] ) || [])];
-
-        objectEntries( source ).forEach( entry =>
-                                         {
-                                             let prop = entry.key;
-                                             let value = entry.value;
-
-                                             if ( ( !skip.includes( prop ) || isNull( target[prop] )) && isWritable( target, prop ) )
-                                             {
-                                                 target[prop] = target[prop] || (isLikeArray( value ) ? [...(asArray( value || [] ) || [])] : value) || target[prop];
-                                             }
-                                         } );
-        return target;
-    }
-
-    function overwriteProperties( pTarget, pSource, ...pOmit )
-    {
-        let target = pTarget || {};
-        let source = pSource || {};
-
-        let skip = [...(asArray( pOmit || [] ) || [])];
-
-        objectEntries( source ).forEach( entry =>
-                                         {
-                                             let prop = entry.key;
-                                             let value = entry.value;
-
-                                             if ( !skip.includes( prop ) && isWritable( target, prop ) )
-                                             {
-                                                 target[prop] = (isLikeArray( value ) ? [...(asArray( value || [] ) || [])] : value) || target[prop];
-                                             }
-                                         } );
-
-        return target;
-    }
-
-    class MemorySink
-    {
-        constructor()
-        {
-
-        }
-
-        save( pEntity )
-        {
-
-        }
-
-        update( pEntity )
-        {
-
-        }
-
-        delete( pEntity )
-        {
-
-        }
-    }
-
-    class EventBroker extends EventTarget
-    {
-        #listeners = [];
-
-        constructor()
-        {
-            super();
-
-            if ( EventBroker.instance )
-            {
-                return EventBroker.instance; // Ensure singleton
-            }
-
-            EventBroker.instance = this;
-        }
-
-        resolveListener( pListener )
-        {
-            if ( isNull( pListener ) )
-            {
-                return no_op;
-            }
-
-            const handlerFunction = isFunction( pListener ) ? pListener : null;
-
-            const handlerObject = isNonNullObject( pListener ) && isFunction( pListener?.handleEvent ) ? pListener : null;
-
-            return handlerFunction || handlerObject || no_op;
-        }
-
-        addEventListener( pType, pListener, pOptions )
-        {
-            let type = asString( pType, true );
-
-            let listener = this.resolveListener( pListener );
-
-            let options = { ...{ capture: false, once: false, passive: false, signal: null }, ...(pOptions || {}) };
-
-            this.#listeners.push( { target: this, type, listener, options } );
-
-            super.addEventListener( pType, pListener, pOptions );
-        }
-
-        dispatchEvent( pEvent, pData, pSource )
-        {
-            const evt = resolveEvent( pEvent, pData );
-            evt.target = evt.target || pSource;
-            return super.dispatchEvent( evt );
-        }
-
-        removeEventListener( pType, pListener, pOptions )
-        {
-            let type = asString( pType, true );
-
-            let listener = this.resolveListener( pListener );
-
-            let options = { ...{ capture: false, once: false, passive: false, signal: null }, ...(pOptions || {}) };
-
-            let obj = { target: this, type, listener, options };
-
-            this.#listeners = this.#listeners.filter( e => !(e.target === this && e.type === type && e.listener === listener && same( e.options, options )) && !same( e, obj ) );
-
-            super.removeEventListener( type, listener, options );
-        }
-    }
-
-    class EventPublisher
-    {
-        #broker;
-        #queue;
-        #storageHandler;
-
-        #timer;
-
-        constructor( pEventBroker, pQueueSize, pStorageHandler )
-        {
-            this.#broker = pEventBroker || new EventBroker();
-            this.#queue = new AsyncBoundedQueue( pQueueSize );
-            this.#storageHandler = pStorageHandler || new MemorySink();
-        }
-
-        async publish( pEvent, pData, pSource )
-        {
-            this.#broker.dispatchEvent( pEvent, pData, pSource );
-        }
-
-        async subscribe( pType, pListener, pOptions )
-        {
-            this.#broker.addEventListener( pType, pListener, pOptions );
-        }
-
-        async unsubscribe( pType, pListener, pOptions )
-        {
-            this.#broker.removeEventListener( pType, pListener, pOptions );
-        }
-
-        async enqueue( pEvent, pData, pSource )
-        {
-            const evt = resolveEvent( pEvent, pData );
-            this.#queue.enQueue( evt );
-
-            if ( isNull( this.#timer ) )
-            {
-                const me = this;
-
-                const func = asyncAttempt( async() =>
-                                           {
-
-                                           } );
-
-                this.#timer = setInterval( func, 100 );
-            }
-        }
-
-        async _processQueuedEvents()
-        {
-
-        }
-    }
-
 
     class BockEntity
     {
@@ -633,6 +459,7 @@ const {
             {
                 return asString( pOther?.name, true ) === asString( this.name, true );
             }
+            return false;
         }
 
         static from( pObject )
@@ -674,6 +501,7 @@ const {
             {
                 return asString( pOther?.code, true ) === asString( this.code, true ) && asString( pOther?.description, true ) === asString( this.description, true );
             }
+            return false;
         }
 
         static from( pObject )
@@ -702,9 +530,8 @@ const {
             BockIdentified,
             BockNamed,
             BockDescribed,
-            populateProperties,
-            overwriteProperties,
             asObject,
+            identical,
             same
         };
 

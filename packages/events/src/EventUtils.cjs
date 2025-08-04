@@ -566,10 +566,154 @@ const { _ud = "undefined", $scope } = constants;
         return obj;
     };
 
+
+    class MemorySink
+    {
+        constructor()
+        {
+
+        }
+
+        save( pEntity )
+        {
+
+        }
+
+        update( pEntity )
+        {
+
+        }
+
+        delete( pEntity )
+        {
+
+        }
+    }
+
+    class EventBroker extends EventTarget
+    {
+        #listeners = [];
+
+        constructor()
+        {
+            super();
+
+            if ( EventBroker.instance )
+            {
+                return EventBroker.instance; // Ensure singleton
+            }
+
+            EventBroker.instance = this;
+        }
+
+        resolveListener( pListener )
+        {
+            if ( isNull( pListener ) )
+            {
+                return no_op;
+            }
+
+            const handlerFunction = isFunction( pListener ) ? pListener : null;
+
+            const handlerObject = isNonNullObject( pListener ) && isFunction( pListener?.handleEvent ) ? pListener : null;
+
+            return handlerFunction || handlerObject || no_op;
+        }
+
+        addEventListener( pType, pListener, pOptions )
+        {
+            let type = asString( pType, true );
+
+            let listener = this.resolveListener( pListener );
+
+            let options = { ...{ capture: false, once: false, passive: false, signal: null }, ...(pOptions || {}) };
+
+            this.#listeners.push( { target: this, type, listener, options } );
+
+            super.addEventListener( pType, pListener, pOptions );
+        }
+
+        dispatchEvent( pEvent, pData, pSource )
+        {
+            const evt = resolveEvent( pEvent, pData );
+            evt.target = evt.target || pSource;
+            return super.dispatchEvent( evt );
+        }
+
+        removeEventListener( pType, pListener, pOptions )
+        {
+            let type = asString( pType, true );
+
+            let listener = this.resolveListener( pListener );
+
+            let options = { ...{ capture: false, once: false, passive: false, signal: null }, ...(pOptions || {}) };
+
+            let obj = { target: this, type, listener, options };
+
+            this.#listeners = this.#listeners.filter( e => !(e.target === this && e.type === type && e.listener === listener && same( e.options, options )) && !same( e, obj ) );
+
+            super.removeEventListener( type, listener, options );
+        }
+    }
+
+    class EventPublisher
+    {
+        #broker;
+        #queue;
+        #storageHandler;
+
+        #timer;
+
+        constructor( pEventBroker, pQueueSize, pStorageHandler )
+        {
+            this.#broker = pEventBroker || new EventBroker();
+            this.#queue = new AsyncBoundedQueue( pQueueSize );
+            this.#storageHandler = pStorageHandler || new MemorySink();
+        }
+
+        async publish( pEvent, pData, pSource )
+        {
+            this.#broker.dispatchEvent( pEvent, pData, pSource );
+        }
+
+        async subscribe( pType, pListener, pOptions )
+        {
+            this.#broker.addEventListener( pType, pListener, pOptions );
+        }
+
+        async unsubscribe( pType, pListener, pOptions )
+        {
+            this.#broker.removeEventListener( pType, pListener, pOptions );
+        }
+
+        async enqueue( pEvent, pData, pSource )
+        {
+            const evt = resolveEvent( pEvent, pData );
+            this.#queue.enQueue( evt );
+
+            if ( isNull( this.#timer ) )
+            {
+                const me = this;
+
+                const func = asyncAttempt( async() =>
+                                           {
+
+                                           } );
+
+                this.#timer = setInterval( func, 100 );
+            }
+        }
+
+        async _processQueuedEvents()
+        {
+
+        }
+    }
+
     let mod =
         {
             dependencies,
-            classes: { Dispatcher, BespokeEvent, CustomEvent },
+            classes: { Dispatcher, BespokeEvent, CustomEvent, EventBroker, EventPublisher },
             Dispatcher,
             resolveEvent,
             resolveEventName,
@@ -583,7 +727,9 @@ const { _ud = "undefined", $scope } = constants;
             generateAbortController,
             generateCancelableHandlerOptions,
             replaceEventHandler,
-            killEvent
+            killEvent,
+            EventPublisher,
+            EventBroker
         };
 
     mod = toolBocksModule.extend( mod );
