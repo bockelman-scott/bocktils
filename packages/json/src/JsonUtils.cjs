@@ -61,6 +61,7 @@ const {
         isNonNullObject,
         isNonNullValue,
         isReadOnly,
+        isLikeArray,
         toObjectLiteral
     } = typeUtils;
 
@@ -370,6 +371,13 @@ const {
         return result;
     };
 
+    function asObject( pObject )
+    {
+        return isNonNullObject( pObject ) || isLikeArray( pObject ) ?
+               pObject :
+               attempt( () => parseJson( pObject ) );
+    }
+
     let mod =
         {
             dependencies,
@@ -386,6 +394,7 @@ const {
             containsInterpolatableContent,
             pendingInterpolation,
             buildPathExpression,
+            asObject,
             toObjectLiteral,
             bruteForceJson,
             cherryPick,

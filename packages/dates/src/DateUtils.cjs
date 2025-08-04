@@ -55,6 +55,7 @@ const { _ud = "undefined", $scope } = constants;
         isNonNullObject,
         isValidDateOrNumeric,
         isValidDateInstance,
+        toDecimal,
         clamp
     } = typeUtils;
 
@@ -80,7 +81,21 @@ const { _ud = "undefined", $scope } = constants;
 
     let resolveDate = ( pDate ) => isDate( pDate ) ? pDate : isNumeric( pDate ) ? new Date( asInt( pDate ) ) : Now();
 
-    const asDate = ( pVal ) => resolveDate( ( !isNull( pVal ) && (isDate( pVal ) || isDateString( pVal ))) ? new Date( pVal || new Date() ) || new Date() : new Date() );
+    const asDate = ( pVal ) =>
+    {
+        let date = pVal;
+
+        if ( !isNull( pVal ) && (isDate( pVal ) || isDateString( pVal )) )
+        {
+            date = new Date( pVal || new Date() ) || new Date();
+        }
+        else if ( isNumeric( pVal ) )
+        {
+            date = new Date( asInt( toDecimal( pVal ) ) );
+        }
+
+        return resolveDate( date );
+    };
 
     const daysAgo = ( pDays = 1 ) => new Date( Date.now() - (ONE_DAY * Math.max( 1, asInt( pDays ) )) );
 
@@ -2188,7 +2203,9 @@ const { _ud = "undefined", $scope } = constants;
             mergeOptions,
             merge,
             Now,
-            rxTz
+            rxTz,
+            asDate,
+            daysAgo
         };
 
     mod = modulePrototype.extend( mod );
