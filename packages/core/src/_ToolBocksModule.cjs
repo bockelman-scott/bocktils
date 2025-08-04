@@ -957,7 +957,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         let hoursPart = (hours > 0) ? (_asStr( hours, true ).padStart( 2, "0" ) + ":") : "00:";
         let minutesPart = (minutes > 0) ? ((hours > 0) ? (_asStr( minutes, true ).padStart( 2, "0" ) + ".") : (_asStr( minutes, true ) + ".")) : "00.";
-        let secondsPart = (minutes > 0 || hours > 0) ? _asStr( seconds, true ).padStart( 2, "0" ) : _asStr( seconds, true ) || "00";
+        let secondsPart = (minutes > 0 || hours > 0) ? _asStr( seconds, true ).padStart( 2, "0" ) : _asStr( seconds, true ).padStart( 2, "0" ) || "00";
 
         if ( hours > 0 || minutes > 0 || seconds > 0 )
         {
@@ -1477,9 +1477,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     function isWritable( pObj, pPropertyName, pIncludeInherited = false )
     {
-        let propertyName = asString( pPropertyName, true );
+        let propertyName = _asStr( pPropertyName ).trim();
 
-        if ( isNull( pObj ) || isBlank( propertyName ) )
+        if ( isNull( pObj ) || (_mt_str === propertyName) )
         {
             return false;
         }
@@ -1517,7 +1517,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             let source = pSource || {};
 
-            let skip = [...(asArray( pOmit || [] ) || [])];
+            let skip = [...((pOmit || []) || [])];
 
             objectEntries( source ).forEach( entry =>
                                              {
@@ -1542,7 +1542,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             let source = pSource || {};
 
-            let skip = [...(asArray( pOmit || [] ) || [])];
+            let skip = [...((pOmit || []) || [])];
 
             objectEntries( source ).forEach( entry =>
                                              {
