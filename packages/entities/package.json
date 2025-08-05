@@ -1,0 +1,20 @@
+{
+  "name": "@toolbocks/common",
+  "version": "1.0.0",
+  "description": "Modules for handling functions, objects, and JSON, including ability to parse or stringify recursive/circular-dependent structures",
+  "main": "src/CommonUtils.cjs",
+  "dependencies": {
+    "@toolbocks/core": "^1.0.0",
+    "@toolbocks/json": "^1.0.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "scripts": {
+    "test": "jest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bockelman-scott/bocktils.git"
+  }
+}

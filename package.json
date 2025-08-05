@@ -9,8 +9,12 @@
     "@dotenvx/dotenvx": "^1.44.1",
     "@toolbocks/all": "file:packages",
     "adm-zip": "^0.5.16",
+    "body-parser": "^2.2.0",
+    "cookie-parser": "^1.4.7",
+    "express": "^5.1.0",
     "lerna": "^8.1.9",
-    "mimetics": "^1.0.4"
+    "mimetics": "^1.0.4",
+    "multer": "^2.0.2"
   },
   "type": "commonjs",
   "devDependencies": {
