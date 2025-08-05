@@ -74,7 +74,7 @@ const jsonUtils = require( "@toolbocks/json" );
 /**
  * Imports the EntityUtils module for the base classes available.
  */
-const entityUtils = require( "../../common/src/EntityUtils.cjs" );
+const entityUtils = require( "../../entities/src/EntityUtils.cjs" );
 
 /**
  * Imports the HttpConstants that define common aspects of the HTTP protocol

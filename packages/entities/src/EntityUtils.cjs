@@ -95,7 +95,7 @@ const {
 
     const { asJson, parseJson } = jsonUtils;
 
-    const modName = "EntityUtils";
+    const modName = "BockEntities";
 
     const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 

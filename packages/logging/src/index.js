@@ -33,7 +33,8 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         resolveError,
         lock,
         populateOptions,
-
+        attempt,
+        attemptSilent
     } = moduleUtils;
 
     const {
@@ -1419,6 +1420,253 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         }
     }
 
+    /**
+     * This class defines a no_op 'logger' to indicate that logging is not required.
+     * It is useful for passing to methods or functions that require or expect an instance of ILogger
+     */
+    class NullLogger extends EventTarget
+    {
+        constructor()
+        {
+            super();
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
+        _log( pLevel, ...pData )
+        {
+            // no_op for the null logger
+        }
+
+        log()
+        {
+            no_op();
+        }
+
+        info()
+        {
+            no_op();
+        }
+
+        warn()
+        {
+            no_op();
+        }
+
+        error()
+        {
+            no_op();
+        }
+
+        debug()
+        {
+            no_op();
+        }
+
+        trace()
+        {
+            no_op();
+        }
+
+        async _appendToFile( ...pData )
+        {
+            no_op();
+        }
+
+        clone()
+        {
+            return new this.constructor[Symbol.species]();
+        }
+    }
+
+    const NULL_LOGGER = new NullLogger();
+
+    /**
+     * A very simple wrapper for the console (or another console-like object).
+     * Prepends the level and timestamp to the message(s) being logged.
+     *
+     * If this is instantiated with a logger other than the console, alias konsole,
+     * the calls to the logging methods are delegated to that logger
+     * without any additional formatting specified or values prepended to the message(s)
+     */
+    class SimpleLogger extends NullLogger
+    {
+        #logger = konsole || console;
+
+        #addFormatting = false;
+
+        #emitEvents = false;
+
+        /**
+         * Constructs an instance of the class and initializes the logger and (optional) log file path.
+         *
+         * @param {ILogger} [pLogger=konsole] - The logger instance to use. Defaults to `konsole` if not provided.
+         *
+         * @param pEmitEvents
+         * @return {SimpleLogger} A new instance of the SimpleLogger class.
+         */
+        constructor( pLogger = konsole, pEmitEvents = false )
+        {
+            super();
+
+            this.#emitEvents = !!pEmitEvents;
+
+            this.#logger = (ToolBocksModule.isLogger( pLogger ) ? pLogger : konsole) || konsole;
+
+            if ( this.#logger instanceof this.constructor )
+            {
+                let loopCount = 0;
+
+                while ( this.#logger instanceof this.constructor && ++loopCount < 10 )
+                {
+                    this.#logger = this.#logger.logger;
+                }
+            }
+
+            if ( isNull( this.#logger ) || !ToolBocksModule.isLogger( this.#logger ) )
+            {
+                this.#logger = konsole;
+            }
+
+            if ( konsole === this.#logger )
+            {
+                this.#addFormatting = true;
+            }
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
+        get logger()
+        {
+            return this.#logger;
+        }
+
+        get emitEvents()
+        {
+            return !!this.#emitEvents;
+        }
+
+        static formatTimeStamp( pDate )
+        {
+            let timestamp = isDate( pDate ) ? (pDate || new Date()) : new Date();
+
+            let s = asString( timestamp.getFullYear(), true ).padStart( 4, "0" ) + "-" +
+                    asString( timestamp.getMonth() + 1, true ).padStart( 2, "0" ) + "-" +
+                    asString( timestamp.getDate(), true ).padStart( 2, "0" ) + " " +
+                    asString( timestamp.getHours(), true ).padStart( 2, "0" ) + ":" +
+                    asString( timestamp.getMinutes(), true ).padStart( 2, "0" ) + "." +
+                    asString( timestamp.getSeconds(), true ).padStart( 2, "0" ) + "," +
+                    asString( timestamp.getMilliseconds(), true ).padStart( 3, "0" ) + " -> ";
+
+            return asString( s );
+        }
+
+        /**
+         * Internal, intended to be 'private' or 'protected', method for writing to the log
+         * @param {string} [pLevel="log"] The log level, which must be one of "log", "info", "warn", "error", "debug", or "trace"
+         * @param {...*} pData One or more values to write to the log
+         *
+         * @private
+         */
+        _log( pLevel, ...pData )
+        {
+            let level = lcase( asString( pLevel, true ) );
+
+            level = ["log", "info", "warn", "error", "debug", "trace"].includes( level ) ? level : "log";
+
+            let msg = [...pData];
+
+            if ( this.#addFormatting )
+            {
+                let TSP = SimpleLogger.formatTimeStamp( new Date() );
+
+                let lvl = asString( ("log" === level ? "info" : level), true );
+                let LVL = ("[" + ucase( lvl ) + "]").padEnd( 8, _spc );
+
+                msg.unshift( TSP );
+                msg.unshift( LVL );
+            }
+
+            let lgr = this.#logger || konsole;
+
+            if ( this === lgr )
+            {
+                lgr = konsole || console;
+            }
+
+            if ( isFunction( lgr[level] ) )
+            {
+                try
+                {
+                    lgr[level].call( lgr, ...msg );
+                }
+                catch( e )
+                {
+                    // ignore the error and log the message(s) to the console
+                    attempt( () => (konsole || console).log( ...msg ) );
+                }
+            }
+            else if ( isFunction( lgr.log ) )
+            {
+                attempt( () => lgr.log( ...msg ) );
+            }
+            else
+            {
+                attempt( () => (konsole || console).log( ...msg ) );
+            }
+
+            if ( this.emitEvents )
+            {
+                const me = this;
+                attemptSilent( () => me.dispatchEvent( new ModuleEvent( level, [...msg], { message: [...msg].join( "\n" ) } ) ) );
+            }
+        }
+
+        log( ...pData )
+        {
+            const me = this;
+            attempt( () => me._log( "log", ...pData ) );
+        }
+
+        info( ...pData )
+        {
+            const me = this;
+            attempt( () => me._log( "info", ...pData ) );
+        }
+
+        warn( ...pData )
+        {
+            const me = this;
+            attempt( () => me._log( "warn", ...pData ) );
+        }
+
+        error( ...pData )
+        {
+            const me = this;
+            attempt( () => me._log( "error", ...pData ) );
+        }
+
+        debug( ...pData )
+        {
+            const me = this;
+            attempt( () => me._log( "debug", ...pData ) );
+        }
+
+        trace( ...pData )
+        {
+            const me = this;
+            attempt( () => me._log( "trace", ...pData ) );
+        }
+    }
+
+    const SIMPLE_LOGGER = new SimpleLogger( konsole );
+
     let mod =
         {
             dependencies,
@@ -1433,7 +1681,9 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                     Logger,
                     AsyncLogger,
                     BufferedLogger,
-                    ConsoleLogger
+                    ConsoleLogger,
+                    SimpleLogger,
+                    NullLogger
                 },
             DEFAULT_TEMPLATE,
             DEFAULT_ERROR_TEMPLATE,
@@ -1451,6 +1701,10 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             resolveSource,
             resolveFormatter,
             resolveFilter,
+            SimpleLogger,
+            NullLogger,
+            SIMPLE_LOGGER,
+            NULL_LOGGER
         };
 
     // makes the properties of mod available as properties and methods of the modulePrototype

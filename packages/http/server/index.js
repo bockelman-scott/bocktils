@@ -1,7 +1,7 @@
 const core = require( "@toolbocks/core" );
 const datesModule = require( "@toolbocks/dates" );
-
 const jsonUtils = require( "@toolbocks/json" );
+const commonUtils = require( "@toolbocks/common" );
 
 const { moduleUtils, constants } = core;
 
@@ -9,15 +9,17 @@ const { DateUtils } = datesModule;
 
 const { asJson, parseJson } = jsonUtils;
 
-const FetchUtils = require( "./src/FetchUtils.cjs" );
-const HttpCacheUtils = require( "./src/HttpCache.cjs" );
-const HttpConstants = require( "./src/HttpConstants.cjs" );
-const HttpHeadersUtils = require( "./src/HttpHeaders.cjs" );
-const HttpRequestUtils = require( "./src/HttpRequest.cjs" );
-const HttpResponseUtils = require( "./src/HttpResponse.cjs" );
-const HttpStorageUtils = require( "./src/HttpStorage.cjs" );
-const ResponseDataModule = require( "./src/ResponseData.js" );
-const HttpClientUtils = require( "./src/HttpClient.js" );
+const { entityUtils } = commonUtils;
+
+const FetchUtils = require( "../src/FetchUtils.cjs" );
+const HttpCacheUtils = require( "../src/HttpCache.cjs" );
+const HttpConstants = require( "../src/HttpConstants.cjs" );
+const HttpHeadersUtils = require( "../src/HttpHeaders.cjs" );
+const HttpRequestUtils = require( "../src/HttpRequest.cjs" );
+const HttpResponseUtils = require( "../src/HttpResponse.cjs" );
+const HttpStorageUtils = require( "../src/HttpStorage.cjs" );
+const ResponseDataModule = require( "../src/ResponseData.js" );
+const HttpClientUtils = require( "../src/HttpClient.js" );
 
 /** define a variable for typeof undefined **/
 const { _ud = "undefined" } = constants;
@@ -36,7 +38,7 @@ const $scope = constants?.$scope || function()
 (function exposeModule()
 {
     // defines a key we can use to store this module in global scope
-    const INTERNAL_NAME = "__BOCK__HTTP_UTILS__";
+    const INTERNAL_NAME = "__BOCK__HTTP_SERVER_UTILS__";
 
     // if we've already executed this code, return the module
     if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
@@ -51,7 +53,7 @@ const $scope = constants?.$scope || function()
         CustomEvent = ModuleEvent;
     }
 
-    const modName = "HttpUtils";
+    const modName = "HttpServerUtils";
 
     const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
@@ -202,8 +204,10 @@ const $scope = constants?.$scope || function()
                     core,
                     datesModule,
                     jsonUtils,
+                    commonUtils,
                     moduleUtils,
                     DateUtils,
+                    entityUtils,
                     FetchUtils,
                     HttpCacheUtils,
                     HttpConstants,

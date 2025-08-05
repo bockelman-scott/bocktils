@@ -1,8 +1,8 @@
 {
-  "name": "@toolbocks/common",
+  "name": "@toolbocks/entities",
   "version": "1.0.0",
   "description": "Modules for handling functions, objects, and JSON, including ability to parse or stringify recursive/circular-dependent structures",
-  "main": "src/CommonUtils.cjs",
+  "main": "index.js",
   "dependencies": {
     "@toolbocks/core": "^1.0.0",
     "@toolbocks/json": "^1.0.0"

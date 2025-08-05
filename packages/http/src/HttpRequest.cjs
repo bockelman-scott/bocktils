@@ -1307,7 +1307,7 @@ const {
     {
         let req = pRequestOrUrl.request || pRequestOrUrl;
 
-        while ( req.request )
+        while ( isNonNullObject( req ) && isNonNullObject( req.request ) )
         {
             req = req.request;
         }
@@ -1550,7 +1550,7 @@ const {
             // handle W3C standard
             if ( _ud !== typeof Request && req instanceof Request )
             {
-                return new Request( attempt( () => req.clone() ), config );
+                return new Request( attempt( () => req.clone() ) || req, config );
             }
 
             if ( isNull( req ) )
@@ -1566,7 +1566,7 @@ const {
             {
                 if ( req instanceof this.constructor )
                 {
-                    return req.request || req;
+                    return _unwrapRequest( req );
                 }
                 return this._resolveRequestFromObject( req, config );
             }

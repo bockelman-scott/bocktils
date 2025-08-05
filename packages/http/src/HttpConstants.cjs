@@ -29,7 +29,7 @@ const jsonUtils = require( "@toolbocks/json" );
  *
  * @module entityUtils
  */
-const entityUtils = require( "../../common/src/EntityUtils.cjs" );
+const entityUtils = require( "../../entities/src/EntityUtils.cjs" );
 
 /**
  * Establish separate constants for each of the common utilities imported
