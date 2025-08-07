@@ -1772,20 +1772,20 @@ const $scope = constants?.$scope || function()
                     }
                     else if ( responseData.isExceedsRateLimit() )
                     {
-                        let redirects = asInt( pRedirects );
+                        let retries = asInt( pRetries );
 
-                        if ( redirects > asInt( me.maxRedirects || cfg.maxRedirects ) )
+                        if ( retries > 5 )
                         {
                             throw new Error( "Failed to fetch data from " + url + ", Server returned: " + (responseData?.status || "no response") + ", " + asString( responseData.headers ) );
                         }
 
                         let delay = Math.max( responseData.retryAfterMilliseconds, DEFAULT_RETRY_DELAY[status], 100 );
 
-                        delay *= (redirects + 1);
+                        delay *= (retries + 1);
 
                         await asyncAttempt( async() => await sleep( delay ) );
 
-                        return await asyncAttempt( async() => await me.getRequestedData( url, cfg, ++redirects ) );
+                        return await asyncAttempt( async() => await me.getRequestedData( url, cfg, ++retries ) );
                     }
                 }
                 throw new Error( "Failed to fetch data from " + url + ", Server returned: " + (responseData?.status || "no response") );
