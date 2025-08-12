@@ -3709,6 +3709,10 @@ const $scope = constants?.$scope || function()
         constructor( pValue )
         {
             this.#value = (pValue instanceof this.constructor) ? pValue.#value : pValue;
+            while ( !isNull( this.#value ) && (this.#value instanceof this.constructor) )
+            {
+                this.#value = this.#value?.value;
+            }
         }
 
         get value()
@@ -3728,7 +3732,7 @@ const $scope = constants?.$scope || function()
 
         isSome()
         {
-            return (null !== this.#value);
+            return (isDefined( this.#value ) && null !== this.#value);
         }
 
         isNone()
@@ -3905,11 +3909,14 @@ const $scope = constants?.$scope || function()
     {
         #exceptions = [];
 
-        constructor( pValue, pErrors = [] )
+        constructor( pValue, ...pErrors )
         {
             super( pValue );
 
-            this.#exceptions = [].concat( pErrors || [] ).flat();
+            if ( pErrors && isArray( pErrors ) )
+            {
+                this.#exceptions = [...pErrors || []].flat();
+            }
         }
 
         get returnValue()
@@ -3919,7 +3926,7 @@ const $scope = constants?.$scope || function()
 
         get exceptions()
         {
-            return [].concat( this.#exceptions ).flat();
+            return ([].concat( this.#exceptions || [] ).flat()).filter( isError );
         }
 
         get errors()
@@ -3935,7 +3942,12 @@ const $scope = constants?.$scope || function()
 
         hasErrors()
         {
-            return (this.#exceptions?.length || 0) > 0;
+            return $ln( this.exceptions ) > 0;
+        }
+
+        get succeeded()
+        {
+            return !isError( this.value ) && !this.hasErrors();
         }
     }
 
