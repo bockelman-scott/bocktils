@@ -1619,7 +1619,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             let guid = this.#map.get( pObject );
 
-            if ( isNull( guid ) || ObjectRegistry.NOT_REGISTERED === guid )
+            if ( isNull( guid ) || String( guid ).startsWith( ObjectRegistry.NOT_REGISTERED ) )
             {
                 if ( isNull( pObject ) || !(isObj( pObject ) || (this.#registerFunctions && isFunc( pObject ))) )
                 {
@@ -2970,7 +2970,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                                 }
                                 else
                                 {
-                                    obj[key] = this.merge( obj[key], value, visited, stack.concat( ObjectRegistry.DEFAULT_INSTANCE.getGuid( obj[key] ) ).concat( ObjectRegistry.DEFAULT_INSTANCE.getGuid( value ) ) );
+                                    obj[key] = this.merge( obj[key], value, visited, stack.concat( OBJECT_REGISTRY.getGuid( obj[key] ) ).concat( OBJECT_REGISTRY.getGuid( value ) ) );
                                 }
 
                                 break;
@@ -6521,7 +6521,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     ToolBocksModule.MODULE_CACHE = ToolBocksModule.MODULE_CACHE || MODULE_CACHE;
     MODULE_CACHE = ToolBocksModule.MODULE_CACHE;
 
-    ToolBocksModule.OBJECT_REGISTRY = ToolBocksModule.OBJECT_REGISTRY = $scope()["__BOCK_OBJECT_REGISTRY__"] = ($scope()["__BOCK_OBJECT_REGISTRY__"] || new ObjectRegistry());
+    ToolBocksModule.OBJECT_REGISTRY = ToolBocksModule.OBJECT_REGISTRY = $scope()["__BOCK_OBJECT_REGISTRY__"] = ($scope()["__BOCK_OBJECT_REGISTRY__"] || OBJECT_REGISTRY || new ObjectRegistry());
 
     /**
      * Defines a private instance of the ToolBocksModule
@@ -7566,7 +7566,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             $ln,
 
             OBJECT_REGISTRY,
-
+            getGuid: function( pObject )
+            {
+                return (OBJECT_REGISTRY || new ObjectRegistry()).getGuid( pObject );
+            },
             __Error,
             ExecutionEnvironment,
             ExecutionMode,
