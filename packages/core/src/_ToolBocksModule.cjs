@@ -814,7 +814,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      *
      * @returns {number}
      */
-    const $ln = ( pVal, pStrict = false ) => !!pStrict ? parseInt( pVal?.length || pVal?.size || 0 ) : (isArray( pVal ) || isSet( pVal ) || isStr( pVal ) || isMap( pVal ) || isFunc( pVal )) ? parseInt( pVal?.length || pVal?.size || 0 ) : -1;
+    const $ln = ( pVal, pStrict = false ) => !pStrict ? parseInt( pVal?.length || pVal?.size || 0 ) : (isArray( pVal ) || isSet( pVal ) || isStr( pVal ) || isMap( pVal ) || isFunc( pVal )) ? parseInt( pVal?.length || pVal?.size || 0 ) : -1;
 
     /**
      * Converts the input into a string representation.
@@ -2421,7 +2421,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return visitor;
     };
 
-    const isValidEntry = e => isArray( e ) && !(isNull( e[0] ) || isNull( e[1] ));
+    const isValidEntry = e => isArray( e ) && $ln(e) > 1 && !(isNull( e[0] ) || isNull( e[1] ));
 
     const stringifyKeys = e => (isArray( e ) && (_symbol !== typeof e[0])) ? [(_mt_str + (e?.key || e[0])).trim().replace( /^#/, _mt_str ), (e?.value || e[1])] : isNull( e ) ? [_mt_str, null] : e;
 
@@ -2776,6 +2776,19 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     }
 
     const isInfiniteLoop = ( object, visited, stack, depth ) => visited.has( object ) || detectCycles( stack, 5, 5 ) || depth > MAX_STACK_SIZE;
+
+
+    ObjectEntry.isValidEntry = function( pEntry, pLax = false )
+    {
+        let valid = !isNull( pEntry ) && ((pEntry instanceof ObjectEntry) && pEntry.isValid());
+
+        if ( !valid && !!pLax )
+        {
+            valid = isValidEntry( pEntry );
+        }
+
+        return valid;
+    };
 
     const DEFAULT_IS_LITERAL_OPTIONS =
         {
