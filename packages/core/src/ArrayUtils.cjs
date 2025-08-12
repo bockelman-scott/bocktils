@@ -4442,6 +4442,21 @@ const $scope = constants?.$scope || function()
             return null;
         }
 
+        get head()
+        {
+            return this.peek();
+        }
+
+        get tail()
+        {
+            const len = this.size;
+            if ( len > 0 )
+            {
+                return this.#arr[len - 1];
+            }
+            return null;
+        }
+
         indexOf( pElem )
         {
             let index = -1;
