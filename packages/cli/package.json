@@ -1,0 +1,20 @@
+{
+  "name": "@toolbocks/cli",
+  "version": "1.0.0",
+  "description": "Modules for handling command line arguments and running command-line scripts/applications",
+  "main": "index.js",
+  "dependencies": {
+    "@toolbocks/core": "^1.0.0",
+    "@toolbocks/json": "^1.0.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "scripts": {
+    "test": "jest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bockelman-scott/bocktils.git"
+  }
+}
