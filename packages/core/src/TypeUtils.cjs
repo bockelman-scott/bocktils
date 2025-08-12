@@ -3884,6 +3884,32 @@ const $scope = constants?.$scope || function()
     }
 
     /**
+     * This class is used to represent a succsul result from a function with no return value
+     */
+    class VOID
+    {
+        #valid = true;
+
+        constructor( pValid = true )
+        {
+            this.#valid = !!pValid;
+        }
+
+        get valid()
+        {
+            return this.#valid;
+        }
+    }
+
+    VOID.OK = lock( new VOID( true ) );
+    VOID.ERROR = lock( new VOID( false ) );
+
+    function isVoid( pVal )
+    {
+        return pVal instanceof VOID;
+    }
+
+    /**
      * This class represents the return value of a function<br>
      * that might return null or throw exceptions<br>
      * <br>
@@ -3915,7 +3941,7 @@ const $scope = constants?.$scope || function()
 
             if ( pErrors && isArray( pErrors ) )
             {
-                this.#exceptions = [...pErrors || []].flat();
+                this.#exceptions = [...pErrors || []].flat().filter( isError );
             }
         }
 
@@ -3937,7 +3963,7 @@ const $scope = constants?.$scope || function()
         addErrors( ...pError )
         {
             this.#exceptions.push( ...pError );
-            this.#exceptions = this.#exceptions.flat();
+            this.#exceptions = this.#exceptions.flat().filter( isError );
         }
 
         hasErrors()
@@ -3948,6 +3974,19 @@ const $scope = constants?.$scope || function()
         get succeeded()
         {
             return !isError( this.value ) && !this.hasErrors();
+        }
+    }
+
+    class VoidResult extends Result
+    {
+        constructor( ...pErrors )
+        {
+            super( new VOID( $ln( [...(pErrors || [])] ) <= 0 ), ...pErrors );
+        }
+
+        get succeeded()
+        {
+            return super.succeeded && isVoid( this.value ) && this.value?.valid;
         }
     }
 
@@ -5402,7 +5441,8 @@ const $scope = constants?.$scope || function()
                     StringOption,
                     NumericOption,
                     BooleanOption,
-                    Result
+                    Result,
+                    VoidResult
                 },
             GenericObject,
             ComparatorFactory,
@@ -5414,7 +5454,8 @@ const $scope = constants?.$scope || function()
             StringOption,
             NumericOption,
             BooleanOption,
-            Result
+            Result,
+            VoidResult
         };
 
     mod = toolBocksModule.extend( mod );
