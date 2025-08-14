@@ -14,7 +14,9 @@ const {
     findDuplicatedSubstrings,
     findCommonSubstrings,
     includesAll,
-    cleanUrl
+    cleanUrl,
+    $last,
+    $nth
 } = stringUtils;
 
 const repoName = "bocktils";

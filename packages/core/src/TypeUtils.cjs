@@ -3939,9 +3939,29 @@ const $scope = constants?.$scope || function()
         {
             super( pValue );
 
-            if ( pErrors && isArray( pErrors ) )
+            let val = pValue;
+
+            let errors = (pErrors && isArray( pErrors )) ? [...(pErrors || [])] : [];
+
+            while ( !isNull( val ) && val instanceof this.constructor )
             {
-                this.#exceptions = [...pErrors || []].flat().filter( isError );
+                errors.push( ...([...(val.exceptions || [])]) );
+                val = val.getOrElse( null );
+            }
+
+            if ( isError( val ) )
+            {
+                errors.push( val );
+            }
+
+            if ( $ln( errors ) )
+            {
+                this.#exceptions.push( ...([...(errors || [])].flat().filter( isError ) || []) );
+            }
+
+            if ( isError( pValue ) )
+            {
+                this.#exceptions.unshift( pValue );
             }
         }
 

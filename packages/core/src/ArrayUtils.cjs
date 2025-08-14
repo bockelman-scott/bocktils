@@ -187,7 +187,7 @@ const $scope = constants?.$scope || function()
         leftOfLast,
         rightOfLast,
         asUtf8ByteArray,
-        cartesian,
+        cartesian
     } = stringUtils;
 
     /** The maximum limit that can be specified for the size of a bounded queue
