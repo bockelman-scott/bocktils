@@ -191,6 +191,7 @@ const $scope = constants?.$scope || function()
             RequestGroupMapper,
             createRateLimitedHttpClient,
 
+            Throttler,
             SimpleRequestThrottler
 
         } = HttpClientUtils;
@@ -247,6 +248,7 @@ const $scope = constants?.$scope || function()
                     RequestWindow,
                     RateLimits,
                     RequestGroupMapper,
+                    Throttler,
                     SimpleRequestThrottler
                 },
             FetchUtils,
@@ -356,6 +358,7 @@ const $scope = constants?.$scope || function()
             RateLimits,
             RequestGroupMapper,
             createRateLimitedHttpClient,
+            Throttler,
             SimpleRequestThrottler,
             asJson,
             parseJson

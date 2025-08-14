@@ -3448,6 +3448,43 @@ const $scope = constants?.$scope || function()
         return new RateLimitedHttpClient( cfg, options, new HttpFetchClient( cfg, options ), ...pRateLimits );
     }
 
+    class Throttler
+    {
+        #numInvocations = 0;
+
+        constructor()
+        {
+        }
+
+        get numInvocations()
+        {
+            return this.#numInvocations;
+        }
+
+        calculateDelay()
+        {
+            return 10;
+        }
+
+        increment()
+        {
+            this.#numInvocations += 1;
+        }
+
+        reset()
+        {
+            this.#numInvocations = 0;
+        }
+    }
+
+    Throttler.isThrottler = function( pThrottler, pStrict = false )
+    {
+        let strict = !!pStrict;
+
+        return isNonNullObject( pThrottler ) &&
+               isFunction( pThrottler.calculateDelay ) &&
+               ( !strict || isFunction( pThrottler.increment ));
+    };
 
     /**
      * A class to throttle request frequency for LeadDocket REST API calls,
@@ -3463,7 +3500,7 @@ const $scope = constants?.$scope || function()
      * - Tracks request history including the last request timestamp.
      * - Determines reset intervals and time until the next reset.
      */
-    class SimpleRequestThrottler
+    class SimpleRequestThrottler extends Throttler
     {
         // Endpoints to which this applies
         // Defaults to all endpoints
@@ -3512,6 +3549,8 @@ const $scope = constants?.$scope || function()
          */
         constructor( pMaxRequests = 250, pPerMilliseconds = 60_000, pLogger = konsole, ...pEndPoints )
         {
+            super();
+
             this.#rateLimitPeriod = Math.max( 1, asInt( pPerMilliseconds ) || 60_000 );
 
             this.#maxRequestsUntilReset = Math.max( (asInt( pMaxRequests ) || 250), (asInt( this.#rateLimitPeriod ) / 250) );
@@ -3868,6 +3907,8 @@ const $scope = constants?.$scope || function()
 
             this.lastRequestExecuted = Date.now();
             this.#requestsSince += 1;
+
+            super.increment();
         }
 
         /**
@@ -3894,6 +3935,8 @@ const $scope = constants?.$scope || function()
                 const me = this;
                 attempt( () => (me || this).#logger.log( "Throttler State:", state ) );
             }
+
+            super.increment();
         }
     }
 
@@ -3950,6 +3993,7 @@ const $scope = constants?.$scope || function()
                     HttpClient,
                     HttpFetchClient,
                     RateLimitedHttpClient,
+                    Throttler,
                     SimpleRequestThrottler
                 },
             HttpAgentConfig,
@@ -3980,6 +4024,7 @@ const $scope = constants?.$scope || function()
             RequestGroupMapper,
             createRateLimitedHttpClient,
 
+            Throttler,
             SimpleRequestThrottler
         };
 
