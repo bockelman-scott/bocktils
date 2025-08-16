@@ -1154,21 +1154,21 @@ describe( "toBool", () =>
               expect( b ).toBe( true );
           } );
 
-/*
-    test( "Boolean(true).evaluate === true",
-          () =>
-          {
-              let b = (new Boolean( true )).evaluate();
-              expect( b ).toBe( true );
-          } );
+    /*
+     test( "Boolean(true).evaluate === true",
+     () =>
+     {
+     let b = (new Boolean( true )).evaluate();
+     expect( b ).toBe( true );
+     } );
 
-    test( "Boolean(false).evaluate === false",
-          () =>
-          {
-              let b = (new Boolean( false )).evaluate();
-              expect( b ).toBe( false );
-          } );
-*/
+     test( "Boolean(false).evaluate === false",
+     () =>
+     {
+     let b = (new Boolean( false )).evaluate();
+     expect( b ).toBe( false );
+     } );
+     */
 } );
 
 describe( "Line breaks", () =>
@@ -1933,7 +1933,27 @@ describe( "findCommonSubstrings", () =>
         const commonSubstrings = findCommonSubstrings( strings );
 
         expect( commonSubstrings ).toEqual( ["de", "d"] );
-
-
     } );
+
+    test( "findCommonSubstrings in a set of Address Line 1", () =>
+    {
+        let strings = ["2760 South Highland Ave", "2760 South Highland Ave"];
+
+        let lengths = strings.map( e => e.length );
+
+        let maxLength = Math.max( ...lengths );
+
+        let minLength = Math.min( ...lengths );
+
+        let avg = (minLength + maxLength) / 2;
+
+        let threshold = asInt( 0.50 * avg );
+
+        let commonSubstrings = findCommonSubstrings( strings );
+
+        commonSubstrings = commonSubstrings.filter( e => e.length > threshold );
+
+        // expect( commonSubstrings ).toEqual( ["de", "d"] );
+    } );
+
 } );

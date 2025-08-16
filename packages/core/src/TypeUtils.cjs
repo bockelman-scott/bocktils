@@ -3943,7 +3943,7 @@ const $scope = constants?.$scope || function()
 
             let errors = (pErrors && isArray( pErrors )) ? [...(pErrors || [])] : [];
 
-            while ( !isNull( val ) && val instanceof this.constructor )
+            while ( isNonNullObject( val ) && val instanceof this.constructor )
             {
                 errors.push( ...([...(val.exceptions || [])]) );
                 val = val.getOrElse( null );
