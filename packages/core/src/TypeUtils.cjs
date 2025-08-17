@@ -3995,6 +3995,25 @@ const $scope = constants?.$scope || function()
         {
             return !isError( this.value ) && !this.hasErrors();
         }
+
+        toString()
+        {
+            let s = "{\"Result\":\"" + String( this.getOrElse( "" ) ) + "\"";
+
+            if ( this.hasErrors() )
+            {
+                s += ", \"errors\":\"" + this.exceptions.map( e => "\"" + (e?.message || "an error") + "\"" );
+            }
+
+            s += "}";
+
+            return s.trim();
+        }
+
+        [Symbol.toPrimitive]( pHint )
+        {
+            return this.toString();
+        }
     }
 
     class VoidResult extends Result
