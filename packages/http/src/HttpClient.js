@@ -2035,7 +2035,7 @@ const $scope = constants?.$scope || function()
     {
         if ( isString( pString ) )
         {
-            let s = lcase( asString( pString, true ) ).replaceAll( /\s/g, _usc );
+            let s = lcase( asString( pString, true ) ).replaceAll( /\s/g, asString( pString ).includes( "=" ) ? _mt : _usc );
 
             switch ( s )
             {
@@ -2686,7 +2686,7 @@ const $scope = constants?.$scope || function()
 
                 const vk = part.split( ";" );
 
-                const v = asInt( vk[0] );
+                const v = asInt( asString( vk[0], true ).replaceAll( /\D/g, _mt ) );
                 const k = asString( $ln( vk ) > 1 ? vk[1] : "burst", true );
 
                 const interval = RequestInterval.resolve( k );

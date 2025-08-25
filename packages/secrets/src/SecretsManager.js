@@ -104,12 +104,16 @@ const $scope = constants?.$scope || function()
             ACCESS_TOKEN: "ACCESS-TOKEN",
             API_VERSION: "API-VERSION",
 
+            AUTH_URL: "AUTH-URL",
+
             CLIENT_ID: "CLIENT-ID",
             CLIENT_SECRET: "CLIENT-SECRET",
 
+            ORG_ID: "ORG-ID",
+            USER_ID: "USER-ID",
+
             ADMIN_LOGIN_NAME: "ADMIN_LOGIN-NAME",
-            ADMIN_LOGIN_PWD: "ADMIN_LOGIN-PWD",
-            AUTH_URL: "AUTH-URL"
+            ADMIN_LOGIN_PWD: "ADMIN_LOGIN-PWD"
         };
 
     const createKey = ( pSystemPrefix, pKey ) =>
