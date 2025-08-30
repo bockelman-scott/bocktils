@@ -32,7 +32,7 @@ const {
 
     const { asArray } = arrayUtils;
 
-    const { BockNamed } = entityUtils;
+    const { Dependency, Dependencies } = entityUtils;
 
     const
         {
@@ -56,139 +56,12 @@ const {
 
     const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
-
     /**
-     * Represents a dependency in the system, implementing the INamed interface.
-     *
-     * The Dependency class is used to define entities or components
-     * that can be 'injected' into RequestHandlers or Services
-     *
-     * @class
-     * @augments BockNamed
-     * @extends BockNamed
-     *
-     * @class
-     *
-     * @param {string} pId - The unique identifier for the dependency.
-     * @param {string} pName - The name of the dependency.
+     * Abstract base class for Request Handlers.
+     * Request Handlers are not necessarily directly invoked.
+     * Most Node.js application server frameworks expect route/path/request handlers to be Functions.
+     * We are using this architectural pattern to make dependency-injection more straightforward.
      */
-    class Dependency extends BockNamed
-    {
-        #component;
-        #options;
-
-        /**
-         * Constructs an instance of the class with the provided id, name, component, and options.
-         *
-         * @param {string|number} pId       The unique identifier for the instance.
-         * @param {string} pName            The name of the instance.
-         * @param {Object} pComponent       The component represented by this instance.
-         * @param {Object} [pOptions={}]    Optional component-specific parameters
-         *                                  to configure the instance.
-         *
-         * @return {Object} An instance of the class.
-         */
-        constructor( pId, pName, pComponent, pOptions = {} )
-        {
-            super( pId, pName );
-
-            this.#component = isNonNullObject( pComponent ) || isClass( pComponent ) ? pComponent : this;
-
-            this.#options = populateOptions( pOptions || {}, {} );
-        }
-
-        get options()
-        {
-            return populateOptions( {}, this.#options || {} );
-        }
-
-        // subclasses may need to clone or create a component to return
-        get component()
-        {
-            if ( isNonNullObject( this.#component ) )
-            {
-                if ( isFunction( this.#component.clone ) )
-                {
-                    return this.#component.clone( this.options );
-                }
-                return this.#component;
-            }
-            else if ( isClass( this.#component ) )
-            {
-                return new this.#component( this.options );
-            }
-
-            return this.#component;
-        }
-
-        clone()
-        {
-            return new Dependency( this.id, this.name, this.component );
-        }
-    }
-
-    class Dependencies
-    {
-        #mapById = new Map();
-        #mapByName = new Map();
-
-        constructor( ...pDependencies )
-        {
-            const dependencies = asArray( pDependencies || [] ).filter( e => isNonNullObject( e ) && e instanceof Dependency );
-
-            for( let dependency of dependencies )
-            {
-                this.#mapById.set( dependency.id, dependency );
-                this.#mapByName.set( dependency.name, dependency );
-            }
-        }
-
-        getDependency( pKey )
-        {
-            if ( isNumeric( pKey ) )
-            {
-                return this.#mapById.get( asInt( pKey ) );
-            }
-            return this.#mapByName.get( asString( pKey, true ) );
-        }
-
-        getComponent( pKey )
-        {
-            const dependency = this.getDependency( pKey );
-            return dependency.component;
-        }
-
-        clone()
-        {
-            let values = [...(asArray( objectValues( this.#mapById ) || [] ) || [])];
-
-            values = values.filter( e => isNonNullObject( e ) && e instanceof Dependency );
-
-            values = values.map( e => e.clone() );
-
-            return new Dependencies( ...values );
-        }
-    }
-
-    function resolveDependencies( pDependencies )
-    {
-        if ( isNonNullObject( pDependencies ) )
-        {
-            if ( pDependencies instanceof Dependencies )
-            {
-                return pDependencies;
-            }
-            else
-            {
-                return new Dependencies( ...(asArray( pDependencies || [] )).filter( e => isNonNullObject( e ) && e instanceof Dependency ) );
-            }
-        }
-        else
-        {
-            return new Dependencies();
-        }
-    }
-
     class RequestHandler
     {
         #dependencies;
@@ -196,7 +69,7 @@ const {
 
         constructor( pDependencies, pOptions )
         {
-            this.#dependencies = resolveDependencies( pDependencies );
+            this.#dependencies = Dependencies.resolveDependencies( pDependencies );
 
             this.#options = populateOptions( pOptions || {}, {} );
         }
@@ -208,7 +81,7 @@ const {
 
         get dependencies()
         {
-            return resolveDependencies( this.#dependencies );
+            return Dependencies.resolveDependencies( this.#dependencies );
         }
 
         get options()
@@ -223,6 +96,16 @@ const {
             return new clazz( this.dependencies.clone(), options );
         }
 
+        async start( ...pArgs )
+        {
+
+        }
+
+        async stop( ...pArgs )
+        {
+
+        }
+
         async handleRequest( pRequest, pResponse, pNext )
         {
             // Decorate the Request
@@ -232,9 +115,11 @@ const {
 
             if ( HttpVerb.isVerb( method ) )
             {
-                if ( isFunction( this.handle[toProperCase( method )] ) )
+                const methodName = ("handle" + toProperCase( method ));
+
+                if ( isFunction( this[methodName] ) )
                 {
-                    return this.handle[toProperCase( method )].call( this, request, pResponse, pNext );
+                    return this[methodName].call( this, request, pResponse, pNext );
                 }
             }
 
@@ -287,6 +172,10 @@ const {
         }
     }
 
+    /**
+     * This class (and its subclasses) exists to return new instances of a RequestHandler.
+     * This is to provide scope/thread safety for request handlers.
+     */
     class RequestHandlerFactory
     {
         #dependencies;
@@ -295,7 +184,7 @@ const {
 
         constructor( pHandlerOrClass, pDependencies, pOptions )
         {
-            this.#dependencies = resolveDependencies( pDependencies );
+            this.#dependencies = Dependencies.resolveDependencies( pDependencies );
 
             this.#options = populateOptions( pOptions || {}, {} );
 
@@ -318,12 +207,22 @@ const {
 
         get dependencies()
         {
-            return resolveDependencies( this.#dependencies );
+            return Dependencies.resolveDependencies( this.#dependencies );
         }
 
         get options()
         {
             return populateOptions( {}, this.#options || {} );
+        }
+
+        async start( ...pArgs )
+        {
+
+        }
+
+        async stop( ...pArgs )
+        {
+
         }
 
         get handler()
@@ -347,6 +246,10 @@ const {
         }
     }
 
+    /**
+     * This subclass of RequestHandlerFactory is intended to be associated with a path (or route)
+     * Typically, you might maintain a map of these by path/route.
+     */
     class PathHandlerFactory extends RequestHandlerFactory
     {
         #path;
@@ -363,6 +266,11 @@ const {
         }
     }
 
+    /**
+     * This class exists to hold a collection of PathHandlerFactory instances
+     * and to return the associated factory for a request URL.
+     * Calling getHandlerFunction returns the function to handle requests to a specific URL
+     */
     class RouteHandlersFactory
     {
         #mapByPath = new Map();
@@ -373,19 +281,33 @@ const {
 
             for( let handler of handlers )
             {
-                const handlers = asArray( this.#mapByPath.get( handler.path ) || [] );
+                const key = handler.path || "*";
+
+                const handlers = asArray( this.#mapByPath.get( key ) || [] );
 
                 handlers.push( handler );
 
-                this.#mapByPath.set( handler.path, handlers );
+                this.#mapByPath.set( key, handlers );
             }
         }
 
+        /**
+         * Returns a function that can be provided to an application server to handle a route.
+         * Note that this factory allows assigning a chain of request handlers for each path/route.
+         * The returned function will call each of these in order
+         * until one of them return null, indicating that it has handled the request.
+         * This is an alternative to specifying multiple functions to the application server middleware
+         * or provides that functionality for middleware that does not have a native capacity to chain functions/handlers
+         * @param pPath
+         * @returns {function(*, *, *): Promise<null>}
+         */
         getHandlerFunction( pPath )
         {
             const me = this;
 
-            const handlers = asArray( this.#mapByPath.get( pPath ) || [] );
+            const key = asString( pPath, true ) || "*";
+
+            const handlers = asArray( this.#mapByPath.get( key ) || this.#mapByPath.get( "*" ) || [] );
 
             return async function( pRequest, pResponse, pNext )
             {
@@ -402,6 +324,16 @@ const {
 
                 return result;
             };
+        }
+
+        async start( ...pArgs )
+        {
+
+        }
+
+        async stop( ...pArgs )
+        {
+
         }
     }
 

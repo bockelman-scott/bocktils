@@ -36,11 +36,15 @@ const perfUtils = require( "perf_hooks" );
 
 const core = require( "@toolbocks/core" );
 
+const entityUtils = require( "@toolbocks/entities" );
+
+const logUtils = require( "@toolbocks/logging" );
+
 const secretsModule = require( "@toolbocks/secrets" );
 
-const databaseUtils = require( "./DatabaseUtils.js" );
+// const databaseUtils = require( "./DatabaseUtils.js" );
 
-const requestHandlerUtils = require( "./RequestHandlerUtils.js" );
+const requestHandlerUtils = require( "../src/handler/RequestHandlerFactory.cjs" );
 
 const { constants } = core;
 
@@ -53,7 +57,7 @@ const $scope = constants?.$scope || function()
 
 (function exposeModule()
 {
-    const INTERNAL_NAME = "__BRYSON__NODE_SERVER_UTILS__";
+    const INTERNAL_NAME = "__BOCK__NODE_SERVER_UTILS__";
 
     if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
     {
@@ -88,19 +92,28 @@ const $scope = constants?.$scope || function()
 
     const { asArray } = arrayUtils;
 
+    const { Dependency, Dependencies } = entityUtils;
+
     const PerformanceObserver = perfUtils.PerformanceObserver;
 
-    const { DatabaseFactory } = databaseUtils;
+    const { SimpleLogger } = logUtils;
 
-    const { SecretsManagerFactory, SECRETS_KEYS, getSecretsManager } = secretsModule;
-
-    const { RequestHandler, RequestHandlerFactory } = requestHandlerUtils;
+    const { RequestHandler, PathHandlerFactory, RouteHandlersFactory } = requestHandlerUtils;
 
     const userInfo = os.userInfo( { encoding: "utf-8" } );
 
     const toolBocksModule = new ToolBocksModule( moduleName, INTERNAL_NAME );
 
     const executionMode = toolBocksModule.executionMode || ExecutionMode.MODES.PROD;
+
+    const simpleLogger = new SimpleLogger( konsole );
+
+    let stopServices = function()
+    {
+
+    };
+
+    const defaultRequestHandler = null;
 
     const handleUncaughtException = function( pException, pOrigin )
     {
@@ -110,7 +123,7 @@ const $scope = constants?.$scope || function()
 
     const handleBeforeExit = function()
     {
-        attempt( () => stopDatabase() );
+        attempt( () => stopServices() );
         attempt( () => closeLogger() );
     };
 
@@ -188,21 +201,6 @@ const $scope = constants?.$scope || function()
         process.on( "disconnect", handlers["disconnect"] || handleDisconnect );
     }
 
-    /**
-     * This function checks that the database is running, starts it if not,
-     * and establishes a connection (or connection pool) to be used throughout
-     * (in the form of an AbstractDatabase entity, which decouples persistence from the business logic)
-     */
-    const startDatabase = async function( pStorageHandler, pOptions )
-    {
-        return await asyncAttempt( async() => await pStorageHandler.connect( pOptions ) );
-    };
-
-    const stopDatabase = async function( pStorageHandler, pOptions )
-    {
-        return await asyncAttempt( async() => await pStorageHandler.disconnect( pOptions ) );
-    };
-
     const closeLogger = async function( pLogger )
     {
         if ( isLogger( pLogger ) && isFunction( pLogger.close ) )
@@ -211,12 +209,16 @@ const $scope = constants?.$scope || function()
         }
     };
 
-    function configureRequestParsers( pApplicationServer,
-                                      pCharacterSet = "utf-8",
-                                      pCookieParser = cookieParser,
-                                      pJsonParser = bodyParser,
-                                      pUrlEncodedParser = bodyParser,
-                                      pBodyParser = bodyParser )
+    const DEFAULT_REQUEST_PARSERS =
+        {
+            character_set: "utf-8",
+            cookies: cookieParser,
+            json: bodyParser,
+            urlEncoded: bodyParser,
+            body: bodyParser
+        };
+
+    function configureRequestParsers( pApplicationServer, pParsersConfig = DEFAULT_REQUEST_PARSERS )
     {
         let server = pApplicationServer;
 
@@ -225,15 +227,15 @@ const $scope = constants?.$scope || function()
             throw new IllegalArgumentError( "Server must be a valid Express server" );
         }
 
-        let characterSet = lcase( asString( (pCharacterSet || _mt), true ) ) || "utf-8";
+        let characterSet = lcase( asString( (pParsersConfig?.character_set || _mt), true ) ) || "utf-8";
 
-        let biscuitParser = isFunction( pCookieParser ) ? pCookieParser : cookieParser;
+        let biscuitParser = isFunction( pParsersConfig?.cookies ) ? pParsersConfig.cookies : cookieParser;
 
-        let bodParser = (isFunction( pBodyParser ) || isClass( pBodyParser ) || isNonNullObject( pBodyParser )) && isFunction( pBodyParser?.json ) ? pBodyParser : bodyParser;
+        let bodParser = (isFunction( pParsersConfig?.body ) || isClass( pParsersConfig?.body ) || isNonNullObject( pParsersConfig?.body )) && isFunction( pParsersConfig?.body?.json ) ? pParsersConfig?.body : bodyParser;
 
-        let jsonParser = (isFunction( pJsonParser ) || isClass( pJsonParser ) || isNonNullObject( pJsonParser )) && isFunction( pJsonParser?.json ) ? pJsonParser : bodParser || bodyParser;
+        let jsonParser = (isFunction( pParsersConfig?.json ) || isClass( pParsersConfig?.json ) || isNonNullObject( pParsersConfig?.json )) && isFunction( pParsersConfig?.json?.json ) ? pParsersConfig?.json : bodParser || bodyParser;
 
-        let urlEncodedParser = (isFunction( pUrlEncodedParser ) || isClass( pUrlEncodedParser ) || isNonNullObject( pUrlEncodedParser )) && isFunction( pUrlEncodedParser?.urlencoded ) ? pUrlEncodedParser : bodParser || bodyParser;
+        let urlEncodedParser = (isFunction( pParsersConfig?.urlEncoded ) || isClass( pParsersConfig?.urlEncoded ) || isNonNullObject( pParsersConfig?.urlEncoded )) && isFunction( pParsersConfig?.urlEncoded?.urlencoded ) ? pParsersConfig?.urlEncoded : bodParser || bodyParser;
 
         /**
          * Parses any cookies sent in a request
@@ -298,86 +300,66 @@ const $scope = constants?.$scope || function()
         return server;
     }
 
+    const DEFAULT_PORT = 3000;
+
     class NodeServerController
     {
-        #secretsManager;
-        #storageHandler;
-        #logger;
+        #dependencies = new Dependencies();
+
+        #logger = new SimpleLogger( konsole );
 
         #options = {};
 
         #performanceMonitor;
 
-        #appServer;
         #server;
+        #appServer;
 
         #port;
         #useSsl;
         #keyPath;
         #certPath;
 
-        #requestHandlerFactory;
-        #requestHandlerClass;
+        #routeHandlersFactory;
 
-        #requestHandlers = new Map();
-
-        constructor( pOptions )
+        constructor( pDependencies, pOptions )
         {
             const me = this;
 
             const options = populateOptions( pOptions || {}, {} );
 
-            this.#secretsManager = pSecretsManager || options.secretsManager || getSecretsManager( toolBocksModule.executionMode, "./.env", _mt, pOptions );
+            this.#dependencies = Dependencies.resolveDependencies( pDependencies || pOptions?.dependencies );
 
-            this.#storageHandler = pStorageHandler || options.storageHandler || (new DatabaseFactory( this.#secretsManager.getCachedSecret( SECRETS_KEYS.DATABASE_TYPE ),
-                                                                                                      this.#secretsManager,
-                                                                                                      this.#secretsManager.getCachedSecret( SECRETS_KEYS.SUPPORTED_DATABASE_TYPES ),
-                                                                                                      pOptions )).getDatabaseServer( this.#secretsManager.getCachedSecret( SECRETS_KEYS.DATABASE_TYPE ),
-                                                                                                                                     (this.#secretsManager.getCachedSecret( SECRETS_KEYS.ADMIN_LOGIN_NAME ) || this.#secretsManager.getCachedSecret( SECRETS_KEYS.LOGIN_NAME )),
-                                                                                                                                     this.#secretsManager,
-                                                                                                                                     SECRETS_KEYS.CONNECTION_STRING,
-                                                                                                                                     options );
+            let logger = this.#dependencies?.getDependency( "logger" ) || options.logger || simpleLogger;
 
-            this.#logger = isLogger( pLogger ) ? pLogger : (isLogger( options.logger ) ? options.logger : null);
+            this.#logger = isLogger( logger ) ? logger : (isLogger( options.logger ) ? options.logger : simpleLogger);
 
             this.#options = lock( options );
 
-            this.#port = asInt( options.serverOptions?.port ) || asInt( options.port ) || this.#secretsManager.getCachedSecret( SECRETS_KEYS.PORT );
+            this.#port = asInt( options.server?.port ) || asInt( options.port ) || DEFAULT_PORT;
 
             this.#keyPath = options.keyPath;
             this.#certPath = options.certPath;
 
             this.#useSsl = !!options.useSsl && !isBlank( this.#keyPath ) && !isBlank( this.#certPath );
 
-            this.#appServer = express();
+            this.#appServer = this.#dependencies?.appServer || options.appServer || express();
 
-            this.#requestHandlerFactory = new RequestHandlerFactory( this.secretsManager, this.storageHandler, this.logger, this.options );
-
-            this.#requestHandlerClass = RequestHandler;
+            this.#routeHandlersFactory = options.routeHandlersFactory || new RouteHandlersFactory();
 
             this._processRequestHandlers( options, me );
 
             this._processRequestParsers( options, me );
         }
 
-        get requestHandlerFactory()
+        get routeHandlersFactory()
         {
-            return this.#requestHandlerFactory || new RequestHandlerFactory( this.secretsManager, this.storageHandler, this.logger, this.options );
+            return this.#routeHandlersFactory || new RouteHandlersFactory();
         }
 
-        set requestHandlerFactory( pFactory )
+        set routeHandlersFactory( pFactory )
         {
-            this.#requestHandlerFactory = pFactory instanceof RequestHandlerFactory ? pFactory : new RequestHandlerFactory( this.secretsManager, this.storageHandler, this.logger, this.options );
-        }
-
-        get requestHandlerClass()
-        {
-            return this.#requestHandlerClass || RequestHandler;
-        }
-
-        set requestHandlerClass( pClass )
-        {
-            this.#requestHandlerClass = isClass( pClass ) ? pClass : RequestHandler;
+            this.#routeHandlersFactory = pFactory instanceof RouteHandlersFactory ? pFactory : new RouteHandlersFactory();
         }
 
         _processRequestHandlers( pOptions, pThis )
@@ -415,13 +397,10 @@ const $scope = constants?.$scope || function()
         _processRequestParsers( pOptions, pThis )
         {
             const me = pThis || this;
+
             const options = populateOptions( pOptions, this.#options || me.options || {} );
 
-            this.configureRequestParsers( (options.characterSet || options.charSet || "utf-8"),
-                                          (options.cookieParser || cookieParser),
-                                          (options.jsonParser || bodyParser),
-                                          (options.urlEncodedParser || bodyParser),
-                                          (options.bodyParser || bodyParser || express) );
+            this.configureRequestParsers( options.parsersConfig || options );
         }
 
         get userInfo()
@@ -459,19 +438,9 @@ const $scope = constants?.$scope || function()
             return __dirname + "/" + __filename;
         }
 
-        get secretsManager()
-        {
-            return this.#secretsManager;
-        }
-
-        get systemPrefix()
-        {
-            return this.secretsManager?.system || _mt;
-        }
-
         get logger()
         {
-            return isLogger( this.#logger ) ? this.#logger : konsole;
+            return isLogger( this.#logger ) ? this.#logger : simpleLogger;
         }
 
         set logger( pLogger )
@@ -492,11 +461,6 @@ const $scope = constants?.$scope || function()
             return this.#performanceMonitor;
         }
 
-        get storageHandler()
-        {
-            return this.#storageHandler;
-        }
-
         get appServer()
         {
             this.#appServer = this.#appServer || express();
@@ -511,12 +475,12 @@ const $scope = constants?.$scope || function()
 
         get port()
         {
-            return this.#port || this.secretsManager.getCachedSecret( SECRETS_KEYS.PORT );
+            return asInt( this.#port ) || DEFAULT_PORT;
         }
 
         get useSsl()
         {
-            return this.#useSsl;
+            return !!this.#useSsl;
         }
 
         get keyPath()
@@ -558,21 +522,11 @@ const $scope = constants?.$scope || function()
             addServerEventListeners( pHandlers || {} );
         }
 
-        async startDatabase()
-        {
-            return await asyncAttempt( async() => await startDatabase( this.storageHandler, this.options ) );
-        }
-
-        async stopDatabase()
-        {
-            await asyncAttempt( async() => await stopDatabase( this.storageHandler, this.options ) );
-        }
-
         createRequestHandler( pPath, pFunctionsByVerb, pAddImmediately = false )
         {
             const me = this;
 
-            const factory = this.#requestHandlerFactory || new RequestHandlerFactory( this.secretsManager, this.storageHandler, this.logger, this.options );
+            const factory = this.#routeHandlersFactory || new RequestHandlerFactory( this.secretsManager, this.storageHandler, this.logger, this.options );
             const handler = factory.createRequestHandler( pPath, pFunctionsByVerb, this.secretsManager, this.storageHandler, this.logger, this.options );
 
             attempt( () => me.#requestHandlers.set( handler.path, handler ) );
@@ -629,13 +583,9 @@ const $scope = constants?.$scope || function()
             }
         }
 
-        configureRequestParsers( pCharSet = "utf-8",
-                                 pCookieParser = cookieParser,
-                                 pJsonParser = bodyParser,
-                                 pUrlEncodedParser = bodyParser,
-                                 pBodyParser = bodyParser )
+        configureRequestParsers( pParsersConfig )
         {
-            configureRequestParsers( this.appServer, pCharSet, pCookieParser, pJsonParser, pUrlEncodedParser, pBodyParser );
+            configureRequestParsers( this.appServer, pParsersConfig );
         }
 
         async createHttpServer( pOptions )
@@ -680,6 +630,16 @@ const $scope = constants?.$scope || function()
             return await asyncAttempt( async() => await me.createHttpServer( opts ) );
         }
 
+        async startServices( ...pArgs )
+        {
+            return await asyncAttempt( async() => this.routeHandlersFactory.start() );
+        }
+
+        async stopServices( ...pArgs )
+        {
+            return await asyncAttempt( async() => this.routeHandlersFactory.stop() );
+        }
+
         async startServer( pOptions )
         {
             const me = this;
@@ -688,7 +648,7 @@ const $scope = constants?.$scope || function()
 
             this.addEventHandlers( opts.eventHandlers || {} );
 
-            await asyncAttempt( async() => await me.startDatabase() );
+            await asyncAttempt( async() => await me.startServices( opts ) );
 
             const server = await asyncAttempt( async() => me.createServer( opts ) );
 
@@ -696,7 +656,7 @@ const $scope = constants?.$scope || function()
                      {
                          server.listen( this.port, async() =>
                          {
-                             (this.logger || konsole).info( "Server, " + ((me || this).systemPrefix || "application") + ", listening on port: " + me.port );
+                             (this.logger || konsole).info( "Server listening on port: " + me.port );
                          } );
                      } );
 
@@ -712,22 +672,22 @@ const $scope = constants?.$scope || function()
         {
             const me = this;
 
-            await asyncAttempt( async() => await me.stopDatabase() ).then( () =>
-                                                                           {
-                                                                               attempt( () => me.logger.info( "Stopping database" ) );
-                                                                               konsole.log( "Stopped Database" );
-                                                                           } ).catch( err =>
-                                                                                      {
-                                                                                          konsole.log( err?.message, err, "stopDatabase" );
-                                                                                          toolBocksModule.reportError( err, err?.message || asString( err ), "error", moduleName, "stopDatabase" );
-                                                                                      } );
+            await asyncAttempt( async() => await me.stopServices( me.options ) ).then( () =>
+                                                                                       {
+                                                                                           attempt( () => me.logger.info( "Stopping Services" ) );
+                                                                                           konsole.log( "Stopped Services" );
+                                                                                       } ).catch( err =>
+                                                                                                  {
+                                                                                                      konsole.log( err?.message, err, "stopServices" );
+                                                                                                      toolBocksModule.reportError( err, err?.message || asString( err ), "error", moduleName, "stopServices" );
+                                                                                                  } );
 
             attempt( () => me.#server.close( () =>
                                              {
-                                                 attempt( () => me.logger.info( "Stopping server, " + ((me || this).systemPrefix || "application") ) );
+                                                 attempt( () => (me.logger || konsole).info( "Stopping Server..." ) );
                                                  attempt( () => me.#server.closeAllConnections() );
                                                  attempt( () => closeLogger( me.logger ) );
-                                                 konsole.log( "Stopped Server, " + ((me || this).systemPrefix || "application") );
+                                                 konsole.log( "Stopped Server" );
                                              } ) );
         }
     }

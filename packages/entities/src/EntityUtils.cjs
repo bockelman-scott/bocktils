@@ -517,6 +517,217 @@ const {
         }
     }
 
+    /**
+     * Represents a dependency in the system, implementing the INamed interface.
+     *
+     * The Dependency class is used to define entities or components
+     * that can be 'injected' into RequestHandlers or Services
+     *
+     * @class
+     * @augments BockNamed
+     * @extends BockNamed
+     *
+     * @class
+     *
+     * @param {string} pId - The unique identifier for the dependency.
+     * @param {string} pName - The name of the dependency.
+     */
+    class Dependency extends BockNamed
+    {
+        #component;
+        #options;
+
+        /**
+         * Constructs an instance of the class with the provided id, name, component, and options.
+         *
+         * @param {string|number} pId                The unique identifier for the instance.
+         * @param {string} pName                     The name of the instance.
+         * @param {Object|function} pComponent       The component represented by this instance.
+         * @param {Object} [pOptions={}]             Optional component-specific parameters
+         *                                           to configure the instance.
+         *
+         * @return {Object} An instance of the class.
+         */
+        constructor( pId, pName, pComponent, pOptions = {} )
+        {
+            super( pId, pName );
+
+            this.#component = isNonNullObject( pComponent ) || isClass( pComponent ) ? pComponent : this;
+
+            this.#options = populateOptions( pOptions || {}, {} );
+        }
+
+        get options()
+        {
+            return populateOptions( {}, this.#options || {} );
+        }
+
+        // subclasses may need to clone or create a component to return
+        get component()
+        {
+            if ( isNonNullObject( this.#component ) )
+            {
+                if ( isFunction( this.#component.clone ) )
+                {
+                    return this.#component.clone( this.options );
+                }
+                return this.#component;
+            }
+            else if ( isClass( this.#component ) )
+            {
+                return new this.#component( this.options );
+            }
+
+            return this.#component;
+        }
+
+        clone()
+        {
+            return new Dependency( this.id, this.name, this.component, this.options );
+        }
+
+        async start( ...pArgs )
+        {
+            let comp = this.component;
+            if ( isFunction( comp?.start ) )
+            {
+                return await asyncAttempt( async() => comp.start( ...pArgs ) );
+            }
+            else if ( isFunction( comp?.init ) )
+            {
+                return await asyncAttempt( async() => comp.init( ...pArgs ) );
+            }
+            return this;
+        }
+
+        async init( ...pArgs )
+        {
+            return await this.start( ...pArgs );
+        }
+
+        async stop( ...pArgs )
+        {
+            let comp = this.component;
+            if ( isFunction( comp?.stop ) )
+            {
+                return await asyncAttempt( async() => comp.stop( ...pArgs ) );
+            }
+            return this;
+        }
+
+        async connect( ...pArgs )
+        {
+            let comp = this.component;
+            if ( isFunction( comp?.connect ) )
+            {
+                return await asyncAttempt( async() => comp.connect( ...pArgs ) );
+            }
+            return this;
+        }
+
+        async disconnect( ...pArgs )
+        {
+            let comp = this.component;
+            if ( isFunction( comp?.disconnect ) )
+            {
+                return await asyncAttempt( async() => comp.disconnect( ...pArgs ) );
+            }
+            return this;
+        }
+    }
+
+    class Dependencies
+    {
+        #mapById = new Map();
+        #mapByName = new Map();
+
+        constructor( ...pDependencies )
+        {
+            const dependencies = asArray( pDependencies || [] ).filter( e => isNonNullObject( e ) && e instanceof Dependency );
+
+            for( let dependency of dependencies )
+            {
+                this.#mapById.set( dependency.id, dependency );
+                this.#mapByName.set( dependency.name, dependency );
+            }
+        }
+
+        getDependency( pKey )
+        {
+            if ( isNumeric( pKey ) )
+            {
+                return this.#mapById.get( asInt( pKey ) ) || this.#mapByName.get( asString( pKey, true ) );
+            }
+            return this.#mapByName.get( asString( pKey, true ) );
+        }
+
+        getComponent( pKey )
+        {
+            const dependency = this.getDependency( pKey );
+            return dependency.component || dependency;
+        }
+
+        clone()
+        {
+            let values = [...(asArray( objectValues( this.#mapById ) || [] ) || [])];
+
+            values = values.filter( e => isNonNullObject( e ) && e instanceof Dependency );
+
+            values = values.map( e => e.clone() );
+
+            return new Dependencies( ...values );
+        }
+
+        async startAll( ...pArgs )
+        {
+            let values = [...(asArray( objectValues( this.#mapById ) || [] ) || [])];
+            for( const dependency of values )
+            {
+                await asyncAttempt( async() => dependency.start( ...pArgs ) );
+            }
+            return this;
+        }
+
+        async stopAll( ...pArgs )
+        {
+            let values = [...(asArray( objectValues( this.#mapById ) || [] ) || [])];
+            for( const dependency of values )
+            {
+                await asyncAttempt( async() => dependency.stop( ...pArgs ) );
+            }
+            return this;
+        }
+
+        async disconnectAll( ...pArgs )
+        {
+            let values = [...(asArray( objectValues( this.#mapById ) || [] ) || [])];
+            for( const dependency of values )
+            {
+                await asyncAttempt( async() => dependency.disconnect( ...pArgs ) );
+            }
+            return this;
+        }
+    }
+
+    Dependencies.resolveDependencies = function( pDependencies )
+    {
+        if ( isNonNullObject( pDependencies ) )
+        {
+            if ( pDependencies instanceof Dependencies )
+            {
+                return pDependencies;
+            }
+            else
+            {
+                return new Dependencies( ...(asArray( pDependencies || [] )).filter( e => isNonNullObject( e ) && e instanceof Dependency ) );
+            }
+        }
+        else
+        {
+            return new Dependencies();
+        }
+    };
+
     let mod =
         {
             classes:
@@ -524,12 +735,16 @@ const {
                     BockEntity,
                     BockIdentified,
                     BockNamed,
-                    BockDescribed
+                    BockDescribed,
+                    Dependency,
+                    Dependencies
                 },
             BockEntity,
             BockIdentified,
             BockNamed,
             BockDescribed,
+            Dependency,
+            Dependencies,
             asObject,
             identical,
             same
