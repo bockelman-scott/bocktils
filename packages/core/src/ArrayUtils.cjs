@@ -4272,7 +4272,8 @@ const $scope = constants?.$scope || function()
          * @param {Array<*>|BoundedQueue} [pArr] An array of values to immediately place in the queue<br>
          * <br>
          * <b>NOTE: </b>If an initial array of values is provided,<br>
-         * the size of the queue will be adjusted to be the maximum of the length of that array or the size specified<br>
+         * the size of the queue will be adjusted to be the maximum of the length of that array
+         * or the size specified<br>
          */
         constructor( pSize, pArr = [] )
         {
@@ -5585,7 +5586,7 @@ const $scope = constants?.$scope || function()
         {
             if ( this.length > 0 )
             {
-                return await super.pop();
+                return Promise.resolve( super.pop() );
             }
         }
 
@@ -5593,7 +5594,7 @@ const $scope = constants?.$scope || function()
         {
             if ( this.length > 0 )
             {
-                return super.peek();
+                return Promise.resolve( super.peek() );
             }
         }
 
@@ -5616,7 +5617,7 @@ const $scope = constants?.$scope || function()
                 arr.unshift( await this.pop() );
             }
 
-            return new AsyncBoundedStack( arr );
+            return new AsyncBoundedStack( this.limit, ...(asArray( arr || [] ) || []) );
         }
     }
 

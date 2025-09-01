@@ -34,11 +34,13 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         lock,
         populateOptions,
         attempt,
-        attemptSilent
+        attemptSilent,
+        asyncAttempt
     } = moduleUtils;
 
     const {
         _mt_str,
+        _mt = _mt_str,
         _spc,
         _comma,
         _colon,
@@ -86,18 +88,22 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         isNumeric,
         isNumber,
         isObject,
+        isNonNullObject,
         isFunction,
         isAsyncFunction,
+        isClass,
         isDate,
         isError,
         firstError,
         isEvent,
         firstMatchingType,
+        getClass,
+        getClassName
     } = typeUtils;
 
     const { asString, asInt, isBlank, lcase, ucase, trimLeadingCharacters } = stringUtils;
 
-    const { asArray, varargs, Filters, concatenateConsecutiveStrings, unique } = arrayUtils;
+    const { asArray, varargs, Filters, concatenateConsecutiveStrings, unique, AsyncBoundedStack } = arrayUtils;
 
     const toolBocksModule = new ToolBocksModule( "LoggingUtils", INTERNAL_NAME );
 
@@ -1667,6 +1673,118 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
     const SIMPLE_LOGGER = new SimpleLogger( konsole );
 
+    async function dbg( ...pData )
+    {
+        SIMPLE_LOGGER.debug( ...pData );
+    }
+
+    class CallTrace
+    {
+        #target;
+        #method;
+        #args = [];
+
+        constructor( pTarget, pMethod, ...pArgs )
+        {
+            this.#target = isNonNullObject( pTarget ) || isClass( pTarget ) ? pTarget : $scope();
+            this.#method = isFunction( pMethod ) ? pMethod : function() {};
+            this.#args.push( ...(asArray( pArgs || [] )) );
+
+            if ( isFunction( this.#target?.clone ) )
+            {
+                this.#target = this.#target.clone();
+            }
+
+            this.#args = this.#args.map( e => isFunction( e?.clone ) ? e.clone() : e );
+        }
+
+        get target()
+        {
+            let object = isNonNullObject( this.#target ) || isClass( this.#target ) ? this.#target : $scope();
+            if ( isFunction( object?.clone ) )
+            {
+                return object.clone();
+            }
+            return object || this.#target || $scope();
+        }
+
+        get method()
+        {
+            return isFunction( this.#method ) ? this.#method : function() {};
+        }
+
+        get args()
+        {
+            return asArray( this.#args || [] ).map( e => isFunction( e?.clone ) ? e.clone() : e );
+        }
+
+        toString()
+        {
+            let className = attempt( () => getClassName( this.target ) );
+            let objectName = attempt( () => asString( asString( this.target?.name || this.target?.id || asString( this.target, true ) ) || "<entry>", true ) );
+            let methodName = attempt( () => asString( asString( this.method?.name || this.method, true ) || asString( this.method, true ) || "anonymous", true ) );
+            let argStrings = [objectName, ...asArray( this.args || [] ).map( e => attempt( () => asString( e ) ) )];
+
+            return `${className}.${methodName} (${argStrings.join( _comma )})`;
+        }
+
+        [Symbol.toPrimitive]( pHint )
+        {
+            return attempt( () => this.toString() ) || "CallTrace";
+        }
+
+        async replay()
+        {
+            if ( isFunction( this.method ) )
+            {
+                return asyncAttempt( async() => this.method.call( this.target, ...this.args ) );
+            }
+        }
+    }
+
+    class CallStack extends AsyncBoundedStack
+    {
+        constructor( pLimit, ...pArgs )
+        {
+            super( pLimit, ...pArgs );
+        }
+
+        forEach( pCallback )
+        {
+            let arr = [...(asArray( this || [] ) || [])];
+            arr = arr.reverse();
+            arr.forEach( pCallback );
+        }
+
+        toString()
+        {
+            let s = _mt;
+
+            this.forEach( ( e ) => s += isNull( e ) ? _mt : asString( e.toString(), true ) + "\n" );
+
+            return asString( s );
+        }
+
+        [Symbol.toPrimitive]( pHint )
+        {
+            return attempt( () => this.toString() ) || "CallStack";
+        }
+
+        async addCall( pCallTrace, pMethod, ...pArgs )
+        {
+            if ( pCallTrace instanceof CallTrace )
+            {
+                this.push( pCallTrace );
+            }
+            else
+            {
+                const callTrace = new CallTrace( pCallTrace, pMethod, ...pArgs );
+                this.push( callTrace );
+            }
+            return this;
+        }
+    }
+
     let mod =
         {
             dependencies,
@@ -1703,8 +1821,11 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             resolveFilter,
             SimpleLogger,
             NullLogger,
+            NULL_LOGGER,
             SIMPLE_LOGGER,
-            NULL_LOGGER
+            dbg,
+            CallTrace,
+            CallStack
         };
 
     // makes the properties of mod available as properties and methods of the modulePrototype
