@@ -2421,7 +2421,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return visitor;
     };
 
-    const isValidEntry = e => isArray( e ) && $ln(e) > 1 && !(isNull( e[0] ) || isNull( e[1] ));
+    const isValidEntry = e => isArray( e ) && $ln( e ) > 1 && !(isNull( e[0] ) || isNull( e[1] ));
 
     const stringifyKeys = e => (isArray( e ) && (_symbol !== typeof e[0])) ? [(_mt_str + (e?.key || e[0])).trim().replace( /^#/, _mt_str ), (e?.value || e[1])] : isNull( e ) ? [_mt_str, null] : e;
 
@@ -2773,6 +2773,31 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         const keys = (isNonNullObj( pObject ) ? Object.keys( pObject || {} ) : []) || [];
         objectEntries( pObject ).forEach( e => keys.push( e[0] ) );
         return [...(new Set( keys.filter( e => null != e && isStr( e ) ) ))];
+    }
+
+    function toMap( pObject )
+    {
+        let map = new Map();
+
+        if ( isNonNullObj( pObject ) )
+        {
+            const entries = objectEntries( pObject );
+            if ( $ln( entries ) )
+            {
+                entries.forEach( entry =>
+                                 {
+                                     const key = ObjectEntry.getKey( entry );
+                                     const value = ObjectEntry.getValue( entry );
+
+                                     if ( isStr( key ) && !isNull( value ) )
+                                     {
+                                         map.set( key, value );
+                                     }
+                                 } );
+            }
+        }
+
+        return map;
     }
 
     const isInfiniteLoop = ( object, visited, stack, depth ) => visited.has( object ) || detectCycles( stack, 5, 5 ) || depth > MAX_STACK_SIZE;
@@ -7556,6 +7581,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             objectValues,
             objectKeys,
             objectMethods,
+
+            toMap,
 
             propertyDescriptors,
 

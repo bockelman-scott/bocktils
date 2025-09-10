@@ -2386,6 +2386,43 @@ const $scope = constants?.$scope || function()
         }
     };
 
+    /**
+     * Parses a given input into a date object using a provided parser or parser object.<br>
+     * <br>
+     * The function supports custom parsing mechanisms by invoking the `parse` or `parseDate`
+     * methods of the parser, or the parser itself, if it is a function.<br>
+     * <br>
+     * If the input cannot be parsed or an error occurs during parsing,
+     * the function dispatches an error event and returns null.
+     *
+     * @param {*} input - The input to be parsed into a date.
+     *
+     * @param {Function|Object} dateParser - A function or object responsible for parsing the input.
+     *                                       If an object, it should have a `parse` or `parseDate` method.
+     *
+     * @returns {Date|null} The parsed date object, or null if parsing failed or an error occurs.
+     *
+     * @alias module:TypeUtils.parseDate
+     */
+    const parseDate = ( input, dateParser ) =>
+    {
+        // noinspection JSUnresolvedReference
+        if ( isFunction( dateParser ) || isFunction( dateParser?.parse || dateParser?.parseDate ) )
+        {
+            // noinspection JSUnresolvedReference
+            return attempt( () => (dateParser.parse || dateParser.parseDate || dateParser).call( dateParser, input ) );
+        }
+
+        let date = new Date( input );
+
+        if ( isValidDateInstance( date ) )
+        {
+            return date;
+        }
+
+        return null;
+    };
+
     function _parseDate( pObj, pDateParser )
     {
         let date = null;
@@ -2439,35 +2476,6 @@ const $scope = constants?.$scope || function()
         const date = _parseDate( pObj, pDateParser );
 
         return isDate( date, true ) && isValidDateInstance( date );
-    };
-
-    /**
-     * Parses a given input into a date object using a provided parser or parser object.<br>
-     * <br>
-     * The function supports custom parsing mechanisms by invoking the `parse` or `parseDate`
-     * methods of the parser, or the parser itself, if it is a function.<br>
-     * <br>
-     * If the input cannot be parsed or an error occurs during parsing,
-     * the function dispatches an error event and returns null.
-     *
-     * @param {*} input - The input to be parsed into a date.
-     *
-     * @param {Function|Object} dateParser - A function or object responsible for parsing the input.
-     *                                       If an object, it should have a `parse` or `parseDate` method.
-     *
-     * @returns {Date|null} The parsed date object, or null if parsing failed or an error occurs.
-     *
-     * @alias module:TypeUtils.parseDate
-     */
-    const parseDate = ( input, dateParser ) =>
-    {
-        // noinspection JSUnresolvedReference
-        if ( isFunction( dateParser ) || isFunction( dateParser?.parse || dateParser?.parseDate ) )
-        {
-            // noinspection JSUnresolvedReference
-            return attempt( () => (dateParser.parse || dateParser.parseDate || dateParser).call( dateParser, input ) );
-        }
-        return null;
     };
 
     /**
@@ -5434,6 +5442,7 @@ const $scope = constants?.$scope || function()
             defaultFor,
             castTo,
             toIterable,
+            parseDate,
             firstMatchingType,
             firstValidObject,
             firstPopulatedObject,
