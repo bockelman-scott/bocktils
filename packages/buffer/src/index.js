@@ -208,7 +208,9 @@ const { _ud = "undefined", $scope } = constants;
 
     function isBuffer( pObject )
     {
-        return isArray( pObject ) || isTypedArray( pObject ) || (BufferDefined && pObject instanceof Buffer);
+        return (isArray( pObject ) && asArray( pObject || [] ).every( e => (isNumber( e ) && asInt( e ) < 256) )) ||
+               isTypedArray( pObject ) ||
+               (BufferDefined && pObject instanceof Buffer);
     }
 
     function isTypedBuffer( pObject )
