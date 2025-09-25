@@ -196,6 +196,35 @@ const {
         return !DEBUG && ATOB_DEFINED;
     };
 
+    const getPreamble = function( pBase64Text )
+    {
+        const rxDataProtocol = /^data:/i;
+        const rxPreamble = /^[^;]+;base64,/i;
+
+        const base64Text = asString( (pBase64Text || _mt_str), true ).replace( rxDataProtocol, _mt_str );
+
+        const matches = rxPreamble.exec( base64Text );
+
+        if ( matches && matches.length )
+        {
+            return asString( (matches[1] || matches[0] || _mt_str), true ).replace( /,$/, _mt_str );
+        }
+
+        return _mt_str;
+    };
+
+    const getMediaType = function( pBase64Text, pDefault )
+    {
+        const preamble = getPreamble( pBase64Text );
+        if ( !isBlank( preamble ) )
+        {
+            const parts = preamble.split( ";" );
+            return asString( asString( parts[0], true ).replace( /base64,/i, _mt_str ) || asString( preamble, true ).replace( /;base64,/i, _mt_str ), true );
+        }
+
+        return asString( pDefault, true ) || "text/plain";
+    };
+
     /**
      * Returns a valid base64 encoded string by replacing spaces with '+'
      * and ensuring that the number of characters is a multiple of 4
@@ -389,9 +418,7 @@ const {
 
     const decode = function( pBase64, pSpec = DEFAULT_VARIANT )
     {
-        // const start = Date.now();
-
-        if ( isNull( pBase64 ) || !isValidBase64( asString( pBase64, true ) ) )
+        if ( isNull( pBase64 ) || !(isValidBase64( asString( pBase64, true ) ) || isValidBase64( cleanBase64( asString( pBase64, true ) ) )) )
         {
             return [];
         }
@@ -430,18 +457,7 @@ const {
             {
                 data.push( (block >> ((2 - k) * 8)) & 0xFF );
             }
-
-            /*
-             if ( i % 1_000 === 0 )
-             {
-             console.log( "Still working...", i, "Time elapsed:", Date.now() - start, "ms" );
-             }
-             */
         }
-
-        // const end = Date.now();
-
-        // console.log( "Decoded in:", (end - start), "ms" );
 
         return numPaddingChars > 0 ? data.slice( 0, data.length - numPaddingChars ) : data;
     };
@@ -495,6 +511,8 @@ const {
                 },
             SUPPORTED_VARIANTS,
             DEFAULT_VARIANT,
+            getPreamble,
+            getMediaType,
             isValidBase64,
             cleanBase64,
             encode,
