@@ -193,6 +193,8 @@ const { _ud = "undefined", $scope } = constants;
 
     let toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
+    const RX_NON_DIGITS = /\D/g;
+
     /**
      * These are the default values assumed for number formatting,
      * when calling methods such as asInt or asFloat
@@ -405,7 +407,7 @@ const { _ud = "undefined", $scope } = constants;
     function bytesPerElement( pByteArray )
     {
         const byteArrayClass = getClass( pByteArray );
-        return asInt( byteArrayClass?.BYTES_PER_ELEMENT, 0 ) || asInt( getClassName( byteArrayClass || pByteArray ).replaceAll( /\D/g, _mt_str ) ) / 8;
+        return asInt( byteArrayClass?.BYTES_PER_ELEMENT, 0 ) || asInt( getClassName( byteArrayClass || pByteArray ).replaceAll( RX_NON_DIGITS, _mt_str ) ) / 8;
     }
 
     /**
@@ -2265,11 +2267,11 @@ const { _ud = "undefined", $scope } = constants;
 
     const isTrue = evaluateBoolean;
     const toBool = evaluateBoolean;
-/*
+    /*
 
-    Boolean.prototype.evaluate = Boolean.evaluate = evaluateBoolean;
-    String.prototype.toBool = String.toBool = evaluateBoolean;
-*/
+     Boolean.prototype.evaluate = Boolean.evaluate = evaluateBoolean;
+     String.prototype.toBool = String.toBool = evaluateBoolean;
+     */
 
     /**
      * This function converts all (carriage return + line feed) sequences to line feed only sequences
@@ -3443,6 +3445,27 @@ const { _ud = "undefined", $scope } = constants;
         return [...(new Set( common ))].sort( lengthPriorityComparator( true ) );
     }
 
+    const MIN_PHONE_NUM_LEN = 10;
+
+    function formatPhoneNumber( pPhoneNumber )
+    {
+        let s = asString( pPhoneNumber || _mt );
+
+        if ( !isBlank( s ) && asInt( s.length ) >= MIN_PHONE_NUM_LEN )
+        {
+            s = s.replaceAll( RX_NON_DIGITS, _mt ).trim().replace( /^1/, _mt );
+
+            if ( asInt( s.length ) >= MIN_PHONE_NUM_LEN )
+            {
+                return "(" + s.slice( 0, 3 ) + ") " + s.slice( 3, 6 ) + _hyphen + s.slice( 6, 10 );
+            }
+
+            return asString( s, true ) || _mt;
+        }
+
+        return pPhoneNumber;
+    }
+
     let mod =
         {
             dependencies,
@@ -3507,6 +3530,7 @@ const { _ud = "undefined", $scope } = constants;
             toCamelCase,
             toSnakeCase,
             toProperCase,
+            formatPhoneNumber,
             copyString,
             reverseString,
             capitalize,
