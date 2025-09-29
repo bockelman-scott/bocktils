@@ -2850,6 +2850,7 @@ const { _ud = "undefined", $scope } = constants;
     const MC_OPTIONS =
         {
             prefixes: ["Mc", "Mac", "O'"],
+            exceptions: ["von", "van", "de", "del", "la", "dos", "da", "der", "di", "du", "et", "al", "o'", "mc", "mac"]
         };
 
     /**
@@ -2910,12 +2911,13 @@ const { _ud = "undefined", $scope } = constants;
     const DEFAULT_PROPERCASE_OPTIONS =
         {
             separator: _spc,
-            surnamePrefixes: MC_OPTIONS.prefixes
+            surnamePrefixes: MC_OPTIONS.prefixes,
+            exceptions: MC_OPTIONS.exceptions
         };
 
     /**
-     * Returns a string with the first letter capitalized,
-     * also handling common surnames that include an apostrophe, Mc, or Mac
+     * Returns a string formatted as a name in proper case
+     * handling common surnames that include a hyphen, apostrophe, Mc, or Mac, etc
      * @param pStr the string to convert to ProperCase
      * @param pOptions an object defining the separator to use to split the string into 'words' as well as other behaviors
      * @returns {string}
@@ -2985,6 +2987,89 @@ const { _ud = "undefined", $scope } = constants;
     {
         return toProperCase( this );
     };
+
+    function asProperCaseName( pName, pExceptions = MC_OPTIONS.exceptions )
+    {
+        // convert the name to lowercase and trim
+        let name = _lct( asString( pName, true ) );
+
+        let exceptions = pExceptions || MC_OPTIONS.exceptions;
+
+        let formattedName = asString( name, true );
+
+        // capitalize the first letter of *each word* using word boundary (\b)
+        formattedName = formattedName.replace( /\b([a-z])/g, ( match, char ) =>
+        {
+            return ucase( asString( char, true ) );
+        } );
+
+        // handle specific exceptions such as 'van', 'de', 'dos', 'Mc'
+        // we only apply this if the word is *not* the first word in the name
+        formattedName = formattedName.replace( /\b([a-z]+)\b/g, ( match, word, index ) =>
+        {
+            if ( index > 0 && exceptions.includes( word ) )
+            {
+                // Check if it's an 'O\'...' name before lowercasing 'o\''
+                if ( word === "o'" && formattedName.charAt( index + 2 ).match( /[a-z]/ ) )
+                {
+                    return "O'"; // Keep the 'O' capitalized for O'Reilly, for example
+                }
+                return _lct( word );
+            }
+            return match;
+        } );
+
+        // handle Mc/Mac-like exceptions (e.g., McNamara, McDonald)
+        // capitalize the letter immediately after 'Mc' or 'Mac' if it exists
+        formattedName = formattedName.replace( /(mc|mac)([a-z])/g, ( match, prefix, remaining ) =>
+        {
+            return ucase( prefix ) + ucase( remaining );
+        } );
+
+        // handle hyphens and apostrophes for double capitalization (e.g., Smith-Jones, O'Leary)
+        formattedName = formattedName.replace( /([-' ])([a-z])/g, ( match, separator, remaining ) =>
+        {
+            return separator + ucase( remaining );
+        } );
+
+        // handle Roman Numerals (IV, III) and Ordinals (3rd)
+        formattedName = formattedName.replace( /\b(i{1,3}|iv|v|vi{1,3}|ix|x|[1-9][stndrh]{2})\b/gi, ( match ) =>
+        {
+            return ucase( match );
+        } );
+
+        return asString( formattedName, true ).replace( /\s+/, _spc ).trim();
+    }
+
+    function normalizeName( pFirstName, pLastName, pExceptions=MC_OPTIONS.exceptions, pCompoundFirstNames=[] )
+    {
+        let firstName = asProperCaseName( asString( pFirstName, true ) );
+        let lastName = asProperCaseName( asString( pLastName, true ) );
+
+        if ( firstName === lastName )
+        {
+            const parts = firstName.split( / / );
+            if ( 2 === $ln( parts ) )
+            {
+                firstName = asString( parts[0], true );
+                lastName = asString( parts[1], true );
+            }
+            else if ( $ln( parts ) > 2 )
+            {
+                // find the right place to split
+            }
+        }
+        else if ( $ln( lastName ) > $ln( firstName ) && lastName.startsWith( firstName ) )
+        {
+            lastName = lastName.replace( firstName, _mt ).trim();
+        }
+        else if ( $ln( lastName ) < $ln( firstName ) && firstName.startsWith( lastName ) )
+        {
+            firstName = firstName.replace( lastName, _mt ).trim();
+        }
+
+        return { first: firstName, last: lastName };
+    }
 
     /**
      * Converts a string in "snake case" ( some_variable_name ) into "camel case" ( someVariableName )
