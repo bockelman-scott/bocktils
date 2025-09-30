@@ -2847,10 +2847,11 @@ const { _ud = "undefined", $scope } = constants;
      */
     const ucase = ( pStr ) => asString( pStr, false ).toUpperCase();
 
-    const MC_OPTIONS =
+    const PROPERCASE_OPTIONS =
         {
             prefixes: ["Mc", "Mac", "O'"],
-            exceptions: ["von", "van", "de", "del", "la", "dos", "da", "der", "di", "du", "et", "al", "o'", "mc", "mac"]
+            exceptions: ["von", "van", "de", "del", "la", "dos", "da", "der", "di", "du", "et", "al", "o'", "mc", "mac", "st"],
+            compounds: ["mary ellen", "dawn marie", "mary ann", "mary anne", "lisa marie", "anne marie", "mary jo"]
         };
 
     /**
@@ -2859,9 +2860,9 @@ const { _ud = "undefined", $scope } = constants;
      * @param pOptions an object specifying additional surname prefixes to handle
      * @returns {string} a string with proper capitalization of the name
      */
-    const handleMc = function handleMc( pString, pOptions = MC_OPTIONS )
+    const handleMc = function handleMc( pString, pOptions = PROPERCASE_OPTIONS )
     {
-        const options = { ...MC_OPTIONS, ...(pOptions || {}) };
+        const options = { ...PROPERCASE_OPTIONS, ...(pOptions || {}) };
 
         let s = asString( pString, false ) || _mt_str;
 
@@ -2911,8 +2912,8 @@ const { _ud = "undefined", $scope } = constants;
     const DEFAULT_PROPERCASE_OPTIONS =
         {
             separator: _spc,
-            surnamePrefixes: MC_OPTIONS.prefixes,
-            exceptions: MC_OPTIONS.exceptions
+            surnamePrefixes: PROPERCASE_OPTIONS.prefixes,
+            exceptions: PROPERCASE_OPTIONS.exceptions
         };
 
     /**
@@ -2988,29 +2989,34 @@ const { _ud = "undefined", $scope } = constants;
         return toProperCase( this );
     };
 
-    function asProperCaseName( pName, pExceptions = MC_OPTIONS.exceptions )
+    function asProperCaseName( pName, pExceptions = PROPERCASE_OPTIONS.exceptions, pIsFirstName = false )
     {
         // convert the name to lowercase and trim
         let name = _lct( asString( pName, true ) );
 
-        let exceptions = pExceptions || MC_OPTIONS.exceptions;
+        // remove honorific prefixes
+        name = name.replace( /^(mr\s+|mr\.\s+|dr\s+|dr\.\s+|ms\s+|ms\.\s+)/gi, _mt ).trim();
+
+        name = name.replaceAll( /\s{2,}/g, _spc );
+
+        let exceptions = pExceptions || PROPERCASE_OPTIONS.exceptions;
 
         let formattedName = asString( name, true );
 
         // capitalize the first letter of *each word* using word boundary (\b)
-        formattedName = formattedName.replace( /\b([a-z])/g, ( match, char ) =>
+        formattedName = formattedName.replace( /\b([a-z])/gi, ( match, char ) =>
         {
             return ucase( asString( char, true ) );
         } );
 
         // handle specific exceptions such as 'van', 'de', 'dos', 'Mc'
         // we only apply this if the word is *not* the first word in the name
-        formattedName = formattedName.replace( /\b([a-z]+)\b/g, ( match, word, index ) =>
+        formattedName = formattedName.replace( /\b([a-z]+)\b/gi, ( match, word, index ) =>
         {
             if ( index > 0 && exceptions.includes( word ) )
             {
                 // Check if it's an 'O\'...' name before lowercasing 'o\''
-                if ( word === "o'" && formattedName.charAt( index + 2 ).match( /[a-z]/ ) )
+                if ( word === "o'" && formattedName.charAt( index + 2 ).match( /[a-z]/i ) )
                 {
                     return "O'"; // Keep the 'O' capitalized for O'Reilly, for example
                 }
@@ -3021,13 +3027,13 @@ const { _ud = "undefined", $scope } = constants;
 
         // handle Mc/Mac-like exceptions (e.g., McNamara, McDonald)
         // capitalize the letter immediately after 'Mc' or 'Mac' if it exists
-        formattedName = formattedName.replace( /(mc|mac)([a-z])/g, ( match, prefix, remaining ) =>
+        formattedName = formattedName.replace( /(mc|mac)([a-z])/gi, ( match, prefix, remaining ) =>
         {
-            return ucase( prefix ) + ucase( remaining );
+            return toProperCase( prefix ) + ucase( remaining );
         } );
 
         // handle hyphens and apostrophes for double capitalization (e.g., Smith-Jones, O'Leary)
-        formattedName = formattedName.replace( /([-' ])([a-z])/g, ( match, separator, remaining ) =>
+        formattedName = formattedName.replace( /([-' ])([a-z])/gi, ( match, separator, remaining ) =>
         {
             return separator + ucase( remaining );
         } );
@@ -3038,10 +3044,100 @@ const { _ud = "undefined", $scope } = constants;
             return ucase( match );
         } );
 
+        // titles and honorifics
+        formattedName = formattedName.replace( /\b(md|dds)\b/gi, ( match ) =>
+        {
+            return ucase( match );
+        } );
+
+        formattedName = formattedName.replace( /\b(ph\.?d\.)\b/gi, ( match ) =>
+        {
+            return "PhD";
+        } );
+
         return asString( formattedName, true ).replace( /\s+/, _spc ).trim();
     }
 
-    function normalizeName( pFirstName, pLastName, pExceptions=MC_OPTIONS.exceptions, pCompoundFirstNames=[] )
+    function _toArr( pVal )
+    {
+        return isArray( pVal ) ? [...pVal].flat().filter( e => isString( e ) && !isBlank( e ) ) : (isString( pVal ) ? asString( pVal, true ).split( _comma ).filter( e => !isBlank( e ) ) : []);
+    }
+
+    function _findSplitOnException( pNameParts, pExceptions = PROPERCASE_OPTIONS.exceptions )
+    {
+        let idx = -1;
+
+        let parts = _toArr( pNameParts || [] ).filter( e => !isBlank( e ) ).map( e => _lct( e ) );
+
+        let exceptions = _toArr( pExceptions || [] ).filter( e => !isBlank( e ) ).map( e => _lct( e ) );
+
+        if ( $ln( exceptions ) > 0 )
+        {
+            for( let exc of exceptions )
+            {
+                idx = parts.indexOf( exc );
+                if ( idx >= 0 )
+                {
+                    break;
+                }
+            }
+        }
+
+        return idx;
+    }
+
+    function _findSplitOnCompoundFirstName( pNameParts, pCompoundFirstNames = PROPERCASE_OPTIONS.compounds )
+    {
+        let idx = -1;
+
+        let parts = _toArr( pNameParts || [] ).filter( e => !isBlank( e ) ).map( e => _lct( e ) );
+
+        let compoundNames = _toArr( pCompoundFirstNames || [] ).filter( e => !isBlank( e ) ).map( e => _lct( e ) );
+
+        if ( $ln( compoundNames ) > 0 )
+        {
+            const firstPart = _lct( parts.slice( 0, 2 ).join( _spc ) );
+
+            for( let cn of compoundNames )
+            {
+                if ( _lct( cn ) === firstPart )
+                {
+                    idx = 2;
+                    break;
+                }
+            }
+        }
+
+        if ( idx < 0 && $ln( parts ) > 2 )
+        {
+            const middleName = _lct( parts[1] );
+
+            if ( ["ann", "jo", "marie", "jane", "sue", "lynn", "lynne", "beth", "may", "grace"].includes( middleName ) )
+            {
+                idx = 2;
+            }
+            else if ( ["ray", "joe", "dean", "lee", "gene", "bob"].includes( middleName ) )
+            {
+                idx = 2;
+            }
+        }
+
+        return idx;
+    }
+
+    function _findSplitOnInitial( pNameParts )
+    {
+        let parts = _toArr( pNameParts ).filter( e => !isBlank( e ) ).map( e => _lct( e ) );
+
+        let idx = parts.findLastIndex( e => ($ln( e ) < 2 || /^\w\.$/.test( e.trim() ) || /^["(]\s*\w+[")]$/.test( e.trim() )) );
+        if ( idx >= 0 )
+        {
+            idx += (idx < $ln( parts ) - 1) ? 1 : 0;
+        }
+        return idx;
+    }
+
+    function normalizeName( pFirstName, pLastName, pExceptions = PROPERCASE_OPTIONS.exceptions, pCompoundFirstNames = PROPERCASE_OPTIONS.compounds )
     {
         let firstName = asProperCaseName( asString( pFirstName, true ) );
         let lastName = asProperCaseName( asString( pLastName, true ) );
@@ -3049,6 +3145,7 @@ const { _ud = "undefined", $scope } = constants;
         if ( firstName === lastName )
         {
             const parts = firstName.split( / / );
+
             if ( 2 === $ln( parts ) )
             {
                 firstName = asString( parts[0], true );
@@ -3056,19 +3153,43 @@ const { _ud = "undefined", $scope } = constants;
             }
             else if ( $ln( parts ) > 2 )
             {
-                // find the right place to split
+                let idx = _findSplitOnException( parts, (pExceptions || PROPERCASE_OPTIONS.exceptions) );
+
+                if ( idx < 0 )
+                {
+                    idx = _findSplitOnInitial( parts );
+                }
+
+                if ( idx < 0 )
+                {
+                    idx = _findSplitOnCompoundFirstName( parts, pCompoundFirstNames );
+                }
+
+                if ( idx >= 0 )
+                {
+                    firstName = asProperCaseName( parts.slice( 0, idx ).join( _spc ), true );
+                    lastName = asProperCaseName( parts.slice( idx ).join( _spc ), true );
+                }
+                else
+                {
+                    firstName = asProperCaseName( parts[0], true );
+                    lastName = asProperCaseName( parts.slice( 1 ).join( _spc ), true );
+                }
             }
         }
-        else if ( $ln( lastName ) > $ln( firstName ) && lastName.startsWith( firstName ) )
+        else if ( $ln( lastName ) > $ln( firstName ) && lastName.startsWith( firstName ) && lastName.includes( _spc ) )
         {
             lastName = lastName.replace( firstName, _mt ).trim();
         }
-        else if ( $ln( lastName ) < $ln( firstName ) && firstName.startsWith( lastName ) )
+        else if ( $ln( lastName ) < $ln( firstName ) && firstName.endsWith( lastName ) && firstName.includes( _spc ) )
         {
             firstName = firstName.replace( lastName, _mt ).trim();
         }
 
-        return { first: firstName, last: lastName };
+        return {
+            first: asString( firstName, true ).replaceAll( / {2,}/g, _spc ),
+            last: asString( lastName, true ).replaceAll( / {2,}/g, _spc )
+        };
     }
 
     /**
@@ -3615,6 +3736,8 @@ const { _ud = "undefined", $scope } = constants;
             toCamelCase,
             toSnakeCase,
             toProperCase,
+            asProperCaseName,
+            normalizeName,
             formatPhoneNumber,
             copyString,
             reverseString,
