@@ -1,13 +1,17 @@
 const fs = require( "fs" );
 
-/** import the dependencies **/
+const moduleUtils = require( "../src/_ToolBocksModule.cjs" );
+
 const constants = require( "../src/Constants.cjs" );
 
 /** import the utilities we are testing */
 const stringUtils = require( "../src/StringUtils.cjs" );
 
+const { attempt, asyncAttempt, $ln } = moduleUtils;
+
 const
     {
+        asInt,
         asString,
         isBlank,
         asProperCaseName,
@@ -15,204 +19,130 @@ const
         formatPhoneNumber
     } = stringUtils;
 
-describe( "Fix Person Names", () =>
+const NUM_TEST_FILES = 4;
+
+const ENCODING = "utf-8";
+
+function configureTestData( pNumFiles, pEncoding = ENCODING )
 {
-    let testData1 = fs.readFileSync( "C:\\Projects\\bocktils\\test_data\\names\\names_1.txt", "utf-8" );
-    let testData2 = fs.readFileSync( "C:\\Projects\\bocktils\\test_data\\names\\names_2.txt", "utf-8" );
-    let testData3 = fs.readFileSync( "C:\\Projects\\bocktils\\test_data\\names\\names_3.txt", "utf-8" );
+    let numFiles = asInt( pNumFiles, NUM_TEST_FILES );
 
-    testData1 = testData1.replaceAll( /(\r\n)+/g, "\n" );
-    testData2 = testData2.replaceAll( /(\r\n)+/g, "\n" );
-    testData3 = testData3.replaceAll( /(\r\n)+/g, "\n" );
+    let encoding = asString( pEncoding, true ) || ENCODING;
 
-    let test_data_1, test_data_2, test_data_3;
+    // an array of arrays of objects structured as { firstName, lastName }
+    let contents = [];
 
-    let names_1 = [], names_2 = [], names_3 = [];
-    let out_1 = [], out_2 = [], out_3 = [];
-
-    test_data_1 = testData1.split( /(\r?\n)/g );
-    for( let line of test_data_1 )
+    for( let i = 0, n = numFiles; i < n; i++ )
     {
-        if ( !isBlank( line ) )
+        let filename = `C:\\Projects\\bocktils\\test_data\\names\\names_${i + 1}.txt`;
+
+        let content = fs.readFileSync( filename, encoding );
+
+        content = content.replaceAll( /(\r\n)+/g, "\n" );
+
+        let lines = content.split( /\n+/ );
+
+        let names = [];
+
+        for( let line of lines )
         {
-            const names = line.split( /\|/g );
-            names_1.push( { "firstName": names[0], "lastName": names[1] } );
+            if ( !isBlank( line ) )
+            {
+                const parts = line.split( /\|/g );
+                if ( 2 === $ln( parts ) )
+                {
+                    names.push( { "firstName": parts[0], "lastName": parts[1] } );
+                }
+            }
         }
+
+        contents.push( names );
     }
 
-    test_data_2 = testData2.split( /(\r?\n)/g );
-    for( let line of test_data_2 )
-    {
-        if ( !isBlank( line ) )
-        {
-            const names = line.split( /\|/g );
-            names_2.push( { "firstName": names[0], "lastName": names[1] } );
-        }
-    }
+    return contents;
+}
 
-    test_data_3 = testData3.split( /(\r?\n)/g );
-    for( let line of test_data_3 )
-    {
-        if ( !isBlank( line ) )
-        {
-            const names = line.split( /\|/g );
-            names_3.push( { "firstName": names[0], "lastName": names[1] } );
-        }
-    }
+describe( "Proper Case Names", () =>
+{
+    let testData = configureTestData( NUM_TEST_FILES, ENCODING );
 
-    test( "asProperCase - 1", async() =>
+    let outData = [];
+
+    test( "asProperCase", async() =>
           {
-              out_1.length = 0;
-
-              for( let obj of names_1 )
+              for( let i = 0, n = NUM_TEST_FILES; i < n; i++ )
               {
-                  const first = asProperCaseName( obj["firstName"] );
-                  const last = asProperCaseName( obj["lastName"] );
+                  let namesData = testData[i];
 
-                  out_1.push( { first, last, fromFirst: obj["firstName"], fromLast: obj["lastName"] } );
+                  outData.length = 0;
+
+                  for( let obj of namesData )
+                  {
+                      const first = asProperCaseName( obj["firstName"] );
+                      const last = asProperCaseName( obj["lastName"] );
+
+                      outData.push( { first, last, fromFirst: obj["firstName"], fromLast: obj["lastName"] } );
+                  }
+
+                  let out = "FIRST_NAME|LAST_NAME||INPUT_1|INPUT_2\n";
+
+                  for( let o of outData )
+                  {
+                      out += o["first"] + "|" + o["last"] + "||" + o["fromFirst"] + "|" + o["fromLast"] + "\n";
+                  }
+
+                  let filename = `C:\\Projects\\bocktils\\test_data\\names\\propercase_names_${i + 1}.txt`;
+
+                  fs.writeFileSync( filename, out, ENCODING );
+
+                  // console.log( out );
               }
-
-              let out = "";
-
-              for( let o of out_1 )
-              {
-                  out += o["first"] + "|" + o["last"] + "::" + o["fromFirst"] + "|" + o["fromLast"] + "\n";
-              }
-
-              console.log( out );
 
           }, 600_000
     );
+} );
 
-    test( "asProperCase - 2", async() =>
+describe( "Normalize Names", () =>
+{
+    let testData = configureTestData( NUM_TEST_FILES, ENCODING );
+
+    let outData = [];
+
+    test( "normalizeName", async() =>
           {
-              out_2.length = 0;
-
-              for( let obj of names_2 )
+              for( let i = 0, n = NUM_TEST_FILES; i < n; i++ )
               {
-                  const first = asProperCaseName( obj["firstName"] );
-                  const last = asProperCaseName( obj["lastName"] );
+                  let namesData = testData[i];
 
-                  out_2.push( { first, last, fromFirst: obj["firstName"], fromLast: obj["lastName"] } );
+                  outData.length = 0;
+
+                  for( let obj of namesData )
+                  {
+                      const normalized = normalizeName( obj["firstName"], obj["lastName"] );
+
+                      outData.push( {
+                                        first: normalized.first,
+                                        last: normalized.last,
+                                        fromFirst: obj["firstName"],
+                                        fromLast: obj["lastName"],
+                                        nameContainsEmail: normalized.nameContainsEmail,
+                                        nameContainsAddress: normalized.nameContainsAddress
+                                    } );
+                  }
+
+                  let out = "FIRST_NAME|LAST_NAME||INPUT_1|INPUT_2||CONTAINS_EMAIL|CONTAINS_ADDRESS\n";
+
+                  for( let o of outData )
+                  {
+                      out += o["first"] + "|" + o["last"] + "||" + o["fromFirst"] + "|" + o["fromLast"] + "||" + o["nameContainsEmail"] + "|" + o["nameContainsAddress"] + "\n";
+                  }
+
+                  let filename = `C:\\Projects\\bocktils\\test_data\\names\\normalized_names_${i + 1}.txt`;
+
+                  fs.writeFileSync( filename, out, ENCODING );
+
+                  // console.log( out );
               }
-
-              let out = "";
-
-              for( let o of out_2 )
-              {
-                  out += o["first"] + "|" + o["last"] + "::" + o["fromFirst"] + "|" + o["fromLast"] + "\n";
-              }
-
-              console.log( out );
-
-          }, 600_000
-    );
-
-    test( "asProperCase - 3", async() =>
-          {
-              out_3.length = 0;
-
-              for( let obj of names_3 )
-              {
-                  const first = asProperCaseName( obj["firstName"] );
-                  const last = asProperCaseName( obj["lastName"] );
-
-                  out_3.push( { first, last, fromFirst: obj["firstName"], fromLast: obj["lastName"] } );
-              }
-
-              let out = "";
-
-              for( let o of out_3 )
-              {
-                  out += o["first"] + "|" + o["last"] + "::" + o["fromFirst"] + "|" + o["fromLast"] + "\n";
-              }
-
-              console.log( out );
-
-          }, 600_000
-    );
-
-
-    test( "normalizeName - 1", async() =>
-          {
-              out_1.length = 0;
-
-              for( let obj of names_1 )
-              {
-                  const normalized = normalizeName( obj["firstName"], obj["lastName"] );
-
-                  out_1.push( {
-                                  "first": normalized.first,
-                                  last: normalized.last,
-                                  fromFirst: obj["firstName"],
-                                  fromLast: obj["lastName"]
-                              } );
-              }
-
-              let out = "";
-
-              for( let o of out_1 )
-              {
-                  out += o["first"] + "|" + o["last"] + "::" + o["fromFirst"] + "|" + o["fromLast"] + "\n";
-              }
-
-              console.log( out );
-
-          }, 600_000
-    );
-
-    test( "normalizeName - 2", async() =>
-          {
-              out_2.length = 0;
-
-              for( let obj of names_2 )
-              {
-                  const normalized = normalizeName( obj["firstName"], obj["lastName"] );
-
-                  out_2.push( {
-                                  "first": normalized.first,
-                                  last: normalized.last,
-                                  fromFirst: obj["firstName"],
-                                  fromLast: obj["lastName"]
-                              } );
-              }
-
-              let out = "";
-
-              for( let o of out_2 )
-              {
-                  out += o["first"] + "|" + o["last"] + "::" + o["fromFirst"] + "|" + o["fromLast"] + "\n";
-              }
-
-              console.log( out );
-
-          }, 600_000
-    );
-
-    test( "normalizeName - 3", async() =>
-          {
-              out_3.length = 0;
-
-              for( let obj of names_3 )
-              {
-                  const normalized = normalizeName( obj["firstName"], obj["lastName"] );
-
-                  out_3.push( {
-                                  "first": normalized.first,
-                                  last: normalized.last,
-                                  fromFirst: obj["firstName"],
-                                  fromLast: obj["lastName"]
-                              } );
-              }
-
-              let out = "";
-
-              for( let o of out_3 )
-              {
-                  out += o["first"] + "|" + o["last"] + "::" + o["fromFirst"] + "|" + o["fromLast"] + "\n";
-              }
-
-              console.log( out );
 
           }, 600_000
     );
