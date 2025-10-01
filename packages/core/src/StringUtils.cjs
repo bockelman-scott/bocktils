@@ -3235,6 +3235,31 @@ const { _ud = "undefined", $scope } = constants;
         };
     }
 
+    function normalizeEmailAddress( pEmail )
+    {
+        let email = lcase( asString( pEmail, true ) );
+
+        // handle some common typos
+        email = asString( email, true ).replace( /\.(comm|con|cpm)$/i, ".com" );
+        email = asString( email, true ).replace( /(gmsil|gmial|gnail|gnial|gamil|gmaill)\.com/i, "gmail.com" );
+        email = asString( email, true ).replace( /h[oi]t[mn][as]il\.com/i, "hotmail.com" );
+        email = asString( email, true ).replace( /yaho+\.com/i, "yahoo.com" );
+
+        // remove "plus-addressing" from known providers that support it
+        const tld = rightOfLast( email, "@" );
+        if ( ["gmail.com", "aol.com", "hotmail.com", "outlook.com", "icloud.com", "yahoo.com", "googlemail.com", "proton.me", "protonmail.com", "fastmail.com", "fastmail.fm", "zohomail.com", "tuta.com", "tutanota.com"].includes( tld ) )
+        {
+            email = asString( email, true ).replace( /\+[^@]+@/, "@" );
+
+            if ( ["gmail.com", "googlemail.com"].includes( tld ) )
+            {
+                let parts = email.split( "@" );
+                email = asString( parts[0], true ).replaceAll( /\./g, _mt ) + "@" + asString( parts[1] || tld, true );
+            }
+        }
+
+        return _lct( email );
+    }
 
     /**
      * Converts a string in "snake case" ( some_variable_name ) into "camel case" ( someVariableName )
@@ -3784,6 +3809,7 @@ const { _ud = "undefined", $scope } = constants;
             asProperCaseName,
             normalizeName,
             formatPhoneNumber,
+            normalizeEmailAddress,
             copyString,
             reverseString,
             capitalize,
