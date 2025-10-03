@@ -98,18 +98,18 @@ const { _ud = "undefined", $scope } = constants;
 
     const { DATE_PARTS, Months, Days, Occurrence } = dateConstants;
 
-    const DEFAULT_LOCALE = new Intl.Locale( DEFAULT_LOCALE_STRING );
+    const DEFAULT_LOCALE = lock( new Intl.Locale( DEFAULT_LOCALE_STRING ) );
 
     const ERAS =
-        [
-            { start: new Date( 0, 0, 0, 0, 0, 0 ), end: null, name: "AD", longName: "Anno Domini" },
-            {
-                start: null,
-                end: new Date( new Date( 0, 0, 0, 0, 0, 0 ).getTime() - 1 ),
-                name: "BC",
-                longName: "Before Common Era"
-            },
-        ];
+        lock( [
+                  { start: new Date( 0, 0, 0, 0, 0, 0 ), end: null, name: "AD", longName: "Anno Domini" },
+                  {
+                      start: null,
+                      end: new Date( new Date( 0, 0, 0, 0, 0, 0 ).getTime() - 1 ),
+                      name: "BC",
+                      longName: "Before Common Era"
+                  },
+              ] );
 
     const MONTH_NAMES = lock( [...(LOCALE_DEFAULTS.MONTH_NAMES || getMonthNames( DEFAULT_LOCALE ))] );
 

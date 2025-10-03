@@ -74,15 +74,30 @@ const $scope = core?.$scope || constants?.$scope || function()
 
     const
         {
+            DEFINED_TOKENS,
+            SUPPORTED_TOKENS,
+            DEFINED_INTL_OPTIONS,
+            SUPPORTED_INTL_OPTIONS,
+            ERAS,
+            MONTH_NAMES,
+            MONTH_NAMES_SHORT,
+            DAY_NAMES,
+            DAY_NAMES_SHORT,
+            DAY_LETTERS,
+            REPETITION_RULES
+        } = dateFormatTokenUtils;
+
+    const { DateParser } = dateParserUtils;
+
+    const
+        {
             resolveDate,
             resolveLocale,
             DEFAULT_LOCALE,
             DEFAULT_TOKEN_SET,
             DEFAULT_FORMAT,
             DateFormatter
-        } = dateFormatTokenUtils;
-
-    const { DateParser } = dateParserUtils;
+        } = dateFormatterUtils;
 
     const
         {
@@ -114,6 +129,21 @@ const $scope = core?.$scope || constants?.$scope || function()
                 {
                     DateFormatter,
                     DateParser
+                },
+            TOKENS:
+                {
+                    DEFINED_TOKENS,
+                    SUPPORTED_TOKENS,
+                    DEFINED_INTL_OPTIONS,
+                    SUPPORTED_INTL_OPTIONS,
+                    ERAS,
+                    MONTH_NAMES,
+                    MONTH_NAMES_SHORT,
+                    DAY_NAMES,
+                    DAY_NAMES_SHORT,
+                    DAY_LETTERS,
+                    FORMATS,
+                    REPETITION_RULES,
                 },
             DateFormatter,
             DateParser,
