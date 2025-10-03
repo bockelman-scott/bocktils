@@ -1912,7 +1912,7 @@ describe( "formatElapsedTime", () =>
           {
               let elapsedMilliseconds = (60 * 60 * 1_000);
               const formatted = formatElapsedTime( elapsedMilliseconds );
-              expect( formatted ).toEqual( "01:00" );
+              expect( formatted ).toEqual( "01:00.00" );
           } );
 
     test( "Returns '01:23.50' if one hour and 23 minutes and 50 seconds have elapsed",
