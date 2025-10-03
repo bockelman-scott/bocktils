@@ -64,6 +64,79 @@ function configureTestData( pNumFiles, pEncoding = ENCODING )
 
 describe( "Proper Case Names", () =>
 {
+    test( "asProperCase for Mc and Mac", () =>
+    {
+        let s = "mcalister";
+
+        expect( asProperCaseName( s ) ).toEqual( "McAlister" );
+
+        s = "Macmillan";
+
+        expect( asProperCaseName( s ) ).toEqual( "MacMillan" );
+
+        s = "mccoy";
+
+        expect( asProperCaseName( s ) ).toEqual( "McCoy" );
+
+        s = "maca";
+
+        expect( asProperCaseName( s ) ).toEqual( "Maca" );
+
+        s = "mcadams";
+
+        expect( asProperCaseName( s ) ).toEqual( "McAdams" );
+
+        s = "machio";
+
+        expect( asProperCaseName( s ) ).toEqual( "Machio" );
+    } );
+
+    test( "asProperCase for O'Leary or O'Neil", () =>
+    {
+        let s = "o'neil";
+
+        expect( asProperCaseName( s ) ).toEqual( "O'Neil" );
+
+        s = "o'reilly";
+
+        expect( asProperCaseName( s ) ).toEqual( "O'Reilly" );
+
+        s = "o'leaRy";
+
+        expect( asProperCaseName( s ) ).toEqual( "O'Leary" );
+    } );
+
+    test( "asProperCase for General Suffix", () =>
+    {
+        let s = "Williams iIi";
+
+        expect( asProperCaseName( s ) ).toEqual( "Williams III" );
+
+        s = "Reynolds iv";
+
+        expect( asProperCaseName( s ) ).toEqual( "Reynolds IV" );
+
+        s = "Henry viiI";
+
+        expect( asProperCaseName( s ) ).toEqual( "Henry VIII" );
+    } );
+
+    test( "asProperCase for Mr. or Ms. or Mrs.", () =>
+    {
+        let s = "MR. MAnn";
+
+        expect( asProperCaseName( s ) ).toEqual( "Mann" );
+
+        s = "Ms. gloria";
+
+        expect( asProperCaseName( s ) ).toEqual( "Gloria" );
+
+        s = "Mrs. del gato";
+
+        expect( asProperCaseName( s ) ).toEqual( "Del Gato" );
+    } );
+
+
     let testData = configureTestData( NUM_TEST_FILES, ENCODING );
 
     let outData = [];
