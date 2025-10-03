@@ -173,7 +173,7 @@ const {
     const AM_PM_DATES = [new Date( 2024, 0, 1, 8, 0, 0, 0 ), new Date( 2024, 0, 1, 20, 0, 0, 0 )];
 
     // Intl.Locale object representing the default locale
-    const DEFAULT_LOCALE = new Intl.Locale( DEFAULT_LOCALE_STRING );
+    const DEFAULT_LOCALE = lock( new Intl.Locale( DEFAULT_LOCALE_STRING ) );
 
     const isLocale = ( pValue ) => (pValue instanceof Intl.Locale) || (isString( pValue ) && !isBlank( pValue ) && (/^[A-Z]{2}$|^[A-Z]{2}(-[^\d\\\/ \s]+)+$/i).test( pValue ));
 
@@ -813,13 +813,13 @@ const {
             DEFAULT_LOCALE_STRING,
             DEFAULTS,
             FORMATS:
-                {
-                    LONG: FORMAT_LONG,
-                    SHORT: FORMAT_SHORT,
-                    NARROW: FORMAT_NARROW,
-                    TWO_DIGIT: FORMAT_2DIGIT,
-                    NUMERIC: FORMAT_NUMERIC,
-                },
+                lock( {
+                          LONG: FORMAT_LONG,
+                          SHORT: FORMAT_SHORT,
+                          NARROW: FORMAT_NARROW,
+                          TWO_DIGIT: FORMAT_2DIGIT,
+                          NUMERIC: FORMAT_NUMERIC,
+                      } ),
             isLocale,
             resolveLocale,
             isDefaultLocale,
