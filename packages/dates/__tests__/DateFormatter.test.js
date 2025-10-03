@@ -118,6 +118,36 @@ describe( "DateFormatter", () =>
         expect( formatted ).toEqual( "7/3/24 09:06:04" );
     } );
 
+    test( "DateFormatter.formatDate with pattern 'yyyy-MM-dd'", () =>
+    {
+        let pattern = "yyyy-MM-dd";
+
+        const dateFormatter = new DateFormatter( pattern );
+
+        let formatted = dateFormatter.format( date );
+
+        expect( formatted ).toEqual( "2024-10-29" );
+
+        formatted = dateFormatter.format( date2 );
+
+        expect( formatted ).toEqual( "2024-07-03" );
+    } );
+
+    test( "DateFormatter.formatDate with pattern 'MM-dd-yyyy'", () =>
+    {
+        let pattern = "MM-dd-yyyy";
+
+        const dateFormatter = new DateFormatter( pattern );
+
+        let formatted = dateFormatter.format( date );
+
+        expect( formatted ).toEqual( "10-29-2024" );
+
+        formatted = dateFormatter.format( date2 );
+
+        expect( formatted ).toEqual( "07-03-2024" );
+    } );
+
     test( "DateFormatter.formatDate works with the examples given", () =>
     {
         for( let i = 0, n = examples.length; i < n; ++i )
