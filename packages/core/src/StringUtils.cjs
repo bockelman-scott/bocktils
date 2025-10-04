@@ -179,6 +179,7 @@ const { _ud = "undefined", $scope } = constants;
             isSet,
             isFunction,
             isRegExp,
+            isSymbol,
             isNanOrInfinite,
             isClass,
             getClass,
@@ -278,6 +279,7 @@ const { _ud = "undefined", $scope } = constants;
     const DEFAULT_AS_STRING_OPTIONS =
         lock( {
                   trim: false,
+                  removeRedundantSpaces: false,
                   omitFunctions: true,
                   executeFunctions: false,
                   returnFunctionSource: false,
@@ -688,7 +690,6 @@ const { _ud = "undefined", $scope } = constants;
 
 
     //// AS STRING HELPERS ////
-
     function _handleFunctionInput( pValue, pTrim, pOptions )
     {
         const options = _aso( pOptions );
@@ -1085,6 +1086,12 @@ const { _ud = "undefined", $scope } = constants;
                 s = _handleFunctionInput( pIn, pTrim, pOptions );
                 break;
 
+            case _symbol:
+                // see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/String#using_string_to_stringify_a_symbol
+                s = String( pIn ); // only the String function can handle Symbol without throwing an error
+                s = _asStringFromType( s, pTrim, pOptions );
+                break;
+
             default:
                 s = _mt_str;
                 break;
@@ -1126,6 +1133,8 @@ const { _ud = "undefined", $scope } = constants;
     {
         const options = _aso( pOptions );
 
+        const isRemoveRedundantSpaces = options.removeRedundantSpaces;
+
         let trim = !!(pTrim || options.trim);
         options.trim = trim;
 
@@ -1136,7 +1145,12 @@ const { _ud = "undefined", $scope } = constants;
             return _mt_str;
         }
 
-        let s = _asStringFromType( input, trim, options, pTrim );
+        if ( isSymbol( input ) )
+        {
+            input = String( input );
+        }
+
+        let s = _asStringFromType( input, trim, options );
 
         // if the string is the null-terminator (perhaps the string came from a C-API)
         if ( _z === s )
@@ -1146,9 +1160,19 @@ const { _ud = "undefined", $scope } = constants;
 
         s = s.replace( _z, _mt_str );
 
+        s = (trim ? s.trim() : s);
+
+        s = isRemoveRedundantSpaces ? s.replaceAll( / {2,}/g, _spc ).trim() : s;
+
         const transformations = ([].concat( ...(options?.transformations || []) )).flat().filter( isTransformer );
 
-        return _transform( _mt_str + ((true === trim) ? ((_mt_str + s).trim()) : s), ...transformations );
+        s = _transform( _mt_str + ((true === trim) ? ((_mt_str + s).trim()) : s), ...transformations );
+
+        s = (trim ? s.trim() : s);
+
+        s = isRemoveRedundantSpaces ? s.trim().replaceAll( / {2,}/g, _spc ).trim() : s;
+
+        return s;
     };
 
     const _toStr = asString;
@@ -1233,6 +1257,7 @@ const { _ud = "undefined", $scope } = constants;
         return s;
     };
 
+
     /**
      * Returns true if the string contains interpolatable variables
      *
@@ -1287,6 +1312,7 @@ const { _ud = "undefined", $scope } = constants;
      *
      * NOTE:  This is equivalent to using template strings `such as ${this}`,
      * but allows the scope to be specified
+     * and is 'late-bound'
      *
      * @returns {string} a string with variable tokens replaced by values in the specified map or scope
      */
@@ -1314,7 +1340,7 @@ const { _ud = "undefined", $scope } = constants;
 
             for( let entry of Object.entries( variables ) )
             {
-                str = str.replaceAll( new RegExp( "\\$\\{" + entry[0] + "\\}", "g" ), asString( entry[1], false ) );
+                str = str.replaceAll( new RegExp( "\\$\\{" + String( entry[0] ) + "\\}", "g" ), asString( entry[1], false ) );
 
                 if ( !hasUnresolvedVariables( str ) )
                 {
@@ -1431,6 +1457,11 @@ const { _ud = "undefined", $scope } = constants;
     {
         return (_mt_str === asString( pStr, true ).trim()) || (_z === pStr);
     };
+
+    function _toArr( pVal )
+    {
+        return isArray( pVal ) ? [...pVal].flat().filter( e => isString( e ) && !isBlank( e ) ) : (isString( pVal ) ? asString( pVal, true ).split( _comma ).filter( e => !isBlank( e ) ) : []);
+    }
 
     const DEFAULT_IS_CAPS_OPTIONS =
         {
@@ -1653,6 +1684,37 @@ const { _ud = "undefined", $scope } = constants;
                 s = s.replace( new RegExp( regExp.source + "$", flags ), _mt_str );
             }
         }
+
+        return s;
+    };
+
+    const removeRedundant = function( pStr, pCharacters = [_spc] )
+    {
+        let chars = _toArr( pCharacters || [] ).map( asString ).filter( e => ($ln( e ) > 0) );
+
+        let s = _mt + asString( pStr, chars.includes( _spc ) );
+
+        function _escape( pChar )
+        {
+            return String( pChar ).replace( /[.*+?^${}()|[\]\\]/g, "\\$&" );
+        }
+
+        let maxIterations = $ln( s );
+
+        let iterations = 0;
+
+        let prior = s;
+
+        do
+        {
+            prior = s;
+
+            chars.forEach( c =>
+                           {
+                               s = s.replaceAll( new RegExp( `(${_escape(c)}){2,}`, "g" ), String( c ) );
+                           } );
+        }
+        while ( s !== prior && $ln( s ) > 0 && (iterations++ < maxIterations) );
 
         return s;
     };
@@ -2473,7 +2535,7 @@ const { _ud = "undefined", $scope } = constants;
 
     const _rpl = ( s, rx, r = _mt ) => asString( s ).replace( _reg( rx, (_rtOf( (rx || /~/), _unixPathSep )) ), _rp( r || _mt ) );
 
-    const $ln = ( e ) => asInt( (e ? (e.length || 0) : 0) ) || 0;
+    const $ln = ( e ) => asInt( (e ? (e?.length || e?.size || 0) : 0) ) || 0;
 
     // returns the Nth element of a collection or the Nth character of a string
     const $nth = ( pArr, pIdx = 0, pDefault = null ) => (null != pArr) && ($ln( isArray( pArr ) || isString( pArr ) ? [...(pArr || [])] : [pArr] ) > pIdx ? [...(pArr || [])][pIdx] : pDefault);
@@ -2847,11 +2909,6 @@ const { _ud = "undefined", $scope } = constants;
      * @returns {string} the string representation of the specified argument in all uppercase characters
      */
     const ucase = ( pStr ) => asString( pStr, false ).toUpperCase();
-
-    function _toArr( pVal )
-    {
-        return isArray( pVal ) ? [...pVal].flat().filter( e => isString( e ) && !isBlank( e ) ) : (isString( pVal ) ? asString( pVal, true ).split( _comma ).filter( e => !isBlank( e ) ) : []);
-    }
 
     const PROPERCASE_OPTIONS =
         lock( {
@@ -3368,6 +3425,17 @@ const { _ud = "undefined", $scope } = constants;
             }
         }
 
+        if ( email.includes( "@" ) )
+        {
+            let parts = _toArr( asString( email ).split( /@/ ) || [] );
+            if ( $ln( parts ) > 1 )
+            {
+                let localPart = (asString( parts[0] || email, true ).slice( 0, 64 )).trim();
+                let domainPart = (asString( parts[1] || tld, true ).slice( 0, (254 - $ln( localPart ) - 1) )).trim();
+                email = (localPart + "@" + (domainPart || tld)).trim();
+            }
+        }
+
         return _lct( email );
     }
 
@@ -3489,26 +3557,28 @@ const { _ud = "undefined", $scope } = constants;
     String.prototype.reverse = String.prototype.reverse || reverseString;
 
     const DEFAULT_TIDY_OPTIONS =
-        {
-            trim: true,
-            replaceTabsWithSpaces: false,
-            replaceSpacesWithTabs: false,
-            removeRedundantSpaces: true,
-            spacesPerTab: 4,
-            functions: [],
-            lowercase: false,
-            uppercase: false,
-            camelCase: false,
-            snakeCase: false,
-            properCase: false,
-            capitalize: false,
-        };
+        lock( {
+                  ...DEFAULT_AS_STRING_OPTIONS,
+                  trim: true,
+                  removeRedundantSpaces: true,
+                  removeLeadingZeroes: false,
+                  replaceTabsWithSpaces: false,
+                  replaceSpacesWithTabs: false,
+                  spacesPerTab: 4,
+                  functions: [],
+                  lowercase: false,
+                  uppercase: false,
+                  camelCase: false,
+                  snakeCase: false,
+                  properCase: false,
+                  capitalize: false,
+              } );
 
     const TRIM_OPERATIONS =
         {
             trim: ( str ) => asString( str, true ).replaceAll( /[\r\n]+/g, _spc ).trim(),
             replaceTabsWithSpaces: ( str, options ) => asString( str ).replaceAll( /\t/g, _spc.repeat( Math.max( 1, asInt( options?.spacesPerTab || 1 ) ) ) ),
-            replaceSpacesWithTabs: ( str, options ) => asString( str ).replaceAll( new RegExp( _spc.repeat( Math.max( 1, asInt( options?.spacesPerTab || 1 ) ) ), "g" ), _tab ),
+            replaceSpacesWithTabs: ( str, options ) => asString( str ).replaceAll( new RegExp( ` {${Math.max( 1, asInt( options?.spacesPerTab || 1 ))},}`, "g" ), _tab ),
             removeRedundantSpaces: ( str ) => asString( str ).replaceAll( / {2,}/g, _spc )
         };
 
@@ -3527,7 +3597,7 @@ const { _ud = "undefined", $scope } = constants;
             snakeCase: toSnakeCase,
             toSnakeCase: toSnakeCase,
             properCase: ( input, options ) =>
-                toProperCase( input, Object.assign( { ...PROPERCASE_OPTIONS }, options || {} ) ),
+                asProperCaseName( input, Object.assign( { ...PROPERCASE_OPTIONS }, options || {} ) ),
             toProperCase: ( input, options ) =>
                 toProperCase( input, Object.assign( { ...PROPERCASE_OPTIONS }, options || {} ) )
         };
@@ -3540,13 +3610,13 @@ const { _ud = "undefined", $scope } = constants;
 
         for( const [key, operation] of Object.entries( CASE_OPERATIONS ) )
         {
-            if ( options[key] )
+            if ( options[key] && isFunction( operation ) )
             {
-                str = operation( str, options ) || str;
+                str = attempt( () => operation( str, options ) ) || str;
             }
         }
 
-        return asString( str );
+        return asString( str, !!options.trim );
     }
 
     /**
@@ -3571,13 +3641,13 @@ const { _ud = "undefined", $scope } = constants;
     {
         const options = { ...DEFAULT_TIDY_OPTIONS, ...(pOptions || {}) };
 
-        let str = asString( _resolveInput.call( this, pString ) || pString, options?.trim );
+        let str = asString( _resolveInput.call( this, pString ) || pString, !!options?.trim, options );
 
         for( const [key, operation] of Object.entries( TRIM_OPERATIONS ) )
         {
-            if ( options[key] )
+            if ( options[key] && isFunction( operation ) )
             {
-                str = operation( str, options );
+                str = attempt( () => operation( str, options ) );
             }
         }
 
@@ -3588,9 +3658,9 @@ const { _ud = "undefined", $scope } = constants;
             operations = operations.concat( ...(options?.functions || []) ).filter( e => isFunction( e ) && e.length > 0 );
         }
 
-        let temp = (_mt_str + asString( str ));
+        let temp = (_mt_str + asString( str, !!options.trim, options ));
 
-        if ( operations.length )
+        if ( $ln( operations ) > 0 )
         {
             for( const func of operations )
             {
@@ -3598,7 +3668,7 @@ const { _ud = "undefined", $scope } = constants;
                 {
                     try
                     {
-                        str = func.apply( this || $scope, [str, options] );
+                        str = func.apply( this || $scope(), [str, options] );
                     }
                     catch( ex )
                     {
@@ -3610,7 +3680,7 @@ const { _ud = "undefined", $scope } = constants;
             }
         }
 
-        str = convertCase( asString( str, options?.trim ), options );
+        str = convertCase( asString( str, !!options?.trim ), options );
 
         return str;
     };
