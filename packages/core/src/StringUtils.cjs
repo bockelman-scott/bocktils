@@ -3794,6 +3794,33 @@ const { _ud = "undefined", $scope } = constants;
             url = url.replace( /\/$/, _mt_str );
         }
 
+        // fix any doubling of the queryString separator
+        url = url.replaceAll( /\?{2,}/g, "?" );
+
+        // remove empty parameters from a queryString
+        url = url.replaceAll( /&{2,}/g, "&" );
+
+        // remove duplicate parameters
+        if ( url.includes( "?" ) )
+        {
+            let parts = url.split( "?" ).filter( e => !isBlank( e ) );
+
+            let path = cleanUrl( asString( parts[0], true ) );
+
+            let qs = asString( $ln( parts ) > 1 ? parts[1] : rightOfLast( url, "?" ), true );
+
+            if ( qs.includes( "&" ) )
+            {
+                let params = _toArr( qs.split( "&" ) );
+
+                params = [...(new Set( params ))];
+
+                qs = params.join( "&" );
+            }
+
+            url = path + (!isBlank( qs ) ? ("?" + qs) : _mt);
+        }
+
         return pPreserveCase ? url : lcase( url );
     };
 
