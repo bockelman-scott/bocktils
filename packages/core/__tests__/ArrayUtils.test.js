@@ -13,7 +13,9 @@ const {
     arraysEqual,
     toPercentages,
     combineConsecutive,
-    concatenateConsecutiveStrings
+    concatenateConsecutiveStrings,
+    includesAll,
+    includesAny
 } = arrayUtils;
 
 const { moduleUtils, constants, stringUtils } = dependencies;
@@ -2451,4 +2453,82 @@ describe( "range", () =>
                                                "mmnn"
                                            ] );
           } );
+} );
+
+
+describe( "includesAll", () =>
+{
+    test( "[1,2,3,4,5] includesAll [1,2,3]",
+          () =>
+          {
+              let arrA = [1, 2, 3, 4, 5];
+              let arrB = [3, 2, 1];
+
+              expect( includesAll( arrA, arrB ) ).toBe( true );
+          } );
+
+    test( "[1,2,3,4,5] includesAll 1, 2, 3",
+          () =>
+          {
+              let arrA = [1, 2, 3, 4, 5];
+
+              expect( includesAll( arrA, 1, 2, 3 ) ).toBe( true );
+          } );
+
+    test( "[1,2,3,4,5] includesAll [6,2,3]",
+          () =>
+          {
+              let arrA = [1, 2, 3, 4, 5];
+              let arrB = [3, 2, 6];
+
+              expect( includesAll( arrA, arrB ) ).toBe( false );
+          } );
+
+    test( "[1,2,3,4,5] includesAll 6, 2, 3",
+          () =>
+          {
+              let arrA = [1, 2, 3, 4, 5];
+
+              expect( includesAll( arrA, 6, 2, 3 ) ).toBe( false );
+          } );
+
+} );
+
+
+describe( "includesAny", () =>
+{
+    test( "[1,2,3,4,5] includesAny [6,2,3]",
+          () =>
+          {
+              let arrA = [1, 2, 3, 4, 5];
+              let arrB = [3, 2, 6];
+
+              expect( includesAny( arrA, arrB ) ).toBe( true );
+          } );
+
+    test( "[1,2,3,4,5] includesAny 6, 2, 3",
+          () =>
+          {
+              let arrA = [1, 2, 3, 4, 5];
+
+              expect( includesAny( arrA, 6, 2, 3 ) ).toBe( true );
+          } );
+
+    test( "[1,2,3,4,5] includesAny [7,8,9]",
+          () =>
+          {
+              let arrA = [1, 2, 3, 4, 5];
+              let arrB = [7,8,9];
+
+              expect( includesAll( arrA, arrB ) ).toBe( false );
+          } );
+
+    test( "[1,2,3,4,5] includesAll 7, 8, 9",
+          () =>
+          {
+              let arrA = [1, 2, 3, 4, 5];
+
+              expect( includesAll( arrA, 7, 8, 9 ) ).toBe( false );
+          } );
+
 } );
