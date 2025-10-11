@@ -369,6 +369,8 @@ const $scope = constants?.$scope || function()
                 return false;
             }
         }
+
+        return true;
     }
 
     function getCurrentDirectory()
