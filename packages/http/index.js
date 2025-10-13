@@ -184,6 +184,8 @@ const $scope = constants?.$scope || function()
             HttpFetchClient,
             RateLimitedHttpClient,
 
+            resolveHttpClient,
+
             RequestInterval,
             RequestWindow,
             RateLimits,
@@ -192,7 +194,12 @@ const $scope = constants?.$scope || function()
             createRateLimitedHttpClient,
 
             Throttler,
-            SimpleRequestThrottler
+            SimpleRequestThrottler,
+
+            HttpConfig,
+            isHttpConfig,
+            resolveHttpConfig,
+            toHttpConfigLiteral
 
         } = HttpClientUtils;
 
@@ -350,9 +357,14 @@ const $scope = constants?.$scope || function()
             ConfigFactory,
             RequestInitModel,
             AxiosConfigModel,
+            HttpConfig,
+            isHttpConfig,
+            resolveHttpConfig,
+            toHttpConfigLiteral,
             HttpClient,
             HttpFetchClient,
             RateLimitedHttpClient,
+            resolveHttpClient,
             RequestInterval,
             RequestWindow,
             RateLimits,

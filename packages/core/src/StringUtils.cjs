@@ -3754,45 +3754,67 @@ const { _ud = "undefined", $scope } = constants;
         return pStr;
     };
 
-    const cleanUrl = function( pStr, pPreserveTrailingSlash = true, pPreserveProtocol = true, pPreserveCase = true )
+    function _resolveCleanUrlOptions( pPreserveTrailingSlash, pPreserveProtocol, pPreserveCase, pAllowRepeatedParams )
     {
-        let url = asString( pStr, true );
-
-        if ( _lct( url ).startsWith( "file:" ) )
-        {
-            return filePathToUrl( pStr );
-        }
-
-        let original = asString( url, true );
-
-        const protocol = extractProtocol( url );
-
-        const rx = new RegExp( "^" + protocol + "://", "i" );
-
-        url = url.replace( rx, _mt_str );
-
-        const arr = url.split( /[\/\\]/ ).map( e => asString( e, true ) ).filter( e => !isBlank( e ) );
-
-        url = asString( arr.join( "/" ), true );
-
-        if ( pPreserveProtocol )
-        {
-            url = (protocol.replace( /:\/\/$/, _mt_str ) + "://") + url;
-        }
-
-        const preserveTrailingSlash = pPreserveTrailingSlash && original.endsWith( "/" );
-
-        if ( preserveTrailingSlash )
-        {
-            if ( !(url.endsWith( "/" )) )
+        return isNonNullObject( pPreserveTrailingSlash ) ?
             {
-                url += "/";
-            }
+                ...(pPreserveTrailingSlash), ...{
+                    "preserveProtocol": !!pPreserveProtocol,
+                    "preserveCase": !!pPreserveCase,
+                    "allowRepeatedParams": !!pAllowRepeatedParams
+                }
+            } :
+            {
+                "preserveTrailingSlash": !!pPreserveTrailingSlash,
+                "preserveProtocol": !!pPreserveProtocol,
+                "preserveCase": !!pPreserveCase,
+                "allowRepeatedParams": !!pAllowRepeatedParams
+            };
+    }
+
+    function _handleTrailingSlash( pUrl, pPreserve = false )
+    {
+        let url = asString( pUrl, true );
+
+        if ( !!pPreserve && !(url.endsWith( "/" )) )
+        {
+            url += "/";
         }
         else
         {
-            url = url.replace( /\/$/, _mt_str );
+            while ( $ln( url ) > 1 && url.endsWith( "/" ) )
+            {
+                url = asString( url.replace( /\/$/, _mt_str ), true );
+            }
         }
+
+        return url;
+    }
+
+    function _handleUrlCase( pUrl, pPreserveCase = false )
+    {
+        let url = asString( pUrl, true );
+
+        if ( !!pPreserveCase )
+        {
+            if ( url.includes( "?" ) )
+            {
+                let parts = asString( url, true ).split( /\?/ );
+                url = _lct( parts[0] ) + "?" + (parts[1] || _mt);
+            }
+            else if ( url.includes( "#" ) )
+            {
+                let parts = asString( url, true ).split( /#/ );
+                url = _lct( parts[0] ) + "#" + (parts[1] || _mt);
+            }
+        }
+
+        return url;
+    }
+
+    function _fixQueryString( pUrl, pAllowRepeatedParameters = false )
+    {
+        let url = asString( pUrl, true );
 
         // fix any doubling of the queryString separator
         url = url.replaceAll( /\?{2,}/g, "?" );
@@ -3800,8 +3822,10 @@ const { _ud = "undefined", $scope } = constants;
         // remove empty parameters from a queryString
         url = url.replaceAll( /&{2,}/g, "&" );
 
+        let allowRepeatedParams = !!pAllowRepeatedParameters;
+
         // remove duplicate parameters
-        if ( url.includes( "?" ) )
+        if ( url.includes( "?" ) && !allowRepeatedParams )
         {
             let parts = url.split( "?" ).filter( e => !isBlank( e ) );
 
@@ -3821,7 +3845,71 @@ const { _ud = "undefined", $scope } = constants;
             url = path + (!isBlank( qs ) ? ("?" + qs) : _mt);
         }
 
-        return pPreserveCase ? url : lcase( url );
+        return asString( url, true );
+    }
+
+    /**
+     * Returns a string that is suitable for use as a url.
+     * Reduces doubled path separators to single path separators,
+     * Optionally removes a trailing separator,
+     * changes the portion prior to any query string or location anchor to lower case,
+     * and removes inadvertently doubled query string parameters
+     * @param {string|URL} pStr
+     * @param {boolean|Object} pPreserveTrailingSlash
+     * @param {boolean} pPreserveProtocol
+     * @param {boolean} pPreserveCase
+     * @param {boolean} pAllowRepeatedParams
+     * @returns {string}
+     */
+    const cleanUrl = function( pStr,
+                               pPreserveTrailingSlash = true,
+                               pPreserveProtocol = true,
+                               pPreserveCase = true,
+                               pAllowRepeatedParams = false )
+    {
+        let url = asString( pStr instanceof URL ? pStr?.href || pStr : asString( pStr, true ), true );
+
+        if ( _lct( url ).startsWith( "file:" ) )
+        {
+            return filePathToUrl( pStr );
+        }
+
+        let options = _resolveCleanUrlOptions( pPreserveTrailingSlash, pPreserveProtocol, pPreserveCase, pAllowRepeatedParams );
+
+        let original = asString( url, true );
+
+        const protocol = extractProtocol( url );
+
+        const rx = new RegExp( "^" + protocol + "://", "i" );
+
+        url = url.replace( rx, _mt_str );
+
+        const arr = url.split( /[\/\\]/ ).map( e => asString( e, true ) ).filter( e => !isBlank( e ) );
+
+        url = asString( arr.join( "/" ), true );
+
+        let preserveProtocol = options.preserveProtocol || !!pPreserveProtocol;
+
+        if ( preserveProtocol )
+        {
+            url = (protocol.replace( /:\/\/$/, _mt_str ) + "://") + url;
+        }
+
+        const preserveTrailingSlash = options.preserveTrailingSlash && original.endsWith( "/" );
+
+        url = _handleTrailingSlash( url, preserveTrailingSlash );
+
+        let preserveCase = options.preserveCase || !!pPreserveCase;
+
+        url = _handleUrlCase( url, preserveCase );
+
+        if ( url.includes( "?" ) )
+        {
+            let allowRepeatedParams = options.allowRepeatedParams || pAllowRepeatedParams;
+            url = _fixQueryString( url, allowRepeatedParams );
+        }
+
+        return asString( url, true );
     };
 
     const lengthPriorityComparator = ( pLongestFirst ) => ( a, b ) =>

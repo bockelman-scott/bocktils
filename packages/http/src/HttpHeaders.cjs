@@ -493,6 +493,11 @@ const {
             return lock( literal );
         }
 
+        clone()
+        {
+            return new HttpHeaders( this.toLiteral() );
+        }
+
         toString()
         {
             let s = _mt_str;
@@ -558,6 +563,11 @@ const {
         {
             super( pOptions );
         }
+
+        clone()
+        {
+            return new HttpRequestHeaders( this.toLiteral() );
+        }
     }
 
     HttpRequestHeaders.getHeaderValue = getHeaderValue.bind( HttpRequestHeaders );
@@ -567,6 +577,11 @@ const {
         constructor( pOptions )
         {
             super( pOptions );
+        }
+
+        clone()
+        {
+            return new HttpResponseHeaders( this.toLiteral() );
         }
     }
 

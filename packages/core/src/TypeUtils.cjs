@@ -2817,6 +2817,18 @@ const $scope = constants?.$scope || function()
         return arr.length > 0 ? arr[0] : null;
     };
 
+    const hasProperty = function( pObject, pPropertyName )
+    {
+        let propertyName = _toString( pPropertyName );
+
+        if ( propertyName )
+        {
+            return ({}).hasOwnProperty.call( pObject, propertyName );
+        }
+
+        return false;
+    };
+
     class Finder
     {
         #filterCriteria = ( e ) => isNonNullValue( e ) || isNonNullObject( e );
@@ -5415,6 +5427,7 @@ const $scope = constants?.$scope || function()
             isArrayBuffer,
             isSharedArrayBuffer,
             isDataView,
+
             toDecimal,
             toHex,
             toOctal,
@@ -5423,6 +5436,7 @@ const $scope = constants?.$scope || function()
             intToBits,
             floatToBits,
             invertBits,
+
             resolveBitString,
             resolveVisitor,
             resolveError,
@@ -5430,12 +5444,16 @@ const $scope = constants?.$scope || function()
             resolveObject,
             resolveLogLevel,
             resolveMethod,
+            resolveMoment,
+
             canBind,
             twosComplement,
+
             clamp,
-            resolveMoment,
+
             areSameType,
             areCompatibleTypes,
+
             instanceOfAny,
             getClass,
             getClassName,
@@ -5443,10 +5461,13 @@ const $scope = constants?.$scope || function()
             castTo,
             toIterable,
             parseDate,
+
             firstMatchingType,
             firstValidObject,
             firstPopulatedObject,
+
             estimateBytesForType,
+
             NVL,
             isReadOnly,
             calculateBitsNeeded,
@@ -5460,8 +5481,11 @@ const $scope = constants?.$scope || function()
             asObject,
             asMap,
             transformObject,
+
+            hasProperty,
             getProperty,
             setProperty,
+
             toNodePathArray,
             collapse,
 

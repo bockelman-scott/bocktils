@@ -2305,7 +2305,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     ObjectEntry.unwrapValues = function( pObject )
     {
-        let entries = isNonNullObj( pObject ) && !isKeyValueArray( pObject ) ? objectEntries( pObject ) : isArray( pObject ) ? [...pObject] : [pObject];
+        let entries = attempt( () => isNonNullObj( pObject ) && !isKeyValueArray( pObject ) ? objectEntries( pObject ) : isArray( pObject ) ? [...pObject] : [pObject] );
 
         let results = [];
 

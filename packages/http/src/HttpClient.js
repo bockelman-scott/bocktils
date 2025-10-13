@@ -200,6 +200,7 @@ const $scope = constants?.$scope || function()
             isNullOrNaN,
             isPopulatedObject,
             isFunction,
+            isClass,
             isError,
             isArray = moduleUtils?.TYPES_CHECKS?.isArray,
             isString,
@@ -212,6 +213,7 @@ const $scope = constants?.$scope || function()
             isMap,
             instanceOfAny,
             firstMatchingType,
+            hasProperty,
             toObjectLiteral,
             asMap,
             transformObject,
@@ -303,7 +305,8 @@ const $scope = constants?.$scope || function()
      * This class is used to define the configuration of an Http (or Https) Agent.
      * Notably, this class exposes properties for whether to use keepAlive, and if so, the duration (in milliseconds).
      * While these options are defined by creating instances of this class,
-     * they must be passed as POJOs (plain old JavaScript objects), for which purpose the toObjectLiteral method is provided.
+     * they must be passed as POJOs (plain old JavaScript objects),
+     * for which purpose the toObjectLiteral method is provided.
      * @class
      */
     class HttpAgentConfig
@@ -453,6 +456,340 @@ const $scope = constants?.$scope || function()
         return httpAgentConfig;
     };
 
+    function resolveHttpAgent( pAgent )
+    {
+        return isNull( pAgent ) || !(pAgent instanceof http.Agent) ? new http.Agent( httpAgentConfig.toObjectLiteral() ) : pAgent;
+    }
+
+    function resolveHttpsAgent( pAgent )
+    {
+        return isNull( pAgent ) || !(pAgent instanceof https.Agent) ? new https.Agent( httpAgentConfig.toObjectLiteral() ) : pAgent;
+    }
+
+    const httpConfigProperties = ["headers", "url", "method", "httpAgent", "httpsAgent"];
+
+    class HttpConfig extends EventTarget
+    {
+        #properties;
+
+        #headers = {};
+
+        #url;
+        #method;
+
+        #data;
+        #body;
+
+        #httpAgent;
+        #httpsAgent;
+
+        constructor( pProperties, pHeaders, pUrl, pMethod )
+        {
+            super();
+
+            const me = this;
+
+            const properties = toObjectLiteral( asObject( pProperties || {} ) );
+
+            this.#properties = { ...(properties || {}) };
+
+            this.#headers = { ...(properties?.headers || {}), ...(pHeaders || pProperties?.headers || {}) };
+
+            this.#url = cleanUrl( asString( pUrl, true ) );
+
+            this.#method = resolveHttpMethod( pMethod );
+
+            const definedProperties = ["properties", ...httpConfigProperties];
+
+            const entries = objectEntries( asObject( this.#properties || {} ) );
+            entries.forEach( entry =>
+                             {
+                                 const key = asString( ObjectEntry.getKey( entry ), true );
+                                 const value = ObjectEntry.getValue( entry );
+
+                                 if ( !(isBlank( key ) || isNull( value ) || (definedProperties.includes( key )) || hasProperty( this, key )) )
+                                 {
+                                     Object.defineProperty( this,
+                                                            key,
+                                                            {
+                                                                enumerable: true,
+                                                                get: function()
+                                                                {
+                                                                    return ((me || this).#properties || {})[key];
+                                                                },
+                                                                set: function( pValue )
+                                                                {
+                                                                    ((me || this).#properties || {})[key] = pValue;
+                                                                }
+                                                            } );
+                                 }
+                             } );
+
+            this.httpAgent = resolveHttpAgent( properties["httpAgent"] || httpAgent, httpAgent );
+            this.httpsAgent = resolveHttpsAgent( properties["httpsAgent"] || httpsAgent, httpsAgent );
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
+        get properties()
+        {
+            return { ...asObject( this.#properties ) };
+        }
+
+        get headers()
+        {
+            return (isNonNullObject( this.#headers ) && isFunction( this.#headers.clone )) ?
+                { ...(toObjectLiteral( this.#headers.clone() )) } :
+                { ...(asObject( this.#headers || {} )) };
+        }
+
+        get baseHeaders()
+        {
+            return (isNonNullObject( this.#headers ) && isFunction( this.#headers.clone )) ?
+                { ...(toObjectLiteral( this.#headers.clone() )) } :
+                { ...(asObject( this.#headers || {} )) };
+        }
+
+        set baseHeaders( pHeaders )
+        {
+            this.#headers = asObject( pHeaders );
+        }
+
+        set headers( pValue )
+        {
+            this.#headers = asObject( pValue );
+        }
+
+        addHeaders( pValue )
+        {
+            if ( isNonNullObject( pValue ) )
+            {
+                if ( isFunction( this.#headers?.merge ) )
+                {
+                    this.#headers = this.#headers.merge( pValue );
+                }
+                else
+                {
+                    const entries = objectEntries( pValue );
+                    entries.forEach( entry =>
+                                     {
+                                         const key = asString( ObjectEntry.getKey( entry ), true );
+                                         const value = asString( ObjectEntry.getValue( entry ), true );
+                                         if ( isFunction( this.#headers.append ) )
+                                         {
+                                             attempt( () => this.#headers.append( key, value ) );
+                                         }
+                                         else if ( isFunction( this.#headers.set ) )
+                                         {
+                                             attempt( () => this.#headers.set( key, value ) );
+                                         }
+                                         else
+                                         {
+                                             attempt( () => this.#headers[key] = value );
+                                         }
+                                     } );
+                }
+            }
+        }
+
+        get url()
+        {
+            return cleanUrl( asString( this.#url, true ) );
+        }
+
+        set url( pUrl )
+        {
+            this.#url = cleanUrl( asString( pUrl, true ) );
+        }
+
+        get method()
+        {
+            return resolveHttpMethod( asString( this.#method, true ) );
+        }
+
+        set method( pMethod )
+        {
+            this.#method = resolveHttpMethod( asString( pMethod, true ) );
+        }
+
+        get httpAgent()
+        {
+            this.#httpAgent = resolveHttpAgent( this.#httpAgent );
+            return this.#httpAgent;
+        }
+
+        set httpAgent( pAgent )
+        {
+            this.#httpAgent = resolveHttpAgent( pAgent );
+        }
+
+        get httpsAgent()
+        {
+            this.#httpsAgent = resolveHttpsAgent( this.#httpsAgent );
+            return this.#httpsAgent;
+        }
+
+        set httpsAgent( pAgent )
+        {
+            this.#httpsAgent = resolveHttpsAgent( pAgent );
+        }
+
+        fixAgents()
+        {
+            fixAgents( this );
+        }
+
+        get data()
+        {
+            return this.#data || this.#body;
+        }
+
+        set data( pData )
+        {
+            this.#data = pData;
+            this.#body = pData;
+        }
+
+        get body()
+        {
+            return this.#body || this.#data;
+        }
+
+        set body( pBody )
+        {
+            this.#body = pBody;
+            this.#data = pBody;
+        }
+
+        toLiteral()
+        {
+            let obj =
+                {
+                    properties: { ...(asObject( this.#properties )) },
+                    headers: { ...(asObject( toObjectLiteral( this.headers ) )) },
+                    url: this.url,
+                    method: this.method,
+                    httpAgent: this.httpAgent,
+                    httpsAgent: this.httpsAgent,
+                    data: this.data,
+                    body: this.body
+                };
+
+            return lock( obj );
+        }
+
+        merge( ...pConfigs )
+        {
+            const configs = asArray( pConfigs ).filter( isNonNullObject ).map( resolveHttpConfig ).filter( isHttpConfig );
+
+            for( let cfg of configs )
+            {
+                this.url = cleanUrl( cfg.url ) || this.url;
+                this.method = resolveHttpMethod( cfg.method ) || this.method;
+                this.httpAgent = resolveHttpAgent( cfg.httpAgent || this.httpAgent ) || this.httpAgent;
+                this.httpsAgent = resolveHttpsAgent( cfg.httpsAgent || this.httpsAgent ) || this.httpsAgent;
+                this.data = cfg.data || cfg.body || this.data;
+                this.body = cfg.body || cfg.data || this.body;
+
+                if ( isNonNullObject( this.#headers ) )
+                {
+                    if ( isFunction( this.#headers.clone ) && isFunction( this.#headers.merge ) )
+                    {
+                        this.#headers = this.#headers.clone();
+                        this.#headers = this.#headers.merge( cfg.headers );
+                    }
+                    else
+                    {
+                        this.#headers = isFunction( this.#headers.toLiteral ) ? this.#headers.toLiteral() : toObjectLiteral( this.#headers );
+
+                        let otherHeaders = asObject( cfg.headers );
+                        otherHeaders = isFunction( otherHeaders.toLiteral ) ? otherHeaders.toLiteral() : toObjectLiteral( otherHeaders );
+
+                        this.headers = { ...asObject( this.#headers || {} ), ...(asObject( otherHeaders )) };
+                    }
+                }
+            }
+
+            return this;
+        }
+
+        clone()
+        {
+            const httpConfig = new HttpConfig( this.#properties, this.headers, this.url, this.method );
+
+            return httpConfig.merge( this );
+        }
+    }
+
+    const isHttpConfig = function( pConfig, pStrict = false, pClass = HttpConfig )
+    {
+        let strict = !!pStrict;
+
+        if ( isNonNullObject( pConfig ) )
+        {
+            if ( pConfig instanceof HttpConfig )
+            {
+                return !strict || isNull( pClass ) || !isClass( pClass ) || pClass === HttpConfig || pConfig instanceof pClass;
+            }
+
+            if ( strict )
+            {
+                return false;
+            }
+
+            let matchesInterface = hasProperty( pConfig, "headers" );
+
+            for( let prop of httpConfigProperties )
+            {
+                matchesInterface = matchesInterface && hasProperty( pConfig, prop );
+                if ( !matchesInterface )
+                {
+                    break;
+                }
+            }
+
+            return matchesInterface;
+        }
+
+        return false;
+    };
+
+    const resolveHttpConfig = function( pConfig, ...pObjects )
+    {
+        let httpConfig = pConfig;
+
+        let hosts = [...(asArray( pObjects || [] ))].filter( isNonNullObject );
+
+        while ( !isHttpConfig( httpConfig ) && $ln( hosts ) )
+        {
+            const host = hosts.shift();
+            if ( isNonNullObject( host ) )
+            {
+                httpConfig = isHttpConfig( host ) ? host : (host.config || host.httpConfig);
+            }
+        }
+
+        return isHttpConfig( httpConfig ) ? httpConfig : null;
+    };
+
+    const toHttpConfigLiteral = function( pHttpConfig )
+    {
+        let httpConfig = isHttpConfig( pHttpConfig ) ? pHttpConfig : { ...(asObject( pHttpConfig || {} )) };
+
+        if ( isNonNullObject( httpConfig ) )
+        {
+            if ( isHttpConfig( httpConfig, true ) )
+            {
+                return isFunction( httpConfig.toLiteral ) ? { ...(asObject( httpConfig.toLiteral() )) } : { ...(toObjectLiteral( asObject( httpConfig ) )) };
+            }
+            return { ...(asObject( httpConfig )) };
+        }
+
+        return new HttpConfig( httpConfig, (httpConfig?.headers || httpConfig), httpConfig?.url, httpConfig?.method );
+    };
 
     const RequestInitModel =
         {
@@ -857,7 +1194,7 @@ const $scope = constants?.$scope || function()
         {
             const me = this;
 
-            let config = { ...(pConfig || {}) };
+            let config = toHttpConfigLiteral( asObject( pConfig ) );
 
             const entries = objectEntries( pModel || {} );
 
@@ -896,6 +1233,7 @@ const $scope = constants?.$scope || function()
             responseType: "text/plain"
         };
 
+    const DEFAULT_HTTP_CONFIG = new HttpConfig( DEFAULT_CONFIG );
 
     const DEFAULT_DOWNLOAD_CONFIG =
         {
@@ -905,6 +1243,7 @@ const $scope = constants?.$scope || function()
             headers: { Accept: "application/octet-stream" }
         };
 
+    const DEFAULT_HTTP_DOWNLOAD_CONFIG = new HttpConfig( DEFAULT_DOWNLOAD_CONFIG, DEFAULT_DOWNLOAD_CONFIG.headers );
 
     function isHttpClient( pDelegate )
     {
@@ -934,9 +1273,9 @@ const $scope = constants?.$scope || function()
             }
         }
 
-        if ( isString( pUrl ) )
+        if ( isString( pUrl ) && !isBlank( pUrl ) )
         {
-            return cleanUrl( asString( pUrl, true ) ) || pConfig?.url;
+            return cleanUrl( asString( pUrl, true ) );
         }
 
         return cleanUrl( pConfig?.url || _mt );
@@ -949,7 +1288,7 @@ const $scope = constants?.$scope || function()
      * For subclasses using a delegate with other expectations, override the corresponding method of HttpClient.
      *
      * @param pBody
-     * @param {Object|HttpClientConfig|RequestInit} pConfig An object with either a body or data property.
+     * @param {Object|HttpConfig|RequestInit} pConfig An object with either a body or data property.
      *
      * @returns {String|ArrayBuffer|Blob|DataView|File|FormData|TypedArray|URLSearchParams|ReadableStream|null}
      * The body to be sent to the server or the body received from the server (which may be an unfulfilled Promise)
@@ -978,7 +1317,7 @@ const $scope = constants?.$scope || function()
         if ( isPromise( body ) || isThenable( body ) )
         {
             body = await asyncAttempt( async() => await body );
-            return resolveBody( { body }, pConfig );
+            return resolveBody( body, pConfig );
         }
 
         // override resolveBody for Axios, which will do this for us
@@ -1049,7 +1388,7 @@ const $scope = constants?.$scope || function()
         {
             this.#queuedTime = Date.now();
 
-            this.#config = { ...(pConfig || {}) };
+            this.#config = toHttpConfigLiteral( asObject( pConfig ) );
 
             this.#request = new HttpRequest( isString( pRequest ) ? (_ud !== typeof Request) ? new Request( pRequest, this.#config ) : new HttpRequest( pRequest, this.#config ) : pRequest );
 
@@ -1092,7 +1431,7 @@ const $scope = constants?.$scope || function()
 
         get config()
         {
-            return { ...(this.#config || {}) };
+            return { ...(toHttpConfigLiteral( this.#config || {} )) };
         }
 
         get request()
@@ -1150,7 +1489,7 @@ const $scope = constants?.$scope || function()
 
         const cfg =
             {
-                ...(pConfig || {}),
+                ...(toHttpConfigLiteral( pConfig || {} )),
                 ...({ url: url, method: method })
             };
 
@@ -1173,31 +1512,35 @@ const $scope = constants?.$scope || function()
     class HttpFetchClient
     {
         #options = DEFAULT_DELEGATE_OPTIONS;
-        #config = DEFAULT_CONFIG;
+        #config = DEFAULT_HTTP_CONFIG;
 
         /**
          * Constructs an instance of the default implementation of an HttpClient delegate
          * @param {Object} pConfig
          * @param {Object} pOptions
          */
-        constructor( pConfig = DEFAULT_CONFIG, pOptions = DEFAULT_DELEGATE_OPTIONS )
+        constructor( pConfig = DEFAULT_HTTP_CONFIG, pOptions = DEFAULT_DELEGATE_OPTIONS )
         {
-            this.#config = { ...DEFAULT_CONFIG, ...(pConfig || {}) };
+            this.#config = (isHttpConfig( pConfig, true )
+                            && isFunction( pConfig?.clone )
+                            && isFunction( pConfig?.merge )) ?
+                           pConfig.clone().merge( DEFAULT_HTTP_CONFIG, pConfig ) :
+                { ...DEFAULT_CONFIG, ...(toHttpConfigLiteral( pConfig || {} )) };
 
             this.#options = populateOptions( pOptions || {}, DEFAULT_DELEGATE_OPTIONS );
         }
 
         get config()
         {
-            return fixAgents( { ...(this.#config || {}) } );
+            return fixAgents( { ...(toHttpConfigLiteral( this.#config || {} )) } );
         }
 
         mergeConfig( pConfig )
         {
-            let mergedConfig = { ...({ ...(this.config || {}) }), ...(pConfig || {}) };
+            let mergedConfig = { ...({ ...(this.config || {}) }), ...(toHttpConfigLiteral( pConfig || {} )) };
 
-            mergedConfig.httpAgent = pConfig?.httpAgent || this.#config?.httpAgent || httpAgent;
-            mergedConfig.httpsAgent = pConfig?.httpsAgent || this.#config?.httpsAgent || httpsAgent;
+            mergedConfig.httpAgent = resolveHttpAgent( pConfig?.httpAgent || this.config?.httpAgent || httpAgent, this.config?.httpAgent || httpAgent, httpAgent ) || httpAgent;
+            mergedConfig.httpsAgent = resolveHttpsAgent( pConfig?.httpsAgent || this.config?.httpsAgent || httpsAgent, this.config?.httpsAgent || httpsAgent, httpsAgent ) || httpsAgent;
 
             return fixAgents( mergedConfig );
         }
@@ -1325,16 +1668,22 @@ const $scope = constants?.$scope || function()
         {
             const me = this;
 
-            const { url, cfg } = await prepareRequestConfig( pUrl, resolveHttpMethod( pMethod ), pConfig, pBody );
+            const { url, cfg } = await prepareRequestConfig( pUrl,
+                                                             resolveHttpMethod( pMethod ),
+                                                             toHttpConfigLiteral( pConfig ),
+                                                             pBody );
 
             return await me.doFetch( url, cfg );
         }
 
         async request( pConfig )
         {
-            const method = pConfig?.method || VERBS.GET;
-            const url = pConfig?.url || pConfig;
-            const body = pConfig?.body || pConfig?.data;
+            const config = isHttpConfig( pConfig ) ? toHttpConfigLiteral( this.mergeConfig( pConfig ) ) : asObject( pConfig || this.config );
+
+            const method = config?.method || pConfig?.method || VERBS.GET;
+            const url = config?.url || pConfig?.url || config;
+            const body = config?.body || config?.data || pConfig?.body || pConfig?.data;
+
             return await this.sendRequest( method, url, pConfig, ([VERBS.POST, VERBS.PUT, VERBS.PATCH, VERBS.DELETE].includes( method ) ? body : undefined) );
         }
 
@@ -1482,7 +1831,7 @@ const $scope = constants?.$scope || function()
             /* TBD */
         };
 
-    class HttpClient
+    class HttpClient extends EventTarget
     {
         #config;
 
@@ -1498,7 +1847,9 @@ const $scope = constants?.$scope || function()
 
         constructor( pConfig, pOptions, pDelegates = new Map(), pDefaultDelegate )
         {
-            this.#config = { ...DEFAULT_CONFIG, ...(pConfig || {}) };
+            super();
+
+            this.#config = isHttpConfig( pConfig, true ) ? pConfig.merge( DEFAULT_HTTP_CONFIG, pConfig ) : new HttpConfig( { ...DEFAULT_CONFIG, ...(toHttpConfigLiteral( pConfig || {} )) } );
 
             this.#options = { ...DEFAULT_HTTP_CLIENT_OPTIONS, ...(pOptions || {}) };
 
@@ -1653,7 +2004,13 @@ const $scope = constants?.$scope || function()
 
         get config()
         {
-            return { ...DEFAULT_CONFIG, ...(this.#config || {}) };
+            let cfg = isHttpConfig( this.#config, true ) ? this.#config.merge( DEFAULT_HTTP_CONFIG, this.#config ) : new HttpConfig( { ...(toHttpConfigLiteral( DEFAULT_HTTP_CONFIG )) }, DEFAULT_HTTP_CONFIG.headers );
+            return isHttpConfig( cfg ) ? cfg : new HttpConfig( cfg, cfg?.headers, cfg?.url, cfg?.method );
+        }
+
+        set config( pConfig )
+        {
+            this.#config = isHttpConfig( pConfig, true ) ? pConfig.merge( DEFAULT_HTTP_CONFIG, pConfig ) : new HttpConfig( { ...DEFAULT_CONFIG, ...(asObject( pConfig || {} )) }, DEFAULT_HTTP_CONFIG.headers );
         }
 
         get options()
@@ -1999,6 +2356,24 @@ const $scope = constants?.$scope || function()
             return _mt;
         }
     }
+
+    const resolveHttpClient = function( pHttpClient, ...pObjects )
+    {
+        let httpClient = pHttpClient;
+
+        let hosts = [...(asArray( pObjects || [] ))].filter( isNonNullObject );
+
+        while ( !isHttpClient( httpClient ) && $ln( hosts ) )
+        {
+            const host = hosts.shift();
+            if ( isNonNullObject( host ) )
+            {
+                httpClient = isHttpClient( host ) ? host : host.httpClient;
+            }
+        }
+
+        return httpClient;
+    };
 
     /**
      * Represents a length of time for which rate limits might apply
@@ -3996,6 +4371,7 @@ const $scope = constants?.$scope || function()
                     Throttler,
                     SimpleRequestThrottler
                 },
+
             HttpAgentConfig,
             httpAgent,
             httpsAgent,
@@ -4013,9 +4389,12 @@ const $scope = constants?.$scope || function()
 
             extractFileNameFromHeader,
 
+            HttpConfig,
             HttpClient,
             HttpFetchClient,
             RateLimitedHttpClient,
+
+            resolveHttpClient,
 
             RequestInterval,
             RequestWindow,
@@ -4025,7 +4404,11 @@ const $scope = constants?.$scope || function()
             createRateLimitedHttpClient,
 
             Throttler,
-            SimpleRequestThrottler
+            SimpleRequestThrottler,
+
+            isHttpConfig,
+            resolveHttpConfig,
+            toHttpConfigLiteral
         };
 
     mod = toolBocksModule.extend( mod );
