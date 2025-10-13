@@ -360,7 +360,27 @@ const {
             JPG: "image/jpeg",
             JPEG: "image/jpeg",
             SVG: "image/svg+xml",
-            PDF:"application/pdf"
+            PDF: "application/pdf"
+        };
+
+    const EXTENSIONS =
+        {
+            "application/pdf": ".pdf",
+            "application/json": ".json",
+            "application/xml": ".xml",
+            "application/zip": ".zip",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+            "application/msword": ".doc",
+            "application/vnd.ms-excel": ".xls",
+            "text/plain": ".txt",
+            "text/html": ".html",
+            "text/css": ".css",
+            "image/jpeg": ".jpg",
+            "image/png": ".png",
+            "image/gif": ".gif",
+            "image/svg+xml": ".svg",
+            "audio/mpeg": ".mp3",
+            "video/mp4": ".mp4"
         };
 
     /**
