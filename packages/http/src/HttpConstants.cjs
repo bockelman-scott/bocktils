@@ -357,7 +357,10 @@ const {
             CSV: "text/csv",
             ZIP: "application/zip",
             PNG: "image/png",
-            SVG: "image/svg+xml"
+            JPG: "image/jpeg",
+            JPEG: "image/jpeg",
+            SVG: "image/svg+xml",
+            PDF:"application/pdf"
         };
 
     /**
