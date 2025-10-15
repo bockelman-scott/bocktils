@@ -9,6 +9,10 @@
  * @license MIT
  */
 
+const fs = require( "fs" );
+
+const { finished } = require( "stream/promises" );
+
 /**
  * This statement imports the core modules:
  * Constants, TypeUtils, StringUtils, and ArrayUtils
@@ -106,7 +110,9 @@ const {
         isDate,
         isDateString,
         isScalar,
+        isPromise,
         asObject,
+        toObjectLiteral,
         clamp = moduleUtils.clamp
     } = typeUtils;
 
@@ -235,6 +241,66 @@ const {
                   "clone",
                   "_setPropertiesFromInstance"
               ] );
+
+    async function streamToFile( pResponseData, pFilePath )
+    {
+        let closed = false;
+
+        let filePath = asString( pFilePath, true );
+
+        let responseData = ResponseData.from( pResponseData );
+
+        let logger = this.logger || konsole;
+
+        // create a writable stream
+        const fileStream = fs.createWriteStream( filePath );
+
+        try
+        {
+            let response = responseData.response;
+
+            let data = (responseData.data || response.data || response.body || response);
+
+            if ( isNonNullObject( data ) && isPromise( data ) )
+            {
+                data = await asyncAttempt( async() => await data );
+            }
+
+            if ( isNonNullObject( data ) && isFunction( data.pipe ) )
+            {
+                attempt( () => (responseData.data || response.body || response).pipe( fileStream ) );
+
+                // wait for the stream to complete
+                await finished( fileStream );
+
+                closed = true;
+
+                logger.log( `Wrote: ${filePath}` );
+
+                return filePath;
+            }
+            else
+            {
+                if ( !closed )
+                {
+                    attempt( () => fileStream.close() );
+                }
+            }
+        }
+        catch( ex )
+        {
+            if ( !closed )
+            {
+                attempt( () => fileStream.close() );
+            }
+
+            toolBocksModule.reportError( ex, ex.message, "error", streamToFile, ex.response?.status, ex.response );
+
+            logger.error( ` *****ERROR*****\nFailed to download file: ${ex.message}`, ex );
+        }
+
+        return _mt;
+    }
 
     /**
      * This class provides both a wrapper for the information returned by an HTTP request
@@ -397,7 +463,6 @@ const {
 
                 // Stores the url path from which the response actually came (in the case of redirects) or the url/path of the request
                 this.#url = cleanUrl( asString( asString( this.#response?.url || this.#frameworkResponse?.url || config?.url || source?.url, true ) || asString( config.url || options.url, true ) || _slash, true ) );
-
             }
         }
 
@@ -446,6 +511,12 @@ const {
         get headers()
         {
             return new HttpResponseHeaders( this.#headers || this.frameworkHeaders || this.#frameworkResponse?.headers || this.config?.headers || this.options.headers );
+        }
+
+        get headersLiteral()
+        {
+            let headers = this.headers;
+            return isFunction( headers.toLiteral ) ? headers.toLiteral() : toObjectLiteral( headers );
         }
 
         get frameworkHeaders()
@@ -639,6 +710,13 @@ const {
             return await asyncAttempt( async() => await res.text() );
         }
 
+        async streamToFile( pFilePath )
+        {
+            const me = this;
+            const filePath = asString( pFilePath, true );
+            return await asyncAttempt( async() => await streamToFile( me, filePath ) );
+        }
+
         clone()
         {
             return new ResponseData( this.frameworkResponse || this.options.response || this.response,
@@ -786,11 +864,15 @@ const {
             return pObject;
         }
 
-        let obj = { ...(pObject || {}) };
+        let obj = { ...(asObject( pObject || {} )) };
 
-        return new ResponseData( obj?.response || pConfig?.response || pOptions?.response || obj,
-                                 pConfig,
-                                 pOptions );
+        const response = obj?.response || pConfig?.response || pOptions?.response || obj;
+
+        const config = pConfig || obj?.config || response?.config;
+
+        const options = asObject( pOptions || config || response );
+
+        return new ResponseData( response, config, options );
     };
 
     ResponseData.exceedsRateLimit = function( pResponseData )
@@ -828,7 +910,8 @@ const {
             HttpStatus,
             STATUS_CODES,
             VERBS,
-            resolveHttpMethod
+            resolveHttpMethod,
+            streamToFile
         };
 
     mod = toolBocksModule.extend( mod );

@@ -375,7 +375,7 @@ const {
     {
         return isNonNullObject( pObject ) || isLikeArray( pObject ) ?
                pObject :
-               attempt( () => parseJson( pObject ) );
+               (isString( pObject ) && isJson( pObject )) ? attempt( () => parseJson( pObject ) ) : { value: pObject };
     }
 
     let mod =

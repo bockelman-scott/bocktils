@@ -186,6 +186,13 @@ const $scope = constants?.$scope || function()
 
             resolveHttpClient,
 
+            getFileExtension,
+            replaceExtension,
+
+            updateContext,
+            calculateFileName,
+            streamToFile,
+
             RequestInterval,
             RequestWindow,
             RateLimits,
@@ -365,6 +372,14 @@ const $scope = constants?.$scope || function()
             HttpFetchClient,
             RateLimitedHttpClient,
             resolveHttpClient,
+
+            getFileExtension,
+            replaceExtension,
+
+            updateContext,
+            calculateFileName,
+            streamToFile,
+
             RequestInterval,
             RequestWindow,
             RateLimits,

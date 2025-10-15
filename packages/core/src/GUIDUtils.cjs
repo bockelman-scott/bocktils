@@ -24,9 +24,11 @@ const crypto = $scope().crypto || require( "crypto" );
         return $scope()[INTERNAL_NAME];
     }
 
-    const { OBJECT_REGISTRY, ToolBocksModule, populateOptions, clamp, lock } = moduleUtils;
+    const { OBJECT_REGISTRY, ToolBocksModule, clamp, lock } = moduleUtils;
 
-    const { _mt_str } = constants;
+    const { _mt_str = "", _mt = _mt_str, _hyphen = "-" } = constants;
+
+    const { isNull, isFunction, isUUID } = typeUtils;
 
     const { asString, isBlank, asInt } = stringUtils;
 
@@ -48,10 +50,18 @@ const crypto = $scope().crypto || require( "crypto" );
 
     const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
-    const MAX_CACHED_VALUES = 10_000;
-    const DEFAULT_CACHED_VALUES = 1_000;
+    const MAX_NUM_CACHED_VALUES = 10_000;
+    const DEFAULT_NUM_CACHED_VALUES = 1_000;
 
     const RandomUUIDOptions = { disableEntropyCache: true, preload: false, numPreload: 0 };
+
+    function generate()
+    {
+        const quad = () => Math.floor( (1 + Math.random()) * 0x10000 ).toString( 16 ).slice( 1 );
+        const octet = () => quad() + quad();
+        const duodec = () => octet() + quad();
+        return [octet(), quad(), quad(), quad(), duodec()].join( _hyphen );
+    }
 
     // noinspection SpellCheckingInspection
     class GUIDMaker
@@ -67,7 +77,7 @@ const crypto = $scope().crypto || require( "crypto" );
 
             if ( this.#options.preload )
             {
-                let num = clamp( asInt( this.#options.numPreload, DEFAULT_CACHED_VALUES ) || DEFAULT_CACHED_VALUES, 10, MAX_CACHED_VALUES );
+                let num = clamp( asInt( this.#options.numPreload, DEFAULT_NUM_CACHED_VALUES ), 10, MAX_NUM_CACHED_VALUES );
 
                 for( let i = num; i--; )
                 {
@@ -88,7 +98,19 @@ const crypto = $scope().crypto || require( "crypto" );
 
         uuid()
         {
-            return crypto.randomUUID( this.options );
+            if ( !isNull( crypto ) && isFunction( crypto.randomUUID ) )
+            {
+                let value = crypto.randomUUID( this.options );
+
+                if ( !isBlank( value ) && isUUID( value ) )
+                {
+                    return asString( value, true );
+                }
+
+                return generate();
+            }
+
+            return generate();
         }
 
         guid()
@@ -100,19 +122,19 @@ const crypto = $scope().crypto || require( "crypto" );
                 value = asString( this.#cached.shift(), true );
             }
 
-            if ( !isBlank( value ) )
+            if ( !isBlank( value ) && isUUID( value ) )
             {
                 return asString( value, true );
             }
 
             value = asString( this.uuid(), true );
 
-            if ( !isBlank( value ) )
+            if ( !isBlank( value ) && isUUID( value ) )
             {
                 return value;
             }
 
-            return "0000-0000-0000-0000";
+            return generate();
         }
     }
 
@@ -129,7 +151,7 @@ const crypto = $scope().crypto || require( "crypto" );
             },
             uuid: function()
             {
-                return crypto.randomUUID( RandomUUIDOptions );
+                return new GUIDMaker( RandomUUIDOptions ).uuid();
             },
             getGuid: function( pObject )
             {

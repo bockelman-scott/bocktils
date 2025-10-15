@@ -247,6 +247,8 @@ const $scope = constants?.$scope || function()
     // import the functions from DateUtils we use in this module
     const { asDate } = DateUtils;
 
+    const { getFileExtension, replaceExtension } = fileUtils;
+
     // import the functions from the JSON Utilities that we use in this module
     const { parseJson, asJson } = jsonUtils;
 
@@ -256,6 +258,7 @@ const $scope = constants?.$scope || function()
     // import the functions, variables, and classes defined in the HttpConstants module that are used in this module
     const {
         CONTENT_TYPES,
+        EXTENSIONS,
         VERBS,
         PRIORITY,
         resolveHttpMethod,
@@ -274,7 +277,7 @@ const $scope = constants?.$scope || function()
         isHeader
     } = httpConstants;
 
-    const { ResponseData } = responseDataModule;
+    const { ResponseData, streamToFile } = responseDataModule;
 
     // define module-level constants
     const MIN_TIMEOUT_MILLISECONDS = 10_000; // 10 seconds
@@ -1316,7 +1319,7 @@ const $scope = constants?.$scope || function()
 
         if ( isPromise( body ) || isThenable( body ) )
         {
-            body = await asyncAttempt( async() => await body );
+            body = isPromise( body ) ? await asyncAttempt( async() => await body ) : Promise.resolve( body ).then( b => b );
             return resolveBody( body, pConfig );
         }
 
@@ -1485,7 +1488,7 @@ const $scope = constants?.$scope || function()
 
         const method = resolveHttpMethod( pMethod || pConfig?.method );
 
-        const body = !isNull( pBody ) ? await resolveBody( (pBody || pConfig?.body || pConfig?.data), pConfig ) : null;
+        const body = !isNull( pBody ) ? await asyncAttempt( async() => await resolveBody( (pBody || pConfig?.body || pConfig?.data), pConfig ) ) : null;
 
         const cfg =
             {
@@ -1495,7 +1498,7 @@ const $scope = constants?.$scope || function()
 
         if ( body )
         {
-            cfg.body = cfg.data = (body || await resolveBody( body, cfg ));
+            cfg.body = cfg.data = await asyncAttempt( async() => await resolveBody( body, cfg ) );
         }
 
         return { url, cfg };
@@ -1831,6 +1834,56 @@ const $scope = constants?.$scope || function()
             /* TBD */
         };
 
+    function updateContext( pConfig, pResponseData )
+    {
+        let responseData = ResponseData.from( pResponseData || pConfig );
+
+        let config = pConfig || responseData.config || responseData.response?.config;
+
+        let context = asObject( (config?.context || config || responseData) || {} );
+
+        context.headers = responseData.headers || config.headers || context.headers;
+
+        context.contentType = HttpHeaders.getHeaderValue( (context.headers || responseData.headers), "content-type" );
+
+        return context;
+    }
+
+    function calculateFileName( pResponseData, pContext, pNamingFunction, pDefaultName = ("file_" + Date.now()) )
+    {
+        let responseData = ResponseData.from( pResponseData );
+
+        let context = isNonNullObject( pContext ) ? asObject( pContext ) : pResponseData;
+
+        // get the default fileName from the Content-Disposition header or use provided filename
+        let defaultName = toUnixPath( asString( context.fileName || context?.data?.fileName, true ) ) || asString( pDefaultName, true );
+
+        const suggestedFileName = extractFileNameFromHeader( responseData.response || responseData, defaultName, true );
+
+        let extension = asString( getFileExtension( suggestedFileName ), true ) || asString( getFileExtension( defaultName ), true );
+
+        if ( isBlank( extension ) )
+        {
+            extension = asString( EXTENSIONS[context.contentType], true );
+        }
+
+        let fileName = asString( suggestedFileName, true ) || asString( context.fileName, true );
+
+        if ( isFunction( pNamingFunction ) )
+        {
+            fileName = attempt( () => pNamingFunction.call( responseData, fileName, context ) );
+        }
+
+        let fileExtension = asString( getFileExtension( fileName ), true );
+
+        if ( isBlank( fileExtension ) || (extension.replace( /^\.+/, _mt ) !== fileExtension.replace( /^\.+/, _mt )) )
+        {
+            fileName = replaceExtension( fileName, extension );
+        }
+
+        return asString( fileName, true );
+    }
+
     class HttpClient extends EventTarget
     {
         #config;
@@ -1860,6 +1913,8 @@ const $scope = constants?.$scope || function()
             this.#defaultDelegate = isHttpClient( pDefaultDelegate ) ? pDefaultDelegate : isHttpClient( pDelegates ) ? pDelegates : new HttpFetchClient( this.config, this.options );
 
             this.#populateDelegates( pDelegates, this.#defaultDelegate );
+
+            this.streamToFile = streamToFile.bind( this );
         }
 
         get defaultDelegate()
@@ -2296,7 +2351,7 @@ const $scope = constants?.$scope || function()
             return this.sendRequest( (cfg.method || VERBS.POST), url, cfg, (cfg.body || cfg.data || pBody) );
         }
 
-        async download( pUrl, pConfig, pOutputPath = ".", pFileName = _mt )
+        async download( pUrl, pConfig, pOutputPath = ".", pFileName = _mt, pNamingFunction )
         {
             let outputPath = toUnixPath( asString( pOutputPath, true ) ) || ".";
 
@@ -2306,48 +2361,40 @@ const $scope = constants?.$scope || function()
 
             if ( isFunction( delegate?.download ) )
             {
-                return asyncAttempt( async() => await delegate.download( url, cfg, outputPath, pFileName ) );
+                return asyncAttempt( async() => await delegate.download( url, cfg, outputPath, pFileName, pNamingFunction ) );
             }
+
+            let logger = this.logger || konsole;
 
             try
             {
-                let config = { ...DEFAULT_CONFIG, ...DEFAULT_DOWNLOAD_CONFIG, ...(cfg || {}) };
+                let config = { ...DEFAULT_CONFIG, ...DEFAULT_DOWNLOAD_CONFIG, ...(asObject( cfg || {} )) };
 
                 const response = await this.sendRequest( config.method || VERBS.GET, url, config );
 
                 if ( ResponseData.isOk( response ) )
                 {
-                    // get the fileName from the Content-Disposition header or use provided filename
-                    let defaultName = toUnixPath( asString( pFileName, true ) ) || _mt;
+                    let responseData = (response instanceof ResponseData) ? response : ResponseData.from( response, config, config?.options || {} );
 
-                    let fileName = asString( pFileName, true ) || extractFileNameFromHeader( response, defaultName );
+                    let context = updateContext( pConfig, responseData );
+
+                    let fileName = calculateFileName( responseData, context, pNamingFunction );
 
                     // append the fileName to the path
                     const filePath = path.join( asString( outputPath, true ).replace( fileName, _mt ), fileName );
 
-                    // create a writable stream
-                    const fileStream = fs.createWriteStream( filePath );
-
-                    // pipe the response data stream to the file stream
-                    response.data.pipe( fileStream );
-
-                    // wait for the stream to complete
-                    await asyncAttempt( async() => await finished( fileStream ) );
-
-                    console.log( `Wrote: ${filePath}` );
-
-                    return filePath;
+                    return await asyncAttempt( async() => streamToFile( responseData, filePath ) );
                 }
             }
             catch( ex )
             {
                 toolBocksModule.reportError( ex, ex.message, "error", this, ex.response?.status, ex.response );
 
-                console.error( ` *****ERROR*****\nFailed to download file: ${ex.message}`, ex );
+                logger.error( ` *****ERROR*****\nFailed to download file: ${ex.message}`, ex );
 
                 if ( ex.response )
                 {
-                    console.error( ` *****ERROR*****\nResponse status: ${ex.response.status}` );
+                    logger.error( ` *****ERROR*****\nResponse status: ${ex.response.status}` );
                 }
 
                 throw ex;
@@ -2356,6 +2403,12 @@ const $scope = constants?.$scope || function()
             return _mt;
         }
     }
+
+    HttpClient.updateContext = updateContext;
+    HttpClient.calculateFileName = calculateFileName;
+
+    HttpClient.ResponseData = ResponseData;
+    HttpClient.streamToFile = streamToFile.bind( HttpClient.prototype );
 
     const resolveHttpClient = function( pHttpClient, ...pObjects )
     {
@@ -4395,6 +4448,10 @@ const $scope = constants?.$scope || function()
             RateLimitedHttpClient,
 
             resolveHttpClient,
+
+            updateContext,
+            calculateFileName,
+            streamToFile,
 
             RequestInterval,
             RequestWindow,

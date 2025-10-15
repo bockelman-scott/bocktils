@@ -541,11 +541,16 @@ const {
 
         if ( isNonNullObject( headers ) )
         {
-            headers = isFunction( headers.toLiteral ) ? headers.toLiteral() : toObjectLiteral( headers, { keyTransformer: lcase } );
+            let value = isFunction( headers.get ) ? headers.get( lcase( key ) ) || headers.get( key ) : headers[lcase( key )] || headers[key];
 
-            let value = headers[lcase( key )] || headers[key];
+            if ( isNull( value ) || (isString( value ) && isBlank( value )) || (isArray( value ) && $ln( value ) <= 0) )
+            {
+                headers = isFunction( headers.toLiteral ) ? headers.toLiteral() : toObjectLiteral( headers, { keyTransformer: lcase } );
 
-            return ( !isNull( value ) && isArray( value )) ? value.join( ", " ) : value;
+                value = headers[lcase( key )] || headers[key];
+            }
+
+            return ( !isNull( value ) && isArray( value )) ? value.join( ", " ) : asString( value );
         }
 
         return isString( pHeaders ) ? asString( pHeaders, true ) : _mt;

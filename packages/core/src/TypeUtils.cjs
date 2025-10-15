@@ -556,6 +556,8 @@ const $scope = constants?.$scope || function()
      */
     const isString = ( pObj ) => (_str === typeof pObj) || pObj instanceof String;
 
+    const isUUID = ( pVal ) => (isString( pVal ) && (/^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$/i).test( String( pVal ) ));
+
     /**
      * Returns true if the specified value is an empty string.<br>
      * <br>
@@ -5421,6 +5423,8 @@ const $scope = constants?.$scope || function()
             isAssignableTo,
             isSymbol,
             isType,
+            isUUID,
+            isGUID: isUUID,
             isValidDateOrNumeric,
             isValidDateInstance,
             isDirectoryEntry,
