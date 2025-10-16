@@ -127,7 +127,6 @@ const {
             asObject
         } = typeUtils;
 
-
     const { asString, asInt, isBlank, isJson, startsWithAny, cleanUrl } = stringUtils;
 
     const { asArray } = arrayUtils;
@@ -272,7 +271,7 @@ const {
 
     const rxUrl = /((?<protocol>\w+):\/\/\/?)?((?<username>[^:@\s]+):(?<password>[^@\s]+)@)?(?<host>[^\/:]+)(:(?<port>(\d+)))?(\/(?<path>[^?#]+))?(?:\?(?<queryString>[^#]*))?(?:#(?<hash>[^#]*))?/;
 
-    const isUrl = ( pUrl ) => (_ud !== typeof URL && isFunction( URL ) && pUrl instanceof URL) || (isString( pUrl ) && rxUrl.test( pUrl ));
+    const isUrl = isFunction( typeUtils?.isUrl ) ? typeUtils?.isUrl : (( pUrl ) => (_ud !== typeof URL && isFunction( URL ) && pUrl instanceof URL) || (isString( pUrl ) && rxUrl.test( pUrl )));
 
     /**
      * Returns the base url (minus any queryString or location hash)

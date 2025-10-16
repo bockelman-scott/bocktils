@@ -558,6 +558,10 @@ const $scope = constants?.$scope || function()
 
     const isUUID = ( pVal ) => (isString( pVal ) && (/^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$/i).test( String( pVal ) ));
 
+    const rxUrl = /((?<protocol>\w+):\/\/\/?)?((?<username>[^:@\s]+):(?<password>[^@\s]+)@)?(?<host>[^\/:]+)(:(?<port>(\d+)))?(\/(?<path>[^?#]+))?(?:\?(?<queryString>[^#]*))?(?:#(?<hash>[^#]*))?/;
+
+    const isUrl = ( pUrl ) => (_ud !== typeof URL && isFunction( URL ) && pUrl instanceof URL) || (isString( pUrl ) && rxUrl.test( pUrl ));
+
     /**
      * Returns true if the specified value is an empty string.<br>
      * <br>
@@ -5425,6 +5429,7 @@ const $scope = constants?.$scope || function()
             isType,
             isUUID,
             isGUID: isUUID,
+            isUrl,
             isValidDateOrNumeric,
             isValidDateInstance,
             isDirectoryEntry,
