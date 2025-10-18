@@ -134,6 +134,11 @@ const $scope = constants?.$scope || function()
             _symbol,
 
             _mt_str,
+            _mt = _mt_str,
+
+            _dblqt,
+            _sglqt,
+
             _dot,
             _comma,
             _minus,
@@ -4426,17 +4431,37 @@ const $scope = constants?.$scope || function()
 
     let parseJson = function( pJson )
     {
-        if ( isObject( pJson ) )
+        if ( isObject( pJson ) || isArray( pJson ) || isTypedArray( pJson ) )
         {
             return pJson;
         }
 
         let s = _toString( isString( pJson ) ? pJson.trim() : _toString( pJson ).trim() );
-        s = s.replace( /^[\r\n]+/, _mt_str ).replace( /[\r\n]+$/, _mt_str ) || _mt_str;
+        s = (s.replace( /^[\r\n\t]+/, _mt_str ).replace( /[\r\n\t]+$/, _mt_str ) || _mt_str).trim();
 
-        if ( (s.startsWith( "{" ) && s.endsWith( "}" )) || ((s.startsWith( "[" ) && s.endsWith( "]" ))) )
+        let canParse = (s.startsWith( "{" ) && s.endsWith( "}" )) || ((s.startsWith( "[" ) && s.endsWith( "]" )));
+
+        canParse = canParse || (s.startsWith( _dblqt ) && s.endsWith( _dblqt )) || (s.startsWith( _sglqt ) && s.endsWith( _sglqt ));
+
+        if ( canParse )
         {
-            return attempt( () => JSON.parse( s ) );
+            let obj = attempt( () => JSON.parse( s ) );
+
+            if ( isNonNullObject( obj ) || isArray( obj ) || isTypedArray( obj ) )
+            {
+                return obj;
+            }
+
+            if ( isString( obj ) )
+            {
+                obj = String( obj ).replace( /^["'`]+/, _mt ).replace( /["'`]+$/, _mt );
+                obj = attempt( () => parseJson( obj ) );
+            }
+
+            if ( isNonNullObject( obj ) || isArray( obj ) || isTypedArray( obj ) )
+            {
+                return obj;
+            }
         }
 
         return { value: s, s };

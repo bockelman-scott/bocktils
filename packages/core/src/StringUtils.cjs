@@ -2666,10 +2666,10 @@ const { _ud = "undefined", $scope } = constants;
     {
         if ( !isString( pStr ) || isBlank( pStr ) )
         {
-            return isNumber( pStr );
+            return isNumber( pStr ) || isBoolean( pStr );
         }
 
-        const str = tidy( asString( pStr, true ) ).trim().replace( /^[ \n\r]+/, _mt_str ).replace( /[ \n\r]+$/, _mt_str );
+        const str = tidy( asString( pStr, true ) ).trim().replace( /^[ \n\r\t]+/, _mt_str ).replace( /[ \n\r\t]+$/, _mt_str );
 
         if ( enclosed( str ) )
         {
@@ -3337,9 +3337,9 @@ const { _ud = "undefined", $scope } = constants;
 
             let data = pData || {};
 
-            name = name.replace( (asString( data.address ) || _mt), _mt );
-            name = name.replace( (asString( data.phoneNumber || data.phone ) || _mt), _mt );
-            name = name.replace( (asString( data.emailAddress || data.email ) || _mt), _mt );
+            name = name.replace( (asString( data.address ) || data.address_line_1 || _mt), _mt );
+            name = name.replace( (asString( data.phoneNumber || data.phone || data.phone_number ) || _mt), _mt );
+            name = name.replace( (asString( data.emailAddress || data.email || data.email_address ) || _mt), _mt );
 
             return asString( name, true );
         }

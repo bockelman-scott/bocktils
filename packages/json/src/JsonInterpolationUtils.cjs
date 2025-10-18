@@ -85,7 +85,8 @@ const { _ud = "undefined", $scope } = constants;
         lock,
         detectCycles,
         objectEntries,
-        ObjectEntry
+        ObjectEntry,
+        attempt
     } = moduleUtils;
 
     const
@@ -110,6 +111,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             isObject,
             isArray,
+            isTypedArray,
             isString,
             isFunction,
             isClass,
@@ -1610,9 +1612,9 @@ const { _ud = "undefined", $scope } = constants;
         const space = [_num, _str].includes( typeof pSpace ) ? pSpace : options.space;
         options.space = [_num, _str].includes( typeof space ) ? space : null;
 
-        let obj = (isNonNullValue( pObject ) ? pObject : options.object);
+        let obj = ((isNonNullValue( pObject ) || isArray( pObject ) || isTypedArray( pObject )) ? pObject : options.object);
 
-        if ( _ud === typeof obj || null === obj )
+        if ( (_ud === typeof obj) || (null === obj) )
         {
             return handleNull( obj, options );
         }
@@ -1630,8 +1632,8 @@ const { _ud = "undefined", $scope } = constants;
 
         if ( !(false === options?.useToJson) && _canUseToJson( obj, obj?.toJson ) )
         {
-            const json = _toJson( obj );
-            if ( json )
+            const json = attempt( () => _toJson( obj ) );
+            if ( json && isJson( json ) )
             {
                 return json;
             }
@@ -1646,6 +1648,22 @@ const { _ud = "undefined", $scope } = constants;
         if ( _exceededTimeLimit( options ) || depth > MAX_RECURSION )
         {
             _handleCaughtException( onError, new Error( TIMEOUT_ERROR ), calculateErrorSourceName( modName, "asJson" ), S_ERROR, _mt_str, options, pVisited, pResolved, pPaths, pRoot );
+
+            let s = _mt_str;
+
+            try
+            {
+                s = asString( attempt( () => JSON.stringify( obj ) ), true );
+            }
+            catch( exx )
+            {
+                // ignored
+            }
+
+            if ( isString( s ) && !isBlank( s ) && isJson( s ) )
+            {
+                return asString( s, true );
+            }
 
             return (depth > MAX_RECURSION ? JSON.stringify( MAX_RECURSION_ERROR ) : (isFunction( obj?.toString ) ? obj.toString() : JSON.stringify( obj?.name || obj?.source || obj?.value )));
         }
@@ -1815,6 +1833,8 @@ const { _ud = "undefined", $scope } = constants;
         const options = populateOptions( pOptions, DEFAULT_OPTIONS_FOR_JSON );
 
         let json = isJson( pJson ) ? asString( pJson, true ) : asJson( pJson, options?.replacer, options.space, options, pScope || $scope() );
+
+        json = asString( json, true ).trim().replace( /^[ \n\r\t]+/, _mt_str ).replace( /[ \n\r\t]+$/, _mt_str ).trim();
 
         if ( !isJson( json ) )
         {

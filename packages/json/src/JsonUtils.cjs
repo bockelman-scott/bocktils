@@ -61,7 +61,10 @@ const {
         isNonNullObject,
         isNonNullValue,
         isReadOnly,
+        isArray,
+        isTypedArray,
         isLikeArray,
+        isFunction,
         toObjectLiteral
     } = typeUtils;
 
@@ -371,11 +374,40 @@ const {
         return result;
     };
 
-    function asObject( pObject )
+    function asObject( pObject, pClone = false )
     {
-        return isNonNullObject( pObject ) || isLikeArray( pObject ) ?
-               pObject :
-               (isString( pObject ) && isJson( pObject )) ? attempt( () => parseJson( pObject ) ) : { value: pObject };
+        let obj = pObject;
+
+        if ( isNonNullObject( obj || pObject ) || isArray( obj || pObject ) || isTypedArray( obj || pObject ) )
+        {
+            if ( !!pClone )
+            {
+                if ( isFunction( (obj || pObject).clone ) )
+                {
+                    obj = attempt( () => (obj || pObject).clone() ) || obj;
+                }
+                return isArray( obj ) || isTypedArray( obj ) ? [...obj] : { ...obj };
+            }
+            return (obj || pObject);
+        }
+
+        if ( isString( pObject ) && isJson( pObject ) )
+        {
+            let s = asString( pObject, true ).trim().replace( /^[ \n\r\t]+/, _mt_str ).replace( /[ \n\r\t]+$/, _mt_str ).trim();
+
+            obj = attempt( () => parseJson( asString( s, true ) ) );
+
+            if ( isNonNullObject( obj ) || isArray( obj ) || isTypedArray( obj ) )
+            {
+                return obj;
+            }
+            else
+            {
+                return { value: pObject };
+            }
+        }
+
+        return {};
     }
 
     let mod =
@@ -406,7 +438,12 @@ const {
 
     if ( typeUtils && !isReadOnly( typeUtils ) && isWritable( typeUtils, "parseJson" ) )
     {
-        attempt( () => typeUtils.parseJson = parseJson );
+        attempt( () => typeUtils.parseJson = parseJson.bind( typeUtils ) );
+    }
+
+    if ( typeUtils && !isReadOnly( typeUtils ) && isWritable( typeUtils, "asObject" ) )
+    {
+        attempt( () => typeUtils.asObject = asObject.bind( typeUtils ) );
     }
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
