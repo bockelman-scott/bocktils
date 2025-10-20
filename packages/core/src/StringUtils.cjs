@@ -3409,10 +3409,11 @@ const { _ud = "undefined", $scope } = constants;
         let email = lcase( asString( pEmail, true ) );
 
         // handle some common typos
-        email = asString( email, true ).replace( /\.(comm|con|cpm)$/i, ".com" );
-        email = asString( email, true ).replace( /(gmsil|gmial|gnail|gnial|gamil|gmaill)\.com/i, "gmail.com" );
-        email = asString( email, true ).replace( /h[oi]t[mn][as]il\.com/i, "hotmail.com" );
+        email = asString( email, true ).replace( /\.(comm|con|cpm|cok|coj|co,)$/i, ".com" );
+        email = asString( email, true ).replace( /(gmsil|gmial|gnail|gnial|gamil|gmaill)\.co\w+$/i, "gmail.com" );
+        email = asString( email, true ).replace( /h[oi]t[mn][as]il\.co\w+$/i, "hotmail.com" );
         email = asString( email, true ).replace( /yaho+\.com/i, "yahoo.com" );
+        email = asString( email, true ).replace( /@aol\.co\w+$/i, "@aol.com" );
 
         // remove "plus-addressing" from known providers that support it
         const tld = rightOfLast( email, "@" );
