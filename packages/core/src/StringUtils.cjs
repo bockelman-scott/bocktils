@@ -217,6 +217,8 @@ const { _ud = "undefined", $scope } = constants;
 
     const AS_INT = "asInt";
 
+    const EMAIL_PROVIDERS_SUPPORTING_PLUS_VARIANTS = lock( ["gmail.com", "aol.com", "hotmail.com", "outlook.com", "icloud.com", "yahoo.com", "googlemail.com", "proton.me", "protonmail.com", "fastmail.com", "fastmail.fm", "zohomail.com", "tuta.com", "tutanota.com"] );
+
     /**
      * When a function is added to a built-in object prototype,
      * the value does not need to be passed in, so we need to find it
@@ -3328,8 +3330,8 @@ const { _ud = "undefined", $scope } = constants;
 
         let exceptions = _toArr( options.exceptions || PROPERCASE_OPTIONS.exceptions || [] ).filter( e => !isBlank( e ) ).map( e => _lct( e ) );
 
-        let firstName = asProperCaseName( asString( pFirstName, true ), options, true );
-        let lastName = asProperCaseName( asString( pLastName, true ), options, false );
+        let firstName = asProperCaseName( asString( pFirstName, true ).replaceAll( / {2,}/g, _spc ), options, true );
+        let lastName = asProperCaseName( asString( pLastName, true ).replaceAll( / {2,}/g, _spc ), options, false );
 
         function _removeContactData( pName, pData = pOtherContactData )
         {
@@ -3414,7 +3416,8 @@ const { _ud = "undefined", $scope } = constants;
 
         // remove "plus-addressing" from known providers that support it
         const tld = rightOfLast( email, "@" );
-        if ( ["gmail.com", "aol.com", "hotmail.com", "outlook.com", "icloud.com", "yahoo.com", "googlemail.com", "proton.me", "protonmail.com", "fastmail.com", "fastmail.fm", "zohomail.com", "tuta.com", "tutanota.com"].includes( tld ) )
+
+        if ( EMAIL_PROVIDERS_SUPPORTING_PLUS_VARIANTS.includes( tld ) )
         {
             email = asString( email, true ).replace( /\+[^@]+@/, "@" );
 
@@ -3432,12 +3435,40 @@ const { _ud = "undefined", $scope } = constants;
             {
                 let localPart = (asString( parts[0] || email, true ).slice( 0, 64 )).trim();
                 let domainPart = (asString( parts[1] || tld, true ).slice( 0, (254 - $ln( localPart ) - 1) )).trim();
-                email = (localPart + "@" + (domainPart || tld)).trim();
+                email = (localPart.replaceAll( /[,\/;<]/g, "." ) + "@" + (domainPart || tld)).trim();
             }
         }
 
         return _lct( email );
     }
+
+    const isValidEmail = function( pEmail, ...pRestrictedToTlds )
+    {
+        let email = asString( pEmail, true );
+
+        if ( isBlank( email ) || !(email.includes( "@" )) || $ln( email ) < 5 )
+        {
+            return false;
+        }
+
+        let parts = ((asString( email, true )).split( /@/ ) || []);
+
+        let localPart = asString( parts[0] || email, true );
+
+        let tld = (asString( (parts[1] || rightOfLast( email, "@" )), true ));
+
+        if ( EMAIL_PROVIDERS_SUPPORTING_PLUS_VARIANTS.includes( tld ) )
+        {
+            localPart = localPart.replace( /\+\w+$/, _mt );
+        }
+
+        if ( $ln( localPart ) > 64 || ($ln( localPart + "@" + tld ) > 255) )
+        {
+            return false;
+        }
+
+        return !(/[:\[,\]`;&<(\\>)]/i).test( localPart );
+    };
 
     /**
      * Converts a string in "snake case" ( some_variable_name ) into "camel case" ( someVariableName )
@@ -4036,9 +4067,48 @@ const { _ud = "undefined", $scope } = constants;
         return pPhoneNumber;
     }
 
+    const isValidPhoneNumber = function( pPhoneNumber )
+    {
+        let phone = asString( pPhoneNumber, true ).replaceAll( /\D/g, _mt );
+
+        if ( isBlank( phone ) || $ln( phone ) < MIN_PHONE_NUM_LEN )
+        {
+            return false;
+        }
+
+        const areaCode = phone.slice( 0, 3 );
+        const prefix = phone.slice( 3, 6 );
+        const lineNumber = phone.slice( 6, 10 );
+
+        // the area code cannot start with 0 or 1.
+        if ( /^[01]/.test( areaCode ) )
+        {
+            return false;
+        }
+
+        // the prefix (NXX) cannot start with 0 or 1.
+        if ( /^[01]/.test( prefix ) )
+        {
+            return false;
+        }
+
+        // reject known fictional 555 numbers
+        if ( prefix === "555" )
+        {
+            // reject the official fictional range (0100 to 0199), 1212 (Dir. Assist), and 4334 (Nat. Use)
+            if ( /^01\d{2}$/.test( lineNumber ) || lineNumber === "1212" || lineNumber === "4334" )
+            {
+                return false;
+            }
+        }
+
+        return true;
+    };
+
     let mod =
         {
             dependencies,
+            EMAIL_PROVIDERS_SUPPORTING_PLUS_VARIANTS,
             DEFAULT_AS_STRING_OPTIONS,
             DEFAULT_NUMBER_SYMBOLS,
             PROPERCASE_OPTIONS,
@@ -4104,7 +4174,10 @@ const { _ud = "undefined", $scope } = constants;
             asProperCaseName,
             normalizeName,
             formatPhoneNumber,
+            isValidPhoneNumber,
             normalizeEmailAddress,
+            isValidEmail,
+            isValidEmailAddress: isValidEmail,
             copyString,
             reverseString,
             capitalize,

@@ -4198,12 +4198,6 @@ const $scope = constants?.$scope || function()
             fsConstants,
             importNodeModules,
 
-            /*
-             MIMETICS_ERRORS,
-             MIMETICS_CONSTANTS,
-             Mimetics,
-             mimetics,
-             */
             calculateMimeType,
 
             supportedMimeTypes,
