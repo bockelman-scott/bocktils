@@ -3443,7 +3443,7 @@ const { _ud = "undefined", $scope } = constants;
         return _lct( email );
     }
 
-    const isValidEmail = function( pEmail, ...pRestrictedToTlds )
+    const isValidEmail = function( pEmail )
     {
         let email = asString( pEmail, true );
 
