@@ -1054,6 +1054,10 @@ const { _ud = "undefined", $scope } = constants;
         // return a value based on the type pf the argument
         switch ( typeof pIn )
         {
+            case _ud:
+                s = _mt_str;
+                break;
+
             case _str:
                 s = pTrim ? (_mt_str + pIn).trim() : pIn;
 
@@ -1457,6 +1461,10 @@ const { _ud = "undefined", $scope } = constants;
      */
     const isBlank = function( pStr )
     {
+        if ( isNull( pStr ) )
+        {
+            return true;
+        }
         return (_mt_str === asString( pStr, true ).trim()) || (_z === pStr);
     };
 
@@ -3604,6 +3612,7 @@ const { _ud = "undefined", $scope } = constants;
                   snakeCase: false,
                   properCase: false,
                   capitalize: false,
+                  removeArtifacts: true
               } );
 
     const TRIM_OPERATIONS =
@@ -3636,15 +3645,15 @@ const { _ud = "undefined", $scope } = constants;
 
     function convertCase( pString, pOptions = DEFAULT_TIDY_OPTIONS )
     {
-        let str = asString( pString );
-
         const options = { ...DEFAULT_TIDY_OPTIONS, ...(pOptions || {}) };
+
+        let str = asString( pString, !!options?.trim );
 
         for( const [key, operation] of Object.entries( CASE_OPERATIONS ) )
         {
             if ( options[key] && isFunction( operation ) )
             {
-                str = attempt( () => operation( str, options ) ) || str;
+                str = asString( attempt( () => operation( str, options ) ) || str, !!options?.trim );
             }
         }
 
@@ -3679,7 +3688,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             if ( options[key] && isFunction( operation ) )
             {
-                str = attempt( () => operation( str, options ) );
+                str = asString( attempt( () => operation( str, options ) ), !!options?.trim );
             }
         }
 
@@ -3700,7 +3709,7 @@ const { _ud = "undefined", $scope } = constants;
                 {
                     try
                     {
-                        str = func.apply( this || $scope(), [str, options] );
+                        str = asString( attempt( () => func.apply( this || $scope(), [str, options] ) ), !!options?.trim );
                     }
                     catch( ex )
                     {
@@ -3708,13 +3717,18 @@ const { _ud = "undefined", $scope } = constants;
                     }
                 }
 
-                str = asString( str || temp );
+                str = asString( (str || temp), !!options?.trim );
             }
         }
 
         str = convertCase( asString( str, !!options?.trim ), options );
 
-        return str;
+        if ( !!options?.removeArtifacts )
+        {
+            str = asString( str, !!options?.trim ).replace( /(undefined)|(void)|(null)/i, _mt_str );
+        }
+
+        return asString( str, !!options?.trim );
     };
 
     String.prototype.tidy = tidy;
