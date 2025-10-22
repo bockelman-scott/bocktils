@@ -418,7 +418,7 @@ const $scope = constants?.$scope || function()
 
         resolve( pObject, pValue )
         {
-            if ( isObject( pObject ) )
+            if ( isNonNullObject( pObject ) )
             {
                 if ( isNonNullValue( pValue ) )
                 {
