@@ -7114,7 +7114,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     function _property( pObject, pPropertyPath, pValue )
     {
-        if ( !isNonNullObj( pObject ) )
+        if ( !isNonNullObj( pObject ) || (_ud === typeof pPropertyPath) || (_mt_str === String( pPropertyPath )) )
         {
             return pObject;
         }
@@ -7123,8 +7123,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         let mutator = (arguments.length > 2 || !isNull( pValue )) ? ( object, key, value ) =>
         {
-            object[key] = (keys.length > 0) ? {} : (value || pValue);
+            attempt( () => object[key] = ((keys.length > 0) ? (/^d+$/.test( String( keys[0] ) ) ? [] : {}) : (value || pValue)) );
+
             return object[key];
+
         } : null;
 
         let value = pObject;
