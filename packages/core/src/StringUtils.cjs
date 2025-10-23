@@ -1189,6 +1189,21 @@ const { _ud = "undefined", $scope } = constants;
     Boolean.prototype.asString = asString;
 
     /**
+     * Edge-case function to remove 'artifacts' from a string.
+     * If an undefined value is coerced to "undefined"
+     * or a function returns void and that value is coerced,
+     * or null becomes the string "null",
+     * this function removes those.
+     * @param pStr
+     * @returns {string}
+     */
+    const clean = function( pStr )
+    {
+        let s = asString( pStr, true );
+        return asString( String( s ).replace( /undefined|void|null/i, _mt ), true );
+    };
+
+    /**
      * Returns a C-language compatible string
      * by converting the JavaScript String to a C-style String (8 byte chunks, null-terminated)
      * This is necessary when interacting with some C/C++ addons.
@@ -4129,6 +4144,8 @@ const { _ud = "undefined", $scope } = constants;
             PROPERCASE_OPTIONS,
             asString,
             _toStr,
+            clean,
+            cleanString: clean,
             isEmpty,
             isNotEmpty: s => !isEmpty( s ),
             isBlank,
