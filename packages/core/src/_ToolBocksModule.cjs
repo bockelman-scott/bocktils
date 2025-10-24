@@ -4555,18 +4555,19 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             const error = isError( pError ) ? pError : isError( pStack ) ? pStack : new Error( pStack || "StackTrace" );
 
+            const me = this;
+
             this.#stack = resolveErrorStack( pStack, error ) || pStack;
 
-            this.#frames = this.parseFrames();
+            this.#frames = attempt( () => (me || this).parseFrames() );
 
-            this.#parts = this.parseFrame( Math.min( 1, this.#frames?.length - 1 ) );
+            this.#parts = this.parseFrame( Math.max( 0, Math.min( 1, $ln( this.#frames ) - 1 ) ) );
 
             this.#methodName = this.#parts.methodName;
             this.#fileName = this.#parts.fileName;
             this.#lineNumber = this.#parts.lineNumber;
             this.#columnNumber = this.#parts.columnNumber;
 
-            const me = this;
             this.clone = () => new ((me || this).constructor || (me || this))( this.#stack, error );
         }
 
@@ -4595,8 +4596,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          */
         get frames()
         {
-            this.#frames = this.#frames?.length ? this.#frames : this.parseFrames();
-            return this.#frames;
+            this.#frames = $ln( this.#frames ) > 0 ? (this.#frames || []) : attempt( () => this.parseFrames() );
+            return [...(this.#frames || [])];
         }
 
         /**
