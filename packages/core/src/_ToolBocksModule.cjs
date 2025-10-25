@@ -4390,8 +4390,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @type {CopyOptions}
      * @see CopyOptions
      */
-    let IMMUTABLE_COPY_OPTIONS = { ...DEFAULT_COPY_OPTIONS };
-    IMMUTABLE_COPY_OPTIONS.freeze = true;
+    const IMMUTABLE_COPY_OPTIONS = { ...DEFAULT_COPY_OPTIONS, freeze: true };
 
     /**
      * This is a 'helper' function for reading a numeric property of the localCopy or immutableCopy options
