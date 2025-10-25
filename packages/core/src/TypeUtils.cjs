@@ -2938,6 +2938,20 @@ const $scope = constants?.$scope || function()
         return clazz;
     };
 
+    const resolveClass = function( pClass, pDefaultClass )
+    {
+        if ( isClass( pClass ) )
+        {
+            return pClass;
+        }
+
+        let klass = getClass( pClass || pDefaultClass );
+
+        klass = isClass( klass ) ? klass : isClass( pDefaultClass ) ? pDefaultClass : getClass( pDefaultClass );
+
+        return isClass( klass ) ? klass : null;
+    };
+
     /**
      * Returns the name of the class of which the specified object is an instance
      * <br>
@@ -5491,6 +5505,7 @@ const $scope = constants?.$scope || function()
             instanceOfAny,
             getClass,
             getClassName,
+            resolveClass,
             defaultFor,
             castTo,
             toIterable,
