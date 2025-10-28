@@ -79,22 +79,41 @@ const { _ud = "undefined", $scope } = constants;
 
     const rxTz = () => /((GMT|UTC)([+-])?(\d{1,2})?:?(\d{2})?)|(((\w+ )*)(Time)?$)/gd;
 
-    let resolveDate = ( pDate ) => isDate( pDate ) ? pDate : isNumeric( pDate ) ? new Date( asInt( pDate ) ) : Now();
+    const isValidDate = isValidDateInstance;
 
-    const asDate = ( pVal ) =>
+    let resolveDate = ( pDate, pDefault ) =>
+    {
+        const date = isValidDate( pDate ) ? pDate : isNumeric( pDate ) ? new Date( asInt( pDate ) ) : new Date( pDefault ) || Now();
+
+        if ( isValidDate( date ) )
+        {
+            return date;
+        }
+
+        if ( isValidDate( pDefault ) )
+        {
+            return new Date( pDefault );
+        }
+
+        return new Date();
+    };
+
+    const asDate = ( pVal, pDefault = new Date() ) =>
     {
         let date = pVal;
 
+        const defaultDate = (isDate( pDefault ) || isDateString( pDefault )) ? new Date( pDefault ) : new Date();
+
         if ( !isNull( pVal ) && (isDate( pVal ) || isDateString( pVal )) )
         {
-            date = new Date( pVal || new Date() ) || new Date();
+            date = new Date( pVal || defaultDate || new Date() ) || new Date();
         }
         else if ( isNumeric( pVal ) )
         {
-            date = new Date( asInt( toDecimal( pVal ) ) );
+            date = new Date( asInt( toDecimal( pVal ) ) ) || defaultDate || new Date();
         }
 
-        return resolveDate( date );
+        return resolveDate( date, defaultDate );
     };
 
     const daysAgo = ( pDays = 1 ) => new Date( Date.now() - (ONE_DAY * Math.max( 1, asInt( pDays ) )) );
@@ -328,7 +347,12 @@ const { _ud = "undefined", $scope } = constants;
         return !isNull( pCalculator ) && isNonNullObject( pCalculator ) && isFunction( pCalculator?.calculate );
     }
 
-    resolveDate = ( pDate ) => isDate( pDate ) ? pDate : isNumeric( pDate ) ? new Date( asInt( pDate ) ) : DateBuffer.isBuffer( pDate ) ? pDate.toDate() : Now();
+    const originalResolveDate = resolveDate;
+
+    resolveDate = ( pDate, pDefault ) =>
+    {
+        return DateBuffer.isBuffer( pDate ) ? pDate.toDate() : originalResolveDate( pDate, pDefault );
+    };
 
     class DatePart
     {
@@ -2156,6 +2180,7 @@ const { _ud = "undefined", $scope } = constants;
             DateBuffer,
             isDate,
             isValidDateArgument,
+            isValidDate,
             resolveDate,
             isLeapYear,
             isWeekend,

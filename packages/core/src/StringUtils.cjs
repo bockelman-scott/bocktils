@@ -3494,6 +3494,12 @@ const { _ud = "undefined", $scope } = constants;
         return !(/[:\[,\]`;&<(\\>)]/i).test( localPart );
     };
 
+    const isValidZipCode = function( pZipCode )
+    {
+        let zip = asString( pZipCode, true );
+        return /^\d{5}(-\d{4})?$/.test( zip );
+    };
+
     /**
      * Converts a string in "snake case" ( some_variable_name ) into "camel case" ( someVariableName )
      * @param pStr a string to convert to camel case
@@ -4210,6 +4216,7 @@ const { _ud = "undefined", $scope } = constants;
             normalizeEmailAddress,
             isValidEmail,
             isValidEmailAddress: isValidEmail,
+            isValidZipCode,
             copyString,
             reverseString,
             capitalize,

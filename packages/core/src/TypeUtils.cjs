@@ -3525,7 +3525,7 @@ const $scope = constants?.$scope || function()
             }
         }
 
-        [Symbol.species]()
+        static get [Symbol.species]()
         {
             return this;
         }
