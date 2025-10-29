@@ -2023,6 +2023,27 @@ const $scope = constants?.$scope || function()
                 return (a < b ? -1 : a > b ? 1 : 0);
             },
 
+            _compareNumeric: function( a, b )
+            {
+                let comp = 0;
+
+                if ( isNumeric( a ) && isNumeric( b ) )
+                {
+                    let n1 = parseFloat( a );
+                    let n2 = parseFloat( b );
+
+                    if ( !isNaN( n1 ) && !isNaN( n2 ) )
+                    {
+                        comp = (n1 - n2);
+                    }
+                }
+
+                if ( 0 === comp )
+                {
+                    return (a < b ? -1 : a > b ? 1 : 0);
+                }
+            },
+
             /**
              * A no op function that will leave a collection in the same order<br>
              * <br>
@@ -2057,7 +2078,7 @@ const $scope = constants?.$scope || function()
                     let aa = Filters.IS_NOT_NULL( a ) ? castTo( a, type ) : defaultFor( type );
                     let bb = Filters.IS_NOT_NULL( b ) ? castTo( b, type ) : defaultFor( type );
 
-                    return Comparators._compare( aa, bb );
+                    return [_num, _big].includes( type ) ? Comparators._compareNumeric( aa, bb ) : Comparators._compare( aa, bb );
                 };
             },
 
@@ -2219,7 +2240,7 @@ const $scope = constants?.$scope || function()
                     idxA = idxA < 0 ? ref.length : idxA;
                     idxB = idxB < 0 ? ref.length : idxB;
 
-                    let comp = Comparators._compare( idxA, idxB );
+                    let comp = Comparators._compareNumeric( idxA, idxB );
 
                     if ( 0 === comp )
                     {
