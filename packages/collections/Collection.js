@@ -32,7 +32,7 @@ const $scope = constants?.$scope || function()
 (function exposeModule()
 {
     // defines a key we can use to store this module in global scope
-    const INTERNAL_NAME = "__BOCK_COLLECTION_UTILS__";
+    const INTERNAL_NAME = "__BOCK_COLLECTION_UTILS_COLLECTION_";
 
     // if we've already executed this code, just return the module
     if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
@@ -200,10 +200,18 @@ const $scope = constants?.$scope || function()
         {
             this.#type = calculateType( pType || "*" );
 
+            this.disableEvents();
+
             if ( isIterable( pCollection ) )
             {
                 this.addAll( ...(pCollection) );
             }
+            else if ( isNonNullObject( pCollection ) && pCollection instanceof getClass( this ) )
+            {
+                this.addAll( ...(asArray( pCollection.toArray() )) );
+            }
+
+            this.enableEvents();
         }
 
         enableEvents()

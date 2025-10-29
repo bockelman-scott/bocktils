@@ -141,6 +141,7 @@ const $scope = constants?.$scope || function()
         isNull,
         isNonNullValue,
         isNonNullObject,
+        isNullOrNaN,
         isString,
         isEmptyString,
         isPrimitive,
@@ -783,7 +784,7 @@ const $scope = constants?.$scope || function()
              * @type {function(*):boolean}
              * @alias module:ArrayUtils#Filters#IS_COMPARATOR
              */
-            IS_COMPARATOR: e => isFunction( e ) && e?.length === 2,
+            IS_COMPARATOR: e => (isFunction( e ) && e?.length === 2) || (isNonNullObject( e ) && isFunction( e.compare ) && e.compare?.length === 2),
 
             /**
              * A filter to return the elements of an array that are not undefined<br>
@@ -2023,6 +2024,23 @@ const $scope = constants?.$scope || function()
                 return (a < b ? -1 : a > b ? 1 : 0);
             },
 
+            /**
+             * The basic, generic, comparison of two numeric values
+             * that can be used when both arguments can be coerced to valid numbers.
+             * This should be used to properly sort numeric values,
+             * to avoid the JavaScript default coercion to strings
+             * that could otherwise result in an ordering such as 1, 10, 100, 2, 20, 200
+             * instead of the (more likely) desired: 1, 2, 10, 20, 100, 200
+             *
+             * @param {*} a - The first value or comparable object
+             * @param {*} b - The other value or comparable object
+             *
+             * @return {number} a value < 0 if the first value should occur before the other value,<br>
+             * a value > 0 if the first value should occur after the other object, or...<br>
+             * 0 if the values are equal or have no preferred order
+             *
+             * @private
+             */
             _compareNumeric: function( a, b )
             {
                 let comp = 0;
@@ -2032,7 +2050,7 @@ const $scope = constants?.$scope || function()
                     let n1 = parseFloat( a );
                     let n2 = parseFloat( b );
 
-                    if ( !isNaN( n1 ) && !isNaN( n2 ) )
+                    if ( !isNullOrNaN( n1 ) && !isNullOrNaN( n2 ) )
                     {
                         comp = (n1 - n2);
                     }
@@ -2102,6 +2120,34 @@ const $scope = constants?.$scope || function()
                 if ( 0 === comp )
                 {
                     comp = Comparators.CREATE_DEFAULT( _str )( sA, sB );
+                }
+
+                return comp;
+            },
+
+            /**
+             * A comparator function that converts each element to a number before comparison<br>
+             * The values are then compared according to their numeric values.<br>
+             * If an element cannot be converted or coerced to a number,
+             * the element's value will treated as if it were zero.<br>
+             * <br>
+             * USAGE: <code>const sorted = array.sort( Comparators.BY_NUMERIC_VALUE );</code><br>
+             * @type {function(*,*):number}
+             * @alias module:ArrayUtils#Comparators#BY_STRING_VALUE
+             * */
+            BY_NUMERIC_VALUE: function( a, b )
+            {
+                let n1 = isNumeric( a ) ? asFloat( a ) : (isFunction( a?.valueOf ) ? asFloat( a.valueOf() ) : 0);
+                let n2 = isNumeric( b ) ? asFloat( b ) : (isFunction( b?.valueOf ) ? asFloat( b.valueOf() ) : 0);
+
+                n1 = isNullOrNaN( n1 ) ? 0 : n1;
+                n2 = isNullOrNaN( n2 ) ? 0 : n2;
+
+                let comp = Comparators._compareNumeric( n1, n2 );
+
+                if ( 0 === comp )
+                {
+                    comp = Comparators.CREATE_DEFAULT( _num )( n1, n2 );
                 }
 
                 return comp;
@@ -2345,15 +2391,20 @@ const $scope = constants?.$scope || function()
              * */
             isComparator: function( pCandidate )
             {
-                return isFunction( pCandidate ) && 2 === pCandidate?.length;
+                let result = isFunction( pCandidate ) && 2 === pCandidate?.length;
+                return result || Filters.IS_COMPARATOR( pCandidate );
+            },
+
+            isComparable: function( pObject )
+            {
+                return isNonNullObject( pObject ) && isFunction( pObject.compareTo );
             },
 
             resolve: function( pComparator, pDefaultComparator = Comparators.NONE )
             {
-                return Filters.IS_COMPARATOR( pComparator ) ? pComparator : (Filters.IS_COMPARATOR( pDefaultComparator ) ? pDefaultComparator : Comparators.NONE);
+                return (Filters.IS_COMPARATOR( pComparator ) || this.isComparator( pComparator )) ? pComparator : (Filters.IS_COMPARATOR( pDefaultComparator ) ? pDefaultComparator : Comparators.NONE);
             }
         };
-
 
     /**
      * Returns an array of valid comparator functions
