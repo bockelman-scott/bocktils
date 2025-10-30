@@ -102,6 +102,7 @@ const {
         isNull,
         isNonNullObject,
         isNonNullValue,
+        isPopulatedObject,
         isError,
         isFunction,
         isString,
@@ -116,7 +117,7 @@ const {
         clamp = moduleUtils.clamp
     } = typeUtils;
 
-    const { asString, asInt, isBlank, cleanUrl } = stringUtils;
+    const { asString, asInt, isBlank, cleanUrl, isJson } = stringUtils;
 
     const { parseJson, asJson } = jsonUtils;
 
@@ -441,6 +442,8 @@ const {
                                                      headers: this.#frameworkHeaders || source?.headers || options.headers
                                                  } );
 
+                this.#options.data = ((config.responseType === "application/json" || isJson( this.#options.data )) ? asObject( this.#options.data ) : this.#options.data) || this.#options.data;
+
                 if ( isNonNullObject( source ) )
                 {
                     this.#response = attempt( () => new HttpResponse( (source || pResponse || config || options),
@@ -503,6 +506,27 @@ const {
             if ( isNull( content ) || (isString( content ) && isBlank( content )) )
             {
                 content = this.response ? this.response.body : content;
+            }
+
+            if ( "application/json" === this.#options.responseType || isJson( content ) )
+            {
+                content = attempt( () => asObject( content ) );
+
+                let populatedObjectOptions =
+                    {
+                        minimumLength: 1,
+                        acceptArrays: true,
+                        countDeadBranches: false
+                    };
+
+                if ( !isPopulatedObject( content, populatedObjectOptions ) )
+                {
+                    content = this.#data || this.frameworkResponse?.data || this.response?.data || this.options.data;
+                    if ( isNull( content ) || (isString( content ) && isBlank( content )) )
+                    {
+                        content = this.response ? this.response.body : content;
+                    }
+                }
             }
 
             return content;
