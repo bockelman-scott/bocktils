@@ -2725,13 +2725,13 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         function updateEntries( pEntries )
         {
-            if ( pEntries && isArray( pEntries ) && pEntries.length > 0 )
+            if ( pEntries && isArray( pEntries ) && $ln( pEntries ) > 0 )
             {
                 pEntries.forEach( populateEntry );
             }
         }
 
-        if ( objects.length === 1 )
+        if ( 1 === $ln( objects ) )
         {
             let object = objects[0];
 
@@ -2749,7 +2749,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 entries = attempt( () => processEntries( entries, object || pObject ) );
             }
         }
-        else
+        else if ( $ln( objects ) > 0 )
         {
             for( let object of objects )
             {
@@ -4775,7 +4775,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             // Capture stack trace if available
             if ( Error.captureStackTrace )
             {
-                Error.captureStackTrace( this, Error );
+                try
+                {
+                    Error.captureStackTrace( this, Error );
+                }
+                catch( ex )
+                {
+                    // ignored
+                }
             }
 
             if ( isError( pMsgOrErr ) )
@@ -4786,7 +4793,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             this.#occurred = isError( pMsgOrErr ) ? OBJECT_REGISTRY.getCreated( pMsgOrErr ) : isError( this.#cause ) ? OBJECT_REGISTRY.getCreated( this.#cause ) : new Date();
             this.#occurred = isDate( this.#occurred ) ? this.#occurred : this.#occurred >= 0 ? new Date( this.#occurred ) : new Date();
 
-            this.#trace = this.#options?.stackTrace || ((isError( pMsgOrErr ) ? new StackTrace( (pMsgOrErr?.stack || this.stack), pMsgOrErr ) : null));
+            this.#trace = attemptSilent( () => this.#options?.stackTrace || ((isError( pMsgOrErr ) ? new StackTrace( (pMsgOrErr?.stack || this.stack), pMsgOrErr ) : null)) );
         }
 
         get occurred()
@@ -5108,18 +5115,18 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     {
         if ( !(isError( pError ) || isError( pMessage ) || (_isValidStr( pMessage ) || _isValidStr( pError ))) )
         {
-            return _handleMissingError( pError, pMessage );
+            return attemptSilent( () => _handleMissingError( pError, pMessage ) );
         }
 
         const msg = _isValidStr( pMessage ) ? pMessage : _isValidStr( pError ) ? pError : pError?.message || pMessage?.message || DEFAULT_ERROR_MSG;
 
-        let cause = isError( pError ) ? pError : isError( pMessage ) ? pMessage : null;
+        let cause = isError( pError ) ? pError?.cause || pError : isError( pMessage ) ? pMessage : null;
 
         let options = isError( cause ) ? { message: msg, cause } : { message: msg };
 
-        let errors = ([pError, pMessage]).map( e => e instanceof __Error ? e : (isError( e ) ? new __Error( e, options ) : new __Error( msg, options )) );
+        let errors = attemptSilent( () => ([pError, pMessage]).map( e => e instanceof __Error ? e : (isError( e ) ? new __Error( e, options ) : new __Error( msg, options )) ) );
 
-        return errors.length > 0 ? errors[0] : new __Error( msg, options );
+        return $ln( errors ) > 0 ? errors[0] : new __Error( msg, options );
     }
 
     /**
