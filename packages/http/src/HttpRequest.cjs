@@ -1008,7 +1008,7 @@ const {
                 return this;
             }
 
-            this.#method = resolveHttpMethod( pMethod );
+            this.#method = attempt( () => resolveHttpMethod( pMethod || VERBS.GET ) );
             this.#headers = new HttpRequestHeaders( pHeaders );
 
             this.#cache = pCache || REQUEST_CACHE_OPTIONS.DEFAULT;

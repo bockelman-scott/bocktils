@@ -89,7 +89,8 @@ const { _ud = "undefined", $scope } = constants;
         populateOptions,
         attempt,
         lock,
-        runtimeLocaleString
+        runtimeLocaleString,
+        $ln = (( e ) => attempt( () => parseInt( (e ? (e?.length || e?.size || 0) : 0) ) || 0 ))
     } = moduleUtils;
 
     const
@@ -1784,7 +1785,6 @@ const { _ud = "undefined", $scope } = constants;
                                default:
                                    break;
                            }
-
                        } );
 
         return lock( symbols ) || DEFAULT_NUMBER_SYMBOLS;
@@ -1991,12 +1991,13 @@ const { _ud = "undefined", $scope } = constants;
      */
     const asInt = function( pValue, pDefault = 0, pOptions = calculateDecimalSymbols() )
     {
-        const {
-            input,
-            dflt,
-            options,
-            type
-        } = _resolveAsArguments( false, _resolveInput.call( this, pValue ), pDefault, pOptions );
+        const
+            {
+                input,
+                dflt,
+                options,
+                type
+            } = _resolveAsArguments( false, _resolveInput.call( this, pValue ), pDefault, pOptions );
 
         if ( [_num, _big].includes( type ) && _isIntegerOutOfRange( input ) )
         {
@@ -2559,8 +2560,6 @@ const { _ud = "undefined", $scope } = constants;
     const _rplA = ( s, rx, r = _mt ) => asString( s ).replaceAll( _reg( rx, "g" ), _rp( r || _mt ) );
 
     const _rpl = ( s, rx, r = _mt ) => asString( s ).replace( _reg( rx, (_rtOf( (rx || /~/), _unixPathSep )) ), _rp( r || _mt ) );
-
-    const $ln = ( e ) => asInt( (e ? (e?.length || e?.size || 0) : 0) ) || 0;
 
     // returns the Nth element of a collection or the Nth character of a string
     const $nth = ( pArr, pIdx = 0, pDefault = null ) => (null != pArr) && ($ln( isArray( pArr ) || isString( pArr ) ? [...(pArr || [])] : [pArr] ) > pIdx ? [...(pArr || [])][pIdx] : pDefault);

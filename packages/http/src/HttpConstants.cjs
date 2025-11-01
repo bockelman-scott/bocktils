@@ -230,7 +230,7 @@ const {
                                          HttpVerb[ucase( key )] = new HttpVerb( value );
                                      } );
 
-    HttpVerb.resolveHttpMethod = function( pMethod )
+    HttpVerb.resolveHttpMethod = function( pMethod = VERBS.GET )
     {
         if ( isString( pMethod ) )
         {
@@ -1249,9 +1249,9 @@ const {
             isHeader,
             isContentType,
             isHttpStatus,
-            resolveHttpMethod: function( pMethod )
+            resolveHttpMethod: function( pMethod = VERBS.GET )
             {
-                return HttpVerb.resolveHttpMethod( pMethod );
+                return HttpVerb.resolveHttpMethod( pMethod || VERBS.GET );
             },
             calculatePriority
         };
