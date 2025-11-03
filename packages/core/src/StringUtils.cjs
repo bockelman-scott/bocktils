@@ -89,6 +89,9 @@ const { _ud = "undefined", $scope } = constants;
         populateOptions,
         attempt,
         lock,
+        getRuntimeLocale,
+        getMessagesLocale,
+        getMessagesLocaleString,
         runtimeLocaleString,
         $ln = (( e ) => attempt( () => parseInt( (e ? (e?.length || e?.size || 0) : 0) ) || 0 ))
     } = moduleUtils;
@@ -1750,45 +1753,52 @@ const { _ud = "undefined", $scope } = constants;
 
     const calculateDecimalSymbols = function( pLocale = _defaultLocale, pCurrency = _defaultCurrency )
     {
-        let locale = NVL( pLocale, _defaultLocale );
+        let locale = NVL( pLocale, _defaultLocale, getRuntimeLocale(), getMessagesLocale() );
 
-        locale = (locale instanceof Intl.Locale) ? (locale?.baseName || _defaultLocaleString) : isNull( locale ) || isBlank( locale ) ? asString( runtimeLocaleString() ) || _defaultLocaleString : asString( locale );
+        locale = asString( (locale instanceof Intl.Locale) ? asString( (locale?.baseName || locale?.basename || _defaultLocaleString || "en-US"), true ) : (isNull( locale ) || (isString( locale ) && (_mt === String( locale ).trim()))) ? (String( runtimeLocaleString() ) || String( getMessagesLocaleString() ) || _defaultLocaleString) : String( locale ) );
 
-        let currency = isNull( pCurrency ) || isBlank( pCurrency ) ? _defaultCurrency : asString( pCurrency || _defaultCurrency );
+        let currency = (isNull( pCurrency ) || isBlank( pCurrency )) ? _defaultCurrency : asString( pCurrency || _defaultCurrency );
 
-        const numberFormatter = new Intl.NumberFormat( (asString( locale ) || _defaultLocaleString),
-                                                       {
-                                                           style: "currency",
-                                                           currency: currency
-                                                       } );
+        let symbols = { ...DEFAULT_NUMBER_SYMBOLS };
 
-        const parts = numberFormatter.formatToParts( 123_456.789 );
+        try
+        {
+            const numberFormatter = new Intl.NumberFormat( (asString( locale || _defaultLocaleString, true ) || asString( (_defaultLocaleString || "en-US"), true )),
+                                                           {
+                                                               style: "currency",
+                                                               currency: currency
+                                                           } );
 
-        const symbols = { ...DEFAULT_NUMBER_SYMBOLS };
+            const parts = numberFormatter.formatToParts( 123_456.789 );
 
-        parts.forEach( part =>
-                       {
-                           const type = lcase( asString( part?.type, true ) );
-                           const val = asString( part?.value );
-
-                           switch ( type )
+            parts.forEach( part =>
                            {
-                               case "currency":
-                                   symbols.currency_symbol = val || DEFAULT_NUMBER_SYMBOLS.currency_symbol;
-                                   break;
+                               const type = lcase( asString( part?.type, true ) );
+                               const val = asString( part?.value );
 
-                               case "decimal":
-                                   symbols.decimal_point = val || DEFAULT_NUMBER_SYMBOLS.decimal_point;
-                                   break;
+                               switch ( type )
+                               {
+                                   case "currency":
+                                       symbols.currency_symbol = val || DEFAULT_NUMBER_SYMBOLS.currency_symbol;
+                                       break;
 
-                               case "group":
-                                   symbols.grouping_separator = val || DEFAULT_NUMBER_SYMBOLS.grouping_separator;
-                                   break;
+                                   case "decimal":
+                                       symbols.decimal_point = val || DEFAULT_NUMBER_SYMBOLS.decimal_point;
+                                       break;
 
-                               default:
-                                   break;
-                           }
-                       } );
+                                   case "group":
+                                       symbols.grouping_separator = val || DEFAULT_NUMBER_SYMBOLS.grouping_separator;
+                                       break;
+
+                                   default:
+                                       break;
+                               }
+                           } );
+        }
+        catch( ex )
+        {
+            // ignored
+        }
 
         return lock( symbols ) || DEFAULT_NUMBER_SYMBOLS;
     };

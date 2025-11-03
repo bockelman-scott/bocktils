@@ -73,7 +73,7 @@ const
         resolveVisitor,
         CURRENT_MODE,
         ARGUMENTS,
-        getMessagesLocale,
+        getMessagesLocaleString,
         isFulfilled,
         isRejected,
         roundToNearestMultiple,
@@ -404,8 +404,8 @@ describe( "Sanity-check", () =>
         expect( ARGUMENTS ).toBeDefined();
         expect( typeof ARGUMENTS ).toBe( "object" );
 
-        expect( getMessagesLocale ).toBeDefined();
-        expect( typeof getMessagesLocale ).toBe( "function" );
+        expect( getMessagesLocaleString ).toBeDefined();
+        expect( typeof getMessagesLocaleString ).toBe( "function" );
 
         expect( isFulfilled ).toBeDefined();
         expect( typeof isFulfilled ).toBe( "function" );
@@ -1138,7 +1138,7 @@ describe( "export/require/import modules", () =>
         mod = await requireModule( "node:fs" );
         expect( mod instanceof ToolBocksModule ).toBe( true );
         expect( typeof mod.existsSync ).toBe( "function" );
-        expect( typeof mod.getMessagesLocale ).toBe( "function" );
+        expect( typeof mod.getMessagesLocaleString ).toBe( "function" );
     } );
 } );
 
@@ -1404,11 +1404,11 @@ describe( "Reserved", () =>
 } );
 
 
-describe( "getMessagesLocale", () =>
+describe( "getMessagesLocaleString", () =>
 {
-    test( "getMessagesLocale returns the current Locale", () =>
+    test( "getMessagesLocaleString returns the current Locale", () =>
     {
-        expect( getMessagesLocale() ).toEqual( "en-US" );
+        expect( getMessagesLocaleString() ).toEqual( "en-US" );
     } );
 } );
 

@@ -43,7 +43,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         populateOptions,
         IterationCap,
         isLogger,
-        getMessagesLocale,
+        getMessagesLocaleString,
         attempt,
         asyncAttempt,
         resolveError
@@ -59,7 +59,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         _fun,
         no_op,
         MILLIS_PER,
-        MESSAGES_LOCALE,
+        MESSAGES_LOCALE_CODE,
         S_ERR_PREFIX
     } = constants;
 
@@ -246,7 +246,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             INFO: MSG_INFO,
         };
 
-    const messagesLocale = MESSAGES_LOCALE || getMessagesLocale();
+    const messagesLocale = MESSAGES_LOCALE_CODE || getMessagesLocaleString();
 
     toolBocksModule.setResourceCache = function( pResourceCache )
     {
@@ -267,7 +267,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
     {
         let cache = this.resourceCache || new Map();
 
-        const messagesLocale = this.messagesLocale || getMessagesLocale();
+        const messagesLocale = this.messagesLocale || getMessagesLocaleString();
 
         let message;
         /*

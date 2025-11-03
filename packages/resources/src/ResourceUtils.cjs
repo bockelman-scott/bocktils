@@ -63,7 +63,7 @@ const { _ud = "undefined", $scope } = constants;
         asyncAttempt,
         PromiseResult,
         resolveError,
-        getMessagesLocale,
+        getMessagesLocaleString,
         isFulfilled,
         isRejected,
         asPhrase,
@@ -100,7 +100,7 @@ const { _ud = "undefined", $scope } = constants;
         S_WARN,
         S_ERR_PREFIX,
         MILLIS_PER,
-        MESSAGES_LOCALE,
+        MESSAGES_LOCALE_CODE,
     } = constants;
 
     const {
@@ -236,7 +236,7 @@ const { _ud = "undefined", $scope } = constants;
      * <br>
      * @type {string|Intl.Locale}
      */
-    let defaultLocale = getMessagesLocale();
+    let defaultLocale = getMessagesLocaleString();
 
     /**
      * This is a dictionary of this module's dependencies.
@@ -2640,7 +2640,7 @@ const { _ud = "undefined", $scope } = constants;
          * Defaults to [defaultPath] if not provided.
          * If a path ends with a path separator, it is assumed to be a directory, and all the properties file in the directory will be 'fetched;
          * Directory paths are compatible only when running in a server environment.
-         * @param {Array<string|Intl.Locale>|string|Intl.Locale} pLocales - The locales to be used. Can be a single string or an array of strings. Defaults to [MESSAGES_LOCALE] if not provided.
+         * @param {Array<string|Intl.Locale>|string|Intl.Locale} pLocales - The locales to be used. Can be a single string or an array of strings. Defaults to [MESSAGES_LOCALE_CODE] if not provided.
          * @param {ResourceLoaderOptions} pOptions - Optional configuration options. Defaults to an empty object if not provided.
          * @return {ResourceLoader} An instance of this class.
          */
@@ -2649,7 +2649,7 @@ const { _ud = "undefined", $scope } = constants;
             super();
 
             this.#paths = asArray( pPaths || [defaultPath] ).flat();
-            this.#locales = asArray( pLocales || [MESSAGES_LOCALE] ).flat();
+            this.#locales = asArray( pLocales || [MESSAGES_LOCALE_CODE] ).flat();
             this.#options = populateOptions( pOptions, DEFAULT_LOADER_OPTIONS );
 
             this.#includeLocaleRegions = this.#options.includeLocaleRegions;
@@ -3305,9 +3305,9 @@ const { _ud = "undefined", $scope } = constants;
             DEFAULT_LOADER_OPTIONS,
             DEFAULT_PROPERTIES_OPTIONS,
             DEFAULT_RESOURCE_CACHE_OPTIONS,
-            MESSAGES_LOCALE,
+            MESSAGES_LOCALE_CODE,
             resolveLocale,
-            getMessagesLocale,
+            getMessagesLocaleString,
             LocaleResourcesBase,
             Properties,
             Resource,

@@ -8,9 +8,9 @@ const {
     DEFAULT_LOADER_OPTIONS,
     DEFAULT_PROPERTIES_OPTIONS,
     DEFAULT_RESOURCE_CACHE_OPTIONS,
-    MESSAGES_LOCALE,
+    MESSAGES_LOCALE_CODE,
     resolveLocale,
-    getMessagesLocale,
+    getMessagesLocaleString,
     LocaleResourcesBase,
     Properties,
     Resource,
@@ -86,10 +86,10 @@ describe( "DEFAULTS", () =>
                                                                 } );
           } );
 
-    test( "MESSAGES_LOCALE is...",
+    test( "MESSAGES_LOCALE_CODE is...",
           () =>
           {
-              expect( MESSAGES_LOCALE ).toEqual( getMessagesLocale() );
+              expect( MESSAGES_LOCALE_CODE ).toEqual( getMessagesLocaleString() );
           } );
 } );
 

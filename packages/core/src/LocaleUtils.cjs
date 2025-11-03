@@ -41,7 +41,7 @@ const {
         objectValues,
         runtimeLocaleString,
         getRuntimeLocale,
-        getMessagesLocale
+        getMessagesLocaleString
     } = moduleUtils;
 
     // Create local aliases for values imported from other modules

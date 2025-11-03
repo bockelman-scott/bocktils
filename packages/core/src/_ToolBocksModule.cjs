@@ -3489,6 +3489,23 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     const runtimeLocaleString = () => getRuntimeLocale()?.baseName || DEFAULT_LOCALE_STRING;
 
+    const getMessagesLocale = function( pEnvironment = ENVIRONMENT )
+    {
+        const environment = resolveObject( pEnvironment || _ENV, false );
+
+        let locale = environment?.LC_ALL ||
+                     environment?.LC_MESSAGES ||
+                     environment?.LANG ||
+                     getRuntimeLocale();
+
+        if ( locale instanceof Intl.Locale )
+        {
+            return locale;
+        }
+
+        return getRuntimeLocale();
+    };
+
     /**
      * Returns the Locale string, such as "en-US",
      * representing the language and region
@@ -3505,13 +3522,21 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @returns the Locale string, such as "en-US", representing the language and region
      * that will be used to resolve messages
      */
-    const getMessagesLocale = function( pEnvironment = ENVIRONMENT )
+    const getMessagesLocaleString = function( pEnvironment = ENVIRONMENT )
     {
-        const environment = resolveObject( pEnvironment || _ENV, false );
+        let locale = getMessagesLocale( pEnvironment || ENVIRONMENT );
 
-        let locale = environment?.LC_ALL || environment?.LC_MESSAGES || environment?.LANG || getRuntimeLocale();
+        if ( locale instanceof Intl.Locale )
+        {
+            return (locale?.baseName || runtimeLocaleString());
+        }
 
-        return _mt_str + (isStr( locale ) ? locale : (locale?.basename || runtimeLocaleString()));
+        if ( isStr( locale ) )
+        {
+            attempt( () => locale = new Intl.Locale( locale ) );
+        }
+
+        return (locale instanceof Intl.Locale) ? locale.baseName || locale.toString() : runtimeLocaleString();
     };
 
     /**
@@ -3549,7 +3574,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         #ENV = { ...ENVIRONMENT };
         #ARGUMENTS = lock( ARGUMENTS );
 
-        #localeCode = getMessagesLocale( ENVIRONMENT );
+        #localeCode = getMessagesLocaleString( ENVIRONMENT );
 
         #mode = CURRENT_MODE;
 
@@ -3589,7 +3614,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             this.#ENV = { ...ENVIRONMENT };
             this.#ARGUMENTS = lock( ARGUMENTS );
 
-            this.#localeCode = this.#navigator?.language || getMessagesLocale( this.#ENV ) || DEFAULT_LOCALE_STRING;
+            this.#localeCode = this.#navigator?.language || getMessagesLocaleString( this.#ENV ) || DEFAULT_LOCALE_STRING;
 
             this.#mode = ExecutionMode.calculate() || CURRENT_MODE;
         }
@@ -3656,7 +3681,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         get localeCode()
         {
-            return this.isBrowser() ? (this.navigator?.language || this.#localeCode || getMessagesLocale( this.ENV ) || DEFAULT_LOCALE_STRING) : this.#localeCode || getMessagesLocale( this.ENV ) || DEFAULT_LOCALE_STRING;
+            return this.isBrowser() ? (this.navigator?.language || this.#localeCode || getMessagesLocaleString( this.ENV ) || DEFAULT_LOCALE_STRING) : this.#localeCode || getMessagesLocaleString( this.ENV ) || DEFAULT_LOCALE_STRING;
         }
 
         get userAgent()
@@ -6010,9 +6035,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return String( this.#cacheKey || this.#moduleName );
         }
 
-        getMessagesLocale()
+        getMessagesLocaleString()
         {
-            return this.executionEnvironment?.localeCode || getMessagesLocale();
+            return this.executionEnvironment?.localeCode || getMessagesLocaleString();
         }
 
         /**
@@ -7649,7 +7674,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             getRuntimeLocale,
             getMessagesLocale,
 
+            getMessagesLocaleString,
             runtimeLocaleString,
+            getRuntimeLocaleString: function()
+            {
+                return runtimeLocaleString();
+            },
 
             isFulfilled,
             isRejected,

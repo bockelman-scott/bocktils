@@ -73,7 +73,8 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
             op_false,
             op_identity,
             lock,
-            getMessagesLocale
+            getMessagesLocale,
+            getMessagesLocaleString
         } = moduleUtils;
 
     /**
@@ -353,7 +354,8 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
             {
                 return (_fun === typeof pFunction ? pFunction?.name || functionToString.call( pFunction, pFunction ) : (_mt_str + pFunction));
             },
-            MESSAGES_LOCALE = getMessagesLocale()
+            MESSAGES_LOCALE = getMessagesLocale(),
+            MESSAGES_LOCALE_CODE = getMessagesLocaleString() || MESSAGES_LOCALE?.baseName
         } = (moduleUtils || $scope() || {});
 
     /**
@@ -1986,7 +1988,7 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
              */
             funcName,
 
-            MESSAGES_LOCALE,
+            MESSAGES_LOCALE_CODE,
 
             NumberProperties
         };
