@@ -317,13 +317,13 @@ const { _ud = "undefined", $scope } = constants;
      */
     function applyTransformations( pString, ...pTransformations )
     {
-        let s = (_mt_str + pString);
+        let s = String( _mt_str + pString );
 
         let transformers = [...(pTransformations || [])];
 
         transformers = transformers.flat().filter( isTransformer );
 
-        let prior = (_mt_str + s);
+        let prior = String( _mt_str + s );
 
         for( let transformer of transformers )
         {
@@ -334,15 +334,15 @@ const { _ud = "undefined", $scope } = constants;
 
             const transform = resolveTransformer( transformer );
 
-            s = attempt( () => transform.call( transformer, s, prior ) ) || prior;
+            s = String( attempt( () => transform.call( transformer, s, prior ) ) || prior );
 
             prior = s || prior;
         }
 
-        return s;
+        return String( s );
     }
 
-    const _transform = ( pString, ...pTransformations ) => applyTransformations( pString, ...pTransformations );
+    const _transform = ( pString, ...pTransformations ) => String( attempt( () => applyTransformations( pString, ...pTransformations ) ) );
 
     /**
      * Returns the source code that defined the specified function.
@@ -493,7 +493,7 @@ const { _ud = "undefined", $scope } = constants;
 
         const encoder = resolveTextEncoder( pTextEncoder, byteArrayClass );
 
-        const s = applyTransformations( asString( pString ), ...pTransformers );
+        const s = attempt( () => applyTransformations( asString( pString ), ...pTransformers ) ) || s;
 
         if ( byteArrayClass && encoder && isFunction( encoder?.encode ) )
         {
@@ -686,7 +686,7 @@ const { _ud = "undefined", $scope } = constants;
 
         let s = decoder.decode( pByteArray );
 
-        s = applyTransformations( s, ...pTransformers );
+        s = attempt( () => applyTransformations( s, ...pTransformers ) ) || String( s );
 
         return s;
     };
@@ -1147,7 +1147,7 @@ const { _ud = "undefined", $scope } = constants;
 
         let input = _resolveInput.call( this, pStr );
 
-        if ( _ud === typeof input || null === input )
+        if ( _ud === typeof input || null === input || _z === input )
         {
             return _mt_str;
         }
@@ -1165,21 +1165,24 @@ const { _ud = "undefined", $scope } = constants;
             return _mt_str;
         }
 
-        s = s.replace( _z, _mt_str );
+        s = String( s ).replace( _z, _mt_str );
 
-        s = (trim ? s.trim() : s);
+        s = String( trim ? String( s ).trim() : s );
 
-        s = isRemoveRedundantSpaces ? s.replaceAll( / {2,}/g, _spc ).trim() : s;
+        s = String( isRemoveRedundantSpaces ? s.replaceAll( / {2,}/g, _spc ).trim() : s );
 
         const transformations = ([].concat( ...(options?.transformations || []) )).flat().filter( isTransformer );
 
-        s = _transform( _mt_str + ((true === trim) ? ((_mt_str + s).trim()) : s), ...transformations );
+        if ( $ln( transformations ) > 0 )
+        {
+            s = String( _transform( _mt_str + ((true === trim) ? ((_mt_str + s).trim()) : s), ...transformations ) );
+        }
 
-        s = (trim ? s.trim() : s);
+        s = String( trim ? String( s ).trim() : s );
 
-        s = isRemoveRedundantSpaces ? s.trim().replaceAll( / {2,}/g, _spc ).trim() : s;
+        s = String( isRemoveRedundantSpaces ? String( s ).trim().replaceAll( / {2,}/g, _spc ).trim() : s );
 
-        return s;
+        return String( s );
     };
 
     const _toStr = asString;
