@@ -3506,6 +3506,20 @@ const { _ud = "undefined", $scope } = constants;
         return !(/[:\[,\]`;&<(\\>)]/i).test( localPart );
     };
 
+    const formatZipCode = function( pZipCode )
+    {
+        let zip = (asString( pZipCode, true ).replaceAll( /[^\d-]/g, _mt )).trim();
+
+        let rx = /\d{5}(-\d{4})?/;
+
+        if ( !rx.test( zip ) )
+        {
+            zip = asString( zip, true ).slice( 0, 5 ).trim();
+        }
+
+        return zip;
+    };
+
     const isValidZipCode = function( pZipCode )
     {
         let zip = asString( pZipCode, true );
@@ -4228,6 +4242,7 @@ const { _ud = "undefined", $scope } = constants;
             normalizeEmailAddress,
             isValidEmail,
             isValidEmailAddress: isValidEmail,
+            formatZipCode,
             isValidZipCode,
             copyString,
             reverseString,
