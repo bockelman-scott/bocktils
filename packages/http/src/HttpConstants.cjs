@@ -190,8 +190,8 @@ const {
          */
         constructor( pVerb )
         {
-            super( VERBS.indexOf( pVerb ), ucase( asString( pVerb, true ) ) );
-            this.#verb = ucase( asString( pVerb, true ) );
+            super( VERBS.indexOf( (pVerb || VERBS.GET) ), ucase( asString( (pVerb || VERBS.GET), true ) ) );
+            this.#verb = ucase( asString( (pVerb || VERBS.GET), true ) );
         }
 
         /**
@@ -232,7 +232,7 @@ const {
 
     HttpVerb.resolveHttpMethod = function( pMethod = VERBS.GET )
     {
-        if ( isString( pMethod ) )
+        if ( isString( pMethod ) && !isBlank( pMethod ) )
         {
             if ( VERBS.indexOf( pMethod ) )
             {
@@ -251,10 +251,10 @@ const {
         {
             if ( pMethod instanceof HttpVerb )
             {
-                return HttpVerb.resolveHttpMethod( pMethod.name );
+                return HttpVerb.resolveHttpMethod( pMethod.name || pMethod?.verb );
             }
 
-            return attempt( () => HttpVerb.resolveHttpMethod( pMethod["method"] ) ) || VERBS.GET;
+            return attempt( () => HttpVerb.resolveHttpMethod( ((pMethod["method"]) || (pMethod["headers"]?.["method"])) ) ) || VERBS.GET;
         }
 
         if ( isNumeric( pMethod ) )

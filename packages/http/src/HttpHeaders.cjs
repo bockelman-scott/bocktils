@@ -278,16 +278,22 @@ const {
 
         let map = new Map();
 
-        const entries = objectEntries( input ).filter( ( entry ) => isHeader( asString( ObjectEntry.getKey( entry ), true ) ) );
+        const entries = attempt( () => objectEntries( input ).filter( ( entry ) => isHeader( asString( ObjectEntry.getKey( entry ), true ) ) ) );
 
-        for( const entry of entries )
+        if ( entries )
         {
-            const key = asString( ObjectEntry.getKey( entry ), true );
-            const value = ObjectEntry.getValue( entry ) || key;
+            for( const entry of entries )
+            {
+                if ( !isNull( entry ) )
+                {
+                    const key = asString( ObjectEntry.getKey( entry ), true );
+                    const value = ObjectEntry.getValue( entry ) || key;
 
-            const existing = map.get( key ) || map.get( lcase( key ) ) || _mt_str;
+                    const existing = map.get( key ) || map.get( lcase( key ) ) || _mt_str;
 
-            map.set( key, ((existing ? (existing + ", ") : _mt_str) + value) || value );
+                    map.set( key, ((existing ? (existing + ", ") : _mt_str) + value) || value );
+                }
+            }
         }
 
         return map;
@@ -405,22 +411,25 @@ const {
 
             if ( !isNull( pOptions ) )
             {
-                const entries = objectEntries( processHeaderOptions( pOptions ) );
+                const entries = attempt( () => objectEntries( processHeaderOptions( pOptions ) ) );
 
-                entries.forEach( entry =>
-                                 {
-                                     const key = ObjectEntry.getKey( entry );
-                                     const value = ObjectEntry.getValue( entry );
+                if ( entries )
+                {
+                    attempt( () => entries.forEach( entry =>
+                                                    {
+                                                        const key = ObjectEntry.getKey( entry );
+                                                        const value = ObjectEntry.getValue( entry );
 
-                                     if ( key && value )
-                                     {
-                                         const existing = me.get( key ) || me.get( lcase( key ) );
-                                         const val = (existing ? existing + ", " : _mt) + value;
+                                                        if ( key && value )
+                                                        {
+                                                            const existing = me.get( key ) || me.get( lcase( key ) );
+                                                            const val = (existing ? existing + ", " : _mt) + value;
 
-                                         this.set( key, val );
-                                         this.#map.set( key, val );
-                                     }
-                                 } );
+                                                            this.set( key, val );
+                                                            this.#map.set( key, val );
+                                                        }
+                                                    } ) );
+                }
             }
         }
 
@@ -570,7 +579,7 @@ const {
     {
         constructor( pOptions )
         {
-            super( pOptions );
+            super( isArray( pOptions ) ? asArray( pOptions || [] ) : asObject( pOptions || {} ) );
         }
 
         clone()

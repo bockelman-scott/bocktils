@@ -204,7 +204,7 @@ const {
 
         let data = res.data || options.data;
 
-        let headers = cloneHeaders( res.headers || options.headers );
+        let headers = cloneHeaders( res.headers || options.headers || options );
 
         // unwrap the response from any container
         while ( isNonNullObject( res ) && isNonNullObject( res.response ) )

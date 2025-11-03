@@ -945,7 +945,7 @@ const {
 
         // noinspection OverlyComplexFunctionJS,FunctionTooLongJS
         constructor( pMethod = VERBS.GET,
-                     pHeaders = new HttpRequestHeaders(),
+                     pHeaders = {},
                      pBody = null,
                      pCache = REQUEST_CACHE_OPTIONS.DEFAULT,
                      pCredentials = REQUEST_CREDENTIALS_OPTIONS.SAME_ORIGIN,
@@ -1201,7 +1201,7 @@ const {
     {
         const options = asObject( pOptions || new HttpRequestOptions() ) || new HttpRequestOptions();
 
-        return new HttpRequestOptions( options.method,
+        return new HttpRequestOptions( options.method || options.headers?.method,
                                        options.headers,
                                        options.body,
                                        options.cache,
