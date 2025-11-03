@@ -4759,18 +4759,20 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             super( initializeMessage( pMsgOrErr ) );
 
-            this.#options = Object.assign( {}, pOptions || {} );
+            const me = this;
+
+            this.#options = attemptSilent( () => Object.assign( {}, { ...(pOptions || {}) } ) ) || {};
 
             this.#type = this.getErrorTypeOrName( pMsgOrErr ).replace( /^__/, _mt_str );
             this.#name = this.getErrorTypeOrName( pMsgOrErr ).replace( /^__/, _mt_str );
 
             this.#msg = (isStr( pMsgOrErr ) ? pMsgOrErr : _mt_str) || super.message;
 
-            this.#cause = this.determineCause( pMsgOrErr, this.#options?.cause );
+            this.#cause = attemptSilent( () => me.determineCause( pMsgOrErr, this.#options?.cause ) );
 
-            this.#code = this.calculateErrorCode( pMsgOrErr, this.#options );
+            this.#code = attemptSilent( () => me.calculateErrorCode( pMsgOrErr, this.#options ) );
 
-            this.#referenceId = this.calculateReferenceId( pMsgOrErr );
+            this.#referenceId = attemptSilent( () => me.calculateReferenceId( pMsgOrErr || me ) );
 
             // Capture stack trace if available
             if ( Error.captureStackTrace )
@@ -4818,9 +4820,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             if ( pError instanceof Error )
             {
-                return _asStr( pError.type || pError.name || this.constructor?.name || "Error" ).replace( /^__/, _mt_str );
+                return _asStr( pError.type || pError.name || pError.constructor?.name || "Error" ).replace( /^__/, _mt_str );
             }
-            return _asStr( this.constructor?.name || "Error" ).replace( /^__/, _mt_str );
+            return "Error";
         }
 
         /**
