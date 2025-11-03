@@ -868,7 +868,7 @@ const {
             return httpStatus;
         }
 
-        throw new IllegalArgumentError( "The specified value cannot interpreted as an HTTP Status",
+        throw new IllegalArgumentError( "The specified value cannot be interpreted as an HTTP Status",
                                         {
                                             context: HttpStatus.fromCode,
                                             args: [pCode]
