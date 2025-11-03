@@ -80,7 +80,7 @@ const {
 
     // get the classes and functions we use from moduleUtils,
     // including the ToolBocksModule class which is instantiated and returned from this closure
-    const { ToolBocksModule, ObjectEntry, populateOptions, attempt, objectEntries, lock, $ln } = moduleUtils;
+    const { ToolBocksModule, ObjectEntry, attempt, objectEntries, lock, $ln } = moduleUtils;
 
     // imports constants for the empty string and space, allowing for more readable use of these string literals
     const { _mt_str = "", _mt = _mt_str, _spc = " " } = constants;
@@ -98,7 +98,6 @@ const {
             isNonNullObject,
             isString,
             isScalar,
-            asObject,
             toObjectLiteral
         } = typeUtils;
 
@@ -107,7 +106,7 @@ const {
 
     const { asArray } = arrayUtils;
 
-    const { asJson, parseJson } = jsonUtils;
+    const { asJson, asObject, parseJson } = jsonUtils;
 
     // imports useful constants and functions related to HTTP request and response headers
     const { isHeader } = httpConstants;
@@ -234,7 +233,7 @@ const {
         // creates the map to return
         let map = new Map();
 
-        // we expect the input to be an array of arrays with the second dimension arrays are name/value pairs to be set as headers
+        // we expect the input to be an array of arrays where the second dimension arrays are name/value pairs to be set as headers
         if ( isKeyValueArray( input ) )
         {
             // filters out any invalid entries in the input
@@ -279,12 +278,12 @@ const {
 
         let map = new Map();
 
-        const entries = objectEntries( input ).filter( ( entry ) => isHeader( ObjectEntry.getKey( entry ) ) );
+        const entries = objectEntries( input ).filter( ( entry ) => isHeader( asString( ObjectEntry.getKey( entry ), true ) ) );
 
         for( const entry of entries )
         {
-            const key = ObjectEntry.getKey( entry );
-            const value = ObjectEntry.getValue( entry ) || _mt_str;
+            const key = asString( ObjectEntry.getKey( entry ), true );
+            const value = ObjectEntry.getValue( entry ) || key;
 
             const existing = map.get( key ) || map.get( lcase( key ) ) || _mt_str;
 
@@ -296,15 +295,17 @@ const {
 
     function processWebApiHeaders( pOptions )
     {
-        let entries = isFunction( pOptions.entries ) ? pOptions.entries() : objectEntries( pOptions );
+        let options = isArray( pOptions ) ? asArray( pOptions ) : asObject( pOptions );
 
-        let arr = [...(entries || objectEntries( pOptions ) || [])];
+        let entries = isFunction( options.entries ) ? options.entries() : objectEntries( options );
+
+        let arr = [...(entries || objectEntries( options ) || [])];
 
         if ( $ln( arr ) <= 0 )
         {
-            if ( isNonNullObject( pOptions ) && !isArray( pOptions ) )
+            if ( isNonNullObject( options ) && !isArray( options ) )
             {
-                return processHeaderObject( pOptions );
+                return processHeaderObject( options );
             }
             else
             {
@@ -314,7 +315,7 @@ const {
                 {
                     if ( entry && $ln( entry ) )
                     {
-                        headers.append( entry[0], entry[1] || entry[0] );
+                        headers.append( asString( entry[0] ), asString( entry[1] || entry[0] ) );
                     }
                 }
 
@@ -402,22 +403,25 @@ const {
 
             const me = this;
 
-            const entries = objectEntries( processHeaderOptions( pOptions ) );
+            if ( !isNull( pOptions ) )
+            {
+                const entries = objectEntries( processHeaderOptions( pOptions ) );
 
-            entries.forEach( entry =>
-                             {
-                                 const key = ObjectEntry.getKey( entry );
-                                 const value = ObjectEntry.getValue( entry );
-
-                                 if ( key && value )
+                entries.forEach( entry =>
                                  {
-                                     const existing = me.get( key ) || me.get( lcase( key ) );
-                                     const val = (existing ? existing + ", " : _mt) + value;
+                                     const key = ObjectEntry.getKey( entry );
+                                     const value = ObjectEntry.getValue( entry );
 
-                                     this.set( key, val );
-                                     this.#map.set( key, val );
-                                 }
-                             } );
+                                     if ( key && value )
+                                     {
+                                         const existing = me.get( key ) || me.get( lcase( key ) );
+                                         const val = (existing ? existing + ", " : _mt) + value;
+
+                                         this.set( key, val );
+                                         this.#map.set( key, val );
+                                     }
+                                 } );
+            }
         }
 
         append( pKey, pValue )
