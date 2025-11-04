@@ -294,7 +294,7 @@ const { _ud = "undefined", $scope } = constants;
                   assumeNumeric: false,
                   assumeAlphabetic: true,
                   dateFormatter: null,
-                  transformations: [function( s ) { return s;}],
+                  transformations: [],
                   checkForByteArray: false,
                   decoder: null,
                   encoder: null,
@@ -987,13 +987,11 @@ const { _ud = "undefined", $scope } = constants;
             return fromByteArray( input, options?.decoder, options?.transformations );
         }
 
-        let s = _mt_str;
-
         // if the argument is an array, recursively call this function on each element
         // and join the results on the joinOn option or the empty character
         if ( isArray( input ) )
         {
-            return _handleArrayInput( input, options, s, trim );
+            return _handleArrayInput( input, options );
         }
 
         // handle ObjectWrapper types
@@ -1051,6 +1049,7 @@ const { _ud = "undefined", $scope } = constants;
         return String( toDecimal( value, options ) );
     }
 
+    // noinspection OverlyComplexFunctionJS
     function _asStringFromType( pIn, pTrim, pOptions )
     {
         let s;
@@ -1800,7 +1799,7 @@ const { _ud = "undefined", $scope } = constants;
             // ignored
         }
 
-        return lock( symbols ) || DEFAULT_NUMBER_SYMBOLS;
+        return lock( { ...DEFAULT_NUMBER_SYMBOLS, ...(symbols || DEFAULT_NUMBER_SYMBOLS) } );
     };
 
     /**
@@ -1821,9 +1820,9 @@ const { _ud = "undefined", $scope } = constants;
         return parts.map( e => e?.length || 0 );
     }
 
-    const deriveDecimalSymbols = function( pNumString, pOptions = calculateDecimalSymbols() )
+    const deriveDecimalSymbols = function( pNumString, pOptions )
     {
-        const options = { ...DEFAULT_NUMBER_SYMBOLS, ...(pOptions || {}) };
+        const options = { ...DEFAULT_NUMBER_SYMBOLS, ...(pOptions || calculateDecimalSymbols() || {}) };
 
         let s = asString( pNumString );
 
@@ -1870,9 +1869,9 @@ const { _ud = "undefined", $scope } = constants;
      * the bigint literal 'n' removed
      * and the decimal symbol replaced with a dot (.)
      */
-    function toCanonicalNumericFormat( pInput, pOptions = calculateDecimalSymbols() )
+    function toCanonicalNumericFormat( pInput, pOptions )
     {
-        const options = { ...DEFAULT_NUMBER_SYMBOLS, ...(pOptions || {}) };
+        const options = { ...DEFAULT_NUMBER_SYMBOLS, ...(pOptions || calculateDecimalSymbols() || {}) };
 
         let s = asString( pInput );
 
@@ -1921,14 +1920,14 @@ const { _ud = "undefined", $scope } = constants;
 
     const _isIntegerOutOfRange = ( pValue ) => pValue > Number.MAX_SAFE_INTEGER || pValue < Number.MIN_SAFE_INTEGER;
 
-    function _resolveAsArguments( pAsFloat, pValue, pDefault = 0, pOptions = calculateDecimalSymbols() )
+    function _resolveAsArguments( pAsFloat, pValue, pDefault = 0, pOptions )
     {
         const zero = pAsFloat ? 0.0 : 0;
         const one = pAsFloat ? 1.0 : 1;
 
         const dflt = isNumber( pDefault ) || isString( pDefault ) ? pDefault : zero;
 
-        const options = populateOptions( pOptions, (isObject( pDefault ) ? pDefault : pOptions), DEFAULT_NUMBER_SYMBOLS );
+        const options = populateOptions( { ...(pOptions || calculateDecimalSymbols()) }, (isObject( pDefault ) ? pDefault : pOptions), DEFAULT_NUMBER_SYMBOLS );
 
         let input = _resolveInput.call( this, pValue );
 
@@ -2002,7 +2001,7 @@ const { _ud = "undefined", $scope } = constants;
      * @param pOptions
      * @returns {number} an integer value represented by or implied by the value provided
      */
-    const asInt = function( pValue, pDefault = 0, pOptions = calculateDecimalSymbols() )
+    const asInt = function( pValue, pDefault = 0, pOptions )
     {
         const
             {
@@ -2010,7 +2009,7 @@ const { _ud = "undefined", $scope } = constants;
                 dflt,
                 options,
                 type
-            } = _resolveAsArguments( false, _resolveInput.call( this, pValue ), pDefault, pOptions );
+            } = _resolveAsArguments( false, _resolveInput.call( this, pValue ), pDefault, (pOptions || calculateDecimalSymbols()) );
 
         if ( [_num, _big].includes( type ) && _isIntegerOutOfRange( input ) )
         {
@@ -2107,13 +2106,13 @@ const { _ud = "undefined", $scope } = constants;
      * @param pOptions
      * @returns {number} an floating-point value represented or implied by the value provided
      */
-    const asFloat = function( pValue, pDefault = 0, pOptions = calculateDecimalSymbols() )
+    const asFloat = function( pValue, pDefault = 0, pOptions )
     {
         const {
             input,
             dflt,
             options
-        } = _resolveAsArguments( true, _resolveInput.call( this, pValue ), pDefault, pOptions );
+        } = _resolveAsArguments( true, _resolveInput.call( this, pValue ), pDefault, (pOptions || calculateDecimalSymbols()) );
 
         let val = attempt( () => _asFloatFromType( input, dflt, options ) );
 
@@ -2135,9 +2134,9 @@ const { _ud = "undefined", $scope } = constants;
 
     const asPositiveFloat = ( pStr ) => Math.max( 0.0, asFloat( pStr ) );
 
-    const toNumberWithinRange = function( pStr, pMin, pMax, converter, pOptions = calculateDecimalSymbols() )
+    const toNumberWithinRange = function( pStr, pMin, pMax, converter, pOptions )
     {
-        const options = { ...DEFAULT_NUMBER_SYMBOLS, ...(pOptions || {}) };
+        const options = { ...DEFAULT_NUMBER_SYMBOLS, ...(pOptions || calculateDecimalSymbols() || {}) };
 
         const value = converter( pStr, 0, options );
 
@@ -2150,14 +2149,14 @@ const { _ud = "undefined", $scope } = constants;
         return clamp( value, smallest, greatest );
     };
 
-    const toIntWithinRange = function( pStr, pMin, pMax, pOptions = calculateDecimalSymbols() )
+    const toIntWithinRange = function( pStr, pMin, pMax, pOptions )
     {
-        return toNumberWithinRange( pStr, pMin, pMax, asInt, pOptions );
+        return toNumberWithinRange( pStr, pMin, pMax, asInt, (pOptions || calculateDecimalSymbols()) );
     };
 
-    const toFloatWithinRange = function( pStr, pMin, pMax, pOptions = calculateDecimalSymbols() )
+    const toFloatWithinRange = function( pStr, pMin, pMax, pOptions )
     {
-        return toNumberWithinRange( pStr, pMin, pMax, asFloat, pOptions );
+        return toNumberWithinRange( pStr, pMin, pMax, asFloat, (pOptions || calculateDecimalSymbols()) );
     };
 
     /**
@@ -3039,6 +3038,7 @@ const { _ud = "undefined", $scope } = constants;
         return _mt;
     }
 
+    // noinspection FunctionTooLongJS
     /**
      * Returns a string formatted as a name in proper case
      * handling common surnames that include a hyphen, apostrophe, Mc, or Mac, etc
