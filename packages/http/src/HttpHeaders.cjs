@@ -96,6 +96,7 @@ const {
             isMap,
             isFunction,
             isNonNullObject,
+            isPopulatedObject,
             isString,
             isScalar,
             toObjectLiteral
@@ -225,10 +226,10 @@ const {
      * @return {Map|string} A Map containing the processed headers with keys and their corresponding values,
      *                      or the modified options object if no headers were processed.
      */
-    function processHeadersArray( pOptions )
+    function processHeadersArray( pOptions = [] )
     {
         // converts the specified argument into either an object or array
-        let input = isArray( pOptions ) ? asArray( pOptions ) : asObject( pOptions );
+        let input = isArray( pOptions ) ? asArray( pOptions || [] ) : asObject( pOptions || {} );
 
         // creates the map to return
         let map = new Map();
@@ -252,7 +253,7 @@ const {
                 let value = $ln( pair ) > 1 ? attempt( () => asString( pair[1] ) ) : key;
 
                 // add the key/value to the map, appending the value to any existing value
-                map.set( key, ((existing ? (existing + ", ") : _mt_str) + value) || value );
+                map.set( key, ((existing && !isBlank( existing ) ? (existing + ", ") : _mt_str) + value) || value );
             }
         }
 
@@ -274,24 +275,24 @@ const {
     {
         let input = isMap( pObject ) ?
                     new Map( pObject ) :
-                    (isArray( pObject ) ? processHeadersArray( pObject ) : asObject( pObject ));
+                    (isArray( pObject ) ? processHeadersArray( asArray( pObject || [] ) ) : asObject( pObject || [] ));
 
         let map = new Map();
 
         const entries = attempt( () => objectEntries( input ).filter( ( entry ) => isHeader( asString( ObjectEntry.getKey( entry ), true ) ) ) );
 
-        if ( entries )
+        if ( entries && $ln( entries ) > 0 )
         {
             for( const entry of entries )
             {
                 if ( !isNull( entry ) )
                 {
                     const key = asString( ObjectEntry.getKey( entry ), true );
-                    const value = ObjectEntry.getValue( entry ) || key;
+                    const value = asString( ObjectEntry.getValue( entry ) || key, true );
 
                     const existing = map.get( key ) || map.get( lcase( key ) ) || _mt_str;
 
-                    map.set( key, ((existing ? (existing + ", ") : _mt_str) + value) || value );
+                    map.set( key, ((existing && !isBlank( existing ) ? (existing + ", ") : _mt_str) + value) || value );
                 }
             }
         }
@@ -301,15 +302,15 @@ const {
 
     function processWebApiHeaders( pOptions )
     {
-        let options = isArray( pOptions ) ? asArray( pOptions ) : asObject( pOptions );
+        let options = isArray( pOptions ) ? asArray( pOptions || [] ) : asObject( pOptions || {} );
 
-        let entries = isFunction( options.entries ) ? options.entries() : objectEntries( options );
+        let entries = attempt( () => isFunction( options?.entries ) ? options.entries() : attempt( () => objectEntries( options ) ) );
 
-        let arr = [...(entries || objectEntries( options ) || [])];
+        let arr = [...asArray( (entries || objectEntries( options ) || []) || [] )];
 
         if ( $ln( arr ) <= 0 )
         {
-            if ( isNonNullObject( options ) && !isArray( options ) )
+            if ( isPopulatedObject( options ) && !isArray( options ) )
             {
                 return processHeaderObject( options );
             }
@@ -317,18 +318,29 @@ const {
             {
                 let headers = new HttpHeaders();
 
-                for( let entry of entries )
+                if ( entries && $ln( entries ) > 0 )
                 {
-                    if ( entry && $ln( entry ) )
+                    for( let entry of entries )
                     {
-                        headers.append( asString( entry[0] ), asString( entry[1] || entry[0] ) );
+                        if ( entry && $ln( entry ) > 0 )
+                        {
+                            const key = asString( entry[0], true );
+
+                            const value = asString( entry[1] || entry[0], true ) || key;
+
+                            if ( key && value )
+                            {
+                                headers.append( key, value );
+                            }
+                        }
                     }
                 }
 
                 return headers;
             }
         }
-        return processHeadersArray( arr );
+
+        return attempt( () => processHeadersArray( arr ) );
     }
 
     /**
@@ -350,12 +362,12 @@ const {
 
         if ( isWebApiHeadersObject( pOptions ) || isMap( pOptions ) )
         {
-            return processWebApiHeaders( pOptions );
+            return attempt( () => processWebApiHeaders( pOptions ) );
         }
 
         if ( isArray( pOptions ) )
         {
-            return processHeadersArray( pOptions );
+            return attempt( () => processHeadersArray( pOptions ) );
         }
 
         if ( isString( pOptions ) )
@@ -365,19 +377,21 @@ const {
                 const obj = attempt( () => parseJson( pOptions ) );
                 if ( isNonNullObject( obj ) )
                 {
-                    return processHeaderObject( obj );
+                    return attempt( () => processHeaderObject( obj ) );
                 }
             }
-
-            return processHeadersArray( asString( pOptions, true ).split( /\r?\n/ ) );
+            else
+            {
+                return attempt( () => processHeadersArray( asString( pOptions, true ).split( /\r?\n/ ) ) );
+            }
         }
 
-        if ( isObject( pOptions ) )
+        if ( isNonNullObject( pOptions ) )
         {
-            return processHeaderObject( pOptions );
+            return attempt( () => processHeaderObject( asObject( pOptions || {} ) ) );
         }
 
-        return new Map( objectEntries( pOptions ) );
+        return new Map();
     }
 
     const HttpHeadersBaseClass = _ud !== typeof Headers ? Headers : Map;
