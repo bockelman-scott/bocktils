@@ -1172,7 +1172,7 @@ const { _ud = "undefined", $scope } = constants;
 
         s = String( trim ? String( s ).trim() : s );
 
-        s = String( isRemoveRedundantSpaces ? s.replaceAll( / {2,}/g, _spc ).trim() : s );
+        s = String( isRemoveRedundantSpaces ? s.replaceAll( / {2,}/g, _spc ) : s );
 
         const transformations = ([].concat( ...(options?.transformations || []) )).flat().filter( isTransformer );
 
@@ -1183,7 +1183,7 @@ const { _ud = "undefined", $scope } = constants;
 
         s = String( trim ? String( s ).trim() : s );
 
-        s = String( isRemoveRedundantSpaces ? String( s ).trim().replaceAll( / {2,}/g, _spc ).trim() : s );
+        s = String( isRemoveRedundantSpaces ? String( s ).replaceAll( / {2,}/g, _spc ) : s );
 
         return String( s );
     };
@@ -3888,7 +3888,7 @@ const { _ud = "undefined", $scope } = constants;
     {
         let url = asString( pUrl, true );
 
-        if ( !!pPreserveCase )
+        if ( !pPreserveCase )
         {
             if ( url.includes( "?" ) )
             {
@@ -3922,7 +3922,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             let parts = url.split( "?" ).filter( e => !isBlank( e ) );
 
-            let path = cleanUrl( asString( parts[0], true ) );
+            let path = asString( parts[0], true );
 
             let qs = asString( $ln( parts ) > 1 ? parts[1] : rightOfLast( url, "?" ), true );
 
@@ -3973,7 +3973,7 @@ const { _ud = "undefined", $scope } = constants;
 
         const protocol = extractProtocol( url );
 
-        const rx = new RegExp( "^" + protocol + "://", "i" );
+        const rx = new RegExp( "^" + (protocol || "\\w+") + ":\\/\\/", "i" );
 
         url = url.replace( rx, _mt_str );
 

@@ -373,7 +373,7 @@ describe( "Archiver", () =>
           {
               const archiver = new Archiver( testDataDir );
 
-              expect( archiver.outputDirectory ).toEqual( testDataDir );
+              expect( toUnixPath( archiver.outputDirectory ) ).toEqual( testDataDir );
               expect( archiver.compressionFormat ).toEqual( CompressionFormat.DEFAULT );
 
               expect( archiver.compressionOptions ).toEqual( CompressionFormat.DEFAULT.compressionOptions );

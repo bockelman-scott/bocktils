@@ -2060,6 +2060,8 @@ const $scope = constants?.$scope || function()
                 {
                     return (a < b ? -1 : a > b ? 1 : 0);
                 }
+
+                return comp;
             },
 
             /**

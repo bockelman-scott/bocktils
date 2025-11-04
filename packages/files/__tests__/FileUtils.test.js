@@ -222,7 +222,7 @@ describe( "FileUtils::findFiles", () =>
 
         let mapped = (found.map( ( entry ) => entry.filepath ));
 
-        expect( mapped.length ).toBe( 19 );
+        expect( mapped.length ).toBe( 23 );
 
         mapped = mapped.map( ( entry ) => path.relative( packagesDirectory, entry ) );
 
@@ -239,7 +239,7 @@ describe( "FileUtils::findFiles", () =>
 
         let mapped = (found.map( ( entry ) => entry.filepath ));
 
-        expect( mapped.length ).toBe( 19 );
+        expect( mapped.length ).toBe( 23 );
 
         mapped = mapped.map( ( entry ) => path.relative( packagesDirectory, entry ) );
 
@@ -256,7 +256,7 @@ describe( "FileUtils::findFiles", () =>
 
         let mapped = (found.map( ( entry ) => entry.filepath ));
 
-        expect( mapped.length ).toBe( 19 );
+        expect( mapped.length ).toBe( 23 );
 
         mapped = mapped.map( ( entry ) => path.relative( packagesDirectory, entry ) );
 

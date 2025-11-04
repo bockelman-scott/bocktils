@@ -1526,7 +1526,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
                                                  if ( ( !skip.includes( prop ) || isNull( target[prop] )) && isWritable( target, prop ) )
                                                  {
-                                                     attemptSilent( () => (target[prop] = target[prop] || (isLikeArray( value ) ? [...(asArray( value || [] ) || [])] : value) || target[prop]) );
+                                                     attemptSilent( () => (target[prop] = target[prop] || (isLikeArray( value ) ? [...((value || []) || [])] : value) || target[prop]) );
                                                  }
                                              } );
         }
@@ -1551,7 +1551,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
                                                  if ( !skip.includes( prop ) && (isNull( target[prop] ) || isWritable( target, prop )) )
                                                  {
-                                                     attemptSilent( () => (target[prop] = (isLikeArray( value ) ? [...(asArray( value || [] ) || [])] : value) || target[prop]) );
+                                                     attemptSilent( () => (target[prop] = (isLikeArray( value ) ? [...((value || []) || [])] : value) || target[prop]) );
                                                  }
                                              } );
         }
@@ -1702,7 +1702,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
 
         /**
-         * Returns true if the 2 objects (or functions) are *very likely"
+         * Returns true if the 2 objects (or functions) are *very likely*
          * either identical or represent the same data
          *
          * @param {Object|Function} pObjectA The first of 2 objects or functions to compare
@@ -4774,13 +4774,16 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         #occurred;
 
+        #args = [];
+
         /**
          * Constructs an instance of the custom Error class, __Error.<br>
          * @constructor
          * @param {string|Error} pMsgOrErr The error message or an Error whose message should be used as the error message
          * @param {Object} [pOptions={}] An object that will be available as a property of this Error
+         * @param {...*} [pArgs=null] One or more values to include in the error message
          */
-        constructor( pMsgOrErr, pOptions = {} )
+        constructor( pMsgOrErr, pOptions = {}, ...pArgs )
         {
             super( initializeMessage( pMsgOrErr ) );
 
@@ -4788,8 +4791,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             this.#options = attemptSilent( () => Object.assign( {}, { ...(pOptions || {}) } ) ) || {};
 
-            this.#type = this.getErrorTypeOrName( pMsgOrErr ).replace( /^__/, _mt_str );
-            this.#name = this.getErrorTypeOrName( pMsgOrErr ).replace( /^__/, _mt_str );
+            this.#type = attemptSilent( () => me.getErrorTypeOrName( pMsgOrErr ).replace( /^__/, _mt_str ) );
+            this.#name = attemptSilent( () => me.getErrorTypeOrName( pMsgOrErr ).replace( /^__/, _mt_str ) );
 
             this.#msg = (isStr( pMsgOrErr ) ? pMsgOrErr : _mt_str) || super.message;
 
@@ -4821,6 +4824,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             this.#occurred = isDate( this.#occurred ) ? this.#occurred : this.#occurred >= 0 ? new Date( this.#occurred ) : new Date();
 
             this.#trace = attemptSilent( () => this.#options?.stackTrace || ((isError( pMsgOrErr ) ? new StackTrace( (pMsgOrErr?.stack || this.stack), pMsgOrErr ) : null)) );
+
+            if ( !isNull( pArgs ) && isArray( pArgs ) )
+            {
+                this.#args.push( ...((pArgs || [])) );
+            }
+            else if ( isArray( this.#options?.arguments ) )
+            {
+                this.#args.push( ...((this.#options?.arguments || [])) );
+            }
         }
 
         get occurred()
@@ -4843,11 +4855,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          */
         getErrorTypeOrName( pError )
         {
-            if ( pError instanceof Error )
+            if ( pError instanceof Error || isNonNullObj( pError ) )
             {
                 return _asStr( pError.type || pError.name || pError.constructor?.name || "Error" ).replace( /^__/, _mt_str );
             }
-            return "Error";
+            return _asStr( this.constructor?.name || "Error" ).replace( /^__/, _mt_str );
         }
 
         /**
@@ -4872,6 +4884,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return immutableCopy( this.#options || {} );
         }
 
+        get args()
+        {
+            return $ln( this.#args ) ? [...(this.#args)] : [];
+        }
+
         get name()
         {
             return this.#name || super.name || this.constructor?.name;
@@ -4889,7 +4906,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         get message()
         {
-            return this.prefix + ((this.#msg || super.message).replace( this.prefix, _mt_str ));
+            let msg = this.prefix + ((this.#msg || super.message).replace( this.prefix, _mt_str ));
+            if ( $ln( this.#args ) )
+            {
+                msg += " -> with arguments: " + ((this.#args || []).filter( e => !isNull( e ) ).map( asString )).join( ", " );
+            }
+            return msg;
         }
 
         toString()
@@ -5016,18 +5038,23 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     class IllegalArgumentError extends __Error
     {
+        #illegalArguments = [];
+
         /**
          * @constructor
          * @param {string|Error} pMessage The error message or an Error whose message should be used as the error message
          * @param {Object} pOptions An object that will be available as a property of this Error
+         * @param {...*} [pArgs=null] One or more values to be included in the error message
          */
-        constructor( pMessage, pOptions )
+        constructor( pMessage, pOptions, ...pArgs )
         {
-            super( pMessage, pOptions );
+            super( pMessage, pOptions, ...pArgs );
 
-            if ( Error.captureStackTrace )
+            let options = { ...(pOptions || {}) };
+
+            if ( isArray( options.arguments || options.illegalArguments ) )
             {
-                Error.captureStackTrace( this, this.constructor );
+                this.#illegalArguments.push( ...(options.arguments || options.illegalArguments || []) );
             }
         }
 
@@ -5038,6 +5065,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         static get [Symbol.species]()
         {
             return this;
+        }
+
+        get illegalArguments()
+        {
+            return [...(this.#illegalArguments || this.args || [])];
         }
 
         /**
@@ -5066,59 +5098,117 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
     }
 
+    class IllegalStateError extends __Error
+    {
+        constructor( pMessage, pOptions, ...pArgs )
+        {
+            super( pMessage, pOptions, ...pArgs );
+
+            if ( Error.captureStackTrace )
+            {
+                const me = this;
+                attempt( () => Error.captureStackTrace( me, me.constructor ) );
+            }
+        }
+
+        /**
+         * Returns a constructor for this class.
+         * @returns {IllegalStateError}
+         */
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
+        /**
+         * @inheritDoc
+         * @returns {string}
+         */
+        toString()
+        {
+            return this.prefix + ((this.message || super.message).replace( this.prefix, _mt_str ));
+        }
+
+        clone()
+        {
+            const options = this.cloneOptions( this.options );
+
+            options.cause = options.cause || this.cause;
+            options.stackTrace = options.stackTrace || this.stackTrace;
+
+            return new this.constructor( this.message, options );
+        }
+    }
+
+    function _fromErrorArray( pError, pMessage, pErrors )
+    {
+        for( let i = 0, n = $ln( pError ); i < n; i++ )
+        {
+            let err = pError[i];
+            if ( isArray( pMessage ) )
+            {
+                pErrors.push( resolveError( err, pMessage[i] || _mt_str ) );
+            }
+            else
+            {
+                pErrors.push( resolveError( err, pMessage ) );
+            }
+        }
+
+        return isError( pErrors[0] ) && pErrors[0] instanceof __Error ? pErrors[0] : new __Error( pErrors[0], {
+            errors: pErrors,
+            message: pMessage || pError,
+            cause: pError || pMessage
+        } );
+    }
+
+    function _fromMessageArray( pMessage, pError, pErrors )
+    {
+        for( let i = 0, n = $ln( pMessage ); i < n; i++ )
+        {
+            let msg = pMessage[i];
+            if ( isArray( pError ) )
+            {
+                pErrors.push( resolveError( msg, pError[i] || pError ) );
+            }
+            else
+            {
+                pErrors.push( resolveError( msg, pError ) );
+            }
+        }
+
+        return isError( pErrors[0] ) && pErrors[0] instanceof __Error ? pErrors[0] : new __Error( pErrors[0], {
+            errors: pErrors,
+            message: pError,
+            cause: pError || pMessage
+        } );
+    }
+
     function _handleMissingError( pError, pMessage )
     {
         const lastError = getLastError();
 
+        let errors = [];
+
         if ( isArray( pError ) || isArray( pMessage ) )
         {
-            let errors = [];
-
             if ( isArray( pError ) )
             {
-                for( let i = 0, n = $ln( pError ); i < n; i++ )
-                {
-                    let err = pError[i];
-                    if ( isArray( pMessage ) )
-                    {
-                        errors.push( resolveError( err, pMessage[i] || _mt_str ) );
-                    }
-                    else
-                    {
-                        errors.push( resolveError( err, pMessage ) );
-                    }
-                }
-                return isError( errors[0] ) && errors[0] instanceof __Error ? errors[0] : new __Error( errors[0], {
-                    errors,
-                    message: pMessage || pError,
-                    cause: pError || pMessage
-                } );
+                return _fromErrorArray( pError, pMessage, errors );
             }
             else if ( isArray( pMessage ) )
             {
-                for( let i = 0, n = $ln( pMessage ); i < n; i++ )
-                {
-                    let msg = pMessage[i];
-                    if ( isArray( pError ) )
-                    {
-                        errors.push( resolveError( msg, pError[i] || pError ) );
-                    }
-                    else
-                    {
-                        errors.push( resolveError( msg, pError ) );
-                    }
-                }
-                return isError( errors[0] ) && errors[0] instanceof __Error ? errors[0] : new __Error( errors[0], {
-                    errors,
-                    message: pError,
-                    cause: pError || pMessage
-                } );
+                return _fromMessageArray( pMessage, pError, errors );
             }
         }
 
         if ( !isNull( lastError ) && isError( lastError ) )
         {
             return resolveError( lastError, lastError?.message || lastError );
+        }
+        else if ( $ln( errors ) )
+        {
+            return resolveError( errors[0], errors[0]?.message || errors[0] );
         }
 
         return null;
@@ -5136,13 +5226,24 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * <br>
      * @param {Error|string} pError  An Error or a string with which to create a new Error
      * @param {string|Error} pMessage A string to use as the message property of the returned Error or an Error whose message will be used instead
+     * @param {...*} [pArgs=null] One or more arguments to use if this function requires constructing a new __Error instance
      * @returns {__Error} an Error (actually an instance of __Error, which provides an environment-agnostic stack trace)
      */
-    function resolveError( pError, pMessage )
+    function resolveError( pError, pMessage, ...pArgs )
     {
         if ( !(isError( pError ) || isError( pMessage ) || (_isValidStr( pMessage ) || _isValidStr( pError ))) )
         {
-            return attemptSilent( () => _handleMissingError( pError, pMessage ) );
+            if ( isArray( pError ) || isArray( pMessage ) )
+            {
+                return attemptSilent( () => _handleMissingError( pError, pMessage ) );
+            }
+
+            if ( isError( getLastError() ) )
+            {
+                return new __Error( getLastError(), pMessage || pError, ...pArgs );
+            }
+
+            return null;
         }
 
         const msg = _isValidStr( pMessage ) ? pMessage : _isValidStr( pError ) ? pError : pError?.message || pMessage?.message || DEFAULT_ERROR_MSG;
@@ -5153,7 +5254,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         let errors = attemptSilent( () => ([pError, pMessage]).map( e => e instanceof __Error ? e : (isError( e ) ? new __Error( e, options ) : new __Error( msg, options )) ) );
 
-        return $ln( errors ) > 0 ? errors[0] : new __Error( msg, options );
+        return $ln( errors ) > 0 ? errors[0] : new __Error( msg, options, ...pArgs );
     }
 
     /**
@@ -5638,7 +5739,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                                                                           error: ex,
                                                                           message: ex.message,
                                                                           visited: pVisited,
-                                                                          args: [...(asArray( pExtra || [] ) || [])]
+                                                                          args: [...(pExtra || [] || [])]
                                                                       }, populateOptions( {
                                                                                               detail: pVisited,
                                                                                               data: pVisited,
@@ -7650,6 +7751,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             ExecutionEnvironment,
             ExecutionMode,
             IllegalArgumentError,
+            IllegalStateError,
             IterationCap,
             SourceInfo,
             StackTrace,
@@ -7704,6 +7806,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     ExecutionMode,
                     __Error,
                     IllegalArgumentError,
+                    IllegalStateError,
                     IterationCap,
                     ModuleArgs,
                     ModuleEvent: ToolBocksModuleEvent,

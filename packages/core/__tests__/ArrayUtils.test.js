@@ -1279,7 +1279,7 @@ describe( "Comparators", () =>
               expect( arraysEqual( expected, actual ) ).toBe( true );
           } );
 
-    test( "The Comparator.BY_POSITION is function that returns a comparison function that orders the array elements according their position in the reference array",
+    test( "The Comparator.BY_POSITION is a function that returns a comparison function that orders the array elements according their position in the reference array",
           () =>
           {
               const arr = ["a", "b", "c", "d", "e", "f"];

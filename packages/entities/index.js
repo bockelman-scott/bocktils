@@ -39,9 +39,11 @@ const {
             BockIdentified,
             BockNamed,
             BockDescribed,
+            Dependency,
+            Dependencies,
             asObject,
             identical,
-            same
+            same,
         } = entityUtils;
 
     const { ToolBocksModule, OBJECT_REGISTRY = $scope()["__BOCK_OBJECT_REGISTRY__"] } = moduleUtils;
@@ -73,6 +75,8 @@ const {
             BockIdentified,
             BockNamed,
             BockDescribed,
+            Dependency,
+            Dependencies,
             same,
             identical
         };

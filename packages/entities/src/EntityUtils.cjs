@@ -39,6 +39,7 @@ const {
         ObjectEntry,
         populateOptions,
         objectEntries,
+        objectValues,
         getProperty,
         isWritable,
         populateProperties,

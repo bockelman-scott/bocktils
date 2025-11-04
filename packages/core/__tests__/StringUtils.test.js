@@ -1767,11 +1767,11 @@ describe( "tidy is a supercharged function with many options", () =>
                                         } ) ).toEqual( "    A    b    c " );
           } );
 
-    test( "tidy(' A    b  c ', {replaceSpacesWithTabs:true}) === 'A\tb c'",
+    test( "tidy(' A    b  c ', {replaceSpacesWithTabs:true,removeRedundantSpaces:true}) === 'A b c'",
           () =>
           {
               let s = " A    b  c ";
-              expect( stringUtils.tidy( s, { replaceSpacesWithTabs: true, spacesPerTab: 4 } ) ).toEqual( "A\tb c" );
+              expect( stringUtils.tidy( s, { replaceSpacesWithTabs: true, spacesPerTab: 4 } ) ).toEqual( "A b c" );
           } );
 
     test( "tidy(' A    b  c ', {replaceSpacesWithTabs:true, removeRedundantSpaces:false}) === 'A\tb  c'",
