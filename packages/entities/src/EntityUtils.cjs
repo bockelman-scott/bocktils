@@ -6,10 +6,6 @@
  *
  */
 
-/**
- * This statement imports the core modules:
- * Constants, TypeUtils, StringUtils, and ArrayUtils
- */
 const core = require( "@toolbocks/core" );
 
 const jsonUtils = require( "@toolbocks/json" );
@@ -33,33 +29,30 @@ const {
         return $scope()[INTERNAL_NAME];
     }
 
-    const {
-        ToolBocksModule,
-        OBJECT_REGISTRY = $scope()["__BOCK_OBJECT_REGISTRY__"],
-        ObjectEntry,
-        populateOptions,
-        objectEntries,
-        objectValues,
-        getProperty,
-        isWritable,
-        populateProperties,
-        overwriteProperties,
-        lock,
-        localCopy,
-        resolveEvent,
-        attempt,
-        asyncAttempt,
-        attemptSilent,
-        detectCycles,
-        $ln,
-        no_op
-    } = moduleUtils;
+    const
+        {
+            ToolBocksModule,
+            OBJECT_REGISTRY = $scope()["__BOCK_OBJECT_REGISTRY__"],
+            ObjectEntry,
+            populateOptions,
+            objectEntries,
+            objectValues,
+            getProperty,
+            isWritable,
+            populateProperties,
+            overwriteProperties,
+            lock,
+            localCopy,
+            resolveEvent,
+            attempt,
+            asyncAttempt,
+            attemptSilent,
+            detectCycles,
+            $ln,
+            no_op
+        } = moduleUtils;
 
-    const {
-        _dot,
-        S_ERROR,
-        _validTypes
-    } = constants;
+    const { _dot, S_ERROR, _validTypes } = constants;
 
     const
         {
@@ -72,8 +65,8 @@ const {
             isObject,
             isNonNullObject,
             isClass,
-            isReadOnly,
             getClass,
+            getClassName,
             isError,
             isArray,
             isLikeArray,
@@ -84,6 +77,7 @@ const {
             isSharedArrayBuffer,
             isDataView,
             areSameType,
+            isReadOnly,
             areCompatibleTypes,
             toObjectLiteral,
             toDecimal,
@@ -351,6 +345,14 @@ const {
 
     class BockEntity
     {
+        // this allows each of our Entities, if necessary, to behave like an EventTarget, if required
+        #__eventTarget = new EventTarget();
+
+        // used rarely to shuttle temporary values between methods
+        // attributes are not included in equality comparisons or persisted.
+        // to save memory, we avoid instantiating a new Map until we need one.
+        #attributes; // = new Map();
+
         constructor()
         {
         }
@@ -368,6 +370,57 @@ const {
             return populateProperties( obj, source );
         }
 
+        setAttribute( pName, pValue )
+        {
+            const key = asString( pName, true );
+
+            if ( !isBlank( key ) )
+            {
+                this.#attributes = !isNull( this.#attributes ) && isMap( this.#attributes ) ? this.#attributes : new Map();
+
+                if ( isNull( pValue ) )
+                {
+                    this.#attributes.delete( key );
+                }
+                else
+                {
+                    this.#attributes.set( key, pValue );
+                }
+
+                return new Map( objectEntries( this.#attributes ) );
+            }
+
+            return null;
+        }
+
+        getAttribute( pName )
+        {
+            const key = asString( pName, true );
+
+            if ( !isBlank( key ) )
+            {
+                this.#attributes = !isNull( this.#attributes ) && isMap( this.#attributes ) ? this.#attributes : new Map();
+
+                return this.#attributes.get( key );
+            }
+
+            return null;
+        }
+
+        hasAttribute( pName )
+        {
+            const key = asString( pName, true );
+
+            if ( !isBlank( key ) )
+            {
+                this.#attributes = !isNull( this.#attributes ) && isMap( this.#attributes ) ? this.#attributes : new Map();
+
+                return this.#attributes.has( key );
+            }
+
+            return false;
+        }
+
         toObjectLiteral( pOptions )
         {
             return toObjectLiteral( this, pOptions );
@@ -383,6 +436,61 @@ const {
             return (pOther === this) || (OBJECT_REGISTRY.getGuid( pOther ) === OBJECT_REGISTRY.getGuid( this ));
         }
 
+        /**
+         * Dispatches an event for which there may be a listener.
+         *
+         * @param {Event} pEvt - The event to be dispatched. Prefer dispatching instances of ModuleEvent.
+         * @return {boolean} Returns true if the event was successfully dispatched, otherwise false.
+         */
+        dispatchEvent( pEvt )
+        {
+            return this.#__eventTarget.dispatchEvent( pEvt );
+        }
+
+        /**
+         * Adds an event listener to this instance.
+         *
+         * @param {string} pEvt - The name of the event to listen for.
+         * @param {Function|Object} pHandler - The callback function to execute when the event is triggered or an Object with a handleEvent method
+         * @param {Object|boolean} [pOptions] - Optional parameters that define characteristics about the event listener,
+         * such as whether it is captured in the capturing phase, is one-time, or is passive.
+         * @return {void} Does not return a value.
+         */
+        addEventListener( pEvt, pHandler, pOptions )
+        {
+            this.#__eventTarget.addEventListener( pEvt, pHandler, pOptions );
+        }
+
+        /**
+         * Removes the specified event listener from this instance.
+         *
+         * @param {string} pEvt - The name of the event to remove the listener from.
+         * @param {Function|Object} pHandler - The event handler function or object to remove.
+         * @param {Object|boolean} [pOptions] - An object or a boolean indicating the options with which the listener was added.
+         * @return {void} - Does not return any value.
+         */
+        removeEventListener( pEvt, pHandler, pOptions )
+        {
+            this.#__eventTarget.removeEventListener( pEvt, pHandler, pOptions );
+        }
+
+        toString()
+        {
+            let s = attempt( () => asJson( this ) );
+
+            if ( !isBlank( s ) )
+            {
+                return s;
+            }
+
+            return `${getClassName( this )}::${OBJECT_REGISTRY.getGuid( this )}`;
+        }
+
+        [Symbol.toPrimitive]()
+        {
+            return this.toString();
+        }
+
         equals( pOther )
         {
             if ( this.isIdentical( pOther ) )
@@ -395,8 +503,13 @@ const {
 
         clone()
         {
-            const species = this.constructor[Symbol.species];
-            return species.from( this );
+            const species = this.constructor[Symbol.species] || this.constructor;
+            return isFunction( species.from ) ? species.from( this ) : new species( this );
+        }
+
+        get cloneable()
+        {
+            return isFunction( this["clone"] );
         }
     }
 

@@ -6,10 +6,6 @@
  *
  */
 
-/**
- * This statement imports the core modules:
- * Constants, TypeUtils, StringUtils, and ArrayUtils
- */
 const core = require( "@toolbocks/core" );
 
 const entityUtils = require( "./src/EntityUtils.cjs" );
@@ -56,7 +52,6 @@ const {
         {
             dependencies:
                 {
-                    core,
                     moduleUtils,
                     constants,
                     typeUtils,

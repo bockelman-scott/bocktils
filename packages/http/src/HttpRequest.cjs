@@ -94,6 +94,7 @@ const {
         mergeObjects,
         attempt,
         asyncAttempt,
+        detectCycles,
         $ln
     } = moduleUtils;
 
@@ -1334,33 +1335,52 @@ const {
             super();
 
             let uri = (isString( pRequestOrUrl ) && !isJson( pRequestOrUrl ) ?
-                       cleanUrl( pRequestOrUrl ) :
-                       asObject( pRequestOrUrl )?.url || asObject( pOptions )?.url);
+                       cleanUrl( pRequestOrUrl || asString( asObject( pOptions || {} )?.url, true ) ) :
+                       asObject( pRequestOrUrl )?.url || asObject( pOptions )?.url || asObject( pRequestOrUrl ) || asObject( pOptions ));
 
             let config = new HttpRequestOptions( asObject( pOptions || (isNonNullObject( pRequestOrUrl ) ?
                                                                         pRequestOrUrl :
                                                                         new HttpRequestOptions()) ) );
 
-            if ( pRequestOrUrl instanceof this.constructor )
+            if ( isNonNullObject( pRequestOrUrl ) )
             {
-                let req = _unwrapRequest( pRequestOrUrl );
-                this.#request = cloneRequest( req );
+                if ( pRequestOrUrl instanceof this.constructor )
+                {
+                    let req = _unwrapRequest( pRequestOrUrl );
+                    this.#request = cloneRequest( req );
+                }
+                else if ( (_ud !== typeof Request) && pRequestOrUrl instanceof Request )
+                {
+                    this.#request = cloneRequest( pRequestOrUrl );
+                }
+                else
+                {
+                    this.#request =
+                        {
+                            url: uri || pRequestOrUrl?.url || asObject( config ).url,
+                            method: HttpVerb.resolveHttpMethod( pRequestOrUrl?.method || asObject( config ).method || VERBS.GET ),
+                            mode: asString( pRequestOrUrl?.mode || asObject( config ).mode || MODES.CORS, true ) || MODES.CORS,
+                            data: pRequestOrUrl?.data || asObject( config )?.data || pRequestOrUrl?.body || asObject( config )?.body,
+                            body: pRequestOrUrl?.data || asObject( config )?.data || pRequestOrUrl?.body || asObject( config )?.body || asObject( config )?.data || resolveRequestBody( config, asObject( pOptions ) ),
+                            headers: asObject( pRequestOrUrl )?.headers || asObject( config )?.headers || asObject( pOptions )?.headers || {}
+                        };
+                }
             }
             else if ( isString( uri ) && !isJson( uri ) && isUrl( uri ) )
             {
                 this.#request = (_ud === typeof Request ?
                     {
                         url: uri || asObject( config ).url,
-                        method: asObject( config ).method || VERBS.GET,
-                        mode: asObject( config ).mode || MODES.CORS,
-                        data: asObject( config )?.data,
+                        method: HttpVerb.resolveHttpMethod( asObject( config ).method || VERBS.GET ) || VERBS.GET,
+                        mode: asString( asObject( config ).mode || MODES.CORS, true ) || MODES.CORS,
+                        data: asObject( config )?.data || asObject( config )?.body || resolveRequestBody( config, asObject( pOptions ) ),
                         body: asObject( config )?.data || resolveRequestBody( config, asObject( pOptions ) ),
                         headers: asObject( config )?.headers || asObject( pOptions )?.headers || {}
                     } : new Request( uri, asObject( config ) ));
             }
             else
             {
-                this.#request = this.resolveRequest( pRequestOrUrl, pOptions );
+                this.#request = attempt( () => this.resolveRequest( pRequestOrUrl, pOptions, new Map, [asString( pRequestOrUrl, true )] ) );
             }
 
             this.#options = mergeObjects( config, (new HttpRequestOptions( HttpVerb.resolveHttpMethod( this.#request?.method || config.method || VERBS.GET ),
@@ -1541,7 +1561,7 @@ const {
             return new HttpRequest( obj.url || url, requestOptions );
         }
 
-        resolveRequest( pRequestOrUrl, pConfig )
+        resolveRequest( pRequestOrUrl, pConfig, pVisited = new Map(), pStack = [] )
         {
             // resolve arguments
             let { req, config } = this._unwrapRequestArguments( pRequestOrUrl, pConfig );
@@ -1551,6 +1571,9 @@ const {
             {
                 return new Request( attempt( () => req.clone() ) || req, config );
             }
+
+            let visited = isMap( pVisited ) ? pVisited : new Map();
+            let stack = isArray( pStack ) ? pStack : [];
 
             if ( isNull( req ) )
             {
@@ -1570,14 +1593,34 @@ const {
                 return this._resolveRequestFromObject( req, config );
             }
 
+            if ( detectCycles( stack, 5, 5 ) )
+            {
+                return visited.get( "request" ) || req || pRequestOrUrl;
+            }
+
             if ( isString( req ) && !isBlank( req ) )
             {
                 if ( isJson( req ) )
                 {
-                    return this.resolveRequest( attempt( () => parseJson( req ) ), config );
+                    const obj = attempt( () => parseJson( req ) );
+
+                    if ( isNonNullObject( obj ) )
+                    {
+                        visited.set( "request", obj );
+                    }
+
+                    return this.resolveRequest( obj, config, visited, stack.concat( req ) );
                 }
-                return new HttpRequest( cleanUrl( asString( req, true ) ),
-                                        HttpRequestOptions.fromOptions( config ) );
+
+                try
+                {
+                    return new HttpRequest( cleanUrl( asString( req, true ) ),
+                                            HttpRequestOptions.fromOptions( config ) );
+                }
+                catch( ex )
+                {
+                    // ignored, stack overflow
+                }
             }
 
             if ( isFunction( req ) )
@@ -1585,7 +1628,16 @@ const {
                 return attempt( () => req.call( config, config ) );
             }
 
-            return new HttpRequest( _slash, HttpRequestOptions.fromOptions( config ) );
+            try
+            {
+                return new HttpRequest( _slash, HttpRequestOptions.fromOptions( config ) );
+            }
+            catch( ex )
+            {
+                // ignored
+            }
+            
+            return req || pRequestOrUrl;
         }
 
     }

@@ -718,6 +718,11 @@ const $scope = constants?.$scope || function()
         return value;
     };
 
+    const isCloneable = function( pObject )
+    {
+        return isNonNullObject( pObject ) && isFunction( pObject.clone );
+    };
+
     /**
      * @typedef {Object} ObjectEvaluationOptions
      *
@@ -5428,6 +5433,7 @@ const $scope = constants?.$scope || function()
             isString,
             isEmptyString,
             isNumber,
+            isCloneable,
             isInteger,
             toInteger,
             isFloat,

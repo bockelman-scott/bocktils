@@ -516,7 +516,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             warn: no_op,
             debug: no_op,
             error: no_op,
-            trace: no_op
+            trace: no_op,
+            mocked: true
         };
 
     /*
@@ -6193,7 +6194,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             if ( ToolBocksModule.isLogger( pLogger ) )
             {
-                this.#logger = pLogger;
+                this.#logger = pLogger || this.#logger;
             }
         }
 
@@ -6222,12 +6223,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
 
         /**
-         * Returns true of the specified object implements the 6 expected methods:<br>
-         * log, info, warn, error, debug, and trace
+         * Returns true if the specified object implements the 5 expected methods:<br>
+         * log, info, warn, error, and debug (and optionally, trace)
          * <br>
          * @param {Object|ILogger} pLogger An object that may or may not be a logger
-         * @returns {boolean} true of the specified object implements the 6 expected methods:
-         * log, info, warn, error, debug, and trace
+         * @returns {boolean} true of the specified object implements the 5 expected methods:
+         * log, info, warn, error, and debug (and optionally, trace)
          */
         static isLogger( pLogger )
         {
