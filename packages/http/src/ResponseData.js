@@ -403,69 +403,77 @@ const {
                 constructed = attempt( () => me._setPropertiesFromInstance( pResponse, pConfig, pOptions ) );
             }
 
-            if ( !constructed )
+            if ( isError( pResponse ) || isError( pConfig ) )
             {
-                const opts = { ...DEFAULT_RESPONSE_OPTIONS, ...(pResponse || (pConfig || pResponse || {})), ...(pConfig || pResponse || {}), ...(pOptions || {}) };
-
-                const config = { ...(pResponse?.config || {}), ...(asObject( pConfig || pResponse || opts ) || {}) };
-
-                const options = { ...(asObject( opts ) || config || {}) };
-
-                const source = (_ud !== typeof Response && pResponse instanceof Response) ? pResponse : attempt( () => HttpResponse.resolveResponse( pResponse, options ) );
-
-                // Some frameworks return the response as a property of an error returned in place of a response.
-                // See https://axios-http.com/docs/handling_errors, for example
-                this.#frameworkResponse = pResponse?.response || pResponse || source?.response || source;
-
-                this.#data = this.#frameworkResponse?.data || source?.data || options.data;
-
-                this.#frameworkHeaders = this.#frameworkResponse?.headers || source?.headers || options.headers;
-
-                this.#status = this.#frameworkResponse?.status || source?.status || options.status;
-
-                this.#error = isError( pResponse ) ? pResponse : isError( pConfig ) ? pConfig : isError( pOptions ) ? pOptions : null;
-
-                this.#error = isError( this.#error ) ? resolveError( this.#error ) : null;
-
-                // Stores the configuration returned with the response
-                // or the configuration used to make the request for which this is the response
-                this.#config = config || options;
-
-                this.#options = populateOptions( options,
-                                                 {
-                                                     response: this.#frameworkResponse || pResponse?.response || pResponse,
-                                                     source: source || pResponse?.response || pResponse,
-                                                     config,
-                                                     error: this.#error,
-                                                     status: this.#status,
-                                                     data: this.#data || config?.data || options.data,
-                                                     headers: this.#frameworkHeaders || source?.headers || options.headers
-                                                 } );
-
-                this.#options.data = ((config.responseType === "application/json" || isJson( this.#options.data )) ? asObject( this.#options.data ) : this.#options.data) || this.#options.data;
-
-                if ( isNonNullObject( source ) )
+                this.#error = resolveError( isError( pResponse ) ? pResponse : pConfig, pConfig, { message: pResponse?.message || pConfig?.message || asString( pConfig || pResponse, true ) } );
+                this.#data = isError( pConfig ) ? (pConfig?.message || pConfig) : isError( pResponse ) ? (pResponse?.message || pResponse) : (this.#error?.message || this.#error);
+            }
+            else
+            {
+                if ( !constructed )
                 {
-                    this.#response = attempt( () => new HttpResponse( (source || pResponse || config || options),
-                                                                      (options || config || source),
-                                                                      (config.url || options.url) ) ) || source || options.response || options || config;
+                    const opts = { ...DEFAULT_RESPONSE_OPTIONS, ...(pResponse || (pConfig || pResponse || {})), ...(pConfig || pResponse || {}), ...(pOptions || {}) };
+
+                    const config = { ...(pResponse?.config || {}), ...(asObject( pConfig || pResponse || opts ) || {}) };
+
+                    const options = { ...(asObject( opts ) || config || {}) };
+
+                    const source = (_ud !== typeof Response && pResponse instanceof Response) ? pResponse : attempt( () => HttpResponse.resolveResponse( pResponse, options ) );
+
+                    // Some frameworks return the response as a property of an error returned in place of a response.
+                    // See https://axios-http.com/docs/handling_errors, for example
+                    this.#frameworkResponse = pResponse?.response || pResponse || source?.response || source;
+
+                    this.#data = this.#frameworkResponse?.data || source?.data || options.data;
+
+                    this.#frameworkHeaders = this.#frameworkResponse?.headers || source?.headers || options.headers;
+
+                    this.#status = this.#frameworkResponse?.status || source?.status || options.status;
+
+                    this.#error = isError( pResponse ) ? pResponse : isError( pConfig ) ? pConfig : isError( pOptions ) ? pOptions : null;
+
+                    this.#error = isError( this.#error ) ? resolveError( this.#error ) : null;
+
+                    // Stores the configuration returned with the response
+                    // or the configuration used to make the request for which this is the response
+                    this.#config = config || options;
+
+                    this.#options = populateOptions( options,
+                                                     {
+                                                         response: this.#frameworkResponse || pResponse?.response || pResponse,
+                                                         source: source || pResponse?.response || pResponse,
+                                                         config,
+                                                         error: this.#error,
+                                                         status: this.#status,
+                                                         data: this.#data || config?.data || options.data,
+                                                         headers: this.#frameworkHeaders || source?.headers || options.headers
+                                                     } );
+
+                    this.#options.data = ((config.responseType === "application/json" || isJson( this.#options.data )) ? asObject( this.#options.data ) : this.#options.data) || this.#options.data;
+
+                    if ( isNonNullObject( source ) )
+                    {
+                        this.#response = attempt( () => new HttpResponse( (source || pResponse || config || options),
+                                                                          (options || config || source),
+                                                                          (config.url || options.url) ) ) || source || options.response || options || config;
+                    }
+                    else
+                    {
+                        this.#response = this.#frameworkResponse || pResponse;
+                    }
+
+                    // construct an instance of HttpStatus as a helper for evaluating the status
+                    this.#httpStatus = attempt( () => HttpStatus.fromCode( this.status ) ) ||
+                                       attempt( () => HttpStatus.fromResponse( this.#response ) ) ||
+                                       attempt( () => HttpStatus.fromCode( this.statusText ) ) ||
+                                       attempt( () => new HttpStatus( asInt( this.status ), asString( this.statusText || this.options.statusText || "UNKNOWN", true ) ) );
+
+                    // Stores the headers returned with the response or the request headers that were passed
+                    this.#headers = new HttpResponseHeaders( source?.headers || this.frameworkHeaders || config.headers || options.headers );
+
+                    // Stores the url path from which the response actually came (in the case of redirects) or the url/path of the request
+                    this.#url = cleanUrl( asString( asString( this.#response?.url || this.#frameworkResponse?.url || config?.url || source?.url, true ) || asString( config.url || options.url, true ) || _slash, true ) );
                 }
-                else
-                {
-                    this.#response = this.#frameworkResponse || pResponse;
-                }
-
-                // construct an instance of HttpStatus as a helper for evaluating the status
-                this.#httpStatus = attempt( () => HttpStatus.fromCode( this.status ) ) ||
-                                   attempt( () => HttpStatus.fromResponse( this.#response ) ) ||
-                                   attempt( () => HttpStatus.fromCode( this.statusText ) ) ||
-                                   attempt( () => new HttpStatus( asInt( this.status ), asString( this.statusText || this.options.statusText || "UNKNOWN", true ) ) );
-
-                // Stores the headers returned with the response or the request headers that were passed
-                this.#headers = new HttpResponseHeaders( source?.headers || this.frameworkHeaders || config.headers || options.headers );
-
-                // Stores the url path from which the response actually came (in the case of redirects) or the url/path of the request
-                this.#url = cleanUrl( asString( asString( this.#response?.url || this.#frameworkResponse?.url || config?.url || source?.url, true ) || asString( config.url || options.url, true ) || _slash, true ) );
             }
         }
 
@@ -912,6 +920,13 @@ const {
     ResponseData.is = function( pResponseData, pWhat )
     {
         return ResponseData.isResponseData( pResponseData ) && attempt( () => pResponseData[("is" + pWhat)]() );
+    };
+
+    ResponseData.createErrorResponse = function( pError, pMsg )
+    {
+        let message = isString( pMsg ) ? (asString( pMsg || pError?.message, true )) : ((isError( pError ) ? asString( pError.message || asString( (isError( pMsg ) ? pMsg?.message || pMsg : pMsg), true ), true ) : asString( (isError( pMsg ) ? pMsg?.message || pMsg : pMsg), true ))) || "An error occurred ";
+        let error = resolveError( isError( pError ) ? resolveError( pError ) : isError( pMsg ) ? resolveError( pMsg, pError ) : new Error( message ) );
+        return new ResponseData( error, message, { error, message } );
     };
 
     let mod =

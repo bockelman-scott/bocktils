@@ -4795,7 +4795,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             this.#type = attemptSilent( () => me.getErrorTypeOrName( pMsgOrErr ).replace( /^__/, _mt_str ) );
             this.#name = attemptSilent( () => me.getErrorTypeOrName( pMsgOrErr ).replace( /^__/, _mt_str ) );
 
-            this.#msg = (isStr( pMsgOrErr ) ? pMsgOrErr : _mt_str) || super.message;
+            this.#msg = (isStr( pMsgOrErr ) ? pMsgOrErr : String( options.message || _mt_str )) || super.message;
 
             this.#cause = attemptSilent( () => me.determineCause( pMsgOrErr, this.#options?.cause ) );
 
