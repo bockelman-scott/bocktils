@@ -29,26 +29,28 @@ const {
 
     const DEBUG = false;
 
-    const {
-        ToolBocksModule,
-        IterationCap,
-        populateOptions,
-        lock,
-        attempt
-    } = moduleUtils;
+    const
+        {
+            ToolBocksModule,
+            IterationCap,
+            populateOptions,
+            lock,
+            attempt
+        } = moduleUtils;
 
-    const {
-        _mt_str,
-        _rxNullTerminator,
-        _slash,
-        _underscore,
-        _comma,
-        _ALPHABET_ENGLISH_UCASE,
-        _ALPHABET_ENGLISH_LCASE,
-        _DIGIT_CHARACTERS
-    } = constants;
+    const
+        {
+            _mt_str,
+            _rxNullTerminator,
+            _slash,
+            _underscore,
+            _comma,
+            _ALPHABET_ENGLISH_UCASE,
+            _ALPHABET_ENGLISH_LCASE,
+            _DIGIT_CHARACTERS
+        } = constants;
 
-    const { isNull, isString, isEmptyString, isFunction } = typeUtils;
+    const { isNull, isNonNullObject, isArray, isString, isEmptyString, isFunction, isClass, getClass } = typeUtils;
 
     const { isBlank, asString, asInt, ucase, lcase } = stringUtils;
 
@@ -66,7 +68,7 @@ const {
 
     const DEFAULT_TEXT_ENCODING = UTF8;
 
-    const validEncodings = lock( ["ascii", "utf8", UTF8, "utf16le", "utf-16le", "ucs2", "ucs-2", BASE64, "base64url", "latin1", "binary", "hex"] );
+    const VALID_ENCODINGS = lock( ["ascii", "utf8", UTF8, "utf16le", "utf-16le", "ucs2", "ucs-2", BASE64, "base64url", "latin1", "binary", "hex"] );
 
     const DEFAULT_CHAR_62 = "+";
     const DEFAULT_CHAR_63 = "/";
@@ -196,6 +198,20 @@ const {
         return !DEBUG && ATOB_DEFINED;
     };
 
+    /**
+     * Returns the media type and encoding scheme that may precede the encoded data.
+     *
+     * Many base64 payloads begin with a preamble,
+     * similar to "application/pdf;base64,"
+     * from which we can parse the media type the encoded data represents.
+     *
+     * Deeper detection of the media type post-decoding requires significant effort, not normally required.
+     *
+     * @param {string} pBase64Text   A string representing binary data encoded in a base64 variant,
+     *                               potentially preceded with the media type and encoding scheme.
+     *
+     * @returns {string} any text up-to-and-including a comma from the start of the encoded data.
+     */
     const getPreamble = function( pBase64Text )
     {
         const rxDataProtocol = /^data:/i;
@@ -213,6 +229,15 @@ const {
         return _mt_str;
     };
 
+    /**
+     * Attempts to discover and return the media-type of the encoded data.
+     * This is a high-level check for text like "application/pdf:base64,"
+     * preceding the base64 alphabet characters.
+     *
+     * @param {string} pBase64Text  The base64 encoded data; that is, the text representing binary data
+     * @param {string} [pDefault=text/plain] The media type to assume if there is no preamble indicating the media type
+     * @returns {string} the media-type of the encoded data
+     */
     const getMediaType = function( pBase64Text, pDefault )
     {
         const preamble = getPreamble( pBase64Text );
@@ -325,7 +350,7 @@ const {
     function resolveEncoding( pEncoding )
     {
         let encoding = lcase( asString( pEncoding, true ) );
-        return validEncodings.includes( encoding ) ? encoding : UTF8;
+        return VALID_ENCODINGS.includes( encoding ) ? encoding : UTF8;
     }
 
     function toBytes( pData )
@@ -416,11 +441,43 @@ const {
         return encodedString;
     }
 
-    const decode = function( pBase64, pSpec = DEFAULT_VARIANT )
+    /**
+     * Returns the byte array
+     * representing the binary data
+     * that is encoded in the specified argument.
+     *
+     *
+     * @param pBase64
+     * @param {string} [pSpec=DEFAULT_VARIANT] Optional argument indicating the specific Base64 Variant
+     *                                         to use to decode the encoded string
+     * @param {*} [pReturnType=Array]   Optional argument to specify whether to return an Array, Uint8Array, or Buffer
+     * @returns {Array.<number>} An array of integers between 0 and 255
+     *                           that represents the bytes comprising the encoded binary data
+     */
+    const decode = function( pBase64, pSpec = DEFAULT_VARIANT, pReturnType = Array )
     {
+        function convertToDesiredType( pArr )
+        {
+            let klass = (isClass( pReturnType ) ? pReturnType : isNonNullObject( pReturnType ) ? getClass( pReturnType ) : Array);
+
+            switch ( klass )
+            {
+                case Uint8Array:
+                    return new Uint8Array( asArray( pArr ) );
+
+                case Buffer:
+                    return Buffer.from( new Uint8Array( asArray( pArr ) ) );
+
+                case Array:
+                default:
+                    return [...(asArray( pArr ))];
+
+            }
+        }
+
         if ( isNull( pBase64 ) || !(isValidBase64( asString( pBase64, true ) ) || isValidBase64( cleanBase64( asString( pBase64, true ) ) )) )
         {
-            return [];
+            return convertToDesiredType( [] ) || [];
         }
 
         const alphabet = getBase64Alphabet( pSpec ).split( _mt_str );
@@ -459,7 +516,7 @@ const {
             }
         }
 
-        return numPaddingChars > 0 ? data.slice( 0, data.length - numPaddingChars ) : data;
+        return convertToDesiredType( numPaddingChars > 0 ? data.slice( 0, data.length - numPaddingChars ) : data ) || data;
     };
 
     function toText( pBase64, pEncoding = DEFAULT_TEXT_ENCODING )
@@ -509,6 +566,7 @@ const {
                     stringUtils,
                     arrayUtils
                 },
+            VALID_ENCODINGS,
             SUPPORTED_VARIANTS,
             DEFAULT_VARIANT,
             getPreamble,
