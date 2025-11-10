@@ -5616,7 +5616,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             this.#options = Object.assign( {}, pOptions || {} );
 
-            this.#visitFunction = isFunc( pVisitFunction ) ? pVisitFunction.bind( this ) : isFunc( this.#options?.visit ) ? this.#options?.visit : null;
+            this.#visitFunction = isFunc( pVisitFunction ) ? pVisitFunction.bind( this ) : isFunc( this.#options?.visit ) ? this.#options?.visit.bind( this ) : null;
         }
 
         get options()
