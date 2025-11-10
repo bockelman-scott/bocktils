@@ -96,7 +96,6 @@ let projectRootDirectory;
  */
 let defaultPath;
 
-// const Mimetics = require( "mimetics" );
 /**
  * The toolbocks/core package provides the building blocks
  * upon which other ToolBocks modules depend.<br>
@@ -142,78 +141,75 @@ const $scope = constants?.$scope || function()
     let _deno = null;
     let _node = null;
 
-    const {
-        ToolBocksModule,
-        lock,
-        populateOptions,
-        mergeOptions,
-        Visitor,
-        resolveVisitor,
-        attempt,
-        asyncAttempt,
-        objectKeys,
-        IllegalArgumentError
-    } = moduleUtils;
+    const
+        {
+            ToolBocksModule,
+            lock,
+            populateOptions,
+            mergeOptions,
+            Visitor,
+            NullVisitor,
+            resolveVisitor,
+            attempt,
+            asyncAttempt,
+            objectKeys,
+            IllegalArgumentError
+        } = moduleUtils;
 
     /*
      * Create local variables for the imported values and functions we use.
      */
-    const {
-        _mt_str,
-        _dot,
-        _colon,
-        _semicolon,
-        _slash,
-        _backslash,
-        no_op,
-        ignore
-    } = constants;
+    const
+        {
+            _mt_str,
+            _dot,
+            _colon,
+            _semicolon,
+            _slash,
+            _backslash,
+            no_op,
+            ignore
+        } = constants;
 
     const _pathSep = _slash;
 
     let _pathDelimiter = _colon;
 
-    const {
-        isDefined,
-        isNull,
-        isString,
-        isNumber,
-        isArray,
-        isDate,
-        isNonNullObject,
-        isFunction,
-        isAsyncFunction,
-        isNumeric,
-        isError,
-        isDirectoryEntry,
-        firstMatchingType,
-        resolveMoment,
-        isValidDateOrNumeric,
-        clamp
-    } = typeUtils;
+    const
+        {
+            isDefined,
+            isNull,
+            isString,
+            isNumber,
+            isArray,
+            isDate,
+            isNonNullObject,
+            isFunction,
+            isAsyncFunction,
+            isNumeric,
+            isError,
+            isDirectoryEntry,
+            firstMatchingType,
+            resolveMoment,
+            isValidDateOrNumeric,
+            clamp
+        } = typeUtils;
 
     const { asString, asInt, toUnixPath, toBool, isBlank, leftOfLast, rightOfLast } = stringUtils;
 
     const { varargs, asArgs, flatArgs, asArray, unique, includesAll, Filters, AsyncBoundedQueue } = arrayUtils;
 
-    let {
-        Buffer = $scope().Buffer,
-        File = $scope().File,
-        Blob = $scope().Blob,
-        TextEncoder = $scope().TextEncoder,
-        TextDecoder = $scope().TextDecoder,
-        arrayFromBuffer,
-        typedArrayFromBuffer
-    } = bufferUtils;
+    let
+        {
+            Buffer = $scope().Buffer,
+            File = $scope().File,
+            Blob = $scope().Blob,
+            TextEncoder = $scope().TextEncoder,
+            TextDecoder = $scope().TextDecoder,
+            arrayFromBuffer,
+            typedArrayFromBuffer
+        } = bufferUtils;
 
-    /*
-     const MIMETICS_CONSTANTS = Mimetics.CONSTANTS;
-     const MIMETICS_ERRORS = Mimetics.ERRORS;
-     const MIMETICS = Mimetics.default;
-
-     const mimetics = new Mimetics();
-
-     */
     const modName = "FileUtils";
 
     let toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
@@ -3017,6 +3013,11 @@ const $scope = constants?.$scope || function()
             return getFileName( this.filepath );
         }
 
+        get extension()
+        {
+            return getFileExtension( this.filepath );
+        }
+
         get name()
         {
             return this.filename;
@@ -3766,7 +3767,7 @@ const $scope = constants?.$scope || function()
                                                     directoryFilter: directoryFilter
                                                 } );
 
-                if ( attempt( () => visitor.visit( dirInfo ) ) )
+                if ( await asyncAttempt( async() => await visitor.visit( dirInfo ) ) )
                 {
                     return EXPLORER_ENTRY_ACTION.STOP;
                 }
@@ -3804,7 +3805,7 @@ const $scope = constants?.$scope || function()
                                                         filePath: filePath
                                                     } );
 
-                    if ( attempt( () => visitor.visit( entryInfo ) ) )
+                    if ( await asyncAttempt( async() => await visitor.visit( entryInfo ) ) )
                     {
                         return EXPLORER_ENTRY_ACTION.STOP;
                     }
@@ -3879,6 +3880,12 @@ const $scope = constants?.$scope || function()
             await this.#collectionStates.remove( searchState );
 
             return results;
+        }
+
+        async visit( pDirectory, pVisitor )
+        {
+            this.#visitor = resolveVisitor( pVisitor || this.visitor ) || resolveVisitor( this.visitor ) || new NullVisitor();
+            return await this.collect( pDirectory );
         }
 
         async _exploreDirectory( pPath, pSearchState )

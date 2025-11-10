@@ -12,38 +12,39 @@ const { isFunction } = typeUtils;
 
 const { asArray, unique } = arrayUtils;
 
-const {
-    exists,
-    asyncExists,
-    makeDirectory,
-    asyncMakeDirectory,
-    removeDirectory,
-    asyncRemoveDirectory,
-    asyncCreateTempFile,
-    createTextFile,
-    asyncCreateTextFile,
-    deleteFile,
-    asyncDeleteFile,
-    deleteMatchingFiles,
-    asyncDeleteMatchingFiles,
-    getFileEntry,
-    asyncGetFileEntry,
-    link,
-    asyncLink,
-    isFile,
-    isDirectory,
-    isSymbolicLink,
-    resolvePath,
-    extractPathSeparator,
-    removeExtension,
-    replaceExtension,
-    getTempDirectory,
-    generateTempFileName,
-    createTempFile,
-    findFiles,
-    FileStats,
-    FileObject
-} = fileUtils;
+const
+    {
+        exists,
+        asyncExists,
+        makeDirectory,
+        asyncMakeDirectory,
+        removeDirectory,
+        asyncRemoveDirectory,
+        asyncCreateTempFile,
+        createTextFile,
+        asyncCreateTextFile,
+        deleteFile,
+        asyncDeleteFile,
+        deleteMatchingFiles,
+        asyncDeleteMatchingFiles,
+        getFileEntry,
+        asyncGetFileEntry,
+        link,
+        asyncLink,
+        isFile,
+        isDirectory,
+        isSymbolicLink,
+        resolvePath,
+        extractPathSeparator,
+        removeExtension,
+        replaceExtension,
+        getTempDirectory,
+        generateTempFileName,
+        createTempFile,
+        findFiles,
+        FileStats,
+        FileObject
+    } = fileUtils;
 
 const currentDirectory = path.dirname( __filename );
 
@@ -58,11 +59,14 @@ const PACKAGES =
         "package.json",
         "base64\\package.json",
         "buffer\\package.json",
+        "cli\\package.json",
+        "collections\\package.json",
         "common\\package.json",
         "compression\\package.json",
         "core\\package.json",
         "database\\package.json",
         "dates\\package.json",
+        "entities\\package.json",
         "events\\package.json",
         "files\\package.json",
         "functors\\package.json",
@@ -73,6 +77,7 @@ const PACKAGES =
         "performance\\package.json",
         "regex\\package.json",
         "secrets\\package.json",
+        "http\\server\\package.json",
         "loggers\\FileLogger\\package.json"
     ];
 

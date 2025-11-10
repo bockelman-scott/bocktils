@@ -5616,7 +5616,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             this.#options = Object.assign( {}, pOptions || {} );
 
-            this.#visitFunction = isFunc( pVisitFunction ) ? pVisitFunction.bind( this ) : null;
+            this.#visitFunction = isFunc( pVisitFunction ) ? pVisitFunction.bind( this ) : isFunc( this.#options?.visit ) ? this.#options?.visit : null;
         }
 
         get options()
@@ -5670,6 +5670,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             if ( isFunc( this.#visitFunction ) )
             {
                 const me = this;
+
+                if ( isAsyncFunction( this.#visitFunction ) )
+                {
+                    asyncAttempt( async() => await (me || this).#visitFunction.call( (me || this), pVisited, ...pExtra ) ).then( no_op ).catch( ex => this.dispatchEvent( new ToolBocksModuleEvent( "error", {
+                        error: ex,
+                        detail: ex
+                    } ) ) );
+                }
+
                 attempt( () => (me || this).#visitFunction.call( (me || this), pVisited, ...pExtra ) );
             }
         }
