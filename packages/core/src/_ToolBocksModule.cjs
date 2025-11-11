@@ -885,6 +885,25 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return 0;
     };
 
+    // returns the Nth element of a collection, the Nth character of a string, or the Nth property of an object (ordering of properties is not guaranteed)
+    const $nth = ( pArr, pIdx = 0 ) =>
+    {
+        const arr = (isArray( pArr ) || isString( pArr )) ? pArr : (isFunc( pArr[Symbol.iterator] ) ? [...(pArr || [])] : isObj( pArr ) ? Object.values( pArr ) : [pArr]);
+
+        const length = $ln( arr );
+
+        let idx = _asInt( pIdx );
+
+        idx = idx < 0 ? (length + idx) : idx;
+
+        return (idx < length ? arr[idx] : undefined);
+    };
+
+    const $last = ( pArr ) =>
+    {
+        return $nth( pArr, -1 );
+    };
+
     /**
      * Returns a value not less than a minimum value and not greater than a maximum value.<br>
      * <br>
@@ -7751,6 +7770,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             compareNullable,
 
             $ln,
+            $nth,
+            $last,
 
             OBJECT_REGISTRY,
             getGuid: function( pObject )

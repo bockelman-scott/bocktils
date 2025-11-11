@@ -79,22 +79,25 @@ const { _ud = "undefined", $scope } = constants;
      */
     const fromCode = String.fromCharCode;
 
-    const {
-        ModuleEvent,
-        ToolBocksModule,
-        IllegalArgumentError,
-        ObjectEntry,
-        objectEntries,
-        functionToString,
-        populateOptions,
-        attempt,
-        lock,
-        getRuntimeLocale,
-        getMessagesLocale,
-        getMessagesLocaleString,
-        runtimeLocaleString,
-        $ln = (( e ) => attempt( () => parseInt( (e ? (e?.length || e?.size || 0) : 0) ) || 0 ))
-    } = moduleUtils;
+    const
+        {
+            ModuleEvent,
+            ToolBocksModule,
+            IllegalArgumentError,
+            ObjectEntry,
+            objectEntries,
+            functionToString,
+            populateOptions,
+            attempt,
+            lock,
+            getRuntimeLocale,
+            getMessagesLocale,
+            getMessagesLocaleString,
+            runtimeLocaleString,
+            $ln = (( e ) => attempt( () => parseInt( (e ? (e?.length || e?.size || 0) : 0) ) || 0 )),
+            $nth,
+            $last
+        } = moduleUtils;
 
     const
         {
@@ -2573,11 +2576,6 @@ const { _ud = "undefined", $scope } = constants;
 
     const _rpl = ( s, rx, r = _mt ) => asString( s ).replace( _reg( rx, (_rtOf( (rx || /~/), _unixPathSep )) ), _rp( r || _mt ) );
 
-    // returns the Nth element of a collection or the Nth character of a string
-    const $nth = ( pArr, pIdx = 0, pDefault = null ) => (null != pArr) && ($ln( isArray( pArr ) || isString( pArr ) ? [...(pArr || [])] : [pArr] ) > pIdx ? [...(pArr || [])][pIdx] : pDefault);
-
-    const $last = ( pArr, pDefault = null ) => (isArray( pArr ) || isString( pArr )) ? $nth( [...(pArr)], $ln( pArr ) - 1, pDefault ) : pDefault;
-
     /**
      * Returns true if the specified value is a string and is not the empty string (unless the third argument is true)
      * or a string containing the text "undefined", "null", or "void" (as can be the result of type coercion),
@@ -4133,7 +4131,7 @@ const { _ud = "undefined", $scope } = constants;
     {
         let phone = asString( pPhoneNumber, true ).replaceAll( /\D/g, _mt );
 
-        if ( isBlank( phone ) || $ln( phone ) < MIN_PHONE_NUM_LEN )
+        if ( isBlank( phone ) || ($ln( phone ) < MIN_PHONE_NUM_LEN) )
         {
             return false;
         }
