@@ -1545,6 +1545,31 @@ const $scope = constants?.$scope || function()
 
     const toUUID = function( pBigInt )
     {
+        if ( isNonNullObject( pBigInt ) )
+        {
+            let obj = asObject( pBigInt );
+
+            let uuid = obj["uuid"] || obj["guid"] || objectValues( obj ).find( e => isUUID( e ) );
+
+            if ( isUUID( uuid ) )
+            {
+                return uuid;
+            }
+
+            uuid = objectValues( obj ).find( e => isBigInt( e ) );
+            if ( uuid && isBigInt( uuid ) )
+            {
+                return toUUID( uuid );
+            }
+
+            if ( isNonNullObject( obj.compoundId ) )
+            {
+                return toUUID( obj.compoundId );
+            }
+
+            return _mt;
+        }
+
         const formatUUID = function( pHex )
         {
             let hex = _toString( pHex ).replace( /^0x/, _mt );
