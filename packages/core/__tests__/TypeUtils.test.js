@@ -20,6 +20,10 @@ const
 
         flattened,
 
+        uuidToNumber,
+        uuidTo32BitInteger,
+        uuidToSafeInteger,
+
         isUndefined,
         isDefined,
         isNull,
@@ -44,6 +48,7 @@ const
         isInteger,
         toInteger,
         isFloat,
+        isUUID,
         containsFloat,
         toFloat,
         isBigInt,
@@ -215,6 +220,42 @@ const geoObject =
         "Saturn":
             {}
     };
+
+test( "uuidToNumber generates a BigInt",
+      () =>
+      {
+          const crypto = require( "crypto" );
+          const uuid = crypto.randomUUID();
+
+          const bigNum = uuidToNumber( uuid );
+
+          const safeNum = uuidTo32BitInteger( uuid );
+
+          console.log( "bigNum:", bigNum, "safeNum:", safeNum );
+
+          let uuid2 = "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF";
+
+          expect( isUUID( uuid2 ) );
+
+          const maxNum = uuidToNumber( uuid2 );
+
+          const maxSafeNum = uuidTo32BitInteger( uuid2 );
+
+          console.log( "maxNum:", maxNum, "maxSafeNum:", maxSafeNum );
+
+          expect( maxNum === BigInt("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"));
+
+          expect( bigNum <= maxNum );
+
+          expect( maxSafeNum <= bigNum );
+
+          const safeInteger = uuidToSafeInteger( uuid );
+          const safeInteger2 = uuidToSafeInteger( uuid2 );
+
+          console.log( "uuid:", uuid, "safeInteger:", safeInteger, "uuid2:", safeInteger2, bigNum, maxNum, maxSafeNum );
+
+
+      } );
 
 describe( "TYPE Constants", () =>
 {

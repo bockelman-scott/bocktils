@@ -878,9 +878,9 @@ const $scope = constants?.$scope || function()
     {
         if ( isString( pObj ) )
         {
-            return isPrimitiveWrapper( pObj ) ? pObj.valueOf() : pObj;
+            return isPrimitiveWrapper( pObj ) ? (pObj.valueOf() || (_mt + pObj)) : pObj;
         }
-        return (0 === pObj || _zero === pObj || false === pObj) ? _zero : ((_mt_str + String( pObj ) + _mt_str).trim());
+        return (0 === pObj || _zero === pObj || false === pObj) ? _zero : ((_mt + String( pObj ) + _mt).trim());
     }
 
     function toNumericString( pObj, pDecimalSeparator = _dot, pGroupSeparator = _comma )
@@ -1543,6 +1543,80 @@ const $scope = constants?.$scope || function()
         return _numStr( s, "b" );
     };
 
+    const toUUID = function( pBigInt )
+    {
+        const formatUUID = function( pHex )
+        {
+            let hex = _toString( pHex ).replace( /^0x/, _mt );
+            hex = hex.padStart( 32, "0" );
+
+            return [
+                hex.substring( 0, 8 ),
+                hex.substring( 8, 12 ),
+                hex.substring( 12, 16 ),
+                hex.substring( 16, 20 ),
+                hex.substring( 20, 32 )
+            ].join( "-" );
+        };
+
+        if ( isBigInt( pBigInt ) )
+        {
+            let hex = BigInt( pBigInt ).toString( 16 ).replace( /^0x/, _mt );
+            return formatUUID( hex.padStart( 32, "0" ) );
+        }
+
+        if ( isInteger( pBigInt ) )
+        {
+            let hex = _toString( toHex( pBigInt ) ).replace( /^0x/, _mt );
+
+            const length = $ln( _toString( hex ).replace( /^0x/, _mt ) );
+
+            if ( length < 32 )
+            {
+                for( let i = 0, n = (32 - length); (i < n && $ln( hex ) < 32); i++ )
+                {
+                    hex = (Math.floor( Math.random() * 16 ).toString( 16 ) + hex);
+                }
+            }
+            else if ( length > 32 )
+            {
+                hex = hex.slice( -32 );
+            }
+
+            return formatUUID( hex );
+        }
+
+        if ( isString( pBigInt ) )
+        {
+            if ( isUUID( pBigInt ) )
+            {
+                return pBigInt;
+            }
+
+            if ( isHex( pBigInt ) )
+            {
+                return toUUID( BigInt( "0x" + _toString( pBigInt ) ) );
+            }
+
+            if ( isOctal( pBigInt ) )
+            {
+                return toUUID( BigInt( "0o" + _toString( pBigInt ) ) );
+            }
+
+            if ( isBinary( (pBigInt) ) )
+            {
+                return toUUID( BigInt( "0b" + _toString( pBigInt ) ) );
+            }
+
+            if ( isNumeric( pBigInt ) )
+            {
+                return toUUID( BigInt( toHex( pBigInt ) ) );
+            }
+        }
+
+        return _mt;
+    };
+
     /**
      * Converts a given value to an integer.
      *
@@ -2138,6 +2212,31 @@ const $scope = constants?.$scope || function()
         }
 
         return !isObject( pVal ) && isNonNullValue( pVal );
+    };
+
+    const asScalar = function( pVal, pTrimStrings )
+    {
+        let value = _mt;
+
+        if ( !isNull( pVal ) )
+        {
+            if ( isScalar( pVal ) )
+            {
+                value = (isString( pVal ) ? pVal : (isPrimitiveWrapper( pVal ) || isFunction( pVal.valueOf ) ? pVal.valueOf() || pVal : pVal));
+            }
+            else if ( isFunction( pVal.valueOf ) )
+            {
+                value = (pVal.valueOf() || (isFunction( pVal.toString ) ? pVal.toString() : String( pVal )));
+            }
+            else if ( isFunction( pVal.toString ) )
+            {
+                value = pVal.toString();
+            }
+
+            return (isString( value ) ? (!!pTrimStrings ? value.trim() : value) : value);
+        }
+
+        return null;
     };
 
     /**
@@ -4496,12 +4595,12 @@ const $scope = constants?.$scope || function()
     }
 
     const DEFAULT_AS_MAP_OPTIONS =
-        {
-            recursive: true,
-            locked: false,
-            preserveUserDefinedClasses: true,
-            ...DEFAULT_TRANSFORMER_PROPERTIES
-        };
+        lock( {
+                  recursive: true,
+                  locked: false,
+                  preserveUserDefinedClasses: true,
+                  ...DEFAULT_TRANSFORMER_PROPERTIES
+              } );
 
     function asMap( pVal, pOptions = DEFAULT_AS_MAP_OPTIONS )
     {
@@ -4894,7 +4993,7 @@ const $scope = constants?.$scope || function()
         return pArray;
     };
 
-    const COMPARE_OPTIONS = { nullFirst: false, prioritizeNumeric: false };
+    const COMPARE_OPTIONS = lock( { nullFirst: false, prioritizeNumeric: false } );
 
     function compareForNullOrIdentity( pA, pB, pOptions = COMPARE_OPTIONS )
     {
@@ -5381,6 +5480,85 @@ const $scope = constants?.$scope || function()
         return String( parseInt( toDecimal( num ), 2 ) ).replace( /^0b/, _mt_str );
     };
 
+    const uuidToNumber = function( pUUID )
+    {
+        if ( isUUID( pUUID ) )
+        {
+            let uuid = _toString( pUUID ).replaceAll( /[^0-9A-Fa-f]/gi, _mt );
+            return BigInt( `0x${uuid}` );
+        }
+
+        return 0;
+    };
+
+    /**
+     * Converts a UUID or GUID value to a numeric value that will fit into 32 bits.
+     * THIS FUNCTION CANNOT GUARANTEE THAT 2 DIFFERENT UUID VALUES WILL PRODUCE DIFFERENT NUMERIC VALUES
+     * USE THIS FOR ONLY VERY SPECIFIC USE CASES
+     *
+     * @param pUUID a globally unique identifier
+     * @returns {number} a number >=0 and <= Number.MAX_SAFE_INTEGER
+     */
+    const uuidTo32BitInteger = function( pUUID )
+    {
+        if ( isUUID( pUUID ) )
+        {
+            let uuid = _toString( pUUID ).replaceAll( /[^0-9A-Fa-f]/gi, _mt );
+
+            let safeNum = 0;
+
+            let shifts = [2, 5, 7, 5, 3, 5, 7, 9];
+
+            shifts = Array.from( { length: $ln( uuid ) }, ( v, i ) => shifts[(i % 7)] );
+
+            for( let i = 0, n = $ln( uuid ); i < n; i++ )
+            {
+                safeNum = ((safeNum << (shifts.shift())) - safeNum) + uuid.charCodeAt( i );
+                safeNum |= 0; // convert to 32-bit integer
+            }
+
+            return Math.abs( safeNum );
+        }
+
+        return 0;
+    };
+
+    const uuidToSafeInteger = function( pUUID )
+    {
+        if ( isUUID( pUUID ) )
+        {
+            let uuid = _toString( pUUID ).replaceAll( /[^0-9A-Fa-f]/gi, _mt );
+
+            let lowBits = 0;
+            let highBits = 0;
+
+            const primeFactor = 31;
+
+            const MODULUS_26 = 2 ** 26;
+            const SHIFT_26 = MODULUS_26;
+
+            for( let i = 0; i < uuid.length; i++ )
+            {
+                const charCode = uuid.charCodeAt( i );
+
+                // update the lowBits using the standard DJB2-style multiplication
+                lowBits = (lowBits * primeFactor) + charCode;
+                lowBits %= MODULUS_26;
+
+                // update the highBits using a different seed (shifted charCode)
+                // to ensure the two resulting chunks are independent.
+                highBits = (highBits * primeFactor) + (charCode << 1);
+                highBits %= MODULUS_26;
+            }
+
+            // combine the two 26-bit integers into a single 52-bit integer.
+            // by multiplying the high bits by 2^26 and adding the low bits.
+            return (highBits * SHIFT_26) + lowBits;
+        }
+
+        return 0;
+    };
+
     // returns true if val is of the type (or one of the types) specified
     const $is = ( val, type ) => (null !== val) && ((_str === typeof type) ? (type === typeof val) : (isArray( type ) ? [...(type || [])].includes( typeof val ) : (_fun === typeof type && val instanceof type)));
 
@@ -5388,6 +5566,35 @@ const $scope = constants?.$scope || function()
         , $isStr = ( val ) => $is( val, _str )
         , $isNum = ( val ) => $is( val, _num )
         , $isObj = ( val ) => $is( val, _obj );
+
+    const CONSTANTS =
+        {
+            DEFAULT_IS_OBJECT_OPTIONS,
+            IS_NON_NULL_OBJECT_OPTIONS,
+
+            DEFAULT_IS_POPULATED_OPTIONS,
+            LAX_POPULATED_OPTIONS,
+            STRICT_POPULATED_OPTIONS,
+            IS_POPULATED_ARRAY_OPTIONS,
+
+            DEFAULT_CAST_OPTIONS,
+
+            DEFAULT_TRANSFORMER_PROPERTIES,
+            DEFAULT_OBJECT_LITERAL_OPTIONS,
+
+            DEFAULT_AS_MAP_OPTIONS,
+
+            COMPARE_OPTIONS,
+
+            JS_TYPES,
+            VALID_TYPES,
+            TYPE_DEFAULTS,
+            TYPE_SORT_ORDER,
+            BYTES_PER_TYPE,
+
+            VOID_OK: VOID.OK,
+            VOID_ERROR: VOID.ERROR
+        };
 
     /**
      * This is the module itself, exported from this function
@@ -5401,6 +5608,8 @@ const $scope = constants?.$scope || function()
             TYPE_DEFAULTS,
             TYPE_SORT_ORDER,
             BYTES_PER_TYPE,
+
+            CONSTANTS,
 
             flattened,
 
@@ -5424,6 +5633,7 @@ const $scope = constants?.$scope || function()
             isError,
             isEvent,
             isScalar,
+            asScalar,
             firstError,
             isFunction,
             isAsyncFunction,
@@ -5481,6 +5691,12 @@ const $scope = constants?.$scope || function()
             isArrayBuffer,
             isSharedArrayBuffer,
             isDataView,
+
+            $is,
+            $isObj,
+            $isFun,
+            $isNum,
+            $isStr,
 
             toDecimal,
             toHex,
@@ -5546,6 +5762,11 @@ const $scope = constants?.$scope || function()
 
             errorToString,
             propertyDescriptors,
+
+            uuidToNumber,
+            uuidTo32BitInteger,
+            uuidToSafeInteger,
+            toUUID,
 
             /**
              * The classes exported with this module.<br>

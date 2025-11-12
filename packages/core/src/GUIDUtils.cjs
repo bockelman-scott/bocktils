@@ -63,6 +63,29 @@ const crypto = $scope().crypto || require( "crypto" );
         return [octet(), quad(), quad(), quad(), duodec()].join( _hyphen );
     }
 
+    function randomBytes( pNumberOfBytes )
+    {
+        const numBytes = clamp( asInt( pNumberOfBytes, 0 ), 8, (2 ** 16) );
+
+        const bytes = new Uint8Array( numBytes );
+
+        if ( crypto && isFunction( crypto?.getRandomValues ) )
+        {
+            return crypto.getRandomValues( bytes );
+        }
+        else
+        {
+            let byte = 0;
+
+            for( let i = 0; i < numBytes; i++ )
+            {
+                byte = clamp( Math.floor( Math.random() * 256 ), 0, 255 );
+                bytes[i] = byte;
+            }
+        }
+        return bytes;
+    }
+
     // noinspection SpellCheckingInspection
     class GUIDMaker
     {
@@ -100,7 +123,7 @@ const crypto = $scope().crypto || require( "crypto" );
         {
             if ( !isNull( crypto ) && isFunction( crypto.randomUUID ) )
             {
-                let value = crypto.randomUUID( this.options );
+                let value = crypto.randomUUID( { disableEntropyCache: this.options.disableEntropyCache } );
 
                 if ( !isBlank( value ) && isUUID( value ) )
                 {
@@ -136,6 +159,11 @@ const crypto = $scope().crypto || require( "crypto" );
 
             return generate();
         }
+
+        getRandomBytes( pNumBytes )
+        {
+            return randomBytes( asInt( pNumBytes ) );
+        }
     }
 
     const INSTANCE = new GUIDMaker( RandomUUIDOptions );
@@ -156,6 +184,11 @@ const crypto = $scope().crypto || require( "crypto" );
             getGuid: function( pObject )
             {
                 return OBJECT_REGISTRY.getGuid( pObject );
+            },
+            randomBytes,
+            getRandomBytes: function( pNumBytes )
+            {
+                return (INSTANCE || new GUIDMaker( RandomUUIDOptions )).getRandomBytes( pNumBytes );
             }
         };
 
