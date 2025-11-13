@@ -5592,6 +5592,117 @@ const $scope = constants?.$scope || function()
         , $isNum = ( val ) => $is( val, _num )
         , $isObj = ( val ) => $is( val, _obj );
 
+    const EXCLUDED_METHODS = ["constructor", "length", "name", "arguments", "caller", "equals", "compareTo"];
+
+    function getMethods( pClass )
+    {
+        let target = isNonNullObject( pClass ) ? pClass : isClass( pClass ) ? (pClass.prototype || Object.getPrototypeOf( pClass )) : {};
+
+        let entries = objectEntries( target );
+
+        let methods = [];
+
+        entries.forEach( entry =>
+                         {
+                             let key = ObjectEntry.getKey( entry );
+                             let value = ObjectEntry.getValue( entry );
+
+                             if ( isFunction( value ) && !(EXCLUDED_METHODS.includes( key )) )
+                             {
+                                 attempt( () => value.name = value.name || key );
+                                 methods.push( value );
+                             }
+                         } );
+
+        return methods;
+    }
+
+    /**
+     * Returns true if the specified object implements all the specified methods
+     * @param pObject
+     * @param pMethods
+     */
+    function implementsMethods( pObject, ...pMethods )
+    {
+        if ( isNull( pObject ) || !isObject( pObject ) )
+        {
+            return false;
+        }
+
+        let methods = [...(pMethods || [])].filter( e => isString( e ) || isFunction( e ) );
+
+        if ( isArray( pObject ) )
+        {
+            return [...(pObject || [])].every( e => implementsMethods( e, ...methods ) );
+        }
+
+        let methodNames = methods.map( e => isString( e ) ? e.trim() : isFunction( e ) ? e?.name : _mt );
+
+        if ( methodNames.every( name => isFunction( pObject[name] ) ) )
+        {
+            methods = methods.filter( e => isFunction( e ) );
+
+            return methods.every( func => (_mt === func?.name) || (pObject[func.name]?.length === func.length) );
+        }
+
+        return false;
+    }
+
+    /**
+     * Returns true if the specified object is either an instance of the specified class
+     * or if it has all the methods defined by the class
+     * @param pObject
+     * @param pClass
+     */
+    function implementsInterface( pObject, pClass )
+    {
+        if ( (isNull( pObject ) || !isObject( pObject )) || (isNull( pClass ) || !(isClass( pClass ) || isObject( pClass ))) )
+        {
+            return false;
+        }
+
+        if ( isArray( pClass ) )
+        {
+            let klasses = [...(pClass || [])].filter( e => isClass( e ) || isNonNullObject( e ) );
+
+            return klasses.every( kls => implementsInterface( pObject, kls ) );
+        }
+
+        let klass = isClass( pClass ) ? pClass : getClass( pClass ) || pClass;
+
+        if ( !isClass( klass ) )
+        {
+            if ( isNonNullObject( klass ) )
+            {
+                let methods = getMethods( klass || pClass ) || getMethods( pClass || klass );
+                return implementsMethods( pObject, ...methods );
+            }
+
+            return false;
+        }
+
+        if ( isArray( pObject ) )
+        {
+            return [...(pObject || [])].every( e => implementsInterface( e, klass ) );
+        }
+
+        if ( pObject instanceof klass )
+        {
+            return true;
+        }
+
+        const prototype = klass.prototype || pClass.prototype || Object.getPrototypeOf( klass ) || Object.getPrototypeOf( pClass );
+
+        if ( isNull( prototype ) )
+        {
+            return false;
+        }
+
+        const methods = getMethods( prototype );
+
+        return implementsMethods( pObject, ...methods );
+    }
+
     const CONSTANTS =
         {
             DEFAULT_IS_OBJECT_OPTIONS,
@@ -5792,6 +5903,10 @@ const $scope = constants?.$scope || function()
             uuidTo32BitInteger,
             uuidToSafeInteger,
             toUUID,
+
+            getMethods,
+            implementsMethods,
+            implementsInterface,
 
             /**
              * The classes exported with this module.<br>

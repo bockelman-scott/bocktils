@@ -743,7 +743,7 @@ const { _ud = "undefined", $scope } = constants;
     }
 
     /**
-     * Returns the name of the function specified, if it is not anonymous
+     * Returns the name of the function specified if it is not anonymous
      *
      * @param {function|string} pFunction The function or source code of the function whose name is to be returned
      *
