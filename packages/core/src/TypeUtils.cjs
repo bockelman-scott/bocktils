@@ -5592,7 +5592,7 @@ const $scope = constants?.$scope || function()
         , $isNum = ( val ) => $is( val, _num )
         , $isObj = ( val ) => $is( val, _obj );
 
-    const EXCLUDED_METHODS = ["constructor", "length", "name", "arguments", "caller", "equals", "compareTo"];
+    const EXCLUDED_METHODS = ["constructor", "length", "name", "arguments", "caller", "equals", "compareTo", "isValid"];
 
     function getMethods( pClass )
     {
