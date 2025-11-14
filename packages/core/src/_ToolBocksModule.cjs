@@ -4096,7 +4096,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         if ( pEventName instanceof ToolBocksModuleEvent || (_ud !== typeof CustomEvent && pEventName instanceof CustomEvent) )
         {
             return {
-                type: resolveEventType( pEventName?.type ),
+                type: resolveEventType( pEventName?.type || pEventName?.name || pEventName ),
                 data: (pEventName?.detail || pEventName?.data),
                 options: populateOptions( pOptions, (pEventName?.detail || pEventName?.data || pData) )
             };

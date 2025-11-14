@@ -55,7 +55,7 @@ const { _ud = "undefined", $scope } = constants;
 
 (function exposeModule()
 {
-    const _fun = constants._fun;
+    const { _fun } = constants;
 
     const INTERNAL_NAME = "__BOCK_JSON_INTERPOLATION__";
 
