@@ -614,7 +614,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      *
      * @returns {boolean} true if the specified value can be used as a number.
      */
-    const isNumeric = pObj => isNum( pObj ) || isStr( pObj ) && /[0-9.-]/.test( pObj ) && !isNaN( attempt( () => parseFloat( pObj ) ) );
+    const isNumeric = pObj => isNum( pObj ) || ((isStr( pObj ) && /[0-9.-]/.test( pObj )) && !isNaN( attempt( () => parseFloat( pObj ) ) ));
 
     /**
      * Returns true if the specified value is a (primitive) boolean.
