@@ -75,6 +75,8 @@ const $scope = constants?.$scope || function()
             ModuleEvent,
 
             $ln,
+            $nth,
+            $last,
 
             functionToString,
             objectToString,
@@ -1796,7 +1798,7 @@ const $scope = constants?.$scope || function()
      */
     const isSpreadable = function( pObj, pMustBeIterable = true )
     {
-        let is = !isNull( pObj ) && (isArray( pObj ) || isString( pObj ) || isNonNullObject( pObj ) || isDefined( pObj[Symbol.isConcatSpreadable] ));
+        let is = !isNull( pObj ) && (isArray( pObj ) || isString( pObj ) || isNonNullObject( pObj ) || isDefined( pObj[Symbol.iterator] ));
         return is && (pMustBeIterable ? isIterable( pObj ) : is);
     };
 
@@ -2998,7 +3000,20 @@ const $scope = constants?.$scope || function()
         {
             let arr = resolveCandidates( ...pCandidates );
             arr = this.findAll( ...arr );
-            return arr.length > 0 ? arr[0] : null;
+            return $ln( arr ) > 0 ? arr[0] : null;
+        }
+
+        findNth( pIdx, ...pCandidates )
+        {
+            let arr = this.findAll( ...pCandidates );
+            return $nth( arr, pIdx );
+        }
+
+        findLast( ...pCandidates )
+        {
+            let arr = resolveCandidates( ...pCandidates );
+            arr = [...arr].reverse();
+            return this.findFirst( ...arr );
         }
 
         findAllNot( ...pCandidates )
@@ -3012,6 +3027,13 @@ const $scope = constants?.$scope || function()
             let arr = resolveCandidates( ...pCandidates );
             arr = this.findAllNot( ...arr );
             return arr.length > 0 ? arr[0] : null;
+        }
+
+        findLastNot( ...pCandidates )
+        {
+            let arr = resolveCandidates( ...pCandidates );
+            arr = this.findAllNot( ...arr );
+            return arr.length > 0 ? $last( arr ) : null;
         }
     }
 
