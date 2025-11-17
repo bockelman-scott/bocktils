@@ -110,6 +110,7 @@ const $scope = constants?.$scope || function()
             toNodePathArray,
             getProperty,
             setProperty,
+            hasProperty: definesProperty,
             populateOptions,
 
             lock,
@@ -2965,7 +2966,7 @@ const $scope = constants?.$scope || function()
 
         if ( propertyName )
         {
-            return ({}).hasOwnProperty.call( pObject, propertyName );
+            return ({}).hasOwnProperty.call( pObject, propertyName ) || definesProperty( pObject, pPropertyName );
         }
 
         return false;
