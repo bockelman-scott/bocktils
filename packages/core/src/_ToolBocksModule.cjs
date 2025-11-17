@@ -109,7 +109,6 @@
  * @see ToolBocksModule
  * @see ToolBocksModuleEvent
  *
- * @see {@link __Error},
  * @see IllegalArgumentError
  * @see StackTrace
  *
@@ -800,6 +799,59 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const isReadOnly = ( pObject ) => !isObj( pObject ) || (isNull( pObject ) || Object.isFrozen( pObject ) || Object.isSealed( pObject ));
 
+
+    /**
+     * Returns true if the execution context is <i>most likely</i> Node.js<br>
+     * by checking for the existence of<br>
+     * a global 'module' property,<br>
+     * a global function named 'require'<br>
+     * and the absence of globally defined symbols for 'self', 'window', and 'Deno'
+     *
+     * @function
+     * @returns {boolean} true if the execution context is <i>most likely</i> Node.js
+     */
+    const isNode = function()
+    {
+        if ( (_ud === typeof self) && (_ud === typeof window) && (_ud !== typeof module) && (isFunc( require )) )
+        {
+            if ( _ud === typeof Deno && (_ud !== typeof process) )
+            {
+                return !isAsyncFunction( require );
+            }
+        }
+        return false;
+    };
+
+    /**
+     * Returns true if the current runtime environment is Deno.
+     *
+     * This function determines if the execution environment is Deno by verifying
+     * that it is not running in a Node.js environment and by checking for the existence
+     * of the `Deno` global object.
+     *
+     * @function
+     * @returns {boolean} Returns true if the runtime environment is Deno, otherwise false.
+     */
+    const isDeno = () => !isNode() && (_ud !== typeof Deno);
+
+    /**
+     * Returns true if the current execution content is a Worker or ServiceWorker.<br>
+     *
+     * @returns true if the current execution content is a Worker or ServiceWorker.
+     */
+    const isWorker = function()
+    {
+        // @TODO
+    };
+
+    /**
+     * Returns true if the current execution environment is a web browser.<br>
+     *
+     * @function
+     * @returns true if the current execution environment is a web browser.<br>
+     */
+    const isBrowser = () => ( !isNode() && !isDeno() && (_ud !== typeof window) && (_ud !== typeof document) && (_ud !== typeof navigator));
+
     /**
      * Returns the value of the length or size property of the specified value.
      *
@@ -1179,8 +1231,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * <b>NOTE</b> <i>This is the DEFAULT implementation
      * and is replaced with the ToolBocksModule 'reportError' method
      * once that class is defined.</i><br>
-     *
-     * @function handleError
      *
      * @memberof handleAttempt
      *
@@ -1599,213 +1649,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return this.#krypto.randomUUID();
         }
     }
-
-    class ObjectRegistry
-    {
-        #registerPrimitives = false;
-        #registerPredefined = false;
-        #registerArrays = false;
-        #registerFunctions = false;
-
-        #map = new WeakMap();
-        #created = new WeakMap();
-
-        #guidGenerator = $scope().crypto || ((isDeno() && _ud !== typeof Deno) ? Deno.crypto : attempt( () => require( "node:crypto" ) )) || attempt( () => require( "crypto" ) ) || new UUIDGenerator();
-
-        constructor( pRegisterPrimitives = false, pRegisterPredefined = false, pRegisterArrays = false, pRegisterFunctions = false )
-        {
-            this.#registerPrimitives = !!pRegisterPrimitives;
-            this.#registerPredefined = !!pRegisterPredefined;
-            this.#registerArrays = !!pRegisterArrays;
-            this.#registerFunctions = !!pRegisterFunctions;
-        }
-
-        #generateGuid()
-        {
-            return (this.#guidGenerator || new UUIDGenerator()).randomUUID();
-        }
-
-        #generateTimestamp()
-        {
-            return Date.now();
-        }
-
-        register( pObject )
-        {
-            if ( isNull( pObject ) || isPrimitive( pObject ) )
-            {
-                return ObjectRegistry.NOT_REGISTERED;
-            }
-
-            let guid = this.#map.get( pObject );
-
-            if ( isNull( guid ) || String( guid ).startsWith( ObjectRegistry.NOT_REGISTERED ) )
-            {
-                if ( isNull( pObject ) || !(isObj( pObject ) || (this.#registerFunctions && isFunc( pObject ))) )
-                {
-                    return ObjectRegistry.NOT_REGISTERED;
-                }
-
-                if ( !(this.#registerPrimitives || this.#registerPredefined) && isPrimitiveWrapper( pObject ) )
-                {
-                    return ObjectRegistry.NOT_REGISTERED;
-                }
-                else if ( !this.#registerPredefined && isGlobalType( pObject ) )
-                {
-                    if ( !this.#registerArrays || !(isArray( pObject ) || isSet( pObject )) )
-                    {
-                        return ObjectRegistry.NOT_REGISTERED;
-                    }
-                }
-
-                if ( isFunc( pObject ) && this.#registerFunctions )
-                {
-                    if ( !this.#registerPredefined &&
-                         isClass( pObject ) &&
-                         GLOBAL_TYPES.includes( pObject ) )
-                    {
-                        return ObjectRegistry.NOT_REGISTERED;
-                    }
-                }
-
-                guid = this.#generateGuid( pObject );
-                this.#map.set( pObject, guid );
-
-                let timestamp = this.#created.get( pObject ) || this.#generateTimestamp();
-                this.#created.set( pObject, timestamp );
-            }
-
-            return guid;
-        }
-
-        getGuid( pObject )
-        {
-            if ( isNull( pObject ) || isPrimitive( pObject ) )
-            {
-                return ObjectRegistry.NOT_REGISTERED + _underscore + String( (Math.random() + 1) * Date.now() );
-            }
-
-            return this.#map.get( pObject ) || this.register( pObject );
-        }
-
-        getCreated( pObject )
-        {
-            if ( isNull( pObject ) || isPrimitive( pObject ) )
-            {
-                return -1;
-            }
-
-            let timestamp = -1;
-
-            if ( isNonNullObj( pObject ) )
-            {
-                timestamp = this.#created.get( pObject ) || this.#generateTimestamp();
-                this.#created.set( pObject, timestamp );
-            }
-
-            return timestamp;
-        }
-
-        identical( pObjectA, pObjectB )
-        {
-            if ( (isNull( pObjectA ) && isNull( pObjectB )) || pObjectA === pObjectB )
-            {
-                return true;
-            }
-
-            if ( !(isObj( pObjectA ) || isFunc( pObjectA )) || !(isObj( pObjectB ) || isFunc( pObjectB )) )
-            {
-                return false;
-            }
-
-            return (this.getGuid( pObjectA ) === this.getGuid( pObjectB ));
-        }
-
-        /**
-         * Returns true if the 2 objects (or functions) are *very likely*
-         * either identical or represent the same data
-         *
-         * @param {Object|Function} pObjectA The first of 2 objects or functions to compare
-         * @param {Object|Function} pObjectB The object or function to compare to the first
-         * @returns {boolean} true if the specified objects or functions
-         *                    are the same object or function
-         *                    or if the 2 objects appear to represent the same data.
-         *
-         *                    This method trades certainty for performance.
-         *                    To accurately and reliably compare 2 objects for equality,
-         *                    use the ObjectUtils package
-         */
-        similar( pObjectA, pObjectB )
-        {
-            // if they are the same object or function, true
-            if ( this.identical( pObjectA, pObjectB ) )
-            {
-                return true;
-            }
-
-            // if both values are objects
-            if ( isNonNullObj( pObjectA ) && isNonNullObj( pObjectB ) )
-            {
-                const keysA = Object.keys( pObjectA );
-                const keysB = Object.keys( pObjectB );
-
-                // if the objects have a different number of properties, return false
-                if ( $ln( keysA ) !== $ln( keysB ) )
-                {
-                    return false;
-                }
-
-                // prepare to compare whether the objects have the same property names
-                const commonKeysA = [...keysA].filter( e => keysB.includes( e ) );
-                const commonKeysB = [...keysB].filter( e => keysA.includes( e ) );
-
-                // if the collections of common property name are of different lengths, return false
-                if ( $ln( commonKeysA ) !== $ln( keysB ) || $ln( commonKeysB ) !== $ln( keysA ) )
-                {
-                    return false;
-                }
-
-                // if both objects have the same set of properties,
-                // we compare the properties for exact equality
-                for( let key of keysA )
-                {
-                    if ( isPrimitive( pObjectA[key] ) )
-                    {
-                        if ( pObjectA[key] !== pObjectB[key] )
-                        {
-                            return false;
-                        }
-                    }
-                    else if ( isPrimitiveWrapper( pObjectA[key] ) && isPrimitiveWrapper( pObjectB ) )
-                    {
-                        if ( pObjectA[key].valueOf() !== pObjectB[key].valueOf() )
-                        {
-                            return false;
-                        }
-                    }
-                    else if ( $ln( pObjectA[key] ) !== $ln( pObjectB[key] ) )
-                    {
-                        return false;
-                    }
-                }
-
-                // if we get this far, the objects might not be the same
-                // they are certainly similar
-                return true;
-            }
-            else if ( isFunc( pObjectA ) && isFunc( pObjectB ) )
-            {
-                return String( _mt_str + functionToString.call( pObjectA ) ).trim() === String( _mt_str + functionToString.call( pObjectB ) ).trim();
-            }
-
-            return false;
-        }
-    }
-
-    ObjectRegistry.NOT_REGISTERED = "__unregistered__";
-    ObjectRegistry.DEFAULT_INSTANCE = new ObjectRegistry();
-
-    const OBJECT_REGISTRY = $scope()["__BOCK_OBJECT_REGISTRY__"] = ($scope()["__BOCK_OBJECT_REGISTRY__"] || ObjectRegistry.DEFAULT_INSTANCE);
 
     /**
      * A class to handle and manage an array of string arguments where each argument can optionally
@@ -2923,6 +2766,213 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return isLiteral;
     }
 
+    class ObjectRegistry
+    {
+        #registerPrimitives = false;
+        #registerPredefined = false;
+        #registerArrays = false;
+        #registerFunctions = false;
+
+        #map = new WeakMap();
+        #created = new WeakMap();
+
+        #guidGenerator = $scope().crypto || ((isDeno() && _ud !== typeof Deno) ? Deno.crypto : attempt( () => require( "node:crypto" ) )) || attempt( () => require( "crypto" ) ) || new UUIDGenerator();
+
+        constructor( pRegisterPrimitives = false, pRegisterPredefined = false, pRegisterArrays = false, pRegisterFunctions = false )
+        {
+            this.#registerPrimitives = !!pRegisterPrimitives;
+            this.#registerPredefined = !!pRegisterPredefined;
+            this.#registerArrays = !!pRegisterArrays;
+            this.#registerFunctions = !!pRegisterFunctions;
+        }
+
+        #generateGuid()
+        {
+            return (this.#guidGenerator || new UUIDGenerator()).randomUUID();
+        }
+
+        #generateTimestamp()
+        {
+            return Date.now();
+        }
+
+        register( pObject )
+        {
+            if ( isNull( pObject ) || isPrimitive( pObject ) )
+            {
+                return ObjectRegistry.NOT_REGISTERED;
+            }
+
+            let guid = this.#map.get( pObject );
+
+            if ( isNull( guid ) || String( guid ).startsWith( ObjectRegistry.NOT_REGISTERED ) )
+            {
+                if ( isNull( pObject ) || !(isObj( pObject ) || (this.#registerFunctions && isFunc( pObject ))) )
+                {
+                    return ObjectRegistry.NOT_REGISTERED;
+                }
+
+                if ( !(this.#registerPrimitives || this.#registerPredefined) && isPrimitiveWrapper( pObject ) )
+                {
+                    return ObjectRegistry.NOT_REGISTERED;
+                }
+                else if ( !this.#registerPredefined && isGlobalType( pObject ) )
+                {
+                    if ( !this.#registerArrays || !(isArray( pObject ) || isSet( pObject )) )
+                    {
+                        return ObjectRegistry.NOT_REGISTERED;
+                    }
+                }
+
+                if ( isFunc( pObject ) && this.#registerFunctions )
+                {
+                    if ( !this.#registerPredefined &&
+                         isClass( pObject ) &&
+                         GLOBAL_TYPES.includes( pObject ) )
+                    {
+                        return ObjectRegistry.NOT_REGISTERED;
+                    }
+                }
+
+                guid = this.#generateGuid( pObject );
+                this.#map.set( pObject, guid );
+
+                let timestamp = this.#created.get( pObject ) || this.#generateTimestamp();
+                this.#created.set( pObject, timestamp );
+            }
+
+            return guid;
+        }
+
+        getGuid( pObject )
+        {
+            if ( isNull( pObject ) || isPrimitive( pObject ) )
+            {
+                return ObjectRegistry.NOT_REGISTERED + _underscore + String( (Math.random() + 1) * Date.now() );
+            }
+
+            return this.#map.get( pObject ) || this.register( pObject );
+        }
+
+        getCreated( pObject )
+        {
+            if ( isNull( pObject ) || isPrimitive( pObject ) )
+            {
+                return -1;
+            }
+
+            let timestamp = -1;
+
+            if ( isNonNullObj( pObject ) )
+            {
+                timestamp = this.#created.get( pObject ) || this.#generateTimestamp();
+                this.#created.set( pObject, timestamp );
+            }
+
+            return timestamp;
+        }
+
+        identical( pObjectA, pObjectB )
+        {
+            if ( (isNull( pObjectA ) && isNull( pObjectB )) || pObjectA === pObjectB )
+            {
+                return true;
+            }
+
+            if ( !(isObj( pObjectA ) || isFunc( pObjectA )) || !(isObj( pObjectB ) || isFunc( pObjectB )) )
+            {
+                return false;
+            }
+
+            return (this.getGuid( pObjectA ) === this.getGuid( pObjectB ));
+        }
+
+        /**
+         * Returns true if the 2 objects (or functions) are *very likely*
+         * either identical or represent the same data
+         *
+         * @param {Object|Function} pObjectA The first of 2 objects or functions to compare
+         * @param {Object|Function} pObjectB The object or function to compare to the first
+         * @returns {boolean} true if the specified objects or functions
+         *                    are the same object or function
+         *                    or if the 2 objects appear to represent the same data.
+         *
+         *                    This method trades certainty for performance.
+         *                    To accurately and reliably compare 2 objects for equality,
+         *                    use the ObjectUtils package
+         */
+        similar( pObjectA, pObjectB )
+        {
+            // if they are the same object or function, true
+            if ( this.identical( pObjectA, pObjectB ) )
+            {
+                return true;
+            }
+
+            // if both values are objects
+            if ( isNonNullObj( pObjectA ) && isNonNullObj( pObjectB ) )
+            {
+                const keysA = Object.keys( pObjectA );
+                const keysB = Object.keys( pObjectB );
+
+                // if the objects have a different number of properties, return false
+                if ( $ln( keysA ) !== $ln( keysB ) )
+                {
+                    return false;
+                }
+
+                // prepare to compare whether the objects have the same property names
+                const commonKeysA = [...keysA].filter( e => keysB.includes( e ) );
+                const commonKeysB = [...keysB].filter( e => keysA.includes( e ) );
+
+                // if the collections of common property name are of different lengths, return false
+                if ( $ln( commonKeysA ) !== $ln( keysB ) || $ln( commonKeysB ) !== $ln( keysA ) )
+                {
+                    return false;
+                }
+
+                // if both objects have the same set of properties,
+                // we compare the properties for exact equality
+                for( let key of keysA )
+                {
+                    if ( isPrimitive( pObjectA[key] ) )
+                    {
+                        if ( pObjectA[key] !== pObjectB[key] )
+                        {
+                            return false;
+                        }
+                    }
+                    else if ( isPrimitiveWrapper( pObjectA[key] ) && isPrimitiveWrapper( pObjectB ) )
+                    {
+                        if ( pObjectA[key].valueOf() !== pObjectB[key].valueOf() )
+                        {
+                            return false;
+                        }
+                    }
+                    else if ( $ln( pObjectA[key] ) !== $ln( pObjectB[key] ) )
+                    {
+                        return false;
+                    }
+                }
+
+                // if we get this far, the objects might not be the same
+                // they are certainly similar
+                return true;
+            }
+            else if ( isFunc( pObjectA ) && isFunc( pObjectB ) )
+            {
+                return String( _mt_str + functionToString.call( pObjectA ) ).trim() === String( _mt_str + functionToString.call( pObjectB ) ).trim();
+            }
+
+            return false;
+        }
+    }
+
+    ObjectRegistry.NOT_REGISTERED = "__unregistered__";
+    ObjectRegistry.DEFAULT_INSTANCE = new ObjectRegistry();
+
+    const OBJECT_REGISTRY = $scope()["__BOCK_OBJECT_REGISTRY__"] = ($scope()["__BOCK_OBJECT_REGISTRY__"] || ObjectRegistry.DEFAULT_INSTANCE);
+
     class Merger
     {
         #objects;
@@ -3442,58 +3492,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     {
         return (((new Merger( pOptions, ...pDefaults )).merged) || pOptions || {});
     }
-
-    /**
-     * Returns true if the execution context is <i>most likely</i> Node.js<br>
-     * by checking for the existence of<br>
-     * a global 'module' property,<br>
-     * a global function named 'require'<br>
-     * and the absence of globally defined symbols for 'self', 'window', and 'Deno'
-     *
-     * @function
-     * @returns {boolean} true if the execution context is <i>most likely</i> Node.js
-     */
-    const isNode = function()
-    {
-        if ( (_ud === typeof self) && (_ud === typeof window) && (_ud !== typeof module) && (isFunc( require )) )
-        {
-            if ( _ud === typeof Deno && (_ud !== typeof process) )
-            {
-                return !isAsyncFunction( require );
-            }
-        }
-        return false;
-    };
-
-    /**
-     * Returns true if the current runtime environment is Deno.
-     *
-     * This function determines if the execution environment is Deno by verifying
-     * that it is not running in a Node.js environment and by checking for the existence
-     * of the `Deno` global object.
-     *
-     * @function
-     * @returns {boolean} Returns true if the runtime environment is Deno, otherwise false.
-     */
-    const isDeno = () => !isNode() && (_ud !== typeof Deno);
-
-    /**
-     * Returns true if the current execution content is a Worker or ServiceWorker.<br>
-     *
-     * @returns true if the current execution content is a Worker or ServiceWorker.
-     */
-    const isWorker = function()
-    {
-        // @TODO
-    };
-
-    /**
-     * Returns true if the current execution environment is a web browser.<br>
-     *
-     * @function
-     * @returns true if the current execution environment is a web browser.<br>
-     */
-    const isBrowser = () => ( !isNode() && !isDeno() && (_ud !== typeof window) && (_ud !== typeof document) && (_ud !== typeof navigator));
 
     /**
      *
