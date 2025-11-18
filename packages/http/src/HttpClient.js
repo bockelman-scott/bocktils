@@ -469,6 +469,11 @@ const $scope = constants?.$scope || function()
         return isNull( pAgent ) || !(pAgent instanceof https.Agent) ? new https.Agent( httpAgentConfig.toObjectLiteral() ) : pAgent;
     }
 
+    HttpAgentConfig.fixAgents = fixAgents;
+    HttpAgentConfig.resolveHttpAgent = resolveHttpAgent;
+    HttpAgentConfig.resolveHttpsAgent = resolveHttpsAgent;
+
+
     const httpConfigProperties = ["headers", "url", "method", "httpAgent", "httpsAgent"];
 
     class HttpConfig extends EventTarget
@@ -793,6 +798,10 @@ const $scope = constants?.$scope || function()
 
         return new HttpConfig( httpConfig, (httpConfig?.headers || httpConfig), httpConfig?.url, httpConfig?.method );
     };
+
+    HttpConfig.isHttpConfig = isHttpConfig;
+    HttpConfig.resolveHttpConfig = resolveHttpConfig;
+    HttpConfig.toHttpConfigLiteral = toHttpConfigLiteral;
 
     const RequestInitModel =
         {
@@ -1504,6 +1513,8 @@ const $scope = constants?.$scope || function()
         return { url, cfg };
     }
 
+    HttpConfig.prepareRequestConfig = prepareRequestConfig;
+
     /**
      * This class provides default implementations of HTTP request methods.
      * The HttpClient class and subclasses can use or replace this delegate
@@ -1829,6 +1840,8 @@ const $scope = constants?.$scope || function()
         }
     }
 
+    HttpFetchClient.prepareRequestInit = prepareRequestConfig;
+
     const DEFAULT_HTTP_CLIENT_OPTIONS =
         {
             /* TBD */
@@ -2066,6 +2079,11 @@ const $scope = constants?.$scope || function()
         set config( pConfig )
         {
             this.#config = isHttpConfig( pConfig, true ) ? pConfig.merge( DEFAULT_HTTP_CONFIG, pConfig ) : new HttpConfig( { ...DEFAULT_CONFIG, ...(asObject( pConfig || {} )) }, DEFAULT_HTTP_CONFIG.headers );
+        }
+
+        get httpConfig()
+        {
+            return HttpConfig.resolveHttpConfig( this.config );
         }
 
         get options()
@@ -2427,6 +2445,8 @@ const $scope = constants?.$scope || function()
 
         return httpClient;
     };
+
+    HttpClient.resolveHttpClient = resolveHttpClient;
 
     /**
      * Represents a length of time for which rate limits might apply
@@ -3875,6 +3895,9 @@ const $scope = constants?.$scope || function()
 
         return new RateLimitedHttpClient( cfg, options, new HttpFetchClient( cfg, options ), ...pRateLimits );
     }
+
+    HttpClient.createRateLimitedHttpClient = createRateLimitedHttpClient;
+    RateLimitedHttpClient.createRateLimitedHttpClient = createRateLimitedHttpClient;
 
     class Throttler
     {
