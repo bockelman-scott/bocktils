@@ -73,6 +73,7 @@ const $scope = constants?.$scope || function()
         {
             ToolBocksModule,
             ModuleEvent,
+            IterationCap,
 
             $ln,
             $nth,
@@ -5619,23 +5620,67 @@ const $scope = constants?.$scope || function()
 
     function getMethods( pClass )
     {
-        let target = isNonNullObject( pClass ) ? pClass : isClass( pClass ) ? (pClass.prototype || Object.getPrototypeOf( pClass )) : {};
+        let target = isNonNullObject( pClass ) ? (pClass.prototype || Object.getPrototypeOf( pClass )) : isClass( pClass ) ? pClass : {};
 
         let entries = objectEntries( target );
 
         let methods = [];
 
-        entries.forEach( entry =>
-                         {
-                             let key = ObjectEntry.getKey( entry );
-                             let value = ObjectEntry.getValue( entry );
+        if ( $ln( entries ) <= 0 )
+        {
+            for( let prop in (target || pClass || {}) )
+            {
+                let value = target[prop] || pClass?.[prop] || Object.getPrototypeOf( pClass )?.[prop];
 
-                             if ( isFunction( value ) && !(EXCLUDED_METHODS.includes( key )) )
+                if ( isFunction( value ) )
+                {
+                    value.name = value.name || asString( prop, true );
+                    methods.push( value );
+                }
+            }
+        }
+        else
+        {
+            entries.forEach( entry =>
                              {
-                                 attempt( () => value.name = value.name || key );
-                                 methods.push( value );
-                             }
-                         } );
+                                 let key = ObjectEntry.getKey( entry );
+                                 let value = ObjectEntry.getValue( entry );
+
+                                 if ( isFunction( value ) && !(EXCLUDED_METHODS.includes( key )) )
+                                 {
+                                     attempt( () => value.name = value.name || key );
+                                     methods.push( value );
+                                 }
+                             } );
+        }
+
+        if ( $ln( methods ) <= 0 )
+        {
+            const prototypes = [pClass?.prototype, Object.getPrototypeOf( pClass || {} ), target?.prototype, Object.getPrototypeOf( target || {} )];
+
+            for( let proto of prototypes )
+            {
+                let p = proto;
+
+                let iterationCap = new IterationCap( 10 );
+
+                while ( !isNull( p ) && !iterationCap.reached )
+                {
+                    for( let prop in p )
+                    {
+                        let value = p[prop] || Object.getPrototypeOf( p )?.[prop];
+
+                        if ( isFunction( value ) )
+                        {
+                            attempt( () => value.name = value.name || prop );
+                            methods.push( value );
+                        }
+                    }
+
+                    p = p.prototype || Object.getPrototypeOf( p );
+                }
+            }
+        }
 
         return methods;
     }
