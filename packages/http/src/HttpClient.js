@@ -2443,7 +2443,7 @@ const $scope = constants?.$scope || function()
             }
         }
 
-        return httpClient;
+        return isHttpClient( httpClient ) ? httpClient : new HttpClient();
     };
 
     HttpClient.resolveHttpClient = resolveHttpClient;
