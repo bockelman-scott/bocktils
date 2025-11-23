@@ -19,20 +19,15 @@
  * The base class, HttpClient defines the interface for the clients/consumers.
  *
  * The base class defaults to using a default delegate.
- * Subclasses can provide their own implementations of methods or fallback on the super class/default delegate.
+ * Subclasses can provide their own implementations of methods
+ * or fallback on the super class/default delegate.
  *
- * The default implementations will use fetch (or node:fetch), but subclasses using Axios are also expected.
+ * The default implementations will use fetch (or node:fetch),
+ * but subclasses using Axios are also expected.
+ *
  * It should also be plausible to use other HTTP client libraries, including XmlHttpRequest.
  *
- *
- *
- *
- *
  */
-
-const fs = require( "fs" );
-
-const { finished } = require( "stream/promises" );
 
 const path = require( "node:path" );
 
@@ -279,19 +274,6 @@ const $scope = constants?.$scope || function()
 
     const { ResponseData, streamToFile } = responseDataModule;
 
-    // define module-level constants
-    const MIN_TIMEOUT_MILLISECONDS = 10_000; // 10 seconds
-    const MAX_TIMEOUT_MILLISECONDS = 60_000; // 60 seconds, or 1 minute
-    const DEFAULT_TIMEOUT_MILLISECONDS = 30_000; // 30 seconds
-
-    const MIN_CONTENT_LENGTH = 64_000; // 64 KBs
-    const DEFAULT_CONTENT_LENGTH = 2_000_000; // 2 MBs
-    const MAX_CONTENT_LENGTH = 200_000_000; // 200 MBs
-
-    const MIN_REDIRECTS = 3;
-    const MAX_REDIRECTS = 10;
-    const DEFAULT_REDIRECTS = 5;
-
     const { HttpHeaders, HttpRequestHeaders, HttpResponseHeaders } = httpHeaders;
 
     // import the HttpRequest (facade) class we use to provide a uniform interface for HTTP Requests
@@ -303,6 +285,27 @@ const $scope = constants?.$scope || function()
     const modName = "HttpClientUtils";
 
     let toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
+
+
+    // define module-level constants
+    const MIN_TIMEOUT_MILLISECONDS = 10_000; // 10 seconds
+    const MAX_TIMEOUT_MILLISECONDS = 60_000; // 60 seconds, or 1 minute
+    const DEFAULT_TIMEOUT_MILLISECONDS = 30_000; // 30 seconds
+
+    const DEFAULT_MAX_CONTENT_LENGTH = 2_000_000; // 2 MBs
+
+    const MAX_REDIRECTS = 5;
+
+    const MAX_REQUEST_RETRIES = 10;
+    const DEFAULT_REQUEST_RETRIES = 5;
+
+    const DEFAULT_HTTP_CLIENT_OPTIONS =
+        {
+            maxContentLength: DEFAULT_MAX_CONTENT_LENGTH,
+            maxRedirects: MAX_REDIRECTS,
+            maxRetries: DEFAULT_REQUEST_RETRIES,
+            timeout: DEFAULT_TIMEOUT_MILLISECONDS
+        };
 
     /**
      * This class is used to define the configuration of an Http (or Https) Agent.
@@ -473,6 +476,19 @@ const $scope = constants?.$scope || function()
     HttpAgentConfig.resolveHttpAgent = resolveHttpAgent;
     HttpAgentConfig.resolveHttpsAgent = resolveHttpsAgent;
 
+    const DEFAULT_CONFIG =
+        {
+            method: VERBS.GET,
+            responseType: "text/plain"
+        };
+
+    const DEFAULT_DOWNLOAD_CONFIG =
+        {
+            method: VERBS.GET,
+            responseType: "stream",
+            Accept: "application/octet-stream",
+            headers: { Accept: "application/octet-stream" }
+        };
 
     const httpConfigProperties = ["headers", "url", "method", "httpAgent", "httpsAgent"];
 
@@ -803,6 +819,20 @@ const $scope = constants?.$scope || function()
     HttpConfig.resolveHttpConfig = resolveHttpConfig;
     HttpConfig.toHttpConfigLiteral = toHttpConfigLiteral;
 
+    const DEFAULT_HTTP_CONFIG = new HttpConfig( DEFAULT_CONFIG );
+
+    const DEFAULT_HTTP_DOWNLOAD_CONFIG = new HttpConfig( DEFAULT_DOWNLOAD_CONFIG, DEFAULT_DOWNLOAD_CONFIG.headers );
+
+    HttpConfig.getDownloadDefault = function()
+    {
+        return new HttpConfig( DEFAULT_HTTP_DOWNLOAD_CONFIG );
+    };
+
+    HttpConfig.getDefault = function( pForDownload = false )
+    {
+        return !!pForDownload ? HttpConfig.getDownloadDefault() : new HttpConfig( DEFAULT_CONFIG );
+    };
+
     const RequestInitModel =
         {
             "attributionReporting":
@@ -997,7 +1027,7 @@ const $scope = constants?.$scope || function()
                 {
                     "required": false,
                     "types": [_num],
-                    "default": 5
+                    "default": MAX_REDIRECTS
                 },
             signal:
                 {
@@ -1239,24 +1269,6 @@ const $scope = constants?.$scope || function()
         }
     }
 
-    const DEFAULT_CONFIG =
-        {
-            method: VERBS.GET,
-            responseType: "text/plain"
-        };
-
-    const DEFAULT_HTTP_CONFIG = new HttpConfig( DEFAULT_CONFIG );
-
-    const DEFAULT_DOWNLOAD_CONFIG =
-        {
-            method: VERBS.GET,
-            responseType: "stream",
-            Accept: "application/octet-stream",
-            headers: { Accept: "application/octet-stream" }
-        };
-
-    const DEFAULT_HTTP_DOWNLOAD_CONFIG = new HttpConfig( DEFAULT_DOWNLOAD_CONFIG, DEFAULT_DOWNLOAD_CONFIG.headers );
-
     function isHttpClient( pDelegate )
     {
         if ( isNonNullObject( pDelegate ) )
@@ -1483,14 +1495,6 @@ const $scope = constants?.$scope || function()
         return id;
     };
 
-    const MAX_REQUEST_RETRIES = 10;
-    const DEFAULT_REQUEST_RETRIES = 5;
-
-    const DEFAULT_DELEGATE_OPTIONS =
-        {
-            maxRetries: DEFAULT_REQUEST_RETRIES
-        };
-
     async function prepareRequestConfig( pUrl, pMethod, pConfig, pBody )
     {
         const url = cleanUrl( (_ud !== typeof Request && pUrl instanceof Request) ? (pUrl?.url || pUrl) : resolveUrl( pUrl, pConfig ) );
@@ -1525,7 +1529,7 @@ const $scope = constants?.$scope || function()
      */
     class HttpFetchClient
     {
-        #options = DEFAULT_DELEGATE_OPTIONS;
+        #options = DEFAULT_HTTP_CLIENT_OPTIONS;
         #config = DEFAULT_HTTP_CONFIG;
 
         /**
@@ -1533,7 +1537,7 @@ const $scope = constants?.$scope || function()
          * @param {Object} pConfig
          * @param {Object} pOptions
          */
-        constructor( pConfig = DEFAULT_HTTP_CONFIG, pOptions = DEFAULT_DELEGATE_OPTIONS )
+        constructor( pConfig = DEFAULT_HTTP_CONFIG, pOptions = DEFAULT_HTTP_CLIENT_OPTIONS )
         {
             this.#config = (isHttpConfig( pConfig, true )
                             && isFunction( pConfig?.clone )
@@ -1541,12 +1545,17 @@ const $scope = constants?.$scope || function()
                            pConfig.clone().merge( DEFAULT_HTTP_CONFIG, pConfig ) :
                 { ...DEFAULT_CONFIG, ...(toHttpConfigLiteral( pConfig || {} )) };
 
-            this.#options = populateOptions( pOptions || {}, DEFAULT_DELEGATE_OPTIONS );
+            this.#options = populateOptions( pOptions || {}, DEFAULT_HTTP_CLIENT_OPTIONS );
         }
 
         get config()
         {
             return fixAgents( { ...(toHttpConfigLiteral( this.#config || {} )) } );
+        }
+
+        get maxRedirects()
+        {
+            return this.config?.maxRedirects || this.options?.maxRedirects || 5;
         }
 
         mergeConfig( pConfig )
@@ -1589,7 +1598,7 @@ const $scope = constants?.$scope || function()
 
         get options()
         {
-            return { ...DEFAULT_DELEGATE_OPTIONS, ...(this.#options || {}) };
+            return { ...DEFAULT_HTTP_CLIENT_OPTIONS, ...(this.#options || {}) };
         }
 
         get maxRetries()
@@ -1650,7 +1659,7 @@ const $scope = constants?.$scope || function()
 
                     let redirects = asInt( pRedirects );
 
-                    if ( redirects <= asInt( me.maxRedirects || cfg.maxRedirects ) )
+                    if ( redirects <= asInt( this.maxRedirects || cfg.maxRedirects ) )
                     {
                         let headers = responseData.headers;
 
@@ -1842,11 +1851,6 @@ const $scope = constants?.$scope || function()
 
     HttpFetchClient.prepareRequestInit = prepareRequestConfig;
 
-    const DEFAULT_HTTP_CLIENT_OPTIONS =
-        {
-            /* TBD */
-        };
-
     function updateContext( pConfig, pResponseData )
     {
         let responseData = ResponseData.from( pResponseData || pConfig );
@@ -1909,9 +1913,9 @@ const $scope = constants?.$scope || function()
 
         #logger;
 
-        #maxRedirects = 5;
+        #maxRedirects = MAX_REDIRECTS;
 
-        constructor( pConfig, pOptions, pDelegates = new Map(), pDefaultDelegate )
+        constructor( pConfig = HttpConfig.getDefault(), pOptions = { ...DEFAULT_HTTP_CLIENT_OPTIONS }, pDelegates = new Map(), pDefaultDelegate = new HttpFetchClient() )
         {
             super();
 
@@ -2578,7 +2582,7 @@ const $scope = constants?.$scope || function()
      * Used to track the number of requests made,
      * number of requests remaining,
      * and the time of the next reset of requests per this duration.
-     * Provides methods for calculating a delay to wait prior to making another request,
+     * Provides methods for calculating a delay to wait before making another request,
      * whether to wait and send a request or instead to queue the request and continue.
      */
     class RequestWindow
@@ -2682,8 +2686,8 @@ const $scope = constants?.$scope || function()
         }
 
         /**
-         * Returns the number of requests that can be made during any occurrence of the duarion of time represented by this window
-         * @returns {number} the number of requests that can be made during any occurrence of the duarion of time represented by this window
+         * Returns the number of requests that can be made during any occurrence of the duration of time represented by this window
+         * @returns {number} the number of requests that can be made during any occurrence of the duration of time represented by this window
          */
         get numAllowed()
         {
