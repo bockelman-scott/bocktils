@@ -262,7 +262,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         };
 
     /*
-     * Defines some useful constants we need prior to loading the Constants module
+     * Defines some useful constants we need before loading the Constants module
      * We define these using a 'fake' destructuring with default values to reduce verbosity
      */
     const
@@ -286,7 +286,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             _comma = ",",
             _underscore = "_",
             _colon = ":",
-            _semicolon = ";",
             _asterisk = "*",
             _unknown = "Unknown",
 
@@ -1548,11 +1547,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     const hasProperty = function( pObject, pPropertyName )
     {
-        let propertyName = _asStr( pPropertyName ).replace( /^#/, _mt_str );
+        let propertyName = _asStr( pPropertyName ).replace( /^#/, _mt_str ).trim();
 
         if ( propertyName )
         {
-            return ({}).hasOwnProperty.call( pObject, propertyName ) || (pPropertyName in pObject);
+            const obj = resolveObject( pObject );
+            return ({}).hasOwnProperty.call( obj, propertyName ) || (pPropertyName in obj);
         }
 
         return false;
@@ -1569,7 +1569,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         if ( hasProperty( pObj, propertyName ) )
         {
-            let descriptor = Object.getOwnPropertyDescriptor( pObj, propertyName );
+            let descriptor = Object.getOwnPropertyDescriptor( pObj, propertyName ) || Object.getOwnPropertyDescriptor( pObj, propertyName.replace( /^#/, _mt ) );
 
             if ( descriptor )
             {
@@ -3247,13 +3247,16 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          *
          * @param {boolean} [pTraceEnabled=false] - Optional flag to enable or disable tracing. Defaults to false.
          *
+         * @param pOptions
          * @return {ExecutionMode} A new instance of the class with the specified name and trace settings.
          */
-        constructor( pName, pTraceEnabled = false )
+        constructor( pName, pTraceEnabled = false, pOptions = {} )
         {
             this.#name = _spcToChar( _ucase( _asStr( pName || S_NONE ).trim() ) );
 
             this.#traceEnabled = !!pTraceEnabled;
+
+            this.#options = { ...(pOptions || {}) };
         }
 
         /**
@@ -3266,6 +3269,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         get name()
         {
             return _spcToChar( _ucase( _asStr( this.#name ).trim() ) );
+        }
+
+        get options()
+        {
+            return { ...(this.#options || {}) };
         }
 
         /**
@@ -3820,7 +3828,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         get ModuleCache()
         {
-            return ToolBocksModule.MODULE_CACHE || MODULE_CACHE;
+            return ToolBocksModule.MODULE_CACHE || MODULE_CACHE || MODULE_OBJECT;
         }
 
         cacheModule( pModuleName, pModulePath, pModule )
@@ -6211,10 +6219,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             {
                 if ( ToolBocksModule.#globalLoggingEnabled )
                 {
-                    logger = ToolBocksModule.getGlobalLogger() || this.#logger;
+                    logger = ToolBocksModule.resolveLogger( ToolBocksModule.getGlobalLogger() || this.#logger, this.#logger || konsole );
                 }
 
-                logger = this.#logger || logger || konsole;
+                logger = ToolBocksModule.resolveLogger( this.#logger || logger || konsole, logger || konsole );
             }
 
             return logger || MockLogger;
@@ -6318,6 +6326,50 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             ToolBocksModule.#globalLoggingEnabled = true;
         }
 
+        /**
+         * Returns an object conforming to the expected interface of ILogger.
+         *
+         * That is, this method returns an object with at least the following methods:
+         * log( ...pData ), info( ...pData ), warn( ...pData ), error( ...pData ), and debug( ...pData ),
+         * with an inherent assumption that the data passed to one of those methods will be written as strings to some destination.
+         * The destination may be a file, a stream, the Windows Event Log, or even just /dev/null
+         *
+         * If the specified object, pLogger, conforms to the expected interface, it is returned unchanged.
+         * Otherwise, if a default is provided, as pDefault, and that object conforms to the expected interface, it is returned.
+         * Otherwise, if there is a global logger attached to the ToolBocksModule class, that object is returned.
+         * If none of those conditions are met, this method returns the console object defined for the current execution environment.
+         *
+         * @param {object|ILogger} pLogger the object to use for logging, if it conforms to the expected interface
+         * @param {object|ILogger|null} [pDefault=null] an aternative object to use for logging, if it conforms to the expected interface, and the specified logger does not
+         * @returns {ILogger|Console} an object that supports the expected logging methods
+         */
+        static resolveLogger( pLogger, pDefault = null )
+        {
+            if ( ToolBocksModule.isLogger( pLogger ) && !pLogger.mocked )
+            {
+                return pLogger;
+            }
+
+            if ( ToolBocksModule.isLogger( pDefault ) && !pDefault.mocked )
+            {
+                return pDefault;
+            }
+
+            let logger = ToolBocksModule.getGlobalLogger();
+
+            if ( ToolBocksModule.isLogger( logger ) && !logger.mocked )
+            {
+                return logger;
+            }
+
+            return konsole;
+        }
+
+        /**
+         * Conditionally writes the specified data element(s) to this module's logger or a global logger,
+         * if logging is enabled for this module or global logging is enabled
+         * @param {...*} pMsg one or more items to be converted to strings and written to a log-specific destimation
+         */
         logMessage( ...pMsg )
         {
             if ( this.#loggingEnabled || ToolBocksModule.#globalLoggingEnabled )
@@ -6327,6 +6379,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             }
         }
 
+        /**
+         * Conditionally writes the specified data element(s) to this module's logger or a global logger,
+         * if logging is enabled for this module or global logging is enabled.
+         *
+         * If the specified logger supports filtering or formatting by level,
+         * applies that filtering or formatting as defined for warnings
+         *
+         * @param {...*} pMsg one or more items to be converted to strings and written to a log-specific destimation
+         */
         logWarning( ...pMsg )
         {
             if ( this.#loggingEnabled || ToolBocksModule.#globalLoggingEnabled )
@@ -6336,6 +6397,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             }
         }
 
+        /**
+         * Conditionally writes the specified data element(s) to this module's logger or a global logger,
+         * if logging is enabled for this module or global logging is enabled.
+         *
+         * If the specified logger supports filtering or formatting by level,
+         * applies that filtering or formatting as defined for errors
+         *
+         * @param {...*} pMsg one or more items to be converted to strings and written to a log-specific destimation
+         */
         logError( ...pMsg )
         {
             if ( this.#loggingEnabled || ToolBocksModule.#globalLoggingEnabled )
@@ -6351,11 +6421,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          * Writes to the defined logger, if logging is enabled.
          * <br>
          * <br>
-         * The event object passed to the event handlers includes a detail property with<br>
-         * the Error object,<br>
-         * a message,<br>
+         * The event object passed to the event handlers includes a detail property with: <br>
+         * the Error object, <br>
+         * a message, <br>
          * the recommended log level (for example, error, info, warn, etc.),<br>
-         * and the 'source' of the error (a string description of the module and function where the error occurred).
+         * and the 'source' of the error
+         * (a string description of the module and function where the error occurred).
          * <br>
          *
          * @param {Error} pError The error encountered
@@ -6428,12 +6499,28 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return this.calculateErrorSourceName( this, pContext?.name || pContext || pError?.stack || pError );
         }
 
-        handleError( pError, pContext, ...pExtra )
+        /**
+         * Convenience method to call reportError
+         * @param {Error|string} pError the error to report
+         * @param {object|function} [pContext=this] the context in which the error occurred
+         * @param {...*} pExtra one or more value to include in the event dispatched and/or log message written when reporting the error
+         */
+        handleError( pError, pContext = this, ...pExtra )
         {
             const source = this.resolveErrorSource( pContext, pError );
             this.reportError( pError, pError?.message || S_DEFAULT_ERROR_MESSAGE, S_ERROR, source, ...pExtra );
         }
 
+        /**
+         * Calls handleError without blocking the current event loop.
+         *
+         * @param {Error|string} pError the error to report
+         * @param {object|function} [pContext=this] the context in which the error occurred
+         * @param {...*} pExtra one or more value to include in the event dispatched and/or log message written when reporting the error
+         *
+         * @returns {Promise<void>} Calling code should NOT await this promise or call this method with an expectation of processing a return value.
+         *                          This method is designed to be a "fire-and-forget" mechanism for reporting an error or exception without blocking the current event loop
+         */
         async handleErrorAsync( pError, pContext, ...pExtra )
         {
             const me = this;
@@ -6452,6 +6539,20 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             };
 
             setTimeout( func, 10 );
+        }
+
+        /**
+         * Alias for this.handleErrorAsync
+         *
+         * @param {Error|string} pError the error to report
+         * @param {object|function} [pContext=this] the context in which the error occurred
+         * @param {...*} pExtra one or more value to include in the event dispatched and/or log message written when reporting the error
+         *
+         * @returns {Promise<void>} Calling code should NOT await this promise or call this method with an expectation of processing a return value.
+         *                          This method is designed to be a "fire-and-forget" mechanism for reporting an error or exception without blocking the current event loop         */
+        async asyncHandleError( pError, pContext, ...pExtra )
+        {
+            this.handleErrorAsync( pError, pContext, ...pExtra ).then( no_op ).catch( no_op );
         }
 
         /**
@@ -6537,7 +6638,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 $scope()[key] = lock( mod || this );
             }
 
-            mod.dispatchEvent( new CustomEvent( "load", mod ) );
+            mod.dispatchEvent( new ToolBocksModuleEvent( "load", mod, this ) );
 
             return lock( mod || this );
         }
@@ -6554,7 +6655,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             const object = isNonNullObj( pObject ) ? { ...pObject } : {};
 
-            dispatchEvent( new ToolBocksModuleEvent( "load", mod, { ...object } ) );
+            mod.dispatchEvent( new ToolBocksModuleEvent( "load", mod, { ...object } ) );
 
             return mod;
         }
@@ -6584,6 +6685,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return toolbocksModule;
         }
 
+        /**
+         * Returns an object representing the current execution environment, such as Node, Deno, a Browser, or a Worker.
+         *
+         * @returns {*}
+         */
         get executionEnvironment()
         {
             if ( null == this.#executionEnvironment )
@@ -7486,7 +7592,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     const COMPARE_EQUAL = 0;
     const COMPARE_GREATER_THAN = 1;
 
-    const resolveComparator = ( pComparator ) => isFunc( pComparator?.compare ) ? pComparator : isFunc( pComparator ) ? { compare: pComparator } : { compare: ( a, b ) => 0 };
+    const resolveComparator = ( pComparator ) => isFunc( pComparator?.compare ) ? pComparator : isFunc( pComparator ) ? { compare: pComparator } : { compare: ( a, b ) => (isNum( a ) && isNum( b )) ? (a - b) : ((a > b) ? 1 : ((a < b) ? 1 : 0)) };
 
     const compare = ( pFirst, pSecond, pNullsFirst = true ) =>
     {
