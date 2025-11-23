@@ -111,7 +111,7 @@ const $scope = constants?.$scope || function()
             toNodePathArray,
             getProperty,
             setProperty,
-            hasProperty: definesProperty,
+            hasProperty,
             populateOptions,
 
             lock,
@@ -2959,18 +2959,6 @@ const $scope = constants?.$scope || function()
         }
 
         return arr.length > 0 ? arr[0] : null;
-    };
-
-    const hasProperty = function( pObject, pPropertyName )
-    {
-        let propertyName = _toString( pPropertyName );
-
-        if ( propertyName )
-        {
-            return ({}).hasOwnProperty.call( pObject, propertyName ) || definesProperty( pObject, pPropertyName );
-        }
-
-        return false;
     };
 
     class Finder

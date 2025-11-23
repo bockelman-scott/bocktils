@@ -279,6 +279,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             _validTypes = [_obj, _fun, _str, _bool, _num, _big, _symbol],
 
             _mt_str = "",
+            _mt = _mt_str,
             _mt_chr = "",
             _spc = " ",
             _dot = ".",
@@ -1545,6 +1546,18 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const resolveObject = ( pObject, pAcceptArray = false ) => isNonNullObj( pObject ) ? (!!pAcceptArray || !isArray( pObject ) ? pObject : {}) : {};
 
+    const hasProperty = function( pObject, pPropertyName )
+    {
+        let propertyName = _asStr( pPropertyName ).replace( /^#/, _mt_str );
+
+        if ( propertyName )
+        {
+            return ({}).hasOwnProperty.call( pObject, propertyName ) || (pPropertyName in pObject);
+        }
+
+        return false;
+    };
+
     function isWritable( pObj, pPropertyName, pIncludeInherited = false )
     {
         let propertyName = _asStr( pPropertyName ).trim();
@@ -1554,9 +1567,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return false;
         }
 
-        let hasProperty = ({}).hasOwnProperty.call( pObj, propertyName );
-
-        if ( hasProperty )
+        if ( hasProperty( pObj, propertyName ) )
         {
             let descriptor = Object.getOwnPropertyDescriptor( pObj, propertyName );
 
@@ -7354,8 +7365,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     {
         return attempt( () => _property( pObject, pPropertyPath, pValue ) );
     }
-
-    const hasProperty = ( pObject, pPropertyPath ) => !isNull( getProperty( pObject, pPropertyPath ) );
 
     function mergeOptions( pOptions, ...pDefaults )
     {
