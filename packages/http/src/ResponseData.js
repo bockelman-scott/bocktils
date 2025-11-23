@@ -28,6 +28,11 @@ const bufferUtils = require( "@toolbocks/buffer" );
 const datesModule = require( "@toolbocks/dates" );
 
 /**
+ * Import the module for file system operations
+ */
+let fileUtils = require( "@toolbocks/files" );
+
+/**
  * This statement imports JSON Utilities
  * that can handle circular references and internal references
  */
@@ -93,7 +98,8 @@ const {
         attempt,
         asyncAttempt,
         isWritable,
-        $ln
+        $ln,
+        konsole = console
     } = moduleUtils;
 
     const { _mt_str = "", _mt = _mt_str, _slash = "/" } = constants;
@@ -117,21 +123,24 @@ const {
         clamp = moduleUtils.clamp
     } = typeUtils;
 
-    const { asString, asInt, isBlank, cleanUrl, isJson } = stringUtils;
+    const { asString, asInt, isBlank, cleanUrl, isJson, isFilePath, toUnixPath } = stringUtils;
 
     const { parseJson, asJson } = jsonUtils;
 
     const { Streamer, toReadableStream, toThrottledReadableStream, readStream } = bufferUtils;
 
+    const { resolvePath, createTempFile } = fileUtils;
+
     // import the functions, variables, and classes defined in the HttpConstants module that are used in this module
-    const {
-        VERBS,
-        resolveHttpMethod,
-        HttpStatus,
-        STATUS_CODES,
-        STATUS_TEXT,
-        DEFAULT_RETRY_DELAY
-    } = httpConstants;
+    const
+        {
+            VERBS,
+            resolveHttpMethod,
+            HttpStatus,
+            STATUS_CODES,
+            STATUS_TEXT,
+            DEFAULT_RETRY_DELAY
+        } = httpConstants;
 
     const { HttpHeaders, HttpRequestHeaders, HttpResponseHeaders } = httpHeaders;
 
@@ -245,16 +254,18 @@ const {
 
     async function streamToFile( pResponseData, pFilePath )
     {
-        let closed = false;
-
-        let filePath = asString( pFilePath, true );
+        let logger = this.logger || konsole;
 
         let responseData = ResponseData.from( pResponseData );
 
-        let logger = this.logger || konsole;
+        let filePath = toUnixPath( asString( pFilePath, true ) );
+
+        filePath = isFilePath( filePath ) ? resolvePath( filePath ) : createTempFile();
 
         // create a writable stream
         const fileStream = fs.createWriteStream( filePath );
+
+        let closed = false;
 
         try
         {
@@ -298,6 +309,13 @@ const {
             toolBocksModule.reportError( ex, ex.message, "error", streamToFile, ex.response?.status, ex.response );
 
             logger.error( ` *****ERROR*****\nFailed to download file: ${ex.message}`, ex );
+        }
+        finally
+        {
+            if ( !closed )
+            {
+                attempt( () => fileStream.close() );
+            }
         }
 
         return _mt;
@@ -547,7 +565,7 @@ const {
 
         get headersLiteral()
         {
-            let headers = this.headers;
+            let headers = asObject( this.headers );
             return isFunction( headers.toLiteral ) ? headers.toLiteral() : toObjectLiteral( headers );
         }
 
