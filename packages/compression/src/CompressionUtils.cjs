@@ -40,6 +40,7 @@ const base64Utils = require( "@toolbocks/base64" );
 
 const fileUtils = require( "@toolbocks/files" );
 
+let jsonUtils = require( "@toolbocks/json" );
 /**
  * Import adm-zip dependency
  */
@@ -64,79 +65,82 @@ const { _ud = "undefined", $scope } = constants;
         return $scope()[INTERNAL_NAME];
     }
 
-    const {
-        ToolBocksModule,
-        populateOptions,
-        no_op,
-        lock,
-        resolveError,
-        attempt,
-        asyncAttempt
-    } = moduleUtils;
+    const
+        {
+            ToolBocksModule,
+            populateOptions,
+            no_op,
+            lock,
+            resolveError,
+            attempt,
+            asyncAttempt
+        } = moduleUtils;
 
-    const {
-        _mt_str,
-        _dot,
-        _str,
-        _num,
-        _big,
-        _bool,
-        _obj,
-        S_ERROR,
-        S_WARN
-    } = constants;
+    const
+        {
+            _mt_str,
+            _dot,
+            _str,
+            _num,
+            _big,
+            _bool,
+            _obj,
+            S_ERROR,
+            S_WARN
+        } = constants;
 
-    const {
-        isNull,
-        isString,
-        isNumeric,
-        isObject,
-        isNonNullObject,
-        isFunction,
-        isArray,
-        isTypedArray,
-        toDecimal,
-        toBits
-    } = typeUtils;
+    const
+        {
+            isNull,
+            isString,
+            isNumeric,
+            isObject,
+            isNonNullObject,
+            isFunction,
+            isArray,
+            isTypedArray,
+            toDecimal,
+            toBits
+        } = typeUtils;
 
-    const { asString, asInt, isBlank, lcase, ucase, toBool } = stringUtils;
+    const { asString, asInt, isBlank, isFilePath, toUnixPath, lcase, ucase, toBool } = stringUtils;
 
     const { varargs, asArray, Filters } = arrayUtils;
 
-    const {
-        isFile,
-        isDirectory,
-        resolvePath,
-        removeExtension,
-        replaceExtension,
-        lstat,
-        exists,
-        readFile,
-        writeFile,
-        opendir,
-        makeDirectory,
-        asyncMakeDirectory,
-        removeDirectory,
-        asyncRemoveDirectory,
-        readLink,
-        link,
-        unlink,
-        asyncLink,
-        isSymbolicLink,
-        resolveDirectoryPath,
-        extractPathSeparator,
-        getFilePathData,
-        getFileName,
-        getDirectoryName,
-        getFileExtension,
+    const
+        {
+            isFile,
+            isDirectory,
+            resolvePath,
+            removeExtension,
+            replaceExtension,
+            lstat,
+            exists,
+            readFile,
+            writeFile,
+            writeFileSync,
+            opendir,
+            makeDirectory,
+            asyncMakeDirectory,
+            removeDirectory,
+            asyncRemoveDirectory,
+            readLink,
+            link,
+            unlink,
+            asyncLink,
+            isSymbolicLink,
+            resolveDirectoryPath,
+            extractPathSeparator,
+            getFilePathData,
+            getFileName,
+            getDirectoryName,
+            getFileExtension,
 
-    } = fileUtils || $scope();
+        } = fileUtils || $scope();
 
-    const {
-        File,
-        arrayFromBuffer,
-        typedArrayFromBuffer
-    } = bufferUtils || $scope();
+    const { asObject } = jsonUtils;
+
+    const { File, arrayFromBuffer, typedArrayFromBuffer } = bufferUtils || $scope();
 
     if ( _ud === typeof Buffer )
     {
@@ -746,8 +750,29 @@ const { _ud = "undefined", $scope } = constants;
 
     function _resolveInputOutput( pInputPath, pOutputPath )
     {
-        const inputPath = isString( pInputPath ) ? resolvePath( asString( pInputPath, true ) ) : isBuffer( pInputPath ) ? Buffer.from( pInputPath ) : asArray( pInputPath );
-        const outputPath = isString( pOutputPath ) ? resolvePath( asString( pOutputPath, true ) ) : isBuffer( pOutputPath ) ? Buffer.from( pOutputPath ) : asArray( pOutputPath );
+        let inputPath = isString( pInputPath ) && isFilePath( pInputPath ) ? resolvePath( asString( pInputPath, true ) ) : isBuffer( pInputPath ) ? Buffer.from( pInputPath ) : isArray( pInputPath ) ? asArray( pInputPath ) : asObject( pInputPath );
+
+        let outputPath = isString( pOutputPath ) && isFilePath( pOutputPath ) ? resolvePath( asString( pOutputPath, true ) ) : isBuffer( pOutputPath ) ? Buffer.from( pOutputPath ) : isArray( pOutputPath ) ? asArray( pOutputPath ) : asObject( pOutputPath );
+
+        if ( isFilePath( inputPath ) )
+        {
+            inputPath = fs.existsSync( inputPath ) ? inputPath : _mt_str;
+        }
+
+        if ( isFilePath( outputPath ) )
+        {
+            outputPath = fs.existsSync( outputPath ) ? outputPath : attempt( () =>
+                                                                             {
+                                                                                 makeDirectory( getDirectoryName( outputPath ) );
+                                                                                 return outputPath;
+                                                                             } );
+
+            outputPath = fs.existsSync( outputPath ) ? outputPath : attempt( () =>
+                                                                             {
+                                                                                 writeFileSync( outputPath, _mt_str );
+                                                                                 return outputPath;
+                                                                             } );
+        }
 
         return { inputPath, outputPath };
     }
@@ -1292,12 +1317,13 @@ const { _ud = "undefined", $scope } = constants;
 
         const errorSource = asString( pErrorSource || (modName + "::initializeArguments"), true );
 
-        let {
-            inputPath,
-            outputPath,
-            leftSide,
-            rightSide
-        } = await CompressionOptions.calculatePipe( pInputPath, pOutputPath );
+        let
+            {
+                inputPath,
+                outputPath,
+                leftSide,
+                rightSide
+            } = await CompressionOptions.calculatePipe( pInputPath, pOutputPath );
 
         async function handleError( pError )
         {
@@ -1718,19 +1744,20 @@ const { _ud = "undefined", $scope } = constants;
 
     async function handleZlibOperation( pArgsObject )
     {
-        let {
-            inputPath = pArgsObject?.inputPath,
-            outputPath = pArgsObject?.outputPath,
-            transformer = pArgsObject?.transformer,
-            handleError = pArgsObject?.onError || pArgsObject?.handleError,
-            handleSuccess = pArgsObject?.onSuccess || pArgsObject?.handleSuccess,
-            recursive = pArgsObject?.recursive
-        } = pArgsObject || {};
+        let
+            {
+                inputPath = pArgsObject?.inputPath,
+                outputPath = pArgsObject?.outputPath,
+                transformer = pArgsObject?.transformer,
+                handleError = pArgsObject?.onError || pArgsObject?.handleError,
+                handleSuccess = pArgsObject?.onSuccess || pArgsObject?.handleSuccess,
+                recursive = pArgsObject?.recursive
+            } = pArgsObject || {};
 
         if ( isBuffer( outputPath ) )
         {
             inputPath = isString( inputPath ) ? resolvePath( inputPath ) : isBuffer( inputPath ) ? Buffer.from( inputPath ) : await readFile( inputPath );
-            inputPath = await isFile( inputPath ) ? await readFile( inputPath ) : inputPath;
+            inputPath = await asyncAttempt( async() => await isFile( inputPath ) ? await readFile( inputPath ) : inputPath );
 
             const stream = Readable.from( inputPath );
             await streamToBuffer( outputPath( stream ) );
@@ -1746,12 +1773,23 @@ const { _ud = "undefined", $scope } = constants;
             }
             catch( ex )
             {
-                await handleError( ex );
-                return null;
+                return handleError( ex );
+            }
+            finally
+            {
+                if ( !isNull( source ) && isFunction( source.close ) )
+                {
+                    attempt( () => source.close() );
+                }
+
+                if ( !isNull( destination ) && isFunction( destination.close ) )
+                {
+                    attempt( () => destination.close() );
+                }
             }
         }
 
-        await handleSuccess( recursive );
+        await asyncAttempt( async() => await handleSuccess( recursive ) );
 
         return outputPath;
     }
@@ -1771,14 +1809,15 @@ const { _ud = "undefined", $scope } = constants;
     {
         const errorSource = modName + "::pipeToCompressedFile";
 
-        let {
-            inputPath,
-            outputPath,
-            leftSide,
-            rightSide,
-            handleError,
-            handleSuccess
-        } = await initializeArguments( pInputPath, pOutputPath, pOptions, errorSource );
+        let
+            {
+                inputPath,
+                outputPath,
+                leftSide,
+                rightSide,
+                handleError,
+                handleSuccess
+            } = await initializeArguments( pInputPath, pOutputPath, pOptions, errorSource );
 
         let options = populateOptions( pOptions, CompressionOptions.DEFAULT );
 
@@ -1863,7 +1902,7 @@ const { _ud = "undefined", $scope } = constants;
             }
             else
             {
-                outputPath = isBuffer( outputPath ) ? Buffer.from( outputPath ) : await readFile( outputPath );
+                outputPath = isBuffer( outputPath ) ? Buffer.from( outputPath ) : await asyncAttempt( async() => await readFile( outputPath ) );
             }
 
             return await handleZlibOperation( {
@@ -2078,11 +2117,6 @@ const { _ud = "undefined", $scope } = constants;
                 {
                     const msg = "The specified file path does not exist or cannot be read: " + pFilePath;
                     toolbocksModule.reportError( new Error( msg ), msg, S_WARN, modName + "::Archiver::checkFilePath" );
-
-                    if ( pFilePath.indexOf( _dot ) < 0 )
-                    {
-                        available = await this.createPath( pFilePath );
-                    }
                 }
 
                 return toBool( available );
@@ -2100,11 +2134,13 @@ const { _ud = "undefined", $scope } = constants;
         {
             try
             {
-                let exists = isString( pPath ) ? await this.checkFilePath( pPath ) : false;
+                let filePath = toUnixPath( (isString( pPath ) && isFilePath( pPath )) ? toUnixPath( asString( pPath, true ) ) : asString( asObject( pPath || {} )?.name, true ) );
 
-                if ( !exists && isString( pPath ) )
+                let exists = (isString( filePath ) && isFilePath( filePath )) ? await this.checkFilePath( filePath ) : false;
+
+                if ( !exists && isString( filePath ) )
                 {
-                    let dirname = resolvePath( pPath );
+                    let dirname = getDirectoryName( resolvePath( filePath ) );
                     if ( !isBlank( dirname ) )
                     {
                         exists = await this.checkFilePath( dirname );
@@ -2129,15 +2165,20 @@ const { _ud = "undefined", $scope } = constants;
 
         async resolveArguments( pFilePath, pDirectory, pOptions )
         {
-            let filepath = isString( pFilePath ) ? pFilePath : asArray( pFilePath );
+            let filepath = isString( pFilePath ) ? pFilePath : isArray( pFilePath ) ? resolvePath( ...(asArray( pFilePath )) ) : isFile( pFilePath ) ? resolvePath( asObject( pFilePath ).path, asObject( pFilePath ).name ) : _mt_str;
 
-            let exists = isString( filepath ) ? await this.checkFilePath( filepath ) : !isNull( filepath );
+            let exists = isString( filepath ) && !isBlank( filepath ) ? await this.checkFilePath( filepath ) : !isNull( filepath );
 
             let outputPath = pDirectory || this.outputDirectory || getDirectoryName( filepath );
 
             if ( isString( outputPath ) )
             {
                 exists &= await this.checkFilePath( outputPath );
+            }
+
+            if ( !exists )
+            {
+                exists = await asyncAttempt( async() => await this.createPath( outputPath ) );
             }
 
             const format = this.compressionFormat;

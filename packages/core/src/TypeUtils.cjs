@@ -5759,6 +5759,145 @@ const $scope = constants?.$scope || function()
         return implementsMethods( pObject, ...methods );
     }
 
+    const NON_DELEGATED_PROPERTIES = ["class", "length", "prototype", "__proto__", "constructor"];
+
+    /**
+     * Adds read-only properties to an object, the target (`pTarget`),
+     * that delegate to a source object, the delegate ('pDelegate') to return a value.
+     *
+     * If the target already defines a property with the same name, preserves that property.
+     *
+     * If the delegated property is a function,
+     * the returned function is bound to the delegate
+     * to preserve 'this' semantics within the function.
+     *
+     * @param {Object} pTarget - The target object to which to add properties and methods
+     * @param {Object} pDelegate - The source object to which to delegate
+     *                             when these properties are accessed or methods invoked.
+     *
+     * @param {Array<string>} [pOmitted=NON_DELEGATED_PROPERTIES] a list of properties and/or methods that should not be delegated
+     *
+     * @returns {boolean} - Returns true if any properties ere successfully delegated, false otherwise
+     */
+    const delegateTo = ( pTarget, pDelegate, pOmitted = [...NON_DELEGATED_PROPERTIES] ) =>
+    {
+        let delegated = false;
+
+        const target = asObject( pTarget );
+
+        const delegate = isFunction( pDelegate ) || isClass( pDelegate ) ? asObject( (pDelegate?.prototype || Object.getPrototypeOf( pDelegate )) ) : asObject( pDelegate );
+
+        let propertiesDelegated = [];
+
+        let omitted = [...(NON_DELEGATED_PROPERTIES || []), ...(pOmitted || [])];
+
+        let entries = attempt( () => objectEntries( delegate ) );
+
+        if ( entries && $ln( entries ) > 0 )
+        {
+            entries.forEach( entry =>
+                             {
+                                 const key = asString( ObjectEntry.getKey( entry ), true );
+
+                                 // Skip if the property already exists (e.g., from parent class)
+                                 // or is a property included in the omitted list
+                                 if ( !omitted.includes( key ) )
+                                 {
+                                     if ( !Object.hasOwn( target, key ) && !(key in target) )
+                                     {
+                                         Object.defineProperty( target,
+                                                                key,
+                                                                {
+                                                                    configurable: false,
+                                                                    enumerable: true,
+                                                                    get: function()
+                                                                    {
+                                                                        const value = delegate[key];
+
+                                                                        if ( isFunction( value ) )
+                                                                        {
+                                                                            return value.bind( delegate );
+                                                                        }
+
+                                                                        return value;
+                                                                    }
+                                                                } );
+
+                                         propertiesDelegated.push( key );
+
+                                         delegated = true;
+                                     }
+                                 }
+                             } );
+        }
+
+        let methods = attempt( () => getMethods( pDelegate ) );
+
+        if ( $ln( methods ) > 0 )
+        {
+            for( const method of methods )
+            {
+                let methodName = method?.name;
+
+                // cannot delegate to anonymous functions
+                if ( _mt === String( methodName ).trim() || "anonymous" === String( methodName ).trim() )
+                {
+                    continue;
+                }
+
+                if ( !(omitted.includes( methodName )) &&
+                     !(propertiesDelegated.includes( methodName ) &&
+                     !hasProperty( this, methodName )) )
+                {
+                    let delegateMethod = delegate[methodName] || method.bind( delegate );
+
+                    if ( isAsyncFunction( target[methodName] ) )
+                    {
+                        const originalMethod = target[methodName].bind( target );
+
+                        const newMethod = async function( ...pArgs )
+                        {
+                            let result = await originalMethod.call( target, ...pArgs );
+                            if ( null === result )
+                            {
+                                result = delegateMethod.call( delegate, ...pArgs );
+                            }
+                            return result;
+                        };
+
+                        target[methodName] = newMethod.bind( target );
+                    }
+                    else if ( isFunction( target[methodName] ) )
+                    {
+                        const originalMethod = target[methodName].bind( target );
+
+                        const newMethod = function( ...pArgs )
+                        {
+                            let result = originalMethod.call( target, ...pArgs );
+                            if ( null === result )
+                            {
+                                result = delegateMethod.call( delegate, ...pArgs );
+                            }
+                            return result;
+                        };
+
+                        target[methodName] = newMethod.bind( target );
+                    }
+                    else
+                    {
+                        target[methodName] = (delegateMethod || method).bind( delegate );
+
+                        propertiesDelegated.push( methodName );
+
+                        delegated = true;
+                    }
+                }
+            }
+        }
+
+        return delegated;
+    };
+
     const CONSTANTS =
         {
             DEFAULT_IS_OBJECT_OPTIONS,
@@ -5963,6 +6102,7 @@ const $scope = constants?.$scope || function()
             getMethods,
             implementsMethods,
             implementsInterface,
+            delegateTo,
 
             /**
              * The classes exported with this module.<br>

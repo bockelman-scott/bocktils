@@ -7311,11 +7311,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const immutableCopy = function( pObject, pOptions = IMMUTABLE_COPY_OPTIONS, pStack = [] )
     {
-        const options = { ...IMMUTABLE_COPY_OPTIONS, ...(pOptions || {}) };
+        const options = { ...IMMUTABLE_COPY_OPTIONS, ...(pOptions || {}), ...({ freeze: true }) };
 
         options.freeze = true;
 
-        return _copy( pObject, options, pStack );
+        return _copy( pObject, options, (pStack || []) );
     };
 
     /**
@@ -7592,7 +7592,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     const COMPARE_EQUAL = 0;
     const COMPARE_GREATER_THAN = 1;
 
-    const resolveComparator = ( pComparator ) => isFunc( pComparator?.compare ) ? pComparator : isFunc( pComparator ) ? { compare: pComparator } : { compare: ( a, b ) => (isNum( a ) && isNum( b )) ? (a - b) : ((a > b) ? 1 : ((a < b) ? 1 : 0)) };
+    const resolveComparator = ( pComparator ) => isFunc( pComparator?.compare ) ? pComparator : (isFunc( pComparator ) && $ln( pComparator ) >= 2) ? { compare: pComparator } : { compare: ( a, b ) => (isNum( a ) && isNum( b )) ? (a - b) : ((a > b) ? 1 : ((a < b) ? 1 : 0)) };
 
     const compare = ( pFirst, pSecond, pNullsFirst = true ) =>
     {
@@ -7652,12 +7652,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         if ( isFunc( comparator?.compare ) )
         {
-            return comparator.compare( pFirst, pSecond, pNullsFirst );
+            return attempt( () => comparator.compare( pFirst, pSecond, pNullsFirst ) );
+        }
+        else if ( isFunc( comparator ) )
+        {
+            return attempt( () => comparator.call( this, pFirst, pSecond, pNullsFirst ) );
         }
 
-        return null;
+        return COMPARE_EQUAL;
     };
-
 
     /**
      * Returns true if EXACTLY one condition is true.
