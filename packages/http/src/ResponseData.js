@@ -442,7 +442,7 @@ const {
                     // See https://axios-http.com/docs/handling_errors, for example
                     this.#frameworkResponse = pResponse?.response || pResponse || source?.response || source;
 
-                    this.#data = this.#frameworkResponse?.data || source?.data || options.data;
+                    this.#data = this.#frameworkResponse?.data || source?.data || this.#frameworkResponse?.body || source?.body || options.data;
 
                     this.#frameworkHeaders = this.#frameworkResponse?.headers || source?.headers || options.headers;
 
@@ -527,7 +527,7 @@ const {
 
         get data()
         {
-            let content = this.#data || this.frameworkResponse?.data || this.response?.data || this.options.data;
+            let content = this.#data || this.frameworkResponse?.data || this.response?.data || this.frameworkResponse?.body || this.response?.body || this.options.data;
 
             if ( isNull( content ) || (isString( content ) && isBlank( content )) )
             {
@@ -841,6 +841,11 @@ const {
 
             return false;
         }
+
+        async resolveData()
+        {
+            this.#data = await this.#data;
+        }
     }
 
     ResponseData.getRetryAfter = function( pResponse, pHeaders )
@@ -923,6 +928,33 @@ const {
         const options = asObject( pOptions || config || response );
 
         return new ResponseData( response, config, options );
+    };
+
+    ResponseData.asyncFrom = async function( pObject, pConfig, pOptions )
+    {
+        if ( ResponseData.isResponseData( pObject ) )
+        {
+            if ( isPromise( pObject.data ) )
+            {
+                await pObject.resolveData();
+            }
+
+            return pObject;
+        }
+
+        let obj = { ...(asObject( pObject || pConfig || pOptions || {} )) };
+
+        const response = obj?.response || pConfig?.response || pOptions?.response || obj;
+
+        const config = pConfig || obj?.config || response?.config;
+
+        const options = asObject( pOptions || config || response );
+
+        let responseData = new ResponseData( response, config, options );
+
+        await responseData.resolveData();
+
+        return responseData;
     };
 
     ResponseData.exceedsRateLimit = function( pResponseData )
