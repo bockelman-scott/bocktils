@@ -190,7 +190,7 @@ const {
          */
         constructor( pVerb )
         {
-            super( VERBS.indexOf( (pVerb || VERBS.GET) ), ucase( asString( (pVerb || VERBS.GET), true ) ) );
+            super( VERBS.indexOf( ucase( pVerb || VERBS.GET ) ), ucase( asString( (pVerb || VERBS.GET), true ) ) );
             this.#verb = ucase( asString( (pVerb || VERBS.GET), true ) );
         }
 
@@ -234,9 +234,11 @@ const {
     {
         if ( isString( pMethod ) && !isBlank( pMethod ) )
         {
-            if ( VERBS.indexOf( pMethod ) )
+            let method = ucase( asString( pMethod, true ) );
+
+            if ( VERBS.indexOf( method ) )
             {
-                return ((VERBS.values()).map( ucase )).includes( ucase( pMethod ) ) ? pMethod : VERBS.GET;
+                return ((VERBS.values()).map( ucase )).includes( method ) ? pMethod : VERBS.GET;
             }
 
             if ( isJson( pMethod ) )
@@ -244,14 +246,14 @@ const {
                 return HttpVerb.resolveHttpMethod( attempt( () => parseJson( pMethod ) ) ) || VERBS.GET;
             }
 
-            return ((VERBS.values()).map( ucase )).includes( ucase( pMethod ) ) ? pMethod : VERBS.GET;
+            return ((VERBS.values()).map( ucase )).includes( method ) ? pMethod : VERBS.GET;
         }
 
         if ( isNonNullObject( pMethod ) )
         {
             if ( pMethod instanceof HttpVerb )
             {
-                return HttpVerb.resolveHttpMethod( pMethod.name || pMethod?.verb );
+                return HttpVerb.resolveHttpMethod( pMethod?.name || pMethod?.verb );
             }
 
             return attempt( () => HttpVerb.resolveHttpMethod( ((pMethod["method"]) || (pMethod["headers"]?.["method"])) ) ) || VERBS.GET;
@@ -663,31 +665,31 @@ const {
              * because the resource is considered locked by the server,
              * we try again after 1 second, to allow time for the lock holder to release the lock
              */
-            [STATUS_CODES.LOCKED]: 1_000,
+            [STATUS_CODES.LOCKED]: 1_024,
 
             /**
              * When a request has been made prior to the retry-after time,
              * we try again in 500 milliseconds (unless we can read the retry-after header).
              */
-            [STATUS_CODES.TOO_EARLY]: 500,
+            [STATUS_CODES.TOO_EARLY]: 512,
 
             /**
              * When a request fails due to the performance of the server,
              * we can try again right away, so we wait 100 milliseconds.
              */
-            [STATUS_CODES.REQUEST_TIMEOUT]: 100,
+            [STATUS_CODES.REQUEST_TIMEOUT]: 128,
 
             /**
              * When a request fails because the server is (perhaps) temporarily offline,
              * we wait for 1 second before trying again to give the server time to recover.
              */
-            [STATUS_CODES.SERVICE_UNAVAILABLE]: 1_000,
+            [STATUS_CODES.SERVICE_UNAVAILABLE]: 1_024,
 
             /**
              * When a request fails because the server gateway is (perhaps) temporarily overloaded,
              * we wait for 250 milliseconds before trying again to give the gateway time to recover.
              */
-            [STATUS_CODES.GATEWAY_TIMEOUT]: 250
+            [STATUS_CODES.GATEWAY_TIMEOUT]: 256
         };
 
     /**

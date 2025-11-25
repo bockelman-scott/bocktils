@@ -140,6 +140,7 @@ const $scope = constants?.$scope || function()
             ToolBocksModule,
             ObjectEntry,
             IterationCap,
+            IllegalStateError,
             resolveOptions,
             populateOptions,
             attempt,
@@ -345,8 +346,8 @@ const $scope = constants?.$scope || function()
                      pRejectUnauthorized = false )
         {
             this.#keepAlive = !!pKeepAlive;
-            this.#keepAliveMsecs = isNullOrNaN( pKeepAliveMilliseconds ) ? 1_000 : Math.max( 1_000, Math.min( asInt( pKeepAliveMilliseconds ), 300_000 ) );
-            this.#maxFreeSockets = isNullOrNaN( pMaxFreeSockets ) ? Infinity : (Math.max( Math.min( asInt( pMaxFreeSockets, 256 ) ) ));
+            this.#keepAliveMsecs = isNullOrNaN( pKeepAliveMilliseconds ) ? 3_000 : clamp( asInt( pKeepAliveMilliseconds, 3_000 ), 1_000, 300_000 );
+            this.#maxFreeSockets = isNullOrNaN( pMaxFreeSockets ) ? Infinity : (clamp( asInt( pMaxFreeSockets, 256 ), 64, 1_024 ));
             this.#maxTotalSockets = isNullOrNaN( pMaxTotalSockets ) ? Infinity : (asInt( pMaxTotalSockets ) > 0 && asInt( pMaxTotalSockets ) > asInt( pMaxFreeSockets ) ? asInt( pMaxTotalSockets ) : Infinity);
             this.#rejectUnauthorized = !!pRejectUnauthorized;
         }
@@ -360,10 +361,10 @@ const $scope = constants?.$scope || function()
         {
             if ( isNullOrNaN( this.#keepAliveMsecs ) )
             {
-                return 1_000;
+                return 3_000;
             }
 
-            return Math.max( 1_000, Math.min( asInt( this.#keepAliveMsecs ), 300_000 ) );
+            return clamp( asInt( this.#keepAliveMsecs, 3_000 ), 1_000, 300_000 );
         }
 
         get maxFreeSockets()
@@ -373,7 +374,7 @@ const $scope = constants?.$scope || function()
                 return Infinity;
             }
 
-            return Math.max( Math.min( asInt( this.#maxFreeSockets, 256 ) ) );
+            return clamp( asInt( this.#maxFreeSockets, 256 ), 64, 1_024 );
         }
 
         get maxTotalSockets()
@@ -519,7 +520,9 @@ const $scope = constants?.$scope || function()
 
             this.#headers = { ...(properties?.headers || {}), ...(pHeaders || pProperties?.headers || {}) };
 
-            this.#url = cleanUrl( asString( pUrl, true ) );
+            let url = asString( pUrl, true );
+
+            this.#url = !isBlank( url ) ? cleanUrl( url ) : _mt;
 
             this.#method = resolveHttpMethod( pMethod );
 
@@ -621,12 +624,15 @@ const $scope = constants?.$scope || function()
 
         get url()
         {
-            return cleanUrl( asString( this.#url, true ) );
+            let url = asString( this.#url, true );
+            return isBlank( url ) ? _mt : cleanUrl( url );
         }
 
         set url( pUrl )
         {
-            this.#url = cleanUrl( asString( pUrl, true ) );
+            let url = asString( pUrl, true );
+
+            this.#url = isBlank( url ) ? asString( this.#url || _mt, true ) : cleanUrl( url );
         }
 
         get method()
@@ -636,7 +642,7 @@ const $scope = constants?.$scope || function()
 
         set method( pMethod )
         {
-            this.#method = resolveHttpMethod( asString( pMethod, true ) );
+            this.#method = resolveHttpMethod( asString( pMethod || this.#method, true ) );
         }
 
         get httpAgent()
@@ -711,8 +717,8 @@ const $scope = constants?.$scope || function()
 
             for( let cfg of configs )
             {
-                this.url = cleanUrl( cfg.url ) || this.url;
-                this.method = resolveHttpMethod( cfg.method ) || this.method;
+                this.url = !isBlank( cfg.url ) ? (cleanUrl( cfg.url ) || this.url) : this.url;
+                this.method = resolveHttpMethod( cfg.method || this.method ) || this.method;
                 this.httpAgent = resolveHttpAgent( cfg.httpAgent || this.httpAgent ) || this.httpAgent;
                 this.httpsAgent = resolveHttpsAgent( cfg.httpsAgent || this.httpsAgent ) || this.httpsAgent;
                 this.data = cfg.data || cfg.body || this.data;
@@ -792,7 +798,7 @@ const $scope = constants?.$scope || function()
             const host = hosts.shift();
             if ( isNonNullObject( host ) )
             {
-                httpConfig = isHttpConfig( host ) ? host : (host.config || host.httpConfig);
+                httpConfig = isHttpConfig( host ) ? host : (host.httpConfig || host.config);
             }
         }
 
@@ -1273,6 +1279,11 @@ const $scope = constants?.$scope || function()
     {
         if ( isNonNullObject( pDelegate ) )
         {
+            if ( pDelegate instanceof HttpClient )
+            {
+                return true;
+            }
+
             return isFunction( pDelegate.sendRequest ) ||
                    (isFunction( pDelegate.sendGetRequest ) &&
                     isFunction( pDelegate.sendPostRequest ) &&
@@ -1553,6 +1564,11 @@ const $scope = constants?.$scope || function()
             return fixAgents( { ...(toHttpConfigLiteral( this.#config || {} )) } );
         }
 
+        get httpConfig()
+        {
+            return new HttpConfig( this.config, this.config?.headers, this.config?.url, this.config?.method );
+        }
+
         get maxRedirects()
         {
             return this.config?.maxRedirects || this.options?.maxRedirects || 5;
@@ -1619,6 +1635,8 @@ const $scope = constants?.$scope || function()
 
             let retries = asInt( pRetries, 0 ) || 0;
 
+            let redirects = asInt( pRedirects, 0 ) || 0;
+
             if ( retries >= asInt( this.maxRetries ) )
             {
                 const error = new Error( "Maximum number of retries exceeded" );
@@ -1657,8 +1675,6 @@ const $scope = constants?.$scope || function()
                 {
                     const me = this;
 
-                    let redirects = asInt( pRedirects );
-
                     if ( redirects <= asInt( this.maxRedirects || cfg.maxRedirects ) )
                     {
                         let headers = responseData.headers;
@@ -1667,24 +1683,25 @@ const $scope = constants?.$scope || function()
 
                         if ( location && cleanUrl( asString( url, true ) ) !== location )
                         {
-                            return await me.doFetch( location, cfg, ++redirects, pRetries, pResolve, pReject );
+                            return await me.doFetch( location, cfg, ++redirects, retries, pResolve, pReject );
                         }
                     }
                     else
                     {
-                        throw new Error( "Exceeded Maximum Number of Redirects (" + asInt( me.maxRedirects || cfg.maxRedirects ) + ")" );
+                        throw new IllegalStateError( "Exceeded Maximum Number of Redirects (" + asInt( me.maxRedirects || cfg.maxRedirects ) + ")" );
                     }
                 }
                 else if ( responseData.isError() || !isNull( getLastError() ) )
                 {
-                    throw responseData?.error || getLastError() || new Error( "Failed to fetch data from " + url + ", Server returned: " + (responseData?.status || "no response") );
+                    throw resolveError( responseData?.error || getLastError() || new Error( "Failed to fetch data from " + url + ", Server returned: " + (responseData?.status || "no response") ) );
                 }
                 else
                 {
-                    throw new Error( "Failed to fetch data from " + url + ", Server returned: " + (responseData?.status || "no response") );
+                    throw resolveError( new Error( "Failed to fetch data from " + url + ", Server returned: " + (responseData?.status || "no response") ) );
                 }
             }
-            throw new Error( "Failed to fetch data from " + url + ", Server returned: " + (responseData?.status || "no response") );
+
+            throw resolveError( new Error( "Failed to fetch data from " + url + ", Server returned: " + (responseData?.status || "no response") ) );
         }
 
         async sendRequest( pMethod, pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
@@ -1703,9 +1720,9 @@ const $scope = constants?.$scope || function()
         {
             const config = isHttpConfig( pConfig ) ? toHttpConfigLiteral( this.mergeConfig( pConfig ) ) : asObject( pConfig || this.config );
 
-            const method = config?.method || pConfig?.method || VERBS.GET;
-            const url = config?.url || pConfig?.url || config;
-            const body = config?.body || config?.data || pConfig?.body || pConfig?.data;
+            const method = resolveHttpMethod( config?.method || pConfig?.method || VERBS.GET );
+            const url = this.resolveUrl( config?.url || pConfig?.url || config, config );
+            const body = this.resolveBody( config?.body || config?.data || pConfig?.body || pConfig?.data );
 
             return await this.sendRequest( method, url, pConfig, ([VERBS.POST, VERBS.PUT, VERBS.PATCH, VERBS.DELETE].includes( method ) ? body : undefined) );
         }
@@ -1763,7 +1780,7 @@ const $scope = constants?.$scope || function()
                     }
                     else
                     {
-                        throw new Error( "Exceeded Maximum Number of Redirects (" + asInt( me.maxRedirects || cfg.maxRedirects ) + ")" );
+                        throw new IllegalStateError( "Exceeded Maximum Number of Redirects (" + asInt( me.maxRedirects || cfg.maxRedirects ) + ")" );
                     }
                 }
                 else if ( responseData.isExceedsRateLimit() )
@@ -1777,7 +1794,7 @@ const $scope = constants?.$scope || function()
                     return await asyncAttempt( async() => await me.getRequestedData( url, cfg, pRedirects, ++retries ) );
                 }
             }
-            throw new Error( "Failed to fetch data from " + url + ", Server returned: " + (responseData?.status || "no response") );
+            throw resolveError( new Error( "Failed to fetch data from " + url + ", Server returned: " + (responseData?.status || "no response") ) );
         }
 
         async sendPostRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
@@ -1915,15 +1932,15 @@ const $scope = constants?.$scope || function()
 
         #maxRedirects = MAX_REDIRECTS;
 
-        constructor( pConfig = HttpConfig.getDefault(), pOptions = { ...DEFAULT_HTTP_CLIENT_OPTIONS }, pDelegates = new Map(), pDefaultDelegate = new HttpFetchClient() )
+        constructor( pConfig = HttpConfig.getDefault(), pOptions = { ...DEFAULT_HTTP_CLIENT_OPTIONS }, pDelegates = new Map(), pDefaultDelegate = new HttpFetchClient( pConfig, pOptions ) )
         {
             super();
 
-            this.#config = isHttpConfig( pConfig, true ) ? pConfig.merge( DEFAULT_HTTP_CONFIG, pConfig ) : new HttpConfig( { ...DEFAULT_CONFIG, ...(toHttpConfigLiteral( pConfig || {} )) } );
+            this.#config = isHttpConfig( pConfig, true ) ? pConfig.merge( DEFAULT_HTTP_CONFIG, pConfig ) : new HttpConfig( { ...DEFAULT_CONFIG, ...(toHttpConfigLiteral( asObject( pConfig || pDefaultDelegate?.httpConfig || pDefaultDelegate?.config || {} ) )) } );
 
-            this.#options = { ...DEFAULT_HTTP_CLIENT_OPTIONS, ...(pOptions || {}) };
+            this.#options = { ...DEFAULT_HTTP_CLIENT_OPTIONS, ...(asObject( pOptions || pDefaultDelegate?.options || {} )) };
 
-            this.#logger = ToolBocksModule.isLogger( this.#options?.logger ) ? this.#options.logger : konsole;
+            this.#logger = ToolBocksModule.resolveLogger( this.#options?.logger, konsole );
 
             this.#maxRedirects = asInt( this.#config.maxRedirects || this.#options.maxRedirects || 5, 5 );
 
@@ -1946,12 +1963,12 @@ const $scope = constants?.$scope || function()
 
         get logger()
         {
-            return ToolBocksModule.isLogger( this.#logger ) ? this.#logger : konsole;
+            return ToolBocksModule.resolveLogger( this.#logger, konsole );
         }
 
         set logger( pLogger )
         {
-            this.#logger = ToolBocksModule.isLogger( pLogger ) ? pLogger : this.#logger || konsole;
+            this.#logger = ToolBocksModule.resolveLogger( ToolBocksModule.isLogger( pLogger ) ? pLogger : (this.#logger || konsole), konsole );
         }
 
         get maxRedirects()
@@ -2150,7 +2167,7 @@ const $scope = constants?.$scope || function()
             }
             else
             {
-                throw new Error( "Exceeded Maximum Number of Redirects (" + asInt( me.maxRedirects || config.maxRedirects ) + ")" );
+                throw new IllegalStateError( "Exceeded Maximum Number of Redirects (" + asInt( me.maxRedirects || config.maxRedirects ) + ")" );
             }
         }
 
@@ -2210,10 +2227,10 @@ const $scope = constants?.$scope || function()
 
                         if ( retries > 5 )
                         {
-                            throw new Error( "Failed to fetch data from " + url + ", Server returned: " + (responseData?.status || "no response") + ", " + asString( responseData.headers ) );
+                            throw resolveError( new Error( "Failed to fetch data from " + url + ", Server returned: " + (responseData?.status || "no response") + ", " + asString( responseData.headers ) ) );
                         }
 
-                        let delay = Math.max( responseData.retryAfterMilliseconds, DEFAULT_RETRY_DELAY[status], 100 );
+                        let delay = Math.max( 128, responseData.retryAfterMilliseconds, DEFAULT_RETRY_DELAY[status] );
 
                         delay *= (retries + 1);
 
@@ -2222,7 +2239,7 @@ const $scope = constants?.$scope || function()
                         return await asyncAttempt( async() => await me.getRequestedData( url, cfg, ++retries ) );
                     }
                 }
-                throw new Error( "Failed to fetch data from " + url + ", Server returned: " + (responseData?.status || "no response") );
+                throw resolveError( new Error( "Failed to fetch data from " + url + ", Server returned: " + (responseData?.status || "no response") ) );
             }
         }
 
@@ -2363,7 +2380,7 @@ const $scope = constants?.$scope || function()
         {
             const { url, cfg } = await prepareRequestConfig( pUrl, (pConfig?.method || VERBS.POST), pConfig, pBody );
 
-            const delegate = this.getDelegate( VERBS.GET, cfg ) || new HttpFetchClient( cfg, this.options );
+            const delegate = this.getDelegate( cfg?.method || VERBS.POST, cfg ) || this.getDelegate( VERBS.POST, cfg ) || new HttpFetchClient( cfg, this.options );
 
             if ( isFunction( delegate?.upload ) )
             {
