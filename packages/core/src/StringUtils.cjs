@@ -3958,7 +3958,12 @@ const { _ud = "undefined", $scope } = constants;
                                pPreserveCase = true,
                                pAllowRepeatedParams = false )
     {
-        let url = asString( pStr instanceof URL ? pStr?.href || pStr : asString( pStr, true ), true );
+        let url = asString( pStr instanceof URL ? (pStr?.href || pStr) : asString( pStr, true ), true );
+
+        if ( isBlank( url ) )
+        {
+            return _mt_str;
+        }
 
         if ( _lct( url ).startsWith( "file:" ) )
         {
@@ -3983,7 +3988,7 @@ const { _ud = "undefined", $scope } = constants;
 
         if ( preserveProtocol )
         {
-            url = (protocol.replace( /:\/\/$/, _mt_str ) + "://") + url;
+            url = !isBlank( protocol ) ? ((protocol.replace( /:\/\/$/, _mt_str ) + "://") + url) : url;
         }
 
         const preserveTrailingSlash = options.preserveTrailingSlash && original.endsWith( "/" );
