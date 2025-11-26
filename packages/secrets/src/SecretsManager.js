@@ -4,7 +4,6 @@ const { SecretClient } = require( "@azure/keyvault-secrets" );
 const { ChainedTokenCredential, DefaultAzureCredential } = require( "@azure/identity" );
 
 const core = require( "@toolbocks/core" );
-const entityUtils = require( "@toolbocks/entities" );
 const fileUtils = require( "@toolbocks/files" );
 const jsonUtils = require( "@toolbocks/json" );
 
@@ -26,39 +25,43 @@ const $scope = constants?.$scope || function()
         return $scope()[INTERNAL_NAME];
     }
 
-    const {
-        moduleUtils,
-        constants,
-        typeUtils,
-        stringUtils,
-        arrayUtils
-    } = core;
+    const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
-    const {
-        ToolBocksModule,
-        ExecutionEnvironment,
-        ExecutionMode,
-        populateOptions,
-        populateProperties,
-        attempt,
-        asyncAttempt,
-        lock,
-        $ln
-    } = moduleUtils;
+    const
+        {
+            ToolBocksModule,
+            ExecutionEnvironment,
+            ExecutionMode,
+            populateOptions,
+            populateProperties,
+            attempt,
+            asyncAttempt,
+            lock,
+            $ln
+        } = moduleUtils;
 
     const { _mt_str, _mt = _mt_str, _hyphen, _underscore } = constants;
 
-    const { isNull, isString, isNumeric, isNonNullObject, isArray, isClass, isFunction } = typeUtils;
+    const
+        {
+            isNull,
+            isString,
+            isNumeric,
+            isNonNullObject,
+            isNonNullValue,
+            isArray,
+            isClass,
+            getClassName,
+            isFunction
+        } = typeUtils;
 
     const { asString, isBlank, ucase, lcase, asInt, isFilePath, isJson } = stringUtils;
 
     const { asArray, unique } = arrayUtils;
 
-    const { exists } = fileUtils;
+    const { exists, resolvePath, readFile } = fileUtils;
 
     const { parseJson } = jsonUtils;
-
-    const { BockNamed } = entityUtils;
 
     let KEYS =
         {
@@ -99,7 +102,7 @@ const $scope = constants?.$scope || function()
             TOKEN_URL: "TOKEN-URL",
             REDIRECT_URI: "REDIRECT-URI",
 
-            PERSONAL_ACCESS_TOKEN: "PERSONAL_ACCESS_TOKEN",
+            PERSONAL_ACCESS_TOKEN: "PERSONAL-ACCESS-TOKEN",
             API_KEY: "API-KEY",
             ACCESS_TOKEN: "ACCESS-TOKEN",
             API_VERSION: "API-VERSION",
@@ -111,6 +114,8 @@ const $scope = constants?.$scope || function()
 
             ORG_ID: "ORG-ID",
             USER_ID: "USER-ID",
+
+            SCOPES: "SCOPES",
 
             ADMIN_LOGIN_NAME: "ADMIN_LOGIN-NAME",
             ADMIN_LOGIN_PWD: "ADMIN_LOGIN-PWD"
@@ -139,7 +144,11 @@ const $scope = constants?.$scope || function()
 
     const calculateSecretsSource = function( pExecutionMode )
     {
-        return asString( process?.env?.["KV-NAME"] ) || "./.env";
+        let executionMode = pExecutionMode || ExecutionMode.calculate();
+
+        let secretsManagerMode = SecretsManagerMode.from( executionMode );
+
+        return secretsManagerMode?.useAzure ? process?.env?.["KV-NAME"] : "./.env";
     };
 
     // noinspection JSUnusedLocalSymbols
@@ -1036,23 +1045,38 @@ const $scope = constants?.$scope || function()
             keyStoreName: _mt
         };
 
-    class SecretsProvider extends BockNamed
+    class SecretsProvider
     {
+        #id;
+        #name;
+
         #options;
         #secretsManagerClass;
         #keyStoreName;
 
         constructor( pId, pName, pOptions )
         {
-            super( pId, pName );
-
             const options = populateOptions( pOptions, DEFAULT_PROVIDER_OPTIONS );
+
+            this.#id = asInt( pId, options.id ) || options.id || Date.now();
+
+            this.#name = asString( pName || options.name, true ) || getClassName( this );
 
             this.#secretsManagerClass = isClass( options.secretsManagerClass ) ? options.secretsManagerClass : isNonNullObject( options.secretsManagerClass ) ? Object.constructor( options.secretsManagerClass ) || (() => options.secretsManagerClass) : LocalSecretsManager;
 
             this.#keyStoreName = asString( options.keyStoreName || options.keyVaultName, true );
 
             this.#options = options;
+        }
+
+        get id()
+        {
+            return asInt( this.#id );
+        }
+
+        get name()
+        {
+            return asString( this.#name, true );
         }
 
         get options()
@@ -1241,7 +1265,7 @@ const $scope = constants?.$scope || function()
 
         if ( isNonNullObject( pObj ) )
         {
-            let mode = new SecretsManagerMode( pObj.id, pObj.name, pObj.provider || pObj.secretsProvider );
+            let mode = new SecretsManagerMode( pObj.id, pObj.name, pObj.secretsProvider || pObj.provider );
 
             return populateProperties( mode, pObj );
         }
@@ -1342,6 +1366,76 @@ const $scope = constants?.$scope || function()
         return factory.getSecretsManager( pOptions );
     };
 
+    async function migrateSecrets( pKeyVaultName = `BHLKV01`, pKeyVaultUrl = `https://${pKeyVaultName}.vault.azure.net` )
+    {
+        let numSecretsMigrated = 0;
+
+        const KEY_VAULT_NAME = asString( pKeyVaultName || "BHLKV01", true );
+        const KEY_VAULT_URL = pKeyVaultUrl || `https://${KEY_VAULT_NAME}.vault.azure.net`;
+
+        try
+        {
+            // DefaultAzureCredential will use the currently logged-in Azure CLI credentials
+            const credential = new DefaultAzureCredential();
+            const secretClient = new SecretClient( KEY_VAULT_URL, credential );
+
+            console.log( `Successfully connected to Key Vault: ${KEY_VAULT_NAME}` );
+
+            const envFilePath = resolvePath( [__dirname, "../.env"] );
+
+            console.log( `Starting migration of variables to Azure Key Vault, ${KEY_VAULT_URL}, from ${envFilePath}` );
+
+            const envFileContent = await asyncAttempt( async() => await readFile( envFilePath, "utf8" ) );
+
+            const lines = envFileContent.split( "\n" );
+
+            for( const line of lines )
+            {
+                const trimmedLine = line.trim();
+
+                // Skip comments and empty lines
+                if ( trimmedLine && !trimmedLine.startsWith( "#" ) )
+                {
+                    const [key, value] = trimmedLine.split( "=", 2 );
+
+                    if ( key && value )
+                    {
+                        // Best practice: Azure Key Vault secret names can only contain alphanumeric characters and dashes.
+                        const secretName = key.replace( /_/g, "-" );
+
+                        console.log( `Setting secret: '${secretName}'...` );
+
+                        // The setSecret method will create a new version if the secret already exists.
+                        const secret = await secretClient.setSecret( secretName, value );
+
+                        if ( isNonNullObject( secret ) || isNonNullValue( secret ) )
+                        {
+                            numSecretsMigrated += 1;
+
+                            console.log( `  -> Successfully set secret for '${secretName}'.` );
+                        }
+                        else
+                        {
+                            console.log( ` !! -> Could not set secret for '${secretName}' !!` );
+                        }
+                    }
+                }
+            }
+
+            console.log( "\nMigration complete. ", `${numSecretsMigrated} variables have been copied to the vault.` );
+        }
+        catch( error )
+        {
+            console.error( "\nAn error occurred during the migration process:", error );
+            if ( error.statusCode === 403 )
+            {
+                console.error( "This looks like a permission issue. Please ensure your account has the 'Key Vault Secrets Officer' role on the Key Vault's Access Policies." );
+            }
+        }
+
+        return numSecretsMigrated;
+    }
+
     /**
      * The actual functionality to be exposed via the toolBocksModule.
      *
@@ -1356,7 +1450,10 @@ const $scope = constants?.$scope || function()
                     constants,
                     typeUtils,
                     stringUtils,
-                    arrayUtils
+                    arrayUtils,
+                    SecretClient,
+                    ChainedTokenCredential,
+                    DefaultAzureCredential
                 },
             classes:
                 {
@@ -1365,7 +1462,10 @@ const $scope = constants?.$scope || function()
                     SecretsManager,
                     LocalSecretsManager,
                     AzureSecretsManager,
-                    SecretsManagerFactory
+                    SecretsManagerFactory,
+                    SecretClient,
+                    ChainedTokenCredential,
+                    DefaultAzureCredential
                 },
             SecretsProvider,
             SecretsManagerMode,
@@ -1390,7 +1490,8 @@ const $scope = constants?.$scope || function()
             addKey: SecretsManager.addKey,
             isValidKey: SecretsManager.isValidKey,
             getKeys: SecretsManager.getKeys,
-            SECRETS_KEYS: lock( SecretsManager.getKeys() )
+            SECRETS_KEYS: lock( SecretsManager.getKeys() ),
+            migrateSecrets
         };
 
     // extends the base module
