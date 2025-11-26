@@ -7024,6 +7024,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     {
         const clone = { ...(pClone || {}) };
 
+        attempt( () => Object.setPrototypeOf( clone, Object.getPrototypeOf( pClone || clone || {} ) ) );
+
         const entries = pEntries || objectEntries( clone );
 
         const options = resolveCopyOptions( pOptions );
@@ -7041,6 +7043,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 clone[key] = (typeof copiedValue === _fun) ? copiedValue.bind( clone ) : copiedValue;
             }
         }
+
+        attempt( () => Object.setPrototypeOf( clone, Object.getPrototypeOf( pClone || clone || {} ) ) );
 
         return clone;
     }
@@ -7067,6 +7071,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     const cloneObject = ( pObject, pOptions = DEFAULT_COPY_OPTIONS, pStack = [] ) =>
     {
         let clone = attempt( () => (isFunc( pObject?.clone )) ? pObject.clone() : (isObjectLiteral( pObject ) ? { ...pObject } : pObject) ) || {};
+
+        attempt( () => Object.setPrototypeOf( clone, Object.getPrototypeOf( pObject || clone || {} ) ) );
 
         const stack = [...(pStack || [])];
 
@@ -7119,6 +7125,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             delete clone["class"];
         }
+
+        attempt( () => Object.setPrototypeOf( clone, Object.getPrototypeOf( pObject || clone || {} ) ) );
 
         return clone;
     };
@@ -7229,6 +7237,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             attempt( () => delete clone["class"] );
         }
+
+        attempt( () => Object.setPrototypeOf( clone, Object.getPrototypeOf( pObject || clone || {} ) ) );
 
         return isFunc( pFreezeFunction ) ? attempt( () => pFreezeFunction( clone ) || clone ) : clone;
     }
