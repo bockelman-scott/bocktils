@@ -2137,8 +2137,21 @@ const $scope = constants?.$scope || function()
              * @type {function(*,*):number}
              * @alias module:ArrayUtils#Comparators#BY_STRING_VALUE
              * */
-            BY_NUMERIC_VALUE: function( a, b )
+            BY_NUMERIC_VALUE: function( pFirst, pSecond )
             {
+                let a = pFirst || 0;
+                let b = pSecond || 0;
+
+                if ( a instanceof Date )
+                {
+                    a = a.getTime();
+                }
+
+                if ( b instanceof Date )
+                {
+                    b = b.getTime();
+                }
+
                 let n1 = isNumeric( a ) ? asFloat( a ) : (isFunction( a?.valueOf ) ? asFloat( a.valueOf() ) : 0);
                 let n2 = isNumeric( b ) ? asFloat( b ) : (isFunction( b?.valueOf ) ? asFloat( b.valueOf() ) : 0);
 
