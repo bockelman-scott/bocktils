@@ -1549,26 +1549,41 @@ const $scope = constants?.$scope || function()
 
     const toUUID = function( pBigInt )
     {
+        if ( isUUID( pBigInt ) )
+        {
+            return pBigInt;
+        }
+
         if ( isNonNullObject( pBigInt ) )
         {
             let obj = asObject( pBigInt );
 
-            let uuid = obj["uuid"] || obj["guid"] || objectValues( obj ).find( e => isUUID( e ) );
+            let values = objectValues( obj );
+
+            let uuid = obj["uuid"] || obj["guid"] || values.find( e => isUUID( e ) );
 
             if ( isUUID( uuid ) )
             {
                 return uuid;
             }
 
-            uuid = objectValues( obj ).find( e => isBigInt( e ) );
+            uuid = values.find( e => isBigInt( e ) );
             if ( uuid && isBigInt( uuid ) )
             {
                 return toUUID( uuid );
             }
 
-            if ( isNonNullObject( obj.compoundId ) )
+            for( let val of values )
             {
-                return toUUID( obj.compoundId );
+                if ( isNonNullObject( val ) )
+                {
+                    uuid = objectValues( val ).find( e => isUUID( e ) );
+
+                    if ( isUUID( uuid ) )
+                    {
+                        return uuid;
+                    }
+                }
             }
 
             return _mt;
