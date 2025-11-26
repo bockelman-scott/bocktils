@@ -161,6 +161,7 @@ const $scope = constants?.$scope || function()
      */
     class SecretsManager
     {
+        #mode;
         #source = calculateSecretsSource();
         #system = _mt;
 
@@ -187,6 +188,8 @@ const $scope = constants?.$scope || function()
          */
         constructor( pSource = calculateSecretsSource(), pSystem, pOptions = {} )
         {
+            this.#mode = SecretsManagerMode.fromExecutionMode( toolBocksModule.executionMode );
+
             this.#source = pSource;
             this.#system = pSystem;
 
