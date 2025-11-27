@@ -40,11 +40,15 @@ const {
 {
     /**
      * This value is used to cache this module in the global scope.
-     * The name is chosen to reduce the odds of collisions with anything else that might already be in global scope.
+     * The name is chosen to reduce the odds of collisions with anything else
+     * that might already be in global scope.
+     *
      * This scope-pollution is an acceptable trade-off
      * to avoid re-executing the closure every time it is imported by another module or script.
-     * Even though some frameworks, such as Node.js have a cache of required modules,
+     *
+     * Even though some frameworks, such as Node.js, have a cache of required modules,
      * these cache this entire script rather than its effects.
+     *
      * @type {string}
      */
     const INTERNAL_NAME = "__BOCK__HTTP_HEADER_UTILS__";
@@ -82,23 +86,22 @@ const {
     // including the ToolBocksModule class which is instantiated and returned from this closure
     const { ToolBocksModule, ObjectEntry, attempt, objectEntries, lock, $ln } = moduleUtils;
 
-    // imports constants for the empty string and space, allowing for more readable use of these string literals
-    const { _mt_str = "", _mt = _mt_str, _spc = " " } = constants;
+    // imports constants for the empty string, allowing for more readable use of these string literals
+    const { _mt_str = "", _mt = _mt_str } = constants;
 
-    // import a number of functions to detect the type of a variable or to convert from one type to another
+    // import a number of functions to detect the type of a variable
+    // or to convert from one type to another
     const
         {
             isNull,
-            isObject,
+            isIterable,
             isArray,
-            is2dArray,
             isKeyValueArray,
             isMap,
             isFunction,
             isNonNullObject,
             isPopulatedObject,
             isString,
-            isScalar,
             toObjectLiteral
         } = typeUtils;
 
@@ -201,6 +204,11 @@ const {
      */
     function isWebApiHeadersObject( pObject )
     {
+        if ( _ud !== typeof Headers && pObject instanceof Headers )
+        {
+            return true;
+        }
+
         return (isNonNullObject( pObject ) &&
                 isFunction( pObject?.append ) &&
                 isFunction( pObject?.delete ) &&
@@ -279,16 +287,16 @@ const {
 
         let map = new Map();
 
-        const entries = attempt( () => objectEntries( input ).filter( ( entry ) => isHeader( asString( ObjectEntry.getKey( entry ), true ) ) ) );
+        const entries = attempt( () => objectEntries( input ).filter( ( entry ) => isHeader( asString( (ObjectEntry.getKey( entry ) || entry[0]), true ) ) ) );
 
-        if ( entries && $ln( entries ) > 0 )
+        if ( entries && isIterable( entries ) )
         {
             for( const entry of entries )
             {
                 if ( !isNull( entry ) )
                 {
-                    const key = asString( ObjectEntry.getKey( entry ), true );
-                    const value = asString( ObjectEntry.getValue( entry ) || key, true );
+                    const key = asString( (ObjectEntry.getKey( entry ) || entry[0]), true );
+                    const value = asString( (ObjectEntry.getValue( entry ) || entry[1] || key), true ) || key;
 
                     const existing = map.get( key ) || map.get( lcase( key ) ) || _mt_str;
 
@@ -306,41 +314,33 @@ const {
 
         let entries = attempt( () => isFunction( options?.entries ) ? options.entries() : attempt( () => objectEntries( options ) ) );
 
-        let arr = [...asArray( (entries || objectEntries( options ) || []) || [] )];
-
-        if ( $ln( arr ) <= 0 )
+        if ( !isNull( entries ) && isIterable( entries ) )
         {
-            if ( isPopulatedObject( options ) && !isArray( options ) )
-            {
-                return processHeaderObject( options );
-            }
-            else
-            {
-                let headers = new HttpHeaders();
+            let headers = new HttpHeaders();
 
-                if ( entries && $ln( entries ) > 0 )
+            for( let entry of entries )
+            {
+                const key = asString( (ObjectEntry.getKey( entry ) || entry[0]), true );
+
+                const value = asString( (ObjectEntry.getValue( entry ) || entry[1] || key), true ) || key;
+
+                if ( key && value )
                 {
-                    for( let entry of entries )
-                    {
-                        if ( entry && $ln( entry ) > 0 )
-                        {
-                            const key = asString( entry[0], true );
-
-                            const value = asString( entry[1] || entry[0], true ) || key;
-
-                            if ( key && value )
-                            {
-                                headers.append( key, value );
-                            }
-                        }
-                    }
+                    attempt( () => headers.append( key, value ) );
                 }
-
-                return headers;
             }
+
+            return headers;
         }
 
-        return attempt( () => processHeadersArray( arr ) );
+        if ( isPopulatedObject( options ) && !isArray( options ) )
+        {
+            return attempt( () => processHeaderObject( options ) );
+        }
+        else if ( isArray( options ) )
+        {
+            return attempt( () => processHeadersArray( asArray( options ) ) );
+        }
     }
 
     /**
@@ -374,7 +374,7 @@ const {
         {
             if ( isJson( pOptions ) )
             {
-                const obj = attempt( () => parseJson( pOptions ) );
+                const obj = attempt( () => asObject( parseJson( pOptions ) ) );
                 if ( isNonNullObject( obj ) )
                 {
                     return attempt( () => processHeaderObject( obj ) );
@@ -382,7 +382,7 @@ const {
             }
             else
             {
-                return attempt( () => processHeadersArray( asString( pOptions, true ).split( /\r?\n/ ) ) );
+                return attempt( () => processHeadersArray( asString( pOptions, true ).split( /(\r?\n)+/ ).map( e => asString( e, true ).split( /:=/ ) ) ) );
             }
         }
 
@@ -439,8 +439,8 @@ const {
                                                             const existing = me.get( key ) || me.get( lcase( key ) );
                                                             const val = (existing ? existing + ", " : _mt) + value;
 
-                                                            this.set( key, val );
-                                                            this.#map.set( key, val );
+                                                            attempt( () => me.set( key, val ) );
+                                                            attempt( () => me.#map.set( key, val ) );
                                                         }
                                                     } ) );
                 }
@@ -501,21 +501,33 @@ const {
         set( pKey, pValue )
         {
             const me = this;
+
             attempt( () => super.set( pKey, pValue ) );
+
             attempt( () => me.#map.set( pKey, pValue ) );
         }
 
         toLiteral()
         {
+            const me = this;
+
             let literal = {};
 
-            let entries = objectEntries( this || this.#map );
+            let map = this.#map || me.#map || me;
 
-            entries.forEach( ( [key, value] ) => literal[key] = asString( isArray( value ) ? value.join( ", " ) : value ) );
+            let entries = attempt( () => objectEntries( me || map ) );
 
-            entries = objectEntries( this.#map );
+            if ( entries )
+            {
+                entries.forEach( ( [key, value] ) => literal[key] = asString( isArray( value ) ? value.join( ", " ) : value ) );
+            }
 
-            entries.forEach( ( [key, value] ) => literal[key] = literal[key] || (asString( isArray( value ) ? value.join( ", " ) : value )) );
+            entries = objectEntries( map );
+
+            if ( entries )
+            {
+                entries.forEach( ( [key, value] ) => literal[key] = literal[key] || (asString( isArray( value ) ? value.join( ", " ) : value )) );
+            }
 
             return lock( literal );
         }
@@ -551,7 +563,7 @@ const {
 
         [Symbol.toPrimitive]()
         {
-            return this.toLiteral();
+            return this.toString();
         }
     }
 
@@ -641,7 +653,6 @@ const {
             HttpHeaders,
             HttpRequestHeaders,
             HttpResponseHeaders,
-            processHeaderOptions,
             getHeaderValue
         };
 
