@@ -450,6 +450,7 @@ const $scope = constants?.$scope || function()
 
     let mod =
         {
+            TYPES,
             dependencies:
                 {
                     moduleUtils,
@@ -463,7 +464,6 @@ const $scope = constants?.$scope || function()
                     Collection,
                     SortedSet
                 },
-            TYPES,
             Collection,
             SortedSet
         };
