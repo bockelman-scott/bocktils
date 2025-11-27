@@ -5177,6 +5177,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
     }
 
+    class IllegalAccessError extends __Error
+    {
+        constructor( pMsgOrErr, pOptions, ...pArgs )
+        {
+            super( pMsgOrErr, pOptions, ...pArgs );
+        }
+    }
+
     function _fromErrorArray( pError, pMessage, pErrors )
     {
         for( let i = 0, n = $ln( pError ); i < n; i++ )
@@ -7909,6 +7917,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             ExecutionMode,
             IllegalArgumentError,
             IllegalStateError,
+            IllegalAccessError,
             IterationCap,
             SourceInfo,
             StackTrace,
@@ -7964,6 +7973,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     __Error,
                     IllegalArgumentError,
                     IllegalStateError,
+                    IllegalAccessError,
                     IterationCap,
                     ModuleArgs,
                     ModuleEvent: ToolBocksModuleEvent,
