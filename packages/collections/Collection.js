@@ -529,7 +529,7 @@ const $scope = constants?.$scope || function()
                 {
                     if ( this.isCompatibleWith( pOther ) )
                     {
-                        return pOther.containsAll( ...(asArray( this.toArray() )) );
+                        return pOther.containsAll( ...(asArray( this.toArray() )) ) && this.containsAll( ...(asArray( pOther.toArray() )) );
                     }
                 }
             }
