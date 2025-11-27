@@ -2095,8 +2095,31 @@ const $scope = constants?.$scope || function()
                 {
                     let type = pType || typeof a;
 
-                    let aa = Filters.IS_NOT_NULL( a ) ? castTo( a, type ) : defaultFor( type );
-                    let bb = Filters.IS_NOT_NULL( b ) ? castTo( b, type ) : defaultFor( type );
+                    let aa, bb;
+
+                    if ( isClass( pType ) )
+                    {
+                        aa = a instanceof pType ? a : (Filters.IS_NOT_NULL( a ) ? castTo( a, type ) : defaultFor( type ));
+                        bb = b instanceof pType ? b : (Filters.IS_NOT_NULL( b ) ? castTo( b, type ) : defaultFor( type ));
+
+                        if ( isFunction( a?.compareTo || aa?.compareTo ) )
+                        {
+                            return (a?.compareTo || aa?.compareTo)( bb || b ) || (a?.compareTo || aa?.compareTo)( b );
+                        }
+
+                        if ( isFunction( b?.compareTo || bb?.compareTo ) )
+                        {
+                            return -(b?.compareTo || bb?.compareTo)( aa || a ) || (b?.compareTo || bb?.compareTo)( a );
+                        }
+
+                        if ( isFunction( pType["compare"] ) )
+                        {
+                            return pType["compare"]( aa || a, bb || b ) || pType["compare"]( a, b );
+                        }
+                    }
+
+                    aa = Filters.IS_NOT_NULL( a ) ? castTo( a, type ) : defaultFor( type );
+                    bb = Filters.IS_NOT_NULL( b ) ? castTo( b, type ) : defaultFor( type );
 
                     return [_num, _big].includes( type ) ? Comparators._compareNumeric( aa, bb ) : Comparators._compare( aa, bb );
                 };

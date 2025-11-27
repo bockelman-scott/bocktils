@@ -842,6 +842,41 @@ const $scope = constants?.$scope || function()
      */
     const isEvent = ( pObj ) => isObject( pObj ) && (pObj instanceof Event || pObj instanceof CustomEvent || pObj instanceof ModuleEvent);
 
+
+    /**
+     * Returns true if the value passed represents a JavaScript Class<br>
+     * JavaScript classes return "function" for the typeof operator,<br>
+     * so this function is necessary to determine the difference<br>
+     * between a function and a class definition<br>
+     *
+     * @param {function} pFunction A function to evaluate
+     * @param {boolean} [pStrict=true] Specify false to consider built-in types as classes
+     *
+     * @returns {boolean} true if the function specified is a class definition
+     *
+     * @alias module:TypeUtils.isClass
+     */
+    const isClass = function( pFunction, pStrict = true )
+    {
+        if ( isNull( pFunction ) )
+        {
+            return false;
+        }
+
+        if ( isFunction( pFunction ) ||
+             ( !pStrict && (BUILTIN_TYPE_NAMES.includes( pFunction?.name )
+                            || BUILTIN_TYPES.includes( pFunction ))) )
+        {
+            return ( !pStrict &&
+                     (BUILTIN_TYPE_NAMES.includes( pFunction?.name ) ||
+                      BUILTIN_TYPES.includes( pFunction )))
+                   || /^class\s/.test( (functionToString.call( pFunction, pFunction )).trim() );
+        }
+
+        return false;
+    };
+
+
     /**
      * Returns the first object that is an instance of Error from the provided input.<br>
      * <br>
@@ -2321,18 +2356,18 @@ const $scope = constants?.$scope || function()
     {
         const typeName = (isString( pType ) && JS_TYPES.includes( pType )) ?
                          (pType).trim().toLowerCase() :
-                         (isFunction( pType ) ? _fun : typeof pType);
+                         ((isFunction( pType ) || isClass( pType, false )) ? _fun : typeof pType);
 
-        if ( JS_TYPES.includes( typeName ) && (typeof pValue) === typeName )
+        if ( JS_TYPES.includes( typeName ) )
         {
             if ( _fun === typeName )
             {
-                return isNonNullObject( pValue ) && isFunction( pType ) ? pValue instanceof pType : isFunction( pValue );
+                return isNonNullObject( pValue ) && isClass( pType, false ) ? pValue instanceof pType : isFunction( pValue );
             }
-            return true;
+            return ((typeof pValue) === typeName);
         }
 
-        if ( isObject( pValue ) && isFunction( pType ) )
+        if ( isNonNullObject( pValue ) && isClass( pType ) )
         {
             return pValue instanceof pType;
         }
@@ -2693,39 +2728,6 @@ const $scope = constants?.$scope || function()
             {
                 // ignored
             }
-        }
-
-        return false;
-    };
-
-    /**
-     * Returns true if the value passed represents a JavaScript Class<br>
-     * JavaScript classes return "function" for the typeof operator,<br>
-     * so this function is necessary to determine the difference<br>
-     * between a function and a class definition<br>
-     *
-     * @param {function} pFunction A function to evaluate
-     * @param {boolean} [pStrict=true] Specify false to consider built-in types as classes
-     *
-     * @returns {boolean} true if the function specified is a class definition
-     *
-     * @alias module:TypeUtils.isClass
-     */
-    const isClass = function( pFunction, pStrict = true )
-    {
-        if ( isNull( pFunction ) )
-        {
-            return false;
-        }
-
-        if ( isFunction( pFunction ) ||
-             ( !pStrict && (BUILTIN_TYPE_NAMES.includes( pFunction?.name )
-                            || BUILTIN_TYPES.includes( pFunction ))) )
-        {
-            return ( !pStrict &&
-                     (BUILTIN_TYPE_NAMES.includes( pFunction?.name ) ||
-                      BUILTIN_TYPES.includes( pFunction )))
-                   || /^class\s/.test( (functionToString.call( pFunction, pFunction )).trim() );
         }
 
         return false;
