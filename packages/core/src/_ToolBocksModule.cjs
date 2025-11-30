@@ -2904,6 +2904,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          *
          * @param {Object|Function} pObjectA The first of 2 objects or functions to compare
          * @param {Object|Function} pObjectB The object or function to compare to the first
+         * @param pStack
          * @returns {boolean} true if the specified objects or functions
          *                    are the same object or function
          *                    or if the 2 objects appear to represent the same data.
@@ -2912,12 +2913,20 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          *                    To accurately and reliably compare 2 objects for equality,
          *                    use the ObjectUtils package
          */
-        similar( pObjectA, pObjectB )
+        similar( pObjectA, pObjectB, pStack = [] )
         {
-            // if they are the same object or function, true
-            if ( this.identical( pObjectA, pObjectB ) )
+            // if they are the same value, object, or function, return true
+            if ( pObjectA === pObjectB || this.identical( pObjectA, pObjectB ) )
             {
                 return true;
+            }
+
+            const stack = [...(pStack || [])];
+
+            if ( detectCycles( stack, 3, 3 ) )
+            {
+                konsole.error( `An infinite loop was encountered while comparing 2 objects: stack=[${stack.join( "->" )}]` );
+                return false;
             }
 
             // if both values are objects
@@ -2936,43 +2945,88 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 const commonKeysA = [...keysA].filter( e => keysB.includes( e ) );
                 const commonKeysB = [...keysB].filter( e => keysA.includes( e ) );
 
-                // if the collections of common property name are of different lengths, return false
-                if ( $ln( commonKeysA ) !== $ln( keysB ) || $ln( commonKeysB ) !== $ln( keysA ) )
+                // if the collections of common property names are of different lengths, return false
+                if ( $ln( commonKeysA ) !== $ln( commonKeysB ) ||
+                     $ln( commonKeysA ) !== $ln( keysB ) ||
+                     $ln( commonKeysB ) !== $ln( keysA ) )
                 {
                     return false;
                 }
 
                 // if both objects have the same set of properties,
-                // we compare the properties for exact equality
+                // we recursively compare their properties
                 for( let key of keysA )
                 {
-                    if ( isPrimitive( pObjectA[key] ) )
+                    let valueA = pObjectA[key];
+                    let valueB = pObjectB[key];
+
+                    if ( (isNull( valueA ) && !isNull( valueB )) || ( !isNull( valueA ) && isNull( valueB )) )
                     {
-                        if ( pObjectA[key] !== pObjectB[key] )
+                        return false;
+                    }
+
+                    if ( isPrimitive( valueA ) )
+                    {
+                        if ( valueA !== valueB )
                         {
                             return false;
                         }
                     }
-                    else if ( isPrimitiveWrapper( pObjectA[key] ) && isPrimitiveWrapper( pObjectB ) )
+                    else if ( isPrimitiveWrapper( valueA ) && isPrimitiveWrapper( valueB ) )
                     {
-                        if ( pObjectA[key].valueOf() !== pObjectB[key].valueOf() )
+                        let a = isFunction( valueA.valueOf ) ? valueA.valueOf() : isFunction( valueA.toString ) ? valueA.toString() : (_mt + valueA);
+
+                        let b = isFunction( valueB.valueOf ) ? valueB.valueOf() : isFunction( valueB.toString ) ? valueB.toString() : (_mt + valueB);
+
+                        if ( a !== b )
                         {
                             return false;
                         }
                     }
-                    else if ( $ln( pObjectA[key] ) !== $ln( pObjectB[key] ) )
+                    else if ( isNonNullObj( valueA ) && isNonNullObj( valueB ) )
+                    {
+                        if ( !this.similar( valueA, valueB, [...stack, key] ) )
+                        {
+                            return false;
+                        }
+                    }
+                    else if ( $ln( valueA ) !== $ln( valueB ) )
                     {
                         return false;
                     }
                 }
 
-                // if we get this far, the objects might not be the same
-                // they are certainly similar
+                // if we get this far, the objects might not be the same,
+                // but they are certainly similar
                 return true;
             }
             else if ( isFunc( pObjectA ) && isFunc( pObjectB ) )
             {
                 return String( _mt_str + functionToString.call( pObjectA ) ).trim() === String( _mt_str + functionToString.call( pObjectB ) ).trim();
+            }
+
+            return false;
+        }
+
+        areEqual( pObjectA, pObjectB, pStack = [] )
+        {
+            if ( pObjectA === pObjectB || this.identical( pObjectA, pObjectB ) )
+            {
+                return true;
+            }
+
+            const stack = [...(pStack || [])];
+
+            if ( detectCycles( stack, 3, 3 ) )
+            {
+                konsole.error( `An infinite loop was encountered while comparing 2 objects: stack=[${stack.join( "->" )}]` );
+                return false;
+            }
+
+            if ( this.similar( pObjectA, pObjectB, stack ) )
+            {
+                //TODO: additional checks
+                return true;
             }
 
             return false;
@@ -7702,6 +7756,117 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return conditions.length < [...(pConditions || [])].length;
     };
 
+    /**
+     * Base class to be used for all objects in a domain, if desired.
+     */
+    class ToolBocksObject
+    {
+        #__eventTarget;
+        #__constructedWith;
+
+        constructor()
+        {
+            this.#__eventTarget = new EventTarget();
+
+            this.#__constructedWith = (arguments && arguments.length) ? [...arguments] : [];
+        }
+
+        dispatchEvent( pEvent )
+        {
+            return this.#__eventTarget.dispatchEvent( resolveEvent( pEvent, pEvent?.data || pEvent?.detail || pEvent, { source: this } ) );
+        }
+
+        addEventListener( pType, pHandler, pOptions )
+        {
+            this.#__eventTarget.addEventListener( pType, pHandler, pOptions );
+        }
+
+        removeEventListener( pType, pHandler, pOptions )
+        {
+            this.#__eventTarget.removeEventListener( pType, pHandler, pOptions );
+        }
+
+        get instanceId()
+        {
+            return OBJECT_REGISTRY.getGuid( this );
+        }
+
+        get instanceCreated()
+        {
+            return OBJECT_REGISTRY.getCreated( this );
+        }
+
+        clone()
+        {
+            let obj = localCopy( this );
+
+            Object.setPrototypeOf( obj, Object.getPrototypeOf( this ) );
+
+            return obj;
+        }
+
+        equals( pOther )
+        {
+            return OBJECT_REGISTRY.identical( this, pOther ) || OBJECT_REGISTRY.similar( this, pOther );
+        }
+
+        compareTo( pOther )
+        {
+            if ( isNull( pOther ) || !isObj( pOther ) )
+            {
+                return -1;
+            }
+
+            if ( this.equals( pOther ) )
+            {
+                return 0;
+            }
+
+            let comp = 0;
+
+            let props = ["name", "lastModified", "lastModifiedDate", "createdDate", "id"];
+
+            while ( 0 === comp && $ln( props ) > 0 )
+            {
+                let prop = props.shift();
+
+                if ( hasProperty( this, prop ) && hasProperty( pOther, prop ) )
+                {
+                    let a = attempt( () => getProperty( this, prop ) );
+                    let b = attempt( () => getProperty( pOther, prop ) );
+
+                    comp = (_num === typeof a && _num === typeof b) ? (a - b) : (a < b ? -1 : a > b ? 1 : 0);
+                }
+            }
+
+            return comp;
+        }
+
+        serialize()
+        {
+            const me = this;
+
+            let s = String( attempt( () => JSON.stringify( me ) || JSON.stringify( me.clone() ) ) ) || String( attempt( () => JSON.stringify( me.clone() ) ) );
+
+            if ( _mt === String( s ).trim() )
+            {
+                s = `![ENTRIES=[` + objectEntries( this ).map( e => [ObjectEntry.getKey( e ), ToolBocksObject.serialize( Object.getValue( e ) )] ) + `]]`;
+            }
+
+            return s;
+        }
+
+    }
+
+    ToolBocksObject.serialize = function( pObject, pStack = [] )
+    {
+        return JSON.stringify( pObject );
+    };
+
+    ToolBocksObject.deserialize = function( pData, pClass )
+    {
+
+    };
 
     const mod =
         {

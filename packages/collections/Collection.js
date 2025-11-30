@@ -44,6 +44,7 @@ const $scope = constants?.$scope || function()
 
     const
         {
+            OBJECT_REGISTRY = $scope()["__BOCK_OBJECT_REGISTRY__"],
             ModuleEvent,
             ToolBocksModule,
             IllegalArgumentError,
@@ -63,6 +64,7 @@ const $scope = constants?.$scope || function()
             isFunction,
             isClass,
             isIterable,
+            isString,
             getClass,
             getClassName,
             toIterable
@@ -70,7 +72,7 @@ const $scope = constants?.$scope || function()
 
     const { asString, asInt } = stringUtils;
 
-    const { asArray, includesAll, Filters } = arrayUtils;
+    const { asArray, includesAll, Filters, Mappers } = arrayUtils;
 
     const modName = "BockCollectionUtils_Collection";
 
@@ -142,16 +144,21 @@ const $scope = constants?.$scope || function()
             return true;
         }
 
-        // 2. Custom equals() method check
-        if ( isFunction( e?.equals ) )
+        if ( isNonNullObject( e ) )
         {
-            return e.equals( item );
-        }
+            // use equals() method if defined
+            if ( isFunction( e?.equals ) )
+            {
+                return e.equals( item );
+            }
 
-        // 3. Custom compareTo() method check
-        if ( isFunction( e?.compareTo ) )
-        {
-            return 0 === e.compareTo( item );
+            // use compareTo() method if defined
+            if ( isFunction( e?.compareTo ) )
+            {
+                return 0 === e.compareTo( item );
+            }
+
+            return OBJECT_REGISTRY.areEqual( e, item );
         }
 
         return false;
@@ -286,7 +293,7 @@ const $scope = constants?.$scope || function()
          * @return {Array} - The resulting array after applying the optional mapping function
          *                   or directly converting the internal data structure to an array.
          */
-        toArray( pMappingFunction )
+        toArray( pMappingFunction = Mappers.IDENTITY )
         {
             let arr = [...(asArray( this.#arr || [] ))];
 
@@ -506,7 +513,7 @@ const $scope = constants?.$scope || function()
         {
             if ( isNonNullObject( pOther ) )
             {
-                return this.type === pOther.type ||
+                return (isString( this.type ) && isString( pOther.type ) && this.type === pOther.type) ||
                        ((isClass( this.type ) && isClass( pOther.type )) &&
                         (this.type instanceof pOther.type || pOther.type instanceof this.type));
             }

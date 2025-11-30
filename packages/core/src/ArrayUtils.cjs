@@ -59,6 +59,7 @@ const $scope = constants?.$scope || function()
     }
 
     const {
+        OBJECT_REGISTRY = $scope()["__BOCK_OBJECT_REGISTRY__"],
         ModuleEvent,
         ToolBocksModule,
         IllegalArgumentError,
@@ -3692,6 +3693,32 @@ const $scope = constants?.$scope || function()
         }
     };
 
+    const contains = function( pArr, pElem )
+    {
+        const arr = [...(asArray( pArr ))];
+
+        if ( arr.includes( pElem ) ||
+             arr.some( e => isNonNullObject( e ) && isFunction( e.equals ) ? e.equals( pElem ) : e === pElem ) )
+        {
+            return true;
+        }
+
+        let result = false;
+
+        for( let i = 0, n = $ln( arr ); i < n && false === result; i++ )
+        {
+            let elem = arr[i];
+
+            if ( OBJECT_REGISTRY.areEqual( elem, pElem ) )
+            {
+                result = true;
+                break;
+            }
+        }
+
+        return result;
+    };
+
     /**
      * Returns true if the array includes any of the values specified
      *
@@ -3710,6 +3737,19 @@ const $scope = constants?.$scope || function()
         return a.some( e => b.includes( e ) );
     };
 
+    const containsAny = function( pArr, ...pSearchFor )
+    {
+        if ( includesAny( pArr, ...pSearchFor ) )
+        {
+            return true;
+        }
+
+        const a = [...(asArray( pArr ))];
+        const b = [...(asArgs( ...pSearchFor ))];
+
+        return a.some( e => contains( b, e ) );
+    };
+
     const includesAll = function( pArr, ...pSearchFor )
     {
         const a = [...(asArray( pArr ))];
@@ -3721,6 +3761,19 @@ const $scope = constants?.$scope || function()
         }
 
         return b.every( e => a.includes( e ) );
+    };
+
+    const containsAll = function( pArr, ...pSearchFor )
+    {
+        if ( includesAll( pArr, ...pSearchFor ) )
+        {
+            return true;
+        }
+
+        const a = [...(asArray( pArr ))];
+        const b = [...(asArgs( ...pSearchFor ))];
+
+        return a.every( e => contains( b, e ) );
     };
 
     /**
@@ -5762,8 +5815,11 @@ const $scope = constants?.$scope || function()
             },
             calculateLength,
             arraysEqual,
+            contains,
             includesAny,
+            containsAny,
             includesAll,
+            containsAll,
             areSubsets,
             superset,
             union,
