@@ -84,7 +84,7 @@ const {
 
     // get the classes and functions we use from moduleUtils,
     // including the ToolBocksModule class which is instantiated and returned from this closure
-    const { ToolBocksModule, ObjectEntry, attempt, objectEntries, lock, $ln } = moduleUtils;
+    const { ToolBocksModule, ObjectEntry, IllegalStateError, attempt, objectEntries, lock, no_op, $ln } = moduleUtils;
 
     // imports constants for the empty string, allowing for more readable use of these string literals
     const { _mt_str = "", _mt = _mt_str } = constants;
@@ -102,6 +102,7 @@ const {
             isNonNullObject,
             isPopulatedObject,
             isString,
+            implementsInterface,
             toObjectLiteral
         } = typeUtils;
 
@@ -312,23 +313,26 @@ const {
     {
         let options = isArray( pOptions ) ? asArray( pOptions || [] ) : asObject( pOptions || {} );
 
-        let entries = attempt( () => isFunction( options?.entries ) ? options.entries() : attempt( () => objectEntries( options ) ) );
+        let entries = attempt( () => objectEntries( options ) ) || (isFunction( options?.entries ) ? attempt( () => options.entries() ) : options);
 
         if ( !isNull( entries ) && isIterable( entries ) )
         {
-            let headers = new HttpHeaders();
+            const headers = new HttpHeaders();
 
-            for( let entry of entries )
-            {
-                const key = asString( (ObjectEntry.getKey( entry ) || entry[0]), true );
+            attempt( () => entries.forEach( entry =>
+                                            {
+                                                if ( entry )
+                                                {
+                                                    const key = asString( (ObjectEntry.getKey( entry ) || entry[0]), true );
 
-                const value = asString( (ObjectEntry.getValue( entry ) || entry[1] || key), true ) || key;
+                                                    const value = asString( (ObjectEntry.getValue( entry ) || entry[1] || key), true ) || key;
 
-                if ( key && value )
-                {
-                    attempt( () => headers.append( key, value ) );
-                }
-            }
+                                                    if ( key && value )
+                                                    {
+                                                        attempt( () => headers.append( key, value ) );
+                                                    }
+                                                }
+                                            } ) );
 
             return headers;
         }
@@ -417,22 +421,41 @@ const {
     {
         #map = new Map();
 
+        #webApiHeaders = attempt( () => (_ud === typeof Headers) ? null : attempt( () => new Headers() ) );
+
         constructor( pOptions )
         {
             super();
 
             const me = this;
 
-            if ( !isNull( pOptions ) )
-            {
-                const entries = attempt( () => objectEntries( processHeaderOptions( pOptions ) ) );
+            let options = isNull( pOptions ) ? {} : (isArray( pOptions ) ? asArray( pOptions || [] ) : asObject( pOptions || {} ));
 
-                if ( entries )
+            if ( !isNull( options ) )
+            {
+                try
                 {
-                    attempt( () => entries.forEach( entry =>
+                    if ( !isNull( this.#webApiHeaders ) && (isKeyValueArray( options ) || isPopulatedObject( options ) || implementsInterface( options, Headers )) )
+                    {
+                        this.#webApiHeaders = new Headers( options );
+                    }
+                }
+                catch( ex )
+                {
+                    // ignored
+                }
+            }
+
+            let entries = attempt( () => objectEntries( processHeaderOptions( options ) ) ) || (isFunction( options?.entries ) ? attempt( () => options.entries() ) : options);
+
+            if ( !isNull( entries ) && isIterable( entries ) )
+            {
+                attempt( () => entries.forEach( entry =>
+                                                {
+                                                    if ( entry )
                                                     {
-                                                        const key = ObjectEntry.getKey( entry );
-                                                        const value = ObjectEntry.getValue( entry );
+                                                        const key = attempt( () => ObjectEntry.getKey( entry ) || entry[0] );
+                                                        const value = attempt( () => ObjectEntry.getValue( entry ) || entry[1] ) || key;
 
                                                         if ( key && value )
                                                         {
@@ -442,8 +465,8 @@ const {
                                                             attempt( () => me.set( key, val ) );
                                                             attempt( () => me.#map.set( key, val ) );
                                                         }
-                                                    } ) );
-                }
+                                                    }
+                                                } ) );
             }
         }
 
@@ -468,16 +491,43 @@ const {
         {
             const me = this;
 
-            attempt( () => me.#map.delete( pKey ) );
-            attempt( () => me.#map.delete( lcase( pKey ) ) );
+            const key = asString( pKey, true );
 
-            return attempt( () => super.delete( pKey ) ) || attempt( () => super.delete( lcase( pKey ) ) );
+            if ( isBlank( key ) )
+            {
+                return false;
+            }
+
+            attempt( () => me.#map.delete( key ) );
+            attempt( () => me.#map.delete( lcase( key ) ) );
+
+            if ( isNonNullObject( me.#webApiHeaders ) && isFunction( me.#webApiHeaders.delete ) )
+            {
+                attempt( () => !isNull( me.#webApiHeaders ) ? me.#webApiHeaders.delete( key ) : no_op() );
+                attempt( () => !isNull( me.#webApiHeaders ) ? me.#webApiHeaders.delete( lcase( key ) ) : no_op() );
+            }
+
+            return attempt( () => super.delete( key ) ) || attempt( () => super.delete( lcase( key ) ) );
         }
 
         get( pKey )
         {
             const me = this;
-            return attempt( () => super.get( pKey ) ) || attempt( () => super.get( lcase( pKey ) ) ) || attempt( () => me.#map.get( pKey ) ) || attempt( () => me.#map.get( lcase( pKey ) ) );
+
+            const key = asString( pKey, true );
+
+            if ( isBlank( key ) )
+            {
+                return null;
+            }
+
+            let value = attempt( () => super.get( key ) ) ||
+                        attempt( () => super.get( lcase( key ) ) ) ||
+                        attempt( () => me.#map.get( key ) ) ||
+                        attempt( () => me.#map.get( lcase( key ) ) ) ||
+                        (!isNull( me.#webApiHeaders ) && isFunction( me.#webApiHeaders.get ) ? (attempt( () => me.#webApiHeaders.get( key ) ) || attempt( () => me.#webApiHeaders.get( lcase( key ) ) )) : null);
+
+            return value || me[key];
         }
 
         getSetCookie()
@@ -495,16 +545,40 @@ const {
         has( pKey )
         {
             const me = this;
-            return attempt( () => super.has( pKey ) ) || attempt( () => super.has( lcase( pKey ) ) ) || attempt( () => me.#map.has( pKey ) ) || attempt( () => me.#map.has( lcase( pKey ) ) );
+
+            const key = asString( pKey, true );
+
+            if ( isBlank( key ) )
+            {
+                return false;
+            }
+
+            return attempt( () => super.has( key ) ) ||
+                   attempt( () => super.has( lcase( key ) ) ) ||
+                   attempt( () => me.#map.has( key ) ) ||
+                   attempt( () => me.#map.has( lcase( key ) ) ) ||
+                   (!isNull( me.#webApiHeaders ) && isFunction( me.#webApiHeaders.has ) ? (attempt( () => me.#webApiHeaders.has( key ) ) || attempt( () => me.#webApiHeaders.has( lcase( key ) ) )) : false);
         }
 
         set( pKey, pValue )
         {
             const me = this;
 
-            attempt( () => super.set( pKey, pValue ) );
+            const key = asString( pKey, true );
 
-            attempt( () => me.#map.set( pKey, pValue ) );
+            if ( isBlank( key ) )
+            {
+                return false;
+            }
+
+            attempt( () => super.set( key, pValue ) );
+
+            attempt( () => me.#map.set( key, pValue ) );
+
+            if ( !isNull( me.#webApiHeaders ) && isFunction( me.#webApiHeaders.set ) )
+            {
+                attempt( () => me.#webApiHeaders.set( key, pValue ) );
+            }
         }
 
         toLiteral()
@@ -564,6 +638,16 @@ const {
         [Symbol.toPrimitive]()
         {
             return this.toString();
+        }
+
+        asWebApiHeaders()
+        {
+            if ( _ud !== typeof Headers )
+            {
+                return isNonNullObject( this.#webApiHeaders ) ? new Headers( this.#webApiHeaders || this.toLiteral() ) : new Headers( this.toLiteral() );
+            }
+
+            throw new IllegalStateError( `This execution environment does not define the Headers class/interface.` );
         }
     }
 
