@@ -1819,9 +1819,9 @@ const $scope = constants?.$scope || function()
      */
     const isTypedArray = ( pObj ) => (([...TYPED_ARRAYS].filter( e => isObject( pObj ) && pObj instanceof e ))?.length || 0) > 0;
 
-    const is2dArray = ( pArray ) => isArray( pArray ) && pArray.length > 0 && pArray.every( elem => isArray( elem ) );
+    const is2dArray = ( pArray ) => isArray( pArray ) && $ln( pArray ) > 0 && pArray.every( elem => isArray( elem ) );
 
-    const isKeyValueArray = ( pArray ) => is2dArray( pArray ) && pArray.every( elem => elem.length >= 2 && elem.length <= 3 && isString( elem[0] ) );
+    const isKeyValueArray = ( pArray ) => is2dArray( pArray ) && pArray.every( elem => $ln( elem ) >= 2 && $ln( elem ) <= 3 && isString( elem[0] ) );
 
     /**
      * Returns true if the specified value is iterable.<br>

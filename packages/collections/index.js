@@ -10,6 +10,7 @@
 const core = require( "@toolbocks/core" );
 
 const collectionModule = require( "./Collection.js" );
+const mapsModule = require( "./Maps.js" );
 const sortedSetModule = require( "./SortedSet.js" );
 
 const { constants } = core;
@@ -45,9 +46,13 @@ const $scope = constants?.$scope || function()
 
     const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
+    const { ToolBocksModule } = moduleUtils;
+
     const { TYPES, Collection } = collectionModule;
 
     const { SortedSet } = sortedSetModule;
+
+    const { PropertyAccessMap, TreeMap, ValueOrderedMap } = mapsModule;
 
     const modName = "BockCollectionUtils";
 
@@ -63,16 +68,23 @@ const $scope = constants?.$scope || function()
                     stringUtils,
                     arrayUtils,
                     collectionModule,
+                    mapsModule,
                     sortedSetModule
                 },
             classes:
                 {
                     Collection,
-                    SortedSet
+                    SortedSet,
+                    PropertyAccessMap,
+                    TreeMap,
+                    ValueOrderedMap
                 },
             TYPES,
             Collection,
-            SortedSet
+            SortedSet,
+            PropertyAccessMap,
+            TreeMap,
+            ValueOrderedMap
         };
 
     mod = toolBocksModule.extend( mod );

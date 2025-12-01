@@ -46,6 +46,7 @@ const $scope = constants?.$scope || function()
 
     const
         {
+            OBJECT_REGISTRY = $scope()["__BOCK_OBJECT_REGISTRY__"],
             ModuleEvent,
             ToolBocksModule,
             IllegalArgumentError,
@@ -118,6 +119,10 @@ const $scope = constants?.$scope || function()
         {
             return item.equals( e );
         }
+        else if ( isNonNullObject( e ) && isNonNullObject( item ) )
+        {
+            return OBJECT_REGISTRY.areEqual( e, item );
+        }
 
         return e === item;
     };
@@ -164,7 +169,7 @@ const $scope = constants?.$scope || function()
 
             if ( isNonNullObject( this.#comparator ) && Comparators.isComparator( this.#comparator.compare ) )
             {
-                let func = this.#comparator.compare.bind( this.#comparator );
+                let func = (this.#comparator.compare || this.#comparator).bind( this.#comparator );
 
                 this.#comparator = ( a, b ) => func( a, b );
             }
