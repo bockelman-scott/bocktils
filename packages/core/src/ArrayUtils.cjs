@@ -2242,7 +2242,7 @@ const $scope = constants?.$scope || function()
              *
              * @param {Array<*>} pReference - An array of values in the order desired
              * @param {function(*, Array<*>)|null} [pPositionFunction=null] A optional function to calculate the desired position.
-             * @param {function(*, Array<*>)|null} [pTransformation=null] An optional function to transform the values prior to finding the desired position
+             * @param {function(*, Array<*>)|null} [pTransformation=null] An optional function to transform the values before finding the desired position
              *
              * @return {function(*,*):number} A comparator that orders an array by the position of elements in another array
              *
@@ -2250,7 +2250,7 @@ const $scope = constants?.$scope || function()
              */
             BY_POSITION: function( pReference, pPositionFunction, pTransformation )
             {
-                const ref = [].concat( ...(pReference || []) );
+                const ref = [...(asArray( pReference || [] ))];
 
                 /**
                  * Transforms a given element using the provided transformation function, if defined.
@@ -2291,7 +2291,7 @@ const $scope = constants?.$scope || function()
                  */
                 const findPosition = function( pElem, pReference )
                 {
-                    let arr = ((pReference && isArray( pReference )) ? pReference : ref) || [];
+                    let arr = asArray( ((pReference && isArray( pReference )) ? pReference : ref) || [] );
 
                     let position = arr.indexOf( pElem );
 
@@ -2307,10 +2307,10 @@ const $scope = constants?.$scope || function()
                 {
                     if ( ref?.length <= 0 )
                     {
-                        let cmp = Comparators.BY_STRING_VALUE( a, b );
+                        let cmp = Comparators.CREATE_DEFAULT( typeof a )( a, b );
                         if ( 0 === cmp )
                         {
-                            cmp = Comparators.CREATE_DEFAULT( typeof a )( a, b );
+                            cmp = Comparators.BY_STRING_VALUE( a, b );
                         }
 
                         return cmp;
@@ -2329,22 +2329,22 @@ const $scope = constants?.$scope || function()
 
                     if ( 0 === comp )
                     {
-                        comp = Comparators.BY_STRING_VALUE( aa, bb );
-                    }
-
-                    if ( 0 === comp )
-                    {
-                        comp = Comparators.BY_STRING_VALUE( a, b );
-                    }
-
-                    if ( 0 === comp )
-                    {
                         comp = Comparators.CREATE_DEFAULT( typeof aa )( aa, bb );
                     }
 
                     if ( 0 === comp )
                     {
                         comp = Comparators.CREATE_DEFAULT( typeof a )( a, b );
+                    }
+
+                    if ( 0 === comp )
+                    {
+                        comp = Comparators.BY_STRING_VALUE( aa, bb );
+                    }
+
+                    if ( 0 === comp )
+                    {
+                        comp = Comparators.BY_STRING_VALUE( a, b );
                     }
 
                     return comp;
