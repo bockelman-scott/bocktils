@@ -3794,6 +3794,72 @@ const { _ud = "undefined", $scope } = constants;
         return toggleCaps( asString( pStr ), lcase, asString );
     }
 
+    const ABBREVIATION_METHODS =
+        {
+            INITIALS: "INITIALS",
+            FIRST_N_CHARS: "FIRST_N_CHARS",
+            LOOKUP: "LOOKUP"
+        };
+
+    const DEFAULT_ABBR_OPTIONS =
+        {
+            methods: [ABBREVIATION_METHODS.INITIALS, ABBREVIATION_METHODS.FIRST_N_CHARS],
+            numCharacters: 4,
+            abbreviations: {}
+        };
+
+    function abbreviate( pStr, pOptions )
+    {
+        let s = asString( pStr, true );
+
+        const options = { ...(DEFAULT_ABBR_OPTIONS), ...(isNonNullObject( pOptions ) || {}) };
+
+        const numChars = asInt( options.numCharacters || DEFAULT_ABBR_OPTIONS.numCharacters || 4 );
+
+        if ( isBlank( s ) || $ln( s ) <= numChars )
+        {
+            return s;
+        }
+
+        const methods = [...(options.methods || DEFAULT_ABBR_OPTIONS.methods || [])];
+
+        const abbreviations = { ...options.abbreviations || {} };
+
+        let abbr = _mt;
+
+        for( let method of methods )
+        {
+            if ( ABBREVIATION_METHODS.INITIALS === ucase( method ) )
+            {
+                if ( /\s+/.test( s ) )
+                {
+                    let parts = s.split( /\s+/ );
+
+                    parts = parts.slice( 0, numChars );
+
+                    for( let part of parts )
+                    {
+                        abbr += ucase( part.slice( 0, 1 ) );
+                    }
+
+                    s = abbr;
+                }
+            }
+
+            if ( ABBREVIATION_METHODS.FIRST_N_CHARS === ucase( method ) )
+            {
+                s = s.slice( 0, numChars );
+            }
+
+            if ( ABBREVIATION_METHODS.LOOKUP === ucase( method ) )
+            {
+                s = abbreviations[s] || abbreviations[asString( pStr, true )] || s;
+            }
+        }
+
+        return s;
+    }
+
     function cartesian( pStrA, pStrB )
     {
         let a = asString( pStrA );
@@ -4251,6 +4317,7 @@ const { _ud = "undefined", $scope } = constants;
             reverseString,
             capitalize,
             uncapitalize,
+            abbreviate,
             cartesian,
             repeat,
             findDuplicatedSubstrings,

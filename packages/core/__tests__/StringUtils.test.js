@@ -16,7 +16,8 @@ const {
     includesAll,
     cleanUrl,
     $last,
-    $nth
+    $nth,
+    abbreviate
 } = stringUtils;
 
 const repoName = "bocktils";
@@ -1956,4 +1957,22 @@ describe( "findCommonSubstrings", () =>
         // expect( commonSubstrings ).toEqual( ["de", "d"] );
     } );
 
+} );
+
+describe( "Abbreviations", () =>
+{
+    test( "default abbreviations",
+          () =>
+          {
+              let a = "Mass Arbitration";
+              let b = "Class Action";
+              let c = "Personal Injury";
+              let d = "Employment";
+
+              expect( abbreviate(a) ).toEqual( "MA" );
+              expect( abbreviate(b) ).toEqual( "CA" );
+              expect( abbreviate(c) ).toEqual( "PI" );
+              expect( abbreviate(d) ).toEqual( "Empl" );
+
+          } );
 } );
