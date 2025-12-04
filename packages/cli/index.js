@@ -26,7 +26,18 @@ const $scope = constants?.$scope || function()
 
     const { _mt_str = "", _mt = _mt_str, _spc, _str, _num, _bool } = constants;
 
-    const { isNull, isNonNullValue, isNonNullObject, isArray, isNumeric, isString, isBoolean, isFunction } = typeUtils;
+    const
+        {
+            isNull,
+            isNonNullValue,
+            isNonNullObject,
+            isArray,
+            isNumeric,
+            isString,
+            isBoolean,
+            isFunction,
+            isReadOnly = moduleUtils.isReadOnly
+        } = typeUtils;
 
     const { asString, asInt, asFloat, toBool, isBlank, isJson, lcase, toUnixPath, toUnixLinebreaks } = stringUtils;
 
@@ -34,7 +45,7 @@ const $scope = constants?.$scope || function()
 
     const { resolvePath, readFile } = fileUtils;
 
-    const { parseJson } = jsonUtils;
+    const { asObject, parseJson, asJson } = jsonUtils;
 
     const toolBocksModule = new ToolBocksModule( "CommandLineUtils", INTERNAL_NAME );
 
@@ -51,13 +62,22 @@ const $scope = constants?.$scope || function()
         defaultValue;
         required;
 
-        constructor( pName, pAlias = pName, pType = _str, pDefaultValue = _mt, pRequired = false )
+        #args = [];
+
+        constructor( pName, pAlias = pName, pType = _str, pDefaultValue = _mt, pRequired = false, ...pArgs )
         {
             this.name = stripHyphens( asString( pName, true ) || _mt );
             this.alias = stripHyphens( asString( pAlias, true ) || this.name || _mt );
             this.type = lcase( asString( pType, true ) ) || _str;
             this.defaultValue = pDefaultValue || _mt;
             this.required = !!pRequired;
+
+            this.#args = asArray( pArgs || [] );
+        }
+
+        get args()
+        {
+            return [...(asArray( this.#args || [] ))];
         }
 
         getDefaultValue()
@@ -89,7 +109,66 @@ const $scope = constants?.$scope || function()
         {
             return new CliParameter( this.name, this.alias, this.type, this.defaultValue, this.required );
         }
+
+        toString()
+        {
+            const me = this;
+
+            let s = attempt( () => asJson( me || this ) );
+
+            if ( !isBlank( s ) )
+            {
+                return s;
+            }
+
+            return `CliParameter::${this.name}, ${this.alias}, ${this.type}, ${this.defaultValue}, ${this.required}`;
+        }
+
+        [Symbol.toPrimitive]( pHint )
+        {
+            return this.toString();
+        }
     }
+
+    CliParameter.from = function( pObject, pParams )
+    {
+        if ( isNonNullObject( pObject ) )
+        {
+            if ( pObject instanceof CliParameter )
+            {
+                return pObject;
+            }
+
+            if ( isArray( pObject ) )
+            {
+                return new CliParameter( pObject[0], (pObject[1] || pObject[0]), (pObject[2] || (typeof (pObject[3] || "string"))), (pObject[3] || _mt), toBool( pObject[4] ), pObject );
+            }
+
+            return new CliParameter( asString( pObject.name, true ),
+                                     asString( pObject.alias || pObject.name, true ),
+                                     pObject.type || (typeof (pObject.defaultValue || _mt)) || "string",
+                                     pObject.defaultValue,
+                                     toBool( pObject.required ),
+                                     pObject.index || (isNonNullObject( pParams ) ? pParams?.getIndex( asString( pObject.name, true ) ) : 0) );
+        }
+        else if ( isString( pObject ) )
+        {
+            if ( isJson( pObject ) )
+            {
+                return CliParameter.from( parseJson( pObject ) );
+            }
+
+            let s = asString( pObject, true ).replace( /^CliParameter::/, _mt );
+
+            return CliParameter.from( s.split( /,;/ ) );
+        }
+        else if ( isNumeric( pObject ) )
+        {
+            return CliParameter.from( (asArray( pParams || [] )[asInt( pObject )]) || {} );
+        }
+
+        return CliParameter.from( {} );
+    };
 
     class CliArgument
     {
@@ -172,13 +251,23 @@ const $scope = constants?.$scope || function()
 
             this.#params.push( ...arr );
 
+            let index = 0;
+
             arr.forEach( param =>
                          {
                              this.#map.set( stripHyphens( param?.name || param?.alias ), param );
+
                              if ( param?.alias )
                              {
                                  this.#map.set( stripHyphens( param?.alias ), param );
                              }
+
+                             if ( !isReadOnly( param ) )
+                             {
+                                 param.index = index;
+                             }
+
+                             index += 1;
                          } );
         }
 
@@ -226,10 +315,19 @@ const $scope = constants?.$scope || function()
             if ( index >= 0 )
             {
                 this.#params.splice( index, 0, pParameter );
+
+                if ( !isReadOnly( pParameter ) )
+                {
+                    pParameter.index = index;
+                }
             }
             else
             {
                 this.#params.push( pParameter );
+                if ( !isReadOnly( pParameter ) )
+                {
+                    pParameter.index = ($ln( this.#params ) - 1);
+                }
             }
 
             let key = stripHyphens( asString( pParameter?.name || pParameter?.alias, true ) );
@@ -368,7 +466,9 @@ const $scope = constants?.$scope || function()
     class CliParser
     {
         #cliParameters;
+
         #skip = 2;
+
         #assignmentCharacter = _spc;
 
         #cliArguments = new CliArguments();
@@ -430,6 +530,18 @@ const $scope = constants?.$scope || function()
             }
 
             return value;
+        }
+
+        resolveArgument( pCmdLineParameter )
+        {
+            const param = CliParameter.from( pCmdLineParameter, this.cliParameters );
+            return this.getArgument( param.name ) || this.getArgument( param.alias ) || this.getArgument( param.index );
+        }
+
+        resolveArgumentValue( pCmdLineParameter )
+        {
+            const param = CliParameter.from( pCmdLineParameter, this.cliParameters );
+            return this.getArgumentValue( param.name ) || this.getArgumentValue( param.alias ) || this.getArgumentValue( param.index );
         }
 
         get assignmentCharacter()
@@ -626,6 +738,38 @@ const $scope = constants?.$scope || function()
             }
         }
     }
+
+    CliParser.create = function( pObject, pOptions = { skip: 2 } )
+    {
+        const options = { ...(pOptions || { skip: 2 }) };
+
+        const entries = objectEntries( pObject );
+
+        const params = [];
+
+        entries.forEach( entry =>
+                         {
+                             const obj = asObject( ObjectEntry.getValue( entry ) );
+
+                             if ( isNonNullObject( obj ) )
+                             {
+                                 const parameter = CliParameter.from( obj );
+
+                                 if ( parameter )
+                                 {
+                                     params.push( parameter );
+                                 }
+                             }
+                         } );
+
+        const commandLineParams = new CliParameters( ...params );
+
+        const parser = new CliParser( commandLineParams );
+
+        parser.skip = Math.max( 0, asInt( options.skip ) );
+
+        return parser;
+    };
 
     let mod =
         {
