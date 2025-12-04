@@ -153,7 +153,8 @@ const $scope = constants?.$scope || function()
             attempt,
             asyncAttempt,
             objectKeys,
-            IllegalArgumentError
+            IllegalArgumentError,
+            $ln
         } = moduleUtils;
 
     /*
@@ -1225,28 +1226,40 @@ const $scope = constants?.$scope || function()
      *        If null or undefined, a default empty string path is returned.
      * @return {string} The resolved and normalized Unix-style path as a string.
      */
-    function resolvePath( pPath )
+    function resolvePath( ...pPath )
     {
+        const pathLib = PathUtils.instance();
+
         let p = _mt_str;
 
         if ( isNull( pPath ) )
         {
-            return p;
+            return pathLib.resolve( "." );
         }
 
-        const pathLib = PathUtils.instance();
+        let components = asArray( pPath );
 
-        if ( isArray( pPath ) )
+        if ( $ln( components ) <= 0 )
         {
-            p = attempt( () => pathLib.resolve( ...(asArray( pPath ).flat()) ) );
+            return pathLib.resolve( "." );
         }
-        else if ( isDirectoryEntry( pPath ) )
+
+        if ( $ln( components ) <= 1 )
         {
-            p = attempt( () => pathLib.resolve( pathLib.join( (pPath?.parentPath || pPath?.path || "./"), (pPath.name || _mt_str) ) ) );
+            components = asString( components[0], true );
+        }
+
+        if ( isArray( components ) )
+        {
+            p = attempt( () => pathLib.resolve( ...(asArray( components ).flat()) ) );
+        }
+        else if ( isDirectoryEntry( components ) )
+        {
+            p = attempt( () => pathLib.resolve( pathLib.join( (components?.parentPath || components?.path || "./"), (components.name || _mt_str) ) ) );
         }
         else
         {
-            p = attempt( () => pathLib.resolve( toUnixPath( asString( pPath, true, { joinOn: _mt_str } ).trim() ) ) );
+            p = attempt( () => pathLib.resolve( toUnixPath( asString( components, true, { joinOn: _mt_str } ).trim() ) ) );
         }
 
         return p || (toUnixPath( asString( p, true ) ));
@@ -2043,7 +2056,7 @@ const $scope = constants?.$scope || function()
      */
     function removeExtension( pPath, pExhaustive = false )
     {
-        let filepath = resolvePath( pPath );
+        let filepath = asString( pPath, true );
 
         const ext = getFileExtension( filepath );
 
@@ -2084,7 +2097,7 @@ const $scope = constants?.$scope || function()
     {
         const newExt = asString( pNewExtension, true ).replace( /^\.+/, _mt_str );
 
-        const newFilename = removeExtension( resolvePath( pPath ), pExhaustive );
+        const newFilename = removeExtension( asString( pPath, true ), pExhaustive );
 
         return (newFilename + (_dot + newExt)).trim();
     }
