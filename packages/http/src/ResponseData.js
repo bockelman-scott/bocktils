@@ -96,6 +96,7 @@ const {
         resolveError,
         lock,
         attempt,
+        attemptSilent,
         asyncAttempt,
         isWritable,
         $ln,
@@ -285,7 +286,11 @@ const {
                 // wait for the stream to complete
                 await finished( fileStream );
 
-                closed = true;
+                if ( !isNull( fileStream ) )
+                {
+                    attemptSilent( () => fileStream.close() );
+                    closed = true;
+                }
 
                 logger.log( `Wrote: ${filePath}` );
 
@@ -293,18 +298,12 @@ const {
             }
             else
             {
-                if ( !closed )
-                {
-                    attempt( () => fileStream.close() );
-                }
+                attempt( () => fileStream.close() );
             }
         }
         catch( ex )
         {
-            if ( !closed )
-            {
-                attempt( () => fileStream.close() );
-            }
+            attemptSilent( () => fileStream.close() );
 
             toolBocksModule.reportError( ex, ex.message, "error", streamToFile, ex.response?.status, ex.response );
 
@@ -312,10 +311,7 @@ const {
         }
         finally
         {
-            if ( !closed )
-            {
-                attempt( () => fileStream.close() );
-            }
+            attemptSilent( () => fileStream.close() );
         }
 
         return _mt;
