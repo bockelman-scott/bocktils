@@ -41,6 +41,7 @@ const { _ud = "undefined", $scope } = constants;
         resolveError,
         populateOptions,
         attempt,
+        attemptSilent,
         asyncAttempt,
         sleep,
         lock,
@@ -748,7 +749,7 @@ const { _ud = "undefined", $scope } = constants;
                                                                {
                                                                    done,
                                                                    value: chunk
-                                                               } = await asyncAttempt( async() => await reader.read() );
+                                                               } = (await asyncAttempt( async() => await reader.read() ) || { done: true });
 
                                                            if ( done )
                                                            {
@@ -770,7 +771,15 @@ const { _ud = "undefined", $scope } = constants;
                                                    }
                                                    finally
                                                    {
-                                                       attempt( () => reader.releaseLock() );
+                                                       if ( !isNull( reader ) && isFunction( reader.releaseLock ) )
+                                                       {
+                                                           attempt( () => reader.releaseLock() );
+                                                       }
+
+                                                       if ( !isNull( reader ) && isFunction( reader.close ) )
+                                                       {
+                                                           attempt( () => reader.close() );
+                                                       }
                                                    }
 
                                                    // Concatenate all chunks into a single Uint8Array
@@ -787,12 +796,12 @@ const { _ud = "undefined", $scope } = constants;
                                                }
 
                                                // Enqueue the single, potentially buffered, chunk
-                                               if ( encodedData )
+                                               if ( encodedData && isFunction( controller?.enqueue ) )
                                                {
                                                    controller.enqueue( encodedData );
                                                }
 
-                                               controller.close();
+                                               attemptSilent( () => controller.close() );
                                            },
 
                                            /**
@@ -809,6 +818,11 @@ const { _ud = "undefined", $scope } = constants;
 
                                                    const event = new ModuleEvent( "StreamCancelled", { reason: pReason } );
                                                    toolBocksModule.dispatchEvent( event );
+
+                                                   if ( pValue?.locked && isFunction( pValue.releaseLock ) )
+                                                   {
+                                                       attemptSilent( () => pValue.releaseLock() );
+                                                   }
                                                }
                                            }
                                        } );
@@ -826,6 +840,8 @@ const { _ud = "undefined", $scope } = constants;
          */
         asSingleChunkStream( pValue )
         {
+            const me = this;
+
             let encodedData = null;
 
             try
@@ -841,10 +857,16 @@ const { _ud = "undefined", $scope } = constants;
             {
                 console.error( "Streamer: Failed to encode value:", ex );
 
+                let err = new Error( `Failed to encode value for streaming: ${ex?.message || pValue}` );
+
                 return new ReadableStream( {
                                                start( controller )
                                                {
-                                                   controller.error( new Error( `Failed to encode value for streaming: ${ex.message}` ) );
+                                                   if ( !isNull( controller ) && isFunction( controller.error ) )
+                                                   {
+                                                       controller.error( err );
+                                                   }
+                                                   toolBocksModule.handleError( resolveError( err ), me.asSingleChunkStream, pValue );
                                                }
                                            } );
             }
@@ -855,18 +877,29 @@ const { _ud = "undefined", $scope } = constants;
                                            start( controller )
                                            {
                                                // If there's encoded data, enqueue it into the stream.
-                                               if ( encodedData )
+                                               if ( encodedData && ( !isNull( controller ) && isFunction( controller.enqueue )) )
                                                {
                                                    controller.enqueue( encodedData );
                                                }
+
                                                // Close the stream immediately after enqueuing the single chunk of data.
-                                               controller.close();
+                                               if ( !isNull( controller ) && isFunction( controller.close ) )
+                                               {
+                                                   attemptSilent( () => controller.close() );
+                                               }
+                                           },
+
+                                           close()
+                                           {
+
                                            }
                                        } );
         }
 
         asChunkedStream( pValue, pChunkSize = this.chunkSize, pDelayMs = this.delayMs )
         {
+            const me = this;
+
             if ( pValue instanceof ReadableStream )
             {
                 return this._streamAsChunkedStream( pValue, pChunkSize, pDelayMs );
@@ -906,11 +939,21 @@ const { _ud = "undefined", $scope } = constants;
                                                    // Extract the chunk
                                                    const chunk = encodedData.slice( offset, end );
 
-                                                   // Enqueue the chunk
-                                                   controller.enqueue( chunk );
+                                                   try
+                                                   {
+                                                       if ( !isNull( controller ) && isFunction( controller.enqueue ) )
+                                                       {
+                                                           // Enqueue the chunk
+                                                           controller.enqueue( chunk );
 
-                                                   // Update the offset for the next pull call
-                                                   offset = end;
+                                                           // Update the offset for the next pull call
+                                                           offset = end;
+                                                       }
+                                                   }
+                                                   catch( exEnqueue )
+                                                   {
+                                                       toolBocksModule.handleError( resolveError( exEnqueue ), me.asChunkedStream, chunk );
+                                                   }
 
                                                    // If a delay is specified, wait before allowing the next pull call
                                                    if ( delayMs > 0 )
@@ -921,7 +964,10 @@ const { _ud = "undefined", $scope } = constants;
                                                else
                                                {
                                                    // If all data has been enqueued, close the stream
-                                                   controller.close();
+                                                   if ( !isNull( controller ) && isFunction( controller.close ) )
+                                                   {
+                                                       attemptSilent( () => controller.close() );
+                                                   }
                                                }
                                            },
 
@@ -986,7 +1032,7 @@ const { _ud = "undefined", $scope } = constants;
                                                                {
                                                                    done,
                                                                    value: newChunk
-                                                               } = await asyncAttempt( async() => await sourceReader.read() );
+                                                               } = (await asyncAttempt( async() => await sourceReader.read() ) || { done: true });
 
                                                            if ( done )
                                                            {
@@ -1003,7 +1049,10 @@ const { _ud = "undefined", $scope } = constants;
                                                        }
                                                        catch( readError )
                                                        {
-                                                           controller.error( new Error( `Error reading from input ReadableStream during pull: ${readError.message}` ) );
+                                                           if ( isFunction( controller?.error ) )
+                                                           {
+                                                               controller.error( new Error( `Error reading from input ReadableStream during pull: ${readError.message}` ) );
+                                                           }
 
                                                            sourceStreamDone = true; // Mark source as done due to error
 
@@ -1021,18 +1070,25 @@ const { _ud = "undefined", $scope } = constants;
                                                    const bytesToEnqueue = Math.min( chunkSize, bytesAvailable );
                                                    const chunk = internalBuffer.slice( bufferOffset, bufferOffset + bytesToEnqueue );
 
-                                                   controller.enqueue( chunk );
-                                                   bufferOffset += bytesToEnqueue;
+                                                   try
+                                                   {
+                                                       controller.enqueue( chunk );
+                                                       bufferOffset += bytesToEnqueue;
+                                                   }
+                                                   catch( ex )
+                                                   {
+                                                       toolBocksModule.handleError( resolveError( ex ), me._streamAsChunkedStream, controller?.enqueue || this );
+                                                   }
 
                                                    if ( delayMs > 0 )
                                                    {
                                                        await asyncAttempt( async() => await sleep( delayMs ) );
                                                    }
                                                }
-                                               else if ( sourceStreamDone )
+                                               else if ( sourceStreamDone && isFunction( controller?.close ) )
                                                {
                                                    // If the internal buffer is empty AND the source stream is done, close the output stream
-                                                   controller.close();
+                                                   attemptSilent( () => controller.close() );
                                                }
                                            },
 
@@ -1043,12 +1099,38 @@ const { _ud = "undefined", $scope } = constants;
                                             */
                                            async cancel( pReason )
                                            {
-                                               if ( sourceReader )
+                                               if ( sourceReader && isFunction( sourceReader?.cancel ) )
                                                {
                                                    await asyncAttempt( async() => await sourceReader.cancel( pReason ).catch( e => toolBocksModule.handleError( resolveError( e ), me._streamAsChunkedStream, this.cancel ) ) );
 
                                                    const event = new ModuleEvent( "StreamCancelled", { reason: pReason } );
                                                    toolBocksModule.dispatchEvent( event );
+                                               }
+                                           },
+
+                                           close()
+                                           {
+                                               if ( !isNull( sourceReader ) && isFunction( sourceReader.releaseLock ) )
+                                               {
+                                                   attemptSilent( () => sourceReader.releaseLock() );
+                                               }
+
+                                               if ( !isNull( sourceReader ) && isFunction( sourceReader.close ) )
+                                               {
+                                                   attemptSilent( () => sourceReader.close() );
+                                               }
+
+                                               if ( pValue instanceof ReadableStream )
+                                               {
+                                                   if ( !isNull( pValue ) && isFunction( pValue.releaseLock ) )
+                                                   {
+                                                       attempt( () => pValue.releaseLock() );
+                                                   }
+
+                                                   if ( !isNull( pValue ) && isFunction( pValue.close ) )
+                                                   {
+                                                       attempt( () => pValue.close() );
+                                                   }
                                                }
                                            }
                                        } );
@@ -1083,7 +1165,7 @@ const { _ud = "undefined", $scope } = constants;
         /**
          * Reads a stream, converting its contents into either an object, string, or Uni8Array (or Buffer, if defined).
          * The second argument specified what kind of data we expect to find in the stream (binary versus text)
-         * The third argument specified whether to parse a string that is expected to be JSON into an object.
+         * The third argument specifies whether to parse a string expected to be JSON into an object.
          * @param pStream
          * @param pContentType
          * @param pParseJson
@@ -1146,6 +1228,17 @@ const { _ud = "undefined", $scope } = constants;
             {
                 toolBocksModule.handleError( error, "Streamer.readStream", chunks );
                 throw error;
+            }
+            finally
+            {
+                if ( !isNull( stream ) && isFunction( stream.releaseLock ) )
+                {
+                    attemptSilent( () => stream.releaseLock() );
+                }
+                if ( !isNull( stream ) && isFunction( stream.close ) )
+                {
+                    attemptSilent( () => stream.close() );
+                }
             }
         }
     }
