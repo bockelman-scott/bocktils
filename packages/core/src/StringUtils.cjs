@@ -2362,7 +2362,7 @@ const { _ud = "undefined", $scope } = constants;
             // note that this is an unexpected case at present,
             // but exists to catch all argument types the function may encounter
             case _obj:
-                return _objectToBoolean( val, pFunctionArgs ) || false;
+                return _objectToBoolean( val, ...pFunctionArgs ) || false;
 
             default:
                 return false;

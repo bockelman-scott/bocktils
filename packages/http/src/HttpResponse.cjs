@@ -105,7 +105,7 @@ const {
             asObject
         } = typeUtils;
 
-    const { asString, asInt, isBlank, cleanUrl, isJson } = stringUtils;
+    const { asString, asInt, isBlank, cleanUrl, isJson, toBool } = stringUtils;
 
     const { asJson, parseJson } = jsonUtils;
 
@@ -318,11 +318,11 @@ const {
 
             const me = this;
 
-            const options = populateOptions( pOptions || pResponse, pResponse, DEFAULT_RESPONSE_OPTIONS );
+            const options = populateOptions( (pOptions || pResponse), pResponse, DEFAULT_RESPONSE_OPTIONS );
 
             options.url = options.url || pUrl;
 
-            const res = attempt( () => HttpResponse.resolveResponse( pResponse || options, options ) ) || pResponse || options;
+            const res = attempt( () => HttpResponse.resolveResponse( (pResponse || options), options ) ) || pResponse || options || {};
 
             this.#headers = attempt( () => (res.headers || pResponse?.headers || options.headers || new HttpResponseHeaders( options )) );
 
@@ -330,7 +330,7 @@ const {
 
             this.#status = HttpStatus.fromCode( res.status || pResponse?.status || options.status ) || attempt( () => HttpStatus.fromResponse( res || options.response || options, options ) );
 
-            this.#ok = this.#ok || this.#status?.isOk() || res?.ok || pResponse?.ok;
+            this.#ok = toBool( this.#ok || this.#status?.isOk() || res?.ok || pResponse?.ok || ( asInt( pResponse?.status ) >= 200 && asInt( pResponse?.status ) < 300 ) );
 
             this.#url = cleanUrl( asString( res?.url || options?.url || pUrl, true ) ) || _slash;
 
@@ -354,11 +354,22 @@ const {
         {
             const options = asObject( pOptions || DEFAULT_RESPONSE_OPTIONS );
 
-            let response = HttpResponse.unwrapResponse( pResponse, options );
+            let response = HttpResponse.unwrapResponse( (pResponse || options), options );
 
             if ( _ud !== Response )
             {
-                response = response instanceof Response ? response : new Response( response.data || options.data || _mt, options );
+                response = response instanceof Response ?
+                           response :
+                           new Response( response?.data || options.data || _mt,
+                                         {
+                                             ...(options),
+                                             ...(
+                                                 {
+                                                     status: response?.status || options.status,
+                                                     statusText: response?.statusText || options.statusText,
+                                                     headers: { ...(options.headers), ...({ ...(response?.headers || options.headers) }) }
+                                                 })
+                                         } );
             }
 
             if ( response instanceof this.constructor )

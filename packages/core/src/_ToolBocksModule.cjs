@@ -6301,7 +6301,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             if ( ToolBocksModule.isLogger( pLogger ) )
             {
-                this.#logger = pLogger || this.#logger;
+                this.#logger = ToolBocksModule.resolveLogger( pLogger || this.#logger, this.#logger || ToolBocksModule.getGlobalLogger() );
             }
         }
 

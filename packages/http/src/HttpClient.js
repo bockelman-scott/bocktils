@@ -1279,7 +1279,7 @@ const $scope = constants?.$scope || function()
     {
         if ( isNonNullObject( pDelegate ) )
         {
-            if ( pDelegate instanceof HttpClient )
+            if ( pDelegate instanceof HttpClient || pDelegate instanceof IHttpClient )
             {
                 return true;
             }
@@ -1918,7 +1918,36 @@ const $scope = constants?.$scope || function()
         return asString( fileName, true );
     }
 
-    class HttpClient extends EventTarget
+    class IHttpClient  extends EventTarget
+    {
+        constructor( pConfig = HttpConfig.getDefault(), pOptions = { ...DEFAULT_HTTP_CLIENT_OPTIONS }, pDelegates = new Map(), pDefaultDelegate = new HttpFetchClient( pConfig, pOptions ) )
+        {
+            super();
+        }
+
+        async sendRequest( pMethod, pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
+        {
+
+        }
+
+        async sendGetRequest( pUrl, pConfig, pRedirects = 0, pRetries = 0, pResolve, pReject )
+        {
+
+        }
+
+        async getRequestedData( pUrl, pConfig, pRedirects = 0, pRetries = 0, pResolve, pReject )
+        {
+
+        }
+
+        async sendPostRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
+        {
+
+        }
+
+    }
+
+    class HttpClient extends IHttpClient
     {
         #config;
 
@@ -1934,7 +1963,7 @@ const $scope = constants?.$scope || function()
 
         constructor( pConfig = HttpConfig.getDefault(), pOptions = { ...DEFAULT_HTTP_CLIENT_OPTIONS }, pDelegates = new Map(), pDefaultDelegate = new HttpFetchClient( pConfig, pOptions ) )
         {
-            super();
+            super( pConfig, pOptions, pDelegates, pDefaultDelegate );
 
             this.#config = isHttpConfig( pConfig, true ) ? pConfig.merge( DEFAULT_HTTP_CONFIG, pConfig ) : new HttpConfig( { ...DEFAULT_CONFIG, ...(toHttpConfigLiteral( asObject( pConfig || pDefaultDelegate?.httpConfig || pDefaultDelegate?.config || {} ) )) } );
 
@@ -3924,6 +3953,8 @@ const $scope = constants?.$scope || function()
     {
         #numInvocations = 0;
 
+        #MAX_INVOCATIONS = (Number.MAX_SAFE_INTEGER / 2);
+
         constructor()
         {
         }
@@ -3940,7 +3971,16 @@ const $scope = constants?.$scope || function()
 
         increment()
         {
-            this.#numInvocations += 1;
+            let num = asInt( this.#numInvocations );
+
+            if ( num < this.#MAX_INVOCATIONS )
+            {
+                this.#numInvocations += 1;
+            }
+            else
+            {
+                this.#numInvocations = 1;
+            }
         }
 
         reset()
@@ -4378,7 +4418,17 @@ const $scope = constants?.$scope || function()
             }
 
             this.lastRequestExecuted = Date.now();
-            this.#requestsSince += 1;
+
+            let requestsCount = asInt( this.#requestsSince );
+
+            if ( requestsCount < Number.MAX_SAFE_INTEGER )
+            {
+                this.#requestsSince += 1;
+            }
+            else
+            {
+                this.#requestsSince = 1;
+            }
 
             super.increment();
         }
@@ -4411,7 +4461,6 @@ const $scope = constants?.$scope || function()
             super.increment();
         }
     }
-
 
     let mod =
         {

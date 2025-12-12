@@ -272,7 +272,7 @@ const {
         {
             let response = responseData.response;
 
-            let data = (responseData.data || response.data || response.body || response);
+            let data = (responseData.data || response?.data || responseData.body || response?.body || response);
 
             if ( isNonNullObject( data ) && isPromise( data ) )
             {
@@ -281,7 +281,7 @@ const {
 
             if ( isNonNullObject( data ) && isFunction( data.pipe ) )
             {
-                attempt( () => (responseData.data || response.body || response).pipe( fileStream ) );
+                attempt( () => (data || responseData.data || response?.data || response?.body || response).pipe( fileStream ) );
 
                 // wait for the stream to complete
                 await finished( fileStream );
@@ -432,13 +432,13 @@ const {
 
                     const options = { ...(asObject( opts ) || config || {}) };
 
-                    const source = (_ud !== typeof Response && pResponse instanceof Response) ? pResponse : attempt( () => HttpResponse.resolveResponse( pResponse, options ) );
+                    const source = (_ud !== typeof Response && pResponse instanceof Response) ? pResponse : attempt( () => HttpResponse.resolveResponse( (pResponse || options), options ) );
 
                     // Some frameworks return the response as a property of an error returned in place of a response.
                     // See https://axios-http.com/docs/handling_errors, for example
                     this.#frameworkResponse = pResponse?.response || pResponse || source?.response || source;
 
-                    this.#data = this.#frameworkResponse?.data || source?.data || this.#frameworkResponse?.body || source?.body || options.data;
+                    this.#data = this.#frameworkResponse?.data || source?.data || this.#frameworkResponse?.body || options.data || source?.body || options.body;
 
                     this.#frameworkHeaders = this.#frameworkResponse?.headers || source?.headers || options.headers;
 
@@ -523,7 +523,7 @@ const {
 
         get data()
         {
-            let content = this.#data || this.frameworkResponse?.data || this.response?.data || this.frameworkResponse?.body || this.response?.body || this.options.data;
+            let content = this.#data || this.frameworkResponse?.data || this.response?.data || this.options.data || this.frameworkResponse?.body || this.response?.body;
 
             if ( isNull( content ) || (isString( content ) && isBlank( content )) )
             {
@@ -546,7 +546,7 @@ const {
                     content = this.#data || this.frameworkResponse?.data || this.response?.data || this.options.data;
                     if ( isNull( content ) || (isString( content ) && isBlank( content )) )
                     {
-                        content = this.response ? this.response.body : content;
+                        content = this.response ? (this.response.data || this.frameworkResponse?.data || this.response.body || this.frameworkResponse?.body) : (this.frameworkResponse ? this.frameworkResponse?.data || this.frameworkResponse?.body : content);
                     }
                 }
             }
@@ -562,7 +562,7 @@ const {
         get headersLiteral()
         {
             let headers = asObject( this.headers );
-            return isFunction( headers.toLiteral ) ? headers.toLiteral() : toObjectLiteral( headers );
+            return isFunction( headers.toLiteral ) ? headers.toLiteral() : attempt( () => toObjectLiteral( headers ) );
         }
 
         get frameworkHeaders()
@@ -725,7 +725,7 @@ const {
 
             if ( isNonNullObject( this.data ) )
             {
-                return this.data;
+                return isPromise( this.data ) ? await asyncAttempt( async() => await Promise.resolve( this.data ) ) : this.data;
             }
             else if ( isString( this.data ) )
             {
@@ -744,6 +744,12 @@ const {
         async text()
         {
             let txt = !isNull( this.data ) && isScalar( this.data ) ? asString( this.data || _mt ) : _mt;
+
+            if ( isPromise( this.data ) )
+            {
+                let data = await asyncAttempt( async() => await Promise.resolve( this.data ) );
+                txt = !isNull( this.data ) && isScalar( this.data ) ? asString( this.data || _mt ) : _mt;
+            }
 
             txt = isBlank( txt ) && isNonNullObject( this.data ) ? asJson( this.data ) : _mt;
 
@@ -840,7 +846,8 @@ const {
 
         async resolveData()
         {
-            this.#data = await this.#data;
+            this.#data = isPromise( this.#data ) ? await asyncAttempt( async() => await Promise.resolve( this.#data ) ) : this.#data;
+            return await this.#data;
         }
     }
 
@@ -932,7 +939,7 @@ const {
         {
             if ( isPromise( pObject.data ) )
             {
-                await pObject.resolveData();
+                await asyncAttempt( async() => await pObject.resolveData() );
             }
 
             return pObject;
@@ -948,7 +955,7 @@ const {
 
         let responseData = new ResponseData( response, config, options );
 
-        await responseData.resolveData();
+        await asyncAttempt( async() => await responseData.resolveData() );
 
         return responseData;
     };

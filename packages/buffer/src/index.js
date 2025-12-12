@@ -773,12 +773,17 @@ const { _ud = "undefined", $scope } = constants;
                                                    {
                                                        if ( !isNull( reader ) && isFunction( reader.releaseLock ) )
                                                        {
-                                                           attempt( () => reader.releaseLock() );
+                                                           attemptSilent( () => reader.releaseLock() );
                                                        }
 
                                                        if ( !isNull( reader ) && isFunction( reader.close ) )
                                                        {
-                                                           attempt( () => reader.close() );
+                                                           attemptSilent( () => reader.close() );
+                                                       }
+
+                                                       if ( !isNull( pValue ) && isFunction( pValue?.releaseLock ) )
+                                                       {
+                                                           attemptSilent( () => pValue.releaseLock() );
                                                        }
                                                    }
 
@@ -891,7 +896,11 @@ const { _ud = "undefined", $scope } = constants;
 
                                            close()
                                            {
-
+                                               const me = this;
+                                               if ( isFunction( me.releaseLock ) )
+                                               {
+                                                   attempt( () => me.releaseLock() );
+                                               }
                                            }
                                        } );
         }
@@ -964,9 +973,21 @@ const { _ud = "undefined", $scope } = constants;
                                                else
                                                {
                                                    // If all data has been enqueued, close the stream
-                                                   if ( !isNull( controller ) && isFunction( controller.close ) )
+                                                   const me = this;
+
+                                                   if ( isFunction( me.releaseLock ) )
                                                    {
-                                                       attemptSilent( () => controller.close() );
+                                                       attemptSilent( () => me.releaseLock() );
+                                                   }
+
+                                                   if ( isFunction( me.close ) )
+                                                   {
+                                                       attemptSilent( () => me.close() );
+                                                   }
+
+                                                   if ( isFunction( controller?.releaseLock ) )
+                                                   {
+                                                       attemptSilent( () => controller.releaseLock() );
                                                    }
                                                }
                                            },
@@ -975,6 +996,28 @@ const { _ud = "undefined", $scope } = constants;
                                            {
                                                const event = new ModuleEvent( "StreamCancelled", { reason: pReason } );
                                                toolBocksModule.dispatchEvent( event );
+
+                                               if ( isFunction( controller?.cancel ) )
+                                               {
+                                                   attemptSilent( () => controller.cancel() );
+                                               }
+
+                                               const me = this;
+
+                                               if ( isFunction( me.releaseLock ) )
+                                               {
+                                                   attempt( () => me.releaseLock() );
+                                               }
+
+                                               if ( isFunction( me.close ) )
+                                               {
+                                                   attemptSilent( () => me.close() );
+                                               }
+
+                                               if ( isFunction( controller?.releaseLock ) )
+                                               {
+                                                   attemptSilent( () => controller.releaseLock() );
+                                               }
                                            }
                                        } );
         }
@@ -1058,6 +1101,24 @@ const { _ud = "undefined", $scope } = constants;
 
                                                            toolBocksModule.handleError( resolveError( readError ), me._streamAsChunkedStream, pValue );
 
+                                                           if ( sourceReader )
+                                                           {
+                                                               if ( isFunction( sourceReader?.releaseLock ) )
+                                                               {
+                                                                   attemptSilent( () => sourceReader.releaseLock() );
+                                                               }
+
+                                                               if ( isFunction( sourceReader?.close ) )
+                                                               {
+                                                                   attemptSilent( () => sourceReader.close() );
+                                                               }
+                                                           }
+
+                                                           if ( pValue && isFunction( pValue?.releaseLock ) )
+                                                           {
+                                                               attemptSilent( () => pValue.releaseLock() );
+                                                           }
+
                                                            return;
                                                        }
                                                    }
@@ -1089,6 +1150,12 @@ const { _ud = "undefined", $scope } = constants;
                                                {
                                                    // If the internal buffer is empty AND the source stream is done, close the output stream
                                                    attemptSilent( () => controller.close() );
+
+                                                   // and release the lock
+                                                   if ( sourceReader && isFunction( sourceReader?.releaseLock ) )
+                                                   {
+                                                       attemptSilent( () => sourceReader.releaseLock() );
+                                                   }
                                                }
                                            },
 
@@ -1105,6 +1172,11 @@ const { _ud = "undefined", $scope } = constants;
 
                                                    const event = new ModuleEvent( "StreamCancelled", { reason: pReason } );
                                                    toolBocksModule.dispatchEvent( event );
+
+                                                   if ( isFunction( sourceReader?.releaseLock ) )
+                                                   {
+                                                       attempt( () => sourceReader.releaseLock() );
+                                                   }
                                                }
                                            },
 
@@ -1120,16 +1192,16 @@ const { _ud = "undefined", $scope } = constants;
                                                    attemptSilent( () => sourceReader.close() );
                                                }
 
-                                               if ( pValue instanceof ReadableStream )
+                                               if ( pValue instanceof ReadableStream || (isNonNullObject( pValue ) && (isFunction( pValue.close ) || isFunction( pValue.releaseLock ))) )
                                                {
                                                    if ( !isNull( pValue ) && isFunction( pValue.releaseLock ) )
                                                    {
-                                                       attempt( () => pValue.releaseLock() );
+                                                       attemptSilent( () => pValue.releaseLock() );
                                                    }
 
                                                    if ( !isNull( pValue ) && isFunction( pValue.close ) )
                                                    {
-                                                       attempt( () => pValue.close() );
+                                                       attemptSilent( () => pValue.close() );
                                                    }
                                                }
                                            }
