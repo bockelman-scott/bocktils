@@ -502,22 +502,38 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
 
     /**
+     * Used as an 'interface'
+     */
+    class ILogger extends EventTarget
+    {
+        constructor()
+        {
+            super();
+        }
+
+        log( ...pData ) {};
+
+        info( ...pData ) {};
+
+        warn( ...pData ) {};
+
+        debug( ...pData ) {};
+
+        error( ...pData ) {};
+
+        trace( ...pData ) {};
+    }
+
+    /**
      * Defines a logger that implements expected methods
      * but does not do anything.<br>
-     * This is used when logging is disabled,<br>
+     * This is used when logging is disabled<br>
      * which might be desirable if consumers prefer to handle errors via event listeners instead.<br>
      * @type {ILogger}
      */
-    const MockLogger =
-        {
-            log: no_op,
-            info: no_op,
-            warn: no_op,
-            debug: no_op,
-            error: no_op,
-            trace: no_op,
-            mocked: true
-        };
+    let MockLogger = new ILogger();
+    MockLogger.mocked = true;
+    MockLogger = Object.freeze( Object.seal( MockLogger ) );
 
     /*
      * The following functions are used in the base module,
@@ -2342,7 +2358,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
                 if ( match && !visited.has( name ) )
                 {
-                    const value = attempt( () => pObject[name] ) || attemptSilent( () => pObject[("#" + name)] );
+                    const value = attemptSilent( () => pObject[name] ) || attemptSilent( () => pObject[("#" + name)] );
 
                     const entry = [name, value, pObject];
 
@@ -6339,12 +6355,16 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          */
         static isLogger( pLogger )
         {
-            return (isNonNullObj( pLogger )
-                    && isFunc( pLogger[S_LOG] )
-                    && isFunc( pLogger[S_INFO] )
-                    && isFunc( pLogger[S_WARN] )
-                    && isFunc( pLogger[S_DEBUG] )
-                    && isFunc( pLogger[S_ERROR] ));
+            if ( _ud === typeof pLogger || null === pLogger )
+            {
+                return false;
+            }
+            return (pLogger instanceof ILogger) || (isNonNullObj( pLogger )
+                                                    && isFunc( pLogger[S_LOG] )
+                                                    && isFunc( pLogger[S_INFO] )
+                                                    && isFunc( pLogger[S_WARN] )
+                                                    && isFunc( pLogger[S_DEBUG] )
+                                                    && isFunc( pLogger[S_ERROR] ));
         }
 
         /**
@@ -8091,6 +8111,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             ObjectEntry,
             Visitor,
 
+            ILogger,
+
             Merger,
             mergeObjects: function( ...pObjects )
             {
@@ -8150,7 +8172,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     StackTrace,
                     StatefulListener,
                     ToolBocksModule,
-                    Visitor
+                    Visitor,
+                    ILogger
                 }
         };
 
