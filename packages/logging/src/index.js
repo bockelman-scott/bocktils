@@ -29,6 +29,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         ExecutionMode,
         StatefulListener,
         StackTrace,
+        ILogger,
         objectToString,
         resolveError,
         lock,
@@ -1430,7 +1431,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
      * This class defines a no_op 'logger' to indicate that logging is not required.
      * It is useful for passing to methods or functions that require or expect an instance of ILogger
      */
-    class NullLogger extends EventTarget
+    class NullLogger extends ILogger
     {
         constructor()
         {
@@ -1807,6 +1808,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             DEFAULT_ERROR_TEMPLATE,
             DEFAULT_LOG_FORMATTER_OPTIONS,
             DEFAULT_LOGGER_OPTIONS,
+            ILogger,
             LogLevel,
             LogRecord,
             LogFormatter,
