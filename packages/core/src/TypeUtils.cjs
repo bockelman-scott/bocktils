@@ -105,6 +105,7 @@ const $scope = constants?.$scope || function()
 
             attempt,
             asyncAttempt,
+            attemptSilent,
             detectCycles,
 
             isObjectLiteral,
@@ -917,7 +918,7 @@ const $scope = constants?.$scope || function()
     {
         if ( isString( pObj ) )
         {
-            return isPrimitiveWrapper( pObj ) ? (pObj.valueOf() || (_mt + pObj)) : pObj;
+            return String( isPrimitiveWrapper( pObj ) ? (pObj.valueOf() || (_mt + pObj)) : pObj );
         }
         return (0 === pObj || _zero === pObj || false === pObj) ? _zero : ((_mt + String( pObj ) + _mt).trim());
     }
@@ -5814,35 +5815,42 @@ const $scope = constants?.$scope || function()
         {
             entries.forEach( entry =>
                              {
-                                 const key = asString( ObjectEntry.getKey( entry ), true );
+                                 const key = _toString( ObjectEntry.getKey( entry ) );
 
                                  // Skip if the property already exists (e.g., from parent class)
                                  // or is a property included in the omitted list
-                                 if ( !omitted.includes( key ) )
+                                 if ( key && !omitted.includes( key ) )
                                  {
-                                     if ( !Object.hasOwn( target, key ) && !(key in target) )
+                                     if ( !(key in target) )
                                      {
-                                         Object.defineProperty( target,
-                                                                key,
-                                                                {
-                                                                    configurable: false,
-                                                                    enumerable: true,
-                                                                    get: function()
+                                         try
+                                         {
+                                             Object.defineProperty( target,
+                                                                    key,
                                                                     {
-                                                                        const value = delegate[key];
-
-                                                                        if ( isFunction( value ) )
+                                                                        configurable: false,
+                                                                        enumerable: true,
+                                                                        get: function()
                                                                         {
-                                                                            return value.bind( delegate );
+                                                                            const value = delegate[key];
+
+                                                                            if ( isFunction( value ) )
+                                                                            {
+                                                                                return value.bind( delegate );
+                                                                            }
+
+                                                                            return value;
                                                                         }
+                                                                    } );
 
-                                                                        return value;
-                                                                    }
-                                                                } );
+                                             propertiesDelegated.push( key );
 
-                                         propertiesDelegated.push( key );
-
-                                         delegated = true;
+                                             delegated = true;
+                                         }
+                                         catch( ex )
+                                         {
+                                             attemptSilent( () => toolBocksModule.handleError( ex, delegateTo, target, delegate, key ) );
+                                         }
                                      }
                                  }
                              } );
