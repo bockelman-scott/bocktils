@@ -3437,9 +3437,14 @@ const { _ud = "undefined", $scope } = constants;
         };
     }
 
-    function normalizeEmailAddress( pEmail )
+    function normalizeEmailAddress( pEmail, pRemoveDots = false )
     {
         let email = lcase( asString( pEmail, true ) );
+
+        if ( isBlank( email ) || $ln( email ) < 5 )
+        {
+            return email;
+        }
 
         // handle some common typos
         email = asString( email, true ).replace( /\.(comm|con|cpm|cok|coj|co,)$/i, ".com" );
@@ -3455,7 +3460,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             email = asString( email, true ).replace( /\+[^@]+@/, "@" );
 
-            if ( ["gmail.com", "googlemail.com"].includes( tld ) )
+            if ( pRemoveDots && (["gmail.com", "googlemail.com"].includes( tld )) )
             {
                 let parts = email.split( "@" );
                 email = asString( parts[0], true ).replaceAll( /\./g, _mt ) + "@" + asString( parts[1] || tld, true );
