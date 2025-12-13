@@ -7,6 +7,7 @@ const fileUtils = require( "@toolbocks/files" );
 const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils, localeUtils } = core;
 
 const {
+    ILogger,
     AsyncLogger,
     LogLevel,
     LogFormatter,
