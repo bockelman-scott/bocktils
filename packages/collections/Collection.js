@@ -12,17 +12,7 @@ const core = require( "@toolbocks/core" );
 const { constants } = core;
 
 /* define a variable for typeof undefined */
-const { _ud = "undefined" } = constants;
-
-/**
- * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
- * @type {function():Object}
- * @return {Object} The host environment scope, a.k.a. globalThis, (i.e., Browser 'window', Node.js 'global', or Worker 'self')
- */
-const $scope = constants?.$scope || function()
-{
-    return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-};
+const { _ud = "undefined", $scope } = constants;
 
 // noinspection FunctionTooLongJS
 /**
@@ -745,7 +735,10 @@ const $scope = constants?.$scope || function()
         {
             const me = this;
 
-            for( const item of this )
+            // prevent issues with a mutable collection
+            let snapshot = [...this];
+
+            for( const item of snapshot )
             {
                 await sleep( 10 );
 
@@ -792,16 +785,6 @@ const $scope = constants?.$scope || function()
                                            async pull( controller )
                                            {
                                                const { value, done } = await iterator.next();
-
-                                               if ( this.#eventsEnabled )
-                                               {
-                                                   me.dispatchEvent( new ModuleEvent( "YieldedValue",
-                                                                                      {
-                                                                                          item: value,
-                                                                                          source: this,
-                                                                                          collection: me
-                                                                                      } ) );
-                                               }
 
                                                if ( done )
                                                {
