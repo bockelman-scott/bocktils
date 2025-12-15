@@ -29,24 +29,26 @@ const { _ud = "undefined", $scope } = constants;
         return scp[INTERNAL_NAME];
     }
 
-    const { _mt_str } = constants;
+    const { _mt_str = "", _mt = _mt_str } = constants;
 
-    const {
-        ModuleEvent,
-        ToolBocksModule,
-        ObjectEntry,
-        objectEntries,
-        objectKeys,
-        objectValues,
-        resolveError,
-        populateOptions,
-        attempt,
-        attemptSilent,
-        asyncAttempt,
-        sleep,
-        lock,
-        $ln
-    } = moduleUtils;
+    const
+        {
+            ModuleEvent,
+            ToolBocksModule,
+            ObjectEntry,
+            IllegalStateError,
+            objectEntries,
+            objectKeys,
+            objectValues,
+            resolveError,
+            populateOptions,
+            attempt,
+            attemptSilent,
+            asyncAttempt,
+            sleep,
+            lock,
+            $ln
+        } = moduleUtils;
 
     const modName = "BufferUtils";
 
@@ -66,6 +68,7 @@ const { _ud = "undefined", $scope } = constants;
         isFunction,
         isArray,
         isTypedArray,
+        isPromise,
         toDecimal,
         clamp = moduleUtils?.clamp
     } = typeUtils;
@@ -856,7 +859,19 @@ const { _ud = "undefined", $scope } = constants;
                     return this._streamToSingleChunkedStream( pValue );
                 }
 
-                encodedData = Streamer._encodeData( pValue );
+                if ( isPromise( pValue ) )
+                {
+                    const me = this;
+
+                    (async function()
+                    {
+                        return me.asSingleChunkStream( await asyncAttempt( async() => await Promise.resolve( pValue ) ) );
+                    }());
+
+                    throw new IllegalStateError( `Cannot stream an unresolved Promise`, pValue );
+                }
+
+                encodedData = Streamer._encodeData( isNull( pValue ) ? _mt : pValue );
             }
             catch( ex )
             {
@@ -914,7 +929,7 @@ const { _ud = "undefined", $scope } = constants;
                 return this._streamAsChunkedStream( pValue, pChunkSize, pDelayMs );
             }
 
-            let encodedData = attempt( () => Streamer._encodeData( pValue ) );
+            let encodedData = attempt( () => Streamer._encodeData( isNull( pValue ) ? _mt : pValue ) );
 
             const chunkSize = clamp( asInt( pChunkSize, this.chunkSize ), MIN_STREAMING_CHUNK_SIZE, MAX_STREAMING_CHUNK_SIZE );
             const delayMs = clamp( asInt( pDelayMs, this.delayMs ), MIN_STREAMING_DELAY_MILLISECONDS, MAX_STREAMING_DELAY_MILLISECONDS );
@@ -1214,7 +1229,7 @@ const { _ud = "undefined", $scope } = constants;
 
             let decoder = pDecoder || new TextDecoder();
 
-            let s = chunks.map( chunk => decoder.decode( chunk ) ).join( "" );
+            let s = chunks.map( chunk => decoder.decode( chunk ) ).join( _mt );
             s += decoder.decode();
 
             // If the content is JSON and pParseJson is true,
@@ -1245,12 +1260,17 @@ const { _ud = "undefined", $scope } = constants;
          */
         async readStream( pStream, pContentType, pParseJson = true )
         {
-            let stream = pStream instanceof ReadableStream ? pStream : this.asChunkedStream( pStream );
-
             let contentType = lcase( asString( pContentType, true ) );
 
             // Determine whether we expect the stream to contain character data.
             const isCharacterData = /(text\/.*|application\/(json|javascript|xml|xhtml\+xml)|charset=)/i.test( contentType );
+
+            if ( isNull( pStream ) )
+            {
+                return this.asChunkedStream( (isCharacterData ? (pParseJson ? {} : _mt) : ((contentType.includes( "json" ) || pParseJson) ? {} : new Uint8Array( 0 ))) );
+            }
+
+            let stream = pStream instanceof ReadableStream ? pStream : (isPromise( pStream ) ? this.asChunkedStream( await Promise.resolve( pStream ) ) : this.asChunkedStream( pStream ));
 
             let totalLength = 0;
 
@@ -1355,6 +1375,24 @@ const { _ud = "undefined", $scope } = constants;
                                                    chunkSize: DEFAULT_STREAMING_CHUNK_SIZE,
                                                    delayMs: asInt( DEFAULT_STREAMING_DELAY_MILLISECONDS )
                                                } );
+
+                if ( isNull( pStream ) )
+                {
+                    let contentType = lcase( asString( pContentType, true ) );
+
+                    // Determine whether we expect the stream to contain character data.
+                    const isCharacterData = /(text\/.*|application\/(json|javascript|xml|xhtml\+xml)|charset=)/i.test( contentType );
+
+                    let content = (isCharacterData ? (pParseJson ? {} : "") : ((contentType.includes( "json" ) || pParseJson) ? {} : new Uint8Array( 0 )));
+
+                    return streamer.readStream( content, contentType, pParseJson );
+                }
+
+                if ( isPromise( pStream ) )
+                {
+                    return streamer.readStream( await Promise.resolve( pStream ), pContentType, pParseJson );
+                }
+
                 return streamer.readStream( pStream, pContentType, pParseJson );
             },
             Streamer
