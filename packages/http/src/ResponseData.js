@@ -438,11 +438,11 @@ const {
                     // See https://axios-http.com/docs/handling_errors, for example
                     this.#frameworkResponse = pResponse?.response || pResponse || source?.response || source;
 
-                    this.#data = this.#frameworkResponse?.data || source?.data || this.#frameworkResponse?.body || options.data || source?.body || options.body;
+                    this.#data = this.#frameworkResponse?.data || source?.data || pResponse?.data || options.data || this.#frameworkResponse?.body || source?.body || options.body || pResponse?.body;
 
-                    this.#frameworkHeaders = this.#frameworkResponse?.headers || source?.headers || options.headers;
+                    this.#frameworkHeaders = this.#frameworkResponse?.headers || source?.headers || options.headers || pResponse?.headers;
 
-                    this.#status = this.#frameworkResponse?.status || source?.status || options.status;
+                    this.#status = this.#frameworkResponse?.status || source?.status || options.status || pResponse?.status;
 
                     this.#error = isError( pResponse ) ? pResponse : isError( pConfig ) ? pConfig : isError( pOptions ) ? pOptions : null;
 
@@ -928,7 +928,12 @@ const {
 
         const config = pConfig || obj?.config || response?.config;
 
-        const options = asObject( pOptions || config || response );
+        const options = asObject( pOptions || config || response || obj );
+
+        if ( isError( obj ) )
+        {
+            return new ResponseData( obj, config, { ...(options), response } );
+        }
 
         return new ResponseData( response, config, options );
     };

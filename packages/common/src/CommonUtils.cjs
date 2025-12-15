@@ -6,12 +6,7 @@ const objectUtils = require( "./ObjectUtils.cjs" );
 
 const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils, localeUtils, NumberParser, guidUtils } = core;
 
-const { _ud = "undefined" } = constants;
-
-const $scope = constants?.$scope || function()
-{
-    return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-};
+const { _ud = "undefined", $scope } = constants;
 
 (function exposeModule()
 {

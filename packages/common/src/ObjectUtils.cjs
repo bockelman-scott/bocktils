@@ -25,6 +25,8 @@ const { _ud = "undefined", $scope } = constants;
         return $scope()[INTERNAL_NAME];
     }
 
+    const MAX_STACK_SIZE = 64;
+
     /**
      * An array of this module's dependencies
      * which are re-exported with this module,
@@ -381,18 +383,6 @@ const { _ud = "undefined", $scope } = constants;
 
         return false;
     };
-
-    /*
-     Object.prototype.isIdenticalTo = function( pOther, pStrict, pClass )
-     {
-     return canCompareObject( pOther, pStrict, pClass ) && (identical( this, pOther ));
-     };
-
-     Object.prototype.equals = function( pObject )
-     {
-     return same( this, pObject, true, getClass( this ) );
-     };
-     */
 
     /**
      * Returns the first candidate object that has a method named pFunctionName
