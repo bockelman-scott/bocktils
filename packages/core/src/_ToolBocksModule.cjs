@@ -7470,7 +7470,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         const isValidArgument = e => isStr( e ) && e.trim().length > 0;
         const isValidPathElement = e => isValidArgument( e ) && /[^.\s#]+/.test( e );
 
-        let propertyPath = arguments.length > 1 ? [...arguments].filter( isValidArgument ) : pPropertyPath;
+        let propertyPath = isNull( pPropertyPath ) ? ( arguments.length > 1 ? [...arguments].filter( isValidArgument ) : pPropertyPath ) : pPropertyPath;
 
         let arr = isArray( propertyPath ) ? propertyPath.map( toDotNotation ).flat() : propertyPath;
 
@@ -7492,7 +7492,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         let keys = toNodePathArray( pPropertyPath );
 
-        let mutator = (arguments.length > 2 || !isNull( pValue )) ? ( object, key, value ) =>
+        let mutator = ( !isNull( pValue ) || arguments.length > 2) ? ( object, key, value ) =>
         {
             attempt( () => object[key] = ((keys.length > 0) ? (/^d+$/.test( String( keys[0] ) ) ? [] : {}) : (value || pValue)) );
 
@@ -7784,11 +7784,13 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         #__eventTarget;
         #__constructedWith;
 
-        constructor()
+        constructor(...pArgs)
         {
             this.#__eventTarget = new EventTarget();
 
-            this.#__constructedWith = (arguments && arguments.length) ? [...arguments] : [];
+            let args = [...(pArgs || [])];
+
+            this.#__constructedWith = (args && args.length) ? [...args] : [];
         }
 
         dispatchEvent( pEvent )

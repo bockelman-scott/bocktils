@@ -193,7 +193,7 @@ const { _ud = "undefined", $scope } = constants;
 
         constructor( pName, pAbbreviation, pUtcOffset, pLocalOffset, pTimeChanges )
         {
-            if ( arguments.length < 2 )
+            if ( isNull( pAbbreviation ) || arguments.length < 2 )
             {
                 const timeZone = TimeZone.parse( pName );
 
