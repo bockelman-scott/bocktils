@@ -90,6 +90,7 @@ const {
     const {
         ModuleEvent,
         ToolBocksModule,
+        IterationCap,
         ObjectEntry,
         objectEntries,
         populateOptions,
@@ -270,13 +271,40 @@ const {
 
         try
         {
-            let response = responseData.response;
+            let response = responseData.response?.response || responseData.response;
 
             let data = (responseData.data || response?.data || responseData.body || response?.body || response);
 
             if ( isNonNullObject( data ) && isPromise( data ) )
             {
-                data = await asyncAttempt( async() => await data );
+                data = await asyncAttempt( async() => await data ) || responseData.body || response?.body || response;
+            }
+
+            const iterationCap = new IterationCap( 4 );
+
+            while ( (isNull( data ) || !isFunction( data?.pipe )) && !iterationCap.reached )
+            {
+                switch ( iterationCap.iterations )
+                {
+                    case 0:
+                        data = await asyncAttempt( async() => await Promise.resolve( data ) );
+                        break;
+
+                    case 1:
+                        data = await asyncAttempt( async() => await Promise.resolve( responseData.data || responseData.response?.response?.data || responseData.response?.data || response?.data ) );
+                        break;
+
+                    case 2:
+                        data = await asyncAttempt( async() => await Promise.resolve( responseData.body || responseData.response?.response?.body || responseData.response?.body || response?.body ) );
+                        break;
+
+                    case 3:
+                        data = await asyncAttempt( async() => await Promise.resolve( response?.response?.body || response?.body ) );
+
+                    default:
+                        data = new Streamer().asChunkedStream( await asyncAttempt( async() => await Promise.resolve( responseData.data || response?.data || responseData.body || response?.body || response ) ) );
+                        break;
+                }
             }
 
             if ( isNonNullObject( data ) && isFunction( data.pipe ) )
@@ -420,7 +448,7 @@ const {
             if ( isError( pResponse ) || isError( pConfig ) )
             {
                 this.#error = resolveError( isError( pResponse ) ? pResponse : pConfig, pConfig, { message: pResponse?.message || pConfig?.message || asString( pConfig || pResponse, true ) } );
-                this.#data = isError( pConfig ) ? (pConfig?.message || pConfig) : isError( pResponse ) ? (pResponse?.message || pResponse) : (this.#error?.message || this.#error);
+                this.#data = isError( pResponse ) ? (pResponse?.message || pResponse) : isError( pConfig ) ? (pConfig?.message || pConfig) : (this.#error?.message || this.#error);
             }
             else
             {
@@ -436,7 +464,7 @@ const {
 
                     // Some frameworks return the response as a property of an error returned in place of a response.
                     // See https://axios-http.com/docs/handling_errors, for example
-                    this.#frameworkResponse = pResponse?.response || pResponse || source?.response || source;
+                    this.#frameworkResponse = pResponse?.response || source?.response || pResponse || source;
 
                     this.#data = this.#frameworkResponse?.data || source?.data || pResponse?.data || options.data || this.#frameworkResponse?.body || source?.body || options.body || pResponse?.body;
 
@@ -463,7 +491,7 @@ const {
                                                          headers: this.#frameworkHeaders || source?.headers || options.headers
                                                      } );
 
-                    this.#options.data = ((config.responseType === "application/json" || isJson( this.#options.data )) ? asObject( this.#options.data ) : this.#options.data) || this.#options.data;
+                    this.#options.data = ((config.responseType === "application/json" || isJson( this.#options.data )) ? asObject( this.#options.data ) : this.#options.data || asObject( this.#data )) || this.#options.data || this.#data;
 
                     if ( isNonNullObject( source ) )
                     {
@@ -771,7 +799,7 @@ const {
 
         clone()
         {
-            return new ResponseData( this.frameworkResponse || this.options.response || this.response,
+            return new ResponseData( cloneResponse( this.frameworkResponse || this.options.response || this.response ),
                                      this.config,
                                      this.options );
         }
@@ -829,7 +857,7 @@ const {
                                          {
                                              if ( isString( key ) && !isBlank( key ) && !isNull( value ) )
                                              {
-                                                 if ( isNull( me[key] ) || isWritable( me, key ) )
+                                                 if ( isNull( me[key] ) && isWritable( me, key ) )
                                                  {
                                                      attempt( () => me[key] = (me[key] || value) );
                                                  }
@@ -922,7 +950,7 @@ const {
             return pObject;
         }
 
-        let obj = { ...(asObject( pObject || {} )) };
+        let obj = asObject( pObject || pConfig || pOptions || {} ) || {};
 
         const response = obj?.response || pConfig?.response || pOptions?.response || obj;
 
@@ -932,7 +960,7 @@ const {
 
         if ( isError( obj ) )
         {
-            return new ResponseData( obj, config, { ...(options), response } );
+            return new ResponseData( obj, config, options, response );
         }
 
         return new ResponseData( response, config, options );
@@ -950,7 +978,7 @@ const {
             return pObject;
         }
 
-        let obj = { ...(asObject( pObject || pConfig || pOptions || {} )) };
+        let obj = (asObject( pObject || pConfig || pOptions || {} ) || {});
 
         const response = obj?.response || pConfig?.response || pOptions?.response || obj;
 

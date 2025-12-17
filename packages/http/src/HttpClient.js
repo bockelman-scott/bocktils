@@ -1752,7 +1752,7 @@ const $scope = constants?.$scope || function()
 
                 if ( ResponseData.isOk( status ) || (status >= 200 && status < 300) )
                 {
-                    let info = responseData.data || responseData.response?.body || responseData.body;
+                    let info = responseData.data || responseData.response?.data || responseData.response?.body || responseData.body;
 
                     if ( isPromise( info ) )
                     {
@@ -1762,6 +1762,13 @@ const $scope = constants?.$scope || function()
                     if ( info instanceof ReadableStream )
                     {
                         const contentType = HttpHeaders.getHeaderValue( headers, "Content-Type" );
+
+                        if( !isNull(info) && info.locked )
+                        {
+                            // some other consumer is either streaming the response or has already consumed it
+                            return responseData.data || responseData.response?.data || info;
+                        }
+
                         return await readStream( info, contentType, true );
                     }
                 }
