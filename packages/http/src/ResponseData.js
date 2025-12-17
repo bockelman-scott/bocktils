@@ -256,7 +256,7 @@ const {
 
     async function streamToFile( pResponseData, pFilePath )
     {
-        let logger = this.logger || konsole;
+        let logger = ToolBocksModule.resolveLogger( toolBocksModule.logger, konsole );
 
         let responseData = ResponseData.from( pResponseData );
 
