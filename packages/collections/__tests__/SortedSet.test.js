@@ -1,16 +1,28 @@
 /** import the utilities to test **/
 
-const collectionUtils = require( "../Collection.js" );
+const collectionUtils = require( "../SortedSet.js" );
 
-const { TYPES, Collection } = collectionUtils;
+const { TYPES, SortedSet } = collectionUtils;
 
 class A
 {
+    #id;
     #propertyName;
 
-    constructor( pName )
+    constructor( pId, pName )
     {
+        this.#id = pId;
         this.#propertyName = pName;
+    }
+
+    compareTo( pOther )
+    {
+
+    }
+
+    equals( pOther )
+    {
+
     }
 }
 
@@ -18,107 +30,48 @@ class B extends A
 {
     #anotherProperty;
 
-    constructor( pName, pAnotherProperty )
+    constructor( pId, pName, pAnotherProperty )
     {
-        super( pName );
+        super( pId, pName );
 
         this.#anotherProperty = pAnotherProperty;
     }
+
+    compareTo( pOther )
+    {
+
+    }
+
+    equals( pOther )
+    {
+
+    }
 }
 
-describe( "TYPES exist", () =>
+describe( "SortedSet Constructors", () =>
 {
-    test( "Enumerate TYPES",
+    test( "Construct SortedSet of Bs",
           () =>
           {
-              expect( Object.keys( TYPES ).length ).toEqual( 7 );
-              expect( Object.values( TYPES ).length ).toEqual( 7 );
+              let collection = new SortedSet( B, [] );
 
-              expect( Object.keys( TYPES ) ).toEqual( ["ANY", "string", "number", "bigint", "boolean", "function", "symbol"] );
-              expect( Object.values( TYPES ) ).toEqual( ["*", "string", "number", "bigint", "boolean", "function", "symbol"] );
-          } );
-} );
+              expect( collection instanceof SortedSet ).toBe( true );
 
-describe( "Collection Constructors", () =>
-{
-    test( "Construct Mixed-type Collection",
-          () =>
-          {
-              let collection = new Collection();
+              expect( collection.type ).toEqual( B );
 
-              expect( collection instanceof Collection ).toBe( true );
-
-              expect( collection.type ).toEqual( TYPES.ANY );
-
-              collection.add( 4 );
-              collection.add( "five" );
-              collection.add( { value: 6 } );
-              collection.add( { value: "seven" } );
-              collection.add( [8, 9] );
-
-              expect( collection.size ).toEqual( 5 );
-
-              let collection_2 = new Collection( TYPES.ANY, [4, "five", { value: 6 }, { value: "seven" }, [8, 9]] );
-
-              expect( collection_2 instanceof Collection ).toBe( true );
-
-              expect( collection_2.type ).toEqual( TYPES.ANY );
-
-              expect( collection_2.size ).toEqual( 5 );
-
-              expect( collection ).toEqual( collection_2 );
-
-              expect( collection.equals( collection_2 ) ).toBe( true );
-          } );
-
-    test( "Construct Numeric Collection",
-          () =>
-          {
-              let collection = new Collection( "number" );
-
-              collection.add( 4 );
-
-              expect( collection.size ).toEqual( 1 );
-
-              try
-              {
-                  collection.add( "four" );
-              }
-              catch( ex )
-              {
-                  console.log( ex );
-              }
-
-              expect( collection.size ).toEqual( 1 );
-
-          } );
-
-
-    test( "Construct Classed Collection",
-          () =>
-          {
-              let collection = new Collection( A );
-
-              collection.add( new A("Scott") );
-
-              expect( collection.size ).toEqual( 1 );
-
-              collection.add( new B("Debby","Cernich") );
+              collection.add( new B( 1, "abc", "def" ) );
+              collection.add( new B( 2, "xyz", "uvw" ) );
 
               expect( collection.size ).toEqual( 2 );
 
-              try
-              {
-                  collection.add( "four" );
-              }
-              catch( ex )
-              {
-                  console.log( ex );
-              }
+              collection.add( new B( 1, "abc", "def" ) );
+              collection.add( new B( 2, "xyz", "uvw" ) );
 
               expect( collection.size ).toEqual( 2 );
 
+
           } );
+
 } );
 
 

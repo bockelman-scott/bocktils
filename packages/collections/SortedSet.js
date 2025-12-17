@@ -178,7 +178,7 @@ const $scope = constants?.$scope || function()
 
             arr = arr.sort( this.#comparator );
 
-            super._replace( ...arr );
+            this.addAll( ...arr );
         }
 
         get comparator()
@@ -212,7 +212,7 @@ const $scope = constants?.$scope || function()
 
             const currentSize = this.size;
 
-            let arr = this.toArray();
+            let arr = [...(asArray( this.toArray() ))];
 
             let exists = arr.find( e => _isEqual( e, pItem ) );
 
@@ -222,7 +222,9 @@ const $scope = constants?.$scope || function()
 
                 arr = arr.sort( this.comparator );
 
-                super._replace( ...arr );
+                this.clear();
+
+                super.addAll( ...arr );
             }
 
             return this.size > currentSize;
@@ -257,7 +259,9 @@ const $scope = constants?.$scope || function()
             {
                 arr = arr.sort( this.comparator );
 
-                super._replace( ...arr );
+                this.clear();
+
+                super.addAll( ...arr );
             }
 
             return this.size > currentSize;
