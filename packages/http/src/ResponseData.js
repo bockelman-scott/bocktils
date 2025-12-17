@@ -968,17 +968,22 @@ const {
 
     ResponseData.asyncFrom = async function( pObject, pConfig, pOptions )
     {
-        if ( ResponseData.isResponseData( pObject ) )
-        {
-            if ( isPromise( pObject.data ) )
-            {
-                await asyncAttempt( async() => await pObject.resolveData() );
-            }
+        let obj = (asObject( pObject || pConfig || pOptions || {} ) || {});
 
-            return pObject;
+        if ( isPromise( obj ) )
+        {
+            obj = await asyncAttempt( async() => await Promise.resolve( obj ) );
         }
 
-        let obj = (asObject( pObject || pConfig || pOptions || {} ) || {});
+        if ( ResponseData.isResponseData( obj ) )
+        {
+            if ( isPromise( obj.data ) )
+            {
+                await asyncAttempt( async() => await obj.resolveData() );
+            }
+
+            return ResponseData.from( obj, pConfig, pOptions );
+        }
 
         const response = obj?.response || pConfig?.response || pOptions?.response || obj;
 
