@@ -1139,7 +1139,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     }
 
     /**
-     * Executes a function with the specified arguments,
+     * Executes a function in the specified scope with the specified arguments,
      * handling both synchronous and asynchronous function execution.<br>
      * <br>
      * Catches and processes any errors that occur during the function execution,<br>
@@ -1152,6 +1152,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * with a call to its reportError method, which emits an error event and/or writes to a user-specified logger.<br>
      * <br>
      *
+     * @param {Object|Function} pScope The scope in which to execute the function (a.k.a. 'this' for methods)
      * @param {Function} pFunction The function to be executed. Can be a synchronous or asynchronous function.
      * @param {...any} pArgs The arguments to pass to the function when it is invoked.
      * @return {any|Promise<any>} Returns the result of the function execution.
@@ -1160,11 +1161,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     function handleAttempt( pFunction, ...pArgs )
     {
-        if ( isFunc( pFunction ) )
+        let args = [...(pArgs || [])];
+
+        let func = isFunc( pFunction ) ? pFunction : ($ln( args ) <= 0 ? null : args.find( e => isFunc( e ) ));
+
+        if ( isFunc( func ) )
         {
             if ( handleAttempt.trace )
             {
-                handleAttempt.traceFunctionCall( pFunction, ...pArgs );
+                handleAttempt.traceFunctionCall( func, ...args );
             }
 
             handleAttempt.lastError = null;
@@ -1172,9 +1177,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             try
             {
-                return !isAsyncFunction( pFunction ) ?
-                       pFunction.call( $scope(), ...pArgs ) :
-                       pFunction.call( $scope(), ...pArgs ).then( result => result );
+                return !isAsyncFunction( func ) ? func( ...pArgs ) : func( ...pArgs );
             }
             catch( ex )
             {
@@ -1190,50 +1193,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
 
         return pFunction;
-    }
-
-    handleAttempt.traceFunctionCall = ( pFunction, ...pArgs ) =>
-    {
-        if ( !handleAttempt.trace )
-        {
-            return;
-        }
-
-        const nameFromSource = ( pFunction ) =>
-        {
-            let s = _asStr( functionToString.call( pFunction, pFunction ) ).trim();
-            s = s.replace( /function /, _mt_str ).trim().replace( /\s*\(.*\).*/, _mt_str ).trim();
-            return s.replace( /function\s+/, _mt_str ).trim().replace( /\s*\(.*\).*/, _mt_str ).trim();
-        };
-
-        const name = pFunction?.name || nameFromSource( pFunction ) || "An anonymous function";
-
-        const hasArguments = [...(pArgs || [])].length > 0;
-
-        konsole.trace( "Calling", name, ...(hasArguments ? ["with arguments:", ...pArgs].map( e => String( e ) + "\n" ) : ["without arguments"]) );
-    };
-
-    /**
-     * An asynchronous version of handleAttempt
-     * Used when attempting to execute asynchronous functions or methods.
-     *
-     * @param {function} pFunction
-     * @param {...*} pArgs
-     *
-     * @returns {Promise<*>}
-     */
-    async function asyncHandleAttempt( pFunction, ...pArgs )
-    {
-        if ( !isAsyncFunction( pFunction ) )
-        {
-            return handleAttempt( pFunction, ...pArgs );
-        }
-        else
-        {
-            handleAttempt.traceFunctionCall( pFunction, ...pArgs );
-        }
-
-        return await pFunction.call( $scope(), ...pArgs ).catch( ex => handleAttempt.handleError( ex, pFunction, ...pArgs ) );
     }
 
     /**
@@ -1267,6 +1226,58 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         handleAttempt.trace = true;
     };
 
+    handleAttempt.traceFunctionCall = ( pFunction, ...pArgs ) =>
+    {
+        if ( !handleAttempt.trace )
+        {
+            return;
+        }
+
+        const nameFromSource = ( pFunction ) =>
+        {
+            let s = _asStr( functionToString.call( pFunction, pFunction ) ).trim();
+            s = s.replace( /function /, _mt_str ).trim().replace( /\s*\(.*\).*/, _mt_str ).trim();
+            return s.replace( /function\s+/, _mt_str ).trim().replace( /\s*\(.*\).*/, _mt_str ).trim();
+        };
+
+        const name = pFunction?.name || nameFromSource( pFunction ) || "An anonymous function";
+
+        const hasArguments = [...(pArgs || [])].length > 0;
+
+        konsole.trace( "Calling", name, ...(hasArguments ? ["with arguments:", ...pArgs].map( e => String( e ) + "\n" ) : ["without arguments"]) );
+    };
+
+    function getLastError()
+    {
+        return handleAttempt.lastError;
+    }
+
+    async function getLastAsynchronousError()
+    {
+        return Promise.resolve( handleAttempt.lastError );
+    }
+
+    /**
+     * An asynchronous version of handleAttempt
+     * Used when attempting to execute asynchronous functions or methods.
+     *
+     * @param {function} pFunction
+     * @param {...*} pArgs
+     *
+     * @returns {Promise<*>}
+     */
+    async function asyncHandleAttempt( pFunction, ...pArgs )
+    {
+        if ( !isAsyncFunction( pFunction ) )
+        {
+            return handleAttempt( pFunction, ...pArgs );
+        }
+
+        handleAttempt.traceFunctionCall( pFunction, ...pArgs );
+
+        return await pFunction( ...pArgs ).catch( ex => handleAttempt.handleError( ex, pFunction, ...pArgs ) );
+    }
+
     /**
      * Executes the specified function with the provided arguments
      * and handles the execution using the handleAttempt function,
@@ -1295,7 +1306,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     {
                         try
                         {
-                            return await pFunction.call( $scope(), ...pArgs );
+                            return await pFunction( ...pArgs );
                         }
                         catch( ex )
                         {
@@ -1312,7 +1323,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             {
                 try
                 {
-                    return pFunction.call( $scope(), ...pArgs );
+                    return pFunction( ...pArgs );
                 }
                 catch( ex )
                 {
@@ -1338,23 +1349,13 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return await asyncHandleAttempt( pFunction, ...pArgs );
     }
 
-    function getLastError()
-    {
-        return handleAttempt.lastError;
-    }
-
-    async function getLastAsynchronousError()
-    {
-        return Promise.resolve( handleAttempt.lastError );
-    }
-
     async function asyncAttemptSilent( pFunction, ...pArgs )
     {
         if ( isFunc( pFunction ) )
         {
             try
             {
-                return await pFunction.call( $scope(), ...pArgs );
+                return await pFunction( ...pArgs );
             }
             catch( ex )
             {
@@ -1390,6 +1391,29 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     const resolveMethod = ( pMethod, pThis ) => canBind( pMethod, pThis ) || (isFunc( pMethod ) && isFunc( pThis?.[pMethod?.name] )) ? pMethod : (isStr( pMethod ) && (isNonNullObj( pThis ) || isFunc( pThis )) ? pThis[pMethod] || (() => pMethod || pThis) : (() => pMethod || pThis));
 
     /**
+     * Binds a method to a specific context and optionally pre-sets additional arguments.
+     * This function attempts to resolve and bind the given method to the provided context.
+     * If binding is not possible, it returns the unresolved method.
+     *
+     * @param {Function|string} pMethod - The method to bind, either as a function or a string representing the method name.
+     * @param {Object} pThis - The context (this) to which to bind the method.
+     * @param {...*} pArgs - Optional arguments to preset for the method.
+     *
+     * @return {Function} The bound method if binding is successful; otherwise, the unresolved method.
+     */
+    function bindMethod( pMethod, pThis, ...pArgs )
+    {
+        const method = resolveMethod( pMethod, pThis );
+
+        if ( canBind( method, pThis ) )
+        {
+            return attempt( () => method.bind( pThis, ...pArgs ) );
+        }
+
+        return method;
+    }
+
+    /**
      * Calls the specified method with the arguments passed,
      * using the specified object as the 'this' context to which the function is bound
      * or will be temporarily bound during execution.<br>
@@ -1406,16 +1430,17 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     function attemptMethod( pThis, pMethod, ...pArgs )
     {
-        const method = resolveMethod( pMethod, pThis );
+        let method = resolveMethod( pMethod, pThis );
 
         if ( isFunc( method ) )
         {
             if ( canBind( method, pThis ) )
             {
-                return attempt( () => method.call( pThis, ...pArgs ) );
+                method = bindMethod( method, pThis, ...pArgs );
+                return attempt( () => method() );
             }
 
-            return attempt( () => method.call( $scope(), ...pArgs ) );
+            return attempt( () => method( ...pArgs ) );
         }
 
         handleAttempt.handleError( new Error( NOT_A_FUNCTION ), pThis, pMethod, ...pArgs );
@@ -1441,16 +1466,17 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     async function asyncAttemptMethod( pThis, pMethod, ...pArgs )
     {
-        const method = resolveMethod( pMethod, pThis );
+        let method = resolveMethod( pMethod, pThis );
 
         if ( isAsyncFunction( method ) )
         {
             if ( canBind( method, pThis ) )
             {
-                return await asyncAttempt( async() => await method.call( pThis, ...pArgs ) );
+                method = bindMethod( method, pThis, ...pArgs );
+                return await asyncAttempt( async() => await method() );
             }
 
-            return await asyncAttempt( async() => await method.call( $scope(), ...pArgs ) );
+            return await asyncAttempt( async() => await method.call( (pThis || $scope()), ...pArgs ) );
         }
         else if ( isFunc( method ) )
         {
@@ -1460,29 +1486,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         handleAttempt.handleError( new Error( NOT_A_FUNCTION ), pThis, pMethod, ...pArgs );
 
         return method || pThis;
-    }
-
-    /**
-     * Binds a method to a specific context and optionally pre-sets additional arguments.
-     * This function attempts to resolve and bind the given method to the provided context.
-     * If binding is not possible, it returns the unresolved method.
-     *
-     * @param {Function|string} pMethod - The method to bind, either as a function or a string representing the method name.
-     * @param {Object} pThis - The context (this) to which to bind the method.
-     * @param {...*} pArgs - Optional arguments to preset for the method.
-     *
-     * @return {Function} The bound method if binding is successful; otherwise, the unresolved method.
-     */
-    function bindMethod( pMethod, pThis, ...pArgs )
-    {
-        const method = resolveMethod( pMethod, pThis );
-
-        if ( canBind( method, pThis ) )
-        {
-            return attempt( () => method.bind( pThis, ...pArgs ) );
-        }
-
-        return method;
     }
 
     /**
@@ -1504,7 +1507,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                         {
                             handleAttempt.traceFunctionCall( func, ...args );
 
-                            func.call( $scope(), ...(args || pArgs || []) ).then( no_op ).catch( no_op );
+                            func( ...(args || pArgs || []) ).then( no_op ).catch( no_op );
 
                         }, 10, ...(args || pArgs || []) );
         }
@@ -1512,7 +1515,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             async function _( ...pArgs )
             {
-                attempt( func.call( $scope(), ...(pArgs || args || []) ), ...(pArgs || args || []) );
+                attempt( () => func( ...(pArgs || args || []) ) );
             }
 
             fireAndForget( _, ...(args || pArgs || []) );
@@ -7470,7 +7473,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         const isValidArgument = e => isStr( e ) && e.trim().length > 0;
         const isValidPathElement = e => isValidArgument( e ) && /[^.\s#]+/.test( e );
 
-        let propertyPath = isNull( pPropertyPath ) ? ( arguments.length > 1 ? [...arguments].filter( isValidArgument ) : pPropertyPath ) : pPropertyPath;
+        let propertyPath = isNull( pPropertyPath ) ? (arguments.length > 1 ? [...arguments].filter( isValidArgument ) : pPropertyPath) : pPropertyPath;
 
         let arr = isArray( propertyPath ) ? propertyPath.map( toDotNotation ).flat() : propertyPath;
 
@@ -7784,7 +7787,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         #__eventTarget;
         #__constructedWith;
 
-        constructor(...pArgs)
+        constructor( ...pArgs )
         {
             this.#__eventTarget = new EventTarget();
 

@@ -1414,24 +1414,159 @@ describe( "getMessagesLocaleString", () =>
 
 describe( "Attempt/AsyncAttempt", () =>
 {
+    class Named
+    {
+        #name;
+
+        constructor( pName )
+        {
+            this.#name = pName;
+        }
+
+        get name()
+        {
+            return this.#name;
+        }
+
+        toUpper()
+        {
+            return this.name.toUpperCase();
+        }
+
+        async toLower()
+        {
+            return this.name.toLowerCase();
+        }
+
+        append( ...pArgs )
+        {
+            let args = [...(pArgs || [])];
+
+            args.forEach( arg => this.#name += " " + String( arg ) );
+
+            return this.name;
+        }
+
+        async replace( ...pArgs )
+        {
+            let args = [...(pArgs || [])];
+
+            let parts = this.name.split( " " );
+
+            let n = Math.min( args.length, parts.length );
+
+            for( let i = 0; i < n; i++ )
+            {
+                parts[i] = args[i];
+            }
+
+            this.#name = parts.join( " " );
+
+            return this.name;
+        }
+    }
+
+    function doSomething( ...pArgs )
+    {
+        let args = [...(pArgs || [])];
+
+        args.forEach( e => console.log( e ) );
+
+        return args.map( e => String( e ).toUpperCase() );
+    }
+
+    async function doItLater( ...pArgs )
+    {
+        let args = [...(pArgs || [])];
+
+        args.forEach( e => console.log( e ) );
+
+        return args.map( e => String( e ).toUpperCase() );
+    }
+
     test( "attempt is an alternative to try/catch", () =>
     {
-        // TODO
+        let mapped = attempt( () => doSomething( "a", "b", "c", 23 ) );
+
+        mapped.forEach( e => console.log( e ) );
+
+        let scott = new Named( "sCott" );
+
+        let fullName = attempt( () => scott.append( "Andrew", "Bockelman" ) );
+
+        console.log( fullName );
+
+        let func = scott.toUpper.bind( scott );
+
+        console.log( attempt( func ) );
+
+        func = scott.append.bind( scott, "can", "bind", "functions" );
+
+        console.log( attempt( func ) );
+
     } );
 
-    test( "asyncAttempt is an alternative to Promise.catch", () =>
+    test( "asyncAttempt is an alternative to Promise.catch", async() =>
     {
-        // TODO
+        let mapped = await asyncAttempt( async() => await doItLater( "a", "b", "c", 23 ) );
+        mapped.forEach( e => console.log( e ) );
+
+        let scott = new Named( "sCott" );
+
+        let func = scott.replace.bind( scott, "Dylan" );
+
+        let name = await asyncAttempt( func );
+
+        console.log( name );
+
+        attempt( () => scott.append( "Christopher", "Bockelman" ) );
+
+        console.log( scott.name );
+
+        await asyncAttempt( func, "Scott", "Matthew" );
+
+        console.log( scott.name );
     } );
 
     test( "attemptMethod is an alternative to try/catch", () =>
     {
-        // TODO
+        let scott = new Named( "sCott" );
+        let debby = new Named( "Debby" );
+
+        let SCOTT = attemptMethod( scott, scott.toUpper );
+
+        console.log( SCOTT );
+
+        attemptMethod( debby, debby.append, "Novak", "Cernich" );
+
+        console.log( debby.name );
+
+        attemptMethod( debby, debby.append, "Alberta", "Crane" );
+
+        console.log( debby.name );
+
+        attemptMethod( scott, debby.append, "Bockelman" );
+
+        console.log( scott.name );
+
+        attemptMethod( debby, debby.append, "Esquire" );
+
+        console.log( debby.name );
+        console.log( scott.name );
+
     } );
 
-    test( "asyncAttemptMethod is an alternative to Promise.catch", () =>
+    test( "asyncAttemptMethod is an alternative to Promise.catch", async() =>
     {
-        // TODO
+        let scott = new Named( "sCott" );
+        let debby = new Named( "Debby" );
+
+        await asyncAttemptMethod( scott, scott.replace, "Scott" );
+        expect( scott.name ).toEqual( "Scott" );
+
+        await asyncAttemptMethod( scott, async() => await scott.replace( "Dylan" ) );
+        expect( scott.name ).toEqual( "Dylan" );
+
     } );
 
     test( "fireAndForget runs an async function from any context without blocking", () =>
