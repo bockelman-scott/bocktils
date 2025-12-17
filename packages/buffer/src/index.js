@@ -1265,12 +1265,21 @@ const { _ud = "undefined", $scope } = constants;
             // Determine whether we expect the stream to contain character data.
             const isCharacterData = /(text\/.*|application\/(json|javascript|xml|xhtml\+xml)|charset=)/i.test( contentType );
 
+            // if the stream is null or undefined, we return a default (empty) value according to the expected content type
             if ( isNull( pStream ) )
             {
-                return this.asChunkedStream( (isCharacterData ? (pParseJson ? {} : _mt) : ((contentType.includes( "json" ) || pParseJson) ? {} : new Uint8Array( 0 ))) );
+                let defaultContent = isCharacterData ? (pParseJson ? {} : _mt) : ((contentType.includes( "json" ) || pParseJson) ? {} : new Uint8Array( 0 ));
+
+                return this.asChunkedStream( defaultContent );
             }
 
             let stream = pStream instanceof ReadableStream ? pStream : (isPromise( pStream ) ? this.asChunkedStream( await Promise.resolve( pStream ) ) : this.asChunkedStream( pStream ));
+
+            if( !isNull( stream ) && stream.locked )
+            {
+                toolBocksModule.logWarning(`The specified stream is locked and potentially already consumed`);
+
+            }
 
             let totalLength = 0;
 
@@ -1376,15 +1385,19 @@ const { _ud = "undefined", $scope } = constants;
                                                    delayMs: asInt( DEFAULT_STREAMING_DELAY_MILLISECONDS )
                                                } );
 
+                // if the stream is null or undefined, we return a default value depending on the expected content type
                 if ( isNull( pStream ) )
                 {
+                    // get the expected content type
                     let contentType = lcase( asString( pContentType, true ) );
 
                     // Determine whether we expect the stream to contain character data.
                     const isCharacterData = /(text\/.*|application\/(json|javascript|xml|xhtml\+xml)|charset=)/i.test( contentType );
 
+                    // create a default value of the expected type
                     let content = (isCharacterData ? (pParseJson ? {} : "") : ((contentType.includes( "json" ) || pParseJson) ? {} : new Uint8Array( 0 )));
 
+                    // send the default content to the streamer to handle
                     return streamer.readStream( content, contentType, pParseJson );
                 }
 
