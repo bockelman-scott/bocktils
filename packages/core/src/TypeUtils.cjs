@@ -4202,7 +4202,7 @@ const $scope = constants?.$scope || function()
 
         toString()
         {
-            let s = "{\"Result\":\"" + String( this.getOrElse( "" ) ) + "\"";
+            let s = "{\"Result\":\"" + String( this.getOrElse( _mt ) ) + "\"";
 
             if ( this.hasErrors() )
             {
