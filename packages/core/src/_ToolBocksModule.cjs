@@ -4187,7 +4187,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             return {
                 type: resolveEventType( pEventName?.type || pEventName?.name || pEventName ),
-                data: (pEventName?.detail || pEventName?.data),
+                data: (pEventName?.detail || pEventName?.data || pData),
                 options: populateOptions( pOptions, (pEventName?.detail || pEventName?.data || pData) )
             };
         }
@@ -4205,7 +4205,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         let data = (isObj( pData ) ? (pData?.detail || pData?.data || pData) : optionsDetail) || optionsDetail;
 
-        data = data?.detail || data?.data || data || options?.detail || options || options?.data || options || {};
+        data = (data?.detail || data?.data || data || options?.detail || options || options?.data || options || {});
 
         return { type, data, options };
     };
