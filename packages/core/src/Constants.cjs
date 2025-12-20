@@ -43,7 +43,7 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
      */
     const $scope = function()
     {
-        return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
+        return (_ud === typeof globalThis) ? (_ud === typeof global ? (_ud === typeof self ? this : self ?? this) : global ?? this) : globalThis ?? this;
     };
 
     /**

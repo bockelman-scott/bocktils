@@ -7,7 +7,7 @@ const moduleUtils = require( "../src/_ToolBocksModule.cjs" );
 /** import the Constants.cjs we are testing */
 const constants = require( "../src/Constants.cjs" );
 
-const { _affirmatives } = constants;
+const { $scope, _affirmatives } = constants;
 
 const {
     ExecutionEnvironment,
@@ -23,6 +23,23 @@ const {
     resolveEvent,
     sleep
 } = moduleUtils;
+
+describe( "Test $scope", () =>
+{
+    test( "$scope returns global scope", () =>
+    {
+        console.log( $scope() );
+
+        expect( $scope() ).toEqual( globalThis );
+
+        expect( $scope() ).toEqual( global );
+
+        expect( $scope() ).not.toEqual( this );
+
+        expect( typeof self ).toEqual( "undefined" );
+    } );
+
+} );
 
 describe( "Affirmatives", () =>
 {
