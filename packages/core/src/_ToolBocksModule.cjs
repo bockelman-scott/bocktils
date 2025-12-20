@@ -7473,7 +7473,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         const isValidArgument = e => isStr( e ) && e.trim().length > 0;
         const isValidPathElement = e => isValidArgument( e ) && /[^.\s#]+/.test( e );
 
-        let propertyPath = isNull( pPropertyPath ) ? (arguments.length > 1 ? [...arguments].filter( isValidArgument ) : pPropertyPath) : pPropertyPath;
+        let propertyPath = attempt(()=>arguments.length > 1 ? [...arguments].filter( isValidArgument ) : pPropertyPath) || pPropertyPath;
 
         let arr = isArray( propertyPath ) ? propertyPath.map( toDotNotation ).flat() : propertyPath;
 
