@@ -102,7 +102,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         getClassName
     } = typeUtils;
 
-    const { asString, asInt, isBlank, lcase, ucase, trimLeadingCharacters } = stringUtils;
+    const { asString, asInt, isBlank, toBool, lcase, ucase, trimLeadingCharacters } = stringUtils;
 
     const { asArray, varargs, Filters, concatenateConsecutiveStrings, unique, AsyncBoundedStack } = arrayUtils;
 
@@ -1041,13 +1041,13 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
         log( pLogRecord, ...pExtra )
         {
-            this._traceIf( pLogRecord, pExtra );
+            this._traceIf( pLogRecord, ...pExtra );
 
             let { logRecord, level, methodName } = this._resolveLogArgs( pLogRecord );
 
             if ( this.isEnabledFor( level ) )
             {
-                logRecord = this._addData( logRecord, pExtra );
+                logRecord = this._addData( logRecord, ...pExtra );
 
                 for( let logger of [...(this.loggers), this] )
                 {
@@ -1143,7 +1143,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             }
         }
 
-        _traceIf( pLogRecord, pExtra )
+        _traceIf( pLogRecord, ...pExtra )
         {
             try
             {
@@ -1491,6 +1491,19 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
     const NULL_LOGGER = new NullLogger();
 
+    const SIMPLE_LOGGER_LEVELS = lock( ["log", "info", "warn", "error", "debug", "trace"] );
+
+    const SIMPLE_LOGGER_DEFAULT_LEVEL = lcase( SIMPLE_LOGGER_LEVELS[0] );
+
+    const SIMPLE_LOGGER_OPTIONS =
+        lock( {
+                  level: SIMPLE_LOGGER_DEFAULT_LEVEL,
+                  addFormatting: false,
+                  logEmptyMessages: true,
+                  addFormattingToEmptyMessages: false,
+                  emitEvents: false
+              } );
+
     /**
      * A very simple wrapper for the console (or another console-like object).
      * Prepends the level and timestamp to the message(s) being logged.
@@ -1503,7 +1516,13 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
     {
         #logger = konsole || console;
 
+        #level = SIMPLE_LOGGER_DEFAULT_LEVEL;
+        #levelIndex = 0;
+
         #addFormatting = false;
+
+        #logEmptyMessages = true;
+        #addFormattingToEmptyMessages = false;
 
         #emitEvents = false;
 
@@ -1512,16 +1531,19 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
          *
          * @param {ILogger} [pLogger=konsole] - The logger instance to use. Defaults to `konsole` if not provided.
          *
-         * @param pEmitEvents
+         * @param {Object|SIMPLE_LOGGER_OPTIONS} pOptions An object used to configure properties of the logger
+         *
          * @return {SimpleLogger} A new instance of the SimpleLogger class.
          */
-        constructor( pLogger = konsole, pEmitEvents = false )
+        constructor( pLogger = konsole, pOptions = SIMPLE_LOGGER_OPTIONS )
         {
             super();
 
-            this.#emitEvents = !!pEmitEvents;
+            const options = { ...SIMPLE_LOGGER_OPTIONS, ...(pOptions || {}) };
 
-            this.#logger = (ToolBocksModule.isLogger( pLogger ) ? pLogger : konsole) || konsole;
+            this.#emitEvents = toBool( options.emitEvents );
+
+            this.#logger = ToolBocksModule.resolveLogger( pLogger, toolBocksModule.logger, konsole ) || konsole;
 
             if ( this.#logger instanceof this.constructor )
             {
@@ -1533,15 +1555,27 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                 }
             }
 
-            if ( isNull( this.#logger ) || !ToolBocksModule.isLogger( this.#logger ) )
-            {
-                this.#logger = konsole;
-            }
+            this.#logger = ToolBocksModule.resolveLogger( this.#logger, toolBocksModule.logger, konsole ) || konsole;
 
-            if ( konsole === this.#logger )
-            {
-                this.#addFormatting = true;
-            }
+            this.#addFormatting = options.addFormatting || (konsole === this.#logger);
+
+            this.#addFormattingToEmptyMessages = options.addFormattingToEmptyMessages;
+
+            this.#logEmptyMessages = options.logEmptyMessages;
+
+            this.#level = lcase( asString( options.level || "log", true ) );
+            this.#level = SIMPLE_LOGGER_LEVELS.includes( this.#level ) ? this.#level : "log";
+            this.#levelIndex = SIMPLE_LOGGER_LEVELS.indexOf( this.#level );
+        }
+
+        #enabledForLevel( pLevel )
+        {
+            let level = lcase( asString( pLevel || this.#level, true ) );
+            level = SIMPLE_LOGGER_LEVELS.includes( level ) ? level : this.#level;
+
+            let index = SIMPLE_LOGGER_LEVELS.indexOf( level );
+
+            return asInt( index ) >= asInt( this.#levelIndex );
         }
 
         static get [Symbol.species]()
@@ -1551,7 +1585,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
         get logger()
         {
-            return this.#logger;
+            return ToolBocksModule.resolveLogger( this.#logger, toolBocksModule.logger, konsole );
         }
 
         get emitEvents()
@@ -1585,90 +1619,100 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         {
             let level = lcase( asString( pLevel, true ) );
 
-            level = ["log", "info", "warn", "error", "debug", "trace"].includes( level ) ? level : "log";
+            level = SIMPLE_LOGGER_LEVELS.includes( level ) ? level : this.#level;
 
             let msg = [...pData];
 
-            if ( this.#addFormatting )
+            if ( !(msg.some( e => !isBlank( e ) ) || this.#logEmptyMessages) )
             {
-                let TSP = SimpleLogger.formatTimeStamp( new Date() );
-
-                let lvl = asString( ("log" === level ? "info" : level), true );
-                let LVL = ("[" + ucase( lvl ) + "]").padEnd( 8, _spc );
-
-                msg.unshift( TSP );
-                msg.unshift( LVL );
+                return;
             }
 
-            let lgr = this.#logger || konsole;
+            const date = new Date();
 
-            if ( this === lgr )
+            if ( this.#enabledForLevel( level ) )
             {
-                lgr = konsole || console;
-            }
-
-            if ( isFunction( lgr[level] ) )
-            {
-                try
+                if ( this.#addFormatting && (msg.some( e => !isBlank( e ) ) || this.#addFormattingToEmptyMessages) )
                 {
-                    lgr[level].call( lgr, ...msg );
+                    let TSP = SimpleLogger.formatTimeStamp( date );
+
+                    let lvl = asString( ("log" === level ? "info" : level), true );
+                    let LVL = ("[" + ucase( lvl ) + "]").padEnd( 8, _spc );
+
+                    msg.unshift( TSP );
+                    msg.unshift( LVL );
                 }
-                catch( e )
+
+                let lgr = this.#logger || konsole;
+
+                if ( this === lgr )
                 {
-                    // ignore the error and log the message(s) to the console
+                    lgr = konsole || console;
+                }
+
+                if ( isFunction( lgr[level] ) )
+                {
+                    try
+                    {
+                        lgr[level].call( lgr, ...msg );
+                    }
+                    catch( e )
+                    {
+                        // ignore the error and log the message(s) to the console
+                        attempt( () => (konsole || console).log( ...msg ) );
+                    }
+                }
+                else if ( isFunction( lgr.log ) )
+                {
+                    attempt( () => lgr.log( ...msg ) );
+                }
+                else
+                {
                     attempt( () => (konsole || console).log( ...msg ) );
                 }
-            }
-            else if ( isFunction( lgr.log ) )
-            {
-                attempt( () => lgr.log( ...msg ) );
-            }
-            else
-            {
-                attempt( () => (konsole || console).log( ...msg ) );
             }
 
             if ( this.emitEvents )
             {
-                const me = this;
-                attemptSilent( () => me.dispatchEvent( new ModuleEvent( level, [...msg], { message: [...msg].join( "\n" ) } ) ) );
+                let moduleEvent = new ModuleEvent( level,
+                                                   [...msg],
+                                                   {
+                                                       date,
+                                                       message: [...msg].join( "\n" )
+                                                   } );
+
+                attemptSilent( () => this.dispatchEvent( moduleEvent ) );
             }
         }
 
         log( ...pData )
         {
-            const me = this;
-            attempt( () => me._log( "log", ...pData ) );
+            attempt( () => this._log( "log", ...pData ) );
         }
 
         info( ...pData )
         {
-            const me = this;
-            attempt( () => me._log( "info", ...pData ) );
+            attempt( () => this._log( "info", ...pData ) );
         }
 
         warn( ...pData )
         {
-            const me = this;
-            attempt( () => me._log( "warn", ...pData ) );
+            attempt( () => this._log( "warn", ...pData ) );
         }
 
         error( ...pData )
         {
-            const me = this;
-            attempt( () => me._log( "error", ...pData ) );
+            attempt( () => this._log( "error", ...pData ) );
         }
 
         debug( ...pData )
         {
-            const me = this;
-            attempt( () => me._log( "debug", ...pData ) );
+            attempt( () => this._log( "debug", ...pData ) );
         }
 
         trace( ...pData )
         {
-            const me = this;
-            attempt( () => me._log( "trace", ...pData ) );
+            attempt( () => this._log( "trace", ...pData ) );
         }
     }
 
@@ -1808,6 +1852,9 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             DEFAULT_ERROR_TEMPLATE,
             DEFAULT_LOG_FORMATTER_OPTIONS,
             DEFAULT_LOGGER_OPTIONS,
+            SIMPLE_LOGGER_LEVELS,
+            SIMPLE_LOGGER_DEFAULT_LEVEL,
+            SIMPLE_LOGGER_OPTIONS,
             ILogger,
             LogLevel,
             LogRecord,
