@@ -131,7 +131,7 @@ const konsole = _ud === typeof console ? {} : console || {};
  * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
  * @return {Object} The global scope, a.k.a. globalThis, for the current execution environment
  */
-const $scope = () => (_ud === typeof self ? ((_ud === typeof global) ? (_ud === typeof globalThis ? {} : globalThis || {}) : (global || (_ud === typeof globalThis ? this || {} : globalThis || this || {}) || this || {})) : (self || (_ud === typeof globalThis ? this || {} : globalThis || this || {})));
+const $scope = () => ((_ud === typeof globalThis) ? (_ud === typeof global ? (_ud === typeof self ? this : self ?? this) : global ?? this) : globalThis ?? this);
 
 /**
  * ENV is an object that provides access to the application's environment variables.
@@ -190,7 +190,7 @@ const _ENV = (function( pScope = $scope() )
     }
     else
     {
-        environment = (scp || {})["__BOCK_MODULE_ENVIRONMENT__"] || scp?.navigator || { "MODE": "DEV" };
+        environment = ((scp || {})["__BOCK_MODULE_ENVIRONMENT__"]) || scp?.navigator || { "MODE": "DEV" };
     }
 
     return environment || {};
@@ -323,6 +323,35 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     const freeze = Object.freeze;
 
     /**
+     * An alias for the native Function.prototype.toString method.<br>
+     * This function returns the string representation of a specified function.<br>
+     * This is normally the source code of the function.<br>
+     *
+     * @returns {string} the string representation of a specified function
+     */
+    const functionToString = Function.prototype.toString;
+
+    /**
+     * An alias for the Object.prototype.toString method.<br>
+     * <br>
+     * Normally returns a string representing the object type of the given value.<br>
+     * Typically used to determine the internal class of an object
+     * by extracting the string from its output, such as `[object <i>Type</i]`.
+     *
+     * @returns {string} a string representing the object type of the given value
+     */
+    const objectToString = Object.prototype.toString;
+
+    /**
+     * An alais for the Error.prototype.toString method.<br>
+     * <br>
+     *
+     * @returns {string} a string representing the error specified (usually the error type and message)
+     */
+    const errorToString = Error.prototype.toString;
+
+
+    /**
      * A constant array of the standard JavaScript error types.<br>
      * <br>
      * This array contains the constructors for the basic built-in error types in JavaScript.<br>
@@ -355,6 +384,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     const PRIMITIVE_WRAPPER_TYPE_NAMES = PRIMITIVE_WRAPPER_TYPES.map( e => e.name || functionToString.call( e ) );
 
+
     /**
      * GLOBAL_TYPES is an array containing all standard JavaScript global object types and structures
      * expected to exist in any execution context.<br>
@@ -386,6 +416,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     const GLOBAL_TYPE_PROTOTYPES = GLOBAL_TYPES.map( e => e.prototype || Object.getPrototypeOf( e ) );
 
     const GLOBAL_TYPE_NAMES = GLOBAL_TYPES.map( e => e.name || functionToString.call( e ) );
+
 
     const TRANSIENT_PROPERTIES = freeze( ["constructor", "prototype", "toJson", "toObject", "global", "this", "toString"] );
 
@@ -463,34 +494,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * If no arguments are passed, returns an empty array.<br>
      */
     const op_identity = ( ...pArg ) => [...(pArg || [])].length > 1 ? [...(pArg || [])] : [...(pArg || [])][0];
-
-    /**
-     * An alias for the native Function.prototype.toString method.<br>
-     * This function returns the string representation of a specified function.<br>
-     * This is normally the source code of the function.<br>
-     *
-     * @returns {string} the string representation of a specified function
-     */
-    const functionToString = Function.prototype.toString;
-
-    /**
-     * An alias for the Object.prototype.toString method.<br>
-     * <br>
-     * Normally returns a string representing the object type of the given value.<br>
-     * Typically used to determine the internal class of an object
-     * by extracting the string from its output, such as `[object <i>Type</i]`.
-     *
-     * @returns {string} a string representing the object type of the given value
-     */
-    const objectToString = Object.prototype.toString;
-
-    /**
-     * An alais for the Error.prototype.toString method.<br>
-     * <br>
-     *
-     * @returns {string} a string representing the error specified (usually the error type and message)
-     */
-    const errorToString = Error.prototype.toString;
 
     /**
      * @typedef {Object} ILogger
@@ -608,10 +611,24 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @param {*} pObject A value to evaluate
      * @returns {boolean} true if the specified argument is an array
      */
-    function isArray( pObject )
+    let isArray = ( pObject ) =>
     {
+        if ( isFunc( Array.isArray ) )
+        {
+            isArray = ( pObject ) => (_ud !== typeof pObject) && Array.isArray( pObject );
+            return !isNull( pObject ) && Array.isArray( pObject );
+        }
         return !isNull( pObject ) && ((isFunc( Array.isArray ) && Array.isArray( pObject )) || objectToString.call( pObject ) === "[object Array]");
-    }
+    };
+
+    /**
+     * Returns true if the specified value is a (primitive) BigInt.
+     *
+     * @param {*} pObj The value to evaluate
+     *
+     * @returns {boolean} true if the specified value is a (primitive) BigInt.
+     */
+    const isBig = pObj => _big === typeof pObj;
 
     /**
      * Returns true if the specified value is a (primitive) number.
@@ -639,15 +656,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @returns {boolean} true if the specified value is a (primitive) boolean.
      */
     const isBool = pObj => _bool === typeof pObj;
-
-    /**
-     * Returns true if the specified value is a (primitive) BigInt.
-     *
-     * @param {*} pObj The value to evaluate
-     *
-     * @returns {boolean} true if the specified value is a (primitive) BigInt.
-     */
-    const isBig = pObj => _big === typeof pObj;
 
     /**
      * Returns true if the specified value is a Symbol.
@@ -753,7 +761,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const isClassInstance = pObj => isNonNullObj( pObj ) && isClass( pObj?.constructor || Object.getPrototypeOf( pObj )?.constructor );
 
-    const isPrimitiveWrapper = pObj => isObj( pObj ) && PRIMITIVE_WRAPPER_TYPES.filter( e => pObj instanceof e ).length > 0;
+    const isPrimitiveWrapper = pObj => isObj( pObj ) && !isNull( PRIMITIVE_WRAPPER_TYPES.some( e => pObj instanceof e ) );
 
     /**
      * Returns true if the specified value is an object that is not null
@@ -765,8 +773,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @returns {boolean} true if the specified value is an instance of a globally defined/built-in type.
      */
     const isGlobalType = pObj => isNonNullObj( pObj ) &&
-                                 ([...GLOBAL_TYPES].filter( e => pObj instanceof e ).length > 0 ||
-                                  GLOBAL_TYPES.includes( Object.getPrototypeOf( pObj )?.constructor || pObj?.constructor ));
+                                 ( !isNull( ([...GLOBAL_TYPES].some( e => pObj instanceof e )) ||
+                                            GLOBAL_TYPES.includes( Object.getPrototypeOf( pObj )?.constructor || pObj?.constructor ) ));
 
     /**
      * Returns true if the specified value is an asynchronous function.
@@ -826,13 +834,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @function
      * @returns {boolean} true if the execution context is <i>most likely</i> Node.js
      */
-    const isNode = function()
+    let isNodeJs = () =>
     {
         if ( (_ud === typeof self) && (_ud === typeof window) && (_ud !== typeof module) && (isFunc( require )) )
         {
             if ( _ud === typeof Deno && (_ud !== typeof process) )
             {
-                return !isAsyncFunction( require );
+                const is = !isAsyncFunction( require );
+                isNodeJs = () => is;
             }
         }
         return false;
@@ -848,7 +857,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @function
      * @returns {boolean} Returns true if the runtime environment is Deno, otherwise false.
      */
-    const isDeno = () => !isNode() && (_ud !== typeof Deno);
+    const isDeno = () => !isNodeJs() && (_ud !== typeof Deno);
 
     /**
      * Returns true if the current execution content is a Worker or ServiceWorker.<br>
@@ -866,7 +875,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @function
      * @returns true if the current execution environment is a web browser.<br>
      */
-    const isBrowser = () => ( !isNode() && !isDeno() && (_ud !== typeof window) && (_ud !== typeof document) && (_ud !== typeof navigator));
+    const isBrowser = () => ( !isNodeJs() && !isDeno() && (_ud !== typeof window) && (_ud !== typeof document) && (_ud !== typeof navigator));
 
     /**
      * Returns the value of the length or size property of the specified value.
@@ -1139,7 +1148,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     }
 
     /**
-     * Executes a function in the specified scope with the specified arguments,
+     * Executes a function with the specified arguments,
      * handling both synchronous and asynchronous function execution.<br>
      * <br>
      * Catches and processes any errors that occur during the function execution,<br>
@@ -1152,7 +1161,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * with a call to its reportError method, which emits an error event and/or writes to a user-specified logger.<br>
      * <br>
      *
-     * @param {Object|Function} pScope The scope in which to execute the function (a.k.a. 'this' for methods)
      * @param {Function} pFunction The function to be executed. Can be a synchronous or asynchronous function.
      * @param {...any} pArgs The arguments to pass to the function when it is invoked.
      * @return {any|Promise<any>} Returns the result of the function execution.
@@ -1177,7 +1185,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             try
             {
-                return !isAsyncFunction( func ) ? func( ...pArgs ) : func( ...pArgs );
+                return isAsyncFunction( func ) ? ((async() => func( ...pArgs ).then( r => r ))()) : func( ...pArgs );
             }
             catch( ex )
             {
@@ -1306,28 +1314,38 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     {
                         try
                         {
+                            handleAttempt.lastError = null;
+
                             return await pFunction( ...pArgs );
                         }
                         catch( ex )
                         {
-                            // ignored, silently
+                            // ignored, silently, but we make the error available if desired
+                            handleAttempt.lastError = ex;
                         }
                     }()).then( r => r ).catch( no_op );
                 }
                 catch( e2 )
                 {
-                    // ignored, silently
+                    // ignored, silently, but made available unless it would obscure the error thrown from the nested try/catch
+                    if ( !isError( handleAttempt.lastError ) )
+                    {
+                        handleAttempt.lastError = e2;
+                    }
                 }
             }
             else
             {
                 try
                 {
+                    handleAttempt.lastError = null;
+
                     return pFunction( ...pArgs );
                 }
                 catch( ex )
                 {
                     // ignored, silently
+                    handleAttempt.lastError = ex;
                 }
             }
         }
@@ -1355,11 +1373,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             try
             {
+                handleAttempt.lastError = null;
+
                 return await pFunction( ...pArgs );
             }
             catch( ex )
             {
                 // ignored, silently
+                handleAttempt.lastError = ex;
             }
         }
     }
@@ -1551,9 +1572,19 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
     }
 
-    const is2dArray = ( pArray ) => isArray( pArray ) && pArray.length > 0 && pArray.every( row => isArray( row ) );
+    const tryOrElse = ( pFunction, pDefault ) =>
+    {
 
-    const isKeyValueArray = ( pArray ) => is2dArray( pArray ) && pArray.every( row => row.length >= 2 && row.length <= 3 && isStr( row[0] ) );
+    };
+
+    const asyncTryOrElse = ( pFunction, pDefault ) =>
+    {
+
+    };
+
+    const is2dArray = ( pArray ) => isArray( pArray ) && $ln( pArray ) > 0 && pArray.every( row => isArray( row ) );
+
+    const isKeyValueArray = ( pArray ) => is2dArray( pArray ) && pArray.every( row => $ln( row ) >= 2 && $ln( row ) <= 3 && isStr( row[0] ) );
 
     /**
      * Returns a non-null object.<br>
@@ -1571,7 +1602,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         if ( propertyName )
         {
             const obj = resolveObject( pObject );
-            return ({}).hasOwnProperty.call( obj, propertyName ) || (pPropertyName in obj);
+            return Object.hasOwn( obj, propertyName ) || (propertyName in obj);
         }
 
         return false;
@@ -1607,56 +1638,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
 
         return false;
-    }
-
-    function populateProperties( pTarget, pSource, ...pOmit )
-    {
-        let target = pTarget || {};
-
-        if ( !isReadOnly( target ) )
-        {
-            let source = pSource || {};
-
-            let skip = [...((pOmit || []) || [])];
-
-            objectEntries( source ).forEach( entry =>
-                                             {
-                                                 let prop = ObjectEntry.getKey( entry );
-                                                 let value = ObjectEntry.getValue( entry );
-
-                                                 if ( ( !skip.includes( prop ) || isNull( target[prop] )) && isWritable( target, prop ) )
-                                                 {
-                                                     attemptSilent( () => (target[prop] = target[prop] || (isLikeArray( value ) ? [...((value || []) || [])] : value) || target[prop]) );
-                                                 }
-                                             } );
-        }
-
-        return target;
-    }
-
-    function overwriteProperties( pTarget, pSource, ...pOmit )
-    {
-        let target = pTarget || {};
-
-        if ( !isReadOnly( target ) )
-        {
-            let source = pSource || {};
-
-            let skip = [...((pOmit || []) || [])];
-
-            objectEntries( source ).forEach( entry =>
-                                             {
-                                                 let prop = ObjectEntry.getKey( entry );
-                                                 let value = ObjectEntry.getValue( entry );
-
-                                                 if ( !skip.includes( prop ) && (isNull( target[prop] ) || isWritable( target, prop )) )
-                                                 {
-                                                     attemptSilent( () => (target[prop] = (isLikeArray( value ) ? [...((value || []) || [])] : value) || target[prop]) );
-                                                 }
-                                             } );
-        }
-
-        return target;
     }
 
     class UUIDGenerator
@@ -2320,7 +2301,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     const processEntries = ( pEntries, pParent ) =>
     {
-        let entries = isArray( pEntries ) ? pEntries : (!isNull( pEntries ) ? (isMap( pEntries ) ? pEntries.entries() : (isSet( pEntries ) ? pEntries.values() : (isObj( pEntries ) ? Object.entries( pEntries ) : [pEntries]))) : []);
+        let entries = isArray( pEntries ) ? pEntries : (!isNull( pEntries ) ? (isMap( pEntries ) ? [...(pEntries.entries() || [])] : (isSet( pEntries ) ? [...(pEntries.values() || [])] : (isObj( pEntries ) ? Object.entries( pEntries ) : [pEntries]))) : []);
 
         entries = entries.filter( isValidEntry ).map( stringifyKeys ).filter( isNotTransient );
 
@@ -2656,14 +2637,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     function objectValues( pObject )
     {
-        const values = (isNonNullObj( pObject ) ? Object.values( pObject || {} ) : []) || [];
+        const values = (isNonNullObj( pObject ) ? (isMap( pObject ) ? [...(pObject.values() | [])] : Object.values( pObject || {} )) : []) || [];
         objectEntries( pObject ).forEach( e => values.push( e[1] ) );
         return [...(new Set( values.filter( e => _ud !== typeof e && null !== e ) ))];
     }
 
     function objectKeys( pObject )
     {
-        const keys = (isNonNullObj( pObject ) ? Object.keys( pObject || {} ) : []) || [];
+        const keys = (isNonNullObj( pObject ) ? (isMap( pObject ) ? [...(pObject.keys() || [])] : Object.keys( pObject || {} )) : []) || [];
         objectEntries( pObject ).forEach( e => keys.push( e[0] ) );
         return [...(new Set( keys.filter( e => null != e && isStr( e ) ) ))];
     }
@@ -2693,9 +2674,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return map;
     }
 
-    const isInfiniteLoop = ( object, visited, stack, depth ) => visited.has( object ) || detectCycles( stack, 5, 5 ) || depth > MAX_STACK_SIZE;
-
-
     ObjectEntry.isValidEntry = function( pEntry, pLax = false )
     {
         let valid = !isNull( pEntry ) && ((pEntry instanceof ObjectEntry) && pEntry.isValid());
@@ -2707,6 +2685,59 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         return valid;
     };
+
+
+    function populateProperties( pTarget, pSource, ...pOmit )
+    {
+        let target = pTarget || {};
+
+        if ( !isReadOnly( target ) )
+        {
+            let source = pSource || {};
+
+            let skip = [...((pOmit || []) || [])];
+
+            attempt( () => objectEntries( source ).forEach( entry =>
+                                                            {
+                                                                let prop = ObjectEntry.getKey( entry );
+                                                                let value = ObjectEntry.getValue( entry );
+
+                                                                if ( ( !skip.includes( prop ) || isNull( target[prop] )) && isWritable( target, prop ) )
+                                                                {
+                                                                    attemptSilent( () => (target[prop] = target[prop] || (isArray( value ) ? [...((value || []) || [])] : value) || target[prop]) );
+                                                                }
+                                                            } ) );
+        }
+
+        return target;
+    }
+
+    function overwriteProperties( pTarget, pSource, ...pOmit )
+    {
+        let target = pTarget || {};
+
+        if ( !isReadOnly( target ) )
+        {
+            let source = pSource || {};
+
+            let skip = [...((pOmit || []) || [])];
+
+            objectEntries( source ).forEach( entry =>
+                                             {
+                                                 let prop = ObjectEntry.getKey( entry );
+                                                 let value = ObjectEntry.getValue( entry );
+
+                                                 if ( !skip.includes( prop ) && (isNull( target[prop] ) || isWritable( target, prop )) )
+                                                 {
+                                                     attemptSilent( () => (target[prop] = (isArray( value ) ? [...((value || []) || [])] : value) || target[prop]) );
+                                                 }
+                                             } );
+        }
+
+        return target;
+    }
+
+    const isInfiniteLoop = ( object, visited, stack, depth ) => visited.has( object ) || detectCycles( stack, 5, 5 ) || depth > MAX_STACK_SIZE;
 
     const DEFAULT_IS_LITERAL_OPTIONS =
         {
@@ -3200,7 +3231,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         if ( isNonNullObj( pOptions ) )
         {
-            sources.unshift( Object.assign( {}, pOptions || {} ) );
+            sources.unshift( Object.assign( {}, resolveObject( pOptions || {} ) ) );
         }
 
         sources = sources.reverse();
@@ -3771,7 +3802,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         isNode()
         {
-            return isNode() && (null != this.process) && (null == this.#DenoGlobal);
+            return isNodeJs() && (null != this.process) && (null == this.#DenoGlobal);
         }
 
         isDeno()
@@ -3974,8 +4005,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             let s = "Runtime: ";
 
-            s += isNode() ? "Node.js" : isDeno() ? "Deno" : isBrowser() ? "Browser" : _unknown;
-            s += isNode() || isDeno() ? (", Version: " + this.version) : _mt_str;
+            s += isNodeJs() ? "Node.js" : isDeno() ? "Deno" : isBrowser() ? "Browser" : _unknown;
+            s += isNodeJs() || isDeno() ? (", Version: " + this.version) : _mt_str;
             s += isBrowser() ? (": " + this.userAgent) : _mt_str;
 
             return s + "\n";
@@ -3993,7 +4024,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     ExecutionEnvironment.isNodeProcess = function( pProcess )
     {
-        return isNode() && isObj( pProcess ) && (_ud !== typeof pProcess?.allowedNodeEnvironmentFlags);
+        return isNodeJs() && isObj( pProcess ) && (_ud !== typeof pProcess?.allowedNodeEnvironmentFlags);
     };
 
     /**
@@ -4422,6 +4453,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         // noinspection DynamicallyGeneratedCodeJS,JSValidateTypes,TypeScriptUMDGlobal
         return new Promise( resolve => setTimeout( resolve, pMilliseconds ) );
     }
+
+    // noinspection DynamicallyGeneratedCodeJS,JSValidateTypes,TypeScriptUMDGlobal
+    const gc = () => new Promise( resolve => setImmediate( resolve ) );
 
     /**
      * Default options for the bracketsToDots function,
@@ -6013,12 +6047,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          * @param {string|ToolBocksModule|Object} pModuleName The name of this instance, or another instance<br>
          *                                                 from which to inherit the name and other properties
          * @param {string} pCacheKey A unique key to use to cache this module in global scope to improve performance
-         * @param {boolean} pTraceEnabled
+         * @param {Object} [pOptions={}]
          * @param {ModuleArgs} [pModuleArguments=MODULE_ARGUMENTS]
          */
-        constructor( pModuleName, pCacheKey, pTraceEnabled = CURRENT_MODE?.traceEnabled || false, pModuleArguments = MODULE_ARGUMENTS )
+        constructor( pModuleName, pCacheKey = pModuleName, pOptions = {}, pModuleArguments = MODULE_ARGUMENTS )
         {
             super();
+
+            const me = this;
 
             this.#moduleName = (isStr( pModuleName )) ? pModuleName : (isObj( pModuleName ) ? pModuleName?.moduleName || pModuleName?.name || pModuleName?.cacheKey : _mt_str) || modName;
             this.#cacheKey = (isStr( pCacheKey )) ? pCacheKey : (isObj( pModuleName ) ? pModuleName?.cacheKey || pModuleName?.moduleName || pModuleName?.name : _mt_str) || INTERNAL_NAME;
@@ -6026,7 +6062,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             this.#moduleName = this.#moduleName || modName;
             this.#cacheKey = this.#cacheKey || INTERNAL_NAME;
 
-            this.#traceEnabled = !!pTraceEnabled;
+            const options = { ...(resolveObject( pOptions || {} ) || {}) };
+
+            this.#traceEnabled = !!options.traceEnabled;
+
+            const logger = objectValues( options ).find( e => ToolBocksModule.isLogger( e ) );
+
+            this.#logger = ToolBocksModule.isLogger( logger ) ? logger : null;
+
+            attempt( () => me.#processOptions( options ) );
 
             this.#moduleArguments = pModuleArguments || MODULE_ARGUMENTS;
 
@@ -6048,8 +6092,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 MODULE_CACHE[this.#cacheKey] = MODULE_CACHE[this.#cacheKey] || this;
             }
 
-            const me = this;
-
             handleAttempt.handleError = function( pError, pContext, ...pExtra )
             {
                 const error = resolveError( pError, pError?.message );
@@ -6058,6 +6100,65 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
                 (me || this).reportError( error, error?.message, S_ERROR, (me || this).calculateErrorSourceName( (me || this), pContext || handleAttempt ), ...pExtra );
             };
+        }
+
+        #processOptions( pOptions = {} )
+        {
+            const me = this;
+
+            const options = { ...(resolveObject( pOptions || {} ) || {}) };
+
+            const entries = objectEntries( options );
+
+            function addListeners( value, key )
+            {
+                if ( value instanceof StatefulListener )
+                {
+                    let evtType = _asStr( key ).replace( /^on/i, _mt );
+                    if ( evtType )
+                    {
+                        attempt( () => me.addStatefulListener( value, evtType ) );
+                    }
+                }
+                else if ( isMap( value ) || isNonNullObj( value ) )
+                {
+                    let listenerEntries = objectEntries( value );
+
+                    listenerEntries.forEach( listenerEntry =>
+                                             {
+                                                 let listener = ObjectEntry.getValue( listenerEntry );
+
+                                                 let types = listenerEntry[0] || ObjectEntry.getKey( listenerEntry );
+                                                 types = isArray( types ) ? types : (isStr( types ) ? [types] : []);
+
+                                                 if ( isNonNullObj( listener ) && listener instanceof StatefulListener )
+                                                 {
+                                                     attempt( () => me.addStatefulListener( listener, ...(types || []) ) );
+                                                 }
+                                                 else if ( isFunc( listener ) )
+                                                 {
+                                                     for( let type of types )
+                                                     {
+                                                         attempt( () => me.addEventListener( type, listener ) );
+                                                     }
+                                                 }
+                                             } );
+                }
+            }
+
+            if ( entries )
+            {
+                attempt( () => entries.forEach( entry =>
+                                                {
+                                                    const key = ObjectEntry.getKey( entry );
+                                                    const value = ObjectEntry.getValue( entry );
+
+                                                    if ( ["listener", "listeners"].includes( key ) || value instanceof StatefulListener )
+                                                    {
+                                                        addListeners( value, key );
+                                                    }
+                                                } ) );
+            }
         }
 
         /**
@@ -6425,19 +6526,25 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          * If none of those conditions are met, this method returns the console object defined for the current execution environment.
          *
          * @param {object|ILogger} pLogger the object to use for logging, if it conforms to the expected interface
-         * @param {object|ILogger|null} [pDefault=null] an aternative object to use for logging, if it conforms to the expected interface, and the specified logger does not
+         * @param {...object} pAlternatives
          * @returns {ILogger|Console} an object that supports the expected logging methods
          */
-        static resolveLogger( pLogger, pDefault = null )
+        static resolveLogger( pLogger, ...pAlternatives )
         {
             if ( ToolBocksModule.isLogger( pLogger ) && !pLogger.mocked )
             {
                 return pLogger;
             }
 
-            if ( ToolBocksModule.isLogger( pDefault ) && !pDefault.mocked )
+            let alternatives = !isNull( pAlternatives ) ? (isArray( pAlternatives ) ? [...pAlternatives] : [pAlternatives]) : [];
+            alternatives = alternatives.filter( e => isNonNullObj( e ) && ToolBocksModule.isLogger( e ) );
+
+            for( let alternative of alternatives )
             {
-                return pDefault;
+                if ( ToolBocksModule.isLogger( alternative ) && !alternative.mocked )
+                {
+                    return alternative;
+                }
             }
 
             let logger = ToolBocksModule.getGlobalLogger();
@@ -6539,11 +6646,13 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
                 const err = resolveError( pError, s );
 
-                let msg = [S_ERR_PREFIX, s, err, ...pExtra];
-
                 let level = _lcase( _asStr( pLevel ).trim() );
 
                 level = [S_LOG, S_INFO, S_WARN, S_DEBUG, S_ERROR].includes( level || S_ERROR ) ? level : S_ERROR;
+
+                let extra = S_TRACE === level ? [...pExtra] : [];
+
+                let msg = [S_ERR_PREFIX, s, err, ...extra];
 
                 if ( this.traceEnabled )
                 {
@@ -6987,7 +7096,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return mod;
         }
 
-        if ( isNode() )
+        if ( isNodeJs() )
         {
             mod = attempt( require, pModulePath );
         }
@@ -7473,7 +7582,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         const isValidArgument = e => isStr( e ) && e.trim().length > 0;
         const isValidPathElement = e => isValidArgument( e ) && /[^.\s#]+/.test( e );
 
-        let propertyPath = attempt(()=>arguments.length > 1 ? [...arguments].filter( isValidArgument ) : pPropertyPath) || pPropertyPath;
+        let propertyPath = attempt( () => arguments.length > 1 ? [...arguments].filter( isValidArgument ) : pPropertyPath ) || pPropertyPath;
 
         let arr = isArray( propertyPath ) ? propertyPath.map( toDotNotation ).flat() : propertyPath;
 
@@ -7971,6 +8080,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             op_identity,
 
             sleep,
+            gc,
 
             functionToString,
             objectToString,

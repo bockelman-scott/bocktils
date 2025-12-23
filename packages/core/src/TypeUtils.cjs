@@ -30,21 +30,13 @@
 
 const moduleUtils = require( "./_ToolBocksModule.cjs" );
 
-/* import the Constants.cjs we depend upon, using require for maximum compatibility with Node versions */
+/* import the Constants.cjs we depend upon, using "require" for maximum compatibility with Node versions */
 const constants = require( "./Constants.cjs" );
 
 /**
  * Defines a string to represent the type, undefined
  */
-const { _ud = "undefined" } = constants;
-
-/**
- * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
- */
-const $scope = constants?.$scope || function()
-{
-    return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-};
+const { _ud = "undefined", $scope } = constants;
 
 // noinspection FunctionTooLongJS,JSUnresolvedReference
 /**
@@ -318,130 +310,6 @@ const $scope = constants?.$scope || function()
         } );
 
     /**
-     * The VisitedSet class extends the native JavaScript Set class,
-     * providing additional functionality to handle equality comparison for objects.
-     *
-     * Instances of this class are useful in recursive algorithms
-     * to avoid visiting the same node more than once.
-     *
-     * @class
-     * @alias module:TypeUtils#VisitedSet
-     */
-    class VisitedSet extends Set
-    {
-        /**
-         * A function used to determine the equality of two objects.
-         *
-         * This function should accept two parameters representing the objects to be compared
-         * and return a boolean value indicating whether the objects are considered equal.
-         *
-         * Typically, the equality function is used in contexts such as data comparison,
-         * filtering, deduplication, or other scenarios that require logic to compare two values.
-         *
-         * @type {function({object},{object}):boolean}
-         *
-         * @param {any} element1 - The object to compare to the other.
-         *
-         * @param {any} element2 - The other object to compare to the first.
-         *
-         * @returns {boolean} true if the two objects are considered equal, otherwise false.
-         */
-        #equalityFunction = (( a, b ) => a === b);
-
-        constructor( pEqualityFunction = ( a, b ) => a === b, ...pValues )
-        {
-            super( pValues );
-
-            this.#equalityFunction = pEqualityFunction || (( a, b ) => a === b);
-        }
-
-        static get [Symbol.species]()
-        {
-            return this;
-        }
-
-        has( pValue )
-        {
-            if ( super.has( pValue ) )
-            {
-                return true;
-            }
-
-            for( let v of this.values() )
-            {
-                if ( isObject( v ) && (v === pValue || (isFunction( this.#equalityFunction ) ? this.#equalityFunction( v, pValue ) : pValue === v)) )
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-    }
-
-    /**
-     * ResolvedSet is a class extending VisitedSet, providing additional functionality
-     * for storing and resolving values associated with specific objects or paths.
-     */
-    class ResolvedSet extends VisitedSet
-    {
-        #map = new Map();
-        #mapByNodePath = new Map();
-
-        constructor( pEqualityFunction = ( a, b ) => a === b, ...pValues )
-        {
-            super( pEqualityFunction, ...pValues );
-        }
-
-        static get [Symbol.species]()
-        {
-            return this;
-        }
-
-        resolveForNodePath( pValue, ...pNodePath )
-        {
-            let paths = toNodePathArray( ...pNodePath );
-
-            if ( isNull( paths ) || paths.length <= 0 )
-            {
-                return this.resolve( pValue );
-            }
-
-            paths = paths.join( _dot );
-
-            let value = this.#mapByNodePath.get( paths );
-
-            value = isNonNullValue( value ) ? value : pValue;
-
-            if ( isNonNullValue( value ) )
-            {
-                this.#mapByNodePath.set( paths, value );
-            }
-
-            return value;
-        }
-
-        resolve( pObject, pValue )
-        {
-            if ( isNonNullObject( pObject ) )
-            {
-                if ( isNonNullValue( pValue ) )
-                {
-                    this.add( pObject );
-                    this.#map.set( pObject, pValue );
-                    return pValue;
-                }
-                else
-                {
-                    return this.has( pObject ) ? this.#map.get( pObject ) : null;
-                }
-            }
-
-            return isNonNullValue( pValue ) ? pValue : null;
-        }
-    }
-
-    /**
      * An object that maps data types to their estimated size in bytes.
      * <br>
      * Note that these values are estimates only<br>
@@ -516,12 +384,19 @@ const $scope = constants?.$scope || function()
      *
      * @private
      */
-    const _isArr = ( pArg ) => !(_ud === typeof pArg || null == pArg) && "[object Array]" === objectToString.call( pArg, pArg );
+    let _isArr = ( pArg ) => !(_ud === typeof pArg || null == pArg) && ((_fun === typeof Array.isArray ? Array.isArray( pArg ) : "[object Array]" === objectToString.call( pArg, pArg )));
 
-    // poly-fill for isArray; probably obsolete with modern environments
-    if ( _fun !== typeof Array.isArray )
+    if ( _fun === typeof Array.isArray )
     {
-        toolBocksModule.attempt( () => Array.isArray = _isArr );
+        _isArr = ( pVal ) => Array.isArray( pVal );
+    }
+    else
+    {
+        // poly-fill for isArray; probably obsolete with modern environments
+        if ( _fun !== typeof Array.isArray )
+        {
+            toolBocksModule.attempt( () => Array.isArray = _isArr );
+        }
     }
 
     /**
@@ -588,7 +463,7 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isEmptyString
      */
-    const isEmptyString = ( pObject ) => isString( pObject ) && (_mt_str === pObject || pObject?.length === 0);
+    const isEmptyString = ( pObject ) => isString( pObject ) && (_mt_str === pObject || 0 === $ln( pObject ));
 
     /**
      * Returns true if the specified value is a string consisting of only whitespace.<br>
@@ -606,7 +481,7 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isBlankString
      */
-    const isBlankString = ( pObject ) => isString( pObject ) && (_mt_str === pObject.trim() || pObject.trim().length === 0);
+    const isBlankString = ( pObject ) => isString( pObject ) && (_mt_str === pObject.trim() || 0 === $ln( pObject.trim() ));
 
     /**
      * Returns true if the specified value is null<br>
@@ -702,7 +577,7 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isPrimitiveWrapper
      */
-    const isPrimitiveWrapper = ( pObj ) => !isNull( pObj ) && [...PRIMITIVE_WRAPPER_TYPES].filter( e => pObj instanceof e ).length > 0;
+    const isPrimitiveWrapper = ( pObj ) => !isNull( pObj ) && [...PRIMITIVE_WRAPPER_TYPES].some( e => pObj instanceof e );
 
     /**
      * Returns the primitive type value of the specified object.<br>
@@ -723,11 +598,6 @@ const $scope = constants?.$scope || function()
         return value;
     };
 
-    const isCloneable = function( pObject )
-    {
-        return isNonNullObject( pObject ) && isFunction( pObject.clone );
-    };
-
     /**
      * @typedef {Object} ObjectEvaluationOptions
      *
@@ -742,13 +612,13 @@ const $scope = constants?.$scope || function()
      * @type {ObjectEvaluationOptions}
      * @alias module:TypeUtils#DEFAULT_IS_OBJECT_OPTIONS
      */
-    const DEFAULT_IS_OBJECT_OPTIONS = lock(
-        {
-            rejectPrimitiveWrappers: true,
-            rejectArrays: false,
-            rejectNull: false,
-            allowEmptyObjects: true
-        } );
+    const DEFAULT_IS_OBJECT_OPTIONS =
+        lock( {
+                  rejectPrimitiveWrappers: true,
+                  rejectArrays: false,
+                  rejectNull: false,
+                  allowEmptyObjects: true
+              } );
 
     /**
      * This object defines the default options for the {@link isNonNullObject} function.<br>
@@ -775,26 +645,60 @@ const $scope = constants?.$scope || function()
      */
     const isObject = function( pObject, pOptions = DEFAULT_IS_OBJECT_OPTIONS )
     {
-        function getKeys( pObject )
-        {
-            if ( isNull( pObject ) )
-            {
-                return [];
-            }
-
-            return pObject instanceof Map ||
-                   pObject instanceof Set ||
-                   isFunction( pObject?.keys ) ? [...(pObject.keys() || [])] : [...(Object.keys( pObject || {} ) || [])];
-        }
-
         if ( _obj === typeof pObject )
         {
             const options = { ...DEFAULT_IS_OBJECT_OPTIONS, ...(pOptions || {}) };
 
+            const isEmpty = (pObject instanceof Map || pObject instanceof Set ? 0 === $ln( pObject ) : (null === pObject || 0 === $ln( Object.keys( pObject ) )));
+
             return !((options.rejectNull && isNull( pObject )) ||
-                   (options.rejectArrays && _isArr( pObject )) ||
-                   (options.rejectPrimitiveWrappers && isPrimitiveWrapper( pObject ))) ||
-                   ( !options.allowEmptyObjects && getKeys( pObject ).length <= 0);
+                     (options.rejectArrays && _isArr( pObject )) ||
+                     (options.rejectPrimitiveWrappers && isPrimitiveWrapper( pObject )) ||
+                     ( !options.allowEmptyObjects && isEmpty));
+        }
+
+        return false;
+    };
+
+    /**
+     * Returns true if the specified value is an object and is not null.<br>
+     * <br>
+     * Optionally, you can pass options to consider objects with no properties as 'null objects'<br>
+     *
+     * @param {*} pObject A value to evaluate
+     * @param {boolean} pStrict Specify true to treat any value that is not identical to null as not-null
+     * @param pOptions {ObjectEvaluationOptions} An object to clarify how to handle objects that are not null, but have no properties, i.e., {}
+     *
+     * @param {Array.<string>} pStack
+     *
+     * @returns {boolean} true if the specified value is an object and is not null
+     *
+     * @alias module:TypeUtils.isNonNullObject
+     */
+    const isNonNullObject = function( pObject, pStrict = false, pOptions = IS_NON_NULL_OBJECT_OPTIONS, pStack = [] )
+    {
+        const options = { ...IS_NON_NULL_OBJECT_OPTIONS, ...(pOptions || {}) };
+
+        if ( !isNull( pObject, pStrict ) && isObject( pObject, options ) )
+        {
+            if ( options.allowEmptyObjects )
+            {
+                return true;
+            }
+
+            const entries = objectEntries( pObject );
+
+            const populatedEntry = ( entry ) =>
+            {
+                const val = entry.value || entry[1];
+                return isNonNullValue( val ) &&
+                       ( !isObject( val ) ||
+                         isNonNullObject( val, pStrict, options, [...(pStack || []), entry.key] ));
+            };
+
+            const populated = ( entries ) => !isNull( entries.find( populatedEntry ) );
+
+            return (entries?.length > 0) && ((detectCycles( pStack, 6, 3 )) || populated( entries ));
         }
 
         return false;
@@ -843,6 +747,30 @@ const $scope = constants?.$scope || function()
      */
     const isEvent = ( pObj ) => isObject( pObj ) && (pObj instanceof Event || pObj instanceof CustomEvent || pObj instanceof ModuleEvent);
 
+    /**
+     * Returns true if the specified value is an array
+     * <br>
+     * @param {*} pObj A value to evaluate
+     *
+     * @returns {boolean} true if the specified value is an array
+     *
+     * @alias module:TypeUtils.isArray
+     */
+    const isArray = ( pObj ) => !isNull( pObj ) && isObject( pObj ) && _isArr( pObj );
+
+    /**
+     * Returns true if the specified value is an instance of a {@link TypedArray}.
+     *
+     * @function isTypedArray
+     *
+     * @param {Object} pObj - The object to be evaluated.
+     * @returns {boolean} Returns true if the object is an instance of any typed array<br>
+     *                    (e.g., Int8Array, Uint8Array, Float32Array, etc.),<br>
+     *                    otherwise false.
+     *
+     * @alias module:TypeUtils.isTypedArray
+     */
+    const isTypedArray = ( pObj ) => [...TYPED_ARRAYS].some( e => isObject( pObj ) && pObj instanceof e );
 
     /**
      * Returns true if the value passed represents a JavaScript Class<br>
@@ -859,51 +787,32 @@ const $scope = constants?.$scope || function()
      */
     const isClass = function( pFunction, pStrict = true )
     {
-        if ( isNull( pFunction ) )
+        if ( isNull( pFunction ) || !isFunction( pFunction ) )
         {
             return false;
         }
 
-        if ( isFunction( pFunction ) ||
-             ( !pStrict && (BUILTIN_TYPE_NAMES.includes( pFunction?.name )
-                            || BUILTIN_TYPES.includes( pFunction ))) )
+        if ( !pStrict )
         {
-            return ( !pStrict &&
-                     (BUILTIN_TYPE_NAMES.includes( pFunction?.name ) ||
-                      BUILTIN_TYPES.includes( pFunction )))
-                   || /^class\s/.test( (functionToString.call( pFunction, pFunction )).trim() );
+            // Use the non-writable nature of class prototypes as a heuristic
+            const descriptor = Object.getOwnPropertyDescriptor( pFunction, "prototype" );
+            const isNativeClass = descriptor && !descriptor.writable;
+
+            if ( isNativeClass )
+            {
+                return true;
+            }
         }
 
-        return false;
+        // Fallback for non-strict/transpiled environments
+        if ( !pStrict )
+        {
+            return BUILTIN_TYPE_NAMES.includes( pFunction?.name ) || BUILTIN_TYPES.includes( pFunction );
+        }
+
+        return functionToString.call( pFunction ).startsWith( "class " );
     };
 
-
-    /**
-     * Returns the first object that is an instance of Error from the provided input.<br>
-     * <br>
-     * <br>
-     * The function takes a variable number of parameters, processes them into a flat array,
-     * and filters out non-error objects. It then returns the first error object found.
-     * <br>
-     * <br>
-     * If the input is null or undefined, or if none of the elements are error objects,
-     * the function returns null.
-     *
-     * @function firstError
-     *
-     * @param {...*} pObj - A variable number of arguments, which can be of any type.
-     *                      If multiple arguments are passed, they are converted into a flat array.
-     *                      Only error objects within this input are considered.
-     *
-     * @returns {Error|undefined} The first error object from the input, or undefined if no errors are found.
-     *
-     * @alias module:TypeUtils.firstError
-     */
-    const firstError = function( ...pObj )
-    {
-        let arr = (!isNull( pObj ) ? isArray( pObj ) ? [...(pObj || [])] : [pObj] : []).flat().filter( isError );
-        return arr.filter( isError ).shift() || null;
-    };
 
     /**
      * Attempts to convert a value to a string<br>
@@ -976,7 +885,7 @@ const $scope = constants?.$scope || function()
      *
      * @alias module:TypeUtils.isBigInt
      */
-    const isBigInt = ( pNum ) => isNumber( pNum ) && _big === typeof pNum;
+    const isBigInt = ( pNum ) => isNumber( pNum ) && (_big === typeof pNum || pNum instanceof BigInt);
 
     /**
      * Returns true if the value is NaN or is not Finite<br>
@@ -1225,32 +1134,30 @@ const $scope = constants?.$scope || function()
             return true;
         }
 
-        if ( !([_num, _big, _str].includes( typeof pObj ) || (pObj instanceof Number || pObj instanceof String)) )
+        if ( ([_num, _big, _str].includes( typeof pObj ) || (pObj instanceof Number || pObj instanceof String)) )
         {
-            return false;
-        }
+            let value = (_mt_str + _toString( pObj )).trim();
+            value = value.replace( /^\(/, _mt_str ).replace( /\)$/, _mt_str ).trim();
+            value = value.replace( /n+$/, _mt_str ).trim();
 
-        let value = (_mt_str + _toString( pObj )).trim();
-        value = value.replace( /^\(/, _mt_str ).replace( /\)$/, _mt_str ).trim();
-        value = value.replace( /n+$/, _mt_str ).trim();
+            const is_decimal = isDecimal( value );
 
-        const is_decimal = isDecimal( value );
-
-        if ( _zero === value || is_decimal || isHex( value ) || isOctal( value ) || isBinary( value ) || (/[eE]/i.test( value ) && isScientificNotation( value )) )
-        {
-            if ( is_decimal )
+            if ( _zero === value || is_decimal || isHex( value ) || isOctal( value ) || isBinary( value ) || (/[eE]/i.test( value ) && isScientificNotation( value )) )
             {
-                value = (!((/[boxe]/i).test( value )) ? (value.includes( _dot ) ? value.replace( /^0{2,}/, _zero ) : value.replace( /^0+/, _mt_str )) : value).trim();
+                if ( is_decimal )
+                {
+                    value = (!((/[boxe]/i).test( value )) ? (value.includes( _dot ) ? value.replace( /^0{2,}/, _zero ) : value.replace( /^0+/, _mt_str )) : value).trim();
+                }
+
+                if ( _mt_str === value )
+                {
+                    return false;
+                }
+
+                let integer = attempt( () => parseInt( value, calculateRadix( pObj ) ) );
+
+                return isNumber( integer ) && !isNanOrInfinite( integer );
             }
-
-            if ( _mt_str === value )
-            {
-                return false;
-            }
-
-            let integer = attempt( () => parseInt( value, calculateRadix( pObj ) ) );
-
-            return isNumber( integer ) && !isNanOrInfinite( integer );
         }
 
         return false;
@@ -1739,50 +1646,6 @@ const $scope = constants?.$scope || function()
     const isBoolean = ( pValue ) => ((_bool === typeof pValue) && ((false === pValue) || true === pValue)) || pValue instanceof Boolean;
 
     /**
-     * Returns true if the specified value is an object and is not null.<br>
-     * <br>
-     * Optionally, you can pass options to consider objects with no properties as 'null objects'<br>
-     *
-     * @param {*} pObject A value to evaluate
-     * @param {boolean} pStrict Specify true to treat any value that is not identical to null as not-null
-     * @param pOptions {ObjectEvaluationOptions} An object to clarify how to handle objects that are not null, but have no properties, i.e., {}
-     *
-     * @param {Array.<string>} pStack
-     *
-     * @returns {boolean} true if the specified value is an object and is not null
-     *
-     * @alias module:TypeUtils.isNonNullObject
-     */
-    const isNonNullObject = function( pObject, pStrict = false, pOptions = IS_NON_NULL_OBJECT_OPTIONS, pStack = [] )
-    {
-        const options = { ...IS_NON_NULL_OBJECT_OPTIONS, ...(pOptions || {}) };
-
-        if ( !isNull( pObject, pStrict ) && isObject( pObject, options ) )
-        {
-            if ( options.allowEmptyObjects )
-            {
-                return true;
-            }
-
-            const entries = objectEntries( pObject );
-
-            const populatedEntry = ( entry ) =>
-            {
-                const val = entry.value || entry[1];
-                return isNonNullValue( val ) &&
-                       ( !isObject( val ) ||
-                         isNonNullObject( val, pStrict, options, [...(pStack || []), entry.key] ));
-            };
-
-            const populated = ( entries ) => !isNull( entries.find( populatedEntry ) );
-
-            return (entries?.length > 0) && ((detectCycles( pStack, 6, 3 )) || populated( entries ));
-        }
-
-        return false;
-    };
-
-    /**
      * Returns true if the specified value,<br>
      * which might otherwise evaluate to 'falsey',<br>
      * is actually a non-null value, such as 0, false, or an empty string<br>
@@ -1794,31 +1657,6 @@ const $scope = constants?.$scope || function()
      * @alias module:TypeUtils.isNonNullValue
      */
     const isNonNullValue = ( pValue ) => (false === pValue || 0 === pValue || _mt_str === pValue || isNonNullObject( pValue ) || isNotNull( pValue, false ));
-
-    /**
-     * Returns true if the specified value is an array
-     * <br>
-     * @param {*} pObj A value to evaluate
-     *
-     * @returns {boolean} true if the specified value is an array
-     *
-     * @alias module:TypeUtils.isArray
-     */
-    const isArray = ( pObj ) => isObject( pObj ) && ((isFunction( Array.isArray )) ? Array.isArray( pObj ) : _isArr( pObj ));
-
-    /**
-     * Returns true if the specified value is an instance of a {@link TypedArray}.
-     *
-     * @function isTypedArray
-     *
-     * @param {Object} pObj - The object to be evaluated.
-     * @returns {boolean} Returns true if the object is an instance of any typed array<br>
-     *                    (e.g., Int8Array, Uint8Array, Float32Array, etc.),<br>
-     *                    otherwise false.
-     *
-     * @alias module:TypeUtils.isTypedArray
-     */
-    const isTypedArray = ( pObj ) => (([...TYPED_ARRAYS].filter( e => isObject( pObj ) && pObj instanceof e ))?.length || 0) > 0;
 
     const is2dArray = ( pArray ) => isArray( pArray ) && $ln( pArray ) > 0 && pArray.every( elem => isArray( elem ) );
 
@@ -1867,6 +1705,8 @@ const $scope = constants?.$scope || function()
      */
     const isAsyncIterable = ( pObj ) => !isNull( pObj ) && isFunction( pObj[Symbol.asyncIterator] );
 
+    const isCloneable = ( pObject ) => isNonNullObject( pObject ) && isFunction( pObject.clone );
+
     /**
      * Returns true if the specified value is array-like<br>
      *
@@ -1910,6 +1750,136 @@ const $scope = constants?.$scope || function()
      * @alias module:TypeUtils.isSymbol
      */
     const isSymbol = ( pValue ) => _symbol === typeof pValue || pValue instanceof Symbol;
+
+
+    /**
+     * The VisitedSet class extends the native JavaScript Set class,
+     * providing additional functionality to handle equality comparison for objects.
+     *
+     * Instances of this class are useful in recursive algorithms
+     * to avoid visiting the same node more than once.
+     *
+     * @class
+     * @alias module:TypeUtils#VisitedSet
+     */
+    class VisitedSet extends Set
+    {
+        /**
+         * A function used to determine the equality of two objects.
+         *
+         * This function should accept two parameters representing the objects to be compared
+         * and return a boolean value indicating whether the objects are considered equal.
+         *
+         * Typically, the equality function is used in contexts such as data comparison,
+         * filtering, deduplication, or other scenarios that require logic to compare two values.
+         *
+         * @type {function({object},{object}):boolean}
+         *
+         * @param {any} element1 - The object to compare to the other.
+         *
+         * @param {any} element2 - The other object to compare to the first.
+         *
+         * @returns {boolean} true if the two objects are considered equal, otherwise false.
+         */
+        #equalityFunction = (( a, b ) => a === b);
+
+        constructor( pEqualityFunction = ( a, b ) => a === b, ...pValues )
+        {
+            super( pValues );
+
+            this.#equalityFunction = (pEqualityFunction && (_fun === typeof pEqualityFunction) ? pEqualityFunction : (( a, b ) => a === b));
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
+        has( pValue )
+        {
+            if ( _ud === typeof pValue || null === pValue )
+            {
+                return false;
+            }
+
+            if ( super.has( pValue ) )
+            {
+                return true;
+            }
+
+            for( let v of this.values() )
+            {
+                if ( (_obj === typeof v) && (v === pValue || this.#equalityFunction( v, pValue )) )
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
+
+    /**
+     * ResolvedSet is a class extending VisitedSet, providing additional functionality
+     * for storing and resolving values associated with specific objects or paths.
+     */
+    class ResolvedSet extends VisitedSet
+    {
+        #map = new Map();
+        #mapByNodePath = new Map();
+
+        constructor( pEqualityFunction = ( a, b ) => a === b, ...pValues )
+        {
+            super( pEqualityFunction, ...pValues );
+        }
+
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
+        resolveForNodePath( pValue, ...pNodePath )
+        {
+            let paths = toNodePathArray( ...pNodePath );
+
+            if ( isNull( paths ) || $ln( paths ) <= 0 )
+            {
+                return this.resolve( pValue );
+            }
+
+            paths = paths.join( _dot );
+
+            let value = this.#mapByNodePath.get( paths );
+
+            value = isNonNullValue( value ) ? value : pValue;
+
+            if ( isNonNullValue( value ) )
+            {
+                this.#mapByNodePath.set( paths, value );
+            }
+
+            return value;
+        }
+
+        resolve( pObject, pValue )
+        {
+            if ( isNonNullObject( pObject ) )
+            {
+                if ( isNonNullValue( pValue ) )
+                {
+                    this.add( pObject );
+                    this.#map.set( pObject, pValue );
+                    return pValue;
+                }
+                else
+                {
+                    return this.has( pObject ) ? this.#map.get( pObject ) : null;
+                }
+            }
+
+            return isNonNullValue( pValue ) ? pValue : null;
+        }
+    }
 
     /**
      * @typedef {object} IsPopulatedOptions
@@ -3912,10 +3882,10 @@ const $scope = constants?.$scope || function()
 
         constructor( pValue )
         {
-            this.#value = (pValue instanceof this.constructor) ? pValue.#value : pValue;
+            this.#value = (pValue instanceof this.constructor) ? pValue.value : pValue;
             while ( !isNull( this.#value ) && (this.#value instanceof this.constructor) )
             {
-                this.#value = this.#value?.value;
+                this.#value = this.value?.value;
             }
         }
 
@@ -3936,12 +3906,12 @@ const $scope = constants?.$scope || function()
 
         isSome()
         {
-            return (isDefined( this.#value ) && null !== this.#value);
+            return (isDefined( this.#value ) && null !== this.#value && !isError( this.#value ));
         }
 
         isNone()
         {
-            return isUndefined( this.#value ) || null === this.#value;
+            return isUndefined( this.#value ) || null === this.#value || isError( this.#value );
         }
 
         map( pFunction )
@@ -4155,7 +4125,7 @@ const $scope = constants?.$scope || function()
 
             if ( isError( val ) )
             {
-                errors.push( val );
+                errors.unshift( resolveError( val ) );
             }
 
             if ( $ln( errors ) )
@@ -4339,6 +4309,34 @@ const $scope = constants?.$scope || function()
      * @alias module:TypeUtils.isArrayBuffer
      */
     const isDataView = ( pValue ) => (_ud !== typeof DataView && pValue instanceof DataView);
+
+
+    /**
+     * Returns the first object that is an instance of Error from the provided input.<br>
+     * <br>
+     * <br>
+     * The function takes a variable number of parameters, processes them into a flat array,
+     * and filters out non-error objects. It then returns the first error object found.
+     * <br>
+     * <br>
+     * If the input is null or undefined, or if none of the elements are error objects,
+     * the function returns null.
+     *
+     * @function firstError
+     *
+     * @param {...*} pObj - A variable number of arguments, which can be of any type.
+     *                      If multiple arguments are passed, they are converted into a flat array.
+     *                      Only error objects within this input are considered.
+     *
+     * @returns {Error|undefined} The first error object from the input, or undefined if no errors are found.
+     *
+     * @alias module:TypeUtils.firstError
+     */
+    const firstError = function( ...pObj )
+    {
+        let arr = (!isNull( pObj ) ? isArray( pObj ) ? [...(pObj || [])] : [pObj] : []).flat().filter( isError );
+        return arr.filter( isError ).shift() || null;
+    };
 
     const DEFAULT_TRANSFORMER_PROPERTIES =
         {
@@ -5294,7 +5292,7 @@ const $scope = constants?.$scope || function()
                                   },
                                   set: ( pTarget = this, pProperty, pValue, pReceiver ) =>
                                   {
-                                      if ( isString( pProperty ) && !isBlank( pProperty ) )
+                                      if ( isString( pProperty ) && !isEmptyString( String( pProperty ).trim() ) )
                                       {
                                           pTarget.#properties.set( pProperty, pValue );
                                           return true;
@@ -5722,6 +5720,36 @@ const $scope = constants?.$scope || function()
         return false;
     }
 
+    function isSubclassOf( pChild, pParent )
+    {
+        if ( (isNull( pChild ) || !(isClass( pChild ) || isObject( pChild ))) || (isNull( pParent ) || !(isClass( pParent ) || isObject( pParent ))) )
+        {
+            return false;
+        }
+
+        let child = isClass( pChild ) ? pChild : getClass( pChild );
+        let parent = isClass( pParent ) ? pParent : getClass( pParent );
+
+        if ( child === parent )
+        {
+            return true;
+        }
+
+        let parentPrototype = parent.prototype;
+        let childPrototype = child.prototype;
+
+        if ( null === parentPrototype || parentPrototype === Object || parentPrototype === Array )
+        {
+            return null === childPrototype || (childPrototype === Object && parentPrototype === Object) || (childPrototype === Array && parentPrototype === Array);
+        }
+        else if ( null === childPrototype )
+        {
+            return false;
+        }
+
+        return parentPrototype.isPrototypeOf( childPrototype );
+    }
+
     /**
      * Returns true if the specified object is either an instance of the specified class
      * or if it has all the methods defined by the class
@@ -6127,6 +6155,7 @@ const $scope = constants?.$scope || function()
             getMethods,
             implementsMethods,
             implementsInterface,
+            isSubclassOf,
             delegateTo,
 
             /**

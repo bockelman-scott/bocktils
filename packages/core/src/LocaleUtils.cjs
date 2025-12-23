@@ -14,13 +14,7 @@ const typeUtils = require( "./TypeUtils.cjs" );
 const stringUtils = require( "./StringUtils.cjs" );
 const arrayUtils = require( "./ArrayUtils.cjs" );
 
-const {
-    _ud = "undefined",
-    $scope = function()
-    {
-        return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-    }
-} = constants;
+const { _ud = "undefined", $scope } = constants;
 
 // noinspection FunctionTooLongJS
 (function exposeModule()
@@ -37,7 +31,9 @@ const {
 
     const {
         ToolBocksModule,
+        attempt,
         lock,
+        resolveError,
         objectValues,
         runtimeLocaleString,
         getRuntimeLocale,
@@ -61,13 +57,20 @@ const {
     const {
         isDefined,
         isNull,
+        isNullOrNaN,
+        isNonNullObject,
         isString,
         isNumeric,
+        isNumber,
         isObject,
         isArray,
         isFunction,
         isDate,
         isMap,
+        isPopulatedObject,
+        delegateTo,
+        Option,
+        Result
     } = typeUtils;
 
     const
@@ -802,6 +805,194 @@ const {
         }
     }
 
+    // risking the usual confusion between location utilities and locale utilities
+    // in the interest of reducing the number of modules and because we don't have a lot of "geo" functionality yet,
+    // we define these function here
+
+    const ANGULAR_MEASUREMENT =
+        lock( {
+                  DEGREES:
+                      lock( {
+                                toRadians: ( pDegrees ) => asFloat( pDegrees ) * (Math.PI / 180.00),
+                                toDegrees: ( pDegrees ) => asFloat( pDegrees )
+                            } ),
+                  RADIANS:
+                      lock( {
+                                toRadians: ( pRadians ) => asFloat( pRadians ),
+                                toDegrees: ( pRadians ) => asFloat( pRadians ) * (180.00 / Math.PI)
+                            } )
+              } );
+
+    const DISTANCE_UNITS =
+        lock( {
+                  MILES: 3958.8,
+                  KILOMETERS: 6371
+              } );
+
+    class GeoLocation
+    {
+        #latitude;
+        #longitude;
+
+        #angularMeasurement = ANGULAR_MEASUREMENT.DEGREES;
+
+        constructor( pLatitude, pLongitude, pAngularMeasurement = ANGULAR_MEASUREMENT.DEGREES )
+        {
+            let latitude = asFloat( pLatitude );
+            let longitude = asFloat( pLongitude );
+
+            this.#latitude = latitude;
+            this.#longitude = longitude;
+
+            this.#angularMeasurement = pAngularMeasurement;
+        }
+
+        get latitude()
+        {
+            return asFloat( this.#latitude );
+        }
+
+        get longitude()
+        {
+            return asFloat( this.#longitude );
+        }
+
+        get angularMeasurement()
+        {
+            return (isNonNullObject( this.#angularMeasurement ) && isFunction( this.#angularMeasurement?.toRadians )) ? this.#angularMeasurement : ANGULAR_MEASUREMENT.DEGREES;
+        }
+
+        inRadians()
+        {
+            const measurement = this.angularMeasurement || ANGULAR_MEASUREMENT.DEGREES;
+
+            const lat = asFloat( measurement.toRadians( this.latitude ) );
+            const lon = asFloat( measurement.toRadians( this.longitude ) );
+
+            return new GeoLocation( lat, lon, ANGULAR_MEASUREMENT.RADIANS );
+        }
+
+        inDegrees()
+        {
+            const measurement = this.angularMeasurement || ANGULAR_MEASUREMENT.DEGREES;
+
+            const lat = asFloat( measurement.toDegrees( this.latitude ) );
+            const lon = asFloat( measurement.toDegrees( this.longitude ) );
+
+            return new GeoLocation( lat, lon, ANGULAR_MEASUREMENT.RADIANS );
+        }
+
+        get valid()
+        {
+            return isNumber( this.latitude ) && !isNullOrNaN( this.latitude ) && isNumber( this.longitude ) && !isNullOrNaN( this.longitude );
+        }
+
+        distanceFrom( pOther, pInUnits = DISTANCE_UNITS.MILES )
+        {
+            if ( pOther instanceof this.constructor )
+            {
+                let from = this.inRadians();
+                let to = pOther.inRadians();
+
+                const dLat = to.latitude - from.latitude;
+                const dLon = to.longitude - from.longitude;
+
+                const a = (Math.sin( dLat / 2 ) ** 2) +
+                          (Math.cos( from.latitude ) * Math.cos( to.latitude )) *
+                          (Math.sin( dLon / 2 ) ** 2);
+
+                const c = 2 * Math.atan2( Math.sqrt( a ), Math.sqrt( 1 - a ) );
+
+                return new Result( c * asFloat( Math.max( 1, pInUnits ) ) );
+            }
+            else if ( isNonNullObject( pOther ) )
+            {
+                const other = GeoLocation.from( pOther );
+                return new Result( this.distanceFrom( other, pInUnits ) );
+            }
+            return new Result( resolveError( new IllegalArgumentError( `Could not calculate distance from ${this} to ${pOther}` ) ) );
+        }
+
+        toString()
+        {
+            let s = attempt( () => JSON.stringify( this ) );
+            if ( !isBlank( s ) )
+            {
+                return s;
+            }
+            return "{\"latitude\":" + asFloat( this.latitude ) + ", \"longitude\":" + asFloat( this.longitude ) + "}";
+        }
+
+        toJSON()
+        {
+            return this.toString();
+        }
+
+        toLiteral()
+        {
+            return { latitude: this.latitude, longitude: this.longitude };
+        }
+    }
+
+    class InvalidGeoLocation extends GeoLocation
+    {
+        constructor( pLatitude, pLongitude, pAngularMeasurement )
+        {
+            super( 0, 0, pAngularMeasurement );
+        }
+
+        inDegrees()
+        {
+            return 0;
+        }
+
+        inRadians()
+        {
+            return 0;
+        }
+
+        get valid()
+        {
+            return false;
+        }
+
+        distanceFrom( pOther )
+        {
+            return 0;
+        }
+    }
+
+    GeoLocation.from = function( pObject )
+    {
+        if ( isPopulatedObject( pObject ) )
+        {
+            let latitude = pObject["latitude"] ?? pObject["lat"] ?? pObject["latVal"] ?? null;
+            let longitude = pObject["longitude"] ?? pObject["lon"] ?? pObject["lng"] ?? pObject["lonVal"] ?? null;
+
+            if ( null !== latitude && null !== longitude )
+            {
+                latitude = asFloat( latitude );
+                longitude = asFloat( longitude );
+
+                let angularMeasurement = ANGULAR_MEASUREMENT.DEGREES;
+
+                if ( isNullOrNaN( latitude ) || isNullOrNaN( longitude ) || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180 )
+                {
+                    return new InvalidGeoLocation();
+                }
+
+                // if the coordinates are both very small, it is likely the values are expressed in radians
+                if ( Math.abs( latitude ) <= 3.14 && Math.abs( longitude ) <= 3.14 )
+                {
+                    return new GeoLocation( latitude, longitude, ANGULAR_MEASUREMENT.RADIANS );
+                }
+
+                return new GeoLocation( latitude, longitude, angularMeasurement );
+            }
+        }
+        return new InvalidGeoLocation();
+    };
+
     let mod =
         {
             dependencies,
@@ -864,7 +1055,69 @@ const {
             toCanonicalNumericFormat,
             LocaleResourcesBase,
             parseLocale,
-            buildLocaleKeyPermutations
+            buildLocaleKeyPermutations,
+            createGeoLocation: ( pLatitude, pLongitude ) =>
+            {
+                let errors = [];
+
+                if ( !isNumeric( pLatitude ) || isNullOrNaN( parseFloat( pLatitude ) ) )
+                {
+                    errors.push( new IllegalArgumentError( `A GeoLocation requires a Latitude` ) );
+                }
+
+                if ( !isNumeric( pLongitude ) || isNullOrNaN( parseFloat( pLongitude ) ) )
+                {
+                    errors.push( new IllegalArgumentError( `A GeoLocation requires a Longitude` ) );
+                }
+
+                let latitude = asFloat( pLatitude );
+                let longitude = asFloat( pLongitude );
+
+                if ( isNullOrNaN( latitude ) || isNullOrNaN( longitude ) || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180 )
+                {
+                    errors.push( new IllegalArgumentError( `Latitude must be a numeric value between -90 and 90 degrees and longitude must be a numeric value between -180 and 180 degrees. Found ${latitude}, ${longitude}` ) );
+                    return new Result( new InvalidGeoLocation(), ...errors );
+                }
+
+                let angularMeasurement = ANGULAR_MEASUREMENT.DEGREES;
+
+                // if the coordinates are both very small, it is likely the values are expressed in radians.
+                // otherwise, in degrees, the coordinates indicate locations at the bottom of the Pacific Ocean
+                if ( Math.abs( latitude ) <= 3.14 && Math.abs( longitude ) <= 3.14 )
+                {
+                    angularMeasurement = ANGULAR_MEASUREMENT.RADIANS;
+                }
+
+                let geolocation = new GeoLocation( latitude, longitude, angularMeasurement );
+
+                let result = new Result( geolocation );
+
+                attempt( () => delegateTo( result, geolocation ) );
+
+                return result;
+            },
+            isValidGeoLocation: ( pValue ) => pValue instanceof GeoLocation && pValue.valid,
+            calculateDistance( pFrom, pTo, pInUnits )
+            {
+                let from = GeoLocation.from( pFrom );
+                from = this.createGeoLocation( from.latitude, from.longitude );
+
+                let to = GeoLocation.from( pTo );
+                from = this.createGeoLocation( to.latitude, to.longitude );
+
+                if ( from.isSome() && to.isSome() )
+                {
+                    from = from.getOrElse( {} );
+                    to = to.getOrElse( {} );
+
+                    if ( from.valid && to.valid )
+                    {
+                        return new Result( to.distanceFrom( from, pInUnits ) );
+                    }
+                }
+
+                return new Result( Option.None(), resolveError( new Error( `Could not calculate the distance from ${pFrom} to ${pTo}` ) ) );
+            }
         };
 
     mod = toolBocksModule.extend( mod );
