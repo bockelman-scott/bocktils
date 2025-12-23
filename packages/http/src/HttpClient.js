@@ -102,15 +102,7 @@ const responseDataModule = require( "./ResponseData.js" );
 const { constants } = core;
 
 // Provides shorthand for the "undefined" Type
-const { _ud = "undefined" } = constants;
-
-/**
- * Returns the global object / host for the current execution context, such as window or global.
- */
-const $scope = constants?.$scope || function()
-{
-    return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-};
+const { _ud = "undefined", $scope } = constants;
 
 // noinspection FunctionTooLongJS
 /**
@@ -1763,7 +1755,7 @@ const $scope = constants?.$scope || function()
                     {
                         const contentType = HttpHeaders.getHeaderValue( headers, "Content-Type" );
 
-                        if( !isNull(info) && info.locked )
+                        if ( !isNull( info ) && info.locked )
                         {
                             // some other consumer is either streaming the response or has already consumed it
                             return responseData.data || responseData.response?.data || info;
@@ -1925,7 +1917,7 @@ const $scope = constants?.$scope || function()
         return asString( fileName, true );
     }
 
-    class IHttpClient  extends EventTarget
+    class IHttpClient extends EventTarget
     {
         constructor( pConfig = HttpConfig.getDefault(), pOptions = { ...DEFAULT_HTTP_CLIENT_OPTIONS }, pDelegates = new Map(), pDefaultDelegate = new HttpFetchClient( pConfig, pOptions ) )
         {

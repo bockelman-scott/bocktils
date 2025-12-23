@@ -44,6 +44,8 @@ const jsonUtils = require( "@toolbocks/json" );
  */
 const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
+const { _ud = "undefined", $scope } = constants;
+
 // import the DateUtils module from the datesModule
 const { DateUtils } = datesModule;
 
@@ -70,13 +72,6 @@ const httpRequestModule = require( "./HttpRequest.cjs" );
  */
 const httpResponseModule = require( "./HttpResponse.cjs" );
 
-const {
-    _ud = "undefined", $scope = constants?.$scope || function()
-    {
-        return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
-    }
-} = constants;
-
 // noinspection FunctionTooLongJS
 (function exposeModule()
 {
@@ -87,43 +82,45 @@ const {
         return $scope()[INTERNAL_NAME];
     }
 
-    const {
-        ModuleEvent,
-        ToolBocksModule,
-        IterationCap,
-        ObjectEntry,
-        objectEntries,
-        populateOptions,
-        resolveError,
-        lock,
-        attempt,
-        attemptSilent,
-        asyncAttempt,
-        isWritable,
-        $ln,
-        konsole = console
-    } = moduleUtils;
+    const
+        {
+            ModuleEvent,
+            ToolBocksModule,
+            IterationCap,
+            ObjectEntry,
+            objectEntries,
+            populateOptions,
+            resolveError,
+            lock,
+            attempt,
+            attemptSilent,
+            asyncAttempt,
+            isWritable,
+            $ln,
+            konsole = console
+        } = moduleUtils;
 
     const { _mt_str = "", _mt = _mt_str, _slash = "/" } = constants;
 
-    const {
-        isNull,
-        isNonNullObject,
-        isNonNullValue,
-        isPopulatedObject,
-        isError,
-        isFunction,
-        isString,
-        isNumeric,
-        isNullOrNaN,
-        isDate,
-        isDateString,
-        isScalar,
-        isPromise,
-        asObject,
-        toObjectLiteral,
-        clamp = moduleUtils.clamp
-    } = typeUtils;
+    const
+        {
+            isNull,
+            isNonNullObject,
+            isNonNullValue,
+            isPopulatedObject,
+            isError,
+            isFunction,
+            isString,
+            isNumeric,
+            isNullOrNaN,
+            isDate,
+            isDateString,
+            isScalar,
+            isPromise,
+            asObject,
+            toObjectLiteral,
+            clamp = moduleUtils.clamp
+        } = typeUtils;
 
     const { asString, asInt, isBlank, cleanUrl, isJson, isFilePath, toUnixPath } = stringUtils;
 

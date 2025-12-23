@@ -300,7 +300,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             S_CUSTOM = "custom",
 
             S_ERR_PREFIX = `An ${S_ERROR} occurred`,
-            S_DEFAULT_OPERATION = "The script encountered un unexpected condition",
+            S_DEFAULT_OPERATION = "The script encountered an unexpected condition",
 
             EMPTY_OBJECT = Object.freeze( {} ),
             EMPTY_ARRAY = Object.freeze( [] ),
@@ -5398,9 +5398,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return null;
         }
 
-        const msg = _isValidStr( pMessage ) ? pMessage : _isValidStr( pError ) ? pError : pError?.message || pMessage?.message || DEFAULT_ERROR_MSG;
+        const msg = _isValidStr( pMessage ) ? pMessage : _isValidStr( pError ) ? pError : (pError?.message || pError?.name || pError?.type) || (pMessage?.message || pMessage?.type || pMessage?.name || DEFAULT_ERROR_MSG);
 
-        let cause = isError( pError ) ? pError?.cause || pError : isError( pMessage ) ? pMessage : null;
+        let cause = isError( pError ) ? pError?.cause || (isError( pMessage ) ? pMessage : pError) : isError( pMessage ) ? pMessage : null;
 
         let options = isError( cause ) ? { message: msg, cause } : { message: msg };
 
@@ -6635,16 +6635,18 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          *
          */
         reportError( pError,
-                     pMessage = pError?.message || S_DEFAULT_OPERATION,
+                     pMessage = (pError?.message || pError?.name || pError?.type || S_DEFAULT_OPERATION),
                      pLevel = S_ERROR,
                      pSource = _mt_str,
                      ...pExtra )
         {
             try
             {
-                const s = _mt_str + (pMessage || pError?.message || S_DEFAULT_OPERATION);
+                let s = _mt_str + (pMessage || pError?.message || pError?.name || pError?.type || S_DEFAULT_OPERATION);
 
-                const err = resolveError( pError, s );
+                const err = resolveError( (isError( pError ) ? pError : isError( pMessage ) ? pMessage : {}), s );
+
+                s = _mt_str + (pMessage || err?.message || err?.type || err?.name || s || S_DEFAULT_OPERATION);
 
                 let level = _lcase( _asStr( pLevel ).trim() );
 
@@ -6661,7 +6663,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
                 if ( this.#loggingEnabled && ToolBocksModule.isLogger( this.logger ) )
                 {
-                    attemptMethod( this.logger, this.logger[level], ...msg );
+                    let logr = ToolBocksModule.resolveLogger( this.logger );
+                    attemptMethod( logr, logr[level], ...msg );
                 }
 
                 try
@@ -6701,8 +6704,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          */
         handleError( pError, pContext = this, ...pExtra )
         {
-            const source = this.resolveErrorSource( pContext, pError );
-            this.reportError( pError, pError?.message || S_DEFAULT_ERROR_MESSAGE, S_ERROR, source, ...pExtra );
+            if ( isError( pError ) )
+            {
+                const source = this.resolveErrorSource( pContext, pError );
+                this.reportError( pError, (pError?.message || pError?.name || pError?.type || S_DEFAULT_ERROR_MESSAGE), S_ERROR, source, ...pExtra );
+            }
         }
 
         /**
@@ -6717,22 +6723,25 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          */
         async handleErrorAsync( pError, pContext, ...pExtra )
         {
-            const me = this;
-
-            const source = this.resolveErrorSource( pContext, pError );
-
-            const error = resolveError( pError, pError?.message );
-
-            const msg = pError?.message || S_DEFAULT_ERROR_MESSAGE;
-
-            const extra = [...pExtra];
-
-            const func = async function()
+            if ( isError( pError ) )
             {
-                me.reportError( error, msg, S_ERROR, source, ...extra );
-            };
+                const me = this;
 
-            setTimeout( func, 10 );
+                const source = this.resolveErrorSource( pContext, pError );
+
+                const error = resolveError( pError, pError?.message );
+
+                const msg = pError?.message || S_DEFAULT_ERROR_MESSAGE;
+
+                const extra = [...pExtra];
+
+                const func = async function()
+                {
+                    me.reportError( error, msg, S_ERROR, source, ...extra );
+                };
+
+                setTimeout( func, 10 );
+            }
         }
 
         /**
@@ -6746,7 +6755,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          *                          This method is designed to be a "fire-and-forget" mechanism for reporting an error or exception without blocking the current event loop         */
         async asyncHandleError( pError, pContext, ...pExtra )
         {
-            this.handleErrorAsync( pError, pContext, ...pExtra ).then( no_op ).catch( no_op );
+            if ( isError( pError ) )
+            {
+                this.handleErrorAsync( pError, pContext, ...pExtra ).then( no_op ).catch( no_op );
+            }
         }
 
         /**

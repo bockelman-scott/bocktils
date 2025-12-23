@@ -78,16 +78,17 @@ const { _ud = "undefined", $scope } = constants;
             arrayUtils
         };
 
-    const {
-        ToolBocksModule,
-        IterationCap,
-        populateOptions,
-        lock,
-        detectCycles,
-        objectEntries,
-        ObjectEntry,
-        attempt
-    } = moduleUtils;
+    const
+        {
+            ToolBocksModule,
+            IterationCap,
+            populateOptions,
+            lock,
+            detectCycles,
+            objectEntries,
+            ObjectEntry,
+            attempt
+        } = moduleUtils;
 
     const
         {
@@ -123,6 +124,7 @@ const { _ud = "undefined", $scope } = constants;
             isNonNullObject,
             isNonNullValue,
             isPopulated,
+            isError = Error.isError,
             toIterable,
             toObjectLiteral,
             getClass,
@@ -139,11 +141,11 @@ const { _ud = "undefined", $scope } = constants;
 
     const modName = "JsonInterpolationUtils";
 
-    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+    const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
     const calculateErrorSourceName = function( pModule = modName, pFunction )
     {
-        return modulePrototype.calculateErrorSourceName( pModule, pFunction );
+        return toolBocksModule.calculateErrorSourceName( pModule, pFunction );
     };
 
     const S_PATH = "path";
@@ -288,7 +290,7 @@ const { _ud = "undefined", $scope } = constants;
 
         if ( detectCycles( stack, 5, 5 ) )
         {
-            modulePrototype.reportError( new Error( `Entered an infinite loop at ${stack.join( _dot )}` ), `iterating a cyclically-connected graph`, S_ERROR, (modName + "::detectCycles"), stack );
+            toolBocksModule.reportError( new Error( `Entered an infinite loop at ${stack.join( _dot )}` ), `iterating a cyclically-connected graph`, S_ERROR, (modName + "::detectCycles"), stack );
             return [];
         }
 
@@ -788,7 +790,7 @@ const { _ud = "undefined", $scope } = constants;
             }
             catch( ex )
             {
-                modulePrototype.reportError( ex, ex?.message, pLevel || S_ERROR, calculateErrorSourceName( modName, "_handleCaughtException -> onError" ), ...pArgs );
+                toolBocksModule.reportError( ex, ex?.message, pLevel || S_ERROR, calculateErrorSourceName( modName, "_handleCaughtException -> onError" ), ...pArgs );
             }
 
             if ( shouldThrow )
@@ -796,7 +798,10 @@ const { _ud = "undefined", $scope } = constants;
                 throw new Error( pError?.message || pError );
             }
         }
-        modulePrototype.reportError( pError, pError?.message, pLevel || S_ERROR, pSource, ...pArgs );
+        if ( isError( pError ) )
+        {
+            toolBocksModule.reportError( pError, pError?.message, pLevel || S_ERROR, pSource, ...pArgs );
+        }
     }
 
     class Segment
@@ -1915,7 +1920,7 @@ const { _ud = "undefined", $scope } = constants;
             findNode
         };
 
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 
