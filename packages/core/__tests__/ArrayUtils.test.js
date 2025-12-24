@@ -15,7 +15,9 @@ const {
     combineConsecutive,
     concatenateConsecutiveStrings,
     includesAll,
-    includesAny
+    includesAny,
+    unique,
+    distinct
 } = arrayUtils;
 
 const { moduleUtils, constants, stringUtils } = dependencies;
@@ -252,7 +254,23 @@ describe( "varargs", () =>
 
 describe( "unique", () =>
 {
-    const { unique } = arrayUtils;
+    test( "unique([1,2,2,3,4,5]) = [1,2,3,4,5]",
+          () =>
+          {
+              let arr = [1, 2, 2, 3, 4, 5];
+
+              expect( unique( arr ) ).toEqual( [1, 2, 3, 4, 5] );
+              expect( unique( 1, 2, 2, 3, 4, 5 ) ).toEqual( [1, 2, 3, 4, 5] );
+          } );
+
+    test( "unique([1,2,2,3,4,5]) !== [1,2,2,3,4,5]",
+          () =>
+          {
+              let arr = [1, 2, 2, 3, 4, 5];
+
+              expect( unique( arr ) ).not.toEqual( [1, 2, 2, 3, 4, 5] );
+              expect( unique( 1, 2, 2, 3, 4, 5 ) ).not.toEqual( [1, 2, 2, 3, 4, 5] );
+          } );
 
     test( "unique array from varargs",
           () =>
@@ -2518,7 +2536,7 @@ describe( "includesAny", () =>
           () =>
           {
               let arrA = [1, 2, 3, 4, 5];
-              let arrB = [7,8,9];
+              let arrB = [7, 8, 9];
 
               expect( includesAll( arrA, arrB ) ).toBe( false );
           } );
@@ -2530,5 +2548,76 @@ describe( "includesAny", () =>
 
               expect( includesAll( arrA, 7, 8, 9 ) ).toBe( false );
           } );
+
+} );
+
+describe( "distinct", () =>
+{
+    test( "distinct([1,2,2,3,4,5]) = [1,2,3,4,5]",
+          () =>
+          {
+              let arr = [1, 2, 2, 3, 4, 5];
+
+              expect( distinct( arr ) ).toEqual( [1, 2, 3, 4, 5] );
+          } );
+
+    test( "distinct([1,2,2,3,4,5]) !== [1,2,2,3,4,5]",
+          () =>
+          {
+              let arr = [1, 2, 2, 3, 4, 5];
+
+              expect( distinct( arr ) ).not.toEqual( [1, 2, 2, 3, 4, 5] );
+          } );
+
+    const objA = {
+        firstName: "Scott",
+        lastName: "Bockelman",
+        age: 23,
+        father: { firstName: "Jerry", lastName: "Bockelman" }
+    };
+    const objB = {
+        firstName: "Dylan",
+        lastName: "Bockelman",
+        age: 26,
+        father: { firstName: "Scott", lastName: "Bockelman" }
+    };
+    const objC = {
+        firstName: "Scott",
+        lastName: "Bockelman",
+        age: 58,
+        father: { firstName: "Jerome", lastName: "Bockelman" }
+    };
+    const objD = {
+        firstName: "Dylan",
+        lastName: "Bockelman",
+        age: 13,
+        father: { firstName: "Feste", lastName: "Mafjgbs" }
+    };
+
+    test( "distinct objects",
+          () =>
+          {
+              let arr = [objA, objB, objC, objD];
+
+              expect( distinct( arr, "firstName", "lastName", "age" ) ).toEqual( [objA, objB, objC, objD] );
+
+              expect( distinct( arr, "firstName", "lastName" ) ).toEqual( [objA, objB] );
+
+              expect( distinct( arr, "firstName" ) ).toEqual( [objA, objB] );
+
+              expect( distinct( arr, "lastName" ) ).toEqual( [objA] );
+
+              expect( distinct( arr, "lastName", "firstName" ) ).toEqual( [objA, objB] );
+
+              expect( distinct( arr, "age", "lastName", "firstName" ) ).toEqual( [objA, objB, objC, objD] );
+
+              expect( distinct( arr, "firstName", "father.firstName" ) ).toEqual( [objA, objB, objC, objD] );
+
+              expect( distinct( arr, "firstName", "father.lastName" ) ).toEqual( [objA, objB, objD] );
+
+              expect( distinct( arr, "father.lastName" ) ).toEqual( [objA, objD] );
+
+          } );
+
 
 } );

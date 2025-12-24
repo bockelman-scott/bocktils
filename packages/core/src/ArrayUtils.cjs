@@ -59,6 +59,7 @@ const { _ud = "undefined", $scope } = constants;
         objectEntries,
         objectToString,
         populateOptions,
+        getProperty,
         localCopy,
         immutableCopy,
         lock,
@@ -133,6 +134,7 @@ const { _ud = "undefined", $scope } = constants;
         isNonNullValue,
         isNonNullObject,
         isNullOrNaN,
+        isPopulatedObject,
         isString,
         isEmptyString,
         isPrimitive,
@@ -159,6 +161,7 @@ const { _ud = "undefined", $scope } = constants;
         areCompatibleTypes,
         defaultFor,
         castTo,
+        asObject,
         toDecimal,
         toHex,
         toOctal,
@@ -3281,6 +3284,78 @@ const { _ud = "undefined", $scope } = constants;
     };
 
     /**
+     * Returns a new array of the unique objects from the specified array,
+     * according to the comparison of the properties specified in the property paths.
+     *
+     * @param {Array|Set} pArr an array of objects
+     * @param {...string} pPropertyPaths one or more key paths to the properties to compare
+     * @returns {*|Array<*>} a new array of objects where the specified properties are unique
+     */
+    const distinct = ( pArr, ...pPropertyPaths ) =>
+    {
+        let arr = [...(asArray( pArr || [] ))].filter( e => !isNull( e ) );
+
+        if ( !arr.every( e => isObject( e ) ) )
+        {
+            return unique( ...arr );
+        }
+
+        let paths = [...(asArray( pPropertyPaths || [] ))].filter( e => isString( e ) && $ln( e.trim() ) > 0 );
+
+        let returnArray = [];
+
+        if ( $ln( paths ) <= 0 )
+        {
+            if ( arr.every( e => isFunction( e?.equals ) ) )
+            {
+                arr.forEach( elem =>
+                             {
+                                 if ( $ln( returnArray ) <= 0 || !(returnArray.some( e => (e === elem || e.equals( elem )) )) )
+                                 {
+                                     returnArray.push( elem );
+                                 }
+                             } );
+
+                return returnArray;
+            }
+            else
+            {
+                return unique( ...arr );
+            }
+        }
+
+        for( let o of arr )
+        {
+            if ( isNull( o ) || !isPopulatedObject( o ) )
+            {
+                continue;
+            }
+
+            let obj = asObject( o ) || { ...(o) };
+
+            if ( $ln( returnArray ) <= 0 )
+            {
+                returnArray.push( obj );
+            }
+            else
+            {
+                for( let keyPath of paths )
+                {
+                    let value = getProperty( obj, keyPath );
+
+                    if ( !returnArray.some( e => (e === obj) || ((isNonNullObject( value ) && isFunction( value.equals ) ? value.equals( getProperty( e, keyPath ) ) : value === getProperty( e, keyPath ))) ) )
+                    {
+                        returnArray.push( obj );
+                        break;
+                    }
+                }
+            }
+        }
+
+        return returnArray;
+    };
+
+    /**
      * Returns a new array ordered according to either the comparator specified<br>
      * --<br>
      * -- OR --<br>
@@ -5787,6 +5862,7 @@ const { _ud = "undefined", $scope } = constants;
             asArray,
             fromIterable,
             unique,
+            distinct,
             pruneArray,
             hasElements,
             isEmptyArray,
