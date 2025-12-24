@@ -4626,16 +4626,16 @@ const { _ud = "undefined", $scope } = constants;
             if ( isString( obj ) )
             {
                 obj = String( obj ).replace( /^["'`]+/, _mt ).replace( /["'`]+$/, _mt );
-                obj = attempt( () => parseJson( obj ) );
+                obj = attempt( () => parseJson( obj ) ) || String( obj );
             }
 
-            if ( isNonNullObject( obj ) || isArray( obj ) || isTypedArray( obj ) )
+            if ( isNonNullObject( obj ) || isArray( obj ) || isTypedArray( obj ) || (isString( obj ) && $ln( obj ) > 0) )
             {
                 return obj;
             }
         }
 
-        return { value: s, s };
+        return { value: s };
     };
 
     toolBocksModule["parseJson"] = toolBocksModule["parseJson"] || parseJson;
