@@ -359,7 +359,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const ERROR_TYPES = [Error, AggregateError, RangeError, ReferenceError, SyntaxError, URIError];
 
-    const ERROR_PROTOTYPES = ERROR_TYPES.map( e => e.prototype || Object.getPrototypeOf( e ) );
+    const ERROR_PROTOTYPES = ERROR_TYPES.map( e => e.prototype || Object.getPrototypeOf( e ) ).filter( e => null !== e && e !== Object );
 
     const ERROR_TYPE_NAMES = ERROR_TYPES.map( e => e.name || functionToString.call( e ) );
 
@@ -380,7 +380,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const PRIMITIVE_WRAPPER_TYPES = [String, Number, Boolean, BigInt];
 
-    const PRIMITIVE_WRAPPER_PROTOTYPES = PRIMITIVE_WRAPPER_TYPES.map( e => e.prototype || Object.getPrototypeOf( e ) );
+    const PRIMITIVE_WRAPPER_PROTOTYPES = PRIMITIVE_WRAPPER_TYPES.map( e => e.prototype || Object.getPrototypeOf( e ) ).filter( e => null !== e && e !== Object );
 
     const PRIMITIVE_WRAPPER_TYPE_NAMES = PRIMITIVE_WRAPPER_TYPES.map( e => e.name || functionToString.call( e ) );
 
@@ -413,10 +413,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const GLOBAL_TYPES = [Array, Function, Date, RegExp, Symbol, Map, Set, Promise, ArrayBuffer, DataView, WeakMap, WeakRef, WeakSet, ...ERROR_TYPES, ...PRIMITIVE_WRAPPER_TYPES];
 
-    const GLOBAL_TYPE_PROTOTYPES = GLOBAL_TYPES.map( e => e.prototype || Object.getPrototypeOf( e ) );
+    const GLOBAL_TYPE_PROTOTYPES = GLOBAL_TYPES.map( e => e.prototype || Object.getPrototypeOf( e ) ).filter( e => null !== e && e !== Object );
 
     const GLOBAL_TYPE_NAMES = GLOBAL_TYPES.map( e => e.name || functionToString.call( e ) );
 
+    const TYPED_ARRAYS = freeze( [Int8Array, Uint8Array, Uint8ClampedArray, Int16Array, Uint16Array, Int32Array, Uint32Array, Float32Array, Float64Array, BigInt64Array, BigUint64Array] );
 
     const TRANSIENT_PROPERTIES = freeze( ["constructor", "prototype", "toJson", "toObject", "global", "this", "toString"] );
 
@@ -842,6 +843,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             {
                 const is = !isAsyncFunction( require );
                 isNodeJs = () => is;
+                return is;
             }
         }
         return false;
@@ -2509,13 +2511,42 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     function initializeEntries( pObject )
     {
-        return (isArray( pObject ) ?
-                pObject.map( ( e, i ) => [i, e] ) :
-               isMap( pObject ) || isFunc( pObject.entries ) ?
-                    [...pObject.entries()] :
-               isSet( pObject ) || isFunc( pObject.values ) ?
-               ([...pObject.values()].map( ( e, i ) => [i, e] )) :
-               Object.entries( pObject || {} )) || Object.entries( pObject || {} );
+        if ( isArray( pObject ) || TYPED_ARRAYS.some( e => pObject instanceof e ) )
+        {
+            return pObject.map( ( e, i ) => [i, e] );
+        }
+
+        if ( isMap( pObject ) || pObject instanceof WeakMap || (_ud !== typeof URLSearchParams && pObject instanceof URLSearchParams) )
+        {
+            return [...pObject.entries()];
+        }
+
+        if ( isSet( pObject ) || pObject instanceof WeakSet )
+        {
+            return ([...(pObject.values())].map( ( e, i ) => [i, e] ));
+        }
+
+        if ( pObject instanceof WeakRef )
+        {
+            let object = attempt( () => pObject.deref() );
+            if ( object )
+            {
+                return initializeEntries( object );
+            }
+        }
+
+        let entries = [];
+
+        if ( isFunc( pObject?.entries ) )
+        {
+            entries = ([...(attemptSilent( () => pObject.entries() ) || attempt( () => Map.prototype.entries.call( pObject ) ))]) || [];
+        }
+        else if ( isFunc( pObject?.values ) )
+        {
+            entries = [...(attemptSilent( () => ([...pObject.values()].map( ( e, i ) => [i, e] )) ) || [...(attempt( () => Set.prototype.values.call( pObject ) ))])];
+        }
+
+        return ($ln( entries ) > 0 ? entries : Object.entries( pObject || {} )) || Object.entries( pObject || {} );
     }
 
     function getEntriesForType( pObjectType, pObject, pEntries )
@@ -2530,6 +2561,18 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 entries = Object.entries( pObject || {} ) || pEntries || [];
                 break;
 
+            case "map":
+                entries = attemptSilent( () => [...pObject.entries()] ) || [...(attempt( () => Map.prototype.entries.call( pObject ) )) || []];
+                break;
+
+            case "set":
+                entries = attemptSilent( () => ([...pObject.values()].map( ( e, i ) => [i, e] )) ) || [...(attempt( () => Set.prototype.values.call( pObject ) )) || []].map( ( e, i ) => [i, e] );
+                break;
+
+            case "array":
+                entries = pObject.map( ( e, i ) => [i, e] );
+                break;
+
             case "class_instance":
                 entries = [...(new Set( [...entries, ...getPrivateEntries( pObject )] ))];
             // do not break;
@@ -2537,18 +2580,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             case "global_type":
                 entries = [...(new Set( [...entries, ...(getGlobalTypeEntries( pObject ) || [])] ))];
-                break;
-
-            case "map":
-                entries = [...pObject.entries()];
-                break;
-
-            case "set":
-                entries = ([...pObject.values()].map( ( e, i ) => [i, e] ));
-                break;
-
-            case "array":
-                entries = pObject.map( ( e, i ) => [i, e] );
                 break;
 
             default:
@@ -3231,7 +3262,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         if ( isNonNullObj( pOptions ) )
         {
-            sources.unshift( Object.assign( {}, resolveObject( pOptions || {} ) ) );
+            sources.unshift( Object.assign( {}, resolveObject( pOptions || {}, true ) ) );
         }
 
         sources = sources.reverse();
