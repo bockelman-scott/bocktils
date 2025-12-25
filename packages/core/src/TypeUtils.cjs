@@ -5864,7 +5864,7 @@ const { _ud = "undefined", $scope } = constants;
 
                                                                             if ( isFunction( value ) )
                                                                             {
-                                                                                return value.bind( delegate );
+                                                                                return ( ...pArgs ) => value.bind( delegate ).call( delegate, ...pArgs );
                                                                             }
 
                                                                             return value;
@@ -5906,39 +5906,29 @@ const { _ud = "undefined", $scope } = constants;
 
                     if ( isAsyncFunction( target[methodName] ) )
                     {
-                        const originalMethod = target[methodName].bind( target );
+                        const originalMethod = target[methodName].bind( delegate );
 
                         const newMethod = async function( ...pArgs )
                         {
-                            let result = await originalMethod.call( target, ...pArgs );
-                            if ( null === result )
-                            {
-                                result = delegateMethod.call( delegate, ...pArgs );
-                            }
-                            return result;
+                            return await originalMethod.call( delegate, ...pArgs );
                         };
 
-                        target[methodName] = newMethod.bind( target );
+                        target[methodName] = newMethod;
                     }
                     else if ( isFunction( target[methodName] ) )
                     {
-                        const originalMethod = target[methodName].bind( target );
+                        const originalMethod = target[methodName].bind( delegate );
 
                         const newMethod = function( ...pArgs )
                         {
-                            let result = originalMethod.call( target, ...pArgs );
-                            if ( null === result )
-                            {
-                                result = delegateMethod.call( delegate, ...pArgs );
-                            }
-                            return result;
+                            return originalMethod.call( delegate, ...pArgs );
                         };
 
-                        target[methodName] = newMethod.bind( target );
+                        target[methodName] = newMethod;
                     }
                     else
                     {
-                        target[methodName] = (delegateMethod || method).bind( delegate );
+                        target[methodName] = ( ...pArgs ) => (delegateMethod || method).bind( delegate ).call( delegate, ...pArgs );
 
                         propertiesDelegated.push( methodName );
 

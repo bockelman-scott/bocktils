@@ -2539,7 +2539,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         if ( isFunc( pObject?.entries ) )
         {
-            entries = ([...(attemptSilent( () => pObject.entries() ) || attempt( () => Map.prototype.entries.call( pObject ) ))]) || [];
+            entries = ([...(attemptSilent( () => [...(pObject.entries())] ))]); //|| attempt( () => Map.prototype.entries.call( pObject ) ))]) || [];
         }
         else if ( isFunc( pObject?.values ) )
         {
@@ -2602,7 +2602,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return [pObject];
         }
 
-        let entries = initializeEntries( pObject );
+        let entries = attemptSilent( () => initializeEntries( pObject ) ) || [];
 
         const { visited, stack, depth } = initializeRecursionArgs( pVisited, pStack, pDepth );
 
