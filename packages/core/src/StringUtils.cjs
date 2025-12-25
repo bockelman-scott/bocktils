@@ -3252,7 +3252,7 @@ const { _ud = "undefined", $scope } = constants;
             } );
 
             // titles and honorifics
-            formattedName = formattedName.replace( /\b(md|dds)\b/gi, ( match ) =>
+            formattedName = formattedName.replace( /\b(md|dds|m\.d\.|d\.d\.s\.)\b/gi, ( match ) =>
             {
                 return ucase( match );
             } );
@@ -3359,12 +3359,25 @@ const { _ud = "undefined", $scope } = constants;
 
     function normalizeName( pFirstName, pLastName, pOptions = PROPERCASE_OPTIONS, pOtherContactData = {} )
     {
-        let options = { ...PROPERCASE_OPTIONS, ...(pOptions || {}) };
+        const options = { ...PROPERCASE_OPTIONS, ...(pOptions || {}) };
 
-        let exceptions = _toArr( options.exceptions || PROPERCASE_OPTIONS.exceptions || [] ).filter( e => !isBlank( e ) ).map( e => _lct( e ) );
+        const exceptions = _toArr( options.exceptions || PROPERCASE_OPTIONS.exceptions || [] ).filter( e => !isBlank( e ) ).map( e => _lct( e ) );
 
-        let firstName = asProperCaseName( asString( pFirstName, true ).replaceAll( / {2,}/g, _spc ), options, true );
-        let lastName = asProperCaseName( asString( pLastName, true ).replaceAll( / {2,}/g, _spc ), options, false );
+        const rxIllegalStartChars = /^[.,><|;:?!@#&*$_+=`'"-]/;
+        const rxIllegalEndChars = /[,><|;:?!@#&*$_+=`'"-]$/;
+        const rxIllegalNameChars = /[,><|;:?!@#&*$_+=`]/g;
+
+        let firstName = asString( pFirstName, true ).replaceAll( / {2,}/g, _spc ).trim();
+        let lastName = asString( pLastName, true ).replaceAll( / {2,}/g, _spc ).trim();
+
+        firstName = asString( firstName.replace( rxIllegalStartChars, _mt ), true ).replace( rxIllegalEndChars, _mt ).trim();
+        lastName = asString( lastName.replace( rxIllegalStartChars, _mt ), true ).replace( rxIllegalEndChars, _mt ).trim();
+
+        firstName = asString( firstName.replaceAll( rxIllegalNameChars, _mt ), true ).trim();
+        lastName = asString( lastName.replaceAll( rxIllegalNameChars, _mt ), true ).trim();
+
+        firstName = asString( asProperCaseName( firstName, options, true ).replaceAll( /\s+/g, _spc ), true );
+        lastName = asString( asProperCaseName( lastName, options, false ).replaceAll( /\s+/g, _spc ), true );
 
         function _removeContactData( pName, pData = pOtherContactData )
         {
@@ -3372,9 +3385,9 @@ const { _ud = "undefined", $scope } = constants;
 
             let data = pData || {};
 
-            name = name.replace( (asString( data.address ) || data.address_line_1 || _mt), _mt );
-            name = name.replace( (asString( data.phoneNumber || data.phone || data.phone_number ) || _mt), _mt );
-            name = name.replace( (asString( data.emailAddress || data.email || data.email_address ) || _mt), _mt );
+            name = name.replace( (asString( data?.address ) || data?.address_line_1 || _mt), _mt );
+            name = name.replace( (asString( data?.phoneNumber || data?.phone || data?.phone_number ) || _mt), _mt );
+            name = name.replace( (asString( data?.emailAddress || data?.email || data?.email_address ) || _mt), _mt );
 
             return asString( name, true );
         }
@@ -3385,7 +3398,17 @@ const { _ud = "undefined", $scope } = constants;
             lastName = asProperCaseName( _removeContactData( lastName, pOtherContactData ), options, false );
         }
 
-        if ( firstName === lastName )
+        if ( /[^aeiouy]jr$/i.test( lastName ) )
+        {
+            lastName = lastName.replace( /jr$/, _mt ) + _spc + "Jr";
+        }
+
+        if ( /\s+(iii?)$/.test( lastName ) )
+        {
+            lastName = lastName.replace( /\s+(iii?)$/, ucase( " $1" ) );
+        }
+
+        if ( ucase( firstName ) === ucase( lastName ) )
         {
             const parts = firstName.split( / / );
 
@@ -3526,7 +3549,7 @@ const { _ud = "undefined", $scope } = constants;
     const isValidZipCode = function( pZipCode )
     {
         let zip = asString( pZipCode, true );
-        return /^\d{5}(-\d{4})?$/.test( zip );
+        return (5 === $ln( zip ) || 10 === $ln( zip )) && /^\d{5}(-\d{4})?$/.test( zip );
     };
 
     /**
