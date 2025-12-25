@@ -761,7 +761,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const isClassInstance = pObj => isNonNullObj( pObj ) && isClass( pObj?.constructor || Object.getPrototypeOf( pObj )?.constructor );
 
-    const isPrimitiveWrapper = pObj => isObj( pObj ) && !isNull( PRIMITIVE_WRAPPER_TYPES.some( e => pObj instanceof e ) );
+    const isPrimitiveWrapper = pObj => isObj( pObj ) && (PRIMITIVE_WRAPPER_TYPES.some( e => pObj instanceof e ));
 
     /**
      * Returns true if the specified value is an object that is not null
@@ -773,8 +773,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @returns {boolean} true if the specified value is an instance of a globally defined/built-in type.
      */
     const isGlobalType = pObj => isNonNullObj( pObj ) &&
-                                 ( !isNull( ([...GLOBAL_TYPES].some( e => pObj instanceof e )) ||
-                                            GLOBAL_TYPES.includes( Object.getPrototypeOf( pObj )?.constructor || pObj?.constructor ) ));
+                                 (([...GLOBAL_TYPES].some( e => pObj instanceof e )) ||
+                                  GLOBAL_TYPES.includes( Object.getPrototypeOf( pObj )?.constructor || pObj?.constructor ));
 
     /**
      * Returns true if the specified value is an asynchronous function.
@@ -2509,13 +2509,13 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     function initializeEntries( pObject )
     {
-        return isArray( pObject ) ?
-               pObject.map( ( e, i ) => [i, e] ) :
-               isMap( pObject ) ?
-                   [...pObject.entries()] :
-               isSet( pObject ) ?
+        return (isArray( pObject ) ?
+                pObject.map( ( e, i ) => [i, e] ) :
+               isMap( pObject ) || isFunc( pObject.entries ) ?
+                    [...pObject.entries()] :
+               isSet( pObject ) || isFunc( pObject.values ) ?
                ([...pObject.values()].map( ( e, i ) => [i, e] )) :
-               Object.entries( pObject || {} );
+               Object.entries( pObject || {} )) || Object.entries( pObject || {} );
     }
 
     function getEntriesForType( pObjectType, pObject, pEntries )
@@ -2637,14 +2637,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     function objectValues( pObject )
     {
-        const values = (isNonNullObj( pObject ) ? (isMap( pObject ) ? [...(pObject.values() | [])] : Object.values( pObject || {} )) : []) || [];
+        const values = (isNonNullObj( pObject ) ? (isMap( pObject ) || isFunc( pObject?.values ) ? ([...(pObject.values() | [])] || Object.values( pObject || {} )) : Object.values( pObject || {} )) : []) || [];
         objectEntries( pObject ).forEach( e => values.push( e[1] ) );
         return [...(new Set( values.filter( e => _ud !== typeof e && null !== e ) ))];
     }
 
     function objectKeys( pObject )
     {
-        const keys = (isNonNullObj( pObject ) ? (isMap( pObject ) ? [...(pObject.keys() || [])] : Object.keys( pObject || {} )) : []) || [];
+        const keys = (isNonNullObj( pObject ) ? (isMap( pObject ) || isFunc( pObject?.keys ) ? [...(pObject.keys() || [])] : Object.keys( pObject || {} )) : []) || [];
         objectEntries( pObject ).forEach( e => keys.push( e[0] ) );
         return [...(new Set( keys.filter( e => null != e && isStr( e ) ) ))];
     }
