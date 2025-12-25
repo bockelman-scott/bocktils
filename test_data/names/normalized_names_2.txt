@@ -55,13 +55,13 @@ Anita|Gutierrez-Alnas||anita gutierrez-alnas|anita gutierrez-alnas||false|false
 Neftali|Perez-Feliciano||neftali|perez-feliciano||false|false
 Patricia|Dimas Lopez||patricia|dimas lopez||false|false
 Victor|Herrera Bautista||victor|herrera bautista||false|false
-Dan|Mivens Jr Jr||dan|mivens jr||false|false
-Dan Mivens Jr|Jr||dan mivens jr|dan mivens jr||false|false
+Dan|Mivens Jr||dan|mivens jr||false|false
+Dan|Mivens Jr||dan mivens jr|dan mivens jr||false|false
 Mary-Michelle|Moore||mary-michelle|moore||false|false
 Christina|Francis-Bruce||christina|francis-bruce||false|false
 Andrea|Zardetto-Smith||andrea|zardetto-smith||false|false
 Tayler|Hubbard Lopez||tayler|hubbard lopez||false|false
-Perrin|Greene Jr Jr||perrin|greene jr||false|false
+Perrin|Greene Jr||perrin|greene jr||false|false
 Teah W|Byrd||teah w byrd|teah w byrd||false|false
 April|Bird||april|bird||false|false
 Lauren|O'Leary||lauren|o'leary||false|false
@@ -78,7 +78,7 @@ Catherine "William|Reed||catherine "william"|reed||false|false
 Catherine "William"|Reed||catherine "william" reed|catherine "william" reed||false|false
 Anne Gabrielle|Velasco||anne gabrielle|velasco||false|false
 Derek|Smith||derek smith|derek smith||false|false
-Barry|Burke Jr Jr||barry|burke jr||false|false
+Barry|Burke Jr||barry|burke jr||false|false
 White|White||white|white||false|false
 Monique|Taylor-Jones||monique|taylor-jones||false|false
 Christopher|Benitez-Banegas||christopher|benitez-banegas||false|false
@@ -134,9 +134,9 @@ Maria A.|Strickland||maria a. strickland|maria a. strickland||false|false
 Edward|Curtis Jr.||edward|curtis jr.||false|false
 Erika May|Towers||erika may|towers||false|false
 Erika May|Towers||erika may towers|erika may towers||false|false
-Joseph|Austin Jr Jr||joseph|austin jr||false|false
-Joseph Austin Jr|Jr||joseph austin jr|joseph austin jr||false|false
-Joseph|Austin Jr Jr||joseph|joseph austin jr||false|false
+Joseph|Austin Jr||joseph|austin jr||false|false
+Joseph|Austin Jr||joseph austin jr|joseph austin jr||false|false
+Joseph|Austin Jr||joseph|joseph austin jr||false|false
 Tim|Aan'T Goor||tim|aan't goor||false|false
 Tim|Aan'T Goor||tim|tim aan't goor||false|false
 C|Diones||c|diones||false|false
@@ -160,7 +160,7 @@ Marsha|McFarland||marsha|mcfarland||false|false
 Jillian|MacPherson||jillian|macpherson||false|false
 Yolanda|Y||yolanda|y||false|false
 Yolanda|Y||yolanda y|yolanda y||false|false
-Lenartha|Christian Jr Jr||lenartha|christian jr||false|false
+Lenartha|Christian Jr||lenartha|christian jr||false|false
 Ian|Vloke-Wurth||ian|vloke-wurth||false|false
 Latunga|Reynolds - Williams||latunga|reynolds - williams||false|false
 Latunga Reynolds -|Williams||latunga reynolds - williams|latunga reynolds - williams||false|false
@@ -188,13 +188,13 @@ Izza-Marie|Alcaide||izza-marie|alcaide||false|false
 Sandra|Olivas-Meranza||sandra|olivas-meranza||false|false
 Stephen|Ragland||stephen ragland|stephen ragland||false|false
 Gustavo|De Castro||gustavo|de castro||false|false
-Thomas|Steves Jr Jr||thomas|steves jr||false|false
+Thomas|Steves Jr||thomas|steves jr||false|false
 Jennifer|Farris-Reed||jennifer|farris-reed||false|false
 Chanel|De La Rosa||chanel|de la rosa||false|false
 Christina|Miller Solis||christina|miller solis||false|false
 Sennecca|Allen Simpson||sennecca|allen simpson||false|false
 Myra Elisa|Morales||myra elisa|morales||false|false
-Richard|Hicks Jr Jr||richard|hicks jr||false|false
+Richard|Hicks Jr||richard|hicks jr||false|false
 Diane|Tells His Name||diane|tells his name||false|false
 X�Rene|Eskandar||x�rene|eskandar||false|false
 Shannon|McIntyre||shannon|mcintyre||false|false
@@ -207,7 +207,7 @@ La'Shan|Powell||la'shan|powell||false|false
 Ruth|Prince-Gabriel||ruth|prince-gabriel||false|false
 Heather|De Boer||heather|de boer||false|false
 Sheila Karina|Guardiola||sheila karina|guardiola||false|false
-Emilio|Magallon Jr Jr||emilio|magallon jr||false|false
+Emilio|Magallon Jr||emilio|magallon jr||false|false
 Kelly|Buchanan Harris||kelly|buchanan harris||false|false
 Estrella|Carrillo Arredondo||estrella|carrillo arredondo||false|false
 Shari|Gregerman Badioli||shari|gregerman badioli||false|false
@@ -283,9 +283,9 @@ Joe|McCorkle||joe|mccorkle||false|false
 Martha|McFauls||martha|mcfauls||false|false
 Claudia|Blanco Nunez||claudia|blanco nunez||false|false
 Willa|O'Malley||willa|o'malley||false|false
-Dwight K|Jones Jr Jr||dwight k|jones jr||false|false
-Dwight K Jones Jr|Jr||dwight k jones jr|dwight k jones jr||false|false
-Dwight K|Jones Jr Jr||dwight k|dwight k jones jr||false|false
+Dwight K|Jones Jr||dwight k|jones jr||false|false
+Dwight K|Jones Jr||dwight k jones jr|dwight k jones jr||false|false
+Dwight K|Jones Jr||dwight k|dwight k jones jr||false|false
 Laurence|Bingenheimer-Emich||laurence|bingenheimer-emich||false|false
 Jaime Lynne|Chapman||jaime lynne|chapman||false|false
 Alyssa|Dikitanan-Huerta||alyssa|dikitanan-huerta||false|false
@@ -329,7 +329,7 @@ Suzanne|Van De Velde||suzanne|van de velde||false|false
 Suzanne|Van De Velde||suzanne van de velde|suzanne van de velde||false|false
 Nicole|Oiler||nicole|oiler||false|false
 Chery A|Jackson||chery a|jackson||false|false
-Miguel|Hall Jr Jr||miguel|hall jr||false|false
+Miguel|Hall Jr||miguel|hall jr||false|false
 Jose|Quero Zabala||jose|quero zabala||false|false
 Rachel|Durban-Hudson||rachel|durban-hudson||false|false
 Phyllis A|Chapital||phyllis a|chapital||false|false
@@ -399,7 +399,7 @@ Tawnya|U||tawnya|u||false|false
 Sandra V|Martinez||sandra v|martinez||false|false
 Kim|Le||kim|le||false|false
 Reyna|De La O||reyna|de la o||false|false
-Jeffrey|Sanchez Jr Jr||jeffrey|sanchez jr||false|false
+Jeffrey|Sanchez Jr||jeffrey|sanchez jr||false|false
 Charlene|Thompson||ms. charlene|thompson||false|false
 Kai-Lynn|Brown||kai-lynn|brown||false|false
 Oli|Nogales||oli|nogales||false|false
@@ -411,14 +411,14 @@ Jose Carlos|Coronado||jose carlos|coronado||false|false
 Amber|Van Duyn||amber|van duyn||false|false
 Q|Isoff-Celestin||q|isoff-celestin||false|false
 Gary|Sturdivan II||gary|sturdivan ii||false|false
-John|Cook Jr Jr||john|cook jr||false|false
+John|Cook Jr||john|cook jr||false|false
 Bethany (Dakota)|Morton||bethany (dakota)|morton||false|false
 Danielle|M||danielle|m||false|false
-Joseph|Bezio Jr Jr||joseph|bezio jr||false|false
+Joseph|Bezio Jr||joseph|bezio jr||false|false
 Alicia|Cervantes ( Lopez )||alicia|cervantes ( lopez )||false|false
 Jean Paul|Carreon||jean paul|carreon||false|false
 Roneisha|Jackson Wesby||roneisha|jackson wesby||false|false
-Esteban|Bernal Jr Jr||esteban|bernal jr||false|false
+Esteban|Bernal Jr||esteban|bernal jr||false|false
 Miguel A|Alejandro||miguel a|alejandro||false|false
 Joao Gabriel|Perroni Couto Da Silva Jacome||joao gabriel|perroni couto da silva jacome||false|false
 Ashley|Barrantes Calvo||ashley|barrantes calvo||false|false
@@ -454,7 +454,7 @@ Marc Alan|Reichbart||marc alan|reichbart||false|false
 Mathew|St. Clair||mathew|st. clair||false|false
 E Lea|Adams||e lea|adams||false|false
 Oliver|Williams III||oliver|williams iii||false|false
-Paul|Gillich Jr Jr||paul|gillich jr||false|false
+Paul|Gillich Jr||paul|gillich jr||false|false
 Tamara Sue|Shannon||tamara sue|shannon||false|false
 Lisa|Curtis Saunders||lisa|curtis saunders||false|false
 Herbert|Morris IV||herbert|morris iv||false|false

@@ -3398,9 +3398,9 @@ const { _ud = "undefined", $scope } = constants;
             lastName = asProperCaseName( _removeContactData( lastName, pOtherContactData ), options, false );
         }
 
-        if ( /[^aeiouy]jr$/i.test( lastName ) )
+        if ( /[^aeiouy\s]jr$/i.test( lastName ) )
         {
-            lastName = lastName.replace( /jr$/, _mt ) + _spc + "Jr";
+            lastName = (lastName.replace( /jr$/, _mt ) + _spc + "Jr").replace( " Jr Jr", " Jr" );
         }
 
         if ( /\s+(iii?)$/.test( lastName ) )

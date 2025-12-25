@@ -367,7 +367,7 @@ Anthony|Nguyen||Anthony|Nguyen||false|false
 Anthony|Orr||Anthony|Orr||false|false
 Anthony|Payne||Anthony|Payne||false|false
 Anthony|Phillips||Anthony|Phillips||false|false
-Anthony|Quimpo Jr Jr||Anthony|Quimpo Jr||false|false
+Anthony|Quimpo Jr||Anthony|Quimpo Jr||false|false
 Anthony|Ramirez||Anthony|Ramirez||false|false
 Anthony|Richardson||Anthony|Richardson||false|false
 Anthony|Sanchez||Anthony|Sanchez||false|false
@@ -1064,7 +1064,7 @@ Danilo|Ocampo||Danilo|Ocampo||false|false
 Danny|Aningayou||Danny|Aningayou||false|false
 Danny|Gonzalez||Danny|Gonzalez||false|false
 Danny|Morales||Danny|Morales||false|false
-Danny|Newton Jr Jr||Danny|Newton Jr||false|false
+Danny|Newton Jr||Danny|Newton Jr||false|false
 Danny|Skinner||Danny|skinner||false|false
 Danny|Spears||Danny|Spears||false|false
 Dante|Oliver||Dante|Oliver||false|false
@@ -1080,7 +1080,7 @@ Darrell|Idlette||Darrell|Idlette||false|false
 Darrell|Mason||Darrell|Mason||false|false
 Darrell|Rodriguez||Darrell|Rodriguez||false|false
 Darren|Goode||Darren|Goode||false|false
-Darrick|Stokes Jr Jr||Darrick|Stokes Jr||false|false
+Darrick|Stokes Jr||Darrick|Stokes Jr||false|false
 Darrin|Williams||Darrin|Williams||false|false
 Darwayne|Randle||Darwayne|Randle||false|false
 Daryll|Melchor||Daryll|Melchor||false|false
@@ -1148,14 +1148,14 @@ David|Szwab||David|Szwab||false|false
 David|Tanner||David|Tanner||false|false
 David|Taylor||David|Taylor||false|false
 David|Taylor||David|Taylor||false|false
-David|Taylor Jr Jr||David|Taylor jr||false|false
+David|Taylor Jr||David|Taylor jr||false|false
 David|Terzich||David|Terzich||false|false
 David|Thornburg||David|Thornburg||false|false
 David|Tirado||David|Tirado||false|false
 David|Williams||David|Williams||false|false
 David|Williams||David|Williams||false|false
 David|Williams||David|Williams||false|false
-David|Wood Jr Jr||David|Wood Jr||false|false
+David|Wood Jr||David|Wood Jr||false|false
 David|Wright||David|wright||false|false
 Davin|Jensen||Davin|Jensen||false|false
 Davin|Jusino||Davin|Jusino||false|false
@@ -1260,7 +1260,7 @@ Donald|Christian||Donald|Christian||false|false
 Donald|Curry||Donald|Curry||false|false
 Donald|Olds||Donald|Olds||false|false
 Donald|Roberts||Donald|Roberts||false|false
-Donald|Thomas Jr Jr||Donald|Thomas Jr||false|false
+Donald|Thomas Jr||Donald|Thomas Jr||false|false
 Donn|Kayarath||Donn|Kayarath||false|false
 Donnell|Williams||Donnell|Williams||false|false
 Donnis|Patterson||Donnis|Patterson||false|false
@@ -1295,8 +1295,8 @@ Dustin|Tarpley||Dustin|Tarpley||false|false
 Dustin|Tarrants||Dustin|Tarrants||false|false
 Dustin|Whitefoot||Dustin|Whitefoot||false|false
 Dwight|Cameron||Dwight|Cameron||false|false
-Dwight|Godwin Jr Jr||Dwight|Godwin Jr||false|false
-Dwighter|Godwin Jr Jr||Dwighter|Godwin jr||false|false
+Dwight|Godwin Jr||Dwight|Godwin Jr||false|false
+Dwighter|Godwin Jr||Dwighter|Godwin jr||false|false
 Dyere|Long||Dyere|Long||false|false
 Dylan|Branham||Dylan|Branham||false|false
 Dylan|Cook||dylan|Cook||false|false
@@ -1664,7 +1664,7 @@ Heather|Ledbetter||Heather|Ledbetter||false|false
 Heather|Reid||Heather|Reid||false|false
 Hebah|Meqbel||Hebah|Meqbel||false|false
 Hector|Alcaraz||Hector|Alcaraz||false|false
-Hector|Alcaraz Jr Jr||Hector|Alcaraz jr||false|false
+Hector|Alcaraz Jr||Hector|Alcaraz jr||false|false
 Hector|Davila||Hector|Davila||false|false
 Hector|Moreno||Hector|Moreno||false|false
 Hector|Rivera||Hector|Rivera||false|false
@@ -2205,7 +2205,7 @@ Johnathan|Bergstrom||Johnathan|Bergstrom||false|false
 Johnathan|Wilson||Johnathan|Wilson||false|false
 Johnie|Bean||Johnie|Bean||false|false
 Johnnie|Brown||Johnnie|Brown||false|false
-Johnnie|Nedd Jr Jr||Johnnie|Nedd jr||false|false
+Johnnie|Nedd Jr||Johnnie|Nedd jr||false|false
 Johnny|Gonzalez||johnny|gonzalez||false|false
 Johnny|Kinney||Johnny|Kinney||false|false
 Johnny|Plaisance||Johnny|Plaisance||false|false
@@ -2441,7 +2441,7 @@ Juan|Avendno||Juan|Avendno||false|false
 Juan|Barrera||Juan|Barrera||false|false
 Juan|Bravo||Juan|Bravo||false|false
 Juan|Cardenas||Juan|Cardenas||false|false
-Juan|Castillo Jr Jr||Juan|castillo jr||false|false
+Juan|Castillo Jr||Juan|castillo jr||false|false
 Juan|Genao||Juan|Genao||false|false
 Juan|Gonzalez||Juan|Gonzalez||false|false
 Juan|Gonzalez||Juan|Gonzalez||false|false
@@ -2569,7 +2569,7 @@ Keith|McGurk||Keith|Mcgurk||false|false
 Keith|Nail||Keith|Nail||false|false
 Keith|Pacific||Keith|Pacific||false|false
 Keith|Stanley||Keith|Stanley||false|false
-Keith|Waterbury Jr Jr||keith|waterbury jr||false|false
+Keith|Waterbury Jr||keith|waterbury jr||false|false
 Kelly|Banks||Kelly|Banks||false|false
 Kelly|Crouch||Kelly|Crouch||false|false
 Kelsey|Cole||Kelsey|Cole||false|false
@@ -2756,7 +2756,7 @@ Loren|Hill||Loren|Hill||false|false
 Lou|Ortiz||Lou|Ortiz||false|false
 Louis|Lave||Louis|Lave||false|false
 Louis|Tolbert||Louis|Tolbert||false|false
-Louis|Toombs Jr Jr||Louis|Toombs Jr||false|false
+Louis|Toombs Jr||Louis|Toombs Jr||false|false
 Louis|Valle||Louis|Valle||false|false
 Lucas|Lee||Lucas|Lee||false|false
 Lucas|Pettit||Lucas|Pettit||false|false
@@ -2852,7 +2852,7 @@ Marcus|Carter||Marcus|Carter||false|false
 Marcus|Huacon||Marcus|Huacon||false|false
 Marcus|Jones||Marcus|Jones||false|false
 Marcus|Leslie||Marcus|Leslie||false|false
-Marcus|Mark Jr Jr||Marcus|Mark Jr||false|false
+Marcus|Mark Jr||Marcus|Mark Jr||false|false
 Marcus|Minor||Marcus|Minor||false|false
 Marcus|Ruckle||Marcus|Ruckle||false|false
 Maria|Amentas||Maria|Amentas||false|false
@@ -2892,7 +2892,7 @@ Mark|Teta||Mark|Teta||false|false
 Mark|Trail||Mark|Trail||false|false
 Mark|Wilson||Mark|Wilson||false|false
 Mark|Wilson||Mark|Wilson||false|false
-Mark|Wood Jr Jr||Mark|Wood Jr||false|false
+Mark|Wood Jr||Mark|Wood Jr||false|false
 Mark Alan|Kawachi||Mark Alan|Kawachi||false|false
 Marlon|Diaz||Marlon|Diaz||false|false
 Marlon|Stevenson||Marlon|Stevenson||false|false
@@ -3368,11 +3368,11 @@ Pavel|Borisiuk||Pavel|Borisiuk||false|false
 Pavon|Dunbar||Pavon|Dunbar||false|false
 Payas|Shah||Payas|Shah||false|false
 Pece|Petrovski||Pece|Petrovski||false|false
-Pedro|Casales Jr Jr||Pedro|Casales jr||false|false
+Pedro|Casales Jr||Pedro|Casales jr||false|false
 Pedro|Felix||Pedro|Felix||false|false
 Pedro|Giardini||Pedro|Giardini||false|false
 Pedro|Martinez II||Pedro|Martinez II||false|false
-Pedro|Torres Jr Jr||Pedro|Torres Jr||false|false
+Pedro|Torres Jr||Pedro|Torres Jr||false|false
 Pedro Jose|Munoz||Pedro jose|Munoz||false|false
 Percy|Huell||Percy|Huell||false|false
 Peris|Edunjobi||Peris|Edunjobi||false|false
@@ -3454,7 +3454,7 @@ Randall|Madrigal||Randall|Madrigal||false|false
 Randell|Ellingsburg||Randell|Ellingsburg||false|false
 Randhier|Ramharakh||Randhier|Ramharakh||false|false
 Randy|Hughey||Randy|Hughey||false|false
-Randy|Latham Jr Jr||Randy|Latham jr||false|false
+Randy|Latham Jr||Randy|Latham jr||false|false
 Randy|Sellers||Randy|Sellers||false|false
 Ranel|Amigo||Ranel|Amigo||false|false
 Ranjiv|Syal||Ranjiv|Syal||false|false
@@ -3573,7 +3573,7 @@ Robbie|Mathis||Robbie|Mathis||false|false
 Robert|Andrzejewski||Robert|Andrzejewski||false|false
 Robert|Berrios||robert|berrios||false|false
 Robert|Betts||Robert|Betts||false|false
-Robert|Bowser Jr Jr||Robert|Bowser JR||false|false
+Robert|Bowser Jr||Robert|Bowser JR||false|false
 Robert|Brewster||Robert|Brewster||false|false
 Robert|Burroughs||Robert|Burroughs||false|false
 Robert|Burton||Robert|Burton||false|false
@@ -3959,7 +3959,7 @@ Stephen|Salmon||Stephen|Salmon||false|false
 Steve|Merritt||Steve|Merritt||false|false
 Steve|Schober||Steve|Schober||false|false
 Steve|Sterling||Steve|Sterling||false|false
-Steven|Adams Jr Jr||Steven|Adams Jr||false|false
+Steven|Adams Jr||Steven|Adams Jr||false|false
 Steven|Alvarez||Steven|Alvarez||false|false
 Steven|Armstrong||Steven|Armstrong||false|false
 Steven|Bates||Steven|Bates||false|false
@@ -4304,7 +4304,7 @@ Wardell|Manor||Wardell|Manor||false|false
 Wayne|Day||Wayne|Day||false|false
 Wayne|Gotsch||Wayne|Gotsch||false|false
 Wayne|Pelham||Wayne|Pelham||false|false
-Wendell|Red Cloud Jr Jr||Wendell|Red cloud jr||false|false
+Wendell|Red Cloud Jr||Wendell|Red cloud jr||false|false
 Wendley|Paul||Wendley|Paul||false|false
 Wes|Olngellel||Wes|Olngellel||false|false
 Wes|Woodby||wes|woodby||false|false
