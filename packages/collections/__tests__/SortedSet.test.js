@@ -15,14 +15,36 @@ class A
         this.#propertyName = pName;
     }
 
+    get id()
+    {
+        return this.#id;
+    }
+
+    get propertyName()
+    {
+        return this.#propertyName;
+    }
+
     compareTo( pOther )
     {
+        if ( pOther instanceof this.constructor )
+        {
+            let comp = this.propertyName < pOther.propertyName ? -1 : this.propertyName > pOther.propertyName ? 1 : 0;
 
+            if ( 0 === comp )
+            {
+                comp = this.id < pOther.id ? -1 : this.id > pOther.id ? 1 : 0;
+            }
+
+            return comp;
+        }
+
+        return -1;
     }
 
     equals( pOther )
     {
-
+        return 0 === this.compareTo( pOther );
     }
 }
 
@@ -37,14 +59,31 @@ class B extends A
         this.#anotherProperty = pAnotherProperty;
     }
 
+    get anotherProperty()
+    {
+        return this.#anotherProperty;
+    }
+
     compareTo( pOther )
     {
+        if ( pOther instanceof this.constructor || pOther instanceof A )
+        {
+            let comp = super.compareTo( pOther );
 
+            if ( 0 === comp )
+            {
+                comp = this.anotherProperty < pOther.anotherProperty ? -1 : this.anotherProperty > pOther.anotherProperty ? 1 : 0;
+            }
+
+            return comp;
+        }
+
+        return -1;
     }
 
     equals( pOther )
     {
-
+        return super.equals( pOther ) && (0 === this.compareTo( pOther ));
     }
 }
 

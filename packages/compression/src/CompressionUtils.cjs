@@ -1525,7 +1525,7 @@ const { _ud = "undefined", $scope } = constants;
                     {
                         const name = entry.name || ("zipEntry" + ((n++ > 0) ? ("_" + n) : ""));
                         const data = asArray( entry.getData() );
-                        const outPath = resolvePath( [output, name] );
+                        const outPath = resolvePath( output, name );
                         await writeFile( outPath, data ).catch( ex => toolbocksModule.reportError( ex, "writing file", S_ERROR, pkUnzipBuffer, outPath, data ) );
                     }
 
@@ -1706,7 +1706,7 @@ const { _ud = "undefined", $scope } = constants;
                     await asyncMakeDirectory( getDirectoryName( outputPath ), { recursive: true } );
                 }
 
-                outputFilePath = resolvePath( [outputPath, getFileName( replaceExtension( getFileName( inputPath ), extension ) )] );
+                outputFilePath = resolvePath( outputPath, getFileName( replaceExtension( getFileName( inputPath ), extension ) ) );
 
                 break;
 
@@ -1845,7 +1845,7 @@ const { _ud = "undefined", $scope } = constants;
             }
             else if ( PIPE.DIRECTORY === rightSide )
             {
-                outputPath = resolvePath( [outputPath, getFileName( replaceExtension( getFileName( inputPath ), extension ) )] );
+                outputPath = resolvePath( outputPath, getFileName( replaceExtension( getFileName( inputPath ), extension ) ) );
             }
             else
             {
@@ -1898,7 +1898,7 @@ const { _ud = "undefined", $scope } = constants;
 
             if ( PIPE.DIRECTORY === rightSide || PIPE.FILE === rightSide )
             {
-                outputPath = isString( inputPath ) ? resolvePath( [outputPath, getFileName( removeExtension( getFileName( inputPath ) ) )] ) : outputPath;
+                outputPath = isString( inputPath ) ? resolvePath( outputPath, getFileName( removeExtension( getFileName( inputPath ) ) ) ) : outputPath;
             }
             else
             {

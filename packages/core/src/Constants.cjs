@@ -115,7 +115,7 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
      * <br>
      * @type {ToolBocksModule}
      */
-    let modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+    let toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
     /**
      * This is the default limit for recursive functions
@@ -226,23 +226,26 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
             _blockCommentEnd = "*/",
             _inlineCommentStart = "//",
 
-            _rxHeaderComment = /^\/\*.*?\*\//s,
-            _rxValidJson = /^((([{\[])(.*)*([}\]]))|(\d+)|((\d*,?\d+)*\.?\d+)|("[^"]+")|('[^']+')|(true|false))$/s,
+            _rxHeaderComment = lock( /^\/\*.*?\*\//s ),
+            _rxValidJson = lock( /^((([{\[])(.*)*([}\]]))|(\d+)|((\d*,?\d+)*\.?\d+)|("[^"]+")|('[^']+')|(true|false))$/s ),
 
-            _xZ = /\u0000/,
-            _rxNullTerminator = /\u0000+$/,
+            _xZ = lock( /\u0000/ ),
+            _rxNullTerminator = lock( /\u0000+$/ ),
 
-            _rxTerminalSemicolon = /;+$/,
-            _rxTrailingNewline = /((\r\n)|(\n))+$/,
-            _rxLeadingNewline = /^((\r\n)|(\n))+/,
-            _rxLeadingWhitespace = /^\s+/,
-            _rxTrailingWhitespace = /\s+$/,
+            _rxTerminalSemicolon = lock( /;+$/ ),
+            _rxTrailingNewline = lock( /((\r\n)|(\n))+$/ ),
+            _rxLeadingNewline = lock( /^((\r\n)|(\n))+/ ),
+            _rxLeadingWhitespace = lock( /^\s+/ ),
+            _rxTrailingWhitespace = lock( /\s+$/ ),
 
-            _rxVariableToken = /\$\{[^}]+}/,
+            _rxVariableToken = lock( /\$\{[^}]+}/ ),
 
-            _rxFunctionSignature = /^(\(?\s*((async(\s+))?\s*function))\s*?([$_\w]+[$_\w]*)?\s*\((\s*(([$_\w]+[$_\w]*\s*,?)\s*)*(\.{3}([$_\w]+[$_\w]*\s*,?)*\s*)*)(?<!,\s*)\)/,
-            _rxFunction = /^(async )*function/,
-            _rxClass = /^class/,
+            _rxFunctionSignature = lock( /^(\(?\s*((async(\s+))?\s*function))\s*?([$_\w]+[$_\w]*)?\s*\((\s*(([$_\w]+[$_\w]*\s*,?)\s*)*(\.{3}([$_\w]+[$_\w]*\s*,?)*\s*)*)(?<!,\s*)\)/ ),
+            _rxFunction = lock( /^(async )*function/ ),
+            _rxClass = lock( /^class / ),
+
+            _rxBigInt = lock( /^[\d_]+n$/ ),
+            RX_BIG_INT = lock( _rxBigInt ),
 
             _defaultLocaleString = "en-US",
             _defaultLocale = lock( new Intl.Locale( _defaultLocaleString ) ),
@@ -308,7 +311,7 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
             /**
              * Strings that are interpreted as 'true' when encountered in JSON or other configuration contexts
              */
-            _affirmatives = lock( [].concat( ...([S_TRUE, "1", "on", S_ENABLED, "t", S_YES]) ) ),
+            _affirmatives = lock( [...([S_TRUE, "1", "on", S_ENABLED, "t", S_YES])] ),
 
             ignore = no_op,
 
@@ -333,6 +336,7 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
                  "if",
                  "import",
                  "in",
+                 "interface",
                  "instanceof",
                  "new",
                  "null",
@@ -354,7 +358,7 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
             {
                 return (_fun === typeof pFunction ? pFunction?.name || functionToString.call( pFunction, pFunction ) : (_mt_str + pFunction));
             },
-            MESSAGES_LOCALE = getMessagesLocale(),
+            MESSAGES_LOCALE = lock( getMessagesLocale() ),
             MESSAGES_LOCALE_CODE = getMessagesLocaleString() || MESSAGES_LOCALE?.baseName
         } = (moduleUtils || $scope() || {});
 
@@ -370,13 +374,13 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
      * - WEEK: The number of milliseconds in one week.
      */
     const MILLIS_PER =
-        {
-            SECOND: 1000,
-            MINUTE: 60 * 1000,
-            HOUR: 60 * 60 * 1000,
-            DAY: 24 * 60 * 60 * 1000,
-            WEEK: 7 * 24 * 60 * 60 * 1000
-        };
+        lock( {
+                  SECOND: 1000,
+                  MINUTE: 60 * 1000,
+                  HOUR: 60 * 60 * 1000,
+                  DAY: 24 * 60 * 60 * 1000,
+                  WEEK: 7 * 24 * 60 * 60 * 1000
+              } );
 
     /**
      * A constant object that defines the number of nanoseconds in various units of time.
@@ -391,28 +395,28 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
      * - WEEK: The number of nanoseconds in one week (604,800,000,000,000 nanoseconds).
      */
     const NANOS_PER =
-        {
-            MICROSECOND: 1000,
-            MILLISECOND: 1000 * 1000,
-            SECOND: 1000 * 1000 * 1000,
-            MINUTE: 60 * 1000 * 1000 * 1000,
-            HOUR: 60 * 60 * 1000 * 1000 * 1000,
-            DAY: 24 * 60 * 60 * 1000 * 1000 * 1000,
-            WEEK: 7 * 24 * 60 * 60 * 1000 * 1000 * 1000
-        };
+        lock( {
+                  MICROSECOND: 1000,
+                  MILLISECOND: 1000 * 1000,
+                  SECOND: 1000 * 1000 * 1000,
+                  MINUTE: 60 * 1000 * 1000 * 1000,
+                  HOUR: 60 * 60 * 1000 * 1000 * 1000,
+                  DAY: 24 * 60 * 60 * 1000 * 1000 * 1000,
+                  WEEK: 7 * 24 * 60 * 60 * 1000 * 1000 * 1000
+              } );
 
     /**
      * An array of the Number constants
      * @type {string[]}
      */
-    const NumberProperties = ["EPSILON",
-                              "MAX_SAFE_INTEGER",
-                              "MAX_VALUE",
-                              "MIN_SAFE_INTEGER",
-                              "MIN_VALUE",
-                              "NaN",
-                              "NEGATIVE_INFINITY",
-                              "POSITIVE_INFINITY"];
+    const NumberProperties = lock( ["EPSILON",
+                                    "MAX_SAFE_INTEGER",
+                                    "MAX_VALUE",
+                                    "MIN_SAFE_INTEGER",
+                                    "MIN_VALUE",
+                                    "NaN",
+                                    "NEGATIVE_INFINITY",
+                                    "POSITIVE_INFINITY"] );
 
     /**
      * Returns true if the specified object implements the ILogger interface.<br>
@@ -436,7 +440,7 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
      *
      * @alias module:Constants#REG_EXP_DOT
      */
-    const REG_EXP_DOT = /\./;
+    const REG_EXP_DOT = lock( /\./ );
 
     /**
      * This is a regular expression that matches a single dot character at the start of a string<br>
@@ -445,7 +449,7 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
      *
      * @alias module:Constants#REG_EXP_LEADING_DOT
      */
-    const REG_EXP_LEADING_DOT = /^\./;
+    const REG_EXP_LEADING_DOT = lock( /^\./ );
 
     /**
      * This is a regular expression that matches a single dot character at the end of a string<br>
@@ -454,7 +458,7 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
      *
      * @alias module:Constants#REG_EXP_TRAILING_DOT
      */
-    const REG_EXP_TRAILING_DOT = /\.$/;
+    const REG_EXP_TRAILING_DOT = lock( /\.$/ );
 
     /**
      * @namespace {object} REG_EXP
@@ -564,13 +568,15 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
             TRAILING_WHITESPACE: _rxTrailingWhitespace,
             /**
              * Regular expression for matching a token for variable interpolation<br>
-             * for example that might be found in a template string<br>
+             * for example, that might be found in a template string<br>
              *
              * @constant {RegExp} VARIABLE_TOKEN
              *
              * @alias module:Constants#REG_EXP#VARIABLE_TOKEN
              */
-            VARIABLE_TOKEN: _rxVariableToken
+            VARIABLE_TOKEN: _rxVariableToken,
+            /** Regular expression for matching a string representing a BigInt value */
+            BIG_INT: _rxBigInt
         } );
 
     /**
@@ -819,6 +825,15 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
              * @alias module:Constants#_mt_str
              */
             _mt_str,
+
+            /**
+             * The empty string<br>
+             * Value: ""<br>
+             * @const
+             * @type {string}
+             * @alias module:Constants#_mt_str
+             */
+            _mt,
 
             /**
              * The empty character<br>
@@ -1827,6 +1842,9 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
             _rxFunction,
             _rxClass,
 
+            _rxBigInt,
+            RX_BIG_INT,
+
             /**
              * A regular expression that matches a block comment.<br>
              * @const
@@ -1994,7 +2012,7 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
         };
 
     // makes the properties of mod available as properties and methods of the modulePrototype
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
 
     // Exports this module
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;

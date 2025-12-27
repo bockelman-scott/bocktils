@@ -6,19 +6,20 @@ const fileUtils = require( "@toolbocks/files" );
 
 const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils, localeUtils } = core;
 
-const {
-    ILogger,
-    AsyncLogger,
-    LogLevel,
-    LogFormatter,
-    LogFilter,
-    LogRecord,
-    DEFAULT_LOGGER_OPTIONS,
-    resolveError,
-    resolveSource,
-    resolveFormatter,
-    resolveFilter,
-} = loggingUtils;
+const
+    {
+        ILogger,
+        AsyncLogger,
+        LogLevel,
+        LogFormatter,
+        LogFilter,
+        LogRecord,
+        DEFAULT_LOGGER_OPTIONS,
+        resolveError,
+        resolveSource,
+        resolveFormatter,
+        resolveFilter,
+    } = loggingUtils;
 
 /* define a variable for typeof undefined **/
 const { _ud = "undefined", konsole = console, $scope } = constants;
@@ -37,67 +38,71 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
     const modName = "FileLogger";
 
-    const {
-        ToolBocksModule,
-        asPhrase,
-        lock,
-        populateOptions,
-        IterationCap,
-        isLogger,
-        getMessagesLocaleString,
-        attempt,
-        asyncAttempt,
-        resolveError
-    } = moduleUtils;
+    const
+        {
+            ToolBocksModule,
+            asPhrase,
+            lock,
+            populateOptions,
+            IterationCap,
+            isLogger,
+            getMessagesLocaleString,
+            attempt,
+            asyncAttempt,
+            resolveError
+        } = moduleUtils;
 
-    const {
-        _mt_str,
-        _hyphen,
-        _underscore,
-        _spc,
-        _dot,
-        _lf,
-        _fun,
-        no_op,
-        MILLIS_PER,
-        MESSAGES_LOCALE_CODE,
-        S_ERR_PREFIX
-    } = constants;
+    const
+        {
+            _mt_str,
+            _hyphen,
+            _underscore,
+            _spc,
+            _dot,
+            _lf,
+            _fun,
+            no_op,
+            MILLIS_PER,
+            MESSAGES_LOCALE_CODE,
+            S_ERR_PREFIX
+        } = constants;
 
-    const {
-        isNull,
-        isNumeric,
-        isInteger,
-        isString,
-        isDate,
-        isFunction,
-        isError,
-        isNonNullObject,
-        firstMatchingType,
-        resolveMoment
-    } = typeUtils;
+    const
+        {
+            isNull,
+            isNumeric,
+            isInteger,
+            isString,
+            isDate,
+            isFunction,
+            isError,
+            isNonNullObject,
+            firstMatchingType,
+            resolveMoment
+        } = typeUtils;
 
     const { asString, asInt, asFloat, isBlank, ucase, capitalize, toBool, formatMessage } = stringUtils;
 
     const { varargs, asArray, Filters, AsyncBoundedQueue } = arrayUtils;
 
-    const {
-        resolvePath,
-        getFileExtension,
-        exists,
-        readFolder,
-        stat,
-        rm,
-        rename,
-        accessSync,
-        statSync,
-        makeDirectory,
-        createWriteStream,
-        writeTextFileSync,
-        FileObject,
-        fsConstants,
-        WriteStream,
-    } = fileUtils;
+    const
+        {
+            resolvePath,
+            getFileExtension,
+            exists,
+            readFolder,
+            stat,
+            rm,
+            rename,
+            accessSync,
+            statSync,
+            makeDirectory,
+            createWriteStream,
+            writeTextFileSync,
+            FileObject,
+            fsConstants,
+            WriteStream,
+        } = fileUtils;
 
     /**
      * This is a dictionary of this module's dependencies.
@@ -1349,10 +1354,11 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         {
             const retries = asInt( pRetries || 0 );
 
-            const {
-                filename = asString( pFileName || this.#currentFilename, true ),
-                filePath = asString( pFilePath || this.#currentFilePath, true )
-            } = this.calculateFileNameAndFilePath();
+            const
+                {
+                    filename = asString( pFileName || this.#currentFilename, true ),
+                    filePath = asString( pFilePath || this.#currentFilePath, true )
+                } = this.calculateFileNameAndFilePath();
 
             if ( retries > 2 )
             {
@@ -1413,7 +1419,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
             const filename = pattern.generateFileName( pDateOrFileInfo, pResolution );
 
-            const filePath = resolvePath( [this.directory, filename] );
+            const filePath = resolvePath( this.directory, filename );
 
             return { filename, filePath };
         }

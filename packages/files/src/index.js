@@ -977,7 +977,7 @@ const $scope = constants?.$scope || function()
 
             const directory = pDirectory || asString( os.tempDir() || executionEnvironment.tmpDirectoryName );
 
-            const tempFilePath = resolvePath( [directory, tempFileName] );
+            const tempFilePath = resolvePath( directory, tempFileName );
 
             writeFileSync( tempFilePath, _mt_str, { flag: "w", encoding: "utf8" } );
 
@@ -1129,7 +1129,7 @@ const $scope = constants?.$scope || function()
 
             let directory = resolvePath( pDirectory || asString( os.tempDir() || pDirectory ) );
 
-            let tempFilePath = resolvePath( [directory, tempFileName] );
+            let tempFilePath = resolvePath( directory, tempFileName );
 
             await fsAsync.writeFile( tempFilePath, _mt_str, { encoding: "utf-8", flag: "w" } );
 
@@ -2412,9 +2412,7 @@ const $scope = constants?.$scope || function()
         {
             if ( await isMatchingFile( file, filter ) )
             {
-                let pathLib = PathUtils.instance();
-
-                const filePath = resolvePath( pathLib.join( dirPath, file.name ) );
+                const filePath = resolvePath( dirPath, file.name );
 
                 expectedDeletions.push( filePath );
 
@@ -3927,7 +3925,7 @@ const $scope = constants?.$scope || function()
                     continue;
                 }
 
-                const entryPath = resolvePath( pathLib.resolve( pathLib.join( dirPath, entry.name ) ) );
+                const entryPath = resolvePath( pathLib.resolve( dirPath, entry.name ) );
 
                 if ( entry.isFile() || entry.isSymbolicLink() )
                 {
@@ -3988,7 +3986,7 @@ const $scope = constants?.$scope || function()
 
             for await ( const entry of entries )
             {
-                const entryPath = resolvePath( pathLib.resolve( pathLib.join( dirPath, entry.name ) ) );
+                const entryPath = resolvePath( pathLib.resolve( dirPath, entry.name ) );
 
                 let info = await FileObject.fromAsync( entryPath, entry, entry );
 

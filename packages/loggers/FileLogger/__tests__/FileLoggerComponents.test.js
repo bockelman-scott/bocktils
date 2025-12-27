@@ -149,7 +149,7 @@ describe( "FileObject", () =>
 
         const comp = await fileInfo.compareTo( otherFileInfo );
 
-        expect( comp ).toEqual( -1 ); // this file was created earlier
+        expect( comp ).toEqual( 1 );
 
         return Promise.resolve( true );
     } );

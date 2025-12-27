@@ -174,6 +174,7 @@ const { _ud = "undefined", $scope } = constants;
             isNumber,
             isNumeric,
             isScientificNotation,
+            isBigInt,
             isBoolean,
             isObject,
             isNonNullObject,
@@ -2041,6 +2042,25 @@ const { _ud = "undefined", $scope } = constants;
     Boolean.prototype.asInt = asInt;
 
     const _toInt = asInt;
+
+    const asInteger = ( pVal ) =>
+    {
+        if ( isNumber( pVal ) || isBigInt( pVal ) )
+        {
+            return isBigInt( pVal ) ? ((pVal >= Number.MIN_SAFE_INTEGER && pVal <= Number.MAX_SAFE_INTEGER) ? asInt( asString( pVal, true ).replaceAll( /\D/g, _mt ) ) : pVal) : asInt( pVal );
+        }
+
+        if ( isNumeric( pVal ) || (/^[\d_]+n$/.test( pVal )) )
+        {
+            let s = leftOf( (asString( pVal, true ).replaceAll( /[^\d_,]/g, _mt )), "." );
+
+            let n = toDecimal( s );
+
+            return isBigInt( n ) ? ((n >= Number.MIN_SAFE_INTEGER && n <= Number.MAX_SAFE_INTEGER) ? asInt( asString( n, true ).replaceAll( /\D/g, _mt ) ) : n) : asInt( n );
+        }
+
+        return 0;
+    };
 
     function _asFloatFromObj( pIn, pDefault, pOptions )
     {
@@ -4302,6 +4322,7 @@ const { _ud = "undefined", $scope } = constants;
             asPositiveFloat,
             toIntWithinRange,
             toFloatWithinRange,
+            asInteger,
             safeIndex,
             clamp,
             validIdentifier,

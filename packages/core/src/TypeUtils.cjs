@@ -160,6 +160,7 @@ const { _ud = "undefined", $scope } = constants;
             BUILTIN_TYPES,
             BUILTIN_TYPE_NAMES,
 
+            RX_BIG_INT = /^[\d_]+n$/
         } = constants;
 
 
@@ -1349,9 +1350,14 @@ const { _ud = "undefined", $scope } = constants;
             return [...pObj].map( toDecimal );
         }
 
-        if ( !isNumeric( pObj ) )
+        if ( !isNumeric( pObj ) || isBigInt( pObj ) )
         {
             return 0;
+        }
+
+        if ( isBigInt( pObj ) )
+        {
+            return pObj >= Number.MIN_SAFE_INTEGER && pObj <= Number.MAX_SAFE_INTEGER ? parseInt( pObj.toString().replace( /n$/, _mt ) ) : pObj;
         }
 
         let s = (_mt_str + (String( pObj ).trim())).toLowerCase();
@@ -1373,6 +1379,12 @@ const { _ud = "undefined", $scope } = constants;
 
                 return parseFloat( (coefficient * 10 ** exponent).toFixed( clamp( Math.abs( exponent ), 0, 100 ) ) );
             }
+        }
+
+        if ( /^[\d_]+n$/.test( s ) && s.endsWith( "n" ) && isBigInt( BigInt( s ) ) )
+        {
+            let b = BigInt( s );
+            return b >= Number.MIN_SAFE_INTEGER && b <= Number.MAX_SAFE_INTEGER ? parseInt( s.replace( /n$/, _mt ) ) : b;
         }
 
         if ( isDecimal( pObj ) )
@@ -1617,7 +1629,7 @@ const { _ud = "undefined", $scope } = constants;
      *
      * @alias module:TypeUtils.toInteger
      */
-    const toInteger = ( pValue ) => attempt( () => parseInt( toDecimal( pValue ) ) );
+    const toInteger = ( pValue ) => attempt( () => parseInt( toDecimal( pValue ) ) ) || (isBigInt( pValue ) ? pValue : 0);
 
     /**
      * Converts the provided value to a floating-point number.

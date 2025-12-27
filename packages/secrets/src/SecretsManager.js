@@ -1384,7 +1384,7 @@ const $scope = constants?.$scope || function()
 
             console.log( `Successfully connected to Key Vault: ${KEY_VAULT_NAME}` );
 
-            const envFilePath = resolvePath( [__dirname, "../.env"] );
+            const envFilePath = resolvePath( __dirname, "../.env" );
 
             console.log( `Starting migration of variables to Azure Key Vault, ${KEY_VAULT_URL}, from ${envFilePath}` );
 

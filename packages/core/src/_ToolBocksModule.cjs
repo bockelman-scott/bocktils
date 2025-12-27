@@ -419,7 +419,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     const TYPED_ARRAYS = freeze( [Int8Array, Uint8Array, Uint8ClampedArray, Int16Array, Uint16Array, Int32Array, Uint32Array, Float32Array, Float64Array, BigInt64Array, BigUint64Array] );
 
-    const TRANSIENT_PROPERTIES = freeze( ["constructor", "prototype", "toJson", "toObject", "global", "this", "toString"] );
+    const TRANSIENT_PROPERTIES = freeze( ["constructor", "prototype", "toJson", "toObject", "global", "this", "toString", "class"] );
 
     /**
      * A constant string representing the default error message.<br>
@@ -536,7 +536,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @type {ILogger}
      */
     let MockLogger = new ILogger();
+    // noinspection JSUndefinedPropertyAssignment
     MockLogger.mocked = true;
+    // noinspection JSUnusedAssignment
     MockLogger = Object.freeze( Object.seal( MockLogger ) );
 
     /*
@@ -574,7 +576,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      *
      * @returns {boolean} true if the specified value is a (primitive) string.
      */
-    const isStr = pObj => _str === typeof pObj;
+    const isStr = pObj => _str === typeof pObj || pObj instanceof String;
 
     /**
      * Returns true if the specified value is a (primitive) string with one or more non-whitespace characters.
@@ -824,6 +826,136 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const isReadOnly = ( pObject ) => !isObj( pObject ) || (isNull( pObject ) || Object.isFrozen( pObject ) || Object.isSealed( pObject ));
 
+    const isWeak = ( pObj ) => !isNull( pObj ) && isObj( pObj ) && (pObj instanceof WeakRef || pObj instanceof WeakSet || pObj instanceof WeakMap);
+
+    const isRef = ( pObj ) => isWeak( pObj ) && pObj instanceof WeakRef;
+
+    /**
+     * Dereferences an object or returns a default value based on the provided type.
+     *
+     * This function checks whether the input object is a WeakRef (using `isRef`).
+     * If so, it attempts to dereference it.
+     *
+     * If the dereferenced value or the input itself is not null, that value is returned.
+     * Otherwise, the function generates a value or object based on the specified type.
+     *
+     * If the type is a string, the function calculates the return value
+     * based on the pre-defined string types like `_str`, `_num`, `_bool`, etc.
+     *
+     * For certain types like arrays or objects, empty constructs are returned.
+     *
+     * If the type is a constructor function,
+     * the function attempts to create a new instance of that type,
+     * falling back to a default object for failure cases.
+     *
+     * If the type is an array or object, the function creates and returns a new copy of it.
+     *
+     * @param {*} pObj - The input object to be dereferenced or returned based on the input and specified expected type.
+     *
+     * @param {*} [pType=Object] - The type expected to be returned,
+     *                             used to determine the return value when the referenced value is null
+     *                             or the input object is null.
+     *
+     *                             This can be a string, constructor function, array, or object.
+     *
+     * @returns {*} The dereferenced value or a default value based on the specified expected type.
+     */
+    const dereference = ( pObj, pType = Object ) =>
+    {
+        let target = isRef( pObj ) ? (pObj.deref() || null) : pObj;
+
+        if ( !isNull( target ) )
+        {
+            return target;
+        }
+
+        if ( !isNull( pType ) )
+        {
+            if ( isStr( pType ) )
+            {
+                switch ( _asStr( pType ) )
+                {
+                    case _str:
+                        return _mt_str;
+
+                    case _num:
+                    case _big:
+                        return 0;
+
+                    case _bool:
+                        return false;
+
+                    case _symbol:
+                        return Symbol.for( "~~no_value~~" );
+
+                    case _fun:
+                        return no_op.bind( {} );
+
+                    case _obj:
+                        return {};
+
+                    case "Array":
+                    case "array":
+                    case "arr":
+                        return [];
+
+                    default:
+                        return {};
+                }
+            }
+            else if ( isFunc( pType ) )
+            {
+                if ( Array === pType )
+                {
+                    return [];
+                }
+                else if ( Object === pType )
+                {
+                    return {};
+                }
+                else if ( Date === pType )
+                {
+                    return new Date( 0 );
+                }
+                else if ( RegExp === pType )
+                {
+                    return /.*/g;
+                }
+                else if ( Number === pType )
+                {
+                    return 0;
+                }
+                else if ( String === pType )
+                {
+                    return _mt_str;
+                }
+                else
+                {
+                    try
+                    {
+                        return new pType();
+                    }
+                    catch( ex )
+                    {
+                        return {};
+                    }
+                }
+            }
+            else
+            {
+                if ( isArray( pType ) )
+                {
+                    return [...pType];
+                }
+                if ( isObj( pType ) )
+                {
+                    return { ...(pObj || {}) };
+                }
+            }
+        }
+
+        return target;
+    };
 
     /**
      * Returns true if the execution context is <i>most likely</i> Node.js<br>
@@ -904,7 +1036,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @param {*} e - The input value to be converted to a string.
      * @returns {string} The string representation of the input.
      */
-    const _asStr = e => isStr( e ) ? e : (isFunc( e?.valueOf ) ? String( e.valueOf() ) : String( (_mt_str + String( e )) ));
+    const _asStr = e => isStr( e ) ? String( e ) : (isFunc( e?.valueOf ) ? String( e.valueOf() ) : String( (_mt_str + String( e )) ));
 
     /**
      * Converts the input value to a lowercase string
@@ -1604,6 +1736,27 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         if ( propertyName )
         {
             const obj = resolveObject( pObject );
+
+            if ( propertyName.includes( "." ) || propertyName.includes( "[" ) )
+            {
+                while ( propertyName.includes( "[" ) )
+                {
+                    propertyName = propertyName.replace( /\[(\w+)]/, ".$1" );
+                }
+
+                let paths = [...(propertyName.split( /\./ ))];
+
+                let o = obj;
+
+                while ( isNonNullObj( o ) && $ln( paths ) > 0 )
+                {
+                    let key = _asStr( paths.shift() ).trim();
+                    o = o[key];
+                }
+
+                return $ln( paths ) <= 0 && !isNull( o );
+            }
+
             return Object.hasOwn( obj, propertyName ) || (propertyName in obj);
         }
 
@@ -2528,7 +2681,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         if ( pObject instanceof WeakRef )
         {
-            let object = attempt( () => pObject.deref() );
+            let object = attempt( () => dereference( pObject ) ) || pObject;
             if ( object )
             {
                 return initializeEntries( object );
@@ -2539,7 +2692,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         if ( isFunc( pObject?.entries ) )
         {
-            entries = ([...(attemptSilent( () => [...(pObject.entries())] ))]); //|| attempt( () => Map.prototype.entries.call( pObject ) ))]) || [];
+            entries = ([...(attemptSilent( () => [...(pObject.entries())] ))]);
         }
         else if ( isFunc( pObject?.values ) )
         {
@@ -2668,7 +2821,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     function objectValues( pObject )
     {
-        const values = (isNonNullObj( pObject ) ? (isMap( pObject ) || isFunc( pObject?.values ) ? ([...(pObject.values() | [])] || Object.values( pObject || {} )) : Object.values( pObject || {} )) : []) || [];
+        const values = [...((isNonNullObj( pObject ) ? (isMap( pObject ) || isSet( pObject ) || isFunc( pObject?.values ) ? attempt( () => [...(pObject.values() || Object.values( pObject || {} ) || [])] ) || attempt( () => [...(Object.values( pObject || {} ) || [])] ) : Object.values( pObject || {} )) : []) || [])];
         objectEntries( pObject ).forEach( e => values.push( e[1] ) );
         return [...(new Set( values.filter( e => _ud !== typeof e && null !== e ) ))];
     }
@@ -3419,19 +3572,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         get traceEnabled()
         {
             return !!this.#traceEnabled;
-        }
-
-        /**
-         * Write the specified message to the console using the console.trace method.<br>
-         * In addition to writing the message,
-         * this instance is included as a second argument
-         * and will also be written to the console.<br>
-         *
-         * @param {*} pMsg A message or value to write to the console, using the console.trace method.
-         */
-        trace( pMsg )
-        {
-            konsole.trace( pMsg, this );
         }
 
         /**
@@ -4416,11 +4556,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             this.#detail = populateOptions( (pData?.detail || pData?.data || pData), this.detail );
             return this.detail;
         }
-
-        trace( pMsg )
-        {
-            konsole.trace( pMsg, this );
-        }
     }
 
     /**
@@ -4990,10 +5125,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 }
             }
 
-            if ( isError( pMsgOrErr ) )
-            {
-                this.stack = pMsgOrErr.stack || this.stack;
-            }
+            this.stack = (isError( this.#cause ) ? this.#cause?.stack : (isError( pMsgOrErr ) ? pMsgOrErr.stack || this.stack : this.stack)) || this.stack;
 
             this.#occurred = isError( pMsgOrErr ) ? OBJECT_REGISTRY.getCreated( pMsgOrErr ) : isError( this.#cause ) ? OBJECT_REGISTRY.getCreated( this.#cause ) : new Date();
             this.#occurred = isDate( this.#occurred ) ? this.#occurred : this.#occurred >= 0 ? new Date( this.#occurred ) : new Date();
@@ -6801,6 +6933,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return isReadOnly( this );
         }
 
+        dereference( pObject, pType )
+        {
+            return attempt( () => dereference( pObject, pType ) );
+        }
+
         /**
          * Adds the properties and functions of the object to this instance, or module
          * @param {Object} pObject An object defining one or more properties or methods to add to this module
@@ -6916,7 +7053,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             if ( isNonNullObj( pObject ) )
             {
-                toolbocksModule.extend( pObject );
+                toolbocksModule = toolbocksModule.extend( pObject ) || toolbocksModule;
             }
 
             return toolbocksModule;
@@ -7023,6 +7160,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         initializeAttempt( pMethod, pThis )
         {
+            const me = this;
+
             const thiz = pThis || this;
 
             const func = resolveMethod( pMethod, thiz ) || (isFunc( pMethod ) ? pMethod : () => pMethod);
@@ -7037,7 +7176,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
                 handleAttempt.lastError = handle.lastError = error;
 
-                thiz.reportError( error, error?.message, S_ERROR, thiz.calculateErrorSourceName( thiz, (pFunction || func) ), ...pArgs );
+                me.reportError( error, error?.message, S_ERROR, me.calculateErrorSourceName( (thiz || me), (pFunction || func) ), ...pArgs );
             };
 
             return { func, result, handle };
@@ -7214,7 +7353,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const cloneArray = ( array, options, stack ) =>
     {
-        let clone = [...(array || [])];
+        let clone = [...(dereference( array, Array ) || array || [])];
 
         if ( detectCycles( stack, 5, 5 ) )
         {
@@ -7226,7 +7365,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     function cloneMap( pMap, pEntries, pOptions = DEFAULT_COPY_OPTIONS, pStack = [] )
     {
-        const map = new Map();
+        const map = pMap instanceof WeakMap ? new WeakMap() : new Map();
 
         const entries = pEntries || objectEntries( pMap );
 
@@ -7243,7 +7382,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     function cloneSet( pSet, pEntries, pOptions = DEFAULT_COPY_OPTIONS, pStack = [] )
     {
-        const set = new Set();
+        const set = pSet instanceof WeakSet ? new WeakSet() : new Set();
 
         const entries = pEntries || objectEntries( pSet );
 
@@ -7259,13 +7398,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     function cloneObjectLiteral( pClone, pEntries, pOptions = DEFAULT_COPY_OPTIONS, pStack = [] )
     {
-        const clone = { ...(pClone || {}) };
-
-        attempt( () => Object.setPrototypeOf( clone, Object.getPrototypeOf( pClone || clone || {} ) ) );
-
-        const entries = pEntries || objectEntries( clone );
+        let isWeakRef = isRef( pClone );
 
         const options = resolveCopyOptions( pOptions );
+
+        const clone = isWeakRef ? (dereference( pClone, (options?.expectedType || _obj) ) || {}) : { ...(pClone || {}) };
+
+        attempt( () => Object.setPrototypeOf( clone, Object.getPrototypeOf( (isWeakRef ? (clone || pClone) : (pClone || clone)) || {} ) ) );
+
+        const entries = pEntries || objectEntries( clone );
 
         const stack = pStack || options.stack || [];
 
@@ -7281,9 +7422,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             }
         }
 
-        attempt( () => Object.setPrototypeOf( clone, Object.getPrototypeOf( pClone || clone || {} ) ) );
+        attempt( () => Object.setPrototypeOf( clone, Object.getPrototypeOf( (isWeakRef ? (clone || pClone) : (pClone || clone)) || {} ) ) );
 
-        return clone;
+        return isWeakRef ? new WeakRef( clone ) : clone;
     }
 
     /**
@@ -7307,55 +7448,64 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const cloneObject = ( pObject, pOptions = DEFAULT_COPY_OPTIONS, pStack = [] ) =>
     {
-        let clone = attempt( () => (isFunc( pObject?.clone )) ? pObject.clone() : (isObjectLiteral( pObject ) ? { ...pObject } : pObject) ) || {};
+        const isWeakRef = isRef( pObject );
 
-        attempt( () => Object.setPrototypeOf( clone, Object.getPrototypeOf( pObject || clone || {} ) ) );
+        const options = resolveCopyOptions( pOptions );
+
+        let obj = isWeakRef ? (dereference( pObject, (options?.expectedType || _obj) ) || {}) : (isNull( pObject ) ? {} : pObject);
+
+        let clone = attempt( () => (isFunc( obj?.clone )) ? obj.clone() : (isObjectLiteral( obj ) ? { ...obj } : obj) ) || {};
+
+        attempt( () => Object.setPrototypeOf( clone, Object.getPrototypeOf( obj || clone || {} ) ) );
 
         const stack = [...(pStack || [])];
 
         if ( detectCycles( stack, 5, 5 ) )
         {
-            return clone;
+            return isWeakRef ? new WeakRef( clone ) : clone;
         }
 
-        if ( isDate( pObject ) )
+        if ( isDate( obj ) )
         {
-            return new Date( pObject.getTime() );
+            const date = new Date( obj.getTime() );
+            return isWeakRef ? new WeakRef( date ) : date;
         }
 
-        if ( isRegExp( pObject ) )
+        if ( isRegExp( obj ) )
         {
-            return new RegExp( pObject.source, pObject.flags );
+            const rx = new RegExp( obj.source, obj.flags );
+            return isWeakRef ? new WeakRef( rx ) : rx;
         }
 
-        if ( isPrimitive( pObject ) )
+        if ( isPrimitive( obj ) )
         {
-            return pObject;
+            return obj;
         }
 
-        if ( isPrimitiveWrapper( pObject ) )
+        if ( isPrimitiveWrapper( obj ) )
         {
-            return pObject.valueOf();
+            return obj.valueOf();
         }
 
-        const entries = objectEntries( pObject );
+        const entries = objectEntries( obj );
 
-        if ( isMap( clone ) )
+        if ( isMap( clone ) || clone instanceof WeakMap )
         {
-            clone = cloneMap( clone, entries, pOptions, stack );
+            clone = cloneMap( clone, entries, { ...(options || {}), ...({ expectedType: isWeak( clone ) ? WeakMap : Map }) }, stack );
         }
-        else if ( isSet( clone ) )
+        else if ( isSet( clone ) || clone instanceof WeakSet )
         {
-            clone = cloneSet( clone, entries, pOptions, stack );
+            clone = cloneSet( clone, entries, { ...(options || {}), ...({ expectedType: isWeak( clone ) ? WeakSet : Set }) }, stack );
         }
         else if ( isError( clone ) )
         {
-            clone = new __Error( clone, { stack: clone.stack } );
-            clone.stack = pObject.stack || clone.stack;
+            clone = new __Error( clone, { stack: clone.stack }, ...(clone.args || []) );
+            clone.stack = obj.stack || clone.stack;
+            clone = resolveError( clone, clone.message, ...(clone.args || []) );
         }
         else
         {
-            clone = cloneObjectLiteral( clone, entries, pOptions, stack );
+            clone = cloneObjectLiteral( clone, entries, { ...(options || {}), ...({ expectedType: isArray( clone ) ? Array : Object }) }, stack );
         }
 
         if ( !!!pOptions?.includeClassNames )
@@ -7363,9 +7513,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             delete clone["class"];
         }
 
-        attempt( () => Object.setPrototypeOf( clone, Object.getPrototypeOf( pObject || clone || {} ) ) );
+        attempt( () => Object.setPrototypeOf( clone, Object.getPrototypeOf( obj || clone || {} ) ) );
 
-        return clone;
+        return isWeakRef ? new WeakRef( clone ) : clone;
     };
 
     /**
@@ -7441,33 +7591,37 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     function handleCopyObject( pObject, pOptions = DEFAULT_COPY_OPTIONS, pFreezeFunction, pStack )
     {
+        const options = resolveCopyOptions( pOptions );
+
         if ( _ud === typeof pObject )
         {
-            return handleCopyUndefined( pObject, pOptions, pFreezeFunction );
+            return handleCopyUndefined( pObject, options, pFreezeFunction );
         }
 
         if ( null === pObject )
         {
-            return handleCopyNull( pObject, pOptions, pFreezeFunction );
+            return handleCopyNull( pObject, options, pFreezeFunction );
         }
 
-        let clone;
+        const isWeakRef = isRef( pObject );
 
-        if ( pObject instanceof Date )
+        let clone = isWeakRef ? dereference( pObject, (options?.expectedType || _obj) ) : pObject;
+
+        if ( clone instanceof Date )
         {
-            clone = new Date( pObject.getTime() );
+            clone = new Date( clone.getTime() );
         }
-        else if ( pObject instanceof RegExp )
+        else if ( clone instanceof RegExp )
         {
-            clone = new RegExp( pObject, pObject.flags || _mt_str );
+            clone = new RegExp( clone, clone.flags || _mt_str );
         }
-        else if ( isArray( pObject ) )
+        else if ( isArray( clone ) || isArray( pObject ) )
         {
-            clone = cloneArray( pObject, pOptions, pStack );
+            clone = cloneArray( (clone || pObject), { ...(options || {}), ...({ expectedType: Array }) }, pStack );
         }
         else
         {
-            clone = attempt( () => cloneObject( pObject, pOptions, pStack ) ) || clone;
+            clone = attempt( () => cloneObject( clone, options, pStack ) ) || clone;
         }
 
         if ( !!!pOptions?.includeClassNames )
@@ -7476,6 +7630,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
 
         attempt( () => Object.setPrototypeOf( clone, Object.getPrototypeOf( pObject || clone || {} ) ) );
+
+        clone = isWeakRef ? new WeakRef( clone ) : clone;
 
         return isFunc( pFreezeFunction ) ? attempt( () => pFreezeFunction( clone ) || clone ) : clone;
     }
@@ -7518,14 +7674,16 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         const stack = [...(pStack || [])];
 
+        const obj = dereference( pObject, resolvedOptions?.expectedType || _obj ) || pObject;
+
         if ( detectCycles( stack, 5, 5 ) )
         {
-            return maybeFreeze( pObject );
+            return maybeFreeze( obj );
         }
 
-        const handler = CopyHandlers.get( typeof pObject ) || CopyHandlers.get( _asterisk );
+        const handler = CopyHandlers.get( typeof obj ) || CopyHandlers.get( _asterisk );
 
-        return attempt( () => handler( pObject, resolvedOptions, maybeFreeze, stack ) );
+        return attempt( () => handler( (pObject || obj), resolvedOptions, maybeFreeze, stack ) );
     };
 
     _copy.CopyHandlers = CopyHandlers;
@@ -7579,7 +7737,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     function propertyDescriptors( pObject, pSearchPrototypeChain = true )
     {
-        let obj = pObject;
+        let obj = isRef( pObject ) ? pObject.deref() || pObject : pObject;
 
         let lastObj = null;
 
@@ -7655,7 +7813,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         } : null;
 
-        let value = pObject;
+        let value = isRef( pObject ) ? dereference( pObject ) : pObject;
 
         while ( keys.length > 0 && isNonNullObj( value ) )
         {
@@ -8027,7 +8185,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             if ( _mt === String( s ).trim() )
             {
-                s = `![ENTRIES=[` + objectEntries( this ).map( e => [ObjectEntry.getKey( e ), ToolBocksObject.serialize( Object.getValue( e ) )] ) + `]]`;
+                s = `![ENTRIES=[` + objectEntries( this ).map( e => [ObjectEntry.getKey( e ), ToolBocksObject.serialize( Object.getValue( e ) )] ).join( ", " ) + `]]`;
             }
 
             return s;
@@ -8035,14 +8193,13 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     }
 
-    ToolBocksObject.serialize = function( pObject, pStack = [] )
-    {
-        return JSON.stringify( pObject );
-    };
+    ToolBocksObject.serialize = ( pObject = {} ) => attempt( () => JSON.stringify( pObject ) );
 
     ToolBocksObject.deserialize = function( pData, pClass )
     {
-
+        let obj = isStr( pData ) ? attempt( () => JSON.parse( _asStr( pData ) ) ) : isNonNullObj( pData ) ? { ...(pData) } : {};
+        attempt( () => Object.setPrototypeOf( obj, pClass?.prototype || Object.getPrototypeOf( pClass ) ) );
+        return obj;
     };
 
     const mod =
@@ -8173,7 +8330,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     isVisitor: Visitor.isVisitor,
                     _isValidStr,
                     _validTypes,
-                    isPrimitiveWrapper
+                    isPrimitiveWrapper,
+                    isWeak,
+                    isRef
                 },
 
             TYPE_HELPERS:
@@ -8191,6 +8350,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     calculateEstimatedTimeRemaining,
                     formatElapsedTime
                 },
+
+            dereference,
 
             isObjectLiteral,
             isReadOnly,
