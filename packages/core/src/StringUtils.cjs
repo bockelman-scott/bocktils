@@ -4229,59 +4229,66 @@ const { _ud = "undefined", $scope } = constants;
 
     function formatPhoneNumber( pPhoneNumber )
     {
-        let s = asString( pPhoneNumber || _mt );
+        let s = asString( pPhoneNumber || _mt, true );
 
-        if ( !isBlank( s ) && asInt( s.length ) >= MIN_PHONE_NUM_LEN )
+        if ( !isBlank( s ) && $ln( s ) >= MIN_PHONE_NUM_LEN )
         {
-            s = s.replaceAll( RX_NON_DIGITS, _mt ).trim().replace( /^1/, _mt );
+            s = s.replaceAll( RX_NON_DIGITS, _mt );
 
-            if ( asInt( s.length ) >= MIN_PHONE_NUM_LEN )
+            while ( $ln( s ) > 10 && /^[01]/.test( s ) )
+            {
+                s = s.slice( 1, $ln( s ) );
+            }
+
+            s = s.trim().replace( /^1/, _mt );
+
+            if ( $ln( s ) >= MIN_PHONE_NUM_LEN )
             {
                 return "(" + s.slice( 0, 3 ) + ") " + s.slice( 3, 6 ) + _hyphen + s.slice( 6, 10 );
             }
-
-            return asString( s, true ) || _mt;
         }
 
-        return pPhoneNumber;
+        return asString( s, true ) || pPhoneNumber;
     }
 
     const isValidPhoneNumber = function( pPhoneNumber )
     {
         let phone = asString( pPhoneNumber, true ).replaceAll( /\D/g, _mt );
 
+        // if there are no digits or not enough digits, the number is invalid
         if ( isBlank( phone ) || ($ln( phone ) < MIN_PHONE_NUM_LEN) )
         {
             return false;
         }
 
         const areaCode = phone.slice( 0, 3 );
-        const prefix = phone.slice( 3, 6 );
-        const lineNumber = phone.slice( 6, 10 );
+        const nxx = phone.slice( 3, 6 );
+        const line = phone.slice( 6, 10 );
 
-        // the area code cannot start with 0 or 1.
-        if ( /^[01]/.test( areaCode ) )
+        // if the number is less than 10 digits or has all zeroes for the NXX or LINE_NUMBER, it is invalid.
+        // and, if the area code starts with 0 or 1, the local exchange starts with 0 or 1, or the area code ends in "11", it is invalid
+        if ( $ln( phone ) < MIN_PHONE_NUM_LEN || nxx === "000" || line === "0000" || /^[01]/.test( areaCode ) || /11$/.test( areaCode ) || /^[01]/.test( nxx ) )
         {
             return false;
         }
 
-        // the prefix (NXX) cannot start with 0 or 1.
-        if ( /^[01]/.test( prefix ) )
+        // split the phone number into an array of its digits to find the number of UNIQUE digits
+        let digits = [...(_toArr( phone.split( _mt ) ))];
+        let uniqueDigits = [...(new Set( digits ))];
+        let numUnique = $ln( uniqueDigits );
+
+        // if the number consists of the same number repeated 10 times or 2 numbers just alternated, it is invalid
+        if ( numUnique < 2 || (numUnique === 2 && phone.slice( 0, 2 ).repeat( 5 ) === phone) )
         {
             return false;
         }
 
-        // reject known fictional 555 numbers
-        if ( prefix === "555" )
-        {
-            // reject the official fictional range (0100 to 0199), 1212 (Dir. Assist), and 4334 (Nat. Use)
-            if ( /^01\d{2}$/.test( lineNumber ) || lineNumber === "1212" || lineNumber === "4334" )
-            {
-                return false;
-            }
-        }
+        // it is possible that we will consider a "key mashed" or "key swiped" fake number as valid,
+        // but we will use a scoring algorithm to assign a confidence to all 'valid' numbers
 
-        return true;
+        // if the area code is 555, we check for the known fictional numbers and 2 special use/reserved numbers
+        // and consider the number valid if it does not fall into that range
+        return !("555" === nxx && (/^01\d{2}$/.test( line ) || "1212" === line || "4334" === line));
     };
 
     let mod =
