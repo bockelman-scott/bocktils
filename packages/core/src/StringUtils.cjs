@@ -3377,6 +3377,31 @@ const { _ud = "undefined", $scope } = constants;
         return (isRegExp( rxAddr ) && (rxAddr.test( pFirstName ) || rxAddr.test( pLastName )));
     }
 
+    function _handleDuplicatedName( pName )
+    {
+        let name = asString( pName, true );
+
+        if ( name.includes( _spc ) )
+        {
+            let parts = name.split( /\s+/ );
+
+            let numSpaces = Math.max( 1, $ln( parts ) - 1 );
+
+            if ( numSpaces > 1 )
+            {
+                let pairs = new Set();
+                for( let i = 0, n = $ln( parts ); i < n; i++ )
+                {
+                    pairs.add( parts.slice( i, i + 1 ).join( _spc ) );
+                }
+
+                name = [...pairs.values()].join( _spc );
+            }
+        }
+
+        return name;
+    }
+
     function normalizeName( pFirstName, pLastName, pOptions = PROPERCASE_OPTIONS, pOtherContactData = {} )
     {
         const options = { ...PROPERCASE_OPTIONS, ...(pOptions || {}) };
@@ -3386,30 +3411,29 @@ const { _ud = "undefined", $scope } = constants;
         const rxIllegalStartChars = /^[.,><|;:?!@#&*$_+=`'"-]/;
         const rxIllegalEndChars = /[,><|;:?!@#&*$_+=`'"-]$/;
         const rxIllegalNameChars = /[,><|;:?!@#&*$_+=`]/g;
+        const rxParenthesized = /\([^)]+\)/g;
+        const rxEmailDomain = /@\w+\.(com|net|org|gov|edu)/;
 
         let firstName = asString( pFirstName, true ).replaceAll( / {2,}/g, _spc ).trim();
         let lastName = asString( pLastName, true ).replaceAll( / {2,}/g, _spc ).trim();
 
-        firstName = asString( firstName.replace( rxIllegalStartChars, _mt ), true ).replace( rxIllegalEndChars, _mt ).trim();
-        lastName = asString( lastName.replace( rxIllegalStartChars, _mt ), true ).replace( rxIllegalEndChars, _mt ).trim();
-
-        firstName = asString( firstName.replaceAll( rxIllegalNameChars, _mt ), true ).trim();
-        lastName = asString( lastName.replaceAll( rxIllegalNameChars, _mt ), true ).trim();
-
-        firstName = asString( asProperCaseName( firstName, options, true ).replaceAll( /\s+/g, _spc ), true );
-        lastName = asString( asProperCaseName( lastName, options, false ).replaceAll( /\s+/g, _spc ), true );
+        firstName = asString( firstName.replace( rxParenthesized, _mt ), true ).trim();
+        lastName = asString( lastName.replace( rxParenthesized, _mt ), true ).trim();
 
         function _removeContactData( pName, pData = pOtherContactData )
         {
+            let inName = asString( pName, true );
+
             let name = asString( pName, true );
 
             let data = pData || {};
 
-            name = name.replace( (asString( data?.address ) || data?.address_line_1 || _mt), _mt );
-            name = name.replace( (asString( data?.phoneNumber || data?.phone || data?.phone_number ) || _mt), _mt );
-            name = name.replace( (asString( data?.emailAddress || data?.email || data?.email_address ) || _mt), _mt );
+            name = name.replace( (asString( data?.address, true ) || asString( data?.address_line_1 || _mt, true ), true), _mt );
+            name = name.replace( (asString( data?.phoneNumber || data?.phone || data?.phone_number || _mt, true )), _mt );
+            name = name.replace( (asString( data?.emailAddress || data?.email || data?.email_address || _mt, true )), _mt );
+            name = name.replace( normalizeEmailAddress( asString( data?.emailAddress || data?.email || data?.email_address ) || _mt, true ), _mt );
 
-            return asString( name, true );
+            return asString( name || inName, true ) || inName;
         }
 
         if ( isPopulatedObject( pOtherContactData ) )
@@ -3417,6 +3441,21 @@ const { _ud = "undefined", $scope } = constants;
             firstName = asProperCaseName( _removeContactData( firstName, pOtherContactData ), options, true );
             lastName = asProperCaseName( _removeContactData( lastName, pOtherContactData ), options, false );
         }
+
+        firstName = asString( firstName.replace( rxEmailDomain, _mt ), true ).trim();
+        lastName = asString( lastName.replace( rxEmailDomain, _mt ), true ).trim();
+
+        firstName = asString( firstName.replace( rxIllegalStartChars, _mt ), true ).replace( rxIllegalEndChars, _mt ).trim();
+        lastName = asString( lastName.replace( rxIllegalStartChars, _mt ), true ).replace( rxIllegalEndChars, _mt ).trim();
+
+        firstName = asString( firstName.replaceAll( rxIllegalNameChars, _mt ), true ).trim();
+        lastName = asString( lastName.replaceAll( rxIllegalNameChars, _mt ), true ).trim();
+
+        firstName = asString( firstName.replaceAll( /\d/g, _mt ), true ).trim();
+        lastName = asString( lastName.replaceAll( /\d/g, _mt ), true ).trim();
+
+        firstName = asString( asProperCaseName( firstName, options, true ).replaceAll( /\s+/g, _spc ), true );
+        lastName = asString( asProperCaseName( lastName, options, false ).replaceAll( /\s+/g, _spc ), true );
 
         if ( /[^aeiouy\s]jr$/i.test( lastName ) )
         {
@@ -3427,6 +3466,8 @@ const { _ud = "undefined", $scope } = constants;
         {
             lastName = lastName.replace( /\s+(iii?)$/, ucase( " $1" ) );
         }
+
+        lastName = _handleDuplicatedName( lastName );
 
         if ( ucase( firstName ) === ucase( lastName ) )
         {
@@ -3471,6 +3512,8 @@ const { _ud = "undefined", $scope } = constants;
         {
             firstName = firstName.replace( lastName, _mt ).trim();
         }
+
+        lastName = _handleDuplicatedName( lastName );
 
         return {
             first: asString( firstName, true ).replaceAll( / {2,}/g, _spc ),

@@ -4,21 +4,23 @@ const constants = require( "../src/Constants.cjs" );
 /** import the utilities we are testing */
 const stringUtils = require( "../src/StringUtils.cjs" );
 
-const {
-    asString,
-    asKey,
-    isEmpty,
-    isBlank,
-    asInt,
-    toCanonicalNumericFormat,
-    findDuplicatedSubstrings,
-    findCommonSubstrings,
-    includesAll,
-    cleanUrl,
-    $last,
-    $nth,
-    abbreviate
-} = stringUtils;
+const
+    {
+        asString,
+        asKey,
+        isEmpty,
+        isBlank,
+        asInt,
+        toCanonicalNumericFormat,
+        findDuplicatedSubstrings,
+        findCommonSubstrings,
+        includesAll,
+        cleanUrl,
+        $last,
+        $nth,
+        abbreviate,
+        normalizeName
+    } = stringUtils;
 
 const repoName = "bocktils";
 
@@ -1969,10 +1971,33 @@ describe( "Abbreviations", () =>
               let c = "Personal Injury";
               let d = "Employment";
 
-              expect( abbreviate(a) ).toEqual( "MA" );
-              expect( abbreviate(b) ).toEqual( "CA" );
-              expect( abbreviate(c) ).toEqual( "PI" );
-              expect( abbreviate(d) ).toEqual( "Empl" );
+              expect( abbreviate( a ) ).toEqual( "MA" );
+              expect( abbreviate( b ) ).toEqual( "CA" );
+              expect( abbreviate( c ) ).toEqual( "PI" );
+              expect( abbreviate( d ) ).toEqual( "Empl" );
+
+          } );
+} );
+
+describe( "normalizeName scenarios", () =>
+{
+    let names =
+        [
+            ["Adrian", "Maurice Golden"]
+            , []
+
+        ];
+
+    let expected =
+        [
+            "Adrian Maurice Golden"
+            ,
+
+        ];
+
+    test( "normalizeName - typical cases",
+          () =>
+          {
 
           } );
 } );
