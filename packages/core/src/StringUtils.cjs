@@ -3660,6 +3660,17 @@ const { _ud = "undefined", $scope } = constants;
     };
 
     /**
+     * Converts a string in camelCase (or other format) ( someVariableName ) into "Pascal Case" ( SomeVariableName )
+     * @param pStr a string to convert to camel case
+     * @returns {string} the specified string formatted in "snake case"
+     */
+    const toPascalCase = function( pStr )
+    {
+        let s = toCamelCase( pStr );
+        return capitalize( s, true );
+    };
+
+    /**
      * This is an extremely 'paranoid' function for producing a copy of a string that cannot possibly be pointing to the original string in memory
      * @param pStr  a string to copy
      * @returns {string} a string with the same characters as the string specified, but not identical to that string
@@ -4403,6 +4414,7 @@ const { _ud = "undefined", $scope } = constants;
             toCamelCase,
             toSnakeCase,
             toProperCase,
+            toPascalCase,
             asProperCaseName,
             normalizeName,
             formatPhoneNumber,

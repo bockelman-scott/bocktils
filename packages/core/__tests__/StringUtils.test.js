@@ -1585,6 +1585,42 @@ describe( "toSnakeCase", () =>
           } );
 } );
 
+describe( "toVariousCases", () =>
+{
+    const a = "some_property_name";
+    const b = "SomePropertyName";
+    const c = "somePropertyName";
+    const d = "somepropertyname";
+
+    test( "various cases of variable name a, 'some_property_name' ",
+          () =>
+          {
+              expect( stringUtils.toSnakeCase( a ) ).toEqual( a );
+              expect( stringUtils.toCamelCase( a ) ).toEqual( c );
+              expect( stringUtils.toPascalCase( a ) ).toEqual( b );
+              expect( stringUtils.ucase( a ) ).toEqual( "SOME_PROPERTY_NAME" );
+              expect( stringUtils.lcase( a ) ).toEqual( a );
+
+              expect( stringUtils.capitalize( a ) ).toEqual( "Some_property_name" );
+
+              expect( stringUtils.toSnakeCase( b ) ).toEqual( a );
+              expect( stringUtils.toCamelCase( b ) ).toEqual( c );
+              expect( stringUtils.toPascalCase( b ) ).toEqual( b );
+              expect( stringUtils.ucase( b ) ).toEqual( "SOMEPROPERTYNAME" );
+              expect( stringUtils.lcase( b ) ).toEqual( d );
+
+              expect( stringUtils.capitalize( b ) ).toEqual( "Somepropertyname" );
+              expect( stringUtils.capitalize( b, true ) ).toEqual( b );
+
+              expect( stringUtils.toSnakeCase( c ) ).toEqual( a );
+              expect( stringUtils.toCamelCase( c ) ).toEqual( c );
+              expect( stringUtils.toPascalCase( c ) ).toEqual( b );
+              expect( stringUtils.ucase( c ) ).toEqual( "SOMEPROPERTYNAME" );
+              expect( stringUtils.lcase( c ) ).toEqual( d );
+
+          } );
+} );
+
 describe( "copyString prevents variable aliases", () =>
 {
     test( "copyString('abc') === 'abc'",
