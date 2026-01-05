@@ -210,7 +210,7 @@ const { _ud = "undefined", $scope } = constants;
      * <br>
      * @type {ToolBocksModule}
      */
-    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+    const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
     /**
      * Returns a valid number regardless of its argument.<br>
@@ -237,7 +237,7 @@ const { _ud = "undefined", $scope } = constants;
     {
         if ( !isNumeric( pNum ) )
         {
-            modulePrototype.reportError( new IllegalArgumentError( ERROR_MSG_NON_NUMERIC ), ERROR_MSG_NON_NUMERIC, S_WARN, modulePrototype.calculateErrorSourceName( modName, resolveNullOrNaN ), pNum );
+            toolBocksModule.reportError( new IllegalArgumentError( ERROR_MSG_NON_NUMERIC ), ERROR_MSG_NON_NUMERIC, S_WARN, toolBocksModule.calculateErrorSourceName( modName, resolveNullOrNaN ), pNum );
 
             return resolveNullOrNaN( pDefault, 0 );
         }
@@ -615,7 +615,7 @@ const { _ud = "undefined", $scope } = constants;
 
         if ( isZero( divisor ) )
         {
-            modulePrototype.reportError( new IllegalArgumentError( ERROR_MSG_DIVISION_BY_ZERO ), ERROR_MSG_DIVISION_BY_ZERO, S_WARN, modulePrototype.calculateErrorSourceName( modName, me ), pDividend, pDivisor, pOptions );
+            toolBocksModule.reportError( new IllegalArgumentError( ERROR_MSG_DIVISION_BY_ZERO ), ERROR_MSG_DIVISION_BY_ZERO, S_WARN, toolBocksModule.calculateErrorSourceName( modName, me ), pDividend, pDivisor, pOptions );
 
             return isNumber( options.byZero ) ? options.byZero : resolveNullOrNaN( options.byZero, resolveNullOrNaN( options.defaultQuotient, 0 ) );
         }
@@ -1655,7 +1655,7 @@ const { _ud = "undefined", $scope } = constants;
                 msg = "At least one divisor must be greater than 0";
             }
 
-            modulePrototype.reportError( new IllegalArgumentError( msg ), msg, S_WARN, modulePrototype.calculateErrorSourceName( modName, me ), ...nums );
+            toolBocksModule.reportError( new IllegalArgumentError( msg ), msg, S_WARN, toolBocksModule.calculateErrorSourceName( modName, me ), ...nums );
 
             return 1;
         }
@@ -1759,7 +1759,7 @@ const { _ud = "undefined", $scope } = constants;
             {
                 const msg = "Denominator cannot be 0";
 
-                modulePrototype.reportError( new IllegalArgumentError( msg ), msg, S_WARN, modulePrototype.calculateErrorSourceName( modName, "Rational::new" ), pNumerator, pDenominator, pOptions );
+                toolBocksModule.reportError( new IllegalArgumentError( msg ), msg, S_WARN, toolBocksModule.calculateErrorSourceName( modName, "Rational::new" ), pNumerator, pDenominator, pOptions );
 
                 denominator = resolveNullOrNaN( this.#options.defaultDenominator, 1 );
 
@@ -1964,7 +1964,7 @@ const { _ud = "undefined", $scope } = constants;
             if ( isNanOrInfinite( num ) )
             {
                 const msg = ERROR_MSG_NON_NUMERIC;
-                modulePrototype.reportError( new IllegalArgumentError( msg ), msg, S_WARN, modulePrototype.calculateErrorSourceName( modName, me ), pDecimal, pOptions );
+                toolBocksModule.reportError( new IllegalArgumentError( msg ), msg, S_WARN, toolBocksModule.calculateErrorSourceName( modName, me ), pDecimal, pOptions );
             }
 
             const options = populateOptions( pOptions, DEFAULT_RATIONAL_OPTIONS );
@@ -2190,7 +2190,7 @@ const { _ud = "undefined", $scope } = constants;
 
         if ( isNull( rational ) )
         {
-            modulePrototype.reportError( new IllegalArgumentError( msg ), msg, S_WARN, modulePrototype.calculateErrorSourceName( modName, Rational.nearestRational ), pNum, pRational );
+            toolBocksModule.reportError( new IllegalArgumentError( msg ), msg, S_WARN, toolBocksModule.calculateErrorSourceName( modName, Rational.nearestRational ), pNum, pRational );
             return Rational.ZERO;
         }
 
@@ -2199,7 +2199,7 @@ const { _ud = "undefined", $scope } = constants;
 
         if ( isNanOrInfinite( numerator ) || isNanOrInfinite( denominator ) || 0 === denominator )
         {
-            modulePrototype.reportError( new IllegalArgumentError( msg ), msg, S_WARN, modulePrototype.calculateErrorSourceName( modName, Rational.nearestRational ), pNum, pRational );
+            toolBocksModule.reportError( new IllegalArgumentError( msg ), msg, S_WARN, toolBocksModule.calculateErrorSourceName( modName, Rational.nearestRational ), pNum, pRational );
             return Rational.ZERO;
         }
 
@@ -2409,7 +2409,7 @@ const { _ud = "undefined", $scope } = constants;
             applyPercent
         };
 
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 }());

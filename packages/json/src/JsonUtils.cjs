@@ -4,13 +4,7 @@ const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
 const jsonInterpolationUtils = require( "./JsonInterpolationUtils.cjs" );
 
-const {
-    _ud = "undefined",
-    $scope = constants?.$scope || function()
-    {
-        return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-    }
-} = constants;
+const { _ud = "undefined", $scope } = constants;
 
 (function exposeModule()
 {

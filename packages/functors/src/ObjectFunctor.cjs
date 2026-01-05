@@ -1,7 +1,5 @@
 const core = require( "@toolbocks/core" );
 
-const commonUtils = require( "@toolbocks/common" );
-
 const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
 // const { objectUtils } = commonUtils;

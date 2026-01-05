@@ -36,22 +36,18 @@ const { _ud = "undefined", $scope } = constants;
             dateUtils
         };
 
-    const {
-        ToolBocksModule,
-        populateOptions,
-        mergeOptions,
-        merge,
-        lock,
-        COMPARE_EQUAL,
-        compareNullable
-    } = moduleUtils;
+    const
+        {
+            ToolBocksModule,
+            populateOptions,
+            mergeOptions,
+            merge,
+            lock,
+            COMPARE_EQUAL,
+            compareNullable
+        } = moduleUtils;
 
-    const {
-        _mt_str,
-        _spc,
-        _colon,
-        _slash,
-    } = constants;
+    const { _mt_str, _spc, _colon, _slash, } = constants;
 
     const { isNull, isString, isNumber, clamp } = typeUtils;
 
@@ -59,25 +55,26 @@ const { _ud = "undefined", $scope } = constants;
 
     const { asArray } = arrayUtils;
 
-    const {
-        DEFAULTS: LOCALE_DEFAULTS,
-        DEFAULT_LOCALE_STRING,
-        isSameLocale,
-        resolveLocale,
-        getMonthNames,
-        getMonthAbbreviations,
-        getDayNames,
-        getDayAbbreviations,
-        getDayLetters,
-        getEras,
-        getAmPmStrings,
-        getFirstDayOfWeek,
-        FORMATS,
-    } = localeUtils;
+    const
+        {
+            DEFAULTS: LOCALE_DEFAULTS,
+            DEFAULT_LOCALE_STRING,
+            isSameLocale,
+            resolveLocale,
+            getMonthNames,
+            getMonthAbbreviations,
+            getDayNames,
+            getDayAbbreviations,
+            getDayLetters,
+            getEras,
+            getAmPmStrings,
+            getFirstDayOfWeek,
+            FORMATS,
+        } = localeUtils;
 
-    const modName = "DateFormatTokenSet";
+    const modName = "BockDateFormatTokenSet";
 
-    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+    const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
     const
         {
@@ -2306,7 +2303,7 @@ const { _ud = "undefined", $scope } = constants;
             merge
         };
 
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 

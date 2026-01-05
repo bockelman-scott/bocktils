@@ -54,6 +54,8 @@ const { _ud = "undefined", $scope } = constants;
         isNull,
         isString,
         isDate,
+        isDateString,
+        isValidDateInstance,
         isNumber,
         isNumeric,
         isNanOrInfinite,
@@ -96,13 +98,13 @@ const { _ud = "undefined", $scope } = constants;
 
     const { TokenSet, TokenLiteral } = TokenSetClasses;
 
-    const { classes: DateFormatterClasses } = dateFormatUtils;
+    const { classes: DateFormatterClasses, DEFAULT_LOCALE, DEFAULT_TOKEN_SET, DEFAULT_FORMAT } = dateFormatUtils;
 
     const DateFormatter = DateFormatterClasses.DateFormatter;
 
-    const modName = "DateParser";
+    const modName = "BockDateParser";
 
-    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+    const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
     const resolveFormatter = function( pFormat, pLocale, pOptions )
     {
@@ -323,7 +325,7 @@ const { _ud = "undefined", $scope } = constants;
 
             let contents = _mt_str;
 
-            const executionEnvironment = modulePrototype.executionEnvironment;
+            const executionEnvironment = toolBocksModule.executionEnvironment;
 
             if ( /https?:\/\//.test( dataLocation ) )
             {
@@ -433,13 +435,13 @@ const { _ud = "undefined", $scope } = constants;
          * @param {object|DateFormatter} pOptions can be either an object describing DateFormatter options
          *                                        or an instance of DateFormatter
          */
-        constructor( pFormat, pLocale, pTokenSet, pOptions )
+        constructor( pFormat, pLocale = DEFAULT_LOCALE, pTokenSet = DEFAULT_TOKEN_SET, pOptions = {} )
         {
             this.#dateFormatter = resolveFormatter( pFormat, pLocale, pOptions );
 
             this.#options = resolveParserOptions( pOptions, pFormat, pTokenSet, pLocale );
 
-            this.#pattern = resolveFormatPattern( pFormat, this.#dateFormatter, pOptions );
+            this.#pattern = resolveFormatPattern( pFormat, this.#dateFormatter, pOptions, this.#options );
 
             this.#locale = resolveLocale( pLocale, this.#options, pOptions, this.#dateFormatter, pTokenSet, pFormat );
 
@@ -483,7 +485,10 @@ const { _ud = "undefined", $scope } = constants;
 
             if ( isNumeric( pString ) )
             {
-                return isNumber( this.pattern ) || !/\D/.test( this.pattern );
+                if ( isNumber( this.pattern ) || !/\D/.test( pString ) )
+                {
+                    return asInt( this.pattern ) === asInt( pString );
+                }
             }
 
             return false;
@@ -600,9 +605,13 @@ const { _ud = "undefined", $scope } = constants;
 
         parse( pString )
         {
-            if ( isDate( pString ) || (isNumber( pString ) && !isNanOrInfinite( pString ) && !this.isPattern( pString )) )
+            if ( (isDate( pString ) || isDateString( pString )) || (isNumber( pString ) && !isNanOrInfinite( pString ) && !this.isPattern( pString )) )
             {
-                return new Date( pString );
+                let date = new Date( pString );
+                if ( isValidDateInstance( date ) )
+                {
+                    return date;
+                }
             }
 
             const s = asString( pString );
@@ -694,7 +703,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             return new DateParser( pFormat, pLocale, pTokenSet, pOptions || {} );
         }
-        throw new Error( "DateParser.fromLocale requires an instance of Intl.Locale or a string representing a Locale" );
+        throw new Error( "DateParser.fromPattern requires an instance of Intl.Locale or a string representing a Locale" );
     };
 
     let mod =
@@ -709,7 +718,7 @@ const { _ud = "undefined", $scope } = constants;
             TimeChange,
             TimeZone,
             DateParser,
-            parse: function( pString, pFormat, pLocale, pTokenSet, pOptions )
+            parse: function( pString, pFormat = DEFAULT_FORMAT, pLocale = DEFAULT_LOCALE, pTokenSet = DEFAULT_TOKEN_SET, pOptions = {} )
             {
                 const parser = new DateParser( pFormat, pLocale, pTokenSet, pOptions );
 
@@ -717,7 +726,7 @@ const { _ud = "undefined", $scope } = constants;
             }
         };
 
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
 
     TimeZone.loadTimeZoneData( DEFAULT_TIME_ZONE_DATA_LOCATION ).then( no_op ).catch( no_op );
 

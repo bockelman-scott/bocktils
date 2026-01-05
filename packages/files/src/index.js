@@ -114,16 +114,7 @@ const bufferUtils = require( "@toolbocks/buffer" );
 const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
 /* define a variable for typeof undefined **/
-const { _ud = "undefined", konsole = console } = constants;
-
-/**
- * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
- * @type {function():Object}
- */
-const $scope = constants?.$scope || function()
-{
-    return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-};
+const { _ud = "undefined", $scope, konsole = console } = constants;
 
 // noinspection OverlyComplexFunctionJS,FunctionTooLongJS
 (function exposeModule()

@@ -10,12 +10,7 @@ const mathUtils = require( "./src/MathUtils.cjs" );
 
 const distributionUtils = require( "./src/DistributionUtils.cjs" );
 
-const { _ud = "undefined" } = constants;
-
-const $scope = core?.$scope || constants?.$scope || function()
-{
-    return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-};
+const { _ud = "undefined", $scope } = constants;
 
 (function exposeModule()
 {

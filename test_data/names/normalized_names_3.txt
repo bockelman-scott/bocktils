@@ -179,7 +179,7 @@ Rhonda|O'Quinn||RHONDA|O'QUINN||false|false
 Pam|Powell||PAM POWELL|PAM POWELL||false|false
 Kaipo|Tautala Kupukaa Takasugi||KAIPO|TAUTALA KUPUKAA TAKASUGI||false|false
 Rebecca|Quesada||REBECCA|QUESADA||false|false
-Linda|Allen5264 N Michigan Rd||LINDA|ALLEN5264 N MICHIGAN RD||false|false
+Linda|Allen N Michigan Rd||LINDA|ALLEN5264 N MICHIGAN RD||false|false
 Cecilia|Cerda Lopez||CECILIA|CERDA LOPEZ||false|false
 Stephen|Ragland||STEPHEN RAGLAND|STEPHEN RAGLAND||false|false
 William|Bank'S||WILLIAM|BANK'S||false|false
@@ -368,7 +368,7 @@ Collettw|Hollingshead||COLLETTW|HOLLINGSHEAD||false|false
 Nana|Bsbsn||NANA|BSBSN||false|false
 Edward Ivan|Franco||EDWARD IVAN|FRANCO||false|false
 Ta|Kjn||TA|KJN||false|false
-Moe|Faye33z||MOE|FAYE33Z||false|false
+Moe|Fayez||MOE|FAYE33Z||false|false
 Elizabeth Logan|Wilder Fuller||ELIZABETH LOGAN|WILDER FULLER||false|false
 Laura|Willis Albrigo||LAURA|WILLIS ALBRIGO||false|false
 Mike|De Santiago||MIKE|DE SANTIAGO||false|false
@@ -412,10 +412,10 @@ Amber|Van Duyn||AMBER|VAN DUYN||false|false
 Q|Isoff-Celestin||Q|ISOFF-CELESTIN||false|false
 Gary|Sturdivan II||GARY|STURDIVAN II||false|false
 John|Cook Jr||JOHN|COOK JR||false|false
-Bethany (Dakota)|Morton||BETHANY (DAKOTA)|MORTON||false|false
+Bethany|Morton||BETHANY (DAKOTA)|MORTON||false|false
 Danielle|M||DANIELLE|M||false|false
 Joseph|Bezio Jr||JOSEPH|BEZIO JR||false|false
-Alicia|Cervantes ( Lopez )||ALICIA|CERVANTES ( LOPEZ )||false|false
+Alicia|Cervantes||ALICIA|CERVANTES ( LOPEZ )||false|false
 Jean Paul|Carreon||JEAN PAUL|CARREON||false|false
 Roneisha|Jackson Wesby||RONEISHA|JACKSON WESBY||false|false
 Esteban|Bernal Jr||ESTEBAN|BERNAL JR||false|false

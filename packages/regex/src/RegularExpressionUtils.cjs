@@ -101,6 +101,7 @@ const { _ud = "undefined", $scope } = constants;
         flags = flags.filter( e => isString( e ) );
         flags = unique( flags.map( e => lcase( e.trim() ).split( _mt_chr ) ).flat() );
         flags = unique( flags.filter( e => e.length === 1 && VALID_FLAGS.includes( e ) ) );
+        flags = flags.sort();
 
         return flags;
     };

@@ -11,12 +11,7 @@ const dateFormatTokenUtils = require( "./src/DateFormatTokenSet.cjs" );
 const dateFormatterUtils = require( "./src/DateFormatter.cjs" );
 const dateParserUtils = require( "./src/DateParser.cjs" );
 
-const { _ud = "undefined" } = constants;
-
-const $scope = core?.$scope || constants?.$scope || function()
-{
-    return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-};
+const { _ud = "undefined", $scope } = constants;
 
 (function exposeModule()
 {
@@ -41,9 +36,9 @@ const $scope = core?.$scope || constants?.$scope || function()
             dateParserUtils
         };
 
-    const { Result, isDate } = typeUtils;
+    const { Result, isDate, isValidDateInstance } = typeUtils;
 
-    const { ToolBocksModule } = moduleUtils;
+    const { ToolBocksModule, attempt } = moduleUtils;
 
     const
         {
@@ -87,7 +82,7 @@ const $scope = core?.$scope || constants?.$scope || function()
             REPETITION_RULES
         } = dateFormatTokenUtils;
 
-    const { DateParser } = dateParserUtils;
+    const { DateParser, parse } = dateParserUtils;
 
     const
         {
@@ -96,7 +91,8 @@ const $scope = core?.$scope || constants?.$scope || function()
             DEFAULT_LOCALE,
             DEFAULT_TOKEN_SET,
             DEFAULT_FORMAT,
-            DateFormatter
+            DateFormatter,
+            formatDate
         } = dateFormatterUtils;
 
     const
@@ -112,9 +108,9 @@ const $scope = core?.$scope || constants?.$scope || function()
             FORMATS
         } = localeUtils;
 
-    const modName = "DatesPackage";
+    const modName = "BockDatesPackage";
 
-    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+    const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
     let mod =
         {
@@ -197,10 +193,26 @@ const $scope = core?.$scope || constants?.$scope || function()
 
             DEFAULT_LOCALE,
             DEFAULT_TOKEN_SET,
-            DEFAULT_FORMAT
+            DEFAULT_FORMAT,
+
+            formatDate,
+            parseDate: function( pString )
+            {
+                const date = attempt( () => parse( pString ) );
+
+                if ( isValidDateInstance( date ) )
+                {
+                    return date;
+                }
+
+                const dateParser = new DateParser();
+
+                return dateParser.parse( pString );
+            }
         };
 
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
+
 }());

@@ -73,7 +73,7 @@ const { _ud = "undefined", $scope } = constants;
 
     const modName = "DateUtils";
 
-    const modulePrototype = new ToolBocksModule( modName, INTERNAL_NAME );
+    const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
     const Now = () => new Date();
 
@@ -706,7 +706,7 @@ const { _ud = "undefined", $scope } = constants;
                     if ( this.greaterThan( value ) )
                     {
                         const mutator = value.getMutator();
-                        modulePrototype.attempt( () => mutator.call( date, asInt( value.minimumValue ) ) );
+                        toolBocksModule.attempt( () => mutator.call( date, asInt( value.minimumValue ) ) );
                     }
                 }
             }
@@ -985,7 +985,7 @@ const { _ud = "undefined", $scope } = constants;
             errors.push( new IllegalArgumentError( "The second argument to transform must be a function with at least one parameter" ) );
         }
 
-        return (isFunction( pFunction ) ? modulePrototype.attempt( pFunction, pDate ) : new Result( pDate, errors ));
+        return (isFunction( pFunction ) ? toolBocksModule.attempt( pFunction, pDate ) : new Result( pDate, errors ));
     };
 
     const _compare = function( pDateA, pDateB, pTransformerFunction )
@@ -1452,7 +1452,7 @@ const { _ud = "undefined", $scope } = constants;
                 }
                 catch( ex )
                 {
-                    modulePrototype.handleError( ex, "Holiday._applyMondayRule", this, date );
+                    toolBocksModule.handleError( ex, "Holiday._applyMondayRule", this, date );
 
                     date = isDate( date ) ? date : pDate;
                 }
@@ -2233,7 +2233,7 @@ const { _ud = "undefined", $scope } = constants;
             daysAgo
         };
 
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 

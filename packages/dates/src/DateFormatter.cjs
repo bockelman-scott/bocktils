@@ -36,15 +36,17 @@ const { _ud = "undefined", $scope } = constants;
 
     const { _mt_str, _mt_chr } = constants;
 
-    const modulePrototype = new ToolBocksModule( "DateFormatter", INTERNAL_NAME );
+    let modName = "BockDateFormatter";
 
-    const { isNull, isDate, isNumeric, isString, isArray, isObject, isNonNullObject } = typeUtils;
+    const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
+
+    const { isNull, isDate, isDateString, isNumeric, isString, isArray, isObject, isNonNullObject } = typeUtils;
 
     const { asString, asInt } = stringUtils;
 
     const { includesAny } = arrayUtils;
 
-    const { classes: TokenSetClasses, getDefaultTokenSet, buildTokenSet, SUPPORTED_INTL_OPTIONS } = tokenSetUtils;
+    const { classes: TokenSetClasses, getDefaultTokenSet, SUPPORTED_INTL_OPTIONS } = tokenSetUtils;
 
     const { TokenSet, Token } = TokenSetClasses;
 
@@ -56,7 +58,7 @@ const { _ud = "undefined", $scope } = constants;
 
     const DEFAULT_FORMAT = "MM/dd/yyyy hh:mm:ss";
 
-    const resolveDate = ( pDate ) => isDate( pDate ) ? pDate : isNumeric( pDate ) ? new Date( asInt( pDate ) ) : new Date();
+    const resolveDate = ( pDate ) => isDate( pDate ) ? pDate : isNumeric( pDate ) ? new Date( asInt( pDate ) ) : isDateString( pDate ) ? new Date( pDate ) : new Date();
 
     class DateFormatter
     {
@@ -251,10 +253,15 @@ const { _ud = "undefined", $scope } = constants;
             DEFAULT_TOKEN_SET,
             DEFAULT_FORMAT,
             DateFormatter,
-            classes: { DateFormatter }
+            classes: { DateFormatter },
+            formatDate: function( pDate, pFormat )
+            {
+                const formatter = new DateFormatter( pFormat );
+                return formatter.format( pDate );
+            }
         };
 
-    mod = modulePrototype.extend( mod );
+    mod = toolBocksModule.extend( mod );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 
