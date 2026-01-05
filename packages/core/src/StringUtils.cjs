@@ -4442,6 +4442,7 @@ const { _ud = "undefined", $scope } = constants;
             fromCString,
             formatMessage,
             interpolate,
+            getFunctionName,
             getFunctionSource,
             toByteArray,
             asUtf8ByteArray,

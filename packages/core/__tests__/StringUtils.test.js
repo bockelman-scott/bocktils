@@ -19,7 +19,8 @@ const
         $last,
         $nth,
         abbreviate,
-        normalizeName
+        normalizeName,
+        getFunctionName
     } = stringUtils;
 
 const repoName = "bocktils";
@@ -1621,7 +1622,74 @@ describe( "toVariousCases", () =>
           } );
 } );
 
-describe( "copyString prevents variable aliases", () =>
+describe( "getFunctionName", () =>
+{
+    const anon = function()
+    {
+        return true;
+    };
+
+    function named()
+    {
+        return true;
+    }
+
+    function withArgs( ...pArgs )
+    {
+        return pArgs;
+    }
+
+    class ABC
+    {
+        #id;
+        #name;
+
+        constructor( pId, pName )
+        {
+            this.#id = pId;
+            this.#name = pName;
+        }
+
+        get id()
+        {
+            return this.#id;
+        }
+
+        get name()
+        {
+            return this.#name;
+        }
+    }
+
+    test( "can return a function's name",
+          () =>
+          {
+              let functionName = getFunctionName( anon );
+              expect( functionName ).toEqual( "anon" );
+
+              functionName = getFunctionName( named );
+              expect( functionName ).toEqual( "named" );
+
+              functionName = getFunctionName( withArgs );
+              expect( functionName ).toEqual( "withArgs" );
+
+              functionName = getFunctionName( getFunctionName );
+              expect( functionName ).toEqual( "getFunctionName" );
+
+              functionName = getFunctionName( ABC );
+              expect( functionName ).toEqual( "ABC" );
+
+              let abc = new ABC( 23, "and me");
+
+              functionName = getFunctionName( abc.constructor );
+              expect( functionName ).toEqual( "ABC" );
+
+              functionName = getFunctionName( abc.id );
+              expect( functionName ).toEqual( "" );
+          } );
+});
+
+    describe( "copyString prevents variable aliases", () =>
 {
     test( "copyString('abc') === 'abc'",
           () =>
