@@ -210,35 +210,36 @@ const { _ud = "undefined", $scope } = constants;
         };
     }
 
-    function isBuffer( pObject )
-    {
-        return (isArray( pObject ) && asArray( pObject || [] ).every( e => (isNumber( e ) && asInt( e ) < 256) )) ||
-               isTypedArray( pObject ) ||
-               (BufferDefined && pObject instanceof Buffer);
-    }
-
     function isTypedBuffer( pObject )
     {
-        return isTypedArray( pObject ) || (BufferDefined && pObject instanceof Buffer);
+        return (BufferDefined && pObject instanceof Buffer) || isTypedArray( pObject );
     }
+
+    function isBuffer( pObject )
+    {
+        return isTypedBuffer( pObject ) ||
+               (isArray( pObject ) && asArray( pObject || [] ).every( e => (isNumber( e ) && asInt( e ) < 256) ));
+    }
+
 
     if ( BufferDefined )
     {
-        mod = {
-            Buffer,
-            Blob,
-            File,
-            atob,
-            btoa,
-            BlobOptions,
-            FileOptions,
-            isAscii,
-            isUtf8,
-            SlowBuffer,
-            transcode,
-            TranscodeEncoding,
-            isBuffer
-        };
+        mod =
+            {
+                Buffer,
+                Blob,
+                File,
+                atob,
+                btoa,
+                BlobOptions,
+                FileOptions,
+                isAscii,
+                isUtf8,
+                SlowBuffer,
+                transcode,
+                TranscodeEncoding,
+                isBuffer
+            };
 
         objectEntries( mod ).forEach( ( [key, value] ) =>
                                       {
@@ -304,6 +305,11 @@ const { _ud = "undefined", $scope } = constants;
                 {
                     this.#byteLength = pArg3;
                 }
+            }
+
+            get buffer()
+            {
+                return this.#arrayBuffer || this.#uInt8Array?.buffer || new ArrayBuffer( asInt( this.#byteLength ) );
             }
 
             get uInt8Array()
@@ -634,6 +640,25 @@ const { _ud = "undefined", $scope } = constants;
         const ArrayClass = pArrayClass || Uint8Array;
         return isBufferDefined() ? (pBuffer instanceof Buffer ? new ArrayClass( pBuffer ) : isArray( pBuffer ) || isTypedArray( pBuffer ) ? new ArrayClass( pBuffer ) : new ArrayClass( arrayFromBuffer( pBuffer ) )) : arrayFromBuffer( pBuffer );
     }
+
+    // Convert Node.js Buffer to ArrayBuffer
+    const toArrayBuffer = function( pBuffer )
+    {
+        if ( !isNull( pBuffer ) )
+        {
+            if ( isTypedBuffer( pBuffer ) )
+            {
+                const buffer = pBuffer;
+                return attempt( () => buffer.buffer.slice( buffer.byteOffset, buffer.byteOffset + buffer.byteLength ) );
+            }
+            else if ( isBuffer( pBuffer ) )
+            {
+                const buffer = attempt( () => Buffer.from( pBuffer ) );
+                return attempt( () => buffer.buffer.slice( buffer.byteOffset, buffer.byteOffset + buffer.byteLength ) );
+            }
+        }
+        return new ArrayBuffer( 0 );
+    };
 
     const isBlob = ( pValue ) => (_ud !== typeof Blob && pValue instanceof Blob);
     const isFile = ( pValue ) => (_ud !== typeof File && pValue instanceof File);
@@ -1275,9 +1300,9 @@ const { _ud = "undefined", $scope } = constants;
 
             let stream = pStream instanceof ReadableStream ? pStream : (isPromise( pStream ) ? this.asChunkedStream( await Promise.resolve( pStream ) ) : this.asChunkedStream( pStream ));
 
-            if( !isNull( stream ) && stream.locked )
+            if ( !isNull( stream ) && stream.locked )
             {
-                toolBocksModule.logWarning(`The specified stream is locked and potentially already consumed`);
+                toolBocksModule.logWarning( `The specified stream is locked and potentially already consumed` );
 
             }
 
@@ -1367,6 +1392,7 @@ const { _ud = "undefined", $scope } = constants;
             ReadableStream: (_ud !== typeof ReadableStream) && isFunction( ReadableStream ) ? ReadableStream : scp.ReadableStream,
             arrayFromBuffer,
             typedArrayFromBuffer,
+            toArrayBuffer,
             isBlob,
             isFile,
             toReadableStream: function( pValue )
