@@ -90,11 +90,12 @@ const {
         $ln
     } = moduleUtils;
 
-    const { _mt_str = "", _mt = _mt_str, _str, _num, _big, _bool, _obj, _fun } = constants;
+    const { _mt_str = "", _mt = _mt_str, _comma, _str, _num, _big, _bool, _obj, _fun } = constants;
 
     const {
         isNull,
         isNonNullObject,
+        isPopulatedObject,
         isString,
         isNumeric,
         isArray,
@@ -906,7 +907,7 @@ const {
 
         toString()
         {
-            return this.name;
+            return asString( this.name, true );
         }
 
         [Symbol.toPrimitive]( pHint )
@@ -918,6 +919,79 @@ const {
             return this.toString();
         }
     }
+
+    HttpHeaderDefinition.from = function( pData )
+    {
+        if ( isNonNullObject( pData ) || isArray( pData ) )
+        {
+            if ( pData instanceof HttpHeaderDefinition )
+            {
+                return pData;
+            }
+
+            if ( isPopulatedObject( pData ) && !isBlank( pData.name ) )
+            {
+                return new HttpHeaderDefinition( pData.name, pData.description || pData.name, pData.category || _mt );
+            }
+            else if ( isArray( pData ) )
+            {
+                let arr = asArray( pData ).filter( e => !isNull( e ) && (isString( e ) || (isPopulatedObject( e ) && (e instanceof HttpHeaderDefinition || !isBlank( e.name )))) );
+
+                if ( $ln( arr ) > 0 )
+                {
+                    if ( arr.every( e => isString( e ) ) )
+                    {
+                        return new HttpHeaderDefinition( arr[0], arr[1] || arr[0], arr[2] || _mt );
+                    }
+                    else if ( arr[0] instanceof HttpHeaderDefinition )
+                    {
+                        return arr[0];
+                    }
+                    else if ( isPopulatedObject( arr[0] ) && !isBlank( arr[0]?.name ) )
+                    {
+                        return new HttpHeaderDefinition( arr[0].name, arr[0].description || arr[0].name, arr[0].category || _mt );
+                    }
+                    else
+                    {
+                        let obj = arr.find( e => isPopulatedObject( e ) && e instanceof HttpHeaderDefinition );
+                        if ( !isNull( obj ) )
+                        {
+                            return obj;
+                        }
+                        obj = arr.find( e => isPopulatedObject( e ) && !isBlank( e.name ) );
+                        if ( !isNull( obj ) )
+                        {
+                            return HttpHeaderDefinition.from( obj );
+                        }
+
+                        let index = arr.findIndex( e => isString( e ) && !isBlank( e ) );
+
+                        return new HttpHeaderDefinition( arr[index], arr[index + 1] || arr[index], arr[index + 2] || _mt );
+                    }
+                }
+            }
+        }
+        else if ( isString( pData ) )
+        {
+            if ( isJson( pData ) )
+            {
+                let obj = attempt( () => asObject( pData ) );
+                if ( isPopulatedObject( obj ) )
+                {
+                    return HttpHeaderDefinition.from( obj );
+                }
+            }
+            if ( !isBlank( pData ) )
+            {
+                let arr = asString( pData, true ).split( /[,:]/ ).filter( e => !isBlank( e ) ).map( e => asString( e, true ) );
+
+                let httpHeaderDef = HttpHeaderDefinition[asString( arr[0], true )] || HttpHeaderDefinition[lcase( asString( arr[0], true ) )];
+
+                return httpHeaderDef || new HttpHeaderDefinition( arr[0], (arr[1] || arr[0]), (arr[2] || _mt) );
+            }
+        }
+        return null;
+    };
 
     HttpHeaderDefinition.NEXT_ID = 0;
     HttpHeaderDefinition.nextId = function()
@@ -1165,23 +1239,34 @@ const {
 
         constructor( pDefinition, pValue )
         {
-            this.#definition = pDefinition;
+            this.#definition = HttpHeaderDefinition.from( pDefinition );
             this.#value = pValue;
         }
 
         get definition()
         {
-            return this.#definition;
+            return HttpHeaderDefinition.from( this.#definition );
         }
 
         get value()
         {
-            return this.#value;
+            return asString( this.#value, true );
         }
 
         get name()
         {
-            return this.definition?.name || asString( this.definition );
+            return asString( this.definition?.name || asString( this.definition ), true );
+        }
+
+        toString()
+        {
+            // RFC 7230 format
+            return asString( this.name, true ) + ": " + asString( this.value, true ) + "\r\n";
+        }
+
+        toJSON()
+        {
+            return `{"${this.name}":"${this.value}}`;
         }
     }
 

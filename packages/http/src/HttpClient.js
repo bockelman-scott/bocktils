@@ -344,6 +344,19 @@ const { _ud = "undefined", $scope } = constants;
             this.#rejectUnauthorized = !!pRejectUnauthorized;
         }
 
+        equals( pOther )
+        {
+            if ( isNonNullObject( pOther ) )
+            {
+                return (pOther.keepAlive === this.keepAlive) &&
+                       (pOther.keepAliveMsecs === this.keepAliveMsecs) &&
+                       (pOther.maxFreeSockets === this.maxFreeSockets) &&
+                       (( !isFinite( pOther.maxTotalSockets ) && !isFinite( this.maxTotalSockets )) || (pOther.maxTotalSockets === this.maxTotalSockets)) &&
+                       (pOther.rejectUnauthorized === this.rejectUnauthorized);
+            }
+            return false;
+        }
+
         get keepAlive()
         {
             return !!this.#keepAlive;
@@ -408,21 +421,62 @@ const { _ud = "undefined", $scope } = constants;
     // for the http and http agents using the class defaults
     const httpAgentConfig = new HttpAgentConfig();
 
-    // create a global instance of http.Agent (and then convert it to an object literal)
+    // create a global instance of http.Agent using the default HttpAgentConfig
     const httpAgent = new http.Agent( httpAgentConfig.toObjectLiteral() );
 
-    // create a global instance of https.Agent (and then convert it to an object literal)
+    // create a global instance of https.Agent using the default HttpAgentConfig
     const httpsAgent = new https.Agent( httpAgentConfig.toObjectLiteral() );
+
+    HttpAgentConfig.getDefault = function()
+    {
+        return httpAgentConfig;
+    };
+
+    HttpAgentConfig.resolveAgentConfig = function( pAgentConfig )
+    {
+        if ( isNonNullObject( pAgentConfig ) )
+        {
+            if ( pAgentConfig instanceof HttpAgentConfig )
+            {
+                return pAgentConfig;
+            }
+
+            const defaultConfig = HttpAgentConfig.getDefault();
+
+            return new HttpAgentConfig( pAgentConfig?.keepAlive ?? defaultConfig.keepAlive,
+                                        pAgentConfig?.keepAliveMsecs ?? defaultConfig.keepAliveMsecs,
+                                        pAgentConfig?.maxFreeSockets ?? defaultConfig.maxFreeSockets,
+                                        pAgentConfig?.maxTotalSockets ?? defaultConfig.maxTotalSockets,
+                                        pAgentConfig?.rejectUnauthorized ?? defaultConfig.rejectUnauthorized ) || defaultConfig;
+        }
+        return HttpAgentConfig.getDefault();
+    };
+
+    function resolveHttpAgent( pAgent, pAgentConfig = httpAgentConfig )
+    {
+        return isNull( pAgent ) || !(pAgent instanceof http.Agent) ? new http.Agent( HttpAgentConfig.resolveAgentConfig( pAgentConfig || httpAgentConfig ).toObjectLiteral() ) : pAgent;
+    }
+
+    function resolveHttpsAgent( pAgent, pAgentConfig = httpAgentConfig )
+    {
+        return isNull( pAgent ) || !(pAgent instanceof https.Agent) ? new https.Agent( HttpAgentConfig.resolveAgentConfig( pAgentConfig || httpAgentConfig ).toObjectLiteral() ) : pAgent;
+    }
 
     /**
      * This function is used to ensure that no configuration
      * has inadvertently replaced the http and/or https Agents with object literals.
      *
-     * @param {Object} pConfig  the configuration to examine (and repair, if necessary)
+     * This can happen if configurations are "merged"
+     * using Object.assign or object spread syntax (e.g., {...cfg1, ...cfg2})
      *
-     * @returns {Object}        the same configuration object specified,
-     *                          but with the http and http agent properties corrected, if necessary,
-     *                          to hold actual instances of http.Agent or https.Agent.
+     * We try to respect any configuration settings the original agents had,
+     * but if that is not plausible, we set the agents to the defaults as defined in this module.
+     *
+     * @param {Object|HttpConfig} pConfig  the configuration to examine (and repair, if necessary)
+     *
+     * @returns {Object|HttpConfig}        the same configuration object specified,
+     *                                     but with the http and http agent properties corrected, if necessary,
+     *                                     to hold actual instances of http.Agent or https.Agent.
      */
     function fixAgents( pConfig )
     {
@@ -431,38 +485,43 @@ const { _ud = "undefined", $scope } = constants;
             return { httpAgent, httpsAgent };
         }
 
+        // reset the property to be an instance of http.Agent
+        // we expect the variable, httpAgent, to hold an instance of http.Agent,
+        // but if it is null or undefined or has been replaced with an object literal, a new instance is created
         if ( (isNull( pConfig.httpAgent ) || !(pConfig.httpAgent instanceof http.Agent)) )
         {
-            // reset the property to be an instance of http.Agent
-            // we expect the variable, httpAgent, to hold an instance of http.Agent,
-            // but if it is null or undefined, a new instance is created
-            pConfig.httpAgent = httpAgent || new http.Agent( httpAgentConfig.toObjectLiteral() );
+            if ( isNonNullObject( pConfig.httpAgent ) )
+            {
+                const defaultAgentCfg = HttpAgentConfig.getDefault();
+                const agentConfig = HttpAgentConfig.resolveAgentConfig( pConfig.httpAgent || defaultAgentCfg );
+                const agent = (agentConfig instanceof HttpAgentConfig) ? (agentConfig.equals( defaultAgentCfg ) ? httpAgent : (new http.Agent( agentConfig.toObjectLiteral() ) || httpAgent)) : httpAgent;
+                pConfig.httpAgent = agent || httpAgent || new http.Agent( httpAgentConfig.toObjectLiteral() );
+            }
+            else
+            {
+                pConfig.httpAgent = httpAgent || new http.Agent( httpAgentConfig.toObjectLiteral() );
+            }
         }
 
+        // reset the property to be an instance of https.Agent
+        // we expect the variable, httpsAgent, to hold an instance of https.Agent,
+        // but if it is null or undefined or has been replaced with an object literal, a new instance is created
         if ( (isNull( pConfig.httpsAgent ) || !(pConfig.httpsAgent instanceof https.Agent)) )
         {
-            // reset the property to be an instance of https.Agent
-            // we expect the variable, httpsAgent, to hold an instance of https.Agent,
-            // but if it is null or undefined, a new instance is created
-            pConfig.httpsAgent = httpsAgent || new https.Agent( httpAgentConfig.toObjectLiteral() );
+            if ( isNonNullObject( pConfig.httpsAgent ) )
+            {
+                const defaultAgentCfg = HttpAgentConfig.getDefault();
+                const agentConfig = HttpAgentConfig.resolveAgentConfig( pConfig.httpsAgent || defaultAgentCfg );
+                const agent = (agentConfig instanceof HttpAgentConfig) ? (agentConfig.equals( defaultAgentCfg ) ? httpsAgent : (new https.Agent( agentConfig.toObjectLiteral() ) || httpsAgent)) : httpsAgent;
+                pConfig.httpsAgent = agent || httpsAgent || new https.Agent( httpAgentConfig.toObjectLiteral() );
+            }
+            else
+            {
+                pConfig.httpsAgent = httpsAgent || new https.Agent( httpAgentConfig.toObjectLiteral() );
+            }
         }
 
         return pConfig;
-    }
-
-    HttpAgentConfig.getDefault = function()
-    {
-        return httpAgentConfig;
-    };
-
-    function resolveHttpAgent( pAgent )
-    {
-        return isNull( pAgent ) || !(pAgent instanceof http.Agent) ? new http.Agent( httpAgentConfig.toObjectLiteral() ) : pAgent;
-    }
-
-    function resolveHttpsAgent( pAgent )
-    {
-        return isNull( pAgent ) || !(pAgent instanceof https.Agent) ? new https.Agent( httpAgentConfig.toObjectLiteral() ) : pAgent;
     }
 
     HttpAgentConfig.fixAgents = fixAgents;
@@ -512,13 +571,13 @@ const { _ud = "undefined", $scope } = constants;
 
             this.#headers = { ...(properties?.headers || {}), ...(pHeaders || pProperties?.headers || {}) };
 
-            let url = asString( pUrl, true );
+            let url = asString( (pUrl || properties?.url), true );
 
             this.#url = !isBlank( url ) ? cleanUrl( url ) : _mt;
 
-            this.#method = resolveHttpMethod( pMethod );
+            this.#method = resolveHttpMethod( pMethod || properties?.method );
 
-            const definedProperties = ["properties", ...httpConfigProperties];
+            const definedProperties = ["properties", "class", ...httpConfigProperties];
 
             const entries = objectEntries( asObject( this.#properties || {} ) );
             entries.forEach( entry =>
@@ -544,8 +603,10 @@ const { _ud = "undefined", $scope } = constants;
                                  }
                              } );
 
-            this.httpAgent = resolveHttpAgent( properties["httpAgent"] || httpAgent, httpAgent );
-            this.httpsAgent = resolveHttpsAgent( properties["httpsAgent"] || httpsAgent, httpsAgent );
+            this.httpAgent = resolveHttpAgent( (properties["httpAgent"] || httpAgent), (properties["httpAgentConfig"] || properties["httpAgent"] || httpAgentConfig) );
+            this.httpsAgent = resolveHttpsAgent( (properties["httpsAgent"] || httpsAgent), (properties["httpAgentConfig"] || properties["httpsAgent"] || httpAgentConfig) );
+
+            fixAgents( this );
         }
 
         static get [Symbol.species]()
@@ -611,6 +672,18 @@ const { _ud = "undefined", $scope } = constants;
                                          }
                                      } );
                 }
+            }
+        }
+
+        get httpHeaders()
+        {
+            if ( this.#headers instanceof HttpHeaders )
+            {
+                return this.#headers.clone();
+            }
+            else
+            {
+                return new HttpHeaders( this.headers );
             }
         }
 
@@ -709,6 +782,24 @@ const { _ud = "undefined", $scope } = constants;
 
             for( let cfg of configs )
             {
+                /*
+                 let entries = objectEntries( cfg );
+
+                 attempt( () => entries.forEach( entry =>
+                 {
+                 let key = ObjectEntry.getKey( entry );
+
+                 if ( "properties" !== lcase( key ) && !httpConfigProperties.includes( key ) )
+                 {
+                 let value = ObjectEntry.getValue( entry ) || this[key];
+
+                 if ( isWritable( this[key] ) )
+                 {
+                 attemptSilent( () => this[key] = value || this[key] );
+                 }
+                 }
+                 } ) );
+                 */
                 this.url = !isBlank( cfg.url ) ? (cleanUrl( cfg.url ) || this.url) : this.url;
                 this.method = resolveHttpMethod( cfg.method || this.method ) || this.method;
                 this.httpAgent = resolveHttpAgent( cfg.httpAgent || this.httpAgent ) || this.httpAgent;
@@ -734,6 +825,8 @@ const { _ud = "undefined", $scope } = constants;
                     }
                 }
             }
+
+            fixAgents( this );
 
             return this;
         }
@@ -794,7 +887,7 @@ const { _ud = "undefined", $scope } = constants;
             }
         }
 
-        return isHttpConfig( httpConfig ) ? httpConfig : null;
+        return isHttpConfig( httpConfig ) ? fixAgents( httpConfig ) : null;
     };
 
     const toHttpConfigLiteral = function( pHttpConfig )
@@ -805,9 +898,9 @@ const { _ud = "undefined", $scope } = constants;
         {
             if ( isHttpConfig( httpConfig, true ) )
             {
-                return isFunction( httpConfig.toLiteral ) ? { ...(asObject( httpConfig.toLiteral() )) } : { ...(toObjectLiteral( asObject( httpConfig ) )) };
+                return fixAgents( (isFunction( httpConfig.toLiteral ) ? { ...(asObject( httpConfig.toLiteral() )) } : { ...(toObjectLiteral( asObject( httpConfig ) )) }) );
             }
-            return { ...(asObject( httpConfig )) };
+            return fixAgents( { ...(asObject( httpConfig )) } );
         }
 
         return new HttpConfig( httpConfig, (httpConfig?.headers || httpConfig), httpConfig?.url, httpConfig?.method );
@@ -1250,7 +1343,7 @@ const { _ud = "undefined", $scope } = constants;
                                  {
                                      if ( isNull( config[key] ) )
                                      {
-                                         config[key] = cfgValue || config[key];
+                                         attemptSilent( () => config[key] = cfgValue || config[key] );
                                          if ( isNull( config[key] ) && !descriptor?.required )
                                          {
                                              attempt( () => delete config[key] );
@@ -1259,7 +1352,7 @@ const { _ud = "undefined", $scope } = constants;
                                      else if ( isNonNullObject( config[key] ) )
                                      {
                                          let cfgObject = isNonNullObject( cfgValue ) ? cfgValue : {};
-                                         config[key] = { ...(cfgObject || {}), ...(config[key]) };
+                                         attemptSilent( () => config[key] = { ...(cfgObject || {}), ...(config[key]) } );
                                      }
                                  }
                              } );

@@ -2706,7 +2706,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     {
         let entries = pEntries || [];
 
-        const objectType = pObjectType || "literal";
+        const objectType = _lcase( pObjectType || "literal" );
 
         switch ( objectType )
         {

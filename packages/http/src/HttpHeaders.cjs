@@ -28,12 +28,7 @@ const httpConstants = require( "./HttpConstants.cjs" );
 const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
 // get the 2 constants we will use immediately inside the IIFE closure
-const {
-    _ud = "undefined", $scope = constants?.$scope || function()
-    {
-        return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
-    }
-} = constants;
+const { _ud = "undefined", $scope } = constants;
 
 // noinspection FunctionTooLongJS
 (function exposeModule()
@@ -435,7 +430,7 @@ const {
             {
                 try
                 {
-                    if ( !isNull( this.#webApiHeaders ) && (isKeyValueArray( options ) || isPopulatedObject( options ) || implementsInterface( options, Headers )) )
+                    if ( !isNull( this.#webApiHeaders ) && (isKeyValueArray( options ) || isPopulatedObject( options ) || (_ud !== typeof Headers && implementsInterface( options, Headers ))) )
                     {
                         this.#webApiHeaders = new Headers( options );
                     }
@@ -446,7 +441,7 @@ const {
                 }
             }
 
-            let entries = attempt( () => objectEntries( processHeaderOptions( options ) ) ) || (isFunction( options?.entries ) ? attempt( () => options.entries() ) : options);
+            let entries = attempt( () => objectEntries( processHeaderOptions( options ) ) ) || (isFunction( options?.entries ) ? attempt( () => [...(options.entries())] ) : options);
 
             if ( !isNull( entries ) && isIterable( entries ) )
             {
@@ -611,6 +606,48 @@ const {
             return new HttpHeaders( this.toLiteral() );
         }
 
+        merge( ...pHeaders )
+        {
+            let copy = this.clone();
+
+            let headers = asArray( pHeaders ).filter( e => !isNull( e ) && (isKeyValueArray( e ) || isPopulatedObject( e )) );
+
+            for( let obj of headers )
+            {
+                if ( isKeyValueArray( obj ) )
+                {
+                    for( let kv of asArray( obj ) )
+                    {
+                        let key = kv[0];
+                        let value = kv[1] || kv[0];
+
+                        if ( !isBlank( key ) && (isHeader( key ) || isHeader( lcase( key ) )) )
+                        {
+                            attempt( () => copy.set( key, value ) );
+                        }
+                    }
+                }
+                else if ( isPopulatedObject( obj ) )
+                {
+                    let entries = attempt( () => objectEntries( obj ) ) || ((obj instanceof this.constructor || isFunction( obj.entries )) ? [...(obj.entries())] : []);
+
+                    entries.forEach( entry =>
+                                     {
+                                         let key = asString( ObjectEntry.getKey( entry ), true );
+                                         let value = asString( ObjectEntry.getValue( entry ), true ) || key;
+
+                                         if ( !isBlank( key ) && (isHeader( key ) || isHeader( lcase( key ) )) )
+                                         {
+                                             copy.set( key, value );
+                                         }
+                                     } );
+
+                }
+            }
+
+            return copy;
+        }
+
         toString()
         {
             let s = _mt_str;
@@ -624,7 +661,7 @@ const {
                 const key = asString( ObjectEntry.getKey( entry ), true );
                 const value = asString( ObjectEntry.getValue( entry ) );
 
-                s += (key + ":" + isArray( value ) ? asArray( value ).join( ", " ) : asString( value ) + "\n");
+                s += (key + ": " + isArray( value ) ? asArray( value ).join( ", " ) : asString( value ) + "\r\n");
             }
 
             return asString( s );
