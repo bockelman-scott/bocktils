@@ -569,7 +569,11 @@ const { _ud = "undefined", $scope } = constants;
 
             this.#properties = { ...(properties || {}) };
 
-            this.#headers = { ...(properties?.headers || {}), ...(pHeaders || pProperties?.headers || {}) };
+            this.#headers = new HttpHeaders( pHeaders || this.#properties?.headers || {} );
+            if ( isNonNullObject( this.#properties?.headers ) )
+            {
+                this.#headers = this.#headers.merge( this.properties.headers, pHeaders );
+            }
 
             let url = asString( (pUrl || properties?.url), true );
 
@@ -621,9 +625,33 @@ const { _ud = "undefined", $scope } = constants;
 
         get headers()
         {
-            return (isNonNullObject( this.#headers ) && isFunction( this.#headers.clone )) ?
-                { ...(toObjectLiteral( this.#headers.clone() )) } :
-                { ...(asObject( this.#headers || {} )) };
+            let headers = this.#headers || this.#properties?.headers;
+
+            if ( isNonNullObject( headers ) )
+            {
+                let copy = isFunction( headers.clone ) ? headers.clone() : { ...(asObject( headers )) };
+
+                if ( isFunction( copy?.toLiteral ) )
+                {
+                    return copy.toLiteral();
+                }
+                return { ...(toObjectLiteral( asObject( headers || {} ) )) };
+            }
+
+            if ( isNonNullObject( this.#properties?.headers ) )
+            {
+                headers = this.#properties?.headers;
+
+                let copy = isFunction( headers.clone ) ? headers.clone() : { ...(asObject( headers )) };
+
+                if ( isFunction( copy?.toLiteral ) )
+                {
+                    return copy.toLiteral();
+                }
+                return { ...(toObjectLiteral( asObject( headers || {} ) )) };
+            }
+
+            return {};
         }
 
         get baseHeaders()
@@ -763,7 +791,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             let obj =
                 {
-                    properties: { ...(asObject( this.#properties )) },
+                    properties: { ...(asObject( this.#properties || {} )) },
                     headers: { ...(asObject( toObjectLiteral( this.headers ) )) },
                     url: this.url,
                     method: this.method,
@@ -772,6 +800,19 @@ const { _ud = "undefined", $scope } = constants;
                     data: this.data,
                     body: this.body
                 };
+
+            let entries = objectEntries( obj.properties );
+
+            for( let entry of entries )
+            {
+                let key = ObjectEntry.getKey( entry );
+                let value = ObjectEntry.getValue( entry );
+
+                if ( !isNull( value ) )
+                {
+                    obj[key] = obj[key] || value;
+                }
+            }
 
             return lock( obj );
         }
@@ -821,7 +862,7 @@ const { _ud = "undefined", $scope } = constants;
                         let otherHeaders = asObject( cfg.headers );
                         otherHeaders = isFunction( otherHeaders.toLiteral ) ? otherHeaders.toLiteral() : toObjectLiteral( otherHeaders );
 
-                        this.headers = { ...asObject( this.#headers || {} ), ...(asObject( otherHeaders )) };
+                        this.headers = { ...(asObject( this.#headers || {} )), ...(asObject( otherHeaders )) };
                     }
                 }
             }
@@ -892,7 +933,8 @@ const { _ud = "undefined", $scope } = constants;
 
     const toHttpConfigLiteral = function( pHttpConfig )
     {
-        let httpConfig = isHttpConfig( pHttpConfig ) ? pHttpConfig : { ...(asObject( pHttpConfig || {} )) };
+        let httpConfig = isHttpConfig( pHttpConfig ) ? pHttpConfig :
+            { ...(asObject( (isFunction( pHttpConfig?.toLiteral ) ? pHttpConfig.toLiteral() : pHttpConfig || {}) )) };
 
         if ( isNonNullObject( httpConfig ) )
         {
