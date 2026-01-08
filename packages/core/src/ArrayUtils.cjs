@@ -1632,6 +1632,20 @@ const { _ud = "undefined", $scope } = constants;
         return Filters.makeMatchesAllFilter( ...(functions || [Filters.IDENTITY]) );
     };
 
+    const toShuffled = function( pArray )
+    {
+        let arr = [...(asArray( pArray ))];
+
+        for( let i = $ln( arr ); i--; )
+        {
+            const j = Math.floor( Math.random() * (i + 1) );
+            [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+
+        return arr;
+    };
+
+
     /**
      * This is a collection of functions
      * <i>and functions that return a function</i>
@@ -5929,6 +5943,7 @@ const { _ud = "undefined", $scope } = constants;
             toTrimmedNonEmptyStrings,
             toTrimmedNonBlankStrings,
             toKeys,
+            toShuffled,
             createExclusiveFilter,
             createInclusiveFilter,
             extractScalar,

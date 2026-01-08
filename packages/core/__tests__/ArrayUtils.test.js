@@ -17,7 +17,8 @@ const {
     includesAll,
     includesAny,
     unique,
-    distinct
+    distinct,
+    toShuffled
 } = arrayUtils;
 
 const { moduleUtils, constants, stringUtils } = dependencies;
@@ -2620,4 +2621,26 @@ describe( "distinct", () =>
           } );
 
 
+} );
+
+
+describe( "toShuffled", () =>
+{
+    test( "shuffle [1,2,3,4,5]",
+          () =>
+          {
+              let a = [1, 2, 3, 4, 5];
+
+              let b = toShuffled( a );
+
+              let c = toShuffled ( a );
+
+              // console.log( a, b );
+
+              expect( a ).not.toEqual( b );
+              expect( a ).not.toEqual( c );
+              expect( c ).not.toEqual( b );
+
+
+          } );
 } );
