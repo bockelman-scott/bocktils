@@ -1286,7 +1286,7 @@ const {
      * @param pHeader
      * @returns {boolean|boolean|*}
      */
-    const isHeader = ( pHeader ) => pHeader instanceof HttpHeaderDefinition || Object.keys( HttpHeaderDefinition ).map( lcase ).includes( lcase( asString( pHeader, true ) ) ) || ucase( asString( pHeader, true ) ).startsWith( "X-" );
+    const isHeader = ( pHeader ) => pHeader instanceof HttpHeaderDefinition || ( !isBlank(asString( pHeader, true )) && (Object.keys( HttpHeaderDefinition ).map( lcase ).includes( lcase( asString( pHeader, true ) ) ) || ucase( asString( pHeader, true ) ).startsWith( "X-" )));
 
     HttpHeader.isHeader = isHeader;
 
