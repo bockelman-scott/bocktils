@@ -267,7 +267,7 @@ const { _ud = "undefined", $scope } = constants;
 
     const { ResponseData, streamToFile } = responseDataModule;
 
-    const { HttpHeaders, HttpRequestHeaders, HttpResponseHeaders } = httpHeaders;
+    const { HttpHeaders, HttpRequestHeaders, HttpResponseHeaders, resolveHeaderName, resolveHeaderValue } = httpHeaders;
 
     // import the HttpRequest (facade) class we use to provide a uniform interface for HTTP Requests
     const { HttpRequest, cloneRequest } = httpRequestModule;
@@ -668,7 +668,7 @@ const { _ud = "undefined", $scope } = constants;
 
         set headers( pValue )
         {
-            this.#headers = asObject( pValue );
+            this.#headers = new HttpHeaders( pValue );
         }
 
         addHeaders( pValue )
@@ -684,8 +684,9 @@ const { _ud = "undefined", $scope } = constants;
                     const entries = objectEntries( pValue );
                     entries.forEach( entry =>
                                      {
-                                         const key = asString( ObjectEntry.getKey( entry ), true );
-                                         const value = asString( ObjectEntry.getValue( entry ), true );
+                                         const key = resolveHeaderName( ObjectEntry.getKey( entry ) );
+                                         const value = resolveHeaderValue( ObjectEntry.getValue( entry ) );
+
                                          if ( isFunction( this.#headers.append ) )
                                          {
                                              attempt( () => this.#headers.append( key, value ) );
@@ -805,14 +806,34 @@ const { _ud = "undefined", $scope } = constants;
 
             for( let entry of entries )
             {
-                let key = ObjectEntry.getKey( entry );
+                let key = asString( ObjectEntry.getKey( entry ), true );
                 let value = ObjectEntry.getValue( entry );
 
-                if ( !isNull( value ) )
+                if ( !(isNull( value ) || isBlank( key )) )
                 {
-                    obj[key] = obj[key] || value;
+                    obj[key] = (obj[key] || value);
                 }
             }
+
+            entries = objectEntries( asObject( obj.headers || {} ) );
+
+            let headers = {};
+
+            entries.forEach( entry =>
+                             {
+                                 let key = asString( ObjectEntry.getKey( entry ), true );
+
+                                 if ( !isBlank( key ) && !(["class"].includes( key )) )
+                                 {
+                                     let value = asString( ObjectEntry.getValue( entry ), true );
+                                     if ( !isBlank( value ) )
+                                     {
+                                         headers[key] = value;
+                                     }
+                                 }
+                             } );
+
+            obj.headers = asObject( headers );
 
             return lock( obj );
         }
@@ -823,24 +844,6 @@ const { _ud = "undefined", $scope } = constants;
 
             for( let cfg of configs )
             {
-                /*
-                 let entries = objectEntries( cfg );
-
-                 attempt( () => entries.forEach( entry =>
-                 {
-                 let key = ObjectEntry.getKey( entry );
-
-                 if ( "properties" !== lcase( key ) && !httpConfigProperties.includes( key ) )
-                 {
-                 let value = ObjectEntry.getValue( entry ) || this[key];
-
-                 if ( isWritable( this[key] ) )
-                 {
-                 attemptSilent( () => this[key] = value || this[key] );
-                 }
-                 }
-                 } ) );
-                 */
                 this.url = !isBlank( cfg.url ) ? (cleanUrl( cfg.url ) || this.url) : this.url;
                 this.method = resolveHttpMethod( cfg.method || this.method ) || this.method;
                 this.httpAgent = resolveHttpAgent( cfg.httpAgent || this.httpAgent ) || this.httpAgent;
