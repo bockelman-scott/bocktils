@@ -79,7 +79,18 @@ const { _ud = "undefined", $scope } = constants;
 
     // get the classes and functions we use from moduleUtils,
     // including the ToolBocksModule class which is instantiated and returned from this closure
-    const { ToolBocksModule, ObjectEntry, IllegalStateError, attempt, objectEntries, lock, no_op, $ln } = moduleUtils;
+    const
+        {
+            ToolBocksModule,
+            ObjectEntry,
+            IllegalStateError,
+            attempt,
+            attemptSilent,
+            objectEntries,
+            lock,
+            no_op,
+            $ln
+        } = moduleUtils;
 
     // imports constants for the empty string, allowing for more readable use of these string literals
     const { _mt_str = "", _mt = _mt_str } = constants;
@@ -102,14 +113,14 @@ const { _ud = "undefined", $scope } = constants;
         } = typeUtils;
 
     // imports useful functions for safer string manipulation
-    const { asString, isBlank, isJson, lcase } = stringUtils;
+    const { asString, asInt, isBlank, isJson, lcase } = stringUtils;
 
     const { asArray } = arrayUtils;
 
     const { asJson, asObject, parseJson } = jsonUtils;
 
     // imports useful constants and functions related to HTTP request and response headers
-    const { isHeader } = httpConstants;
+    const { HttpHeader, isHeader } = httpConstants;
 
     /**
      * This is the name of this module, which can be displayed in logs or messages written to the console
@@ -191,6 +202,10 @@ const { _ud = "undefined", $scope } = constants;
      */
     const FORBIDDEN_RESPONSE_HEADERS = lock( [...FORBIDDEN_RESPONSE_HEADER_NAMES, ...(FORBIDDEN_RESPONSE_HEADER_NAMES.map( e => e.toLowerCase() ))] );
 
+    const MAX_HEADER_KEY_LENGTH = 256;
+    const MAX_HEADER_VALUE_LENGTH = 4_096;
+    const MAX_HEADERS_LENGTH = 8_192;
+
     /**
      * Determines if the provided object is a valid Web API Headers object
      * or is compatible with that specification.
@@ -216,6 +231,24 @@ const { _ud = "undefined", $scope } = constants;
                 isFunction( pObject?.keys ) &&
                 isFunction( pObject?.set ) &&
                 isFunction( pObject?.values ));
+    }
+
+    function resolveHeaderName( pKey )
+    {
+        let key = ((isString( pKey ) && $ln( asString( pKey, true ) <= MAX_HEADER_KEY_LENGTH )) ? asString( pKey, true ) : (isPopulatedObject( pKey ) ? asString( pKey?.name || pKey?.key, true ) : (isArray( pKey ) && $ln( pKey ) > 0 ? pKey[0] : _mt)));
+
+        key = (isString( key ) && $ln( asString( key, true ) <= MAX_HEADER_KEY_LENGTH )) ? asString( pKey, true ) : _mt;
+
+        return asString( key, true ).slice( 0, MAX_HEADER_KEY_LENGTH ).trim();
+    }
+
+    function resolveHeaderValue( pValue, pKey )
+    {
+        let key = resolveHeaderName( pKey || pValue );
+
+        let value = isString( pValue ) ? (asString( pValue || key, true ) || key) : (isPopulatedObject( pKey ) ? (pKey.value || (isPopulatedObject( pValue ) ? pValue.value : isArray( pKey ) && $ln( pKey ) > 1 ? pKey[1] : isArray( pValue ) ? asArray( pValue ).map( e => resolveHeaderValue( e ) ).join( ", " ) : _mt)) : _mt) || key;
+
+        return asString( value, true ).slice( 0, MAX_HEADER_VALUE_LENGTH ).trim();
     }
 
     /**
@@ -283,7 +316,7 @@ const { _ud = "undefined", $scope } = constants;
 
         let map = new Map();
 
-        const entries = attempt( () => objectEntries( input ).filter( ( entry ) => isHeader( asString( (ObjectEntry.getKey( entry ) || entry[0]), true ) ) ) );
+        const entries = attempt( () => objectEntries( input ).filter( ( entry ) => isHeader( resolveHeaderName( ObjectEntry.getKey( entry ) || entry[0] ) ) ) );
 
         if ( entries && isIterable( entries ) )
         {
@@ -291,12 +324,12 @@ const { _ud = "undefined", $scope } = constants;
             {
                 if ( !isNull( entry ) )
                 {
-                    const key = asString( (ObjectEntry.getKey( entry ) || entry[0]), true );
-                    const value = asString( (ObjectEntry.getValue( entry ) || entry[1] || key), true ) || key;
+                    const key = resolveHeaderName( ObjectEntry.getKey( entry ) || entry[0] );
+                    const value = resolveHeaderValue( ObjectEntry.getValue( entry ) || entry[1] || key );
 
-                    const existing = map.get( key ) || map.get( lcase( key ) ) || _mt_str;
+                    const existing = resolveHeaderValue( map.get( key ) || map.get( lcase( key ) ) || _mt_str );
 
-                    map.set( key, ((existing && !isBlank( existing ) ? (existing + ", ") : _mt_str) + value) || value );
+                    attempt( () => map.set( key, (((existing && !isBlank( existing ) && !existing.includes( value )) ? (existing + ", ") : _mt_str) + value) || value ) );
                 }
             }
         }
@@ -318,14 +351,9 @@ const { _ud = "undefined", $scope } = constants;
                                             {
                                                 if ( entry )
                                                 {
-                                                    const key = asString( (ObjectEntry.getKey( entry ) || entry[0]), true );
-
-                                                    const value = asString( (ObjectEntry.getValue( entry ) || entry[1] || key), true ) || key;
-
-                                                    if ( key && value )
-                                                    {
-                                                        attempt( () => headers.append( key, value ) );
-                                                    }
+                                                    const key = ObjectEntry.getKey( entry ) || entry[0];
+                                                    const value = ObjectEntry.getValue( entry ) || entry[1] || key;
+                                                    attempt( () => headers.append( key, value ) );
                                                 }
                                             } ) );
 
@@ -381,7 +409,7 @@ const { _ud = "undefined", $scope } = constants;
             }
             else
             {
-                return attempt( () => processHeadersArray( asString( pOptions, true ).split( /(\r?\n)+/ ).map( e => asString( e, true ).split( /:=/ ) ) ) );
+                return attempt( () => processHeadersArray( asString( pOptions, true ).split( /(\r?\n)+/ ).map( e => asString( e, true ).split( /:/ ) ) ) );
             }
         }
 
@@ -422,8 +450,6 @@ const { _ud = "undefined", $scope } = constants;
         {
             super();
 
-            const me = this;
-
             let options = isNull( pOptions ) ? {} : (isArray( pOptions ) ? asArray( pOptions || [] ) : asObject( pOptions || {} ));
 
             if ( !isNull( options ) )
@@ -449,44 +475,98 @@ const { _ud = "undefined", $scope } = constants;
                                                 {
                                                     if ( entry )
                                                     {
-                                                        const key = attempt( () => ObjectEntry.getKey( entry ) || entry[0] );
-                                                        const value = attempt( () => ObjectEntry.getValue( entry ) || entry[1] ) || key;
-
-                                                        if ( key && value )
-                                                        {
-                                                            const existing = me.get( key ) || me.get( lcase( key ) );
-                                                            const val = (existing ? existing + ", " : _mt) + value;
-
-                                                            attempt( () => me.set( key, val ) );
-                                                            attempt( () => me.#map.set( key, val ) );
-                                                        }
+                                                        attempt( () => this.append( ObjectEntry.getKey( entry ), ObjectEntry.getValue( entry ) ) );
                                                     }
                                                 } ) );
             }
+
+            if ( this.headersLength > MAX_HEADERS_LENGTH )
+            {
+                ToolBocksModule.resolveLogger( toolBocksModule?.logger, console );
+            }
+        }
+
+        #resolveKey( pKey )
+        {
+            return resolveHeaderName( pKey );
+        }
+
+        #resolveValue( pValue, pKey )
+        {
+            return resolveHeaderValue( pValue, pKey );
+        }
+
+        get headersLength()
+        {
+            let len = 0;
+
+            let entries = [...this.#map.entries()];
+
+            for( let entry of entries )
+            {
+                if ( entry )
+                {
+                    let value = ObjectEntry.getValue( entry );
+
+                    if ( value && value instanceof HttpHeader )
+                    {
+                        let s = attempt( () => value.toString() ) || asString( value );
+                        len += $ln( s );
+                    }
+                    else if ( isString( value ) )
+                    {
+                        len += $ln( value );
+                    }
+                    else
+                    {
+                        value = resolveHeaderValue( value, ObjectEntry.getKey( entry ) );
+                        len += $ln( asString( value ) );
+                    }
+                }
+            }
+
+            return asInt( len );
         }
 
         append( pKey, pValue )
         {
             const me = this;
 
-            const key = asString( pKey, true );
-            const value = asString( pValue || key ) || key;
+            let key = this.#resolveKey( pKey || pValue );
 
-            if ( isBlank( key ) || !isHeader( key ) )
+            if ( !isBlank( key ) && isHeader( key ) )
             {
-                return;
+                let value = this.#resolveValue( pValue, pKey );
+
+                if ( !isBlank( value ) && $ln( asString( value ) ) <= MAX_HEADER_VALUE_LENGTH )
+                {
+                    let existing = this.get( key ) || this.get( lcase( key ) ) || this.#map.get( key ) || this.#map.get( lcase( key ) );
+
+                    existing = this.#resolveValue( existing, pKey );
+
+                    if ( !existing.includes( value ) )
+                    {
+                        const val = ((!isBlank( existing ) ? (asString( existing, true ) + ", ") : _mt) + value);
+
+                        let httpHeader = new HttpHeader( key, val );
+
+                        attempt( () => me.set( key, httpHeader ) );
+                        attempt( () => me.#map.set( key, httpHeader ) );
+                    }
+
+                    if ( !isNull( me.#webApiHeaders ) && isFunction( me.#webApiHeaders.append ) )
+                    {
+                        attempt( () => me.#webApiHeaders.append( key, this.#resolveValue( value, pKey ) ) );
+                    }
+                }
             }
-
-            const existing = this.get( key ) || this.get( lcase( key ) );
-
-            attempt( () => me.set( key, (existing ? (asString( existing, true ) + ", ") : _mt) + value ) );
         }
 
         delete( pKey )
         {
             const me = this;
 
-            const key = asString( pKey, true );
+            const key = this.#resolveKey( pKey ) || asString( pKey, true );
 
             if ( isBlank( key ) )
             {
@@ -502,14 +582,17 @@ const { _ud = "undefined", $scope } = constants;
                 attempt( () => !isNull( me.#webApiHeaders ) ? me.#webApiHeaders.delete( lcase( key ) ) : no_op() );
             }
 
-            return attempt( () => super.delete( key ) ) || attempt( () => super.delete( lcase( key ) ) );
+            attempt( () => super.delete( key ) );
+            attempt( () => super.delete( lcase( key ) ) );
+
+            return true;
         }
 
         get( pKey )
         {
             const me = this;
 
-            const key = asString( pKey, true );
+            const key = this.#resolveKey( pKey ) || asString( pKey, true );
 
             if ( isBlank( key ) )
             {
@@ -522,7 +605,9 @@ const { _ud = "undefined", $scope } = constants;
                         attempt( () => me.#map.get( lcase( key ) ) ) ||
                         (!isNull( me.#webApiHeaders ) && isFunction( me.#webApiHeaders.get ) ? (attempt( () => me.#webApiHeaders.get( key ) ) || attempt( () => me.#webApiHeaders.get( lcase( key ) ) )) : null);
 
-            return value || me[key];
+            value = value || me[key];
+
+            return this.#resolveValue( value, pKey );
         }
 
         getSetCookie()
@@ -541,7 +626,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             const me = this;
 
-            const key = asString( pKey, true );
+            const key = this.#resolveKey( pKey ) || asString( pKey, true );
 
             if ( isBlank( key ) )
             {
@@ -559,20 +644,25 @@ const { _ud = "undefined", $scope } = constants;
         {
             const me = this;
 
-            const key = asString( pKey, true );
+            let key = this.#resolveKey( pKey );
 
-            if ( isBlank( key ) )
+            if ( !isBlank( key ) && isHeader( key ) )
             {
-                return false;
-            }
+                let value = this.#resolveValue( pValue, pKey );
 
-            attempt( () => super.set( key, pValue ) );
+                if ( !isBlank( value ) && $ln( asString( value ) ) <= MAX_HEADER_VALUE_LENGTH )
+                {
+                    let httpHeader = new HttpHeader( key, value );
 
-            attempt( () => me.#map.set( key, pValue ) );
+                    attempt( () => super.set( key, httpHeader ) );
 
-            if ( !isNull( me.#webApiHeaders ) && isFunction( me.#webApiHeaders.set ) )
-            {
-                attempt( () => me.#webApiHeaders.set( key, pValue ) );
+                    attempt( () => me.#map.set( key, httpHeader ) );
+                }
+
+                if ( !isNull( me.#webApiHeaders ) && isFunction( me.#webApiHeaders.set ) )
+                {
+                    attempt( () => me.#webApiHeaders.set( key, this.#resolveValue( value ) ) );
+                }
             }
         }
 
@@ -584,19 +674,30 @@ const { _ud = "undefined", $scope } = constants;
 
             let map = this.#map || me.#map || me;
 
-            let entries = attempt( () => objectEntries( me || map ) );
+            let collections = [me || this, map].filter( isNonNullObject );
 
-            if ( entries )
+            for( let collection of collections )
             {
-                entries.forEach( ( [key, value] ) => literal[key] = asString( isArray( value ) ? value.join( ", " ) : value ) );
+                let entries = attempt( () => objectEntries( collection ) );
+
+                if ( entries )
+                {
+                    entries.forEach( entry =>
+                                     {
+                                         let key = this.#resolveKey( ObjectEntry.getKey( entry ) );
+                                         if ( !isBlank( key ) )
+                                         {
+                                             let value = this.#resolveValue( ObjectEntry.getValue( entry ), ObjectEntry.getKey( entry ) );
+                                             if ( !(isNull( value ) || isBlank( asString( value, true ) )) )
+                                             {
+                                                 literal[key] = literal[key] || asString( value, true ).replace( /(\r\n)+$/, _mt );
+                                             }
+                                         }
+                                     } );
+                }
             }
 
-            entries = objectEntries( map );
-
-            if ( entries )
-            {
-                entries.forEach( ( [key, value] ) => literal[key] = literal[key] || (asString( isArray( value ) ? value.join( ", " ) : value )) );
-            }
+            attempt( () => literal[_mt] );
 
             return lock( literal );
         }
@@ -610,7 +711,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             let copy = this.clone();
 
-            let headers = asArray( pHeaders ).filter( e => !isNull( e ) && (isKeyValueArray( e ) || isPopulatedObject( e )) );
+            let headers = asArray( pHeaders ).filter( e => !isNull( e ) && (isKeyValueArray( e ) || isPopulatedObject( e ) || e instanceof this.constructor) );
 
             for( let obj of headers )
             {
@@ -621,25 +722,21 @@ const { _ud = "undefined", $scope } = constants;
                         let key = kv[0];
                         let value = kv[1] || kv[0];
 
-                        if ( !isBlank( key ) && (isHeader( key ) || isHeader( lcase( key ) )) )
-                        {
-                            attempt( () => copy.set( key, value ) );
-                        }
+                        attempt( () => copy.set( key, value ) );
                     }
                 }
-                else if ( isPopulatedObject( obj ) )
+                else if ( isPopulatedObject( obj ) || obj instanceof this.constructor )
                 {
-                    let entries = attempt( () => objectEntries( obj ) ) || ((obj instanceof this.constructor || isFunction( obj.entries )) ? [...(obj.entries())] : []);
+                    let entries = attempt( () => ((obj instanceof this.constructor || isFunction( obj.entries )) ? [...(obj.entries())] : objectEntries( obj )) || [] );
+
+                    entries = ($ln( entries ) <= 0) ? objectEntries( obj ) || [] : entries;
 
                     entries.forEach( entry =>
                                      {
-                                         let key = asString( ObjectEntry.getKey( entry ), true );
-                                         let value = asString( ObjectEntry.getValue( entry ), true ) || key;
+                                         let key = ObjectEntry.getKey( entry );
+                                         let value = ObjectEntry.getValue( entry );
 
-                                         if ( !isBlank( key ) && (isHeader( key ) || isHeader( lcase( key ) )) )
-                                         {
-                                             copy.set( key, value );
-                                         }
+                                         attempt( () => copy.set( key, value ) );
                                      } );
 
                 }
@@ -654,14 +751,14 @@ const { _ud = "undefined", $scope } = constants;
 
             const literal = this.toLiteral();
 
-            const entries = objectEntries( literal || this );
+            const entries = objectEntries( literal ) || [...(asArray( isFunction( this.entries ) ? this.entries() : this.#map.entries() ))];
 
             for( const entry of entries )
             {
-                const key = asString( ObjectEntry.getKey( entry ), true );
-                const value = asString( ObjectEntry.getValue( entry ) );
+                const key = this.#resolveKey( ObjectEntry.getKey( entry ) );
+                const value = this.#resolveValue( ObjectEntry.getValue( entry ) );
 
-                s += (key + ": " + isArray( value ) ? asArray( value ).join( ", " ) : asString( value ) + "\r\n");
+                s += (asString( key, true ) + ": " + (isArray( value ) ? asArray( value ).map( e => this.#resolveValue( e ) ).join( ", " ) : asString( value )) + "\r\n");
             }
 
             return asString( s );
@@ -690,7 +787,7 @@ const { _ud = "undefined", $scope } = constants;
 
     function getHeaderValue( pHeaders, pKey )
     {
-        let key = asString( pKey, true ) || _mt;
+        let key = resolveHeaderName( pKey ) || asString( pKey, true ) || _mt;
 
         if ( isBlank( key ) )
         {
@@ -703,6 +800,8 @@ const { _ud = "undefined", $scope } = constants;
         {
             let value = isFunction( headers.get ) ? headers.get( lcase( key ) ) || headers.get( key ) : headers[lcase( key )] || headers[key];
 
+            value = resolveHeaderValue( value );
+
             if ( isNull( value ) || (isString( value ) && isBlank( value )) || (isArray( value ) && $ln( value ) <= 0) )
             {
                 headers = isFunction( headers.toLiteral ) ? headers.toLiteral() : toObjectLiteral( headers, { keyTransformer: lcase } );
@@ -710,7 +809,7 @@ const { _ud = "undefined", $scope } = constants;
                 value = headers[lcase( key )] || headers[key];
             }
 
-            return ( !isNull( value ) && isArray( value )) ? value.join( ", " ) : asString( value );
+            return ( !isNull( value ) && isArray( value )) ? asArray( value ).map( e => resolveHeaderValue( e ) ).join( ", " ) : asString( value );
         }
 
         return isString( pHeaders ) ? asString( pHeaders, true ) : _mt;
@@ -774,6 +873,8 @@ const { _ud = "undefined", $scope } = constants;
             HttpHeaders,
             HttpRequestHeaders,
             HttpResponseHeaders,
+            resolveHeaderName,
+            resolveHeaderValue,
             getHeaderValue
         };
 
