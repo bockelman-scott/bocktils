@@ -457,7 +457,7 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
 
                     const options = { ...(asObject( opts ) || config || {}) };
 
-                    const source = (_ud !== typeof Response && pResponse instanceof Response) ? pResponse : attempt( () => HttpResponse.resolveResponse( (pResponse || options), options ) );
+                    const source = (_ud !== typeof Response && pResponse instanceof Response) ? pResponse : attempt( () => HttpResponse.resolveResponse( (pResponse || options), options ) ) || asObject( pResponse );
 
                     // Some frameworks return the response as a property of an error returned in place of a response.
                     // See https://axios-http.com/docs/handling_errors, for example

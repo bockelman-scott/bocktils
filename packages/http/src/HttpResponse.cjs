@@ -85,6 +85,7 @@ const {
         ToolBocksModule,
         ObjectEntry,
         objectEntries,
+        objectKeys,
         populateOptions,
         localCopy,
         attempt,
@@ -283,8 +284,7 @@ const {
         return new HttpResponseHeaders( headers );
     };
 
-    const DEFAULT_RESPONSE_OPTIONS =
-        {};
+    const DEFAULT_RESPONSE_OPTIONS = {};
 
     class HttpResponse extends EventTarget
     {
@@ -330,7 +330,7 @@ const {
 
             this.#status = HttpStatus.fromCode( res.status || pResponse?.status || options.status ) || attempt( () => HttpStatus.fromResponse( res || options.response || options, options ) );
 
-            this.#ok = toBool( this.#ok || this.#status?.isOk() || res?.ok || pResponse?.ok || ( asInt( pResponse?.status ) >= 200 && asInt( pResponse?.status ) < 300 ) );
+            this.#ok = toBool( this.#ok || this.#status?.isOk() || res?.ok || pResponse?.ok || (asInt( pResponse?.status ) >= 200 && asInt( pResponse?.status ) < 300) );
 
             this.#url = cleanUrl( asString( res?.url || options?.url || pUrl, true ) ) || _slash;
 
@@ -358,18 +358,57 @@ const {
 
             if ( _ud !== Response )
             {
-                response = response instanceof Response ?
-                           response :
-                           new Response( response?.data || options.data || _mt,
-                                         {
-                                             ...(options),
-                                             ...(
+                if ( !(response instanceof Response) )
+                {
+                    let responseOptions =
+                        {
+                            ...(options),
+                            ...(
+                                {
+                                    status: response?.status || options.status,
+                                    statusText: response?.statusText || options.statusText,
+                                    headers: { ...(options.headers), ...({ ...(response?.headers || options.headers) }) }
+                                })
+                        };
+
+                    if ( isNonNullObject( responseOptions?.headers ) )
+                    {
+                        let headers = { ...(asObject( responseOptions?.headers || {} )) };
+
+                        if ( $ln( objectKeys( headers ) ) <= 0 )
+                        {
+                            attempt( () => delete responseOptions.headers );
+                        }
+                        else
+                        {
+                            let fixed = {};
+
+                            let entries = objectEntries( headers );
+
+                            if ( entries )
+                            {
+                                entries.forEach( entry =>
                                                  {
-                                                     status: response?.status || options.status,
-                                                     statusText: response?.statusText || options.statusText,
-                                                     headers: { ...(options.headers), ...({ ...(response?.headers || options.headers) }) }
-                                                 })
-                                         } );
+                                                     let key = asString( ObjectEntry.getKey( entry ), true );
+                                                     let value = asString( ObjectEntry.getValue( entry ), true );
+
+                                                     if ( !(isBlank( key ) || isBlank( value )) )
+                                                     {
+                                                         fixed[key] = value;
+                                                     }
+                                                 } );
+                            }
+
+                            responseOptions.headers = fixed;
+                        }
+                    }
+                    else if ( !isNull( responseOptions?.headers ) )
+                    {
+                        attempt( () => delete responseOptions.headers );
+                    }
+
+                    response = new Response( (response?.data || options.data || _mt), responseOptions );
+                }
             }
 
             if ( response instanceof this.constructor )
