@@ -1099,7 +1099,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     // returns the Nth element of a collection, the Nth character of a string, or the Nth property of an object (ordering of properties is not guaranteed)
     const $nth = ( pArr, pIdx = 0 ) =>
     {
-        const arr = (isArray( pArr ) || isString( pArr )) ? pArr : (isFunc( pArr[Symbol.iterator] ) ? [...(pArr || [])] : isObj( pArr ) ? Object.values( pArr ) : [pArr]);
+        const arr = (isArray( pArr ) || (_str === typeof pArr)) ? pArr : (isFunc( pArr[Symbol.iterator] ) ? [...(pArr || [])] : isObj( pArr ) ? Object.values( pArr ) : [pArr]);
 
         const length = $ln( arr );
 
@@ -2450,7 +2450,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return visitor;
     };
 
-    const isValidEntry = e => isArray( e ) && $ln( e ) > 1 && !(isNull( e[0] ) || isNull( e[1] ));
+    const isValidEntry = e => isArray( e ) && ($ln( e ) > 1) && !(isNull( e[0] ) || isNull( e[1] )) && (isStr( e[0] ) ? (_isValidStr( e[0] )) : true);
 
     const stringifyKeys = e => (isArray( e ) && (_symbol !== typeof e[0])) ? [(_mt_str + (e?.key || e[0])).trim().replace( /^#/, _mt_str ), (e?.value || e[1])] : isNull( e ) ? [_mt_str, null] : e;
 
@@ -2733,6 +2733,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             case "global_type":
                 entries = [...(new Set( [...entries, ...(getGlobalTypeEntries( pObject ) || [])] ))];
+
+                entries = entries.filter( isValidEntry );
+
                 break;
 
             default:
