@@ -3895,7 +3895,7 @@ const { _ud = "undefined", $scope } = constants;
         constructor( pValue )
         {
             this.#value = (pValue instanceof this.constructor) ? pValue.value : pValue;
-            while ( !isNull( this.#value ) && (this.#value instanceof this.constructor) )
+            while ( isNonNullObject( this.#value ) && (this.#value instanceof this.constructor) )
             {
                 this.#value = this.value?.value;
             }

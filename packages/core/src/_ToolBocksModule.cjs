@@ -4607,7 +4607,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return evt;
         }
 
-        return new ToolBocksModuleEvent( evt, pData, pOptions );
+        return new ToolBocksModuleEvent( evt, (pData || evt.data || evt.detail), pOptions );
     };
 
     /**
