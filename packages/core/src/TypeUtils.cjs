@@ -4366,6 +4366,7 @@ const { _ud = "undefined", $scope } = constants;
             preserveArrays: true,
             maxDepth: Infinity,
             preserveUserDefinedClasses: false,
+            preserveTypes: false,
             ...DEFAULT_TRANSFORMER_PROPERTIES
         };
 
@@ -4480,9 +4481,16 @@ const { _ud = "undefined", $scope } = constants;
 
         const { options, visited, stack, depth } = resolveObjectLiteralArguments( pOptions, pVisited, pStack, pDepth );
 
+        const preserveTypes = !!options?.preserveTypes;
+
+        if ( preserveTypes && instanceOfAny( pObject, Date, RegExp, Symbol, Map, Set, Promise, ArrayBuffer, SharedArrayBuffer, DataView, WeakMap, WeakRef, WeakSet ) )
+        {
+            return pObject;
+        }
+
         if ( !isNanOrInfinite( options.maxDepth ) && !isNanOrInfinite( depth ) && depth > options.maxDepth )
         {
-            return { ...(pObject || {}) };
+            return pObject || {};
         }
 
         const transientProperties = resolveTransientProperties( options );
@@ -4664,6 +4672,7 @@ const { _ud = "undefined", $scope } = constants;
                   recursive: true,
                   locked: false,
                   preserveUserDefinedClasses: true,
+                  preserveTypes: false,
                   ...DEFAULT_TRANSFORMER_PROPERTIES
               } );
 
