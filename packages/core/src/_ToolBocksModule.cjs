@@ -4823,7 +4823,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     function generateStack( pError )
     {
-        let stack = pError instanceof Error ? pError?.stack : isStr( pError ) ? pError : _mt_str;
+        let stack = pError instanceof Error ? (pError?.stack || pError?.cause?.stack) : isStr( pError ) ? pError : _mt_str;
 
         if ( _ud === typeof stack || null == stack || !isStr( stack ) )
         {
@@ -4852,7 +4852,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     function resolveErrorStack( pStack, pError )
     {
-        let errorStack = pStack || pError?.stack || pError;
+        let errorStack = pStack || pError?.stack || pError?.cause?.stack || pError;
 
         if ( pStack instanceof String || isStr( pStack ) )
         {
@@ -4860,7 +4860,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
         else if ( Error.isError( pStack ) || pStack instanceof Error )
         {
-            errorStack = (pStack.stack || generateStack( pStack ) || generateStack( pError ) || _mt_str);
+            errorStack = (pStack.stack || pStack?.cause?.stack || generateStack( pStack || pError ) || generateStack( pError ) || _mt_str);
         }
 
         return errorStack || pError?.stack || generateStack( pError ) || generateStack( pStack );
@@ -5177,7 +5177,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          */
         determineCause( pError, pCause )
         {
-            return (pCause instanceof Error ? pCause : (isError( pError ) ? pError?.cause || pError : null)) || this.#cause;
+            let originalError = (pCause instanceof Error ? pCause : (isError( pError ) ? (pError?.cause || null) : null)) || this.#cause;
+            if ( originalError !== this && originalError !== pError )
+            {
+                return originalError;
+            }
+            return null;
         }
 
         /**
@@ -5232,6 +5237,28 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         get cause()
         {
             this.#cause = this.#cause || (isError( this.#options?.cause ) ? this.#options?.cause : super.cause) || super.cause;
+
+            if ( this.#cause === this )
+            {
+                this.#cause = null;
+            }
+
+            if ( !isNull( this.#cause ) && isError( this.#cause ) )
+            {
+                let cause = this.#cause?.cause;
+
+                let iterationCap = new IterationCap( 5 );
+
+                while ( !isNull( cause ) && isError( cause?.cause ) && !iterationCap.reached )
+                {
+                    if ( cause === cause?.cause )
+                    {
+                        attemptSilent( () => cause.cause = null );
+                    }
+                    attemptSilent( () => cause = cause?.cause );
+                }
+            }
+
             return this.#cause;
         }
 
