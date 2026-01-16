@@ -20,7 +20,8 @@ const
         $nth,
         abbreviate,
         normalizeName,
-        getFunctionName
+        getFunctionName,
+        transliterate
     } = stringUtils;
 
 const repoName = "bocktils";
@@ -1679,7 +1680,7 @@ describe( "getFunctionName", () =>
               functionName = getFunctionName( ABC );
               expect( functionName ).toEqual( "ABC" );
 
-              let abc = new ABC( 23, "and me");
+              let abc = new ABC( 23, "and me" );
 
               functionName = getFunctionName( abc.constructor );
               expect( functionName ).toEqual( "ABC" );
@@ -1687,9 +1688,9 @@ describe( "getFunctionName", () =>
               functionName = getFunctionName( abc.id );
               expect( functionName ).toEqual( "" );
           } );
-});
+} );
 
-    describe( "copyString prevents variable aliases", () =>
+describe( "copyString prevents variable aliases", () =>
 {
     test( "copyString('abc') === 'abc'",
           () =>
@@ -2102,6 +2103,45 @@ describe( "normalizeName scenarios", () =>
     test( "normalizeName - typical cases",
           () =>
           {
+
+          } );
+} );
+
+
+describe( "transliteration", () =>
+{
+    test( "typical cases",
+          () =>
+          {
+              let s = `“Hello World”`;
+              expect( transliterate( s ) ).toEqual( `"Hello World"` );
+
+              s = `It’s a ‘test’`;
+              expect( transliterate( s ) ).toEqual( `It's a 'test'` );
+
+              s = `Phase 1–Phase 2`;
+              expect( transliterate( s ) ).toEqual( `Phase 1-Phase 2` );
+
+              s = `Final Item—Done`;
+              expect( transliterate( s ) ).toEqual( `Final Item-Done` );
+
+              s = `Renée Müller`;
+              expect( transliterate( s ) ).toEqual( `Renee Muller` );
+
+              s = `João Caçador`;
+              expect( transliterate( s ) ).toEqual( `Joao Cacador` );
+
+              s = `Crème Brûlée`;
+              expect( transliterate( s ) ).toEqual( `Creme Brulee` );
+
+              s = `First Last`;
+              expect( transliterate( s ) ).toEqual( `First Last` );
+
+              s = `Total: $10`;
+              expect( transliterate( s ) ).toEqual( `Total: $10` );
+
+              s = `“The developer’s résumé—updated for 2026—shows João’s skills.”`;
+              expect( transliterate( s ) ).toEqual( `"The developer's resume-updated for 2026-shows Joao's skills."` );
 
           } );
 } );

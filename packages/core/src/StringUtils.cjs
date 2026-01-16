@@ -3743,6 +3743,57 @@ const { _ud = "undefined", $scope } = constants;
 
     String.prototype.reverse = String.prototype.reverse || reverseString;
 
+    const LATIN_1_CHARACTER_MAP =
+        {
+            // Smart Quotes & Apostrophes
+            "’": "'", "‘": "'", "”": "\"", "“": "\"", "`": "'",
+
+            // Dashes
+            "–": "-", "—": "-",
+
+            // Commonly Accented 'Latin-1' characters
+            "à": "a", "á": "a", "â": "a", "ã": "a", "ä": "a", "å": "a",
+            "è": "e", "é": "e", "ê": "e", "ë": "e",
+            "ì": "i", "í": "i", "î": "i", "ï": "i",
+            "ò": "o", "ó": "o", "ô": "o", "õ": "o", "ö": "o",
+            "ù": "u", "ú": "u", "û": "u", "ü": "u",
+            "ñ": "n", "ç": "c",
+
+            // Some special cases
+
+            // ellipsis
+            "…": "...",
+
+            // bullet
+            "•": "-",
+
+            // Whitespace (Non-breaking spaces)
+            "\u00A0": " ", "\u202F": " "
+        };
+
+
+    /**
+     * Return a string with extended (a.k.a. 'unsafe') characters replaced
+     * with the closest ASCII/Latin-1 equivalent, according to the mapping specified.
+     *
+     * @param {String} pStr the string to modify
+     *
+     * @param {Object} pCharacterMap a POJO mapping the 'unsafe' character to its 'safe' equivalent
+     */
+    function transliterate( pStr, pCharacterMap = LATIN_1_CHARACTER_MAP )
+    {
+        const s = asString( pStr );
+
+        // map of 'unsafe' characters to 'safe' characters
+        const characterMap = { ...LATIN_1_CHARACTER_MAP, ...(pCharacterMap || {}) };
+
+        // Build a RegExp based on the map
+        // We could escape special regex characters if necessary, but for now we just join keys
+        const pattern = new RegExp( Object.keys( characterMap ).join( "|" ), "g" );
+
+        return s.replace( pattern, ( matched ) => characterMap[matched] );
+    }
+
     const DEFAULT_TIDY_OPTIONS =
         lock( {
                   ...DEFAULT_AS_STRING_OPTIONS,
@@ -3759,6 +3810,7 @@ const { _ud = "undefined", $scope } = constants;
                   snakeCase: false,
                   properCase: false,
                   capitalize: false,
+                  transliterate: false,
                   removeArtifacts: true
               } );
 
@@ -3873,6 +3925,11 @@ const { _ud = "undefined", $scope } = constants;
         if ( !!options?.removeArtifacts )
         {
             str = asString( str, !!options?.trim ).replace( /(undefined)|(void)|(null)/i, _mt_str );
+        }
+
+        if ( !!options.transliterate )
+        {
+            str = transliterate( asString( str ) );
         }
 
         return asString( str, !!options?.trim );
@@ -4429,6 +4486,7 @@ const { _ud = "undefined", $scope } = constants;
             capitalize,
             uncapitalize,
             abbreviate,
+            transliterate,
             cartesian,
             repeat,
             findDuplicatedSubstrings,
