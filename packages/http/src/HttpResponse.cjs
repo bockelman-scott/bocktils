@@ -81,17 +81,19 @@ const {
             httpRequest
         };
 
-    const {
-        ToolBocksModule,
-        ObjectEntry,
-        objectEntries,
-        objectKeys,
-        populateOptions,
-        localCopy,
-        attempt,
-        asyncAttempt,
-        $ln
-    } = moduleUtils;
+    const
+        {
+            ToolBocksModule,
+            ObjectEntry,
+            objectEntries,
+            objectKeys,
+            populateOptions,
+            localCopy,
+            attempt,
+            attemptSilent,
+            asyncAttempt,
+            $ln
+        } = moduleUtils;
 
     const { _mt_str = "", _mt = _mt_str, S_ERR_PREFIX, _slash = "/" } = constants;
 
@@ -203,15 +205,15 @@ const {
 
         let res = asObject( pResponse || options?.response || options || {} ) || {};
 
-        let data = res.data || options.data;
+        let data = res.data || options.data || null;
 
-        let headers = cloneHeaders( res.headers || options.headers || options );
+        let headers = attempt( () => cloneHeaders( res.headers || options.headers || options ) );
 
         // unwrap the response from any container
         while ( isNonNullObject( res ) && isNonNullObject( res.response ) )
         {
             res = res.response;
-            data = data || res.data || options.data;
+            data = data || res.data || options.data || null;
         }
 
         if ( isNonNullObject( res ) )
@@ -228,7 +230,7 @@ const {
 
         res.headers = new HttpResponseHeaders( headers );
 
-        res.data = data || res.data;
+        res.data = data || res.data || null;
 
         return res || { ...(options || {}) };
     };
@@ -354,7 +356,7 @@ const {
         {
             const options = asObject( pOptions || DEFAULT_RESPONSE_OPTIONS );
 
-            let response = HttpResponse.unwrapResponse( (pResponse || options), options );
+            let response = attempt( () => HttpResponse.unwrapResponse( (pResponse || options), options ) ) || pResponse;
 
             if ( _ud !== Response )
             {
@@ -407,7 +409,17 @@ const {
                         attempt( () => delete responseOptions.headers );
                     }
 
-                    response = new Response( (response?.data || options.data || _mt), responseOptions );
+                    let responseBody = HttpStatus.allowsResponseBody( response?.status || options?.status || responseOptions?.status ) ? response?.data || options?.data || pResponse?.data || null : null;
+
+                    try
+                    {
+                        response = new Response( responseBody, responseOptions );
+                    }
+                    catch( e )
+                    {
+                        // ignore this and reset to default
+                        response = (response || attemptSilent( () => HttpResponse.unwrapResponse( (pResponse || options), options ) ) || pResponse);
+                    }
                 }
             }
 
@@ -416,7 +428,7 @@ const {
                 return response.response || response;
             }
 
-            return cloneResponse( response );
+            return attempt( () => cloneResponse( response ) );
         }
 
         static unwrapResponse( pResponse, pOptions )
@@ -448,13 +460,17 @@ const {
 
         get data()
         {
-            return this.#data || this.options.data;
+            return this.#data || this.options.data || null;
         }
 
         get body()
         {
-            const res = cloneResponse( this.response );
-            return res.bodyUsed ? toReadableStream( this.data || _mt ) : res.body || toReadableStream( this.data || _mt );
+            if ( HttpStatus.allowsResponseBody( this.status ) )
+            {
+                const res = cloneResponse( this.response );
+                return res.bodyUsed ? toReadableStream( this.data || _mt ) : res.body || toReadableStream( this.data || _mt );
+            }
+            return null;
         }
 
         get bodyUsed()
@@ -464,12 +480,17 @@ const {
 
         get stream()
         {
-            return toThrottledReadableStream( this.data || this.body, 2_048, 0 );
+            let data = this.data || this.body;
+            if ( data )
+            {
+                return toThrottledReadableStream( data, 2_048, 0 );
+            }
+            return toThrottledReadableStream( _mt, 10, 0 );
         }
 
         getThrottledStream( pChuckSize, pDelayMs )
         {
-            return toThrottledReadableStream( this.data || this.body, pChuckSize, pDelayMs );
+            return toThrottledReadableStream( this.data || this.body || null, pChuckSize, pDelayMs );
         }
 
         async arrayBuffer()
@@ -479,14 +500,19 @@ const {
                 return this.#arrayBuffer;
             }
 
-            const res = cloneResponse( this.response );
-
-            if ( isNonNullObject( res ) && isFunction( res?.arrayBuffer ) )
+            if ( HttpStatus.allowsResponseBody( this.status ) )
             {
-                this.#arrayBuffer = await asyncAttempt( async() => await res.arrayBuffer() );
+                const res = cloneResponse( this.response );
 
-                return this.#arrayBuffer;
+                if ( isNonNullObject( res ) && isFunction( res?.arrayBuffer ) )
+                {
+                    this.#arrayBuffer = await asyncAttempt( async() => await res.arrayBuffer() );
+
+                    return this.#arrayBuffer;
+                }
             }
+
+            return new ArrayBuffer( 0 );
         }
 
         async blob()
@@ -496,14 +522,19 @@ const {
                 return this.#blob;
             }
 
-            const res = cloneResponse( this.response );
-
-            if ( isNonNullObject( res ) && isFunction( res?.blob ) )
+            if ( HttpStatus.allowsResponseBody( this.status ) )
             {
-                this.#blob = await asyncAttempt( async() => await res.blob() );
+                const res = cloneResponse( this.response );
 
-                return this.#blob;
+                if ( isNonNullObject( res ) && isFunction( res?.blob ) )
+                {
+                    this.#blob = await asyncAttempt( async() => await res.blob() );
+
+                    return this.#blob;
+                }
             }
+
+            return new Blob( new ArrayBuffer( 0 ) );
         }
 
         async bytes()
@@ -513,14 +544,19 @@ const {
                 return this.#bytes;
             }
 
-            const res = cloneResponse( this.response );
-
-            if ( isNonNullObject( res ) && isFunction( res?.bytes ) )
+            if ( HttpStatus.allowsResponseBody( this.status ) )
             {
-                this.#bytes = await asyncAttempt( async() => await res.bytes() );
+                const res = cloneResponse( this.response );
 
-                return this.#bytes;
+                if ( isNonNullObject( res ) && isFunction( res?.bytes ) )
+                {
+                    this.#bytes = await asyncAttempt( async() => await res.bytes() );
+
+                    return this.#bytes;
+                }
             }
+
+            return new Uint8Array( 0 );
         }
 
         async formData()
@@ -530,14 +566,19 @@ const {
                 return this.#formData;
             }
 
-            const res = cloneResponse( this.response );
-
-            if ( isNonNullObject( res ) && isFunction( res?.formData ) )
+            if ( HttpStatus.allowsResponseBody( this.status ) )
             {
-                this.#formData = await asyncAttempt( async() => await res.formData() );
+                const res = cloneResponse( this.response );
 
-                return this.#formData;
+                if ( isNonNullObject( res ) && isFunction( res?.formData ) )
+                {
+                    this.#formData = await asyncAttempt( async() => await res.formData() );
+
+                    return this.#formData;
+                }
             }
+
+            return new FormData();
         }
 
         async json()
@@ -547,14 +588,19 @@ const {
                 return this.#json;
             }
 
-            const res = cloneResponse( this.response );
-
-            if ( isNonNullObject( res ) && isFunction( res?.json ) )
+            if ( HttpStatus.allowsResponseBody( this.status ) )
             {
-                this.#json = await asyncAttempt( async() => await res.json() );
+                const res = cloneResponse( this.response );
 
-                return this.#json;
+                if ( isNonNullObject( res ) && isFunction( res?.json ) )
+                {
+                    this.#json = await asyncAttempt( async() => await res.json() );
+
+                    return this.#json;
+                }
             }
+
+            return {};
         }
 
         async text()
@@ -564,14 +610,19 @@ const {
                 return this.#text;
             }
 
-            const res = cloneResponse( this.response );
-
-            if ( isNonNullObject( res ) && isFunction( res?.text ) )
+            if ( HttpStatus.allowsResponseBody( this.status ) )
             {
-                this.#text = await asyncAttempt( async() => await res.text() );
+                const res = cloneResponse( this.response );
 
-                return this.#text;
+                if ( isNonNullObject( res ) && isFunction( res?.text ) )
+                {
+                    this.#text = await asyncAttempt( async() => await res.text() );
+
+                    return this.#text;
+                }
             }
+
+            return _mt;
         }
 
         get headers()
@@ -596,7 +647,12 @@ const {
 
         get status()
         {
-            return this.#status?.code || this.#status;
+            return this.#status?.code || this.response?.status || this.#status;
+        }
+
+        get httpStatus()
+        {
+            return (this.#status instanceof HttpStatus) ? this.#status : HttpStatus.fromCode( this.response?.status || this.#response?.status || this.options?.status ) || attempt( () => HttpStatus.fromResponse( this.response || this.options?.response || this.options, this.options ) );
         }
 
         get statusText()

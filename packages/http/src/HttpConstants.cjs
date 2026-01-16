@@ -693,6 +693,8 @@ const {
             [STATUS_CODES.GATEWAY_TIMEOUT]: 256
         };
 
+    const STATUSES_FORBIDDING_BODY = lock( [101, 204, 205, 304] );
+
     /**
      * Represents an HTTP status with its numeric code and textual name.
      * <br>
@@ -779,7 +781,32 @@ const {
         {
             return this.isOk() || OK_STATUSES.includes( this.code );
         }
+
+        get allowsBody()
+        {
+            return !(STATUSES_FORBIDDING_BODY.includes( this.code ));
+        }
+
+        get forbidsBody()
+        {
+            return STATUSES_FORBIDDING_BODY.includes( this.code );
+        }
     }
+
+    HttpStatus.allowsResponseBody = function( pStatus )
+    {
+        if ( isNonNullObject( pStatus ) && pStatus instanceof HttpStatus )
+        {
+            return pStatus.allowsBody();
+        }
+
+        if ( isNumeric( pStatus ) )
+        {
+            return !(STATUSES_FORBIDDING_BODY.includes( asInt( pStatus ) ));
+        }
+
+        return true;
+    };
 
     objectEntries( STATUS_CODES ).forEach( ( entry ) =>
                                            {
@@ -1286,7 +1313,7 @@ const {
      * @param pHeader
      * @returns {boolean|boolean|*}
      */
-    const isHeader = ( pHeader ) => pHeader instanceof HttpHeaderDefinition || ( !isBlank(asString( pHeader, true )) && (Object.keys( HttpHeaderDefinition ).map( lcase ).includes( lcase( asString( pHeader, true ) ) ) || ucase( asString( pHeader, true ) ).startsWith( "X-" )));
+    const isHeader = ( pHeader ) => pHeader instanceof HttpHeaderDefinition || ( !isBlank( asString( pHeader, true ) ) && (Object.keys( HttpHeaderDefinition ).map( lcase ).includes( lcase( asString( pHeader, true ) ) ) || ucase( asString( pHeader, true ) ).startsWith( "X-" )));
 
     HttpHeader.isHeader = isHeader;
 
