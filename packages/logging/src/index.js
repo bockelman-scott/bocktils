@@ -1658,17 +1658,23 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                     }
                     catch( e )
                     {
-                        // ignore the error and log the message(s) to the console
-                        attempt( () => (konsole || console).log( ...msg ) );
+                        // add this error message and log the new message(s) to the console
+                        attemptSilent( msg.push( e?.message ) );
+
+                        // convert all messages to strings
+                        attempt( () => msg = msg.map( e => asString( e?.message || e, true ) ) );
+
+                        // log to the console
+                        attemptSilent( () => (konsole || console).log( ...msg ) );
                     }
                 }
                 else if ( isFunction( lgr.log ) )
                 {
-                    attempt( () => lgr.log( ...msg ) );
+                    attemptSilent( () => lgr.log( ...msg ) );
                 }
                 else
                 {
-                    attempt( () => (konsole || console).log( ...msg ) );
+                    attemptSilent( () => (konsole || console).log( ...msg ) );
                 }
             }
 
