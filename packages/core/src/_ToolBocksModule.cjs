@@ -120,12 +120,61 @@
 // defines a variable for typeof undefined
 const _ud = "undefined";
 
+// define variables for stdout and stderr
+const _bock_std_out = ((_ud !== typeof process) ? ((_ud !== typeof process.stdout) ? process.stdout : { write: () => null }) : { write: () => null });
+
+// define variables for stdout and stderr
+const _bock_std_err = ((_ud !== typeof process) ? ((_ud !== typeof process.stdout) ? process.stdout : { write: () => null }) : { write: () => null });
+
+/**
+ * This is a last resort 'logger' that writes directly to stdout or stderr if available
+ * @param {WriteStream} pOut - the WriteStream (e.g., stdout or stderr) to which to write
+ * @param {...*} pArgs one or more arguments to convert to strings and write to stderr or stdout
+ * @private
+ */
+const _bock_write = ( pOut, ...pArgs ) =>
+{
+    try
+    {
+        let message = [...(pArgs || [])].filter( e => _ud !== typeof e && null !== e ).map( e => String( e ) ).join( ", " );
+
+        let _out = (pOut && pOut.write) ? pOut : (_bock_std_out || _bock_std_err);
+
+        if ( _out )
+        {
+            _out.write( message );
+        }
+        else
+        {
+            (_bock_std_out || _bock_std_err).write( message );
+        }
+    }
+    catch( e )
+    {
+        // ignored
+    }
+};
+
+/**
+ * This is 'standin' for the Console if it is absent
+ * @type {{log: function(...[*]): void, info: function(...[*]): void, warn: function(...[*]): void, error: function(...[*]): void, debug: function(...[*]): void, trace: function(...[*]): void}}
+ */
+const mockConsole =
+    {
+        log: ( ...pArgs ) => _bock_write( _bock_std_out, ...pArgs ),
+        info: ( ...pArgs ) => _bock_write( _bock_std_out, ...pArgs ),
+        warn: ( ...pArgs ) => _bock_write( _bock_std_out, ...pArgs ),
+        error: ( ...pArgs ) => _bock_write( _bock_std_err, ...pArgs ),
+        debug: ( ...pArgs ) => _bock_write( _bock_std_out, ...pArgs ),
+        trace: ( ...pArgs ) => _bock_write( _bock_std_out, ...pArgs )
+    };
+
 /**
  * An alias for the console object available in most environments.<br>
  * We create an alias for the console to reduce lint complaints.<br>
  * @type {ILogger|console|Console|{}}
  */
-const konsole = _ud === typeof console ? {} : console || {};
+const konsole = _ud === typeof console ? mockConsole : (console || mockConsole);
 
 /**
  * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
@@ -185,7 +234,7 @@ const _ENV = (function( pScope = $scope() )
         }
         catch( ex )
         {
-            konsole.error( "Could not load environment", ex.message, ex );
+            (konsole || console).error( "Could not load environment", ex.message, ex );
         }
     }
     else
@@ -1260,7 +1309,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
         catch( err )
         {
-            konsole.error( "Unable to define the Promise.try method", err );
+            (konsole || console || mockConsole).error( "Unable to define the Promise.try method", err );
         }
     }
 
@@ -1311,7 +1360,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             if ( handleAttempt.trace )
             {
-                handleAttempt.traceFunctionCall( func, ...args );
+                attemptSilent( () => handleAttempt.traceFunctionCall( func, ...args ) );
             }
 
             handleAttempt.lastError = null;
@@ -1324,14 +1373,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             catch( ex )
             {
                 handleAttempt.lastError = ex;
-                handleAttempt.handleError( ex, pFunction, ...pArgs );
+                attemptSilent( () => handleAttempt.handleError( ex, pFunction, ...pArgs ) );
             }
         }
         else
         {
-            const error = new Error( NOT_A_FUNCTION );
+            const error = resolveError( new Error( NOT_A_FUNCTION ) );
             handleAttempt.lastError = error;
-            handleAttempt.handleError( error, pFunction, ...pArgs );
+            attemptSilent( () => handleAttempt.handleError( error, pFunction, ...pArgs ) );
         }
 
         return pFunction;
@@ -1357,8 +1406,27 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     handleAttempt.handleError = function( pError, pFunction, ...pArgs )
     {
-        handleAttempt.lastError = pError;
-        konsole.error( (pError instanceof Error ? ATTEMPT_FAILED : NOT_A_FUNCTION), pError?.message || pFunction?.name || _mt_str, pError || {}, pFunction || {}, ...pArgs );
+        if ( isError( pError ) )
+        {
+            handleAttempt.lastError = pError;
+
+            try
+            {
+                (konsole || console || mockConsole).error( (pError instanceof Error ? ATTEMPT_FAILED : NOT_A_FUNCTION), pError?.message || pFunction?.name || _mt_str, pError || {}, pFunction || (function() {}), ...pArgs );
+            }
+            catch( ex )
+            {
+                try
+                {
+                    mockConsole.error( ex.message || ex );
+                    mockConsole.error( pError?.message || pError?.name || pError );
+                }
+                catch( e2 )
+                {
+                    // ignore this one
+                }
+            }
+        }
     };
 
     handleAttempt.trace = false;
@@ -1386,7 +1454,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         const hasArguments = [...(pArgs || [])].length > 0;
 
-        konsole.trace( "Calling", name, ...(hasArguments ? ["with arguments:", ...pArgs].map( e => String( e ) + "\n" ) : ["without arguments"]) );
+        (konsole || console || mockConsole).trace( "Calling", name, ...(hasArguments ? ["with arguments:", ...pArgs].map( e => String( e ) + "\n" ) : ["without arguments"]) );
     };
 
     function getLastError()
@@ -3162,7 +3230,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             if ( detectCycles( stack, 3, 3 ) )
             {
-                konsole.error( `An infinite loop was encountered while comparing 2 objects: stack=[${stack.join( "->" )}]` );
+                (konsole || console || mockConsole).error( `An infinite loop was encountered while comparing 2 objects: stack=[${stack.join( "->" )}]` );
                 return false;
             }
 
@@ -3256,7 +3324,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             if ( detectCycles( stack, 3, 3 ) )
             {
-                konsole.error( `An infinite loop was encountered while comparing 2 objects: stack=[${stack.join( "->" )}]` );
+                (konsole || console || mockConsole).error( `An infinite loop was encountered while comparing 2 objects: stack=[${stack.join( "->" )}]` );
                 return false;
             }
 
@@ -5259,7 +5327,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 }
             }
 
-            return this.#cause;
+            return this.#cause || super.cause;
         }
 
         get stackTrace()
@@ -5302,7 +5370,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          */
         logTo( pLogger, pLevel )
         {
-            const logger = pLogger || konsole;
+            const logger = pLogger || konsole || mockConsole;
 
             const level = resolveLogLevel( pLevel );
 
@@ -5593,9 +5661,13 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         const msg = _isValidStr( pMessage ) ? pMessage : _isValidStr( pError ) ? pError : (pError?.message || pError?.name || pError?.type) || (pMessage?.message || pMessage?.type || pMessage?.name || DEFAULT_ERROR_MSG);
 
-        let cause = isError( pError ) ? pError?.cause || (isError( pMessage ) ? pMessage : pError) : isError( pMessage ) ? pMessage : null;
+        let cause = isError( pError ) ? pError?.cause || (isError( pMessage ) ? pMessage?.cause : null) : isError( pMessage ) ? pMessage?.cause : null;
 
-        let options = isError( cause ) ? { message: msg, cause } : { message: msg };
+        let options = (isError( cause ) && (cause !== pError) && (cause !== pMessage)) ?
+            {
+                message: msg,
+                cause
+            } : { message: msg };
 
         let errors = attemptSilent( () => ([pError, pMessage]).map( e => e instanceof __Error ? e : (isError( e ) ? new __Error( e, options ) : new __Error( msg, options )) ) );
 
@@ -6287,11 +6359,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             handleAttempt.handleError = function( pError, pContext, ...pExtra )
             {
-                const error = resolveError( pError, pError?.message );
+                if ( isError( pError ) )
+                {
+                    const error = resolveError( pError, pError?.message );
 
-                handleAttempt.lastError = error;
+                    handleAttempt.lastError = error;
 
-                (me || this).reportError( error, error?.message, S_ERROR, (me || this).calculateErrorSourceName( (me || this), pContext || handleAttempt ), ...pExtra );
+                    attemptSilent( () => (me || this).reportError( error, error?.message, S_ERROR, (me || this).calculateErrorSourceName( (me || this), pContext || handleAttempt ), ...pExtra ) );
+                }
             };
         }
 
@@ -6900,7 +6975,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             if ( isError( pError ) )
             {
                 const source = this.resolveErrorSource( pContext, pError );
-                this.reportError( pError, (pError?.message || pError?.name || pError?.type || S_DEFAULT_ERROR_MESSAGE), S_ERROR, source, ...pExtra );
+                attemptSilent( () => this.reportError( pError, (pError?.message || pError?.name || pError?.type || S_DEFAULT_ERROR_MESSAGE), S_ERROR, source, ...pExtra ) );
             }
         }
 
@@ -6930,8 +7005,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
                 const func = async function()
                 {
-                    me.reportError( error, msg, S_ERROR, source, ...extra );
-                };
+                    attemptSilent( () => me.reportError( error, msg, S_ERROR, source, ...extra ) );
+                }.bind( me );
 
                 setTimeout( func, 10 );
             }
@@ -7122,7 +7197,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             }
             catch( ex )
             {
-                handle( ex, func, ...pArgs );
+                attemptSilent( () => handle( ex, func, ...pArgs ) );
             }
 
             return this.calculateResult( result );
@@ -7142,7 +7217,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             }
             catch( ex )
             {
-                handle( ex, func, ...pArgs );
+                attemptSilent( () => handle( ex, func, ...pArgs ) );
             }
 
             return this.calculateResult( result );
@@ -7162,7 +7237,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             }
             catch( ex )
             {
-                handle( ex, func, ...pArgs );
+                attemptSilent( () => handle( ex, func, ...pArgs ) );
             }
 
             return this.calculateResult( result );
@@ -7182,7 +7257,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             }
             catch( ex )
             {
-                handle( ex, func, ...pArgs );
+                attemptSilent( () => handle( ex, func, ...pArgs ) );
             }
 
             return this.calculateResult( result );
@@ -7206,7 +7281,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
                 handleAttempt.lastError = handle.lastError = error;
 
-                me.reportError( error, error?.message, S_ERROR, me.calculateErrorSourceName( (thiz || me), (pFunction || func) ), ...pArgs );
+                attemptSilent( () => me.reportError( error, error?.message, S_ERROR, me.calculateErrorSourceName( (thiz || me), (pFunction || func) ), ...pArgs ) );
             };
 
             return { func, result, handle };
@@ -7288,7 +7363,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     // The constructor of a ToolBocksModule will replace the handler with its own instance method.
     handleAttempt.handleError = ( pError, pFunction, ...pArgs ) =>
     {
-        GLOBAL_INSTANCE.handleError( pError, pFunction, ...pArgs );
+        attemptSilent( () => GLOBAL_INSTANCE.handleError( pError, pFunction, ...pArgs ) );
     };
 
     /**
