@@ -2917,6 +2917,43 @@ const { _ud = "undefined", $scope } = constants;
         return false;
     };
 
+    const toLegalFileName = function( pName, pOptions )
+    {
+        let name = asString( pName, true );
+
+        let options = isNonNullObject( pOptions ) ? { ...(pOptions || {}) } : {};
+
+        if ( !isLegalFileName( name ) )
+        {
+            name = name.replaceAll( /[*?><:|"\\\/]/g, _underscore );
+        }
+
+        if ( options.replacements && isArray( options.replacements ) )
+        {
+            let arr = [...(options.replacements)].filter( e => isArray( e ) && 2 === $ln( e ) );
+
+            for( let kv of arr )
+            {
+                let rx = kv[0];
+                let s = kv[1];
+
+                if ( isString( s ) && (isString( rx ) || isRegExp( rx )) )
+                {
+                    if ( isString( rx ) || (isRegExp( rx ) && asString( rx.flags, true ).includes( "g" )) )
+                    {
+                        name = name.replaceAll( rx, s );
+                    }
+                    else
+                    {
+                        name = name.replace( rx, s );
+                    }
+                }
+            }
+        }
+
+        return name.replaceAll( /_+/g, _underscore );
+    };
+
     /**
      * Returns true if the specified string is very likely to be a filepath
      *
@@ -4466,6 +4503,7 @@ const { _ud = "undefined", $scope } = constants;
             isJson,
             isLegalFileName,
             isFilePath,
+            toLegalFileName,
             lcase,
             ucase,
             toCamelCase,
