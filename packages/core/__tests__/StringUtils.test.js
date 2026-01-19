@@ -38,6 +38,30 @@ let strings = ["abc", "abd", "bcd", "cbd", "dbc", "acb", "dogs", "cats", "lions"
 
 describe( "asString", () =>
 {
+    test( "asString(null) returns an empy string",
+          () => expect( "" === testAsString( null ) ).toBe( true )
+    );
+
+    test( "asString(undefined) returns an empty string",
+          () => expect( "" === testAsString( undefined ) ).toBe( true )
+    );
+
+    test( "asString('null') returns the string, 'null'",
+          () => expect( "null" === testAsString( "null" ) ).toBe( true )
+    );
+
+    test( "asString('undefined') returns the string, 'undefined'",
+          () => expect( "undefined" === testAsString( "undefined" ) ).toBe( true )
+    );
+
+    test( "asString(globalThis) returns an empty string",
+          () => expect( "" === testAsString( globalThis ) ).toBe( true )
+    );
+
+    test( "asString(this) returns a string representation of an empty object",
+          () => expect( testAsString( this ) ).toEqual( "{}" )
+    );
+
     test( "asString(string) returns the input string",
           () => expect( "abc" === testAsString( "abc" ) ).toBe( true )
     );
@@ -165,6 +189,31 @@ describe( "asString", () =>
               let s = b.asString();
               expect( "string" === typeof s ).toBe( true ) && expect( s === "false" ).toBe( true );
           } );
+
+    test( "An object with no cyclic properties",
+          () =>
+          {
+              let obj = { a: 1, b: "2", c: true };
+              let s = testAsString( obj, true );
+              expect( JSON.stringify( obj ) ).toEqual( s );
+          } );
+
+    test( "An object with cyclic properties",
+          () =>
+          {
+              let a = { "name": "A" };
+              let b = { "name": "B" };
+              let c = { people: [a, b] };
+              let d = { "ref_1": a, "ref_2": b };
+              let obj = { a: a, b: b, c: c, d: d };
+              obj.obj = obj;
+              let s = testAsString( obj, true );
+              // expect( JSON.stringify( obj ) ).toEqual( s );
+
+              console.log( s );
+          } );
+
+
 } );
 
 class TestStringUtilsClassA

@@ -3684,6 +3684,11 @@ const { _ud = "undefined", $scope } = constants;
 
         let arr = [...(asArray( pArr || [] ))];
 
+        if ( options.ignoreNulls )
+        {
+            arr = arr.filter( e => !isNull( e ) );
+        }
+
         if ( options.trim )
         {
             arr = arr.map( e => (isString( e ) ? e.trim() : e) );
@@ -3692,11 +3697,6 @@ const { _ud = "undefined", $scope } = constants;
         if ( options.ignoreCase )
         {
             arr = arr.map( e => (isString( e ) ? ucase( e ) : e) );
-        }
-
-        if ( options.ignoreNulls )
-        {
-            arr = arr.filter( e => !isNull( e ) );
         }
 
         if ( options.ignoreNaNs )

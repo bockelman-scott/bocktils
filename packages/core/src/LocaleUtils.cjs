@@ -29,56 +29,61 @@ const { _ud = "undefined", $scope } = constants;
         return $scope()[INTERNAL_NAME];
     }
 
-    const {
-        ToolBocksModule,
-        attempt,
-        lock,
-        resolveError,
-        objectValues,
-        runtimeLocaleString,
-        getRuntimeLocale,
-        getMessagesLocaleString
-    } = moduleUtils;
+    const
+        {
+            ToolBocksModule,
+            attempt,
+            lock,
+            resolveError,
+            objectValues,
+            runtimeLocaleString,
+            getRuntimeLocale,
+            getMessagesLocaleString
+        } = moduleUtils;
 
     // Create local aliases for values imported from other modules
-    const {
-        _mt_str,
-        _hyphen,
-        _str,
-        _num,
-        _big,
-        _bool,
-        _obj,
-        _fun,
-        S_WARN,
-        S_ERROR,
-    } = constants;
+    const
+        {
+            _mt_str,
+            _hyphen,
+            _str,
+            _num,
+            _big,
+            _bool,
+            _obj,
+            _fun,
+            S_WARN,
+            S_ERROR,
+        } = constants;
 
-    const {
-        isDefined,
-        isNull,
-        isNullOrNaN,
-        isNonNullObject,
-        isString,
-        isNumeric,
-        isNumber,
-        isObject,
-        isArray,
-        isFunction,
-        isDate,
-        isMap,
-        isPopulatedObject,
-        delegateTo,
-        Option,
-        Result
-    } = typeUtils;
+    const
+        {
+            isDefined,
+            isNull,
+            isNullOrNaN,
+            isNonNullObject,
+            isString,
+            isNumeric,
+            isNumber,
+            isObject,
+            isArray,
+            isFunction,
+            isDate,
+            isMap,
+            isPopulatedObject,
+            delegateTo,
+            Option,
+            Result
+        } = typeUtils;
 
     const
         {
             asString,
+            asInt,
             asFloat,
             isBlank,
             lcase,
+            ucase,
             DEFAULT_NUMBER_SYMBOLS,
             deriveDecimalSymbols,
             calculateDecimalSymbols,
@@ -134,35 +139,57 @@ const { _ud = "undefined", $scope } = constants;
         {
             LOCALE_STRING: DEFAULT_LOCALE_STRING,
             LANGUAGE: "en",
+
             MONTH_NAMES: lock( ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"] ),
             MONTH_NAMES_SHORT: lock( ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] ),
             MONTH_LETTERS: lock( ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"] ),
-            DAY_NAMES: lock( ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] ),
-            DAY_NAMES_SHORT: lock( ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] ),
-            DAY_LETTERS: lock( ["S", "M", "T", "W", "R", "F", "Sa"] ),
+
+            DAY_NAMES: lock( ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] ),
+            DAY_NAMES_SHORT: lock( ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] ),
+            DAY_LETTERS: lock( ["S", "M", "T", "W", "R", "F", "Sa", "S"] ),
+
             ERAS:
-                [
-                    {
-                        start: START_AD,
-                        end: null,
-                        name: "AD",
-                        longName: "Anno Domini"
-                    },
-                    {
-                        start: null,
-                        end: END_AD,
-                        name: "BC",
-                        longName: "Before Common Era"
-                    },
-                ],
+                lock( [
+                          {
+                              start: START_AD,
+                              end: null,
+                              name: "AD",
+                              longName: "Anno Domini"
+                          },
+                          {
+                              start: null,
+                              end: END_AD,
+                              name: "BC",
+                              longName: "Before Common Era"
+                          },
+                      ] ),
+
             FORMATS:
-                {
-                    LONG: FORMAT_LONG,
-                    SHORT: FORMAT_SHORT,
-                    NARROW: FORMAT_NARROW,
-                    TWO_DIGIT: FORMAT_2DIGIT,
-                    NUMERIC: FORMAT_NUMERIC
-                }
+                lock( {
+                          LONG: FORMAT_LONG,
+                          SHORT: FORMAT_SHORT,
+                          NARROW: FORMAT_NARROW,
+                          TWO_DIGIT: FORMAT_2DIGIT,
+                          NUMERIC: FORMAT_NUMERIC
+                      } ),
+
+            ISO_REGIONS: lock( [
+                                   // --- Europe (Primary ISO Users) ---
+                                   "AD", "AL", "AM", "AT", "AX", "AZ", "BA", "BE", "BG", "BY", "CH", "CY", "CZ",
+                                   "DE", "DK", "EE", "ES", "FI", "FO", "FR", "GE", "GG", "GI", "GL", "GR", "HR",
+                                   "HU", "IE", "IM", "IS", "IT", "JE", "LI", "LT", "LU", "LV", "MC", "MD", "ME",
+                                   "MK", "MT", "NL", "NO", "PL", "PT", "RO", "RS", "RU", "SE", "SI", "SJ", "SK",
+                                   "SM", "TR", "UA", "VA", "GB",
+
+                                   // --- Asia & Oceania ---
+                                   "AU", "NZ", "VN", "TR",
+
+                                   // --- Others following ISO standards ---
+                                   "BM", "GF", "GP", "MQ", "RE", "TF"
+                               ] ),
+
+            ISO_OUTLIERS: lock( ["US", "CA", "BR", "JP", "KP", "KR", "MX", "CN", "TW", "AS", "GU", "UM", "VI"] )
+
         } );
 
     // local variable used to generate locale-specific month names and abbreviations
@@ -224,40 +251,6 @@ const { _ud = "undefined", $scope } = constants;
     };
 
     /**
-     * Returns true if the specified locale is the default locale (en-US)
-     * @param pLocale {string|Intl.Locale} the locale to test
-     * @returns {boolean} true if the specified locale is the default locale (en-US)
-     */
-    function isDefaultLocale( pLocale )
-    {
-        if ( isString( pLocale ) )
-        {
-            return lcase( DEFAULT_LOCALE_STRING ) === lcase( pLocale );
-        }
-
-        let locale = resolveLocale( pLocale );
-
-        return locale === DEFAULT_LOCALE || asString( locale?.baseName ).startsWith( DEFAULT_LOCALE_STRING );
-    }
-
-    /**
-     * Returns true if the specified locale is the runtime locale
-     * @param pLocale {string|Intl.Locale} the locale to test
-     * @returns {boolean} true if the specified locale is the runtime locale
-     */
-    function isRuntimeLocale( pLocale )
-    {
-        if ( isString( pLocale ) )
-        {
-            return lcase( runtimeLocaleString() ) === lcase( pLocale );
-        }
-
-        let locale = resolveLocale( pLocale );
-
-        return locale === getRuntimeLocale() || asString( locale?.baseName ).startsWith( runtimeLocaleString() );
-    }
-
-    /**
      * Returns true if the specified locales represent the same Locale.
      *
      * @param pLocaleA the first locale to compare to the second locale
@@ -275,8 +268,47 @@ const { _ud = "undefined", $scope } = constants;
             localeA = localeA.minimize();
             localeB = localeB.minimize();
         }
+        else
+        {
+            localeA = localeA.maximize();
+            localeB = localeB.maximize();
+        }
 
         return localeA === localeB || localeA?.baseName === localeB?.baseName;
+    }
+
+    /**
+     * Returns true if the specified locale is the default locale (en-US)
+     * @param pLocale {string|Intl.Locale} the locale to test
+     * @returns {boolean} true if the specified locale is the default locale (en-US)
+     */
+    function isDefaultLocale( pLocale )
+    {
+        if ( isString( pLocale ) )
+        {
+            return lcase( DEFAULT_LOCALE_STRING ) === lcase( pLocale );
+        }
+
+        let locale = resolveLocale( pLocale );
+
+        return locale === DEFAULT_LOCALE || isSameLocale( locale, DEFAULT_LOCALE ) || asString( locale?.baseName ).startsWith( DEFAULT_LOCALE_STRING );
+    }
+
+    /**
+     * Returns true if the specified locale is the runtime locale
+     * @param pLocale {string|Intl.Locale} the locale to test
+     * @returns {boolean} true if the specified locale is the runtime locale
+     */
+    function isRuntimeLocale( pLocale )
+    {
+        if ( isString( pLocale ) )
+        {
+            return lcase( runtimeLocaleString() ) === lcase( pLocale );
+        }
+
+        let locale = resolveLocale( pLocale );
+
+        return locale === getRuntimeLocale() || isSameLocale( locale, getRuntimeLocale() ) || asString( locale?.baseName ).startsWith( runtimeLocaleString() );
     }
 
     /**
@@ -293,10 +325,10 @@ const { _ud = "undefined", $scope } = constants;
      */
     function isSameLanguage( pLocaleA, pLocaleB )
     {
-        let localeA = resolveLocale( pLocaleA );
-        let localeB = resolveLocale( pLocaleB );
+        let localeA = resolveLocale( pLocaleA ).maximize();
+        let localeB = resolveLocale( pLocaleB ).maximize();
 
-        if ( isSameLocale( localeA, localeB ) )
+        if ( isSameLocale( localeA, localeB ) || isSameLocale( pLocaleA, pLocaleB, true ) )
         {
             return true;
         }
@@ -321,8 +353,8 @@ const { _ud = "undefined", $scope } = constants;
      */
     function isSameRegion( pLocaleA, pLocaleB )
     {
-        let localeA = resolveLocale( pLocaleA );
-        let localeB = resolveLocale( pLocaleB );
+        let localeA = resolveLocale( pLocaleA ).maximize();
+        let localeB = resolveLocale( pLocaleB ).maximize();
 
         if ( isSameLocale( localeA, localeB ) )
         {
@@ -347,7 +379,6 @@ const { _ud = "undefined", $scope } = constants;
      *
      */
     const isDefaultLanguage = ( pLocale ) => isDefaultLocale( pLocale ) || isSameLanguage( DEFAULT_LOCALE, pLocale );
-
 
     /**
      * Returns true if the specified locale uses the same language as the runtime locale.
@@ -510,6 +541,40 @@ const { _ud = "undefined", $scope } = constants;
 
     const getDayLtr = ( pDate, pLocale ) => isDate( pDate ) ? asArray( getDayLetters( pLocale ) )[pDate.getDay()] : _mt_str;
 
+    const getDayOrdinal = ( pDayNumber ) =>
+    {
+        let num = asInt( pDayNumber );
+
+        let s = asString( num, true );
+
+        let ones = asInt( s.slice( -1 ) );
+
+        if ( num < 11 || num > 13 )
+        {
+            switch ( ones )
+            {
+                case 0:
+                    return `${s}th`;
+
+                case 1:
+                    return `${s}st`;
+
+                case 2:
+                    return `${s}nd`;
+
+                case 3:
+                    return `${s}rd`;
+
+                default:
+                    return `${s}th`;
+            }
+        }
+        else
+        {
+            return `${s}th`;
+        }
+    };
+
     const getEras = function( pLocale )
     {
         const locale = resolveLocale( pLocale );
@@ -569,12 +634,12 @@ const { _ud = "undefined", $scope } = constants;
             if ( isFunction( locale.getWeekInfo ) )
             {
                 // noinspection JSUnresolvedReference
-                weekData = Object.assign( locale.getWeekInfo() || locale.weekInfo || {} );
+                weekData = Object.assign( {}, { ...(locale.getWeekInfo() || locale.weekInfo || {}) } );
             }
             else
             {
                 // noinspection JSUnresolvedReference
-                weekData = Object.assign( locale.weekInfo || weekData || {} );
+                weekData = Object.assign( {}, { ...(locale.weekInfo || weekData || {}) } );
             }
         }
         catch( ex )
@@ -582,10 +647,38 @@ const { _ud = "undefined", $scope } = constants;
             toolBocksModule.reportError( ex, ex.message, S_ERROR, calculateErrorSourceName( modName, "getWeekData" ), locale );
         }
 
+        function calculateMinimalDays( pLocale = locale )
+        {
+            const local = (pLocale || locale).maximize();
+
+            const region = ucase( local.region || (local.baseName.split( "-" )[1]) );
+
+            const calendarUsingFourAsMinimalDays = "iso8601";
+
+            if ( (calendarUsingFourAsMinimalDays === lcase( asString( local.calendar, true ) )) ||
+                 lcase( asString( local.toString(), true ) ).includes( calendarUsingFourAsMinimalDays ) )
+            {
+                return 4;
+            }
+
+            const isoRegions = DEFAULTS.ISO_REGIONS;
+
+            if ( isoRegions.includes( ucase( region ) ) )
+            {
+                return 4;
+            }
+
+            // These "Outliers" are regions that specifically use minimalDays = 1
+            const isoOutliers = DEFAULTS.ISO_OUTLIERS;
+
+            return isoOutliers.includes( region ) ? 1 : 4;
+        }
+
         if ( weekData )
         {
             weekData.firstDay = [0, 7].includes( weekData.firstDay ) ? 0 : weekData.firstDay;
             weekData.weekend = asArray( weekData.weekend ).map( e => 7 === e ? 0 : e );
+            weekData.minimalDays = weekData.minimalDays ?? calculateMinimalDays( locale );
         }
 
         return lock( weekData );
@@ -807,7 +900,7 @@ const { _ud = "undefined", $scope } = constants;
 
     // risking the usual confusion between location utilities and locale utilities
     // in the interest of reducing the number of modules and because we don't have a lot of "geo" functionality yet,
-    // we define these function here
+    // we define these functions here
 
     const ANGULAR_MEASUREMENT =
         lock( {
@@ -1034,6 +1127,7 @@ const { _ud = "undefined", $scope } = constants;
             getDayShortNames: getDayAbbreviations,
             getDayLetters,
             getDayLtr,
+            getDayOrdinal,
             getEras,
             getAmPmStrings,
             getWeekData,

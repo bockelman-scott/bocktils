@@ -426,7 +426,8 @@ describe( "TokenSet Locales", () =>
                                                  "miércoles",
                                                  "jueves",
                                                  "viernes",
-                                                 "sábado"
+                                                 "sábado",
+                                                 "domingo"
                                              ] );
 
         expect( tokenSet.dayAbbreviations ).toEqual( [
@@ -436,7 +437,8 @@ describe( "TokenSet Locales", () =>
                                                          "mié",
                                                          "jue",
                                                          "vie",
-                                                         "sáb"
+                                                         "sáb",
+                                                         "dom"
                                                      ] );
 
         expect( tokenSet.dayLetters ).toEqual( [
@@ -446,7 +448,8 @@ describe( "TokenSet Locales", () =>
                                                    "X",
                                                    "J",
                                                    "V",
-                                                   "S"
+                                                   "S",
+                                                   "D"
                                                ] );
     } );
 

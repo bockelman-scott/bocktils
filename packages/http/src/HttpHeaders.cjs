@@ -23,6 +23,7 @@ const jsonUtils = require( "@toolbocks/json" );
 
 // import the HTTP constants
 const httpConstants = require( "./HttpConstants.cjs" );
+const console = require( "node:console" );
 
 // get the specific core modules we need
 const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
@@ -444,28 +445,11 @@ const { _ud = "undefined", $scope } = constants;
     {
         #map = new Map();
 
-        #webApiHeaders = attempt( () => (_ud === typeof Headers) ? null : attempt( () => new Headers() ) );
-
         constructor( pOptions )
         {
             super();
 
             let options = isNull( pOptions ) ? {} : (isArray( pOptions ) ? asArray( pOptions || [] ) : asObject( pOptions || {} ));
-
-            if ( !isNull( options ) )
-            {
-                try
-                {
-                    if ( !isNull( this.#webApiHeaders ) && (isKeyValueArray( options ) || isPopulatedObject( options ) || (_ud !== typeof Headers && implementsInterface( options, Headers ))) )
-                    {
-                        this.#webApiHeaders = new Headers( options );
-                    }
-                }
-                catch( ex )
-                {
-                    // ignored
-                }
-            }
 
             let entries = attempt( () => objectEntries( processHeaderOptions( options ) ) ) || (isFunction( options?.entries ) ? attempt( () => [...(options.entries())] ) : options);
 
@@ -553,13 +537,28 @@ const { _ud = "undefined", $scope } = constants;
                         attempt( () => me.set( key, httpHeader ) );
                         attempt( () => me.#map.set( key, httpHeader ) );
                     }
-
-                    if ( !isNull( me.#webApiHeaders ) && isFunction( me.#webApiHeaders.append ) )
-                    {
-                        attempt( () => me.#webApiHeaders.append( key, this.#resolveValue( value, pKey ) ) );
-                    }
                 }
             }
+        }
+
+        [Symbol.iterator]()
+        {
+            return [...(this.#map.entries() || super[Symbol.iterator]())];
+        }
+
+        entries()
+        {
+            return [...(this.#map.entries() || super.entries())];
+        }
+
+        keys()
+        {
+            return [...(this.#map.keys() || super.keys())];
+        }
+
+        values()
+        {
+            return [...(this.#map.values() || super.values())];
         }
 
         delete( pKey )
@@ -575,12 +574,6 @@ const { _ud = "undefined", $scope } = constants;
 
             attempt( () => me.#map.delete( key ) );
             attempt( () => me.#map.delete( lcase( key ) ) );
-
-            if ( isNonNullObject( me.#webApiHeaders ) && isFunction( me.#webApiHeaders.delete ) )
-            {
-                attempt( () => !isNull( me.#webApiHeaders ) ? me.#webApiHeaders.delete( key ) : no_op() );
-                attempt( () => !isNull( me.#webApiHeaders ) ? me.#webApiHeaders.delete( lcase( key ) ) : no_op() );
-            }
 
             attempt( () => super.delete( key ) );
             attempt( () => super.delete( lcase( key ) ) );
@@ -602,8 +595,7 @@ const { _ud = "undefined", $scope } = constants;
             let value = attempt( () => super.get( key ) ) ||
                         attempt( () => super.get( lcase( key ) ) ) ||
                         attempt( () => me.#map.get( key ) ) ||
-                        attempt( () => me.#map.get( lcase( key ) ) ) ||
-                        (!isNull( me.#webApiHeaders ) && isFunction( me.#webApiHeaders.get ) ? (attempt( () => me.#webApiHeaders.get( key ) ) || attempt( () => me.#webApiHeaders.get( lcase( key ) ) )) : null);
+                        attempt( () => me.#map.get( lcase( key ) ) );
 
             value = value || me[key];
 
@@ -636,8 +628,7 @@ const { _ud = "undefined", $scope } = constants;
             return attempt( () => super.has( key ) ) ||
                    attempt( () => super.has( lcase( key ) ) ) ||
                    attempt( () => me.#map.has( key ) ) ||
-                   attempt( () => me.#map.has( lcase( key ) ) ) ||
-                   (!isNull( me.#webApiHeaders ) && isFunction( me.#webApiHeaders.has ) ? (attempt( () => me.#webApiHeaders.has( key ) ) || attempt( () => me.#webApiHeaders.has( lcase( key ) ) )) : false);
+                   attempt( () => me.#map.has( lcase( key ) ) );
         }
 
         set( pKey, pValue )
@@ -657,11 +648,6 @@ const { _ud = "undefined", $scope } = constants;
                     attempt( () => super.set( key, httpHeader ) );
 
                     attempt( () => me.#map.set( key, httpHeader ) );
-                }
-
-                if ( !isNull( me.#webApiHeaders ) && isFunction( me.#webApiHeaders.set ) )
-                {
-                    attempt( () => me.#webApiHeaders.set( key, this.#resolveValue( value ) ) );
                 }
             }
         }
@@ -778,7 +764,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             if ( _ud !== typeof Headers )
             {
-                return isNonNullObject( this.#webApiHeaders ) ? new Headers( this.#webApiHeaders || this.toLiteral() ) : new Headers( this.toLiteral() );
+                return new Headers( this.toLiteral() );
             }
 
             throw new IllegalStateError( `This execution environment does not define the Headers class/interface.` );

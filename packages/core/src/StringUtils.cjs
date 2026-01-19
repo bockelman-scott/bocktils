@@ -168,6 +168,8 @@ const { _ud = "undefined", $scope } = constants;
         {
             isUndefined,
             isNull,
+            isScalar,
+            isPrimitive,
             isPrimitiveWrapper,
             isDate,
             isString,
@@ -230,35 +232,80 @@ const { _ud = "undefined", $scope } = constants;
     /**
      * When a function is added to a built-in object prototype,
      * the value does not need to be passed in, so we need to find it
+     *
      * @param pValue either a value or undefined when the value should be the value of 'this'
-     * @returns {number | string} the value to use in the function
+     *
+     * @param pDefault a value to use if 'this' is the global object or the resolved value is null or undefined
+     *
+     * @returns {number | string} the value to use in the calling function
+     *
      * @private
      */
-    function _resolveInput( pValue )
+    function _resolveInput( pValue, pDefault = pValue )
     {
-        let input = pValue;
+        let thiz = (this === $scope() ? (pValue ?? pDefault ?? this) : this);
 
-        if ( isUndefined( pValue ) )
+        const isValidThis = (isNonNullObject( thiz ) ||
+                             isFunction( thiz ) ||
+                             isPrimitiveWrapper( thiz ) ||
+                             isPrimitiveWrapper( Object.getPrototypeOf( thiz ) )
+                            ) && ($scope() !== thiz);
+
+        thiz = isValidThis ? thiz :
+            {
+                valueOf: () => pValue ?? pDefault,
+                toString: () => String( pValue ?? pDefault ?? _mt )
+            };
+
+        let input = ((_ud === typeof pValue) || null === pValue) ?
+                    (isFunction( thiz.valueOf ) ? thiz.valueOf() : (isFunction( thiz.toString ) ? thiz.toString() : null)) :
+                    (pValue ?? pDefault);
+
+        if ( _ud === typeof input || null === input )
         {
-            if ( this instanceof Number || Number === this?.constructor || isNumber( this?.prototype ) )
+            input = ((_ud === typeof pDefault) || null === pDefault) ?
+                    (isFunction( thiz.valueOf ) ? thiz.valueOf() : (isFunction( thiz.toString ) ? thiz.toString() : null)) :
+                    (pDefault ?? pValue);
+        }
+
+        if ( isScalar( input ) )
+        {
+            if ( isPrimitiveWrapper( input ) )
+            {
+                input = isFunction( input.valueOf ) ? input.valueOf() : (isFunction( input.toString ) ? input.toString() : (pDefault ?? input));
+            }
+        }
+        else if ( isScalar( pDefault ) )
+        {
+            if ( isPrimitiveWrapper( pDefault ) )
+            {
+                input = isFunction( pDefault.valueOf ) ? pDefault.valueOf() : (isFunction( pDefault.toString ) ? pDefault.toString() : (pDefault ?? input));
+            }
+        }
+
+        if ( _ud === typeof input || null === input )
+        {
+            if ( this instanceof Number || Number === this?.constructor || isNumber( this?.prototype ) || Number === Object.getPrototypeOf( this ) )
             {
                 input = (Number( this ).valueOf() || parseFloat( _mt_str + this )) || pValue;
             }
-            else if ( this instanceof String || String === this?.constructor || isString( this?.prototype ) )
+            else if ( this instanceof String || String === this?.constructor || isString( this?.prototype ) || String === Object.getPrototypeOf( this ) )
             {
-                input = (String( this ).valueOf() || asString( _mt_str + this )) || pValue;
+                input = (String( this ).valueOf() || asString( _mt_str + this )) ?? pValue;
             }
-            else if ( this instanceof Boolean || Boolean === this?.constructor || isBoolean( this?.prototype ) )
+            else if ( this instanceof Boolean || Boolean === this?.constructor || isBoolean( this?.prototype ) || Boolean === Object.getPrototypeOf( this ) )
             {
                 input = Boolean( this.valueOf() );
             }
             else if ( this[Symbol.toPrimitive] )
             {
-                input = this[Symbol.toPrimitive]( "string" ) || pValue;
+                input = this[Symbol.toPrimitive]( "string" ) ?? pValue;
             }
         }
 
-        return input || pValue;
+        let candidates = [input, pValue, pDefault].filter( e => (e !== $scope()) );
+
+        return candidates.find( e => (_ud !== typeof e && null !== e) );
     }
 
     /**
@@ -702,18 +749,18 @@ const { _ud = "undefined", $scope } = constants;
     //// AS STRING HELPERS ////
     function _handleFunctionInput( pValue, pTrim, pOptions )
     {
-        const options = _aso( pOptions );
+        const options = _aso( pOptions || {} );
 
-        if ( options.omitFunctions )
+        if ( options?.omitFunctions )
         {
             return _mt_str;
         }
 
-        const input = _resolveInput.call( this, pValue ) || pValue;
+        const input = isFunction( pValue ) ? (pValue ?? _resolveInput.call( (this ?? pValue), pValue ) ?? pValue) : (function() {});
 
-        let result = options.executeFunctions ? _attemptInvocation( input, options ) || _mt_str : _mt_str;
+        let result = (options?.executeFunctions && isFunction( input )) ? _attemptInvocation( input, options ) || _mt_str : _mt_str;
 
-        if ( isBlank( result ) )
+        if ( isBlank( result ) && isFunction( input ) )
         {
             result = (options.returnFunctionSource ? getFunctionSource( input ) : _mt_str) ||
                      input?.name ||
@@ -726,21 +773,10 @@ const { _ud = "undefined", $scope } = constants;
 
         if ( isBlank( result ) )
         {
-            result = _getClassOrFunctionNameFromSource( result, options );
+            result = _getClassOrFunctionNameFromSource( (input ?? result), options );
         }
 
         return result;
-    }
-
-    function _attemptInvocation( pFunction, pOptions )
-    {
-        const options = _aso( pOptions );
-
-        if ( isFunction( pFunction ) )
-        {
-            return attempt( () => pFunction.call( options?.this || options, options ), options ) ||
-                   getFunctionName( pFunction, options );
-        }
     }
 
     /**
@@ -782,11 +818,13 @@ const { _ud = "undefined", $scope } = constants;
             return getFunctionName( pValue, options );
         }
 
-        const regExp = _rxClass.test( pValue ) ? _rxClass : _rxFunction;
+        let value = isString( pValue ) ? pValue.trim() : _mt_str;
 
-        if ( regExp.test( pValue ) )
+        const regExp = _rxClass.test( value ) ? _rxClass : _rxFunction;
+
+        if ( regExp.test( value ) )
         {
-            let value = asString( pValue.replace( regExp, _mt_str ), true, options );
+            value = asString( value.replace( regExp, _mt_str ), true, options );
 
             let indices = [value.indexOf( _spc ), value.indexOf( "{" )].filter( e => e > 1 );
 
@@ -798,12 +836,22 @@ const { _ud = "undefined", $scope } = constants;
             }
         }
 
-        return pValue;
+        return value;
+    }
+
+    function _attemptInvocation( pFunction, pOptions )
+    {
+        const options = _aso( pOptions );
+
+        if ( isFunction( pFunction ) )
+        {
+            return attempt( () => pFunction( options ) ) ?? getFunctionName( pFunction, options );
+        }
     }
 
     function _handlePrimitiveWrapperInput( pValue, pTrim, pOptions )
     {
-        let input = _resolveInput.call( pValue, pValue ) || pValue;
+        let input = pValue ?? _resolveInput.call( this ?? pValue, pValue ) ?? pValue;
 
         if ( input instanceof Boolean )
         {
@@ -830,7 +878,7 @@ const { _ud = "undefined", $scope } = constants;
     {
         const options = _aso( pOptions );
 
-        let input = new Date( _resolveInput.call( pValue, pValue ) || pValue );
+        let input = new Date( pValue ?? _resolveInput.call( (this ?? pValue), pValue ) ?? pValue );
 
         let s = input.toISOString();
 
@@ -855,18 +903,18 @@ const { _ud = "undefined", $scope } = constants;
 
         const me = toolBocksModule || exposeModule || asString;
 
-        const input = _resolveInput.call( pValue, pValue ) || pValue;
+        const input = pValue ?? _resolveInput.call( (this ?? pValue), pValue ) ?? pValue;
 
         if ( isNull( input ) )
         {
             return _mt_str;
         }
 
-        let s = input.toString();
+        let s = isPrimitiveWrapper( input ) || (isNonNullObject( input ) && isFunction( input.toString )) ? input.toString() : String( input );
 
         function isGenericObjectString( pStr )
         {
-            const value = pStr || s;
+            const value = String( pStr || s );
 
             return "[object object]" === lcase( value ) || "Object" === value || isBlank( value );
         }
@@ -896,7 +944,7 @@ const { _ud = "undefined", $scope } = constants;
     {
         let s = _mt_str;
 
-        let input = pValue || pOptions?.value || {};
+        let input = (pValue ?? pOptions?.value ?? {}) || {};
 
         if ( isNonNullObject( input ) )
         {
@@ -939,12 +987,12 @@ const { _ud = "undefined", $scope } = constants;
                                      const key = ObjectEntry.getKey( entry );
                                      const value = ObjectEntry.getValue( entry );
 
-                                     s += "\"" + asString( key, true ) + "\": \"" + asString( value, true ) + "\",\n";
+                                     s += "\"" + asString( key, true ).replaceAll( /"/g, "\\\"" ) + "\": \"" + asString( value, true ).replaceAll( /"/g, "\\\"" ) + "\",\n";
 
                                      numKeys += 1;
                                  } );
 
-                s = numKeys > 0 ? s.slice( -2 ) : s; // remove last comma + newline sequence
+                s = String( numKeys > 0 ? s.slice( -2 ) : s ).trim(); // remove last comma + newline sequence
 
                 s += "}";
 
@@ -961,7 +1009,7 @@ const { _ud = "undefined", $scope } = constants;
 
         let s = _mt_str;
 
-        if ( pOptions.checkForByteArray && arr.every( e => isNumeric( e ) && toDecimal( e ) ) <= 255 )
+        if ( pOptions?.checkForByteArray && arr.every( e => isNumeric( e ) && toDecimal( e ) ) <= 255 )
         {
             s = fromUtf8ByteArray( arr.map( e => toDecimal( e ) ) );
         }
@@ -970,7 +1018,7 @@ const { _ud = "undefined", $scope } = constants;
             s = arr.map( e => asString( e, pOptions?.trim, pOptions ) ).join( (asString( pOptions.joinOn ) || _mt_chr) );
         }
 
-        return pOptions?.trim ? (_mt_str + s).trim() : s;
+        return String( pOptions?.trim ? (_mt_str + String( s )).trim() : s );
     }
 
     function _handleObjectInput( pValue, pTrim, pOptions )
@@ -980,11 +1028,11 @@ const { _ud = "undefined", $scope } = constants;
             return _mt_str;
         }
 
-        const options = _aso( pOptions ) || {};
+        const options = _aso( pOptions || {} ) || {};
 
         const trim = !!(pTrim || options.trim);
 
-        const input = pValue || options?.value;
+        const input = pValue ?? options?.value;
 
         if ( isTypedArray( input ) )
         {
@@ -1056,25 +1104,25 @@ const { _ud = "undefined", $scope } = constants;
     // noinspection OverlyComplexFunctionJS
     function _asStringFromType( pIn, pTrim, pOptions )
     {
-        let s;
+        let s = (pIn ?? _resolveInput.call( this, pIn ));
 
-        // return a value based on the type pf the argument
-        switch ( typeof pIn )
+        // return a value based on the type of the argument
+        switch ( typeof (s ?? pIn) )
         {
             case _ud:
-                s = _mt_str;
+                s = _mt;
                 break;
 
             case _str:
-                s = pTrim ? (_mt_str + pIn).trim() : pIn;
+                s = (String( pTrim ? String( _mt + pIn ).trim() : pIn ));
 
                 if ( pOptions.assumeNumeric )
                 {
-                    if ( isNumeric( pIn ) )
+                    if ( isNumeric( s ) )
                     {
-                        s = (_mt_str + _handleNumericString( pIn, pOptions ));
+                        s = (_mt_str + _handleNumericString( s, pOptions ));
                     }
-                    s = pIn.replaceAll( /[^\d,.-]/g, _mt_str );
+                    s = pIn.replaceAll( /[^\d,.EeXxOoBb-]/g, _mt_str );
                     s = (_mt_str + _handleNumericString( s, pOptions ));
                 }
                 break;
@@ -1082,26 +1130,48 @@ const { _ud = "undefined", $scope } = constants;
             // numeric values are converted to the string representation of their float value
             case _num:
             case _big:
-                s = _handleNumericString( pIn, pOptions ) || _zero;
+                s = _handleNumericString( s, pOptions ) || _zero;
                 break;
 
             // booleans are converted to either the string "true" or the string "false"
             case _bool:
-                s = pIn ? S_TRUE : S_FALSE;
+                s = (s ?? pIn) ? S_TRUE : S_FALSE;
                 break;
 
             // objects are a special case...
             case _obj:
-                s = _handleObjectInput( pIn, pTrim, pOptions );
+                if ( isNonNullObject( pIn ?? s ) )
+                {
+                    if ( $scope() === (pIn ?? s) )
+                    {
+                        s = "{}";
+                    }
+                    else
+                    {
+                        s = _handleObjectInput( (pIn ?? s), pTrim, pOptions );
+                    }
+                    break;
+                }
+                else
+                {
+                    s = _mt;
+                }
                 break;
 
             case _fun:
-                s = _handleFunctionInput( pIn, pTrim, pOptions );
+                if ( $scope() === (pIn ?? s) )
+                {
+                    s = "(globalThis)";
+                }
+                else
+                {
+                    s = _handleFunctionInput( (pIn ?? s), pTrim, pOptions );
+                }
                 break;
 
             case _symbol:
                 // see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/String#using_string_to_stringify_a_symbol
-                s = String( pIn ); // only the String function can handle Symbol without throwing an error
+                s = String( (pIn ?? s) ); // only the String function can handle Symbol without throwing an error
                 s = _asStringFromType( s, pTrim, pOptions );
                 break;
 
@@ -1110,7 +1180,7 @@ const { _ud = "undefined", $scope } = constants;
                 break;
         }
 
-        return s;
+        return s ?? _mt;
     }
 
     /**
@@ -1151,11 +1221,11 @@ const { _ud = "undefined", $scope } = constants;
         let trim = !!(pTrim || options.trim);
         options.trim = trim;
 
-        let input = _resolveInput.call( this, pStr );
+        let input = ((_ud !== typeof pStr && null !== pStr) && isScalar( pStr ) && isString( pStr )) ? String( pStr ) : (_resolveInput.call( (this ?? pStr), pStr ));
 
         if ( _ud === typeof input || null === input || _z === input )
         {
-            return _mt_str;
+            return isString( pStr ) ? (trim ? String( pStr ).trim() : String( pStr )) : _mt_str;
         }
 
         if ( isSymbol( input ) )
@@ -1573,7 +1643,7 @@ const { _ud = "undefined", $scope } = constants;
      */
     const leftOf = function( pString, pOf )
     {
-        let s = asString( _resolveInput.call( this, pString ) );
+        let s = asString( isString( pString ) ? pString ?? _resolveInput.call( (this ?? pString), pString ) ?? String( pString ) : _resolveInput.call( (this ?? pString), pString ) ?? String( pString ) );
 
         const pos = findPosition( s, pOf );
 
@@ -1584,12 +1654,14 @@ const { _ud = "undefined", $scope } = constants;
     {
         const pos = asInt( pPosition, -1 );
 
+        let s = asString( isString( pString ) ? pString ?? _resolveInput.call( (this ?? pString), pString ) : _resolveInput.call( (this ?? pString), pString ) ?? String( pString ) );
+
         if ( 0 <= pos )
         {
-            return pString.slice( pos + ((_str === typeof pOf) ? pOf.length : 1), pString.length );
+            return s.slice( pos + ((_str === typeof pOf) ? pOf.length : 1), s.length );
         }
 
-        return pString;
+        return s ?? pString;
     }
 
     /**
@@ -1600,7 +1672,7 @@ const { _ud = "undefined", $scope } = constants;
      */
     const rightOf = function( pString, pOf )
     {
-        let s = asString( _resolveInput.call( this, pString ) );
+        let s = asString( isString( pString ) ? pString ?? _resolveInput.call( (this ?? pString), pString ) : _resolveInput.call( (this ?? pString), pString ) ?? String( pString ) );
 
         const pos = findPosition( s, pOf );
 
@@ -1617,7 +1689,7 @@ const { _ud = "undefined", $scope } = constants;
      */
     const leftOfLast = function( pString, pOf )
     {
-        let s = asString( _resolveInput.call( this, pString ) );
+        let s = asString( isString( pString ) ? pString ?? _resolveInput.call( (this ?? pString), pString ) : _resolveInput.call( (this ?? pString), pString ) ?? String( pString ) );
 
         const pos = findLastPosition( s, pOf );
 
@@ -1632,7 +1704,7 @@ const { _ud = "undefined", $scope } = constants;
      */
     const rightOfLast = function( pString, pOf )
     {
-        let s = asString( _resolveInput.call( this, pString ) );
+        let s = asString( isString( pString ) ? pString ?? _resolveInput.call( (this ?? pString), pString ) : _resolveInput.call( (this ?? pString), pString ) ?? String( pString ) );
 
         const pos = findLastPosition( s, pOf );
 
@@ -1933,7 +2005,7 @@ const { _ud = "undefined", $scope } = constants;
 
         const options = populateOptions( { ...(pOptions || calculateDecimalSymbols()) }, (isObject( pDefault ) ? pDefault : pOptions), DEFAULT_NUMBER_SYMBOLS );
 
-        let input = _resolveInput.call( this, pValue );
+        let input = _resolveInput.call( (this ?? pValue), pValue );
 
         if ( isPrimitiveWrapper( input ) )
         {
@@ -2007,13 +2079,17 @@ const { _ud = "undefined", $scope } = constants;
      */
     const asInt = function( pValue, pDefault = 0, pOptions )
     {
+        let ipt = pValue ?? _resolveInput.call( (this ?? pValue), pValue ) ?? pValue;
+
+        let symbols = pOptions || calculateDecimalSymbols();
+
         const
             {
-                input,
-                dflt,
-                options,
-                type
-            } = _resolveAsArguments( false, _resolveInput.call( this, pValue ), pDefault, (pOptions || calculateDecimalSymbols()) );
+                input = ipt ?? pValue,
+                dflt = pDefault ?? 0,
+                options = symbols,
+                type = typeof (ipt ?? pValue)
+            } = _resolveAsArguments( false, (ipt ?? pValue), pDefault, symbols );
 
         if ( [_num, _big].includes( type ) && _isIntegerOutOfRange( input ) )
         {
@@ -2021,7 +2097,7 @@ const { _ud = "undefined", $scope } = constants;
             return asInt( dflt, 0, options );
         }
 
-        let val = attempt( () => _asIntFromType( input, dflt, options ) );
+        let val = attempt( () => _asIntFromType( (input ?? pValue), dflt, options ) );
 
         if ( isNull( val ) || isNanOrInfinite( val ) )
         {
@@ -2034,7 +2110,7 @@ const { _ud = "undefined", $scope } = constants;
             val = asInt( dflt, 0, options );
         }
 
-        return val || 0;
+        return val ?? 0;
     };
 
     String.prototype.asInt = asInt;
@@ -2092,9 +2168,14 @@ const { _ud = "undefined", $scope } = constants;
 
     function _asFloatFromType( pIn, pDefault, pOptions )
     {
-        let val = null;
+        let val = pIn ?? pDefault;
 
-        const type = typeof pIn;
+        if ( isNumber( val ) || isNumber( pIn ) )
+        {
+            return parseFloat( val ?? pIn ?? pDefault );
+        }
+
+        const type = typeof (pIn ?? val);
 
         switch ( type )
         {
@@ -2119,7 +2200,7 @@ const { _ud = "undefined", $scope } = constants;
                 break;
         }
 
-        return val;
+        return val ?? asFloat( pDefault );
     }
 
     /**
@@ -2131,15 +2212,20 @@ const { _ud = "undefined", $scope } = constants;
      */
     const asFloat = function( pValue, pDefault = 0, pOptions )
     {
-        const {
-            input,
-            dflt,
-            options
-        } = _resolveAsArguments( true, _resolveInput.call( this, pValue ), pDefault, (pOptions || calculateDecimalSymbols()) );
+        let ipt = pValue ?? _resolveInput.call( (this ?? pValue), pValue ) ?? pValue;
 
-        let val = attempt( () => _asFloatFromType( input, dflt, options ) );
+        let symbols = isObject( pOptions ) ? (pOptions?.decimalFormatSymbol ?? pOptions?.decimalSymbols ?? pOptions?.symbols ?? pOptions ?? calculateDecimalSymbols()) : calculateDecimalSymbols();
 
-        if ( isNull( val ) || isNanOrInfinite( val ) )
+        const
+            {
+                input = ipt ?? pValue,
+                dflt = pDefault ?? 0.0,
+                options = symbols
+            } = _resolveAsArguments( true, ipt ?? pValue, pDefault ?? 0.0, symbols ?? calculateDecimalSymbols() );
+
+        let val = !isNumber( input ) ? attempt( () => _asFloatFromType( input, dflt, options ) ) : parseFloat( input );
+
+        if ( !isNumber( val ) || isNanOrInfinite( val ) )
         {
             val = asFloat( dflt, 0.0, options );
         }
@@ -2348,7 +2434,7 @@ const { _ud = "undefined", $scope } = constants;
      */
     const evaluateBoolean = function( pValue, ...pFunctionArgs )
     {
-        let val = _resolveInput.call( this, pValue );
+        let val = pValue ?? _resolveInput.call( (this ?? pValue), pValue ) ?? pValue;
 
         // missing values are always interpreted as negatives (false)
         if ( isNull( val ) )
@@ -2650,7 +2736,7 @@ const { _ud = "undefined", $scope } = constants;
      */
     const isValidJsonEntity = function( pString, pChars = ["{", "}"], pTest = false )
     {
-        let str = _resolveInput.call( this, pString );
+        let str = pString ?? _resolveInput.call( (this ?? pString), pString ) ?? pString;
 
         const s = attempt( _prepareJson, str ) || asString( str, true );
 
@@ -2764,7 +2850,7 @@ const { _ud = "undefined", $scope } = constants;
      */
     const isValidJson = function( pString, pOptions = JSON_VALIDATION_OPTIONS )
     {
-        let str = _resolveInput.call( this, pString );
+        let str = pString ?? _resolveInput.call( (this ?? pString), pString );
 
         const s = attempt( _prepareJson, str ) || asString( str, true );
 
@@ -3465,7 +3551,7 @@ const { _ud = "undefined", $scope } = constants;
 
             let data = pData || {};
 
-            name = name.replace( (asString( data?.address, true ) || asString( data?.address_line_1 || _mt, true ), true), _mt );
+            name = name.replace( (asString( data?.address, true ) || asString( data?.address_line_1 || _mt, true )), _mt );
             name = name.replace( (asString( data?.phoneNumber || data?.phone || data?.phone_number || _mt, true )), _mt );
             name = name.replace( (asString( data?.emailAddress || data?.email || data?.email_address || _mt, true )), _mt );
             name = name.replace( normalizeEmailAddress( asString( data?.emailAddress || data?.email || data?.email_address ) || _mt, true ), _mt );
@@ -3731,7 +3817,7 @@ const { _ud = "undefined", $scope } = constants;
 
     const reverseString = function( pStr )
     {
-        let str = _resolveInput.call( this, pStr );
+        let str = pStr ?? _resolveInput.call( (this ?? pStr), pStr ) ?? pStr;
 
         if ( null == str || _ud === typeof str || isBlank( str ) )
         {
@@ -3918,7 +4004,7 @@ const { _ud = "undefined", $scope } = constants;
     {
         const options = { ...DEFAULT_TIDY_OPTIONS, ...(pOptions || {}) };
 
-        let str = asString( _resolveInput.call( this, pString ) || pString, !!options?.trim, options );
+        let str = asString( (pString ?? _resolveInput.call( (this ?? pString), pString )) || pString, !!options?.trim, options );
 
         for( const [key, operation] of Object.entries( TRIM_OPERATIONS ) )
         {

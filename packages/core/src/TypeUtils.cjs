@@ -2243,7 +2243,7 @@ const { _ud = "undefined", $scope } = constants;
     {
         const options = { ...({ boxedPrimitiveIsScalar: true }), ...(pOptions || {}) };
 
-        if ( isNull( pVal ) )
+        if ( ( _ud === typeof pVal) || isNull( pVal ) )
         {
             return !!options.nullIsScalar;
         }

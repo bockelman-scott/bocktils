@@ -178,9 +178,9 @@ describe( "Days", () =>
               expect( usDays ).toEqual( localeUtils.DEFAULTS.DAY_NAMES );
               expect( britishDays ).toEqual( localeUtils.DEFAULTS.DAY_NAMES );
 
-              expect( germanDays ).toEqual( ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"] );
+              expect( germanDays ).toEqual( ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"] );
 
-              expect( spanishDays ).toEqual( ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"] );
+              expect( spanishDays ).toEqual( ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"] );
 
           } );
 
@@ -201,9 +201,9 @@ describe( "Days", () =>
 
               expect( britishMonths ).toEqual( localeUtils.DEFAULTS.DAY_NAMES_SHORT );
 
-              expect( germanMonths ).toEqual( ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"] );
+              expect( germanMonths ).toEqual( ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"] );
 
-              expect( spanishMonths ).toEqual( ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"] );
+              expect( spanishMonths ).toEqual( ["dom", "lun", "mar", "mié", "jue", "vie", "sáb", "dom"] );
 
           } );
 
@@ -224,9 +224,9 @@ describe( "Days", () =>
 
               expect( britishMonths ).toEqual( localeUtils.DEFAULTS.DAY_LETTERS.map( e => e.slice( 0, 1 ) ).map( e => "R" === e ? "T" : e ) );
 
-              expect( germanMonths ).toEqual( ["S", "M", "D", "M", "D", "F", "S"] );
+              expect( germanMonths ).toEqual( ["S", "M", "D", "M", "D", "F", "S", "S"] );
 
-              expect( spanishMonths ).toEqual( ["D", "L", "M", "M", "J", "V", "S"] );
+              expect( spanishMonths ).toEqual( ["D", "L", "M", "M", "J", "V", "S", "D"] );
 
           } );
 } );

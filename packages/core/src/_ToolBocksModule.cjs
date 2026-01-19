@@ -276,6 +276,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     // defines a key we can use to store this module in global scope
     const INTERNAL_NAME = "__BOCK__MODULE_BASE_MODULE__";
 
+    // defines the key under which we store a Module cache
+    const MODULE_CACHE_GLOBAL_KEY = "__BOCK_MODULE_CACHE__";
+
     // if we've already executed this code, just return the module
     if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
     {
@@ -283,12 +286,19 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     }
 
     /**
-     * This is an internal cache of constructed and loaded modules.<br>
+     * This is a cache of constructed and loaded modules.<br>
      * @type {Object}
      * @dict
-     * @private
      */
-    let MODULE_CACHE = {};
+    let MODULE_CACHE = $scope[MODULE_CACHE_GLOBAL_KEY] || {};
+
+    $scope[MODULE_CACHE_GLOBAL_KEY] = $scope[MODULE_CACHE_GLOBAL_KEY] || MODULE_CACHE;
+    MODULE_CACHE = $scope[MODULE_CACHE_GLOBAL_KEY] || MODULE_CACHE || {};
+
+    if ( MODULE_CACHE && null != MODULE_CACHE[INTERNAL_NAME] )
+    {
+        return MODULE_CACHE[INTERNAL_NAME];
+    }
 
     /* This is the internal name of this module; it is exported as ToolBocksModule */
     const modName = "ToolBocksModule";
@@ -577,6 +587,25 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         trace( ...pData ) {};
     }
 
+    ILogger.isLogger = function( pObj )
+    {
+        if ( _ud !== typeof pObj && _obj === typeof pObj && null !== pObj )
+        {
+            if ( pObj instanceof ILogger || console === pObj || konsole === pObj )
+            {
+                return true;
+            }
+
+            return (_fun === typeof pObj.log) &&
+                   (_fun === typeof pObj.info) &&
+                   (_fun === typeof pObj.warn) &&
+                   (_fun === typeof pObj.error) &&
+                   (_fun === typeof pObj.debug);
+        }
+
+        return false;
+    };
+
     /**
      * Defines a logger that implements expected methods
      * but does not do anything.<br>
@@ -585,8 +614,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @type {ILogger}
      */
     let MockLogger = new ILogger();
+
     // noinspection JSUndefinedPropertyAssignment
     MockLogger.mocked = true;
+
     // noinspection JSUnusedAssignment
     MockLogger = Object.freeze( Object.seal( MockLogger ) );
 
@@ -1331,6 +1362,287 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     }
 
     /**
+     * An environment-agnostic (isomorphic) safe stringifier.
+     * Handles: Circular References, BigInt, Map, Set, and Date.
+     *
+     * Useful for preventing crashes related to simply trying to log an error, for example
+     */
+    function serialize( pValue, pSpaces = 2 )
+    {
+        const visited = new WeakMap();
+
+        // Note that the replacer function's 'this' context is the parent object of the current value
+        return JSON.stringify( pValue, function( key, value )
+        {
+            // We handle BigInt immediately.
+            // Node.js JSON.stringify will literally 'panic' and crash otherwise
+            if ( _big === typeof value )
+            {
+                return `${value.toString()}n`;
+            }
+
+            // Then we handle potentially cyclic object graphs and Collections classes
+            if ( _obj === typeof value && null !== value )
+            {
+                // we find the path of the parent object, so we can remember it
+                const parentPath = visited.get( this ) || "root";
+
+                // we build the property path to the current object, so we can store it
+                const currentPath = key ? `${parentPath}.${key}` : parentPath;
+
+                // here, we avoid the infinite loop, stack overflow, or potential runtime crash
+                if ( visited.has( value ) )
+                {
+                    return `[Circular -> ${(visited.get( value ) || (_isValidStr( key ) ? key : "~~"))}]`;
+                }
+
+                // We store the property path for subsequent encounters
+                visited.set( value, currentPath );
+
+                // We transform Sets, Maps, and Dates into serializable structures
+                if ( value instanceof Set )
+                {
+                    return Array.from( value );
+                }
+
+                if ( value instanceof Map )
+                {
+                    return Object.fromEntries( value );
+                }
+
+                if ( value instanceof Date )
+                {
+                    return value.getTime();
+                }
+            }
+
+            /*
+             if ( isStr( value ) && (/^\{[^}]+}$/ims.test( _trim( value ) )) || (/^\[[^\]]+]$/ims.test( _trim( value ) )) )
+             {
+             try
+             {
+             value = JSON.stringify( JSON.parse( value ) );
+             }
+             catch( e )
+             {
+             console.log( e );
+             }
+             }
+             */
+
+            return value;
+
+        }, pSpaces );
+    }
+
+    /**
+     * A 'safe' implementation of ILogger
+     * that uses the serialize function to stringify the message arguments.
+     *
+     * This prevents allowing the runtime to attempt to stringify
+     * objects that might have circular references, which can crash some runtimes
+     *
+     * @param pSink the 'writer' or another instance of ILogger
+     */
+    class Konsole extends ILogger
+    {
+        #logger = konsole;
+
+        constructor( pSink )
+        {
+            super();
+
+            this.#logger = ILogger.isLogger( pSink ) ? pSink : konsole;
+        }
+
+        log( ...pData )
+        {
+            try
+            {
+                const data = [...(pData || [])].map( e => serialize( e ) );
+                this.#logger.log( ...(data || []) );
+            }
+            catch( ex )
+            {
+                // ignored; I mean, what are we going to do, log the error that occurred logging the error?
+            }
+        }
+
+        info( ...pData )
+        {
+            try
+            {
+                const data = [...(pData || [])].map( e => serialize( e ) );
+                this.#logger.info( ...(data || []) );
+            }
+            catch( ex )
+            {
+                // ignored; I mean, what are we going to do, log the error that occurred logging the error?
+            }
+        }
+
+        warn( ...pData )
+        {
+            try
+            {
+                const data = [...(pData || [])].map( e => serialize( e ) );
+                this.#logger.warn( ...(data || []) );
+            }
+            catch( ex )
+            {
+                // ignored; I mean, what are we going to do, log the error that occurred logging the error?
+            }
+        }
+
+        debug( ...pData )
+        {
+            try
+            {
+                const data = [...(pData || [])].map( e => serialize( e ) );
+                this.#logger.debug( ...(data || []) );
+            }
+            catch( ex )
+            {
+                // ignored; I mean, what are we going to do, log the error that occurred logging the error?
+            }
+        }
+
+        error( ...pData )
+        {
+            try
+            {
+                const data = [...(pData || [])].map( e => serialize( e ) );
+                this.#logger.error( ...(data || []) );
+            }
+            catch( ex )
+            {
+                // ignored; I mean, what are we going to do, log the error that occurred logging the error?
+            }
+        }
+
+        trace( ...pData )
+        {
+            try
+            {
+                const data = [...(pData || [])].map( e => serialize( e ) );
+                this.#logger.trace( ...(data || []) );
+            }
+            catch( ex )
+            {
+                // ignored; I mean, what are we going to do, log the error that occurred logging the error?
+            }
+        }
+    }
+
+    const LOG_LEVELS =
+        {
+            LOG: S_LOG,
+            INFO: S_INFO,
+            WARN: S_WARN,
+            ERROR: S_ERROR,
+            DEBUG: S_DEBUG,
+            TRACE: S_TRACE
+        };
+
+    /**
+     * nothing written to the log
+     */
+    const SILENCED_LOG_LEVELS = [];
+
+    /**
+     * only errors are written to the log
+     */
+    const QUIETER_LOG_LEVELS = [LOG_LEVELS.ERROR];
+
+    /**
+     * only errors and warnings are written to the log
+     */
+    const QUIET_LOG_LEVELS = [LOG_LEVELS.WARN, ...QUIETER_LOG_LEVELS];
+
+    /**
+     * generic messages, informational messages, errors, and warnings are all written to the log
+     */
+    const MODEST_LOG_LEVELS = [LOG_LEVELS.LOG, LOG_LEVELS.INFO, ...QUIET_LOG_LEVELS];
+
+    /**
+     * debugging messages as well as
+     * generic messages, informational messages, errors, and warnings are all written to the log
+     */
+    const DEBUG_LOG_LEVELS = [LOG_LEVELS.DEBUG, ...MODEST_LOG_LEVELS];
+
+    /**
+     * every kind of message is written to the log
+     */
+    const VERBOSE_LOG_LEVELS = [LOG_LEVELS.TRACE, ...DEBUG_LOG_LEVELS];
+
+    class ConditionalLogger extends Konsole
+    {
+        #levels = MODEST_LOG_LEVELS;
+
+        constructor( pSink, ...pLevels )
+        {
+            super( pSink );
+
+            this.#levels = [...(pLevels || [])];
+        }
+
+        get levels()
+        {
+            return [...(this.levels || [])];
+        }
+
+        log( ...pData )
+        {
+            if ( this.#levels.includes( LOG_LEVELS.LOG ) )
+            {
+                super.log( ...pData );
+            }
+        }
+
+        info( ...pData )
+        {
+            if ( this.#levels.includes( LOG_LEVELS.INFO ) )
+            {
+                super.info( ...pData );
+            }
+        }
+
+        warn( ...pData )
+        {
+            if ( this.#levels.includes( LOG_LEVELS.WARN ) )
+            {
+                super.warn( ...pData );
+            }
+        }
+
+        debug( ...pData )
+        {
+            if ( this.#levels.includes( LOG_LEVELS.DEBUG ) )
+            {
+                super.debug( ...pData );
+            }
+        }
+
+        error( ...pData )
+        {
+            if ( this.#levels.includes( LOG_LEVELS.ERROR ) )
+            {
+                super.error( ...pData );
+            }
+        }
+
+        trace( ...pData )
+        {
+            if ( this.#levels.includes( LOG_LEVELS.TRACE ) )
+            {
+                super.trace( ...pData );
+            }
+        }
+    }
+
+    const INTERNAL_LOGGER = new ConditionalLogger( (konsole || console || mockConsole), ...(MODEST_LOG_LEVELS) );
+
+    /**
      * Executes a function with the specified arguments,
      * handling both synchronous and asynchronous function execution.<br>
      * <br>
@@ -1373,17 +1685,32 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             catch( ex )
             {
                 handleAttempt.lastError = ex;
-                attemptSilent( () => handleAttempt.handleError( ex, pFunction, ...pArgs ) );
+
+                try
+                {
+                    const args = [ex, pFunction, ...pArgs].map( e => attemptSilent( () => serialize( e ) ) );
+                    attemptSilent( () => handleAttempt.handleError( ...args ) );
+                }
+                catch( e )
+                {
+                    // ignored
+                }
             }
         }
         else
         {
             const error = resolveError( new Error( NOT_A_FUNCTION ) );
+
             handleAttempt.lastError = error;
-            attemptSilent( () => handleAttempt.handleError( error, pFunction, ...pArgs ) );
+
+            const args = [error, pFunction, ...pArgs].map( e => attemptSilent( () => serialize( e ) ) );
+
+            attemptSilent( () => handleAttempt.handleError( ...args ) );
+
+            return pFunction;
         }
 
-        return pFunction;
+        return null;
     }
 
     /**
@@ -1412,13 +1739,17 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             try
             {
-                (konsole || console || mockConsole).error( (pError instanceof Error ? ATTEMPT_FAILED : NOT_A_FUNCTION), pError?.message || pFunction?.name || _mt_str, pError || {}, pFunction || (function() {}), ...pArgs );
+                let args = [(pError instanceof Error ? ATTEMPT_FAILED : NOT_A_FUNCTION), (pError?.message || pFunction?.name || _mt_str), (pError || {}), (pFunction || (function() {})), ...pArgs];
+
+                args = args.map( e => attemptSilent( () => serialize( e ) ) );
+
+                INTERNAL_LOGGER.error( ...args );
             }
             catch( ex )
             {
                 try
                 {
-                    mockConsole.error( ex.message || ex );
+                    mockConsole.error( ex?.message || ex );
                     mockConsole.error( pError?.message || pError?.name || pError );
                 }
                 catch( e2 )
@@ -1440,7 +1771,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     {
         if ( !handleAttempt.trace )
         {
-            return;
+            return pFunction;
         }
 
         const nameFromSource = ( pFunction ) =>
@@ -1454,7 +1785,19 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         const hasArguments = [...(pArgs || [])].length > 0;
 
-        (konsole || console || mockConsole).trace( "Calling", name, ...(hasArguments ? ["with arguments:", ...pArgs].map( e => String( e ) + "\n" ) : ["without arguments"]) );
+        if ( INTERNAL_LOGGER.levels.include( LOG_LEVELS.TRACE ) )
+        {
+            try
+            {
+                INTERNAL_LOGGER.trace( "Calling", name, ...(hasArguments ? ["with arguments:", ...pArgs].map( e => String( attemptSilent( () => serialize( e ) ) ) + "\n" ) : ["without arguments"]) );
+            }
+            catch( e )
+            {
+                // ignored
+            }
+        }
+
+        return pFunction;
     };
 
     function getLastError()
@@ -1462,7 +1805,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return handleAttempt.lastError;
     }
 
-    async function getLastAsynchronousError()
+    async function asyncGetLastError()
     {
         return Promise.resolve( handleAttempt.lastError );
     }
@@ -1478,14 +1821,29 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     async function asyncHandleAttempt( pFunction, ...pArgs )
     {
-        if ( !isAsyncFunction( pFunction ) )
+        if ( isFunc( pFunction ) )
         {
-            return handleAttempt( pFunction, ...pArgs );
+            if ( !isAsyncFunction( pFunction ) )
+            {
+                return handleAttempt( pFunction, ...pArgs );
+            }
+
+            handleAttempt.traceFunctionCall( pFunction, ...pArgs );
+
+            return await pFunction( ...pArgs ).catch( ex => handleAttempt.handleError( ex, pFunction, ...pArgs ) );
         }
+        else
+        {
+            const error = resolveError( new Error( NOT_A_FUNCTION ) );
 
-        handleAttempt.traceFunctionCall( pFunction, ...pArgs );
+            handleAttempt.lastError = error;
 
-        return await pFunction( ...pArgs ).catch( ex => handleAttempt.handleError( ex, pFunction, ...pArgs ) );
+            const args = [error, pFunction, ...pArgs].map( e => attemptSilent( () => serialize( e ) ) );
+
+            attemptSilent( () => handleAttempt.handleError( ...args ) );
+
+            return pFunction;
+        }
     }
 
     /**
@@ -1551,6 +1909,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 }
             }
         }
+        return pFunction;
     }
 
     /**
@@ -1585,6 +1944,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 handleAttempt.lastError = ex;
             }
         }
+
+        return pFunction;
     }
 
     /**
@@ -1666,9 +2027,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return attempt( () => method( ...pArgs ) );
         }
 
-        handleAttempt.handleError( new Error( NOT_A_FUNCTION ), pThis, pMethod, ...pArgs );
-
-        return method || pThis;
+        return handleAttempt.handleError( new Error( NOT_A_FUNCTION ), pThis, pMethod, ...pArgs );
     }
 
     /**
@@ -1706,9 +2065,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return attemptMethod( pThis, method, ...pArgs );
         }
 
-        handleAttempt.handleError( new Error( NOT_A_FUNCTION ), pThis, pMethod, ...pArgs );
-
-        return method || pThis;
+        return handleAttempt.handleError( new Error( NOT_A_FUNCTION ), pThis, pMethod, ...pArgs );
     }
 
     /**
@@ -1774,14 +2131,93 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
     }
 
-    const tryOrElse = ( pFunction, pDefault ) =>
-    {
 
+    const asyncTryOrElse = async( pFunction, pDefault ) =>
+    {
+        let args = [...(pArgs || [])];
+
+        let func = isFunc( pFunction ) ? pFunction : ($ln( args ) <= 0 ? null : args.find( e => isFunc( e ) ));
+
+        if ( isFunc( func ) )
+        {
+            if ( handleAttempt.trace )
+            {
+                attemptSilent( () => handleAttempt.traceFunctionCall( func, ...args ) );
+            }
+
+            handleAttempt.lastError = null;
+            delete handleAttempt.lastError;
+
+            try
+            {
+                return await func( ...args ) ?? pDefault;
+            }
+            catch( ex )
+            {
+                if ( pDefault )
+                {
+                    return pDefault;
+                }
+                else
+                {
+                    throw ex;
+                }
+            }
+        }
+
+        return pDefault ?? handleAttempt.lastError ?? new Error( NOT_A_FUNCTION );
     };
 
-    const asyncTryOrElse = ( pFunction, pDefault ) =>
+    const tryOrElse = ( pFunction, pDefault ) =>
     {
+        let args = [...(pArgs || [])];
 
+        let func = isFunc( pFunction ) ? pFunction : ($ln( args ) <= 0 ? null : args.find( e => isFunc( e ) ));
+
+        if ( isFunc( func ) )
+        {
+            if ( handleAttempt.trace )
+            {
+                attemptSilent( () => handleAttempt.traceFunctionCall( func, ...args ) );
+            }
+
+            handleAttempt.lastError = null;
+            delete handleAttempt.lastError;
+
+            try
+            {
+                return isAsyncFunction( func ) ?
+                       ((async() => asyncTryOrElse( func, ...pArgs ).catch( ex =>
+                                                                            {
+                                                                                handleAttempt.lastError = ex;
+                                                                                attemptSilent( () => handleAttempt.handleError( ex, pFunction, ...pArgs ) );
+                                                                                return pDefault || ex;
+                                                                            } ).then( r => r ))()) :
+                       func( ...pArgs ) ?? pDefault;
+            }
+            catch( ex )
+            {
+                handleAttempt.lastError = ex;
+
+                const args = [ex, pFunction, ...pArgs].map( e => attemptSilent( () => serialize( e ) ) );
+
+                attemptSilent( () => handleAttempt.handleError( ...args ) );
+            }
+
+            return pDefault ?? handleAttempt.lastError;
+        }
+        else
+        {
+            const error = resolveError( new Error( NOT_A_FUNCTION ) );
+
+            handleAttempt.lastError = error;
+
+            const args = [error, pFunction, ...pArgs].map( e => attemptSilent( () => serialize( e ) ) );
+
+            attemptSilent( () => handleAttempt.handleError( ...args ) );
+        }
+
+        return pDefault ?? handleAttempt.lastError;
     };
 
     const is2dArray = ( pArray ) => isArray( pArray ) && $ln( pArray ) > 0 && pArray.every( row => isArray( row ) );
@@ -3230,7 +3666,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             if ( detectCycles( stack, 3, 3 ) )
             {
-                (konsole || console || mockConsole).error( `An infinite loop was encountered while comparing 2 objects: stack=[${stack.join( "->" )}]` );
+                INTERNAL_LOGGER.error( `An infinite loop was encountered while comparing 2 objects: stack=[${stack.join( "->" )}]` );
                 return false;
             }
 
@@ -3324,7 +3760,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             if ( detectCycles( stack, 3, 3 ) )
             {
-                (konsole || console || mockConsole).error( `An infinite loop was encountered while comparing 2 objects: stack=[${stack.join( "->" )}]` );
+                INTERNAL_LOGGER.error( `An infinite loop was encountered while comparing 2 objects: stack=[${stack.join( "->" )}]` );
                 return false;
             }
 
@@ -3974,7 +4410,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             this.#version = this.#versions?.node || this.#versions?.deno;
 
-            this.#console = (_ud !== typeof console && isFunc( console?.log )) ? console : MockLogger;
+            this.#console = new ConditionalLogger( ((_ud !== typeof konsole && isFunc( konsole?.log )) ? konsole : new Konsole( console )), ...(MODEST_LOG_LEVELS) );
 
             this.#window = _ud !== typeof window ? window : null;
 
@@ -4034,7 +4470,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         get console()
         {
-            return this.#console || konsole || MockLogger;
+            return this.#console || new ConditionalLogger( konsole, ...(MODEST_LOG_LEVELS) ) || MockLogger;
         }
 
         get fetch()
@@ -4222,7 +4658,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             if ( isNonNullObj( this.ARGUMENTS ) && Object.keys( this.ARGUMENTS ).length > 0 )
             {
                 s += "ARGUMENTS: \n";
-                s += JSON.stringify( this.ARGUMENTS, null, 4 );
+                s += serialize( this.ARGUMENTS, 4 );
                 s += "\n";
             }
 
@@ -4236,7 +4672,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             if ( isNonNullObj( this.ENV ) && Object.keys( this.ENV ).length > 0 )
             {
                 s += "ENV: \n";
-                s += JSON.stringify( this.ENV, null, 4 );
+                s += serialize( this.ENV, 4 );
                 s += "\n";
             }
 
@@ -5140,13 +5576,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     class __Error extends Error
     {
-        #msg;
         #options;
 
         #type;
-        #name;
-
-        #cause = null;
 
         #trace;
 
@@ -5166,18 +5598,13 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          */
         constructor( pMsgOrErr, pOptions = {}, ...pArgs )
         {
-            super( initializeMessage( pMsgOrErr ) );
+            super( initializeMessage( pMsgOrErr ), { ...(pOptions || {}) } );
 
             const me = this;
 
             this.#options = attemptSilent( () => Object.assign( {}, { ...(pOptions || {}) } ) ) || {};
 
             this.#type = attemptSilent( () => me.getErrorTypeOrName( pMsgOrErr ).replace( /^__/, _mt_str ) );
-            this.#name = attemptSilent( () => me.getErrorTypeOrName( pMsgOrErr ).replace( /^__/, _mt_str ) );
-
-            this.#msg = (isStr( pMsgOrErr ) ? pMsgOrErr : String( options.message || _mt_str )) || super.message;
-
-            this.#cause = attemptSilent( () => me.determineCause( pMsgOrErr, this.#options?.cause ) );
 
             this.#code = attemptSilent( () => me.calculateErrorCode( pMsgOrErr, this.#options ) );
 
@@ -5196,9 +5623,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 }
             }
 
-            this.stack = (isError( this.#cause ) ? this.#cause?.stack : (isError( pMsgOrErr ) ? pMsgOrErr.stack || this.stack : this.stack)) || this.stack;
+            this.stack = (isError( this.cause ) ? this.cause?.stack : (isError( pMsgOrErr ) ? pMsgOrErr.stack || this.stack : this.stack)) || this.stack;
 
-            this.#occurred = isError( pMsgOrErr ) ? OBJECT_REGISTRY.getCreated( pMsgOrErr ) : isError( this.#cause ) ? OBJECT_REGISTRY.getCreated( this.#cause ) : new Date();
+            this.#occurred = isError( pMsgOrErr ) ? OBJECT_REGISTRY.getCreated( pMsgOrErr ) : isError( this.cause ) ? OBJECT_REGISTRY.getCreated( this.cause ) : new Date();
             this.#occurred = isDate( this.#occurred ) ? this.#occurred : this.#occurred >= 0 ? new Date( this.#occurred ) : new Date();
 
             this.#trace = attemptSilent( () => this.#options?.stackTrace || ((isError( pMsgOrErr ) ? new StackTrace( (pMsgOrErr?.stack || this.stack), pMsgOrErr ) : null)) );
@@ -5241,19 +5668,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
 
         /**
-         * Determines the cause of the error based on provided options or message.
-         */
-        determineCause( pError, pCause )
-        {
-            let originalError = (pCause instanceof Error ? pCause : (isError( pError ) ? (pError?.cause || null) : null)) || this.#cause;
-            if ( originalError !== this && originalError !== pError )
-            {
-                return originalError;
-            }
-            return null;
-        }
-
-        /**
          * Returns a constructor for this class.
          * @returns {__Error}
          */
@@ -5274,7 +5688,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         get name()
         {
-            return this.#name || super.name || this.constructor?.name;
+            return this.constructor?.name || super.name;
         }
 
         get type()
@@ -5284,50 +5698,17 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         get prefix()
         {
-            return this.name + ": ";
+            return this.name + " -> ";
         }
 
         get message()
         {
-            let msg = this.prefix + ((this.#msg || super.message).replace( this.prefix, _mt_str ));
-            if ( $ln( this.#args ) )
-            {
-                msg += " -> with arguments: " + ((this.#args || []).filter( e => !isNull( e ) ).map( asString )).join( ", " );
-            }
-            return msg;
+            return this.prefix + ((super.message).replace( this.prefix, _mt_str ));
         }
 
         toString()
         {
-            return this.prefix + ((this.message || super.message).replace( this.prefix, _mt_str ));
-        }
-
-        get cause()
-        {
-            this.#cause = this.#cause || (isError( this.#options?.cause ) ? this.#options?.cause : super.cause) || super.cause;
-
-            if ( this.#cause === this )
-            {
-                this.#cause = null;
-            }
-
-            if ( !isNull( this.#cause ) && isError( this.#cause ) )
-            {
-                let cause = this.#cause?.cause;
-
-                let iterationCap = new IterationCap( 5 );
-
-                while ( !isNull( cause ) && isError( cause?.cause ) && !iterationCap.reached )
-                {
-                    if ( cause === cause?.cause )
-                    {
-                        attemptSilent( () => cause.cause = null );
-                    }
-                    attemptSilent( () => cause = cause?.cause );
-                }
-            }
-
-            return this.#cause || super.cause;
+            return this.message;
         }
 
         get stackTrace()
@@ -5474,7 +5855,22 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         get illegalArguments()
         {
-            return [...(this.#illegalArguments || this.args || [])];
+            return [...(this.#illegalArguments || [])];
+        }
+
+        get args()
+        {
+            return [...(super.args), ...(this.illegalArguments)];
+        }
+
+        get prefix()
+        {
+            return this.name + " -> ";
+        }
+
+        get message()
+        {
+            return this.prefix + ((super.message).replace( this.prefix, _mt_str ).replace( super.prefix, _mt_str ));
         }
 
         /**
@@ -5483,7 +5879,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          */
         toString()
         {
-            return this.prefix + ((this.message || super.message).replace( this.prefix, _mt_str ));
+            return this.prefix + ((this.message).replace( this.prefix, _mt_str ).replace( super.prefix, _mt_str ));
         }
 
         /**
@@ -5555,9 +5951,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     function _fromErrorArray( pError, pMessage, pErrors )
     {
-        for( let i = 0, n = $ln( pError ); i < n; i++ )
+        let errors = (isArray( pError )) ? [...(pError || [])] : [pError];
+
+        for( let i = 0, n = $ln( errors ); i < n; i++ )
         {
-            let err = pError[i];
+            let err = errors[i];
+
             if ( isArray( pMessage ) )
             {
                 pErrors.push( resolveError( err, pMessage[i] || _mt_str ) );
@@ -5568,18 +5967,22 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             }
         }
 
-        return isError( pErrors[0] ) && pErrors[0] instanceof __Error ? pErrors[0] : new __Error( pErrors[0], {
-            errors: pErrors,
-            message: pMessage || pError,
-            cause: pError || pMessage
-        } );
+        return isError( pErrors[0] ) && pErrors[0] instanceof __Error ?
+               pErrors[0] :
+               new __Error( pErrors[0],
+                            {
+                                errors: pErrors,
+                                message: pMessage || pError
+                            } );
     }
 
     function _fromMessageArray( pMessage, pError, pErrors )
     {
-        for( let i = 0, n = $ln( pMessage ); i < n; i++ )
+        let messages = isArray( pMessage ) ? [...(pMessage || [])] : [pMessage];
+
+        for( let i = 0, n = $ln( messages ); i < n; i++ )
         {
-            let msg = pMessage[i];
+            let msg = message[i];
             if ( isArray( pError ) )
             {
                 pErrors.push( resolveError( msg, pError[i] || pError ) );
@@ -5590,11 +5993,13 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             }
         }
 
-        return isError( pErrors[0] ) && pErrors[0] instanceof __Error ? pErrors[0] : new __Error( pErrors[0], {
-            errors: pErrors,
-            message: pError,
-            cause: pError || pMessage
-        } );
+        return isError( pErrors[0] ) && pErrors[0] instanceof __Error ?
+               pErrors[0] :
+               new __Error( pErrors[0],
+                            {
+                                errors: pErrors,
+                                message: pError
+                            } );
     }
 
     function _handleMissingError( pError, pMessage )
@@ -5617,9 +6022,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         if ( !isNull( lastError ) && isError( lastError ) )
         {
-            return resolveError( lastError, lastError?.message || lastError );
+            errors.unshift( resolveError( lastError, lastError?.message || lastError ) );
         }
-        else if ( $ln( errors ) )
+
+        if ( $ln( errors ) > 0 )
         {
             return resolveError( errors[0], errors[0]?.message || errors[0] );
         }
@@ -6094,8 +6500,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                         detail: ex
                     } ) ) );
                 }
-
-                attempt( () => (me || this).#visitFunction.call( (me || this), pVisited, ...pExtra ) );
+                else
+                {
+                    attempt( () => (me || this).#visitFunction.call( (me || this), pVisited, ...pExtra ) );
+                }
             }
         }
     }
@@ -6460,7 +6868,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             if ( this.traceEnabled )
             {
-                konsole.trace( pMessage, pOptions || "Called without options" );
+                INTERNAL_LOGGER.trace( pMessage, pOptions || "Called without options" );
 
                 this.dispatchEvent( new ToolBocksModuleEvent( "trace", pMessage, pOptions ) );
             }
@@ -6673,6 +7081,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 }
 
                 logger = ToolBocksModule.resolveLogger( this.#logger || logger || konsole, logger || konsole );
+
+                return new ConditionalLogger( logger, ...(logger?.levels || MODEST_LOG_LEVELS) );
             }
 
             return logger || MockLogger;
@@ -6834,7 +7244,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             if ( this.#loggingEnabled || ToolBocksModule.#globalLoggingEnabled )
             {
-                const writer = this.logger || konsole;
+                const writer = this.logger || INTERNAL_LOGGER || konsole;
                 attempt( () => writer.log( ...pMsg ) );
             }
         }
@@ -6852,7 +7262,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             if ( this.#loggingEnabled || ToolBocksModule.#globalLoggingEnabled )
             {
-                const writer = this.logger || konsole;
+                const writer = this.logger || INTERNAL_LOGGER || konsole;
                 attempt( () => writer.warn( ...pMsg ) );
             }
         }
@@ -6870,7 +7280,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             if ( this.#loggingEnabled || ToolBocksModule.#globalLoggingEnabled )
             {
-                const writer = this.logger || konsole;
+                const writer = this.logger || INTERNAL_LOGGER || konsole;
                 attempt( () => writer.error( ...pMsg ) );
             }
         }
@@ -6922,7 +7332,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
                 let extra = S_TRACE === level ? [...pExtra] : [];
 
-                let msg = [S_ERR_PREFIX, s, err, ...extra];
+                let msg = [S_ERR_PREFIX, s, err, ...extra].map( e => attemptSilent( () => serialize( e ) ) );
 
                 if ( this.traceEnabled )
                 {
@@ -6931,7 +7341,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
                 if ( this.#loggingEnabled && ToolBocksModule.isLogger( this.logger ) )
                 {
-                    let logr = ToolBocksModule.resolveLogger( this.logger );
+                    let logr = ToolBocksModule.resolveLogger( this.logger, INTERNAL_LOGGER );
                     attemptMethod( logr, logr[level], ...msg );
                 }
 
@@ -6950,7 +7360,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 }
                 catch( ex2 )
                 {
-                    konsole.error( ex2, ...msg );
+                    //ignored
                 }
             }
             catch( ex )
@@ -7066,12 +7476,18 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                         return mod || this;
                     }
 
-                    return Object.assign( this, pObject || {} );
+                    const extendedInstance = Object.assign( this, pObject || {} );
+                    Object.setPrototypeOf( extendedInstance, Object.getPrototypeOf( this ) );
+
+                    return extendedInstance;
                 }
 
                 let toolbocksModule = new ToolBocksModule( pObject );
 
-                return Object.assign( toolbocksModule, pObject );
+                let extendedModule = Object.assign( toolbocksModule, pObject );
+                Object.setPrototypeOf( extendedModule, Object.getPrototypeOf( this ) );
+
+                return extendedModule;
             }
 
             return this;
@@ -7306,7 +7722,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     }
 
     /**
-     * Define a cache scoped to the BlockModulePrototype namespace.<br>
+     * Define a cache scoped to the ToolBocksModule namespace.<br>
      * <br>
      * This property is used to store and manage cached module data.<br>
      *
@@ -7363,7 +7779,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     // The constructor of a ToolBocksModule will replace the handler with its own instance method.
     handleAttempt.handleError = ( pError, pFunction, ...pArgs ) =>
     {
-        attemptSilent( () => GLOBAL_INSTANCE.handleError( pError, pFunction, ...pArgs ) );
+        const args = [pRrror, pFunction, ...pArgs].map( e => attemptSilent( () => serialize( e ) ) );
+        attemptSilent( () => GLOBAL_INSTANCE.handleError( ...args ) );
     };
 
     /**
@@ -7930,7 +8347,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             }
             else
             {
-                value = isArray( value ) && /^\d+$/.test( key ) ? value[Number( key )] : value[key];
+                value = isArray( value ) && /^\d+$/.test( key ) ? value[Number( key )] : value[key] || value[key.split( "_" ).map( e => _ucase( e.slice( 0, 1 ) + _lcase( e.slice( 1 ) ) ) ).join( _mt ).replace( /([A-Z])/, ( match ) => match.toLowerCase() )] || value[key.replaceAll( /([A-Z])/g, ( match ) => "_" + match.toLowerCase() ).replace( /^_/, _mt )] || value[key.split( "_" ).map( e => _ucase( e.slice( 0, 1 ) + _lcase( e.slice( 1 ) ) ) ).join( _mt )];
             }
         }
 
@@ -7980,6 +8397,39 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     function setProperty( pObject, pPropertyPath, pValue )
     {
         return attempt( () => _property( pObject, pPropertyPath, pValue ) );
+    }
+
+    /**
+     * Returns the value of a property by trying each of the specified paths.
+     * This can be useful when reading properties from an object that may take one of several shapes.
+     * @param pObject the object from which to read the property value
+     * @param pPropertyPaths one or more possible paths to the value
+     * @returns {*|null} the value value of the property if found, otherwise null
+     */
+    function readProperty( pObject, ...pPropertyPaths )
+    {
+        let value = null;
+
+        let paths = [...(pPropertyPaths || [])].filter( e => _isValidStr( e ) ).map( e => String( e ).trim() );
+
+        while ( null === value && $ln( paths ) > 0 )
+        {
+            let path = paths.shift();
+
+            // try the path as-is
+            value = getProperty( pObject, path );
+
+            // try the path as camelCase
+            value = value || getProperty( pObject, path.split( "_" ).map( e => _ucase( e.slice( 0, 1 ) + _lcase( e.slice( 1 ) ) ) ).join( _mt ).replace( /([A-Z])/, ( match ) => match.toLowerCase() ) );
+
+            // try the property as snake_case
+            value = value || getProperty( pObject, path.replaceAll( /([A-Z])/g, ( match ) => "_" + match.toLowerCase() ).replace( /^_/, "" ) );
+
+            // try the path as PascalCase
+            value = value || getProperty( pObject, path.split( "_" ).map( e => _ucase( e.slice( 0, 1 ) + _lcase( e.slice( 1 ) ) ) ).join( _mt ) );
+        }
+
+        return value;
     }
 
     function mergeOptions( pOptions, ...pDefaults )
@@ -8286,7 +8736,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             const me = this;
 
-            let s = String( attempt( () => JSON.stringify( me ) || JSON.stringify( me.clone() ) ) ) || String( attempt( () => JSON.stringify( me.clone() ) ) );
+            let s = String( attempt( () => serialize( me ) || serialize( me.clone() ) ) ) || String( attempt( () => serialize( me.clone() ) ) );
 
             if ( _mt === String( s ).trim() )
             {
@@ -8298,7 +8748,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     }
 
-    ToolBocksObject.serialize = ( pObject = {} ) => attempt( () => JSON.stringify( pObject ) );
+    ToolBocksObject.serialize = ( pObject = {} ) => attempt( () => serialize( pObject ) );
 
     ToolBocksObject.deserialize = function( pData, pClass )
     {
@@ -8475,7 +8925,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             asyncAttemptMethod,
 
             getLastError,
-            getLastAsynchronousError,
+            asyncGetLastError,
 
             attemptSilent,
             asyncAttemptSilent,
@@ -8491,6 +8941,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             objectKeys,
             objectMethods,
 
+            serialize,
+
             toMap,
 
             propertyDescriptors,
@@ -8503,6 +8955,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             getProperty,
             setProperty,
             hasProperty,
+
+            readProperty,
 
             lock,
             deepFreeze,
@@ -8536,6 +8990,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             Visitor,
 
             ILogger,
+            Konsole,
+            ConditionalLogger,
 
             Merger,
             mergeObjects: function( ...pObjects )
@@ -8597,7 +9053,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     StatefulListener,
                     ToolBocksModule,
                     Visitor,
-                    ILogger
+                    ILogger,
+                    Konsole,
+                    ConditionalLogger
                 }
         };
 
