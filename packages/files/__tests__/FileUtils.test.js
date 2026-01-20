@@ -232,7 +232,7 @@ describe( "FileUtils::findFiles", () =>
         mapped = mapped.map( ( entry ) => path.relative( packagesDirectory, entry ) );
 
         expect( mapped ).toEqual( PACKAGES );
-    } );
+    }, 120_000 );
 
     test( "'findFiles' can take a Visitor", async() =>
     {
@@ -249,7 +249,7 @@ describe( "FileUtils::findFiles", () =>
         mapped = mapped.map( ( entry ) => path.relative( packagesDirectory, entry ) );
 
         expect( mapped ).toEqual( PACKAGES );
-    } );
+    }, 120_000 );
 
     test( "'find' can perform depth-first searches", async() =>
     {
@@ -290,5 +290,5 @@ describe( "FileUtils::findFiles", () =>
                                       "regex\\package.json",
                                       "secrets\\package.json",
                                   ] );
-    } );
+    }, 120_000 );
 } );

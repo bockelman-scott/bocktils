@@ -747,6 +747,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return !isNull( pObject ) && ((isFunc( Array.isArray ) && Array.isArray( pObject )) || objectToString.call( pObject ) === "[object Array]");
     };
 
+    const _asArr = ( pArr ) => isNull( pArr ) ? [] : (isArray( pArr ) ? pArr : !isNull( pArr?.[Symbol.iterator] ) ? [...(pArr || [])] : [pArr]);
+
     /**
      * Returns true if the specified value is a (primitive) BigInt.
      *
@@ -3470,7 +3472,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         if ( isFunc( pObject?.entries ) )
         {
-            entries = ([...(attemptSilent( () => [...(pObject.entries())] ))]);
+            entries = ([...(attemptSilent( () => [...(pObject.entries() || [])] ))]);
         }
         else if ( isFunc( pObject?.values ) )
         {
@@ -3501,18 +3503,21 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 break;
 
             case "array":
-                entries = pObject.map( ( e, i ) => [i, e] );
+                entries = _asArr( pObject || [] ).map( ( e, i ) => [i, e] );
                 break;
 
             case "class_instance":
-                entries = [...(new Set( [...entries, ...getPrivateEntries( pObject )] ))];
+                entries = [...(new Set( [...entries, ...((attemptSilent( () => getPrivateEntries( pObject ) || [] ) || []))] ))];
+
+                entries = _asArr( entries || [] ).filter( isValidEntry );
+
             // do not break;
             // fall-through
 
             case "global_type":
-                entries = [...(new Set( [...entries, ...(getGlobalTypeEntries( pObject ) || [])] ))];
+                entries = [...(new Set( [...entries, ...((attemptSilent( () => getGlobalTypeEntries( pObject ) || [] ) || []))] ))];
 
-                entries = entries.filter( isValidEntry );
+                entries = _asArr( entries || [] ).filter( isValidEntry );
 
                 break;
 

@@ -340,25 +340,37 @@ const { _ud = "undefined", $scope } = constants;
 
     function processWebApiHeaders( pOptions )
     {
-        let options = isArray( pOptions ) ? asArray( pOptions || [] ) : asObject( pOptions || {} );
+        let options = asObject( pOptions );
 
-        let entries = attempt( () => objectEntries( options ) ) || (isFunction( options?.entries ) ? attempt( () => options.entries() ) : options);
-
-        if ( !isNull( entries ) && isIterable( entries ) )
+        if ( isFunction( options.entries ) )
         {
-            const headers = new HttpHeaders();
+            let entries = attemptSilent( () => options.entries() );
 
-            attempt( () => entries.forEach( entry =>
-                                            {
-                                                if ( entry )
-                                                {
-                                                    const key = ObjectEntry.getKey( entry ) || entry[0];
-                                                    const value = ObjectEntry.getValue( entry ) || entry[1] || key;
-                                                    attempt( () => headers.append( key, value ) );
-                                                }
-                                            } ) );
+            if ( entries )
+            {
+                let map = new Map();
 
-            return headers;
+                for( let entry of entries )
+                {
+                    let key = attemptSilent( () => asString( entry[0], true ) );
+
+                    if ( !(isBlank( key ) || key.startsWith( "#" )) )
+                    {
+                        let value = attemptSilent( () => entry[1] ) || key;
+
+                        if ( !isNull( value ) )
+                        {
+                            attempt( () => map.set( key, value ) );
+                        }
+                    }
+                }
+
+                return map;
+            }
+            else
+            {
+                return new Map( Object.entries( options ) );
+            }
         }
 
         if ( isPopulatedObject( options ) && !isArray( options ) )
@@ -369,6 +381,8 @@ const { _ud = "undefined", $scope } = constants;
         {
             return attempt( () => processHeadersArray( asArray( options ) ) );
         }
+
+        return new Map();
     }
 
     /**
@@ -388,9 +402,14 @@ const { _ud = "undefined", $scope } = constants;
             return new Map();
         }
 
-        if ( isWebApiHeadersObject( pOptions ) || isMap( pOptions ) )
+        if ( isWebApiHeadersObject( pOptions ) )
         {
-            return attempt( () => processWebApiHeaders( pOptions ) );
+            return attemptSilent( () => processWebApiHeaders( pOptions ) );
+        }
+
+        if ( isMap( pOptions ) )
+        {
+            return new Map( pOptions );
         }
 
         if ( isArray( pOptions ) )
@@ -477,7 +496,7 @@ const { _ud = "undefined", $scope } = constants;
 
         #resolveValue( pValue, pKey )
         {
-            return resolveHeaderValue( pValue, pKey );
+            return attempt( () => resolveHeaderValue( pValue, pKey ) );
         }
 
         get headersLength()
@@ -668,18 +687,18 @@ const { _ud = "undefined", $scope } = constants;
 
                 if ( entries )
                 {
-                    entries.forEach( entry =>
-                                     {
-                                         let key = this.#resolveKey( ObjectEntry.getKey( entry ) );
-                                         if ( !isBlank( key ) )
-                                         {
-                                             let value = this.#resolveValue( ObjectEntry.getValue( entry ), ObjectEntry.getKey( entry ) );
-                                             if ( !(isNull( value ) || isBlank( asString( value, true ) )) )
-                                             {
-                                                 literal[key] = literal[key] || asString( value, true ).replace( /(\r\n)+$/, _mt );
-                                             }
-                                         }
-                                     } );
+                    attempt( () => entries.forEach( entry =>
+                                                    {
+                                                        let key = this.#resolveKey( ObjectEntry.getKey( entry ) );
+                                                        if ( !isBlank( key ) )
+                                                        {
+                                                            let value = this.#resolveValue( ObjectEntry.getValue( entry ), ObjectEntry.getKey( entry ) );
+                                                            if ( !(isNull( value ) || isBlank( asString( value, true ) )) )
+                                                            {
+                                                                literal[key] = literal[key] || asString( value, true ).replace( /(\r\n)+$/, _mt );
+                                                            }
+                                                        }
+                                                    } ) );
                 }
             }
 
@@ -826,7 +845,7 @@ const { _ud = "undefined", $scope } = constants;
     {
         constructor( pOptions )
         {
-            super( pOptions );
+            super( isArray( pOptions ) ? asArray( pOptions || [] ) : asObject( pOptions || {} ) );
         }
 
         clone()
