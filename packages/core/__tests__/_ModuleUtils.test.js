@@ -81,6 +81,7 @@ const
         calculateElapsedTime,
         calculateEstimatedTimeRemaining,
         formatElapsedTime,
+        serialize,
         classes: moduleUtilsClasses,
     } = moduleUtils;
 
@@ -2058,4 +2059,40 @@ describe( "formatElapsedTime", () =>
               expect( formatted ).toEqual( "01:23.50" );
           } );
 
+} );
+
+describe( "serialize", () =>
+{
+    test( "can serialize a cyclically dependent object",
+          () =>
+          {
+              let a = { "name": "A" };
+              let b = { "name": "B" };
+              let c = { people: new Set( [a, b] ) };
+
+              let map = new Map();
+              map.set( "a", a );
+              map.set( "b", b );
+              map.set( "c", c );
+
+              let d = { "ref_1": a, "ref_2": b, map };
+
+              map.set( "d", d );
+
+              let obj = { a: a, b: b, c: c, d: d };
+
+              map.set( "obj", obj );
+
+              obj.obj = obj;
+
+              let json = serialize( obj, 2 );
+
+              // console.log( json );
+
+              let json2 = serialize( json );
+
+              // console.log( json );
+
+              expect( json2 ).toEqual( json );
+          } );
 } );
