@@ -117,6 +117,14 @@
  * <br>
  */
 
+/**
+ * Indicates whether this module is running in debug mode.
+ * When running in debug mode,
+ * logging is more verbose and some type and/or null checks are more explicit and log unexpected conditions
+ * @type {boolean} true to see more verbose logging and type checking messages
+ */
+let DEBUG_MODE = false;
+
 // defines a variable for typeof undefined
 const _ud = "undefined";
 
@@ -298,7 +306,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     MODULE_CACHE = $scope[MODULE_CACHE_GLOBAL_KEY] || MODULE_CACHE || {};
 
     // if this module already exists in our MODULE_CACHE,
-    // we return it, instead of re-executing the code to create it
+    // we return it (instead of re-executing the code to create it)
     if ( MODULE_CACHE && null != MODULE_CACHE[INTERNAL_NAME] )
     {
         return MODULE_CACHE[INTERNAL_NAME];
@@ -576,6 +584,27 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * If no arguments are passed, returns an empty array.<br>
      */
     const op_identity = ( ...pArg ) => [...(pArg || [])].length > 1 ? [...(pArg || [])] : [...(pArg || [])][0];
+
+    /**
+     * Enables DEBUG_MODE if it is not already enabled by checking the environment and command line arguments
+     * Note that DEBUG_MODE can only ever be turned on during execution.  It cannot be subsequently disabled.
+     * @returns {boolean}
+     */
+    function configureDebugMode()
+    {
+        if ( !DEBUG_MODE )
+        {
+            const _environs = pEnvironment || _ENV || { "get": function( pKey ) { return $scope()[pKey]; } };
+
+            DEBUG_MODE = DEBUG_MODE || (_fun === typeof (_environs?.get)) ? ["true", "1", "debug", "trace", true].includes( _environs?.get( "debug" ) ) : ["true", "1", "debug", "trace", true].includes( _environs?.["debug"] );
+
+            DEBUG_MODE = DEBUG_MODE || [...(pArgs || CMD_LINE_ARGS || [])].includes( "-debug" );
+        }
+        return DEBUG_MODE;
+    }
+
+    // enabled DEBUG_MODE if it is not already enabled
+    DEBUG_MODE = DEBUG_MODE || configureDebugMode();
 
     /**
      * @typedef {Object} ILogger
@@ -1185,6 +1214,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const _asStr = e => isStr( e ) ? String( e ) : (isFunc( e?.valueOf ) ? String( e.valueOf() ) : String( (_mt_str + String( e )) ));
 
+    const _trim = s => (_asStr( s )).replace( /^\s+/, _mt ).replace( /\s+$/, _mt ).trim();
+
     /**
      * Converts the input value to a lowercase string
      *
@@ -1206,6 +1237,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @returns {string} The uppercase string representation of the input value.
      */
     const _ucase = e => _asStr( e ).toUpperCase();
+
+    const _lct = e => _lcase( _trim( e ) ).trim();
+    const _uct = e => _ucase( _trim( e ) ).trim();
 
     /**
      * Replaces all occurrences of whitespace in a given string with a specified character.
@@ -1813,7 +1847,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
     }
 
-    const INTERNAL_LOGGER = new ConditionalLogger( (konsole || console || mockConsole), ...(MODEST_LOG_LEVELS) );
+    const INTERNAL_LOGGER = new ConditionalLogger( (konsole || console || mockConsole), ...(DEBUG_MODE ? DEBUG_LOG_LEVELS : MODEST_LOG_LEVELS) );
 
     /**
      * Executes a function with the specified arguments,
@@ -2629,7 +2663,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 const populateMap = e =>
                 {
                     const parts = _asStr( e ).split( "=" );
-                    const key = _asStr( parts.length ? _asStr( parts[0] ).trim() : _mt_str ).trim();
+                    const key = _trim( parts.length ? _trim( parts[0] ) : _mt_str );
                     const value = parts.length > 1 ? _asStr( parts[1] || key ) : key;
 
                     if ( key && value )
@@ -4681,6 +4715,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             const globalScope = pGlobalScope || $scope();
 
+            this.#ENV = { ...ENVIRONMENT };
+            this.#ARGUMENTS = lock( ARGUMENTS );
+
             this.#DenoGlobal = _ud === typeof Deno && _ud === typeof globalScope?.Deno ? null : (_ud !== typeof Deno ? Deno : null) || globalScope?.Deno;
 
             this.#process = _ud !== typeof process ? process : this.#DenoGlobal || null;
@@ -4689,7 +4726,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             this.#version = this.#versions?.node || this.#versions?.deno;
 
-            this.#console = new ConditionalLogger( ((_ud !== typeof konsole && isFunc( konsole?.log )) ? konsole : new Konsole( console )), ...(MODEST_LOG_LEVELS) );
+            this.#mode = ExecutionMode.calculate() || CURRENT_MODE;
+
+            this.#console = new ConditionalLogger( ((_ud !== typeof konsole && isFunc( konsole?.log )) ? konsole : new Konsole( console )), ...((DEBUG_MODE || this.#mode?.traceEnabled) ? DEBUG_LOG_LEVELS : MODEST_LOG_LEVELS) );
 
             this.#window = _ud !== typeof window ? window : null;
 
@@ -4709,12 +4748,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             this.#fetch = _ud !== typeof fetch && isFunc( fetch ) ? fetch : null;
 
-            this.#ENV = { ...ENVIRONMENT };
-            this.#ARGUMENTS = lock( ARGUMENTS );
-
             this.#localeCode = this.#navigator?.language || getMessagesLocaleString( this.#ENV ) || DEFAULT_LOCALE_STRING;
-
-            this.#mode = ExecutionMode.calculate() || CURRENT_MODE;
         }
 
         clone()
@@ -4749,7 +4783,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         get console()
         {
-            return this.#console || new ConditionalLogger( konsole, ...(MODEST_LOG_LEVELS) ) || MockLogger;
+            return this.#console || new ConditionalLogger( konsole, ...((DEBUG_MODE || this.#mode?.traceEnabled) ? DEBUG_LOG_LEVELS : MODEST_LOG_LEVELS) ) || MockLogger;
         }
 
         get fetch()
@@ -6032,7 +6066,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             const level = resolveLogLevel( pLevel );
 
-            const logger = pLogger || INTERNAL_LOGGER || new ConditionalLogger( konsole || mockConsole, level );
+            const logger = ToolBocksModule.resolveLogger( pLogger, INTERNAL_LOGGER ) || new ConditionalLogger( (konsole || mockConsole), level );
 
             if ( isFunc( logger[level] ) )
             {
@@ -6040,9 +6074,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             }
         }
 
-        cloneOptions( pOptions )
+        cloneOptions( pOptions = {} )
         {
-            let options = populateOptions( pOptions, { ...this.options } );
+            let options = { ...(this.options || {}), ...(resolveObject( pOptions || {} ) || {}) };
             return localCopy( options );
         }
 
@@ -6056,7 +6090,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          */
         clone()
         {
-            let options = this.cloneOptions( this.options );
+            let options = this.cloneOptions();
 
             options.cause = options.cause || this.cause;
             options.stackTrace = options.stackTrace || this.stackTrace || this.#trace;
@@ -6186,8 +6220,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             if ( Error.captureStackTrace )
             {
-                const me = this;
-                attemptSilent( () => Error.captureStackTrace( me, me.constructor ) );
+                attemptSilent( () => Error.captureStackTrace( this, this.constructor ) );
             }
         }
 
@@ -6968,6 +7001,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         // the key under which this module may be cached in global scope
         #cacheKey;
 
+        #executionEnvironment;
+
+        #traceEnabled = false;
+
+        #moduleArguments = MODULE_ARGUMENTS;
+
+        #debugMode = DEBUG_MODE;
+
         // a global logger to be used with all instances of this class that do not have their own logger
         static #globalLogger = null;
 
@@ -6982,12 +7023,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         // a map of stateful listeners by event (string)
         #statefulListeners = {};
-
-        #executionEnvironment;
-
-        #traceEnabled = false;
-
-        #moduleArguments;
 
         /**
          * Constructs a new instance, or module, to expose functionality to consumers.
@@ -7023,7 +7058,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             attempt( () => me.#processOptions( options ) );
 
-            this.#moduleArguments = pModuleArguments || MODULE_ARGUMENTS;
+            this.#moduleArguments = pModuleArguments || MODULE_ARGUMENTS || { "get": function( pKey ) {} };
+
+            this.#debugMode = this.#debugMode || DEBUG_MODE || attempt( () => this.#moduleArguments.get( "-debug" ) );
 
             // if the constructor is called with an object, instead of a string,
             // inherit its properties and functions
@@ -7120,6 +7157,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                                                     }
                                                 } ) );
             }
+        }
+
+        isDebugMode()
+        {
+            return this.#debugMode;
         }
 
         /**
@@ -8006,6 +8048,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
     }
 
+    ToolBocksModule.DEBUG_MODE = DEBUG_MODE;
+
     /**
      * Define a cache scoped to the ToolBocksModule namespace.<br>
      * <br>
@@ -8587,11 +8631,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         const removeHashSign = e => isStr( e ) ? String( e ).trim().replace( /^#/, _mt_str ) : isArray( e ) ? e.map( removeHashSign ) : e;
 
         const isValidArgument = e => isStr( e ) && e.trim().length > 0;
-        const isValidPathElement = e => isValidArgument( e ) && /[^.\s#]+/.test( e );
+        const isValidPathElement = e => isValidArgument( e ) && !(/[.\s#]/).test( e );
 
-        let propertyPath = attempt( () => arguments.length > 1 ? [...arguments].filter( isValidArgument ) : pPropertyPath ) || pPropertyPath;
+        let propertyPath = attempt( () => arguments.length > 1 ? [...arguments].map( removeHashSign ).map( removeOptionalSyntax ).filter( isValidArgument ) : pPropertyPath ) || pPropertyPath;
 
-        let arr = isArray( propertyPath ) ? propertyPath.map( toDotNotation ).flat() : propertyPath;
+        let arr = isArray( propertyPath ) ? propertyPath.map( removeHashSign ).map( removeOptionalSyntax ).map( toDotNotation ).flat() : propertyPath;
 
         arr = (isStr( arr ) ? bracketsToDots( arr, { numericIndexOnly: false } ).split( _dot ) : (isArray( arr ) ? arr.map( toDotNotation ).flat() : [String( arr )]).filter( isValidArgument )).flat();
 
@@ -8602,6 +8646,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return arr.filter( isValidPathElement );
     }
 
+    const _toCamel = e => e.includes( _dot ) ? e.split( _dot ).map( _toCamel ).join( _dot ) : e.includes( _underscore ) ? e.replace( /^_+/, _mt ).split( /_/ ).map( ( s, i ) => (0 === i ? _lcase( s.slice( 0, 1 ) ) : _ucase( s.slice( 0, 1 ) )) + s.slice( 1 ) ).join( _mt ) : _lcase( e.slice( 0, 1 ) ) + e.slice( 1 );
+    const _toPascal = e => e.includes( _dot ) ? e.split( _dot ).map( _toPascal ).join( _dot ) : e.includes( _underscore ) ? e.split( /_/ ).map( s => _ucase( s.slice( 0, 1 ) ) + s.slice( 1 ) ).join( _mt ) : _ucase( e.slice( 0, 1 ) ) + e.slice( 1 );
+    const _toSnake = e => e.includes( _dot ) ? e.split( _dot ).map( _toSnake ).join( _dot ) : e.replaceAll( /([A-Z])/g, ( match ) => ("_" + _lcase( match )) ).replace( /^_/, _mt ).replaceAll( /_+/g, _underscore );
+    const _toSnakeStrict = e => _lcase( _toSnake( e ) );
+
     function _property( pObject, pPropertyPath, pValue )
     {
         if ( !isNonNullObj( pObject ) || (_ud === typeof pPropertyPath) || (_mt_str === String( pPropertyPath )) )
@@ -8610,6 +8659,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
 
         let keys = toNodePathArray( pPropertyPath );
+
+        if ( DEBUG_MODE )
+        {
+            INTERNAL_LOGGER.debug( `_property called with keys: ${keys.join( _dot )}` );
+        }
 
         let mutator = ( !isNull( pValue ) || arguments.length > 2) ? ( object, key, value ) =>
         {
@@ -8621,9 +8675,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         let value = isRef( pObject ) ? dereference( pObject ) : pObject;
 
+        // create a temporary copy of the current node/value, so we can try different variations of the key
+        let root = isArray( value ) ? [...(_asArr( value ))] : value;
+
         while ( keys.length > 0 && isNonNullObj( value ) )
         {
             const key = String( keys.shift() ).trim().replace( /^#/, _mt_str );
+
+            INTERNAL_LOGGER.debug( `Trying key: ${key}, of ${$ln( keys )} remaining` );
 
             if ( isFunc( mutator ) )
             {
@@ -8631,7 +8690,17 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             }
             else
             {
-                value = isArray( value ) && /^\d+$/.test( key ) ? value[Number( key )] : value[key] || value[key.split( "_" ).map( e => _ucase( e.slice( 0, 1 ) + _lcase( e.slice( 1 ) ) ) ).join( _mt ).replace( /([A-Z])/, ( match ) => match.toLowerCase() )] || value[key.replaceAll( /([A-Z])/g, ( match ) => "_" + match.toLowerCase() ).replace( /^_/, _mt )] || value[key.split( "_" ).map( e => _ucase( e.slice( 0, 1 ) + _lcase( e.slice( 1 ) ) ) ).join( _mt )];
+                // create a temporary copy of the current node/value, so we can try different variations of the key
+                let node = isArray( value ) ? [...(_asArr( value ))] : value;
+
+                // try array index or key 'as-is'; this is the 'expected' property key
+                value = (isArray( node ) && /^\d+$/.test( key )) ? node[Number( key )] : node[key];
+
+                // if the value is null, undefined, or an empty string, try PascalCase, camelCase, and snake_case variations
+                value = value || node[_toPascal( key )] || node[_toCamel( key )] || node[_toSnake( key )] || node[_toSnakeStrict( key )];
+
+                // if the value is still null, undefined, or an empty string, try finding the property on the 'root'
+                value = value || root[key] || root[_toPascal( key )] || root[_toCamel( key )] || root[_toSnake( key )] || root[_toSnakeStrict( key )];
             }
         }
 
@@ -8696,21 +8765,51 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         let paths = [...(pPropertyPaths || [])].filter( e => _isValidStr( e ) ).map( e => String( e ).trim() );
 
-        while ( null === value && $ln( paths ) > 0 )
+        let obj = isArray( pObject ) ? [...(pObject || [])] : isNonNullObj( pObject ) ? { ...(pObject || {}) } : (pObject);
+
+        while ( (null === value || (isStr( value ) && !_isValidStr( value ))) && $ln( paths ) > 0 )
         {
             let path = paths.shift();
 
-            // try the path as-is
-            value = getProperty( pObject, path );
+            // try the path as-is, as camelCase, as PascalCase, as snake_Case, and as snake_case
+            value = getProperty( obj, path ) ||
+                    getProperty( obj, _toCamel( path ) ) ||
+                    getProperty( obj, _toPascal( path ) ) ||
+                    getProperty( obj, _toSnake( path ) ) ||
+                    getProperty( obj, _toSnakeStrict( path ) );
+        }
 
-            // try the path as camelCase
-            value = value || getProperty( pObject, path.split( "_" ).map( e => _ucase( e.slice( 0, 1 ) + _lcase( e.slice( 1 ) ) ) ).join( _mt ).replace( /([A-Z])/, ( match ) => match.toLowerCase() ) );
+        return value;
+    }
 
-            // try the property as snake_case
-            value = value || getProperty( pObject, path.replaceAll( /([A-Z])/g, ( match ) => "_" + match.toLowerCase() ).replace( /^_/, "" ) );
+    function readScalarProperty( pObject, pType = _str, ...pPropertyPaths )
+    {
+        const obj = isArray( pObject ) ? [...(pObject || [])] : isNonNullObj( pObject ) ? { ...(pObject || {}) } : (pObject);
 
-            // try the path as PascalCase
-            value = value || getProperty( pObject, path.split( "_" ).map( e => _ucase( e.slice( 0, 1 ) + _lcase( e.slice( 1 ) ) ) ).join( _mt ) );
+        const type = _validTypes.includes( _lct( pType ) ) ? _lct( pType ) : _str;
+
+        let paths = [...(pPropertyPaths || [])].filter( e => _isValidStr( e ) ).map( e => _trim( e ) );
+
+        const isValidValue = ( v ) => (null !== v) && (_ud !== typeof v) && (type === typeof v);
+
+        let value = null;
+
+        while ( (null === value || !isValidValue( value )) && $ln( paths ) > 0 )
+        {
+            let path = paths.shift();
+
+            // try the path as-is, as camelCase, as PascalCase, as snake_Case, and as snake_case
+            value = getProperty( obj, path );
+
+            value = isValidValue( value ) ? value : getProperty( obj, _toCamel( path ) );
+            value = isValidValue( value ) ? value : getProperty( obj, _toPascal( path ) );
+            value = isValidValue( value ) ? value : getProperty( obj, _toSnake( path ) );
+            value = isValidValue( value ) ? value : getProperty( obj, _toSnakeStrict( path ) );
+
+            if ( isValidValue( value ) )
+            {
+                break;
+            }
         }
 
         return value;
@@ -9241,6 +9340,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             hasProperty,
 
             readProperty,
+            readScalarProperty,
 
             lock,
             deepFreeze,
@@ -9307,10 +9407,37 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             {
                 return ToolBocksModule.getGlobalLogger();
             },
+
             setGlobalLogger: function( pLogger )
             {
                 ToolBocksModule.setGlobalLogger( pLogger );
             },
+
+            getModeAwareLogger: function( pSink )
+            {
+                if ( DEBUG_MODE )
+                {
+                    return new ConditionalLogger( (pSink || konsole), ...(DEBUG_LOG_LEVELS) );
+                }
+
+                let con = this.getExecutionEnvironment?.console;
+
+                if ( !isNull( con ) && ToolBocksModule.isLogger( con ) )
+                {
+                    return con;
+                }
+
+                let levels = [...(DEBUG_MODE ? DEBUG_LOG_LEVELS : MODEST_LOG_LEVELS)];
+
+                return new ConditionalLogger( (pSink || konsole), ...(levels) );
+            },
+
+            getProductionLogger: function( pSink )
+            {
+                return new ConditionalLogger( ToolBockModule.resolveLogger( pSink, konsole ),
+                                              ...(QUIETER_LOG_LEVELS) );
+            },
+
             exportModule,
             requireModule,
             importModule: requireModule,

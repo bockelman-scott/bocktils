@@ -49,6 +49,8 @@ const
         objectMethods,
         getProperty,
         setProperty,
+        readProperty,
+        readScalarProperty,
         populateOptions,
         mergeOptions,
         merge = mergeOptions,
@@ -2094,5 +2096,83 @@ describe( "serialize", () =>
               // console.log( json );
 
               expect( json2 ).toEqual( json );
+          } );
+} );
+
+describe( "readScalarProperty", () =>
+{
+    test( "readScalarProperty resolves issues between similarly shaped, differently named, semantically equivalent, objects",
+          () =>
+          {
+              let objectA =
+                  {
+                      person:
+                          {
+                              firstName: "Scott",
+                              lastName: "Bockelman",
+                              address:
+                                  {
+                                      line1: "2760 S Highland",
+                                      city: "Lombard",
+                                      state: "IL",
+                                      zipCode: "60148"
+                                  }
+                          }
+                  };
+
+              let objectB =
+                  {
+                      firstName: "Scott",
+                      lastName: "Bockelman",
+                      address:
+                          {
+                              line1: "2760 S Highland",
+                              city: "Lombard",
+                              state: "IL",
+                              zipCode: "60148"
+                          }
+                  };
+
+              let objectC =
+                  {
+                      person:
+                          {
+                              FirstName: "Scott",
+                              LastName: "Bockelman",
+                              Address1: "2760 S Highland",
+                              City: "Lombard",
+                              State: "IL",
+                              Zip: "60148"
+                          }
+                  };
+
+
+              let objectD =
+                  {
+                      person:
+                          {
+                              first_name: "Scott",
+                              LastName: "Bockelman",
+                              Address1: "2760 S Highland",
+                              City: "Lombard",
+                              State: "IL",
+                              Zip: "60148"
+                          }
+                  };
+
+              let objectE = "Scott";
+
+              let objects = [objectA, objectB, objectC, objectD, objectE];
+
+              for( let i = 0, n = objects.length; i < n; i++ )
+              {
+                  let obj = objects[i];
+
+                  let fName = readScalarProperty( obj, "string", "person.firstName", "firstName" );
+
+                  expect( fName ).toEqual( "Scott" );
+              }
+
+
           } );
 } );

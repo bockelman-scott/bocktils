@@ -721,10 +721,31 @@ describe( "Errors", () =>
 
     const mockLogger =
         {
+            log: function( ...pArgs )
+            {
+                loggedMessages.push( ...pArgs );
+            },
+
+            info: function( ...pArgs )
+            {
+                loggedMessages.push( ...pArgs );
+            },
+
             warn: function( ...pArgs )
             {
                 loggedMessages.push( ...pArgs );
+            },
+
+            error: function( ...pArgs )
+            {
+                loggedMessages.push( ...pArgs );
+            },
+
+            debug: function( ...pArgs )
+            {
+                loggedMessages.push( ...pArgs );
             }
+
         };
 
     function add( pA, pB )
@@ -749,7 +770,7 @@ describe( "Errors", () =>
         {
             if ( ex instanceof IllegalArgumentError )
             {
-                ex.logTo( mockLogger, "warn" );
+                ex.logTo( mockLogger, "error" );
             }
 
             // console.log( ex.message, ex );
@@ -803,9 +824,9 @@ describe( "Errors", () =>
 
         expect( loggedMessages.slice( 0, 1 ) ).toEqual( [
                                                             "IllegalArgumentError -> Both arguments to add must be numbers",
-/*
-                                                            { "a": "A", "b": "B", }
-*/
+                                                            /*
+                                                             { "a": "A", "b": "B", }
+                                                             */
                                                         ] );
 
 

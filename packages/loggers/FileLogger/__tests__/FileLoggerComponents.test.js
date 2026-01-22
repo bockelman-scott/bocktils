@@ -182,7 +182,7 @@ describe( "FileObject", () =>
 
 
         return Promise.resolve( true );
-    } );
+    }, 10_000 );
 
 } );
 

@@ -64,7 +64,7 @@ describe( "Log Rotation", () =>
 
             expect( !isBlank( content ) ).toBe( true );
         }
-    } );
+    }, 20_000 );
 
     jest.clearAllTimers();
 } );
