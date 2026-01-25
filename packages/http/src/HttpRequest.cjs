@@ -43,12 +43,7 @@ const httpHeaderUtils = require( "./HttpHeaders.cjs" );
  */
 const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
-const {
-    _ud = "undefined", $scope = constants?.$scope || function()
-    {
-        return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
-    }
-} = constants;
+const { _ud = "undefined", $scope } = constants;
 
 // noinspection FunctionTooLongJS,OverlyComplexFunctionJS
 (function exposeModule()
@@ -84,31 +79,32 @@ const {
             httpHeaderUtils
         };
 
-    const {
-        ToolBocksModule,
-        ObjectEntry,
-        objectEntries,
-        populateOptions,
-        lock,
-        localCopy,
-        mergeObjects,
-        attempt,
-        asyncAttempt,
-        detectCycles,
-        $ln
-    } = moduleUtils;
+    const
+        {
+            ToolBocksModule,
+            ObjectEntry,
+            objectEntries,
+            lock,
+            localCopy,
+            mergeObjects,
+            attempt,
+            asyncAttempt,
+            detectCycles,
+            $ln
+        } = moduleUtils;
 
-    const {
-        _str,
-        _obj,
-        _fun,
-        _mt_str,
-        _spc,
-        _slash,
-        _dot,
-        _ampersand,
-        _equals,
-    } = constants;
+    const
+        {
+            _str,
+            _obj,
+            _fun,
+            _mt_str,
+            _spc,
+            _slash,
+            _dot,
+            _ampersand,
+            _equals,
+        } = constants;
 
     const
         {
@@ -134,17 +130,18 @@ const {
 
     const { parseJson } = jsonUtils;
 
-    const {
-        VERBS,
-        MODES,
-        PRIORITY,
-        HttpVerb,
-        HttpContentType,
-        HttpStatus,
-        HttpHeaderDefinition,
-        isHeader,
-        resolveHttpMethod
-    } = httpConstants;
+    const
+        {
+            VERBS,
+            MODES,
+            PRIORITY,
+            HttpVerb,
+            HttpContentType,
+            HttpStatus,
+            HttpHeaderDefinition,
+            isHeader,
+            resolveHttpMethod
+        } = httpConstants;
 
     const
         {
@@ -156,10 +153,11 @@ const {
             HttpRequestHeaders
         } = httpHeaderUtils;
 
-    const {
-        File = (_ud === typeof File) ? $scope().File : File,
-        Blob = (_ud === typeof Blob) ? $scope().Blob : Blob
-    } = bufferUtils;
+    const
+        {
+            File = (_ud === typeof File) ? $scope().File : File,
+            Blob = (_ud === typeof Blob) ? $scope().Blob : Blob
+        } = bufferUtils;
 
     const modName = "HttpRequest";
 
@@ -1636,7 +1634,7 @@ const {
             {
                 // ignored
             }
-            
+
             return req || pRequestOrUrl;
         }
 

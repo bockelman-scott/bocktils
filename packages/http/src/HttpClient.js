@@ -125,7 +125,7 @@ const { _ud = "undefined", $scope } = constants;
     // import the specific modules from @toolbocks/core that are necessary for this module
     const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
-    // import the classes, variables, and function defined in moduleUtils that are used in this module
+    // import the classes, variables, and functions defined in moduleUtils that are used in this module
     const
         {
             ModuleEvent,
@@ -148,6 +148,8 @@ const { _ud = "undefined", $scope } = constants;
             objectKeys,
             objectValues,
             objectEntries,
+            readProperty,
+            readScalarProperty,
             sleep,
             no_op,
             $ln,
@@ -194,6 +196,7 @@ const { _ud = "undefined", $scope } = constants;
             isString,
             isNumber,
             isNumeric,
+            isBoolean,
             isDate,
             isRegExp,
             isPromise,
@@ -205,24 +208,27 @@ const { _ud = "undefined", $scope } = constants;
             toObjectLiteral,
             asMap,
             transformObject,
+            delegateTo,
             clamp
         } = typeUtils;
 
     // import the useful functions from the core module, StringUtils
-    const {
-        asString,
-        asInt,
-        toBool,
-        isBlank,
-        isJson,
-        cleanUrl,
-        lcase,
-        ucase,
-        toUnixPath,
-        toSnakeCase,
-        toProperCase,
-        toCamelCase
-    } = stringUtils;
+    const
+        {
+            asString,
+            asInt,
+            toBool,
+            isBlank,
+            isJson,
+            cleanUrl,
+            lcase,
+            ucase,
+            toUnixPath,
+            toLegalFileName,
+            toSnakeCase,
+            toProperCase,
+            toCamelCase
+        } = stringUtils;
 
     // import the useful functions from the core module, ArrayUtils
     const { asArray, concatMaps, unique, TypedArray, BoundedQueue } = arrayUtils;
@@ -244,28 +250,30 @@ const { _ud = "undefined", $scope } = constants;
     const { BockNamed, asObject } = entityUtils;
 
     // import the functions, variables, and classes defined in the HttpConstants module that are used in this module
-    const {
-        CONTENT_TYPES,
-        EXTENSIONS,
-        VERBS,
-        PRIORITY,
-        resolveHttpMethod,
-        calculatePriority,
-        HttpContentType,
-        HttpVerb,
-        HttpStatus,
-        HttpHeaderDefinition,
-        HttpHeader,
-        STATUS_CODES,
-        STATUS_TEXT,
-        STATUS_TEXT_ARRAY,
-        STATUS_ELIGIBLE_FOR_RETRY,
-        DEFAULT_RETRY_DELAY,
-        isVerb,
-        isHeader
-    } = httpConstants;
+    const
+        {
+            HTTP_HEADERS,
+            CONTENT_TYPES,
+            EXTENSIONS,
+            VERBS,
+            PRIORITY,
+            resolveHttpMethod,
+            calculatePriority,
+            HttpContentType,
+            HttpVerb,
+            HttpStatus,
+            HttpHeaderDefinition,
+            HttpHeader,
+            STATUS_CODES,
+            STATUS_TEXT,
+            STATUS_TEXT_ARRAY,
+            STATUS_ELIGIBLE_FOR_RETRY,
+            DEFAULT_RETRY_DELAY,
+            isVerb,
+            isHeader
+        } = httpConstants;
 
-    const { ResponseData, streamToFile } = responseDataModule;
+    const { ResponseData, streamToFile, pipeToFile } = responseDataModule;
 
     const { HttpHeaders, HttpRequestHeaders, HttpResponseHeaders, resolveHeaderName, resolveHeaderValue } = httpHeaders;
 
@@ -338,7 +346,7 @@ const { _ud = "undefined", $scope } = constants;
                      pRejectUnauthorized = false )
         {
             this.#keepAlive = !!pKeepAlive;
-            this.#keepAliveMsecs = isNullOrNaN( pKeepAliveMilliseconds ) ? 3_000 : clamp( asInt( pKeepAliveMilliseconds, 3_000 ), 1_000, 300_000 );
+            this.#keepAliveMsecs = isNullOrNaN( pKeepAliveMilliseconds ) ? 10_000 : clamp( asInt( pKeepAliveMilliseconds, 10_000 ), 3_000, 300_000 );
             this.#maxFreeSockets = isNullOrNaN( pMaxFreeSockets ) ? Infinity : (clamp( asInt( pMaxFreeSockets, 256 ), 64, 1_024 ));
             this.#maxTotalSockets = isNullOrNaN( pMaxTotalSockets ) ? Infinity : (asInt( pMaxTotalSockets ) > 0 && asInt( pMaxTotalSockets ) > asInt( pMaxFreeSockets ) ? asInt( pMaxTotalSockets ) : Infinity);
             this.#rejectUnauthorized = !!pRejectUnauthorized;
@@ -350,9 +358,8 @@ const { _ud = "undefined", $scope } = constants;
             {
                 return (pOther.keepAlive === this.keepAlive) &&
                        (pOther.keepAliveMsecs === this.keepAliveMsecs) &&
-                       (pOther.maxFreeSockets === this.maxFreeSockets) &&
-                       (( !isFinite( pOther.maxTotalSockets ) && !isFinite( this.maxTotalSockets )) || (pOther.maxTotalSockets === this.maxTotalSockets)) &&
-                       (pOther.rejectUnauthorized === this.rejectUnauthorized);
+                       (( !isFinite( pOther.maxFreeSockets ) && !isFinite( this.maxFreeSockets )) || (pOther.maxFreeSockets === this.maxFreeSockets)) &&
+                       (( !isFinite( pOther.maxTotalSockets ) && !isFinite( this.maxTotalSockets )) || (pOther.maxTotalSockets === this.maxTotalSockets));
             }
             return false;
         }
@@ -416,32 +423,130 @@ const { _ud = "undefined", $scope } = constants;
         }
     }
 
-    // creates an instance of the HttpAgentConfig class
+    class HttpAgentConfigExtended extends HttpAgentConfig
+    {
+        #agentKeepAliveTimeoutBuffer;
+        #scheduling;
+        #timeout;
+
+        constructor( pKeepAlive = true,
+                     pKeepAliveMilliseconds = 15_000,
+                     pMaxFreeSockets = 64,
+                     pMaxTotalSockets = Infinity,
+                     pRejectUnauthorized = false,
+                     pAgentKeepAliveTimeoutBuffer = 1_500,
+                     pScheduling = "lifo",
+                     pTimeout = 15_000 )
+        {
+            super( pKeepAlive, pKeepAliveMilliseconds, pMaxFreeSockets, pMaxTotalSockets, pRejectUnauthorized );
+
+            this.#agentKeepAliveTimeoutBuffer = clamp( asInt( pAgentKeepAliveTimeoutBuffer, 1_500 ), 128, 4_500 );
+
+            this.#scheduling = lcase( asString( pScheduling || "lifo" ) );
+            this.#scheduling = ["lifo", "fifo"].includes( this.#scheduling ) ? this.#scheduling : "lifo";
+
+            this.#timeout = clamp( asInt( pTimeout ), 5_000, 19_000 );
+            this.freeSocketTimeout = asInt( this.#timeout );
+        }
+
+        get agentKeepAliveTimeoutBuffer()
+        {
+            return clamp( asInt( this.#agentKeepAliveTimeoutBuffer, 1_500 ), 128, 4_500 );
+        }
+
+        get scheduling()
+        {
+            return lcase( asString( this.#scheduling, true ) || "lifo" );
+        }
+
+        get timeout()
+        {
+            return clamp( asInt( this.#timeout ), 5_000, 19_000 );
+        }
+
+        equals( pOther )
+        {
+            if ( super.equals( pOther ) )
+            {
+                return pOther?.scheduling === this.scheduling &&
+                       pOther?.timeout === this.timeout &&
+                       pOther?.agentKeepAliveTimeoutBuffer === this.agentKeepAliveTimeoutBuffer;
+            }
+            return false;
+        }
+
+        toObjectLiteral( pOptions )
+        {
+            return toObjectLiteral( this, pOptions );
+        }
+
+        toString()
+        {
+            return asJson( this );
+        }
+    }
+
+    // create an instance of the HttpAgentConfig class
     // to define configuration properties
     // for the http and http agents using the class defaults
-    const httpAgentConfig = new HttpAgentConfig();
+    const HTTP_AGENT_DEFAULT_CFG = lock( new HttpAgentConfig() );
+
+    // create another instance more suitable for reading streams
+    // from clouflare/S3 backed servers
+    const HTTP_AGENT_DOWNLOAD_CFG = lock( new HttpAgentConfigExtended() );
 
     // create a global instance of http.Agent using the default HttpAgentConfig
-    const httpAgent = new http.Agent( httpAgentConfig.toObjectLiteral() );
+    const HTTP_AGENT = new http.Agent( HTTP_AGENT_DEFAULT_CFG.toObjectLiteral() );
 
     // create a global instance of https.Agent using the default HttpAgentConfig
-    const httpsAgent = new https.Agent( httpAgentConfig.toObjectLiteral() );
+    const HTTPS_AGENT = new https.Agent( HTTP_AGENT_DEFAULT_CFG.toObjectLiteral() );
 
     HttpAgentConfig.getDefault = function()
     {
-        return httpAgentConfig;
+        return HTTP_AGENT_DEFAULT_CFG;
     };
 
-    HttpAgentConfig.resolveAgentConfig = function( pAgentConfig )
+    HttpAgentConfig.getDownloadDefault = function()
+    {
+        return HTTP_AGENT_DOWNLOAD_CFG;
+    };
+
+    HttpAgentConfig.getForContext = function( pContext )
+    {
+        let context = isNonNullObject( pContext ) ? asObject( pContext ) : isBoolean( pContext ) ? { "forDownload": pContext } : {};
+
+        if ( context?.forDownload )
+        {
+            return HttpAgentConfig.getDownloadDefault();
+        }
+        return HttpAgentConfig.getDefault();
+    };
+
+    HttpAgentConfig.asExtended = ( pAgentConfig ) => (isNonNullObject( pAgentConfig ) && (pAgentConfig instanceof HttpAgentConfigExtended));
+
+    HttpAgentConfig.resolveAgentConfig = function( pAgentConfig, pExtended = HttpAgentConfig.asExtended( pAgentConfig ) )
     {
         if ( isNonNullObject( pAgentConfig ) )
         {
-            if ( pAgentConfig instanceof HttpAgentConfig )
+            if ( pExtended ? (pAgentConfig instanceof HttpAgentConfigExtended) : (pAgentConfig instanceof HttpAgentConfig) )
             {
                 return pAgentConfig;
             }
 
-            const defaultConfig = HttpAgentConfig.getDefault();
+            const defaultConfig = !!pExtended ? HttpAgentConfig.getDownloadDefault() : HttpAgentConfig.getDefault();
+
+            if ( pAgentConfig instanceof http.Agent || pAgentConfig instanceof https.Agent || !!pExtended )
+            {
+                return new HttpAgentConfigExtended( pAgentConfig?.keepAlive ?? defaultConfig.keepAlive,
+                                                    pAgentConfig?.keepAliveMsecs ?? defaultConfig.keepAliveMsecs,
+                                                    pAgentConfig?.maxFreeSockets ?? defaultConfig.maxFreeSockets,
+                                                    pAgentConfig?.maxTotalSockets ?? defaultConfig.maxTotalSockets,
+                                                    pAgentConfig?.rejectUnauthorized ?? defaultConfig.rejectUnauthorized,
+                                                    pAgentConfig?.agentKeepAliveTimeoutBuffer ?? defaultConfig.agentKeepAliveTimeoutBuffer ?? 1_500,
+                                                    pAgentConfig?.scheduling ?? defaultConfig.scheduling ?? "lifo",
+                                                    pAgentConfig?.timeout ?? defaultConfig.timeout ?? 15_000 ) || defaultConfig;
+
+            }
 
             return new HttpAgentConfig( pAgentConfig?.keepAlive ?? defaultConfig.keepAlive,
                                         pAgentConfig?.keepAliveMsecs ?? defaultConfig.keepAliveMsecs,
@@ -449,17 +554,68 @@ const { _ud = "undefined", $scope } = constants;
                                         pAgentConfig?.maxTotalSockets ?? defaultConfig.maxTotalSockets,
                                         pAgentConfig?.rejectUnauthorized ?? defaultConfig.rejectUnauthorized ) || defaultConfig;
         }
-        return HttpAgentConfig.getDefault();
+
+        return !!pExtended ? HttpAgentConfig.getDownloadDefault() : HttpAgentConfig.getDefault();
     };
 
-    function resolveHttpAgent( pAgent, pAgentConfig = httpAgentConfig )
+    function createHttpAgent( pHttpAgentConfig, pExtended = HttpAgentConfig.asExtended( pHttpAgentConfig ) )
     {
-        return isNull( pAgent ) || !(pAgent instanceof http.Agent) ? new http.Agent( HttpAgentConfig.resolveAgentConfig( pAgentConfig || httpAgentConfig ).toObjectLiteral() ) : pAgent;
+        const agentConfig = HttpAgentConfig.resolveAgentConfig( pHttpAgentConfig, pExtended );
+        return new http.Agent( agentConfig.toObjectLiteral() );
     }
 
-    function resolveHttpsAgent( pAgent, pAgentConfig = httpAgentConfig )
+    function createHttpsAgent( pHttpAgentConfig, pExtended = HttpAgentConfig.asExtended( pHttpAgentConfig ) )
     {
-        return isNull( pAgent ) || !(pAgent instanceof https.Agent) ? new https.Agent( HttpAgentConfig.resolveAgentConfig( pAgentConfig || httpAgentConfig ).toObjectLiteral() ) : pAgent;
+        const agentConfig = HttpAgentConfig.resolveAgentConfig( pHttpAgentConfig, pExtended );
+        return new https.Agent( agentConfig.toObjectLiteral() );
+    }
+
+    function resolveHttpAgent( pAgent, pAgentConfig = HTTP_AGENT_DEFAULT_CFG, pExtended = HttpAgentConfig.asExtended( pAgentConfig ) )
+    {
+        const extended = !!pExtended || HttpAgentConfig.asExtended( pAgentConfig );
+
+        const agentConfig = HttpAgentConfig.resolveAgentConfig( pAgentConfig, extended );
+
+        if ( isNonNullObject( pAgent ) && (pAgent instanceof http.Agent) )
+        {
+            if ( agentConfig.equals( pAgent ) )
+            {
+                return pAgent;
+            }
+            return createHttpAgent( agentConfig, extended );
+        }
+
+        if ( (isNonNullObject( HTTP_AGENT ) && (HTTP_AGENT instanceof http.Agent)) &&
+             (extended ? HTTP_AGENT_DOWNLOAD_CFG : HTTP_AGENT_DEFAULT_CFG).equals( agentConfig ) )
+        {
+            return HTTP_AGENT;
+        }
+
+        return createHttpAgent( agentConfig, extended );
+    }
+
+    function resolveHttpsAgent( pAgent, pAgentConfig = HTTP_AGENT_DEFAULT_CFG, pExtended = HttpAgentConfig.asExtended( pAgentConfig ) )
+    {
+        const extended = !!pExtended || HttpAgentConfig.asExtended( pAgentConfig );
+
+        const agentConfig = HttpAgentConfig.resolveAgentConfig( pAgentConfig, pExtended );
+
+        if ( isNonNullObject( pAgent ) && (pAgent instanceof https.Agent) )
+        {
+            if ( agentConfig.equals( pAgent ) )
+            {
+                return pAgent;
+            }
+            return createHttpsAgent( agentConfig, extended );
+        }
+
+        if ( (isNonNullObject( HTTPS_AGENT ) && (HTTPS_AGENT instanceof https.Agent)) &&
+             (extended ? HTTP_AGENT_DOWNLOAD_CFG : HTTP_AGENT_DEFAULT_CFG).equals( agentConfig ) )
+        {
+            return HTTPS_AGENT;
+        }
+
+        return createHttpsAgent( agentConfig, extended );
     }
 
     /**
@@ -474,50 +630,63 @@ const { _ud = "undefined", $scope } = constants;
      *
      * @param {Object|HttpConfig} pConfig  the configuration to examine (and repair, if necessary)
      *
+     * @param {boolean} [pForDownload=false] indicates whether the agent(s) should be optimized for downloading binary data
+     *
      * @returns {Object|HttpConfig}        the same configuration object specified,
      *                                     but with the http and http agent properties corrected, if necessary,
      *                                     to hold actual instances of http.Agent or https.Agent.
      */
-    function fixAgents( pConfig )
+    function fixAgents( pConfig, pForDownload = false )
     {
         if ( isNull( pConfig ) || !isObject( pConfig ) )
         {
-            return { httpAgent, httpsAgent };
+            const agentConfig = HttpAgentConfig.getForContext( pForDownload );
+
+            return {
+                httpAgent: resolveHttpAgent( HTTP_AGENT, agentConfig ),
+                httpsAgent: resolveHttpsAgent( HTTPS_AGENT, agentConfig )
+            };
         }
 
-        // reset the property to be an instance of http.Agent
-        // we expect the variable, httpAgent, to hold an instance of http.Agent,
-        // but if it is null or undefined or has been replaced with an object literal, a new instance is created
+        // Resets the property to an instance of http.Agent
+        // We expect the variable, httpAgent, to hold an instance of http.Agent,
+        // but if it is null or undefined or has been replaced with an object literal,
+        // a new instance is created
         if ( (isNull( pConfig.httpAgent ) || !(pConfig.httpAgent instanceof http.Agent)) )
         {
+            // Check for the scenario in which configs have been merged
+            // perhaps by using spread syntax or calls to toObjectLiteral
+            // resulting in an object that "looks like" an http.Agent, but is not an instance of the class
             if ( isNonNullObject( pConfig.httpAgent ) )
             {
-                const defaultAgentCfg = HttpAgentConfig.getDefault();
-                const agentConfig = HttpAgentConfig.resolveAgentConfig( pConfig.httpAgent || defaultAgentCfg );
-                const agent = (agentConfig instanceof HttpAgentConfig) ? (agentConfig.equals( defaultAgentCfg ) ? httpAgent : (new http.Agent( agentConfig.toObjectLiteral() ) || httpAgent)) : httpAgent;
-                pConfig.httpAgent = agent || httpAgent || new http.Agent( httpAgentConfig.toObjectLiteral() );
+                const agentConfig = HttpAgentConfig.resolveAgentConfig( pConfig.httpAgent || HttpAgentConfig.getForContext( pForDownload ) );
+                const agent = resolveHttpAgent( pConfig.httpAgent, agentConfig, HttpAgentConfig.asExtended( agentConfig ) );
+                pConfig.httpAgent = agent || HTTP_AGENT || createHttpAgent( agentConfig, pForDownload );
             }
             else
             {
-                pConfig.httpAgent = httpAgent || new http.Agent( httpAgentConfig.toObjectLiteral() );
+                pConfig.httpAgent = resolveHttpAgent( HTTP_AGENT, HttpAgentConfig.getForContext( pForDownload ) );
             }
         }
 
-        // reset the property to be an instance of https.Agent
-        // we expect the variable, httpsAgent, to hold an instance of https.Agent,
-        // but if it is null or undefined or has been replaced with an object literal, a new instance is created
+        // Resets the property to an instance of http.Agent
+        // We expect the variable, httpAgent, to hold an instance of https.Agent,
+        // but if it is null or undefined or has been replaced with an object literal,
+        // a new instance is created
         if ( (isNull( pConfig.httpsAgent ) || !(pConfig.httpsAgent instanceof https.Agent)) )
         {
+            // Check for the scenario in which configs have been merged
+            // perhaps by using spread syntax or calls to toObjectLiteral
+            // resulting in an object that "looks like" an https.Agent, but is not an instance of the class
             if ( isNonNullObject( pConfig.httpsAgent ) )
             {
-                const defaultAgentCfg = HttpAgentConfig.getDefault();
-                const agentConfig = HttpAgentConfig.resolveAgentConfig( pConfig.httpsAgent || defaultAgentCfg );
-                const agent = (agentConfig instanceof HttpAgentConfig) ? (agentConfig.equals( defaultAgentCfg ) ? httpsAgent : (new https.Agent( agentConfig.toObjectLiteral() ) || httpsAgent)) : httpsAgent;
-                pConfig.httpsAgent = agent || httpsAgent || new https.Agent( httpAgentConfig.toObjectLiteral() );
+                const agentConfig = HttpAgentConfig.resolveAgentConfig( pConfig.httpsAgent || HttpAgentConfig.getForContext( pForDownload ) );
+                const agent = resolveHttpsAgent( pConfig.httpsAgent, agentConfig, HttpAgentConfig.asExtended( agentConfig ) );
+                pConfig.httpsAgent = agent || HTTPS_AGENT || createHttpsAgent( agentConfig, pForDownload );
             }
             else
             {
-                pConfig.httpsAgent = httpsAgent || new https.Agent( httpAgentConfig.toObjectLiteral() );
+                pConfig.httpsAgent = resolveHttpsAgent( HTTPS_AGENT, HttpAgentConfig.getForContext( pForDownload ) );
             }
         }
 
@@ -529,20 +698,105 @@ const { _ud = "undefined", $scope } = constants;
     HttpAgentConfig.resolveHttpsAgent = resolveHttpsAgent;
 
     const DEFAULT_CONFIG =
-        {
-            method: VERBS.GET,
-            responseType: "text/plain"
-        };
+        lock( {
+                  method: VERBS.GET,
+                  responseType: "text/plain",
+                  httpAgent: HTTP_AGENT,
+                  httpsAgent: HTTPS_AGENT
+              } );
 
     const DEFAULT_DOWNLOAD_CONFIG =
-        {
-            method: VERBS.GET,
-            responseType: "stream",
-            Accept: "application/octet-stream",
-            headers: { Accept: "application/octet-stream" }
-        };
+        lock( {
+                  method: VERBS.GET,
+                  responseType: "stream",
+                  Accept: "application/octet-stream",
+                  headers: { Accept: "application/octet-stream" },
+                  httpAgent: new http.Agent( HTTP_AGENT_DOWNLOAD_CFG.toObjectLiteral() ),
+                  httpsAgent: new https.Agent( HTTP_AGENT_DOWNLOAD_CFG.toObjectLiteral() ),
+              } );
 
-    const httpConfigProperties = ["headers", "url", "method", "httpAgent", "httpsAgent"];
+    const HTTP_CONFIG_PROPERTY_NAMES = lock( ["headers", "url", "method", "httpAgent", "httpsAgent"] );
+
+    const NON_DELEGATED_PROPERTIES = ["data", "body", "properties", "class", ...HTTP_CONFIG_PROPERTY_NAMES];
+
+
+    function resolveUrl( pUrl, pConfig )
+    {
+        if ( isString( pUrl ) && !isBlank( pUrl ) )
+        {
+            return cleanUrl( asString( pUrl, true ) );
+        }
+
+        let url = pUrl || pConfig?.url || pConfig;
+
+        if ( isNonNullObject( url ) )
+        {
+            if ( _ud !== typeof Request && url instanceof Request )
+            {
+                url = url.url || pConfig?.url;
+            }
+
+            if ( url instanceof URL )
+            {
+                url = cleanUrl( pUrl.href );
+            }
+
+            let count = 0;
+            while ( count++ < 5 && (( !isString( url ) || isBlank( url )) && isNonNullObject( url )) )
+            {
+                url = url.url || pConfig?.url || pConfig;
+            }
+        }
+
+        return isString( url ) ? cleanUrl( url || _mt ) : _mt;
+    }
+
+    /**
+     * Returns the body data that was fetched or should be sent in a request.
+     * This function expects the body to be a property of the configuration object specified.
+     * The property is expected to be named either 'body' or 'data'.
+     * For subclasses using a delegate with other expectations, override the corresponding method of HttpClient.
+     *
+     * @param pBody
+     * @param {Object|HttpConfig|RequestInit} pConfig An object with either a body or data property.
+     *
+     * @returns {String|ArrayBuffer|Blob|DataView|File|FormData|TypedArray|URLSearchParams|ReadableStream|null}
+     * The body to be sent to the server or the body received from the server (which may be an unfulfilled Promise)
+     *
+     * // override resolveBody for Axios, which will do this for us
+     */
+    async function resolveBody( pBody, pConfig, pParseJson = false )
+    {
+        let body = isNonNullObject( pBody ) || (isString( pBody ) && !isBlank( pBody )) ? pBody : (pConfig?.data || pConfig?.body);
+
+        if ( isString( body ) && !isBlank( body ) )
+        {
+            return body;
+        }
+
+        if ( instanceOfAny( body, ArrayBuffer, Blob, DataView, File, FormData, TypedArray, URLSearchParams, ReadableStream ) )
+        {
+            return body;
+        }
+
+        if ( isNumber( body ) )
+        {
+            return asString( body, true );
+        }
+
+        if ( isPromise( body ) || isThenable( body ) )
+        {
+            body = isPromise( body ) ? await asyncAttempt( async() => await body ) : await Promise.resolve( body ).then( b => b );
+            return resolveBody( body, pConfig );
+        }
+
+        if ( isNonNullObject( body ) && pParseJson )
+        {
+            return asJson( body );
+        }
+
+        return body;
+    }
 
     class HttpConfig extends EventTarget
     {
@@ -553,64 +807,56 @@ const { _ud = "undefined", $scope } = constants;
         #url;
         #method;
 
+        #params;
+
         #data;
         #body;
 
         #httpAgent;
         #httpsAgent;
 
-        constructor( pProperties, pHeaders, pUrl, pMethod )
+        constructor( pProperties, pHeaders, pUrl, pMethod, pBody = null )
         {
             super();
 
-            const me = this;
-
-            const properties = toObjectLiteral( asObject( pProperties || {} ) );
+            const properties = { ...DEFAULT_CONFIG, ...(asObject( pProperties || {} )) };
 
             this.#properties = { ...(properties || {}) };
 
-            this.#headers = new HttpHeaders( pHeaders || this.#properties?.headers || {} );
-            if ( isNonNullObject( this.#properties?.headers ) )
-            {
-                this.#headers = this.#headers.merge( this.properties.headers, pHeaders );
-            }
+            this.#headers = new HttpHeaders( pHeaders || this.#properties?.headers || {}, this.#properties?.headers );
 
-            let url = asString( (pUrl || properties?.url), true );
-
+            let url = asString( resolveUrl( pUrl, properties ), true );
             this.#url = !isBlank( url ) ? cleanUrl( url ) : _mt;
 
             this.#method = resolveHttpMethod( pMethod || properties?.method );
 
-            const definedProperties = ["properties", "class", ...httpConfigProperties];
+            const me = this || {};
 
-            const entries = objectEntries( asObject( this.#properties || {} ) );
-            entries.forEach( entry =>
-                             {
-                                 const key = asString( ObjectEntry.getKey( entry ), true );
-                                 const value = ObjectEntry.getValue( entry );
+            attempt( () => delegateTo( me, (me || this).#properties || {}, NON_DELEGATED_PROPERTIES ) );
 
-                                 if ( !(isBlank( key ) || isNull( value ) || (definedProperties.includes( key )) || hasProperty( this, key )) )
-                                 {
-                                     Object.defineProperty( this,
-                                                            key,
-                                                            {
-                                                                enumerable: true,
-                                                                get: function()
-                                                                {
-                                                                    return ((me || this).#properties || {})[key];
-                                                                },
-                                                                set: function( pValue )
-                                                                {
-                                                                    ((me || this).#properties || {})[key] = pValue;
-                                                                }
-                                                            } );
-                                 }
-                             } );
+            this.configureAgents( properties );
 
-            this.httpAgent = resolveHttpAgent( (properties["httpAgent"] || httpAgent), (properties["httpAgentConfig"] || properties["httpAgent"] || httpAgentConfig) );
-            this.httpsAgent = resolveHttpsAgent( (properties["httpsAgent"] || httpsAgent), (properties["httpAgentConfig"] || properties["httpsAgent"] || httpAgentConfig) );
+            if ( pBody )
+            {
+                this.body = pBody;
+            }
+        }
 
-            fixAgents( this );
+        configureAgents( pProperties )
+        {
+            const properties = pProperties || this.properties;
+
+            let agent = (properties["httpAgent"] || HTTP_AGENT);
+            let agentConfig = properties["httpAgentConfig"] || HTTP_AGENT_DEFAULT_CFG;
+
+            this.httpAgent = resolveHttpAgent( agent, agentConfig );
+
+            agent = (properties["httpsAgent"] || HTTPS_AGENT);
+            agentConfig = (properties["httpAgentConfig"] || agentConfig || HTTP_AGENT_DEFAULT_CFG);
+
+            this.httpsAgent = resolveHttpsAgent( agent, agentConfig );
+
+            return fixAgents( this );
         }
 
         static get [Symbol.species]()
@@ -620,86 +866,53 @@ const { _ud = "undefined", $scope } = constants;
 
         get properties()
         {
-            return { ...asObject( this.#properties ) };
+            return { ...DEFAULT_CONFIG, ...(asObject( this.#properties || {} )) };
         }
 
         get headers()
         {
-            let headers = this.#headers || this.#properties?.headers;
+            let headers = {};
 
-            if ( isNonNullObject( headers ) )
+            let headersProperties = [this.properties?.headers, this.#headers].filter( isNonNullObject );
+
+            for( let headersObject of headersProperties )
             {
-                let copy = isFunction( headers.clone ) ? headers.clone() : { ...(asObject( headers )) };
-
-                if ( isFunction( copy?.toLiteral ) )
-                {
-                    return copy.toLiteral();
-                }
-                return { ...(toObjectLiteral( asObject( headers || {} ) )) };
+                let copy = isFunction( headersObject?.clone ) ? headersObject.clone() : asObject( headersObject || {} );
+                let objLiteral = isFunction( copy?.toLiteral ) ? copy.toLiteral() : toObjectLiteral( copy || {} );
+                headers = { ...headers, ...objLiteral };
             }
 
-            if ( isNonNullObject( this.#properties?.headers ) )
-            {
-                headers = this.#properties?.headers;
-
-                let copy = isFunction( headers.clone ) ? headers.clone() : { ...(asObject( headers )) };
-
-                if ( isFunction( copy?.toLiteral ) )
-                {
-                    return copy.toLiteral();
-                }
-                return { ...(toObjectLiteral( asObject( headers || {} ) )) };
-            }
-
-            return {};
-        }
-
-        get baseHeaders()
-        {
-            return (isNonNullObject( this.#headers ) && isFunction( this.#headers.clone )) ?
-                { ...(toObjectLiteral( this.#headers.clone() )) } :
-                { ...(asObject( this.#headers || {} )) };
-        }
-
-        set baseHeaders( pHeaders )
-        {
-            this.#headers = asObject( pHeaders );
+            return isPopulatedObject( headers ) ? headers : { ...(toObjectLiteral( this.properties?.headers || {} )), ...(toObjectLiteral( this.#headers || {} )) };
         }
 
         set headers( pValue )
         {
-            this.#headers = new HttpHeaders( pValue );
+            this.#headers = new HttpHeaders( pValue, new HttpHeaders( this.#headers, this.properties ) );
         }
 
-        addHeaders( pValue )
+        addHeaders( ...pValue )
         {
-            if ( isNonNullObject( pValue ) )
-            {
-                if ( isFunction( this.#headers?.merge ) )
-                {
-                    this.#headers = this.#headers.merge( pValue );
-                }
-                else
-                {
-                    const entries = objectEntries( pValue );
-                    entries.forEach( entry =>
-                                     {
-                                         const key = resolveHeaderName( ObjectEntry.getKey( entry ) );
-                                         const value = resolveHeaderValue( ObjectEntry.getValue( entry ) );
+            this.#headers = HttpHeaders.mergeHeaders( this.#headers, ...pValue );
+        }
 
-                                         if ( isFunction( this.#headers.append ) )
-                                         {
-                                             attempt( () => this.#headers.append( key, value ) );
-                                         }
-                                         else if ( isFunction( this.#headers.set ) )
-                                         {
-                                             attempt( () => this.#headers.set( key, value ) );
-                                         }
-                                         else
-                                         {
-                                             attempt( () => this.#headers[key] = value );
-                                         }
-                                     } );
+        removeHeaderValues( ...pKeys )
+        {
+            let keys = [...(asArray( pKeys ))];
+
+            if ( isFunction( this.#headers?.delete ) )
+            {
+                while ( $ln( keys ) > 0 )
+                {
+                    let key = resolveHeaderName( keys.shift() );
+                    attempt( () => this.#headers.delete( key ) );
+                }
+            }
+            else if ( isNonNullObject( this.#headers ) )
+            {
+                while ( $ln( keys ) > 0 )
+                {
+                    let key = resolveHeaderName( keys.shift() );
+                    attempt( () => delete this.#headers[key] );
                 }
             }
         }
@@ -712,19 +925,19 @@ const { _ud = "undefined", $scope } = constants;
             }
             else
             {
-                return new HttpHeaders( this.headers );
+                return new HttpHeaders( this.headers, this.properties );
             }
         }
 
         get url()
         {
-            let url = asString( this.#url, true );
+            let url = asString( resolveUrl( this.#url, this.properties ), true );
             return isBlank( url ) ? _mt : cleanUrl( url );
         }
 
         set url( pUrl )
         {
-            let url = asString( pUrl, true );
+            let url = asString( resolveUrl( pUrl ), true );
 
             this.#url = isBlank( url ) ? asString( this.#url || _mt, true ) : cleanUrl( url );
         }
@@ -747,7 +960,7 @@ const { _ud = "undefined", $scope } = constants;
 
         set httpAgent( pAgent )
         {
-            this.#httpAgent = resolveHttpAgent( pAgent );
+            this.#httpAgent = resolveHttpAgent( pAgent || this.#httpAgent );
         }
 
         get httpsAgent()
@@ -758,12 +971,12 @@ const { _ud = "undefined", $scope } = constants;
 
         set httpsAgent( pAgent )
         {
-            this.#httpsAgent = resolveHttpsAgent( pAgent );
+            this.#httpsAgent = resolveHttpsAgent( pAgent || this.#httpsAgent );
         }
 
-        fixAgents()
+        fixAgents( pForDownload )
         {
-            fixAgents( this );
+            fixAgents( this, pForDownload );
         }
 
         get data()
@@ -779,107 +992,115 @@ const { _ud = "undefined", $scope } = constants;
 
         get body()
         {
-            return this.#body || this.#data;
+            return this.#body || this.#data || null;
         }
 
         set body( pBody )
         {
-            this.#body = pBody;
-            this.#data = pBody;
+            this.#body = pBody || null;
+            this.#data = pBody || null;
+        }
+
+        get params()
+        {
+            return this.#params instanceof URLSearchParams ? this.#params : !isNull( this.#params ) ? attempt( () => new URLSearchParams( this.#params ) ) : null;
+        }
+
+        set params( pParams )
+        {
+            let params = isNull( pParams ) ? null : pParams instanceof URLSearchParams ? pParams : attempt( () => new URLSearchParams( pParams ) );
+            this.#params = params || null;
         }
 
         toLiteral()
         {
+            // prevent any confusion over 'this' in obj
+            const me = this;
+
             let obj =
                 {
-                    properties: { ...(asObject( this.#properties || {} )) },
-                    headers: { ...(asObject( toObjectLiteral( this.headers ) )) },
-                    url: this.url,
-                    method: this.method,
-                    httpAgent: this.httpAgent,
-                    httpsAgent: this.httpsAgent,
-                    data: this.data,
-                    body: this.body
+                    properties: { ...(asObject( me.properties || {} )) },
+                    headers: me.headers,
+                    method: me.method,
+                    url: me.url,
+                    httpAgent: me.httpAgent,
+                    httpsAgent: me.httpsAgent
                 };
 
-            let entries = objectEntries( obj.properties );
-
-            for( let entry of entries )
+            if ( me.data || me.body )
             {
-                let key = asString( ObjectEntry.getKey( entry ), true );
-                let value = ObjectEntry.getValue( entry );
+                obj["data"] = me.data || me.body;
+                obj["body"] = me.body || me.data;
+            }
 
-                if ( !(isNull( value ) || isBlank( key )) )
+            if ( me.params )
+            {
+                obj["params"] = me.params;
+            }
+
+            const entries = objectEntries( this.properties );
+
+            if ( entries && $ln( entries ) > 0 )
+            {
+                for( let entry of entries )
                 {
-                    obj[key] = (obj[key] || value);
+                    if ( entry )
+                    {
+                        let key = asString( ObjectEntry.getKey( entry ), true );
+                        let value = ObjectEntry.getValue( entry );
+
+                        if ( !(isNull( value ) || isBlank( key )) )
+                        {
+                            obj[key] = (obj[key] || value);
+                        }
+                    }
                 }
             }
 
-            entries = objectEntries( asObject( obj.headers || {} ) );
+            let headers = asObject( this.headers || obj.headers );
 
-            let headers = {};
+            if ( headers instanceof HttpHeaders || isFunction( headers?.toLiteral ) )
+            {
+                headers = headers.toLiteral();
+                obj.headers = headers;
+            }
+            else
+            {
+                obj.headers = toObjectLiteral( obj.headers || this.headers );
+            }
 
-            entries.forEach( entry =>
-                             {
-                                 let key = asString( ObjectEntry.getKey( entry ), true );
-
-                                 if ( !isBlank( key ) && !(["class"].includes( key )) )
-                                 {
-                                     let value = asString( ObjectEntry.getValue( entry ), true );
-                                     if ( !isBlank( value ) )
-                                     {
-                                         headers[key] = value;
-                                     }
-                                 }
-                             } );
-
-            obj.headers = asObject( headers );
-
-            return lock( obj );
+            return lock( fixAgents( obj ) );
         }
 
         merge( ...pConfigs )
         {
-            const configs = asArray( pConfigs ).filter( isNonNullObject ).map( resolveHttpConfig ).filter( isHttpConfig );
+            const configs = attempt( () => asArray( pConfigs || [] ).filter( isNonNullObject ).map( resolveHttpConfig ).filter( isHttpConfig ) );
 
-            for( let cfg of configs )
+            if ( configs && $ln( configs ) > 0 )
             {
-                this.url = !isBlank( cfg.url ) ? (cleanUrl( cfg.url ) || this.url) : this.url;
-                this.method = resolveHttpMethod( cfg.method || this.method ) || this.method;
-                this.httpAgent = resolveHttpAgent( cfg.httpAgent || this.httpAgent ) || this.httpAgent;
-                this.httpsAgent = resolveHttpsAgent( cfg.httpsAgent || this.httpsAgent ) || this.httpsAgent;
-                this.data = cfg.data || cfg.body || this.data;
-                this.body = cfg.body || cfg.data || this.body;
-
-                if ( isNonNullObject( this.#headers ) )
+                for( let cfg of configs )
                 {
-                    if ( isFunction( this.#headers.clone ) && isFunction( this.#headers.merge ) )
-                    {
-                        this.#headers = this.#headers.clone();
-                        this.#headers = this.#headers.merge( cfg.headers );
-                    }
-                    else
-                    {
-                        this.#headers = isFunction( this.#headers.toLiteral ) ? this.#headers.toLiteral() : toObjectLiteral( this.#headers );
-
-                        let otherHeaders = asObject( cfg.headers );
-                        otherHeaders = isFunction( otherHeaders.toLiteral ) ? otherHeaders.toLiteral() : toObjectLiteral( otherHeaders );
-
-                        this.headers = { ...(asObject( this.#headers || {} )), ...(asObject( otherHeaders )) };
-                    }
+                    this.url = !isBlank( cfg.url ) ? (cleanUrl( cfg.url ) || this.url) : this.url;
+                    this.method = resolveHttpMethod( cfg.method || this.method || VERBS.GET ) || this.method;
+                    this.httpAgent = resolveHttpAgent( cfg.httpAgent || this.httpAgent || HTTP_AGENT ) || this.httpAgent;
+                    this.httpsAgent = resolveHttpsAgent( cfg.httpsAgent || this.httpsAgent || HTTPS_AGENT ) || this.httpsAgent;
+                    this.data = cfg.data || cfg.body || this.data;
+                    this.body = cfg.body || cfg.data || this.body;
+                    this.params = cfg.params || this.params;
                 }
+
+                let heads = configs.filter( isNonNullObject ).map( e => e.headers );
+
+                this.headers = attempt( () => HttpHeaders.mergeHeaders( this.#headers, ...heads ) );
             }
 
-            fixAgents( this );
-
-            return this;
+            return fixAgents( this ) || this;
         }
 
         clone()
         {
-            const httpConfig = new HttpConfig( this.#properties, this.headers, this.url, this.method );
-
-            return httpConfig.merge( this );
+            const httpConfig = new HttpConfig( this.properties, this.headers, this.url, this.method, this.body );
+            return fixAgents( httpConfig.merge( this ) );
         }
     }
 
@@ -901,7 +1122,7 @@ const { _ud = "undefined", $scope } = constants;
 
             let matchesInterface = hasProperty( pConfig, "headers" );
 
-            for( let prop of httpConfigProperties )
+            for( let prop of HTTP_CONFIG_PROPERTY_NAMES )
             {
                 matchesInterface = matchesInterface && hasProperty( pConfig, prop );
                 if ( !matchesInterface )
@@ -918,7 +1139,7 @@ const { _ud = "undefined", $scope } = constants;
 
     const resolveHttpConfig = function( pConfig, ...pObjects )
     {
-        let httpConfig = pConfig;
+        let httpConfig = pConfig || {};
 
         let hosts = [...(asArray( pObjects || [] ))].filter( isNonNullObject );
 
@@ -931,33 +1152,134 @@ const { _ud = "undefined", $scope } = constants;
             }
         }
 
-        return isHttpConfig( httpConfig ) ? fixAgents( httpConfig ) : null;
+        return isHttpConfig( httpConfig ) ? fixAgents( httpConfig ) : new HttpConfig( DEFAULT_CONFIG );
     };
 
     const toHttpConfigLiteral = function( pHttpConfig )
     {
-        let httpConfig = isHttpConfig( pHttpConfig ) ? pHttpConfig :
-            { ...(asObject( (isFunction( pHttpConfig?.toLiteral ) ? pHttpConfig.toLiteral() : pHttpConfig || {}) )) };
-
-        if ( isNonNullObject( httpConfig ) )
+        if ( isHttpConfig( pHttpConfig ) || isFunction( pHttpConfig?.toLiteral ) )
         {
-            if ( isHttpConfig( httpConfig, true ) )
-            {
-                return fixAgents( (isFunction( httpConfig.toLiteral ) ? { ...(asObject( httpConfig.toLiteral() )) } : { ...(toObjectLiteral( asObject( httpConfig ) )) }) );
-            }
-            return fixAgents( { ...(asObject( httpConfig )) } );
+            return fixAgents( pHttpConfig.toLiteral() );
         }
 
-        return new HttpConfig( httpConfig, (httpConfig?.headers || httpConfig), httpConfig?.url, httpConfig?.method );
+        const httpConfig = fixAgents( { ...(asObject( pHttpConfig || {} ) || {}) } );
+
+        const config = new HttpConfig( httpConfig, (httpConfig?.headers || httpConfig), httpConfig?.url, httpConfig?.method );
+
+        return config.toLiteral();
     };
 
     HttpConfig.isHttpConfig = isHttpConfig;
     HttpConfig.resolveHttpConfig = resolveHttpConfig;
     HttpConfig.toHttpConfigLiteral = toHttpConfigLiteral;
 
+    HttpConfig.mergeConfigs = function( ...pConfigs )
+    {
+        let properties = { ...DEFAULT_CONFIG };
+
+        let others = (asArray( pConfigs || [{}] ));
+
+        if ( $ln( others ) > 0 )
+        {
+            for( let other of others )
+            {
+                let cfg = isHttpConfig( other ) ? toHttpConfigLiteral( other ) : { ...(other) };
+                properties = { ...properties, ...(cfg || other) };
+            }
+        }
+
+        const httpConfig = new HttpConfig( { ...properties } );
+
+        const configs = asArray( pConfigs ).filter( isNonNullObject ).map( resolveHttpConfig ).filter( isHttpConfig );
+
+        return httpConfig.merge( ...configs );
+    };
+
+    async function prepareConfig( pConfig, pUrl = pConfig?.url, pMethod = pConfig.method, pBody, pParseJson )
+    {
+        const httpConfig = isHttpConfig( pConfig ) ? pConfig : new HttpConfig( pConfig, pConfig?.headers, pUrl || pConfig?.url, pMethod || pConfig?.method, (pBody || pConfig.body) );
+
+        const url = cleanUrl( asString( resolveUrl( pUrl, pConfig ) || pConfig?.url, true ), true );
+
+        const method = resolveHttpMethod( pMethod || pConfig?.method );
+
+        let body = pBody || pConfig?.data || pConfig?.body || httpConfig?.data || httpConfig?.body;
+
+        let params = null;
+
+        let contentType = null;
+
+        let contentLength = -1;
+
+        if ( !isNull( body ) && HttpVerb.resolve( method ).allowsBody )
+        {
+            body = await asyncAttempt( async() => await resolveBody( body, pConfig, pParseJson ) );
+
+            contentType = await asyncAttempt( async() => await HttpContentType.calculateContentType( {
+                                                                                                         data: body,
+                                                                                                         body
+                                                                                                     } ) );
+        }
+        else if ( ( !isNull( body ) && (body instanceof URLSearchParams || isMap( body ))) || !isNull( pConfig?.params || httpConfig?.params ) )
+        {
+            if ( !isNull( body ) && (body instanceof URLSearchParams || isMap( body )) )
+            {
+                params = new URLSearchParams( body || httpConfig?.params );
+            }
+            else if ( !isNull( pConfig?.params || httpConfig?.params ) )
+            {
+                params = new URLSearchParams( pConfig?.params || httpConfig?.params );
+            }
+            body = httpConfig.body = httpConfig.data = null;
+        }
+
+        let config = new HttpConfig( httpConfig, httpConfig.headers, url, method, body );
+
+        if ( params )
+        {
+            config.params = params;
+        }
+
+        config = HttpConfig.mergeConfigs( httpConfig, config );
+
+        if ( isNull( contentType ) || (isNull( body ) || !isNull( params )) )
+        {
+            attempt( () => config.removeHeaderValues( ...(asArray( objectKeys( HTTP_HEADERS.MESSAGE_BODY ) )) ) );
+        }
+
+        return fixAgents( config );
+    }
+
+    async function prepareConfigParams( pConfig, pUrl = pConfig?.url, pMethod = pConfig.method, pParams = { "params": new URLSearchParams() } )
+    {
+        const httpConfig = isHttpConfig( pConfig ) ? pConfig : new HttpConfig( pConfig, pConfig?.headers, pUrl || pConfig?.url, pMethod || pConfig?.method, (pBody || pConfig.body || pConfig.params) );
+
+        const url = cleanUrl( asString( pUrl || pConfig?.url, true ), true );
+
+        const method = resolveHttpMethod( pMethod || pConfig?.method );
+
+        let params = pParams || httpConfig.params;
+
+        params = !isNull( params ) ? new URLSearchParams( params ) : null;
+
+        let config = new HttpConfig( httpConfig, httpConfig.headers, url, method );
+
+        config = HttpConfig.mergeConfigs( httpConfig, config );
+
+        config.params = params;
+
+        attempt( () => config.removeHeaderValues( ...(asArray( objectKeys( HTTP_HEADERS.MESSAGE_BODY ) )) ) );
+
+        return fixAgents( config );
+    }
+
+    HttpConfig.prepareConfig = prepareConfig;
+    HttpConfig.prepareConfigParams = prepareConfigParams;
+
     const DEFAULT_HTTP_CONFIG = new HttpConfig( DEFAULT_CONFIG );
 
-    const DEFAULT_HTTP_DOWNLOAD_CONFIG = new HttpConfig( DEFAULT_DOWNLOAD_CONFIG, DEFAULT_DOWNLOAD_CONFIG.headers );
+    const DEFAULT_HTTP_DOWNLOAD_CONFIG = new HttpConfig( DEFAULT_DOWNLOAD_CONFIG,
+                                                         DEFAULT_DOWNLOAD_CONFIG.headers );
 
     HttpConfig.getDownloadDefault = function()
     {
@@ -968,6 +1290,17 @@ const { _ud = "undefined", $scope } = constants;
     {
         return !!pForDownload ? HttpConfig.getDownloadDefault() : new HttpConfig( DEFAULT_CONFIG );
     };
+
+    HttpConfig.getCustom = function( pForDownload, pCustomProperties )
+    {
+        let baseConfig = HttpConfig.getDefault( pForDownload );
+
+        let httpConfig = new HttpConfig( { ...(baseConfig.toLiteral()), ...(asObject( pCustomProperties )) } );
+
+        return fixAgents( httpConfig );
+    };
+
+    HttpConfig.prepareConfig = prepareConfig;
 
     const RequestInitModel =
         {
@@ -1186,55 +1519,56 @@ const { _ud = "undefined", $scope } = constants;
 
     class ConfigFactory
     {
+        #object = {};
+        #options = {};
+
         #map;
         #literal;
-        #options = {};
 
         constructor( pObject, pOptions )
         {
+            this.#object = asObject( pObject || {} );
             this.#options = { ...(pOptions || {}) };
-
-            this.#map = attempt( () => asMap( pObject || {}, pOptions ) );
-            this.#literal = attempt( () => toObjectLiteral( pObject || {}, pOptions ) );
         }
 
         get map()
         {
+            if ( isNull( this.#map ) || !isMap( this.#map ) )
+            {
+                this.#map = asMap( (this.#object || {}), (this.#options || {}) );
+            }
+
             return lock( new Map( this.#map ) );
         }
 
         get literal()
         {
+            if ( isNull( this.#literal ) || !isObject( this.#literal ) )
+            {
+                this.#literal = isFunction( this.#object?.toLiteral ) ? this.#object.toLiteral() : toObjectLiteral( (this.#object || {}), (this.#options || {}) );
+            }
             return lock( { ...(this.#literal || {}) } );
         }
 
         getConfigValue( pKey )
         {
-            const me = this;
-
             let key = asString( pKey, true );
 
-            const map = me.#map;
+            const map = this.map;
 
-            let value = (map.get( key ) ||
-                         map.get( lcase( key ) ) ||
-                         map.get( toProperCase( key ) ) ||
-                         map.get( toSnakeCase( key ) ) ||
-                         map.get( toCamelCase( key ) ));
+            let value = readProperty( map, key );
 
             if ( isNull( value ) )
             {
-                const obj = me.literal;
-                value = obj[key] || obj[lcase( key )] || obj[toSnakeCase( key )] || obj[toCamelCase( key )] || obj[toProperCase( key )];
+                const o = (this.#object || {});
+                value = readProperty( o, key );
             }
 
-            return value;
+            return value || (readProperty( this.literal, key ));
         }
 
         resolveValue( pDescriptor, pValue, pKey )
         {
-            const me = this;
-
             const descriptor = pDescriptor || DEFAULT_PROPERTY_DESCRIPTOR;
 
             let { required, types, allowed, value } = this.resolveDescriptor( descriptor, pValue, pKey );
@@ -1257,7 +1591,7 @@ const { _ud = "undefined", $scope } = constants;
                     }
                     else
                     {
-                        value = this.handleObjectValue( value, pValue, descriptor, me );
+                        value = this.handleObjectValue( value, pValue, descriptor, this );
                     }
                     break;
 
@@ -1274,20 +1608,18 @@ const { _ud = "undefined", $scope } = constants;
 
         handleObjectValue( pValue, pDescriptor )
         {
-            const me = this;
-
             const descriptor = pDescriptor || DEFAULT_PROPERTY_DESCRIPTOR;
 
             let value = { ...(pValue || {}) };
 
-            const properties = asArray( descriptor?.properties || [] ).filter( e => !isNull( e ) && !isBlank( e ) );
+            const properties = asArray( descriptor?.properties || [] ).filter( e => !(isNull( e ) || isBlank( e )) );
 
             for( let prop of properties )
             {
                 value[prop] = value[prop] ||
-                              attempt( () => me.resolveValue( descriptor || DEFAULT_PROPERTY_DESCRIPTOR,
-                                                              me.getConfigValue( prop ),
-                                                              prop ) );
+                              attempt( () => this.resolveValue( descriptor || DEFAULT_PROPERTY_DESCRIPTOR,
+                                                                this.getConfigValue( prop ),
+                                                                prop ) );
 
                 if ( this.isMissingValue( value[prop] ) )
                 {
@@ -1346,8 +1678,6 @@ const { _ud = "undefined", $scope } = constants;
 
         buildConfig( pModel )
         {
-            const me = this;
-
             let config = {};
 
             const entries = objectEntries( pModel || {} );
@@ -1358,7 +1688,7 @@ const { _ud = "undefined", $scope } = constants;
 
                                  const descriptor = ObjectEntry.getValue( entry );
 
-                                 let cfgValue = me.resolveValue( descriptor, me.getConfigValue( key ), key );
+                                 let cfgValue = this.resolveValue( descriptor, this.getConfigValue( key ), key );
 
                                  if ( !isNull( cfgValue ) )
                                  {
@@ -1370,8 +1700,6 @@ const { _ud = "undefined", $scope } = constants;
 
         populateConfig( pConfig, pModel )
         {
-            const me = this;
-
             let config = toHttpConfigLiteral( asObject( pConfig ) );
 
             const entries = objectEntries( pModel || {} );
@@ -1382,7 +1710,7 @@ const { _ud = "undefined", $scope } = constants;
 
                                  const descriptor = ObjectEntry.getValue( entry );
 
-                                 let cfgValue = me.resolveValue( descriptor, me.getConfigValue( key ), key );
+                                 let cfgValue = this.resolveValue( descriptor, this.getConfigValue( key ), key );
 
                                  if ( !isNull( cfgValue ) )
                                  {
@@ -1422,76 +1750,8 @@ const { _ud = "undefined", $scope } = constants;
                     isFunction( pDelegate.sendDeleteRequest ));
 
         }
-    }
 
-    function resolveUrl( pUrl, pConfig )
-    {
-        if ( isNonNullObject( pUrl ) )
-        {
-            if ( pUrl instanceof URL )
-            {
-                return cleanUrl( pUrl.href );
-            }
-            else
-            {
-                return cleanUrl( asString( pUrl?.url || pUrl?.href || pUrl, true ) || asString( pUrl, true ) );
-            }
-        }
-
-        if ( isString( pUrl ) && !isBlank( pUrl ) )
-        {
-            return cleanUrl( asString( pUrl, true ) );
-        }
-
-        return cleanUrl( pConfig?.url || _mt );
-    }
-
-    /**
-     * Returns the body data that was fetched or should be sent in a request.
-     * This function expects the body to be a property of the configuration object specified.
-     * The property is expected to be named either 'body' or 'data'.
-     * For subclasses using a delegate with other expectations, override the corresponding method of HttpClient.
-     *
-     * @param pBody
-     * @param {Object|HttpConfig|RequestInit} pConfig An object with either a body or data property.
-     *
-     * @returns {String|ArrayBuffer|Blob|DataView|File|FormData|TypedArray|URLSearchParams|ReadableStream|null}
-     * The body to be sent to the server or the body received from the server (which may be an unfulfilled Promise)
-     *
-     * // override resolveBody for Axios, which will do this for us
-     */
-    async function resolveBody( pBody, pConfig )
-    {
-        let body = isNonNullObject( pBody ) || (isString( pBody ) && !isBlank( pBody )) ? pBody : (pConfig?.data || pConfig?.body);
-
-        if ( isString( body ) && !isBlank( body ) )
-        {
-            return body;
-        }
-
-        if ( instanceOfAny( body, ArrayBuffer, Blob, DataView, File, FormData, TypedArray, URLSearchParams, ReadableStream ) )
-        {
-            return body;
-        }
-
-        if ( isNumber( body ) )
-        {
-            return asString( body, true );
-        }
-
-        if ( isPromise( body ) || isThenable( body ) )
-        {
-            body = isPromise( body ) ? await asyncAttempt( async() => await body ) : Promise.resolve( body ).then( b => b );
-            return resolveBody( body, pConfig );
-        }
-
-        // override resolveBody for Axios, which will do this for us
-        if ( isNonNullObject( body ) )
-        {
-            return asJson( body );
-        }
-
-        return body;
+        return false;
     }
 
     function extractFileNameFromHeader( pResponse, pDefaultName, pReplaceCharacters = false )
@@ -1528,7 +1788,7 @@ const { _ud = "undefined", $scope } = constants;
             }
         }
 
-        return asString( pDefaultName, true );
+        return toLegalFileName( asString( pDefaultName, true ) );
     }
 
     class QueuedRequest
@@ -1596,7 +1856,7 @@ const { _ud = "undefined", $scope } = constants;
 
         get config()
         {
-            return { ...(toHttpConfigLiteral( this.#config || {} )) };
+            return fixAgents( { ...(toHttpConfigLiteral( this.#config || {} )) } );
         }
 
         get request()
@@ -1638,11 +1898,11 @@ const { _ud = "undefined", $scope } = constants;
 
     async function prepareRequestConfig( pUrl, pMethod, pConfig, pBody )
     {
-        const url = cleanUrl( (_ud !== typeof Request && pUrl instanceof Request) ? (pUrl?.url || pUrl) : resolveUrl( pUrl, pConfig ) );
+        const url = cleanUrl( asString( resolveUrl( pUrl, pConfig ), true ), true );
 
         const method = resolveHttpMethod( pMethod || pConfig?.method );
 
-        const body = !isNull( pBody ) ? await asyncAttempt( async() => await resolveBody( (pBody || pConfig?.body || pConfig?.data), pConfig ) ) : null;
+        let body = await (pBody || pConfig?.data || pConfig?.body || httpConfig?.data || httpConfig?.body);
 
         const cfg =
             {
@@ -1708,8 +1968,8 @@ const { _ud = "undefined", $scope } = constants;
         {
             let mergedConfig = { ...({ ...(this.config || {}) }), ...(toHttpConfigLiteral( pConfig || {} )) };
 
-            mergedConfig.httpAgent = resolveHttpAgent( pConfig?.httpAgent || this.config?.httpAgent || httpAgent, this.config?.httpAgent || httpAgent, httpAgent ) || httpAgent;
-            mergedConfig.httpsAgent = resolveHttpsAgent( pConfig?.httpsAgent || this.config?.httpsAgent || httpsAgent, this.config?.httpsAgent || httpsAgent, httpsAgent ) || httpsAgent;
+            mergedConfig.httpAgent = resolveHttpAgent( pConfig?.httpAgent || this.config?.httpAgent || HTTP_AGENT ) || HTTP_AGENT;
+            mergedConfig.httpsAgent = resolveHttpsAgent( pConfig?.httpsAgent || this.config?.httpsAgent || HTTPS_AGENT ) || HTTPS_AGENT;
 
             return fixAgents( mergedConfig );
         }
@@ -1840,7 +2100,7 @@ const { _ud = "undefined", $scope } = constants;
 
             const { url, cfg } = await prepareRequestConfig( pUrl,
                                                              resolveHttpMethod( pMethod ),
-                                                             toHttpConfigLiteral( pConfig ),
+                                                             toHttpConfigLiteral( pConfig || this.config ),
                                                              pBody );
 
             return await me.doFetch( url, cfg );
@@ -1854,14 +2114,14 @@ const { _ud = "undefined", $scope } = constants;
             const url = this.resolveUrl( config?.url || pConfig?.url || config, config );
             const body = this.resolveBody( config?.body || config?.data || pConfig?.body || pConfig?.data );
 
-            return await this.sendRequest( method, url, pConfig, ([VERBS.POST, VERBS.PUT, VERBS.PATCH, VERBS.DELETE].includes( method ) ? body : undefined) );
+            return await this.sendRequest( method, url, config, ([VERBS.POST, VERBS.PUT, VERBS.PATCH, VERBS.DELETE].includes( method ) ? body : undefined) );
         }
 
         async sendGetRequest( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )
         {
             const me = this;
 
-            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.GET, pConfig );
+            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.GET, pConfig || this.config );
 
             return await asyncAttempt( async() => await me.sendRequest( VERBS.GET, url, cfg, null, pRedirects, pRetries, pResolve, pReject ) );
         }
@@ -1870,7 +2130,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             const me = this;
 
-            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.GET, pConfig );
+            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.GET, pConfig || this.config );
 
             const responseData = new ResponseData( await asyncAttempt( async() => await me.sendGetRequest( url, cfg ) ) );
 
@@ -1938,21 +2198,21 @@ const { _ud = "undefined", $scope } = constants;
         {
             const me = this;
 
-            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.POST, pConfig, pBody );
+            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.POST, pConfig || this.config, pBody );
 
             return asyncAttempt( async() => await me.sendRequest( VERBS.POST, url, cfg, (cfg.body || cfg.data), pRedirects, pRetries, pResolve, pReject ) );
         }
 
         async upload( pUrl, pConfig, pBody )
         {
-            return this.sendPostRequest( pUrl, pConfig, pBody );
+            return this.sendPostRequest( pUrl, pConfig || this.config, pBody );
         }
 
         async sendDeleteRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
             const me = this;
 
-            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.DELETE, pConfig, pBody );
+            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.DELETE, pConfig || this.config, pBody );
 
             return asyncAttempt( async() => await me.sendRequest( VERBS.DELETE, url, cfg, (cfg.body || cfg.data), pRedirects, pRetries, pResolve, pReject ) );
         }
@@ -1961,7 +2221,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             const me = this;
 
-            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.PUT, pConfig, pBody );
+            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.PUT, pConfig || this.config, pBody );
 
             return asyncAttempt( async() => await me.sendRequest( VERBS.PUT, url, cfg, (cfg.body || cfg.data), pRedirects, pRetries, pResolve, pReject ) );
         }
@@ -1970,7 +2230,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             const me = this;
 
-            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.PATCH, pConfig, pBody );
+            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.PATCH, pConfig || this.config, pBody );
 
             return asyncAttempt( async() => await me.sendRequest( VERBS.PATCH, url, cfg, (cfg.body || cfg.data), pRedirects, pRetries, pResolve, pReject ) );
         }
@@ -1979,7 +2239,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             const me = this;
 
-            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.HEAD, pConfig );
+            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.HEAD, pConfig || this.config );
 
             return asyncAttempt( async() => await me.sendRequest( VERBS.HEAD, url, cfg ) );
         }
@@ -1988,7 +2248,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             const me = this;
 
-            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.OPTIONS, pConfig );
+            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.OPTIONS, pConfig || this.config );
 
             return asyncAttempt( async() => await me.sendRequest( VERBS.OPTIONS, url, cfg ) );
         }
@@ -1997,7 +2257,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             const me = this;
 
-            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.TRACE, pConfig );
+            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.TRACE, pConfig || this.config );
 
             return asyncAttempt( async() => await me.sendRequest( VERBS.TRACE, url, cfg ) );
         }
@@ -2052,12 +2312,12 @@ const { _ud = "undefined", $scope } = constants;
             fileName = replaceExtension( fileName, extension );
         }
 
-        return asString( fileName, true );
+        return toLegalFileName( asString( fileName, true ) );
     }
 
     class IHttpClient extends EventTarget
     {
-        constructor( pConfig = HttpConfig.getDefault(), pOptions = { ...DEFAULT_HTTP_CLIENT_OPTIONS }, pDelegates = new Map(), pDefaultDelegate = new HttpFetchClient( pConfig, pOptions ) )
+        constructor( pConfig, pOptions, pDelegates, pDefaultDelegate )
         {
             super();
         }
@@ -2084,67 +2344,100 @@ const { _ud = "undefined", $scope } = constants;
 
     }
 
+    IHttpClient.resolveConfig = function( pConfig, pDefaultDelegate )
+    {
+        if ( isHttpConfig( pConfig, true ) )
+        {
+            return pConfig.merge( DEFAULT_HTTP_CONFIG, pConfig );
+        }
+
+        const config = asObject( pConfig || pDefaultDelegate?.httpConfig || pDefaultDelegate?.config || DEFAULT_CONFIG );
+
+        return new HttpConfig( { ...DEFAULT_CONFIG, ...(toHttpConfigLiteral( config )) } );
+    };
+
+    IHttpClient.resolveDelegate = function( pDelegate, pConfig, pOptions )
+    {
+        if ( isHttpClient( pDelegate ) )
+        {
+            return pDelegate;
+        }
+
+        let options = { ...DEFAULT_HTTP_CLIENT_OPTIONS, ...(pOptions || {}) };
+
+        if ( isHttpClient( options?.delegate || options?.defaultDelegate ) )
+        {
+            return options?.delegate || options?.defaultDelegate;
+        }
+
+        let config = IHttpClient.resolveConfig( pConfig, (options?.delegate || options?.defaultDelegate) );
+
+        return new HttpFetchClient( config, options );
+    };
+
     class HttpClient extends IHttpClient
     {
         #config;
 
-        #options;
+        #options = { ...DEFAULT_HTTP_CLIENT_OPTIONS };
 
         #delegates = new Map();
 
-        #defaultDelegate = new HttpFetchClient();
+        #defaultDelegate;
 
         #logger;
 
         #maxRedirects = MAX_REDIRECTS;
 
-        constructor( pConfig = HttpConfig.getDefault(), pOptions = { ...DEFAULT_HTTP_CLIENT_OPTIONS }, pDelegates = new Map(), pDefaultDelegate = new HttpFetchClient( pConfig, pOptions ) )
+        constructor( pConfig, pOptions, pDelegates, pDefaultDelegate )
         {
             super( pConfig, pOptions, pDelegates, pDefaultDelegate );
 
-            this.#config = isHttpConfig( pConfig, true ) ? pConfig.merge( DEFAULT_HTTP_CONFIG, pConfig ) : new HttpConfig( { ...DEFAULT_CONFIG, ...(toHttpConfigLiteral( asObject( pConfig || pDefaultDelegate?.httpConfig || pDefaultDelegate?.config || {} ) )) } );
+            this.#config = IHttpClient.resolveConfig( pConfig, pDefaultDelegate );
 
             this.#options = { ...DEFAULT_HTTP_CLIENT_OPTIONS, ...(asObject( pOptions || pDefaultDelegate?.options || {} )) };
 
-            this.#logger = ToolBocksModule.resolveLogger( this.#options?.logger, konsole );
+            this.#defaultDelegate = IHttpClient.resolveDelegate( (pDefaultDelegate || pDelegates), this.#config, this.#options );
 
-            this.#maxRedirects = asInt( this.#config.maxRedirects || this.#options.maxRedirects || 5, 5 );
+            this.#maxRedirects = asInt( (this.#config.maxRedirects ?? this.#options.maxRedirects ?? MAX_REDIRECTS), MAX_REDIRECTS );
 
-            this.#defaultDelegate = isHttpClient( pDefaultDelegate ) ? pDefaultDelegate : isHttpClient( pDelegates ) ? pDelegates : new HttpFetchClient( this.config, this.options );
+            this.#populateDelegates( (pDelegates || this.#options?.delegates || this.#config?.delegates), this.#defaultDelegate );
 
-            this.#populateDelegates( pDelegates, this.#defaultDelegate );
+            this.#logger = ToolBocksModule.resolveLogger( this.#options?.logger, toolBocksModule?.logger, konsole );
 
             this.streamToFile = streamToFile.bind( this );
+
+            this.pipeToFile = pipeToFile.bind( this );
         }
 
         get defaultDelegate()
         {
-            return this.#defaultDelegate || new HttpFetchClient( this.config, this.options );
+            return IHttpClient.resolveDelegate( this.#defaultDelegate, this.config, this.options );
         }
 
         set defaultDelegate( pDelegate )
         {
-            this.#defaultDelegate = isHttpClient( pDelegate ) ? pDelegate : this.getDelegate( VERBS.GET, { ["content-type"]: "*" } );
+            this.#defaultDelegate = IHttpClient.resolveDelegate( isHttpClient( pDelegate ) ? pDelegate : this.getDelegate( VERBS.GET, { ["content-type"]: "*" } ), this.config, this.options );
         }
 
         get logger()
         {
-            return ToolBocksModule.resolveLogger( this.#logger, konsole );
+            return ToolBocksModule.resolveLogger( this.#logger, toolBocksModule?.logger, konsole );
         }
 
         set logger( pLogger )
         {
-            this.#logger = ToolBocksModule.resolveLogger( ToolBocksModule.isLogger( pLogger ) ? pLogger : (this.#logger || konsole), konsole );
+            this.#logger = ToolBocksModule.resolveLogger( pLogger, this.logger, konsole );
         }
 
         get maxRedirects()
         {
-            return clamp( asInt( this.#maxRedirects || this.config.maxRedirects ), 0, 10 );
+            return clamp( asInt( this.#maxRedirects ?? this.config.maxRedirects ), 0, 10 );
         }
 
         set maxRedirects( pMaxRedirects )
         {
-            this.#maxRedirects = clamp( asInt( pMaxRedirects || this.maxRedirects ), 0, 10 );
+            this.#maxRedirects = clamp( asInt( pMaxRedirects ?? this.maxRedirects ), 0, 10 );
         }
 
         /**
@@ -2173,7 +2466,7 @@ const { _ud = "undefined", $scope } = constants;
 
         #updateMapByType( pTypes, pMapByType, pNewMap, pDefaultDelegate )
         {
-            const defaultDelegate = isHttpClient( pDefaultDelegate ) ? pDefaultDelegate : this.#defaultDelegate || new HttpFetchClient( this.config, this.options );
+            const defaultDelegate = IHttpClient.resolveDelegate( pDefaultDelegate ?? this.defaultDelegate, this.config, this.options );
 
             let mapByType = isMap( pMapByType ) ? pMapByType : asMap( pMapByType );
 
@@ -2205,7 +2498,7 @@ const { _ud = "undefined", $scope } = constants;
 
             let mapByType = isMap( pMapByType ) ? pMapByType : asMap( pMapByType );
 
-            let delegate = isHttpClient( pDelegate ) ? pDelegate : isMap( pDelegate ) ? (this.#defaultDelegate || null) : new HttpFetchClient();
+            let delegate = IHttpClient.resolveDelegate( (isHttpClient( pDelegate ) ? pDelegate || this.defaultDelegate : this.defaultDelegate), this.config, this.options );
 
             unique( [...(asArray( pTypes || [] )), "*"] ).forEach( type =>
                                                                    {
@@ -2259,18 +2552,18 @@ const { _ud = "undefined", $scope } = constants;
 
         get config()
         {
-            let cfg = isHttpConfig( this.#config, true ) ? this.#config.merge( DEFAULT_HTTP_CONFIG, this.#config ) : new HttpConfig( { ...(toHttpConfigLiteral( DEFAULT_HTTP_CONFIG )) }, DEFAULT_HTTP_CONFIG.headers );
-            return isHttpConfig( cfg ) ? cfg : new HttpConfig( cfg, cfg?.headers, cfg?.url, cfg?.method );
+            return HttpConfig.resolveHttpConfig( this.#config, ...(asArray( [this.#defaultDelegate || {}] )) );
         }
 
         set config( pConfig )
         {
-            this.#config = isHttpConfig( pConfig, true ) ? pConfig.merge( DEFAULT_HTTP_CONFIG, pConfig ) : new HttpConfig( { ...DEFAULT_CONFIG, ...(asObject( pConfig || {} )) }, DEFAULT_HTTP_CONFIG.headers );
+            const config = isHttpConfig( pConfig, true ) ? pConfig.merge( DEFAULT_HTTP_CONFIG, pConfig ) : new HttpConfig( { ...DEFAULT_CONFIG, ...(asObject( pConfig || {} )) }, DEFAULT_HTTP_CONFIG.headers );
+            this.#config = isHttpConfig( this.#config, true ) ? this.#config.merge( config ) : config;
         }
 
         get httpConfig()
         {
-            return HttpConfig.resolveHttpConfig( this.config );
+            return HttpConfig.resolveHttpConfig( this.config, ...(asArray( [this.#defaultDelegate || {}] )) );
         }
 
         get options()
@@ -2282,7 +2575,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             const method = resolveHttpMethod( pMethod?.name || pMethod );
 
-            const type = HttpContentType.getContentType( pContentType || pConfig ) || "*";
+            const type = HttpContentType.getContentType( pContentType || pConfig || this.config ) || "*";
 
             const byContentType = this.#delegates.get( method ) ||
                                   this.#delegates.get( ucase( method ) ) ||
@@ -2293,14 +2586,19 @@ const { _ud = "undefined", $scope } = constants;
                              byContentType.get( lcase( type ) ) ||
                              byContentType.get( ucase( type ) );
 
-            return isHttpClient( delegate ) ? delegate : isHttpClient( this.#defaultDelegate ) ? this.#defaultDelegate : new HttpFetchClient( this.config, this.options );
+            return isHttpClient( delegate ) ? delegate : isHttpClient( this.#defaultDelegate ) ? this.#defaultDelegate : new HttpFetchClient( (pConfig || this.config), this.options );
         }
 
         async sendRequest( pMethod, pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
-            const { url, cfg } = await prepareRequestConfig( pUrl, pMethod, pConfig, pBody );
+            const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
+                                             resolveUrl( pUrl, pConfig || this.config ),
+                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ),
+                                             await resolveBody( pBody, esolveHttpConfig( pConfig, this.config ) ) );
 
-            const method = resolveHttpMethod( cfg.method || pMethod );
+            const url = resolveUrl( pUrl, cfg );
+
+            const method = resolveHttpMethod( pMethod || cfg.method );
 
             const delegate = this.getDelegate( method, cfg ) || new HttpFetchClient( cfg, this.options );
 
@@ -2316,7 +2614,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             const me = this;
 
-            let config = pConfig || pResponseData?.config;
+            let config = resolveHttpConfig( pConfig, pResponseData?.config, pResponseData, this.config );
 
             let headers = { ...(config?.headers), ...(pResponseData.headers) };
 
@@ -2339,7 +2637,11 @@ const { _ud = "undefined", $scope } = constants;
 
         async sendGetRequest( pUrl, pConfig, pRedirects = 0, pRetries = 0, pResolve, pReject )
         {
-            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.GET, pConfig );
+            const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
+                                             resolveUrl( pUrl, pConfig || this.config ),
+                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ) );
+
+            const url = resolveUrl( pUrl, cfg );
 
             const delegate = this.getDelegate( VERBS.GET, cfg ) || new HttpFetchClient( cfg, this.options );
 
@@ -2360,7 +2662,11 @@ const { _ud = "undefined", $scope } = constants;
         {
             const me = this;
 
-            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.GET, pConfig );
+            const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
+                                             resolveUrl( pUrl, pConfig || this.config ),
+                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ) );
+
+            const url = resolveUrl( pUrl, cfg );
 
             const delegate = this.getDelegate( VERBS.GET, cfg ) || new HttpFetchClient( cfg, this.options );
 
@@ -2411,7 +2717,12 @@ const { _ud = "undefined", $scope } = constants;
 
         async sendPostRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
-            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.POST, pConfig, pBody );
+            const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
+                                             resolveUrl( pUrl, pConfig || this.config ),
+                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ),
+                                             await resolveBody( pBody, esolveHttpConfig( pConfig, this.config ) ) );
+
+            const url = resolveUrl( pUrl, cfg );
 
             const delegate = this.getDelegate( VERBS.POST, cfg ) || new HttpFetchClient( cfg, this.options );
 
@@ -2430,7 +2741,12 @@ const { _ud = "undefined", $scope } = constants;
 
         async sendPutRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
-            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.PUT, pConfig, pBody );
+            const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
+                                             resolveUrl( pUrl, pConfig || this.config ),
+                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ),
+                                             await resolveBody( pBody, esolveHttpConfig( pConfig, this.config ) ) );
+
+            const url = resolveUrl( pUrl, cfg );
 
             const delegate = this.getDelegate( VERBS.PUT, cfg ) || new HttpFetchClient( cfg, this.options );
 
@@ -2449,7 +2765,12 @@ const { _ud = "undefined", $scope } = constants;
 
         async sendPatchRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
-            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.PATCH, pConfig, pBody );
+            const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
+                                             resolveUrl( pUrl, pConfig || this.config ),
+                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ),
+                                             await resolveBody( pBody, esolveHttpConfig( pConfig, this.config ) ) );
+
+            const url = resolveUrl( pUrl, cfg );
 
             const delegate = this.getDelegate( VERBS.PATCH, cfg ) || new HttpFetchClient( cfg, this.options );
 
@@ -2468,7 +2789,12 @@ const { _ud = "undefined", $scope } = constants;
 
         async sendDeleteRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
-            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.DELETE, pConfig, pBody );
+            const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
+                                             resolveUrl( pUrl, pConfig || this.config ),
+                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ),
+                                             await resolveBody( pBody, esolveHttpConfig( pConfig, this.config ) ) );
+
+            const url = resolveUrl( pUrl, cfg );
 
             const delegate = this.getDelegate( VERBS.DELETE, cfg ) || new HttpFetchClient( cfg, this.options );
 
@@ -2487,7 +2813,11 @@ const { _ud = "undefined", $scope } = constants;
 
         async sendHeadRequest( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )
         {
-            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.HEAD, pConfig );
+            const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
+                                             resolveUrl( pUrl, pConfig || this.config ),
+                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ) );
+
+            const url = resolveUrl( pUrl, cfg );
 
             const delegate = this.getDelegate( VERBS.HEAD, cfg ) || new HttpFetchClient( cfg, this.options );
 
@@ -2506,7 +2836,11 @@ const { _ud = "undefined", $scope } = constants;
 
         async sendOptionsRequest( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )
         {
-            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.OPTIONS, pConfig );
+            const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
+                                             resolveUrl( pUrl, pConfig || this.config ),
+                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ) );
+
+            const url = resolveUrl( pUrl, cfg );
 
             const delegate = this.getDelegate( VERBS.OPTIONS, cfg ) || new HttpFetchClient( cfg, this.options );
 
@@ -2525,7 +2859,11 @@ const { _ud = "undefined", $scope } = constants;
 
         async sendTraceRequest( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )
         {
-            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.TRACE, pConfig );
+            const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
+                                             resolveUrl( pUrl, pConfig || this.config ),
+                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ) );
+
+            const url = resolveUrl( pUrl, cfg );
 
             const delegate = this.getDelegate( VERBS.TRACE, cfg ) || new HttpFetchClient( cfg, this.options );
 
@@ -2544,7 +2882,12 @@ const { _ud = "undefined", $scope } = constants;
 
         async upload( pUrl, pConfig, pBody )
         {
-            const { url, cfg } = await prepareRequestConfig( pUrl, (pConfig?.method || VERBS.POST), pConfig, pBody );
+            const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
+                                             resolveUrl( pUrl, pConfig || this.config ),
+                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ),
+                                             await resolveBody( pBody, resolveHttpConfig( pConfig, this.config ) ) );
+
+            const url = resolveUrl( pUrl, cfg );
 
             const delegate = this.getDelegate( cfg?.method || VERBS.POST, cfg ) || this.getDelegate( VERBS.POST, cfg ) || new HttpFetchClient( cfg, this.options );
 
@@ -2560,7 +2903,12 @@ const { _ud = "undefined", $scope } = constants;
         {
             let outputPath = toUnixPath( asString( pOutputPath, true ) ) || ".";
 
-            const { url, cfg } = await prepareRequestConfig( pUrl, pConfig?.method || VERBS.GET, pConfig );
+            const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
+                                             resolveUrl( pUrl, pConfig || this.config ),
+                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ),
+                                             await resolveBody( pBody, resolveHttpConfig( pConfig, this.config ) ) );
+
+            const url = resolveUrl( pUrl, cfg );
 
             const delegate = this.getDelegate( (cfg.method || VERBS.GET), cfg ) || new HttpFetchClient( cfg, this.options );
 
@@ -2569,11 +2917,11 @@ const { _ud = "undefined", $scope } = constants;
                 return asyncAttempt( async() => await delegate.download( url, cfg, outputPath, pFileName, pNamingFunction ) );
             }
 
-            let logger = this.logger || konsole;
+            const logger = ToolBocksModule.resolveLogger( this.logger, konsole );
 
             try
             {
-                let config = { ...DEFAULT_CONFIG, ...DEFAULT_DOWNLOAD_CONFIG, ...(asObject( cfg || {} )) };
+                let config = { ...DEFAULT_CONFIG, ...DEFAULT_DOWNLOAD_CONFIG, ...(toHttpConfigLiteral( asObject( cfg || {} ) )) };
 
                 const response = await this.sendRequest( config.method || VERBS.GET, url, config );
 
@@ -2588,7 +2936,9 @@ const { _ud = "undefined", $scope } = constants;
                     // append the fileName to the path
                     const filePath = path.join( asString( outputPath, true ).replace( fileName, _mt ), fileName );
 
-                    return await asyncAttempt( async() => streamToFile( responseData, filePath ) );
+                    const method = cfg.usePipeToFile ? this.pipeToFile : this.streamToFile;
+
+                    return await asyncAttempt( async() => method( responseData, filePath ) );
                 }
             }
             catch( ex )
@@ -2614,10 +2964,16 @@ const { _ud = "undefined", $scope } = constants;
 
     HttpClient.ResponseData = ResponseData;
     HttpClient.streamToFile = streamToFile.bind( HttpClient.prototype );
+    HttpClient.pipeToFile = pipeToFile.bind( HttpClient.prototype );
 
     const resolveHttpClient = function( pHttpClient, ...pObjects )
     {
         let httpClient = pHttpClient;
+
+        if ( isHttpClient( httpClient ) )
+        {
+            return fixAgents( httpClient );
+        }
 
         let hosts = [...(asArray( pObjects || [] ))].filter( isNonNullObject );
 
@@ -2630,7 +2986,7 @@ const { _ud = "undefined", $scope } = constants;
             }
         }
 
-        return isHttpClient( httpClient ) ? httpClient : new HttpClient();
+        return isHttpClient( httpClient ) ? httpClient : new HttpClient( resolveHttpConfig( pHttpClient, ...hosts ) );
     };
 
     HttpClient.resolveHttpClient = resolveHttpClient;
@@ -3706,16 +4062,17 @@ const { _ud = "undefined", $scope } = constants;
          * If constructed without a valid HttpClient, defaults to using an instance of HttpFetchClient
          * @param pConfig The default configuration for requests this client will send
          * @param pOptions An object specifying any values specific to this instance or its wrapped client
-         * @param pDelegate An instance of HttpClient to decorate with rate-limit-aware behavior
+         * @param pDelegates
+         * @param pDefaultDelegate An instance of HttpClient to decorate with rate-limit-aware behavior
          * @param pRateLimits One or more instances of RateLimits to define the limits for requests as per their 'group' or policy
          */
-        constructor( pConfig, pOptions, pDelegate, ...pRateLimits )
+        constructor( pConfig, pOptions, pDelegates, pDefaultDelegate, ...pRateLimits )
         {
-            super( pDelegate, pConfig, pOptions );
+            super( pConfig, pOptions, pDelegates, pDefaultDelegate );
 
             this.#requestGroupMapper = this.options?.requestGroupMapper || RequestGroupMapper.DEFAULT;
 
-            this.#maxDelayBeforeQueueing = clamp( asInt( this.options?.maxDelayBeforeQueueing, 2_500 ), 100, 10_000 );
+            this.#maxDelayBeforeQueueing = clamp( asInt( this.options?.maxDelayBeforeQueueing, 2_500 ), 256, 10_000 );
 
             let arr = asArray( pRateLimits );
             arr.forEach( rateLimits =>
@@ -3754,7 +4111,7 @@ const { _ud = "undefined", $scope } = constants;
 
         get maxDelayBeforeQueueing()
         {
-            return Math.max( 100, Math.min( 10_000, asInt( this.#maxDelayBeforeQueueing, 2_500 ) ) );
+            return clamp( asInt( this.#maxDelayBeforeQueueing, 2_500 ), 256, 10_000 );
         }
 
         get requestQueue()
@@ -3916,7 +4273,12 @@ const { _ud = "undefined", $scope } = constants;
 
         async sendGetRequest( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )
         {
-            const { cfg, url } = await prepareRequestConfig( pUrl, VERBS.GET, pConfig );
+            const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
+                                             resolveUrl( pUrl, pConfig || this.config ),
+                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ),
+                                             await resolveBody( pBody, resolveHttpConfig( pConfig, this.config ) ) );
+
+            const url = resolveUrl( pUrl, cfg );
 
             return this.sendRequest( VERBS.GET, url, cfg, null, pRedirects, pRetries, pResolve, pReject );
         }
@@ -3925,7 +4287,12 @@ const { _ud = "undefined", $scope } = constants;
         {
             const me = this;
 
-            const { cfg, url } = await prepareRequestConfig( pUrl, VERBS.GET, pConfig, null );
+            const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
+                                             resolveUrl( pUrl, pConfig || this.config ),
+                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ),
+                                             await resolveBody( pBody, resolveHttpConfig( pConfig, this.config ) ) );
+
+            const url = resolveUrl( pUrl, cfg );
 
             const responseData = await asyncAttempt( async() => await me.sendGetRequest( url, cfg, pRedirects, pRetries, pResolve, pReject ) );
 
@@ -3995,14 +4362,14 @@ const { _ud = "undefined", $scope } = constants;
 
         async sendPostRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
-            const
-                {
-                    cfg,
-                    url,
-                    body
-                } = await prepareRequestConfig( pUrl, VERBS.POST, pConfig, await resolveBody( pBody, pConfig ) );
+            const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
+                                             resolveUrl( pUrl, pConfig || this.config ),
+                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ),
+                                             await resolveBody( pBody, resolveHttpConfig( pConfig, this.config ) ) );
 
-            return this.sendRequest( VERBS.POST, url, cfg, body, pRedirects, pRetries, pResolve, pReject );
+            const url = resolveUrl( pUrl, cfg );
+
+            return this.sendRequest( VERBS.POST, url, cfg, cfg.body || pBody, pRedirects, pRetries, pResolve, pReject );
         }
 
         async upload( pUrl, pConfig, pBody )
@@ -4012,56 +4379,69 @@ const { _ud = "undefined", $scope } = constants;
 
         async sendPutRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
-            const {
-                cfg,
-                url,
-                body
-            } = await prepareRequestConfig( pUrl, VERBS.PUT, pConfig, await resolveBody( pBody, pConfig ) );
+            const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
+                                             resolveUrl( pUrl, pConfig || this.config ),
+                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ),
+                                             await resolveBody( pBody, resolveHttpConfig( pConfig, this.config ) ) );
+
+            const url = resolveUrl( pUrl, cfg );
 
             return this.sendRequest( VERBS.PUT, url, cfg, body, pRedirects, pRetries, pResolve, pReject );
         }
 
         async sendPatchRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
-            const
-                {
-                    cfg,
-                    url,
-                    body
-                } = await prepareRequestConfig( pUrl, VERBS.PATCH, pConfig, await resolveBody( pBody, pConfig ) );
+            const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
+                                             resolveUrl( pUrl, pConfig || this.config ),
+                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ),
+                                             await resolveBody( pBody, resolveHttpConfig( pConfig, this.config ) ) );
+
+            const url = resolveUrl( pUrl, cfg );
 
             return this.sendRequest( VERBS.PATCH, url, cfg, body, pRedirects, pRetries, pResolve, pReject );
         }
 
         async sendDeleteRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
-            const
-                {
-                    cfg,
-                    url,
-                    body
-                } = await prepareRequestConfig( pUrl, VERBS.DELETE, pConfig, await resolveBody( pBody, pConfig ) );
+            const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
+                                             resolveUrl( pUrl, pConfig || this.config ),
+                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ),
+                                             await resolveBody( pBody, resolveHttpConfig( pConfig, this.config ) ) );
+
+            const url = resolveUrl( pUrl, cfg );
 
             return this.sendRequest( VERBS.DELETE, url, cfg, body, pRedirects, pRetries, pResolve, pReject );
         }
 
         async sendHeadRequest( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )
         {
-            const { cfg, url } = await prepareRequestConfig( pUrl, VERBS.HEAD, pConfig );
+            const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
+                                             resolveUrl( pUrl, pConfig || this.config ),
+                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ) );
+
+            const url = resolveUrl( pUrl, cfg );
 
             return this.sendRequest( VERBS.HEAD, url, cfg );
         }
 
         async sendOptionsRequest( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )
         {
-            const { cfg, url } = await prepareRequestConfig( pUrl, VERBS.OPTIONS, pConfig );
+            const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
+                                             resolveUrl( pUrl, pConfig || this.config ),
+                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ) );
+
+            const url = resolveUrl( pUrl, cfg );
 
             return this.sendRequest( VERBS.OPTIONS, url, cfg );
         }
 
         async sendTraceRequest( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )
         {
-            const { cfg, url } = await prepareRequestConfig( pUrl, VERBS.TRACE, pConfig );
+            const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
+                                             resolveUrl( pUrl, pConfig || this.config ),
+                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ) );
+
+            const url = resolveUrl( pUrl, cfg );
 
             return this.sendRequest( VERBS.TRACE, url, cfg );
         }
@@ -4641,6 +5021,7 @@ const { _ud = "undefined", $scope } = constants;
                     HttpResponse,
                     ResponseData,
                     HttpAgentConfig,
+                    HttpAgentConfigExtended,
                     QueuedRequest,
                     RequestQueue,
                     RequestInterval,
@@ -4656,8 +5037,18 @@ const { _ud = "undefined", $scope } = constants;
                 },
 
             HttpAgentConfig,
-            httpAgent,
-            httpsAgent,
+            HttpAgentConfigExtended,
+
+            resolveHttpAgent,
+            resolveHttpConfig,
+            resolveAgentConfig: HttpAgentConfig.resolveAgentConfig,
+
+            createHttpAgent,
+            createHttpsAgent,
+
+            httpAgent: HTTP_AGENT,
+            httpsAgent: HTTPS_AGENT,
+
             fixAgents,
 
             ConfigFactory,
@@ -4682,6 +5073,7 @@ const { _ud = "undefined", $scope } = constants;
             updateContext,
             calculateFileName,
             streamToFile,
+            pipeToFile,
 
             RequestInterval,
             RequestWindow,
@@ -4694,7 +5086,6 @@ const { _ud = "undefined", $scope } = constants;
             SimpleRequestThrottler,
 
             isHttpConfig,
-            resolveHttpConfig,
             toHttpConfigLiteral
         };
 

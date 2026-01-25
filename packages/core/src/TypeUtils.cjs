@@ -1950,15 +1950,15 @@ const { _ud = "undefined", $scope } = constants;
 
     function resolveAcceptedTypes( pOptions )
     {
-        const options = populateOptions( pOptions, DEFAULT_IS_POPULATED_OPTIONS );
-        let acceptedTypes = [_obj].concat( ...(options.acceptedTypes || []) ).flat();
+        const options = { ...DEFAULT_IS_POPULATED_OPTIONS, ...(pOptions || {}) };
+        let acceptedTypes = [_obj, ...(options.acceptedTypes || [])].flat();
         acceptedTypes = acceptedTypes.map( e => isString( e ) ? e.trim().toLowerCase() : e );
         return acceptedTypes.filter( e => VALID_TYPES.includes( e ) );
     }
 
     function resolveMandatoryKeys( pOptions )
     {
-        const options = populateOptions( pOptions, DEFAULT_IS_POPULATED_OPTIONS );
+        const options = { ...DEFAULT_IS_POPULATED_OPTIONS, ...(pOptions || {}) };
         let mandatoryKeys = [...(options.mandatoryKeys || [])];
         mandatoryKeys = mandatoryKeys.map( e => isString( e ) ? e.trim().toLowerCase() : e );
         return mandatoryKeys.filter( e => isString( e ) && e.length > 0 );
@@ -1972,7 +1972,7 @@ const { _ud = "undefined", $scope } = constants;
 
         const mandatoryKeys = resolveMandatoryKeys( options );
 
-        const minimumLength = Math.max( 1, (mandatoryKeys?.length || 0), (options.minimumKeys || options.minimumLength || 1) );
+        const minimumLength = Math.max( 1, ($ln( mandatoryKeys ) || 0), toInteger( options.minimumKeys || options.minimumLength || 1 ) );
 
         const countDeadBranches = !!options.countDeadBranches;
 
@@ -2001,16 +2001,17 @@ const { _ud = "undefined", $scope } = constants;
 
     function isPopulatedObject( pObject, pOptions = DEFAULT_IS_POPULATED_OPTIONS, pVisited = new ResolvedSet(), pStack = [] )
     {
-        const {
-            options,
-            minimumLength,
-            acceptedTypes,
-            mandatoryKeys,
-            countDeadBranches
-        } = resolveIsPopulatedArgs( pOptions );
+        const
+            {
+                options,
+                minimumLength,
+                acceptedTypes,
+                mandatoryKeys,
+                countDeadBranches
+            } = resolveIsPopulatedArgs( pOptions );
 
         const mandatory = [...(mandatoryKeys || [])];
-        const minLength = Math.max( 1, (mandatory?.length || 0), toInteger( minimumLength ) );
+        const minLength = Math.max( 1, $ln( mandatory ), toInteger( minimumLength ) );
         const acceptArrays = !!options.acceptArrays;
 
         let populated = false;
@@ -2243,7 +2244,7 @@ const { _ud = "undefined", $scope } = constants;
     {
         const options = { ...({ boxedPrimitiveIsScalar: true }), ...(pOptions || {}) };
 
-        if ( ( _ud === typeof pVal) || isNull( pVal ) )
+        if ( (_ud === typeof pVal) || isNull( pVal ) )
         {
             return !!options.nullIsScalar;
         }
@@ -2853,7 +2854,7 @@ const { _ud = "undefined", $scope } = constants;
             return false;
         }
 
-        let clazz = isClass( pClass ) ? (pClass || getConstructor( pObject ) || getProto( pObject )) : getConstructor( pObject ) || getProto( pObject )?.constructor || getProto( pObject );
+        let clazz = isClass( pClass ) ? (pClass || getClass( pObject ) || Object.getPrototypeOf( pObject )) : getClass( pObject ) || Object.getPrototypeOf( pObject )?.constructor || getProto( pObject );
 
         return isUserDefinedClass( clazz ) && (null === clazz || instanceOfAny( pObject, clazz ));
     };
@@ -2946,7 +2947,7 @@ const { _ud = "undefined", $scope } = constants;
 
             try
             {
-                arr = arr.filter( e => pType.call( scope, e ) );
+                arr = arr.filter( e => attempt( () => pType.call( scope, e ) ) );
             }
             catch( ex )
             {
@@ -2972,7 +2973,7 @@ const { _ud = "undefined", $scope } = constants;
 
         defaultFilter()
         {
-            return Finder.DEFAULT_FILTER;
+            return ( e ) => Finder.DEFAULT_FILTER( e );
         }
 
         get filterCriteria()
@@ -2989,14 +2990,7 @@ const { _ud = "undefined", $scope } = constants;
         findFirst( ...pCandidates )
         {
             let arr = resolveCandidates( ...pCandidates );
-            arr = this.findAll( ...arr );
-            return $ln( arr ) > 0 ? arr[0] : null;
-        }
-
-        findNth( pIdx, ...pCandidates )
-        {
-            let arr = this.findAll( ...pCandidates );
-            return $nth( arr, pIdx );
+            return arr.find( this.filterCriteria ) || null;
         }
 
         findLast( ...pCandidates )
@@ -3015,8 +3009,7 @@ const { _ud = "undefined", $scope } = constants;
         findFirstNot( ...pCandidates )
         {
             let arr = resolveCandidates( ...pCandidates );
-            arr = this.findAllNot( ...arr );
-            return arr.length > 0 ? arr[0] : null;
+            return arr.find( e => !this.filterCriteria( e ) );
         }
 
         findLastNot( ...pCandidates )
@@ -3024,6 +3017,44 @@ const { _ud = "undefined", $scope } = constants;
             let arr = resolveCandidates( ...pCandidates );
             arr = this.findAllNot( ...arr );
             return arr.length > 0 ? $last( arr ) : null;
+        }
+
+        indexOf( ...pCandidates )
+        {
+            let arr = resolveCandidates( ...pCandidates );
+            return arr.findIndex( this.filterCriteria );
+        }
+
+        lastIndexOf( ...pCandidates )
+        {
+            let arr = resolveCandidates( ...pCandidates );
+            return arr.lastIndexOf( this.filterCriteria );
+        }
+
+        indexes( ...pCandidates )
+        {
+            let rtn = [];
+
+            let arr = resolveCandidates( ...pCandidates );
+
+            for( let i = $ln( arr ); i--; )
+            {
+                if ( this.filterCriteria( arr[i] ) )
+                {
+                    rtn.push( i );
+                }
+            }
+
+            return rtn;
+        }
+
+        findNth( pIdx, ...pCandidates )
+        {
+            const indices = this.indexes( ...pCandidates );
+
+            const idx = $nth( indices, pIdx );
+
+            return $nth( [...pCandidates], idx );
         }
     }
 
@@ -3064,14 +3095,14 @@ const { _ud = "undefined", $scope } = constants;
             return null;
         }
 
-        let clazz = isClass( obj ) ? obj : obj?.constructor || obj?.prototype?.constructor || obj?.prototype || obj?.__proto__;
+        let clazz = isClass( obj ) ? obj : [obj?.constructor, obj?.prototype?.constructor, obj?.prototype, Object.getPrototypeOf( obj ), Object.getPrototypeOf( obj )?.constructor].find( e => isClass( e ) );
 
         if ( isClass( clazz ) )
         {
             return clazz;
         }
 
-        if ( isPrimitiveWrapper( pObject ) || instanceOfAny( pObject, ...BUILTIN_TYPES ) )
+        if ( ( !options?.rejectPrimitiveWrappers && isPrimitiveWrapper( pObject )) || instanceOfAny( pObject, ...BUILTIN_TYPES ) )
         {
             return pObject?.constructor;
         }
@@ -4411,61 +4442,73 @@ const { _ud = "undefined", $scope } = constants;
 
     const processValue = ( pValue, pOptions ) => (pOptions?.trimStrings && isString( pValue )) ? String( pValue ).trim() : pValue;
 
-    function toArrayLiteral( pObject, pOptions, pVisited, pStack )
+    function toArrayLiteral( pObject, pOptions, pVisited, pStack, pDepth = 0 )
     {
-        const { options, visited, stack } = resolveObjectLiteralArguments( pOptions, pVisited, pStack );
+        const { options, visited, stack, depth } = resolveObjectLiteralArguments( pOptions, pVisited, pStack, pDepth );
 
-        let arr = [...(pObject || [])];
+        let arr = isNull( pObject ) ? [] : (!isArray( pObject ) ? (isFunction( pObject.values ) ? [...(pObject.values() || [])] : [pObject]) : [...(pObject || [])]) || [];
 
         if ( options?.prune )
         {
-            arr = arr.filter( isNonNullValue ).filter( e => !isEmptyString( e ) );
+            arr = ([...(arr || [])].filter( isNonNullValue ) || []).filter( e => !isEmptyString( e ) );
         }
 
-        arr = arr.map( ( e, i ) => toObjectLiteral( e, options, visited, [...stack, String( i )] ) );
+        arr = [...(arr || [])].map( ( e, i ) => toObjectLiteral( e, options, visited, [...stack, String( i )], depth + 1 ) ) || [];
 
-        return [...(arr || [])];
+        return arr;
     }
 
-    function arrayToObject( pArr, pOptions, pVisited, pStack )
+    function arrayToObject( pArr, pOptions, pVisited, pStack, pDepth )
     {
         let object = {};
 
-        let arr = toArrayLiteral( pArr, pOptions, pVisited, pStack );
-
-        for( let i = 0, n = arr.length; i < n; i++ )
+        if ( isNull( pArr ) || !isArray( pArr ) )
         {
-            object[String( i )] = toObjectLiteral( arr[i], pOptions, pVisited, [...(pStack || []), String( i )] );
+            return object;
+        }
+
+        let depth = toInteger( pDepth );
+
+        let arr = toArrayLiteral( pArr, pOptions, pVisited, pStack, depth + 1 ) || [];
+
+        if ( isArray( arr ) && $ln( arr ) > 0 )
+        {
+            for( let i = 0, n = arr.length; i < n; i++ )
+            {
+                object[String( i )] = attempt( () => toObjectLiteral( arr[i], pOptions, pVisited, [...(pStack || []), String( i )], depth + 1 ) );
+            }
         }
 
         return object;
     }
 
-    function _handleArray( pObject, pOptions = DEFAULT_OBJECT_LITERAL_OPTIONS, pVisited = new ResolvedSet(), pStack = [] )
+    function _handleArray( pObject, pOptions = DEFAULT_OBJECT_LITERAL_OPTIONS, pVisited = new ResolvedSet(), pStack = [], pDepth = 0 )
     {
-        if ( !isArray( pObject ) )
+        if ( !(isArray( pObject ) || isFunction( pObject.values )) && isNonNullValue( pObject ) )
         {
-            return toObjectLiteral( pObject, pOptions, pVisited, pStack );
+            return [pObject];
         }
 
-        const { options, visited, stack } = resolveObjectLiteralArguments( pOptions, pVisited, pStack );
+        const { options, visited, stack, depth } = resolveObjectLiteralArguments( pOptions, pVisited, pStack, pDepth );
 
-        let arr = toArrayLiteral( pObject, options, visited, stack );
+        let arr = toArrayLiteral( pObject, options, visited, stack, depth );
 
         visited.add( arr );
 
-        if ( options?.preserveArrays )
-        {
-            return [...(arr || [])];
-        }
-        else
-        {
-            const object = arrayToObject( arr, options, visited, stack );
+        /*
+         if ( options?.preserveArrays )
+         {
+         */
+        return [...(arr || [])];
+        /*
+         }
 
-            visited.add( object );
+         const object = attempt( () => arrayToObject( arr, options, visited, stack ) );
 
-            return object;
-        }
+         visited.add( object );
+
+         return object;
+         */
     }
 
     function toObjectLiteral( pObject,
@@ -4483,6 +4526,7 @@ const { _ud = "undefined", $scope } = constants;
 
         const preserveTypes = !!options?.preserveTypes;
 
+        // noinspection JSCheckFunctionSignatures
         if ( preserveTypes && instanceOfAny( pObject, Date, RegExp, Symbol, Map, Set, Promise, ArrayBuffer, SharedArrayBuffer, DataView, WeakMap, WeakRef, WeakSet ) )
         {
             return pObject;
@@ -4493,17 +4537,29 @@ const { _ud = "undefined", $scope } = constants;
             return pObject || {};
         }
 
+        if ( depth > 32 || detectCycles( stack, 5, 3 ) )
+        {
+            return isArray( pObject ) ? [...(pObject || [])] : isFunction( pObject.values ) ? [...(pObject.values() || [])] : { ...(resolveObject( pObject || {} )) };
+        }
+
         const transientProperties = resolveTransientProperties( options );
 
-        if ( isArray( pObject ) )
+        if ( isArray( pObject ) || isFunction( pObject.values ) )
         {
-            return _handleArray( pObject, options, visited, stack );
+            return _handleArray( pObject, options, visited, stack, depth );
         }
 
         const entries = ObjectEntry.unwrapValues( pObject );
 
-        const keyTransformer = isFunction( options.keyTransformer ) ? options.keyTransformer : ( pKey ) => pKey;
-        const valueTransformer = isFunction( options.valueTransformer ) ? options.valueTransformer : ( pValue ) => pValue;
+        let methods = [];
+
+        if ( !(options?.omitFunctions) && isNonNullObject( pObject ) )
+        {
+            methods = objectMethods( pObject );
+        }
+
+        const keyTransformer = isFunction( options?.keyTransformer ) ? options.keyTransformer : ( pKey ) => pKey;
+        const valueTransformer = isFunction( options?.valueTransformer ) ? options.valueTransformer : ( pValue ) => pValue;
 
         const obj = {};
 
@@ -4523,31 +4579,44 @@ const { _ud = "undefined", $scope } = constants;
                 let key = keyTransformer( pKey );
                 obj[key] = valueTransformer( pValue ) || pValue;
             }
+            else if ( isFunction( pValue ) )
+            {
+                methods.push( pValue.bind( obj ) );
+            }
         }
 
         for( const entry of entries )
         {
-            let key = entry[0];
+            let key = String( ObjectEntry.getKey( entry ) ).trim();
 
             if ( transientProperties.includes( key ) || key.startsWith( "#" ) )
             {
                 continue;
             }
 
-            const value = visited.resolveForNodePath( undefined, [...stack, key] ) || entry[1];
+            const value = visited.resolveForNodePath( undefined, [...stack, key] ) || ObjectEntry.getValue( entry );
 
             if ( !includeProperty( key, value, options ) )
             {
+                if ( isFunction( value ) )
+                {
+                    methods.push( value.bind( obj ) );
+                }
                 continue;
             }
 
-            if ( visited.has( value ) || detectCycles( stack, 5, 5 ) )
+            if ( depth > 32 || visited.has( value ) || detectCycles( stack, 5, 3 ) )
             {
-                let newValue = visited.resolve( value ) || value || entry[1];
+                let newValue = visited.resolve( value ) || value || ObjectEntry.getValue( entry );
 
                 updateObject( key, newValue, options );
 
                 continue;
+            }
+
+            if ( $ln( methods ) > 0 && !options?.omitFunctions )
+            {
+                methods.forEach( method => obj[method?.name] = method.bind( obj ) );
             }
 
             if ( !options.recursive || (options.preserveUserDefinedClasses && isInstanceOfUserDefinedClass( value )) )
@@ -4556,7 +4625,7 @@ const { _ud = "undefined", $scope } = constants;
             }
             else
             {
-                let newValue = (attempt( () => toObjectLiteral( value, options, visited, [...stack, key], (depth + 1) ) ) || value);
+                let newValue = toObjectLiteral( value, options, visited, [...stack, key], (depth + 1) ) || value;
 
                 updateObject( key, newValue, options );
             }
@@ -4662,9 +4731,40 @@ const { _ud = "undefined", $scope } = constants;
 
     function asObject( pObject )
     {
-        return isNonNullObject( pObject ) || isLikeArray( pObject ) ?
-               pObject :
-               attempt( () => (toolBocksModule["parseJson"] || parseJson).call( toolBocksModule, pObject ) );
+        if ( isNonNullObject( pObject ) || isArray( pObject ) || isTypedArray( pObject ) )
+        {
+            return pObject || {};
+        }
+
+        if ( isString( pObject ) )
+        {
+            return attempt( () => (toolBocksModule["parseJson"] || parseJson).call( toolBocksModule, pObject ) );
+        }
+
+        if ( isFunction( pObject ) )
+        {
+            if ( isClass( pObject ) )
+            {
+                const instance = attempt( () => new pObject() );
+                if ( !isNull( instance ) )
+                {
+                    return asObject( instance );
+                }
+
+                return { "class": pObject };
+            }
+
+            const result = attempt( () => pObject() );
+
+            if ( !isNull( result ) )
+            {
+                return asObject( result );
+            }
+
+            return { [pObject?.name]: pObject };
+        }
+
+        return {};
     }
 
     const DEFAULT_AS_MAP_OPTIONS =
@@ -4764,7 +4864,7 @@ const { _ud = "undefined", $scope } = constants;
 
             case _symbol:
                 map.set( pVal, pVal );
-                map.set( pVal.toString(), pVal );
+                map.set( String( pVal ).toString(), pVal );
                 break;
 
             default:
@@ -5645,6 +5745,11 @@ const { _ud = "undefined", $scope } = constants;
 
     function getMethods( pClass )
     {
+        if ( _ud === typeof pClass || isNull( pClass ) || $scope() === pClass )
+        {
+            return [];
+        }
+
         let target = isNonNullObject( pClass ) ? (pClass.prototype || Object.getPrototypeOf( pClass )) : isClass( pClass ) ? pClass : {};
 
         let entries = objectEntries( target );
@@ -5681,7 +5786,7 @@ const { _ud = "undefined", $scope } = constants;
 
         if ( $ln( methods ) <= 0 )
         {
-            const prototypes = [pClass?.prototype, Object.getPrototypeOf( pClass || {} ), target?.prototype, Object.getPrototypeOf( target || {} )];
+            const prototypes = [pClass?.prototype, Object.getPrototypeOf( pClass || {} ), target?.prototype, Object.getPrototypeOf( target || {} )].filter( e => !isNull( e ) );
 
             for( let proto of prototypes )
             {
@@ -5693,16 +5798,19 @@ const { _ud = "undefined", $scope } = constants;
                 {
                     for( let prop in p )
                     {
-                        let value = p[prop] || Object.getPrototypeOf( p )?.[prop];
-
-                        if ( isFunction( value ) )
+                        if ( prop )
                         {
-                            attempt( () => value.name = value.name || prop );
-                            methods.push( value );
+                            let value = p[prop] || attemptSilent( () => Object.getPrototypeOf( p )?.[prop] );
+
+                            if ( isFunction( value ) )
+                            {
+                                attempt( () => value.name = value.name || prop );
+                                methods.push( value );
+                            }
                         }
                     }
 
-                    p = p.prototype || Object.getPrototypeOf( p );
+                    p = p?.prototype || (_ud !== typeof p && !isNull( p )) ? Object.getPrototypeOf( p ) : null;
                 }
             }
         }
@@ -5717,7 +5825,7 @@ const { _ud = "undefined", $scope } = constants;
      */
     function implementsMethods( pObject, ...pMethods )
     {
-        if ( isNull( pObject ) || !isObject( pObject ) )
+        if ( isNull( pObject ) || !isObject( pObject ) || $scope() === pObject )
         {
             return false;
         }
@@ -5756,8 +5864,8 @@ const { _ud = "undefined", $scope } = constants;
             return true;
         }
 
-        let parentPrototype = parent.prototype;
-        let childPrototype = child.prototype;
+        let parentPrototype = parent?.prototype;
+        let childPrototype = child?.prototype;
 
         if ( null === parentPrototype || parentPrototype === Object || parentPrototype === Array )
         {
@@ -5784,6 +5892,11 @@ const { _ud = "undefined", $scope } = constants;
             return false;
         }
 
+        if ( [pObject, pClass].includes( $scope() ) )
+        {
+            return false;
+        }
+
         if ( isArray( pClass ) )
         {
             let klasses = [...(pClass || [])].filter( e => isClass( e ) || isNonNullObject( e ) );
@@ -5797,7 +5910,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             if ( isNonNullObject( klass ) )
             {
-                let methods = getMethods( klass || pClass ) || getMethods( pClass || klass );
+                let methods = attempt( () => getMethods( klass || pClass ) ) || attempt( () => getMethods( pClass || klass ) );
                 return implementsMethods( pObject, ...methods );
             }
 
@@ -5821,7 +5934,7 @@ const { _ud = "undefined", $scope } = constants;
             return false;
         }
 
-        const methods = getMethods( prototype );
+        const methods = attempt( () => getMethods( prototype ) ) || [];
 
         return implementsMethods( pObject, ...methods );
     }
@@ -5850,27 +5963,72 @@ const { _ud = "undefined", $scope } = constants;
     {
         let delegated = false;
 
+        if ( isNull( pTarget ) || !isObject( pTarget ) || ($scope() === pTarget) )
+        {
+            attemptSilent( () => (ToolBocksModule.resolveLogger( toolBocksModule?.logger, console ) || console).log( `Invalid Target. Target is ${($scope() === pTarget) ? "the global scope" : (isNull( pTarget ) ? "null" : "not an object")} at delegateTo, line 5963` ) );
+            return false;
+        }
+
         const target = asObject( pTarget );
 
-        const delegate = isFunction( pDelegate ) || isClass( pDelegate ) ? asObject( (pDelegate?.prototype || Object.getPrototypeOf( pDelegate )) ) : asObject( pDelegate );
+        if ( isNull( pDelegate ) || ( !(isNonNullObject( pDelegate ) || isFunction( pDelegate ))) )
+        {
+            attemptSilent( () => (ToolBocksModule.resolveLogger( toolBocksModule?.logger, console ) || console).log( `${pDelegate} is null or not an object or function at delegateTo, line 5971` ) );
+            return false;
+        }
+
+        let delegate = isFunction( pDelegate ) || isClass( pDelegate ) ? ((pDelegate?.prototype || Object.getPrototypeOf( pDelegate )) || pDelegate) : asObject( pDelegate );
+
+        if ( isNull( delegate ) || !(isObject( delegate ) || isFunction( delegate )) || ($scope() === delegate) )
+        {
+            if ( $scope() === delegate )
+            {
+                attemptSilent( () => (ToolBocksModule.resolveLogger( toolBocksModule?.logger, console ) || console).log( `Cannot delegate to the global scope` ) );
+            }
+            return delegated;
+        }
+
+        if ( !isObject( delegate ) )
+        {
+            if ( isFunction( delegate ) )
+            {
+                if ( isClass( delegate ) )
+                {
+                    const instance = attemptSilent( () => new delegate() );
+                    if ( isNonNullObject( instance ) )
+                    {
+                        return attempt( () => delegateTo( target, instance ) );
+                    }
+                }
+
+                let name = _toString( delegate?.name || _mt );
+                if ( (isString( name ) && _mt !== name.trim()) )
+                {
+                    attempt( () => target[name] = isFunction( target[name] ) ? target[name].bind( target ) : isAsyncFunction( delegate ) ? (async function( ...pArgs ) { return await asyncAttempt( async() => await delegate( ...pArgs ) ); }).bind( target ) : (function( ...pArgs ) { return attempt( () => delegate( ...pArgs ) ); }).bind( target ) );
+                    delegated = isFunction( target[name] );
+                }
+            }
+
+            return delegated;
+        }
 
         let propertiesDelegated = [];
 
         let omitted = [...(NON_DELEGATED_PROPERTIES || []), ...(pOmitted || [])];
 
-        let entries = attempt( () => objectEntries( delegate ) );
+        let entries = attempt( () => objectEntries( delegate || {} ) );
 
-        if ( entries && $ln( entries ) > 0 )
+        if ( entries && $ln( entries ) > 0 && isFunction( entries.forEach ) )
         {
             entries.forEach( entry =>
                              {
-                                 const key = _toString( ObjectEntry.getKey( entry ) );
-
-                                 // Skip if the property already exists (e.g., from parent class)
-                                 // or is a property included in the omitted list
-                                 if ( key && !omitted.includes( key ) )
+                                 if ( !isNull( entry ) )
                                  {
-                                     if ( !(key in target) )
+                                     const key = _toString( ObjectEntry.getKey( entry ) || _mt );
+
+                                     // Skip if the property already exists (e.g., from parent class)
+                                     // or is a property included in the omitted list
+                                     if ( (_mt !== key) && !omitted.includes( key ) && !(key in target) )
                                      {
                                          try
                                          {
@@ -5905,54 +6063,71 @@ const { _ud = "undefined", $scope } = constants;
                              } );
         }
 
-        let methods = attempt( () => getMethods( pDelegate ) );
+        let methods = attempt( () => getMethods( delegate ) );
 
         if ( $ln( methods ) > 0 )
         {
+            methods = [...(methods || [])].filter( isFunction );
+
             for( const method of methods )
             {
                 let methodName = method?.name;
 
                 // cannot delegate to anonymous functions
-                if ( _mt === String( methodName ).trim() || "anonymous" === String( methodName ).trim() )
+                if ( _mt === _toString( methodName ).trim() || "anonymous" === _toString( methodName ).trim() )
                 {
                     continue;
                 }
 
                 if ( !(omitted.includes( methodName )) &&
                      !(propertiesDelegated.includes( methodName ) &&
-                     !hasProperty( this, methodName )) )
+                     !hasProperty( target, methodName )) )
                 {
-                    let delegateMethod = delegate[methodName] || method.bind( delegate );
+                    let delegateMethod = (delegate[methodName] || method).bind( delegate );
 
-                    if ( isAsyncFunction( target[methodName] ) )
+                    if ( isAsyncFunction( target[methodName] ) || isAsyncFunction( delegateMethod ) )
                     {
-                        const originalMethod = target[methodName].bind( delegate );
+                        const originalMethod = isFunction( target[methodName] ) ? target[methodName].bind( target ) : function() {}.bind( target );
 
+                        // noinspection UnnecessaryLocalVariableJS
                         const newMethod = async function( ...pArgs )
                         {
-                            return await originalMethod.call( delegate, ...pArgs );
+                            let originalReturnValue = await asyncAttempt( async() => await originalMethod( ...pArgs ) );
+
+                            let delegateReturnValue = await asyncAttempt( async() => await delegateMethod( ...pArgs ) );
+
+                            return await delegateReturnValue || await originalReturnValue;
                         };
 
-                        target[methodName] = newMethod;
+                        target[methodName] = newMethod.bind( target );
                     }
                     else if ( isFunction( target[methodName] ) )
                     {
-                        const originalMethod = target[methodName].bind( delegate );
+                        const originalMethod = target[methodName].bind( target );
 
+                        // noinspection UnnecessaryLocalVariableJS
                         const newMethod = function( ...pArgs )
                         {
-                            return originalMethod.call( delegate, ...pArgs );
+                            let originalReturnValue = attempt( () => originalMethod( ...pArgs ) );
+
+                            let delegateReturnValue = attempt( () => delegateMethod( ...pArgs ) );
+
+                            return delegateReturnValue || originalReturnValue;
                         };
 
-                        target[methodName] = newMethod;
+                        target[methodName] = newMethod.bind( target );
                     }
                     else
                     {
-                        target[methodName] = ( ...pArgs ) => (delegateMethod || method).bind( delegate ).call( delegate, ...pArgs );
+                        target[methodName] = function( ...pArgs )
+                        {
+                            (delegateMethod || method)( ...pArgs );
+                        }.bind( target );
+                    }
 
+                    if ( isFunction( target[methodName] ) )
+                    {
                         propertiesDelegated.push( methodName );
-
                         delegated = true;
                     }
                 }

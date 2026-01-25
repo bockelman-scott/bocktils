@@ -507,11 +507,11 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
                 {
                     const opts = { ...DEFAULT_RESPONSE_OPTIONS, ...(pResponse || (pConfig || pResponse || {})), ...(pConfig || pResponse || {}), ...(pOptions || {}) };
 
-                    const config = { ...(pResponse?.config || {}), ...(asObject( pConfig || pResponse || opts ) || {}) };
+                    const config = { ...(pResponse?.config || {}), ...(asObject( pConfig || pResponse || opts || {} ) || {}) };
 
-                    const options = { ...(asObject( opts ) || config || {}) };
+                    const options = { ...(asObject( opts || config || {} ) || config || {}) };
 
-                    const source = (_ud !== typeof Response && pResponse instanceof Response) ? pResponse : attempt( () => HttpResponse.resolveResponse( (pResponse || options), options ) ) || asObject( pResponse );
+                    const source = (_ud !== typeof Response && pResponse instanceof Response) ? pResponse : attempt( () => HttpResponse.resolveResponse( (pResponse || options), options ) ) || asObject( pResponse || {} );
 
                     // Some frameworks return the response as a property of an error returned in place of a response.
                     // See https://axios-http.com/docs/handling_errors, for example
@@ -562,7 +562,7 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
                                        attempt( () => new HttpStatus( asInt( this.status ), asString( this.statusText || this.options.statusText || "UNKNOWN", true ) ) );
 
                     // Stores the headers returned with the response or the request headers that were passed
-                    this.#headers = attemptSilent( () => new HttpResponseHeaders( source?.headers || this.frameworkHeaders || config.headers || options.headers ) ) || attemptSilent( () => new HttpResponseHeaders( this.frameworkHeaders ) ) || this.frameworkHeaders;
+                    this.#headers = attempt( () => new HttpResponseHeaders( source?.headers || this.frameworkHeaders || config?.headers || options?.headers ) ) || attempt( () => new HttpResponseHeaders( this.frameworkHeaders ) ) || this.frameworkHeaders;
 
                     // Stores the url path from which the response actually came (in the case of redirects) or the url/path of the request
                     this.#url = cleanUrl( asString( asString( this.#response?.url || this.#frameworkResponse?.url || config?.url || source?.url, true ) || asString( config.url || options.url, true ) || _slash, true ) );
@@ -641,7 +641,7 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
         get headersLiteral()
         {
             let headers = asObject( this.headers );
-            return isFunction( headers.toLiteral ) ? headers.toLiteral() : attempt( () => toObjectLiteral( headers ) );
+            return isFunction( headers?.toLiteral ) ? headers.toLiteral() : attempt( () => toObjectLiteral( headers || {} ) );
         }
 
         get frameworkHeaders()
@@ -867,9 +867,9 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
 
             if ( isNonNullObject( pResponseData ) && pResponseData instanceof this.constructor )
             {
-                const options = asObject( { ...DEFAULT_RESPONSE_OPTIONS, ...(pResponseData.options), ...(pResponseData.config), ...(pConfig || {}), ...(pOptions || {}) } ) || {};
+                const options = asObject( { ...DEFAULT_RESPONSE_OPTIONS, ...(pResponseData.options || {}), ...(pResponseData.config || {}), ...(pConfig || {}), ...(pOptions || {}) } ) || {};
 
-                const config = asObject( { ...(pResponseData.config || options), ...(pConfig || options) } );
+                const config = asObject( { ...(pResponseData.config || options || {}), ...(pConfig || options || {}) } );
 
                 const source = attempt( () => HttpResponse.resolveResponse( pResponseData.response, config || options ) );
 
@@ -894,7 +894,7 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
                 this.#config = config || options;
 
                 // Stores the headers returned with the response or the request headers that were passed
-                this.#headers = attemptSilent( () => new HttpResponseHeaders( pResponseData?.headers || pResponseData.frameworkHeaders || config.headers || options.headers ) ) || attemptSilent( () => new HttpResponseHeaders( pResponseData.frameworkHeaders ) ) || pResponseData.frameworkHeaders;
+                this.#headers = attempt( () => new HttpResponseHeaders( pResponseData?.headers || pResponseData?.frameworkHeaders || config?.headers || options?.headers ) ) || attempt( () => new HttpResponseHeaders( pResponseData?.frameworkHeaders || {} ) ) || pResponseData?.frameworkHeaders;
 
                 this.#url = pResponseData.url || cleanUrl( asString( asString( this.#response?.url || this.#frameworkResponse?.url, true ) || asString( options.url || config.url, true ) || _slash, true ) );
 
@@ -949,7 +949,7 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
 
             let headers = pHeaders || pResponse?.headers || pResponse;
 
-            let responseHeaders = attemptSilent( () => new HttpResponseHeaders( headers ) ) || headers;
+            let responseHeaders = attempt( () => new HttpResponseHeaders( headers ) ) || headers;
 
             let retryAfter = attempt( () => responseHeaders.get( "Retry-After" ) ) || attempt( () => responseHeaders.get( "retry-after" ) );
 

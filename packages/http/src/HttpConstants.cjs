@@ -37,12 +37,7 @@ const entityUtils = require( "../../entities/src/EntityUtils.cjs" );
  */
 const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
-const {
-    _ud = "undefined", $scope = constants?.$scope || function()
-    {
-        return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
-    }
-} = constants;
+const { _ud = "undefined", $scope } = constants;
 
 // noinspection FunctionTooLongJS
 (function exposeModule()
@@ -102,7 +97,8 @@ const {
         isFunction,
         toObjectLiteral,
         isTypedArray,
-        isPromise
+        isPromise,
+        isThenable
     } = typeUtils;
 
     const { asString, isBlank, asInt, lcase, ucase, capitalize, isJson } = stringUtils;
@@ -444,17 +440,17 @@ const {
         return type;
     }
 
-    function calculateContentType( pRequest )
+    async function calculateContentType( pRequest )
     {
         let type = _mt;
 
         let request = (_ud !== typeof Request && pRequest instanceof Request) ? attempt( () => pRequest.clone() ) || pRequest : isNonNullObject( pRequest ) ? pRequest : { data: pRequest };
 
-        let data = attempt( () => request?.data || request?.body );
+        let data = request?.data || request?.body || pRequest;
 
-        if ( isPromise( data ) )
+        if ( !isNull( data ) && (isPromise( data ) || isThenable( data )) )
         {
-            data = {};
+            data = await asyncAttempt( async() => await (isPromise( data ) ? data : await Promise.resolve( data ).then( b => b )) );
         }
 
         if ( data )
@@ -1296,6 +1292,26 @@ const {
             return `{"${this.name}":"${this.value}}`;
         }
     }
+
+    HttpHeader.from = function( pValue, pKey )
+    {
+        if ( isNonNullObject( pValue ) )
+        {
+            if ( pValue instanceof HttpHeader )
+            {
+                return pValue;
+            }
+
+            let value = pValue.value || (((isNonNullObject( pKey ) ? (pKey.value || asString( pValue )) : (isString( pKey ) ? asString( pKey ) : (isArray( pValue ) ? ([...pValue][1] || [...pValue][0]) : _mt)))));
+            let key = pValue.name || ((isNonNullObject( pKey ) ? (pKey.name || asString( pKey )) : (isString( pKey ) ? asString( pKey ) : (isArray( pKey ) ? ([...pKey][1] || [...pKey][0]) : value))));
+
+            return new HttpHeader( HttpHeaderDefinition.from( pValue || key ), value );
+        }
+        else
+        {
+            return new HttpHeader( HttpHeaderDefinition.from( pKey ), pValue );
+        }
+    };
 
     /**
      * Returns true if the specified value is a valid/known HTTP Verb (such as GET, POST, PUT, etc.)

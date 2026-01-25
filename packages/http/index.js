@@ -165,9 +165,14 @@ const $scope = constants?.$scope || function()
     const
         {
             HttpAgentConfig,
+            HttpAgentConfigExtended,
+
             httpAgent,
             httpsAgent,
             fixAgents,
+
+            createHttpAgent,
+            createHttpsAgent,
 
             resolveUrl,
             resolveBody,
@@ -192,6 +197,7 @@ const $scope = constants?.$scope || function()
             updateContext,
             calculateFileName,
             streamToFile,
+            pipeToFile,
 
             RequestInterval,
             RequestWindow,
@@ -252,6 +258,7 @@ const $scope = constants?.$scope || function()
                     HttpStorageEvent,
                     ResponseData,
                     HttpAgentConfig,
+                    HttpAgentConfigExtended,
                     ConfigFactory,
                     RequestInitModel,
                     AxiosConfigModel,
@@ -352,15 +359,24 @@ const $scope = constants?.$scope || function()
             ResponseData,
             populateResponseData,
             populateErrorResponse,
+
             HttpAgentConfig,
+            HttpAgentConfigExtended,
+
             httpAgent,
             httpsAgent,
             fixAgents,
+
+            createHttpAgent,
+            createHttpsAgent,
+
             resolveUrl,
             resolveBody,
+
             isHttpClient,
             prepareRequestConfig,
             extractFileNameFromHeader,
+
             ConfigFactory,
             RequestInitModel,
             AxiosConfigModel,
@@ -379,6 +395,7 @@ const $scope = constants?.$scope || function()
             updateContext,
             calculateFileName,
             streamToFile,
+            pipeToFile,
 
             RequestInterval,
             RequestWindow,

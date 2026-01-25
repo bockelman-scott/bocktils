@@ -69,6 +69,7 @@ const { _ud = "undefined", $scope } = constants;
         isArray,
         isTypedArray,
         isPromise,
+        isThenable,
         toDecimal,
         clamp = moduleUtils?.clamp
     } = typeUtils;
@@ -692,7 +693,7 @@ const { _ud = "undefined", $scope } = constants;
 
         constructor( pOptions = DEFAULT_STREAMING_OPTIONS )
         {
-            this.#options = populateOptions( pOptions || {}, DEFAULT_STREAMING_OPTIONS );
+            this.#options = { ...(DEFAULT_STREAMING_OPTIONS), ...(pOptions || {}) };
 
             this.#chunkSize = clamp( asInt( this.#options.chunkSize, DEFAULT_STREAMING_CHUNK_SIZE ), MIN_STREAMING_CHUNK_SIZE, MAX_STREAMING_CHUNK_SIZE );
 
@@ -726,12 +727,12 @@ const { _ud = "undefined", $scope } = constants;
                 // we create a Uint8Array view.
                 encodedData = new Uint8Array( pValue );
             }
-            else if ( pValue instanceof Uint8Array )
+            else if ( pValue instanceof Uint8Array || isTypedArray( pValue ) )
             {
-                // If it's already a Uint8Array, use it directly.
+                // If it's already a byte array, try to use it directly.
                 encodedData = pValue;
             }
-            else if ( isNonNullObject( pValue ) )
+            else if ( isNonNullObject( pValue ) && !isTypedArray( pValue ) )
             {
                 // For plain objects and arrays, stringify them to JSON first,
                 // then encode the JSON string.
@@ -1298,12 +1299,11 @@ const { _ud = "undefined", $scope } = constants;
                 return this.asChunkedStream( defaultContent );
             }
 
-            let stream = pStream instanceof ReadableStream ? pStream : (isPromise( pStream ) ? this.asChunkedStream( await Promise.resolve( pStream ) ) : this.asChunkedStream( pStream ));
+            let stream = pStream instanceof ReadableStream ? pStream : (isPromise( pStream ) || isThenable( pStream ) ? this.asChunkedStream( await pStream ) : this.asChunkedStream( pStream ));
 
             if ( !isNull( stream ) && stream.locked )
             {
                 toolBocksModule.logWarning( `The specified stream is locked and potentially already consumed` );
-
             }
 
             let totalLength = 0;

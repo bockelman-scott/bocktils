@@ -1,10 +1,12 @@
+const fs = require( "fs" );
+
 const moduleUtils = require( "../src/_ToolBocksModule.cjs" );
 
 const constants = require( "../src/Constants.cjs" );
 
 const { _num, _str, _bool, _obj, _fun, _symbol, _big, _ud } = constants;
 
-const { ModuleEvent, lock, attempt, asyncAttempt } = moduleUtils;
+const { ModuleEvent, lock, serialize, attempt, asyncAttempt } = moduleUtils;
 
 const typeUtils = require( "../src/TypeUtils.cjs" );
 
@@ -243,7 +245,7 @@ test( "uuidToNumber generates a BigInt",
 
           console.log( "maxNum:", maxNum, "maxSafeNum:", maxSafeNum );
 
-          expect( maxNum === BigInt("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"));
+          expect( maxNum === BigInt( "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF" ) );
 
           expect( bigNum <= maxNum );
 
@@ -3847,6 +3849,122 @@ describe( "toObjectLiteral", () =>
               expect( literal["address"]["city"] ).toEqual( "Chattanooga" );
           }
     );
+
+    test( "toObjectLiteral can handle complex structures and circular references",
+          () =>
+          {
+              class Person
+              {
+                  #id;
+                  #name;
+
+                  #parents = [];
+
+                  constructor( pId, pName, ...pParents )
+                  {
+                      this.#id = pId;
+                      this.#name = pName;
+                      this.#parents.push( ...pParents );
+                  }
+
+                  get id()
+                  {
+                      return this.#id;
+                  }
+
+                  get name()
+                  {
+                      return this.#name;
+                  }
+
+                  get parents()
+                  {
+                      return this.#parents;
+                  }
+              }
+
+              class Parent extends Person
+              {
+                  #children = [];
+
+                  constructor( pId, pName, pParents = [], ...pChildren )
+                  {
+                      super( pId, pName, ...(pParents || []) );
+                      this.#children.push( ...pChildren );
+                  }
+
+                  get children()
+                  {
+                      return this.#children;
+                  }
+
+                  addChildren( ...pChildren )
+                  {
+                      this.#children.push( ...pChildren );
+                  }
+              }
+
+              class FamilyTree
+              {
+                  #descendant;
+
+                  #parentTrees = [];
+
+                  constructor( pDescendant )
+                  {
+                      this.#descendant = pDescendant;
+
+                      for( let parent of this.descendant.parents )
+                      {
+                          this.#parentTrees.push( new this.constructor( parent ) );
+                      }
+                  }
+
+                  get descendant()
+                  {
+                      return this.#descendant;
+                  }
+
+                  get fullTree()
+                  {
+                      return this.#parentTrees;
+                  }
+              }
+
+              let grandma = new Parent( 1, "Esther Fields" );
+              let grandpa = new Parent( 2, "Floyd Fields" );
+
+              let grandmother = new Parent( 3, "Alice Bockelman" );
+              let grandfather = new Parent( 4, "Sylvester Bockelman" );
+
+              let mother = new Parent( 5, "Judith Fields", [grandma, grandpa] );
+              let father = new Parent( 6, "Jerome Bockelman", [grandmother, grandfather] );
+
+              grandma.addChildren( mother );
+              grandpa.addChildren( mother );
+
+              grandmother.addChildren( father );
+              grandfather.addChildren( father );
+
+              let child = new Person( 7, "Scott Bockelman", mother, father );
+
+              mother.addChildren( child );
+              father.addChildren( child );
+
+              const familyTree = new FamilyTree( child );
+
+              const startTime = Date.now();
+
+              let tree = toObjectLiteral( familyTree );
+
+              const endTime = Date.now();
+
+              const duration = (endTime - startTime);
+
+              fs.writeFileSync( "C:\\Temp\\familyTree.json", serialize( tree ), "utf-8" );
+
+              console.log( `Time to convert to an object literal: ${duration} milliseconds` );
+          } );
 } );
 
 describe( "transformObject", () =>

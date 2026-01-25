@@ -1,3 +1,5 @@
+const fs = require( "fs" );
+
 const core = require( "@toolbocks/core" );
 
 /** import the utilities to test **/
@@ -162,3 +164,20 @@ describe( "cherryPick", () =>
               console.log( picked );
           } );
 } );
+
+/*
+
+describe( "deserialize a complex JSON", () =>
+{
+    test( "resurrect a family tree",
+          () =>
+          {
+              const json = fs.readFileSync( "C:\\Temp\\familyTree.json", "utf-8");
+
+              const familyTree = jsonUtils.parseJson( json );
+
+              console.log( familyTree );
+
+
+          }, 600_000 );
+} );*/

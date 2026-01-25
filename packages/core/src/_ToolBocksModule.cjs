@@ -508,7 +508,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     /**
      * A constant array of the property names of properties that should not be serialized or persisted
      */
-    const TRANSIENT_PROPERTIES = freeze( ["constructor", "prototype", "toJson", "toObject", "global", "this", "toString", "class"] );
+    const TRANSIENT_PROPERTIES = freeze( ["constructor", "prototype", "isPrototypeOf", "__proto__", "hasOwnProperty", "propertyIsEnumerable", "toJson", "toObject", "toString", "toLocaleString", "valueOf", "global", "this", "toString", "class"] );
 
     /**
      * A constant string representing the default error message.<br>
@@ -1264,7 +1264,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         if ( pVal && isNumeric( pVal ) )
         {
             let val = attempt( () => parseInt( pVal ) );
-            if ( isNum( val ) )
+            if ( isNum( val ) && !(isNaN( val ) || !isFinite( val )) )
             {
                 return val;
             }
@@ -1633,6 +1633,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             super();
 
             this.#logger = ILogger.isLogger( pSink ) ? pSink : konsole;
+
+            let count = 0;
+
+            while ( !isNull( this.#logger ) && this.#logger instanceof this.constructor && count++ < 5 )
+            {
+                this.#logger = Object.getPrototypeOf( this.#logger ) || konsole;
+            }
+
+            this.#logger = this.#logger || konsole || mockConsole;
         }
 
         log( ...pData )
@@ -1755,6 +1764,20 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const VERBOSE_LOG_LEVELS = [LOG_LEVELS.TRACE, ...DEBUG_LOG_LEVELS];
 
+    function unwrapKonsoleLogger( pSink )
+    {
+        let sink = pSink;
+
+        let count = 0;
+
+        while ( !isNull( pSink ) && pSink instanceof Konsole && count++ < 5 )
+        {
+            sink = Object.getPrototypeOf( pSink );
+        }
+
+        return sink || konsole || mockConsole;
+    }
+
     /**
      * A subclass of Konsole (a serialization-safe logger)
      * that only logs messages associated with the levels enabled
@@ -1788,7 +1811,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          */
         constructor( pSink, ...pLevels )
         {
-            super( pSink );
+            super( unwrapKonsoleLogger( pSink ) );
 
             this.#levels = [...(pLevels || [])];
         }
@@ -1848,6 +1871,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     }
 
     const INTERNAL_LOGGER = new ConditionalLogger( (konsole || console || mockConsole), ...(DEBUG_MODE ? DEBUG_LOG_LEVELS : MODEST_LOG_LEVELS) );
+    const DEBUG_LOGGER = new ConditionalLogger( (konsole || console || mockConsole), ...DEBUG_LOG_LEVELS );
+    const PRODUCTION_LOGGER = new ConditionalLogger( (konsole || console || mockConsole), ...QUIET_LOG_LEVELS );
 
     /**
      * Executes a function with the specified arguments,
@@ -2788,7 +2813,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         const options = Object.assign( {}, { ...(pOptions || {}) } );
 
         return {
-            visited: pVisited || options?.visited || new Set(),
+            visited: pVisited || options?.visited || new WeakSet(),
             stack: [...(pStack || options?.stack || [])],
             depth: pDepth || options?.depth || 0
         };
@@ -3148,35 +3173,43 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     ObjectEntry.unwrapValues = function( pObject )
     {
-        let entries = attempt( () => isNonNullObj( pObject ) && !isKeyValueArray( pObject ) ? objectEntries( pObject ) : isArray( pObject ) ? [...pObject] : [pObject] );
+        let entries = attempt( () => isNonNullObj( pObject ) && !isKeyValueArray( pObject ) ? objectEntries( pObject ) || [] : isArray( pObject ) ? [...pObject] : [pObject] );
 
         let results = [];
 
         const visited = new Set();
         const stack = [];
 
-        for( let entry of entries )
+        if ( entries && $ln( entries ) )
         {
-            const key = ObjectEntry.getKey( entry );
-
-            let value = ObjectEntry.getValue( entry );
-
-            if ( !(isNull( key ) || isNull( value ) || key === _mt_str) )
+            for( let entry of entries )
             {
-                if ( value instanceof ObjectEntry && value.isValid() )
+                if ( isNull( entry ) )
                 {
-                    if ( detectCycles( stack, 5, 5 ) )
-                    {
-                        results.push( [key, value, value?.parent] );
-                        results.push( [value?.key, value?.value, value?.parent] );
-                        continue;
-                    }
-
-                    value = attempt( () => value.toArray( visited, [...stack, key], 0 ) );
+                    continue;
                 }
-            }
 
-            results.push( [key, value, pObject] );
+                const key = ObjectEntry.getKey( entry );
+
+                let value = ObjectEntry.getValue( entry );
+
+                if ( !(isNull( key ) || isNull( value ) || key === _mt_str) )
+                {
+                    if ( value instanceof ObjectEntry && value.isValid() )
+                    {
+                        if ( detectCycles( stack, 5, 5 ) )
+                        {
+                            results.push( [key, value, value?.parent] );
+                            results.push( [value?.key, value?.value, value?.parent] );
+                            continue;
+                        }
+
+                        value = attempt( () => value.toArray( visited, [...stack, key], 0 ) );
+                    }
+                }
+
+                results.push( [key, value, pObject] );
+            }
         }
 
         return results;
@@ -3264,36 +3297,89 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return visitor;
     };
 
-    const isValidEntry = e => isArray( e ) && ($ln( e ) > 1) && !(isNull( e[0] ) || isNull( e[1] )) && (isStr( e[0] ) ? (_isValidStr( e[0] )) : true);
+    const isValidEntry = e => isArray( e ) && ($ln( e ) > 1) && !(isNull( e[0] ) || isNull( e[1] )) && ( !isStr( e[0] ) || (_isValidStr( e[0] )));
 
-    const stringifyKeys = e => (isArray( e ) && (_symbol !== typeof e[0])) ? [(_mt_str + (e?.key || e[0])).trim().replace( /^#/, _mt_str ), (e?.value || e[1])] : isNull( e ) ? [_mt_str, null] : e;
+    const stringifyKeys = e => (isArray( e ) ? [(_trim( String( e.key || e[0] ) )).replace( /^#/, _mt ), (e.value || e[1]), (e.parent || e[2])] : isNull( e ) ? [_mt, null] : e);
 
     const processEntries = ( pEntries, pParent ) =>
     {
-        let entries = isArray( pEntries ) ? pEntries : (!isNull( pEntries ) ? (isMap( pEntries ) ? [...(pEntries.entries() || [])] : (isSet( pEntries ) ? [...(pEntries.values() || [])] : (isObj( pEntries ) ? Object.entries( pEntries ) : [pEntries]))) : []);
+        let entries = [];
 
-        entries = entries.filter( isValidEntry ).map( stringifyKeys ).filter( isNotTransient );
+        if ( !isNull( pEntries ) )
+        {
+            if ( isArray( pEntries ) || !isNull( pEntries[Symbol.iterator] ) )
+            {
+                if ( pEntries instanceof ObjectEntry )
+                {
+                    entries = [pEntries];
+                }
+                else
+                {
+                    entries = _asArr( pEntries || [] ).map( ( e, i ) => e instanceof ObjectEntry ? e : ($ln( e ) > 1 ? ObjectEntry.from( (e[0] || i), (e[1] || e), (e[2] || e?.parent || pParent || e) ) : [i, e, pParent]) );
+                }
+            }
+            else if ( isMap( pEntries ) || isFunc( pEntries?.entries ) )
+            {
+                entries = [...(pEntries.entries() || [])].map( ( e, i ) => e instanceof ObjectEntry ? e : ($ln( e ) > 1 ? ObjectEntry.from( (e[0] || i), (e[1] || e), (e[2] || e?.parent || pParent || e) ) : [i, e, pParent]) );
+                ;
+            }
+            else if ( isSet( pEntries ) || isFunc( pEntries?.values ) )
+            {
+                entries = [...(pEntries.values() || [])].map( ( e, i ) => e instanceof ObjectEntry ? e : ($ln( e ) > 1 ? ObjectEntry.from( (e[0] || i), (e[1] || e), (e[2] || e?.parent || pObject || e) ) : [i, e, pObject]) );
+            }
+            else
+            {
+                entries = (pEntries instanceof ObjectEntry) ? [pEntries] : (Object.entries( pEntries ) || [pEntries]).map( ( e, i ) => e instanceof ObjectEntry ? e : ($ln( e ) > 1 ? ObjectEntry.from( (e[0] || i), (e[1] || e), (e[2] || e?.parent || pParent || e) ) : [i, e, pParent]) );
 
-        return [...(new Set( entries || [] ))].filter( isValidEntry ).map( e => ObjectEntry.from( e[0], e[1], (pParent || e[2]) ) );
+            }
+        }
+
+        entries = _asArr( entries ).filter( isValidEntry ).map( stringifyKeys ).filter( e => isNotTransient( e[0] ) && !(_ud === typeof e[1] || isNull( e[1] )) );
+
+        return [...(new Set( entries || [] ))].filter( isValidEntry ).map( e => ObjectEntry.from( e[0], e[1], (e[2] || pParent) ) ).filter( e => _fun !== typeof ObjectEntry.getValue( e ) );
     };
 
     function extractClassSource( pObject )
     {
+        if ( _ud === typeof pObject || isNull( pObject ) )
+        {
+            return _mt;
+        }
+
         const ctr = isClass( pObject ) || isFunc( pObject ) ? pObject : (pObject?.constructor || Object.getPrototypeOf( pObject )?.constructor);
 
-        return isClass( ctr ) || isFunc( ctr ) ? functionToString.call( ctr ) : _mt_str;
+        return isClass( ctr ) || isFunc( ctr ) ? functionToString.call( ctr ) : _mt;
+    }
+
+    function extractClassName( pObject )
+    {
+        if ( _ud === typeof pObject || isNull( pObject ) )
+        {
+            return _mt;
+        }
+
+        const s = extractClassSource( pObject );
+
+        if ( _isValidStr( s ) )
+        {
+            const rx = /\s*class\s*(\w+)\s+/;
+            const matches = rx.exec( s );
+            return (matches && $ln( matches ) > 1) ? _trim( matches[1] ) : _mt;
+        }
+
+        return _mt;
     }
 
     function getPrivates( pObject, pCollection, pCallback )
     {
-        if ( isNull( pObject ) )
+        if ( _ud === typeof pObject || isNull( pObject ) )
         {
             return [];
         }
 
-        let collection = (isArray( pCollection ) ? [...pCollection] : []) || [];
+        let collection = ((_ud === typeof pCollection || isNull( pCollection ))) ? [] : (isArray( pCollection ) ? (pCollection instanceof ObjectEntry ? [pCollection] : [...pCollection]) : []) || [];
 
-        let source = extractClassSource( pObject?.constructor || pObject?.prototype || pObject );
+        let source = extractClassSource( Object.getPrototypeOf( pObject ) );
 
         if ( source )
         {
@@ -3340,232 +3426,189 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     function getPrivateEntries( pObject )
     {
-        return getPrivates( pObject, [], ( collection, entry ) => collection.push( entry ) );
+        return getPrivates( pObject, [], ( collection, entry ) => isNull( collection.find( e => ObjectEntry.getKey( entry ) === ObjectEntry.getKey( e ) ) ) ? collection.push( entry ) : no_op() );
     }
 
     function populateDateEntries( pEntries, pDate )
     {
         const date = pDate || new Date();
 
-        pEntries.push( ["string", date.toString()] );
-        pEntries.push( ["isoString", date.toISOString()] );
-        pEntries.push( ["localeString", date.toLocaleString()] );
-        pEntries.push( ["timestamp", date.getTime()] );
-        pEntries.push( ["day", date.getDay()] );
-        pEntries.push( ["year", date.getFullYear()] );
-        pEntries.push( ["month", date.getMonth()] );
-        pEntries.push( ["date", date.getDate()] );
-        pEntries.push( ["hours", date.getHours()] );
-        pEntries.push( ["minutes", date.getMinutes()] );
-        pEntries.push( ["seconds", date.getSeconds()] );
-        pEntries.push( ["milliseconds", date.getMilliseconds()] );
+        pEntries.push( ["intValue", date.getTime(), date] );
+        pEntries.push( ["string", date.toString(), date] );
+        pEntries.push( ["isoString", date.toISOString(), date] );
+        pEntries.push( ["localeString", date.toLocaleString(), date] );
+        pEntries.push( ["timestamp", date.getTime(), date] );
+        pEntries.push( ["day", date.getDay(), date] );
+        pEntries.push( ["year", date.getFullYear(), date] );
+        pEntries.push( ["month", date.getMonth(), date] );
+        pEntries.push( ["date", date.getDate(), date] );
+        pEntries.push( ["hours", date.getHours(), date] );
+        pEntries.push( ["minutes", date.getMinutes(), date] );
+        pEntries.push( ["seconds", date.getSeconds(), date] );
+        pEntries.push( ["milliseconds", date.getMilliseconds(), date] );
     }
 
     function populateRegExpEntries( pEntries, pRx )
     {
         const rx = pRx || /_/;
 
-        pEntries.push( ["pattern", rx.toString()] );
-        pEntries.push( ["source", rx.source] );
-        pEntries.push( ["flags", rx.flags || _mt_str] );
-        pEntries.push( ["lastIndex", rx.lastIndex] );
+        pEntries.push( ["pattern", rx.toString(), rx] );
+        pEntries.push( ["source", rx.source, rx] );
+        pEntries.push( ["flags", rx.flags || _mt_str, rx] );
+        pEntries.push( ["lastIndex", rx.lastIndex, rx] );
 
-        pEntries.push( ["global", rx.global] );
-        pEntries.push( ["ignoreCase", rx.ignoreCase] );
-        pEntries.push( ["multiline", rx.multiline] );
-        pEntries.push( ["sticky", rx.sticky] );
-        pEntries.push( ["unicode", rx.unicode] );
+        pEntries.push( ["global", rx.global, rx] );
+        pEntries.push( ["ignoreCase", rx.ignoreCase, rx] );
+        pEntries.push( ["multiline", rx.multiline, rx] );
+        pEntries.push( ["sticky", rx.sticky, rx] );
+        pEntries.push( ["unicode", rx.unicode, rx] );
     }
 
-    function getGlobalTypeEntries( pObject )
+    function _getPrototypeClassName( pPrototype )
     {
-        let entries = [];
+        return isNull( pPrototype ) ? _mt : (extractClassName( pPrototype ) ?? pPrototype?.name);
+    }
 
-        if ( !isNonNullObj( pObject ) || pObject === $scope() )
+    function _isUserDefinedObject( pPrototype )
+    {
+        let className = _getPrototypeClassName( pPrototype );
+
+        return !isNull( pPrototype ) &&
+               ![_mt, "Object", ...GLOBAL_TYPE_NAMES].includes( className ) &&
+               ![Object, ...GLOBAL_TYPES].includes( pPrototype );
+    }
+
+    const rxNative = /^__\w+__$/;
+
+    const notTransient = (( e ) => !(rxNative.test( _asStr( e ) ) || TRANSIENT_PROPERTIES.includes( _asStr( e ) )));
+
+    function getDefaultEntries( pObject, pCount = 0, pStack = [] )
+    {
+        if ( isNull( pObject ) || !isObj( pObject ) )
         {
             return [];
         }
 
-        if ( isGlobalType( pObject ) )
+        const obj = isNonNullObj( pObject ) ? pObject : {};
+
+        const stack = [...(_asArr( pStack || [] ))];
+
+        const entries = [];
+
+        const callback = ( pKey ) =>
         {
-            entries.push( ["class", objectToString.call( pObject ).replace( /^\[object (.*)]$/, "$1" )] );
-        }
-        else if ( isClassInstance( pObject ) )
-        {
-            let source = functionToString.call( pObject?.constructor || pObject ).replace( /^\[object (.*)]$/, "$1" );
-            entries.push( ["class", (source.replace( /\r\n/, _spc ).split( _spc ))[1]] );
-        }
+            const key = _trim( String( pKey ) );
 
-        if ( isFunc( pObject ) || pObject instanceof Function )
-        {
-            entries.push( ["name", pObject?.name || "anonymous"] );
-            entries.push( ["length", pObject?.length || 0] );
-        }
-
-        if ( isDate( pObject ) )
-        {
-            populateDateEntries( entries, pObject );
-        }
-
-        if ( isRegExp( pObject ) )
-        {
-            populateRegExpEntries( entries, pObject );
-        }
-
-        if ( isPromise( pObject ) )
-        {
-            entries.push( ["status", pObject.status, pObject] );
-            entries.push( ["reason", pObject.reason, pObject] );
-        }
-
-        if ( isError( pObject ) )
-        {
-            entries.push( ["type", objectToString.call( pObject ).replace( /^\[object (.*)]$/, "$1" ), pObject] );
-            entries.push( ["name", pObject?.name || pObject?.type, pObject] );
-            entries.push( ["message", pObject.message, pObject] );
-            entries.push( ["stack", pObject.stack, pObject] );
-        }
-
-        return processEntries( entries, pObject );
-    }
-
-    const TYPE_DETECTORS = freeze(
-        [
-            { name: "map", method: isMap },
-            { name: "set", method: isSet },
-            { name: "array", method: isArray },
-
-            { name: "class_instance", method: isClassInstance },
-            { name: "global_type", method: isGlobalType }
-        ] );
-
-    function calculateObjectType( pObject, pTypeDetectors = TYPE_DETECTORS )
-    {
-        let objectType = _mt_str;
-
-        let typeDetectors = [...new Set( [...(pTypeDetectors || []), ...TYPE_DETECTORS] )];
-
-        while ( _mt_str === objectType && typeDetectors.length > 0 )
-        {
-            const detector = typeDetectors.shift();
-
-            if ( detector.method( pObject ) )
+            if ( _isValidStr( key ) && isNull( entries.find( e => (key === ObjectEntry.getKey( e )) ) ) )
             {
-                objectType = detector.name || _mt_str;
-                break;
+                try
+                {
+                    const value = obj[key];
+                    const entry = [key, value, obj];
+                    if ( isValidEntry( entry ) && !(entries.map( e => ObjectEntry.getKey( e ) ).includes( key )) )
+                    {
+                        entries.push( entry );
+                    }
+                }
+                catch( ex )
+                {
+                    //ignored
+                }
+            }
+        };
+
+        if ( [Date, RegExp].find( e => pObject instanceof e ) )
+        {
+            if ( pObject instanceof Date )
+            {
+                populateDateEntries( entries, pObject );
+            }
+
+            if ( pObject instanceof RegExp )
+            {
+                populateRegExpEntries( entries, pObject );
+            }
+
+            return entries;
+        }
+
+        attempt( () =>
+                     [
+                         ...Object.getOwnPropertyNames( pObject ),
+                         ...Object.getOwnPropertySymbols( pObject )
+                     ].filter( notTransient ).forEach( callback ) );
+
+        let count = _asInt( pCount ) || 0;
+
+        if ( count > 5 || detectCycles( stack, 5, 5 ) )
+        {
+            return entries || [];
+        }
+
+        let prototype = Object.getPrototypeOf( pObject );
+
+        if ( prototype )
+        {
+            let className = _getPrototypeClassName( prototype );
+
+            while ( _isUserDefinedObject( prototype ) && count < 10 )
+            {
+                attempt( () =>
+                             [
+                                 ...Object.getOwnPropertyNames( prototype ),
+                                 ...Object.getOwnPropertySymbols( prototype )
+                             ].filter( notTransient ).forEach( callback ) );
+
+                prototype = Object.getPrototypeOf( prototype );
+
+                className = _getPrototypeClassName( prototype );
             }
         }
 
-        return objectType || "literal";
-    }
-
-    function getDefaultEntries( pObject )
-    {
-        let entries = [];
-
-        [...Object.getOwnPropertyNames( pObject ),
-         ...Object.getOwnPropertySymbols( pObject )].forEach( ( key ) =>
-                                                              {
-                                                                  const value = pObject[key];
-                                                                  const entry = [key, value];
-                                                                  if ( isValidEntry( entry ) )
-                                                                  {
-                                                                      entries.push( entry );
-                                                                  }
-                                                              } );
-        return entries;
+        return [...(new Set( entries ))];
     }
 
     function initializeEntries( pObject )
     {
+        if ( isNull( pObject ) || !isObj( pObject ) || $scope() === pObject )
+        {
+            return [];
+        }
+
         if ( isArray( pObject ) || TYPED_ARRAYS.some( e => pObject instanceof e ) )
         {
-            return pObject.map( ( e, i ) => [i, e] );
+            if ( pObject instanceof ObjectEntry )
+            {
+                return [pObject];
+            }
+            return pObject.map( ( e, i ) => e instanceof ObjectEntry ? e : ($ln( e ) > 1 ? ObjectEntry.from( (e[0] || i), (e[1] || e), (e[2] || e?.parent || pObject || e) ) : [i, e, pObject]) );
         }
 
-        if ( isMap( pObject ) || pObject instanceof WeakMap || (_ud !== typeof URLSearchParams && pObject instanceof URLSearchParams) )
+        if ( isMap( pObject ) || isFunc( pObject?.entries ) )
         {
-            return [...pObject.entries()];
+            return [...(attemptSilent( () => pObject.entries() || [] ) || [])];
         }
 
-        if ( isSet( pObject ) || pObject instanceof WeakSet )
+        if ( isSet( pObject ) || isFunc( pObject?.values ) )
         {
-            return ([...(pObject.values())].map( ( e, i ) => [i, e] ));
+            return ([...(attemptSilent( () => (pObject.values() || []) || [] ))].map( ( e, i ) => e instanceof ObjectEntry ? e : ($ln( e ) > 1 ? ObjectEntry.from( (e[0] || i), (e[1] || e), (e[2] || e?.parent || pObject || e) ) : [i, e, pObject]) ));
         }
 
         if ( pObject instanceof WeakRef )
         {
             let object = attempt( () => dereference( pObject ) ) || pObject;
-            if ( object )
+            if ( isNonNullObj( object ) && (object !== pObject) && !(object instanceof WeakRef) )
             {
                 return initializeEntries( object );
             }
         }
 
-        let entries = [];
-
-        if ( isFunc( pObject?.entries ) )
-        {
-            entries = ([...(attemptSilent( () => [...(pObject.entries() || [])] ))]);
-        }
-        else if ( isFunc( pObject?.values ) )
-        {
-            entries = [...(attemptSilent( () => ([...pObject.values()].map( ( e, i ) => [i, e] )) ) || [...(attempt( () => Set.prototype.values.call( pObject ) ))])];
-        }
-
-        return ($ln( entries ) > 0 ? entries : Object.entries( pObject || {} )) || Object.entries( pObject || {} );
-    }
-
-    function getEntriesForType( pObjectType, pObject, pEntries )
-    {
-        let entries = pEntries || [];
-
-        const objectType = _lcase( pObjectType || "literal" );
-
-        switch ( objectType )
-        {
-            case "literal":
-                entries = Object.entries( pObject || {} ) || pEntries || [];
-                break;
-
-            case "map":
-                entries = attemptSilent( () => [...pObject.entries()] ) || [...(attempt( () => Map.prototype.entries.call( pObject ) )) || []];
-                break;
-
-            case "set":
-                entries = attemptSilent( () => ([...pObject.values()].map( ( e, i ) => [i, e] )) ) || [...(attempt( () => Set.prototype.values.call( pObject ) )) || []].map( ( e, i ) => [i, e] );
-                break;
-
-            case "array":
-                entries = _asArr( pObject || [] ).map( ( e, i ) => [i, e] );
-                break;
-
-            case "class_instance":
-                entries = [...(new Set( [...entries, ...((attemptSilent( () => getPrivateEntries( pObject ) || [] ) || []))] ))];
-
-                entries = _asArr( entries || [] ).filter( isValidEntry );
-
-            // do not break;
-            // fall-through
-
-            case "global_type":
-                entries = [...(new Set( [...entries, ...((attemptSilent( () => getGlobalTypeEntries( pObject ) || [] ) || []))] ))];
-
-                entries = _asArr( entries || [] ).filter( isValidEntry );
-
-                break;
-
-            default:
-                entries = getDefaultEntries( pObject );
-                break;
-        }
-
-        return entries;
+        return getDefaultEntries( pObject );
     }
 
     function getEntries( pObject, pVisited = new Set(), pStack = [], pDepth = 0 )
     {
-        if ( !isNonNullObj( pObject ) )
+        if ( isNull( pObject ) || !isObj( pObject ) || $scope() === pObject )
         {
             return [];
         }
@@ -3575,39 +3618,48 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return [pObject];
         }
 
-        let entries = attemptSilent( () => initializeEntries( pObject ) ) || [];
-
         const { visited, stack, depth } = initializeRecursionArgs( pVisited, pStack, pDepth );
+
+        const entries = initializeEntries( pObject ) || [];
 
         if ( isInfiniteLoop( pObject, visited, stack, depth ) )
         {
             return entries;
         }
 
-        const objectType = calculateObjectType( pObject );
-
-        entries = getEntriesForType( objectType, pObject, entries );
-
         visited.add( pObject );
 
-        return processEntries( entries, pObject );
+        const privateEntries = getPrivateEntries( pObject ) || [];
+
+        if ( privateEntries && $ln( privateEntries ) )
+        {
+            const notAlreadyPresent = e =>
+            {
+                const searchPredicate = t => ObjectEntry.getKey( e ) === ObjectEntry.getKey( t );
+
+                return isNull( entries.find( searchPredicate ) );
+            };
+
+            entries.push( ...((_asArr( privateEntries.filter( notAlreadyPresent ) )) || []) );
+        }
+
+        return processEntries( _asArr( entries || [] ), pObject );
     }
 
     function objectEntries( ...pObject )
     {
-        let objects = isArray( pObject ) ? pObject.filter( isNonNullObj ) : [pObject];
+        let objects = [...(isArray( pObject ) ? _asArr( pObject ).filter( isNonNullObj ) : [pObject])].filter( e => _obj === typeof e );
+
+        objects = isNull( objects ) ? [] : (!isArray( objects ) ? [] : objects.filter( e => isNonNullObj( e ) && ($scope() !== e) ));
+
+        if ( $ln( objects ) <= 0 )
+        {
+            return [];
+        }
 
         let entries = [];
 
         const populateEntry = e => isValidEntry( e ) ? entries.push( e ) : no_op();
-
-        function updateEntries( pEntries )
-        {
-            if ( pEntries && isArray( pEntries ) && $ln( pEntries ) > 0 )
-            {
-                pEntries.forEach( populateEntry );
-            }
-        }
 
         if ( 1 === $ln( objects ) )
         {
@@ -3620,37 +3672,43 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     return [pObject];
                 }
 
-                const items = attempt( () => getEntries( object ) );
+                const items = (getEntries( object ) || []).filter( isNonNullObj )/*.filter( e => _fun !== (typeof ObjectEntry.getValue( e )) )*/;
 
-                updateEntries( items );
+                if ( $ln( items ) > 0 )
+                {
+                    _asArr( items || [] ).forEach( populateEntry );
 
-                entries = attempt( () => processEntries( entries, object || pObject ) );
+                    entries = processEntries( entries, object || pObject );
+                }
             }
         }
         else if ( $ln( objects ) > 0 )
         {
             for( let object of objects )
             {
-                const items = objectEntries( object );
-                updateEntries( items );
+                const items = objectEntries( object ).filter( isNonNullObj );
+                if ( $ln( items ) > 0 )
+                {
+                    _asArr( items || [] ).forEach( populateEntry );
+                }
             }
         }
 
-        return entries.map( e => ObjectEntry.from( e ) );
+        return entries.map( e => e instanceof ObjectEntry ? e : ObjectEntry.from( e ) )/*.filter( e => _fun !== typeof ObjectEntry.getValue( e ) )*/;
     }
 
     function objectValues( pObject )
     {
-        const values = [...((isNonNullObj( pObject ) ? (isMap( pObject ) || isSet( pObject ) || isFunc( pObject?.values ) ? attempt( () => [...(pObject.values() || Object.values( pObject || {} ) || [])] ) || attempt( () => [...(Object.values( pObject || {} ) || [])] ) : Object.values( pObject || {} )) : []) || [])];
-        objectEntries( pObject ).forEach( e => values.push( e[1] ) );
-        return [...(new Set( values.filter( e => _ud !== typeof e && null !== e ) ))];
+        const values = [...((isNonNullObj( pObject ) ? (isMap( pObject ) || isSet( pObject ) || isFunc( pObject?.values ) ? attempt( () => [...(pObject.values() || Object.values( pObject || {} ) || [])] ) || attempt( () => [...(Object.values( pObject || {} ) || [])] ) : (Object.values( pObject || {} )) || []) : []) || [])];
+        attemptSilent( () => ([...((objectEntries( pObject || {} ) || []) || [])].filter( e => isArray( e ) && $ln( e ) > 1 )).forEach( e => values.push( e[1] ) ) );
+        return [...(new Set( _asArr( values ).filter( e => _ud !== typeof e && null !== e ) ))];
     }
 
     function objectKeys( pObject )
     {
         const keys = (isNonNullObj( pObject ) ? (isMap( pObject ) || isFunc( pObject?.keys ) ? [...(pObject.keys() || [])] : Object.keys( pObject || {} )) : []) || [];
-        objectEntries( pObject ).forEach( e => keys.push( e[0] ) );
-        return [...(new Set( keys.filter( e => null != e && isStr( e ) ) ))];
+        attemptSilent( () => ([...((objectEntries( pObject || {} ) || []) || [])].filter( e => isArray( e ) && $ln( e ) > 0 )).forEach( e => keys.push( e[0] ) ) );
+        return [...(new Set( _asArr( keys ).filter( e => null != e && isStr( e ) && _isValidStr( e ) ) ))];
     }
 
     function toMap( pObject )
@@ -3659,7 +3717,13 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         if ( isNonNullObj( pObject ) )
         {
+            if ( isMap( pObject ) || isFunc( pObject.entries ) )
+            {
+                return new Map( pObject.entries() );
+            }
+
             const entries = objectEntries( pObject );
+
             if ( $ln( entries ) )
             {
                 entries.forEach( entry =>
@@ -3669,7 +3733,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
                                      if ( isStr( key ) && !isNull( value ) )
                                      {
-                                         map.set( key, value );
+                                         map.set( String( key ), value );
                                      }
                                  } );
             }
@@ -3768,7 +3832,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                               pStack = [],
                               pDepth = 0 )
     {
-        const options = Object.assign( pOptions || {}, DEFAULT_IS_LITERAL_OPTIONS );
+        const options = { ...DEFAULT_IS_LITERAL_OPTIONS, ...(pOptions || {}) };
 
         const { visited, stack, depth } = initializeRecursionArgs( pVisited, pStack, pDepth, options );
 
@@ -4425,6 +4489,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             TRACE: freeze( new ExecutionMode( "TRACE", true ) )
         };
 
+    ExecutionMode.isProduction = function( pMode = CURRENT_MODE )
+    {
+        return ExecutionMode.MODES.PROD.equals( pMode || CURRENT_MODE ) || ExecutionMode.MODES.PRODUCTION.equals( pMode || CURRENT_MODE );
+    };
     // adds each Execution Mode constant as a static member of the ExecutionMode class
     Object.entries( ExecutionMode.MODES ).forEach( ( [key, value] ) =>
                                                    {
@@ -4728,7 +4796,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             this.#mode = ExecutionMode.calculate() || CURRENT_MODE;
 
-            this.#console = new ConditionalLogger( ((_ud !== typeof konsole && isFunc( konsole?.log )) ? konsole : new Konsole( console )), ...((DEBUG_MODE || this.#mode?.traceEnabled) ? DEBUG_LOG_LEVELS : MODEST_LOG_LEVELS) );
+            this.#console = (DEBUG_MODE || this.#mode?.traceEnabled) ? DEBUG_LOGGER : (ExecutionMode.isProduction( this.#mode ) ? PRODUCTION_LOGGER : INTERNAL_LOGGER);
 
             this.#window = _ud !== typeof window ? window : null;
 
@@ -4783,7 +4851,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         get console()
         {
-            return this.#console || new ConditionalLogger( konsole, ...((DEBUG_MODE || this.#mode?.traceEnabled) ? DEBUG_LOG_LEVELS : MODEST_LOG_LEVELS) ) || MockLogger;
+            return this.#console || (DEBUG_MODE || this.#mode?.traceEnabled) ? DEBUG_LOGGER : (ExecutionMode.isProduction( this.#mode ) ? PRODUCTION_LOGGER : INTERNAL_LOGGER);
         }
 
         get fetch()
@@ -5924,17 +5992,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             this.#referenceId = attemptSilent( () => me.calculateReferenceId( pMsgOrErr || me ) );
 
             // Capture stack trace if available
-            if ( Error.captureStackTrace )
-            {
-                try
-                {
-                    Error.captureStackTrace( this, Error );
-                }
-                catch( ex )
-                {
-                    // ignored
-                }
-            }
+            attemptSilent( () => Error.captureStackTrace ? Error.captureStackTrace( this, Error ) : no_op() );
 
             this.stack = (isError( this.cause ) ? this.cause?.stack : (isError( pMsgOrErr ) ? pMsgOrErr.stack || this.stack : this.stack)) || this.stack;
 
@@ -6066,7 +6124,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             const level = resolveLogLevel( pLevel );
 
-            const logger = ToolBocksModule.resolveLogger( pLogger, INTERNAL_LOGGER ) || new ConditionalLogger( (konsole || mockConsole), level );
+            const logger = ToolBocksModule.resolveLogger( pLogger, ExecutionMode.isProduction( CURRENT_MODE ) ? PRODUCTION_LOGGER : (DEBUG_MODE ? DEBUG_LOGGER : INTERNAL_LOGGER) );
 
             if ( isFunc( logger[level] ) )
             {
@@ -6149,6 +6207,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             super( pMessage, pOptions, ...pArgs );
 
+            // Capture stack trace if available
+            attemptSilent( () => Error.captureStackTrace ? Error.captureStackTrace( this, Error ) : no_op() );
+
             let options = { ...(pOptions || {}) };
 
             if ( isArray( options.arguments || options.illegalArguments ) )
@@ -6218,10 +6279,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             super( pMessage, pOptions, ...pArgs );
 
-            if ( Error.captureStackTrace )
-            {
-                attemptSilent( () => Error.captureStackTrace( this, this.constructor ) );
-            }
+            // Capture stack trace if available
+            attemptSilent( () => Error.captureStackTrace ? Error.captureStackTrace( this, this.constructor ) : no_op() );
         }
 
         /**
@@ -6309,31 +6368,24 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     {
         const lastError = getLastError();
 
-        let errors = [];
+        const resolver = ( e ) => resolveError( e, e?.message || (isString( pMessage ) ? pMessage : isString( pError ) ? pError : e?.message || (isError( pError ) ? pError?.message : _mt) || (isError( pMessage ) ? pMessage?.message : _mt) || (isError( lastError ) ? lastError?.message : _mt) || _mt) );
 
-        if ( isArray( pError ) || isArray( pMessage ) )
-        {
-            if ( isArray( pError ) )
-            {
-                return _fromErrorArray( pError, pMessage, errors );
-            }
-            else if ( isArray( pMessage ) )
-            {
-                return _fromMessageArray( pMessage, pError, errors );
-            }
-        }
+        let errors = [lastError || {}, pError || {}, pMessage || {}].filter( isError ).map( resolver );
 
-        if ( !isNull( lastError ) && isError( lastError ) )
-        {
-            errors.unshift( resolveError( lastError, lastError?.message || lastError ) );
-        }
+        errors.push( ...(isArray( lastError ) ? lastError : []) ).filter( isError ).map( resolver );
+        errors.push( ...(isArray( pError ) ? pError : []) ).filter( isError ).map( resolver );
+        errors.push( ...(isArray( pMessage ) ? pMessage : []) ).filter( isError ).map( resolver );
 
         if ( $ln( errors ) > 0 )
         {
-            return resolveError( errors[0], errors[0]?.message || errors[0] );
+            return resolveError( errors[0], (errors[0]?.message || pMessage), ...errors );
         }
 
-        return null;
+        return new __Error( DEFAULT_ERROR_MSG,
+                            {
+                                errors: ([lastError, pError, pMessage].filter( isError ) || []),
+                                messages: ([lastError, pError, pMessage].filter( isString ) || []),
+                            } );
     }
 
     /**
@@ -6353,35 +6405,22 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     function resolveError( pError, pMessage, ...pArgs )
     {
-        if ( !(isError( pError ) || isError( pMessage ) || (_isValidStr( pMessage ) || _isValidStr( pError ))) )
+        const lastError = getLastError();
+
+        let candidates =
+            [
+                ...(isArray( lastError ) ? lastError : [lastError || {}]),
+                ...(isArray( pError ) ? pError : [pError || {}]),
+                ...(isArray( pMessage ) ? pMessage : [pMessage || {}]),
+                ...(isArray( pMessage ) && _asArr( pMessage ).some( isString ) ? _asArr( pMessage ).filter( isString ).map( e => new __Error( e ) ) : []),
+                ...pArgs
+            ].filter( e => isError( e ) || e instanceof __Error );
+
+        if ( $ln( candidates ) )
         {
-            if ( isArray( pError ) || isArray( pMessage ) )
-            {
-                return attemptSilent( () => _handleMissingError( pError, pMessage ) );
-            }
-
-            const lastError = getLastError();
-            if ( isError( lastError ) )
-            {
-                return new __Error( lastError, pMessage || pError, ...pArgs );
-            }
-
-            return null;
+            return new __Error( candidates[0] );
         }
-
-        const msg = _isValidStr( pMessage ) ? pMessage : _isValidStr( pError ) ? pError : (pError?.message || pError?.name || pError?.type) || (pMessage?.message || pMessage?.type || pMessage?.name || DEFAULT_ERROR_MSG);
-
-        let cause = isError( pError ) ? pError?.cause || (isError( pMessage ) ? pMessage?.cause : null) : isError( pMessage ) ? pMessage?.cause : null;
-
-        let options = (isError( cause ) && (cause !== pError) && (cause !== pMessage)) ?
-            {
-                message: msg,
-                cause
-            } : { message: msg };
-
-        let errors = attemptSilent( () => ([pError, pMessage]).map( e => e instanceof __Error ? e : (isError( e ) ? new __Error( e, options ) : new __Error( msg, options )) ) );
-
-        return $ln( errors ) > 0 ? errors[0] : new __Error( msg, options, ...pArgs );
+        return null;
     }
 
     /**
@@ -7407,9 +7446,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     logger = ToolBocksModule.resolveLogger( ToolBocksModule.getGlobalLogger() || this.#logger, this.#logger || INTERNAL_LOGGER );
                 }
 
-                logger = ToolBocksModule.resolveLogger( logger, this.#logger, INTERNAL_LOGGER );
+                logger = ToolBocksModule.resolveLogger( logger, this.#logger, ((DEBUG_MODE || CURRENT_MODE.traceEnabled) ? DEBUG_LOGGER : (ExecutionMode.isProduction( CURRENT_MODE ) ? PRODUCTION_LOGGER : INTERNAL_LOGGER)) );
 
-                return new ConditionalLogger( logger, ...(logger?.levels || MODEST_LOG_LEVELS) );
+                return logger instanceof ConditionalLogger ? logger : (DEBUG_MODE || CURRENT_MODE.traceEnabled) ? DEBUG_LOGGER : (ExecutionMode.isProduction( CURRENT_MODE ) ? PRODUCTION_LOGGER : INTERNAL_LOGGER);
             }
 
             return logger || MockLogger;
@@ -8072,7 +8111,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @see _copy
      * @type {ToolBocksModule}
      */
-    const GLOBAL_INSTANCE = new ToolBocksModule( "GLOBAL_INSTANCE", "__BOCK__MODULE_PROTOTYPE_GLOBAL_INSTANCE__" );
+    const GLOBAL_INSTANCE = new ToolBocksModule( "GLOBAL_INSTANCE", "__BOCK__MODULE_PROTOTYPE_GLOBAL_INSTANCE__", { logger: INTERNAL_LOGGER } );
 
     MODULE_CACHE["GLOBAL_INSTANCE"] = GLOBAL_INSTANCE;
     MODULE_CACHE["__BOCK__MODULE_PROTOTYPE_GLOBAL_INSTANCE__"] = GLOBAL_INSTANCE;
@@ -8651,9 +8690,28 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     const _toSnake = e => e.includes( _dot ) ? e.split( _dot ).map( _toSnake ).join( _dot ) : e.replaceAll( /([A-Z])/g, ( match ) => ("_" + _lcase( match )) ).replace( /^_/, _mt ).replaceAll( /_+/g, _underscore );
     const _toSnakeStrict = e => _lcase( _toSnake( e ) );
 
+    /**
+     * This function ensures that property paths do not start or end with a dot or contain spaces.
+     * @param e the path component
+     * @returns {string} a valid property key or key.path
+     * @private
+     */
+    const _cleanPath = (( e ) => _trim( String( e ) ).replace( /^\./, _mt ).replace( /\.$/, _mt ));
+
+    const _preparePaths = ( ...pPropertyPaths ) => [...(pPropertyPaths || [])].filter( _isValidStr ).map( _cleanPath );
+
+    /**
+     * Converts any value into something that is compatible with the _property function.
+     *
+     * @param pObject
+     * @param pPropertyPaths
+     * @returns {*}
+     */
+    const _prepareContainer = ( pObject, ...pPropertyPaths ) => (isNonNullObj( pObject ) || isArray( pObject )) ? pObject : isFunc( pObject ) ? () => attempt( () => pObject( ...pPropertyPaths ) ) : [...(pPropertyPaths || [])].reduce( ( acc, path ) => ({ ...acc, ...path.split( "." ).reduceRight( ( val, key ) => ({ [key]: val }), pObject ) }), {} );
+
     function _property( pObject, pPropertyPath, pValue )
     {
-        if ( !isNonNullObj( pObject ) || (_ud === typeof pPropertyPath) || (_mt_str === String( pPropertyPath )) )
+        if ( isNull( pObject ) || !isObj( pObject ) || (_ud === typeof pPropertyPath) || (_mt_str === String( pPropertyPath )) )
         {
             return pObject;
         }
@@ -8667,7 +8725,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         let mutator = ( !isNull( pValue ) || arguments.length > 2) ? ( object, key, value ) =>
         {
-            attempt( () => object[key] = ((keys.length > 0) ? (/^d+$/.test( String( keys[0] ) ) ? [] : {}) : (value || pValue)) );
+            if ( isMap( object ) || (isFunc( object?.set ) && (2 === $ln( object?.set ))) )
+            {
+                attempt( () => object.set( key, ((keys.length > 0) ? new Map() : value || pValue) ) );
+                return object.get( key );
+            }
+            else
+            {
+                attempt( () => object[key] = ((keys.length > 0) ? (/^d+$/.test( String( keys[0] ) ) ? [] : {}) : (value || pValue)) );
+            }
 
             return object[key];
 
@@ -8693,15 +8759,41 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 // create a temporary copy of the current node/value, so we can try different variations of the key
                 let node = isArray( value ) ? [...(_asArr( value ))] : value;
 
+                /**
+                 * This function returns a function that knows how to address the object holding the value(s) we seek.
+                 * That is, if it is a Map or Headers or other container exposing a 'get' method to retrieve values,
+                 * the returned function closes over the Map (or map-like object) and uses the key in the call to its 'get'.
+                 * If the object is just a POJO, the returned version closes over this object literal and uses bracket syntax to access its properties.
+                 *
+                 * @param pObj The object, Map, or map-like object from which to retrieve values
+                 * @returns {(function(*): *)|(function(*): *)} the function to call with the key
+                 */
+                const makeAccessor = ( pObj ) =>
+                {
+                    if ( isMap( pObj ) || (isFunc( pObj?.get ) && (1 === $ln( pObj?.get ))) )
+                    {
+                        return ( pKey ) => pObj.get( pKey );
+                    }
+
+                    return ( pKey ) => pObj[pKey];
+                };
+
                 // try array index or key 'as-is'; this is the 'expected' property key
-                value = (isArray( node ) && /^\d+$/.test( key )) ? node[Number( key )] : node[key];
+                let accessor = makeAccessor( node );
+                value = (isArray( node ) && /^\d+$/.test( key )) ? node[_asInt( key )] : accessor( key );
 
                 // if the value is null, undefined, or an empty string, try PascalCase, camelCase, and snake_case variations
-                value = value || node[_toPascal( key )] || node[_toCamel( key )] || node[_toSnake( key )] || node[_toSnakeStrict( key )];
+                value = value || accessor( _toPascal( key ) ) || accessor( _toCamel( key ) ) || accessor( _toSnake( key ), node ) || accessor( _toSnakeStrict( key ), node ) || accessor( _ucase( key ) ) || accessor( _lcase( key ) );
 
                 // if the value is still null, undefined, or an empty string, try finding the property on the 'root'
-                value = value || root[key] || root[_toPascal( key )] || root[_toCamel( key )] || root[_toSnake( key )] || root[_toSnakeStrict( key )];
+                accessor = makeAccessor( root );
+                value = value || accessor( key ) || accessor( _toPascal( key ) ) || accessor( _toCamel( key ) ) || accessor( _toSnake( key ) ) || accessor( _toSnakeStrict( key ) ) || accessor( _ucase( key ) ) || accessor( _lcase( key ) );
             }
+        }
+
+        if ( $ln( keys ) > 0 )
+        {
+            INTERNAL_LOGGER.warn( `There are ${$ln( keys )} remaining` );
         }
 
         return value;
@@ -8761,11 +8853,13 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     function readProperty( pObject, ...pPropertyPaths )
     {
+        const paths = _preparePaths( pPropertyPaths );
+
+        const obj = _prepareContainer( pObject, ...paths );
+
         let value = null;
 
-        let paths = [...(pPropertyPaths || [])].filter( e => _isValidStr( e ) ).map( e => String( e ).trim() );
-
-        let obj = isArray( pObject ) ? [...(pObject || [])] : isNonNullObj( pObject ) ? { ...(pObject || {}) } : (pObject);
+        // let obj = (isNonNullObj( pObject ) || isArray( pObject )) ? pObject : isFunc( pObject ) ? attempt( () => pObject( ...pPropertyPaths ) ) : [...(pPropertyPaths || [])].reduce( ( acc, path ) => ({ ...acc, ...path.split( "." ).reduceRight( ( val, key ) => ({ [key]: val }), pObject ) }), {} );
 
         while ( (null === value || (isStr( value ) && !_isValidStr( value ))) && $ln( paths ) > 0 )
         {
@@ -8784,13 +8878,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     function readScalarProperty( pObject, pType = _str, ...pPropertyPaths )
     {
-        const obj = isArray( pObject ) ? [...(pObject || [])] : isNonNullObj( pObject ) ? { ...(pObject || {}) } : (pObject);
+        // const obj = (isNonNullObj( pObject ) || isArray( pObject )) ? pObject : isFunc( pObject ) ? attempt( () => pObject( ...pPropertyPaths ) ) : [...(pPropertyPaths || [])].reduce( ( acc, path ) => ({ ...acc, ...path.split( "." ).reduceRight( ( val, key ) => ({ [key]: val }), pObject ) }), {} );
 
-        const type = _validTypes.includes( _lct( pType ) ) ? _lct( pType ) : _str;
+        const paths = [...(pPropertyPaths || [])].filter( _isValidStr ).map( _cleanPath );
 
-        let paths = [...(pPropertyPaths || [])].filter( e => _isValidStr( e ) ).map( e => _trim( e ) );
+        const obj = _prepareContainer( pObject, ...paths );
 
-        const isValidValue = ( v ) => (null !== v) && (_ud !== typeof v) && (type === typeof v);
+        const type = ["*", ...(_validTypes)].includes( _lct( pType ) ) ? _lct( pType ) : _str;
+
+        const isValidValue = ( v ) => (null !== v) && (_ud !== typeof v) && ((type === typeof v) || ([_str, _num, _bool].includes( typeof v ) && "*" === type));
 
         let value = null;
 
@@ -8805,6 +8901,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             value = isValidValue( value ) ? value : getProperty( obj, _toPascal( path ) );
             value = isValidValue( value ) ? value : getProperty( obj, _toSnake( path ) );
             value = isValidValue( value ) ? value : getProperty( obj, _toSnakeStrict( path ) );
+            value = isValidValue( value ) ? value : getProperty( obj, _ucase( path ) );
+            value = isValidValue( value ) ? value : getProperty( obj, _lcase( path ) );
 
             if ( isValidValue( value ) )
             {
@@ -9427,15 +9525,25 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     return con;
                 }
 
-                let levels = [...(DEBUG_MODE ? DEBUG_LOG_LEVELS : MODEST_LOG_LEVELS)];
+                if ( isNull( pSink ) || !ToolBocksModule.isLogger( pSink ) )
+                {
+                    return DEBUG_MODE ? DEBUG_LOGGER : ExecutionMode.isProduction( CURRENT_MODE ) ? PRODUCTION_LOGGER : INTERNAL_LOGGER;
+                }
+
+                let levels = [...(DEBUG_MODE ? DEBUG_LOG_LEVELS : ExecutionMode.isProduction( CURRENT_MODE ) ? QUIET_LOG_LEVELS : MODEST_LOG_LEVELS)];
 
                 return new ConditionalLogger( (pSink || konsole), ...(levels) );
             },
 
             getProductionLogger: function( pSink )
             {
+                if ( isNull( pSink ) || !ToolBocksModule.isLogger( pSink ) )
+                {
+                    return PRODUCTION_LOGGER;
+                }
+
                 return new ConditionalLogger( ToolBockModule.resolveLogger( pSink, konsole ),
-                                              ...(QUIETER_LOG_LEVELS) );
+                                              ...(QUIET_LOG_LEVELS) );
             },
 
             exportModule,

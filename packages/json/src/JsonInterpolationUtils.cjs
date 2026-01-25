@@ -1794,7 +1794,7 @@ const { _ud = "undefined", $scope } = constants;
                         s += (_dblqt + key + _dblqt + _colon);
                     }
 
-                    s += asJson( value, replacer, space, options, visited, resolved, [...paths].concat( ...[key] ), root, (depth + 1) );
+                    s += asJson( value, replacer, space, options, visited, resolved, [...paths, key], root, (depth + 1) );
 
                     prependComma = true;
                 }

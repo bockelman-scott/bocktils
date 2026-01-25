@@ -59,6 +59,7 @@ const { _ud = "undefined", $scope } = constants;
         isTypedArray,
         isLikeArray,
         isFunction,
+        isClass,
         toObjectLiteral
     } = typeUtils;
 
@@ -378,7 +379,7 @@ const { _ud = "undefined", $scope } = constants;
             {
                 if ( isFunction( (obj || pObject).clone ) )
                 {
-                    obj = attempt( () => (obj || pObject).clone() ) || obj;
+                    obj = attempt( () => (obj || pObject).clone() ) || obj || pObject;
                 }
                 return isArray( obj ) || isTypedArray( obj ) ? [...obj] : { ...obj };
             }
@@ -395,10 +396,29 @@ const { _ud = "undefined", $scope } = constants;
             {
                 return obj;
             }
-            else
+        }
+
+        if ( isFunction( pObject ) )
+        {
+            if ( isClass( pObject ) )
             {
-                return { value: pObject };
+                const instance = attempt( () => new pObject() );
+                if ( !isNull( instance ) )
+                {
+                    return asObject( instance );
+                }
+
+                return { "class": pObject };
             }
+
+            const result = attempt( () => pObject() );
+
+            if ( !isNull( result ) )
+            {
+                return asObject( result );
+            }
+
+            return { [pObject?.name]: pObject };
         }
 
         return {};

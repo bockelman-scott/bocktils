@@ -38,12 +38,7 @@ const httpRequest = require( "./HttpRequest.cjs" );
  */
 const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
-const {
-    _ud = "undefined", $scope = constants?.$scope || function()
-    {
-        return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
-    }
-} = constants;
+const { _ud = "undefined", $scope } = constants;
 
 // noinspection FunctionTooLongJS
 (function exposeModule()
@@ -178,7 +173,7 @@ const {
             obj = { ...pOptions };
         }
 
-        if ( _ud !== Response )
+        if ( _ud !== typeof Response )
         {
             const body = data || obj.data || obj.body || obj;
 
@@ -207,14 +202,14 @@ const {
 
         let data = res.data || options.data || null;
 
-        let headers = attempt( () => cloneHeaders( res.headers || options.headers || options ) );
-
         // unwrap the response from any container
         while ( isNonNullObject( res ) && isNonNullObject( res.response ) )
         {
             res = res.response;
-            data = data || res.data || options.data || null;
+            data = res.data || data;
         }
+
+        let headers = attempt( () => cloneHeaders( res.headers || options.headers || options ) );
 
         if ( isNonNullObject( res ) )
         {
@@ -250,26 +245,7 @@ const {
             return new HttpResponseHeaders();
         }
 
-        if ( headers instanceof HttpHeaders )
-        {
-            return new HttpResponseHeaders( headers );
-        }
-
-        if ( isString( headers ) )
-        {
-            if ( isJson( headers ) )
-            {
-                headers = attempt( () => parseJson( headers ) );
-            }
-            else
-            {
-                const arr = asString( headers ).split( /[\r\n]/ );
-                if ( $ln( arr ) )
-                {
-                    return new HttpResponseHeaders( arr );
-                }
-            }
-        }
+        headers = new HttpResponseHeaders( headers );
 
         if ( isNonNullObject( headers ) )
         {
@@ -358,7 +334,7 @@ const {
 
             let response = attempt( () => HttpResponse.unwrapResponse( (pResponse || options), options ) ) || pResponse;
 
-            if ( _ud !== Response )
+            if ( _ud !== typeof Response )
             {
                 if ( !(response instanceof Response) )
                 {
@@ -418,7 +394,7 @@ const {
                     catch( e )
                     {
                         // ignore this and reset to default
-                        response = (response || attemptSilent( () => HttpResponse.unwrapResponse( (pResponse || options), options ) ) || pResponse);
+                        response = (response || attempt( () => HttpResponse.unwrapResponse( (pResponse || options), options ) ) || pResponse);
                     }
                 }
             }

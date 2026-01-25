@@ -2268,4 +2268,23 @@ describe( "readScalarProperty", () =>
 
 
           } );
+
+
+    test( "readScalarProperty can also handle Maps",
+          () =>
+          {
+              const obj = new Map();
+
+              const m = new Map();
+
+              m.set( "b", 2 );
+
+              obj.set( "a", m );
+
+              const v = readScalarProperty( obj, "number", "a.b" );
+
+              expect( v ).toEqual( 2 );
+
+
+          } );
 } );
