@@ -42,7 +42,8 @@ describe( "ObjectFunctor", () =>
           {
               const functor = new ObjectFunctor( obj );
 
-              expect( functor.length ).toEqual( 9 );
+              // i and j will be omitted, because "i" is null and "j" is a function
+              expect( functor.length ).toEqual( 8 );
 
           } );
 } );

@@ -11,7 +11,7 @@
 
 const fs = require( "fs" );
 
-const { finished } = require( "stream/promises" );
+const { pipeline, finished } = require( "stream/promises" );
 
 /**
  * This statement imports the core modules:
@@ -251,15 +251,69 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
                   "_setPropertiesFromInstance"
               ] );
 
+    function _resolveFilePath( pFilePath )
+    {
+        const filePath = toUnixPath( asString( pFilePath, true ) );
+        return isFilePath( filePath ) ? resolvePath( filePath ) : createTempFile();
+    }
+
+    async function pipeToFile( pResponseData, pFilePath )
+    {
+        const logger = ToolBocksModule.resolveLogger( toolBocksModule.logger, konsole );
+
+        const responseData = ResponseData.from( pResponseData );
+
+        const filePath = _resolveFilePath( pFilePath );
+
+        try
+        {
+            const response = responseData.response?.response || responseData.response;
+
+            let data = (responseData.data || response?.data || responseData.body || response?.body || response);
+
+            if ( isNonNullObject( data ) && isPromise( data ) )
+            {
+                data = await data || await responseData.body || await response?.body || response;
+            }
+
+            const isPipeable = (( obj ) => isNonNullObject( obj ) && isFunction( obj.pipe ));
+
+            let source = [data, responseData.data, responseData.body, response?.data, response?.body].find( isPipeable );
+
+            if ( isNull( source ) || !(isFunction( source?.pipe )) )
+            {
+                source = new Streamer().asChunkedStream( responseData.data || response?.data || responseData.body || response?.body || response );
+            }
+
+            // create a writable stream
+            const fileStream = fs.createWriteStream( filePath );
+
+            // Using pipeline to automatically handle 'error', 'end', and potential 'socket hang up'
+            // This is in contrast to using .pipe() and the finished() callback
+            await pipeline( source, fileStream );
+
+            logger.log( `Wrote: ${filePath}` );
+
+            return filePath;
+        }
+        catch( ex )
+        {
+            // pipeline automatically closes fileStream if 'source' fails
+            toolBocksModule.reportError( ex, ex.message, "error", pipeToFile );
+
+            logger.error( ` *****ERROR*****\nFailed to download ${filePath} due to: ${ex.message}`, ex );
+        }
+
+        return _mt;
+    }
+
     async function streamToFile( pResponseData, pFilePath )
     {
-        let logger = ToolBocksModule.resolveLogger( toolBocksModule.logger, konsole );
+        const logger = ToolBocksModule.resolveLogger( toolBocksModule.logger, konsole );
 
-        let responseData = ResponseData.from( pResponseData );
+        const responseData = ResponseData.from( pResponseData );
 
-        let filePath = toUnixPath( asString( pFilePath, true ) );
-
-        filePath = isFilePath( filePath ) ? resolvePath( filePath ) : createTempFile();
+        const filePath = _resolveFilePath( pFilePath );
 
         // create a writable stream
         const fileStream = fs.createWriteStream( filePath );
@@ -284,22 +338,22 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
                 switch ( iterationCap.iterations )
                 {
                     case 0:
-                        data = await asyncAttempt( async() => await Promise.resolve( data ) );
+                        data = await (data || responseData.data) || await responseData.data;
                         break;
 
                     case 1:
-                        data = await asyncAttempt( async() => await Promise.resolve( responseData.data || responseData.response?.response?.data || responseData.response?.data || response?.data ) );
+                        data = await (responseData.data || responseData.response?.response?.data || responseData.response?.data || response?.data);
                         break;
 
                     case 2:
-                        data = await asyncAttempt( async() => await Promise.resolve( responseData.body || responseData.response?.response?.body || responseData.response?.body || response?.body ) );
+                        data = await (responseData.body || responseData.response?.response?.body || responseData.response?.body || response?.body);
                         break;
 
                     case 3:
-                        data = await asyncAttempt( async() => await Promise.resolve( response?.response?.body || response?.body ) );
+                        data = await (response?.response?.body || response?.body);
 
                     default:
-                        data = new Streamer().asChunkedStream( await asyncAttempt( async() => await Promise.resolve( responseData.data || response?.data || responseData.body || response?.body || response ) ) );
+                        data = new Streamer().asChunkedStream( await (responseData.data || response?.data || responseData.body || response?.body || response) );
                         break;
                 }
             }
@@ -332,7 +386,7 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
 
             toolBocksModule.reportError( ex, ex.message, "error", streamToFile, ex.response?.status, ex.response );
 
-            logger.error( ` *****ERROR*****\nFailed to download file: ${ex.message}`, ex );
+            logger.error( ` *****ERROR*****\nFailed to download file, ${filePath}, due to: ${ex.message}`, ex );
         }
         finally
         {
@@ -794,6 +848,12 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
             return await asyncAttempt( async() => await streamToFile( me, filePath ) );
         }
 
+        async pipeToFile( pFilePath )
+        {
+            const filePath = asString( pFilePath, true );
+            return await asyncAttempt( async() => await pipeToFile( this, filePath ) );
+        }
+
         clone()
         {
             return new ResponseData( cloneResponse( this.frameworkResponse || this.options.response || this.response ),
@@ -1039,7 +1099,8 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
             STATUS_CODES,
             VERBS,
             resolveHttpMethod,
-            streamToFile
+            streamToFile,
+            pipeToFile
         };
 
     mod = toolBocksModule.extend( mod );

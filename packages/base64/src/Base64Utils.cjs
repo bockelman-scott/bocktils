@@ -28,14 +28,15 @@ const { _ud = "undefined", $scope } = constants;
         {
             ToolBocksModule,
             IterationCap,
-            populateOptions,
             lock,
-            attempt
+            attempt,
+            $ln
         } = moduleUtils;
 
     const
         {
             _mt_str,
+            _mt = _mt_str,
             _rxNullTerminator,
             _slash,
             _underscore,
@@ -45,7 +46,7 @@ const { _ud = "undefined", $scope } = constants;
             _DIGIT_CHARACTERS
         } = constants;
 
-    const { isNull, isNonNullObject, isArray, isString, isEmptyString, isFunction, isClass, getClass } = typeUtils;
+    const { isNull, isNonNullObject, isString, isFunction, isClass, getClass } = typeUtils;
 
     const { isBlank, asString, asInt, ucase, lcase } = stringUtils;
 
@@ -70,79 +71,79 @@ const { _ud = "undefined", $scope } = constants;
     const DEFAULT_PADDING_CHAR = "=";
 
     const PADDING =
-        {
-            OPTIONAL: 0,
-            MANDATORY: 1,
-            NONE: 99
-        };
+        lock( {
+                  OPTIONAL: 0,
+                  MANDATORY: 1,
+                  NONE: 99
+              } );
 
-    const DEFAULT_BASE64_OPTIONS = lock(
-        {
-            replacements: [[/ /g, DEFAULT_CHAR_62], [/ /, DEFAULT_CHAR_62]],
-            padding: PADDING.OPTIONAL,
-            paddingCharacter: DEFAULT_PADDING_CHAR
-        } );
+    const DEFAULT_BASE64_OPTIONS =
+        lock( {
+                  replacements: [[/ /g, DEFAULT_CHAR_62], [/ /, DEFAULT_CHAR_62]],
+                  padding: PADDING.OPTIONAL,
+                  paddingCharacter: DEFAULT_PADDING_CHAR
+              } );
 
     const DEFAULT_BASE64_ALPHABET =
-        [
-            _ALPHABET_ENGLISH_UCASE,
-            _ALPHABET_ENGLISH_LCASE,
-            _DIGIT_CHARACTERS,
-            DEFAULT_CHAR_62,
-            DEFAULT_CHAR_63,
-            DEFAULT_PADDING_CHAR
-        ].join( _mt_str );
+        lock( [
+                  _ALPHABET_ENGLISH_UCASE,
+                  _ALPHABET_ENGLISH_LCASE,
+                  _DIGIT_CHARACTERS,
+                  DEFAULT_CHAR_62,
+                  DEFAULT_CHAR_63,
+                  DEFAULT_PADDING_CHAR
+              ] ).join( _mt );
 
-    const SUPPORTED_VARIANTS = lock(
-        {
-            "4648": lock(
-                {
-                    alphabet: DEFAULT_BASE64_ALPHABET,
-                    padding: PADDING.OPTIONAL
-                } ),
-            "4648_URL": lock(
-                {
-                    alphabet: DEFAULT_BASE64_ALPHABET.replace( _slash, _underscore ),
-                    padding: PADDING.OPTIONAL
-                } ),
-            "1421": lock(
-                {
-                    alphabet: DEFAULT_BASE64_ALPHABET,
-                    padding: PADDING.MANDATORY
-                } ),
-            "2045": lock(
-                {
-                    alphabet: DEFAULT_BASE64_ALPHABET,
-                    padding: PADDING.MANDATORY
-                } ),
-            "2152": lock(
-                {
-                    alphabet: DEFAULT_BASE64_ALPHABET,
-                    padding: PADDING.NONE
-                } ),
-            "3501": lock(
-                {
-                    alphabet: DEFAULT_BASE64_ALPHABET.replace( _slash, _comma ),
-                    padding: PADDING.NONE
-                } ),
-            "4840": lock(
-                {
-                    alphabet: DEFAULT_BASE64_ALPHABET,
-                    padding: PADDING.MANDATORY,
-                    checksum: true
-                } ),
-            "UUENCODE": lock(
-                {
-                    alphabet: " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_",
-                    padding: PADDING.MANDATORY
-                } )
-        } );
+    const SUPPORTED_VARIANTS =
+        lock( {
+                  "4648": lock(
+                      {
+                          alphabet: DEFAULT_BASE64_ALPHABET,
+                          padding: PADDING.OPTIONAL
+                      } ),
+                  "4648_URL": lock(
+                      {
+                          alphabet: DEFAULT_BASE64_ALPHABET.replace( _slash, _underscore ),
+                          padding: PADDING.OPTIONAL
+                      } ),
+                  "1421": lock(
+                      {
+                          alphabet: DEFAULT_BASE64_ALPHABET,
+                          padding: PADDING.MANDATORY
+                      } ),
+                  "2045": lock(
+                      {
+                          alphabet: DEFAULT_BASE64_ALPHABET,
+                          padding: PADDING.MANDATORY
+                      } ),
+                  "2152": lock(
+                      {
+                          alphabet: DEFAULT_BASE64_ALPHABET,
+                          padding: PADDING.NONE
+                      } ),
+                  "3501": lock(
+                      {
+                          alphabet: DEFAULT_BASE64_ALPHABET.replace( _slash, _comma ),
+                          padding: PADDING.NONE
+                      } ),
+                  "4840": lock(
+                      {
+                          alphabet: DEFAULT_BASE64_ALPHABET,
+                          padding: PADDING.MANDATORY,
+                          checksum: true
+                      } ),
+                  "UUENCODE": lock(
+                      {
+                          alphabet: " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_",
+                          padding: PADDING.MANDATORY
+                      } )
+              } );
 
     const DEFAULT_VARIANT = "4648";
 
     function getRfcVariantData( pRfcSpec )
     {
-        const key = ucase( asString( pRfcSpec ).replace( /^RFC_/i, _mt_str ) );
+        const key = ucase( asString( pRfcSpec ).replace( /^RFC_/i, _mt ) );
         return SUPPORTED_VARIANTS[key] || SUPPORTED_VARIANTS[DEFAULT_VARIANT];
     }
 
@@ -212,16 +213,16 @@ const { _ud = "undefined", $scope } = constants;
         const rxDataProtocol = /^data:/i;
         const rxPreamble = /^[^;]+;base64,/i;
 
-        const base64Text = asString( (pBase64Text || _mt_str), true ).replace( rxDataProtocol, _mt_str );
+        const base64Text = asString( (pBase64Text || _mt), true ).replace( rxDataProtocol, _mt );
 
         const matches = rxPreamble.exec( base64Text );
 
         if ( matches && matches.length )
         {
-            return asString( (matches[1] || matches[0] || _mt_str), true ).replace( /,$/, _mt_str );
+            return asString( (matches[1] || matches[0] || _mt), true ).replace( /,$/, _mt );
         }
 
-        return _mt_str;
+        return _mt;
     };
 
     /**
@@ -239,7 +240,7 @@ const { _ud = "undefined", $scope } = constants;
         if ( !isBlank( preamble ) )
         {
             const parts = preamble.split( ";" );
-            return asString( asString( parts[0], true ).replace( /base64,/i, _mt_str ) || asString( preamble, true ).replace( /;base64,/i, _mt_str ), true );
+            return asString( asString( parts[0], true ).replace( /base64,/i, _mt ) || asString( preamble, true ).replace( /;base64,/i, _mt ), true );
         }
 
         return asString( pDefault, true ) || "text/plain";
@@ -254,13 +255,13 @@ const { _ud = "undefined", $scope } = constants;
      */
     const cleanBase64 = function( pStr, pOptions = DEFAULT_BASE64_OPTIONS )
     {
-        let options = populateOptions( pOptions, DEFAULT_BASE64_OPTIONS );
+        let options = { ...(DEFAULT_BASE64_OPTIONS), ...(pOptions || {}) };
 
         let replacements = (asArray( options.replacements || [[/ /g, "+"], [/ /, "+"]] ) || [[/ /g, "+"], [/ /, "+"]]).filter( e => Array.isArray( e ) && 2 === e.length );
 
         replacements = ((replacements?.length || 0) <= 0) || asArray( replacements[0] || [] ).length !== 2 ? [[/ /g, "+"]] : replacements;
 
-        let str = asString( pStr, true ).replaceAll( /[\r\n]+/g, _mt_str ).trim();
+        let str = asString( pStr, true ).replaceAll( /[\r\n]+/g, _mt ).trim();
 
         const rxDataProtocol = /^data:/;
         const rxPreamble = /^[^;]+;base64,/;
@@ -268,15 +269,15 @@ const { _ud = "undefined", $scope } = constants;
         // remove any preamble
         if ( str.startsWith( "data:" ) || rxDataProtocol.test( str ) )
         {
-            str = asString( str.replace( rxDataProtocol, _mt_str ), true );
+            str = asString( str.replace( rxDataProtocol, _mt ), true );
         }
 
         if ( rxPreamble.test( str ) )
         {
-            str = str.replace( rxDataProtocol, _mt_str ).replace( rxPreamble, _mt_str ).trim();
+            str = str.replace( rxDataProtocol, _mt ).replace( rxPreamble, _mt ).trim();
         }
 
-        str = asString( str, true ).replaceAll( new RegExp( "\\\\r|\\\\n", "g" ), _mt_str );
+        str = asString( str, true ).replaceAll( /(\r?\n)/g, _mt ).replaceAll( /\r/g, _mt ).replaceAll( /\n/g, _mt );
 
         for( let i = 0, n = replacements.length; i < n; i++ )
         {
@@ -297,12 +298,12 @@ const { _ud = "undefined", $scope } = constants;
 
             let loopCap = new IterationCap( 8 );
 
-            while ( str.length % 4 !== 0 && str.endsWith( paddingChar ) && !loopCap.reached )
+            while ( 0 !== (str.length % 4) && str.endsWith( paddingChar ) && !loopCap.reached )
             {
                 str = str.slice( 0, str.length - 1 );
             }
 
-            while ( str.length % 4 !== 0 )
+            while ( 0 !== (str.length % 4) )
             {
                 str += paddingChar;
             }
@@ -320,26 +321,22 @@ const { _ud = "undefined", $scope } = constants;
      */
     const isValidBase64 = function( pString, pRfcSpec = DEFAULT_VARIANT, pCleanPriorToTest = false )
     {
-        const str = asString( pString );
-
-        const rx = makeBlackList( pRfcSpec );
-
-        if ( !rx.test( str ) )
+        if ( isNull( pString ) || !isString( pString ) )
         {
-            return (requiresPadding( pRfcSpec ) ? 0 === str?.length % 4 : !isBlank( str ));
+            return false;
         }
+
+        let str = asString( pString );
 
         if ( !!pCleanPriorToTest )
         {
-            const cleaned = asString( attempt( () => cleanBase64( str ) ), true );
-
-            if ( !rx.test( cleaned ) )
-            {
-                return (requiresPadding( pRfcSpec ) ? 0 === str?.length % 4 : !isBlank( str ));
-            }
+            str = asString( pString, true );
+            str = asString( attempt( () => cleanBase64( str ) ), true );
         }
 
-        return false;
+        const rx = makeBlackList( pRfcSpec );
+
+        return ( !rx.test( str )) && (requiresPadding( pRfcSpec ) ? 0 === str?.length % 4 : !isBlank( str ));
     };
 
     function resolveEncoding( pEncoding )
@@ -364,7 +361,7 @@ const { _ud = "undefined", $scope } = constants;
             }
             else
             {
-                return new Uint8Array( asArray( pData.split( _mt_str ) ).map( e => e.charCodeAt( 0 ) ) );
+                return new Uint8Array( asArray( pData.split( _mt ) ).map( e => e.charCodeAt( 0 ) ) );
             }
         }
         else if ( !isNull( pData ) )
@@ -386,9 +383,9 @@ const { _ud = "undefined", $scope } = constants;
             return cleanBase64( Buffer.from( data || [] ).toString( BASE64 ) );
         }
 
-        const lookupTable = getBase64Alphabet( pVariant ).split( _mt_str );
+        const lookupTable = getBase64Alphabet( pVariant ).split( _mt );
 
-        let encodedString = _mt_str;
+        let encodedString = _mt;
 
         for( let i = 0; i < data.length; i += 3 )
         {
@@ -413,7 +410,7 @@ const { _ud = "undefined", $scope } = constants;
         const thirdByte = pData[index + 2] || 0;
         const threeByteBlock = firstByte + secondByte + thirdByte;
 
-        let block = _mt_str;
+        let block = _mt;
 
         for( let k = 0; k < 4; k++ )
         {
@@ -475,7 +472,7 @@ const { _ud = "undefined", $scope } = constants;
             return convertToDesiredType( [] ) || [];
         }
 
-        const alphabet = getBase64Alphabet( pSpec ).split( _mt_str );
+        const alphabet = getBase64Alphabet( pSpec ).split( _mt );
 
         const lookup = {};
 
@@ -525,7 +522,7 @@ const { _ud = "undefined", $scope } = constants;
 
         if ( isNull( input ) || !isValidBase64( asString( input, true ) ) )
         {
-            return _mt_str;
+            return _mt;
         }
 
         const str = isString( input ) ? cleanBase64( asString( input, true ) ) : encode( input );
@@ -538,7 +535,7 @@ const { _ud = "undefined", $scope } = constants;
 
             let result = buffer.toString( encoding );
 
-            result = result.replace( _rxNullTerminator, _mt_str );
+            result = result.replace( _rxNullTerminator, _mt );
 
             return asString( result, true );
         }
@@ -549,7 +546,7 @@ const { _ud = "undefined", $scope } = constants;
 
         const data = decode( str );
 
-        return data.map( e => String.fromCharCode( e ) ).join( _mt_str ).replace( _rxNullTerminator, _mt_str );
+        return data.map( e => String.fromCharCode( e ) ).join( _mt ).replace( _rxNullTerminator, _mt );
     }
 
     let mod =

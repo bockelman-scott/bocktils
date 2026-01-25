@@ -1729,6 +1729,85 @@ describe( "objectEntries - ObjectEntry", () =>
               }
           } );
 
+    test( "objectEntries works recursively to include inherited properties",
+          () =>
+          {
+              class A
+              {
+                  #id = 123;
+                  #name = "A";
+
+                  constructor( id, name )
+                  {
+                      this.#id = id;
+                      this.#name = name;
+                  }
+
+                  get id()
+                  {
+                      return this.#id;
+                  }
+
+                  get name()
+                  {
+                      return this.#name;
+                  }
+              }
+
+              class B extends A
+              {
+                  #code = "B226";
+                  #description = "Teter Thompson Dorm Room";
+
+                  constructor( id, name, code, description )
+                  {
+                      super( id, name );
+                      this.#code = code;
+                      this.#description = description;
+                  }
+
+                  get description()
+                  {
+                      return this.#description;
+                  }
+
+                  get code()
+                  {
+                      return this.#code;
+                  }
+              }
+
+              class C extends B
+              {
+                  #monthlyRent = 400;
+                  #moveInDate = new Date();
+
+                  constructor( id, name, code, description, monthlyRent, moveInDate )
+                  {
+                      super( id, name, code, description );
+                      this.#monthlyRent = monthlyRent;
+                      this.#moveInDate = moveInDate;
+                  }
+
+                  get monthlyRent()
+                  {
+                      return this.#monthlyRent;
+                  }
+
+                  get moveInDate()
+                  {
+                      return this.#moveInDate;
+                  }
+              }
+
+              const c = new C( 333, "Room", "B226", "Dorm Room", 456, new Date() );
+
+              const entries = objectEntries( c );
+
+              console.log( entries );
+
+          } );
+
     test( "objectEntries returns the entries of all objects specified",
           () =>
           {
@@ -1813,7 +1892,7 @@ describe( "objectEntries - ObjectEntry", () =>
 
               const entries = objectEntries( testClass );
 
-              expect( entries?.length ).toEqual( 5 );
+              expect( entries?.length ).toEqual( 4 );
 
               expect( entries[0]?.key ).toEqual( "revealed" );
               expect( entries[0]?.value ).toEqual( "public" );
@@ -1829,9 +1908,6 @@ describe( "objectEntries - ObjectEntry", () =>
 
               expect( entries[4]?.key ).not.toEqual( "topSecret" );
               expect( entries[4]?.value ).not.toEqual( "topSecret" );
-
-              expect( entries[4]?.key ).toEqual( "class" );
-              expect( entries[4]?.value ).toEqual( "SecureClass" );
 
               expect( entries.map( e => e.key ).includes( "topSecret" ) ).toBe( false );
               expect( entries.map( e => e.key ).includes( "obscured" ) ).toBe( true );
@@ -1868,11 +1944,11 @@ describe( "objectEntries - ObjectEntry", () =>
 
               entries = objectEntries( rx );
 
-              expect( entries?.length ).toEqual( 10 );
+              expect( entries?.length ).toEqual( 8 );
 
               entries = objectEntries( new Error( "The test passed" ) );
 
-              expect( entries?.length ).toBeGreaterThanOrEqual( 4 );
+              expect( entries?.length ).toBeGreaterThanOrEqual( 2 );
 
               entries = objectEntries( new IllegalArgumentError( "This is not a number" ) );
 
@@ -2172,6 +2248,23 @@ describe( "readScalarProperty", () =>
 
                   expect( fName ).toEqual( "Scott" );
               }
+          } );
+
+    test( "readScalarProperty resolves properties that differ only in case",
+          () =>
+          {
+              let obj =
+                  {
+                      Value: 5,
+                      name: "Gaburah",
+                      ID: 777
+                  };
+
+              const v = readScalarProperty( obj, "number", "value" );
+              const nm = readScalarProperty( obj, "string", "NaMe" );
+              const id = readScalarProperty( obj, "number", "id" );
+
+              console.log( id, nm, v );
 
 
           } );

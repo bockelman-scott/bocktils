@@ -3738,6 +3738,11 @@ const { _ud = "undefined", $scope } = constants;
         return (5 === $ln( zip ) || 10 === $ln( zip )) && /^\d{5}(-\d{4})?$/.test( zip );
     };
 
+    const _toCamel = e => e.includes( _dot ) ? e.split( _dot ).map( _toCamel ).join( _dot ) : e.includes( _underscore ) ? e.replace( /^_+/, _mt ).split( /_/ ).map( ( s, i ) => (0 === i ? _lcase( s.slice( 0, 1 ) ) : _ucase( s.slice( 0, 1 ) )) + s.slice( 1 ) ).join( _mt ) : _lcase( e.slice( 0, 1 ) ) + e.slice( 1 );
+    const _toPascal = e => e.includes( _dot ) ? e.split( _dot ).map( _toPascal ).join( _dot ) : e.includes( _underscore ) ? e.split( /_/ ).map( s => _ucase( s.slice( 0, 1 ) ) + s.slice( 1 ) ).join( _mt ) : _ucase( e.slice( 0, 1 ) ) + e.slice( 1 );
+    const _toSnake = e => e.includes( _dot ) ? e.split( _dot ).map( _toSnake ).join( _dot ) : e.replaceAll( /([A-Z])/g, ( match ) => ("_" + _lcase( match )) ).replace( /^_/, _mt ).replaceAll( /_+/g, _underscore );
+    const _toSnakeStrict = e => _lcase( _toSnake( e ) );
+
     /**
      * Converts a string in "snake case" ( some_variable_name ) into "camel case" ( someVariableName )
      * @param pStr a string to convert to camel case
@@ -3745,20 +3750,7 @@ const { _ud = "undefined", $scope } = constants;
      */
     const toCamelCase = function( pStr )
     {
-        let s = asString( pStr, false ) || _mt_str;
-
-        s = lcase( s.slice( 0, 1 ) ) + s.slice( 1 );
-
-        let re = /_+(\w)/gi;
-
-        function lambda( pMatch )
-        {
-            let match = pMatch.replace( /^_+/, _mt_str );
-
-            return match.substring( 0 ).toUpperCase() + match.substring( 1 ).toLowerCase();
-        }
-
-        return s.replace( re, lambda );
+        return _toCamel( asString( pStr, false ) || _mt_str );
     };
 
     /**
@@ -3768,18 +3760,7 @@ const { _ud = "undefined", $scope } = constants;
      */
     const toSnakeCase = function( pStr )
     {
-        let s = asString( pStr, false ) || _mt_str;
-
-        s = lcase( s.slice( 0, 1 ) ) + s.slice( 1 );
-
-        let re = /[A-Z]/g;
-
-        function lambda( pMatch )
-        {
-            return (_underscore + lcase( (pMatch.substring( 0 )) ));
-        }
-
-        return lcase( s.replace( re, lambda ) ).replaceAll( /_{2,}/g, _underscore );
+        return _toSnakeStrict( asString( pStr, false ) || _mt_str );
     };
 
     /**
@@ -3789,8 +3770,7 @@ const { _ud = "undefined", $scope } = constants;
      */
     const toPascalCase = function( pStr )
     {
-        let s = toCamelCase( pStr );
-        return capitalize( s, true );
+        return _toPascal( asString( pStr, false ) || _mt_str );
     };
 
     /**
