@@ -2750,7 +2750,7 @@ const { _ud = "undefined", $scope } = constants;
                 }
                 catch( ex )
                 {
-                    toolBocksModule.reportError( ex, "attempting to call instanceof without a class or callable", S_WARN, modName + "::instanceOfAny" );
+                    attemptSilent( () => toolBocksModule.reportError( ex, "attempting to call instanceof without a class or callable", S_WARN, modName + "::instanceOfAny" ) );
                 }
             }
         }
@@ -4398,6 +4398,7 @@ const { _ud = "undefined", $scope } = constants;
             maxDepth: Infinity,
             preserveUserDefinedClasses: false,
             preserveTypes: false,
+            respectToLiteralMethod: true,
             ...DEFAULT_TRANSFORMER_PROPERTIES
         };
 
@@ -4547,6 +4548,32 @@ const { _ud = "undefined", $scope } = constants;
         if ( isArray( pObject ) || isFunction( pObject.values ) )
         {
             return _handleArray( pObject, options, visited, stack, depth );
+        }
+
+        if ( options.respectToLiteralMethod && isFunction( pObject?.toLiteral ) )
+        {
+            try
+            {
+                let literal = pObject.toLiteral();
+
+                if ( isNonNullObject( literal ) )
+                {
+                    return literal;
+                }
+
+                literal = {};
+
+                for( let prop in pObject )
+                {
+                    literal[prop] = pObject[prop];
+                }
+
+                return literal;
+            }
+            catch( ex )
+            {
+                toolBocksModule.handleError( ex );
+            }
         }
 
         const entries = ObjectEntry.unwrapValues( pObject );
@@ -5161,7 +5188,7 @@ const { _ud = "undefined", $scope } = constants;
         }
         catch( ex )
         {
-            toolBocksModule.handleError( ex, toTypedArray, pArray );
+            attemptSilent( () => toolBocksModule.handleError( ex, toTypedArray, pArray ) );
         }
 
         return pArray;
