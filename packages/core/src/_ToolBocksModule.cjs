@@ -8709,6 +8709,100 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const _prepareContainer = ( pObject, ...pPropertyPaths ) => (isNonNullObj( pObject ) || isArray( pObject )) ? pObject : isFunc( pObject ) ? () => attempt( () => pObject( ...pPropertyPaths ) ) : [...(pPropertyPaths || [])].reduce( ( acc, path ) => ({ ...acc, ...path.split( "." ).reduceRight( ( val, key ) => ({ [key]: val }), pObject ) }), {} );
 
+
+    const makeMutator = ( pObj ) =>
+    {
+        if ( isNull( pObj ) || !(isObj( pObj ) || isArray( pObj )) )
+        {
+            return ( pKey, pValue ) => new ObjectEntry( pKey, pValue, pObj );
+        }
+
+        if ( isArray( pObj ) )
+        {
+            return ( pKey, pValue ) =>
+            {
+                if ( isNumeric( pKey ) )
+                {
+                    let idx = _asInt( pKey );
+                    if ( idx < $ln( pObj ) )
+                    {
+                        return _asArr( pObj ).splice( idx, 0, pValue );
+                    }
+                    return [...(_asArr( pObj )), pValue];
+                }
+            };
+        }
+
+        if ( isMap( pObj ) || (isFunc( pObj?.set ) && (2 === $ln( pObj?.set ))) )
+        {
+            return ( pKey, pValue ) => pObj.set( pKey, pValue );
+        }
+
+        if ( isFunc( pObj?.add ) )
+        {
+            return ( pKey, pValue ) => pObj.add( pValue );
+        }
+
+        return ( pKey, pValue ) => attempt( () => pObj[pKey] = pValue );
+    };
+
+    /**
+     * This function returns a function that knows how to address an object holding the value(s) we seek.
+     * That is, if it is a Map or Headers or other container exposing a 'get' method to retrieve values,
+     * the returned function closes over the Map (or map-like object) and uses the key in the call to its 'get'.
+     * If the object is just a POJO, the returned version closes over this object literal and uses bracket syntax to access its properties.
+     *
+     * @param pObj The object, Map, or map-like object from which to retrieve values
+     * @returns {(function(*): *)|(function(*): *)} the function to call with the key
+     */
+    const makeAccessor = ( pObj ) =>
+    {
+        if ( isMap( pObj ) || (isFunc( pObj?.get ) && (1 === $ln( pObj?.get ))) )
+        {
+            return ( pKey ) => pObj.get( pKey );
+        }
+
+        return ( pKey ) => pObj[pKey];
+    };
+
+    const makeDeleter = ( pObj ) =>
+    {
+        if ( isMap( pObj ) || (isFunc( pObj?.delete ) && (1 === $ln( pObj?.delete ))) )
+        {
+            return ( pKey ) => attempt( () => pObj.delete( pKey ) );
+        }
+        else if ( (isFunc( pObj?.remove ) && (1 === $ln( pObj?.remove ))) )
+        {
+            return ( pKey ) => attempt( () => pObj.remove( pKey ) );
+        }
+
+        return ( pKey ) => attempt( () => delete pObj[pKey] );
+    };
+
+    const makeAppender = ( pObj ) =>
+    {
+        if ( isMap( pObj ) || (isFunc( pObj?.append ) && (2 === $ln( pObj?.append ))) )
+        {
+            return ( pKey, pValue ) => attempt( () => pObj.append( pKey, pValue ) );
+        }
+        else if ( isFunc( pObj?.add ) )
+        {
+            return ( pKey, pValue ) => attempt( () => pObj.add( pValue ) );
+        }
+
+        const accessor = makeAccessor( pObj );
+
+        return ( pKey, pValue ) => attempt( () =>
+                                            {
+                                                let existing = accessor( pKey );
+
+                                                let value = isArray( existing ) ? [...existing, pValue] : isNonNullObj( existing ) ? { ...existing, ...(isNonNullObj( pValue ) ? pValue : { pValue }) } : (asString( existing ) + "," + asString( pValue ));
+
+                                                return ((isFunc( pObj?.set ) && (2 === $ln( pObj?.set )))) ? attempt( () => pObj.set( pKey, value ) ) : attempt( () => pObj[pKey] = value );
+                                            } );
+    };
+
+
     function _property( pObject, pPropertyPath, pValue )
     {
         if ( isNull( pObject ) || !isObj( pObject ) || (_ud === typeof pPropertyPath) || (_mt_str === String( pPropertyPath )) )
@@ -8727,15 +8821,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             if ( isMap( object ) || (isFunc( object?.set ) && (2 === $ln( object?.set ))) )
             {
-                attempt( () => object.set( key, ((keys.length > 0) ? new Map() : value || pValue) ) );
+                attempt( () => object.set( key, ((keys.length > 0) ? (isMap( object ) ? new Map() : {}) : value || pValue) ) );
                 return object.get( key );
             }
             else
             {
-                attempt( () => object[key] = ((keys.length > 0) ? (/^d+$/.test( String( keys[0] ) ) ? [] : {}) : (value || pValue)) );
+                attempt( () => object[key] = ((keys.length > 0) ? (isArray( pObject ) || (/^d+$/.test( String( key ) )) ? [] : {}) : (value || pValue)) );
             }
 
-            return object[key];
+            return _property( object, key );
 
         } : null;
 
@@ -8758,25 +8852,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             {
                 // create a temporary copy of the current node/value, so we can try different variations of the key
                 let node = isArray( value ) ? [...(_asArr( value ))] : value;
-
-                /**
-                 * This function returns a function that knows how to address the object holding the value(s) we seek.
-                 * That is, if it is a Map or Headers or other container exposing a 'get' method to retrieve values,
-                 * the returned function closes over the Map (or map-like object) and uses the key in the call to its 'get'.
-                 * If the object is just a POJO, the returned version closes over this object literal and uses bracket syntax to access its properties.
-                 *
-                 * @param pObj The object, Map, or map-like object from which to retrieve values
-                 * @returns {(function(*): *)|(function(*): *)} the function to call with the key
-                 */
-                const makeAccessor = ( pObj ) =>
-                {
-                    if ( isMap( pObj ) || (isFunc( pObj?.get ) && (1 === $ln( pObj?.get ))) )
-                    {
-                        return ( pKey ) => pObj.get( pKey );
-                    }
-
-                    return ( pKey ) => pObj[pKey];
-                };
 
                 // try array index or key 'as-is'; this is the 'expected' property key
                 let accessor = makeAccessor( node );
@@ -8823,6 +8898,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     function getProperty( pObject, pPropertyPath )
     {
+        if ( isNull( pObject ) || !isObj( pObject ) || isNull( pPropertyPath ) || (isStr( pPropertyPath ) && !_isValidStr( pPropertyPath )) )
+        {
+            INTERNAL_LOGGER.warn( `getProperty called on ${isNull( pObject ) ? "a null value, returning null" : !isObj( pObject ) ? "a scalar value, returning that value" : "without a valid property name or path, returning the target"}` );
+
+            return pObject;
+        }
         return attempt( () => _property( pObject, pPropertyPath ) );
     }
 
@@ -8841,6 +8922,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     function setProperty( pObject, pPropertyPath, pValue )
     {
+        if ( isNull( pObject ) || !isObj( pObject ) || isReadOnly( pObject ) )
+        {
+            const target = isNull( pObject ) ? "null" : !isObj( pObject ) ? "a scalar value" : "a read-only object";
+            throw new IllegalArgumentError( `Cannot modify the properties of ${target}` );
+        }
         return attempt( () => _property( pObject, pPropertyPath, pValue ) );
     }
 
@@ -8859,8 +8945,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         let value = null;
 
-        // let obj = (isNonNullObj( pObject ) || isArray( pObject )) ? pObject : isFunc( pObject ) ? attempt( () => pObject( ...pPropertyPaths ) ) : [...(pPropertyPaths || [])].reduce( ( acc, path ) => ({ ...acc, ...path.split( "." ).reduceRight( ( val, key ) => ({ [key]: val }), pObject ) }), {} );
-
         while ( (null === value || (isStr( value ) && !_isValidStr( value ))) && $ln( paths ) > 0 )
         {
             let path = paths.shift();
@@ -8870,7 +8954,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     getProperty( obj, _toCamel( path ) ) ||
                     getProperty( obj, _toPascal( path ) ) ||
                     getProperty( obj, _toSnake( path ) ) ||
-                    getProperty( obj, _toSnakeStrict( path ) );
+                    getProperty( obj, _toSnakeStrict( path ) ) ||
+                    getProperty( obj, _lcase( path ) ) ||
+                    getProperty( obj, _ucase( path ) );
         }
 
         return value;
@@ -8878,8 +8964,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     function readScalarProperty( pObject, pType = _str, ...pPropertyPaths )
     {
-        // const obj = (isNonNullObj( pObject ) || isArray( pObject )) ? pObject : isFunc( pObject ) ? attempt( () => pObject( ...pPropertyPaths ) ) : [...(pPropertyPaths || [])].reduce( ( acc, path ) => ({ ...acc, ...path.split( "." ).reduceRight( ( val, key ) => ({ [key]: val }), pObject ) }), {} );
-
         const paths = [...(pPropertyPaths || [])].filter( _isValidStr ).map( _cleanPath );
 
         const obj = _prepareContainer( pObject, ...paths );
@@ -8910,7 +8994,41 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             }
         }
 
-        return value;
+        return isValidValue( value ) ? value : null;
+    }
+
+    function removeProperties( pObject, ...pPropertyPaths )
+    {
+        if ( isNull( pObject ) || !isObj( pObject ) || isNull( pPropertyPaths ) || $ln( _asArr( pPropertyPaths ) ) <= 0 || !(_asArr( pPropertyPaths ).some( _isValidStr )) )
+        {
+            INTERNAL_LOGGER.warn( `removeProperties called on ${isNull( pObject ) ? "a null value, nothing changed" : !isObj( pObject ) ? "a scalar value, nothing changed" : "without a valid property name or path, nothing changed"}` );
+
+            return pObject;
+        }
+
+        let paths = _asArr( pPropertyPaths );
+
+        for( let path of paths )
+        {
+            const keys = toNodePathArray( path );
+
+            let node = pObject;
+
+            while ( !isNull( node ) && $ln( keys ) > 0 )
+            {
+                const accessor = makeAccessor( node );
+
+                const key = keys.shift();
+
+                node = accessor( key ) ?? accessor( _toCamel( key ) ) ?? accessor( _toPascal( key ) ) ?? accessor( _toSnake( key ) ) ?? accessor( _toSnakeStrict( key ) ) ?? accessor( _lcase( key ) ) ?? accessor( _case( key ) );
+
+                if ( isNonNullObj( node ) && 1 === $ln( keys ) )
+                {
+                    const remover = makeDeleter( node );
+                    attempt( () => remover( keys.shift() ) );
+                }
+            }
+        }
     }
 
     function mergeOptions( pOptions, ...pDefaults )
@@ -9433,12 +9551,20 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             overwriteProperties,
 
             toNodePathArray,
+
             getProperty,
             setProperty,
             hasProperty,
 
             readProperty,
             readScalarProperty,
+
+            removeProperties,
+
+            makeMutator,
+            makeAccessor,
+            makeAppender,
+            makeDeleter,
 
             lock,
             deepFreeze,
