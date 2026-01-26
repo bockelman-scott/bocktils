@@ -72,23 +72,30 @@ const { _ud = "undefined", $scope } = constants;
             entityUtils
         };
 
-    const {
-        ModuleEvent,
-        ToolBocksModule,
-        IllegalArgumentError,
-        ObjectEntry,
-        objectEntries,
-        objectValues,
-        objectKeys,
-        lock,
-        attempt,
-        $ln
-    } = moduleUtils;
+    const
+        {
+            ModuleEvent,
+            ToolBocksModule,
+            IllegalArgumentError,
+            ObjectEntry,
+            objectEntries,
+            objectValues,
+            objectKeys,
+            readProperty,
+            readScalarProperty,
+            setProperty,
+            makeAppender,
+            makeDeleter,
+            lock,
+            attempt,
+            $ln
+        } = moduleUtils;
 
     const { _mt_str = "", _mt = _mt_str, _comma, _str, _num, _big, _bool, _obj, _fun } = constants;
 
     const {
         isNull,
+        isObject,
         isNonNullObject,
         isPopulatedObject,
         isString,
@@ -1347,6 +1354,332 @@ const { _ud = "undefined", $scope } = constants;
     HttpStatus.isHttpStatats = isHttpStatus;
 
     HttpHeaderDefinition.isHeader = isHeader;
+
+
+    /**
+     * A default function for merging property entries in an object.
+     *
+     * @param {Object} pObject - An object to which a merge operation will be applied.
+     * @param {string} pPropertyPath - The path to the property being modified
+     * @param {string} pValue - The value to merge with the specified property
+     */
+    const DEFAULT_PROPERTIES_MERGE_FUNCTION = ( pObject, pPropertyPath, pValue ) =>
+    {
+        if ( isNonNullObject( pObject ) )
+        {
+            const name = asString( pPropertyPath, true );
+
+            let mutator = makeAppender( pObject );
+
+            return attempt( () => mutator( name, pValue ) );
+        }
+    };
+
+    class HttpPropertyMergeRule
+    {
+        #id;
+        #name;
+
+        #mergeFunction;
+
+        constructor( pId, pName, pMergeFunction )
+        {
+            this.#id = pId;
+            this.#name = pName;
+            this.#mergeFunction = (isFunction( pMergeFunction ) && (3 === pMergeFunction.length)) ? pMergeFunction : DEFAULT_PROPERTIES_MERGE_FUNCTION;
+        }
+
+        get id()
+        {
+            return this.#id;
+        }
+
+        get name()
+        {
+            return this.#name;
+        }
+
+        get mergeFunction()
+        {
+            return this.#mergeFunction;
+        }
+
+        isValid()
+        {
+            return (isFunction( this.mergeFunction ) && (3 === this.mergeFunction.length));
+        }
+
+        execute( pHeaders, pKey, pValue )
+        {
+            if ( this.isValid() )
+            {
+                return attempt( () => this.#mergeFunction( pHeaders, pKey, pValue ) );
+            }
+            return false;
+        }
+    }
+
+    /**
+     * Represents a predefined rule for merging properties
+     * that preserves the existing value
+     * if it already exists in the provided object.
+     *
+     * If the property is not present, it resolves
+     * and sets the provided value as the property's value.
+     *
+     * The rule operates by attempting to retrieve an existing value
+     * using a case-insensitive name resolution.
+     *
+     * If a value is found, it remains unchanged.
+     *
+     * If no value exists, the rule attempts to resolve and set the provided value for the property.
+     *
+     */
+    const PROPERTY_MERGE_RULE_PRESERVE = new HttpPropertyMergeRule( 1, "PRESERVE", ( pObject, pName, pValue ) =>
+    {
+        if ( isNonNullObject( pObject ) )
+        {
+            const name = asString( pName, true );
+
+            const value = readProperty( pObject, name ) ?? pValue;
+
+            if ( value )
+            {
+                attempt( () => setProperty( pObject, name, value ) );
+            }
+        }
+    } );
+
+    /**
+     * A constant representing the rule for merging HTTP headers
+     * by replacing the existing header value with the provided value.
+     *
+     * This rule ensures that the specified header
+     * is either added or updated with the new value, replacing any previous value.
+     *
+     * If the provided value is null or empty, the header will be removed.
+     *
+     * Rule Details:
+     * - Header existence is checked in the provided headers collection.
+     * - If the header already exists, its value is replaced.
+     * - If the new header value is blank (null or empty), the header is removed.
+     *
+     * This rule is used in scenarios where headers need to be overridden without merging or appending.
+     */
+    const PROPERTY_MERGE_RULE_REPLACE = new HttpPropertyMergeRule( 2, "REPLACE", ( pObject, pName, pValue ) =>
+    {
+        if ( isNonNullObject( pObject ) )
+        {
+            const name = asString( pName, true );
+
+            let value = pValue ?? readProperty( pObject, name );
+
+            if ( value )
+            {
+                attempt( () => setProperty( pObject, name, value ) );
+            }
+        }
+    } );
+
+    /**
+     * Represents a predefined HTTP header merge rule that combines multiple header values.
+     * This rule is identified by the name "COMBINE" and uses a default merging function to process header values.
+     * It is primarily used in scenarios where header values need to be consolidated while retaining all unique entries.
+     */
+    const PROPERTY_MERGE_RULE_COMBINE = new HttpPropertyMergeRule( 3, "COMBINE", DEFAULT_PROPERTIES_MERGE_FUNCTION );
+
+    // noinspection JSUnusedLocalSymbols
+    const PROPERTY_MERGE_RULE_REMOVE = new HttpPropertyMergeRule( 4, "REMOVE", ( pObject, pName, pValue ) =>
+    {
+        if ( isNonNullObject( pObject ) )
+        {
+            const name = asString( pName, true );
+
+            if ( !isBlank( name ) )
+            {
+                const deleter = makeDeleter( pObject );
+
+                return attempt( () => deleter( name ) );
+            }
+        }
+    } );
+
+    HttpPropertyMergeRule["PRESERVE"] = PROPERTY_MERGE_RULE_PRESERVE;
+    HttpPropertyMergeRule["REPLACE"] = PROPERTY_MERGE_RULE_REPLACE;
+    HttpPropertyMergeRule["COMBINE"] = PROPERTY_MERGE_RULE_COMBINE;
+    HttpPropertyMergeRule["REMOVE"] = PROPERTY_MERGE_RULE_REMOVE;
+    HttpPropertyMergeRule["DELETE"] = PROPERTY_MERGE_RULE_REMOVE;
+
+    HttpPropertyMergeRule.resolveHttpPropertyMergeRule = function( pMergeRule )
+    {
+        if ( isNonNullObject( pMergeRule ) )
+        {
+            if ( pMergeRule instanceof HttpPropertyMergeRule )
+            {
+                return lock( pMergeRule );
+            }
+
+            if ( !isBlank( asString( pMergeRule?.name, true ) ) || asInt( pMergeRule?.id ) > 0 )
+            {
+                if ( isFunction( pMergeRule?.mergeFunction ) && (3 === pMergeRule?.mergeFunction?.length) )
+                {
+                    return new HttpPropertyMergeRule( asInt( pMergeRule.id || 999_999 ),
+                                                      asString( pMergeRule.name || "Ad Hoc Rule" ),
+                                                      ( pHeaders, pName, pValue ) => pMergeRule.mergeFunction( pHeaders, pName, pValue ) );
+                }
+            }
+        }
+
+        if ( isString( pMergeRule ) )
+        {
+            let mergeRule = HttpPropertyMergeRule[ucase( asString( pMergeRule, true ) )];
+            if ( isNonNullObject( mergeRule ) || mergeRule instanceof HttpPropertyMergeRule )
+            {
+                return mergeRule;
+            }
+        }
+
+        return PROPERTY_MERGE_RULE_COMBINE;
+    };
+
+    class HttpPropertyRule
+    {
+        #propertyName;
+        #mergeRule = PROPERTY_MERGE_RULE_COMBINE;
+
+        constructor( pPropertyName, pMergeRule )
+        {
+            this.#propertyName = asString( pPropertyName, true );
+            this.#mergeRule = HttpPropertyMergeRule.resolveHttpPropertyMergeRule( pMergeRule );
+        }
+
+        get propertyName()
+        {
+            return asString( this.#propertyName, true );
+        }
+
+        get mergeRule()
+        {
+            return HttpPropertyMergeRule.resolveHttpPropertyMergeRule( this.#mergeRule );
+        }
+
+        isValid()
+        {
+            return !isBlank( this.propertyName ) && this.mergeRule instanceof HttpPropertyMergeRule && this.mergeRule.isValid();
+        }
+
+        apply( pObject, pValue )
+        {
+            if ( this.isValid() )
+            {
+                return attempt( () => this.mergeRule.execute( pObject, this.propertyName, pValue ) );
+            }
+            return false;
+        }
+    }
+
+    HttpPropertyRule.from = function( pData )
+    {
+        if ( isNonNullObject( pData ) || isArray( pData ) )
+        {
+            if ( pData instanceof HttpPropertyRule )
+            {
+                return pData;
+            }
+
+            let data = isArray( pData ) ? pData : objectEntries( pData );
+
+            let name = ObjectEntry.getKey( data );
+            let value = ObjectEntry.getValue( data );
+
+            if ( isString( name ) && !isBlank( name ) )
+            {
+                let mergeRule = isNonNullObject( value ) ? HttpPropertyMergeRule.resolveHttpPropertyMergeRule( value ) : (isString( value ) ? HttpPropertyMergeRule[ucase( value )] : null);
+
+                if ( !isNull( mergeRule ) && mergeRule instanceof HttpPropertyMergeRule )
+                {
+                    return new HttpPropertyRule( name, mergeRule );
+                }
+
+                if ( isFunction( value ) && 3 === value.length )
+                {
+                    return new HttpPropertyRule( name, new HttpPropertyMergeRule( 99_999, name, value ) );
+                }
+            }
+        }
+        else if ( isString( pData ) )
+        {
+            if ( isJson( pData ) )
+            {
+                return HttpPropertyRule.from( attempt( () => parseJson( pData ) ) );
+            }
+
+            const propertyName = asString( pData, true );
+
+            return new HttpPropertyRule( propertyName, PROPERTY_MERGE_RULE_COMBINE );
+        }
+        return null;
+    };
+
+    const defineHttpPropertyRules = function( pRules )
+    {
+        let rules = {};
+
+        if ( isNull( pRules ) || !(isObject( pRules ) || isArray( pRules )) )
+        {
+            return rules;
+        }
+
+        if ( isNonNullObject( pRules ) )
+        {
+            if ( objectEntries( pRules ).every( e => isString( ObjectEntry.getKey( e ) ) && ObjectEntry.getValue( e ) instanceof HttpPropertyRule ) )
+            {
+                return pRules;
+            }
+        }
+
+        const entries = isArray( pRules ) && asArray( pRules ).every( e => isNonNullObject( e ) || isArray( e ) ) ? asArray( pRules ) : objectEntries( pRules );
+
+        for( let entry of entries )
+        {
+            let httpPropertyRule = HttpPropertyRule.from( entry );
+            if ( isNonNullObject( httpPropertyRule ) && httpPropertyRule.isValid() )
+            {
+                rules[httpPropertyRule.propertyName] = httpPropertyRule;
+            }
+        }
+
+        return rules;
+    };
+
+
+    /**
+     * This class is used to create an intelligent way
+     * to merge one or more objects expect to have the same form.
+     *
+     * It is constructed with 2 sets of rules in the form of key/value pairs,
+     * specified either as a POJO (recommended), Map, or 2-dimensional array.
+     *
+     * The first set defines how to merge
+     * the first-level properties of 2 objects.
+     *
+     * The second set defines how to merge any deeper-level properties
+     * for which the first-level rule is the special rule,"DEFERRED"
+     */
+    class HttpPropertiesMerger
+    {
+        #propertyRules;
+
+        #deferredRules;
+
+        constructor( pPropertyRules, pDeferredRules )
+        {
+            this.#propertyRules = defineHttpPropertyRules( pPropertyRules );
+            this.#deferredRules = defineHttpPropertyRules( pDeferredRules );
+        }
+    }
+
+    HttpPropertiesMerger.defineHttpPropertyRules = defineHttpPropertyRules;
 
     let mod =
         {

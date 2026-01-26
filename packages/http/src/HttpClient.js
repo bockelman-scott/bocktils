@@ -887,7 +887,7 @@ const { _ud = "undefined", $scope } = constants;
 
         set headers( pValue )
         {
-            this.#headers = new HttpHeaders( pValue, new HttpHeaders( this.#headers, this.properties ) );
+            this.#headers = new HttpHeaders( pValue, new HttpHeaders( this.#headers, this.properties?.headers ) );
         }
 
         addHeaders( ...pValue )
@@ -1074,6 +1074,7 @@ const { _ud = "undefined", $scope } = constants;
 
         merge( ...pConfigs )
         {
+            // TODO: merge using rules
             const configs = attempt( () => asArray( pConfigs || [] ).filter( isNonNullObject ).map( resolveHttpConfig ).filter( isHttpConfig ) );
 
             if ( configs && $ln( configs ) > 0 )
@@ -1099,9 +1100,18 @@ const { _ud = "undefined", $scope } = constants;
 
         clone()
         {
+            // TODO: clone the body??
             const httpConfig = new HttpConfig( this.properties, this.headers, this.url, this.method, this.body );
             return fixAgents( httpConfig.merge( this ) );
         }
+    }
+
+    class HttpConfigMerger
+    {
+        #configRules;
+        #headersMerger;
+
+
     }
 
     const isHttpConfig = function( pConfig, pStrict = false, pClass = HttpConfig )
@@ -1152,7 +1162,22 @@ const { _ud = "undefined", $scope } = constants;
             }
         }
 
-        return isHttpConfig( httpConfig ) ? fixAgents( httpConfig ) : new HttpConfig( DEFAULT_CONFIG );
+        if ( isHttpConfig( httpConfig ) )
+        {
+            return fixAgents( httpConfig );
+        }
+
+        let objects = [pConfig, ...pObjects].filter( isNonNullObject );
+
+        let headersObjects = objects.map( e => e.headers ).filter( isNonNullObject );
+
+        let properties = objects.reduce( ( acc, curr ) => ({
+            ...acc,
+            ...curr,
+            headers: HttpHeaders.mergeHeaders( acc.headers, curr.headers )
+        }), {} );
+
+        return new HttpConfig( properties, HttpHeaders.mergeHeaders( properties.headers, ...headersObjects ), properties.url, properties.method, properties.body || properties.data );
     };
 
     const toHttpConfigLiteral = function( pHttpConfig )
@@ -1175,6 +1200,9 @@ const { _ud = "undefined", $scope } = constants;
 
     HttpConfig.mergeConfigs = function( ...pConfigs )
     {
+
+// TODO: merge object with rules
+
         let properties = { ...DEFAULT_CONFIG };
 
         let others = (asArray( pConfigs || [{}] ));
@@ -1193,6 +1221,16 @@ const { _ud = "undefined", $scope } = constants;
         const configs = asArray( pConfigs ).filter( isNonNullObject ).map( resolveHttpConfig ).filter( isHttpConfig );
 
         return httpConfig.merge( ...configs );
+    };
+
+    HttpConfig.from = function( ...pValues )
+    {
+        const args = [...(asArray( pValue ))].filter( e => !isNull( e ) );
+
+        if ( args.every( e => isNonNullObject( e ) && (isHttpConfig( e ) || isFunction( e.toLiteral )) ) )
+        {
+
+        }
     };
 
     async function prepareConfig( pConfig, pUrl = pConfig?.url, pMethod = pConfig.method, pBody, pParseJson )
@@ -1700,7 +1738,9 @@ const { _ud = "undefined", $scope } = constants;
 
         populateConfig( pConfig, pModel )
         {
-            let config = toHttpConfigLiteral( asObject( pConfig ) );
+            const config = toHttpConfigLiteral( asObject( pConfig ) ) || {};
+
+            const headers = config?.headers || pConfig?.headers;
 
             const entries = objectEntries( pModel || {} );
 
@@ -1813,7 +1853,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             this.#queuedTime = Date.now();
 
-            this.#config = toHttpConfigLiteral( asObject( pConfig ) );
+            this.#config = resolveHttpConfig( asObject( pConfig ), pRequest ).clone();
 
             this.#request = new HttpRequest( isString( pRequest ) ? (_ud !== typeof Request) ? new Request( pRequest, this.#config ) : new HttpRequest( pRequest, this.#config ) : pRequest );
 
@@ -1856,7 +1896,7 @@ const { _ud = "undefined", $scope } = constants;
 
         get config()
         {
-            return fixAgents( { ...(toHttpConfigLiteral( this.#config || {} )) } );
+            return fixAgents( resolveHttpConfig( this.#config, this.request ) );
         }
 
         get request()
@@ -1896,6 +1936,8 @@ const { _ud = "undefined", $scope } = constants;
         return id;
     };
 
+
+    //TODO: not this
     async function prepareRequestConfig( pUrl, pMethod, pConfig, pBody )
     {
         const url = cleanUrl( asString( resolveUrl( pUrl, pConfig ), true ), true );
@@ -1940,6 +1982,8 @@ const { _ud = "undefined", $scope } = constants;
          */
         constructor( pConfig = DEFAULT_HTTP_CONFIG, pOptions = DEFAULT_HTTP_CLIENT_OPTIONS )
         {
+            //TODO: convert to RequestInt model
+
             this.#config = (isHttpConfig( pConfig, true )
                             && isFunction( pConfig?.clone )
                             && isFunction( pConfig?.merge )) ?
@@ -1951,7 +1995,7 @@ const { _ud = "undefined", $scope } = constants;
 
         get config()
         {
-            return fixAgents( { ...(toHttpConfigLiteral( this.#config || {} )) } );
+            return fixAgents( resolveHttpConfig( this.#config ) );
         }
 
         get httpConfig()
@@ -1966,6 +2010,8 @@ const { _ud = "undefined", $scope } = constants;
 
         mergeConfig( pConfig )
         {
+            // TODO: merge using rules, convert to RequestInit
+
             let mergedConfig = { ...({ ...(this.config || {}) }), ...(toHttpConfigLiteral( pConfig || {} )) };
 
             mergedConfig.httpAgent = resolveHttpAgent( pConfig?.httpAgent || this.config?.httpAgent || HTTP_AGENT ) || HTTP_AGENT;
@@ -2100,7 +2146,7 @@ const { _ud = "undefined", $scope } = constants;
 
             const { url, cfg } = await prepareRequestConfig( pUrl,
                                                              resolveHttpMethod( pMethod ),
-                                                             toHttpConfigLiteral( pConfig || this.config ),
+                                                             resolveHttpConfig( pConfig, this.config ),
                                                              pBody );
 
             return await me.doFetch( url, cfg );
@@ -2346,12 +2392,12 @@ const { _ud = "undefined", $scope } = constants;
 
     IHttpClient.resolveConfig = function( pConfig, pDefaultDelegate )
     {
-        if ( isHttpConfig( pConfig, true ) )
-        {
-            return pConfig.merge( DEFAULT_HTTP_CONFIG, pConfig );
-        }
+        let config = resolveHttpConfig( pConfig, pDefaultDelegate );
 
-        const config = asObject( pConfig || pDefaultDelegate?.httpConfig || pDefaultDelegate?.config || DEFAULT_CONFIG );
+        if ( isHttpConfig( config, true ) )
+        {
+            return config.merge( DEFAULT_HTTP_CONFIG, config );
+        }
 
         return new HttpConfig( { ...DEFAULT_CONFIG, ...(toHttpConfigLiteral( config )) } );
     };
@@ -2921,6 +2967,8 @@ const { _ud = "undefined", $scope } = constants;
 
             try
             {
+                // NOPE!
+                // TODO: fix this
                 let config = { ...DEFAULT_CONFIG, ...DEFAULT_DOWNLOAD_CONFIG, ...(toHttpConfigLiteral( asObject( cfg || {} ) )) };
 
                 const response = await this.sendRequest( config.method || VERBS.GET, url, config );

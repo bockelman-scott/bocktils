@@ -87,13 +87,15 @@ const { _ud = "undefined", $scope } = constants;
             attempt,
             attemptSilent,
             objectEntries,
+            setProperty,
             readProperty,
+            readScalarProperty,
             lock,
             $ln
         } = moduleUtils;
 
     // imports constants for the empty string, allowing for more readable use of these string literals
-    const { _mt_str = "", _mt = _mt_str, _str } = constants;
+    const { _mt_str = "", _mt = _mt_str, _comma } = constants;
 
     // import a number of functions to detect the type of a variable
     // or to convert from one type to another
@@ -114,14 +116,14 @@ const { _ud = "undefined", $scope } = constants;
         } = typeUtils;
 
     // imports useful functions for safer string manipulation
-    const { asString, asInt, isBlank, isJson, lcase } = stringUtils;
+    const { asString, asInt, isBlank, isJson, lcase, ucase } = stringUtils;
 
     const { asArray } = arrayUtils;
 
     const { asJson, asObject, parseJson } = jsonUtils;
 
     // imports useful constants and functions related to HTTP request and response headers
-    const { HttpHeader, isHeader } = httpConstants;
+    const { HttpHeaderDefinition, HttpHeader, isHeader } = httpConstants;
 
     /**
      * This is the name of this module, which can be displayed in logs or messages written to the console
@@ -234,15 +236,20 @@ const { _ud = "undefined", $scope } = constants;
                 isFunction( pObject?.values ));
     }
 
-    function resolveHeaderName( pKey )
+    function resolveHeaderName( pKey, pStrict = false )
     {
-        let key = asString( pKey, true );
+        let key = "x-unknown";
+
+        if ( isNull( pKey ) )
+        {
+            return key;
+        }
 
         if ( isString( pKey ) && !isBlank( pKey ) )
         {
             key = asString( pKey, true ) || key;
         }
-        else if ( pKey instanceof HttpHeader )
+        else if ( pKey instanceof HttpHeader || pKey instanceof HttpHeaderDefinition )
         {
             key = asString( pKey.name || asString( pKey, true ), true );
         }
@@ -252,7 +259,7 @@ const { _ud = "undefined", $scope } = constants;
         }
         else
         {
-            const stringFinder = new Finder( ( e ) => isString( e ) && (_mt !== e.trim()) );
+            const stringFinder = new Finder( ( e ) => isString( e ) && !isBlank( e ) && ( !pStrict || isHeader( e )) );
 
             if ( isArray( pKey ) )
             {
@@ -263,12 +270,17 @@ const { _ud = "undefined", $scope } = constants;
                 let entries = pKey.entries();
                 for( let entry of entries )
                 {
-                    const k = ObjectEntry.getKey( entry );
+                    const k = asString( ObjectEntry.getKey( entry ), true );
                     const v = ObjectEntry.getValue( entry );
 
-                    if ( ("name" === k || "key" === k) && !isBlank( v ) )
+                    if ( (["name", "key"].includes( k )) && !isBlank( v ) && ( !pStrict || isHeader( v )) )
                     {
                         key = asString( v, true );
+                        break;
+                    }
+                    else if ( isHeader( k ) )
+                    {
+                        key = k;
                         break;
                     }
                 }
@@ -286,7 +298,7 @@ const { _ud = "undefined", $scope } = constants;
 
     function resolveHeaderValue( pValue, pKey )
     {
-        let key = resolveHeaderName( pKey || pValue );
+        let key = resolveHeaderName( pKey || pValue ) || resolveHeaderName( pValue );
 
         let value = pValue;
 
@@ -347,6 +359,338 @@ const { _ud = "undefined", $scope } = constants;
     const isForbiddenResponseHeader = function( pKey )
     {
         return FORBIDDEN_RESPONSE_HEADERS.includes( resolveHeaderName( pKey ) );
+    };
+
+    /**
+     * A default function for merging header entries in a headers object.
+     * This function ensures that header names are normalized and values are merged correctly to avoid duplicates.
+     *
+     * The function checks if `pHeaders` is a non-null object. If so, it:
+     * - Resolves the normalized name of the header (`pName`) using a helper function.
+     * - Resolves the intended header value (`pValue`) based on the header name.
+     * - Retrieves the existing value for the header, if available.
+     * - Combines the existing and new values, deduplicates them, trims whitespace, and rejoins them as a single string.
+     * - Updates the headers object accordingly, either by:
+     *   - Setting the combined value for the normalized header name.
+     *   - Removing the header entirely if the combined value is blank.
+     *
+     * The function supports headers objects that implement `get`, `set`, or `delete` methods, or ones that use direct property access.
+     *
+     * @param {Object} pHeaders - The headers object where the merge operation will be applied.
+     * @param {string} pName - The name of the header being modified, which will be normalized.
+     * @param {string} pValue - The value to merge with the existing header value, which will be normalized and deduplicated.
+     */
+    const DEFAULT_HEADER_MERGE_FUNCTION = ( pHeaders, pName, pValue ) =>
+    {
+        if ( isNonNullObject( pHeaders ) )
+        {
+            const name = resolveHeaderName( pName );
+
+            let value = resolveHeaderValue( pValue, pName );
+
+            let accessor = isFunction( pHeaders.get ) ? () => pHeaders.get( name ) : pHeaders[name];
+
+            let existing = accessor() || _mt;
+
+            let arr = asString( existing, true ).split( _comma );
+
+            arr = [...(new Set( ([...arr, value].map( e => e.trim() )) ))].filter( e => !isBlank( e ) );
+
+            value = arr.join( `${_comma} ` );
+
+            let mutator = isFunction( pHeaders.set ) ? () => pHeaders.set( name, value ) : () => pHeaders[name] = value;
+
+            if ( isBlank( value ) )
+            {
+                mutator = isFunction( pHeaders.delete ) ? () => pHeaders.delete( name ) : () => delete pHeaders[name];
+            }
+
+            attempt( mutator );
+        }
+    };
+
+    class HttpHeaderMergeRule
+    {
+        #name;
+
+        #mergeFunction;
+
+        constructor( pName, pMergeFunction )
+        {
+            this.#name = pName;
+            this.#mergeFunction = (isFunction( pMergeFunction ) && (3 === pMergeFunction.length)) ? pMergeFunction : DEFAULT_HEADER_MERGE_FUNCTION;
+        }
+
+        get name()
+        {
+            return this.#name;
+        }
+
+        get mergeFunction()
+        {
+            return this.#mergeFunction;
+        }
+
+        isValid()
+        {
+            return (isFunction( this.mergeFunction ) && (3 === this.mergeFunction.length));
+        }
+
+        execute( pHeaders, pKey, pValue )
+        {
+            if ( this.isValid() )
+            {
+                return attempt( () => this.mergeFunction( pHeaders, pKey, pValue ) );
+            }
+            return false;
+        }
+    }
+
+    /**
+     * Represents a predefined rule for merging HTTP headers
+     * that preserves the existing header value
+     * if it already exists in the provided headers object.
+     *
+     * If the header is not present, it resolves
+     * and sets the provided value as the header's value.
+     *
+     * The rule operates by attempting to retrieve an existing header value
+     * using a case-insensitive header name resolution.
+     *
+     * If a value is found, it remains unchanged.
+     *
+     * If no value exists, the rule attempts to resolve and set the provided value for the header.
+     *
+     * Characteristics:
+     * - Case-insensitive resolution is applied to header names.
+     * - Ensures immutability of existing header values for the specified name.
+     * - Safely applies mutations by handling possible exceptions during value retrieval or assignment.
+     */
+    const HEADER_MERGE_RULE_PRESERVE = new HttpHeaderMergeRule( "PRESERVE", ( pHeaders, pName, pValue ) =>
+    {
+        if ( isNonNullObject( pHeaders ) )
+        {
+            const name = resolveHeaderName( pName );
+
+            const accessor = isFunction( pHeaders.get ) ? () => pHeaders.get( name ) : pHeaders[name];
+
+            const value = attempt( () => accessor() ) || resolveHeaderValue( pValue, pName );
+
+            if ( value )
+            {
+                const mutator = isFunction( pHeaders.set ) ? () => pHeaders.set( name, value ) : () => pHeaders[name] = value;
+                attempt( mutator );
+            }
+        }
+    } );
+
+    /**
+     * A constant representing the rule for merging HTTP headers
+     * by replacing the existing header value with the provided value.
+     *
+     * This rule ensures that the specified header
+     * is either added or updated with the new value, replacing any previous value.
+     *
+     * If the provided value is null or empty, the header will be removed.
+     *
+     * Rule Details:
+     * - Header existence is checked in the provided headers collection.
+     * - If the header already exists, its value is replaced.
+     * - If the new header value is blank (null or empty), the header is removed.
+     *
+     * This rule is used in scenarios where headers need to be overridden without merging or appending.
+     */
+    const HEADER_MERGE_RULE_REPLACE = new HttpHeaderMergeRule( "REPLACE", ( pHeaders, pName, pValue ) =>
+    {
+        if ( isNonNullObject( pHeaders ) )
+        {
+            const name = resolveHeaderName( pName );
+
+            let value = resolveHeaderValue( pValue, pName );
+
+            const accessor = isFunction( pHeaders.get ) ? () => pHeaders.get( name ) : pHeaders[name];
+
+            value = value || attempt( () => accessor() );
+
+            let mutator = isFunction( pHeaders.set ) ? () => pHeaders.set( name, value ) : () => pHeaders[name] = value;
+
+            if ( isBlank( value ) )
+            {
+                mutator = isFunction( pHeaders.delete ) ? () => pHeaders.delete( name ) : () => delete pHeaders[name];
+            }
+
+            attempt( mutator );
+        }
+    } );
+
+    /**
+     * Represents a predefined HTTP header merge rule that combines multiple header values.
+     * This rule is identified by the name "COMBINE" and uses a default merging function to process header values.
+     * It is primarily used in scenarios where header values need to be consolidated while retaining all unique entries.
+     */
+    const HEADER_MERGE_RULE_COMBINE = new HttpHeaderMergeRule( "COMBINE", DEFAULT_HEADER_MERGE_FUNCTION );
+
+    // noinspection JSUnusedLocalSymbols
+    const HEADER_MERGE_RULE_REMOVE = new HttpHeaderMergeRule( "REMOVE", ( pHeaders, pName, pValue ) =>
+    {
+        if ( isNonNullObject( pHeaders ) )
+        {
+            const name = resolveHeaderName( pName );
+
+            const mutator = isFunction( pHeaders.delete ) ? () => pHeaders.delete( name ) : () => delete pHeaders[name];
+
+            attempt( mutator );
+        }
+    } );
+
+    HttpHeaderMergeRule["PRESERVE"] = HEADER_MERGE_RULE_PRESERVE;
+    HttpHeaderMergeRule["REPLACE"] = HEADER_MERGE_RULE_REPLACE;
+    HttpHeaderMergeRule["COMBINE"] = HEADER_MERGE_RULE_COMBINE;
+    HttpHeaderMergeRule["REMOVE"] = HEADER_MERGE_RULE_REMOVE;
+    HttpHeaderMergeRule["DELETE"] = HEADER_MERGE_RULE_REMOVE;
+
+    HttpHeaderMergeRule.resolveHttpHeaderMergeRule = function( pMergeRule, pName = _mt )
+    {
+        if ( isNonNullObject( pMergeRule ) )
+        {
+            if ( pMergeRule instanceof HttpHeaderMergeRule )
+            {
+                return lock( pMergeRule );
+            }
+
+            if ( !isBlank( asString( pMergeRule?.name, true ) ) )
+            {
+                if ( isFunction( pMergeRule?.mergeFunction ) && (3 === pMergeRule?.mergeFunction?.length) )
+                {
+                    return new HttpHeaderMergeRule( asString( (pMergeRule.name || pName || "Ad Hoc Rule"), true ),
+                                                    ( pHeaders, pName, pValue ) => pMergeRule.mergeFunction( pHeaders, pName, pValue ) );
+                }
+            }
+        }
+
+        if ( isString( pMergeRule ) )
+        {
+            let mergeRule = HttpHeaderMergeRule[ucase( asString( pMergeRule, true ) )];
+            if ( isNonNullObject( mergeRule ) || mergeRule instanceof HttpHeaderMergeRule )
+            {
+                return mergeRule;
+            }
+        }
+
+        return HEADER_MERGE_RULE_COMBINE;
+    };
+
+    class HttpHeaderRule
+    {
+        #headerName;
+        #mergeRule = HEADER_MERGE_RULE_COMBINE;
+
+        constructor( pHeaderName, pMergeRule )
+        {
+            this.#headerName = resolveHeaderName( pHeaderName );
+            this.#mergeRule = HttpHeaderMergeRule.resolveHttpHeaderMergeRule( pMergeRule, pHeaderName );
+        }
+
+        get headerName()
+        {
+            return resolveHeaderName( this.#headerName );
+        }
+
+        get mergeRule()
+        {
+            return HttpHeaderMergeRule.resolveHttpHeaderMergeRule( this.#mergeRule );
+        }
+
+        isValid()
+        {
+            return !isBlank( this.headerName ) && this.mergeRule instanceof HttpHeaderMergeRule && this.mergeRule.isValid();
+        }
+
+        apply( pHeaders, pValue )
+        {
+            if ( this.isValid() )
+            {
+                return attempt( () => this.mergeRule.execute( pHeaders, this.headerName, pValue ) );
+            }
+            return false;
+        }
+    }
+
+    HttpHeaderRule.from = function( pData, pStrict = false )
+    {
+        if ( isNonNullObject( pData ) || isArray( pData ) )
+        {
+            if ( pData instanceof HttpHeaderRule )
+            {
+                return pData;
+            }
+
+            let data = isArray( pData ) ? pData : objectEntries( pData );
+
+            let name = ObjectEntry.getKey( data );
+            let value = ObjectEntry.getValue( data );
+
+            if ( isString( name ) && !isBlank( name ) && ( !pStrict || isHeader( resolveHeaderName( name ) )) )
+            {
+                let mergeRule = isNonNullObject( value ) ? HttpHeaderMergeRule.resolveHttpHeaderMergeRule( value ) : (isString( value ) ? HttpHeaderMergeRule[ucase( value )] : null);
+
+                if ( !isNull( mergeRule ) && mergeRule instanceof HttpHeaderMergeRule )
+                {
+                    return new HttpHeaderRule( name, mergeRule );
+                }
+
+                if ( isFunction( value ) && 3 === value.length )
+                {
+                    return new HttpHeaderRule( name, new HttpHeaderMergeRule( 99_999, name, value ) );
+                }
+            }
+        }
+        else if ( isString( pData ) )
+        {
+            if ( isJson( pData ) )
+            {
+                return HttpHeaderRule.from( attempt( () => parseJson( pData ) ) );
+            }
+
+            const headerName = resolveHeaderName( pData, true );
+
+            if ( isHeader( headerName ) )
+            {
+                return new HttpHeaderRule( headerName, HEADER_MERGE_RULE_COMBINE );
+            }
+        }
+        return null;
+    };
+
+    const defineHttpHeaderRules = function( pRules )
+    {
+        let rules = {};
+
+        if ( isNull( pRules ) || !(isObject( pRules ) || isArray( pRules )) )
+        {
+            return rules;
+        }
+
+        if ( isNonNullObject( pRules ) )
+        {
+            if ( objectEntries( pRules ).every( e => isString( ObjectEntry.getKey( e ) ) && ObjectEntry.getValue( e ) instanceof HttpHeaderRule ) )
+            {
+                return pRules;
+            }
+        }
+
+        const entries = isArray( pRules ) && asArray( pRules ).every( e => isNonNullObject( e ) || isArray( e ) ) ? asArray( pRules ) : objectEntries( pRules );
+
+        for( let entry of entries )
+        {
+            let httpHeaderRule = HttpHeaderRule.from( entry );
+            if ( isNonNullObject( httpHeaderRule ) && httpHeaderRule.isValid() )
+            {
+                rules[httpHeaderRule.headerName] = httpHeaderRule;
+            }
+        }
+
+        return rules;
     };
 
     /**
@@ -494,7 +838,7 @@ const { _ud = "undefined", $scope } = constants;
     {
         if ( isString( pString ) )
         {
-            let lines = [...(asString( pString ).split( /(\r?\n)/ ))].filter( line => /\w+:\s*\w+/.test( e ) );
+            let lines = [...(asString( pString ).split( /(\r?\n)/ ))].filter( line => /\w+:\s*\w+/.test( line ) );
             return $ln( lines ) > 0;
         }
         return false;
@@ -502,8 +846,8 @@ const { _ud = "undefined", $scope } = constants;
 
     function isCompatibleHeadersObject( pObject )
     {
-        // can be a Map, Headers, HttpHeaders, an object literal, a 2 dimensional array
-        // or a json string, or a string matching the format of a raw http response
+        // can be a Map, Headers, HttpHeaders, an object literal, a 2-dimensional array
+        // or a JSON string, or a string matching the format of a raw http response
 
         if ( isNull( pObject ) )
         {
@@ -615,7 +959,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             super();
 
-            let defaultOptions = resolveHeaderOptions( pDefaultOptions );
+            let defaultOptions = resolveHeaderOptions( pDefaultOptions ?? pOptions ?? {} );
             let options = resolveHeaderOptions( pOptions );
 
             this.#options = options || {};
@@ -640,8 +984,6 @@ const { _ud = "undefined", $scope } = constants;
                     attemptSilent( () => logger.warn( `The maximum lengths of HTTP Header values are (key=${MAX_HEADER_KEY_LENGTH} and value=${MAX_HEADER_VALUE_LENGTH}). "${key}" is ${$ln( key )} and ${$ln( value )} characters respectively.` ) );
                 }
             }
-
-            let headersLength = 0;
 
             if ( $ln( options ) )
             {
@@ -668,23 +1010,12 @@ const { _ud = "undefined", $scope } = constants;
                             {
                                 if ( !isBlank( value ) )
                                 {
-                                    attempt( () => this.append( key, value ) );
-
-                                    headersLength += ($ln( key ) + $ln( value ) + 3); // account for the assignment operator and newline characters
+                                    attempt( () => this.set( key, value ) );
                                 }
                                 validateHeader( key, value );
                             }
                         }
                     }
-                }
-
-                if ( headersLength > MAX_HEADERS_LENGTH )
-                {
-                    attemptSilent( () => logger.warn( `The length of the entire HTTP Headers, ${this.headersLength}, exceeds the configured maximum of ${MAX_HEADERS_LENGTH}` ) );
-                }
-                else if ( headersLength < 1 )
-                {
-                    attemptSilent( () => logger.debug( `There are no headers set` ) );
                 }
             }
         }
@@ -697,38 +1028,6 @@ const { _ud = "undefined", $scope } = constants;
         #resolveValue( pValue, pKey )
         {
             return attempt( () => resolveHeaderValue( pValue, pKey ) );
-        }
-
-        get headersLength()
-        {
-            let len = 0;
-
-            let entries = [...this.#map.entries()];
-
-            for( let entry of entries )
-            {
-                if ( entry )
-                {
-                    let value = ObjectEntry.getValue( entry );
-
-                    if ( value && value instanceof HttpHeader )
-                    {
-                        let s = attempt( () => value.toString() ) || asString( value );
-                        len += $ln( s );
-                    }
-                    else if ( isString( value ) )
-                    {
-                        len += $ln( value );
-                    }
-                    else
-                    {
-                        value = resolveHeaderValue( value, ObjectEntry.getKey( entry ) );
-                        len += $ln( asString( value ) );
-                    }
-                }
-            }
-
-            return asInt( len );
         }
 
         append( pKey, pValue )
@@ -857,9 +1156,12 @@ const { _ud = "undefined", $scope } = constants;
                 {
                     let httpHeader = new HttpHeader( key, value );
 
-                    attempt( () => super.set( key, httpHeader ) );
-
                     attempt( () => this.#map.set( key, httpHeader ) );
+
+                    if ( !(isForbiddenRequestHeader( key )) )
+                    {
+                        attempt( () => super.set( key, httpHeader ) );
+                    }
                 }
             }
         }
@@ -907,43 +1209,7 @@ const { _ud = "undefined", $scope } = constants;
 
         merge( ...pHeaders )
         {
-            const headerObjects = asArray( pHeaders ).filter( isCompatibleHeadersObject );
-
-            const numObjects = $ln( headerObjects );
-
-            const defaultOptions = this.toLiteral();
-
-            const copy = new this.constructor( (numObjects > 0 ? headerObjects[0] : defaultOptions), defaultOptions );
-
-            for( let obj of headerObjects )
-            {
-                if ( isKeyValueArray( obj ) )
-                {
-                    for( let kv of asArray( obj ) )
-                    {
-                        let key = this.#resolveKey( kv[0] || kv );
-                        let value = this.#resolveValue( kv[1] || kv );
-
-                        attempt( () => copy.set( key, value || copy.get( key ) ) );
-                    }
-                }
-                else if ( isPopulatedObject( obj ) || isFunction( obj.entries ) )
-                {
-                    let entries = attempt( () => (isFunction( obj.entries ) ? [...(obj.entries())] : objectEntries( obj )) || [] );
-
-                    entries = ($ln( entries ) <= 0) ? objectEntries( obj ) || [] : entries;
-
-                    for( let entry of entries )
-                    {
-                        let key = this.#resolveKey( ObjectEntry.getKey( entry ) );
-                        let value = this.#resolveValue( ObjectEntry.getValue( entry ), key );
-
-                        attempt( () => copy.set( key, value || copy.get( key ) ) );
-                    }
-                }
-            }
-
-            return copy;
+            return new HttpHeadersMerger().mergeHeaders( this, ...pHeaders );
         }
 
         toString()
@@ -1020,24 +1286,129 @@ const { _ud = "undefined", $scope } = constants;
         return getHeaderValue( this, pKey );
     };
 
+    const DEFAULT_HEADER_MERGE_RULES = defineHttpHeaderRules(
+        {
+            "api_key": new HttpHeaderRule( "api_key", HEADER_MERGE_RULE_PRESERVE ),
+
+            "responseType": new HttpHeaderRule( "responseType", HEADER_MERGE_RULE_PRESERVE ),
+            "accept": new HttpHeaderRule( "accept", HEADER_MERGE_RULE_COMBINE ),
+
+            "allowAbsoluteUrls": new HttpHeaderRule( "allowAbsoluteUrls", HEADER_MERGE_RULE_PRESERVE ),
+            "timeout": new HttpHeaderRule( "timeout", HEADER_MERGE_RULE_REPLACE ),
+            "maxContentLength": new HttpHeaderRule( "maxContentLength", HEADER_MERGE_RULE_REPLACE ),
+            "maxBodyLength": new HttpHeaderRule( "maxBodyLength", HEADER_MERGE_RULE_REPLACE ),
+            "maxRedirects": new HttpHeaderRule( "maxRedirects", HEADER_MERGE_RULE_REPLACE ),
+            "decompress": new HttpHeaderRule( "decompress", HEADER_MERGE_RULE_REPLACE ),
+
+            "content-type": new HttpHeaderRule( "content-type", HEADER_MERGE_RULE_REPLACE ),
+            "content-length": new HttpHeaderRule( "content-length", HEADER_MERGE_RULE_REPLACE ),
+
+            "www-authenticate": new HttpHeaderRule( "www-authenticate", HEADER_MERGE_RULE_REPLACE ),
+            "authorization": new HttpHeaderRule( "authorization", HEADER_MERGE_RULE_REPLACE ),
+            "proxy-authenticate": new HttpHeaderRule( "proxy-authenticate", HEADER_MERGE_RULE_REPLACE ),
+            "proxy-authorization": new HttpHeaderRule( "proxy-authorization", HEADER_MERGE_RULE_REPLACE ),
+
+            "connection": new HttpHeaderRule( "connection", HEADER_MERGE_RULE_REMOVE ),
+            "keep-alive": new HttpHeaderRule( "keep-alive", HEADER_MERGE_RULE_REMOVE ),
+            "proxy-connection": new HttpHeaderRule( "proxy-connection", HEADER_MERGE_RULE_REMOVE ),
+            "TE": new HttpHeaderRule( "TE", HEADER_MERGE_RULE_REMOVE ),
+            "trailer": new HttpHeaderRule( "trailer", HEADER_MERGE_RULE_REMOVE ),
+            "transfer-encoding": new HttpHeaderRule( "transfer-encoding", HEADER_MERGE_RULE_REMOVE ),
+            "upgrade": new HttpHeaderRule( "upgrade", HEADER_MERGE_RULE_REMOVE ),
+
+            // add more as necessary
+        } );
+
+    class HttpHeadersMerger
+    {
+        #rules = DEFAULT_HEADER_MERGE_RULES;
+
+        constructor( pRules )
+        {
+            this.#rules = defineHttpHeaderRules( pRules );
+        }
+
+        getRule( pHeaderName )
+        {
+            return readProperty( pHeaderName );
+        }
+
+        mergeHeaders( pHeaders, ...pOthers )
+        {
+            let objects = [pHeaders, ...(asArray( pOthers || [] ))].filter( isCompatibleHeadersObject );
+
+            if ( $ln( objects ) > 0 )
+            {
+                let options = objects.shift();
+
+                let headers = options instanceof HttpHeaders ? options.clone() : new HttpHeaders( options );
+
+                while ( $ln( objects ) > 0 )
+                {
+                    let obj = objects.shift();
+
+                    let entries = obj instanceof HttpHeaders || isFunction( obj.entries ) ? [...(obj.entries)] : objectEntries( obj );
+
+                    if ( entries && $ln( entries ) )
+                    {
+                        for( let entry of entries )
+                        {
+                            const name = ObjectEntry.getKey( entry );
+                            const value = ObjectEntry.getValue( entry );
+
+                            const rule = this.getRule( name );
+
+                            if ( rule && rule.isValid() )
+                            {
+                                const mergeFunction = rule.mergeFunction;
+                                if ( isFunction( mergeFunction ) )
+                                {
+                                    attempt( () => mergeFunction( headers, name, value ) );
+                                }
+                                else
+                                {
+                                    let existing = readScalarProperty( headers, "*", name );
+
+                                    if ( !["api_key"].includes( name ) || isNull( existing ) || isBlank( existing ) )
+                                    {
+                                        setProperty( headers, name, (value || existing) );
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                let existing = readScalarProperty( headers, "*", name );
+
+                                if ( !["api_key"].includes( name ) || isNull( existing ) || isBlank( existing ) )
+                                {
+                                    setProperty( headers, name, (value || existing) );
+                                }
+                            }
+                        }
+                    }
+                }
+                return headers;
+            }
+            return new HttpHeaders();
+        }
+    }
+
     HttpHeaders.mergeHeaders = function( pHeaders, ...pOthers )
     {
-        let headers = new HttpHeaders( pHeaders );
-
         let objects = [pHeaders, ...(asArray( pOthers || [] ))].filter( isCompatibleHeadersObject );
 
         if ( $ln( objects ) > 0 )
         {
-            objects = objects.map( e => new HttpHeaders( e, headers ) );
+            let headers = new HttpHeaders( objects.shift() );
 
-            while ( $ln( objects ) > 0 )
-            {
-                headers = headers.merge( objects.shift() );
-            }
+            headers = new HttpHeadersMerger().mergeHeaders( headers, ...objects );
+
+            return headers;
         }
 
-        return headers;
+        return new HttpHeaders( {} );
     };
+
 
     class HttpRequestHeaders extends HttpHeaders
     {
@@ -1093,7 +1464,12 @@ const { _ud = "undefined", $scope } = constants;
             HttpResponseHeaders,
             resolveHeaderName,
             resolveHeaderValue,
-            getHeaderValue
+            getHeaderValue,
+            HttpHeaderMergeRule,
+            HttpHeaderRule,
+            defineHttpHeaderRules,
+            isForbiddenRequestHeader,
+            isForbiddenResponseHeader,
         };
 
     mod = toolBocksModule.extend( mod );
