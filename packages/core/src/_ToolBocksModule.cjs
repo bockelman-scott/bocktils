@@ -8796,7 +8796,30 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                                             {
                                                 let existing = accessor( pKey );
 
-                                                let value = isArray( existing ) ? [...existing, pValue] : isNonNullObj( existing ) ? { ...existing, ...(isNonNullObj( pValue ) ? pValue : { pValue }) } : (asString( existing ) + "," + asString( pValue ));
+                                                let value = pValue ?? existing;
+
+                                                if ( isArray( existing ) )
+                                                {
+                                                    value = [...(new Set( [...existing, ...(isArray( pValue ) ? pValue : [pValue])] ))];
+                                                }
+                                                else if ( isNonNullObj( existing ) )
+                                                {
+                                                    if ( (isFunction( existing?.equals ) && !existing.equals( pValue )) || !OBJECT_REGISTRY.areEqual( existing, pValue ) )
+                                                    {
+                                                        value = { ...existing, ...(isNonNullObj( pValue ) ? pValue : { [name]: pValue }) };
+                                                    }
+                                                    else
+                                                    {
+                                                        value = existing;
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    let exStr = _asStr( existing );
+                                                    let newStr = _asStr( pValue );
+
+                                                    value = (_ucase( exStr.trim() ) === _ucase( newStr.trim() )) ? exStr : (exStr + ", " + newStr);
+                                                }
 
                                                 return ((isFunc( pObj?.set ) && (2 === $ln( pObj?.set )))) ? attempt( () => pObj.set( pKey, value ) ) : attempt( () => pObj[pKey] = value );
                                             } );
@@ -8939,7 +8962,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     function readProperty( pObject, ...pPropertyPaths )
     {
-        const paths = _preparePaths( pPropertyPaths );
+        const paths = _preparePaths( ...pPropertyPaths );
 
         const obj = _prepareContainer( pObject, ...paths );
 
