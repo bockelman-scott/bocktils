@@ -4800,16 +4800,27 @@ const { _ud = "undefined", $scope } = constants;
                   locked: false,
                   preserveUserDefinedClasses: true,
                   preserveTypes: false,
+                  maxDepth: 5,
                   ...DEFAULT_TRANSFORMER_PROPERTIES
               } );
 
-    function asMap( pVal, pOptions = DEFAULT_AS_MAP_OPTIONS )
+    function asMap( pVal, pOptions = DEFAULT_AS_MAP_OPTIONS, pVisited = new ResolvedSet(), pStack = [], pDepth = 0 )
     {
         const options = { ...DEFAULT_AS_MAP_OPTIONS, ...(pOptions || {}) };
 
         const recursive = !!options.recursive;
         const preserve = !!options.preserveUserDefinedClasses;
         const locked = !!options.locked;
+        const maxDepth = options.maxDepth || 5;
+
+        const visited = pVisited || new ResolvedSet();
+        const stack = (pStack || []);
+        const depth = toInteger( pDepth ) || 0;
+
+        if ( visited.has( pVal ) || depth > maxDepth || detectCycles( stack, 3, 3 ) )
+        {
+            return pVal;
+        }
 
         const keyTransformer = isFunction( options.keyTransformer ) ? options.keyTransformer : ( pKey ) => pKey;
         const valueTransformer = isFunction( options.valueTransformer ) ? options.valueTransformer : ( pValue ) => pValue;
@@ -4846,7 +4857,7 @@ const { _ud = "undefined", $scope } = constants;
 
                     pVal.forEach( ( e, i ) =>
                                   {
-                                      map.set( i, shouldRecurse( e, recursive ) ? asMap( e, options ) : e );
+                                      map.set( i, shouldRecurse( e, recursive ) ? asMap( e, options, visited, [...stack, i, depth + 1] ) : e );
                                   } );
                 }
                 else
@@ -4859,7 +4870,7 @@ const { _ud = "undefined", $scope } = constants;
 
                                                        key = keyTransformer( key );
 
-                                                       map.set( key, shouldRecurse( value, recursive ) ? asMap( value, options ) : valueTransformer( value ) );
+                                                       map.set( key, shouldRecurse( value, recursive ) ? asMap( value, options, visited, [...stack, key], depth + 1 ) : valueTransformer( value ) );
                                                    } );
                 }
                 break;
@@ -4882,7 +4893,7 @@ const { _ud = "undefined", $scope } = constants;
                 break;
 
             case _fun:
-                map.set( "function", pVal );
+                map.set( (pVal?.name || "function"), pVal );
                 map.execute = function( ...pArgs )
                 {
                     return isAsyncFunction( pVal ) ? asyncAttempt( async() => await pVal.call( map, ...pArgs ) ) : attempt( () => pVal.call( map, ...pArgs ) );
@@ -4897,6 +4908,9 @@ const { _ud = "undefined", $scope } = constants;
             default:
                 break;
         }
+
+        visited.resolve( pVal, map );
+        visited.resolveForNodePath( map, ...stack );
 
         return !!locked ? lock( map ) : map;
     }
