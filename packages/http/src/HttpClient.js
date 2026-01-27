@@ -150,6 +150,7 @@ const { _ud = "undefined", $scope } = constants;
             objectEntries,
             readProperty,
             readScalarProperty,
+            setProperty,
             sleep,
             no_op,
             $ln,
@@ -259,6 +260,9 @@ const { _ud = "undefined", $scope } = constants;
             PRIORITY,
             resolveHttpMethod,
             calculatePriority,
+            HttpPropertyRule,
+            HttpPropertyMergeRule,
+            HttpPropertiesMerger,
             HttpContentType,
             HttpVerb,
             HttpStatus,
@@ -275,7 +279,15 @@ const { _ud = "undefined", $scope } = constants;
 
     const { ResponseData, streamToFile, pipeToFile } = responseDataModule;
 
-    const { HttpHeaders, HttpRequestHeaders, HttpResponseHeaders, resolveHeaderName, resolveHeaderValue } = httpHeaders;
+    const
+        {
+            HttpHeaders,
+            HttpRequestHeaders,
+            HttpResponseHeaders,
+            HttpHeadersMerger,
+            resolveHeaderName,
+            resolveHeaderValue
+        } = httpHeaders;
 
     // import the HttpRequest (facade) class we use to provide a uniform interface for HTTP Requests
     const { HttpRequest, cloneRequest } = httpRequestModule;
@@ -492,7 +504,7 @@ const { _ud = "undefined", $scope } = constants;
     const HTTP_AGENT_DEFAULT_CFG = lock( new HttpAgentConfig() );
 
     // create another instance more suitable for reading streams
-    // from clouflare/S3 backed servers
+    // from cloudflare/S3 backed servers
     const HTTP_AGENT_DOWNLOAD_CFG = lock( new HttpAgentConfigExtended() );
 
     // create a global instance of http.Agent using the default HttpAgentConfig
@@ -759,6 +771,7 @@ const { _ud = "undefined", $scope } = constants;
      *
      * @param pBody
      * @param {Object|HttpConfig|RequestInit} pConfig An object with either a body or data property.
+     * @param {boolean} [pParseJson=false] whether to stringify the body if it is an object
      *
      * @returns {String|ArrayBuffer|Blob|DataView|File|FormData|TypedArray|URLSearchParams|ReadableStream|null}
      * The body to be sent to the server or the body received from the server (which may be an unfulfilled Promise)
@@ -1074,28 +1087,9 @@ const { _ud = "undefined", $scope } = constants;
 
         merge( ...pConfigs )
         {
-            // TODO: merge using rules
-            const configs = attempt( () => asArray( pConfigs || [] ).filter( isNonNullObject ).map( resolveHttpConfig ).filter( isHttpConfig ) );
+            let configs = [this, ...pConfigs];
 
-            if ( configs && $ln( configs ) > 0 )
-            {
-                for( let cfg of configs )
-                {
-                    this.url = !isBlank( cfg.url ) ? (cleanUrl( cfg.url ) || this.url) : this.url;
-                    this.method = resolveHttpMethod( cfg.method || this.method || VERBS.GET ) || this.method;
-                    this.httpAgent = resolveHttpAgent( cfg.httpAgent || this.httpAgent || HTTP_AGENT ) || this.httpAgent;
-                    this.httpsAgent = resolveHttpsAgent( cfg.httpsAgent || this.httpsAgent || HTTPS_AGENT ) || this.httpsAgent;
-                    this.data = cfg.data || cfg.body || this.data;
-                    this.body = cfg.body || cfg.data || this.body;
-                    this.params = cfg.params || this.params;
-                }
-
-                let heads = configs.filter( isNonNullObject ).map( e => e.headers );
-
-                this.headers = attempt( () => HttpHeaders.mergeHeaders( this.#headers, ...heads ) );
-            }
-
-            return fixAgents( this ) || this;
+            return HttpConfig.mergeConfigs( ...configs );
         }
 
         clone()
@@ -1106,13 +1100,110 @@ const { _ud = "undefined", $scope } = constants;
         }
     }
 
-    class HttpConfigMerger
+    HttpConfig.resolveUrl = resolveUrl;
+
+    const DEFAULT_CONFIG_MERGE_RULES =
+        lock( HttpPropertiesMerger.defineHttpPropertyRules(
+            {
+                "auth": new HttpPropertyRule( "auth", HttpPropertyMergeRule["REPLACE"] ),
+                "withCredentials": new HttpPropertyRule( "withCredentials", HttpPropertyMergeRule["REPLACE"] ),
+
+                "xsrfCookieName": new HttpPropertyRule( "xsrfCookieName", HttpPropertyMergeRule["REPLACE"] ),
+                "xsrfHeaderName": new HttpPropertyRule( "xsrfHeaderName", HttpPropertyMergeRule["REPLACE"] ),
+                "withXSRFToken": new HttpPropertyRule( "withXSRFToken", HttpPropertyMergeRule["REPLACE"] ),
+
+                "method": new HttpPropertyRule( "method", HttpPropertyMergeRule["REPLACE"] ),
+
+                "baseUrl": new HttpPropertyRule( "baseUrl", HttpPropertyMergeRule["PRESERVE"] ),
+                "url": new HttpPropertyRule( "url", HttpPropertyMergeRule["REPLACE"] ),
+
+                "responseType": new HttpPropertyRule( "responseType", HttpPropertyMergeRule["REPLACE"] ),
+                "responseEncoding": new HttpPropertyRule( "responseEncoding", HttpPropertyMergeRule["REPLACE"] ),
+                "accept": new HttpPropertyRule( "accept", HttpPropertyMergeRule["COMBINE"] ),
+
+                "params": new HttpPropertyRule( "params", HttpPropertyMergeRule["REPLACE"] ),
+                "paramsSerializer": new HttpPropertyRule( "paramsSerializer", HttpPropertyMergeRule["REPLACE"] ),
+
+                "data": new HttpPropertyRule( "data", HttpPropertyMergeRule["REPLACE"] ),
+                "body": new HttpPropertyRule( "body", HttpPropertyMergeRule["REPLACE"] ),
+
+                "env": new HttpPropertyRule( "env", HttpPropertyMergeRule["PRESERVE"] ),
+                "formSerializer": new HttpPropertyRule( "formSerializer", HttpPropertyMergeRule["PRESERVE"] ),
+
+                "allowAbsoluteUrls": new HttpPropertyRule( "allowAbsoluteUrls", HttpPropertyMergeRule["PRESERVE"] ),
+                "timeout": new HttpPropertyRule( "timeout", HttpPropertyMergeRule["REPLACE"] ),
+                "maxContentLength": new HttpPropertyRule( "maxContentLength", HttpPropertyMergeRule["REPLACE"] ),
+                "maxBodyLength": new HttpPropertyRule( "maxBodyLength", HttpPropertyMergeRule["REPLACE"] ),
+                "maxRedirects": new HttpPropertyRule( "maxRedirects", HttpPropertyMergeRule["REPLACE"] ),
+                "decompress": new HttpPropertyRule( "decompress", HttpPropertyMergeRule["REPLACE"] ),
+
+                "transformRequest": new HttpPropertyRule( "transformRequest", HttpPropertyMergeRule["REPLACE"] ),
+                "transformResponse": new HttpPropertyRule( "transformResponse", HttpPropertyMergeRule["REPLACE"] ),
+
+                "validateStatus": new HttpPropertyRule( "allowAbsoluteUrls", HttpPropertyMergeRule["PRESERVE"] ),
+
+                "proxy": new HttpPropertyRule( "proxy", HttpPropertyMergeRule["REPLACE"] ),
+                "socketPath": new HttpPropertyRule( "socketPath", HttpPropertyMergeRule["REPLACE"] ),
+                "transport": new HttpPropertyRule( "transport", HttpPropertyMergeRule["REPLACE"] ),
+
+                "httpAgent": new HttpPropertyRule( "httpAgent", HttpPropertyMergeRule["REPLACE"] ),
+                "httpsAgent": new HttpPropertyRule( "httpAgent", HttpPropertyMergeRule["REPLACE"] ),
+
+                "cancelToken": new HttpPropertyRule( "cancelToken", HttpPropertyMergeRule["REPLACE"] ),
+                "signal": new HttpPropertyRule( "signal", HttpPropertyMergeRule["REPLACE"] ),
+                "maxRate": new HttpPropertyRule( "maxRate", HttpPropertyMergeRule["REPLACE"] ),
+
+                "headers": new HttpPropertyRule( "headers",
+                                                 new HttpPropertyMergeRule( "headers", ( pObject, pKey, pValue ) =>
+                                                 {
+                                                     // existing headers
+                                                     let headers = readProperty( pObject, "headers" );
+
+                                                     headers = (isNonNullObject( headers )) ? isFunction( headers.clone ) ? headers.clone() : new HttpHeaders( headers, pValue ?? {} ) : new HttpHeaders();
+
+                                                     if ( isNonNullObject( pValue ) )
+                                                     {
+                                                         const merger = HttpHeadersMerger.getDefault();
+                                                         headers = merger.mergeHeaders( headers, pValue );
+                                                     }
+
+                                                     setProperty( pObject, "headers", headers );
+                                                 } ) )
+
+                // add more as necessary
+            } ) );
+
+    class HttpConfigMerger extends HttpPropertiesMerger
     {
-        #configRules;
-        #headersMerger;
+        constructor( pConfigRules = DEFAULT_CONFIG_MERGE_RULES )
+        {
+            super( pConfigRules || DEFAULT_CONFIG_MERGE_RULES );
+        }
 
+        mergeConfigs( pConfig, ...pOthers )
+        {
+            let configs = [pConfig, ...pOthers].filter( isNonNullObject );
 
+            let headersObjects = configs.map( e => e.headers );
+
+            let config = super.mergeProperties( pConfig, ...pOthers );
+
+            let headersMerger = HttpHeadersMerger.getDefault();
+
+            let headers = headersMerger.mergeHeaders( ...headersObjects );
+
+            config.headers = headers;
+
+            return config;
+        }
     }
+
+    const DEFAULT_CONFIG_MERGER = new HttpConfigMerger( DEFAULT_CONFIG_MERGE_RULES );
+
+    HttpConfigMerger.getDefault = function()
+    {
+        return DEFAULT_CONFIG_MERGER || new HttpConfigMerger( DEFAULT_CONFIG_MERGE_RULES );
+    };
 
     const isHttpConfig = function( pConfig, pStrict = false, pClass = HttpConfig )
     {
@@ -1200,47 +1291,104 @@ const { _ud = "undefined", $scope } = constants;
 
     HttpConfig.mergeConfigs = function( ...pConfigs )
     {
+        const configs = asArray( pConfigs ).filter( isNonNullObject );
 
-// TODO: merge object with rules
-
-        let properties = { ...DEFAULT_CONFIG };
-
-        let others = (asArray( pConfigs || [{}] ));
-
-        if ( $ln( others ) > 0 )
+        if ( $ln( configs ) > 1 )
         {
-            for( let other of others )
-            {
-                let cfg = isHttpConfig( other ) ? toHttpConfigLiteral( other ) : { ...(other) };
-                properties = { ...properties, ...(cfg || other) };
-            }
+            const merger = HttpConfigMerger.getDefault();
+            return merger.mergeConfigs( configs.shift(), ...(asArray( configs )) );
         }
 
-        const httpConfig = new HttpConfig( { ...properties } );
-
-        const configs = asArray( pConfigs ).filter( isNonNullObject ).map( resolveHttpConfig ).filter( isHttpConfig );
-
-        return httpConfig.merge( ...configs );
+        return configs[0];
     };
 
     HttpConfig.from = function( ...pValues )
     {
-        const args = [...(asArray( pValue ))].filter( e => !isNull( e ) );
+        let args = [...(asArray( pValues ))].filter( e => !isNull( e ) );
 
-        if ( args.every( e => isNonNullObject( e ) && (isHttpConfig( e ) || isFunction( e.toLiteral )) ) )
+        if ( $ln( args ) > 0 && (args.every( e => isNonNullObject( e ) && (isHttpConfig( e ) || isFunction( e.toLiteral )) )) )
         {
+            args = args.map( e => new HttpConfig( e, e?.headers, e?.url, e?.method, e?.body || e?.data ) );
 
+            return HttpConfig.mergeConfigs( ...args );
         }
+
+        return new HttpConfig( args );
     };
 
-    async function prepareConfig( pConfig, pUrl = pConfig?.url, pMethod = pConfig.method, pBody, pParseJson )
+    HttpConfig.toFetchRequestInitOptions = async function( pConfig )
     {
-        const httpConfig = isHttpConfig( pConfig ) ? pConfig : new HttpConfig( pConfig, pConfig?.headers, pUrl || pConfig?.url, pMethod || pConfig?.method, (pBody || pConfig.body) );
+        const config = resolveHttpConfig( pConfig );
 
-        const url = cleanUrl( asString( resolveUrl( pUrl, pConfig ) || pConfig?.url, true ), true );
+        const mapper = async( pCfg = config, pInitOptions = {} ) =>
+        {
+            const cfg = resolveHttpConfig( pCfg, config, pConfig );
 
-        const method = resolveHttpMethod( pMethod || pConfig?.method );
+            const initOpts = asObject( pInitOptions || {} );
 
+            let headers = cfg?.headers || {};
+
+            initOpts.headers = isFunction( headers?.toLiteral ) ? headers.toLiteral() : { ...(toObjectLiteral( asObject( headers || {} ) )) };
+
+            initOpts.method = ucase( cfg?.method || VERBS.GET );
+
+            const urlMapper = ( pUrl, pParams ) =>
+            {
+                let url = cleanUrl( resolveUrl( pUrl, pConfig ), true );
+
+                let params = pParams || cfg?.params || pConfig?.params;
+
+                if ( !(isNull( pParams )) )
+                {
+                    let qs = new URLSearchParams( params ).toString();
+
+                    if ( !isBlank( qs ) )
+                    {
+                        url = url.replace( /\/+$/, _mt );
+                        if ( url.includes( "?" ) )
+                        {
+                            url += (/\?\w+=\w+$/.test( url )) ? ("&" + qs) : qs;
+                        }
+                        else
+                        {
+                            url += ("?" + qs);
+                        }
+                    }
+                }
+
+                return url;
+            };
+
+            initOpts.url = urlMapper( cfg?.url, cfg?.params || config?.params || pConfig?.params );
+
+            let body = (cfg?.data || config?.data || pConfig?.data || cfg?.body || config?.body || pConfig?.body);
+            body = !isNull( body ) ? await body : null;
+
+            if ( !isNull( body ) )
+            {
+                initOpts.body = isNonNullObject( body ) ? attempt( () => asJson( body ) || body ) : body;
+            }
+
+            if ( cfg?.withCredentials ?? config?.withCredentials ?? pConfig?.withCredentials )
+            {
+                initOpts.credentials = "include";
+            }
+
+            if ( cfg?.timeout ?? config?.timeout ?? pConfig?.timeout )
+            {
+                initOpts.signal = AbortSignal.timeout( cfg?.timeout ?? config?.timeout ?? pConfig?.timeout );
+            }
+
+            return initOpts;
+        };
+
+        let requestInitOptions = { ...(config) };
+
+        return await mapper( config, requestInitOptions );
+    };
+
+    async function prepareRequestBody( pBody, pConfig, httpConfig, method, pParseJson )
+    {
         let body = pBody || pConfig?.data || pConfig?.body || httpConfig?.data || httpConfig?.body;
 
         let params = null;
@@ -1271,16 +1419,35 @@ const { _ud = "undefined", $scope } = constants;
             body = httpConfig.body = httpConfig.data = null;
         }
 
+        return { body, params, contentType, contentLength };
+    }
+
+    async function prepareConfig( pConfig, pUrl = pConfig?.url, pMethod = pConfig.method, pBody, pParseJson )
+    {
+        const httpConfig = isHttpConfig( pConfig ) ? pConfig : new HttpConfig( pConfig, pConfig?.headers, pUrl || pConfig?.url, pMethod || pConfig?.method, (pBody || pConfig?.body || pConfig?.data) );
+
+        const url = cleanUrl( asString( resolveUrl( pUrl, pConfig ) || pConfig?.url, true ), true );
+
+        const method = resolveHttpMethod( pMethod || pConfig?.method );
+
+        let
+            {
+                body,
+                params,
+                contentType,
+                contentLength
+            } = await prepareRequestBody( pBody, pConfig, httpConfig, method, pParseJson );
+
         let config = new HttpConfig( httpConfig, httpConfig.headers, url, method, body );
 
-        if ( params )
+        if ( isNull( body ) && params )
         {
-            config.params = params;
+            return await prepareConfigParams( config, url, method, params );
         }
 
         config = HttpConfig.mergeConfigs( httpConfig, config );
 
-        if ( isNull( contentType ) || (isNull( body ) || !isNull( params )) )
+        if ( isNull( body ) )
         {
             attempt( () => config.removeHeaderValues( ...(asArray( objectKeys( HTTP_HEADERS.MESSAGE_BODY ) )) ) );
         }
@@ -1290,13 +1457,13 @@ const { _ud = "undefined", $scope } = constants;
 
     async function prepareConfigParams( pConfig, pUrl = pConfig?.url, pMethod = pConfig.method, pParams = { "params": new URLSearchParams() } )
     {
-        const httpConfig = isHttpConfig( pConfig ) ? pConfig : new HttpConfig( pConfig, pConfig?.headers, pUrl || pConfig?.url, pMethod || pConfig?.method, (pBody || pConfig.body || pConfig.params) );
+        const httpConfig = isHttpConfig( pConfig ) ? pConfig : new HttpConfig( pConfig, pConfig?.headers, pUrl || pConfig?.url, pMethod || pConfig?.method, (pConfig.body || pConfig.data) );
 
         const url = cleanUrl( asString( pUrl || pConfig?.url, true ), true );
 
         const method = resolveHttpMethod( pMethod || pConfig?.method );
 
-        let params = pParams || httpConfig.params;
+        let params = pParams || pConfig?.params || httpConfig.params;
 
         params = !isNull( params ) ? new URLSearchParams( params ) : null;
 
@@ -1306,7 +1473,10 @@ const { _ud = "undefined", $scope } = constants;
 
         config.params = params;
 
-        attempt( () => config.removeHeaderValues( ...(asArray( objectKeys( HTTP_HEADERS.MESSAGE_BODY ) )) ) );
+        if ( isNull( config.data ) && isNull( config.body ) )
+        {
+            attempt( () => config.removeHeaderValues( ...(asArray( objectKeys( HTTP_HEADERS.MESSAGE_BODY ) )) ) );
+        }
 
         return fixAgents( config );
     }
@@ -1321,7 +1491,7 @@ const { _ud = "undefined", $scope } = constants;
 
     HttpConfig.getDownloadDefault = function()
     {
-        return new HttpConfig( DEFAULT_HTTP_DOWNLOAD_CONFIG );
+        return new HttpConfig( DEFAULT_HTTP_DOWNLOAD_CONFIG, DEFAULT_HTTP_DOWNLOAD_CONFIG.headers );
     };
 
     HttpConfig.getDefault = function( pForDownload = false )
@@ -1334,6 +1504,8 @@ const { _ud = "undefined", $scope } = constants;
         let baseConfig = HttpConfig.getDefault( pForDownload );
 
         let httpConfig = new HttpConfig( { ...(baseConfig.toLiteral()), ...(asObject( pCustomProperties )) } );
+
+        httpConfig = HttpConfig.mergeConfigs( baseConfig, httpConfig );
 
         return fixAgents( httpConfig );
     };
@@ -1937,30 +2109,24 @@ const { _ud = "undefined", $scope } = constants;
     };
 
 
-    //TODO: not this
-    async function prepareRequestConfig( pUrl, pMethod, pConfig, pBody )
+    async function prepareFetchConfig( pUrl, pMethod, pConfig, pBody, pParseJson )
     {
-        const url = cleanUrl( asString( resolveUrl( pUrl, pConfig ), true ), true );
+        const config = resolveHttpConfig( pConfig );
 
-        const method = resolveHttpMethod( pMethod || pConfig?.method );
+        const url = cleanUrl( asString( resolveUrl( pUrl, config ), true ), true );
 
-        let body = await (pBody || pConfig?.data || pConfig?.body || httpConfig?.data || httpConfig?.body);
+        const method = resolveHttpMethod( pMethod || config?.method );
 
-        const cfg =
-            {
-                ...(toHttpConfigLiteral( pConfig || {} )),
-                ...({ url: url, method: method })
-            };
+        let body = await (pBody || config?.data || config?.body || pConfig?.data || pConfig?.body);
 
-        if ( body )
-        {
-            cfg.body = cfg.data = await asyncAttempt( async() => await resolveBody( body, cfg ) );
-        }
+        let cfg = await prepareConfig( config, url, method, body, pParseJson );
+
+        cfg = await HttpConfig.toFetchRequestInitOptions( cfg );
 
         return { url, cfg };
     }
 
-    HttpConfig.prepareRequestConfig = prepareRequestConfig;
+    HttpConfig.prepareRequestConfig = prepareFetchConfig;
 
     /**
      * This class provides default implementations of HTTP request methods.
@@ -1982,20 +2148,14 @@ const { _ud = "undefined", $scope } = constants;
          */
         constructor( pConfig = DEFAULT_HTTP_CONFIG, pOptions = DEFAULT_HTTP_CLIENT_OPTIONS )
         {
-            //TODO: convert to RequestInt model
+            this.#options = { ...DEFAULT_HTTP_CLIENT_OPTIONS, ...(pOptions || {}) };
 
-            this.#config = (isHttpConfig( pConfig, true )
-                            && isFunction( pConfig?.clone )
-                            && isFunction( pConfig?.merge )) ?
-                           pConfig.clone().merge( DEFAULT_HTTP_CONFIG, pConfig ) :
-                { ...DEFAULT_CONFIG, ...(toHttpConfigLiteral( pConfig || {} )) };
-
-            this.#options = populateOptions( pOptions || {}, DEFAULT_HTTP_CLIENT_OPTIONS );
+            this.#config = HttpConfig.toFetchRequestInitOptions( pConfig || this.#options );
         }
 
         get config()
         {
-            return fixAgents( resolveHttpConfig( this.#config ) );
+            return { ...(this.#config) };
         }
 
         get httpConfig()
@@ -2005,19 +2165,25 @@ const { _ud = "undefined", $scope } = constants;
 
         get maxRedirects()
         {
-            return this.config?.maxRedirects || this.options?.maxRedirects || 5;
+            return this.httpConfig?.maxRedirects || this.options?.maxRedirects || 5;
         }
 
         mergeConfig( pConfig )
         {
-            // TODO: merge using rules, convert to RequestInit
+            const httpCfg = this.httpConfig;
 
-            let mergedConfig = { ...({ ...(this.config || {}) }), ...(toHttpConfigLiteral( pConfig || {} )) };
+            let config = resolveHttpConfig( pConfig || httpCfg ) || pConfig;
 
-            mergedConfig.httpAgent = resolveHttpAgent( pConfig?.httpAgent || this.config?.httpAgent || HTTP_AGENT ) || HTTP_AGENT;
-            mergedConfig.httpsAgent = resolveHttpsAgent( pConfig?.httpsAgent || this.config?.httpsAgent || HTTPS_AGENT ) || HTTPS_AGENT;
+            if ( isHttpConfig( config ) )
+            {
+                config = HttpConfig.mergeConfigs( httpCfg, (config || pConfig) );
+            }
+            else
+            {
+                config = { ...(toHttpConfigLiteral( httpCfg )), ...(asObject( (config || pConfig) )) };
+            }
 
-            return fixAgents( mergedConfig );
+            return HttpConfig.toFetchRequestInitOptions( config );
         }
 
         resolveUrl( pUrl, pConfig )
@@ -2027,7 +2193,7 @@ const { _ud = "undefined", $scope } = constants;
 
         resolveConfig( pConfig, pRequest )
         {
-            let cfg = fixAgents( this.mergeConfig( pConfig || this.config ) );
+            let cfg = this.mergeConfig( pConfig || this.config );
 
             if ( _ud !== typeof Request && pRequest instanceof Request )
             {
@@ -2040,12 +2206,12 @@ const { _ud = "undefined", $scope } = constants;
                 cfg = { ...cfg, ...(this.mergeConfig( pRequest )) };
             }
 
-            return fixAgents( cfg );
+            return HttpConfig.toFetchRequestInitOptions( new HttpConfig( { ...(cfg) }, cfg.headers, cfg.url, cfg.method, cfg.body ) );
         }
 
         async resolveBody( pBody, pConfig )
         {
-            return resolveBody( pBody, pConfig );
+            return resolveBody( pBody || pConfig?.body || pConfig?.data, pConfig || this.config );
         }
 
         get options()
@@ -2144,10 +2310,10 @@ const { _ud = "undefined", $scope } = constants;
         {
             const me = this;
 
-            const { url, cfg } = await prepareRequestConfig( pUrl,
-                                                             resolveHttpMethod( pMethod ),
-                                                             resolveHttpConfig( pConfig, this.config ),
-                                                             pBody );
+            const { url, cfg } = await prepareFetchConfig( pUrl,
+                                                           resolveHttpMethod( pMethod ),
+                                                           resolveHttpConfig( pConfig, this.config ),
+                                                           pBody );
 
             return await me.doFetch( url, cfg );
         }
@@ -2167,7 +2333,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             const me = this;
 
-            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.GET, pConfig || this.config );
+            const { url, cfg } = await prepareFetchConfig( pUrl, VERBS.GET, pConfig || this.config );
 
             return await asyncAttempt( async() => await me.sendRequest( VERBS.GET, url, cfg, null, pRedirects, pRetries, pResolve, pReject ) );
         }
@@ -2176,7 +2342,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             const me = this;
 
-            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.GET, pConfig || this.config );
+            const { url, cfg } = await prepareFetchConfig( pUrl, VERBS.GET, pConfig || this.config );
 
             const responseData = new ResponseData( await asyncAttempt( async() => await me.sendGetRequest( url, cfg ) ) );
 
@@ -2244,7 +2410,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             const me = this;
 
-            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.POST, pConfig || this.config, pBody );
+            const { url, cfg } = await prepareFetchConfig( pUrl, VERBS.POST, pConfig || this.config, pBody );
 
             return asyncAttempt( async() => await me.sendRequest( VERBS.POST, url, cfg, (cfg.body || cfg.data), pRedirects, pRetries, pResolve, pReject ) );
         }
@@ -2256,60 +2422,49 @@ const { _ud = "undefined", $scope } = constants;
 
         async sendDeleteRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
-            const me = this;
+            const { url, cfg } = await prepareFetchConfig( pUrl, VERBS.DELETE, pConfig || this.config, pBody );
 
-            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.DELETE, pConfig || this.config, pBody );
-
-            return asyncAttempt( async() => await me.sendRequest( VERBS.DELETE, url, cfg, (cfg.body || cfg.data), pRedirects, pRetries, pResolve, pReject ) );
+            return asyncAttempt( async() => await this.sendRequest( VERBS.DELETE, url, cfg, (cfg.body || cfg.data), pRedirects, pRetries, pResolve, pReject ) );
         }
 
         async sendPutRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
-            const me = this;
+            const { url, cfg } = await prepareFetchConfig( pUrl, VERBS.PUT, pConfig || this.config, pBody );
 
-            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.PUT, pConfig || this.config, pBody );
-
-            return asyncAttempt( async() => await me.sendRequest( VERBS.PUT, url, cfg, (cfg.body || cfg.data), pRedirects, pRetries, pResolve, pReject ) );
+            return asyncAttempt( async() => await this.sendRequest( VERBS.PUT, url, cfg, (cfg.body || cfg.data), pRedirects, pRetries, pResolve, pReject ) );
         }
 
         async sendPatchRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
-            const me = this;
+            const { url, cfg } = await prepareFetchConfig( pUrl, VERBS.PATCH, pConfig || this.config, pBody );
 
-            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.PATCH, pConfig || this.config, pBody );
-
-            return asyncAttempt( async() => await me.sendRequest( VERBS.PATCH, url, cfg, (cfg.body || cfg.data), pRedirects, pRetries, pResolve, pReject ) );
+            return asyncAttempt( async() => await this.sendRequest( VERBS.PATCH, url, cfg, (cfg.body || cfg.data), pRedirects, pRetries, pResolve, pReject ) );
         }
 
         async sendHeadRequest( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )
         {
-            const me = this;
+            const { url, cfg } = await prepareFetchConfig( pUrl, VERBS.HEAD, pConfig || this.config );
 
-            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.HEAD, pConfig || this.config );
-
-            return asyncAttempt( async() => await me.sendRequest( VERBS.HEAD, url, cfg ) );
+            return asyncAttempt( async() => await this.sendRequest( VERBS.HEAD, url, cfg ) );
         }
 
         async sendOptionsRequest( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )
         {
-            const me = this;
+            const { url, cfg } = await prepareFetchConfig( pUrl, VERBS.OPTIONS, pConfig || this.config );
 
-            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.OPTIONS, pConfig || this.config );
-
-            return asyncAttempt( async() => await me.sendRequest( VERBS.OPTIONS, url, cfg ) );
+            return asyncAttempt( async() => await this.sendRequest( VERBS.OPTIONS, url, cfg ) );
         }
 
         async sendTraceRequest( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )
         {
-            const me = this;
+            const { url, cfg } = await prepareFetchConfig( pUrl, VERBS.TRACE, pConfig || this.config );
 
-            const { url, cfg } = await prepareRequestConfig( pUrl, VERBS.TRACE, pConfig || this.config );
-
-            return asyncAttempt( async() => await me.sendRequest( VERBS.TRACE, url, cfg ) );
+            return asyncAttempt( async() => await this.sendRequest( VERBS.TRACE, url, cfg ) );
         }
     }
 
-    HttpFetchClient.prepareRequestInit = prepareRequestConfig;
+    HttpFetchClient.prepareFetchConfig = prepareFetchConfig;
+    HttpFetchClient.prepareRequestInit = prepareFetchConfig;
 
     function updateContext( pConfig, pResponseData )
     {
@@ -2399,7 +2554,7 @@ const { _ud = "undefined", $scope } = constants;
             return config.merge( DEFAULT_HTTP_CONFIG, config );
         }
 
-        return new HttpConfig( { ...DEFAULT_CONFIG, ...(toHttpConfigLiteral( config )) } );
+        return new HttpConfig( { ...DEFAULT_CONFIG, ...(toHttpConfigLiteral( config )) }, config?.headers );
     };
 
     IHttpClient.resolveDelegate = function( pDelegate, pConfig, pOptions )
@@ -2603,7 +2758,7 @@ const { _ud = "undefined", $scope } = constants;
 
         set config( pConfig )
         {
-            const config = isHttpConfig( pConfig, true ) ? pConfig.merge( DEFAULT_HTTP_CONFIG, pConfig ) : new HttpConfig( { ...DEFAULT_CONFIG, ...(asObject( pConfig || {} )) }, DEFAULT_HTTP_CONFIG.headers );
+            const config = isHttpConfig( pConfig, true ) ? pConfig.merge( DEFAULT_HTTP_CONFIG, pConfig ) : new HttpConfig( { ...DEFAULT_CONFIG, ...(asObject( pConfig || {} )) }, (DEFAULT_HTTP_CONFIG.headers ?? pConfig?.headers) );
             this.#config = isHttpConfig( this.#config, true ) ? this.#config.merge( config ) : config;
         }
 
@@ -2640,7 +2795,7 @@ const { _ud = "undefined", $scope } = constants;
             const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
                                              resolveUrl( pUrl, pConfig || this.config ),
                                              resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ),
-                                             await resolveBody( pBody, esolveHttpConfig( pConfig, this.config ) ) );
+                                             await resolveBody( pBody, resolveHttpConfig( pConfig, this.config ) ) );
 
             const url = resolveUrl( pUrl, cfg );
 
@@ -2653,7 +2808,7 @@ const { _ud = "undefined", $scope } = constants;
                 return await asyncAttempt( async() => await delegate.sendRequest( method, url, cfg, (cfg.body || cfg.data || pBody), pRedirects, pRetries, pResolve, pReject ) );
             }
 
-            return fetch( url, cfg );
+            return fetch( url, HttpConfig.toFetchRequestInitOptions( cfg ) );
         }
 
         async #handleRedirect( pResponseData, pConfig, pRedirects )
@@ -2685,7 +2840,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
                                              resolveUrl( pUrl, pConfig || this.config ),
-                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ) );
+                                             VERBS.GET );
 
             const url = resolveUrl( pUrl, cfg );
 
@@ -2701,7 +2856,7 @@ const { _ud = "undefined", $scope } = constants;
                 return await asyncAttempt( async() => await delegate.sendRequest( VERBS.GET, url, cfg, null, pRedirects, pRetries, pResolve, pReject ) );
             }
 
-            return fetch( url, cfg );
+            return fetch( url, HttpConfig.toFetchRequestInitOptions( cfg ) );
         }
 
         async getRequestedData( pUrl, pConfig, pRedirects = 0, pRetries = 0, pResolve, pReject )
@@ -2710,7 +2865,7 @@ const { _ud = "undefined", $scope } = constants;
 
             const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
                                              resolveUrl( pUrl, pConfig || this.config ),
-                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ) );
+                                             VERBS.GET );
 
             const url = resolveUrl( pUrl, cfg );
 
@@ -2765,8 +2920,8 @@ const { _ud = "undefined", $scope } = constants;
         {
             const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
                                              resolveUrl( pUrl, pConfig || this.config ),
-                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ),
-                                             await resolveBody( pBody, esolveHttpConfig( pConfig, this.config ) ) );
+                                             VERBS.POST,
+                                             await resolveBody( pBody, resolveHttpConfig( pConfig, this.config ) ) );
 
             const url = resolveUrl( pUrl, cfg );
 
@@ -2782,15 +2937,15 @@ const { _ud = "undefined", $scope } = constants;
                 return await asyncAttempt( async() => await delegate.sendRequest( VERBS.POST, url, cfg, (cfg.body || cfg.data || pBody), pRedirects, pRetries, pResolve, pReject ) );
             }
 
-            return fetch( url, cfg );
+            return fetch( url, HttpConfig.toFetchRequestInitOptions( cfg ) );
         }
 
         async sendPutRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
             const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
                                              resolveUrl( pUrl, pConfig || this.config ),
-                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ),
-                                             await resolveBody( pBody, esolveHttpConfig( pConfig, this.config ) ) );
+                                             VERBS.PUT,
+                                             await resolveBody( pBody, resolveHttpConfig( pConfig, this.config ) ) );
 
             const url = resolveUrl( pUrl, cfg );
 
@@ -2806,15 +2961,15 @@ const { _ud = "undefined", $scope } = constants;
                 return await asyncAttempt( async() => await delegate.sendRequest( VERBS.PUT, url, cfg, (cfg.body || cfg.data || pBody), pRedirects, pRetries, pResolve, pReject ) );
             }
 
-            return fetch( url, cfg );
+            return fetch( url, HttpConfig.toFetchRequestInitOptions( cfg ) );
         }
 
         async sendPatchRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
             const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
                                              resolveUrl( pUrl, pConfig || this.config ),
-                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ),
-                                             await resolveBody( pBody, esolveHttpConfig( pConfig, this.config ) ) );
+                                             VERBS.PATCH,
+                                             await resolveBody( pBody, resolveHttpConfig( pConfig, this.config ) ) );
 
             const url = resolveUrl( pUrl, cfg );
 
@@ -2830,15 +2985,15 @@ const { _ud = "undefined", $scope } = constants;
                 return await asyncAttempt( async() => await delegate.sendRequest( VERBS.PATCH, url, cfg, (cfg.body || cfg.data || pBody), pRedirects, pRetries, pResolve, pReject ) );
             }
 
-            return fetch( url, cfg );
+            return fetch( url, HttpConfig.toFetchRequestInitOptions( cfg ) );
         }
 
         async sendDeleteRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
             const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
                                              resolveUrl( pUrl, pConfig || this.config ),
-                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ),
-                                             await resolveBody( pBody, esolveHttpConfig( pConfig, this.config ) ) );
+                                             VERBS.DELETE,
+                                             await resolveBody( pBody, resolveHttpConfig( pConfig, this.config ) ) );
 
             const url = resolveUrl( pUrl, cfg );
 
@@ -2854,14 +3009,14 @@ const { _ud = "undefined", $scope } = constants;
                 return await asyncAttempt( async() => await delegate.sendRequest( VERBS.DELETE, url, cfg, (cfg.body || cfg.data || pBody), pRedirects, pRetries, pResolve, pReject ) );
             }
 
-            return fetch( url, cfg );
+            return fetch( url, HttpConfig.toFetchRequestInitOptions( cfg ) );
         }
 
         async sendHeadRequest( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )
         {
             const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
                                              resolveUrl( pUrl, pConfig || this.config ),
-                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ) );
+                                             VERBS.HEAD );
 
             const url = resolveUrl( pUrl, cfg );
 
@@ -2877,14 +3032,14 @@ const { _ud = "undefined", $scope } = constants;
                 return await asyncAttempt( async() => await delegate.sendRequest( VERBS.HEAD, url, cfg, null, pRedirects, pRetries, pResolve, pReject ) );
             }
 
-            return fetch( url, cfg );
+            return fetch( url, HttpConfig.toFetchRequestInitOptions( cfg ) );
         }
 
         async sendOptionsRequest( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )
         {
             const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
                                              resolveUrl( pUrl, pConfig || this.config ),
-                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ) );
+                                             VERBS.OPTIONS );
 
             const url = resolveUrl( pUrl, cfg );
 
@@ -2900,14 +3055,14 @@ const { _ud = "undefined", $scope } = constants;
                 return await asyncAttempt( async() => await delegate.sendRequest( VERBS.OPTIONS, url, cfg, null, pRedirects, pRetries, pResolve, pReject ) );
             }
 
-            return fetch( url, cfg );
+            return fetch( url, HttpConfig.toFetchRequestInitOptions( cfg ) );
         }
 
         async sendTraceRequest( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )
         {
             const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
                                              resolveUrl( pUrl, pConfig || this.config ),
-                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ) );
+                                             VERBS.TRACE );
 
             const url = resolveUrl( pUrl, cfg );
 
@@ -2923,14 +3078,14 @@ const { _ud = "undefined", $scope } = constants;
                 return await asyncAttempt( async() => await delegate.sendRequest( VERBS.TRACE, url, cfg, null, pRedirects, pRetries, pResolve, pReject ) );
             }
 
-            return fetch( url, cfg );
+            return fetch( url, HttpConfig.toFetchRequestInitOptions( cfg ) );
         }
 
         async upload( pUrl, pConfig, pBody )
         {
             const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
                                              resolveUrl( pUrl, pConfig || this.config ),
-                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ),
+                                             resolveHttpMethod( pConfig?.method || VERBS.POST ),
                                              await resolveBody( pBody, resolveHttpConfig( pConfig, this.config ) ) );
 
             const url = resolveUrl( pUrl, cfg );
@@ -2949,10 +3104,9 @@ const { _ud = "undefined", $scope } = constants;
         {
             let outputPath = toUnixPath( asString( pOutputPath, true ) ) || ".";
 
-            const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
-                                             resolveUrl( pUrl, pConfig || this.config ),
-                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ),
-                                             await resolveBody( pBody, resolveHttpConfig( pConfig, this.config ) ) );
+            let cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
+                                           resolveUrl( pUrl, pConfig || this.config ),
+                                           VERBS.GET );
 
             const url = resolveUrl( pUrl, cfg );
 
@@ -2960,6 +3114,8 @@ const { _ud = "undefined", $scope } = constants;
 
             if ( isFunction( delegate?.download ) )
             {
+                cfg = HttpConfig.mergeConfigs( DEFAULT_HTTP_DOWNLOAD_CONFIG, cfg );
+
                 return asyncAttempt( async() => await delegate.download( url, cfg, outputPath, pFileName, pNamingFunction ) );
             }
 
@@ -2967,9 +3123,7 @@ const { _ud = "undefined", $scope } = constants;
 
             try
             {
-                // NOPE!
-                // TODO: fix this
-                let config = { ...DEFAULT_CONFIG, ...DEFAULT_DOWNLOAD_CONFIG, ...(toHttpConfigLiteral( asObject( cfg || {} ) )) };
+                let config = HttpConfig.mergeConfigs( DEFAULT_HTTP_DOWNLOAD_CONFIG, cfg );
 
                 const response = await this.sendRequest( config.method || VERBS.GET, url, config );
 
@@ -3007,6 +3161,7 @@ const { _ud = "undefined", $scope } = constants;
         }
     }
 
+    HttpClient.resolveUrl = resolveUrl;
     HttpClient.updateContext = updateContext;
     HttpClient.calculateFileName = calculateFileName;
 
@@ -3287,8 +3442,8 @@ const { _ud = "undefined", $scope } = constants;
         }
 
         /**
-         * Returns the options with which this instance as created
-         * @returns {objects}
+         * Returns the options with which this instance was created
+         * @returns {object}
          */
         get options()
         {
@@ -4323,8 +4478,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
                                              resolveUrl( pUrl, pConfig || this.config ),
-                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ),
-                                             await resolveBody( pBody, resolveHttpConfig( pConfig, this.config ) ) );
+                                             VERBS.GET );
 
             const url = resolveUrl( pUrl, cfg );
 
@@ -4337,8 +4491,7 @@ const { _ud = "undefined", $scope } = constants;
 
             const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
                                              resolveUrl( pUrl, pConfig || this.config ),
-                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ),
-                                             await resolveBody( pBody, resolveHttpConfig( pConfig, this.config ) ) );
+                                             VERBS.GET );
 
             const url = resolveUrl( pUrl, cfg );
 
@@ -4412,7 +4565,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
                                              resolveUrl( pUrl, pConfig || this.config ),
-                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ),
+                                             VERBS.POST,
                                              await resolveBody( pBody, resolveHttpConfig( pConfig, this.config ) ) );
 
             const url = resolveUrl( pUrl, cfg );
@@ -4429,7 +4582,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
                                              resolveUrl( pUrl, pConfig || this.config ),
-                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ),
+                                             VERBS.POST,
                                              await resolveBody( pBody, resolveHttpConfig( pConfig, this.config ) ) );
 
             const url = resolveUrl( pUrl, cfg );
@@ -4441,7 +4594,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
                                              resolveUrl( pUrl, pConfig || this.config ),
-                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ),
+                                             VERBS.PATCH,
                                              await resolveBody( pBody, resolveHttpConfig( pConfig, this.config ) ) );
 
             const url = resolveUrl( pUrl, cfg );
@@ -4453,7 +4606,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
                                              resolveUrl( pUrl, pConfig || this.config ),
-                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ),
+                                             VERBS.DELETE,
                                              await resolveBody( pBody, resolveHttpConfig( pConfig, this.config ) ) );
 
             const url = resolveUrl( pUrl, cfg );
@@ -4465,7 +4618,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
                                              resolveUrl( pUrl, pConfig || this.config ),
-                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ) );
+                                             VERBS.HEAD );
 
             const url = resolveUrl( pUrl, cfg );
 
@@ -4476,7 +4629,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
                                              resolveUrl( pUrl, pConfig || this.config ),
-                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ) );
+                                             VERBS.OPTIONS );
 
             const url = resolveUrl( pUrl, cfg );
 
@@ -4487,7 +4640,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             const cfg = await prepareConfig( resolveHttpConfig( pConfig, this.config ),
                                              resolveUrl( pUrl, pConfig || this.config ),
-                                             resolveHttpMethod( pMethod || pConfig?.method || this.config?.method ) );
+                                             VERBS.TRACE );
 
             const url = resolveUrl( pUrl, cfg );
 
@@ -5107,7 +5260,7 @@ const { _ud = "undefined", $scope } = constants;
             resolveBody,
 
             isHttpClient,
-            prepareRequestConfig,
+            prepareFetchConfig,
 
             extractFileNameFromHeader,
 

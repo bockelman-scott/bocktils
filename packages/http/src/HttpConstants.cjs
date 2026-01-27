@@ -88,25 +88,28 @@ const { _ud = "undefined", $scope } = constants;
             makeDeleter,
             lock,
             attempt,
+            asyncAttempt,
             $ln
         } = moduleUtils;
 
     const { _mt_str = "", _mt = _mt_str, _comma, _str, _num, _big, _bool, _obj, _fun } = constants;
 
-    const {
-        isNull,
-        isObject,
-        isNonNullObject,
-        isPopulatedObject,
-        isString,
-        isNumeric,
-        isArray,
-        isFunction,
-        toObjectLiteral,
-        isTypedArray,
-        isPromise,
-        isThenable
-    } = typeUtils;
+    const
+        {
+            isNull,
+            isObject,
+            isNonNullObject,
+            isPopulatedObject,
+            isString,
+            isNumeric,
+            isArray,
+            isFunction,
+            toObjectLiteral,
+            isTypedArray,
+            isPromise,
+            isThenable,
+            isReadOnly
+        } = typeUtils;
 
     const { asString, isBlank, asInt, lcase, ucase, capitalize, isJson } = stringUtils;
 
@@ -136,7 +139,7 @@ const { _ud = "undefined", $scope } = constants;
     /**
      * An object that defines common HTTP request methods as key-value pairs.<br>
      * <br>
-     * Each key is the uppercase HTTP method name and its value is the same string representation.<br>
+     * Each key is the uppercase HTTP method, and its value is the same string representation.<br>
      * <br>
      *
      * Properties:<br>
@@ -666,8 +669,8 @@ const { _ud = "undefined", $scope } = constants;
 
             /**
              * When a request failed to update an existing resource
-             * because the resource is considered locked by the server,
-             * we try again after 1 second, to allow time for the lock holder to release the lock
+             * because the server considers the resource to be locked.
+             * We try again after 1 second, to allow time for the lock holder to release the lock
              */
             [STATUS_CODES.LOCKED]: 1_024,
 
@@ -1377,21 +1380,13 @@ const { _ud = "undefined", $scope } = constants;
 
     class HttpPropertyMergeRule
     {
-        #id;
         #name;
-
         #mergeFunction;
 
-        constructor( pId, pName, pMergeFunction )
+        constructor( pName, pMergeFunction )
         {
-            this.#id = pId;
             this.#name = pName;
             this.#mergeFunction = (isFunction( pMergeFunction ) && (3 === pMergeFunction.length)) ? pMergeFunction : DEFAULT_PROPERTIES_MERGE_FUNCTION;
-        }
-
-        get id()
-        {
-            return this.#id;
         }
 
         get name()
@@ -1409,11 +1404,11 @@ const { _ud = "undefined", $scope } = constants;
             return (isFunction( this.mergeFunction ) && (3 === this.mergeFunction.length));
         }
 
-        execute( pHeaders, pKey, pValue )
+        execute( pObject, pKey, pValue )
         {
             if ( this.isValid() )
             {
-                return attempt( () => this.#mergeFunction( pHeaders, pKey, pValue ) );
+                return attempt( () => this.mergeFunction( pObject, pKey, pValue ) );
             }
             return false;
         }
@@ -1435,7 +1430,7 @@ const { _ud = "undefined", $scope } = constants;
      * If no value exists, the rule attempts to resolve and set the provided value for the property.
      *
      */
-    const PROPERTY_MERGE_RULE_PRESERVE = new HttpPropertyMergeRule( 1, "PRESERVE", ( pObject, pName, pValue ) =>
+    const PROPERTY_MERGE_RULE_PRESERVE = new HttpPropertyMergeRule( "PRESERVE", ( pObject, pName, pValue ) =>
     {
         if ( isNonNullObject( pObject ) )
         {
@@ -1451,22 +1446,14 @@ const { _ud = "undefined", $scope } = constants;
     } );
 
     /**
-     * A constant representing the rule for merging HTTP headers
-     * by replacing the existing header value with the provided value.
+     * A constant representing the rule for merging object properties
+     * by replacing the existing property value with the provided value.
      *
-     * This rule ensures that the specified header
-     * is either added or updated with the new value, replacing any previous value.
+     * If the provided value is null or not specified,
+     * the existing value is preserved
      *
-     * If the provided value is null or empty, the header will be removed.
-     *
-     * Rule Details:
-     * - Header existence is checked in the provided headers collection.
-     * - If the header already exists, its value is replaced.
-     * - If the new header value is blank (null or empty), the header is removed.
-     *
-     * This rule is used in scenarios where headers need to be overridden without merging or appending.
      */
-    const PROPERTY_MERGE_RULE_REPLACE = new HttpPropertyMergeRule( 2, "REPLACE", ( pObject, pName, pValue ) =>
+    const PROPERTY_MERGE_RULE_REPLACE = new HttpPropertyMergeRule( "REPLACE", ( pObject, pName, pValue ) =>
     {
         if ( isNonNullObject( pObject ) )
         {
@@ -1486,10 +1473,10 @@ const { _ud = "undefined", $scope } = constants;
      * This rule is identified by the name "COMBINE" and uses a default merging function to process header values.
      * It is primarily used in scenarios where header values need to be consolidated while retaining all unique entries.
      */
-    const PROPERTY_MERGE_RULE_COMBINE = new HttpPropertyMergeRule( 3, "COMBINE", DEFAULT_PROPERTIES_MERGE_FUNCTION );
+    const PROPERTY_MERGE_RULE_COMBINE = new HttpPropertyMergeRule( "COMBINE", DEFAULT_PROPERTIES_MERGE_FUNCTION );
 
     // noinspection JSUnusedLocalSymbols
-    const PROPERTY_MERGE_RULE_REMOVE = new HttpPropertyMergeRule( 4, "REMOVE", ( pObject, pName, pValue ) =>
+    const PROPERTY_MERGE_RULE_REMOVE = new HttpPropertyMergeRule( "REMOVE", ( pObject, pName, pValue ) =>
     {
         if ( isNonNullObject( pObject ) )
         {
@@ -1523,8 +1510,7 @@ const { _ud = "undefined", $scope } = constants;
             {
                 if ( isFunction( pMergeRule?.mergeFunction ) && (3 === pMergeRule?.mergeFunction?.length) )
                 {
-                    return new HttpPropertyMergeRule( asInt( pMergeRule.id || 999_999 ),
-                                                      asString( pMergeRule.name || "Ad Hoc Rule" ),
+                    return new HttpPropertyMergeRule( asString( pMergeRule.name || "Ad Hoc Rule" ),
                                                       ( pHeaders, pName, pValue ) => pMergeRule.mergeFunction( pHeaders, pName, pValue ) );
                 }
             }
@@ -1603,7 +1589,7 @@ const { _ud = "undefined", $scope } = constants;
 
                 if ( isFunction( value ) && 3 === value.length )
                 {
-                    return new HttpPropertyRule( name, new HttpPropertyMergeRule( 99_999, name, value ) );
+                    return new HttpPropertyRule( name, new HttpPropertyMergeRule( name, value ) );
                 }
             }
         }
@@ -1632,13 +1618,18 @@ const { _ud = "undefined", $scope } = constants;
 
         if ( isNonNullObject( pRules ) )
         {
-            if ( objectEntries( pRules ).every( e => isString( ObjectEntry.getKey( e ) ) && ObjectEntry.getValue( e ) instanceof HttpPropertyRule ) )
+            const propertyRulesFilter = e => isString( ObjectEntry.getKey( e ) )
+                                             && ObjectEntry.getValue( e ) instanceof HttpPropertyRule;
+
+            if ( objectEntries( pRules ).every( propertyRulesFilter ) )
             {
                 return pRules;
             }
         }
 
-        const entries = isArray( pRules ) && asArray( pRules ).every( e => isNonNullObject( e ) || isArray( e ) ) ? asArray( pRules ) : objectEntries( pRules );
+        const entries = (isArray( pRules ) && asArray( pRules ).every( e => isNonNullObject( e ) || isArray( e ) )) ?
+                        asArray( pRules ) :
+                        objectEntries( pRules );
 
         for( let entry of entries )
         {
@@ -1657,25 +1648,74 @@ const { _ud = "undefined", $scope } = constants;
      * This class is used to create an intelligent way
      * to merge one or more objects expect to have the same form.
      *
-     * It is constructed with 2 sets of rules in the form of key/value pairs,
-     * specified either as a POJO (recommended), Map, or 2-dimensional array.
-     *
-     * The first set defines how to merge
-     * the first-level properties of 2 objects.
-     *
-     * The second set defines how to merge any deeper-level properties
-     * for which the first-level rule is the special rule,"DEFERRED"
      */
     class HttpPropertiesMerger
     {
-        #propertyRules;
+        #rules;
 
-        #deferredRules;
-
-        constructor( pPropertyRules, pDeferredRules )
+        constructor( pPropertyRules )
         {
-            this.#propertyRules = defineHttpPropertyRules( pPropertyRules );
-            this.#deferredRules = defineHttpPropertyRules( pDeferredRules );
+            this.#rules = defineHttpPropertyRules( pPropertyRules );
+        }
+
+        get rules()
+        {
+            return this.#rules;
+        }
+
+        get propertyRules()
+        {
+            return this.rules;
+        }
+
+        getRule( pPropertyName )
+        {
+            return readProperty( this.propertyRules || {}, pPropertyName );
+        }
+
+        mergeProperties( pObject, ...pOthers )
+        {
+            let objects = [pObject, ...(asArray( pOthers || [] ))].filter( isNonNullObject );
+
+            if ( $ln( objects ) > 0 )
+            {
+                let object = objects.shift();
+
+                if ( isReadOnly( object ) )
+                {
+                    object = { ...object };
+                }
+
+                while ( $ln( objects ) > 0 )
+                {
+                    let obj = objects.shift();
+
+                    let entries = isFunction( obj.entries ) ? [...(obj.entries)] : objectEntries( obj );
+
+                    if ( entries && $ln( entries ) )
+                    {
+                        for( let entry of entries )
+                        {
+                            const name = ObjectEntry.getKey( entry );
+                            const value = ObjectEntry.getValue( entry );
+
+                            const rule = this.getRule( name );
+
+                            if ( rule && rule.isValid() )
+                            {
+                                attempt( () => rule.apply( object, value ) );
+                            }
+                            else
+                            {
+                                let existing = readProperty( object, name );
+                                setProperty( object, name, value || existing );
+                            }
+                        }
+                    }
+                }
+                return object;
+            }
+            return pObject || {};
         }
     }
 
@@ -1691,6 +1731,7 @@ const { _ud = "undefined", $scope } = constants;
                     HttpHeader,
                     HttpStatus,
                     HttpContentType,
+                    HttpPropertiesMerger
                 },
             STATUS_CODES: lock( STATUS_CODES ),
             STATUS_TEXT: lock( STATUS_TEXT_BY_CODE_STRING ),
@@ -1708,6 +1749,9 @@ const { _ud = "undefined", $scope } = constants;
             HttpHeader,
             HttpStatus,
             HttpContentType,
+            HttpPropertyRule,
+            HttpPropertiesMerger,
+            HttpPropertyMergeRule,
             isVerb,
             isHeader,
             isContentType,

@@ -95,7 +95,7 @@ const { _ud = "undefined", $scope } = constants;
         } = moduleUtils;
 
     // imports constants for the empty string, allowing for more readable use of these string literals
-    const { _mt_str = "", _mt = _mt_str, _comma } = constants;
+    const { _mt_str = "", _mt = _mt_str, _str, _comma } = constants;
 
     // import a number of functions to detect the type of a variable
     // or to convert from one type to another
@@ -494,7 +494,7 @@ const { _ud = "undefined", $scope } = constants;
      * If the provided value is null or empty, the header will be removed.
      *
      * Rule Details:
-     * - Header existence is checked in the provided headers collection.
+     * - Header existence is checked in the provided collection.
      * - If the header already exists, its value is replaced.
      * - If the new header value is blank (null or empty), the header is removed.
      *
@@ -675,7 +675,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             if ( objectEntries( pRules ).every( e => isString( ObjectEntry.getKey( e ) ) && ObjectEntry.getValue( e ) instanceof HttpHeaderRule ) )
             {
-                return pRules;
+                return lock( pRules );
             }
         }
 
@@ -690,7 +690,7 @@ const { _ud = "undefined", $scope } = constants;
             }
         }
 
-        return rules;
+        return lock( rules );
     };
 
     /**
@@ -857,6 +857,11 @@ const { _ud = "undefined", $scope } = constants;
         if ( !(isObject( pObject ) || isArray( pObject ) || isMap( pObject ) || (isString( pObject ) && (isJson( pObject ) || isRFC7230( pObject )))) )
         {
             return false;
+        }
+
+        if ( pObject instanceof HttpHeaders )
+        {
+            return true;
         }
 
         if ( isArray( pObject ) )
@@ -1204,12 +1209,13 @@ const { _ud = "undefined", $scope } = constants;
 
         clone()
         {
-            return new HttpHeaders( this.toLiteral(), this.#defaultOptions );
+            return new HttpHeaders( this.toLiteral(), this.#defaultOptions || {} );
         }
 
         merge( ...pHeaders )
         {
-            return new HttpHeadersMerger().mergeHeaders( this, ...pHeaders );
+            const merger = HttpHeadersMerger.getDefault();
+            return merger.mergeHeaders( this, ...pHeaders );
         }
 
         toString()
@@ -1286,51 +1292,62 @@ const { _ud = "undefined", $scope } = constants;
         return getHeaderValue( this, pKey );
     };
 
-    const DEFAULT_HEADER_MERGE_RULES = defineHttpHeaderRules(
-        {
-            "api_key": new HttpHeaderRule( "api_key", HEADER_MERGE_RULE_PRESERVE ),
+    const DEFAULT_HEADER_MERGE_RULES =
+        lock( defineHttpHeaderRules(
+            {
+                "api_key": new HttpHeaderRule( "api_key", HEADER_MERGE_RULE_PRESERVE ),
 
-            "responseType": new HttpHeaderRule( "responseType", HEADER_MERGE_RULE_PRESERVE ),
-            "accept": new HttpHeaderRule( "accept", HEADER_MERGE_RULE_COMBINE ),
+                "responseType": new HttpHeaderRule( "responseType", HEADER_MERGE_RULE_PRESERVE ),
+                "accept": new HttpHeaderRule( "accept", HEADER_MERGE_RULE_COMBINE ),
 
-            "allowAbsoluteUrls": new HttpHeaderRule( "allowAbsoluteUrls", HEADER_MERGE_RULE_PRESERVE ),
-            "timeout": new HttpHeaderRule( "timeout", HEADER_MERGE_RULE_REPLACE ),
-            "maxContentLength": new HttpHeaderRule( "maxContentLength", HEADER_MERGE_RULE_REPLACE ),
-            "maxBodyLength": new HttpHeaderRule( "maxBodyLength", HEADER_MERGE_RULE_REPLACE ),
-            "maxRedirects": new HttpHeaderRule( "maxRedirects", HEADER_MERGE_RULE_REPLACE ),
-            "decompress": new HttpHeaderRule( "decompress", HEADER_MERGE_RULE_REPLACE ),
+                "allowAbsoluteUrls": new HttpHeaderRule( "allowAbsoluteUrls", HEADER_MERGE_RULE_PRESERVE ),
+                "timeout": new HttpHeaderRule( "timeout", HEADER_MERGE_RULE_REPLACE ),
+                "maxContentLength": new HttpHeaderRule( "maxContentLength", HEADER_MERGE_RULE_REPLACE ),
+                "maxBodyLength": new HttpHeaderRule( "maxBodyLength", HEADER_MERGE_RULE_REPLACE ),
+                "maxRedirects": new HttpHeaderRule( "maxRedirects", HEADER_MERGE_RULE_REPLACE ),
+                "decompress": new HttpHeaderRule( "decompress", HEADER_MERGE_RULE_REPLACE ),
 
-            "content-type": new HttpHeaderRule( "content-type", HEADER_MERGE_RULE_REPLACE ),
-            "content-length": new HttpHeaderRule( "content-length", HEADER_MERGE_RULE_REPLACE ),
+                "content-type": new HttpHeaderRule( "content-type", HEADER_MERGE_RULE_REPLACE ),
+                "content-length": new HttpHeaderRule( "content-length", HEADER_MERGE_RULE_REPLACE ),
 
-            "www-authenticate": new HttpHeaderRule( "www-authenticate", HEADER_MERGE_RULE_REPLACE ),
-            "authorization": new HttpHeaderRule( "authorization", HEADER_MERGE_RULE_REPLACE ),
-            "proxy-authenticate": new HttpHeaderRule( "proxy-authenticate", HEADER_MERGE_RULE_REPLACE ),
-            "proxy-authorization": new HttpHeaderRule( "proxy-authorization", HEADER_MERGE_RULE_REPLACE ),
+                "www-authenticate": new HttpHeaderRule( "www-authenticate", HEADER_MERGE_RULE_REPLACE ),
+                "authorization": new HttpHeaderRule( "authorization", HEADER_MERGE_RULE_REPLACE ),
+                "proxy-authenticate": new HttpHeaderRule( "proxy-authenticate", HEADER_MERGE_RULE_REPLACE ),
+                "proxy-authorization": new HttpHeaderRule( "proxy-authorization", HEADER_MERGE_RULE_REPLACE ),
 
-            "connection": new HttpHeaderRule( "connection", HEADER_MERGE_RULE_REMOVE ),
-            "keep-alive": new HttpHeaderRule( "keep-alive", HEADER_MERGE_RULE_REMOVE ),
-            "proxy-connection": new HttpHeaderRule( "proxy-connection", HEADER_MERGE_RULE_REMOVE ),
-            "TE": new HttpHeaderRule( "TE", HEADER_MERGE_RULE_REMOVE ),
-            "trailer": new HttpHeaderRule( "trailer", HEADER_MERGE_RULE_REMOVE ),
-            "transfer-encoding": new HttpHeaderRule( "transfer-encoding", HEADER_MERGE_RULE_REMOVE ),
-            "upgrade": new HttpHeaderRule( "upgrade", HEADER_MERGE_RULE_REMOVE ),
+                "connection": new HttpHeaderRule( "connection", HEADER_MERGE_RULE_REMOVE ),
+                "keep-alive": new HttpHeaderRule( "keep-alive", HEADER_MERGE_RULE_REMOVE ),
+                "proxy-connection": new HttpHeaderRule( "proxy-connection", HEADER_MERGE_RULE_REMOVE ),
+                "TE": new HttpHeaderRule( "TE", HEADER_MERGE_RULE_REMOVE ),
+                "trailer": new HttpHeaderRule( "trailer", HEADER_MERGE_RULE_REMOVE ),
+                "transfer-encoding": new HttpHeaderRule( "transfer-encoding", HEADER_MERGE_RULE_REMOVE ),
+                "upgrade": new HttpHeaderRule( "upgrade", HEADER_MERGE_RULE_REMOVE ),
 
-            // add more as necessary
-        } );
+                "cache-control": new HttpHeaderRule( "cache-control", HEADER_MERGE_RULE_REPLACE )
+
+                // add more as necessary
+            } ) );
 
     class HttpHeadersMerger
     {
         #rules = DEFAULT_HEADER_MERGE_RULES;
 
-        constructor( pRules )
+        #defaultHeaders = new HttpHeaders( {} );
+
+        constructor( pRules, pDefaultHeaders )
         {
-            this.#rules = defineHttpHeaderRules( pRules );
+            this.#rules = lock( isNonNullObject( pRules ) ? defineHttpHeaderRules( pRules ) : DEFAULT_HEADER_MERGE_RULES );
+            this.#defaultHeaders = new HttpHeaders( pDefaultHeaders || {} );
+        }
+
+        get rules()
+        {
+            return lock( isNonNullObject( this.#rules ) ? this.#rules : DEFAULT_HEADER_MERGE_RULES );
         }
 
         getRule( pHeaderName )
         {
-            return readProperty( pHeaderName );
+            return readProperty( this.rules, pHeaderName );
         }
 
         mergeHeaders( pHeaders, ...pOthers )
@@ -1360,26 +1377,13 @@ const { _ud = "undefined", $scope } = constants;
 
                             if ( rule && rule.isValid() )
                             {
-                                const mergeFunction = rule.mergeFunction;
-                                if ( isFunction( mergeFunction ) )
-                                {
-                                    attempt( () => mergeFunction( headers, name, value ) );
-                                }
-                                else
-                                {
-                                    let existing = readScalarProperty( headers, "*", name );
-
-                                    if ( !["api_key"].includes( name ) || isNull( existing ) || isBlank( existing ) )
-                                    {
-                                        setProperty( headers, name, (value || existing) );
-                                    }
-                                }
+                                attempt( () => rule.apply( headers, value ) );
                             }
                             else
                             {
-                                let existing = readScalarProperty( headers, "*", name );
+                                let existing = readScalarProperty( headers, _str, name );
 
-                                if ( !["api_key"].includes( name ) || isNull( existing ) || isBlank( existing ) )
+                                if ( !["api_key", "Authorization"].includes( name ) || isNull( existing ) || isBlank( existing ) )
                                 {
                                     setProperty( headers, name, (value || existing) );
                                 }
@@ -1389,9 +1393,16 @@ const { _ud = "undefined", $scope } = constants;
                 }
                 return headers;
             }
-            return new HttpHeaders();
+            return new HttpHeaders( this.#defaultHeaders );
         }
     }
+
+    const DEFAULT_HEADERS_MERGER = lock( new HttpHeadersMerger( DEFAULT_HEADER_MERGE_RULES ) );
+
+    HttpHeadersMerger.getDefault = function()
+    {
+        return DEFAULT_HEADERS_MERGER;
+    };
 
     HttpHeaders.mergeHeaders = function( pHeaders, ...pOthers )
     {
@@ -1401,7 +1412,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             let headers = new HttpHeaders( objects.shift() );
 
-            headers = new HttpHeadersMerger().mergeHeaders( headers, ...objects );
+            headers = DEFAULT_HEADERS_MERGER.mergeHeaders( headers, ...objects );
 
             return headers;
         }
@@ -1467,6 +1478,7 @@ const { _ud = "undefined", $scope } = constants;
             getHeaderValue,
             HttpHeaderMergeRule,
             HttpHeaderRule,
+            HttpHeadersMerger,
             defineHttpHeaderRules,
             isForbiddenRequestHeader,
             isForbiddenResponseHeader,
