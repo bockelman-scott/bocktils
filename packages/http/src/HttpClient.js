@@ -1084,9 +1084,34 @@ const { _ud = "undefined", $scope } = constants;
             // prevent any confusion over 'this' in obj
             const me = this;
 
+            const heads = me.headers;
+
+            const acceptHeader = lcase( heads?.accept );
+
+            function calculateResponseType()
+            {
+                if ( ["application/json"].includes( acceptHeader ) || acceptHeader.includes( "json" ) )
+                {
+                    return "json";
+                }
+
+                if ( ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"].includes( acceptHeader ) ||
+                     acceptHeader.includes( "wordprocessingml.document" ) )
+                {
+                    return "arraybuffer";
+                }
+
+                if ( ["application/octet-stream"].includes( acceptHeader ) || acceptHeader.includes( "stream" ) )
+                {
+                    return "stream";
+                }
+
+                return me.responseType;
+            }
+
             let obj =
                 {
-                    properties: { ...(asObject( me.properties || {} )) },
+                    responseType: me.responseType ?? calculateResponseType(),
                     headers: me.headers,
                     method: me.method,
                     url: me.url,
@@ -1135,6 +1160,8 @@ const { _ud = "undefined", $scope } = constants;
             {
                 obj.headers = toObjectLiteral( obj.headers || this.headers );
             }
+
+            delete obj["properties"];
 
             return lock( fixAgents( obj ) );
         }
