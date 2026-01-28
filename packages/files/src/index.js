@@ -1317,7 +1317,7 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
      *
      * @param {string} pFilePath - The full path or name of the file from which to extract the extension.
      *
-     * @return {string} The file extension of the given file path.
+     * @return {string} The file extension of the given file path, including the leading dot
      *                  Returns an empty string if no extension is found.
      */
     function getFileExtension( pFilePath )

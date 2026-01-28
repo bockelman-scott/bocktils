@@ -1,4 +1,6 @@
 // requires the core modules
+// noinspection JSUnresolvedReference
+
 const core = require( "@toolbocks/core" );
 
 const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
@@ -9,12 +11,7 @@ const httpHeaders = require( "./HttpHeaders.cjs" );
 const httpRequest = require( "./HttpRequest.cjs" );
 const httpResponse = require( "./HttpResponse.cjs" );
 
-const {
-    _ud = "undefined", $scope = constants?.$scope || function()
-    {
-        return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
-    }
-} = constants;
+const { _ud = "undefined", $scope } = constants;
 
 // noinspection FunctionTooLongJS
 (function exposeModule()
@@ -127,7 +124,7 @@ const {
             TIMEOUT: "timeout"
         };
 
-    const isFetchEvent = ( pName ) => !isBlank( asString( FetchEvents[ucase( asString( resolveEventType( pName ), true ) )], true) );
+    const isFetchEvent = ( pName ) => !isBlank( asString( FetchEvents[ucase( asString( resolveEventType( pName ), true ) )], true ) );
 
     const isHandlerObject = function( pHandler, pEventName )
     {

@@ -4402,6 +4402,20 @@ const { _ud = "undefined", $scope } = constants;
             ...DEFAULT_TRANSFORMER_PROPERTIES
         };
 
+    const FAST_OBJECT_LITERAL_OPTIONS =
+        {
+            prune: false,
+            trimStrings: false,
+            omitFunctions: true,
+            transientProperties: ["class", "prototype"],
+            preserveArrays: true,
+            maxDepth: 5,
+            preserveUserDefinedClasses: true,
+            preserveTypes: false,
+            respectToLiteralMethod: true,
+            ...DEFAULT_TRANSFORMER_PROPERTIES
+        };
+
     function restoreMethods( pSource, pTarget, pOptions = DEFAULT_OBJECT_LITERAL_OPTIONS )
     {
         const source = pSource || {};
@@ -4496,20 +4510,11 @@ const { _ud = "undefined", $scope } = constants;
 
         visited.add( arr );
 
-        /*
-         if ( options?.preserveArrays )
-         {
-         */
+        visited.resolve( pObject, arr );
+
+        visited.resolveForNodePath( arr, ...stack );
+
         return [...(arr || [])];
-        /*
-         }
-
-         const object = attempt( () => arrayToObject( arr, options, visited, stack ) );
-
-         visited.add( object );
-
-         return object;
-         */
     }
 
     function toObjectLiteral( pObject,
@@ -4525,6 +4530,9 @@ const { _ud = "undefined", $scope } = constants;
 
         const { options, visited, stack, depth } = resolveObjectLiteralArguments( pOptions, pVisited, pStack, pDepth );
 
+        let maxDepth = toInteger( options?.maxDepth );
+        maxDepth = isNanOrInfinite( maxDepth ) ? 32 : clamp( toInteger( maxDepth ), 2, 32 );
+
         const preserveTypes = !!options?.preserveTypes;
 
         // noinspection JSCheckFunctionSignatures
@@ -4533,21 +4541,56 @@ const { _ud = "undefined", $scope } = constants;
             return pObject;
         }
 
-        if ( !isNanOrInfinite( options.maxDepth ) && !isNanOrInfinite( depth ) && depth > options.maxDepth )
+        if ( !isNanOrInfinite( maxDepth ) && !isNanOrInfinite( depth ) && depth > maxDepth )
         {
             return pObject || {};
         }
 
-        if ( depth > 32 || detectCycles( stack, 5, 3 ) )
+        const keyTransformer = isFunction( options?.keyTransformer ) ? options.keyTransformer : ( pKey ) => pKey;
+        const valueTransformer = isFunction( options?.valueTransformer ) ? options.valueTransformer : ( pValue ) => pValue;
+
+        if ( depth > maxDepth || detectCycles( stack, 5, 3 ) )
         {
-            return isArray( pObject ) ? [...(pObject || [])] : isFunction( pObject.values ) ? [...(pObject.values() || [])] : { ...(resolveObject( pObject || {} )) };
+            return isArray( pObject ) ? [...(pObject || [])] : isFunction( pObject.entries ) ? [...(pObject.entries() || [])] : { ...(resolveObject( pObject || {} )) };
         }
 
         const transientProperties = resolveTransientProperties( options );
 
-        if ( isArray( pObject ) || isFunction( pObject.values ) )
+        if ( isArray( pObject ) )
         {
             return _handleArray( pObject, options, visited, stack, depth );
+        }
+
+        if ( isMap( pObject ) || isFunction( pObject.entries ) )
+        {
+            let obj = {};
+
+            for( let entry of pObject.entries() )
+            {
+                let k = ObjectEntry.getKey( entry );
+
+                if ( !isBlankString( k ) )
+                {
+                    k = keyTransformer( k );
+
+                    let v = valueTransformer( ObjectEntry.getValue( entry ) );
+
+                    if ( options.recursive )
+                    {
+                        v = toObjectLiteral( v, options, visited, [...stack, k], depth + 1 );
+                    }
+
+                    obj[k] = v;
+                }
+            }
+
+            visited.add( pObject );
+
+            visited.resolve( pObject, obj );
+
+            visited.resolveForNodePath( obj, ...stack );
+
+            return obj;
         }
 
         if ( options.respectToLiteralMethod && isFunction( pObject?.toLiteral ) )
@@ -4584,9 +4627,6 @@ const { _ud = "undefined", $scope } = constants;
         {
             methods = objectMethods( pObject );
         }
-
-        const keyTransformer = isFunction( options?.keyTransformer ) ? options.keyTransformer : ( pKey ) => pKey;
-        const valueTransformer = isFunction( options?.valueTransformer ) ? options.valueTransformer : ( pValue ) => pValue;
 
         const obj = {};
 
@@ -4632,7 +4672,7 @@ const { _ud = "undefined", $scope } = constants;
                 continue;
             }
 
-            if ( depth > 32 || visited.has( value ) || detectCycles( stack, 5, 3 ) )
+            if ( depth > 32 || detectCycles( stack, 5, 3 ) || visited.has( value ) )
             {
                 let newValue = visited.resolve( value ) || value || ObjectEntry.getValue( entry );
 
@@ -6192,6 +6232,7 @@ const { _ud = "undefined", $scope } = constants;
 
             DEFAULT_TRANSFORMER_PROPERTIES,
             DEFAULT_OBJECT_LITERAL_OPTIONS,
+            FAST_OBJECT_LITERAL_OPTIONS,
 
             DEFAULT_AS_MAP_OPTIONS,
 
@@ -6221,6 +6262,9 @@ const { _ud = "undefined", $scope } = constants;
             BYTES_PER_TYPE,
 
             CONSTANTS,
+
+            DEFAULT_OBJECT_LITERAL_OPTIONS,
+            FAST_OBJECT_LITERAL_OPTIONS,
 
             flattened,
 

@@ -421,8 +421,10 @@ const { _ud = "undefined", $scope } = constants;
         }
     }
 
+    // noinspection JSUnresolvedReference
     if ( _ud === typeof StorageEvent )
     {
+        // noinspection JSUnresolvedReference
         $scope().StorageEvent = $scope().StorageEvent || HttpStorageEvent;
     }
 

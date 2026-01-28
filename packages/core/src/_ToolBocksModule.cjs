@@ -3321,7 +3321,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             else if ( isMap( pEntries ) || isFunc( pEntries?.entries ) )
             {
                 entries = [...(pEntries.entries() || [])].map( ( e, i ) => e instanceof ObjectEntry ? e : ($ln( e ) > 1 ? ObjectEntry.from( (e[0] || i), (e[1] || e), (e[2] || e?.parent || pParent || e) ) : [i, e, pParent]) );
-                ;
             }
             else if ( isSet( pEntries ) || isFunc( pEntries?.values ) )
             {
@@ -5601,7 +5600,17 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             maxStackSize: MAX_STACK_SIZE,
             nullReplacement: EMPTY_OBJECT,
             undefinedReplacement: EMPTY_OBJECT,
-            depth: 99,
+            maxDepth: 99,
+            freeze: false,
+            includeClassNames: false
+        };
+
+    const FAST_COPY_OPTIONS =
+        {
+            maxStackSize: 16,
+            nullReplacement: EMPTY_OBJECT,
+            undefinedReplacement: EMPTY_OBJECT,
+            maxDepth: 5,
             freeze: false,
             includeClassNames: false
         };
@@ -5614,6 +5623,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @see CopyOptions
      */
     const IMMUTABLE_COPY_OPTIONS = { ...DEFAULT_COPY_OPTIONS, freeze: true };
+
+    const FAST_IMMUTABLE_COPY_OPTIONS = { ...FAST_COPY_OPTIONS, freeze: true };
 
     /**
      * This is a 'helper' function for reading a numeric property of the localCopy or immutableCopy options
@@ -8199,6 +8210,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return mod;
     }
 
+
     /**
      * Resolves and normalizes the options used when copying objects
      * by merging user-provided options with default values.<br>
@@ -8215,6 +8227,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     {
         const resolvedOptions = { ...DEFAULT_COPY_OPTIONS, ...(pOptions || {}) };
 
+        const maxDepth = resolvedOptions?.maxDepth;
+
         const depth = _getDepth( resolvedOptions );
         const maxStackSize = _getMaxStackSize( resolvedOptions );
         const freeze = true === resolvedOptions.freeze;
@@ -8222,7 +8236,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         resolvedOptions.depth = depth;
         resolvedOptions.maxStackSize = maxStackSize;
 
-        return { resolvedOptions, maxStackSize, freeze };
+        return { resolvedOptions, maxStackSize, maxDepth, freeze };
     }
 
     /**
@@ -8254,7 +8268,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     function cloneMap( pMap, pEntries, pOptions = DEFAULT_COPY_OPTIONS, pStack = [] )
     {
-        const map = pMap instanceof WeakMap ? new WeakMap() : new Map();
+        const options = { ...DEFAULT_COPY_OPTIONS, ...(pOptions || {}) };
+
+        const map = pMap instanceof WeakMap || (WeakMap === options.expectedType) ? new WeakMap() : new Map();
 
         const entries = pEntries || objectEntries( pMap );
 
@@ -8271,7 +8287,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     function cloneSet( pSet, pEntries, pOptions = DEFAULT_COPY_OPTIONS, pStack = [] )
     {
-        const set = pSet instanceof WeakSet ? new WeakSet() : new Set();
+        const options = { ...DEFAULT_COPY_OPTIONS, ...(pOptions || {}) };
+
+        const set = (pSet instanceof WeakSet || (WeakSet === options.expectedType)) ? new WeakSet() : new Set();
 
         const entries = pEntries || objectEntries( pSet );
 
@@ -8293,8 +8311,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         const clone = isWeakRef ? (dereference( pClone, (options?.expectedType || _obj) ) || {}) : { ...(pClone || {}) };
 
-        attempt( () => Object.setPrototypeOf( clone, Object.getPrototypeOf( (isWeakRef ? (clone || pClone) : (pClone || clone)) || {} ) ) );
-
         const entries = pEntries || objectEntries( clone );
 
         const stack = pStack || options.stack || [];
@@ -8310,8 +8326,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 clone[key] = (typeof copiedValue === _fun) ? copiedValue.bind( clone ) : copiedValue;
             }
         }
-
-        attempt( () => Object.setPrototypeOf( clone, Object.getPrototypeOf( (isWeakRef ? (clone || pClone) : (pClone || clone)) || {} ) ) );
 
         return isWeakRef ? new WeakRef( clone ) : clone;
     }
@@ -8343,14 +8357,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         let obj = isWeakRef ? (dereference( pObject, (options?.expectedType || _obj) ) || {}) : (isNull( pObject ) ? {} : pObject);
 
-        let clone = attempt( () => (isFunc( obj?.clone )) ? obj.clone() : (isObjectLiteral( obj ) ? { ...obj } : obj) ) || {};
+        let clone = attempt( () => (isFunc( obj?.clone )) ? obj.clone() : { ...obj } );
 
-        attempt( () => Object.setPrototypeOf( clone, Object.getPrototypeOf( obj || clone || {} ) ) );
+        let clazz = isClass( obj ) ? obj : [obj?.constructor, obj?.prototype?.constructor, obj?.prototype, Object.getPrototypeOf( obj ), Object.getPrototypeOf( obj )?.constructor].find( isClass );
 
         const stack = [...(pStack || [])];
 
-        if ( detectCycles( stack, 5, 5 ) )
+        if ( detectCycles( stack, 5, 3 ) )
         {
+            clone = isClass( clazz ) && isFunc( clazz.fromLiteral ) ? clazz.fromLiteral( clone ) : clone;
             return isWeakRef ? new WeakRef( clone ) : clone;
         }
 
@@ -8402,7 +8417,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             delete clone["class"];
         }
 
-        attempt( () => Object.setPrototypeOf( clone, Object.getPrototypeOf( obj || clone || {} ) ) );
+        if ( isClass( clazz ) && isFunc( clazz.fromLiteral ) )
+        {
+            clone = clazz.fromLiteral( clone );
+        }
 
         return isWeakRef ? new WeakRef( clone ) : clone;
     };
@@ -8496,6 +8514,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         let clone = isWeakRef ? dereference( pObject, (options?.expectedType || _obj) ) : pObject;
 
+        let clazz = isClass( clone ) ? clone : [clone?.constructor, clone?.prototype?.constructor, clone?.prototype, Object.getPrototypeOf( clone ), Object.getPrototypeOf( clone )?.constructor].find( isClass );
+
         if ( clone instanceof Date )
         {
             clone = new Date( clone.getTime() );
@@ -8518,7 +8538,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             attempt( () => delete clone["class"] );
         }
 
-        attempt( () => Object.setPrototypeOf( clone, Object.getPrototypeOf( pObject || clone || {} ) ) );
+        if ( isClass( clazz ) && isFunc( clazz.fromLiteral ) )
+        {
+            clone = clazz.fromLiteral( clone );
+        }
 
         clone = isWeakRef ? new WeakRef( clone ) : clone;
 
@@ -8710,16 +8733,16 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     const _prepareContainer = ( pObject, ...pPropertyPaths ) => (isNonNullObj( pObject ) || isArray( pObject )) ? pObject : isFunc( pObject ) ? () => attempt( () => pObject( ...pPropertyPaths ) ) : [...(pPropertyPaths || [])].reduce( ( acc, path ) => ({ ...acc, ...path.split( "." ).reduceRight( ( val, key ) => ({ [key]: val }), pObject ) }), {} );
 
 
-    const makeMutator = ( pObj ) =>
+    const makeMutator = ( pObj, pName = _mt ) =>
     {
         if ( isNull( pObj ) || !(isObj( pObj ) || isArray( pObj )) )
         {
-            return ( pKey, pValue ) => new ObjectEntry( pKey, pValue, pObj );
+            return ( pKey = pName, pValue ) => new ObjectEntry( pKey, pValue, pObj );
         }
 
         if ( isArray( pObj ) )
         {
-            return ( pKey, pValue ) =>
+            return ( pKey = pName, pValue ) =>
             {
                 if ( isNumeric( pKey ) )
                 {
@@ -8735,15 +8758,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         if ( isMap( pObj ) || (isFunc( pObj?.set ) && (2 === $ln( pObj?.set ))) )
         {
-            return ( pKey, pValue ) => pObj.set( pKey, pValue );
+            return ( pKey = pName, pValue ) => pObj.set( pKey, pValue );
         }
 
         if ( isFunc( pObj?.add ) )
         {
-            return ( pKey, pValue ) => pObj.add( pValue );
+            return ( pKey = pName, pValue ) => pObj.add( pValue );
         }
 
-        return ( pKey, pValue ) => attempt( () => pObj[pKey] = pValue );
+        return ( pKey = pName, pValue ) => attempt( () => pObj[pKey] = pValue );
     };
 
     /**
@@ -8753,76 +8776,81 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * If the object is just a POJO, the returned version closes over this object literal and uses bracket syntax to access its properties.
      *
      * @param pObj The object, Map, or map-like object from which to retrieve values
+     * @param pName
      * @returns {(function(*): *)|(function(*): *)} the function to call with the key
      */
-    const makeAccessor = ( pObj ) =>
+    const makeAccessor = ( pObj, pName = _mt ) =>
     {
         if ( isMap( pObj ) || (isFunc( pObj?.get ) && (1 === $ln( pObj?.get ))) )
         {
-            return ( pKey ) => pObj.get( pKey );
+            return ( pKey = pName ) => pObj.get( pKey );
         }
 
-        return ( pKey ) => pObj[pKey];
+        return ( pKey = pName ) => pObj[pKey];
     };
 
-    const makeDeleter = ( pObj ) =>
+    const makeDeleter = ( pObj, pName = _mt ) =>
     {
         if ( isMap( pObj ) || (isFunc( pObj?.delete ) && (1 === $ln( pObj?.delete ))) )
         {
-            return ( pKey ) => attempt( () => pObj.delete( pKey ) );
+            return ( pKey = pName ) => attempt( () => pObj.delete( pKey ) );
         }
         else if ( (isFunc( pObj?.remove ) && (1 === $ln( pObj?.remove ))) )
         {
-            return ( pKey ) => attempt( () => pObj.remove( pKey ) );
+            return ( pKey = pName ) => attempt( () => pObj.remove( pKey ) );
         }
 
-        return ( pKey ) => attempt( () => delete pObj[pKey] );
+        return ( pKey = pName ) => attempt( () => delete pObj[pKey] );
     };
 
-    const makeAppender = ( pObj ) =>
+    const makeAppender = ( pObj, pName ) =>
     {
         if ( isMap( pObj ) || (isFunc( pObj?.append ) && (2 === $ln( pObj?.append ))) )
         {
-            return ( pKey, pValue ) => attempt( () => pObj.append( pKey, pValue ) );
+            return ( pKey = pName, pValue ) => attempt( () => pObj.append( pKey, pValue ) );
         }
         else if ( isFunc( pObj?.add ) )
         {
-            return ( pKey, pValue ) => attempt( () => pObj.add( pValue ) );
+            return ( pKey = pName, pValue ) => attempt( () => pObj.add( pValue ) );
         }
 
-        const accessor = makeAccessor( pObj );
+        const accessor = makeAccessor( pObj, pName );
 
-        return ( pKey, pValue ) => attempt( () =>
-                                            {
-                                                let existing = accessor( pKey );
-
-                                                let value = pValue ?? existing;
-
-                                                if ( isArray( existing ) )
-                                                {
-                                                    value = [...(new Set( [...existing, ...(isArray( pValue ) ? pValue : [pValue])] ))];
-                                                }
-                                                else if ( isNonNullObj( existing ) )
-                                                {
-                                                    if ( (isFunction( existing?.equals ) && !existing.equals( pValue )) || !OBJECT_REGISTRY.areEqual( existing, pValue ) )
+        return ( pKey = pName, pValue ) => attempt( () =>
                                                     {
-                                                        value = { ...existing, ...(isNonNullObj( pValue ) ? pValue : { [name]: pValue }) };
-                                                    }
-                                                    else
-                                                    {
-                                                        value = existing;
-                                                    }
-                                                }
-                                                else
-                                                {
-                                                    let exStr = _asStr( existing );
-                                                    let newStr = _asStr( pValue );
+                                                        let existing = accessor( pKey );
 
-                                                    value = (_ucase( exStr.trim() ) === _ucase( newStr.trim() )) ? exStr : (exStr + ", " + newStr);
-                                                }
+                                                        let value = pValue ?? existing;
 
-                                                return ((isFunc( pObj?.set ) && (2 === $ln( pObj?.set )))) ? attempt( () => pObj.set( pKey, value ) ) : attempt( () => pObj[pKey] = value );
-                                            } );
+                                                        if ( isArray( existing ) )
+                                                        {
+                                                            value = [...(new Set( [...existing, ...(isArray( pValue ) ? pValue : [pValue])] ))];
+                                                        }
+                                                        else if ( isNonNullObj( existing ) )
+                                                        {
+                                                            if ( (isFunction( existing?.equals ) && !existing.equals( pValue )) || !OBJECT_REGISTRY.areEqual( existing, pValue ) )
+                                                            {
+                                                                value = { ...existing, ...(isNonNullObj( pValue ) ? pValue : { [name]: pValue }) };
+                                                            }
+                                                            else
+                                                            {
+                                                                value = existing;
+                                                            }
+                                                        }
+                                                        else if ( isNumeric( existing ) || isNumeric( pValue ) || isBool( existing ) || isBool( pValue ) )
+                                                        {
+                                                            value = pValue ?? existing;
+                                                        }
+                                                        else if ( _isValidStr( existing ) )
+                                                        {
+                                                            let exStr = _asStr( existing || _mt ).replace( /undefined|null|void/, _mt );
+                                                            let newStr = _asStr( pValue || mt ).replace( /undefined|null|void/, _mt );
+
+                                                            value = (_ucase( exStr.trim() ) === _ucase( newStr.trim() )) ? exStr : (exStr + ", " + newStr);
+                                                        }
+
+                                                        return ((isFunc( pObj?.set ) && (2 === $ln( pObj?.set )))) ? attempt( () => pObj.set( pKey, value ) ) : attempt( () => pObj[pKey] = value );
+                                                    } );
     };
 
 
@@ -9310,11 +9338,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         clone()
         {
-            let obj = localCopy( this );
-
-            Object.setPrototypeOf( obj, Object.getPrototypeOf( this ) );
-
-            return obj;
+            return localCopy( this );
         }
 
         equals( pOther )

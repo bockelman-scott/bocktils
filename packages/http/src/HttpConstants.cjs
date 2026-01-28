@@ -86,6 +86,7 @@ const { _ud = "undefined", $scope } = constants;
             setProperty,
             makeAppender,
             makeDeleter,
+            localCopy,
             lock,
             attempt,
             asyncAttempt,
@@ -96,6 +97,8 @@ const { _ud = "undefined", $scope } = constants;
 
     const
         {
+            DEFAULT_OBJECT_LITERAL_OPTIONS,
+            FAST_OBJECT_LITERAL_OPTIONS,
             isNull,
             isObject,
             isNonNullObject,
@@ -263,7 +266,7 @@ const { _ud = "undefined", $scope } = constants;
                 return HttpVerb.resolveHttpMethod( pMethod?.name || pMethod?.verb );
             }
 
-            return attempt( () => HttpVerb.resolveHttpMethod( ((pMethod["method"]) || (pMethod["headers"]?.["method"])) ) ) || VERBS.GET;
+            return HttpVerb.resolveHttpMethod( ((pMethod["method"]) || (pMethod["headers"]?.["method"])) ) || VERBS.GET;
         }
 
         if ( isNumeric( pMethod ) )
@@ -799,6 +802,32 @@ const { _ud = "undefined", $scope } = constants;
         }
     }
 
+    HttpStatus.fromLiteral = function( pObject )
+    {
+        if ( isNonNullObject( pObject ) && isNumeric( pObject.code ) )
+        {
+            return new HttpStatus( pObject.code, pObject?.name || pObject?.statusText );
+        }
+        else if ( isNumeric( pObject ) )
+        {
+            return new HttpStatus( pObject );
+        }
+        else if ( isString( pObject ) )
+        {
+            if ( "ok" === lcase( asString( pObject, true ) ) )
+            {
+                return new HttpStatus( 200, pObject );
+            }
+
+            const code = STATUS_CODES[ucase( asString( pObject, true ) )];
+            if ( !isNull( code ) && asInt( code ) > 0 )
+            {
+                return new HttpStatus( asInt( code ), STATUS_TEXT_BY_INT_VALUE[code] );
+            }
+        }
+        return null;
+    };
+
     HttpStatus.allowsResponseBody = function( pStatus )
     {
         if ( isNonNullObject( pStatus ) && pStatus instanceof HttpStatus )
@@ -845,6 +874,13 @@ const { _ud = "undefined", $scope } = constants;
         if ( HttpStatus.isStatusCode( code ) || HttpStatus.isStatusText( text ) )
         {
             return new HttpStatus( code, text );
+        }
+
+        const httpStatus = HttpStatus.fromLiteral( response ) ?? HttpStatus.fromLiteral( response?.status ) ?? HttpStatus.fromLiteral( response?.statusText );
+
+        if ( !isNull( httpStatus ) )
+        {
+            return httpStatus;
         }
 
         throw new IllegalArgumentError( "A valid Response object is required to calculate its status",
@@ -953,79 +989,6 @@ const { _ud = "undefined", $scope } = constants;
         }
     }
 
-    HttpHeaderDefinition.from = function( pData )
-    {
-        if ( isNonNullObject( pData ) || isArray( pData ) )
-        {
-            if ( pData instanceof HttpHeaderDefinition )
-            {
-                return pData;
-            }
-
-            if ( isPopulatedObject( pData ) && !isBlank( pData.name ) )
-            {
-                return new HttpHeaderDefinition( pData.name, pData.description || pData.name, pData.category || _mt );
-            }
-            else if ( isArray( pData ) )
-            {
-                let arr = asArray( pData ).filter( e => !isNull( e ) && (isString( e ) || (isPopulatedObject( e ) && (e instanceof HttpHeaderDefinition || !isBlank( e.name )))) );
-
-                if ( $ln( arr ) > 0 )
-                {
-                    if ( arr.every( e => isString( e ) ) )
-                    {
-                        return new HttpHeaderDefinition( arr[0], arr[1] || arr[0], arr[2] || _mt );
-                    }
-                    else if ( arr[0] instanceof HttpHeaderDefinition )
-                    {
-                        return arr[0];
-                    }
-                    else if ( isPopulatedObject( arr[0] ) && !isBlank( arr[0]?.name ) )
-                    {
-                        return new HttpHeaderDefinition( arr[0].name, arr[0].description || arr[0].name, arr[0].category || _mt );
-                    }
-                    else
-                    {
-                        let obj = arr.find( e => isPopulatedObject( e ) && e instanceof HttpHeaderDefinition );
-                        if ( !isNull( obj ) )
-                        {
-                            return obj;
-                        }
-                        obj = arr.find( e => isPopulatedObject( e ) && !isBlank( e.name ) );
-                        if ( !isNull( obj ) )
-                        {
-                            return HttpHeaderDefinition.from( obj );
-                        }
-
-                        let index = arr.findIndex( e => isString( e ) && !isBlank( e ) );
-
-                        return new HttpHeaderDefinition( arr[index], arr[index + 1] || arr[index], arr[index + 2] || _mt );
-                    }
-                }
-            }
-        }
-        else if ( isString( pData ) )
-        {
-            if ( isJson( pData ) )
-            {
-                let obj = attempt( () => asObject( pData ) );
-                if ( isPopulatedObject( obj ) )
-                {
-                    return HttpHeaderDefinition.from( obj );
-                }
-            }
-            if ( !isBlank( pData ) )
-            {
-                let arr = asString( pData, true ).split( /[,:]/ ).filter( e => !isBlank( e ) ).map( e => asString( e, true ) );
-
-                let httpHeaderDef = HttpHeaderDefinition[asString( arr[0], true )] || HttpHeaderDefinition[lcase( asString( arr[0], true ) )];
-
-                return httpHeaderDef || new HttpHeaderDefinition( arr[0], (arr[1] || arr[0]), (arr[2] || _mt) );
-            }
-        }
-        return null;
-    };
-
     HttpHeaderDefinition.NEXT_ID = 0;
     HttpHeaderDefinition.nextId = function()
     {
@@ -1079,7 +1042,8 @@ const { _ud = "undefined", $scope } = constants;
                     "WWW-Authenticate": "Defines the authentication method that should be used to access a resource.",
                     "Authorization": "Contains the credentials to authenticate a user-agent with a server.",
                     "Proxy-Authenticate": "Defines the authentication method that should be used to access a resource behind a proxy server.",
-                    "Proxy-Authorization": "Contains the credentials to authenticate a user-agent with a proxy server."
+                    "Proxy-Authorization": "Contains the credentials to authenticate a user-agent with a proxy server.",
+                    "api_key": "Custom header often used to pass API credentials; not a currently defined header according to any RFP Specification"
                 },
             CACHING:
                 {
@@ -1258,9 +1222,97 @@ const { _ud = "undefined", $scope } = constants;
                                                 Object.entries( headers ).forEach( ( [header, description] ) =>
                                                                                    {
                                                                                        HttpHeaderDefinition[header] = new HttpHeaderDefinition( header, description, categoryName );
+
+                                                                                       if ( !(lcase( header ) in HttpHeaderDefinition) )
+                                                                                       {
+                                                                                           HttpHeaderDefinition[lcase( header )] = new HttpHeaderDefinition( lcase( header ), description, categoryName );
+                                                                                       }
+
                                                                                    }
                                                 );
                                             } );
+
+    HttpHeaderDefinition.from = function( pData )
+    {
+        if ( isNonNullObject( pData ) || isArray( pData ) )
+        {
+            if ( pData instanceof HttpHeaderDefinition )
+            {
+                return pData;
+            }
+
+            if ( isPopulatedObject( pData ) && !isBlank( pData.name ) )
+            {
+                return new HttpHeaderDefinition( pData.name, pData.description || pData.name, pData.category || _mt );
+            }
+            else if ( isArray( pData ) )
+            {
+                let arr = asArray( pData ).filter( e => !isNull( e ) && (isString( e ) || (isPopulatedObject( e ) && (e instanceof HttpHeaderDefinition || !isBlank( e.name )))) );
+
+                if ( $ln( arr ) > 0 )
+                {
+                    if ( arr.every( e => isString( e ) ) )
+                    {
+                        return new HttpHeaderDefinition( arr[0], arr[1] || arr[0], arr[2] || _mt );
+                    }
+                    else if ( arr[0] instanceof HttpHeaderDefinition )
+                    {
+                        return arr[0];
+                    }
+                    else if ( isPopulatedObject( arr[0] ) && !isBlank( arr[0]?.name ) )
+                    {
+                        return new HttpHeaderDefinition( arr[0].name, arr[0].description || arr[0].name, arr[0].category || _mt );
+                    }
+                    else
+                    {
+                        let obj = arr.find( e => isPopulatedObject( e ) && e instanceof HttpHeaderDefinition );
+                        if ( !isNull( obj ) )
+                        {
+                            return obj;
+                        }
+                        obj = arr.find( e => isPopulatedObject( e ) && !isBlank( e.name ) );
+                        if ( !isNull( obj ) )
+                        {
+                            return HttpHeaderDefinition.from( obj );
+                        }
+
+                        let index = arr.findIndex( e => isString( e ) && !isBlank( e ) );
+
+                        return new HttpHeaderDefinition( arr[index], arr[index + 1] || arr[index], arr[index + 2] || _mt );
+                    }
+                }
+            }
+        }
+        else if ( isString( pData ) )
+        {
+            if ( isJson( pData ) )
+            {
+                let obj = attempt( () => asObject( pData ) );
+                if ( isPopulatedObject( obj ) )
+                {
+                    return HttpHeaderDefinition.from( obj );
+                }
+            }
+            if ( !isBlank( pData ) )
+            {
+                let arr = asString( pData, true ).split( /[,:]/ ).filter( e => !isBlank( e ) ).map( e => asString( e, true ) );
+
+                let httpHeaderDef = HttpHeaderDefinition[asString( arr[0], true )] || HttpHeaderDefinition[lcase( asString( arr[0], true ) )];
+
+                return httpHeaderDef || new HttpHeaderDefinition( arr[0], (arr[1] || arr[0]), (arr[2] || _mt) );
+            }
+        }
+        return null;
+    };
+
+    HttpHeaderDefinition.fromLiteral = function( pObject )
+    {
+        if ( isNonNullObject( pObject ) && !isNull( pObject.name ) )
+        {
+            return new HttpHeaderDefinition( pObject.name, pObject.description || pObject.name, pObject.category || pObject.name );
+        }
+        return HttpHeaderDefinition.from( pObject );
+    };
 
     /**
      * Represents an HTTP header, encapsulating its definition and value.
@@ -1323,6 +1375,16 @@ const { _ud = "undefined", $scope } = constants;
         }
     };
 
+    HttpHeader.fromLiteral = function( pObject )
+    {
+        if ( isNonNullObject( pObject ) && !isNull( pObject.value ) )
+        {
+            const definition = HttpHeaderDefinition.fromLiteral( pObject.definition || pObject.name || pObject );
+            return new HttpHeader( definition || pObject?.name || pObject, pObject.value );
+        }
+        return HttpHeader.from( pObject?.value || pObject, pObject?.name || pObject?.key || pObject );
+    };
+
     /**
      * Returns true if the specified value is a valid/known HTTP Verb (such as GET, POST, PUT, etc.)
      *
@@ -1372,7 +1434,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             const name = asString( pPropertyPath, true );
 
-            let mutator = makeAppender( pObject );
+            let mutator = makeAppender( pObject, name );
 
             return attempt( () => mutator( name, pValue ) );
         }
@@ -1408,7 +1470,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             if ( this.isValid() )
             {
-                return attempt( () => this.mergeFunction( pObject, pKey, pValue ) );
+                return /*attempt( () =>*/ this.mergeFunction( pObject, pKey, pValue /*)*/ );
             }
             return false;
         }
@@ -1484,7 +1546,7 @@ const { _ud = "undefined", $scope } = constants;
 
             if ( !isBlank( name ) )
             {
-                const deleter = makeDeleter( pObject );
+                const deleter = makeDeleter( pObject, name );
 
                 return attempt( () => deleter( name ) );
             }
@@ -1558,7 +1620,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             if ( this.isValid() )
             {
-                return attempt( () => this.mergeRule.execute( pObject, this.propertyName, pValue ) );
+                return this.mergeRule.execute( pObject, this.propertyName, pValue );
             }
             return false;
         }
@@ -1653,9 +1715,36 @@ const { _ud = "undefined", $scope } = constants;
     {
         #rules;
 
-        constructor( pPropertyRules )
+        #options = FAST_OBJECT_LITERAL_OPTIONS;
+
+        #deepCopy = false;
+
+        #maxDepth = FAST_OBJECT_LITERAL_OPTIONS.maxDepth;
+
+        constructor( pPropertyRules, pDeepCopy = false, pOptions = FAST_OBJECT_LITERAL_OPTIONS )
         {
             this.#rules = defineHttpPropertyRules( pPropertyRules );
+
+            this.#deepCopy = !!pDeepCopy;
+
+            this.#options = { ...FAST_OBJECT_LITERAL_OPTIONS, ...(pOptions || {}) };
+
+            this.#maxDepth = this.#options?.maxDepth;
+        }
+
+        get options()
+        {
+            return { ...FAST_OBJECT_LITERAL_OPTIONS, ...(this.#options || {}) };
+        }
+
+        get deepCopy()
+        {
+            return !!this.#deepCopy;
+        }
+
+        get maxDepth()
+        {
+            return asInt( this.#maxDepth, 5 );
         }
 
         get rules()
@@ -1663,47 +1752,57 @@ const { _ud = "undefined", $scope } = constants;
             return this.#rules;
         }
 
-        get propertyRules()
-        {
-            return this.rules;
-        }
-
         getRule( pPropertyName )
         {
-            return readProperty( this.propertyRules || {}, pPropertyName );
+            return readProperty( (this.rules || {}), pPropertyName );
         }
 
         mergeProperties( pObject, ...pOthers )
         {
             let objects = [pObject, ...(asArray( pOthers || [] ))].filter( isNonNullObject );
 
-            if ( $ln( objects ) > 0 )
+            if ( $ln( objects ) > 1 )
             {
                 let object = objects.shift();
 
-                if ( isReadOnly( object ) )
+                if ( $ln( objects ) > 0 )
                 {
-                    object = { ...object };
+                    if ( isReadOnly( object ) )
+                    {
+                        object = { ...object };
+                    }
+                    object = this.#deepCopy ? localCopy( object ) : ((isFunction( object?.clone )) ? object.clone() : object);
                 }
 
                 while ( $ln( objects ) > 0 )
                 {
                     let obj = objects.shift();
 
-                    let entries = isFunction( obj.entries ) ? [...(obj.entries)] : objectEntries( obj );
+                    let entries = isFunction( obj.entries ) ? [...(obj.entries())] : objectEntries( obj );
 
                     if ( entries && $ln( entries ) )
                     {
                         for( let entry of entries )
                         {
                             const name = ObjectEntry.getKey( entry );
-                            const value = ObjectEntry.getValue( entry );
+
+                            if ( isBlank( name ) )
+                            {
+                                continue;
+                            }
+
+                            let value = ObjectEntry.getValue( entry );
+
+                            if ( this.#deepCopy && isNonNullObject( value ) )
+                            {
+                                value = isFunction( value?.clone ) ? value.clone() : localCopy( value );
+                            }
 
                             const rule = this.getRule( name );
 
                             if ( rule && rule.isValid() )
                             {
-                                attempt( () => rule.apply( object, value ) );
+                                rule.apply( object, value );
                             }
                             else
                             {
@@ -1715,7 +1814,14 @@ const { _ud = "undefined", $scope } = constants;
                 }
                 return object;
             }
-            return pObject || {};
+            else
+            {
+                let object = $ln( objects ) > 0 ? asObject( objects[0] ?? {} ) : (pObject ?? {});
+
+                object = this.#deepCopy ? localCopy( object ) : (isFunction( object?.clone ) ? object.clone() : (object ?? {}));
+
+                return object;
+            }
         }
     }
 

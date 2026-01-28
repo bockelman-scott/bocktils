@@ -184,6 +184,8 @@ const { _ud = "undefined", $scope } = constants;
     // import the useful functions from the core module, TypeUtils
     const
         {
+            DEFAULT_OBJECT_LITERAL_OPTIONS,
+            FAST_OBJECT_LITERAL_OPTIONS,
             isNull,
             isObject,
             isNonNullObject,
@@ -420,9 +422,17 @@ const { _ud = "undefined", $scope } = constants;
          * Returns an object literal whose properties are those of this instance.
          * @returns {Object} an object literal whose properties are those of this instance.
          */
-        toObjectLiteral( pOptions )
+        toLiteral( pOptions )
         {
-            return toObjectLiteral( this, pOptions );
+            let literal = {};
+
+            literal["keepAlive"] = this.keepAlive;
+            literal["keepAliveMsecs"] = this.keepAliveMsecs;
+            literal["maxFreeSockets"] = this.maxFreeSockets;
+            literal["maxTotalSockets"] = this.maxTotalSockets;
+            literal["rejectUnauthorized"] = this.rejectUnauthorized;
+
+            return literal;
         }
 
         /**
@@ -487,9 +497,15 @@ const { _ud = "undefined", $scope } = constants;
             return false;
         }
 
-        toObjectLiteral( pOptions )
+        toLiteral( pOptions )
         {
-            return toObjectLiteral( this, pOptions );
+            let literal = super.toLiteral();
+
+            literal["agentKeepAliveTimeoutBuffer"] = this.agentKeepAliveTimeoutBuffer;
+            literal["scheduling"] = this.scheduling;
+            literal["timeout"] = this.timeout;
+
+            return literal;
         }
 
         toString()
@@ -497,6 +513,45 @@ const { _ud = "undefined", $scope } = constants;
             return asJson( this );
         }
     }
+
+
+    HttpAgentConfig.fromLiteral = function( pObject )
+    {
+        if ( isNonNullObject( pObject ) )
+        {
+            if ( !isNull( pObject.agentKeepAliveTimeoutBuffer ) || !isNull( pObject.timeout ) || !isNull( pObject.scheduling ) )
+            {
+                return new HttpAgentConfigExtended( pObject.keepAlive ?? true,
+                                                    pObject.keepAliveMsecs ?? 10_000,
+                                                    pObject.maxFreeSockets ?? 256,
+                                                    pObject.maxTotalSockets ?? Infinity,
+                                                    pObject.rejectUnauthorized ?? false,
+                                                    pObject.agentKeepAliveTimeoutBuffer ?? 1_500,
+                                                    pObject.scheduling ?? "lifo",
+                                                    pObject.timeout ?? 15_000 );
+            }
+            else
+            {
+                return new HttpAgentConfig( pObject.keepAlive ?? true,
+                                            pObject.keepAliveMsecs ?? 10_000,
+                                            pObject.maxFreeSockets ?? 256,
+                                            pObject.maxTotalSockets ?? Infinity,
+                                            pObject.rejectUnauthorized ?? false );
+            }
+        }
+    };
+
+    HttpAgentConfigExtended.fromLiteral = function( pObject )
+    {
+        return new HttpAgentConfigExtended( pObject.keepAlive ?? true,
+                                            pObject.keepAliveMsecs ?? 10_000,
+                                            pObject.maxFreeSockets ?? 256,
+                                            pObject.maxTotalSockets ?? Infinity,
+                                            pObject.rejectUnauthorized ?? false,
+                                            pObject.agentKeepAliveTimeoutBuffer ?? 1_500,
+                                            pObject.scheduling ?? "lifo",
+                                            pObject.timeout ?? 15_000 );
+    };
 
     // create an instance of the HttpAgentConfig class
     // to define configuration properties
@@ -508,10 +563,10 @@ const { _ud = "undefined", $scope } = constants;
     const HTTP_AGENT_DOWNLOAD_CFG = lock( new HttpAgentConfigExtended() );
 
     // create a global instance of http.Agent using the default HttpAgentConfig
-    const HTTP_AGENT = new http.Agent( HTTP_AGENT_DEFAULT_CFG.toObjectLiteral() );
+    const HTTP_AGENT = new http.Agent( HTTP_AGENT_DEFAULT_CFG.toLiteral() );
 
     // create a global instance of https.Agent using the default HttpAgentConfig
-    const HTTPS_AGENT = new https.Agent( HTTP_AGENT_DEFAULT_CFG.toObjectLiteral() );
+    const HTTPS_AGENT = new https.Agent( HTTP_AGENT_DEFAULT_CFG.toLiteral() );
 
     HttpAgentConfig.getDefault = function()
     {
@@ -573,13 +628,13 @@ const { _ud = "undefined", $scope } = constants;
     function createHttpAgent( pHttpAgentConfig, pExtended = HttpAgentConfig.asExtended( pHttpAgentConfig ) )
     {
         const agentConfig = HttpAgentConfig.resolveAgentConfig( pHttpAgentConfig, pExtended );
-        return new http.Agent( agentConfig.toObjectLiteral() );
+        return new http.Agent( agentConfig.toLiteral() );
     }
 
     function createHttpsAgent( pHttpAgentConfig, pExtended = HttpAgentConfig.asExtended( pHttpAgentConfig ) )
     {
         const agentConfig = HttpAgentConfig.resolveAgentConfig( pHttpAgentConfig, pExtended );
-        return new https.Agent( agentConfig.toObjectLiteral() );
+        return new https.Agent( agentConfig.toLiteral() );
     }
 
     function resolveHttpAgent( pAgent, pAgentConfig = HTTP_AGENT_DEFAULT_CFG, pExtended = HttpAgentConfig.asExtended( pAgentConfig ) )
@@ -712,7 +767,6 @@ const { _ud = "undefined", $scope } = constants;
     const DEFAULT_CONFIG =
         lock( {
                   method: VERBS.GET,
-                  responseType: "text/plain",
                   httpAgent: HTTP_AGENT,
                   httpsAgent: HTTPS_AGENT
               } );
@@ -723,13 +777,13 @@ const { _ud = "undefined", $scope } = constants;
                   responseType: "stream",
                   Accept: "application/octet-stream",
                   headers: { Accept: "application/octet-stream" },
-                  httpAgent: new http.Agent( HTTP_AGENT_DOWNLOAD_CFG.toObjectLiteral() ),
-                  httpsAgent: new https.Agent( HTTP_AGENT_DOWNLOAD_CFG.toObjectLiteral() ),
+                  httpAgent: new http.Agent( HTTP_AGENT_DOWNLOAD_CFG.toLiteral() ),
+                  httpsAgent: new https.Agent( HTTP_AGENT_DOWNLOAD_CFG.toLiteral() ),
               } );
 
-    const HTTP_CONFIG_PROPERTY_NAMES = lock( ["headers", "url", "method", "httpAgent", "httpsAgent"] );
+    const HTTP_CONFIG_PROPERTY_NAMES = lock( ["headers", "httpAgent", "httpsAgent"] );
 
-    const NON_DELEGATED_PROPERTIES = ["data", "body", "properties", "class", ...HTTP_CONFIG_PROPERTY_NAMES];
+    const NON_DELEGATED_PROPERTIES = ["url", "method", "data", "body", "properties", "class", ...HTTP_CONFIG_PROPERTY_NAMES];
 
 
     function resolveUrl( pUrl, pConfig )
@@ -938,7 +992,7 @@ const { _ud = "undefined", $scope } = constants;
             }
             else
             {
-                return new HttpHeaders( this.headers, this.properties );
+                return new HttpHeaders( this.headers, new HttpHeaders( this.properties, this ) );
             }
         }
 
@@ -1072,7 +1126,7 @@ const { _ud = "undefined", $scope } = constants;
 
             let headers = asObject( this.headers || obj.headers );
 
-            if ( headers instanceof HttpHeaders || isFunction( headers?.toLiteral ) )
+            if ( isFunction( headers?.toLiteral ) )
             {
                 headers = headers.toLiteral();
                 obj.headers = headers;
@@ -1087,20 +1141,80 @@ const { _ud = "undefined", $scope } = constants;
 
         merge( ...pConfigs )
         {
-            let configs = [this, ...pConfigs];
+            let others = asArray( pConfigs ).filter( isNonNullObject ).map( e => isFunction( e?.clone ) ? e.clone() : e );
 
-            return HttpConfig.mergeConfigs( ...configs );
+            if ( $ln( others ) > 0 )
+            {
+                return HttpConfig.mergeConfigs( this.clone(), ...others );
+            }
+
+            return this.clone();
         }
 
         clone()
         {
-            // TODO: clone the body??
-            const httpConfig = new HttpConfig( this.properties, this.headers, this.url, this.method, this.body );
-            return fixAgents( httpConfig.merge( this ) );
+            let body = this.body || this.data;
+
+            if ( !isNull( body ) && !(isPromise( body ) || isThenable( body )) )
+            {
+                if ( isNonNullObject( body ) || isArray( body ) )
+                {
+                    if ( isFunction( body?.clone ) )
+                    {
+                        body = body.clone();
+                    }
+                    else if ( isArray( body ) )
+                    {
+                        body = [...body];
+                    }
+                    else
+                    {
+                        body = { ...body };
+                    }
+                }
+            }
+
+            const httpConfig = new HttpConfig( this.properties, this.headers, asString( this.url, true ), asString( this.method, true ), body );
+
+            return fixAgents( httpConfig );
         }
     }
 
+    HttpConfig.fromLiteral = function( pObject )
+    {
+        if ( isNonNullObject( pObject ) )
+        {
+            return new HttpConfig( pObject.properties || { ...pObject }, pObject.headers, asString( pObject.url || _mt ), asString( pObject.method || VERBS.GET, true ), pObject.body ?? null );
+        }
+        return new HttpConfig( DEFAULT_CONFIG );
+    };
+
     HttpConfig.resolveUrl = resolveUrl;
+
+    const makePropertyMergeRule =
+        ( pPropertyName = "headers" ) =>
+        {
+            return new HttpPropertyMergeRule( (pPropertyName || "headers"),
+                                              ( pObject, pKey, pValue ) =>
+                                              {
+                                                  // existing headers
+                                                  let headers = readProperty( pObject, (pPropertyName || "headers") );
+
+                                                  headers = (isNonNullObject( headers )) ?
+                                                            isFunction( headers.clone ) ?
+                                                            headers.clone() :
+                                                            new HttpHeaders( headers, pValue ?? {} ) :
+                                                            new HttpHeaders();
+
+                                                  if ( isNonNullObject( pValue ) )
+                                                  {
+                                                      const merger = HttpHeadersMerger.getDefault();
+                                                      headers = merger.mergeHeaders( headers, pValue );
+                                                  }
+
+                                                  setProperty( pObject, (pPropertyName || "headers"), headers );
+                                              } );
+        };
 
     const DEFAULT_CONFIG_MERGE_RULES =
         lock( HttpPropertiesMerger.defineHttpPropertyRules(
@@ -1140,7 +1254,7 @@ const { _ud = "undefined", $scope } = constants;
                 "transformRequest": new HttpPropertyRule( "transformRequest", HttpPropertyMergeRule["REPLACE"] ),
                 "transformResponse": new HttpPropertyRule( "transformResponse", HttpPropertyMergeRule["REPLACE"] ),
 
-                "validateStatus": new HttpPropertyRule( "allowAbsoluteUrls", HttpPropertyMergeRule["PRESERVE"] ),
+                "validateStatus": new HttpPropertyRule( "validateStatus", HttpPropertyMergeRule["PRESERVE"] ),
 
                 "proxy": new HttpPropertyRule( "proxy", HttpPropertyMergeRule["REPLACE"] ),
                 "socketPath": new HttpPropertyRule( "socketPath", HttpPropertyMergeRule["REPLACE"] ),
@@ -1153,48 +1267,73 @@ const { _ud = "undefined", $scope } = constants;
                 "signal": new HttpPropertyRule( "signal", HttpPropertyMergeRule["REPLACE"] ),
                 "maxRate": new HttpPropertyRule( "maxRate", HttpPropertyMergeRule["REPLACE"] ),
 
-                "headers": new HttpPropertyRule( "headers",
-                                                 new HttpPropertyMergeRule( "headers", ( pObject, pKey, pValue ) =>
-                                                 {
-                                                     // existing headers
-                                                     let headers = readProperty( pObject, "headers" );
-
-                                                     headers = (isNonNullObject( headers )) ? isFunction( headers.clone ) ? headers.clone() : new HttpHeaders( headers, pValue ?? {} ) : new HttpHeaders();
-
-                                                     if ( isNonNullObject( pValue ) )
-                                                     {
-                                                         const merger = HttpHeadersMerger.getDefault();
-                                                         headers = merger.mergeHeaders( headers, pValue );
-                                                     }
-
-                                                     setProperty( pObject, "headers", headers );
-                                                 } ) )
+                "headers": new HttpPropertyRule( "headers", makePropertyMergeRule( "headers" ) ),
+                "httpHeaders": new HttpPropertyRule( "httpHeaders", makePropertyMergeRule( "httpHeaders" ) )
 
                 // add more as necessary
             } ) );
 
     class HttpConfigMerger extends HttpPropertiesMerger
     {
-        constructor( pConfigRules = DEFAULT_CONFIG_MERGE_RULES )
+        constructor( pConfigRules = DEFAULT_CONFIG_MERGE_RULES, pDeepCopy = false, pOptions = FAST_OBJECT_LITERAL_OPTIONS )
         {
-            super( pConfigRules || DEFAULT_CONFIG_MERGE_RULES );
+            super( pConfigRules || DEFAULT_CONFIG_MERGE_RULES, pDeepCopy, { ...FAST_OBJECT_LITERAL_OPTIONS, ...(pOptions || {}) } );
         }
 
         mergeConfigs( pConfig, ...pOthers )
         {
-            let configs = [pConfig, ...pOthers].filter( isNonNullObject );
+            // filter out anything that is irrelevant, such as empty objects or objects that cannot be treated as an HttpConfig
+            let configs = [pConfig, ...pOthers].filter( e => isHttpConfig( e ) || isPopulatedObject( e ) );
 
-            let headersObjects = configs.map( e => e.headers );
+            // if we have more than one, we will merge, otherwise we will clone
+            if ( $ln( configs ) > 1 )
+            {
+                // save the existing headers properties for post-processing
+                let headersObjects = configs.map( e => e.headers ).filter( isNonNullObject );
 
-            let config = super.mergeProperties( pConfig, ...pOthers );
+                // protect the original objects by either cloning them or converting them to POJOs
+                headersObjects = headersObjects.map( e => isFunction( e?.clone ) ? e.clone() : toObjectLiteral( e ) );
 
-            let headersMerger = HttpHeadersMerger.getDefault();
+                // get the first config
+                let config = configs.shift();
 
-            let headers = headersMerger.mergeHeaders( ...headersObjects );
+                // protect the original config by cloning it if possible
+                if ( isFunction( config?.clone ) )
+                {
+                    config = config.clone();
+                }
+                else
+                {
+                    // if the object does not have a clone method, it is likely a POJO
+                    // so we treat it like one
+                    config = new HttpConfig( toObjectLiteral( config, FAST_OBJECT_LITERAL_OPTIONS ), toObjectLiteral( config.headers ), asString( config.url || _mt, true ), asString( config.method || _mt, true ), (isNonNullObject( config.body ) ? (isFunction( config.body?.clone ) ? config.body.clone() : localCopy( config.body )) : config.body ?? null) );
+                    config = fixAgents( config );
+                }
 
-            config.headers = headers;
+                let others = asArray( configs ).map( e => isFunction( e?.clone ) ? e.clone() : e );
 
-            return config;
+                config = super.mergeProperties( config, ...(others) );
+
+                if ( $ln( headersObjects ) > 1 )
+                {
+                    let headersMerger = HttpHeadersMerger.getDefault();
+
+                    config.headers = headersMerger.mergeHeaders( ...headersObjects );
+                }
+
+                return fixAgents( config );
+            }
+
+            let cfg = $ln( configs ) > 0 ? configs[0] : new HttpConfig( DEFAULT_CONFIG );
+
+            if ( isFunction( cfg?.clone ) )
+            {
+                return fixAgents( cfg.clone() );
+            }
+
+            cfg = new HttpConfig( toObjectLiteral( cfg, FAST_OBJECT_LITERAL_OPTIONS ), toObjectLiteral( cfg.headers || {} ), asString( cfg.url || _mt, true ), asString( cfg.method || _mt, true ), (isNonNullObject( cfg.body ) ? (isFunction( cfg.body?.clone ) ? cfg.body.clone() : localCopy( cfg.body )) : cfg.body ?? null) );
+
+            return fixAgents( cfg );
         }
     }
 
@@ -1273,7 +1412,7 @@ const { _ud = "undefined", $scope } = constants;
 
     const toHttpConfigLiteral = function( pHttpConfig )
     {
-        if ( isHttpConfig( pHttpConfig ) || isFunction( pHttpConfig?.toLiteral ) )
+        if ( isFunction( pHttpConfig?.toLiteral ) )
         {
             return fixAgents( pHttpConfig.toLiteral() );
         }
@@ -1291,15 +1430,37 @@ const { _ud = "undefined", $scope } = constants;
 
     HttpConfig.mergeConfigs = function( ...pConfigs )
     {
-        const configs = asArray( pConfigs ).filter( isNonNullObject );
+        // filter the arguments such that we only have relevant objects
+        const configs = asArray( pConfigs ).filter( e => isHttpConfig( e ) || isPopulatedObject( e ) );
 
-        if ( $ln( configs ) > 1 )
+        // if we have relevant objects, slurp the first one off of the list, otherwise create a config from the arguments
+        let base = ($ln( configs ) > 0) ? configs.shift() : new HttpConfig( ...pConfigs );
+
+        // protect the original config; the expectation is that the merge operations return new objects
+        if ( isFunction( base?.clone ) )
         {
-            const merger = HttpConfigMerger.getDefault();
-            return merger.mergeConfigs( configs.shift(), ...(asArray( configs )) );
+            base = base.clone();
         }
 
-        return configs[0];
+        // if after having removed the first element, we still have other relevant objects
+        if ( $ln( configs ) > 0 )
+        {
+            // filter the remaining objects
+            const others = asArray( configs ).filter( e => isHttpConfig( e ) || isPopulatedObject( e ) );
+
+            // if the filtered list is not empty
+            if ( $ln( others ) > 0 )
+            {
+                // merge the remaining configs with the first on we slurper off above
+                // and return the result
+                const merger = HttpConfigMerger.getDefault();
+                return merger.mergeConfigs( base, ...others );
+            }
+        }
+
+        // if there we no more than 1 relevant objects to merge,
+        // we return the one we either slurped off the original arguments or created as a substitute
+        return base;
     };
 
     HttpConfig.from = function( ...pValues )
@@ -1449,7 +1610,10 @@ const { _ud = "undefined", $scope } = constants;
 
         if ( isNull( body ) )
         {
-            attempt( () => config.removeHeaderValues( ...(asArray( objectKeys( HTTP_HEADERS.MESSAGE_BODY ) )) ) );
+            if ( isFunction( config?.removeHeaderValues ) )
+            {
+                attempt( () => config.removeHeaderValues( ...(asArray( objectKeys( HTTP_HEADERS.MESSAGE_BODY ) )) ) );
+            }
         }
 
         return fixAgents( config );
@@ -1475,7 +1639,10 @@ const { _ud = "undefined", $scope } = constants;
 
         if ( isNull( config.data ) && isNull( config.body ) )
         {
-            attempt( () => config.removeHeaderValues( ...(asArray( objectKeys( HTTP_HEADERS.MESSAGE_BODY ) )) ) );
+            if ( isFunction( config.removeHeaderValues ) )
+            {
+                attempt( () => config.removeHeaderValues( ...(asArray( objectKeys( HTTP_HEADERS.MESSAGE_BODY ) )) ) );
+            }
         }
 
         return fixAgents( config );
@@ -1503,7 +1670,7 @@ const { _ud = "undefined", $scope } = constants;
     {
         let baseConfig = HttpConfig.getDefault( pForDownload );
 
-        let httpConfig = new HttpConfig( { ...(baseConfig.toLiteral()), ...(asObject( pCustomProperties )) } );
+        let httpConfig = new HttpConfig( { ...(baseConfig.toLiteral()), ...(asObject( pCustomProperties )) }, { ...(baseConfig.headers), ...(asObject( pCustomProperties.headers )) } );
 
         httpConfig = HttpConfig.mergeConfigs( baseConfig, httpConfig );
 
@@ -2808,7 +2975,7 @@ const { _ud = "undefined", $scope } = constants;
                 return await asyncAttempt( async() => await delegate.sendRequest( method, url, cfg, (cfg.body || cfg.data || pBody), pRedirects, pRetries, pResolve, pReject ) );
             }
 
-            return fetch( url, HttpConfig.toFetchRequestInitOptions( cfg ) );
+            return fetch( url, await HttpConfig.toFetchRequestInitOptions( cfg ) );
         }
 
         async #handleRedirect( pResponseData, pConfig, pRedirects )
@@ -2856,7 +3023,7 @@ const { _ud = "undefined", $scope } = constants;
                 return await asyncAttempt( async() => await delegate.sendRequest( VERBS.GET, url, cfg, null, pRedirects, pRetries, pResolve, pReject ) );
             }
 
-            return fetch( url, HttpConfig.toFetchRequestInitOptions( cfg ) );
+            return fetch( url, await HttpConfig.toFetchRequestInitOptions( cfg ) );
         }
 
         async getRequestedData( pUrl, pConfig, pRedirects = 0, pRetries = 0, pResolve, pReject )
@@ -2937,7 +3104,7 @@ const { _ud = "undefined", $scope } = constants;
                 return await asyncAttempt( async() => await delegate.sendRequest( VERBS.POST, url, cfg, (cfg.body || cfg.data || pBody), pRedirects, pRetries, pResolve, pReject ) );
             }
 
-            return fetch( url, HttpConfig.toFetchRequestInitOptions( cfg ) );
+            return fetch( url, await HttpConfig.toFetchRequestInitOptions( cfg ) );
         }
 
         async sendPutRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
@@ -2961,7 +3128,7 @@ const { _ud = "undefined", $scope } = constants;
                 return await asyncAttempt( async() => await delegate.sendRequest( VERBS.PUT, url, cfg, (cfg.body || cfg.data || pBody), pRedirects, pRetries, pResolve, pReject ) );
             }
 
-            return fetch( url, HttpConfig.toFetchRequestInitOptions( cfg ) );
+            return fetch( url, await HttpConfig.toFetchRequestInitOptions( cfg ) );
         }
 
         async sendPatchRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
@@ -2985,7 +3152,7 @@ const { _ud = "undefined", $scope } = constants;
                 return await asyncAttempt( async() => await delegate.sendRequest( VERBS.PATCH, url, cfg, (cfg.body || cfg.data || pBody), pRedirects, pRetries, pResolve, pReject ) );
             }
 
-            return fetch( url, HttpConfig.toFetchRequestInitOptions( cfg ) );
+            return fetch( url, await HttpConfig.toFetchRequestInitOptions( cfg ) );
         }
 
         async sendDeleteRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
@@ -3009,7 +3176,7 @@ const { _ud = "undefined", $scope } = constants;
                 return await asyncAttempt( async() => await delegate.sendRequest( VERBS.DELETE, url, cfg, (cfg.body || cfg.data || pBody), pRedirects, pRetries, pResolve, pReject ) );
             }
 
-            return fetch( url, HttpConfig.toFetchRequestInitOptions( cfg ) );
+            return fetch( url, await HttpConfig.toFetchRequestInitOptions( cfg ) );
         }
 
         async sendHeadRequest( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )
@@ -3032,7 +3199,7 @@ const { _ud = "undefined", $scope } = constants;
                 return await asyncAttempt( async() => await delegate.sendRequest( VERBS.HEAD, url, cfg, null, pRedirects, pRetries, pResolve, pReject ) );
             }
 
-            return fetch( url, HttpConfig.toFetchRequestInitOptions( cfg ) );
+            return fetch( url, await HttpConfig.toFetchRequestInitOptions( cfg ) );
         }
 
         async sendOptionsRequest( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )
@@ -3055,7 +3222,7 @@ const { _ud = "undefined", $scope } = constants;
                 return await asyncAttempt( async() => await delegate.sendRequest( VERBS.OPTIONS, url, cfg, null, pRedirects, pRetries, pResolve, pReject ) );
             }
 
-            return fetch( url, HttpConfig.toFetchRequestInitOptions( cfg ) );
+            return fetch( url, await HttpConfig.toFetchRequestInitOptions( cfg ) );
         }
 
         async sendTraceRequest( pUrl, pConfig, pRedirects, pRetries, pResolve, pReject )
@@ -3078,7 +3245,7 @@ const { _ud = "undefined", $scope } = constants;
                 return await asyncAttempt( async() => await delegate.sendRequest( VERBS.TRACE, url, cfg, null, pRedirects, pRetries, pResolve, pReject ) );
             }
 
-            return fetch( url, HttpConfig.toFetchRequestInitOptions( cfg ) );
+            return fetch( url, await HttpConfig.toFetchRequestInitOptions( cfg ) );
         }
 
         async upload( pUrl, pConfig, pBody )

@@ -180,7 +180,7 @@ const { _ud = "undefined", $scope } = constants;
             let response = new Response( body, options );
 
             response.status = status || obj.status || response.status;
-            response.data = data || obj.data || response.data;
+            response.data = data || obj.data || body || response.body;
             response.headers = new HttpResponseHeaders( headers || obj.headers || response.headers );
 
             return response;

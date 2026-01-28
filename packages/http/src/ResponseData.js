@@ -331,7 +331,7 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
                 data = await asyncAttempt( async() => await data ) || responseData.body || response?.body || response;
             }
 
-            const iterationCap = new IterationCap( 4 );
+            const iterationCap = new IterationCap( 5 );
 
             while ( (isNull( data ) || !isFunction( data?.pipe )) && !iterationCap.reached )
             {
@@ -351,6 +351,7 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
 
                     case 3:
                         data = await (response?.response?.body || response?.body);
+                        break;
 
                     default:
                         data = new Streamer().asChunkedStream( await (responseData.data || response?.data || responseData.body || response?.body || response) );
@@ -395,6 +396,38 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
 
         return _mt;
     }
+
+    const calculateRetryDelay = function( pRetryAfter, pDefaultDelay = 128 )
+    {
+        let millis = asInt( pDefaultDelay, 128 );
+
+        let retryAfter = pRetryAfter ?? millis;
+
+        if ( isNumeric( retryAfter ) && !isDate( retryAfter ) )
+        {
+            millis = clamp( asInt( Math.max( (retryAfter * 1_000), millis ) ), 128, 10_000 );
+        }
+        else if ( isDateString( retryAfter ) || isDate( retryAfter ) )
+        {
+            let nextDateTime = asDate( retryAfter );
+            if ( isDate( nextDateTime ) )
+            {
+                millis = clamp( Math.max( millis, asInt( nextDateTime.getTime() - Date.now() ) ), 128, 10_000 );
+            }
+            else
+            {
+                millis = clamp( 2 * millis, 128, 10_000 );
+            }
+        }
+        else
+        {
+            millis = 256;
+        }
+
+        millis += (Math.random() * 256); // add some 'jitter'
+
+        return millis;
+    };
 
     /**
      * This class provides both a wrapper for the information returned by an HTTP request
@@ -744,30 +777,7 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
 
             retryAfter = retryAfter || attempt( () => responseHeaders.get( "X-Retry-After" ) ) || attempt( () => responseHeaders.get( "x-retry-after" ) );
 
-            if ( isNumeric( retryAfter ) && !isDate( retryAfter ) )
-            {
-                millis = clamp( asInt( Math.max( (retryAfter * 1_000), millis ) ), 100, 30_000 );
-            }
-            else if ( isDateString( retryAfter ) || isDate( retryAfter ) )
-            {
-                let nextDateTime = asDate( retryAfter );
-                if ( isDate( nextDateTime ) )
-                {
-                    millis = clamp( Math.max( millis, asInt( nextDateTime.getTime() - Date.now() ) ), 100, 30_000 );
-                }
-                else
-                {
-                    millis = clamp( 2 * millis, 100, 30_000 );
-                }
-            }
-            else
-            {
-                millis = 256;
-            }
-
-            millis += (Math.random() * 128); // add some 'jitter'
-
-            return millis;
+            return calculateRetryDelay( retryAfter, millis );
         }
 
         get body()
@@ -804,7 +814,7 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
 
             if ( isNonNullObject( this.data ) )
             {
-                return isPromise( this.data ) ? await asyncAttempt( async() => await Promise.resolve( this.data ) ) : this.data;
+                return isPromise( this.data ) ? await asyncAttempt( async() => await this.data ) : this.data;
             }
             else if ( isString( this.data ) )
             {
@@ -826,7 +836,7 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
 
             if ( isPromise( this.data ) )
             {
-                let data = await asyncAttempt( async() => await Promise.resolve( this.data ) );
+                let data = await asyncAttempt( async() => await this.data );
                 txt = !isNull( this.data ) && isScalar( this.data ) ? asString( this.data || _mt ) : _mt;
             }
 
@@ -932,8 +942,8 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
 
         async resolveData()
         {
-            this.#data = isPromise( this.#data ) ? await asyncAttempt( async() => await Promise.resolve( this.#data ) ) : this.#data;
-            return await this.#data;
+            this.#data = isPromise( this.#data ) ? await asyncAttempt( async() => await this.#data ) : this.#data;
+            return this.#data;
         }
     }
 
@@ -959,30 +969,7 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
 
             retryAfter = retryAfter || attempt( () => headers["X-Retry-After"] ) || attempt( () => headers["x-retry-after"] );
 
-            if ( isNumeric( retryAfter ) && !isDate( retryAfter ) )
-            {
-                millis = clamp( asInt( Math.max( (retryAfter * 1_000), millis ) ), 100, 30_000 );
-            }
-            else if ( isDateString( retryAfter ) || isDate( retryAfter ) )
-            {
-                let nextDateTime = asDate( retryAfter );
-                if ( isDate( nextDateTime ) )
-                {
-                    millis = clamp( Math.max( millis, asInt( nextDateTime.getTime() - Date.now() ) ), 100, 30_000 );
-                }
-                else
-                {
-                    millis = clamp( 2 * millis, 100, 30_000 );
-                }
-            }
-            else
-            {
-                millis = 256;
-            }
-
-            millis += (Math.random() * 128); // add some 'jitter'
-
-            return millis;
+            return calculateRetryDelay( retryAfter, millis );
         }
     };
 
@@ -1018,7 +1005,7 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
 
         if ( isError( obj ) )
         {
-            return new ResponseData( obj, config, options, response );
+            return new ResponseData( obj || response, config, options || response );
         }
 
         return new ResponseData( response, config, options );
@@ -1030,7 +1017,7 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
 
         if ( isPromise( obj ) )
         {
-            obj = await asyncAttempt( async() => await Promise.resolve( obj ) );
+            obj = await asyncAttempt( async() => await obj );
         }
 
         if ( ResponseData.isResponseData( obj ) )

@@ -1,3 +1,5 @@
+// noinspection JSUnresolvedReference
+
 /**
  * @fileOverview
  *
@@ -206,8 +208,10 @@ const { _ud = "undefined", $scope } = constants;
 
     const VALID_URL_COMPONENTS = lock( Object.values( URL_COMPONENTS ) );
 
+    // noinspection JSUndeclaredVariable
     if ( _ud === typeof document )
     {
+        // noinspection JSUndeclaredVariable
         document = ((_ud !== typeof window) ? window?.document : $scope().document) || (_ud !== typeof __dirname ? { URL: __dirname } : { URL: _mt_str });
     }
 

@@ -245,7 +245,7 @@ const { _ud = "undefined", $scope } = constants;
             return key;
         }
 
-        if ( isString( pKey ) && !isBlank( pKey ) )
+        if ( isString( pKey ) && !isBlank( pKey ) && ( !pStrict || isHeader( pKey.trim() )) )
         {
             key = asString( pKey, true ) || key;
         }
@@ -255,7 +255,7 @@ const { _ud = "undefined", $scope } = constants;
         }
         else if ( isPopulatedObject( pKey ) && !isBlank( asString( pKey.name || pKey.key ) ) )
         {
-            key = asString( pKey.name || pKey.key, true );
+            return resolveHeaderName( asString( pKey.name || pKey.key, true ), pStrict );
         }
         else
         {
@@ -293,7 +293,9 @@ const { _ud = "undefined", $scope } = constants;
             }
         }
 
-        return asString( key, true ).slice( 0, MAX_HEADER_KEY_LENGTH ).trim();
+        key = asString( key, true ).slice( 0, MAX_HEADER_KEY_LENGTH ).trim();
+
+        return !(key.startsWith( "X-" )) ? lcase( key ) : key;
     }
 
     function resolveHeaderValue( pValue, pKey )
@@ -388,7 +390,7 @@ const { _ud = "undefined", $scope } = constants;
 
             let value = resolveHeaderValue( pValue, pName );
 
-            let accessor = isFunction( pHeaders.get ) ? () => pHeaders.get( name ) : pHeaders[name];
+            let accessor = isFunction( pHeaders.get ) ? () => pHeaders.get( name ) ?? pHeaders.get( lcase( name ) ) ?? pHeaders[name] ?? pHeaders[lcase( name )] : () => pHeaders[name] || pHeaders[lcase( name )];
 
             let existing = accessor() || _mt;
 
@@ -398,11 +400,21 @@ const { _ud = "undefined", $scope } = constants;
 
             value = arr.join( `${_comma} ` );
 
-            let mutator = isFunction( pHeaders.set ) ? () => pHeaders.set( name, value ) : () => pHeaders[name] = value;
+            let mutator = isFunction( pHeaders.set ) ? () => pHeaders.set( name, value ) : () => pHeaders[lcase( name )] = value;
 
             if ( isBlank( value ) )
             {
-                mutator = isFunction( pHeaders.delete ) ? () => pHeaders.delete( name ) : () => delete pHeaders[name];
+                mutator = isFunction( pHeaders.delete ) ?
+                          () =>
+                          {
+                              pHeaders.delete( name );
+                              pHeaders.delete( lcase( name ) );
+                          } :
+                          () =>
+                          {
+                              delete pHeaders[lcase( name )];
+                              delete pHeaders[name];
+                          };
             }
 
             attempt( mutator );
@@ -472,7 +484,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             const name = resolveHeaderName( pName );
 
-            const accessor = isFunction( pHeaders.get ) ? () => pHeaders.get( name ) : pHeaders[name];
+            const accessor = isFunction( pHeaders.get ) ? () => pHeaders.get( name ) || pHeaders.get( lcase( name ) ) : () => pHeaders[name] || pHeaders[lcase( name )];
 
             const value = attempt( () => accessor() ) || resolveHeaderValue( pValue, pName );
 
@@ -508,15 +520,25 @@ const { _ud = "undefined", $scope } = constants;
 
             let value = resolveHeaderValue( pValue, pName );
 
-            const accessor = isFunction( pHeaders.get ) ? () => pHeaders.get( name ) : pHeaders[name];
+            const accessor = isFunction( pHeaders.get ) ? () => pHeaders.get( name ) ?? pHeaders.get( lcase( name ) ) : () => pHeaders[name] ?? pHeaders[lcase( name )];
 
             value = value || attempt( () => accessor() );
 
-            let mutator = isFunction( pHeaders.set ) ? () => pHeaders.set( name, value ) : () => pHeaders[name] = value;
+            let mutator = isFunction( pHeaders.set ) ? () => pHeaders.set( name, value ) : () => pHeaders[lcase( name )] = value;
 
             if ( isBlank( value ) )
             {
-                mutator = isFunction( pHeaders.delete ) ? () => pHeaders.delete( name ) : () => delete pHeaders[name];
+                mutator = isFunction( pHeaders.delete ) ?
+                          () =>
+                          {
+                              pHeaders.delete( lcase( name ) );
+                              pHeaders.delete( name );
+                          } :
+                          () =>
+                          {
+                              delete pHeaders[lcase( name )];
+                              delete pHeaders[name];
+                          };
             }
 
             attempt( mutator );
@@ -537,7 +559,17 @@ const { _ud = "undefined", $scope } = constants;
         {
             const name = resolveHeaderName( pName );
 
-            const mutator = isFunction( pHeaders.delete ) ? () => pHeaders.delete( name ) : () => delete pHeaders[name];
+            const mutator = isFunction( pHeaders.delete ) ?
+                            () =>
+                            {
+                                pHeaders.delete( lcase( name ) );
+                                pHeaders.delete( name );
+                            } :
+                            () =>
+                            {
+                                delete pHeaders[lcase( name )];
+                                delete pHeaders[name];
+                            };
 
             attempt( mutator );
         }
@@ -702,10 +734,11 @@ const { _ud = "undefined", $scope } = constants;
      *                            Each pair should be an array where the first element is the header key,
      *                            and the second (optional) element is the header value.
      *
+     * @param pStrict
      * @return {Map|string} A Map containing the processed headers with keys and their corresponding values,
      *                      or the modified options object if no headers were processed.
      */
-    function processHeadersArray( pOptions = [] )
+    function processHeadersArray( pOptions = [], pStrict = false )
     {
         // converts the specified argument into either an object or array
         let input = isArray( pOptions ) ? asArray( pOptions || [] ) : asObject( pOptions || {} );
@@ -713,11 +746,33 @@ const { _ud = "undefined", $scope } = constants;
         // creates the map to return
         let map = new Map();
 
+        // handle an edge case in which the argument is a single key/value pair
+        if ( isArray( pOptions ) && (2 === $ln( asArray( pOptions ) )) && !(asArray( pOptions ).some( isArray )) )
+        {
+            const arr = asArray( pOptions );
+
+            let name = resolveHeaderName( arr[0], !!pStrict );
+            let value = resolveHeaderValue( arr[1], name );
+
+            if ( isString( name ) && !isBlank( name ) && !isNull( value ) )
+            {
+                const headerKey = !(name.startsWith( "X-" )) ? lcase( name ) : name;
+                map.set( headerKey, value );
+            }
+
+            return map;
+        }
+
         // we expect the input to be an array of arrays where the second dimension arrays are name/value pairs to be set as headers
         if ( isKeyValueArray( input ) )
         {
             // filters out any invalid entries in the input
-            input = asArray( input ).filter( isArray ).filter( e => asArray( e ).length > 0 ).filter( e => isHeader( asString( e[0], true ) ) );
+            input = asArray( input ).filter( isArray ).filter( e => asArray( e ).length > 0 );
+
+            if ( !!pStrict )
+            {
+                input = input.filter( e => isHeader( asString( e[0], true ) ) );
+            }
 
             // build the map, appending to any existing entries created in a prior iteration
             for( const pair of input )
@@ -731,8 +786,10 @@ const { _ud = "undefined", $scope } = constants;
                 // get the value for the header; use the key itself if there is no value
                 let value = $ln( pair ) > 1 ? attempt( () => asString( pair[1] ) ) : key;
 
+                const headerKey = !(key.startsWith( "X-" )) ? lcase( key ) : key;
+
                 // add the key/value to the map, appending the value to any existing value
-                map.set( key, ((existing && !isBlank( existing ) ? (existing + ", ") : _mt_str) + value) || value );
+                map.set( headerKey, ((existing && !isBlank( existing ) ? (existing + ", ") : _mt_str) + value) || value );
             }
         }
 
@@ -748,17 +805,23 @@ const { _ud = "undefined", $scope } = constants;
      *                            Each property can be a scalar value or an array of values
      *                            to concatenate as the header value.
      *
+     * @param pStrict
      * @return {Map|string} A Map containing the processed headers with keys and their corresponding values
      */
-    function processHeaderObject( pObject )
+    function processHeaderObject( pObject, pStrict = false )
     {
         let input = isMap( pObject ) ?
                     new Map( pObject ) :
-                    (isArray( pObject ) ? processHeadersArray( asArray( pObject || [] ) ) : asObject( pObject || [] ));
+                    (isArray( pObject ) ? processHeadersArray( asArray( pObject || [] ), pStrict ) : asObject( pObject || [] ));
 
         let map = new Map();
 
-        const entries = attempt( () => (isFunction( input?.entries ) ? input.entries() : objectEntries( input )).filter( ( entry ) => entry instanceof HttpHeader || isHeader( resolveHeaderName( ObjectEntry.getKey( entry ) || entry[0] ) ) ) );
+        let entries = attempt( () => (isFunction( input?.entries ) ? [...(asArray( [...(input.entries())] ))] : objectEntries( input )) );
+
+        if ( !!pStrict )
+        {
+            entries = entries.filter( ( entry ) => entry instanceof HttpHeader || isHeader( resolveHeaderName( ObjectEntry.getKey( entry ) || entry[0], pStrict ) ) );
+        }
 
         if ( entries && isIterable( entries ) )
         {
@@ -766,7 +829,13 @@ const { _ud = "undefined", $scope } = constants;
             {
                 if ( !isNull( entry ) )
                 {
-                    const key = resolveHeaderName( ObjectEntry.getKey( entry ) || entry[0] );
+                    const key = resolveHeaderName( ObjectEntry.getKey( entry ) || entry[0], pStrict );
+
+                    if ( isBlank( key ) || ( !!pStrict && !isHeader( key )) )
+                    {
+                        continue;
+                    }
+
                     const value = resolveHeaderValue( ObjectEntry.getValue( entry ) || entry[1] || key ) || key;
 
                     const existing = resolveHeaderValue( map.get( key ) || map.get( lcase( key ) ) || _mt_str );
@@ -779,7 +848,7 @@ const { _ud = "undefined", $scope } = constants;
         return map;
     }
 
-    function processWebApiHeaders( pOptions )
+    function processWebApiHeaders( pOptions, pStrict = false )
     {
         let map = new Map();
 
@@ -801,7 +870,7 @@ const { _ud = "undefined", $scope } = constants;
 
                 let key = asString( ObjectEntry.getKey( entry ), true );
 
-                if ( !(isBlank( key ) || key.startsWith( "#" )) )
+                if ( !(isBlank( key ) || key.startsWith( "#" ) || ( !!pStrict && !isHeader( key, pStrict ))) )
                 {
                     let value = ObjectEntry.getValue( entry ) || key;
 
@@ -824,11 +893,11 @@ const { _ud = "undefined", $scope } = constants;
 
         if ( isPopulatedObject( options ) && !isArray( options ) )
         {
-            return attempt( () => processHeaderObject( options ) );
+            return attempt( () => processHeaderObject( options, pStrict ) );
         }
         else if ( isArray( options ) )
         {
-            return attempt( () => processHeadersArray( asArray( options ) ) );
+            return attempt( () => processHeadersArray( asArray( options ), pStrict ) );
         }
 
         return map;
@@ -861,15 +930,21 @@ const { _ud = "undefined", $scope } = constants;
 
         if ( pObject instanceof HttpHeaders )
         {
-            return true;
+            return pObject.size > 0;
         }
 
         if ( isArray( pObject ) )
         {
-            return [...(asArray( pObject ))].every( e => isArray( e ) || e instanceof ObjectEntry );
+            let arr = [...(asArray( pObject ))];
+            return $ln( arr ) > 0 && arr.every( e => isArray( e ) || e instanceof ObjectEntry );
         }
 
-        return true;
+        if ( isMap( pObject ) )
+        {
+            return $ln( pObject ) > 0;
+        }
+
+        return isString( pObject ) || $ln( Object.keys( pObject ) ) > 0;
     }
 
     /**
@@ -879,10 +954,11 @@ const { _ud = "undefined", $scope } = constants;
      *                                                                    Can be a Web API Headers object,
      *                                                                    Map, array, string, or object.
      *
+     * @param pStrict
      * @return {Map} A Map representation of the processed header options.
      *               Returns an empty Map if the input is null or cannot be processed.
      */
-    function processHeaderOptions( pOptions )
+    function processHeaderOptions( pOptions, pStrict = false )
     {
         if ( isNull( pOptions ) || !isCompatibleHeadersObject( pOptions ) )
         {
@@ -891,7 +967,7 @@ const { _ud = "undefined", $scope } = constants;
 
         if ( isWebApiHeadersObject( pOptions ) )
         {
-            return attempt( () => processWebApiHeaders( pOptions ) );
+            return attempt( () => processWebApiHeaders( pOptions, pStrict ) );
         }
 
         if ( isMap( pOptions ) )
@@ -901,7 +977,7 @@ const { _ud = "undefined", $scope } = constants;
 
         if ( isArray( pOptions ) )
         {
-            return attempt( () => processHeadersArray( pOptions ) );
+            return attempt( () => processHeadersArray( pOptions, pStrict ) );
         }
 
         if ( isString( pOptions ) )
@@ -911,18 +987,18 @@ const { _ud = "undefined", $scope } = constants;
                 const obj = attempt( () => asObject( parseJson( pOptions ) ) );
                 if ( isNonNullObject( obj ) )
                 {
-                    return attempt( () => processHeaderObject( obj ) );
+                    return attempt( () => processHeaderObject( obj, pStrict ) );
                 }
             }
             else
             {
-                return attempt( () => processHeadersArray( asString( pOptions, true ).split( /(\r?\n)+/ ).map( e => asString( e, true ).split( /:/ ) ) ) );
+                return attempt( () => processHeadersArray( asString( pOptions, true ).split( /(\r?\n)+/ ).map( e => asString( e, true ).split( /:/ ) ) ), pStrict );
             }
         }
 
         if ( isNonNullObject( pOptions ) )
         {
-            return attempt( () => processHeaderObject( asObject( pOptions || {} ) ) );
+            return attempt( () => processHeaderObject( asObject( pOptions || {} ) ), pStrict );
         }
 
         return new Map();
@@ -958,11 +1034,15 @@ const { _ud = "undefined", $scope } = constants;
 
         #options;
 
+        #strict = false;
+
         #map = new Map();
 
-        constructor( pOptions, pDefaultOptions = {} )
+        constructor( pOptions, pDefaultOptions = {}, pStrict = false )
         {
             super();
+
+            this.#strict = !!pStrict;
 
             let defaultOptions = resolveHeaderOptions( pDefaultOptions ?? pOptions ?? {} );
             let options = resolveHeaderOptions( pOptions );
@@ -994,25 +1074,23 @@ const { _ud = "undefined", $scope } = constants;
             {
                 for( let obj of options )
                 {
-                    let entries = (isFunction( obj?.entries ) ?
-                                   attempt( () => [...(obj.entries() || [])] ) :
-                                   attempt( () => objectEntries( processHeaderOptions( obj ) ) )) ||
-                                  attempt( () => objectEntries( processHeaderOptions( obj ) ) );
+                    let entries = (isFunction( obj?.entries ) ? [...(obj.entries() || [])] : objectEntries( obj ));
 
                     if ( entries && $ln( entries ) > 0 )
                     {
-                        entries = attempt( () => [...(entries || [])].filter( e => !isNull( e ) && (isNonNullObject( e ) || isArray( e )) ) );
+                        entries = [...(entries || [])].filter( e => !isNull( e ) && (isNonNullObject( e ) || isArray( e )) );
                     }
 
                     if ( !isNull( entries ) && ($ln( entries ) > 0) )
                     {
                         for( let entry of entries )
                         {
-                            const key = resolveHeaderName( asString( ObjectEntry.getKey( entry ), true ) );
-                            const value = resolveHeaderValue( asString( ObjectEntry.getValue( entry ) ), key );
+                            const key = resolveHeaderName( asString( ObjectEntry.getKey( entry ), true ), this.#strict );
 
                             if ( !(isBlank( key ) || $ln( key ) > MAX_HEADER_KEY_LENGTH) )
                             {
+                                const value = resolveHeaderValue( asString( ObjectEntry.getValue( entry ) ), key );
+
                                 if ( !isBlank( value ) )
                                 {
                                     attempt( () => this.set( key, value ) );
@@ -1027,7 +1105,7 @@ const { _ud = "undefined", $scope } = constants;
 
         #resolveKey( pKey )
         {
-            return resolveHeaderName( pKey );
+            return resolveHeaderName( pKey, this.#strict );
         }
 
         #resolveValue( pValue, pKey )
@@ -1039,13 +1117,14 @@ const { _ud = "undefined", $scope } = constants;
         {
             let key = this.#resolveKey( pKey || pValue );
 
-            if ( !isBlank( key ) && isHeader( key ) )
+            if ( !isBlank( key ) && ( !this.#strict || isHeader( key )) )
             {
                 let value = this.#resolveValue( pValue, pKey );
 
                 if ( !isBlank( value ) && $ln( asString( value ) ) <= MAX_HEADER_VALUE_LENGTH )
                 {
-                    let existing = this.get( key ) || this.get( lcase( key ) ) || this.#map.get( key ) || this.#map.get( lcase( key ) );
+                    let existing = this.get( key ) || this.get( lcase( key ) ) ||
+                                   this.#map.get( key ) || this.#map.get( lcase( key ) );
 
                     existing = this.#resolveValue( existing, pKey );
 
@@ -1068,7 +1147,7 @@ const { _ud = "undefined", $scope } = constants;
 
         entries()
         {
-            return [...(this.#map.entries() || super.entries())].map( ( e ) => [this.#resolveKey( e[0] || e ), this.#resolveValue( (e[1] || e), this.#resolveKey( e[0] || e ) )] );
+            return [...(this.#map.entries() || super.entries())].map( ( e ) => [this.#resolveKey( e[0] || e ), this.#resolveValue( (e[1] || e), this.#resolveKey( e[0] || e ) ), e] );
         }
 
         [Symbol.iterator]()
@@ -1113,6 +1192,11 @@ const { _ud = "undefined", $scope } = constants;
                 return null;
             }
 
+            if ( ["set-cookie"].includes( lcase( key ) ) )
+            {
+                return this.getSetCookie();
+            }
+
             let value = readProperty( this.#map, key ) || readProperty( this, key );
 
             value = value || this[key] || this[lcase( key )];
@@ -1155,6 +1239,8 @@ const { _ud = "undefined", $scope } = constants;
 
             if ( !isBlank( key ) && isHeader( key ) )
             {
+                key = !(key.startsWith( "X-" )) ? lcase( key ) : key;
+
                 let value = this.#resolveValue( pValue, pKey );
 
                 if ( !isBlank( value ) && $ln( asString( value ) ) <= MAX_HEADER_VALUE_LENGTH )
@@ -1191,7 +1277,8 @@ const { _ud = "undefined", $scope } = constants;
                         let value = this.#resolveValue( ObjectEntry.getValue( entry ), key );
                         if ( !(isNull( value ) || isBlank( asString( value, true ) )) )
                         {
-                            literal[key] = asString( literal[key] || asString( value, true ).replace( /(\r\n)+$/, _mt ), true );
+                            key = !key.startsWith( "X-" ) ? lcase( key ) : key;
+                            literal[key] = (asString( literal[key] || literal[lcase( key )], true ) || asString( value, true )).replace( /(\r\n)+$/, _mt ).trim();
                         }
                     }
                 }
@@ -1215,7 +1302,12 @@ const { _ud = "undefined", $scope } = constants;
         merge( ...pHeaders )
         {
             const merger = HttpHeadersMerger.getDefault();
-            return merger.mergeHeaders( this, ...pHeaders );
+            return merger.mergeHeaders( this.clone(), ...pHeaders );
+        }
+
+        get size()
+        {
+            return Math.max( 0, $ln( this.#map ) );
         }
 
         toString()
@@ -1255,6 +1347,15 @@ const { _ud = "undefined", $scope } = constants;
             throw new IllegalStateError( `This execution environment does not define the Headers class/interface.` );
         }
     }
+
+    HttpHeaders.fromLiteral = function( pObject )
+    {
+        if ( isNonNullObject( pObject ) )
+        {
+            return new HttpHeaders( pObject );
+        }
+        return new HttpHeaders( {} );
+    };
 
     function getHeaderValue( pHeaders, pKey )
     {
@@ -1297,7 +1398,7 @@ const { _ud = "undefined", $scope } = constants;
             {
                 "api_key": new HttpHeaderRule( "api_key", HEADER_MERGE_RULE_PRESERVE ),
 
-                "responseType": new HttpHeaderRule( "responseType", HEADER_MERGE_RULE_PRESERVE ),
+                "responseType": new HttpHeaderRule( "responseType", HEADER_MERGE_RULE_REPLACE ),
                 "accept": new HttpHeaderRule( "accept", HEADER_MERGE_RULE_COMBINE ),
 
                 "allowAbsoluteUrls": new HttpHeaderRule( "allowAbsoluteUrls", HEADER_MERGE_RULE_PRESERVE ),
@@ -1354,26 +1455,39 @@ const { _ud = "undefined", $scope } = constants;
         {
             let objects = [pHeaders, ...(asArray( pOthers || [] ))].filter( isCompatibleHeadersObject );
 
+            objects = objects.map( e => processHeaderObject( e ) ).map( e => new HttpHeaders( e, pHeaders ) );
+
+            if ( 1 === $ln( objects ) )
+            {
+                return objects[0];
+            }
+
             if ( $ln( objects ) > 0 )
             {
                 let options = objects.shift();
 
-                let headers = options instanceof HttpHeaders ? options.clone() : new HttpHeaders( options );
+                let headers = toObjectLiteral( new HttpHeaders( options ) );
 
                 while ( $ln( objects ) > 0 )
                 {
-                    let obj = objects.shift();
+                    let obj = toObjectLiteral( objects.shift() );
 
-                    let entries = obj instanceof HttpHeaders || isFunction( obj.entries ) ? [...(obj.entries)] : objectEntries( obj );
+                    let entries = objectEntries( obj );
 
                     if ( entries && $ln( entries ) )
                     {
                         for( let entry of entries )
                         {
                             const name = ObjectEntry.getKey( entry );
+
+                            if ( isBlank( name ) )
+                            {
+                                continue;
+                            }
+
                             const value = ObjectEntry.getValue( entry );
 
-                            const rule = this.getRule( name );
+                            const rule = this.getRule( name ) || this.getRule( lcase( name ) );
 
                             if ( rule && rule.isValid() )
                             {
@@ -1412,7 +1526,10 @@ const { _ud = "undefined", $scope } = constants;
         {
             let headers = new HttpHeaders( objects.shift() );
 
-            headers = DEFAULT_HEADERS_MERGER.mergeHeaders( headers, ...objects );
+            if ( $ln( objects ) > 0 )
+            {
+                headers = DEFAULT_HEADERS_MERGER.mergeHeaders( headers, ...objects );
+            }
 
             return headers;
         }
