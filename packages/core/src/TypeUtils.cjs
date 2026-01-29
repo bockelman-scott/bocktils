@@ -5862,7 +5862,7 @@ const { _ud = "undefined", $scope } = constants;
 
                 if ( isFunction( value ) )
                 {
-                    value.name = value.name || toString( prop, true );
+                    value.name = value.name || _toString( prop, true );
                     methods.push( value );
                 }
             }
