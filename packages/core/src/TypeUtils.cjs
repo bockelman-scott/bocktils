@@ -141,6 +141,9 @@ const { _ud = "undefined", $scope } = constants;
             _minus,
             _zero,
 
+            _underscore,
+            _hash,
+
             _tilde,
             _pipe,
 
@@ -444,10 +447,6 @@ const { _ud = "undefined", $scope } = constants;
 
     const isUUID = ( pVal ) => (isString( pVal ) && (/^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$/i).test( String( pVal ) ));
 
-    const rxUrl = /((?<protocol>\w+):\/\/\/?)?((?<username>[^:@\s]+):(?<password>[^@\s]+)@)?(?<host>[^\/:]+)(:(?<port>(\d+)))?(\/(?<path>[^?#]+))?(?:\?(?<queryString>[^#]*))?(?:#(?<hash>[^#]*))?/;
-
-    const isUrl = ( pUrl ) => (_ud !== typeof URL && isFunction( URL ) && pUrl instanceof URL) || (isString( pUrl ) && rxUrl.test( pUrl ));
-
     /**
      * Returns true if the specified value is an empty string.<br>
      * <br>
@@ -567,6 +566,14 @@ const { _ud = "undefined", $scope } = constants;
      */
     const isGeneratorFunction = ( pObject ) => (isFunction( pObject ) && "[object Generator]" === objectToString.call( pObject.prototype, pObject.prototype ));
 
+    const isPrivateMethod = ( pMethod, pPrivatePropertyPrefixes = [_hash] ) => isFunction( pMethod ) && [...pPrivatePropertyPrefixes || []].some( e => _toString( pMethod?.name ).startsWith( e ) );
+
+    const isPrivateProperty = ( pProperty, pPrivatePropertyPrefixes = [_hash] ) => isString( pProperty ) && [...pPrivatePropertyPrefixes || []].some( e => _toString( pProperty ).trim().startsWith( e ) );
+
+    const rxUrl = /((?<protocol>\w+):\/\/\/?)?((?<username>[^:@\s]+):(?<password>[^@\s]+)@)?(?<host>[^\/:]+)(:(?<port>(\d+)))?(\/(?<path>[^?#]+))?(?:\?(?<queryString>[^#]*))?(?:#(?<hash>[^#]*))?/;
+
+    const isUrl = ( pUrl ) => (_ud !== typeof URL && isFunction( URL ) && pUrl instanceof URL) || (isString( pUrl ) && rxUrl.test( pUrl ));
+
     /**
      * Returns true if the specified value is an instance of String, Number, Boolean, or BigInt<br>
      *
@@ -598,6 +605,24 @@ const { _ud = "undefined", $scope } = constants;
 
         return value;
     };
+
+    /**
+     * Attempts to convert a value to a string<br>
+     *
+     * @param {*} pObj
+     *
+     * @returns {string} A string representation of the specified value, if possible
+     *
+     * @private
+     */
+    function _toString( pObj )
+    {
+        if ( isString( pObj ) )
+        {
+            return String( isPrimitiveWrapper( pObj ) ? (pObj.valueOf() || toPrimitive( pObj ) || String( _mt + pObj )) : pObj );
+        }
+        return (0 === pObj || _zero === pObj || false === pObj) ? _zero : ((_mt + String( pObj ) + _mt).trim());
+    }
 
     /**
      * @typedef {Object} ObjectEvaluationOptions
@@ -813,25 +838,6 @@ const { _ud = "undefined", $scope } = constants;
 
         return functionToString.call( pFunction ).startsWith( "class " );
     };
-
-
-    /**
-     * Attempts to convert a value to a string<br>
-     *
-     * @param {*} pObj
-     *
-     * @returns {string} A string representation of the specified value, if possible
-     *
-     * @private
-     */
-    function _toString( pObj )
-    {
-        if ( isString( pObj ) )
-        {
-            return String( isPrimitiveWrapper( pObj ) ? (pObj.valueOf() || (_mt + pObj)) : pObj );
-        }
-        return (0 === pObj || _zero === pObj || false === pObj) ? _zero : ((_mt + String( pObj ) + _mt).trim());
-    }
 
     function toNumericString( pObj, pDecimalSeparator = _dot, pGroupSeparator = _comma )
     {
@@ -4394,10 +4400,12 @@ const { _ud = "undefined", $scope } = constants;
             trimStrings: false,
             omitFunctions: true,
             transientProperties: [],
+            privatePropertyPrefixes: [_hash],
+            skipPrivateProperties: true,
             preserveArrays: true,
-            maxDepth: Infinity,
+            maxDepth: 32,
             preserveUserDefinedClasses: false,
-            preserveTypes: false,
+            preserveTypes: true,
             respectToLiteralMethod: true,
             ...DEFAULT_TRANSFORMER_PROPERTIES
         };
@@ -4408,6 +4416,8 @@ const { _ud = "undefined", $scope } = constants;
             trimStrings: false,
             omitFunctions: true,
             transientProperties: ["class", "prototype"],
+            privatePropertyPrefixes: [_hash, _underscore],
+            skipPrivateProperties: true,
             preserveArrays: true,
             maxDepth: 5,
             preserveUserDefinedClasses: true,
@@ -4531,7 +4541,7 @@ const { _ud = "undefined", $scope } = constants;
         const { options, visited, stack, depth } = resolveObjectLiteralArguments( pOptions, pVisited, pStack, pDepth );
 
         let maxDepth = toInteger( options?.maxDepth );
-        maxDepth = isNanOrInfinite( maxDepth ) ? 32 : clamp( toInteger( maxDepth ), 2, 32 );
+        maxDepth = isNanOrInfinite( maxDepth ) ? 16 : clamp( toInteger( maxDepth ), 2, 32 );
 
         const preserveTypes = !!options?.preserveTypes;
 
@@ -4634,7 +4644,8 @@ const { _ud = "undefined", $scope } = constants;
         {
             return ( !pOptions?.prune || isNonNullValue( pValue )) &&
                    ( !pOptions?.omitFunctions || !isFunction( pValue ))
-                   && !transientProperties.includes( String( pKey ) );
+                   && !transientProperties.includes( _toString( pKey ).trim() )
+                   && ( !options.skipPrivateProperties || !isPrivateProperty( pKey, options.privatePropertyPrefixes ));
         };
 
         function updateObject( pKey, pValue, pOptions )
@@ -4648,7 +4659,10 @@ const { _ud = "undefined", $scope } = constants;
             }
             else if ( isFunction( pValue ) )
             {
-                methods.push( pValue.bind( obj ) );
+                if ( !options.skipPrivateProperties || !isPrivateMethod( pValue, options.privatePropertyPrefixes ) )
+                {
+                    methods.push( pValue.bind( obj ) );
+                }
             }
         }
 
@@ -4656,7 +4670,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             let key = String( ObjectEntry.getKey( entry ) ).trim();
 
-            if ( transientProperties.includes( key ) || key.startsWith( "#" ) )
+            if ( transientProperties.includes( key ) || isPrivateProperty( key, options.privatePropertyPrefixes ) )
             {
                 continue;
             }
@@ -4665,7 +4679,8 @@ const { _ud = "undefined", $scope } = constants;
 
             if ( !includeProperty( key, value, options ) )
             {
-                if ( isFunction( value ) )
+                // even if we skip the property, we may want to restore the method(s)
+                if ( isFunction( value ) && ( !options.skipPrivateProperties || !isPrivateMethod( value, options.privatePropertyPrefixes )) )
                 {
                     methods.push( value.bind( obj ) );
                 }
@@ -4683,6 +4698,8 @@ const { _ud = "undefined", $scope } = constants;
 
             if ( $ln( methods ) > 0 && !options?.omitFunctions )
             {
+                methods = methods.filter( e => isFunction( e ) && ( !options.skipPrivateProperties || !isPrivateMethod( e, options.privatePropertyPrefixes )) );
+
                 methods.forEach( method => obj[method?.name] = method.bind( obj ) );
             }
 
@@ -5845,7 +5862,7 @@ const { _ud = "undefined", $scope } = constants;
 
                 if ( isFunction( value ) )
                 {
-                    value.name = value.name || asString( prop, true );
+                    value.name = value.name || toString( prop, true );
                     methods.push( value );
                 }
             }
@@ -6293,6 +6310,7 @@ const { _ud = "undefined", $scope } = constants;
             isFunction,
             isAsyncFunction,
             isGeneratorFunction,
+            isPrivateMethod,
             isPromise,
             isThenable,
             isString,
