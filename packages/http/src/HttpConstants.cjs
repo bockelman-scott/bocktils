@@ -104,17 +104,18 @@ const { _ud = "undefined", $scope } = constants;
             isNonNullObject,
             isPopulatedObject,
             isString,
+            isUrl,
             isNumeric,
             isArray,
             isFunction,
-            toObjectLiteral,
             isTypedArray,
             isPromise,
             isThenable,
-            isReadOnly
+            isReadOnly,
+            toObjectLiteral,
         } = typeUtils;
 
-    const { asString, isBlank, asInt, lcase, ucase, capitalize, isJson } = stringUtils;
+    const { asString, isBlank, asInt, lcase, ucase, capitalize, isJson, cleanUrl } = stringUtils;
 
     const { asArray } = arrayUtils;
 
@@ -240,42 +241,74 @@ const { _ud = "undefined", $scope } = constants;
                                          HttpVerb[ucase( key )] = new HttpVerb( value );
                                      } );
 
-    HttpVerb.resolveHttpMethod = function( pMethod = VERBS.GET )
+    HttpVerb.resolveHttpMethod = function( pMethod = VERBS.GET, pConfig = {} )
     {
+        const verbs = Object.values( VERBS ).map( ucase );
+
         if ( isString( pMethod ) && !isBlank( pMethod ) )
         {
             let method = ucase( asString( pMethod, true ) );
 
-            if ( VERBS.indexOf( method ) )
+            if ( verbs.includes( method ) )
             {
-                return ((VERBS.values()).map( ucase )).includes( method ) ? pMethod : VERBS.GET;
+                return method;
             }
 
             if ( isJson( pMethod ) )
             {
-                return HttpVerb.resolveHttpMethod( attempt( () => parseJson( pMethod ) ) ) || VERBS.GET;
-            }
+                let candidate = attempt( () => parseJson( pMethod ) );
 
-            return ((VERBS.values()).map( ucase )).includes( method ) ? pMethod : VERBS.GET;
+                candidate = isString( candidate ) ? ucase( candidate ) : isNonNullObject( candidate ) ? candidate.method : pConfig?.method;
+
+                method = HttpVerb.resolveHttpMethod( candidate, pConfig );
+
+                if ( isString( method ) && verbs.includes( ucase( asString( method, true ) ) ) )
+                {
+                    return method;
+                }
+            }
         }
 
         if ( isNonNullObject( pMethod ) )
         {
             if ( pMethod instanceof HttpVerb )
             {
-                return HttpVerb.resolveHttpMethod( pMethod?.name || pMethod?.verb );
-            }
+                let candidate = HttpVerb.resolveHttpMethod( pMethod?.name || pMethod?.verb, pConfig );
 
-            return HttpVerb.resolveHttpMethod( ((pMethod["method"]) || (pMethod["headers"]?.["method"])) ) || VERBS.GET;
+                if ( isString( candidate ) && verbs.includes( ucase( asString( candidate, true ) ) ) )
+                {
+                    return candidate;
+                }
+            }
+            else
+            {
+                let candidate = HttpVerb.resolveHttpMethod( pMethod?.method, pConfig );
+
+                if ( isString( candidate ) && verbs.includes( ucase( asString( candidate, true ) ) ) )
+                {
+                    return candidate;
+                }
+            }
         }
 
         if ( isNumeric( pMethod ) )
         {
-            const values = Object.values( VERBS );
-
             const index = asInt( pMethod );
 
-            return HttpVerb.resolveHttpMethod( (index >= 0 && index < values.length) ? values[index] : VERBS.GET );
+            if ( index >= 0 && index < $ln( verbs ) )
+            {
+                let candidate = verbs[index];
+
+                if ( isString( candidate ) && verbs.includes( ucase( asString( candidate, true ) ) ) )
+                {
+                    return candidate;
+                }
+            }
+        }
+
+        if ( pConfig )
+        {
+            return HttpVerb.resolveHttpMethod( pConfig );
         }
 
         return VERBS.GET;
@@ -1470,7 +1503,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             if ( this.isValid() )
             {
-                return /*attempt( () =>*/ this.mergeFunction( pObject, pKey, pValue /*)*/ );
+                return this.mergeFunction( pObject, pKey, pValue );
             }
             return false;
         }
@@ -1827,6 +1860,73 @@ const { _ud = "undefined", $scope } = constants;
 
     HttpPropertiesMerger.defineHttpPropertyRules = defineHttpPropertyRules;
 
+    /**
+     * Returns a string representing a URL (or URI).
+     *
+     * In the expected case, the url has been passed in as a string,
+     * and this function simply makes sure it is 'clean' (see StringUtils.cleanUrl)
+     *
+     * In edge cases, (for example, the first argument is null or not a string),
+     * the url is sought by looking for a property of the second argument.
+     *
+     * If that does not produce a string, we check for the possibility
+     * that the first argument or second argument is a Request or URL (object).
+     *
+     * If none of those options result in a non-blank string,
+     * we enter a constrained loop (limited to 5 iterations)
+     * in an attempt to find a suitable value to treat as and return as a url.
+     *
+     * @param pUrl
+     * @param pConfig
+     * @returns {*|string}
+     */
+    function resolveUrl( pUrl, pConfig )
+    {
+        if ( isString( pUrl ) && !isBlank( pUrl ) )
+        {
+            return cleanUrl( asString( pUrl, true ) );
+        }
+
+        let url = pUrl || pConfig?.url || pConfig;
+
+        if ( isNonNullObject( url ) )
+        {
+            if ( _ud !== typeof Request )
+            {
+                if ( url instanceof Request )
+                {
+                    url = url.url || pConfig?.url;
+                }
+                else if ( pConfig instanceof Request )
+                {
+                    url = pConfig.url;
+                }
+            }
+
+            if ( isUrl( url ) )
+            {
+                url = cleanUrl( pUrl.href || asString( pUrl, true ) );
+            }
+            else if ( isUrl( pConfig ) )
+            {
+                url = cleanUrl( pConfig.href || asString( pConfig, true ) );
+            }
+
+            // This code tries to "dig" the url out of some potentially nested object structure.
+            // During each iteration, the variable, url, is assigned to the url property
+            // of the last object assigned to the variable or a string, if found.
+            // The iteration ends when the variable, url, is a string or the variable is null
+            // or the count has reached 5
+            let count = 0;
+            while ( (( !isString( url ) || isBlank( url )) && isNonNullObject( url )) && count++ < 5 )
+            {
+                url = isUrl( url ) ? url.href || asString( url, true ) : url.url;
+            }
+        }
+
+        return isString( url ) ? cleanUrl( url || _mt ) : _mt;
+    }
+
     let mod =
         {
             dependencies,
@@ -1862,9 +1962,10 @@ const { _ud = "undefined", $scope } = constants;
             isHeader,
             isContentType,
             isHttpStatus,
-            resolveHttpMethod: function( pMethod = VERBS.GET )
+            resolveUrl,
+            resolveHttpMethod: function( pMethod = VERBS.GET, pConfig = {} )
             {
-                return HttpVerb.resolveHttpMethod( pMethod || VERBS.GET );
+                return HttpVerb.resolveHttpMethod( pMethod, pConfig );
             },
             calculatePriority
         };
