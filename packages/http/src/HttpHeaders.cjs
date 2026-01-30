@@ -95,7 +95,7 @@ const { _ud = "undefined", $scope } = constants;
         } = moduleUtils;
 
     // imports constants for the empty string, allowing for more readable use of these string literals
-    const { _mt_str = "", _mt = _mt_str, _str, _comma } = constants;
+    const { _mt_str = "", _mt = _mt_str, _str, _comma, _underscore } = constants;
 
     // import a number of functions to detect the type of a variable
     // or to convert from one type to another
@@ -116,7 +116,7 @@ const { _ud = "undefined", $scope } = constants;
         } = typeUtils;
 
     // imports useful functions for safer string manipulation
-    const { asString, asInt, isBlank, isJson, lcase, ucase } = stringUtils;
+    const { asString, isBlank, isJson, lcase, ucase, toLegalFileName } = stringUtils;
 
     const { asArray } = arrayUtils;
 
@@ -452,7 +452,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             if ( this.isValid() )
             {
-                return attempt( () => this.mergeFunction( pHeaders, pKey, pValue ) );
+                return this.mergeFunction( pHeaders, pKey, pValue );
             }
             return false;
         }
@@ -486,7 +486,7 @@ const { _ud = "undefined", $scope } = constants;
 
             const accessor = isFunction( pHeaders.get ) ? () => pHeaders.get( name ) || pHeaders.get( lcase( name ) ) : () => pHeaders[name] || pHeaders[lcase( name )];
 
-            const value = attempt( () => accessor() ) || resolveHeaderValue( pValue, pName );
+            const value = accessor() || resolveHeaderValue( pValue, pName );
 
             if ( value )
             {
@@ -522,7 +522,7 @@ const { _ud = "undefined", $scope } = constants;
 
             const accessor = isFunction( pHeaders.get ) ? () => pHeaders.get( name ) ?? pHeaders.get( lcase( name ) ) : () => pHeaders[name] ?? pHeaders[lcase( name )];
 
-            value = value || attempt( () => accessor() );
+            value = value || accessor();
 
             let mutator = isFunction( pHeaders.set ) ? () => pHeaders.set( name, value ) : () => pHeaders[lcase( name )] = value;
 
@@ -642,7 +642,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             if ( this.isValid() )
             {
-                return attempt( () => this.mergeRule.execute( pHeaders, this.headerName, pValue ) );
+                return this.mergeRule.execute( pHeaders, this.headerName, pValue );
             }
             return false;
         }
@@ -810,9 +810,20 @@ const { _ud = "undefined", $scope } = constants;
      */
     function processHeaderObject( pObject, pStrict = false )
     {
-        let input = isMap( pObject ) ?
-                    new Map( pObject ) :
-                    (isArray( pObject ) ? processHeadersArray( asArray( pObject || [] ), pStrict ) : asObject( pObject || [] ));
+        let input = isNonNullObject( pObject ) ? pObject : {};
+
+        if ( isMap( pObject ) )
+        {
+            input = pObject;
+        }
+        else if ( isArray( pObject ) )
+        {
+            input = processHeadersArray( asArray( pObject || [] ), pStrict );
+        }
+        else
+        {
+            input = asObject( pObject || {} );
+        }
 
         let map = new Map();
 
@@ -876,7 +887,7 @@ const { _ud = "undefined", $scope } = constants;
 
                     if ( !isNull( value ) )
                     {
-                        attempt( () => map.set( key, value ) );
+                        map.set( key, value );
                     }
                 }
             }
@@ -1006,10 +1017,30 @@ const { _ud = "undefined", $scope } = constants;
 
     function resolveHeaderOptions( pOptions )
     {
-        return isNull( pOptions ) || !isCompatibleHeadersObject( pOptions ) ? {} : (isArray( pOptions ) ? asArray( pOptions || [] ) : asObject( pOptions || {} ));
-    }
+        let options = isNull( pOptions ) || !isCompatibleHeadersObject( pOptions ) ? {} : (isArray( pOptions ) ? asArray( pOptions || [] ) : asObject( pOptions || {} ));
 
-    const HttpHeadersBaseClass = _ud !== typeof Headers ? Headers : Map;
+        let entries = (isFunction( options?.entries ) ? [...(options.entries() || [])] : objectEntries( options ));
+
+        if ( entries && $ln( entries ) > 0 )
+        {
+            entries = [...(entries || [])].filter( e => !isNull( e ) && (isNonNullObject( e ) || isArray( e )) );
+        }
+
+        let object = {};
+
+        entries.forEach( entry =>
+                         {
+                             const key = asString( ObjectEntry.getKey( entry ), true );
+                             const value = asString( ObjectEntry.getValue( entry ), true );
+
+                             if ( !(isBlank( key ) || isBlank( value )) )
+                             {
+                                 object[key] = value;
+                             }
+                         } );
+
+        return lock( toObjectLiteral( object ) );
+    }
 
     /**
      * The HttpRequestHeaders class is facade and/or substitute for the Headers class found in the Fetch API,
@@ -1028,7 +1059,7 @@ const { _ud = "undefined", $scope } = constants;
      * - Concatenation of values for repeated headers (e.g., `Set-Cookie`).
      * - Serialization of headers into string or object literal formats.
      */
-    class HttpHeaders extends HttpHeadersBaseClass
+    class HttpHeaders
     {
         #defaultOptions;
 
@@ -1040,15 +1071,13 @@ const { _ud = "undefined", $scope } = constants;
 
         constructor( pOptions, pDefaultOptions = {}, pStrict = false )
         {
-            super();
-
             this.#strict = !!pStrict;
 
             let defaultOptions = resolveHeaderOptions( pDefaultOptions ?? pOptions ?? {} );
             let options = resolveHeaderOptions( pOptions );
 
-            this.#options = options || {};
-            this.#defaultOptions = defaultOptions || {};
+            this.#options = toObjectLiteral( options || {} );
+            this.#defaultOptions = toObjectLiteral( defaultOptions || {} );
 
             this.#populateHeaders( defaultOptions, options );
         }
@@ -1093,7 +1122,7 @@ const { _ud = "undefined", $scope } = constants;
 
                                 if ( !isBlank( value ) )
                                 {
-                                    attempt( () => this.set( key, value ) );
+                                    this.set( key, value );
                                 }
                                 validateHeader( key, value );
                             }
@@ -1123,8 +1152,7 @@ const { _ud = "undefined", $scope } = constants;
 
                 if ( !isBlank( value ) && $ln( asString( value ) ) <= MAX_HEADER_VALUE_LENGTH )
                 {
-                    let existing = this.get( key ) || this.get( lcase( key ) ) ||
-                                   this.#map.get( key ) || this.#map.get( lcase( key ) );
+                    let existing = this.#map.get( key ) || this.#map.get( lcase( key ) );
 
                     existing = this.#resolveValue( existing, pKey );
 
@@ -1134,11 +1162,9 @@ const { _ud = "undefined", $scope } = constants;
 
                         let httpHeader = new HttpHeader( key, val );
 
-                        attempt( () => this.#map.set( key, httpHeader ) );
-
                         if ( !(isForbiddenRequestHeader( key )) )
                         {
-                            attempt( () => this.set( key, httpHeader ) );
+                            this.#map.set( key, httpHeader );
                         }
                     }
                 }
@@ -1147,7 +1173,7 @@ const { _ud = "undefined", $scope } = constants;
 
         entries()
         {
-            return [...(this.#map.entries() || super.entries())].map( ( e ) => [this.#resolveKey( e[0] || e ), this.#resolveValue( (e[1] || e), this.#resolveKey( e[0] || e ) ), e] );
+            return [...(this.#map.entries())].map( ( e ) => [this.#resolveKey( e[0] || e ), this.#resolveValue( (e[1] || e), this.#resolveKey( e[0] || e ) ), e] );
         }
 
         [Symbol.iterator]()
@@ -1157,12 +1183,12 @@ const { _ud = "undefined", $scope } = constants;
 
         keys()
         {
-            return [...(this.#map.keys() || super.keys())];
+            return [...(this.#map.keys())];
         }
 
         values()
         {
-            return [...(this.#map.values() || super.values())].map( e => this.#resolveValue( e ) );
+            return [...(this.#map.values())].map( e => this.#resolveValue( e ) );
         }
 
         delete( pKey )
@@ -1176,9 +1202,6 @@ const { _ud = "undefined", $scope } = constants;
 
             attempt( () => this.#map.delete( key ) );
             attempt( () => this.#map.delete( lcase( key ) ) );
-
-            attempt( () => super.delete( key ) );
-            attempt( () => super.delete( lcase( key ) ) );
 
             return true;
         }
@@ -1197,7 +1220,7 @@ const { _ud = "undefined", $scope } = constants;
                 return this.getSetCookie();
             }
 
-            let value = readProperty( this.#map, key ) || readProperty( this, key );
+            let value = readProperty( this.#map, key );
 
             value = value || this[key] || this[lcase( key )];
 
@@ -1225,12 +1248,7 @@ const { _ud = "undefined", $scope } = constants;
                 return false;
             }
 
-            const m = this.#map;
-
-            return attempt( () => super.has( key ) ) ||
-                   attempt( () => super.has( lcase( key ) ) ) ||
-                   attempt( () => m.has( key ) ) ||
-                   attempt( () => m.has( lcase( key ) ) );
+            return this.#map.has( key ) || this.#map.has( lcase( key ) );
         }
 
         set( pKey, pValue )
@@ -1247,11 +1265,9 @@ const { _ud = "undefined", $scope } = constants;
                 {
                     let httpHeader = new HttpHeader( key, value );
 
-                    attempt( () => this.#map.set( key, httpHeader ) );
-
                     if ( !(isForbiddenRequestHeader( key )) )
                     {
-                        attempt( () => super.set( key, httpHeader ) );
+                        this.#map.set( key, httpHeader );
                     }
                 }
             }
@@ -1261,25 +1277,18 @@ const { _ud = "undefined", $scope } = constants;
         {
             const literal = {};
 
-            const map = this.#map || (isMap( this ) ? this : new Map());
+            let entries = this.#map.entries();
 
-            const collections = [this, map].filter( isNonNullObject );
-
-            for( let collection of collections )
+            for( let entry of entries )
             {
-                let entries = attempt( () => isFunction( collection?.entries ) ? collection?.entries() : objectEntries( collection ) );
-
-                for( let entry of entries )
+                let key = this.#resolveKey( ObjectEntry.getKey( entry ) );
+                if ( !isBlank( key ) )
                 {
-                    let key = this.#resolveKey( ObjectEntry.getKey( entry ) );
-                    if ( !isBlank( key ) )
+                    let value = this.#resolveValue( ObjectEntry.getValue( entry ), key );
+                    if ( !(isNull( value ) || isBlank( asString( value, true ) )) )
                     {
-                        let value = this.#resolveValue( ObjectEntry.getValue( entry ), key );
-                        if ( !(isNull( value ) || isBlank( asString( value, true ) )) )
-                        {
-                            key = !key.startsWith( "X-" ) ? lcase( key ) : key;
-                            literal[key] = (asString( literal[key] || literal[lcase( key )], true ) || asString( value, true )).replace( /(\r\n)+$/, _mt ).trim();
-                        }
+                        key = !key.startsWith( "X-" ) ? lcase( key ) : key;
+                        literal[key] = (asString( literal[key] || literal[lcase( key )], true ) || asString( value, true )).replace( /(\r\n)+$/, _mt ).trim();
                     }
                 }
             }
@@ -1291,7 +1300,7 @@ const { _ud = "undefined", $scope } = constants;
 
         toMap()
         {
-            return new Map( this.entries() );
+            return new Map( this.#map.entries() );
         }
 
         clone()
@@ -1314,9 +1323,9 @@ const { _ud = "undefined", $scope } = constants;
         {
             let s = _mt_str;
 
-            const mapEntries = this.#map.entries() || super.entries();
+            const entries = this.#map.entries();
 
-            for( let entry of mapEntries )
+            for( let entry of entries )
             {
                 let httpHeader = HttpHeader.from( ObjectEntry.getValue( entry ), ObjectEntry.getKey( entry ) );
                 httpHeader = httpHeader || new HttpHeader( entry[0], entry[1] );
@@ -1370,7 +1379,7 @@ const { _ud = "undefined", $scope } = constants;
 
         if ( isNonNullObject( headers ) )
         {
-            let value = isFunction( headers.get ) ? headers.get( lcase( key ) ) || headers.get( key ) : headers[lcase( key )] || headers[key];
+            let value = readProperty( headers, key );
 
             value = resolveHeaderValue( value );
 
@@ -1560,6 +1569,30 @@ const { _ud = "undefined", $scope } = constants;
             super( pOptions, pDefaultOptions );
         }
 
+        extractFileName( pDefaultName )
+        {
+            let fileName = asString( pDefaultName );
+
+            const contentDisposition = asString( readProperty( this, "Content-Disposition" ), true );
+
+            if ( !(isNull( contentDisposition ) || isBlank( contentDisposition )) )
+            {
+                const matches = (/filename\*?=(?:['"](?:[^'"]*['"])*)?([^;]+)/i).exec( contentDisposition );
+
+                if ( matches && matches[1] )
+                {
+                    fileName = asString( decodeURIComponent( matches[1].trim().replace( /^['"]|['"]$/g, "" ) ), true );
+                }
+
+                if ( !isBlank( fileName ) )
+                {
+                    return toLegalFileName( fileName );
+                }
+            }
+
+            return toLegalFileName( asString( pDefaultName, true ) );
+        }
+
         clone()
         {
             return new HttpResponseHeaders( this.toLiteral() );
@@ -1567,6 +1600,7 @@ const { _ud = "undefined", $scope } = constants;
     }
 
     HttpResponseHeaders.getHeaderValue = getHeaderValue.bind( HttpResponseHeaders );
+
 
     if ( _ud === typeof Headers )
     {
