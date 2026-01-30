@@ -21,7 +21,8 @@ const
         abbreviate,
         normalizeName,
         getFunctionName,
-        transliterate
+        transliterate,
+        toLegalFileName
     } = stringUtils;
 
 const repoName = "bocktils";
@@ -2191,6 +2192,39 @@ describe( "transliteration", () =>
 
               s = `“The developer’s résumé—updated for 2026—shows João’s skills.”`;
               expect( transliterate( s ) ).toEqual( `"The developer's resume-updated for 2026-shows Joao's skills."` );
+
+          } );
+} );
+
+
+describe( "toLegalFileName", () =>
+{
+    test( "typical cases",
+          () =>
+          {
+              let fileName = "Save Me.txt";
+              expect( toLegalFileName( fileName ) ).toEqual( fileName );
+
+              fileName = "\"Save Me.txt\"";
+              expect( toLegalFileName( fileName ) ).toEqual( "Save Me.txt" );
+
+              fileName = "\"Save Me.txt\"";
+              expect( toLegalFileName( fileName, { replacements: [["\"", " "]] } ) ).toEqual( "Save Me.txt" );
+
+              fileName = "** \\master__mind,txt > mini.me:";
+              expect( toLegalFileName( fileName ) ).toEqual( "master_mind,txt_mini.me" );
+
+              fileName = "***";
+              expect( toLegalFileName( fileName ) ).toEqual( "File_1" );
+
+              fileName = "../";
+              expect( toLegalFileName( fileName ) ).toEqual( "File_2" );
+
+              fileName = "***.???";
+              expect( toLegalFileName( fileName ) ).toEqual( "File_3" );
+
+
+
 
           } );
 } );

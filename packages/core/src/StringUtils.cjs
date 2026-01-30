@@ -3003,15 +3003,19 @@ const { _ud = "undefined", $scope } = constants;
         return false;
     };
 
+    let FILE_NAME_INDEX = 0;
+
     const toLegalFileName = function( pName, pOptions )
     {
-        let name = asString( pName, true );
-
         let options = isNonNullObject( pOptions ) ? { ...(pOptions || {}) } : {};
 
-        if ( !isLegalFileName( name ) )
+        let name = asString( pName, true );
+
+        if ( isBlank( name ) || /^\.+$/.test( name ) )
         {
-            name = name.replaceAll( /[*?><:|"\\\/]/g, _underscore );
+            let ext = asString( options.extension, true ).replace( /^\.+/, _mt );
+
+            name = `File_${++FILE_NAME_INDEX}` + (!isBlank( ext ) ? ("." + ext) : _mt);
         }
 
         if ( options.replacements && isArray( options.replacements ) )
@@ -3031,13 +3035,49 @@ const { _ud = "undefined", $scope } = constants;
                     }
                     else
                     {
-                        name = name.replace( rx, s );
+                        name = asString( name.replace( rx, s ), true );
                     }
                 }
             }
         }
 
-        return name.replaceAll( /_+/g, _underscore );
+        if ( !isLegalFileName( name ) )
+        {
+            name = asString( name.replaceAll( /[*?><:|"\\\/]/g, _underscore ), true );
+        }
+
+        let cleanup = ( part = name ) =>
+        {
+            // remove redundant spaces
+            part = asString( part.replaceAll( /\s+/g, _spc ), true );
+
+            // remove redundant underscores
+            part = asString( part.replaceAll( /_+/g, _underscore ), true );
+
+            // remove spaces around underscores
+            part = asString( part.replaceAll( /\s*_\s*/g, _underscore ), true );
+
+            // remove redundant underscores (again)
+            part = asString( part.replaceAll( /_+/g, _underscore ), true );
+
+            // remove leading or trailing underscores
+            part = asString( part.replaceAll( /^_+/g, _mt ), true ).replaceAll( /_+$/g, _mt );
+
+            return part;
+        };
+
+        const parts = name.split( /\./ ).map( e => cleanup( e ) );
+
+        name = parts.join( "." );
+
+        if ( isBlank( name ) || /^\.+$/.test( name ) )
+        {
+            let ext = asString( options.extension, true ).replace( /^\.+/, _mt );
+
+            name = `File_${++FILE_NAME_INDEX}` + (!isBlank( ext ) ? ("." + ext) : _mt);
+        }
+
+        return asString( cleanup( name ), true );
     };
 
     /**
