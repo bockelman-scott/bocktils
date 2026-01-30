@@ -82,10 +82,8 @@ const { _ud = "undefined", $scope } = constants;
             ObjectEntry,
             objectEntries,
             objectKeys,
-            populateOptions,
             localCopy,
             attempt,
-            attemptSilent,
             asyncAttempt,
             $ln
         } = moduleUtils;
@@ -103,7 +101,7 @@ const { _ud = "undefined", $scope } = constants;
             asObject
         } = typeUtils;
 
-    const { asString, asInt, isBlank, cleanUrl, isJson, toBool } = stringUtils;
+    const { asString, asInt, isBlank, cleanUrl, toBool } = stringUtils;
 
     const { asJson, parseJson } = jsonUtils;
 
@@ -111,9 +109,9 @@ const { _ud = "undefined", $scope } = constants;
 
     const { STATUS_CODES, HttpStatus } = httpConstants;
 
-    const { HttpHeaders, HttpResponseHeaders } = httpHeaders;
+    const { HttpResponseHeaders } = httpHeaders;
 
-    const { HttpUrl, HttpRequest, cloneRequest } = httpRequest;
+    const { HttpUrl, HttpRequest } = httpRequest;
 
     const modName = "HttpResponse";
 
@@ -196,7 +194,7 @@ const { _ud = "undefined", $scope } = constants;
             return null;
         }
 
-        let options = { ...DEFAULT_RESPONSE_OPTIONS, ...(pOptions || {}) };
+        let options = { ...(pOptions || {}) };
 
         let res = asObject( pResponse || options?.response || options || {} ) || {};
 
@@ -262,9 +260,7 @@ const { _ud = "undefined", $scope } = constants;
         return new HttpResponseHeaders( headers );
     };
 
-    const DEFAULT_RESPONSE_OPTIONS = {};
-
-    class HttpResponse extends EventTarget
+    class HttpResponse
     {
         #response;
 
@@ -281,8 +277,6 @@ const { _ud = "undefined", $scope } = constants;
 
         #type;
 
-        #options;
-
         #text;
         #json;
         #formData;
@@ -290,33 +284,23 @@ const { _ud = "undefined", $scope } = constants;
         #blob;
         #arrayBuffer;
 
-        constructor( pResponse, pOptions = DEFAULT_RESPONSE_OPTIONS, pUrl )
+        constructor( pResponse, pUrl )
         {
-            super();
+            const res = attempt( () => HttpResponse.resolveResponse( pResponse ) ) || pResponse || {};
 
-            const me = this;
+            this.#headers = attempt( () => new HttpResponseHeaders( res.headers || pResponse?.headers ) );
 
-            const options = populateOptions( (pOptions || pResponse), pResponse, DEFAULT_RESPONSE_OPTIONS );
+            this.#response = attempt( () => (res || pResponse) );
 
-            options.url = options.url || pUrl;
-
-            const res = attempt( () => HttpResponse.resolveResponse( (pResponse || options), options ) ) || pResponse || options || {};
-
-            this.#headers = attempt( () => (res.headers || pResponse?.headers || options.headers || new HttpResponseHeaders( options )) );
-
-            this.#response = attempt( () => (res || pResponse || options.response || options) );
-
-            this.#status = HttpStatus.fromCode( res.status || pResponse?.status || options.status ) || attempt( () => HttpStatus.fromResponse( res || options.response || options, options ) );
+            this.#status = HttpStatus.fromCode( res.status || pResponse?.status ) || attempt( () => HttpStatus.fromResponse( res || pResponse ) );
 
             this.#ok = toBool( this.#ok || this.#status?.isOk() || res?.ok || pResponse?.ok || (asInt( pResponse?.status ) >= 200 && asInt( pResponse?.status ) < 300) );
 
-            this.#url = cleanUrl( asString( res?.url || options?.url || pUrl, true ) ) || _slash;
+            this.#url = cleanUrl( asString( res?.url || this.#response?.url || pResponse?.url || pUrl, true ) ) || _slash;
 
-            this.#request = res.request || options.request || new HttpRequest( HttpUrl.resolveUrl( this.#url || options.url || pUrl ), options );
+            this.#request = res.request || new HttpRequest( HttpUrl.resolveUrl( this.#url || pUrl ) );
 
-            this.#data = res.data || pResponse?.data || options.data;
-
-            this.#options = attempt( () => populateOptions( options, me ) ) || options;
+            this.#data = res?.data || pResponse?.data || res?.body || pResponse?.body;
         }
 
         /**
@@ -324,15 +308,12 @@ const { _ud = "undefined", $scope } = constants;
          * This response will be converted into a Fetch API Response object.
          *
          * @param {Object|HttpResponse|Response} pResponse a response or an object with a response property
-         * @param {Object} pOptions  other values that should be considered or added to the response
          *
          * @returns {Response|Object}
          */
-        static resolveResponse( pResponse, pOptions )
+        static resolveResponse( pResponse )
         {
-            const options = asObject( pOptions || DEFAULT_RESPONSE_OPTIONS );
-
-            let response = attempt( () => HttpResponse.unwrapResponse( (pResponse || options), options ) ) || pResponse;
+            let response = attempt( () => HttpResponse.unwrapResponse( pResponse ) ) || pResponse;
 
             if ( _ud !== typeof Response )
             {
@@ -340,13 +321,9 @@ const { _ud = "undefined", $scope } = constants;
                 {
                     let responseOptions =
                         {
-                            ...(options),
-                            ...(
-                                {
-                                    status: response?.status || options.status,
-                                    statusText: response?.statusText || options.statusText,
-                                    headers: { ...(options.headers), ...({ ...(response?.headers || options.headers) }) }
-                                })
+                            status: response?.status,
+                            statusText: response?.statusText,
+                            headers: { ...({ ...(response?.headers) }) }
                         };
 
                     if ( isNonNullObject( responseOptions?.headers ) )
@@ -385,7 +362,7 @@ const { _ud = "undefined", $scope } = constants;
                         attempt( () => delete responseOptions.headers );
                     }
 
-                    let responseBody = HttpStatus.allowsResponseBody( response?.status || options?.status || responseOptions?.status ) ? response?.data || options?.data || pResponse?.data || null : null;
+                    let responseBody = HttpStatus.allowsResponseBody( response?.status || responseOptions?.status ) ? response?.data || pResponse?.data || response?.body || pResponse?.body : null;
 
                     try
                     {
@@ -394,22 +371,22 @@ const { _ud = "undefined", $scope } = constants;
                     catch( e )
                     {
                         // ignore this and reset to default
-                        response = (response || attempt( () => HttpResponse.unwrapResponse( (pResponse || options), options ) ) || pResponse);
+                        response = (response || attempt( () => HttpResponse.unwrapResponse( pResponse ) ) || pResponse);
                     }
                 }
             }
 
-            if ( response instanceof this.constructor )
+            if ( response instanceof this )
             {
                 return response.response || response;
             }
 
-            return attempt( () => cloneResponse( response ) );
+            return attempt( () => cloneResponse( response ) ) || response;
         }
 
-        static unwrapResponse( pResponse, pOptions )
+        static unwrapResponse( pResponse )
         {
-            let response = asObject( pResponse?.response || pResponse || pOptions?.response || pOptions || {} ) || {};
+            let response = asObject( pResponse?.response || pResponse || {} ) || {};
 
             while ( isNonNullObject( response ) && isNonNullObject( response.response ) )
             {
@@ -419,24 +396,19 @@ const { _ud = "undefined", $scope } = constants;
             return response || pResponse;
         }
 
-        get options()
-        {
-            return { ...DEFAULT_RESPONSE_OPTIONS, ...(this.#options || {}) };
-        }
-
         get response()
         {
-            return HttpResponse.resolveResponse( this.#response, this.options );
+            return HttpResponse.resolveResponse( this.#response );
         }
 
         clone()
         {
-            return new HttpResponse( cloneResponse( this.response ), this.options );
+            return new HttpResponse( cloneResponse( this.response ) );
         }
 
         get data()
         {
-            return this.#data || this.options.data || null;
+            return this.#data || null;
         }
 
         get body()
@@ -603,7 +575,7 @@ const { _ud = "undefined", $scope } = constants;
 
         get headers()
         {
-            return new HttpResponseHeaders( this.#headers || this.response.headers || this.options.headers );
+            return new HttpResponseHeaders( this.#headers || this.response.headers );
         }
 
         get ok()
@@ -613,12 +585,7 @@ const { _ud = "undefined", $scope } = constants;
 
         get request()
         {
-            return (this.#request || this.options.request);
-        }
-
-        get redirected()
-        {
-            return this.#response?.redirected || false;
+            return this.#request;
         }
 
         get status()
@@ -628,7 +595,8 @@ const { _ud = "undefined", $scope } = constants;
 
         get httpStatus()
         {
-            return (this.#status instanceof HttpStatus) ? this.#status : HttpStatus.fromCode( this.response?.status || this.#response?.status || this.options?.status ) || attempt( () => HttpStatus.fromResponse( this.response || this.options?.response || this.options, this.options ) );
+            return (this.#status instanceof HttpStatus) ? this.#status : HttpStatus.fromCode( this.response?.status || this.#response?.status ) ||
+                                                                         HttpStatus.fromResponse( this.response );
         }
 
         get statusText()
@@ -643,7 +611,7 @@ const { _ud = "undefined", $scope } = constants;
 
         get url()
         {
-            return this.#url || this.response?.url || this.request?.url || this.options?.url || _mt_str;
+            return this.#url || this.response?.url || this.request?.url || _mt_str;
         }
     }
 
