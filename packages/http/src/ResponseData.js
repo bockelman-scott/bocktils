@@ -3,6 +3,12 @@
  * This module defines a wrapper for HttpResponse or Response objects<br>
  * <br>
  *
+ * The intent is to provide a uniform interface regardless of the environment or frameworks used.
+ * For example, the Fetch API of browsers returns a Web API Response,
+ * the archaic XMLHttpRequest returns its own idea of the response,
+ * direct usage of the Node.js http package returns a sublcas of or a wrapper over IncomingMessage,
+ * and Axios returns it own idea of a response.
+ *
  * @module ResponseData
  *
  * @author Scott Bockelman
@@ -72,6 +78,8 @@ const httpRequestModule = require( "./HttpRequest.cjs" );
  */
 const httpResponseModule = require( "./HttpResponse.cjs" );
 
+const httpConfigUtils = require( "./HttpConfigUtils.js" );
+
 // noinspection FunctionTooLongJS
 (function exposeModule()
 {
@@ -88,9 +96,8 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
             ToolBocksModule,
             IterationCap,
             ObjectEntry,
-            objectEntries,
-            populateOptions,
             resolveError,
+            readProperty,
             lock,
             attempt,
             attemptSilent,
@@ -100,7 +107,7 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
             konsole = console
         } = moduleUtils;
 
-    const { _mt_str = "", _mt = _mt_str, _slash = "/" } = constants;
+    const { _mt_str = "", _mt = _mt_str, _slash = "/", _hash, _underscore } = constants;
 
     const
         {
@@ -119,6 +126,7 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
             isPromise,
             asObject,
             toObjectLiteral,
+            FAST_OBJECT_LITERAL_OPTIONS,
             clamp = moduleUtils.clamp
         } = typeUtils;
 
@@ -146,6 +154,8 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
     const { HttpRequest } = httpRequestModule;
 
     const { HttpResponse, cloneResponse } = httpResponseModule;
+
+    const { HttpConfig, toHttpConfigLiteral } = httpConfigUtils;
 
     /**
      * This is a dictionary of this module's dependencies.
@@ -177,11 +187,6 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
     const modName = "ResponseDataUtils";
 
     const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
-
-    const DEFAULT_RESPONSE_OPTIONS =
-        {
-            //
-        };
 
     const OK_STATUSES = lock( [STATUS_CODES.OK, STATUS_CODES.NO_CONTENT, STATUS_CODES.ACCEPTED, STATUS_CODES.CREATED] );
 
@@ -397,6 +402,16 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
         return _mt;
     }
 
+    /**
+     * If the Response Status is 429, it may include a retry-after header.
+     *
+     * This function helps calculate the number of milliseconds to wait before retrying the failed request.
+     *
+     * @param pRetryAfter The value returned by the server, in seconds.
+     * @param pDefaultDelay The default number of millseconds to wait if the retry-after value is absent or invalid
+     *
+     * @returns {number} The number of milliseconds to wait before retrying a failed request.
+     */
     const calculateRetryDelay = function( pRetryAfter, pDefaultDelay = 128 )
     {
         let millis = asInt( pDefaultDelay, 128 );
@@ -430,34 +445,35 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
     };
 
     /**
-     * This class provides both a wrapper for the information returned by an HTTP request
+     * This class provides both a wrapper for the information returned in response to an HTTP request
      * and static methods to check the validity of a response.
      */
     class ResponseData
     {
         /**
-         * Holds the underlying response object
+         * Holds the underlying response object,
+         * unwrapped from any framework response (such as the axios response)
          */
         #response;
 
         /**
-         * Holds the object returned by the framework as the response
+         * Holds the object returned by the framework as the response.
+         * This may be the same as #response if no framework is being used.
+         * Examples include the response returned from browser's Fetch API.
+         * (Sort of, of course, the 'real' response is just a stream of bits over TCP, but...)
          */
         #frameworkResponse;
 
         /**
-         * Holds the resolved options
-         */
-        #options = DEFAULT_RESPONSE_OPTIONS;
-
-        /**
-         * Holds the numeric code return as the HTTP Status
+         * Holds the numeric code returned as the HTTP Status.
+         * For example, in most case, this will be 200
          * @type {number}
          */
         #status;
 
         /**
-         * Instance of an HttpStatus object to use as a helper
+         * Instance of an HttpStatus object to use as a helper for evaluating the status.
+         * The HttpStatus class contains intelligence based on the latest RFC Specs for HTTP Status codes.
          * @type {HttpStatus}
          */
         #httpStatus = new HttpStatus( 0, "UNKNOWN" );
@@ -465,37 +481,61 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
         /**
          * Holds the body of the response.
          * This can be a string, json-encoded data, an object, or a stream.
+         * This intentionally mimics Axios model to avoid using the 'body' property,
+         * which hs special 'semantics' in the case of the Web API Response,
+         * such as being a Promise, and being a read-once ReadableStream.
+         *
+         * If this instance is being created from Web API response,
+         * data will initially be a Promise.
+         *
+         * If the framework has already resolve the body, this will hold the useful data.
+         *
          * @type {String|Object|ReadableStream}
          */
         #data;
 
         /**
          * Holds the Response Headers returned
-         * or if no headers were returned, the Request Header used to make the request.
+         * or if no headers were returned,
+         * the Request Header used to make the request.
+         *
+         * This will be wrapped in an instance of HttpHeaders to provide a uniform interface.
+         *
          * @type {Headers|HttpResponseHeaders|Map<String,String>|Object}
          */
         #headers;
 
         /**
-         * Holds the headers as returned by the framework used
+         * Holds the headers as returned by the framework used.
+         * These headers are the 'native' headers as returned, not wrapped in HttpHeaders.
+         * Proceed with some caution, depending on their source.
          */
         #frameworkHeaders;
 
         /**
          * Holds the RequestInit object (if using fetch)
          * or the config object (if using Axios, for example)
-         * used to make the request
-         * @type {Object|RequestInit}
+         * used to make the request.
+         *
+         * This will be wrapped in an instance of HttpConfig to provide a uniform interface
+         * and preserve the http.Agents that may have been indicated.
+         *
+         * @type {Object|RequestInit|HttpConfig}
          */
         #config;
 
         /**
-         * Holds the url of the response (may differ from the url of the request if redirects were followed)
+         * Holds the url of the response
+         * (which may differ from the url of the request if redirects were followed)
+         *
+         * @type {string|URL}
          */
         #url;
 
         /**
-         * Holds either the request property of the returned response or the original request.
+         * Holds either the request property of the returned response or the original Request.
+         * This will be wrapped in an HttpRequest to provide a uniform insterface
+         *
          * @type {String|URL|HttpRequest|Request}
          */
         #request;
@@ -503,9 +543,14 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
         /**
          * Holds any error the framework has returned
          * or an error generated by this class when the request was unsuccessful.
-         * @type {Error|Object}
+         *
+         * Will be null when the request and construction of the response are succesful.
+         *
+         * @type {Error|null}
          */
         #error;
+
+        #responseType;
 
         /**
          * Constructs a new instance of the class with the given response, error, configuration, and URL.
@@ -514,74 +559,66 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
          *                                which may include details such as status, headers, and data.
          *
          * @param pConfig
-         * @param pOptions
          *
          * @return {ResponseData}          An instance of ResponseData
          */
-        constructor( pResponse, pConfig, pOptions )
+        constructor( pResponse, pConfig )
         {
             const me = this;
 
+            // we avoid double-wrapping, triple wrapping, etc
+            // by checking the type of the first argument
             let constructed = false;
 
             if ( pResponse instanceof this.constructor )
             {
-                constructed = attempt( () => me._setPropertiesFromInstance( pResponse, pConfig, pOptions ) );
+                constructed = attempt( () => me.#setPropertiesFromInstance( pResponse, pConfig ) );
             }
 
-            if ( isError( pResponse ) || isError( pConfig ) )
+            if ( isError( pResponse ) || isError( pConfig ) || isError( pResponse?.error ) || isError( pResponse?.response ) )
             {
-                this.#error = resolveError( isError( pResponse ) ? pResponse : pConfig, pConfig, { message: pResponse?.message || pConfig?.message || asString( pConfig || pResponse, true ) } );
-                this.#data = isError( pResponse ) ? (pResponse?.message || pResponse) : isError( pConfig ) ? (pConfig?.message || pConfig) : (this.#error?.message || this.#error);
+                this.#error = resolveError( [pResponse, pConfig, pResponse?.error, pResponse?.response].find( isError ) );
+                this.#data = isError( this.#error ) ? (this.#error?.message || pResponse) : pResponse?.data || pResponse?.body;
             }
             else
             {
                 if ( !constructed )
                 {
-                    const opts = { ...DEFAULT_RESPONSE_OPTIONS, ...(pResponse || (pConfig || pResponse || {})), ...(pConfig || pResponse || {}), ...(pOptions || {}) };
-
-                    const config = { ...(pResponse?.config || {}), ...(asObject( pConfig || pResponse || opts || {} ) || {}) };
-
-                    const options = { ...(asObject( opts || config || {} ) || config || {}) };
-
-                    const source = (_ud !== typeof Response && pResponse instanceof Response) ? pResponse : attempt( () => HttpResponse.resolveResponse( (pResponse || options), options ) ) || asObject( pResponse || {} );
+                    const source = (_ud !== typeof Response && pResponse instanceof Response) ? pResponse : HttpResponse.resolveResponse( pResponse ) || asObject( pResponse || {} );
 
                     // Some frameworks return the response as a property of an error returned in place of a response.
                     // See https://axios-http.com/docs/handling_errors, for example
-                    this.#frameworkResponse = pResponse?.response || source?.response || pResponse || source;
+                    this.#frameworkResponse = isError( pResponse ) ? pResponse?.response || pResponse || source : pResponse;
 
-                    this.#data = this.#frameworkResponse?.data || source?.data || pResponse?.data || options.data || this.#frameworkResponse?.body || source?.body || options.body || pResponse?.body;
+                    this.#data = this.#frameworkResponse?.data || pResponse?.data || this.#frameworkResponse?.body || source?.body || pResponse?.body;
 
-                    this.#frameworkHeaders = this.#frameworkResponse?.headers || source?.headers || options.headers || pResponse?.headers;
+                    this.#frameworkHeaders = this.#frameworkResponse?.headers || pResponse?.headers || source?.headers;
 
-                    this.#status = this.#frameworkResponse?.status || source?.status || options.status || pResponse?.status;
+                    // Stores the headers returned with the response or the request headers that were passed
+                    this.#headers = new HttpResponseHeaders( this.frameworkHeaders || pConfig?.headers || source?.headers ) || this.frameworkHeaders;
 
-                    this.#error = isError( pResponse ) ? pResponse : isError( pConfig ) ? pConfig : isError( pOptions ) ? pOptions : null;
+                    this.#status = this.#frameworkResponse?.status || pResponse?.status;
+
+                    this.#error = [pResponse, pConfig].find( isError ) || null;
 
                     this.#error = isError( this.#error ) ? resolveError( this.#error ) : null;
 
+                    // Stores the url path from which the response actually came (in the case of redirects) or the url/path of the request
+                    this.#url = cleanUrl( asString( asString( this.#frameworkResponse?.url || this.#response?.url || pConfig?.url || source?.url, true ) ||
+                                                    asString( pConfig?.url, true ) || _slash, true ) );
+
                     // Stores the configuration returned with the response
                     // or the configuration used to make the request for which this is the response
-                    this.#config = config || options;
+                    this.#config = new HttpConfig( toHttpConfigLiteral( pConfig ), this.#headers, this.#url );
 
-                    this.#options = populateOptions( options,
-                                                     {
-                                                         response: this.#frameworkResponse || pResponse?.response || pResponse,
-                                                         source: source || pResponse?.response || pResponse,
-                                                         config,
-                                                         error: this.#error,
-                                                         status: this.#status,
-                                                         data: this.#data || config?.data || options.data,
-                                                         headers: this.#frameworkHeaders || source?.headers || options.headers
-                                                     } );
+                    this.#responseType = this.#config?.responseType || HttpConfig.calculateResponseType( readProperty( this.#headers, "accept" ) );
 
-                    this.#options.data = ((config.responseType === "application/json" || isJson( this.#options.data )) ? asObject( this.#options.data ) : this.#options.data || asObject( this.#data )) || this.#options.data || this.#data;
-
+                    // this.#response = this.#frameworkResponse;
                     if ( isNonNullObject( source ) )
                     {
-                        this.#response = attempt( () => new HttpResponse( (source || pResponse || config || options),
-                                                                          (options || config || source),
-                                                                          (config.url || options.url) ) ) || source || options.response || options || config;
+                        this.#response = attempt( () => new HttpResponse( (source || pResponse || this.#config),
+                                                                          (this.#config),
+                                                                          (this.#url || this.#config.url) ) ) || source || pConfig;
                     }
                     else
                     {
@@ -590,61 +627,85 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
 
                     // construct an instance of HttpStatus as a helper for evaluating the status
                     this.#httpStatus = attempt( () => HttpStatus.fromCode( this.status ) ) ||
-                                       attempt( () => HttpStatus.fromResponse( this.#response ) ) ||
+                                       attempt( () => HttpStatus.fromResponse( this.frameworkResponse || this.#response ) ) ||
                                        attempt( () => HttpStatus.fromCode( this.statusText ) ) ||
-                                       attempt( () => new HttpStatus( asInt( this.status ), asString( this.statusText || this.options.statusText || "UNKNOWN", true ) ) );
+                                       attempt( () => new HttpStatus( asInt( this.status ), asString( this.statusText || "UNKNOWN", true ) ) );
 
-                    // Stores the headers returned with the response or the request headers that were passed
-                    this.#headers = attempt( () => new HttpResponseHeaders( source?.headers || this.frameworkHeaders || config?.headers || options?.headers ) ) || attempt( () => new HttpResponseHeaders( this.frameworkHeaders ) ) || this.frameworkHeaders;
 
-                    // Stores the url path from which the response actually came (in the case of redirects) or the url/path of the request
-                    this.#url = cleanUrl( asString( asString( this.#response?.url || this.#frameworkResponse?.url || config?.url || source?.url, true ) || asString( config.url || options.url, true ) || _slash, true ) );
                 }
             }
         }
 
-        get options()
-        {
-            return {
-                ...(this.#options || {}),
-                ...(asObject( this.#config || {} ) || {}),
-                ...(asObject( this.#frameworkResponse ) || {}), ...(this.#response || {})
-            };
-        }
-
         get response()
         {
-            const me = this;
-            return attempt( () => cloneResponse( HttpResponse.resolveResponse( me.#response || me.#frameworkResponse, me.options ) ) );
+            return attempt( () => cloneResponse( HttpResponse.resolveResponse( this.#response || this.#frameworkResponse ) ) );
         }
 
         get frameworkResponse()
         {
-            return asObject( this.#frameworkResponse || this.options.response || this.#response ) || Object.assign( {}, this.#options || {} );
+            return asObject( this.#frameworkResponse || this.#response );
         }
 
         get status()
         {
-            return asInt( this.#status || this.frameworkResponse?.status || this.#response?.status || this.options.status );
+            return asInt( this.#status || this.frameworkResponse?.status || this.#response?.status );
+        }
+
+        get httpStatus()
+        {
+            return this.#httpStatus || HttpStatus.fromCode( this.status );
         }
 
         get statusText()
         {
-            return asString( this.frameworkResponse?.statusText || STATUS_TEXT[asInt( this.status )] || this.options.statusText, true );
+            return asString( this.frameworkResponse?.statusText || STATUS_TEXT[asInt( this.status )], true );
+        }
+
+        get url()
+        {
+            return this.#url;
+        }
+
+        get responseType()
+        {
+            return this.#responseType || HttpConfig.calculateResponseType( readProperty( this.headers, "accept" ) );
+        }
+
+        get headers()
+        {
+            return attempt( () => new HttpResponseHeaders( this.#headers || this.frameworkHeaders || this.#frameworkResponse?.headers || this.config?.headers ) ) || this.frameworkHeaders;
+        }
+
+        get headersLiteral()
+        {
+            let headers = asObject( this.headers );
+            return isFunction( headers?.toLiteral ) ? headers.toLiteral() : toObjectLiteral( headers || {} );
+        }
+
+        get frameworkHeaders()
+        {
+            return this.#frameworkHeaders || this.#frameworkResponse?.headers || this.#response?.headers || this.config?.headers;
+        }
+
+        get config()
+        {
+            return asObject( this.#config ) || {};
         }
 
         get data()
         {
-            let content = this.#data || this.frameworkResponse?.data || this.response?.data || this.options.data || this.frameworkResponse?.body || this.response?.body;
+            let content = this.#data || this.frameworkResponse?.data || this.response?.data || this.response?.body || this.frameworkResponse?.body;
 
             if ( isNull( content ) || (isString( content ) && isBlank( content )) )
             {
                 content = this.response ? this.response.body : content;
             }
 
-            if ( "application/json" === this.#options.responseType || isJson( content ) )
+            if ( "json" === this.responseType ||
+                 ["application/json"].includes( readProperty( this.headers, "content-type" ) )
+                 || isJson( content ) )
             {
-                content = attempt( () => asObject( content ) );
+                content = attempt( () => asObject( content ) || parseJson( content ) );
 
                 let populatedObjectOptions =
                     {
@@ -655,7 +716,7 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
 
                 if ( !isPopulatedObject( content, populatedObjectOptions ) )
                 {
-                    content = this.#data || this.frameworkResponse?.data || this.response?.data || this.options.data;
+                    content = this.#data || this.frameworkResponse?.data || this.response?.data || this.response?.body;
                     if ( isNull( content ) || (isString( content ) && isBlank( content )) )
                     {
                         content = this.response ? (this.response.data || this.frameworkResponse?.data || this.response.body || this.frameworkResponse?.body) : (this.frameworkResponse ? this.frameworkResponse?.data || this.frameworkResponse?.body : content);
@@ -666,41 +727,15 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
             return content;
         }
 
-        get headers()
-        {
-            return attempt( () => new HttpResponseHeaders( this.#headers || this.frameworkHeaders || this.#frameworkResponse?.headers || this.config?.headers || this.options.headers ) ) || this.frameworkHeaders;
-        }
-
-        get headersLiteral()
-        {
-            let headers = asObject( this.headers );
-            return isFunction( headers?.toLiteral ) ? headers.toLiteral() : attempt( () => toObjectLiteral( headers || {} ) );
-        }
-
-        get frameworkHeaders()
-        {
-            return this.#frameworkHeaders || this.#frameworkResponse?.headers || this.#response?.headers || this.config?.headers || this.options.headers;
-        }
-
-        get config()
-        {
-            return asObject( this.#config || this.options ) || {};
-        }
-
         get request()
         {
-            this.#request = this.#request || attempt( () => new HttpRequest( this.#response?.request || this?.frameworkResponse?.request || this.config.request || this.options.request || this.config, this.options ) );
-            return this.#request || this.config.request || this.options.request || this.config || this.options;
+            this.#request = new HttpRequest( this.#request || new HttpRequest( this.#response?.request || this?.frameworkResponse?.request || this.config.request || this.config ) );
+            return toObjectLiteral( this.#request || this.config.request || this.config, { maxDepth: 2 } );
         }
 
         get error()
         {
-            return this.#error;
-        }
-
-        get httpStatus()
-        {
-            return this.#httpStatus || HttpStatus.fromCode( this.status );
+            return isError( this.#error ) ? this.#error : isError( this.#frameworkResponse ) ? this.#frameworkResponse : null;
         }
 
         get ok()
@@ -710,21 +745,18 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
 
         isError()
         {
-            return ( !isNull( this.error ) && isError( this.error )) || (this.httpStatus?.isError());
+            return ( !isNull( this.error ) && isError( this.error )) || (this.httpStatus?.isError()) || isError( this.frameworkResponse );
         }
 
         isRedirect()
         {
-            if ( isNonNullObject( this.httpStatus ) ?
-                 this.httpStatus.isRedirect() :
-                 REDIRECT_STATUSES.includes( asInt( this.status ) ) )
+            if ( isNonNullObject( this.httpStatus ) ? this.httpStatus.isRedirect() : REDIRECT_STATUSES.includes( asInt( this.status ) ) )
             {
                 // noinspection JSUnresolvedReference
-                let loc = isFunction( this?.headers?.get ) ?
-                          this?.headers.get( "location" ) || this?.headers.get( "Location" ) :
-                          this?.headers?.location || this.headers?.Location;
+                let loc = readProperty( this.headers, "location" );
+
                 // noinspection JSUnresolvedReference
-                return !isBlank( loc || this?.headers?.location || this.headers?.Location );
+                return !isBlank( loc );
             }
             return false;
         }
@@ -758,9 +790,7 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
             if ( this.isRedirect() )
             {
                 // noinspection JSUnresolvedReference
-                return isFunction( this.headers?.get ) ?
-                       this.headers.get( "location" ) || this.headers.get( "Location" ) || this.headers.location || this.headers.Location :
-                       this.headers.location || this.headers.Location;
+                return readProperty( this.headers, "location" );
             }
             return _mt;
         }
@@ -773,9 +803,9 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
 
             const responseHeaders = new HttpResponseHeaders( this.headers || this.response?.headers );
 
-            let retryAfter = attempt( () => responseHeaders.get( "Retry-After" ) ) || attempt( () => responseHeaders.get( "retry-after" ) );
+            let retryAfter = attempt( () => readProperty( responseHeaders, "Retry-After" ) );
 
-            retryAfter = retryAfter || attempt( () => responseHeaders.get( "X-Retry-After" ) ) || attempt( () => responseHeaders.get( "x-retry-after" ) );
+            retryAfter = retryAfter || attempt( () => readProperty(responseHeaders, "X-Retry-After" ) );
 
             return calculateRetryDelay( retryAfter, millis );
         }
@@ -866,49 +896,42 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
 
         clone()
         {
-            return new ResponseData( cloneResponse( this.frameworkResponse || this.options.response || this.response ),
-                                     this.config,
-                                     this.options );
+            return new ResponseData( cloneResponse( this.frameworkResponse || this.response ), this.config );
         }
 
-        _setPropertiesFromInstance( pResponseData, pConfig, pOptions )
+        #setPropertiesFromInstance( pResponseData, pConfig )
         {
             const me = this;
 
             if ( isNonNullObject( pResponseData ) && pResponseData instanceof this.constructor )
             {
-                const options = asObject( { ...DEFAULT_RESPONSE_OPTIONS, ...(pResponseData.options || {}), ...(pResponseData.config || {}), ...(pConfig || {}), ...(pOptions || {}) } ) || {};
+                const source = attempt( () => HttpResponse.resolveResponse( pResponseData.response ) ) || {};
 
-                const config = asObject( { ...(pResponseData.config || options || {}), ...(pConfig || options || {}) } );
+                this.#frameworkResponse = pResponseData?.frameworkResponse || pResponseData.response || source;
 
-                const source = attempt( () => HttpResponse.resolveResponse( pResponseData.response, config || options ) );
+                this.#data = pResponseData?.data || this.#frameworkResponse?.data || source?.body;
 
-                this.#frameworkResponse = pResponseData?.frameworkResponse || pResponseData.response || source.response || source;
+                this.#frameworkHeaders = pResponseData?.frameworkHeaders || this.#frameworkResponse?.headers || source?.headers;
 
-                this.#data = pResponseData.data || this.#frameworkResponse?.data || options.data;
+                this.#status = pResponseData?.status || this.#frameworkResponse?.status || source?.status;
 
-                this.#frameworkHeaders = pResponseData.frameworkHeaders || this.#frameworkResponse?.headers || options.headers || source.headers;
-
-                this.#status = pResponseData.status || this.#frameworkResponse?.status || source.status || options.status;
-
-                this.#error = pResponseData.error || isError( pResponseData ) ? pResponseData : isError( pConfig ) ? pConfig : isError( pOptions ) ? pOptions : null;
+                this.#error = pResponseData?.error || isError( pResponseData ) ? pResponseData : isError( this.#frameworkResponse ) ? this.#frameworkResponse : null;
 
                 this.#error = isError( this.#error ) ? resolveError( this.#error ) : null;
 
-                this.#options = { ...(pResponseData.options || {}), ...(options || {}) };
+                this.#response = attempt( () => cloneResponse( pResponseData?.response || this.frameworkResponse ) );
 
-                this.#response = cloneResponse( pResponseData.response );
-
-                this.#httpStatus = new HttpStatus( pResponseData.status, pResponseData.statusText );
-
-                this.#config = config || options;
+                this.#httpStatus = new HttpStatus( pResponseData?.status || this.#status, pResponseData?.statusText || this.#frameworkResponse?.statusText );
 
                 // Stores the headers returned with the response or the request headers that were passed
-                this.#headers = attempt( () => new HttpResponseHeaders( pResponseData?.headers || pResponseData?.frameworkHeaders || config?.headers || options?.headers ) ) || attempt( () => new HttpResponseHeaders( pResponseData?.frameworkHeaders || {} ) ) || pResponseData?.frameworkHeaders;
+                this.#headers = attempt( () => new HttpResponseHeaders( pResponseData?.headers || pResponseData?.frameworkHeaders || pConfig?.headers ) ) ||
+                                attempt( () => new HttpResponseHeaders( pResponseData?.frameworkHeaders || {} ) ) || pResponseData?.frameworkHeaders;
 
-                this.#url = pResponseData.url || cleanUrl( asString( asString( this.#response?.url || this.#frameworkResponse?.url, true ) || asString( options.url || config.url, true ) || _slash, true ) );
+                this.#url = pResponseData.url || cleanUrl( asString( asString( this.#response?.url || this.#frameworkResponse?.url, true ) || asString( pConfig.url, true ) || _slash, true ) );
 
-                attempt( () => me.#request = pResponseData.request || options.request || config.request );
+                this.#config = new HttpConfig( pResponseData?.config || pResponseData?.httpConfig, this.#headers, this.#url );
+
+                attempt( () => me.#request = toObjectLiteral( pResponseData.request || pConfig.request, { maxDepth: 2 } ) );
 
                 let entries = attempt( () => Object.entries( pResponseData ) );
 
@@ -961,9 +984,9 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
 
             let responseHeaders = attempt( () => new HttpResponseHeaders( headers ) ) || headers;
 
-            let retryAfter = attempt( () => responseHeaders.get( "Retry-After" ) ) || attempt( () => responseHeaders.get( "retry-after" ) );
+            let retryAfter = attempt( () => readProperty(responseHeaders, "Retry-After" ) );
 
-            retryAfter = retryAfter || attempt( () => responseHeaders.get( "X-Retry-After" ) ) || attempt( () => responseHeaders.get( "x-retry-after" ) );
+            retryAfter = retryAfter || attempt( () => readProperty(responseHeaders, "X-Retry-After" ) );
 
             retryAfter = retryAfter || attempt( () => headers["Retry-After"] ) || attempt( () => headers["retry-after"] );
 
@@ -1001,19 +1024,17 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
 
         const config = pConfig || obj?.config || response?.config;
 
-        const options = asObject( pOptions || config || response || obj );
-
         if ( isError( obj ) )
         {
-            return new ResponseData( obj || response, config, options || response );
+            return new ResponseData( obj || response, config );
         }
 
-        return new ResponseData( response, config, options );
+        return new ResponseData( response, config );
     };
 
-    ResponseData.asyncFrom = async function( pObject, pConfig, pOptions )
+    ResponseData.asyncFrom = async function( pObject, pConfig )
     {
-        let obj = (asObject( pObject || pConfig || pOptions || {} ) || {});
+        let obj = (asObject( pObject || pConfig || {} ) || {});
 
         if ( isPromise( obj ) )
         {
@@ -1027,16 +1048,14 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
                 await asyncAttempt( async() => await obj.resolveData() );
             }
 
-            return ResponseData.from( obj, pConfig, pOptions );
+            return ResponseData.from( obj, pConfig );
         }
 
-        const response = obj?.response || pConfig?.response || pOptions?.response || obj;
+        const response = obj?.response || pConfig?.response || obj;
 
         const config = pConfig || obj?.config || response?.config;
 
-        const options = asObject( pOptions || config || response );
-
-        let responseData = new ResponseData( response, config, options );
+        let responseData = new ResponseData( response, config );
 
         await asyncAttempt( async() => await responseData.resolveData() );
 
@@ -1050,6 +1069,10 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
 
     ResponseData.isOk = function( pResponseData )
     {
+        if ( ResponseData.isResponseData( pResponseData ) )
+        {
+            return pResponseData.ok || (pResponseData.httpStatus.isOk());
+        }
         return isNonNullObject( pResponseData ) && (pResponseData.ok || ([200, 201, 204].includes( asInt( pResponseData.status ) )));
     };
 
@@ -1062,7 +1085,7 @@ const httpResponseModule = require( "./HttpResponse.cjs" );
     {
         let message = isString( pMsg ) ? (asString( pMsg || pError?.message, true )) : ((isError( pError ) ? asString( pError.message || asString( (isError( pMsg ) ? pMsg?.message || pMsg : pMsg), true ), true ) : asString( (isError( pMsg ) ? pMsg?.message || pMsg : pMsg), true ))) || "An error occurred ";
         let error = resolveError( isError( pError ) ? resolveError( pError ) : isError( pMsg ) ? resolveError( pMsg, pError ) : new Error( message ) );
-        return new ResponseData( error, message, { error, message } );
+        return new ResponseData( error, message );
     };
 
     let mod =

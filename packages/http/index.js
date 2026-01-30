@@ -17,7 +17,10 @@ const HttpRequestUtils = require( "./src/HttpRequest.cjs" );
 const HttpResponseUtils = require( "./src/HttpResponse.cjs" );
 const HttpStorageUtils = require( "./src/HttpStorage.cjs" );
 const ResponseDataModule = require( "./src/ResponseData.js" );
+const HttpAgentUtils = require( "./src/HttpAgentUtils.js" );
+const HttpConfigUtils = require( "./src/HttpConfigUtils.js" );
 const HttpClientUtils = require( "./src/HttpClient.js" );
+
 
 /** define a variable for typeof undefined **/
 const { _ud = "undefined" } = constants;
@@ -172,18 +175,32 @@ const $scope = constants?.$scope || function()
             fixAgents,
 
             createHttpAgent,
-            createHttpsAgent,
+            createHttpsAgent
 
+        } = HttpAgentUtils;
+
+
+    const
+        {
+            HttpConfig,
+            isHttpConfig,
+            resolveHttpConfig,
+            toHttpConfigLiteral,
+
+            ConfigFactory,
+            RequestInitModel,
+            AxiosConfigModel
+
+        } = HttpConfigUtils;
+
+    const
+        {
             resolveUrl,
             resolveBody,
 
             isHttpClient,
             prepareRequestConfig,
             extractFileNameFromHeader,
-
-            ConfigFactory,
-            RequestInitModel,
-            AxiosConfigModel,
 
             HttpClient,
             HttpFetchClient,
@@ -208,11 +225,6 @@ const $scope = constants?.$scope || function()
 
             Throttler,
             SimpleRequestThrottler,
-
-            HttpConfig,
-            isHttpConfig,
-            resolveHttpConfig,
-            toHttpConfigLiteral
 
         } = HttpClientUtils;
 
@@ -272,6 +284,21 @@ const $scope = constants?.$scope || function()
                     Throttler,
                     SimpleRequestThrottler
                 },
+            modules:
+                {
+                    DateUtils,
+                    FetchUtils,
+                    HttpCacheUtils,
+                    HttpConstants,
+                    HttpHeadersUtils,
+                    HttpRequestUtils,
+                    HttpResponseUtils,
+                    HttpStorageUtils,
+                    ResponseDataModule,
+                    HttpAgentUtils,
+                    HttpConfigUtils,
+                    HttpClientUtils
+                },
             FetchUtils,
             HttpCacheUtils,
             HttpConstants,
@@ -280,6 +307,8 @@ const $scope = constants?.$scope || function()
             HttpResponseUtils,
             HttpStorageUtils,
             ResponseDataModule,
+            HttpAgentUtils,
+            HttpConfigUtils,
             HttpClientUtils,
             HttpCache,
             HttpCacheStorage,
