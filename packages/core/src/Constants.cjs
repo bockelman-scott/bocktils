@@ -152,13 +152,17 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
             _mt_str = "",
             _mt_chr = "",
             _mt = _mt_str,
+
             _spc = " ",
+
             _dot = ".",
             _comma = ",",
             _underscore = "_",
             _usc = _underscore,
+
             _hyphen = "-",
             _hy = _hyphen,
+
             _asterisk = "*",
             _ampersand = "&",
             _equals = "=",
@@ -185,6 +189,7 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
             _colon = ":",
             _pipe = "|",
             _question = "?",
+            _hash = "#",
 
             _ALPHABET_ENGLISH_UCASE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
             _ALPHABET_ENGLISH_LCASE = _ALPHABET_ENGLISH_UCASE.toLowerCase(),
@@ -1004,6 +1009,8 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
              * @alias module:Constants#_question
              */
             _question,
+
+            _hash,
 
             /**
              * The comma character<br>
