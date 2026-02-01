@@ -118,6 +118,7 @@ const { _ud = "undefined", $scope } = constants;
             isClass,
             isDate,
             isNumber,
+            isBoolean,
             isMap,
             isSet,
             isNull,
@@ -137,7 +138,7 @@ const { _ud = "undefined", $scope } = constants;
 
     const { asString, asInt, isBlank, isJson, lcase, rightOfLast } = stringUtils;
 
-    const { asArray, pruneArray, unique, toNonBlankStrings } = arrayUtils;
+    const { asArray, pruneArray, unique, toNonBlankStrings, Filters } = arrayUtils;
 
     const modName = "JsonInterpolationUtils";
 
@@ -157,7 +158,7 @@ const { _ud = "undefined", $scope } = constants;
 
     const MAX_RUN_TIME = 10_000;
 
-    const MAX_RECURSION = 32;
+    const MAX_RECURSION = 16;
 
     const MAX_RECURSION_ERROR = `Maximum Recursion, ${MAX_RECURSION}, Exceeded`;
 
@@ -288,7 +289,7 @@ const { _ud = "undefined", $scope } = constants;
             return paths;
         }
 
-        if ( detectCycles( stack, 5, 5 ) )
+        if ( detectCycles( stack, 5, 3 ) )
         {
             toolBocksModule.reportError( new Error( `Entered an infinite loop at ${stack.join( _dot )}` ), `iterating a cyclically-connected graph`, S_ERROR, (modName + "::detectCycles"), stack );
             return [];
@@ -330,7 +331,7 @@ const { _ud = "undefined", $scope } = constants;
 
             if ( isPopulated( value ) )
             {
-                let result = tracePathTo( target, value, paths.concat( key ), stack.concat( key ), visited );
+                let result = tracePathTo( target, value, [...paths, key], [...stack, key], visited );
 
                 if ( (result?.length || 0) > 0 )
                 {
@@ -469,7 +470,7 @@ const { _ud = "undefined", $scope } = constants;
 
     const buildPathExpression = function( pType, pBase, ...pPaths )
     {
-        let paths = arrayUtils.toNonBlankStrings( ...(asArray( pPaths || [] ).map( e => isString( e ) ? e.split( _dot ) : e )).flat() ).flat();
+        let paths = toNonBlankStrings( ...(asArray( pPaths || [] ).map( e => isString( e ) ? e.split( _dot ) : e )).flat() ).flat();
 
         let type = _clean( asString( pType, true ) || S_PATH );
 
@@ -982,9 +983,9 @@ const { _ud = "undefined", $scope } = constants;
 
             let paths = [].concat( ...(asArray( pPaths || [] )) );
 
-            if ( detectCycles( paths, 5, 5 ) )
+            if ( detectCycles( paths, 5, 3 ) )
             {
-                return infiniteLoopMessage( paths, 5, 5 );
+                return infiniteLoopMessage( paths, 5, 3 );
             }
 
             let scp = firstValidObject( pScope, $scope() );
@@ -1238,7 +1239,7 @@ const { _ud = "undefined", $scope } = constants;
 
             const resolved = _resolveResolvedMap( pResolved || this.resolved );
 
-            let paths = [].concat( ...asArray( pPaths || [] ) ).filter( arrayUtils.Filters.NON_BLANK );
+            let paths = [].concat( ...(asArray( pPaths || [] )) ).filter( Filters.NON_BLANK );
 
             const propertyKey = asString( pKey, true ).replace( "^", _mt_str );
 
@@ -1524,9 +1525,19 @@ const { _ud = "undefined", $scope } = constants;
 
     function _resolveObject( pObject, pOptions )
     {
-        if ( pObject instanceof Set || pObject instanceof Map )
+        if ( _ud === typeof (pObject) || isNull( pObject ) )
+        {
+            return _resolveNullHandler( pOptions ).call( {}, pObject );
+        }
+
+        if ( [Set, Map, WeakSet, WeakMap].some( e => pObject instanceof e ) )
         {
             return toObjectLiteral( pObject, pOptions );
+        }
+
+        if ( pObject instanceof WeakRef )
+        {
+            return attempt( () => _resolveObject( pObject.deref(), pOptions ) );
         }
 
         if ( isPopulated( pObject ) || isArray( pObject ) )
@@ -1669,6 +1680,14 @@ const { _ud = "undefined", $scope } = constants;
             {
                 return asString( s, true );
             }
+            else if ( isBoolean( s ) )
+            {
+                return (options.quoteBooleans) ? (_dblqt + asString( s, true ) + _dblqt) : s;
+            }
+            else if ( isNumber( s ) )
+            {
+                return (options.quoteNumbers) ? (_dblqt + asString( s, true ) + _dblqt) : s;
+            }
 
             return (depth > MAX_RECURSION ? JSON.stringify( MAX_RECURSION_ERROR ) : (isFunction( obj?.toString ) ? obj.toString() : JSON.stringify( obj?.name || obj?.source || obj?.value )));
         }
@@ -1676,9 +1695,9 @@ const { _ud = "undefined", $scope } = constants;
         let paths = asArray( pPaths || options.paths || [] );
         options.paths = paths;
 
-        if ( detectCycles( paths, 5, 5 ) )
+        if ( detectCycles( paths, 5, 3 ) )
         {
-            const errorMessage = infiniteLoopMessage( paths, 5, 5 );
+            const errorMessage = infiniteLoopMessage( paths, 5, 3 );
 
             _handleCaughtException( onError, new Error( errorMessage ), calculateErrorSourceName( modName, "asJson" ), S_ERROR, _mt_str, options, pVisited, pResolved, paths, pRoot );
 
