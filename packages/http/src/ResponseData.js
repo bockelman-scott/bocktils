@@ -588,14 +588,14 @@ const httpConfigUtils = require( "./HttpConfigUtils.js" );
 
                     // Some frameworks return the response as a property of an error returned in place of a response.
                     // See https://axios-http.com/docs/handling_errors, for example
-                    this.#frameworkResponse = isError( pResponse ) ? pResponse?.response || pResponse || source : pResponse;
+                    this.#frameworkResponse = isError( pResponse ) ? (pResponse?.response ?? pResponse ?? source) : pResponse;
 
-                    this.#data = this.#frameworkResponse?.data || pResponse?.data || this.#frameworkResponse?.body || source?.body || pResponse?.body;
+                    this.#data = this.#frameworkResponse?.data ?? pResponse?.data ?? this.#frameworkResponse?.body ?? source?.body ?? pResponse?.body;
 
-                    this.#frameworkHeaders = this.#frameworkResponse?.headers || pResponse?.headers || source?.headers;
+                    this.#frameworkHeaders = this.#frameworkResponse?.headers ?? pResponse?.headers ?? source?.headers;
 
                     // Stores the headers returned with the response or the request headers that were passed
-                    this.#headers = new HttpResponseHeaders( this.frameworkHeaders || pConfig?.headers || source?.headers ) || this.frameworkHeaders;
+                    this.#headers = new HttpResponseHeaders( this.frameworkHeaders ?? source?.headers ?? pConfig?.headers ) ?? pConfig?.headers ?? this.frameworkHeaders;
 
                     this.#status = this.#frameworkResponse?.status || pResponse?.status;
 
@@ -613,17 +613,7 @@ const httpConfigUtils = require( "./HttpConfigUtils.js" );
 
                     this.#responseType = this.#config?.responseType || HttpConfig.calculateResponseType( readProperty( this.#headers, "accept" ) );
 
-                    // this.#response = this.#frameworkResponse;
-                    if ( isNonNullObject( source ) )
-                    {
-                        this.#response = attempt( () => new HttpResponse( (source || pResponse || this.#config),
-                                                                          (this.#config),
-                                                                          (this.#url || this.#config.url) ) ) || source || pConfig;
-                    }
-                    else
-                    {
-                        this.#response = this.#frameworkResponse || pResponse;
-                    }
+                    this.#response = source || this.#frameworkResponse;
 
                     // construct an instance of HttpStatus as a helper for evaluating the status
                     this.#httpStatus = attempt( () => HttpStatus.fromCode( this.status ) ) ||
@@ -729,13 +719,13 @@ const httpConfigUtils = require( "./HttpConfigUtils.js" );
 
         get request()
         {
-            this.#request = new HttpRequest( this.#request || new HttpRequest( this.#response?.request || this?.frameworkResponse?.request || this.config.request || this.config ) );
-            return toObjectLiteral( this.#request || this.config.request || this.config, { maxDepth: 2 } );
+            this.#request = new HttpRequest( this.#request ?? new HttpRequest( this.#response?.request ?? this?.frameworkResponse?.request ?? this.config.request ?? this.config ) );
+            return toObjectLiteral( this.#request ?? this.config.request ?? this.config, { maxDepth: 2 } );
         }
 
         get error()
         {
-            return isError( this.#error ) ? this.#error : isError( this.#frameworkResponse ) ? this.#frameworkResponse : null;
+            return isError( this.#error ) ? resolveError( this.#error ) : isError( this.#frameworkResponse ) ? resolveError( this.#frameworkResponse ) : null;
         }
 
         get ok()
@@ -805,7 +795,7 @@ const httpConfigUtils = require( "./HttpConfigUtils.js" );
 
             let retryAfter = attempt( () => readProperty( responseHeaders, "Retry-After" ) );
 
-            retryAfter = retryAfter || attempt( () => readProperty(responseHeaders, "X-Retry-After" ) );
+            retryAfter = retryAfter || attempt( () => readProperty( responseHeaders, "X-Retry-After" ) );
 
             return calculateRetryDelay( retryAfter, millis );
         }
@@ -907,11 +897,11 @@ const httpConfigUtils = require( "./HttpConfigUtils.js" );
             {
                 const source = attempt( () => HttpResponse.resolveResponse( pResponseData.response ) ) || {};
 
-                this.#frameworkResponse = pResponseData?.frameworkResponse || pResponseData.response || source;
+                this.#frameworkResponse = pResponseData?.frameworkResponse ?? pResponseData.response ?? source;
 
-                this.#data = pResponseData?.data || this.#frameworkResponse?.data || source?.body;
+                this.#data = pResponseData?.data ?? this.#frameworkResponse?.data ?? source?.body;
 
-                this.#frameworkHeaders = pResponseData?.frameworkHeaders || this.#frameworkResponse?.headers || source?.headers;
+                this.#frameworkHeaders = pResponseData?.frameworkHeaders ?? this.#frameworkResponse?.headers ?? source?.headers;
 
                 this.#status = pResponseData?.status || this.#frameworkResponse?.status || source?.status;
 
@@ -919,17 +909,17 @@ const httpConfigUtils = require( "./HttpConfigUtils.js" );
 
                 this.#error = isError( this.#error ) ? resolveError( this.#error ) : null;
 
-                this.#response = attempt( () => cloneResponse( pResponseData?.response || this.frameworkResponse ) );
+                this.#response = attempt( () => cloneResponse( pResponseData?.response ?? source ?? this.frameworkResponse ) );
 
                 this.#httpStatus = new HttpStatus( pResponseData?.status || this.#status, pResponseData?.statusText || this.#frameworkResponse?.statusText );
 
                 // Stores the headers returned with the response or the request headers that were passed
-                this.#headers = attempt( () => new HttpResponseHeaders( pResponseData?.headers || pResponseData?.frameworkHeaders || pConfig?.headers ) ) ||
-                                attempt( () => new HttpResponseHeaders( pResponseData?.frameworkHeaders || {} ) ) || pResponseData?.frameworkHeaders;
+                this.#headers = attempt( () => new HttpResponseHeaders( pResponseData?.headers ?? pResponseData?.frameworkHeaders ?? pConfig?.headers ?? source?.headers ) ) ??
+                                attempt( () => new HttpResponseHeaders( pResponseData?.frameworkHeaders ?? {} ) ) ?? pResponseData?.frameworkHeaders;
 
                 this.#url = pResponseData.url || cleanUrl( asString( asString( this.#response?.url || this.#frameworkResponse?.url, true ) || asString( pConfig.url, true ) || _slash, true ) );
 
-                this.#config = new HttpConfig( pResponseData?.config || pResponseData?.httpConfig, this.#headers, this.#url );
+                this.#config = new HttpConfig( pResponseData?.config ?? pResponseData?.httpConfig, this.#headers, this.#url );
 
                 attempt( () => me.#request = toObjectLiteral( pResponseData.request || pConfig.request, { maxDepth: 2 } ) );
 
@@ -950,7 +940,7 @@ const httpConfigUtils = require( "./HttpConfigUtils.js" );
                                              {
                                                  if ( isNull( me[key] ) && isWritable( me, key ) )
                                                  {
-                                                     attempt( () => me[key] = (me[key] || value) );
+                                                     attempt( () => setProperty( me, (me[key] || value) ) );
                                                  }
                                              }
                                          }
@@ -984,9 +974,9 @@ const httpConfigUtils = require( "./HttpConfigUtils.js" );
 
             let responseHeaders = attempt( () => new HttpResponseHeaders( headers ) ) || headers;
 
-            let retryAfter = attempt( () => readProperty(responseHeaders, "Retry-After" ) );
+            let retryAfter = attempt( () => readProperty( responseHeaders, "Retry-After" ) );
 
-            retryAfter = retryAfter || attempt( () => readProperty(responseHeaders, "X-Retry-After" ) );
+            retryAfter = retryAfter || attempt( () => readProperty( responseHeaders, "X-Retry-After" ) );
 
             retryAfter = retryAfter || attempt( () => headers["Retry-After"] ) || attempt( () => headers["retry-after"] );
 

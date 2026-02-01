@@ -486,7 +486,7 @@ const { _ud = "undefined", $scope } = constants;
 
             const accessor = isFunction( pHeaders.get ) ? () => pHeaders.get( name ) || pHeaders.get( lcase( name ) ) : () => pHeaders[name] || pHeaders[lcase( name )];
 
-            const value = accessor() || resolveHeaderValue( pValue, pName );
+            const value = asString( accessor() ) || asString( resolveHeaderValue( pValue, pName ) );
 
             if ( value )
             {
@@ -516,11 +516,11 @@ const { _ud = "undefined", $scope } = constants;
     {
         if ( isNonNullObject( pHeaders ) )
         {
-            const name = resolveHeaderName( pName );
+            const name = asString( resolveHeaderName( pName ), true );
 
-            let value = resolveHeaderValue( pValue, pName );
+            let value = asString( resolveHeaderValue( pValue, pName ) );
 
-            const accessor = isFunction( pHeaders.get ) ? () => pHeaders.get( name ) ?? pHeaders.get( lcase( name ) ) : () => pHeaders[name] ?? pHeaders[lcase( name )];
+            const accessor = isFunction( pHeaders.get ) ? () => pHeaders.get( name ) || pHeaders.get( lcase( name ) ) : () => pHeaders[name] || pHeaders[lcase( name )];
 
             value = value || accessor();
 
@@ -1173,7 +1173,7 @@ const { _ud = "undefined", $scope } = constants;
 
         entries()
         {
-            return [...(this.#map.entries())].map( ( e ) => [this.#resolveKey( e[0] || e ), this.#resolveValue( (e[1] || e), this.#resolveKey( e[0] || e ) ), e] );
+            return [...(this.#map.entries())].map( ( e ) => [this.#resolveKey( e[0] || ObjectEntry.getKey( e ) ), this.#resolveValue( (e[1] || ObjectEntry.getValue( e )), this.#resolveKey( e[0] || ObjectEntry.getKey( e ) ) ), this] );
         }
 
         [Symbol.iterator]()
@@ -1273,6 +1273,39 @@ const { _ud = "undefined", $scope } = constants;
             }
         }
 
+        equals( pOther )
+        {
+            if ( isNull( pOther ) || !isCompatibleHeadersObject( pOther ) )
+            {
+                return false;
+            }
+
+            let other = (pOther instanceof this.constructor) ? pOther : new HttpHeaders( pOther );
+
+            if ( other.size !== this.size )
+            {
+                return false;
+            }
+
+            let is = true;
+
+            let entries = this.entries();
+
+            for( let entry of entries )
+            {
+                const key = asString( ObjectEntry.getKey( entry ), true );
+                const value = asString( ObjectEntry.getValue( entry ), true );
+
+                if ( readScalarProperty( other, _str, key ) !== value )
+                {
+                    is = false;
+                    break;
+                }
+            }
+
+            return is;
+        }
+
         toLiteral()
         {
             const literal = {};
@@ -1295,7 +1328,7 @@ const { _ud = "undefined", $scope } = constants;
 
             attempt( () => delete literal[_mt] );
 
-            return lock( literal );
+            return literal;
         }
 
         toMap()
@@ -1473,13 +1506,20 @@ const { _ud = "undefined", $scope } = constants;
 
             if ( $ln( objects ) > 0 )
             {
-                let options = objects.shift();
+                let firstHeaders = objects.shift();
 
-                let headers = toObjectLiteral( new HttpHeaders( options ) );
+                let headers = toObjectLiteral( new HttpHeaders( firstHeaders ) );
 
                 while ( $ln( objects ) > 0 )
                 {
-                    let obj = toObjectLiteral( objects.shift() );
+                    const httpHeaders = objects.shift();
+
+                    if ( firstHeaders.equals( httpHeaders ) )
+                    {
+                        continue;
+                    }
+
+                    let obj = toObjectLiteral( httpHeaders );
 
                     let entries = objectEntries( obj );
 
@@ -1487,14 +1527,14 @@ const { _ud = "undefined", $scope } = constants;
                     {
                         for( let entry of entries )
                         {
-                            const name = ObjectEntry.getKey( entry );
+                            const name = asString( ObjectEntry.getKey( entry ), true );
 
                             if ( isBlank( name ) )
                             {
                                 continue;
                             }
 
-                            const value = ObjectEntry.getValue( entry );
+                            const value = asString( ObjectEntry.getValue( entry ) );
 
                             const rule = this.getRule( name ) || this.getRule( lcase( name ) );
 
@@ -1508,7 +1548,7 @@ const { _ud = "undefined", $scope } = constants;
 
                                 if ( !["api_key", "Authorization"].includes( name ) || isNull( existing ) || isBlank( existing ) )
                                 {
-                                    setProperty( headers, name, (value || existing) );
+                                    setProperty( headers, name, asString( value || existing ) );
                                 }
                             }
                         }

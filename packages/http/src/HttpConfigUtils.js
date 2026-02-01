@@ -112,8 +112,10 @@ const { _ud = "undefined", $scope } = constants;
             lock,
             localCopy,
             objectKeys,
+            objectValues,
             objectEntries,
             readProperty,
+            readScalarProperty,
             setProperty,
             sleep,
             $ln,
@@ -247,6 +249,7 @@ const { _ud = "undefined", $scope } = constants;
 
     const DEFAULT_CONFIG =
         lock( {
+                  responseType: "json",
                   method: VERBS.GET,
                   httpAgent: HTTP_AGENT,
                   httpsAgent: HTTPS_AGENT
@@ -315,6 +318,56 @@ const { _ud = "undefined", $scope } = constants;
         return body;
     }
 
+    const AXIOS_CONFIG_PROPERTIES =
+        lock( [
+                  "responseType",
+                  "baseURL",
+                  "method",
+                  "timeout",
+                  "withCredentials",
+                  "responseEncoding",
+                  "xsrfCookieName",
+                  "xsrfHeaderName",
+                  "withXSRFToken",
+                  "maxContentLength",
+                  "maxBodyLength",
+                  "maxRedirects",
+                  "socketPath",
+                  "proxy",
+                  "decompress",
+                  "maxRate"] );
+
+
+    const VALID_RESPONSE_TYPES = lock( ["arraybuffer", "json", "stream", "document", "text"] );
+
+    const isValidResponseType = function( pValue, pMethod, pUrl, pHeaders )
+    {
+        if ( isString( pValue ) && !isBlank( pValue ) && VALID_RESPONSE_TYPES.includes( lcase( pValue ).trim() ) )
+        {
+            const method = asString( resolveHttpMethod( pMethod ), true );
+
+            const url = asString( resolveUrl( pUrl ), true );
+
+            const headers = asObject( pHeaders || {} );
+
+            const acceptHeader = asString( readScalarProperty( headers, _str, "accept" ), true );
+
+            if ( ["application/json"].includes( acceptHeader ) || acceptHeader.includes( "json" ) )
+            {
+                return "json" === pValue;
+            }
+
+            if ( ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/octet-stream"].includes( acceptHeader ) ||
+                 acceptHeader.includes( "wordprocessingml.document" ) || acceptHeader.includes( "stream" ) || asString( url, true ).includes( "download" ) )
+            {
+                return ["arraybuffer", "stream"].includes( pValue );
+            }
+
+            return objectValues( VERBS ).includes( ucase( method ) );
+        }
+        return false;
+    };
+
     class HttpConfig
     {
         #properties;
@@ -340,14 +393,23 @@ const { _ud = "undefined", $scope } = constants;
 
             this.#properties = { ...(properties || {}) };
 
-            this.#responseType = this.#properties["responseType"] || _mt;
-
             this.#headers = new HttpHeaders( pHeaders || this.#properties?.headers || {}, this.#properties?.headers );
 
             this.#method = resolveHttpMethod( pMethod || properties?.method );
 
             let url = asString( resolveUrl( pUrl, properties ), true );
             this.#url = !isBlank( url ) ? cleanUrl( url ) : _mt;
+
+            const type = readScalarProperty( this.#properties, _str, "responseType" ) || _mt;
+
+            if ( isValidResponseType( type, this.#method, this.#url, this.#headers ) )
+            {
+                this.#responseType = ("text" === type && isNonNullObject( pBody )) ? "json" : type;
+            }
+            else
+            {
+                this.#responseType = HttpConfig.calculateResponseType( readScalarProperty( this.#headers, _str, "accept" ) );
+            }
 
             this.configureAgents( properties );
 
@@ -386,7 +448,31 @@ const { _ud = "undefined", $scope } = constants;
 
         get responseType()
         {
-            return this.#responseType ?? this.properties?.responseType ?? HttpConfig.calculateResponseType( readProperty( this.headers, "accept" ) );
+            let type = this.#responseType || readScalarProperty( this.properties, _str, "responseType" );
+
+            if ( !isValidResponseType( type ) || ((isNonNullObject( this.data ) || isNonNullObject( this.body )) && "text" === type) )
+            {
+                if ( isNonNullObject( this.data ) || isNonNullObject( this.body ) )
+                {
+                    type = "json";
+                }
+                else if ( (isString( this.data ) || isString( this.body )) )
+                {
+                    type = "text";
+                }
+            }
+
+            this.#responseType = type;
+
+            return type;
+        }
+
+        set responseType( pValue )
+        {
+            if ( isValidResponseType( pValue ) )
+            {
+                this.#responseType = lcase( pValue ).trim();
+            }
         }
 
         get headers()
@@ -402,7 +488,22 @@ const { _ud = "undefined", $scope } = constants;
                 headers = { ...headers, ...objLiteral };
             }
 
-            return isPopulatedObject( headers ) ? headers : { ...(toObjectLiteral( this.properties?.headers || {} )), ...(toObjectLiteral( this.#headers || {} )) };
+            let rtnValue = {};
+
+            let entries = objectEntries( headers || {} ) || [];
+
+            entries.forEach( entry =>
+                             {
+                                 let key = asString( ObjectEntry.getKey( entry ), true );
+                                 let value = asString( ObjectEntry.getValue( entry ), true );
+
+                                 if ( !(isBlank( key ) || isBlank( value )) )
+                                 {
+                                     rtnValue[key] = value;
+                                 }
+                             } );
+
+            return rtnValue;
         }
 
         set headers( pValue )
@@ -445,8 +546,17 @@ const { _ud = "undefined", $scope } = constants;
             }
             else
             {
-                return new HttpHeaders( this.headers, new HttpHeaders( this.properties, this ) );
+                return new HttpHeaders( this.headers || {}, new HttpHeaders( this.properties || {}, this ) );
             }
+        }
+
+        get webApiHeaders()
+        {
+            if ( _ud !== typeof Headers )
+            {
+                return new Headers( this.headers );
+            }
+            return { ...this.headers };
         }
 
         get url()
@@ -532,6 +642,83 @@ const { _ud = "undefined", $scope } = constants;
             this.#params = params || null;
         }
 
+        equals( pOther )
+        {
+            if ( isNull( pOther ) || !isObject( pOther ) )
+            {
+                return false;
+            }
+
+            if ( !isNull( this.data ) || !isNull( pOther?.data ) || !isNull( pOther?.body ) )
+            {
+                return false;
+            }
+
+            if ( (isNull( this.params ) && !isNull( pOther.params )) || ( !isNull( this.params ) && isNull( pOther.params )) )
+            {
+                return false;
+            }
+
+            let theseParams = new URLSearchParams( this.params || {} );
+            let otherParams = new URLSearchParams( pOther.params || {} );
+
+            let paramEntries = theseParams.entries();
+
+            let is = true;
+
+            for( let [k, v] of paramEntries )
+            {
+                if ( otherParams.get( k ) !== v )
+                {
+                    is = false;
+                    break;
+                }
+            }
+
+            if ( !is )
+            {
+                return is;
+            }
+
+            let properties =
+                [
+                    "responseType",
+                    "baseURL",
+                    "method",
+                    "timeout",
+                    "withCredentials",
+                    "responseEncoding",
+                    "xsrfCookieName",
+                    "xsrfHeaderName",
+                    "withXSRFToken",
+                    "maxContentLength",
+                    "maxBodyLength",
+                    "maxRedirects",
+                    "socketPath",
+                    "proxy",
+                    "decompress",
+                    "maxRate"];
+
+            while ( is && $ln( properties ) )
+            {
+                let property = properties.shift();
+
+                const otherValue = readProperty( pOther, property );
+
+                const thisValue = readProperty( this, property );
+
+                if ( (isNull( otherValue ) && !isNull( thisValue )) ||
+                     ( !isNull( otherValue ) && isNull( thisValue )) ||
+                     otherValue !== thisValue )
+                {
+                    is = false;
+                    break;
+                }
+            }
+
+            return is && (this.httpHeaders.equals( pOther?.httpHeaders ));
+        }
+
         toLiteral()
         {
             // prevent any confusion over 'this' in obj
@@ -539,14 +726,14 @@ const { _ud = "undefined", $scope } = constants;
 
             const heads = me.headers;
 
-            const acceptHeader = lcase( asString( readProperty( heads, "accept" ), true ) );
+            const acceptHeader = lcase( asString( readScalarProperty( heads, _str, "accept" ), true ) );
 
             let obj =
                 {
-                    responseType: me.responseType ?? HttpConfig.calculateResponseType( acceptHeader ),
-                    headers: me.headers,
+                    responseType: asString( me.responseType, true ) || HttpConfig.calculateResponseType( acceptHeader ),
                     method: me.method,
                     url: me.url,
+                    headers: me.headers,
                     httpAgent: me.httpAgent,
                     httpsAgent: me.httpsAgent
                 };
@@ -557,9 +744,15 @@ const { _ud = "undefined", $scope } = constants;
                 obj["body"] = me.body || me.data;
             }
 
+            if ( isNonNullObject( obj["data"] ) || isNonNullObject( obj["body"] ) )
+            {
+                const type = lcase( asString( obj.responseType, true ) );
+                obj.responseType = (isBlank( type ) || "text" === type) ? "json" : type;
+            }
+
             if ( me.params )
             {
-                obj["params"] = me.params;
+                obj["params"] = new URLSearchParams( me.params );
             }
 
             const entries = objectEntries( this.properties );
@@ -659,7 +852,7 @@ const { _ud = "undefined", $scope } = constants;
             return "stream";
         }
 
-        return "text";
+        return undefined;
     };
 
     HttpConfig.fromLiteral = function( pObject )
@@ -713,8 +906,8 @@ const { _ud = "undefined", $scope } = constants;
                 "baseUrl": new HttpPropertyRule( "baseUrl", HttpPropertyMergeRule["PRESERVE"] ),
                 "url": new HttpPropertyRule( "url", HttpPropertyMergeRule["REPLACE"] ),
 
-                "responseType": new HttpPropertyRule( "responseType", HttpPropertyMergeRule["REPLACE"] ),
-                "responseEncoding": new HttpPropertyRule( "responseEncoding", HttpPropertyMergeRule["REPLACE"] ),
+                "responseType": new HttpPropertyRule( "responseType", HttpPropertyMergeRule["REPLACE_STRING"] ),
+                "responseEncoding": new HttpPropertyRule( "responseEncoding", HttpPropertyMergeRule["REPLACE_STRING"] ),
                 "accept": new HttpPropertyRule( "accept", HttpPropertyMergeRule["COMBINE"] ),
 
                 "params": new HttpPropertyRule( "params", HttpPropertyMergeRule["REPLACE"] ),
@@ -915,7 +1108,7 @@ const { _ud = "undefined", $scope } = constants;
         // filter the arguments such that we only have relevant objects
         const configs = asArray( pConfigs ).filter( e => isHttpConfig( e ) || isPopulatedObject( e ) );
 
-        // if we have relevant objects, slurp the first one off of the list, otherwise create a config from the arguments
+        // if we have relevant objects, shift the first one off of the list, otherwise create a config from the arguments
         let base = ($ln( configs ) > 0) ? configs.shift() : new HttpConfig( ...pConfigs );
 
         // protect the original config; the expectation is that the merge operations return new objects
@@ -928,12 +1121,12 @@ const { _ud = "undefined", $scope } = constants;
         if ( $ln( configs ) > 0 )
         {
             // filter the remaining objects
-            const others = asArray( configs ).filter( e => isHttpConfig( e ) || isPopulatedObject( e ) );
+            const others = asArray( configs ).filter( e => (isHttpConfig( e ) && isFunction( base?.equals ) ? !base.equals( e ) : isPopulatedObject( e )) );
 
             // if the filtered list is not empty
             if ( $ln( others ) > 0 )
             {
-                // merge the remaining configs with the first on we slurper off above
+                // merge the remaining configs with the first one we shifted off above
                 // and return the result
                 const merger = HttpConfigMerger.getDefault();
                 return merger.mergeConfigs( base, ...others );
@@ -972,6 +1165,10 @@ const { _ud = "undefined", $scope } = constants;
             let headers = cfg?.headers || {};
 
             initOpts.headers = isFunction( headers?.toLiteral ) ? headers.toLiteral() : { ...(toObjectLiteral( asObject( headers || {} ) )) };
+
+            initOpts.headers = toObjectLiteral( initOpts.headers, { respectToLiteralMethod: false } );
+
+            initOpts.headers = new Headers( initOpts.headers || {} );
 
             initOpts.method = ucase( cfg?.method || VERBS.GET );
 
@@ -1724,7 +1921,6 @@ const { _ud = "undefined", $scope } = constants;
 
         return { url, cfg };
     }
-
 
     HttpConfig.prepareRequestConfig = prepareFetchConfig;
 

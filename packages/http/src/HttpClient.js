@@ -751,20 +751,29 @@ const { _ud = "undefined", $scope } = constants;
 
         resolveConfig( pConfig, pRequest )
         {
-            let cfg = this.mergeConfig( pConfig || this.config );
+            let cfg = resolveHttpConfig( pConfig, this.config );
 
             if ( _ud !== typeof Request && pRequest instanceof Request )
             {
-                let req = new Request( pRequest.clone() );
-                cfg = populateOptions( cfg, req );
+                attemptSilent( () => cfg.addHeaders( pRequest.headers ) );
+
+                cfg = this.mergeConfig( cfg || this.config );
+
+                cfg = toObjectLiteral( cfg );
+
+                cfg = populateOptions( cfg, (pRequest || {}) );
+
                 cfg.headers = populateOptions( cfg.headers, req.headers );
+
+                let req = new Request( pRequest.clone(), cfg );
             }
             else if ( isNonNullObject( pRequest ) )
             {
+                cfg = this.mergeConfig( cfg || this.config );
                 cfg = { ...cfg, ...(this.mergeConfig( pRequest )) };
             }
 
-            return HttpConfig.toFetchRequestInitOptions( new HttpConfig( { ...(cfg) }, cfg.headers, cfg.url, cfg.method, cfg.body ) );
+            return HttpConfig.toFetchRequestInitOptions( new HttpConfig( { ...(cfg) }, (cfg.headers || {}), cfg.url, cfg.method, cfg.body ) );
         }
 
         async resolveBody( pBody, pConfig )
@@ -804,6 +813,7 @@ const { _ud = "undefined", $scope } = constants;
             }
 
             const body = await this.resolveBody( (cfg.data || cfg.body), pConfig );
+
             if ( body )
             {
                 cfg.body = cfg.data = body || cfg.data || cfg.body;

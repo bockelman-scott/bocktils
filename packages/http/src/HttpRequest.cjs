@@ -97,7 +97,11 @@ const { _ud = "undefined", $scope } = constants;
 
     const
         {
+            _mt,
             _str,
+            _num,
+            _big,
+            _bool,
             _obj,
             _fun,
             _mt_str,
@@ -106,6 +110,8 @@ const { _ud = "undefined", $scope } = constants;
             _dot,
             _ampersand,
             _equals,
+            _hash,
+            _underscore
         } = constants;
 
     const
@@ -114,6 +120,7 @@ const { _ud = "undefined", $scope } = constants;
             isString,
             isObject,
             isNonNullObject,
+            isPopulatedObject,
             isError,
             isArray,
             isMap,
@@ -921,7 +928,7 @@ const { _ud = "undefined", $scope } = constants;
         #cache;
         #mode;
 
-        #keepalive;
+        #keepAlive;
 
         #credentials;
         #integrity;
@@ -953,7 +960,7 @@ const { _ud = "undefined", $scope } = constants;
                      pCache = REQUEST_CACHE_OPTIONS.DEFAULT,
                      pCredentials = REQUEST_CREDENTIALS_OPTIONS.SAME_ORIGIN,
                      pIntegrity = _mt_str,
-                     pKeepalive = false,
+                     pKeepAlive = false,
                      pMode = MODES.CORS,
                      pPriority = PRIORITY.AUTO,
                      pRedirect = REDIRECT_OPTIONS.FOLLOW,
@@ -985,7 +992,7 @@ const { _ud = "undefined", $scope } = constants;
                 this.#cache = pBody.cache || pCache;
                 this.#credentials = pBody.credentials || pCredentials;
                 this.#integrity = pBody.integrity || pIntegrity;
-                this.#keepalive = pBody.keepalive || pKeepalive;
+                this.#keepAlive = pBody.keepAlive || pKeepAlive;
                 this.#method = pBody.method || pMethod;
                 this.#mode = pBody.mode || pMode;
                 this.#priority = pBody.priority || pPriority;
@@ -1000,13 +1007,13 @@ const { _ud = "undefined", $scope } = constants;
                 this.#baseURL = pBody.baseURL || pBaseURL || _mt_str;
                 this.#requestTransformer = pBody.requestTransformer || pRequestTransformer || null;
                 this.#responseTransformer = pBody.responseTransformer || pResponseTransformer || null;
-                this.#params = pBody.params || pParams || null;
+                this.#params = pBody.params ?? pParams ?? null;
                 this.#paramsSerializer = pBody.paramsSerializer || pParamsSerializer || null;
                 this.#responseType = pBody.responseType || pResponseType || null;
                 this.#responseEncoding = pBody.responseEncoding || pResponseEncoding || null;
                 this.#xsrfCookieName = pBody.xsrfCookieName || pXsrfCookieName || _mt_str;
                 this.#xsrfHeaderName = pBody.xsrfHeaderName || pXsrfHeaderName || _mt_str;
-                this.#proxy = isNonNullObject( pBody.proxy ) ? pBody.proxy || null : isNonNullObject( pProxy ) ? pProxy || null : null;
+                this.#proxy = pBody.proxy ?? pBody.proxy ?? pProxy ?? null;
 
                 return this;
             }
@@ -1018,13 +1025,13 @@ const { _ud = "undefined", $scope } = constants;
 
             this.#credentials = pCredentials || REQUEST_CREDENTIALS_OPTIONS.SAME_ORIGIN;
             this.#integrity = pIntegrity || _mt_str;
-            this.#keepalive = pKeepalive;
+            this.#keepAlive = pKeepAlive;
             this.#mode = pMode || MODES.CORS;
             this.#priority = pPriority || PRIORITY.AUTO;
             this.#redirect = pRedirect || REDIRECT_OPTIONS.FOLLOW;
             this.#referrer = pReferrer || "about:client";
             this.#referrerPolicy = pReferrerPolicy || REFERRER_POLICY_OPTIONS.NO_REFERRER_WHEN_DOWNGRADE;
-            this.#abortController = pAbortController || new AbortController();
+            this.#abortController = pAbortController ?? new AbortController();
             this.#signal = this.#abortController?.signal || null;
             this.#timeout = asInt( pTimeout ) || 0;
 
@@ -1035,13 +1042,13 @@ const { _ud = "undefined", $scope } = constants;
             this.#baseURL = pBaseURL || _mt_str;
             this.#requestTransformer = pRequestTransformer || null;
             this.#responseTransformer = pResponseTransformer || null;
-            this.#params = pParams || null;
-            this.#paramsSerializer = pParamsSerializer || null;
-            this.#responseType = pResponseType || null;
+            this.#params = pParams ?? null;
+            this.#paramsSerializer = pParamsSerializer ?? null;
+            this.#responseType = pResponseType || _mt;
             this.#responseEncoding = pResponseEncoding || null;
             this.#xsrfCookieName = pXsrfCookieName || _mt_str;
             this.#xsrfHeaderName = pXsrfHeaderName || _mt_str;
-            this.#proxy = isNonNullObject( pProxy ) ? pProxy || null : null;
+            this.#proxy = pProxy || null;
         }
 
         get body()
@@ -1074,9 +1081,9 @@ const { _ud = "undefined", $scope } = constants;
             return this.#integrity;
         }
 
-        get keepalive()
+        get keepAlive()
         {
-            return this.#keepalive;
+            return this.#keepAlive;
         }
 
         get method()
@@ -1121,7 +1128,7 @@ const { _ud = "undefined", $scope } = constants;
 
         get signal()
         {
-            return this.abortController.signal;
+            return this.abortController?.signal;
         }
 
         get timeout()
@@ -1198,6 +1205,67 @@ const { _ud = "undefined", $scope } = constants;
         {
             return this.#proxy;
         }
+
+        toLiteral()
+        {
+            let literal = {};
+
+            const entries = objectEntries( this );
+
+            if ( entries )
+            {
+                entries.forEach( entry =>
+                                 {
+                                     const key = asString( ObjectEntry.getKey( entry ), true );
+
+                                     const value = ObjectEntry.getValue( entry );
+
+                                     switch ( typeof value )
+                                     {
+                                         case _ud:
+                                             break;
+
+                                         case _str:
+                                         case _num:
+                                         case _bool:
+                                             literal[key] = literal[key] || value;
+                                             break;
+
+                                         case _big:
+                                             literal[key] = asString( BigInt( value ).toString(), true );
+                                             break;
+
+                                         case _fun:
+                                             break;
+
+                                         case _obj:
+                                             if ( isFunction( value?.toLiteral ) )
+                                             {
+                                                 literal[key] = value.toLiteral();
+                                             }
+
+                                             if ( isNonNullObject( value ) )
+                                             {
+                                                 literal[key] = toObjectLiteral( value,
+                                                                                 {
+                                                                                     prune: true,
+                                                                                     trimStrings: true,
+                                                                                     omitFunctions: true,
+                                                                                     transientProperties: [],
+                                                                                     privatePropertyPrefixes: [_hash, _underscore],
+                                                                                     skipPrivateProperties: true,
+                                                                                     preserveArrays: true,
+                                                                                     maxDepth: 3,
+                                                                                     preserveUserDefinedClasses: false,
+                                                                                     preserveTypes: false,
+                                                                                     respectToLiteralMethod: false,
+                                                                                 } );
+                                             }
+                                             break;
+                                     }
+                                 } );
+            }
+        }
     }
 
     HttpRequestOptions.fromOptions = function( pOptions )
@@ -1210,7 +1278,7 @@ const { _ud = "undefined", $scope } = constants;
                                        options.cache,
                                        options.credentials,
                                        options.integrity,
-                                       options.keepalive,
+                                       options.keepAlive,
                                        options.mode,
                                        options.priority,
                                        options.redirect,
@@ -1250,18 +1318,25 @@ const { _ud = "undefined", $scope } = constants;
         {
             if ( isFunction( req?.clone ) )
             {
-                return new HttpRequest( attempt( () => req.clone() ) || req );
+                return new HttpRequest( attempt( () => req.clone() ) || req,
+                                        toObjectLiteral( HttpRequestOptions.fromOptions( req || {} ) || {} ) );
             }
             else
             {
                 let url = req.url || req.href || req.location;
-                let options = req.config || req.options || attempt( () => localCopy( req ) );
+
+                let options = HttpRequestOptions.fromOptions( isNonNullObject( req.config ) ? req.config : isNonNullObject( req.options ) ? req.options : attempt( () => localCopy( req ) ) );
+
                 if ( _ud !== typeof Request )
                 {
-                    const request = new Request( url, options );
-                    return new HttpRequest( request, options );
+                    options = toObjectLiteral( options || {} );
+
+                    const request = isPopulatedObject( options ) ? new Request( url, options ) : new Request( url );
+
+                    return isPopulatedObject( options ) ? new HttpRequest( request, options ) : new HttpRequest( request );
                 }
-                return new HttpRequest( url, options );
+
+                return isPopulatedObject( options ) ? new HttpRequest( url, options ) : new HttpRequest( url );
             }
         }
         else if ( isString( req ) )
@@ -1340,9 +1415,9 @@ const { _ud = "undefined", $scope } = constants;
                        cleanUrl( pRequestOrUrl || asString( asObject( pOptions || {} )?.url, true ) ) :
                        asObject( pRequestOrUrl )?.url || asObject( pOptions )?.url || asObject( pRequestOrUrl ) || asObject( pOptions ));
 
-            let config = new HttpRequestOptions( asObject( pOptions || (isNonNullObject( pRequestOrUrl ) ?
-                                                                        pRequestOrUrl :
-                                                                        new HttpRequestOptions()) ) );
+            let config = HttpRequestOptions.fromOptions( asObject( pOptions || (isNonNullObject( pRequestOrUrl ) ?
+                                                                                pRequestOrUrl :
+                                                                                new HttpRequestOptions()) ) );
 
             if ( isNonNullObject( pRequestOrUrl ) )
             {
@@ -1378,7 +1453,7 @@ const { _ud = "undefined", $scope } = constants;
                         data: asObject( config )?.data || asObject( config )?.body || resolveRequestBody( config, asObject( pOptions ) ),
                         body: asObject( config )?.data || resolveRequestBody( config, asObject( pOptions ) ),
                         headers: asObject( config )?.headers || asObject( pOptions )?.headers || {}
-                    } : new Request( uri, asObject( config ) ));
+                    } : new Request( uri, asObject( config.toLiteral() ) ));
             }
             else
             {
@@ -1481,16 +1556,16 @@ const { _ud = "undefined", $scope } = constants;
         _unwrapRequestArguments( pRequestOrUrl, pConfig )
         {
             let req = pRequestOrUrl || pConfig?.request || pConfig?.url;
-            let config = pConfig || req?.config || req?.options;
+            let config = pConfig || req?.config || req?.options || req;
 
             // unwrap from any other containers
             if ( isNonNullObject( req ) )
             {
-                config = config || req?.config || req?.options;
+                config = config || req?.config || req?.options || req;
                 while ( req.request )
                 {
                     req = req.request;
-                    config = config || req?.config || req?.options;
+                    config = req?.config || req?.options || config || req;
                 }
             }
             return { req, config };
@@ -1595,7 +1670,7 @@ const { _ud = "undefined", $scope } = constants;
                 return this._resolveRequestFromObject( req, config );
             }
 
-            if ( detectCycles( stack, 5, 5 ) )
+            if ( detectCycles( stack, 3, 3 ) )
             {
                 return visited.get( "request" ) || req || pRequestOrUrl;
             }
