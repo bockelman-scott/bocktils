@@ -2827,7 +2827,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @type {number}
      * @const
      */
-    const MAX_STACK_SIZE = 32;
+    const MAX_STACK_SIZE = 16;
 
     /**
      * Returns true if the executing code appears to have entered an infinite loop.<br>
@@ -3101,7 +3101,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             {
                 const { visited, stack, depth } = initializeRecursionArgs( pVisited, pStack, pDepth );
 
-                if ( detectCycles( stack, 5, 5 ) || depth > MAX_STACK_SIZE )
+                if ( detectCycles( stack, 5, 3 ) || depth > MAX_STACK_SIZE )
                 {
                     return value;
                 }
@@ -3124,16 +3124,16 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         toArray( pVisited = new Set(), pStack = [], pDepth = 0 )
         {
-            let key = this.key;
-            let value = this.value;
+            let key = this.key || this[0];
+            let value = this.value || this[1];
 
             if ( value instanceof this.constructor )
             {
                 const { visited, stack, depth } = initializeRecursionArgs( pVisited, pStack, pDepth );
 
-                if ( detectCycles( stack, 5, 5 ) || depth > 32 )
+                if ( detectCycles( stack, 5, 3 ) || depth > MAX_STACK_SIZE )
                 {
-                    return [key, [value?.key, value?.value, value?.parent], this.parent];
+                    return [key, [value?.key, value?.value, value?.parent], value];
                 }
 
                 value = attempt( () => value.toArray( visited, [...stack, key], depth + 1 ) );
@@ -3197,7 +3197,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 {
                     if ( value instanceof ObjectEntry && value.isValid() )
                     {
-                        if ( detectCycles( stack, 5, 5 ) )
+                        if ( detectCycles( stack, 5, 3 ) )
                         {
                             results.push( [key, value, value?.parent] );
                             results.push( [value?.key, value?.value, value?.parent] );
@@ -3247,8 +3247,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return obj;
     };
 
-    ObjectEntry.getKey = ( entry ) => isNull( entry ) ? _mt_str : entry?.key || entry[0] || _mt_str;
-    ObjectEntry.getValue = ( entry ) => isNull( entry ) ? null : entry?.value || entry[1] || null;
+    ObjectEntry.getKey = ( entry ) => isNull( entry ) ? _mt_str : (entry?.key || entry[0] || _mt_str);
+    ObjectEntry.getValue = ( entry ) => isNull( entry ) ? null : (entry?.value ?? entry[1] ?? null);
     ObjectEntry.getType = ( entry ) => isNull( entry ) ? _ud : entry?.type || typeof (ObjectEntry.getValue( entry ));
 
     ObjectEntry.iterate = function( pObject, pVisitor, pVisited = new Set(), pStack = [] )
@@ -3282,7 +3282,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                         break;
                     }
 
-                    if ( recursive && isNonNullObj( value ) && !detectCycles( stack, 5, 5 ) )
+                    if ( recursive && isNonNullObj( value ) && !detectCycles( stack, 5, 3 ) )
                     {
                         ObjectEntry.iterate( value, visitor, visited, [...stack, key] );
                     }
@@ -3299,43 +3299,48 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     const isValidEntry = e => isArray( e ) && ($ln( e ) > 1) && !(isNull( e[0] ) || isNull( e[1] )) && ( !isStr( e[0] ) || (_isValidStr( e[0] )));
 
+    const makeObjectEntryMapper = ( pParent ) => ( e, i ) => e instanceof ObjectEntry ? e : ($ln( e ) > 1 ? ObjectEntry.from( (e[0] ?? i), (e[1] ?? e?.value), (e[2] ?? e?.parent ?? pParent ?? e) ) : [(e?.key ?? i), (e?.value ?? e[0]), e?.parent ?? pParent ?? e]);
+
     const stringifyKeys = e => (isArray( e ) ? [(_trim( String( e.key || e[0] ) )).replace( /^#/, _mt ), (e.value || e[1]), (e.parent || e[2])] : isNull( e ) ? [_mt, null] : e);
 
-    const processEntries = ( pEntries, pParent ) =>
+    const processEntries = ( pEntries = [], pParent ) =>
     {
         let entries = [];
 
         if ( !isNull( pEntries ) )
         {
+            if ( pEntries instanceof ObjectEntry )
+            {
+                return [pEntries];
+            }
+
+            const filter = ( e ) => isNonNullObj( e ) || isArray( e );
+
+            const mapper = makeObjectEntryMapper( pParent );
+
             if ( isArray( pEntries ) || !isNull( pEntries[Symbol.iterator] ) )
             {
-                if ( pEntries instanceof ObjectEntry )
-                {
-                    entries = [pEntries];
-                }
-                else
-                {
-                    entries = _asArr( pEntries || [] ).map( ( e, i ) => e instanceof ObjectEntry ? e : ($ln( e ) > 1 ? ObjectEntry.from( (e[0] || i), (e[1] || e), (e[2] || e?.parent || pParent || e) ) : [i, e, pParent]) );
-                }
+                entries = [...(pEntries || [])];
             }
             else if ( isMap( pEntries ) || isFunc( pEntries?.entries ) )
             {
-                entries = [...(pEntries.entries() || [])].map( ( e, i ) => e instanceof ObjectEntry ? e : ($ln( e ) > 1 ? ObjectEntry.from( (e[0] || i), (e[1] || e), (e[2] || e?.parent || pParent || e) ) : [i, e, pParent]) );
+                entries = [...(pEntries.entries() || [])];
             }
             else if ( isSet( pEntries ) || isFunc( pEntries?.values ) )
             {
-                entries = [...(pEntries.values() || [])].map( ( e, i ) => e instanceof ObjectEntry ? e : ($ln( e ) > 1 ? ObjectEntry.from( (e[0] || i), (e[1] || e), (e[2] || e?.parent || pObject || e) ) : [i, e, pObject]) );
+                entries = [...(pEntries.values() || [])];
             }
             else
             {
-                entries = (pEntries instanceof ObjectEntry) ? [pEntries] : (Object.entries( pEntries ) || [pEntries]).map( ( e, i ) => e instanceof ObjectEntry ? e : ($ln( e ) > 1 ? ObjectEntry.from( (e[0] || i), (e[1] || e), (e[2] || e?.parent || pParent || e) ) : [i, e, pParent]) );
-
+                entries = isObj( pEntries ) ? (Object.entries( pEntries )) : [pEntries];
             }
+
+            entries = entries.filter( filter ).map( mapper );
         }
 
         entries = _asArr( entries ).filter( isValidEntry ).map( stringifyKeys ).filter( e => isNotTransient( e[0] ) && !(_ud === typeof e[1] || isNull( e[1] )) );
 
-        return [...(new Set( entries || [] ))].filter( isValidEntry ).map( e => ObjectEntry.from( e[0], e[1], (e[2] || pParent) ) ).filter( e => _fun !== typeof ObjectEntry.getValue( e ) );
+        return [...(new Set( entries || [] ))].filter( isValidEntry ).map( e => ObjectEntry.from( e.key || e[0], e.value || e[1], (e.parent ?? e[2] ?? pParent) ) );
     };
 
     function extractClassSource( pObject )
@@ -3539,7 +3544,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         let count = _asInt( pCount ) || 0;
 
-        if ( count > 5 || detectCycles( stack, 5, 5 ) )
+        if ( count > 5 || detectCycles( stack, 5, 3 ) )
         {
             return entries || [];
         }
@@ -3574,23 +3579,27 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return [];
         }
 
+        if ( pObject instanceof ObjectEntry )
+        {
+            return [pObject];
+        }
+
+        const mapper = makeObjectEntryMapper( pObject );
+
         if ( isArray( pObject ) || TYPED_ARRAYS.some( e => pObject instanceof e ) )
         {
-            if ( pObject instanceof ObjectEntry )
-            {
-                return [pObject];
-            }
-            return pObject.map( ( e, i ) => e instanceof ObjectEntry ? e : ($ln( e ) > 1 ? ObjectEntry.from( (e[0] || i), (e[1] || e), (e[2] || e?.parent || pObject || e) ) : [i, e, pObject]) );
+            const arr = _asArr( pObject );
+            return arr.map( ( e, i ) => new ObjectEntry( i, e, pObject ) );
         }
 
         if ( isMap( pObject ) || isFunc( pObject?.entries ) )
         {
-            return [...(attemptSilent( () => pObject.entries() || [] ) || [])];
+            return [...(pObject.entries() || [])].map( mapper );
         }
 
         if ( isSet( pObject ) || isFunc( pObject?.values ) )
         {
-            return ([...(attemptSilent( () => (pObject.values() || []) || [] ))].map( ( e, i ) => e instanceof ObjectEntry ? e : ($ln( e ) > 1 ? ObjectEntry.from( (e[0] || i), (e[1] || e), (e[2] || e?.parent || pObject || e) ) : [i, e, pObject]) ));
+            return [...(pObject.values() || [])].map( mapper );
         }
 
         if ( pObject instanceof WeakRef )
@@ -3668,10 +3677,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             {
                 if ( pObject instanceof ObjectEntry )
                 {
-                    return [pObject];
+                    populateEntry( pObject );
+                    return entries;
                 }
 
-                const items = (getEntries( object ) || []).filter( isNonNullObj )/*.filter( e => _fun !== (typeof ObjectEntry.getValue( e )) )*/;
+                const items = (getEntries( object ) || []).filter( isNonNullObj );
 
                 if ( $ln( items ) > 0 )
                 {
@@ -3685,7 +3695,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             for( let object of objects )
             {
-                const items = objectEntries( object ).filter( isNonNullObj );
+                const items = objectEntries( object ).filter( isValidEntry );
                 if ( $ln( items ) > 0 )
                 {
                     _asArr( items || [] ).forEach( populateEntry );
@@ -3693,7 +3703,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             }
         }
 
-        return entries.map( e => e instanceof ObjectEntry ? e : ObjectEntry.from( e ) )/*.filter( e => _fun !== typeof ObjectEntry.getValue( e ) )*/;
+        return entries.map( e => e instanceof ObjectEntry ? e : ObjectEntry.from( e ) );
     }
 
     function objectValues( pObject )
@@ -3804,7 +3814,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return target;
     }
 
-    const isInfiniteLoop = ( object, visited, stack, depth ) => visited.has( object ) || detectCycles( stack, 5, 5 ) || depth > MAX_STACK_SIZE;
+    const isInfiniteLoop = ( object, visited, stack, depth ) => visited.has( object ) || detectCycles( stack, 5, 3 ) || depth > MAX_STACK_SIZE;
 
     const DEFAULT_IS_LITERAL_OPTIONS =
         {
@@ -8258,7 +8268,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     {
         let clone = [...(dereference( array, Array ) || array || [])];
 
-        if ( detectCycles( stack, 5, 5 ) )
+        if ( detectCycles( stack, 5, 3 ) )
         {
             return clone;
         }
@@ -8588,7 +8598,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         const obj = dereference( pObject, resolvedOptions?.expectedType || _obj ) || pObject;
 
-        if ( detectCycles( stack, 5, 5 ) )
+        if ( detectCycles( stack, 5, 3 ) )
         {
             return maybeFreeze( obj );
         }

@@ -1075,37 +1075,37 @@ describe( "Global Logging", () =>
         expect( logger.filteredMessages( ( e ) => e.includes( "with data" ) ).length ).toBe( 6 );
 
     } );
-/*
+    /*
 
-    test( "disable globalLogging", () =>
-    {
-        let logger = ToolBocksModule.getGlobalLogger();
+     test( "disable globalLogging", () =>
+     {
+     let logger = ToolBocksModule.getGlobalLogger();
 
-        expect( logger instanceof TestLogger ).toBe( true );
+     expect( logger instanceof TestLogger ).toBe( true );
 
-        moduleUtils.reportError( new Error( "TEST" ) );
+     moduleUtils.reportError( new Error( "TEST" ) );
 
-        ToolBocksModule.disableGlobalLogger();
+     ToolBocksModule.disableGlobalLogger();
 
-        logger = ToolBocksModule.getGlobalLogger();
+     logger = ToolBocksModule.getGlobalLogger();
 
-        expect( logger instanceof TestLogger ).toBe( false );
+     expect( logger instanceof TestLogger ).toBe( false );
 
-        moduleUtils.reportError( new Error( "TEST_2" ) );
+     moduleUtils.reportError( new Error( "TEST_2" ) );
 
-        ToolBocksModule.enableGlobalLogger();
+     ToolBocksModule.enableGlobalLogger();
 
-        logger = ToolBocksModule.getGlobalLogger();
+     logger = ToolBocksModule.getGlobalLogger();
 
-        expect( logger instanceof TestLogger ).toBe( true );
+     expect( logger instanceof TestLogger ).toBe( true );
 
-        expect( logger.filteredMessages( ( e ) => e.includes( "TEST" ) ).length ).toBe( 1 );
+     expect( logger.filteredMessages( ( e ) => e.includes( "TEST" ) ).length ).toBe( 1 );
 
-        expect( logger.filteredMessages( ( e ) => e.includes( "TEST_2" ) ).length ).toBe( 0 );
+     expect( logger.filteredMessages( ( e ) => e.includes( "TEST_2" ) ).length ).toBe( 0 );
 
-    } );
+     } );
 
-*/
+     */
 
 } );
 
@@ -1854,6 +1854,48 @@ describe( "objectEntries - ObjectEntry", () =>
 
               expect( entries[10]?.key ).toEqual( "o" );
               expect( entries[10]?.value ).toEqual( a );
+
+          } );
+
+    test( "objectEntries is not instance-recursive; entry values are not expanded into arrays of their entries",
+          () =>
+          {
+              let obj =
+                  {
+                      name: "Scott",
+                      address:
+                          {
+                              line_1: "2760 S Highland Ave",
+                              line_2: "Apt 327",
+                              city: "Lombard",
+                              state: "IL",
+                              zipCode: 60148
+                          },
+                      phones: ["(630) 212-7770", "(630) 469-6334"],
+                      rankings: [1, 2, 3, 4, 5],
+                      children:
+                          [
+                              {
+                                  name: "Dylan",
+                                  address:
+                                      {
+                                          line_1: "2760 S Highland Ave",
+                                          line_2: "Apt 327",
+                                          city: "Lombard",
+                                          state: "IL",
+                                          zipCode: 60148
+                                      },
+                                  phones: ["(630) 818-4499"],
+                                  rankings: [4, 3]
+                              }
+                          ]
+                  };
+
+              const entries = objectEntries( obj );
+
+              console.log( entries );
+
+              expect( entries.length ).toEqual( 5 );
 
           } );
 
