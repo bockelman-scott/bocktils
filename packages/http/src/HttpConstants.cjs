@@ -1535,7 +1535,7 @@ const { _ud = "undefined", $scope } = constants;
 
             if ( value )
             {
-                attempt( () => setProperty( pObject, name, value ) );
+                setProperty( pObject, name, value );
             }
         }
     } );
@@ -1558,7 +1558,30 @@ const { _ud = "undefined", $scope } = constants;
 
             if ( value )
             {
-                attempt( () => setProperty( pObject, name, value ) );
+                setProperty( pObject, name, value );
+            }
+        }
+    } );
+
+    /**
+     * A constant representing the rule for merging object properties that are expected to be strings.
+     * This rule only replaces an existing property value if the provided value is not null or an empty string.
+     *
+     * If the provided value is null, not specified, or an empty string,
+     * the existing value is preserved
+     *
+     */
+    const PROPERTY_MERGE_RULE_REPLACE_STRING = new HttpPropertyMergeRule( "REPLACE_STRING", ( pObject, pName, pValue ) =>
+    {
+        if ( isNonNullObject( pObject ) )
+        {
+            const name = asString( pName, true );
+
+            let value = pValue || readScalarProperty( pObject, _str, name );
+
+            if ( value )
+            {
+                setProperty( pObject, name, value || pValue );
             }
         }
     } );
@@ -1588,6 +1611,7 @@ const { _ud = "undefined", $scope } = constants;
 
     HttpPropertyMergeRule["PRESERVE"] = PROPERTY_MERGE_RULE_PRESERVE;
     HttpPropertyMergeRule["REPLACE"] = PROPERTY_MERGE_RULE_REPLACE;
+    HttpPropertyMergeRule["REPLACE_STRING"] = PROPERTY_MERGE_RULE_REPLACE_STRING;
     HttpPropertyMergeRule["COMBINE"] = PROPERTY_MERGE_RULE_COMBINE;
     HttpPropertyMergeRule["REMOVE"] = PROPERTY_MERGE_RULE_REMOVE;
     HttpPropertyMergeRule["DELETE"] = PROPERTY_MERGE_RULE_REMOVE;
