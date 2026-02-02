@@ -508,7 +508,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     /**
      * A constant array of the property names of properties that should not be serialized or persisted
      */
-    const TRANSIENT_PROPERTIES = freeze( ["constructor", "prototype", "isPrototypeOf", "__proto__", "hasOwnProperty", "propertyIsEnumerable", "toJson", "toObject", "toString", "toLocaleString", "valueOf", "global", "this", "toString", "class"] );
+    const TRANSIENT_PROPERTIES = freeze( ["constructor", "prototype", "isPrototypeOf", "__proto__", "hasOwnProperty", "propertyIsEnumerable", "toJson", "toObject", "toString", "toLocaleString", "valueOf", "global", "this", "toString", "class", "lastAccessed"] );
 
     /**
      * A constant string representing the default error message.<br>
@@ -3199,8 +3199,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     {
                         if ( detectCycles( stack, 5, 3 ) )
                         {
-                            results.push( [key, value, value?.parent] );
-                            results.push( [value?.key, value?.value, value?.parent] );
+                            results.push( [value?.key || key, value?.value || value, value?.parent || pObject] );
                             continue;
                         }
 
@@ -3295,6 +3294,68 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
 
         return visitor;
+    };
+
+    ObjectEntry.COMPARATOR = ( a, b ) =>
+    {
+        let keyA = _uct( ObjectEntry.getKey( a ) );
+        let keyB = _uct( ObjectEntry.getKey( b ) );
+
+        let comp = (keyA < keyB) ? -1 : (keyA > keyB) ? 1 : 0;
+
+        if ( 0 === comp )
+        {
+            let valA = ObjectEntry.getValue( a );
+            let valB = ObjectEntry.getValue( b );
+
+            const typeA = typeof valA;
+            const typeB = typeof valB;
+
+            if ( [_str, _num].includes( typeA ) && [_str, _num].includes( typeB ) )
+            {
+                if ( _num === typeA && _num === typeB )
+                {
+                    comp = valA - valB;
+                }
+                else
+                {
+                    let strA = _uct( valA );
+                    let strB = _uct( valB );
+
+                    comp = (strA < strB) ? -1 : (strA > strB) ? 1 : 0;
+                }
+            }
+        }
+
+        return comp;
+    };
+
+    ObjectEntry.entriesToObject = function( pEntries )
+    {
+        let obj = {};
+
+        if ( !isNull( pEntries ) && (isArray( pEntries ) || !isNull( pEntries[Symbol.iterator] )) )
+        {
+            try
+            {
+                for( let entry of pEntries )
+                {
+                    const key = ObjectEntry.getKey( entry );
+                    const value = ObjectEntry.getValue( entry );
+
+                    if ( value )
+                    {
+                        obj[key] = lock( value );
+                    }
+                }
+            }
+            catch( ex )
+            {
+                INTERNAL_LOGGER.error( ex );
+            }
+        }
+
+        return obj;
     };
 
     const isValidEntry = e => isArray( e ) && ($ln( e ) > 1) && !(isNull( e[0] ) || isNull( e[1] )) && ( !isStr( e[0] ) || (_isValidStr( e[0] )));

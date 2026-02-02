@@ -4405,7 +4405,7 @@ const { _ud = "undefined", $scope } = constants;
             preserveArrays: true,
             maxDepth: 32,
             preserveUserDefinedClasses: false,
-            preserveTypes: true,
+            preserveTypes: false,
             respectToLiteralMethod: true,
             ...DEFAULT_TRANSFORMER_PROPERTIES
         };
@@ -4421,7 +4421,7 @@ const { _ud = "undefined", $scope } = constants;
             preserveArrays: true,
             maxDepth: 5,
             preserveUserDefinedClasses: true,
-            preserveTypes: false,
+            preserveTypes: true,
             respectToLiteralMethod: true,
             ...DEFAULT_TRANSFORMER_PROPERTIES
         };
@@ -4459,23 +4459,38 @@ const { _ud = "undefined", $scope } = constants;
 
         const stack = [...(pStack || options?.stack || [])];
 
+        let maxDepth = isNumeric( options.maxDepth ) ? toInteger( options.maxDepth ) : DEFAULT_OBJECT_LITERAL_OPTIONS.maxDepth;
+        maxDepth = isNanOrInfinite( maxDepth ) ? 16 : clamp( maxDepth, 2, 32 );
+
         let depth = isNumeric( pDepth ) ? toInteger( pDepth ) : 0;
         depth = isNanOrInfinite( depth ) ? 0 : clamp( depth, 0, 256 );
 
-        return { options, visited, stack, depth };
+        return { options, visited, stack, maxDepth, depth };
     }
 
     const processValue = ( pValue, pOptions ) => (pOptions?.trimStrings && isString( pValue )) ? String( pValue ).trim() : pValue;
 
     function toArrayLiteral( pObject, pOptions, pVisited, pStack, pDepth = 0 )
     {
-        const { options, visited, stack, depth } = resolveObjectLiteralArguments( pOptions, pVisited, pStack, pDepth );
+        const
+            {
+                options,
+                visited,
+                stack,
+                maxDepth,
+                depth
+            } = resolveObjectLiteralArguments( pOptions, pVisited, pStack, pDepth );
 
         let arr = isNull( pObject ) ? [] : (!isArray( pObject ) ? (isFunction( pObject.values ) ? [...(pObject.values() || [])] : [pObject]) : [...(pObject || [])]) || [];
 
         if ( options?.prune )
         {
             arr = ([...(arr || [])].filter( isNonNullValue ) || []).filter( e => !isEmptyString( e ) );
+        }
+
+        if ( depth > maxDepth )
+        {
+            return arr;
         }
 
         arr = [...(arr || [])].map( ( e, i ) => toObjectLiteral( e, options, visited, [...stack, String( i )], depth + 1 ) ) || [];
@@ -4514,7 +4529,14 @@ const { _ud = "undefined", $scope } = constants;
             return [pObject];
         }
 
-        const { options, visited, stack, depth } = resolveObjectLiteralArguments( pOptions, pVisited, pStack, pDepth );
+        const
+            {
+                options,
+                visited,
+                stack,
+                maxDepth,
+                depth
+            } = resolveObjectLiteralArguments( pOptions, pVisited, pStack, pDepth );
 
         let arr = toArrayLiteral( pObject, options, visited, stack, depth );
 
@@ -4538,10 +4560,15 @@ const { _ud = "undefined", $scope } = constants;
             return pObject;
         }
 
-        const { options, visited, stack, depth } = resolveObjectLiteralArguments( pOptions, pVisited, pStack, pDepth );
+        const
+            {
+                options,
+                visited,
+                stack,
+                maxDepth,
+                depth
+            } = resolveObjectLiteralArguments( pOptions, pVisited, pStack, pDepth );
 
-        let maxDepth = toInteger( options?.maxDepth );
-        maxDepth = isNanOrInfinite( maxDepth ) ? 16 : clamp( toInteger( maxDepth ), 2, 32 );
 
         const preserveTypes = !!options?.preserveTypes;
 
@@ -4579,7 +4606,7 @@ const { _ud = "undefined", $scope } = constants;
             {
                 let k = ObjectEntry.getKey( entry );
 
-                if ( !isBlankString( k ) )
+                if ( !isBlankString( k ) || transientProperties.includes( k ) )
                 {
                     k = keyTransformer( k );
 
@@ -4618,7 +4645,10 @@ const { _ud = "undefined", $scope } = constants;
 
                 for( let prop in pObject )
                 {
-                    literal[prop] = pObject[prop];
+                    if ( !isEmptyString( prop ) || transientProperties.includes( prop ) )
+                    {
+                        literal[prop] = pObject[prop];
+                    }
                 }
 
                 return literal;
@@ -4687,7 +4717,7 @@ const { _ud = "undefined", $scope } = constants;
                 continue;
             }
 
-            if ( depth > 32 || detectCycles( stack, 5, 3 ) || visited.has( value ) )
+            if ( depth > maxDepth || visited.has( value ) || detectCycles( stack, 5, 3 ) )
             {
                 let newValue = visited.resolve( value ) || value || ObjectEntry.getValue( entry );
 

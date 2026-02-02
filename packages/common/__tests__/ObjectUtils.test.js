@@ -17,7 +17,7 @@ const { _ud = "undefined", $scope } = constants;
 
 objectUtils.disableLogging();
 
-const { OBJECT_REGISTRY, detectCycles, } = moduleUtils;
+const { OBJECT_REGISTRY, detectCycles, IllegalArgumentError } = moduleUtils;
 
 const { arrayToObject } = typeUtils;
 
@@ -630,7 +630,7 @@ describe( "setProperty", () =>
           {
               let obj = Object.freeze( { a: 5 } );
 
-              expect( setProperty( obj, "a", 7 ) ).toEqual( 5 );
+              expect( () => setProperty( obj, "a", 7 ) ).toThrow( IllegalArgumentError );
           } );
 
     test( "setProperty changes, if possible, the value of the specified property path and returns the value of the property",

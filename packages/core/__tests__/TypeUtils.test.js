@@ -3732,6 +3732,22 @@ describe( "toObjectLiteral", () =>
               expect( objB["mapB"].get( "cc" ) ).toEqual( 33 );
           } );
 
+    test( "toObjectLiteral can preserve a Map, if configured to do so",
+          () =>
+          {
+              const mapA = new Map();
+              mapA.set( "a", 1 );
+              mapA.set( "b", 2 );
+              mapA.set( "c", 3 );
+
+              const objA = toObjectLiteral( mapA, { preserveTypes: true } );
+
+              expect( objA instanceof Map ).toBe( true );
+              expect( "undefined" === typeof objA["a"] ).toBe( true );
+              expect( objA.get( "a" ) ).toEqual( 1 );
+
+          } );
+
     test( "toObjectLiteral can NOT read private fields with no accessors",
           () =>
           {
