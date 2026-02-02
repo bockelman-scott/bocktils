@@ -2021,6 +2021,68 @@ describe( "propertyDescriptors", () =>
 
               console.log( descriptors );
           } );
+
+    test( "propertyDescriptors returns all superclass properties as well",
+          () =>
+          {
+              class A
+              {
+                  #id;
+                  #name;
+
+                  constructor( pId, pName )
+                  {
+                      this.#id = pId;
+                      this.#name = pName;
+                  }
+
+                  get id()
+                  {
+                      return this.#id;
+                  }
+
+                  get name()
+                  {
+                      return this.#name;
+                  }
+
+                  set name( pName )
+                  {
+                      this.#name = pName;
+                  }
+              }
+
+              class B extends A
+              {
+                  #phoneNumber;
+
+                  constructor( pId, pName, pPhoneNumber )
+                  {
+                      super( pId, pName );
+                      this.#phoneNumber = pPhoneNumber;
+                  }
+
+                  get phoneNumber()
+                  {
+                      return this.#phoneNumber;
+                  }
+              }
+
+              const b = new B( 1, "Scott Bockelman", "(630) 212 - 7770" );
+
+              b.someValue = 23;
+
+              let descriptors = propertyDescriptors( b );
+
+              console.log( descriptors );
+
+
+              let bb = new B();
+
+              descriptors = propertyDescriptors( bb );
+
+              console.log( descriptors );
+          } );
 } );
 
 describe( "roundToNearestMultiple", () =>

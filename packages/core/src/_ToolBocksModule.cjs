@@ -8685,6 +8685,30 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return descriptors;
     }
 
+    function propertyNames( pObject, pSearchPrototypeChain = true )
+    {
+        let names = [];
+
+        let obj = isRef( pObject ) ? pObject.deref() || pObject : pObject;
+
+        let lastObj = null;
+
+        const iterationCap = new IterationCap( 32 );
+
+        while ( isNonNullObj( obj ) && !iterationCap.reached )
+        {
+            names.push( ...(Object.getOwnPropertyNames( obj || {} ) || []) );
+
+            lastObj = obj;
+
+            obj = pSearchPrototypeChain ? Object.getPrototypeOf( obj ) || obj?.constructor?.prototype : null;
+
+            obj = (obj === lastObj || isTerminal( obj, lastObj )) ? null : obj;
+        }
+
+        return [...(new Set( names ))];
+    }
+
     const objectMethods = ( pObject, pSearchPrototypeChain = true ) =>
     {
         const descriptors = propertyDescriptors( pObject, pSearchPrototypeChain );
@@ -9601,6 +9625,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             toMap,
 
+            propertyNames,
             propertyDescriptors,
 
             isWritable,
