@@ -596,7 +596,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             const _environs = pEnvironment || _ENV || { "get": function( pKey ) { return $scope()[pKey]; } };
 
-            DEBUG_MODE = DEBUG_MODE || (_fun === typeof (_environs?.get)) ? ["true", "1", "debug", "trace", true].includes( _environs?.get( "debug" ) ) : ["true", "1", "debug", "trace", true].includes( _environs?.["debug"] );
+            DEBUG_MODE = DEBUG_MODE || (_fun === typeof (_environs?.get)) ? ["true", "1", S_DEBUG, S_TRACE, true].includes( _environs?.get( S_DEBUG ) ) : ["true", "1", S_DEBUG, S_TRACE, true].includes( _environs?.[S_DEBUG] );
 
             DEBUG_MODE = DEBUG_MODE || [...(pArgs || CMD_LINE_ARGS || [])].includes( "-debug" );
         }
@@ -1606,6 +1606,24 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }, pSpaces );
     }
 
+    const LOG_LEVELS =
+        {
+            LOG: S_LOG,
+            INFO: S_INFO,
+            WARN: S_WARN,
+            ERROR: S_ERROR,
+            DEBUG: S_DEBUG,
+            TRACE: S_TRACE
+        };
+
+    const DEFAULT_KONSOLE_OPTIONS =
+        {
+            defaultLogger: konsole,
+            addFormatting: true,
+            logEmptyMessages: false,
+            addFormattingToEmptyMessages: false
+        };
+
     /**
      * A 'safe' implementation of ILogger
      * that uses the serialize function to stringify the message arguments.
@@ -1628,11 +1646,29 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     {
         #logger = konsole;
 
-        constructor( pSink )
+        #logEmptyMessages = true;
+
+        #addFormatting = false;
+        #addFormattingToEmptyMessages = false;
+
+        constructor( pSink, pOptions = DEFAULT_KONSOLE_OPTIONS )
         {
             super();
 
-            this.#logger = ILogger.isLogger( pSink ) ? pSink : konsole;
+            const options = { ...DEFAULT_KONSOLE_OPTIONS, ...(pOptions || {}) };
+
+            const sink = pSink || options.defaultLogger;
+
+            this.#logger = ILogger.isLogger( sink ) ? sink : konsole;
+
+            if ( sink === konsole || sink === console )
+            {
+                this.#addFormatting = options.addFormatting;
+
+                this.#addFormattingToEmptyMessages = options.addFormattingToEmptyMessages;
+
+                this.#logEmptyMessages = options.logEmptyMessages;
+            }
 
             let count = 0;
 
@@ -1644,94 +1680,105 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             this.#logger = this.#logger || konsole || mockConsole;
         }
 
-        log( ...pData )
+        static formatTimeStamp( pDate )
+        {
+            let timestamp = isDate( pDate ) ? (pDate || new Date()) : new Date();
+
+            let s = asString( timestamp.getFullYear(), true ).padStart( 4, "0" ) + "-" +
+                    asString( timestamp.getMonth() + 1, true ).padStart( 2, "0" ) + "-" +
+                    asString( timestamp.getDate(), true ).padStart( 2, "0" ) + " " +
+                    asString( timestamp.getHours(), true ).padStart( 2, "0" ) + ":" +
+                    asString( timestamp.getMinutes(), true ).padStart( 2, "0" ) + "." +
+                    asString( timestamp.getSeconds(), true ).padStart( 2, "0" ) + "," +
+                    asString( timestamp.getMilliseconds(), true ).padStart( 3, "0" ) + " -> ";
+
+            return asString( s );
+        }
+
+        #_log( pLevel, ...pData )
         {
             try
             {
+                let level = _lct( pLevel || LOG_LEVELS.LOG ) || LOG_LEVELS.LOG;
+
                 const data = [...(pData || [])].map( e => serialize( e ) );
-                this.#logger.log( ...(data || []) );
+
+                let msg = [...data];
+
+                if ( !(msg.some( e => !isBlank( e ) ) || this.#logEmptyMessages) )
+                {
+                    return;
+                }
+
+                if ( this.#addFormatting && (msg.some( e => !isBlank( e ) ) || this.#addFormattingToEmptyMessages) )
+                {
+                    const date = new Date();
+
+                    let TSP = Konsole.formatTimeStamp( date );
+
+                    let lvl = asString( (LOG_LEVELS.LOG === level ? LOG_LEVELS.INFO : level), true );
+                    let LVL = ("[" + ucase( lvl ) + "]").padEnd( 8, _spc );
+
+                    msg.unshift( TSP );
+                    msg.unshift( LVL );
+                }
+
+                if ( isFunc( this.#logger[level] ) )
+                {
+                    this.#logger[level]( ...(msg || []) );
+                }
+                else if ( isFunc( this.#logger?.log ) )
+                {
+                    this.#logger.log( ...msg );
+                }
+                else
+                {
+                    if ( isFunc( konsole[level] ) )
+                    {
+                        konsole[level]( ...msg );
+                    }
+                    else
+                    {
+                        konsole.log( ...msg );
+                    }
+                }
             }
             catch( ex )
             {
                 // ignored; I mean, what are we going to do, log the error that occurred logging the error?
             }
+        }
+
+        log( ...pData )
+        {
+            return this.#_log( LOG_LEVELS.LOG, ...pData );
         }
 
         info( ...pData )
         {
-            try
-            {
-                const data = [...(pData || [])].map( e => serialize( e ) );
-                this.#logger.info( ...(data || []) );
-            }
-            catch( ex )
-            {
-                // ignored; I mean, what are we going to do, log the error that occurred logging the error?
-            }
+            return this.#_log( LOG_LEVELS.INFO, ...pData );
         }
 
         warn( ...pData )
         {
-            try
-            {
-                const data = [...(pData || [])].map( e => serialize( e ) );
-                this.#logger.warn( ...(data || []) );
-            }
-            catch( ex )
-            {
-                // ignored; I mean, what are we going to do, log the error that occurred logging the error?
-            }
+            return this.#_log( LOG_LEVELS.WARN, ...pData );
         }
 
         debug( ...pData )
         {
-            try
-            {
-                const data = [...(pData || [])].map( e => serialize( e ) );
-                this.#logger.debug( ...(data || []) );
-            }
-            catch( ex )
-            {
-                // ignored; I mean, what are we going to do, log the error that occurred logging the error?
-            }
+            return this.#_log( LOG_LEVELS.DEBUG, ...pData );
         }
 
         error( ...pData )
         {
-            try
-            {
-                const data = [...(pData || [])].map( e => serialize( e ) );
-                this.#logger.error( ...(data || []) );
-            }
-            catch( ex )
-            {
-                // ignored; I mean, what are we going to do, log the error that occurred logging the error?
-            }
+            return this.#_log( LOG_LEVELS.ERROR, ...pData );
         }
 
         trace( ...pData )
         {
-            try
-            {
-                const data = [...(pData || [])].map( e => serialize( e ) );
-                this.#logger.trace( ...(data || []) );
-            }
-            catch( ex )
-            {
-                // ignored; I mean, what are we going to do, log the error that occurred logging the error?
-            }
+            return this.#_log( LOG_LEVELS.TRACE, ...pData );
         }
     }
-
-    const LOG_LEVELS =
-        {
-            LOG: S_LOG,
-            INFO: S_INFO,
-            WARN: S_WARN,
-            ERROR: S_ERROR,
-            DEBUG: S_DEBUG,
-            TRACE: S_TRACE
-        };
 
     /**
      * nothing written to the log
@@ -6927,7 +6974,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
                 if ( isAsyncFunction( this.#visitFunction ) )
                 {
-                    asyncAttempt( async() => await (me || this).#visitFunction.call( (me || this), pVisited, ...pExtra ) ).then( no_op ).catch( ex => this.dispatchEvent( new ToolBocksModuleEvent( "error", {
+                    asyncAttempt( async() => await (me || this).#visitFunction.call( (me || this), pVisited, ...pExtra ) ).then( no_op ).catch( ex => this.dispatchEvent( new ToolBocksModuleEvent( S_ERROR, {
                         error: ex,
                         detail: ex
                     } ) ) );
@@ -7000,7 +7047,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     }
                     catch( ex )
                     {
-                        this.dispatchEvent( new ToolBocksModuleEvent( "error",
+                        this.dispatchEvent( new ToolBocksModuleEvent( S_ERROR,
                                                                       {
                                                                           error: ex,
                                                                           message: ex.message,
@@ -7318,7 +7365,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             {
                 INTERNAL_LOGGER.trace( pMessage, pOptions || "Called without options" );
 
-                this.dispatchEvent( new ToolBocksModuleEvent( "trace", pMessage, pOptions ) );
+                this.dispatchEvent( new ToolBocksModuleEvent( S_TRACE, pMessage, pOptions ) );
             }
         }
 
