@@ -105,6 +105,7 @@ const { _ud = "undefined", $scope } = constants;
             getProperty,
             setProperty,
             hasProperty,
+            readProperty,
             populateOptions,
 
             lock,
@@ -3164,6 +3165,85 @@ const { _ud = "undefined", $scope } = constants;
     };
 
     /**
+     * Returns as OBJECT representing the primitive value specified.
+     * The optional second parameter allows you to choose which Object Wrapper to return.
+     *
+     * For example, specifying a string value without a second argument
+     * returns a String object whose valueOd method returns the specified string.
+     *
+     * However, if the second argument is provided and is Number,
+     * a Number object is returned, representing as closely as possible the numeric value of the string specified.
+     *
+     * @param pPrimitive
+     * @param pWrapperClass
+     */
+    const wrapPrimitive = function( pPrimitive, pWrapperClass )
+    {
+        switch ( typeof pPrimitive )
+        {
+            case _ud:
+                // noinspection JSPrimitiveTypeWrapperUsage
+                return isClass( pWrapperClass ) ? (Number === pWrapperClass ? new Number( 0 ) : (Boolean === pWrapperClass) ? new Boolean( false ) : new String( _mt )) : null;
+
+            case _str:
+                if ( Number === pWrapperClass )
+                {
+                    // noinspection JSPrimitiveTypeWrapperUsage
+                    return isNumeric( pPrimitive ) ? new Number( parseFloat( pPrimitive ) ) : pPrimitive.split( _mt ).reduce();
+                }
+                if ( Boolean === pWrapperClass )
+                {
+                    // noinspection JSPrimitiveTypeWrapperUsage
+                    return _affirmatives.includes( pPrimitive.toLowerCase() ) ? new Boolean( true ) : new Boolean( false );
+                }
+                // noinspection JSPrimitiveTypeWrapperUsage
+                return new String( pPrimitive );
+
+            case _num:
+                if ( String === pWrapperClass )
+                {
+                    // noinspection JSPrimitiveTypeWrapperUsage
+                    return new String( _mt + pPrimitive );
+                }
+                if ( Boolean === pWrapperClass )
+                {
+                    // noinspection JSPrimitiveTypeWrapperUsage
+                    return new Boolean( pPrimitive > 0 );
+                }
+                // noinspection JSPrimitiveTypeWrapperUsage
+                return new Number( pPrimitive );
+
+            case _bool:
+                // noinspection JSPrimitiveTypeWrapperUsage
+                return (String === pWrapperClass) ? new String( pPrimitive ) : (Number === pWrapperClass) ? new Number( pPrimitive ? 1 : 0 ) : new Boolean( pPrimitive );
+
+            case _symbol:
+                // noinspection JSPrimitiveTypeWrapperUsage
+                return (String === pWrapperClass) ? new String( String( pPrimitive ) ) : (Boolean === pWrapperClass ? new Boolean( true ) : new Number( 1 ));
+
+            default:
+                if ( isNull( pPrimitive ) )
+                {
+                    // noinspection JSPrimitiveTypeWrapperUsage
+                    return isClass( pWrapperClass ) ? new pWrapperClass() : new String( _mt );
+                }
+
+                if ( isNonNullObject( pPrimitive ) )
+                {
+                    if ( isPrimitiveWrapper( pPrimitive ) )
+                    {
+                        return wrapPrimitive( pPrimitive.valueOf() );
+                    }
+                    // noinspection JSPrimitiveTypeWrapperUsage
+                    return (String === pWrapperClass ? (isFunction( pPrimitive?.toString ) ? pPrimitive.toString() : serialize( pPrimitive )) : Number === pWrapperClass ? new Number( 1 ) : new Boolean( true ));
+                }
+
+                // noinspection JSPrimitiveTypeWrapperUsage
+                return isClass( pWrapperClass ) ? (Number === pWrapperClass ? new Number( 0 ) : (Boolean === pWrapperClass) ? new Boolean( false ) : new String( _mt )) : null;
+        }
+    };
+
+    /**
      * @typedef {object} CastOptions
      *
      * @property {string} propertyKey
@@ -3534,11 +3614,10 @@ const { _ud = "undefined", $scope } = constants;
         boxPrimitive( pValue )
         {
             let value = pValue || this.value;
-            // noinspection JSPrimitiveTypeWrapperUsage
-            value = isString( pValue ) ? new String( value ) : value;
-            // noinspection JSPrimitiveTypeWrapperUsage
-            value = isBoolean( pValue ) ? new Boolean( value ) : value;
-            return isNumber( value ) ? _big === this.toType ? new Number( BigInt( parseInt( value ) ) ) : new Number( value ) : value;
+
+            const castType = [_obj, _fun].includes( this.toType ) ? null : (_str === this.toType ? String : [_num, _big].includes( this.toType ) ? Number : Boolean);
+
+            return wrapPrimitive( value, castType );
         }
 
         objectFromFunction( pValue, pKey = _mt_str )
@@ -3618,7 +3697,6 @@ const { _ud = "undefined", $scope } = constants;
                 default:
                     break;
             }
-
         }
     }
 
@@ -4507,7 +4585,7 @@ const { _ud = "undefined", $scope } = constants;
             return object;
         }
 
-        let depth = toInteger( pDepth );
+        const depth = toInteger( pDepth );
 
         let arr = toArrayLiteral( pArr, pOptions, pVisited, pStack, depth + 1 ) || [];
 
@@ -4841,8 +4919,6 @@ const { _ud = "undefined", $scope } = constants;
         return { value: s };
     };
 
-    toolBocksModule["parseJson"] = toolBocksModule["parseJson"] || parseJson;
-
     function asObject( pObject )
     {
         if ( isNonNullObject( pObject ) || isArray( pObject ) || isTypedArray( pObject ) )
@@ -4852,7 +4928,8 @@ const { _ud = "undefined", $scope } = constants;
 
         if ( isString( pObject ) )
         {
-            return attempt( () => (toolBocksModule["parseJson"] || parseJson).call( toolBocksModule, pObject ) );
+            const parse = firstMatchingType( _fun, ToolBocksModule["ParseJson"], toolBocksModule["parseJson"], parseJson, JSON.parse );
+            return attempt( () => parse( pObject ) );
         }
 
         if ( isFunction( pObject ) )
@@ -4874,11 +4951,9 @@ const { _ud = "undefined", $scope } = constants;
             {
                 return asObject( result );
             }
-
-            return { [pObject?.name]: pObject };
         }
 
-        return {};
+        return wrapPrimitive( pObject );
     }
 
     const DEFAULT_AS_MAP_OPTIONS =
@@ -5116,6 +5191,242 @@ const { _ud = "undefined", $scope } = constants;
     {
 
     }
+
+    class AnonymousClass
+    {
+        #evtTarget = new EventTarget();
+
+        #originalObject = {};
+
+        constructor( pObject )
+        {
+            let obj = pObject;
+
+            if ( isNonNullObject( pObject ) )
+            {
+                obj = isWeakRef( pObject ) ? pObject.deref() : pObject;
+
+                if ( isArray( obj ) )
+                {
+                    let arr = [...obj].map( e => isNonNullObject( e ) ? new AnonymousClass( e ) : e );
+                    obj = Object.fromEntries( arr.entries() );
+                }
+
+                if ( isSet( obj ) || isWeakSet( obj ) || isMap( obj ) || isWeakMap( obj ) )
+                {
+                    obj = Object.fromEntries( obj.entries() );
+                }
+            }
+            else
+            {
+                switch ( typeof pObject )
+                {
+                    case _ud:
+                        obj = {};
+                        break;
+
+                    default:
+                        obj = (isNull( pObject )) ? {} : wrapPrimitive( pObject );
+                        break;
+
+                }
+            }
+
+            if ( isNonNullObject( obj ) )
+            {
+                this.#originalObject = obj;
+
+                if ( isPrimitiveWrapper( obj ) )
+                {
+                    const v = obj.valueOf() || String( obj );
+
+                    this.valueOf = () => v;
+                }
+
+                const omitFromDelegated = [...NON_DELEGATED_PROPERTIES];
+
+                const entries = attempt( () => objectEntries( obj ) );
+
+                if ( entries && $ln( entries ) )
+                {
+                    for( let entry of entries )
+                    {
+                        let key = ObjectEntry.getKey( entry );
+
+                        key = isSymbol( key ) ? key : asString( key, true );
+
+                        if ( !isEmptyString( key ) && ( !isString( key ) || !["class", "constructor", "prototype", "__proto__", "valueOf", "toString", "equals"].includes( key )) )
+                        {
+                            let value = ObjectEntry.getValue( key );
+
+                            if ( isFunction( value ) )
+                            {
+                                // if pObject is an instance of a class with #private properties,
+                                // we need any function called on this instance to preserve the 'this' semantics of that object,
+                                // so, we create a new arrow function that calls a function that is bound to the original object.
+                                value = (( ...pArgs ) => value.bind( obj ).call( obj, ...pArgs ));
+                            }
+
+                            Object.defineProperty( this,
+                                                   key,
+                                                   {
+                                                       configurable: false,
+                                                       enumerable: !isFunction( value ),
+                                                       get: () => value
+                                                   } );
+
+                            omitFromDelegated.push( key );
+                        }
+                    }
+
+                    attempt( () => delegateTo( this, this.#evtTarget, omitFromDelegated ) );
+                }
+            }
+        }
+
+        entries()
+        {
+            return objectEntries( this );
+        }
+
+        equals( pOther, pStack = [], pDepth = 0 )
+        {
+            if ( isNull( pOther ) || !isObject( pOther ) )
+            {
+                return false;
+            }
+
+            if ( this === pOther )
+            {
+                return true;
+            }
+
+            const depth = toInteger( pDepth || 0 );
+
+            if ( !isNanOrInfinite( depth ) && depth > 8 )
+            {
+                // if we have reached this depth without returning false,
+                // we return true, even though it is possible that the objects differ at a greater depth.
+                // any design that requires comparing objects beyond 8 levels of depth is already suspect
+                return true;
+            }
+
+            const stack = [...(pStack || [])];
+
+            if ( detectCycles( stack, 5, 3 ) )
+            {
+                // if we are cycling, the object(s) are degenerate and we will consider them unequal
+                // in truth, we are really asserting that equality is meaningless in the context of self-referential structures
+                return false;
+            }
+
+            const other = new AnonymousClass( pOther );
+
+            const entries = this.entries();
+
+            const otherEntries = other.entries();
+
+            let isEqual = $ln( entries ) === $ln( otherEntries );
+
+            if ( isEqual )
+            {
+                for( let entry of entries )
+                {
+                    const key = ObjectEntry.getKey( entry );
+
+                    const value = ObjectEntry.getValue( entry );
+
+                    const otherValue = readProperty( other, key );
+
+                    if ( isNonNullObject( value ) )
+                    {
+                        isEqual = isNonNullObject( otherValue );
+
+                        if ( !isEqual )
+                        {
+                            break;
+                        }
+
+                        if ( (isNull( value ) && !isNull( otherValue )) || ( !isNull( value ) && isNull( otherValue )) )
+                        {
+                            isEqual = false;
+                            break;
+                        }
+
+                        if ( isFunction( value?.equals ) && !value.equals( otherValue ) )
+                        {
+                            isEqual = false;
+                            break;
+                        }
+
+                        if ( isArray( value ) && isArray( otherValue ) )
+                        {
+                            isEqual = $ln( value ) === $ln( otherValue );
+
+                            if ( !isEqual )
+                            {
+                                break;
+                            }
+
+                            const arr = attempt( () => [...value].map( e => new AnonymousClass( e ) ) );
+                            const otherArray = attempt( () => [...value].map( e => new AnonymousClass( e ) ) );
+
+                            isEqual = arr.map( ( e, i ) => e.equals( otherArray[i], [...stack, String( i )], (1 + depth) ) ).every( e => true === e );
+
+                            if ( !isEqual )
+                            {
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            isEqual = new AnonymousClass( value ).equals( otherValue, [...stack, key], (1 + depth) );
+
+                            if ( !isEqual )
+                            {
+                                break;
+                            }
+                        }
+                    }
+
+                    if ( isFunction( value ) || isFunction( otherValue ) )
+                    {
+                        isEqual = (isFunction( value ) && isFunction( otherValue ));
+
+                        if ( isEqual )
+                        {
+                            isEqual = (value?.name === otherValue?.name);
+                        }
+
+                        if ( !isEqual )
+                        {
+                            break;
+                        }
+                    }
+
+                    isEqual = (value === otherValue);
+
+                    if ( !isEqual )
+                    {
+                        break;
+                    }
+                }
+            }
+
+            return isEqual;
+        }
+
+        toString()
+        {
+            if ( !isNull( this.#originalObject ) && isFunction( this.#originalObject.toString ) )
+            {
+                return this.#originalObject.toString();
+            }
+
+            return `${getClassName( this.#originalObject || this ) || "AnonymousClass"}::${this.#originalObject?.instanceId || this.instanceId || readProperty( this, "id", "name", "code" )}`;
+        }
+    }
+
 
     /**
      * Aligns a given number of bits to the nearest valid byte boundary.
@@ -6067,7 +6378,7 @@ const { _ud = "undefined", $scope } = constants;
         return implementsMethods( pObject, ...methods );
     }
 
-    const NON_DELEGATED_PROPERTIES = ["class", "length", "prototype", "__proto__", "constructor"];
+    const NON_DELEGATED_PROPERTIES = ["class", "length", "prototype", "__proto__", "constructor", "valueOf", "toString", "equals"];
 
     /**
      * Adds read-only properties to an object, the target (`pTarget`),
@@ -6455,6 +6766,8 @@ const { _ud = "undefined", $scope } = constants;
             asObject,
             asMap,
             transformObject,
+
+            wrapPrimitive,
 
             hasProperty,
             getProperty,
