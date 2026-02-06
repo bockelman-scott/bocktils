@@ -35,68 +35,63 @@ const { _ud = "undefined", $scope } = constants;
         attempt
     } = moduleUtils;
 
-    const {
-        _mt_str,
-        _dot,
-        _str,
-        _obj,
-        _fun,
-        _symbol,
-        _num,
-        _big,
-        _bool,
-        S_WARN
-    } = constants;
+    const
+        {
+            _mt_str,
+            _dot,
+            _str,
+            _obj,
+            _fun,
+            _symbol,
+            _num,
+            _big,
+            _bool,
+            S_WARN
+        } = constants;
 
-    const {
-        isNull,
-        isString,
-        isObject,
-        isNonNullObject,
-        isNonNullValue,
-        isReadOnly,
-        isArray,
-        isTypedArray,
-        isLikeArray,
-        isFunction,
-        isClass,
-        toObjectLiteral
-    } = typeUtils;
+    const
+        {
+            AnonymousClass,
+            isNull,
+            isString,
+            isObject,
+            isNonNullObject,
+            isNonNullValue,
+            isReadOnly,
+            isArray,
+            isTypedArray,
+            isLikeArray,
+            isFunction,
+            isClass,
+            toObjectLiteral
+        } = typeUtils;
 
     const { asString, isBlank, isJson, toBool } = stringUtils;
 
-    const {
-        asArray,
-        asArgs,
-        flatArgs,
-        filteredArgs,
-        Filters,
-        Mappers
-    } = arrayUtils;
+    const { asArray, asArgs } = arrayUtils;
 
-    const {
-        DEFAULT_REPLACER,
-        DEFAULT_REVIVER,
-        DEFAULT_OPTIONS_FOR_JSON,
-        DEFAULT_EXCLUSIONS,
-        DEFAULT_MAX_RUNTIME,
-        DEFAULT_MAX_DEPTH,
-        containsInterpolatableContent,
-        pendingInterpolation,
-        buildPathExpression,
-        asJson,
-        parseJson,
-        tracePathTo,
-        findNode
-    } = jsonInterpolationUtils;
+    const
+        {
+            DEFAULT_REPLACER,
+            DEFAULT_REVIVER,
+            DEFAULT_OPTIONS_FOR_JSON,
+            DEFAULT_EXCLUSIONS,
+            DEFAULT_MAX_RUNTIME,
+            DEFAULT_MAX_DEPTH,
+            containsInterpolatableContent,
+            pendingInterpolation,
+            buildPathExpression,
+            asJson,
+            parseJson,
+            tracePathTo,
+            findNode
+        } = jsonInterpolationUtils;
 
     const modName = "JsonUtils";
 
     const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
     const calculateErrorSourceName = ( pModule = modName, pFunction ) => toolBocksModule.calculateErrorSourceName( pModule, pFunction );
-
-    const _isValidInput = ( pValue ) => !isNull( pValue ) && (isString( pValue ) || isObject( pValue ));
 
     const DEFAULT_REFLECTION_OPTIONS =
         {
@@ -373,13 +368,13 @@ const { _ud = "undefined", $scope } = constants;
     {
         let obj = pObject;
 
-        if ( isNonNullObject( obj || pObject ) || isArray( obj || pObject ) || isTypedArray( obj || pObject ) )
+        if ( isNonNullObject( pObject ) || isArray( pObject ) || isTypedArray( pObject ) )
         {
             if ( !!pClone )
             {
-                if ( isFunction( (obj || pObject).clone ) )
+                if ( isFunction( pObject?.clone ) )
                 {
-                    obj = attempt( () => (obj || pObject).clone() ) || obj || pObject;
+                    obj = attempt( () => (pObject).clone() ) || pObject || obj;
                 }
                 return isArray( obj ) || isTypedArray( obj ) ? [...obj] : { ...obj };
             }
@@ -417,11 +412,9 @@ const { _ud = "undefined", $scope } = constants;
             {
                 return asObject( result );
             }
-
-            return { [pObject?.name]: pObject };
         }
 
-        return {};
+        return new AnonymousClass( pObject );
     }
 
     let mod =
@@ -450,14 +443,31 @@ const { _ud = "undefined", $scope } = constants;
 
     mod = toolBocksModule.extend( mod );
 
-    if ( typeUtils && !isReadOnly( typeUtils ) && isWritable( typeUtils, "parseJson" ) )
+    // The TypeUtils module will behave differently if/after this module is loaded.
+    if ( !isReadOnly( ToolBocksModule ) )
     {
-        attempt( () => typeUtils.parseJson = parseJson.bind( typeUtils ) );
+        attempt( () => ToolBocksModule["AsJson"] = ToolBocksModule["AsJson"] ?? asJson );
+        attempt( () => ToolBocksModule["ParseJson"] = ToolBocksModule["ParseJson"] ?? parseJson );
+        attempt( () => ToolBocksModule["AsObject"] = ToolBocksModule["AsObject"] ?? asObject );
     }
 
-    if ( typeUtils && !isReadOnly( typeUtils ) && isWritable( typeUtils, "asObject" ) )
+    // The TypeUtils module will behave differently if/after this module is loaded.
+    if ( typeUtils && !isReadOnly( typeUtils ) )
     {
-        attempt( () => typeUtils.asObject = asObject.bind( typeUtils ) );
+        if ( isWritable( typeUtils, "parseJson" ) )
+        {
+            attempt( () => typeUtils.parseJson = parseJson.bind( typeUtils ) );
+        }
+
+        if ( isWritable( typeUtils, "asObject" ) )
+        {
+            attempt( () => typeUtils.asObject = asObject.bind( typeUtils ) );
+        }
+
+        if ( isWritable( typeUtils, "asJson" ) )
+        {
+            attempt( () => typeUtils.asJson = asJson.bind( typeUtils ) );
+        }
     }
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
