@@ -6801,6 +6801,7 @@ const { _ud = "undefined", $scope } = constants;
              */
             classes:
                 {
+                    AnonymousClass,
                     GenericObject,
                     ComparatorFactory,
                     Finder,
@@ -6814,6 +6815,7 @@ const { _ud = "undefined", $scope } = constants;
                     Result,
                     VoidResult
                 },
+            AnonymousClass,
             GenericObject,
             ComparatorFactory,
             Finder,
