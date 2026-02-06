@@ -5625,6 +5625,28 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return new Promise( resolve => setTimeout( resolve, pMilliseconds ) );
     }
 
+    /**
+     * Suspends the execution of an asynchronous function
+     * for at least the specified number of milliseconds.
+     *
+     * The exact time to suspend execution is calculated
+     * by multiplying the specified value by a random number between 0.1 and 1
+     * and adding that value to the specified number of milliseconds.
+     *
+     * This can help in some scenarios by adding a little bit of 'jitter'
+     * to the forced delays between the execution of network calls
+     * that might otherwise become a 'thundering herd'
+     *
+     * @param {number} pMilliseconds - The minimum number of milliseconds to pause execution.
+     *
+     * @return {Promise<void>} A promise that resolves after the specified delay.
+     */
+    function doze( pMilliseconds )
+    {
+        const millis = pMilliseconds + ((Math.random() + 0.1) * pMilliseconds);
+        return sleep( Math.floor( millis ) );
+    }
+
     // noinspection DynamicallyGeneratedCodeJS,JSValidateTypes,TypeScriptUMDGlobal
     const gc = () => new Promise( resolve => setImmediate( resolve ) );
 
@@ -9623,6 +9645,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             op_identity,
 
             sleep,
+            doze,
             gc,
 
             functionToString,
