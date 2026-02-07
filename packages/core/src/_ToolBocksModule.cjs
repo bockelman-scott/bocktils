@@ -3194,7 +3194,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     {
         const arr = _asArr( pEntries ).filter( e => ObjectEntry.isValidEntry( e, true ) );
 
-        const collator = new Intl.Collator( _mt, { sensitivity: (pCaseSensitive ? "case" : "base") } );
+        const collator = new Intl.Collator( DEFAULT_LOCALE_STRING, { sensitivity: (pCaseSensitive ? "case" : "base") } );
 
         let comparator = ( a, b ) =>
         {
@@ -3308,6 +3308,22 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
 
         return obj;
+    };
+
+    ObjectEntry.fromEntries = function( pEntries )
+    {
+        if ( pEntries )
+        {
+            if ( isArray( pEntries ) || pEntries[Symbol.iterator] )
+            {
+                return _asArr( pEntries ).filter( e => isArray( e ) && $ln( e ) >= 2 ).map( e => new ObjectEntry( e[0], e[1], e ) );
+            }
+            else if ( isObj( pEntries ) )
+            {
+                return ObjectEntry.fromEntries( Object.entries( pEntries || {} ) );
+            }
+        }
+        return [];
     };
 
     ObjectEntry.getKey = ( entry ) => isNull( entry ) ? _mt_str : (entry?.key || entry[0] || _mt_str);
@@ -3439,7 +3455,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 return [pEntries];
             }
 
-            const filter = ( e ) => isNonNullObj( e ) || isArray( e );
+            const filter = ( e ) => (isNonNullObj( e ) || isArray( e )) && !isFunc( e );
 
             const mapper = makeObjectEntryMapper( pParent );
 
@@ -9480,31 +9496,31 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     class ToolBocksObject
     {
-        #__eventTarget;
-        #__constructedWith;
+        #zTarget;
+        #zArgs;
 
         constructor( ...pArgs )
         {
-            this.#__eventTarget = new EventTarget();
+            this.#zTarget = new EventTarget();
 
             let args = [...(pArgs || [])];
 
-            this.#__constructedWith = (args && args.length) ? [...args] : [];
+            this.#zArgs = (args && args.length) ? [...args] : [];
         }
 
         dispatchEvent( pEvent )
         {
-            return this.#__eventTarget.dispatchEvent( resolveEvent( pEvent, pEvent?.data || pEvent?.detail || pEvent, { source: this } ) );
+            return this.#zTarget.dispatchEvent( resolveEvent( pEvent, pEvent?.data || pEvent?.detail || pEvent, { source: this } ) );
         }
 
         addEventListener( pType, pHandler, pOptions )
         {
-            this.#__eventTarget.addEventListener( pType, pHandler, pOptions );
+            this.#zTarget.addEventListener( pType, pHandler, pOptions );
         }
 
         removeEventListener( pType, pHandler, pOptions )
         {
-            this.#__eventTarget.removeEventListener( pType, pHandler, pOptions );
+            this.#zTarget.removeEventListener( pType, pHandler, pOptions );
         }
 
         get instanceId()

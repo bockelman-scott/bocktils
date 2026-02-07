@@ -172,7 +172,7 @@ const { _ud = "undefined", $scope } = constants;
      */
     class Timing
     {
-        #__eventTarget = new EventTarget();
+        #zTarget = new EventTarget();
 
         #markers = [];
 
@@ -185,17 +185,17 @@ const { _ud = "undefined", $scope } = constants;
 
         addEventListener( pEventName, pListener, pOptions )
         {
-            this.#__eventTarget.addEventListener( pEventName, pListener, pOptions );
+            this.#zTarget.addEventListener( pEventName, pListener, pOptions );
         }
 
         removeEventListener( pEventName, pListener, pOptions )
         {
-            this.#__eventTarget.removeEventListener( pEventName, pListener, pOptions );
+            this.#zTarget.removeEventListener( pEventName, pListener, pOptions );
         }
 
         dispatch( pEvent )
         {
-            this.#__eventTarget.dispatchEvent( resolveEvent( pEvent ) );
+            this.#zTarget.dispatchEvent( resolveEvent( pEvent ) );
         }
 
         /**

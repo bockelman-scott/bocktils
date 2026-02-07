@@ -341,7 +341,7 @@ const { _ud = "undefined", $scope } = constants;
     class BockEntity
     {
         // this allows each of our Entities, if necessary, to behave like an EventTarget, if required
-        #__eventTarget = new EventTarget();
+        #zTarget = new EventTarget();
 
         // used rarely to shuttle temporary values between methods
         // attributes are not included in equality comparisons or persisted.
@@ -439,7 +439,7 @@ const { _ud = "undefined", $scope } = constants;
          */
         dispatchEvent( pEvt )
         {
-            return this.#__eventTarget.dispatchEvent( pEvt );
+            return this.#zTarget.dispatchEvent( pEvt );
         }
 
         /**
@@ -453,7 +453,7 @@ const { _ud = "undefined", $scope } = constants;
          */
         addEventListener( pEvt, pHandler, pOptions )
         {
-            this.#__eventTarget.addEventListener( pEvt, pHandler, pOptions );
+            this.#zTarget.addEventListener( pEvt, pHandler, pOptions );
         }
 
         /**
@@ -466,7 +466,7 @@ const { _ud = "undefined", $scope } = constants;
          */
         removeEventListener( pEvt, pHandler, pOptions )
         {
-            this.#__eventTarget.removeEventListener( pEvt, pHandler, pOptions );
+            this.#zTarget.removeEventListener( pEvt, pHandler, pOptions );
         }
 
         toString()

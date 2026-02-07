@@ -169,7 +169,7 @@ const { _ud = "undefined", $scope } = constants;
         /**
          * Internal delegate allowing instances of this class to behave like an EventTarget
          */
-        #eventTarget = new EventTarget();
+        #zTarget = new EventTarget();
 
         /**
          * This property can be used to restrict the types of items that can be stored in this collection.
@@ -847,7 +847,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             if ( this.#eventsEnabled )
             {
-                this.#eventTarget.dispatchEvent( pEvt );
+                this.#zTarget.dispatchEvent( pEvt );
             }
         }
 
@@ -861,7 +861,7 @@ const { _ud = "undefined", $scope } = constants;
          */
         addEventListener( pEventType, pHandler, pOptions )
         {
-            this.#eventTarget.addEventListener( pEventType, pHandler, pOptions );
+            this.#zTarget.addEventListener( pEventType, pHandler, pOptions );
         }
 
         /**
@@ -874,7 +874,7 @@ const { _ud = "undefined", $scope } = constants;
          */
         removeEventListener( pEventType, pHandler, pOptions )
         {
-            this.#eventTarget.removeEventListener( pEventType, pHandler, pOptions );
+            this.#zTarget.removeEventListener( pEventType, pHandler, pOptions );
         }
     }
 

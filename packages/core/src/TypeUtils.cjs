@@ -1925,7 +1925,8 @@ const { _ud = "undefined", $scope } = constants;
             minimumLength: 1,
             acceptArrays: false,
             mandatoryKeys: [],
-            countDeadBranches: true
+            countDeadBranches: true,
+            omitFunctions: true
         };
 
     const IS_POPULATED_ARRAY_OPTIONS =
@@ -1943,7 +1944,8 @@ const { _ud = "undefined", $scope } = constants;
             minimumLength: 1,
             acceptArrays: false,
             mandatoryKeys: [],
-            countDeadBranches: false
+            countDeadBranches: false,
+            omitFunctions: true
         };
 
     const LAX_POPULATED_OPTIONS =
@@ -1983,7 +1985,9 @@ const { _ud = "undefined", $scope } = constants;
 
         const countDeadBranches = !!options.countDeadBranches;
 
-        return { options, minimumLength, acceptedTypes, mandatoryKeys, countDeadBranches };
+        const omitFunctions = !!options.omitFunctions;
+
+        return { options, minimumLength, acceptedTypes, mandatoryKeys, countDeadBranches, omitFunctions };
     }
 
     function isPopulatedArray( pObject, pCountEmptyElements, pOptions, pVisited, pStack )
@@ -2000,6 +2004,11 @@ const { _ud = "undefined", $scope } = constants;
             arr = arr.filter( ( e, i ) => isPopulated( e, pOptions, pVisited, [...(pStack || []), String( i )] ) );
         }
 
+        if ( pOptions?.omitFunctions )
+        {
+            arr = arr.filter( e => !isFunction( e ) );
+        }
+
         let minLength = toInteger( pOptions?.minimumLength ) || 1;
         minLength = Math.max( 1, isNanOrInfinite( minLength ) ? 1 : minLength );
 
@@ -2014,7 +2023,8 @@ const { _ud = "undefined", $scope } = constants;
                 minimumLength,
                 acceptedTypes,
                 mandatoryKeys,
-                countDeadBranches
+                countDeadBranches,
+                omitFunctions
             } = resolveIsPopulatedArgs( pOptions );
 
         const mandatory = [...(mandatoryKeys || [])];
@@ -2053,14 +2063,19 @@ const { _ud = "undefined", $scope } = constants;
                     {
                         populated = mandatory.length <= 0 || mandatory.every( key => isDefined( pObject[key] ) );
                     }
+
+                    if ( populated )
+                    {
+                        populated = !omitFunctions || Object.entries( pObject ).some( e => !isFunction( ObjectEntry.getValue( e ) ) );
+                    }
                 }
                 else
                 {
-                    const entries = objectEntries( pObject || {} );
+                    const entries = Object.entries( pObject || {} );
 
                     for( const entry of entries )
                     {
-                        const value = entry.value;
+                        const value = ObjectEntry.getValue( entry ) || entry.value || entry[1];
 
                         const opts = { ...options };
 
@@ -2069,7 +2084,7 @@ const { _ud = "undefined", $scope } = constants;
 
                         if ( isPopulated( value, opts, pVisited, [...(pStack || []), entry.key] ) )
                         {
-                            populated = true;
+                            populated = !omitFunctions || !isFunction( value );
                             break;
                         }
                     }
@@ -5194,15 +5209,15 @@ const { _ud = "undefined", $scope } = constants;
 
     class AnonymousClass
     {
-        #evtTarget = new EventTarget();
+        #zTarget = new EventTarget();
 
         #originalObject = {};
 
         constructor( pObject )
         {
-            const me = this;
-
             let obj = pObject;
+
+            const omitFromDelegated = [...NON_DELEGATED_PROPERTIES, "get", "set", "entries", Symbol.iterator];
 
             if ( isNonNullObject( pObject ) )
             {
@@ -5255,8 +5270,6 @@ const { _ud = "undefined", $scope } = constants;
                 }
                 else
                 {
-                    const omitFromDelegated = [...NON_DELEGATED_PROPERTIES];
-
                     const entries = attempt( () => objectEntries( obj ) );
 
                     if ( entries && $ln( entries ) )
@@ -5274,11 +5287,11 @@ const { _ud = "undefined", $scope } = constants;
 
                             if ( !isString( key ) || !isEmptyString( key ) )
                             {
-                                let value = ObjectEntry.getValue( key );
+                                let value = ObjectEntry.getValue( entry );
 
                                 if ( isFunction( value ) )
                                 {
-                                    if ( isFunction( Object.getPrototypeOf( this )?.[key] ) )
+                                    if ( isFunction( Object.getPrototypeOf( this.constructor )?.[key] ) || key in this )
                                     {
                                         continue;
                                     }
@@ -5303,17 +5316,17 @@ const { _ud = "undefined", $scope } = constants;
                     }
                 }
             }
-            attempt( () => delegateTo( this, this.#evtTarget, omitFromDelegated ) );
+            attempt( () => delegateTo( this, this.#zTarget, omitFromDelegated ) );
         }
 
         entries()
-        {
-            return objectEntries( this );
+        { // cannot use objectEntries here, as that would call this method infinitely
+            return ObjectEntry.fromEntries( Object.entries( this ) );
         }
 
         orderedEntries()
         {
-            return ObjectEntry.sort( objectEntries( this ) );
+            return ObjectEntry.sort( this.entries() );
         }
 
         equals( pOther, pStack = [], pDepth = 0 )
@@ -6498,7 +6511,9 @@ const { _ud = "undefined", $scope } = constants;
         return implementsMethods( pObject, ...methods );
     }
 
-    const NON_DELEGATED_PROPERTIES = ["class", "length", "prototype", "__proto__", "constructor", "valueOf", "toString", "equals", "compareTo", "hashCode"];
+    const NON_DELEGATED_PROPERTIES = ["class", "length", "prototype", "__proto__", "constructor",
+                                      "valueOf", "toString", "equals", "compareTo", "hashCode", "clone",
+                                      Symbol.toPrimitive, Symbol.iterator, Symbol.asyncIterator, Symbol.species];
 
     /**
      * Adds read-only properties to an object, the target (`pTarget`),
