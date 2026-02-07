@@ -5200,27 +5200,30 @@ const { _ud = "undefined", $scope } = constants;
 
         constructor( pObject )
         {
+            const me = this;
+
             let obj = pObject;
 
             if ( isNonNullObject( pObject ) )
             {
                 obj = isWeakRef( pObject ) ? pObject.deref() : pObject;
 
-                if ( isArray( obj ) )
+                while ( obj instanceof this.constructor )
                 {
-                    let arr = [...obj].map( e => isNonNullObject( e ) ? new AnonymousClass( e ) : e );
-                    obj = Object.fromEntries( arr.entries() );
+                    obj = obj.#originalObject;
                 }
 
-                if ( isSet( obj ) || isWeakSet( obj ) || isMap( obj ) || isWeakMap( obj ) )
+                if ( isArray( obj ) || isSet( obj ) || isWeakSet( obj ) )
+                {
+                    let arr = [...obj].map( e => new AnonymousClass( e ) );
+                    obj = Object.fromEntries( arr.entries() );
+                }
+                else if ( isMap( obj ) || isWeakMap( obj ) )
                 {
                     obj = Object.fromEntries( obj.entries() );
                 }
 
-                if ( obj instanceof this.constructor )
-                {
-
-                }
+                this.#originalObject = obj;
             }
             else
             {
@@ -5233,11 +5236,10 @@ const { _ud = "undefined", $scope } = constants;
                     default:
                         obj = (isNull( pObject )) ? {} : wrapPrimitive( pObject );
                         break;
-
                 }
             }
 
-            if ( isNonNullObject( obj ) )
+            if ( isNonNullObject( obj ) || isPrimitiveWrapper( obj ) )
             {
                 this.#originalObject = obj;
 
@@ -5246,47 +5248,62 @@ const { _ud = "undefined", $scope } = constants;
                     const v = obj.valueOf() || String( obj );
 
                     this.valueOf = () => v;
+
+                    this[Symbol.toPrimitive] = () => v;
+
+                    this.toString = () => String( v );
                 }
-
-                const omitFromDelegated = [...NON_DELEGATED_PROPERTIES];
-
-                const entries = attempt( () => objectEntries( obj ) );
-
-                if ( entries && $ln( entries ) )
+                else
                 {
-                    for( let entry of entries )
+                    const omitFromDelegated = [...NON_DELEGATED_PROPERTIES];
+
+                    const entries = attempt( () => objectEntries( obj ) );
+
+                    if ( entries && $ln( entries ) )
                     {
-                        let key = ObjectEntry.getKey( entry );
-
-                        key = isSymbol( key ) ? key : String( key );
-
-                        if ( !isEmptyString( key ) && ( !isString( key ) || !["class", "constructor", "prototype", "__proto__", "valueOf", "toString", "equals"].includes( key )) )
+                        for( let entry of entries )
                         {
-                            let value = ObjectEntry.getValue( key );
+                            let key = ObjectEntry.getKey( entry );
 
-                            if ( isFunction( value ) )
+                            key = isSymbol( key ) ? key : String( key );
+
+                            if ( isString( key ) && omitFromDelegated.includes( key ) )
                             {
-                                // if pObject is an instance of a class with #private properties,
-                                // we need any function called on this instance to preserve the 'this' semantics of that object,
-                                // so, we create a new arrow function that calls a function that is bound to the original object.
-                                value = (( ...pArgs ) => value.bind( obj ).call( obj, ...pArgs ));
+                                continue;
                             }
 
-                            Object.defineProperty( this,
-                                                   key,
-                                                   {
-                                                       configurable: false,
-                                                       enumerable: !isFunction( value ),
-                                                       get: () => value
-                                                   } );
+                            if ( !isString( key ) || !isEmptyString( key ) )
+                            {
+                                let value = ObjectEntry.getValue( key );
 
-                            omitFromDelegated.push( key );
+                                if ( isFunction( value ) )
+                                {
+                                    if ( isFunction( Object.getPrototypeOf( this )?.[key] ) )
+                                    {
+                                        continue;
+                                    }
+
+                                    // if pObject is an instance of a class with #private properties,
+                                    // we need any function called on this instance to preserve the 'this' semantics of that object,
+                                    // so, we create a new arrow function that calls a function that is bound to the original object.
+                                    value = (( ...pArgs ) => value.bind( obj ).call( obj, ...pArgs ));
+                                }
+
+                                Object.defineProperty( this,
+                                                       key,
+                                                       {
+                                                           configurable: false,
+                                                           enumerable: !isFunction( value ),
+                                                           get: () => value
+                                                       } );
+
+                                omitFromDelegated.push( key );
+                            }
                         }
                     }
-
-                    attempt( () => delegateTo( this, this.#evtTarget, omitFromDelegated ) );
                 }
             }
+            attempt( () => delegateTo( this, this.#evtTarget, omitFromDelegated ) );
         }
 
         entries()
@@ -6481,7 +6498,7 @@ const { _ud = "undefined", $scope } = constants;
         return implementsMethods( pObject, ...methods );
     }
 
-    const NON_DELEGATED_PROPERTIES = ["class", "length", "prototype", "__proto__", "constructor", "valueOf", "toString", "equals"];
+    const NON_DELEGATED_PROPERTIES = ["class", "length", "prototype", "__proto__", "constructor", "valueOf", "toString", "equals", "compareTo", "hashCode"];
 
     /**
      * Adds read-only properties to an object, the target (`pTarget`),
