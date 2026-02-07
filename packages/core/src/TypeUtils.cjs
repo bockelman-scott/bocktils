@@ -5216,6 +5216,11 @@ const { _ud = "undefined", $scope } = constants;
                 {
                     obj = Object.fromEntries( obj.entries() );
                 }
+
+                if ( obj instanceof this.constructor )
+                {
+
+                }
             }
             else
             {
@@ -5253,7 +5258,7 @@ const { _ud = "undefined", $scope } = constants;
                     {
                         let key = ObjectEntry.getKey( entry );
 
-                        key = isSymbol( key ) ? key : asString( key, true );
+                        key = isSymbol( key ) ? key : String( key );
 
                         if ( !isEmptyString( key ) && ( !isString( key ) || !["class", "constructor", "prototype", "__proto__", "valueOf", "toString", "equals"].includes( key )) )
                         {
@@ -5287,6 +5292,11 @@ const { _ud = "undefined", $scope } = constants;
         entries()
         {
             return objectEntries( this );
+        }
+
+        orderedEntries()
+        {
+            return ObjectEntry.sort( objectEntries( this ) );
         }
 
         equals( pOther, pStack = [], pDepth = 0 )
@@ -5414,6 +5424,99 @@ const { _ud = "undefined", $scope } = constants;
             }
 
             return isEqual;
+        }
+
+        compareTo( pOther )
+        {
+            const other = new AnonymousClass( pOther );
+
+            if ( other.equals( this ) )
+            {
+                return 0;
+            }
+
+            let comp = 0;
+
+            let entries = this.orderedEntries();
+            let otherEntries = other.orderedEntries();
+
+            const numEntries = $ln( entries );
+            const numOtherEntries = $ln( otherEntries );
+
+            if ( numEntries !== numOtherEntries )
+            {
+                return numEntries - numOtherEntries;
+            }
+
+            const collator = new Intl.Collator( _mt, { sensitivity: "base" } );
+
+            for( let entry of entries )
+            {
+                const key = ObjectEntry.getKey( entry );
+
+                const value = ObjectEntry.getValue( entry );
+
+                const otherValue = readProperty( other, key );
+
+                switch ( typeof value )
+                {
+                    case _ud:
+                        comp = _ud === typeof otherValue || isNull( otherValue ) ? 0 : 1;
+                        break;
+
+                    case _str:
+                        if ( isString( otherValue ) )
+                        {
+                            comp = collator.compare( value, otherValue );
+                        }
+                        else
+                        {
+                            comp = -1;
+                        }
+                        break;
+
+                    case _num:
+                    case _big:
+                        if ( isNumeric( otherValue ) )
+                        {
+                            comp = value - attempt( () => parseFloat( otherValue ) );
+                        }
+                        else
+                        {
+                            comp = 1;
+                        }
+                        break;
+
+                    case _bool:
+                        if ( isBoolean( otherValue ) )
+                        {
+                            comp = value === otherValue ? 0 : value ? -1 : 1;
+                        }
+                        else
+                        {
+                            comp = -1;
+                        }
+                        break;
+
+                    case _obj:
+                        if ( isNonNullObject( otherValue ) )
+                        {
+                            comp = new AnonymousClass( value ).compareTo( new AnonymousClass( otherValue ) );
+                        }
+                        else
+                        {
+                            comp = -1;
+                        }
+                        break;
+                }
+
+                if ( 0 !== comp )
+                {
+                    break;
+                }
+            }
+
+            return comp;
         }
 
         toString()

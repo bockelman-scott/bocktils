@@ -3190,6 +3190,23 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
     }
 
+    ObjectEntry.sort = function( pEntries, pCaseSensitive = false )
+    {
+        const arr = _asArr( pEntries ).filter( e => ObjectEntry.isValidEntry( e, true ) );
+
+        const collator = new Intl.Collator( _mt, { sensitivity: (pCaseSensitive ? "case" : "base") } );
+
+        let comparator = ( a, b ) =>
+        {
+            const aa = _asStr( ObjectEntry.getKey( a ) );
+            const bb = _asStr( ObjectEntry.getKey( b ) );
+
+            return collator.compare( aa, bb );
+        };
+
+        return arr.sort( comparator );
+    };
+
     ObjectEntry.foldEntry = function( pEntry )
     {
         let key = pEntry?.key || pEntry[0] || _mt_str;
