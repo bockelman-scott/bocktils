@@ -14,22 +14,9 @@
  * Constants, TypeUtils, StringUtils, and ArrayUtils
  */
 const core = require( "@toolbocks/core" );
-
 const bufferUtils = require( "@toolbocks/buffer" );
-
 const jsonUtils = require( "@toolbocks/json" );
-
-/**
- * Utility module for handling entity-related operations.
- * Provides a set of helper functions that facilitate working with entities,
- * including operations such as manipulation, validation, and transformation.
- *
- * The module is imported from the common library and serves as a shared utility
- * for managing entity data across different parts of the application.
- *
- * @module entityUtils
- */
-const entityUtils = require( "../../entities/src/EntityUtils.cjs" );
+const entityUtils = require( "@toolbocks/entities" );
 
 /**
  * Establish separate constants for each of the common utilities imported

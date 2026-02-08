@@ -6,6 +6,7 @@
   "dependencies": {
     "@toolbocks/core": "^1.0.0",
     "@toolbocks/dates": "^1.0.0",
+    "@toolbocks/entities": "^1.0.0",
     "@toolbocks/json": "^1.0.0"
   },
   "devDependencies": {
