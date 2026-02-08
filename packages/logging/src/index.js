@@ -23,39 +23,43 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         return $scope()[INTERNAL_NAME];
     }
 
-    const {
-        ModuleEvent,
-        ToolBocksModule,
-        ExecutionMode,
-        StatefulListener,
-        StackTrace,
-        ILogger,
-        objectToString,
-        resolveError,
-        lock,
-        populateOptions,
-        attempt,
-        attemptSilent,
-        asyncAttempt
-    } = moduleUtils;
+    const
+        {
+            ModuleEvent,
+            ToolBocksModule,
+            ExecutionMode,
+            StatefulListener,
+            StackTrace,
+            ILogger,
+            Konsole,
+            ConditionalLogger,
+            objectToString,
+            resolveError,
+            lock,
+            populateOptions,
+            attempt,
+            attemptSilent,
+            asyncAttempt
+        } = moduleUtils;
 
-    const {
-        _mt_str,
-        _mt = _mt_str,
-        _spc,
-        _comma,
-        _colon,
-        _num,
-        _obj,
-        _fun,
-        _lf,
-        _crlf,
-        funcName,
-        _defaultLocaleString = "en-US",
-        S_ERROR = "error",
-        no_op,
-        ignore
-    } = constants;
+    const
+        {
+            _mt_str,
+            _mt = _mt_str,
+            _spc,
+            _comma,
+            _colon,
+            _num,
+            _obj,
+            _fun,
+            _lf,
+            _crlf,
+            funcName,
+            _defaultLocaleString = "en-US",
+            S_ERROR = "error",
+            no_op,
+            ignore
+        } = constants;
 
     /**
      * This is a dictionary of this module's dependencies.
@@ -83,30 +87,48 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         CustomEvent = ModuleEvent;
     }
 
-    const {
-        isNull,
-        isString,
-        isNumeric,
-        isNumber,
-        isObject,
-        isNonNullObject,
-        isFunction,
-        isAsyncFunction,
-        isClass,
-        isDate,
-        isError,
-        firstError,
-        isEvent,
-        firstMatchingType,
-        getClass,
-        getClassName
-    } = typeUtils;
+    const
+        {
+            isNull,
+            isString,
+            isNumeric,
+            isNumber,
+            isObject,
+            isNonNullObject,
+            isFunction,
+            isAsyncFunction,
+            isClass,
+            isDate,
+            isError,
+            firstError,
+            isEvent,
+            firstMatchingType,
+            getClass,
+            getClassName
+        } = typeUtils;
 
     const { asString, asInt, isBlank, toBool, lcase, ucase, trimLeadingCharacters } = stringUtils;
 
     const { asArray, varargs, Filters, concatenateConsecutiveStrings, unique, AsyncBoundedStack } = arrayUtils;
 
     const toolBocksModule = new ToolBocksModule( "LoggingUtils", INTERNAL_NAME );
+
+    const LOG = "log";
+    const INFO = "info";
+    const WARN = "warn";
+    const ERROR = "error";
+    const DEBUG = "debug";
+    const TRACE = "trace";
+
+    const LOGGER_METHODS =
+        {
+            LOG,
+            INFO,
+            WARN,
+            ERROR,
+            DEBUG,
+            TRACE
+        };
 
     class LogLevel
     {
@@ -201,11 +223,11 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
     };
 
     LogLevel.ALL = lock( new LogLevel( Number.MAX_SAFE_INTEGER, "ALL" ) );
-    LogLevel.ERROR = lock( new LogLevel( 200, "ERROR" ) );
-    LogLevel.WARN = lock( new LogLevel( 300, "WARN" ) );
-    LogLevel.INFO = lock( new LogLevel( 400, "INFO" ) );
-    LogLevel.DEBUG = lock( new LogLevel( 500, "DEBUG" ) );
-    LogLevel.TRACE = lock( new LogLevel( 600, "TRACE" ) );
+    LogLevel.ERROR = lock( new LogLevel( 200, ucase( ERROR ) ) );
+    LogLevel.WARN = lock( new LogLevel( 300, ucase( WARN ) ) );
+    LogLevel.INFO = lock( new LogLevel( 400, ucase( INFO ) ) );
+    LogLevel.DEBUG = lock( new LogLevel( 500, ucase( DEBUG ) ) );
+    LogLevel.TRACE = lock( new LogLevel( 600, ucase( TRACE ) ) );
     LogLevel.OFF = lock( new LogLevel( 0, "OFF" ) );
     LogLevel.NONE = lock( LogLevel.OFF );
 
@@ -1491,7 +1513,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
     const NULL_LOGGER = new NullLogger();
 
-    const SIMPLE_LOGGER_LEVELS = lock( ["log", "info", "warn", "error", "debug", "trace"] );
+    const SIMPLE_LOGGER_LEVELS = lock( [LOG, INFO, WARN, ERROR, DEBUG, TRACE] );
 
     const SIMPLE_LOGGER_DEFAULT_LEVEL = lcase( SIMPLE_LOGGER_LEVELS[0] );
 
@@ -1543,7 +1565,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
             this.#emitEvents = toBool( options.emitEvents );
 
-            this.#logger = ToolBocksModule.resolveLogger( pLogger, toolBocksModule.logger, konsole ) || konsole;
+            this.#logger = ToolBocksModule.resolveLogger( pLogger, toolBocksModule.logger, konsole ) || console;
 
             if ( this.#logger instanceof this.constructor )
             {
@@ -1555,16 +1577,16 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                 }
             }
 
-            this.#logger = ToolBocksModule.resolveLogger( this.#logger, toolBocksModule.logger, konsole ) || konsole;
+            this.#logger = ToolBocksModule.resolveLogger( this.#logger, toolBocksModule.logger, konsole ) || console;
 
-            this.#addFormatting = options.addFormatting || (konsole === this.#logger);
+            this.#addFormatting = options.addFormatting || (konsole === this.#logger) || (console === this.#logger);
 
-            this.#addFormattingToEmptyMessages = options.addFormattingToEmptyMessages;
+            this.#addFormattingToEmptyMessages = !!options.addFormattingToEmptyMessages;
 
-            this.#logEmptyMessages = options.logEmptyMessages;
+            this.#logEmptyMessages = !!options.logEmptyMessages;
 
-            this.#level = lcase( asString( options.level || "log", true ) );
-            this.#level = SIMPLE_LOGGER_LEVELS.includes( this.#level ) ? this.#level : "log";
+            this.#level = lcase( asString( options.level || LOG, true ) );
+            this.#level = SIMPLE_LOGGER_LEVELS.includes( this.#level ) ? this.#level : LOG;
             this.#levelIndex = SIMPLE_LOGGER_LEVELS.indexOf( this.#level );
         }
 
@@ -1585,7 +1607,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
         get logger()
         {
-            return ToolBocksModule.resolveLogger( this.#logger, toolBocksModule.logger, konsole );
+            return ToolBocksModule.resolveLogger( this.#logger, toolBocksModule.logger, konsole, console ) || console;
         }
 
         get emitEvents()
@@ -1617,7 +1639,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
          */
         _log( pLevel, ...pData )
         {
-            let level = lcase( asString( pLevel, true ) );
+            let level = lcase( asString( pLevel || LOG, true ) );
 
             level = SIMPLE_LOGGER_LEVELS.includes( level ) ? level : this.#level;
 
@@ -1693,32 +1715,32 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
         log( ...pData )
         {
-            attempt( () => this._log( "log", ...pData ) );
+            attemptSilent( () => this._log( LOG, ...pData ) );
         }
 
         info( ...pData )
         {
-            attempt( () => this._log( "info", ...pData ) );
+            attemptSilent( () => this._log( INFO, ...pData ) );
         }
 
         warn( ...pData )
         {
-            attempt( () => this._log( "warn", ...pData ) );
+            attemptSilent( () => this._log( WARN, ...pData ) );
         }
 
         error( ...pData )
         {
-            attempt( () => this._log( "error", ...pData ) );
+            attemptSilent( () => this._log( ERROR, ...pData ) );
         }
 
         debug( ...pData )
         {
-            attempt( () => this._log( "debug", ...pData ) );
+            attemptSilent( () => this._log( DEBUG, ...pData ) );
         }
 
         trace( ...pData )
         {
-            attempt( () => this._log( "trace", ...pData ) );
+            attemptSilent( () => this._log( TRACE, ...pData ) );
         }
     }
 
@@ -1728,6 +1750,63 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
     {
         SIMPLE_LOGGER.debug( ...pData );
     }
+
+
+    class SimpleAsynchronousLogger extends SimpleLogger
+    {
+        constructor( pLogger, pOptions )
+        {
+            super( pLogger, pOptions || SIMPLE_LOGGER_OPTIONS );
+        }
+
+        async _log( pLevel, ...pData )
+        {
+            const level = lcase( asString( pLevel || LOGGER_METHODS.LOG ), true );
+
+            const data = asArray( pData );
+
+            const superClassMethod = super._log;
+
+            const defer = function()
+            {
+                return superClassMethod( level, ...data );
+            }.bind( this );
+
+            return (ERROR === level) ? setImmediate( defer ) : setTimeout( defer, 128 );
+        }
+
+        async log( ...pData )
+        {
+            return this._log( LOGGER_METHODS.LOG, ...pData );
+        }
+
+        async info( ...pData )
+        {
+            return this._log( LOGGER_METHODS.INFO, ...pData );
+        }
+
+        async warn( ...pData )
+        {
+            return this._log( LOGGER_METHODS.WARN, ...pData );
+        }
+
+        async error( ...pData )
+        {
+            return this._log( LOGGER_METHODS.ERROR, ...pData );
+        }
+
+        async debug( ...pData )
+        {
+            return this._log( LOGGER_METHODS.DEBUG, ...pData );
+        }
+
+        async trace( ...pData )
+        {
+            return this._log( LOGGER_METHODS.TRACE, ...pData );
+        }
+    }
+
+    const SIMPLE_ASYNC_LOGGER = new SimpleAsynchronousLogger( konsole );
 
     class CallTrace
     {
@@ -1875,9 +1954,11 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             resolveFormatter,
             resolveFilter,
             SimpleLogger,
+            SimpleAsynchronousLogger,
             NullLogger,
             NULL_LOGGER,
             SIMPLE_LOGGER,
+            SIMPLE_ASYNC_LOGGER,
             dbg,
             CallTrace,
             CallStack

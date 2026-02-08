@@ -65,6 +65,7 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
 
     const
         {
+            konsole,
             ModuleEvent,
             ToolBocksModule,
             ENDIAN,
@@ -733,6 +734,11 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
              * @alias module:Constants#_ud
              */
             _ud,
+
+            /**
+             * Re-export the 'console' resolved by the ToolBocksModule, moduleUtils
+             */
+            konsole,
 
             /**
              * The string returned by the typeof operator when applied to an {@link Object}<br>

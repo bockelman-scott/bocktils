@@ -8,12 +8,7 @@ const numberParser = require( "./NumberParser.cjs" );
 const guidUtils = require( "./GUIDUtils.cjs" );
 const functionUtils = require( "./FunctionUtils.cjs" );
 
-const { _ud = "undefined" } = constants;
-
-const $scope = constants?.$scope || function()
-{
-    return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-};
+const { _ud = "undefined", $scope } = constants;
 
 (function exposeModule()
 {
