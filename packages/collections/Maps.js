@@ -95,12 +95,14 @@ const { _ud = "undefined", $scope } = constants;
      */
     class PropertyAccessMap extends Map
     {
-        constructor( pEntries )
+        constructor( pEntries, ...pExcludedProperties )
         {
             // Call the parent Map constructor to initialize the map's data
             super( isArray( pEntries ) ? pEntries : isNonNullObject( pEntries ) ? objectEntries( pEntries ) : [[]] );
 
             const me = this;
+
+            const excludedProperties = asArray( pExcludedProperties );
 
             // Define the custom behavior for the proxy
             const handler =
@@ -123,7 +125,7 @@ const { _ud = "undefined", $scope } = constants;
                         }
 
                         // check for non-function properties (like 'size')
-                        if ( property in target )
+                        if ( property in target || excludedProperties.includes( property ) )
                         {
                             return value;
                         }
@@ -137,6 +139,11 @@ const { _ud = "undefined", $scope } = constants;
                     {
                         const instance = target || me;
 
+                        if ( property in instance || excludedProperties.includes( property ) )
+                        {
+                            attempt( () => instance[property] = value );
+                        }
+
                         attempt( () => instance.set( property, value ) );
                         attempt( () => me.set( property, value ) );
 
@@ -147,7 +154,10 @@ const { _ud = "undefined", $scope } = constants;
                     {
                         const instance = target || me;
 
-                        return instance.delete( property );
+                        if ( !(property in instance || excludedProperties.includes( property )) )
+                        {
+                            return instance.delete( property );
+                        }
                     },
 
                     // Handle the 'in' operator (e.g., 'key' in myMap)
@@ -155,7 +165,7 @@ const { _ud = "undefined", $scope } = constants;
                     {
                         const instance = target || me;
 
-                        return instance.has( property ) || attempt( () => me.has( property ) );
+                        return (property in instance) || instance.has( property ) || attempt( () => me.has( property ) );
                     }
                 };
 
@@ -222,9 +232,9 @@ const { _ud = "undefined", $scope } = constants;
         #keyType = TYPES.ANY;
         #valueType = TYPES.ANY;
 
-        constructor( pEntries, K, V )
+        constructor( pEntries, K, V, ...pExcludedProperties )
         {
-            super( pEntries );
+            super( pEntries, ...pExcludedProperties );
 
             const me = this;
 
@@ -404,9 +414,9 @@ const { _ud = "undefined", $scope } = constants;
     {
         #comparator;
 
-        constructor( pEntries, K, V, comparator )
+        constructor( pEntries, K, V, comparator, ...pExcludedProperties )
         {
-            super( pEntries, K, V );
+            super( pEntries, K, V, ...pExcludedProperties );
 
             this.#comparator = (isNull( comparator ) || !Comparators.isComparator( comparator )) ? DEFAULT_COMPARATOR : comparator;
 
@@ -488,9 +498,9 @@ const { _ud = "undefined", $scope } = constants;
     {
         #comparator;
 
-        constructor( pEntries, K, V, comparator )
+        constructor( pEntries, K, V, comparator, ...pExcludedProperties )
         {
-            super( pEntries, K, V );
+            super( pEntries, K, V, ...pExcludedProperties );
 
             this.#comparator = (isNull( comparator ) || !Comparators.isComparator( comparator )) ? DEFAULT_COMPARATOR : comparator;
 
