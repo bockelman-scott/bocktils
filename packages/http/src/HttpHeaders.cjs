@@ -1255,7 +1255,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             let key = this.#resolveKey( pKey );
 
-            if ( !isBlank( key ) && isHeader( key ) )
+            if ( !isBlank( key ) && ( !this.#strict || isHeader( key )) )
             {
                 key = !(key.startsWith( "X-" )) ? lcase( key ) : key;
 
