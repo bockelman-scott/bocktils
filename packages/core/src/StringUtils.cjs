@@ -3696,8 +3696,8 @@ const { _ud = "undefined", $scope } = constants;
         }
 
         // handle some common typos
-        email = asString( email, true ).replace( /\.(comm|con|cpm|cok|coj|co,)$/i, ".com" );
-        email = asString( email, true ).replace( /(gmsil|gmial|gnail|gnial|gamil|gmaill)\.co\w+$/i, "gmail.com" );
+        email = asString( email, true ).replace( /\.(comm|con|cpm|cok|coj|co,|cim|xom)$/i, ".com" );
+        email = asString( email, true ).replace( /(gmsil|gmial|gnail|gnial|gamil|gmaill|ymail)\.co\w+$/i, "gmail.com" );
         email = asString( email, true ).replace( /h[oi]t[mn][as]il\.co\w+$/i, "hotmail.com" );
         email = asString( email, true ).replace( /yaho+\.com/i, "yahoo.com" );
         email = asString( email, true ).replace( /@aol\.co\w+$/i, "@aol.com" );
