@@ -1063,7 +1063,10 @@ const { _ud = "undefined", $scope } = constants;
                     "Authorization": "Contains the credentials to authenticate a user-agent with a server.",
                     "Proxy-Authenticate": "Defines the authentication method that should be used to access a resource behind a proxy server.",
                     "Proxy-Authorization": "Contains the credentials to authenticate a user-agent with a proxy server.",
-                    "api_key": "Custom header often used to pass API credentials; not a currently defined header according to any RFP Specification"
+                    "api_key": "Custom header often used to pass API credentials; not a currently defined header according to any RFP Specification",
+                    "api-key": "Custom header often used to pass API credentials; not a currently defined header according to any RFP Specification",
+                    "user_id": "Custom header often used to pass API credentials; not a currently defined header according to any RFP Specification",
+                    "user-id": "Custom header often used to pass API credentials; not a currently defined header according to any RFP Specification"
                 },
             CACHING:
                 {
