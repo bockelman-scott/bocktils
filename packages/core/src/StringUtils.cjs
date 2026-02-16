@@ -47,7 +47,7 @@ const typeUtils = require( "./TypeUtils.cjs" );
 /**
  * Defines a string to represent the type, undefined
  */
-const { _ud = "undefined", $scope } = constants;
+const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
 // noinspection FunctionTooLongJS
 /**

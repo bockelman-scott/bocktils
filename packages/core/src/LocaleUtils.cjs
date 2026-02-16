@@ -14,7 +14,7 @@ const typeUtils = require( "./TypeUtils.cjs" );
 const stringUtils = require( "./StringUtils.cjs" );
 const arrayUtils = require( "./ArrayUtils.cjs" );
 
-const { _ud = "undefined", $scope } = constants;
+const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
 // noinspection FunctionTooLongJS
 (function exposeModule()

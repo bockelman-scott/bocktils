@@ -6,7 +6,7 @@ const stringUtils = require( "./StringUtils.cjs" );
 const arrayUtils = require( "./ArrayUtils.cjs" );
 
 /* define a variable for typeof undefined */
-const { _ud = "undefined", $scope } = constants;
+const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
 // noinspection FunctionTooLongJS
 /**

@@ -9612,6 +9612,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     const mod =
         {
+            $scope,
+
             ModuleEvent: ToolBocksModuleEvent,
             ToolBocksModule,
             CustomEvent,

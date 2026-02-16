@@ -6,7 +6,7 @@ const typeUtils = require( "./TypeUtils.cjs" );
 const stringUtils = require( "./StringUtils.cjs" );
 const localeUtils = require( "./LocaleUtils.cjs" );
 
-const { _ud = "undefined", $scope } = constants;
+const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
 (function exposeModule()
 {

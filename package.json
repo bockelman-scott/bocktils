@@ -8,7 +8,6 @@
     "@azure/keyvault-secrets": "^4.9.0",
     "@dotenvx/dotenvx": "^1.44.1",
     "@toolbocks/all": "file:packages",
-    "@toolbocks/core": "^1.0.0",
     "@toolbocks/dates": "^1.0.0",
     "@toolbocks/json": "^1.0.0",
     "adm-zip": "^0.5.16",

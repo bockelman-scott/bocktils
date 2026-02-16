@@ -1,12 +1,12 @@
-const moduleUtils = require( "./_ToolBocksModule.cjs" );
-const constants = require( "./Constants.cjs" );
-const typeUtils = require( "./TypeUtils.cjs" );
-const stringUtils = require( "./StringUtils.cjs" );
-const arrayUtils = require( "./ArrayUtils.cjs" );
-const localeUtils = require( "./LocaleUtils.cjs" );
-const numberParser = require( "./NumberParser.cjs" );
-const guidUtils = require( "./GUIDUtils.cjs" );
-const functionUtils = require( "./FunctionUtils.cjs" );
+const moduleUtils = require( "./src/_ToolBocksModule.cjs" );
+const constants = require( "./src/Constants.cjs" );
+const typeUtils = require( "./src/TypeUtils.cjs" );
+const stringUtils = require( "./src/StringUtils.cjs" );
+const arrayUtils = require( "./src/ArrayUtils.cjs" );
+const localeUtils = require( "./src/LocaleUtils.cjs" );
+const numberParser = require( "./src/NumberParser.cjs" );
+const guidUtils = require( "./src/GUIDUtils.cjs" );
+const functionUtils = require( "./src/FunctionUtils.cjs" );
 
 const { _ud = "undefined", $scope } = constants;
 
