@@ -5222,6 +5222,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
     }
 
+    ExecutionEnvironment.getInstance = function()
+    {
+        return new ExecutionEnvironment( $scope() );
+    };
+
     /**
      * Returns true if the specified value is a Node.js process.<br>
      * <br>
@@ -8822,7 +8827,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     function propertyDescriptors( pObject, pSearchPrototypeChain = true )
     {
-        let obj = isRef( pObject ) ? pObject.deref() || pObject : pObject;
+        let obj = isRef( pObject ) ? pObject.deref() ?? pObject : pObject;
 
         let lastObj = null;
 
@@ -8830,19 +8835,24 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         let objectProperties = {};
 
-        const iterationCap = new IterationCap( 32 );
+        const iterationCap = new IterationCap( 16 );
 
         while ( isNonNullObj( obj ) && !iterationCap.reached )
         {
+            lastObj = obj;
+
             objectProperties = Object.getOwnPropertyDescriptors( obj || {} );
 
             descriptors = mergeObjects( descriptors, objectProperties );
 
-            lastObj = obj;
-
             obj = pSearchPrototypeChain ? Object.getPrototypeOf( obj ) || obj?.constructor?.prototype : null;
 
-            obj = (obj === lastObj || isTerminal( obj, lastObj )) ? null : obj;
+            obj = (isNull( obj ) || (obj === lastObj || isTerminal( obj, lastObj ))) ? null : obj;
+
+            if ( isNull( obj ) )
+            {
+                break;
+            }
         }
 
         return descriptors;
