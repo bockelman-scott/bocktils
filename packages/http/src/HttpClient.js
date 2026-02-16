@@ -638,7 +638,7 @@ const { _ud = "undefined", $scope } = constants;
             return config.merge( DEFAULT_HTTP_CONFIG, config );
         }
 
-        return new HttpConfig( { ...DEFAULT_CONFIG, ...(toHttpConfigLiteral( config )) }, config?.headers );
+        return new HttpConfig( { ...DEFAULT_CONFIG, ...(toHttpConfigLiteral( config ?? {} )) }, config?.headers );
     };
 
     IHttpClient.resolveDelegate = function( pDelegate, pConfig, pOptions )
@@ -1647,7 +1647,7 @@ const { _ud = "undefined", $scope } = constants;
             }
         }
 
-        return isHttpClient( httpClient ) ? httpClient : new HttpClient( resolveHttpConfig( pHttpClient, ...hosts ) );
+        return isHttpClient( httpClient ) ? httpClient : new HttpClient( resolveHttpConfig( pHttpClient, ...pObjects ) );
     };
 
     HttpClient.resolveHttpClient = resolveHttpClient;
