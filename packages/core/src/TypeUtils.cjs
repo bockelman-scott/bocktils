@@ -6539,7 +6539,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
         if ( isNull( pTarget ) || !isObject( pTarget ) || ($scope() === pTarget) )
         {
-            attemptSilent( () => (ToolBocksModule.resolveLogger( toolBocksModule?.logger, console ) || console).log( `Invalid Target. Target is ${($scope() === pTarget) ? "the global scope" : (isNull( pTarget ) ? "null" : "not an object")} at delegateTo, line 5963` ) );
+            attemptSilent( () => (ToolBocksModule.resolveLogger( toolBocksModule?.logger, console ) || console).log( `Invalid Target. Target is ${($scope() === pTarget) ? "the global scope" : (isNull( pTarget ) ? "null" : "not an object")}` ) );
             return false;
         }
 
@@ -6547,11 +6547,11 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
         if ( isNull( pDelegate ) || ( !(isNonNullObject( pDelegate ) || isFunction( pDelegate ))) )
         {
-            attemptSilent( () => (ToolBocksModule.resolveLogger( toolBocksModule?.logger, console ) || console).log( `${pDelegate} is null or not an object or function at delegateTo, line 5971` ) );
+            attemptSilent( () => (ToolBocksModule.resolveLogger( toolBocksModule?.logger, console ) || console).log( `${pDelegate} is null or not an object or function` ) );
             return false;
         }
 
-        let delegate = isFunction( pDelegate ) || isClass( pDelegate ) ? ((pDelegate?.prototype || Object.getPrototypeOf( pDelegate )) || pDelegate) : asObject( pDelegate );
+        let delegate = isFunction( pDelegate ) || isClass( pDelegate ) ? ((Object.getPrototypeOf( pDelegate ) || pDelegate?.prototype) || pDelegate) : asObject( pDelegate );
 
         if ( isNull( delegate ) || !(isObject( delegate ) || isFunction( delegate )) || ($scope() === delegate) )
         {
@@ -6661,7 +6661,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
                     if ( isAsyncFunction( target[methodName] ) || isAsyncFunction( delegateMethod ) )
                     {
-                        const originalMethod = isFunction( target[methodName] ) ? target[methodName].bind( target ) : function() {}.bind( target );
+                        const originalMethod = isFunction( target[methodName] ) ? target[methodName].bind( target ) : (function() {}).bind( target );
 
                         // noinspection UnnecessaryLocalVariableJS
                         const newMethod = async function( ...pArgs )
@@ -6670,7 +6670,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
                             let delegateReturnValue = await asyncAttempt( async() => await delegateMethod( ...pArgs ) );
 
-                            return await delegateReturnValue || await originalReturnValue;
+                            return await delegateReturnValue ?? await originalReturnValue;
                         };
 
                         target[methodName] = newMethod.bind( target );
@@ -6686,7 +6686,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
                             let delegateReturnValue = attempt( () => delegateMethod( ...pArgs ) );
 
-                            return delegateReturnValue || originalReturnValue;
+                            return delegateReturnValue ?? originalReturnValue;
                         };
 
                         target[methodName] = newMethod.bind( target );
