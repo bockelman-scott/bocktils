@@ -9079,8 +9079,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             if ( isMap( object ) || (isFunc( object?.set ) && (2 === $ln( object?.set ))) )
             {
-                attempt( () => object.set( key, ((keys.length > 0) ? (isMap( object ) ? new Map() : {}) : value || pValue) ) );
-                return object.get( key );
+                attempt( () => object.set( key, ((keys.length > 0) ? (isMap( object ) ? object.get( key ) ?? new Map() : object[key] ?? {}) : value || pValue) ) );
+                return isFunction( object.get ) ? object.get( key ) : object[key];
             }
             else
             {
