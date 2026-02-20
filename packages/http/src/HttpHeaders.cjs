@@ -1536,6 +1536,11 @@ const { _ud = "undefined", $scope } = constants;
 
                             const value = asString( ObjectEntry.getValue( entry ) );
 
+                            if ( isFunction( value ) )
+                            {
+                                continue;
+                            }
+
                             const rule = this.getRule( name ) || this.getRule( lcase( name ) );
 
                             if ( rule && rule.isValid() )

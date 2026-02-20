@@ -1814,11 +1814,12 @@ const { _ud = "undefined", $scope } = constants;
 
                 if ( $ln( objects ) > 0 )
                 {
+                    object = this.#deepCopy ? localCopy( object ) : ((isFunction( object?.clone )) ? object.clone() : object);
+
                     if ( isReadOnly( object ) )
                     {
                         object = { ...object };
                     }
-                    object = this.#deepCopy ? localCopy( object ) : ((isFunction( object?.clone )) ? object.clone() : object);
                 }
 
                 while ( $ln( objects ) > 0 )
@@ -1839,6 +1840,12 @@ const { _ud = "undefined", $scope } = constants;
                             }
 
                             let value = ObjectEntry.getValue( entry );
+
+                            if ( isFunction( value ) )
+                            {
+                                attempt( () => object[name] = value.bind( object ) );
+                                continue;
+                            }
 
                             if ( this.#deepCopy && isNonNullObject( value ) )
                             {

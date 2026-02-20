@@ -127,6 +127,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             _mt_str = "",
             _mt = _mt_str,
+            _comma,
             _str,
             _num,
             _big,
@@ -340,6 +341,37 @@ const { _ud = "undefined", $scope } = constants;
 
     const VALID_RESPONSE_TYPES = lock( ["arraybuffer", "json", "stream", "document", "text"] );
 
+    const EXPECTED_BINARY_MIME_TYPES =
+        [
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.ms-excel",
+            "application/octet-stream",
+            "image/png",
+            "image/svg+xml",
+            "image/jpeg",
+            "application/pdf",
+            "message/rfc822"
+        ];
+
+    const RESPONSE_TYPE_MAPPING =
+        {
+            "application/octet-stream": "stream",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "arraybuffer",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "arraybuffer",
+            "application/vnd.ms-excel": "arraybuffer",
+            "image/png": "arraybuffer",
+            "image/svg+xml": "arraybuffer",
+            "image/jpeg": "arraybuffer",
+            "application/pdf": "arraybuffer",
+            "message/rfc822": "arraybuffer",
+            "text/css": "text",
+            "text/html": "text",
+            "text/xml": "text",
+            "application/json": "json",
+            "application/javascript": "text",
+        };
+
     const isValidResponseType = function( pValue, pMethod, pUrl, pHeaders )
     {
         if ( isString( pValue ) && !isBlank( pValue ) && VALID_RESPONSE_TYPES.includes( lcase( pValue ).trim() ) )
@@ -357,14 +389,28 @@ const { _ud = "undefined", $scope } = constants;
                 return "json" === pValue;
             }
 
-            if ( ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/octet-stream"].includes( acceptHeader ) ||
-                 acceptHeader.includes( "wordprocessingml.document" ) || acceptHeader.includes( "stream" ) || asString( url, true ).includes( "download" ) )
+            if ( EXPECTED_BINARY_MIME_TYPES.includes( acceptHeader ) ||
+                 acceptHeader.includes( "wordprocessingml.document" ) ||
+                 acceptHeader.includes( "stream" ) ||
+                 acceptHeader.includes( "image/" ) ||
+                 asString( url, true ).includes( "download" ) )
             {
                 return ["arraybuffer", "stream"].includes( pValue );
             }
 
+            const acceptable = acceptHeader.split( _comma );
+
+            for( let accepted of acceptable )
+            {
+                if ( pValue === RESPONSE_TYPE_MAPPING[acceptable] )
+                {
+                    return true;
+                }
+            }
+
             return objectValues( VERBS ).includes( ucase( method ) );
         }
+
         return false;
     };
 
@@ -400,11 +446,11 @@ const { _ud = "undefined", $scope } = constants;
             let url = asString( resolveUrl( pUrl, properties ), true );
             this.#url = !isBlank( url ) ? cleanUrl( url ) : _mt;
 
-            const type = readScalarProperty( this.#properties, _str, "responseType" ) || _mt;
+            const type = lcase( asString( readScalarProperty( this.#properties, _str, "responseType" ) || _mt, true ) );
 
             if ( isValidResponseType( type, this.#method, this.#url, this.#headers ) )
             {
-                this.#responseType = ("text" === type && isNonNullObject( pBody )) ? "json" : type;
+                this.#responseType = lcase( type );
             }
             else
             {
@@ -448,23 +494,16 @@ const { _ud = "undefined", $scope } = constants;
 
         get responseType()
         {
-            let type = this.#responseType || readScalarProperty( this.properties, _str, "responseType" );
+            let type = asString( this.#responseType || readScalarProperty( this.properties, _str, "responseType" ), true );
 
             if ( !isValidResponseType( type ) || ((isNonNullObject( this.data ) || isNonNullObject( this.body )) && "text" === type) )
             {
-                if ( isNonNullObject( this.data ) || isNonNullObject( this.body ) )
-                {
-                    type = "json";
-                }
-                else if ( (isString( this.data ) || isString( this.body )) )
-                {
-                    type = "text";
-                }
+                type = HttpConfig.calculateResponseType( readScalarProperty( this.#headers, _str, "accept" ) );
             }
 
-            this.#responseType = type;
+            this.#responseType = isBlank( type ) ? HttpConfig.calculateResponseType( readScalarProperty( this.#headers, _str, "accept" ) ) : asString( type, true );
 
-            return type;
+            return lcase( asString( this.#responseType, true ) ) || "json";
         }
 
         set responseType( pValue )
@@ -616,8 +655,22 @@ const { _ud = "undefined", $scope } = constants;
 
         set data( pData )
         {
-            this.#data = pData;
-            this.#body = pData;
+            if ( pData )
+            {
+                this.#data = pData;
+                this.#body = pData;
+            }
+        }
+
+        clearData()
+        {
+            this.#data = null;
+            this.#body = null;
+        }
+
+        clearBody()
+        {
+            this.clearData();
         }
 
         get body()
@@ -640,6 +693,11 @@ const { _ud = "undefined", $scope } = constants;
         {
             let params = isNull( pParams ) ? null : new URLSearchParams( pParams );
             this.#params = params || null;
+        }
+
+        clearParams()
+        {
+            this.#params = null;
         }
 
         equals( pOther )
@@ -730,10 +788,10 @@ const { _ud = "undefined", $scope } = constants;
 
             let obj =
                 {
-                    responseType: asString( me.responseType, true ) || HttpConfig.calculateResponseType( acceptHeader ),
+                    responseType: lcase( asString( me.responseType, true ) || HttpConfig.calculateResponseType( acceptHeader ) ),
                     method: me.method,
                     url: me.url,
-                    headers: me.headers,
+                    headers: heads,
                     httpAgent: me.httpAgent,
                     httpsAgent: me.httpsAgent
                 };
@@ -742,12 +800,6 @@ const { _ud = "undefined", $scope } = constants;
             {
                 obj["data"] = me.data || me.body;
                 obj["body"] = me.body || me.data;
-            }
-
-            if ( isNonNullObject( obj["data"] ) || isNonNullObject( obj["body"] ) )
-            {
-                const type = lcase( asString( obj.responseType, true ) );
-                obj.responseType = (isBlank( type ) || "text" === type) ? "json" : type;
             }
 
             if ( me.params )
@@ -768,13 +820,13 @@ const { _ud = "undefined", $scope } = constants;
 
                         if ( !(isNull( value ) || isBlank( key )) )
                         {
-                            obj[key] = (obj[key] ?? value);
+                            obj[key] = (obj[key] ?? obj[lcase( key )] ?? value);
                         }
                     }
                 }
             }
 
-            let headers = asObject( this.headers || obj.headers );
+            let headers = asObject( heads ?? this.headers ?? obj.headers );
 
             if ( isFunction( headers?.toLiteral ) )
             {
@@ -783,7 +835,7 @@ const { _ud = "undefined", $scope } = constants;
             }
             else
             {
-                obj.headers = toObjectLiteral( obj.headers || this.headers );
+                obj.headers = toObjectLiteral( headers ?? obj.headers ?? this.headers );
             }
 
             delete obj["properties"];
@@ -834,7 +886,7 @@ const { _ud = "undefined", $scope } = constants;
 
     HttpConfig.calculateResponseType = function( pAcceptHeader )
     {
-        const acceptHeader = asString( pAcceptHeader, true );
+        const acceptHeader = lcase( asString( pAcceptHeader, true ) );
 
         if ( ["application/json"].includes( acceptHeader ) || acceptHeader.includes( "json" ) )
         {
@@ -842,7 +894,8 @@ const { _ud = "undefined", $scope } = constants;
         }
 
         if ( ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"].includes( acceptHeader ) ||
-             acceptHeader.includes( "wordprocessingml.document" ) )
+             acceptHeader.includes( "wordprocessingml.document" ) ||
+             acceptHeader.includes( "openxmlformats-officedocument" ) )
         {
             return "arraybuffer";
         }
@@ -852,7 +905,41 @@ const { _ud = "undefined", $scope } = constants;
             return "stream";
         }
 
-        return undefined;
+        let responseType = _mt;
+
+        const acceptable = acceptHeader.split( _comma );
+
+        for( let accepted of acceptable )
+        {
+            responseType = lcase( asString( RESPONSE_TYPE_MAPPING[accepted], true ) );
+
+            if ( !isBlank( responseType ) )
+            {
+                break;
+            }
+        }
+
+        if ( isBlank( responseType ) )
+        {
+            if ( (/image\/|pdf|openxmlformats-officedocument/).test( acceptHeader ) )
+            {
+                responseType = "arraybuffer";
+            }
+            else if ( (/json/).test( acceptHeader ) )
+            {
+                responseType = "json";
+            }
+            else if ( (/text\//).test( acceptHeader ) )
+            {
+                responseType = "text";
+            }
+            else if ( (/stream/).test( acceptHeader ) )
+            {
+                responseType = "stream";
+            }
+        }
+
+        return responseType;
     };
 
     HttpConfig.fromLiteral = function( pObject )
