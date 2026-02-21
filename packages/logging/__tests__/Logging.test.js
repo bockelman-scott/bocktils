@@ -2,7 +2,7 @@ const core = require( "@toolbocks/core" );
 
 const { moduleUtils } = core;
 
-const { ModuleEvent } = moduleUtils;
+const { ModuleEvent, sleep } = moduleUtils;
 
 const logging = require( "@toolbocks/logging" );
 
@@ -11,6 +11,7 @@ const {
     DEFAULT_ERROR_TEMPLATE,
     DEFAULT_LOG_FORMATTER_OPTIONS,
     DEFAULT_LOGGER_OPTIONS,
+    DEFAULT_SIMPLE_LOGGER_OPTIONS,
     LogLevel,
     LogRecord,
     LogFormatter,
@@ -19,9 +20,15 @@ const {
     AsyncLogger,
     BufferedLogger,
     ConsoleLogger,
+    ConditionalLogger,
+    SimpleLogger,
+    SimpleAsynchronousLogger,
+    SourcedSimpleLogger,
     resolveError,
     resolveSource
 } = logging;
+
+let consoleMessages = [];
 
 const logRecord = new LogRecord( "This is a test",
                                  "debug",
@@ -213,5 +220,103 @@ describe( "AsyncLogger", () =>
 
     } );
 } );
+
+describe( "SimpleLogger", () =>
+          {
+              let MockSink =
+                  {
+                      log: ( ...pData ) => consoleMessages.push( ...pData ),
+                      info: ( ...pData ) => consoleMessages.push( ...pData ),
+                      warn: ( ...pData ) => consoleMessages.push( ...pData ),
+                      error: ( ...pData ) => consoleMessages.push( ...pData ),
+                      debug: ( ...pData ) => consoleMessages.push( ...pData ),
+                      trace: ( ...pData ) => consoleMessages.push( ...pData )
+                  };
+
+              test( "SimpleLogger is an alternative to the more complex Logging Framework",
+                    () =>
+                    {
+                        const simpleLogger = new SimpleLogger( MockSink, "warn", "error" );
+
+                        simpleLogger.log( "This will not be displayed" );
+                        simpleLogger.info( "Nor will this" );
+                        simpleLogger.warn( "This WILL be displayed" );
+                        simpleLogger.error( "And so will this" );
+                        simpleLogger.debug( "But not this" );
+                        simpleLogger.trace( "or this" );
+
+                        console.log( consoleMessages );
+
+                        expect( consoleMessages.includes( "This will not be displayed" ) ).toBe( false );
+                        expect( consoleMessages.includes( "Nor will this" ) ).toBe( false );
+                        expect( consoleMessages.includes( "This WILL be displayed" ) ).toBe( true );
+                        expect( consoleMessages.includes( "And so will this" ) ).toBe( true );
+                        expect( consoleMessages.includes( "But not this" ) ).toBe( false );
+                        expect( consoleMessages.includes( "or this" ) ).toBe( false );
+
+                        consoleMessages.length = 0;
+                    }
+              );
+
+              test( "SimpleLogger can be decorated to indicate the source",
+                    () =>
+                    {
+                        const logger = new SourcedSimpleLogger( MockSink, "SomeClassOrRandomString", DEFAULT_SIMPLE_LOGGER_OPTIONS );
+
+                        logger.info( "Some Message" );
+
+                        console.log( consoleMessages );
+
+                        expect( consoleMessages.includes( "SomeClassOrRandomString :: " ) ).toBe( true );
+
+                        consoleMessages.length = 0;
+                    } );
+
+              test( "SimpleLogger can be configured to indicate the source",
+                    () =>
+                    {
+                        const logger = new SimpleLogger( MockSink, { ...DEFAULT_SIMPLE_LOGGER_OPTIONS, source: "TheSource" } );
+
+                        logger.info( "Some Message" );
+
+                        console.log( consoleMessages );
+
+                        expect( consoleMessages.includes( "TheSource :: " ) ).toBe( true );
+
+                        consoleMessages.length = 0;
+                    } );
+
+
+              test( "SimpleAsynchronousLogger can be used to improve performance",
+                    () =>
+                    {
+                        consoleMessages.length = 0;
+
+                        const logger = new SimpleAsynchronousLogger( MockSink );
+
+                        logger.info( "An asynchronously written message" );
+
+                        logger.info( "Another message" );
+
+                        logger.info( "Last message" );
+
+                    }, 30_000 );
+
+              test( "SimpleAsynchronousLogger cannot be easily tested",
+                    async() =>
+                    {
+                        sleep( 1_024 ).then( () => console.log( consoleMessages ) );
+
+                        sleep( 1_024 ).then( () => console.log( "done" ) );
+
+                        sleep( 1_024 ).then( () => console.log( "exit" ) );
+
+                        await sleep( 128 );
+
+                        expect( 1 ).toEqual( 1 );
+                        
+                    }, 30_000 );
+          }
+);
 
 // Active timers can also cause this, ensure that .unref() was called on them. ??

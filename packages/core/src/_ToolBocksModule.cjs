@@ -1649,6 +1649,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         #logEmptyMessages = true;
 
         #addFormatting = false;
+
         #addFormattingToEmptyMessages = false;
 
         constructor( pSink, pOptions = DEFAULT_KONSOLE_OPTIONS )
@@ -1661,14 +1662,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             this.#logger = ILogger.isLogger( sink ) ? sink : konsole;
 
-            if ( sink === konsole || sink === console )
-            {
-                this.#addFormatting = options.addFormatting;
+            this.#addFormatting = options.addFormatting;
 
-                this.#addFormattingToEmptyMessages = options.addFormattingToEmptyMessages;
+            this.#addFormattingToEmptyMessages = options.addFormattingToEmptyMessages;
 
-                this.#logEmptyMessages = options.logEmptyMessages;
-            }
+            this.#logEmptyMessages = options.logEmptyMessages;
 
             let count = 0;
 
@@ -1684,52 +1682,89 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             let timestamp = isDate( pDate ) ? (pDate || new Date()) : new Date();
 
-            let s = asString( timestamp.getFullYear(), true ).padStart( 4, "0" ) + "-" +
-                    asString( timestamp.getMonth() + 1, true ).padStart( 2, "0" ) + "-" +
-                    asString( timestamp.getDate(), true ).padStart( 2, "0" ) + " " +
-                    asString( timestamp.getHours(), true ).padStart( 2, "0" ) + ":" +
-                    asString( timestamp.getMinutes(), true ).padStart( 2, "0" ) + "." +
-                    asString( timestamp.getSeconds(), true ).padStart( 2, "0" ) + "," +
-                    asString( timestamp.getMilliseconds(), true ).padStart( 3, "0" ) + " -> ";
+            let s = _asStr( timestamp.getFullYear() ).padStart( 4, "0" ) + "-" +
+                    _asStr( timestamp.getMonth() + 1 ).padStart( 2, "0" ) + "-" +
+                    _asStr( timestamp.getDate() ).padStart( 2, "0" ) + " " +
+                    _asStr( timestamp.getHours() ).padStart( 2, "0" ) + ":" +
+                    _asStr( timestamp.getMinutes() ).padStart( 2, "0" ) + "." +
+                    _asStr( timestamp.getSeconds() ).padStart( 2, "0" ) + "," +
+                    _asStr( timestamp.getMilliseconds() ).padStart( 3, "0" ) + " -> ";
 
-            return asString( s );
+            return _asStr( s );
+        }
+
+        get logger()
+        {
+            return this.#logger ?? konsole;
+        }
+
+        get addFormatting()
+        {
+            return !!this.#addFormatting;
+        }
+
+        get logEmptyMessages()
+        {
+            return !!this.#logEmptyMessages;
+        }
+
+        get addFormattingToEmptyMessages()
+        {
+            return !!this.#addFormattingToEmptyMessages && this.logEmptyMessages;
+        }
+
+        addSource( ...pMsg )
+        {
+            // overridden by subclasses or decorators
+            return [...pMsg];
+        }
+
+        addPrefix( pDate, level, ...pMsgs )
+        {
+            let msgs = [...pMsgs];
+
+            let TSP = Konsole.formatTimeStamp( pDate ?? new Date() );
+
+            let lvl = _asStr( ("log" === level ? "info" : level) ).trim();
+            let LVL = ("[" + _ucase( lvl ) + "]").padEnd( 8, _spc );
+
+            msgs = this.addSource( ...msgs );
+
+            msgs.unshift( TSP );
+            msgs.unshift( LVL );
+
+            return [...(msgs || pMsgs)];
         }
 
         #_log( pLevel, ...pData )
         {
             try
             {
-                let level = _lct( pLevel || LOG_LEVELS.LOG ) || LOG_LEVELS.LOG;
+                const level = _lct( pLevel || LOG_LEVELS.LOG ) || LOG_LEVELS.LOG;
 
                 const data = [...(pData || [])].map( e => serialize( e ) );
 
+                const isValidMessage = e => !isStr( e ) || _isValidStr( e );
+
                 let msg = [...data];
 
-                if ( !(msg.some( e => !isBlank( e ) ) || this.#logEmptyMessages) )
+                if ( !(msg.some( isValidMessage ) || this.logEmptyMessages) )
                 {
                     return;
                 }
 
-                if ( this.#addFormatting && (msg.some( e => !isBlank( e ) ) || this.#addFormattingToEmptyMessages) )
+                if ( this.addFormatting && (msg.some( isValidMessage ) || this.addFormattingToEmptyMessages) )
                 {
-                    const date = new Date();
-
-                    let TSP = Konsole.formatTimeStamp( date );
-
-                    let lvl = asString( (LOG_LEVELS.LOG === level ? LOG_LEVELS.INFO : level), true );
-                    let LVL = ("[" + ucase( lvl ) + "]").padEnd( 8, _spc );
-
-                    msg.unshift( TSP );
-                    msg.unshift( LVL );
+                    msg = this.addPrefix( new Date(), level, ...msg );
                 }
 
-                if ( isFunc( this.#logger[level] ) )
+                if ( isFunc( this.logger[level] ) )
                 {
-                    this.#logger[level]( ...(msg || []) );
+                    this.logger[level]( ...(msg || []) );
                 }
-                else if ( isFunc( this.#logger?.log ) )
+                else if ( isFunc( this.logger?.log ) )
                 {
-                    this.#logger.log( ...msg );
+                    this.logger.log( ...msg );
                 }
                 else
                 {
@@ -1851,16 +1886,19 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          * for this instance.
          *
          * @param {ILogger} pSink - The underlying logger that will write messages to a destination, such as a file, a socket, a database, or the console
+         * @param pOptions
          * @param {...string} pLevels - One or more LOG_LEVELS indicating which message this instance will log and which it will ignore
          * @return An instance of the ConditionalLogger class configured to safely log messages associated with one of the levels specified
          *
          * @constructor
          */
-        constructor( pSink, ...pLevels )
+        constructor( pSink, pOptions, ...pLevels )
         {
-            super( unwrapKonsoleLogger( pSink ) );
+            super( unwrapKonsoleLogger( pSink ), pOptions );
 
-            this.#levels = [...(pLevels || [])];
+            this.#levels = [...(pLevels || pOptions?.levels || [])].flat();
+
+            this.#levels = $ln( this.#levels ) < 1 ? [...(MODEST_LOG_LEVELS)] : this.#levels;
         }
 
         get levels()
@@ -1868,9 +1906,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return [...(this.#levels || [])];
         }
 
+        isEnabledForLevel( pLevel )
+        {
+            return (this.levels).map( _lcase ).includes( _lcase( pLevel ) );
+        }
+
         log( ...pData )
         {
-            if ( this.#levels.includes( LOG_LEVELS.LOG ) )
+            if ( this.isEnabledForLevel( LOG_LEVELS.LOG ) )
             {
                 super.log( ...pData );
             }
@@ -1878,7 +1921,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         info( ...pData )
         {
-            if ( this.#levels.includes( LOG_LEVELS.INFO ) )
+            if ( this.isEnabledForLevel( LOG_LEVELS.INFO ) )
             {
                 super.info( ...pData );
             }
@@ -1886,7 +1929,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         warn( ...pData )
         {
-            if ( this.#levels.includes( LOG_LEVELS.WARN ) )
+            if ( this.isEnabledForLevel( LOG_LEVELS.WARN ) )
             {
                 super.warn( ...pData );
             }
@@ -1894,7 +1937,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         debug( ...pData )
         {
-            if ( this.#levels.includes( LOG_LEVELS.DEBUG ) )
+            if ( this.isEnabledForLevel( LOG_LEVELS.DEBUG ) )
             {
                 super.debug( ...pData );
             }
@@ -1902,7 +1945,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         error( ...pData )
         {
-            if ( this.#levels.includes( LOG_LEVELS.ERROR ) )
+            if ( this.isEnabledForLevel( LOG_LEVELS.ERROR ) )
             {
                 super.error( ...pData );
             }
@@ -1910,7 +1953,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         trace( ...pData )
         {
-            if ( this.#levels.includes( LOG_LEVELS.TRACE ) )
+            if ( this.isEnabledForLevel( LOG_LEVELS.TRACE ) )
             {
                 super.trace( ...pData );
             }
