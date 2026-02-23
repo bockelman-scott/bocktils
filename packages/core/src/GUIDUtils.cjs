@@ -3,9 +3,9 @@ const constants = require( "./Constants.cjs" );
 const typeUtils = require( "./TypeUtils.cjs" );
 const stringUtils = require( "./StringUtils.cjs" );
 
-const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
+const { _ud = "undefined", $scope = moduleUtils.$scope, _fun } = constants;
 
-const crypto = $scope().crypto || require( "crypto" );
+const crypto = $scope()?.crypto ?? (_ud !== typeof require && _fun === typeof require) ? require( "crypto" ) : undefined;
 
 (function exposeModule()
 {
@@ -16,13 +16,13 @@ const crypto = $scope().crypto || require( "crypto" );
         return $scope()[INTERNAL_NAME];
     }
 
-    const { OBJECT_REGISTRY, ToolBocksModule, clamp, lock } = moduleUtils;
+    const { OBJECT_REGISTRY, ToolBocksModule, attempt, asyncAttempt, clamp, lock } = moduleUtils;
 
     const { _mt_str = "", _mt = _mt_str, _hyphen = "-" } = constants;
 
     const { isNull, isFunction, isUUID } = typeUtils;
 
-    const { asString, isBlank, asInt } = stringUtils;
+    const { asString, isBlank, asInt, repeat } = stringUtils;
 
     /**
      * An array of this module's dependencies
@@ -158,6 +158,69 @@ const crypto = $scope().crypto || require( "crypto" );
         }
     }
 
+    const HASH_ALGO = "sha256";
+
+    const hash = async( pContent, pHashAlgorithm ) =>
+    {
+        const encoder = (_ud !== typeof TextEncoder) ? new TextEncoder() :
+            {
+                encode: ( pIn ) =>
+                {
+                    return new Uint8Array( ((pIn).split( _mt )).map( e => e.charCodeAt( 0 ) ) );
+                }
+            };
+
+        let data = encoder.encode( asString( pContent ) );
+
+        // Create a hash object
+        const hasher = ((_ud !== typeof crypto && !isNull( crypto )) && isFunction( crypto?.createHash )) ? crypto.createHash( pHashAlgorithm || HASH_ALGO ) : null;
+
+        if ( hasher )
+        {
+            await asyncAttempt( () => hasher.update( data ) );
+            return hasher.digest( "hex" );
+        }
+
+        let useCrypto = (_ud !== typeof crypto && !isNull( crypto )) && _ud !== typeof crypto.subtle;
+
+        let buffer = useCrypto ? await crypto.subtle.digest( (pHashAlgorithm || HASH_ALGO), data ) : data.map( ( e, i ) => e + ((i % 7) << 3) );
+
+        const arr = [...(new Uint8Array( buffer ))];
+
+        const padLeft = isFunction( _mt.padStart ) ? ( pStr, pLen = 2 ) => asString( pStr ).padStart( asInt( pLen ), "0" ) : ( pStr, pLen = 2 ) => ((repeat( "0", asInt( pLen ) - $ln( asString( pStr ) ) + asString( pStr ) ).substring( -(asInt( pLen )) )));
+
+        let mapper = ( b ) => padLeft( Number( b ).toString( 16 ), 2 );
+
+        return arr.map( mapper ).join( _mt );
+    };
+
+    const hashSync = ( s ) =>
+    {
+        // Create a hash object
+        const hasher = ((_ud !== typeof crypto && !isNull( crypto )) && isFunction( crypto?.createHash )) ? crypto.createHash( pHashAlgorithm || HASH_ALGO ) : null;
+
+        if ( hasher )
+        {
+            attempt( () => hasher.update( data ) );
+            return hasher.digest( "hex" );
+        }
+
+        let arr = asString( s ).split( _mt ).map( e => e.charCodeAt( 0 ) );
+
+        arr = arr.reverse();
+
+        let arr2 = [];
+
+        for( let i = 0, n = $ln( arr ); i < n; i += 16 )
+        {
+            arr2.push( arr.slice( i, i + 16 ).reduce( ( a, c ) => a + c, 0 ) );
+        }
+
+        arr2 = arr2.map( e => Number( e ).toString( 36 ) );
+
+        return arr2.join( _mt );
+    };
+
     const INSTANCE = new GUIDMaker( RandomUUIDOptions );
 
     let mod =
@@ -181,7 +244,9 @@ const crypto = $scope().crypto || require( "crypto" );
             getRandomBytes: function( pNumBytes )
             {
                 return (INSTANCE || new GUIDMaker( RandomUUIDOptions )).getRandomBytes( pNumBytes );
-            }
+            },
+            hash,
+            hashSync
         };
 
     mod = toolBocksModule.extend( mod );

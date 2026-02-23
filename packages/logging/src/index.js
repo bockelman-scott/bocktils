@@ -1501,7 +1501,11 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         #addFormattingToEmptyMessages = false;
         #emitEvents = false;
 
-        constructor( pLevels, pAddFormatting = true, pLogEmptyMessages = false, pAddFormattingToEmptyMessages = false, pEmitEvents = false )
+        constructor( pLevels,
+                     pAddFormatting = true,
+                     pLogEmptyMessages = false,
+                     pAddFormattingToEmptyMessages = false,
+                     pEmitEvents = false )
         {
             this.#levels.push( ...([asArray( pLevels || [] )]) );
 

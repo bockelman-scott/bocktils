@@ -117,21 +117,24 @@ const
         toTypedArray,
         collapse,
         toObjectLiteral,
-        transformObject
+        transformObject,
+        isSubclassOf
     } = typeUtils;
 
 const { toSnakeCase } = stringUtils;
 
 const anAsyncFunction = async function()
 {
-    // await console.log( "When I get around to it..." );
+    // await console.log("When I get around to it...");
 };
 
 class A
 {
-    constructor()
-    {
+    #id;
 
+    constructor( pId )
+    {
+        this.#id = pId;
     }
 
     doSomething()
@@ -143,34 +146,57 @@ class A
     {
         return function()
         {
-            // console.log( "A function that returns a function?!  What will they think of next?!!" );
+            // console.log("A function that returns a function?!  What will they think of next?!!");
         };
     }
 
     static doNothing()
     {
-        // console.log( "\"I didn't do it.  No one saw me do it.  You can't prove anything\" -- Bart Simpson" );
+        // console.log("\"I didn't do it.  No one saw me do it.  You can't prove anything\" -- Bart Simpson");
     }
 
     async lazyLog()
     {
         await anAsyncFunction();
     }
+
+    get id()
+    {
+        return this.#id;
+    }
 }
 
 class B extends A
 {
-    constructor()
+    #name;
+
+    constructor( pId, pName )
     {
-        super();
+        super( pId );
+
+        this.#name = pName;
+    }
+
+    get name()
+    {
+        return this.#name;
     }
 }
 
 class C extends B
 {
-    constructor()
+    #value;
+
+    constructor( pId, pName, pValue )
     {
-        super();
+        super( pId, pName );
+
+        this.#value = pValue;
+    }
+
+    get value()
+    {
+        return this.#value;
     }
 }
 
@@ -3384,7 +3410,7 @@ describe( "getClass", () =>
     test( "getClass( new A() )",
           () =>
           {
-              let a = new A();
+              let a = new A( 1 );
               expect( getClass( a ) ).toBe( A );
           } );
 
@@ -3398,7 +3424,7 @@ describe( "getClass", () =>
     test( "getClass( new C() )",
           () =>
           {
-              let c = new C();
+              let c = new C( 1, "Bob", "Dobbs" );
               expect( getClass( c ) ).toBe( C );
           } );
 
@@ -3444,7 +3470,7 @@ describe( "getClassName", () =>
     test( "getClassName( new A() )",
           () =>
           {
-              let a = new A();
+              let a = new A( 23 );
               expect( getClassName( a ) ).toBe( "A" );
           } );
 
@@ -3458,7 +3484,7 @@ describe( "getClassName", () =>
     test( "getClassName( new C() )",
           () =>
           {
-              let c = new C();
+              let c = new C( 777, "Johnny", "Be Goode" );
               expect( getClassName( c ) ).toBe( "C" );
           } );
 
@@ -3496,6 +3522,90 @@ describe( "getClassName", () =>
               let a = "a";
               expect( getClassName( a ) ).toEqual( "" );
           } );
+} );
+
+describe( "isSubclassOf", () =>
+{
+    class D extends Map
+    {
+        constructor( pEntries )
+        {
+            super( pEntries );
+        }
+    }
+
+    test( "isSubclassOf( B, A )",
+          () =>
+          {
+              expect( isSubclassOf( B, A ) ).toBe( true );
+          } );
+
+    test( "isSubclassOf( C, A )",
+          () =>
+          {
+              expect( isSubclassOf( C, A ) ).toBe( true );
+          } );
+
+    test( "isSubclassOf( new B(), A )",
+          () =>
+          {
+              expect( isSubclassOf( new B( 1, "Bob" ), A ) ).toBe( true );
+          } );
+
+    test( "isSubclassOf( B, new A() )",
+          () =>
+          {
+              expect( isSubclassOf( C, new A( 23 ) ) ).toBe( true );
+          } );
+
+    test( "isSubclassOf( A, A )",
+          () =>
+          {
+              expect( isSubclassOf( A, A ) ).toBe( true );
+          } );
+
+    test( "isSubclassOf( B, B )",
+          () =>
+          {
+              expect( isSubclassOf( B, B ) ).toBe( true );
+          } );
+
+    test( "isSubclassOf( A, B ) === false",
+          () =>
+          {
+              expect( isSubclassOf( A, B ) ).toBe( false );
+          } );
+
+    test( "isSubclassOf( {}, A )",
+          () =>
+          {
+              expect( isSubclassOf( {}, A ) ).toBe( false );
+          } );
+
+    test( "isSubclassOf( A, {} )",
+          () =>
+          {
+              expect( isSubclassOf( A, {} ) ).toBe( true );
+          } );
+
+    test( "isSubclassOf( B, Array )",
+          () =>
+          {
+              expect( isSubclassOf( B, Array ) ).toBe( false );
+          } );
+
+    test( "isSubclassOf( D, B ) === false",
+          () =>
+          {
+              expect( isSubclassOf( D, B ) ).toBe( false );
+          } );
+
+    test( "isSubclassOf( D, Map )",
+          () =>
+          {
+              expect( isSubclassOf( D, Map ) ).toBe( true );
+          } );
+
 } );
 
 describe( "toIterable", () =>

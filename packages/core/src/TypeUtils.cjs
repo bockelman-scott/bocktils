@@ -1832,9 +1832,45 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
                 {
                     return true;
                 }
+
+                if ( isFunction( v.equals ) && v.equals( pValue ) )
+                {
+                    return true;
+                }
+
+                if ( isFunction( pValue?.equals ) && pValue.equals( v ) )
+                {
+                    return true;
+                }
             }
 
             return false;
+        }
+
+        get( pValue )
+        {
+            if ( _ud === typeof pValue || null === pValue )
+            {
+                return null;
+            }
+
+            for( let v of this.values() )
+            {
+                if ( (_obj === typeof v) && (v === pValue || this.#equalityFunction( v, pValue )) )
+                {
+                    return v;
+                }
+
+                if ( isFunction( v.equals ) && v.equals( pValue ) )
+                {
+                    return v;
+                }
+
+                if ( isFunction( pValue?.equals ) && pValue.equals( v ) )
+                {
+                    return v;
+                }
+            }
         }
     }
 
@@ -1844,7 +1880,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
      */
     class ResolvedSet extends VisitedSet
     {
-        #map = new Map();
+        #map = new WeakMap();
         #mapByNodePath = new Map();
 
         constructor( pEqualityFunction = ( a, b ) => a === b, ...pValues )
@@ -1884,19 +1920,34 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         {
             if ( isNonNullObject( pObject ) )
             {
+                this.add( pObject );
+
                 if ( isNonNullValue( pValue ) )
                 {
-                    this.add( pObject );
                     this.#map.set( pObject, pValue );
                     return pValue;
                 }
                 else
                 {
-                    return this.has( pObject ) ? this.#map.get( pObject ) : null;
+                    return this.has( pObject ) ? this.#map.get( pObject ) : pValue;
                 }
             }
 
             return isNonNullValue( pValue ) ? pValue : null;
+        }
+
+        getResolved( ...pNodePath )
+        {
+            let paths = toNodePathArray( ...pNodePath );
+
+            if ( isNull( paths ) || $ln( paths ) <= 0 )
+            {
+                return null;
+            }
+
+            paths = paths.join( _dot );
+
+            return this.#mapByNodePath.get( paths );
         }
     }
 
@@ -3117,7 +3168,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             return null;
         }
 
-        let clazz = isClass( obj ) ? obj : [obj?.constructor, obj?.prototype?.constructor, obj?.prototype, Object.getPrototypeOf( obj ), Object.getPrototypeOf( obj )?.constructor].find( e => isClass( e ) );
+        let clazz = isClass( obj ) ? obj : [obj?.constructor, obj?.prototype, Object.getPrototypeOf( obj ), obj?.prototype?.constructor, Object.getPrototypeOf( obj )?.constructor].find( e => isClass( e ) );
 
         if ( isClass( clazz ) )
         {
@@ -6423,21 +6474,21 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
     function isSubclassOf( pChild, pParent )
     {
-        if ( (isNull( pChild ) || !(isClass( pChild ) || isObject( pChild ))) || (isNull( pParent ) || !(isClass( pParent ) || isObject( pParent ))) )
+        if ( (isNull( pChild ) || !(isClass( pChild, false ) || isObject( pChild ))) || (isNull( pParent ) || !(isClass( pParent, false ) || isObject( pParent ))) )
         {
             return false;
         }
 
-        let child = isClass( pChild ) ? pChild : getClass( pChild );
-        let parent = isClass( pParent ) ? pParent : getClass( pParent );
+        let child = isClass( pChild, false ) ? pChild : getClass( pChild );
+        let parent = isClass( pParent, false ) ? pParent : getClass( pParent );
 
         if ( child === parent )
         {
             return true;
         }
 
-        let parentPrototype = parent?.prototype;
-        let childPrototype = child?.prototype;
+        let parentPrototype = !isNull( parent ) ? parent?.prototype ?? Object.getPrototypeOf( parent ) ?? parent?.constructor : null;
+        let childPrototype = !isNull( child ) ? child?.prototype ?? Object.getPrototypeOf( child ) ?? child.constructor : null;
 
         if ( null === parentPrototype || parentPrototype === Object || parentPrototype === Array )
         {
@@ -6923,6 +6974,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             implementsMethods,
             implementsInterface,
             isSubclassOf,
+            isSubClassOf: isSubclassOf,
             delegateTo,
 
             /**

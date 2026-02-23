@@ -1038,7 +1038,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const dereference = ( pObj, pType = Object ) =>
     {
-        let target = isRef( pObj ) ? (pObj.deref() || null) : pObj;
+        let target = isRef( pObj ) ? (pObj.deref() ?? null) : pObj;
 
         if ( !isNull( target ) )
         {
@@ -5893,12 +5893,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         if ( _ud === typeof pObject )
         {
-            return freeze( null === options?.undefinedReplacement ? null : options?.undefinedReplacement ?? null );
+            return freeze( (null === options?.undefinedReplacement) ? null : (options?.undefinedReplacement ?? null) );
         }
 
         if ( null === pObject )
         {
-            return freeze( null === options?.nullReplacement ? null : options?.nullReplacement ?? EMPTY_OBJECT );
+            return freeze( (null === options?.nullReplacement) ? null : (options?.nullReplacement ?? EMPTY_OBJECT) );
         }
 
         return freeze( pObject );
