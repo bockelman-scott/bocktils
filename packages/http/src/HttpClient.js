@@ -626,7 +626,6 @@ const { _ud = "undefined", $scope } = constants;
         {
 
         }
-
     }
 
     IHttpClient.resolveConfig = function( pConfig, pDefaultDelegate )
@@ -1054,9 +1053,9 @@ const { _ud = "undefined", $scope } = constants;
 
             this.#config = IHttpClient.resolveConfig( pConfig, pDefaultDelegate );
 
-            this.#options = { ...DEFAULT_HTTP_CLIENT_OPTIONS, ...(asObject( pOptions || pDefaultDelegate?.options || {} )) };
+            this.#options = { ...DEFAULT_HTTP_CLIENT_OPTIONS, ...(asObject( pOptions ?? pDefaultDelegate?.options ?? {} )) };
 
-            this.#defaultDelegate = IHttpClient.resolveDelegate( (pDefaultDelegate || pDelegates), this.#config, this.#options );
+            this.#defaultDelegate = IHttpClient.resolveDelegate( (pDefaultDelegate ?? pDelegates), this.#config, this.#options );
 
             this.#maxRedirects = asInt( (this.#config.maxRedirects ?? this.#options.maxRedirects ?? MAX_REDIRECTS), MAX_REDIRECTS );
 
@@ -1067,6 +1066,41 @@ const { _ud = "undefined", $scope } = constants;
             this.streamToFile = streamToFile.bind( this );
 
             this.pipeToFile = pipeToFile.bind( this );
+        }
+
+        get delegates()
+        {
+            const map = new Map();
+
+            if ( isMap( this.#delegates ) )
+            {
+                let entries = objectEntries( this.#delegates );
+
+                if ( entries && $ln( entries ) > 0 )
+                {
+                    for( let entry of entries )
+                    {
+                        const key = ObjectEntry.getKey( entry );
+                        const value = ObjectEntry.getValue( entry );
+
+                        if ( isMap( value ) )
+                        {
+                            const mapEntries = objectEntries( value );
+
+                            const valueMap = new Map();
+
+                            mapEntries.forEach( e => valueMap.set( e[0], lock( e[1] ) ) );
+
+                            map.set( key, lock( valueMap ) );
+                        }
+                        else
+                        {
+                            map.set( key, lock( value ) );
+                        }
+                    }
+                }
+            }
+            return $ln( map ) > 0 ? map : null;
         }
 
         get defaultDelegate()
