@@ -194,14 +194,14 @@ const crypto = $scope()?.crypto ?? (_ud !== typeof require && _fun === typeof re
         return arr.map( mapper ).join( _mt );
     };
 
-    const hashSync = ( s ) =>
+    const hashSync = ( s, pHashAlgorithm = HASH_ALGO ) =>
     {
         // Create a hash object
         const hasher = ((_ud !== typeof crypto && !isNull( crypto )) && isFunction( crypto?.createHash )) ? crypto.createHash( pHashAlgorithm || HASH_ALGO ) : null;
 
         if ( hasher )
         {
-            attempt( () => hasher.update( data ) );
+            attempt( () => hasher.update( s ) );
             return hasher.digest( "hex" );
         }
 
