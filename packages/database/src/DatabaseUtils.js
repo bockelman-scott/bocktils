@@ -137,7 +137,7 @@ const $scope = constants?.$scope || function()
                                                       ucase( this.dbType ),
                                                       options );
 
-            this.#secretsManager = (this.#secretsManager instanceof SecretsManager ? this.#secretsManager : new SecretsManagerFactory( options.mode, options.keyPath, options.system, options ).getSecretsManager( options ));
+            this.#secretsManager = (this.#secretsManager instanceof SecretsManager ? this.#secretsManager : new SecretsManagerFactory( options.mode, options.keyPath, options.prefix, options ).getSecretsManager( options ));
 
             this.#serverProtocol = options.connectionOptions?.protocol || options.protocol || this.#secretsManager.getCachedSecret( SECRETS_KEYS.PROTOCOL );
 

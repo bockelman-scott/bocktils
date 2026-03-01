@@ -43,18 +43,19 @@ const { _ud = "undefined", $scope } = constants;
             isString,
             isNumeric,
             isNonNullObject,
-            isNonNullValue,
             isArray,
+            isMap,
             isClass,
+            getClass,
             getClassName,
             isFunction
         } = typeUtils;
 
-    const { asString, isBlank, ucase, lcase, asInt, isFilePath, isJson } = stringUtils;
+    const { asString, isBlank, ucase, asInt, isFilePath, isJson } = stringUtils;
 
-    const { asArray, unique } = arrayUtils;
+    const { asArray } = arrayUtils;
 
-    const { exists, resolvePath, readFile } = fileUtils;
+    const { exists } = fileUtils;
 
     const { parseJson } = jsonUtils;
 
@@ -116,9 +117,9 @@ const { _ud = "undefined", $scope } = constants;
             ADMIN_LOGIN_PWD: "ADMIN_LOGIN-PWD"
         };
 
-    const createKey = ( pSystemPrefix, pKey ) =>
+    const createKey = ( pPrefix, pKey ) =>
     {
-        let prefix = ucase( asString( pSystemPrefix, true ) );
+        let prefix = ucase( asString( pPrefix, true ) );
 
         let keyPart = (ucase( asString( pKey, true ) )).replace( new RegExp( ("^" + prefix), "i" ), _mt ).replace( /^[_-]+/, _mt ).trim();
 
@@ -129,7 +130,8 @@ const { _ud = "undefined", $scope } = constants;
         {
             source: "./.env",
             allowCache: true,
-            excludeFromCache: []
+            excludeFromCache: [],
+            restrictKeys: false
         };
 
     /**
@@ -143,7 +145,7 @@ const { _ud = "undefined", $scope } = constants;
 
         let secretsManagerMode = SecretsManagerMode.from( executionMode );
 
-        return secretsManagerMode?.useAzure ? process?.env?.["KV-NAME"] : "./.env";
+        return "./.env";
     };
 
     // noinspection JSUnusedLocalSymbols
@@ -157,16 +159,16 @@ const { _ud = "undefined", $scope } = constants;
     class SecretsManager
     {
         #mode;
-        #source = calculateSecretsSource();
-        #system = _mt;
+        #source;
+        #prefix = _mt;
 
         #options = {};
 
-        #cache = new Map();
+        #cache;
         #allowCache = true;
         #excludeFromCache = [];
 
-        #invalidKeys = [];
+        #restrictKeys = false;
 
         // noinspection GrazieInspection
         /**
@@ -176,19 +178,19 @@ const { _ud = "undefined", $scope } = constants;
          * This base class should rarely be constructed except as by a subclass constructor call to super().
          * <br>
          * @param pSource - the key/value store to use (such as a path to the .env file or the NAME of the key vault)
-         * @param pSystem - the system or module whose key/value pairs this instance stores, such as FA, LD, FV, RLS, etc
+         * @param pPrefix - the system or module whose key/value pairs this instance stores, such as FA, LD, FV, RLS, etc
          * @param pOptions - an object providing subclass-specific values for the construction of the instance
          *
          * @constructor
          */
-        constructor( pSource = calculateSecretsSource(), pSystem, pOptions = {} )
+        constructor( pSource, pPrefix, pOptions = {} )
         {
             this.#mode = SecretsManagerMode.fromExecutionMode( toolBocksModule.executionMode );
 
-            this.#source = pSource;
-            this.#system = pSystem;
+            this.#source = pSource || calculateSecretsSource( this.mode );
+            this.#prefix = pPrefix;
 
-            const options = populateOptions( pOptions || {}, DEFAULT_OPTIONS ) || {};
+            const options = { ...(DEFAULT_OPTIONS), ...(pOptions ?? {}) };
 
             this.#options = lock( options );
 
@@ -198,6 +200,18 @@ const { _ud = "undefined", $scope } = constants;
             {
                 this.#excludeFromCache = [...(asArray( options.excludeFromCache || [] ) || [])].filter( e => !isBlank( e ) );
             }
+
+            this.#restrictKeys = !!options.restrictKeys;
+
+            if ( this.#allowCache )
+            {
+                this.cache = new Map();
+            }
+        }
+
+        get mode()
+        {
+            return lock( this.#mode );
         }
 
         /**
@@ -206,7 +220,7 @@ const { _ud = "undefined", $scope } = constants;
          */
         get options()
         {
-            return lock( populateOptions( {}, this.#options ) );
+            return lock( { ...(DEFAULT_OPTIONS), ...(this.#options ?? {}) } );
         }
 
         /**
@@ -237,7 +251,7 @@ const { _ud = "undefined", $scope } = constants;
          */
         get source()
         {
-            return this.#source || calculateSecretsSource() || DEFAULT_OPTIONS.source;
+            return this.#source || calculateSecretsSource( this.mode ) || this.#options?.source || DEFAULT_OPTIONS.source;
         }
 
         /**
@@ -246,9 +260,14 @@ const { _ud = "undefined", $scope } = constants;
          * <br>
          * @returns {string} the prefix to use when looking for values.
          */
-        get system()
+        get prefix()
         {
-            return asString( this.#system, true );
+            return asString( this.#prefix, true );
+        }
+
+        get restrictKeys()
+        {
+            return !!this.#restrictKeys;
         }
 
         /**
@@ -260,18 +279,7 @@ const { _ud = "undefined", $scope } = constants;
          */
         createKey( pKey )
         {
-            return createKey( this.system, ucase( asString( pKey, true ) ) );
-        }
-
-        get invalidKeys()
-        {
-            return lock( unique( [...(asArray( this.#invalidKeys || [] ) || [])] ) );
-        }
-
-        isInvalidKey( pKey )
-        {
-            let key = asString( pKey, true ).replaceAll( /_/g, _hyphen );
-            return this.invalidKeys.includes( key ) || !(SecretsManager.isValidKey( key ));
+            return createKey( this.prefix, ucase( asString( pKey, true ) ) );
         }
 
         /**
@@ -290,10 +298,35 @@ const { _ud = "undefined", $scope } = constants;
 
                 const arr = this.excludeFromCache;
 
-                return !(arr.includes( k ) || arr.includes( uK ) || arr.includes( this.createKey( k ) ));
+                return !(arr.includes( k ) || arr.includes( uK ) || arr.includes( this.createKey( k ) )) && isMap( this.#cache );
             }
 
             return false;
+        }
+
+        /**
+         * Replaces underscores with hyphens.
+         * Override for subclasses that require different key formatting.
+         *
+         * @param {String} pKey a key under which a secret is stored
+         * @returns {String} a string that adheres to the formatting conventions or restrictions of the key store
+         */
+        resolveKey( pKey )
+        {
+            return asString( pKey, true ).replaceAll( /_/g, _hyphen );
+        }
+
+        /**
+         * Returns the value of the retrieved secret.
+         * May be overridden to match the return values of the specific key store
+         *
+         * @param {*} pSecret  the value returned from the key store
+         *
+         * @returns {*}  the value of the secret if that value is a property of the returned value or the returned value otherwise
+         */
+        resolveSecretValue( pSecret )
+        {
+            return isNonNullObject( pSecret ) ? (pSecret?.value || pSecret?.Value || pSecret) : pSecret;
         }
 
         /**
@@ -311,7 +344,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             if ( !isNull( pSecret ) )
             {
-                if ( this.allowCache && this.canCache( pKey ) )
+                if ( this.allowCache && this.canCache( pKey ) && isMap( this.#cache ) )
                 {
                     this.#cache.set( this.createKey( pKey ), pSecret );
                     this.#cache.set( pKey, pSecret );
@@ -341,9 +374,9 @@ const { _ud = "undefined", $scope } = constants;
          */
         async get( pKey )
         {
-            let key = asString( pKey, true ).replaceAll( /_/g, _hyphen );
+            let key = this.resolveKey( pKey );
 
-            if ( this.invalidKeys.includes( key ) || !(SecretsManager.isValidKey( key ) || SecretsManager.isValidKey( pKey )) )
+            if ( this.#restrictKeys && !(SecretsManager.isValidKey( key ) || SecretsManager.isValidKey( pKey )) )
             {
                 return null;
             }
@@ -354,7 +387,7 @@ const { _ud = "undefined", $scope } = constants;
             // if found in the cache... return the value
             if ( !isNull( secret ) )
             {
-                return isNonNullObject( secret ) ? (secret?.value || secret?.Value || secret) : secret;
+                return this.resolveSecretValue( secret );
             }
 
             // call the subclass method to get the value from the key store
@@ -362,7 +395,7 @@ const { _ud = "undefined", $scope } = constants;
                      await this.getSecret( ucase( asString( key, true ) ) ) ||
                      await this.getSecret( this.createKey( key ) );
 
-            secret = isNonNullObject( secret ) ? (secret?.value || secret?.Value || secret) : secret;
+            secret = this.resolveSecretValue( secret );
 
             if ( !isNull( secret ) )
             {
@@ -372,17 +405,13 @@ const { _ud = "undefined", $scope } = constants;
                     this.cacheSecret( pKey, secret );
                 }
             }
-            else
-            {
-                this.#invalidKeys.push( key );
-            }
 
             // return the value (or null if no value was found in either the cache or the key store)
-            return isNonNullObject( secret ) ? (secret?.value || secret?.Value || secret) : secret;
+            return this.resolveSecretValue( secret );
         }
 
         /**
-         * Synchronously returns the value cached for the specified key,
+         * Synchronously returns the value cached for the specified key
          * if the value has been previously read from the key store and could be cached.
          * <br>
          * <br>
@@ -392,9 +421,9 @@ const { _ud = "undefined", $scope } = constants;
          */
         getCachedSecret( pKey )
         {
-            let key = asString( pKey, true ).replaceAll( /_/g, _hyphen );
+            let key = this.resolveKey( pKey );
 
-            if ( this.invalidKeys.includes( key ) || !(SecretsManager.isValidKey( key ) || SecretsManager.isValidKey( pKey )) )
+            if ( this.#restrictKeys && !(SecretsManager.isValidKey( key ) || SecretsManager.isValidKey( pKey )) )
             {
                 return null;
             }
@@ -405,7 +434,7 @@ const { _ud = "undefined", $scope } = constants;
             // if it is found, we simply return it
             if ( !isNull( secret ) )
             {
-                return isNonNullObject( secret ) ? (secret?.value || secret) : secret;
+                return this.resolveSecretValue( secret );
             }
 
             // if the value was not found, kick off an asynchronous function
@@ -439,152 +468,131 @@ const { _ud = "undefined", $scope } = constants;
                         THIZ.cacheSecret( k, secret );
                     }
 
-                    return isNonNullObject( secret ) ? (secret?.value || secret) : secret;
-                }
-                else
-                {
-                    attempt( () => THIZ.#invalidKeys.push( k ) );
+                    return THIZ.resolveSecretValue( secret );
                 }
             }( key ));
 
             // return whatever value is currently stored in the secret variable
-            return isNonNullObject( secret ) ? (secret?.value || secret) : secret;
+            return isNonNullObject( secret ) ? (secret?.value || secret?.Value || secret) : secret;
         }
 
         // convenience method for a typical key
         async getDbConnectionString()
         {
             // should be overridden in subclasses
-            const me = this;
-            return await asyncAttempt( async() => (me || this).get( KEYS.CONNECTION_STRING ) );
+            return await asyncAttempt( async() => this.get( KEYS.CONNECTION_STRING ) );
         }
 
         // convenience method for a typical key
         async getCorsAllowedOrigin()
         {
             // should be overridden in subclasses
-            const me = this;
-            return await asyncAttempt( async() => (me || this).get( KEYS.CORS_ALLOWED_ORIGIN ) );
+            return await asyncAttempt( async() => this.get( KEYS.CORS_ALLOWED_ORIGIN ) );
         }
 
         // convenience method for a typical key
         async getRateLimitWindowMs()
         {
             // should be overridden in subclasses
-            const me = this;
-            return await asyncAttempt( async() => (me || this).get( KEYS.RATE_LIMIT_MS ) );
+            return await asyncAttempt( async() => this.get( KEYS.RATE_LIMIT_MS ) );
         }
 
         // convenience method for a typical key
         async getRateLimitMax()
         {
             // should be overridden in subclasses
-            const me = this;
-            return await asyncAttempt( async() => (me || this).get( KEYS.RATE_LIMIT_MS_MAX ) );
+            return await asyncAttempt( async() => this.get( KEYS.RATE_LIMIT_MS_MAX ) );
         }
 
         // convenience method for a typical key
         async getInstanceUrl()
         {
             // should be overridden in subclasses
-            const me = this;
-            return await asyncAttempt( async() => (me || this).get( KEYS.INSTANCE_URL ) );
+            return await asyncAttempt( async() => this.get( KEYS.INSTANCE_URL ) );
         }
 
         // convenience method for a typical key
         async getTokenUrl()
         {
             // should be overridden in subclasses
-            const me = this;
-            return await asyncAttempt( async() => (me || this).get( KEYS.TOKEN_URL ) );
+            return await asyncAttempt( async() => this.get( KEYS.TOKEN_URL ) );
         }
 
         // convenience method for a typical key
         async getTokenRedirectUrl()
         {
             // should be overridden in subclasses
-            const me = this;
-            return await asyncAttempt( async() => (me || this).get( KEYS.REDIRECT_URI ) );
+            return await asyncAttempt( async() => this.get( KEYS.REDIRECT_URI ) );
         }
 
         // convenience method for a typical key
         async getApiKey()
         {
             // should be overridden in subclasses
-            const me = this;
-            return await asyncAttempt( async() => (me || this).get( KEYS.API_KEY ) );
+            return await asyncAttempt( async() => this.get( KEYS.API_KEY ) );
         }
 
         // convenience method for a typical key
         async getAccessToken()
         {
             // should be overridden in subclasses
-            const me = this;
-            return await asyncAttempt( async() => (me || this).get( KEYS.ACCESS_TOKEN ) );
+            return await asyncAttempt( async() => this.get( KEYS.ACCESS_TOKEN ) );
         }
 
         // convenience method for a typical key
-        async getApiVersion( pSystem, pDefault = "v1" )
+        async getApiVersion( pPrefix, pDefault = "v1" )
         {
             // should be overridden in subclasses
-            const me = this;
-            return await asyncAttempt( async() => (me || this).get( KEYS.API_VERSION ) ) || asString( pDefault, true );
+            return await asyncAttempt( async() => this.get( KEYS.API_VERSION ) ) || asString( pDefault, true );
         }
 
         // convenience method for a typical key
         async getClientId()
         {
             // should be overridden in subclasses
-            const me = this;
-            return await asyncAttempt( async() => (me || this).get( KEYS.CLIENT_ID ) );
+            return await asyncAttempt( async() => this.get( KEYS.CLIENT_ID ) );
         }
 
         // convenience method for a typical key
         async getClientSecret()
         {
             // should be overridden in subclasses
-            const me = this;
-            return await asyncAttempt( async() => (me || this).get( KEYS.CLIENT_SECRET ) );
+            return await asyncAttempt( async() => this.get( KEYS.CLIENT_SECRET ) );
         }
 
         // convenience method for a typical key
         async getAdminLoginName()
         {
             // should be overridden in subclasses
-            const me = this;
-            return await asyncAttempt( async() => (me || this).get( KEYS.ADMIN_LOGIN_NAME ) ) || await asyncAttempt( async() => (me || this).get( KEYS.LOGIN_NAME ) );
+            return await asyncAttempt( async() => this.get( KEYS.ADMIN_LOGIN_NAME ) ) || await asyncAttempt( async() => this.get( KEYS.LOGIN_NAME ) );
         }
 
         // convenience method for a typical key
         async getAdminPwd()
         {
             // should be overridden in subclasses
-            const me = this;
-            return await asyncAttempt( async() => (me || this).get( KEYS.ADMIN_LOGIN_PWD ) ) || await asyncAttempt( async() => (me || this).get( KEYS.LOGIN_PWD ) );
+            return await asyncAttempt( async() => this.get( KEYS.ADMIN_LOGIN_PWD ) ) || await asyncAttempt( async() => this.get( KEYS.LOGIN_PWD ) );
         }
 
         // convenience method for a typical key
         async getLoginName()
         {
             // should be overridden in subclasses
-            const me = this;
-            return await asyncAttempt( async() => (me || this).get( KEYS.LOGIN_NAME ) ) || await asyncAttempt( async() => (me || this).get( KEYS.ADMIN_LOGIN_NAME ) );
+            return await asyncAttempt( async() => this.get( KEYS.LOGIN_NAME ) ) || await asyncAttempt( async() => this.get( KEYS.ADMIN_LOGIN_NAME ) );
         }
 
         // convenience method for a typical key
         async getPwd()
         {
             // should be overridden in subclasses
-            const me = this;
-            return await asyncAttempt( async() => (me || this).get( KEYS.LOGIN_PWD ) ) || await asyncAttempt( async() => (me || this).get( KEYS.ADMIN_LOGIN_PWD ) );
+            return await asyncAttempt( async() => this.get( KEYS.LOGIN_PWD ) ) || await asyncAttempt( async() => this.get( KEYS.ADMIN_LOGIN_PWD ) );
         }
 
         // convenience method for a typical key
         async getAuthUrl()
         {
             // should be overridden in subclasses
-            const me = this;
-            return await asyncAttempt( async() => (me || this).get( KEYS.AUTH_URL ) );
+            return await asyncAttempt( async() => this.get( KEYS.AUTH_URL ) );
         }
     }
 
@@ -668,13 +676,11 @@ const { _ud = "undefined", $scope } = constants;
      */
     class LocalSecretsManager extends SecretsManager
     {
-        constructor( pSource = "./.env", pSystem, pOptions = DEFAULT_OPTIONS )
+        constructor( pSource = "./.env", pPrefix, pOptions = DEFAULT_OPTIONS )
         {
-            super( pSource || calculateSecretsSource(), pSystem, pOptions || {} );
+            super( pSource || calculateSecretsSource(), pPrefix, pOptions || {} );
 
-            const me = this;
-
-            let path = pSource || (me || this).source;
+            let path = pSource || this.source;
 
             if ( isFilePath( path ) && exists( path ) )
             {
@@ -692,18 +698,20 @@ const { _ud = "undefined", $scope } = constants;
 
         async getSecret( pKey )
         {
-            let key = asString( pKey, true ).replaceAll( /_/g, _hyphen );
+            let key = this.resolveKey( pKey );
+
             let secret = process.env[this.createKey( key )] || process.env[asString( key, true )];
-            secret = isNonNullObject( secret ) ? (secret?.value || secret.Value || secret) : secret;
+
+            secret = this.resolveSecretValue( secret );
 
             return !isNull( secret ) ? secret : super.getSecret( key );
         }
 
         async get( pKey )
         {
-            let key = asString( pKey, true ).replaceAll( /_/g, _hyphen );
+            let key = this.resolveKey( pKey );
 
-            if ( this.invalidKeys.includes( key ) || !(SecretsManager.isValidKey( key ) || SecretsManager.isValidKey( pKey )) )
+            if ( this.restrictKeys && !(SecretsManager.isValidKey( key ) || SecretsManager.isValidKey( pKey )) )
             {
                 return null;
             }
@@ -712,21 +720,21 @@ const { _ud = "undefined", $scope } = constants;
                          this.getCachedSecret( key ) ||
                          await this.getSecret( key );
 
-            secret = isNonNullObject( secret ) ? (secret?.value || secret.Value || secret) : secret;
+            secret = this.resolveSecretValue( secret );
 
             if ( !isNull( secret ) && this.canCache( key ) )
             {
                 this.cacheSecret( key, secret );
             }
 
-            return isNonNullObject( secret ) ? (secret?.value || secret) : secret;
+            return this.resolveSecretValue( secret );
         }
 
         getCachedSecret( pKey )
         {
-            let key = asString( pKey, true ).replaceAll( /_/g, _hyphen );
+            let key = this.resolveKey( pKey );
 
-            if ( this.invalidKeys.includes( key ) || !(SecretsManager.isValidKey( key ) || SecretsManager.isValidKey( pKey )) )
+            if ( this.restrictKeys && !(SecretsManager.isValidKey( key ) || SecretsManager.isValidKey( pKey )) )
             {
                 return null;
             }
@@ -737,7 +745,7 @@ const { _ud = "undefined", $scope } = constants;
                          process.env[key] ||
                          process.env[ucase( asString( key, true ) )];
 
-            return isNonNullObject( secret ) ? (secret?.value || secret) : secret;
+            return this.resolveSecretValue( secret );
         }
 
         async getDbConnectionString()
@@ -745,7 +753,7 @@ const { _ud = "undefined", $scope } = constants;
             let secret = this.getCachedSecret( KEYS.CONNECTION_STRING ) ||
                          await this.getSecret( KEYS.CONNECTION_STRING );
 
-            return isNonNullObject( secret ) ? (secret?.value || secret) : secret;
+            return this.resolveSecretValue( secret );
         }
 
         async getCorsAllowedOrigin()
@@ -753,7 +761,7 @@ const { _ud = "undefined", $scope } = constants;
             let secret = this.getCachedSecret( KEYS.CORS_ALLOWED_ORIGIN ) ||
                          await this.getSecret( KEYS.CORS_ALLOWED_ORIGIN );
 
-            return isNonNullObject( secret ) ? (secret?.value || secret) : secret;
+            return this.resolveSecretValue( secret );
         }
 
         async getRateLimitWindowMs()
@@ -761,7 +769,7 @@ const { _ud = "undefined", $scope } = constants;
             let secret = this.getCachedSecret( KEYS.RATE_LIMIT_MS ) ||
                          await this.getSecret( KEYS.RATE_LIMIT_MS );
 
-            return isNonNullObject( secret ) ? (secret?.value || secret) : secret;
+            return this.resolveSecretValue( secret );
         }
 
         async getRateLimitMax()
@@ -769,265 +777,147 @@ const { _ud = "undefined", $scope } = constants;
             let secret = this.getCachedSecret( KEYS.RATE_LIMIT_MS_MAX ) ||
                          await this.getSecret( KEYS.RATE_LIMIT_MS_MAX );
 
-            return isNonNullObject( secret ) ? (secret?.value || secret) : secret;
+            return this.resolveSecretValue( secret );
         }
 
-        async getInstanceUrl( pSystem )
+        async getInstanceUrl( pPrefix )
         {
-            let system = asString( pSystem || this.system, true );
+            let prefix = asString( pPrefix || this.prefix, true );
 
             let secret = this.getCachedSecret( KEYS.INSTANCE_URL ) ||
-                         await this.getSecret( createKey( system, KEYS.INSTANCE_URL ) );
+                         await this.getSecret( createKey( prefix, KEYS.INSTANCE_URL ) );
 
-            let url = isNonNullObject( secret ) ? (secret?.value || secret) : secret;
+            let url = this.resolveSecretValue( secret );
 
             return asString( isBlank( url ) ? await this.getSecret( KEYS.INSTANCE_URL ) : url, true );
         }
 
-        async getTokenUrl( pSystem )
+        async getTokenUrl( pPrefix )
         {
-            let system = asString( pSystem || this.system, true );
+            let prefix = asString( pPrefix || this.prefix, true );
 
             let secret = this.getCachedSecret( KEYS.TOKEN_URL ) ||
-                         await this.getSecret( createKey( system, KEYS.TOKEN_URL ) );
+                         await this.getSecret( createKey( prefix, KEYS.TOKEN_URL ) );
 
-            let url = isNonNullObject( secret ) ? (secret?.value || secret) : secret;
+            let url = this.resolveSecretValue( secret );
 
             return asString( isBlank( url ) ? await this.getSecret( KEYS.TOKEN_URL ) : url, true );
         }
 
-        async getTokenRedirectUrl( pSystem )
+        async getTokenRedirectUrl( pPrefix )
         {
-            let system = asString( pSystem || this.system, true );
+            let prefix = asString( pPrefix || this.prefix, true );
 
             let secret = this.getCachedSecret( KEYS.REDIRECT_URI ) ||
-                         await this.getSecret( createKey( system, KEYS.REDIRECT_URI ) );
+                         await this.getSecret( createKey( prefix, KEYS.REDIRECT_URI ) );
 
-            let url = isNonNullObject( secret ) ? (secret?.value || secret) : secret;
+            let url = this.resolveSecretValue( secret );
 
             return asString( isBlank( url ) ? await this.getSecret( KEYS.REDIRECT_URI ) : url, true );
         }
 
-        async getApiKey( pSystem )
+        async getApiKey( pPrefix )
         {
-            let system = asString( pSystem || this.system, true );
+            let prefix = asString( pPrefix || this.prefix, true );
 
             let secret = this.getCachedSecret( KEYS.API_KEY ) ||
-                         await this.getSecret( createKey( system, KEYS.API_KEY ) );
+                         await this.getSecret( createKey( prefix, KEYS.API_KEY ) );
 
-            let apiKey = isNonNullObject( secret ) ? (secret?.value || secret) : secret;
+            let apiKey = this.resolveSecretValue( secret );
 
             return asString( isBlank( apiKey ) ? await this.getSecret( KEYS.API_KEY ) : apiKey, true );
         }
 
-        async getAccessToken( pSystem )
+        async getAccessToken( pPrefix )
         {
-            let system = asString( pSystem || this.system, true );
+            let prefix = asString( pPrefix || this.prefix, true );
 
             let secret = this.getCachedSecret( KEYS.ACCESS_TOKEN ) ||
-                         await this.getSecret( createKey( system, KEYS.ACCESS_TOKEN ) );
+                         await this.getSecret( createKey( prefix, KEYS.ACCESS_TOKEN ) );
 
-            let token = isNonNullObject( secret ) ? (secret?.value || secret) : secret;
+            let token = this.resolveSecretValue( secret );
 
             return asString( isBlank( token ) ? await this.getSecret( KEYS.ACCESS_TOKEN ) : token, true );
         }
 
         /**
          *
-         * @param {string} pSystem
+         * @param {string} pPrefix
          * @param {string }pDefault
          * @returns {Promise<*|void>}
          */
-        async getApiVersion( pSystem, pDefault = "v1" )
+        async getApiVersion( pPrefix, pDefault = "v1" )
         {
-            let system = asString( pSystem || this.system, true );
+            let prefix = asString( pPrefix || this.prefix, true );
 
             let secret = this.getCachedSecret( KEYS.API_VERSION ) ||
-                         await this.getSecret( createKey( system, KEYS.API_VERSION ) );
+                         await this.getSecret( createKey( prefix, KEYS.API_VERSION ) );
 
-            let version = isNonNullObject( secret ) ? (secret?.value || secret) : secret;
+            let version = this.resolveSecretValue( secret );
 
             version = asString( isBlank( version ) ? await this.getSecret( KEYS.API_VERSION ) : version, true );
 
-            return version || asString( pDefault, true ) || await super.getApiVersion( system, pDefault );
+            return version || asString( pDefault, true ) || await super.getApiVersion( prefix, pDefault );
         }
 
-        async getClientId( pSystem )
+        async getClientId( pPrefix )
         {
-            let system = asString( pSystem || this.system, true );
+            let prefix = asString( pPrefix || this.prefix, true );
 
-            let clientId = this.getCachedSecret( KEYS.CLIENT_ID ) ||
-                           await this.getSecret( createKey( system, KEYS.CLIENT_ID ) );
+            let secret = this.getCachedSecret( KEYS.CLIENT_ID ) ||
+                         await this.getSecret( createKey( prefix, KEYS.CLIENT_ID ) );
 
-            return asString( isBlank( clientId ) ? await this.getSecret( KEYS.CLIENT_ID ) : clientId, true );
+            secret = this.resolveSecretValue( secret );
+
+            return asString( isBlank( secret ) ? await this.getSecret( KEYS.CLIENT_ID ) : secret, true );
         }
 
-        async getClientSecret( pSystem )
+        async getClientSecret( pPrefix )
         {
-            let system = asString( pSystem || this.system, true );
+            let prefix = asString( pPrefix || this.prefix, true );
 
             let secret = this.getCachedSecret( KEYS.CLIENT_SECRET ) ||
-                         await this.getSecret( createKey( system, KEYS.CLIENT_SECRET ) );
+                         await this.getSecret( createKey( prefix, KEYS.CLIENT_SECRET ) );
+
+            secret = this.resolveSecretValue( secret );
 
             return asString( isBlank( secret ) ? await this.getSecret( KEYS.CLIENT_SECRET ) : secret, true );
         }
 
-        async getAdminLoginName( pSystem )
+        async getAdminLoginName( pPrefix )
         {
-            let system = asString( pSystem || this.system, true );
+            let prefix = asString( pPrefix || this.prefix, true );
 
-            let login = this.getCachedSecret( KEYS.ADMIN_LOGIN_NAME ) ||
-                        await this.getSecret( createKey( system, KEYS.ADMIN_LOGIN_NAME ) );
+            let secret = this.getCachedSecret( KEYS.ADMIN_LOGIN_NAME ) ||
+                         await this.getSecret( createKey( prefix, KEYS.ADMIN_LOGIN_NAME ) );
 
-            return asString( isBlank( login ) ? await this.getSecret( KEYS.ADMIN_LOGIN_NAME ) : login, true );
+            secret = this.resolveSecretValue( secret );
+
+            return asString( isBlank( secret ) ? await this.getSecret( KEYS.ADMIN_LOGIN_NAME ) : secret, true );
         }
 
-        async getAdminPwd( pSystem )
+        async getAdminPwd( pPrefix )
         {
-            let system = asString( pSystem || this.system, true );
+            let prefix = asString( pPrefix || this.prefix, true );
 
             let pw = this.getCachedSecret( KEYS.ADMIN_LOGIN_PWD ) ||
-                     await this.getSecret( createKey( system, KEYS.ADMIN_LOGIN_PWD ) );
+                     await this.getSecret( createKey( prefix, KEYS.ADMIN_LOGIN_PWD ) );
+
+            pw = this.resolveSecretValue( pw );
 
             return asString( isBlank( pw ) ? await this.getSecret( KEYS.ADMIN_LOGIN_PWD ) : pw, true );
         }
 
-        async getAuthUrl( pSystem )
+        async getAuthUrl( pPrefix )
         {
-            let system = asString( pSystem || this.system, true );
+            let prefix = asString( pPrefix || this.prefix, true );
 
             let url = this.getCachedSecret( KEYS.AUTH_URL ) ||
-                      await this.getSecret( createKey( system, KEYS.AUTH_URL ) );
+                      await this.getSecret( createKey( prefix, KEYS.AUTH_URL ) );
+
+            url = this.resolveSecretValue( url );
 
             return asString( isBlank( url ) ? await this.getSecret( KEYS.AUTH_URL ) : url, true );
-        }
-    }
-
-    /**
-     * This subclass of SecretsManager uses the Azure Key Vault to store and retrieve values.
-     * <br>
-     * <br>
-     * @class
-     * @extends #SecretsManager
-     */
-    class AzureSecretsManager extends SecretsManager
-    {
-        #keyVaultName;
-        #keyVaultUrl;
-        #credential;
-        #client;
-
-        constructor( pSource = calculateSecretsSource(), pSystem, pOptions = {} )
-        {
-            super( pSource, pSystem, pOptions );
-
-            this.#keyVaultName = ucase( asString( pSource || calculateSecretsSource(), true ) );
-            this.#keyVaultUrl = this.options.keyVaultUrl || `https://${lcase( this.source )}.vault.azure.net`;
-        }
-
-        get keyVaultName()
-        {
-            return this.#keyVaultName || calculateSecretsSource() || super.getCachedSecret( "KV-NAME" );
-        }
-
-        get keyVaultUrl()
-        {
-            this.#keyVaultUrl = this.#keyVaultUrl || `https://${lcase( this.keyVaultName )}.vault.azure.net`;
-            return this.#keyVaultUrl;
-        }
-
-        set keyVaultUrl( pUrl )
-        {
-            this.#keyVaultUrl = pUrl || `https://${lcase( this.keyVaultName )}.vault.azure.net`;
-        }
-
-        get credential()
-        {
-            this.#credential = this.#credential || new DefaultAzureCredential();
-            return this.#credential;
-        }
-
-        set credential( pValue )
-        {
-            let isCredential = pValue instanceof ChainedTokenCredential || pValue instanceof DefaultAzureCredential;
-            this.#credential = isCredential ? pValue : (this.#credential || new DefaultAzureCredential());
-        }
-
-        get client()
-        {
-            this.#client = this.#client || new SecretClient( this.keyVaultUrl, this.credential );
-            return this.#client;
-        }
-
-        set client( pClient )
-        {
-            this.#client = (pClient instanceof SecretClient) ? pClient : (this.#client || new SecretClient( this.keyVaultUrl, this.credential ));
-        }
-
-        async getSecret( pKey )
-        {
-            const me = this;
-
-            let key = asString( pKey, true ).replaceAll( /_/g, _hyphen );
-
-            if ( this.invalidKeys.includes( key ) || !(SecretsManager.isValidKey( key ) || SecretsManager.isValidKey( pKey )) )
-            {
-                return null;
-            }
-
-            let client = (me || this).client || new SecretClient( this.keyVaultUrl, this.credential );
-
-            let secret = await asyncAttempt( async() => client.getSecret( createKey( (me || this).system, key ) ) );
-
-            secret = isNonNullObject( secret ) ? (secret?.value || secret) : secret;
-
-            if ( isNull( secret ) || isBlank( secret ) )
-            {
-                secret = await asyncAttempt( async() => client.getSecret( key ) );
-            }
-
-            secret = isNonNullObject( secret ) ? (secret?.value || secret) : secret;
-
-            secret = (isString( secret ) && !isBlank( secret )) ? secret : ((isNonNullObject( secret ) ? secret.value : await super.getSecret( key )) || super.getSecret( key ));
-
-            if ( !isNull( secret ) && this.allowCache && this.canCache( key ) )
-            {
-                this.cacheSecret( createKey( this.system, key ), secret );
-                this.cacheSecret( key, secret );
-                this.cacheSecret( ucase( asString( key, true ) ), secret );
-            }
-
-            return isNonNullObject( secret ) ? (secret?.value || secret) : secret;
-        }
-
-        async get( pKey )
-        {
-            let key = asString( pKey, true ).replaceAll( /_/g, _hyphen );
-
-            if ( this.invalidKeys.includes( key ) || !(SecretsManager.isValidKey( key ) || SecretsManager.isValidKey( pKey )) )
-            {
-                return null;
-            }
-
-            let secret = this.getCachedSecret( key );
-
-            secret = isNonNullObject( secret ) ? (secret?.value || secret?.Value || secret) : secret;
-
-            if ( !isNull( secret ) && !isBlank( secret ) )
-            {
-                return secret;
-            }
-
-            secret = await asyncAttempt( async() => await this.getSecret( key ) );
-
-            secret = isNonNullObject( secret ) ? (secret?.value || secret?.Value || secret) : secret;
-
-            if ( secret && this.canCache( key ) )
-            {
-                this.cacheSecret( key, secret );
-            }
-
-            return isNonNullObject( secret ) ? (secret?.value || secret?.Value || secret) : secret;
         }
     }
 
@@ -1035,12 +925,6 @@ const { _ud = "undefined", $scope } = constants;
         {
             secretsManagerClass: LocalSecretsManager,
             keyStoreName: ".env"
-        };
-
-    const DEFAULT_AZURE_OPTIONS =
-        {
-            secretsManagerClass: AzureSecretsManager,
-            keyStoreName: _mt
         };
 
     class SecretsProvider
@@ -1054,13 +938,13 @@ const { _ud = "undefined", $scope } = constants;
 
         constructor( pId, pName, pOptions )
         {
-            const options = populateOptions( pOptions, DEFAULT_PROVIDER_OPTIONS );
+            const options = lock( { ...(DEFAULT_PROVIDER_OPTIONS), ...(pOptions ?? {}) } );
 
             this.#id = asInt( pId, options.id ) || options.id || Date.now();
 
             this.#name = asString( pName || options.name, true ) || getClassName( this );
 
-            this.#secretsManagerClass = isClass( options.secretsManagerClass ) ? options.secretsManagerClass : isNonNullObject( options.secretsManagerClass ) ? Object.constructor( options.secretsManagerClass ) || (() => options.secretsManagerClass) : LocalSecretsManager;
+            this.#secretsManagerClass = isClass( options.secretsManagerClass ) ? options.secretsManagerClass : isNonNullObject( options.secretsManagerClass ) ? getClass( options.secretsManagerClass ) || (() => options.secretsManagerClass) : LocalSecretsManager;
 
             this.#keyStoreName = asString( options.keyStoreName || options.keyVaultName, true );
 
@@ -1079,47 +963,52 @@ const { _ud = "undefined", $scope } = constants;
 
         get options()
         {
-            return populateOptions( this.#options || {}, DEFAULT_PROVIDER_OPTIONS );
+            return lock( { ...(DEFAULT_PROVIDER_OPTIONS), ...(this.#options ?? {}) } );
         }
 
         get secretsManagerClass()
         {
-            if ( isClass( this.#secretsManagerClass ) || isFunction( this.#secretsManagerClass ) )
+            if ( isClass( this.#secretsManagerClass ) )
             {
                 return this.#secretsManagerClass;
             }
 
             if ( isNonNullObject( this.#secretsManagerClass ) )
             {
-                return this.#secretsManagerClass.constructor || (() => this.#secretsManagerClass);
+                return getClass( this.#secretsManagerClass ) || (() => this.#secretsManagerClass);
+            }
+
+            if ( isFunction( this.#secretsManagerClass ) )
+            {
+                return this.#secretsManagerClass;
             }
 
             return LocalSecretsManager;
         }
 
-        getSecretsManager( pSource, pSystem, pOptions )
+        getSecretsManager( pSource, pPrefix, pOptions )
         {
-            const options = populateOptions( { ...(this.options || {}) }, pOptions, DEFAULT_PROVIDER_OPTIONS );
+            const options = lock( { ...(DEFAULT_PROVIDER_OPTIONS), ...(this.options || {}), ...(pOptions ?? {}) } );
 
             const source = pSource || options.source || options.keyStoreName || options.keyVaultName || this.keyStoreName;
 
-            const system = pSystem || options.system || options.prefix;
+            const prefix = pPrefix || options.prefix || options.prefix;
 
             const klass = this.secretsManagerClass;
 
             if ( isClass( klass ) )
             {
-                return new klass( source, system, options );
+                return new klass( source, prefix, options );
             }
             else if ( isFunction( klass ) )
             {
-                return klass.call( this, source, system, options );
+                return klass.call( this, source, prefix, options );
             }
             else if ( isNonNullObject( klass ) && klass instanceof SecretsManager )
             {
                 return klass;
             }
-            return new LocalSecretsManager( source, system, options );
+            return new LocalSecretsManager( source, prefix, options );
         }
 
         get keyStoreName()
@@ -1154,8 +1043,6 @@ const { _ud = "undefined", $scope } = constants;
 
         #secretsProvider;
 
-        #useAzure;
-
         constructor( pId, pName, pSecretsProvider )
         {
             super( pName );
@@ -1163,8 +1050,6 @@ const { _ud = "undefined", $scope } = constants;
             this.#id = asInt( pId );
             this.#name = asString( pName, true );
             this.#secretsProvider = pSecretsProvider;
-
-            this.#useAzure = "AZURE" === ucase( asString( pSecretsProvider?.name, true ) || asString( pSecretsProvider, true ) );
 
             SecretsManagerMode.#modeMap.set( ucase( pName ), this );
         }
@@ -1184,24 +1069,14 @@ const { _ud = "undefined", $scope } = constants;
             return this.#secretsProvider;
         }
 
-        getSecretsManager( pSource = calculateSecretsSource(), pSystem, pOptions = {} )
+        getSecretsManager( pSource = calculateSecretsSource(), pPrefix, pOptions = {} )
         {
             if ( isNonNullObject( this.secretsProvider ) )
             {
-                return this.secretsProvider.getSecretsManager( pSource, pSystem, pOptions );
+                return this.secretsProvider.getSecretsManager( pSource, pPrefix, pOptions );
             }
 
-            if ( this.useAzure )
-            {
-                return new AzureSecretsManager( pSource, pSystem, pOptions );
-            }
-
-            return new LocalSecretsManager( pSource, pSystem, pOptions );
-        }
-
-        get useAzure()
-        {
-            return this.#useAzure;
+            return new LocalSecretsManager( pSource, pPrefix, pOptions );
         }
 
         static getModeByName( pName )
@@ -1217,32 +1092,16 @@ const { _ud = "undefined", $scope } = constants;
             {
                 case ExecutionMode.MODES.PROD:
                 case ExecutionMode.MODES.PRODUCTION:
-                    return SecretsManagerMode.PRODUCTION;
+                    return new SecretsManagerMode( 1, "Production" );
                 case ExecutionMode.MODES.DEV:
-                case ExecutionMode.MODES.DEVELOPMENT:
-                    return SecretsManagerMode.DEVELOPMENT;
                 case ExecutionMode.MODES.DEBUG:
-                    return SecretsManagerMode.DEBUG;
+                case ExecutionMode.MODES.DEVELOPMENT:
                 case ExecutionMode.MODES.TEST:
-                    return SecretsManagerMode.TEST;
-                case ExecutionMode.MODES.TRACE:
-                    return SecretsManagerMode.QA;
                 default:
-                    return SecretsManagerMode.DEVELOPMENT;
+                    return new SecretsManagerMode( 2, "Development", LocalSecretsManager );
             }
         }
     }
-
-    const environmentSecretsProvider = new SecretsProvider( 1, "ENV", DEFAULT_PROVIDER_OPTIONS );
-    const azureSecretsProvider = new SecretsProvider( 2, "AZURE", DEFAULT_AZURE_OPTIONS );
-
-    SecretsManagerMode.PRODUCTION = new SecretsManagerMode( 1, "PRODUCTION", azureSecretsProvider );
-    SecretsManagerMode.DEVELOPMENT = new SecretsManagerMode( 2, "DEVELOPMENT", environmentSecretsProvider );
-    SecretsManagerMode.UAT = new SecretsManagerMode( 4, "UAT", azureSecretsProvider );
-    SecretsManagerMode.ORT = new SecretsManagerMode( 4, "ORT", azureSecretsProvider );
-    SecretsManagerMode.DEBUG = new SecretsManagerMode( 3, "DEBUG", environmentSecretsProvider );
-    SecretsManagerMode.QA = new SecretsManagerMode( 4, "QA", environmentSecretsProvider );
-    SecretsManagerMode.TEST = new SecretsManagerMode( 4, "TEST", environmentSecretsProvider );
 
     SecretsManagerMode.from = function( pObj )
     {
@@ -1263,30 +1122,40 @@ const { _ud = "undefined", $scope } = constants;
 
         if ( isNonNullObject( pObj ) )
         {
-            let mode = new SecretsManagerMode( pObj.id, pObj.name, pObj.secretsProvider || pObj.provider );
+            let mode = new SecretsManagerMode( pObj.id, pObj.name, pObj.secretsProvider ?? pObj.provider ?? pObj );
 
             return populateProperties( mode, pObj );
         }
 
-        return SecretsManagerMode.DEVELOPMENT;
+        return new SecretsManagerMode( pObj?.id || pObj, pObj?.name || pObj, pObj?.secretsProvider ?? pObj?.provider ?? pObj );
     };
 
     SecretsManagerMode.resolveMode = function( pMode )
     {
+        let mode = null;
+
         if ( isString( pMode ) )
         {
-            return SecretsManagerMode.getModeByName( pMode ) || SecretsManagerMode[ucase( asString( pMode, true ) )] || SecretsManagerMode.DEVELOPMENT;
+            mode = SecretsManagerMode.getModeByName( pMode ) || SecretsManagerMode[ucase( asString( pMode, true ) )];
         }
 
-        if ( isNumeric( pMode ) )
+        if ( isNull( mode ) )
         {
-            return SecretsManagerMode.fromExecutionMode( ExecutionMode.from( pMode ) ) || SecretsManagerMode.DEVELOPMENT;
+            if ( isNumeric( pMode ) )
+            {
+                mode = SecretsManagerMode.fromExecutionMode( ExecutionMode.from( pMode ) );
+            }
+
+            if ( isNull( mode ) )
+            {
+                if ( isNonNullObject( pMode ) )
+                {
+                    mode = SecretsManagerMode.from( pMode );
+                }
+            }
         }
 
-        if ( isNonNullObject( pMode ) )
-        {
-            return SecretsManagerMode.from( pMode );
-        }
+        return mode;
     };
 
     /**
@@ -1298,21 +1167,21 @@ const { _ud = "undefined", $scope } = constants;
      */
     class SecretsManagerFactory
     {
-        #mode = SecretsManagerMode.from( ExecutionMode.calculate() ) || SecretsManagerMode.DEVELOPMENT;
+        #mode = SecretsManagerMode.from( ExecutionMode.calculate() );
 
-        #keyPath = calculateSecretsSource() || "./.env";
+        #keyPath = "./.env";
 
-        #system = _mt;
+        #prefix = _mt;
 
         #options = {};
 
-        constructor( pMode, pKeyPath, pSystem, pOptions = {} )
+        constructor( pMode, pKeyPath, pPrefix, pOptions = {} )
         {
             this.#mode = SecretsManagerMode.resolveMode( pMode || toolBocksModule.executionMode );
 
-            this.#system = ucase( asString( pSystem, true ) );
+            this.#prefix = ucase( asString( pPrefix, true ) );
 
-            this.#keyPath = pKeyPath || calculateSecretsSource() || "./.env";
+            this.#keyPath = pKeyPath || calculateSecretsSource( this.#mode ) || "./.env";
 
             this.#options = populateOptions( pOptions || {}, {} );
         }
@@ -1322,9 +1191,9 @@ const { _ud = "undefined", $scope } = constants;
             return this.#mode || ExecutionMode.calculate();
         }
 
-        get system()
+        get prefix()
         {
-            return this.#system;
+            return this.#prefix;
         }
 
         get keyPath()
@@ -1339,100 +1208,25 @@ const { _ud = "undefined", $scope } = constants;
 
         getSecretsManager( pOptions = {} )
         {
-            let options = populateOptions( (pOptions || {}), (this.options || {}) );
+            let options = lock( { ...(this.options || {}), ...(pOptions ?? {}) } );
 
-            let secretsManagerMode = options.mode || this.mode || SecretsManagerMode.from( ExecutionMode.calculate() ) || SecretsManagerMode.DEVELOPMENT;
+            let secretsManagerMode = options.mode || this.mode || SecretsManagerMode.from( ExecutionMode.calculate() );
 
-            if ( secretsManagerMode.useAzure )
-            {
-                return new AzureSecretsManager( this.keyPath, this.system, options );
-            }
-
-            return secretsManagerMode.getSecretsManager( this.keyPath, this.system, options );
+            return secretsManagerMode.getSecretsManager( this.keyPath, this.prefix, options );
         }
 
-        static getInstance( pMode, pSource, pSystem, pOptions )
+        static getInstance( pMode, pSource, pPrefix, pOptions )
         {
-            return new SecretsManagerFactory( pMode, pSource, pSystem, pOptions );
+            return new SecretsManagerFactory( pMode, pSource, pPrefix, pOptions );
         }
     }
 
-    SecretsManagerFactory.makeSecretsManager = function( pMode, pSource = calculateSecretsSource(), pSystem, pOptions )
+    SecretsManagerFactory.makeSecretsManager = function( pMode, pSource = calculateSecretsSource(), pPrefix, pOptions )
     {
-        let factory = SecretsManagerFactory.getInstance( pMode, pSource || calculateSecretsSource(), pSystem, pOptions );
+        let factory = SecretsManagerFactory.getInstance( pMode, pSource || calculateSecretsSource(), pPrefix, pOptions );
 
         return factory.getSecretsManager( pOptions );
     };
-
-    async function migrateSecrets( pKeyVaultName = `BHLKV01`, pKeyVaultUrl = `https://${pKeyVaultName}.vault.azure.net` )
-    {
-        let numSecretsMigrated = 0;
-
-        const KEY_VAULT_NAME = asString( pKeyVaultName || "BHLKV01", true );
-        const KEY_VAULT_URL = pKeyVaultUrl || `https://${KEY_VAULT_NAME}.vault.azure.net`;
-
-        try
-        {
-            // DefaultAzureCredential will use the currently logged-in Azure CLI credentials
-            const credential = new DefaultAzureCredential();
-            const secretClient = new SecretClient( KEY_VAULT_URL, credential );
-
-            console.log( `Successfully connected to Key Vault: ${KEY_VAULT_NAME}` );
-
-            const envFilePath = resolvePath( __dirname, "../.env" );
-
-            console.log( `Starting migration of variables to Azure Key Vault, ${KEY_VAULT_URL}, from ${envFilePath}` );
-
-            const envFileContent = await asyncAttempt( async() => await readFile( envFilePath, "utf8" ) );
-
-            const lines = envFileContent.split( "\n" );
-
-            for( const line of lines )
-            {
-                const trimmedLine = line.trim();
-
-                // Skip comments and empty lines
-                if ( trimmedLine && !trimmedLine.startsWith( "#" ) )
-                {
-                    const [key, value] = trimmedLine.split( "=", 2 );
-
-                    if ( key && value )
-                    {
-                        // Best practice: Azure Key Vault secret names can only contain alphanumeric characters and dashes.
-                        const secretName = key.replace( /_/g, "-" );
-
-                        console.log( `Setting secret: '${secretName}'...` );
-
-                        // The setSecret method will create a new version if the secret already exists.
-                        const secret = await secretClient.setSecret( secretName, value );
-
-                        if ( isNonNullObject( secret ) || isNonNullValue( secret ) )
-                        {
-                            numSecretsMigrated += 1;
-
-                            console.log( `  -> Successfully set secret for '${secretName}'.` );
-                        }
-                        else
-                        {
-                            console.log( ` !! -> Could not set secret for '${secretName}' !!` );
-                        }
-                    }
-                }
-            }
-
-            console.log( "\nMigration complete. ", `${numSecretsMigrated} variables have been copied to the vault.` );
-        }
-        catch( error )
-        {
-            console.error( "\nAn error occurred during the migration process:", error );
-            if ( error.statusCode === 403 )
-            {
-                console.error( "This looks like a permission issue. Please ensure your account has the 'Key Vault Secrets Officer' role on the Key Vault's Access Policies." );
-            }
-        }
-
-        return numSecretsMigrated;
-    }
 
     /**
      * The actual functionality to be exposed via the toolBocksModule.
@@ -1459,7 +1253,6 @@ const { _ud = "undefined", $scope } = constants;
                     SecretsManagerMode,
                     SecretsManager,
                     LocalSecretsManager,
-                    AzureSecretsManager,
                     SecretsManagerFactory,
                     SecretClient,
                     ChainedTokenCredential,
@@ -1469,27 +1262,21 @@ const { _ud = "undefined", $scope } = constants;
             SecretsManagerMode,
             SecretsManager,
             LocalSecretsManager,
-            AzureSecretsManager,
             SecretsManagerFactory,
             calculateSecretsSource,
-            getSecretsManager: function( pMode, pSource, pSystem, pOptions )
+            getSecretsManager: function( pMode, pSource, pPrefix, pOptions )
             {
-                return SecretsManagerFactory.makeSecretsManager( pMode, pSource, pSystem, pOptions );
+                return SecretsManagerFactory.makeSecretsManager( pMode, pSource, pPrefix, pOptions );
             },
-            getLocalSecretsManager: function( pSource, pSystem, pOptions )
+            getLocalSecretsManager: function( pSource, pPrefix, pOptions )
             {
-                return new LocalSecretsManager( pSource, pSystem, pOptions );
-            },
-            getAzureSecretsManager: function( pSource, pSystem, pOptions )
-            {
-                return new AzureSecretsManager( pSource, pSystem, pOptions );
+                return new LocalSecretsManager( pSource, pPrefix, pOptions );
             },
             defineKeys: SecretsManager.defineKeys,
             addKey: SecretsManager.addKey,
             isValidKey: SecretsManager.isValidKey,
             getKeys: SecretsManager.getKeys,
-            SECRETS_KEYS: lock( SecretsManager.getKeys() ),
-            migrateSecrets
+            SECRETS_KEYS: lock( SecretsManager.getKeys() )
         };
 
     // extends the base module
