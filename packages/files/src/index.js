@@ -1250,7 +1250,7 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
         }
         else
         {
-            p = attempt( () => pathLib.resolve( toUnixPath( asString( components, true, { joinOn: _mt_str } ).trim() ) ) );
+            p = attempt( () => pathLib.resolve( toUnixPath( asString( components, true, { joinOn: _pathSep } ).trim() ) ) );
         }
 
         return p || (toUnixPath( asString( p, true ) ));

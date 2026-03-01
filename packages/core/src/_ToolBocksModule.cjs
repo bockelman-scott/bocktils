@@ -1038,7 +1038,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const dereference = ( pObj, pType = Object ) =>
     {
-        let target = isRef( pObj ) ? (pObj.deref() ?? null) : pObj;
+        let target = ( !isNull( pObj ) && isRef( pObj )) ? (pObj.deref() ?? null) : pObj;
 
         if ( !isNull( target ) )
         {
@@ -1109,10 +1109,18 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 {
                     try
                     {
-                        return new pType();
+                        return new pType( pObj );
                     }
                     catch( ex )
                     {
+                        try
+                        {
+                            return pType.call( pObj );
+                        }
+                        catch( ex2 )
+                        {
+
+                        }
                         return {};
                     }
                 }
@@ -1125,7 +1133,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 }
                 if ( isObj( pType ) )
                 {
-                    return { ...(pObj || {}) };
+                    return { ...(pObj ?? {}) };
                 }
             }
         }

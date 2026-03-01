@@ -117,8 +117,9 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             objectMethods,
 
             isPromise = ( pArg ) => (pArg && (pArg.constructor === Promise || pArg === Promise || pArg instanceof Promise)),
-            isThenable = ( pArg ) => (pArg && (pArg.then && ("function" === typeof pArg.then)))
+            isThenable = ( pArg ) => (pArg && (pArg.then && ("function" === typeof pArg.then))),
 
+            dereference
         } = moduleUtils;
 
     const
@@ -1899,18 +1900,18 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
             if ( isNull( paths ) || $ln( paths ) <= 0 )
             {
-                return this.resolve( pValue );
+                return dereference( this.resolve( pValue ) );
             }
 
             paths = paths.join( _dot );
 
             let value = this.#mapByNodePath.get( paths );
 
-            value = isNonNullValue( value ) ? value : pValue;
+            value = dereference( isNonNullValue( value ) ? value : pValue );
 
             if ( isNonNullValue( value ) )
             {
-                this.#mapByNodePath.set( paths, value );
+                this.#mapByNodePath.set( paths, new WeakRef( value ) );
             }
 
             return value;
@@ -1920,20 +1921,20 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         {
             if ( isNonNullObject( pObject ) )
             {
-                this.add( pObject );
+                this.add( new WeakRef( pObject ) );
 
                 if ( isNonNullValue( pValue ) )
                 {
-                    this.#map.set( pObject, pValue );
-                    return pValue;
+                    this.#map.set( pObject, new WeakRef( pValue ) );
+                    return dereference( pValue );
                 }
                 else
                 {
-                    return this.has( pObject ) ? this.#map.get( pObject ) : pValue;
+                    return dereference( this.has( pObject ) ? this.#map.get( pObject ) : pValue );
                 }
             }
 
-            return isNonNullValue( pValue ) ? pValue : null;
+            return isNonNullValue( pValue ) ? dereference( pValue ) : null;
         }
 
         getResolved( ...pNodePath )
@@ -1947,7 +1948,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
             paths = paths.join( _dot );
 
-            return this.#mapByNodePath.get( paths );
+            return dereference( this.#mapByNodePath.get( paths ) );
         }
     }
 
