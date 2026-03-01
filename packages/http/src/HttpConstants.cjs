@@ -1415,7 +1415,7 @@ const { _ud = "undefined", $scope } = constants;
      *
      * @returns {boolean} true if the specified value is a valid/known HTTP Verb (such as GET, POST, PUT, etc.)
      */
-    const isVerb = ( pVerb ) => pVerb instanceof HttpVerb || VERBS.indexOf( pVerb ) >= 0;
+    const isVerb = ( pVerb ) => pVerb instanceof HttpVerb || (isString( pVerb ) && VERBS.indexOf( ucase( pVerb ) ) >= 0);
 
     HttpVerb.isVerb = isVerb;
 
