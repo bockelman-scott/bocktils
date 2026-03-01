@@ -1911,7 +1911,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
             if ( isNonNullValue( value ) )
             {
-                this.#mapByNodePath.set( paths, new WeakRef( value ) );
+                this.#mapByNodePath.set( paths, isNonNullObject( value ) ? new WeakRef( value ) : value );
             }
 
             return value;
@@ -1925,7 +1925,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
                 if ( isNonNullValue( pValue ) )
                 {
-                    this.#map.set( pObject, new WeakRef( pValue ) );
+                    this.#map.set( pObject, isNonNullObject( pValue ) ? new WeakRef( pValue ) : pValue );
                     return dereference( pValue );
                 }
                 else
