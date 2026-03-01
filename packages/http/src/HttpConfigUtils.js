@@ -1141,9 +1141,9 @@ const { _ud = "undefined", $scope } = constants;
 
     const resolveHttpConfig = function( pConfig, ...pObjects )
     {
-        let httpConfig = pConfig || {};
+        let httpConfig = pConfig ?? {};
 
-        let hosts = [...(asArray( pObjects || [] ))].filter( isNonNullObject );
+        let hosts = [...(asArray( pObjects ?? [] ))].filter( isNonNullObject );
 
         while ( !isHttpConfig( httpConfig ) && $ln( hosts ) )
         {
@@ -1183,7 +1183,7 @@ const { _ud = "undefined", $scope } = constants;
 
         const config = new HttpConfig( httpConfig, (httpConfig?.headers || httpConfig), httpConfig?.url, httpConfig?.method );
 
-        return config.toLiteral();
+        return fixAgents( config.toLiteral() );
     };
 
     HttpConfig.isHttpConfig = isHttpConfig;
