@@ -4210,7 +4210,9 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
             calculateMimeType,
 
             supportedMimeTypes,
-            supportedExtensions
+            supportedExtensions,
+
+            getCurrentDirectory
         };
 
     mod = toolBocksModule.extend( mod );
