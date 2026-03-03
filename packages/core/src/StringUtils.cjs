@@ -3338,9 +3338,9 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
         if ( !(matchesAny( formattedName, /c+hi[ao]$/, /caro$/, /ccone$/, /cena$/, /ad[aio]$/, /di[ao]$/ ) || /(?![a-zA-Z0-9_])\w/iu.test( formattedName )) )
         {
-            formattedName = formattedName.replace( /(mc|mac)+?([a-z]{2,})/gi, ( match, prefix, remaining ) =>
+            formattedName = formattedName.replace( /^(mc|mac)+?([a-z]{2,})/gi, ( match, prefix, remaining ) =>
             {
-                return toProperCase( prefix ) + toProperCase( remaining );
+                return toProperCase( prefix ) + (($ln( remaining ) > 2) ? toProperCase( remaining ) : remaining);
             } );
         }
 
@@ -3565,6 +3565,15 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         return name;
     }
 
+    function _fixNameTypos( pName )
+    {
+        let name = asString( pName, true );
+
+        // TODO...
+
+        return name || pName;
+    }
+
     function normalizeName( pFirstName, pLastName, pOptions = PROPERCASE_OPTIONS, pOtherContactData = {} )
     {
         const options = { ...PROPERCASE_OPTIONS, ...(pOptions || {}) };
@@ -3582,6 +3591,9 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
         firstName = asString( firstName.replace( rxParenthesized, _mt ), true ).trim();
         lastName = asString( lastName.replace( rxParenthesized, _mt ), true ).trim();
+
+        firstName = _fixNameTypos( firstName ) || firstName;
+        lastName = _fixNameTypos( lastName ) || lastName;
 
         function _removeContactData( pName, pData = pOtherContactData )
         {
@@ -3657,13 +3669,13 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
                 if ( idx >= 0 )
                 {
-                    firstName = asProperCaseName( parts.slice( 0, idx ).join( _spc ), true );
-                    lastName = asProperCaseName( parts.slice( idx ).join( _spc ), false );
+                    firstName = asProperCaseName( parts.slice( 0, idx ).join( _spc ), true ).trim();
+                    lastName = asProperCaseName( parts.slice( idx ).join( _spc ), false ).trim();
                 }
                 else
                 {
-                    firstName = asProperCaseName( parts[0], true );
-                    lastName = asProperCaseName( parts.slice( 1 ).join( _spc ), false );
+                    firstName = asProperCaseName( parts[0], true ).trim();
+                    lastName = asProperCaseName( parts.slice( 1 ).join( _spc ), false ).trim();
                 }
             }
         }
