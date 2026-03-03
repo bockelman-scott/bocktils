@@ -7076,7 +7076,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                                                           populateOptions( this.#options,
                                                                            {
                                                                                detail: pVisited,
-                                                                               data: pVisited
+                                                                               data: pVisited,
+                                                                               extra: [...(pExtra ?? [])]
                                                                            } ) ) );
 
             if ( isFunc( this.#visitFunction ) )
@@ -7085,14 +7086,17 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
                 if ( isAsyncFunction( this.#visitFunction ) )
                 {
-                    asyncAttempt( async() => await (me || this).#visitFunction.call( (me || this), pVisited, ...pExtra ) ).then( no_op ).catch( ex => this.dispatchEvent( new ToolBocksModuleEvent( S_ERROR, {
-                        error: ex,
-                        detail: ex
-                    } ) ) );
+                    const onError = ex => this.dispatchEvent( new ToolBocksModuleEvent( S_ERROR,
+                                                                                        {
+                                                                                            error: ex,
+                                                                                            detail: ex
+                                                                                        } ) );
+
+                    asyncAttempt( async() => await (me || this).#visitFunction.call( (me || this), pVisited, ...pExtra ) ).then( no_op ).catch( onError );
                 }
                 else
                 {
-                    attempt( () => (me || this).#visitFunction.call( (me || this), pVisited, ...pExtra ) );
+                    return attempt( () => (me || this).#visitFunction.call( (me || this), pVisited, ...pExtra ) );
                 }
             }
         }
