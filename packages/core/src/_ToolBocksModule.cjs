@@ -8360,6 +8360,42 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     MODULE_CACHE["GLOBAL_INSTANCE"] = GLOBAL_INSTANCE;
     MODULE_CACHE["__BOCK__MODULE_PROTOTYPE_GLOBAL_INSTANCE__"] = GLOBAL_INSTANCE;
 
+    ToolBocksModule.resolveVersionIntegerValue = function( pVersion )
+    {
+        switch ( typeof pVersion )
+        {
+            case _ud:
+                return 0;
+
+            case _num:
+            case _big:
+                return parseInt( _trim( _asStr( pVersion ) ).replace( /n$/, _mt ) );
+
+            case _str:
+                let val = 0;
+                let power = 1;
+                let parts = _trim( _asStr( pVersion ) ).split( _dot ).map( _asInt ).filter( isNum ).reverse();
+                for( let i = 0, n = $ln( parts ); i < n; i++ )
+                {
+                    val += _asInt( parts[i] ) * (10 ** (power + (i + 1)));
+                }
+                return val;
+
+            case _obj:
+                if ( isNull( pVersion ) )
+                {
+                    return 0;
+                }
+                return ToolBocksModule.resolveVersionIntegerValue( pVersion?.version ) || 0;
+
+            case _fun:
+                return ToolBocksModule.resolveVersionIntegerValue( attempt( () => pVersion.call( $scope() ) ) );
+
+            default:
+                return 0;
+        }
+    };
+
     /**
      * Makes the specified object available as a module that can be imported or required by other code
      * @param {Object|ToolBocksModule} pObject The object or module to export
