@@ -1219,7 +1219,7 @@ Deven|Held||Deven|Held
 Devin|Castellanos||devin|castellanos
 Devin|Fitzgerald||Devin|Fitzgerald
 Devin|Honn||Devin|Honn
-Devin|RamMacHer||Devin|Rammacher
+Devin|Rammacher||Devin|Rammacher
 Devion|Robinson||Devion|Robinson
 Devon|Heuer||Devon|Heuer
 Devon|Newman||Devon|Newman
@@ -3302,7 +3302,7 @@ Om|Patel||Om|Patel
 Oman|Gurung||Oman|Gurung
 Omar|Ahsan||Omar|Ahsan
 Omar|Aliyev||Omar|Aliyev
-Omar|CaMacHo||Omar|Camacho
+Omar|Camacho||Omar|Camacho
 Omar|Lozano||Omar|Lozano
 Omar|Nazari||Omar|Nazari
 Omar|Ortega||Omar|Ortega
