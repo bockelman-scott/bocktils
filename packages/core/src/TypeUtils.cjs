@@ -677,12 +677,12 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         {
             const options = { ...DEFAULT_IS_OBJECT_OPTIONS, ...(pOptions || {}) };
 
-            const isEmpty = (pObject instanceof Map || pObject instanceof Set ? 0 === $ln( pObject ) : (null === pObject || 0 === $ln( Object.keys( pObject ) )));
+            const isEmpty = ( pObj ) => (pObj instanceof Map || pObj instanceof Set ? 0 === $ln( pObj ) : (null === pObj || 0 === $ln( Object.keys( pObj ) )));
 
             return !((options.rejectNull && isNull( pObject )) ||
                      (options.rejectArrays && _isArr( pObject )) ||
                      (options.rejectPrimitiveWrappers && isPrimitiveWrapper( pObject )) ||
-                     ( !options.allowEmptyObjects && isEmpty));
+                     ( !options.allowEmptyObjects && isEmpty( pObject )));
         }
 
         return false;
@@ -1900,14 +1900,18 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
             if ( isNull( paths ) || $ln( paths ) <= 0 )
             {
-                return dereference( this.resolve( pValue ) );
+                const val = this.resolve( pValue );
+
+                return isNull( val ) ? null : isWeakRef( val ) ? dereference( val ) : val;
             }
 
             paths = paths.join( _dot );
 
             let value = this.#mapByNodePath.get( paths );
 
-            value = dereference( isNonNullValue( value ) ? value : pValue );
+            value = (isNonNullValue( value ) ? value : pValue);
+
+            value = isNull( value ) ? null : (isWeakRef( value ) ? dereference( value ) : value);
 
             if ( isNonNullValue( value ) )
             {
@@ -1930,7 +1934,8 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
                 }
                 else
                 {
-                    return dereference( this.has( pObject ) ? this.#map.get( pObject ) : pValue );
+                    let val = (this.has( pObject ) ? this.#map.get( pObject ) : pValue);
+                    return isNull( val ) ? val : isWeakRef( val ) ? dereference( val ) : val;
                 }
             }
 
@@ -1948,7 +1953,9 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
             paths = paths.join( _dot );
 
-            return dereference( this.#mapByNodePath.get( paths ) );
+            let val = (this.#mapByNodePath.get( paths ));
+
+            return isNull( val ) ? null : (isWeakRef( val ) ? dereference( val ) : val);
         }
     }
 
@@ -6473,6 +6480,15 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         return false;
     }
 
+    /**
+     * Returns true if the first argument is a subclass of the second argument.
+     * Either argument can be either a class or an object.
+     * When an argument is an object, its class is used in the comparison/evaluations.
+     *
+     * @param {Object|Function} pChild
+     * @param {Object|Function} pParent
+     * @returns {boolean}
+     */
     function isSubclassOf( pChild, pParent )
     {
         if ( (isNull( pChild ) || !(isClass( pChild, false ) || isObject( pChild ))) || (isNull( pParent ) || !(isClass( pParent, false ) || isObject( pParent ))) )
@@ -6501,6 +6517,64 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         }
 
         return parentPrototype.isPrototypeOf( childPrototype );
+    }
+
+    /**
+     * Returns true if the specified class is a subclass of a class with the specified name.
+     *
+     * @param pClass the class to evaluate
+     * @param pName the name of a potential superclass
+     */
+    function isSubclassOfName( pClass, pName )
+    {
+        if ( isNull( pClass ) || isNull( pName ) || isEmptyString( pName ) )
+        {
+            return false;
+        }
+
+        let clz = isClass( pClass ) ? pClass : (isObject( pClass ) ? getClass( pClass ) : (isString( pClass ) ? attempt( () => getClass( asObject( pClass ) ) ) : null));
+
+        if ( isNull( clz ) || !isClass( clz ) )
+        {
+            return false;
+        }
+
+        if ( isClass( pName ) )
+        {
+            return isSubclassOf( clz, pName );
+        }
+
+        const className = isNull( pName ) ? _mt : _toString( pName );
+
+        let clzName = getClassName( clz );
+
+        if ( clzName === className )
+        {
+            return true;
+        }
+
+        let proto = clz?.prototype ?? Object.getPrototypeOf( clz ) ?? clz.constructor;
+
+        const cap = new IterationCap( 16 );
+
+        while ( !isNull( proto ) && !cap.reached )
+        {
+            clzName = getClassName( proto );
+
+            if ( className === clzName )
+            {
+                return true;
+            }
+
+            if ( BUILTIN_TYPE_NAMES.includes( clzName ) )
+            {
+                break;
+            }
+
+            proto = proto?.prototype ?? Object.getPrototypeOf( proto ) ?? proto.constructor;
+        }
+
+        return false;
     }
 
     /**
@@ -6974,8 +7048,12 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             getMethods,
             implementsMethods,
             implementsInterface,
+
             isSubclassOf,
             isSubClassOf: isSubclassOf,
+            isSubclassOfName,
+            isSubClassOfName: isSubclassOfName,
+
             delegateTo,
 
             /**

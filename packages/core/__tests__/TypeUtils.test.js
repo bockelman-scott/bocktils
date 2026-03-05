@@ -118,7 +118,8 @@ const
         collapse,
         toObjectLiteral,
         transformObject,
-        isSubclassOf
+        isSubclassOf,
+        isSubclassOfName
     } = typeUtils;
 
 const { toSnakeCase } = stringUtils;
@@ -3546,6 +3547,12 @@ describe( "isSubclassOf", () =>
               expect( isSubclassOf( C, A ) ).toBe( true );
           } );
 
+    test( "isSubclassOf( A, C )",
+          () =>
+          {
+              expect( isSubclassOf( A, C ) ).toBe( false );
+          } );
+
     test( "isSubclassOf( new B(), A )",
           () =>
           {
@@ -3607,6 +3614,116 @@ describe( "isSubclassOf", () =>
           } );
 
 } );
+
+describe( "isSubclassOfName", () =>
+{
+    class D extends Map
+    {
+        constructor( pEntries )
+        {
+            super( pEntries );
+        }
+    }
+
+    test( "isSubclassOfName( B, 'A' )",
+          () =>
+          {
+              expect( isSubclassOfName( B, "A" ) ).toBe( true );
+          } );
+
+    test( "isSubclassOfName( C, 'A' )",
+          () =>
+          {
+              expect( isSubclassOfName( C, "A" ) ).toBe( true );
+          } );
+
+    test( "isSubclassOfName( A, 'C' )",
+          () =>
+          {
+              expect( isSubclassOf( A, "C" ) ).toBe( false );
+          } );
+
+    test( "isSubclassOfName( new B(), 'A' )",
+          () =>
+          {
+              expect( isSubclassOfName( new B( 1, "Bob" ), "A" ) ).toBe( true );
+          } );
+
+    test( "isSubclassOfName( 'C', new A() )",
+          () =>
+          {
+              expect( isSubclassOfName( "C", new A( 23 ) ) ).toBe( false );
+          } );
+
+    test( "isSubclassOfName( A, 'A' )",
+          () =>
+          {
+              expect( isSubclassOfName( A, "A" ) ).toBe( true );
+          } );
+
+    test( "isSubclassOfName( B, 'B' )",
+          () =>
+          {
+              expect( isSubclassOfName( B, "B" ) ).toBe( true );
+          } );
+
+    test( "isSubclassOfName( 'A', A )",
+          () =>
+          {
+              expect( isSubclassOfName( "A", A ) ).toBe( false );
+          } );
+
+    test( "isSubclassOfName( 'B', B )",
+          () =>
+          {
+              expect( isSubclassOfName( "B", B ) ).toBe( false );
+          } );
+
+    test( "isSubclassOfName( A, 'B' ) === false",
+          () =>
+          {
+              expect( isSubclassOfName( A, "B" ) ).toBe( false );
+          } );
+
+    test( "isSubclassOfName( {}, 'A' )",
+          () =>
+          {
+              expect( isSubclassOf( {}, "A" ) ).toBe( false );
+          } );
+
+    test( "isSubclassOfName( 'A', {} )",
+          () =>
+          {
+              expect( isSubclassOf( "A", {} ) ).toBe( false );
+          } );
+
+    test( "isSubclassOfName( B, 'Array' )",
+          () =>
+          {
+              expect( isSubclassOfName( B, "Array" ) ).toBe( false );
+          } );
+
+    test( "isSubclassOfName( D, 'B' ) === false",
+          () =>
+          {
+              expect( isSubclassOfName( D, "B" ) ).toBe( false );
+          } );
+
+    test( "isSubclassOfName( D, 'Map' )",
+          () =>
+          {
+              expect( isSubclassOfName( D, "Map" ) ).toBe( true );
+          } );
+
+    test( "isSubclassOfName( B, 'Object' ) === false",
+          () =>
+          {
+              expect( isSubclassOfName( B, "Object" ) ).toBe( true );
+          } );
+
+
+} );
+
 
 describe( "toIterable", () =>
 {
