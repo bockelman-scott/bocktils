@@ -3429,7 +3429,12 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             } );
 
             // handle Roman Numerals (IV, III) and Ordinals (3rd)
-            formattedName = formattedName.replace( /\b(i{1,3}|iv|v|vi{1,3}|ix|x|[1-9][stndrh]{2})\b/gi, ( match ) =>
+            formattedName = formattedName.replace( /\b(i{1,3}|iv|v|vi{1,3}|ix|x)\b/gi, ( match ) =>
+            {
+                return ucase( match );
+            } );
+
+            formattedName = formattedName.replace( /\s+(i{1,3}|iv|v|vi{1,3}|ix|x)$/gi, ( match ) =>
             {
                 return ucase( match );
             } );
