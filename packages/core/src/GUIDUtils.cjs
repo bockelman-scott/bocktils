@@ -194,18 +194,20 @@ const crypto = $scope()?.crypto ?? (_ud !== typeof require && _fun === typeof re
         return arr.map( mapper ).join( _mt );
     };
 
-    const hashSync = ( s, pHashAlgorithm = HASH_ALGO ) =>
+    const hashSync = ( pContent, pHashAlgorithm = HASH_ALGO ) =>
     {
+        const content = asString( pContent );
+
         // Create a hash object
         const hasher = ((_ud !== typeof crypto && !isNull( crypto )) && isFunction( crypto?.createHash )) ? crypto.createHash( pHashAlgorithm || HASH_ALGO ) : null;
 
         if ( hasher )
         {
-            attempt( () => hasher.update( s ) );
+            attempt( () => hasher.update( content ) );
             return hasher.digest( "hex" );
         }
 
-        let arr = asString( s ).split( _mt ).map( e => e.charCodeAt( 0 ) );
+        let arr = asString( content ).split( _mt ).map( e => e.charCodeAt( 0 ) );
 
         arr = arr.reverse();
 
