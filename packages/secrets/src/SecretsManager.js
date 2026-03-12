@@ -1,8 +1,5 @@
 const dotenvx = require( "@dotenvx/dotenvx" );
 
-const { SecretClient } = require( "@azure/keyvault-secrets" );
-const { ChainedTokenCredential, DefaultAzureCredential } = require( "@azure/identity" );
-
 const core = require( "@toolbocks/core" );
 const fileUtils = require( "@toolbocks/files" );
 const jsonUtils = require( "@toolbocks/json" );
@@ -1242,10 +1239,7 @@ const { _ud = "undefined", $scope } = constants;
                     constants,
                     typeUtils,
                     stringUtils,
-                    arrayUtils,
-                    SecretClient,
-                    ChainedTokenCredential,
-                    DefaultAzureCredential
+                    arrayUtils
                 },
             classes:
                 {
@@ -1253,10 +1247,7 @@ const { _ud = "undefined", $scope } = constants;
                     SecretsManagerMode,
                     SecretsManager,
                     LocalSecretsManager,
-                    SecretsManagerFactory,
-                    SecretClient,
-                    ChainedTokenCredential,
-                    DefaultAzureCredential
+                    SecretsManagerFactory
                 },
             SecretsProvider,
             SecretsManagerMode,
