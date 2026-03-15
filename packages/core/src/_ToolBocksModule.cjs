@@ -9217,7 +9217,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         if ( $ln( keys ) > 0 )
         {
-            INTERNAL_LOGGER.warn( `There are ${$ln( keys )} remaining` );
+            INTERNAL_LOGGER.debug( `There are ${$ln( keys )} keys remaining` );
         }
 
         return value;
@@ -9249,7 +9249,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     {
         if ( isNull( pObject ) || !isObj( pObject ) || isNull( pPropertyPath ) || (isStr( pPropertyPath ) && !_isValidStr( pPropertyPath )) )
         {
-            INTERNAL_LOGGER.warn( `getProperty called on ${isNull( pObject ) ? "a null value, returning null" : !isObj( pObject ) ? "a scalar value, returning that value" : "without a valid property name or path, returning the target"}` );
+            INTERNAL_LOGGER.debug( `getProperty called on ${isNull( pObject ) ? "a null value, returning null" : !isObj( pObject ) ? "a scalar value, returning that value" : "without a valid property name or path, returning the target"}` );
 
             return pObject;
         }
@@ -9350,7 +9350,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     {
         if ( isNull( pObject ) || !isObj( pObject ) || isNull( pPropertyPaths ) || $ln( _asArr( pPropertyPaths ) ) <= 0 || !(_asArr( pPropertyPaths ).some( _isValidStr )) )
         {
-            INTERNAL_LOGGER.warn( `removeProperties called on ${isNull( pObject ) ? "a null value, nothing changed" : !isObj( pObject ) ? "a scalar value, nothing changed" : "without a valid property name or path, nothing changed"}` );
+            INTERNAL_LOGGER.debug( `removeProperties called on ${isNull( pObject ) ? "a null value, nothing changed" : !isObj( pObject ) ? "a scalar value, nothing changed" : "without a valid property name or path, nothing changed"}` );
 
             return pObject;
         }
