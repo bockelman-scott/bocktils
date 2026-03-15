@@ -3223,6 +3223,44 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         return (!isNull( clazz ) ? clazz?.name || objectToString.call( clazz, clazz ).replace( /\[object\s+/, _mt_str ).replace( /\s*]\s*$/, _mt_str ) : _mt_str) || _mt_str;
     };
 
+    const classFrom = function( pValue )
+    {
+        class Anon
+        {
+
+        }
+
+        switch ( typeof pValue )
+        {
+            case _ud:
+                return Anon;
+
+            case _fun:
+                if ( isClass( pValue ) )
+                {
+                    return pValue;
+                }
+                else
+                {
+                    Anon.prototype[pValue?.name || "execute"] = pValue;
+                    return Anon;
+                }
+
+            case _obj:
+                if ( !isNull( pValue ) )
+                {
+                    return getClass( pValue );
+                }
+                else
+                {
+                    return Anon;
+                }
+
+            default:
+                return Anon;
+        }
+    };
+
     /**
      * Returns the default value for the type specified
      *
@@ -7003,6 +7041,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             getClass,
             getClassName,
             resolveClass,
+            classFrom,
             defaultFor,
             castTo,
             toIterable,
