@@ -108,6 +108,8 @@ const core = require( "@toolbocks/core" );
  */
 const bufferUtils = require( "@toolbocks/buffer" );
 
+const jsonUtils = require( "@toolbocks/json" );
+
 /**
  * These modules are imported from toolbocks/core
  */
@@ -154,6 +156,7 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
     const
         {
             _mt_str,
+            _mt,
             _dot,
             _colon,
             _semicolon,
@@ -187,7 +190,7 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
             clamp
         } = typeUtils;
 
-    const { asString, asInt, toUnixPath, toBool, isBlank, leftOfLast, rightOfLast } = stringUtils;
+    const { asString, asInt, toUnixPath, toBool, isBlank, leftOfLast, rightOfLast, isJson } = stringUtils;
 
     const { varargs, asArgs, flatArgs, asArray, unique, includesAll, Filters, AsyncBoundedQueue } = arrayUtils;
 
@@ -201,6 +204,8 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
             arrayFromBuffer,
             typedArrayFromBuffer
         } = bufferUtils;
+
+    const { asObject } = jsonUtils;
 
     const modName = "FileUtils";
 
@@ -2458,7 +2463,7 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
     };
 
     /**
-     * This class is a stand-in for the Deno.FsFile, Node.Js FileHandle object, or the Wen API File object.<br>
+     * This class is a stand-in for the Deno.FsFile, Node.Js FileHandle object, or the Web API File object.<br>
      * <br>
      * @class
      */
@@ -2489,7 +2494,7 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
         {
             if ( isNull( this.#file ) )
             {
-                this.#file = isDefined( File ) ? await asyncAttempt( async() => new File() ) : this;
+                this.#file = isDefined( File ) ? await asyncAttempt( async() => new File( await readFile( this.filePath ), this.filePath ) ) : this;
             }
             return this.#file;
         }
@@ -2637,19 +2642,40 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
             // no Node.js equivalent?
         }
 
+        async getContents( pOptions )
+        {
+            return await readFile( this.filePath, pOptions );
+        }
+
+        /**
+         * Populates the provided buffer
+         * and returns an object including the buffer and the number of bytes written to the buffer.
+         *
+         * TODO: determine whether to close the file or filehandler or document that this is the responsibility of the caller
+         *
+         * @param pBuffer
+         * @returns {Promise<{buffer: *, bytesRead}|{buffer, bytesRead}|{buffer: *, bytesRead: *}|{buffer: *, bytesRead}>}
+         */
         async read( pBuffer )
         {
+            let _buf = pBuffer ?? new Buffer();
+
             if ( !isNull( this.#fsFile ) && this.notMe( this.#fsFile ) )
             {
                 const fsFile = this.#fsFile;
-                asyncAttempt( async() => fsFile.read( pBuffer ) );
-                return { buffer: pBuffer, bytesRead: fsFile.bytesRead };
+                asyncAttempt( async() => fsFile.read( _buf ?? pBuffer ) );
+                const output = { buffer: _buf, bytesRead: fsFile.bytesRead || (_buf ?? pBuffer).length };
+                asyncAttempt( async() => fsFile.close() );
+                return output;
             }
 
             if ( !isNull( this.#fileHandle ) && this.notMe( this.#fileHandle ) )
             {
                 const fileHandle = this.#fileHandle;
-                asyncAttempt( async() => fileHandle.read( pBuffer ) );
+                asyncAttempt( async() => fileHandle.read( _buf ?? pBuffer ) );
+                const output = { buffer: _buf ?? pBuffer, bytesRead: fileHandle.bytesRead || (_buf ?? pBuffer).length };
+                asyncAttempt( async() => fileHandle.close() );
+                return output;
             }
 
             const me = this;
@@ -2660,15 +2686,15 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
 
             if ( !isNull( proxy ) && this.notMe( proxy ) )
             {
-                const { buffer, bytesRead } = asyncAttempt( async() => await proxy.read( pBuffer ) );
+                const { buffer, bytesRead } = asyncAttempt( async() => await proxy.read( _buf ?? pBuffer ) );
                 return { buffer, bytesRead };
             }
 
             const buffer = asyncAttempt( async() => await readFile( filePath ) );
 
-            const bytesCopied = buffer.copy( pBuffer );
+            const bytesCopied = buffer.copy( _buf ?? pBuffer );
 
-            return { buffer, bytesRead: bytesCopied };
+            return { buffer, bytesRead: bytesCopied || (_buf ?? pBuffer).length };
         }
 
         readSync( pBuffer )
@@ -3245,6 +3271,26 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
             }
             return this.filepath;
         }
+
+        async getContents( pOptions )
+        {
+            if ( await this.isFile() )
+            {
+                return await readFile( this.filepath, pOptions );
+            }
+            return isString( pOptions?.encoding ) ? _mt : lock( Buffer.allocUnsafe( 0 ) ); // okay to use unsafe here, because we are returning an empty buffer
+        }
+
+        async getObjectFromJson()
+        {
+            const json = await asyncAttempt( async() => await this.getContents( { encoding: "utf-8" } ) );
+            if ( isString( json ) && !isBlank( json ) && isJson( json ) )
+            {
+                return attempt( () => asObject( json ) ) || {};
+            }
+            return {};
+        }
+
     }
 
     /**
