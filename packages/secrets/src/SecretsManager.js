@@ -1,3 +1,5 @@
+// noinspection JSUnresolvedReference
+
 const dotenvx = require( "@dotenvx/dotenvx" );
 
 const core = require( "@toolbocks/core" );
@@ -24,8 +26,9 @@ const { _ud = "undefined", $scope } = constants;
             ToolBocksModule,
             ExecutionEnvironment,
             ExecutionMode,
-            populateOptions,
+            NotImplementedError,
             populateProperties,
+            readProperty,
             attempt,
             asyncAttempt,
             lock,
@@ -54,7 +57,7 @@ const { _ud = "undefined", $scope } = constants;
 
     const { exists } = fileUtils;
 
-    const { parseJson } = jsonUtils;
+    const { asObject } = jsonUtils;
 
     let KEYS =
         {
@@ -118,9 +121,11 @@ const { _ud = "undefined", $scope } = constants;
     {
         let prefix = ucase( asString( pPrefix, true ) );
 
-        let keyPart = (ucase( asString( pKey, true ) )).replace( new RegExp( ("^" + prefix), "i" ), _mt ).replace( /^[_-]+/, _mt ).trim();
+        let key = asString( pKey, true ).replace( new RegExp( ("^" + prefix), "i" ), _mt ).trim().replace( /^[_-]+/, _mt ).trim().replace( /[_-]+$/, _mt ).trim();
 
-        return ucase( isBlank( prefix ) ? keyPart : (prefix + _hyphen + keyPart) );
+        let keyPart = (ucase( asString( key, true ) )).replace( new RegExp( ("^" + prefix), "i" ), _mt ).trim().replace( /^[_-]+/, _mt ).trim().replace( /[_-]+$/, _mt ).trim();
+
+        return (ucase( isBlank( prefix ) ? keyPart : (prefix + _hyphen + keyPart) )).replace( /^[_-]+/, _mt ).trim().replace( /[_-]+$/, _mt ).trim();
     };
 
     const DEFAULT_OPTIONS =
@@ -160,6 +165,7 @@ const { _ud = "undefined", $scope } = constants;
         #prefix = _mt;
 
         #options = {};
+        #args = [];
 
         #cache;
         #allowCache = true;
@@ -174,36 +180,43 @@ const { _ud = "undefined", $scope } = constants;
          * <br>
          * This base class should rarely be constructed except as by a subclass constructor call to super().
          * <br>
-         * @param pSource - the key/value store to use (such as a path to the .env file or the NAME of the key vault)
-         * @param pPrefix - the system or module whose key/value pairs this instance stores, such as FA, LD, FV, RLS, etc
-         * @param pOptions - an object providing subclass-specific values for the construction of the instance
+         *
+         * @param {Object} pOptions - an object providing subclass-specific values
+         *                            for the construction of the instance
+         *
+         * @param {...*} pArgs - zero or more additional arguments that may be relevant to a subclass
          *
          * @constructor
          */
-        constructor( pSource, pPrefix, pOptions = {} )
+        constructor( pOptions = {}, ...pArgs )
         {
-            this.#mode = SecretsManagerMode.fromExecutionMode( toolBocksModule.executionMode );
+            this.#options = { ...(DEFAULT_OPTIONS), ...(asObject( pOptions ?? {} )) };
 
-            this.#source = pSource || calculateSecretsSource( this.mode );
-            this.#prefix = pPrefix;
+            this.#args = asArray( pArgs ?? this.#args ?? [] );
 
-            const options = { ...(DEFAULT_OPTIONS), ...(pOptions ?? {}) };
+            this.#mode = this.#options?.mode ?? SecretsManagerMode.fromExecutionMode( toolBocksModule.executionMode );
 
-            this.#options = lock( options );
+            this.#source = this.#options?.source || calculateSecretsSource( this.mode );
 
-            this.#allowCache = (false !== options.allowCache);
+            this.#prefix = asString( this.#options?.prefix, true ) || ($ln( this.#args ) > 0 ? this.#args[0] : _mt);
 
-            if ( isArray( options.excludeFromCache ) )
+            this.#prefix = asString( this.#prefix, true ).replace( /^[_-]+/, _mt ).trim().replace( /[_-]+$/, _mt ).trim();
+
+            this.#allowCache = (false !== this.#options?.allowCache);
+
+            if ( isArray( this.#options?.excludeFromCache ) )
             {
-                this.#excludeFromCache = [...(asArray( options.excludeFromCache || [] ) || [])].filter( e => !isBlank( e ) );
+                this.#excludeFromCache = [...(asArray( this.#options.excludeFromCache || [] ) || [])].filter( e => !isBlank( e ) );
             }
 
-            this.#restrictKeys = !!options.restrictKeys;
+            this.#restrictKeys = !!(this.#options?.restrictKeys);
 
             if ( this.#allowCache )
             {
-                this.cache = new Map();
+                this.#cache = new Map();
             }
+
+            this.#options = lock( this.#options ?? {} );
         }
 
         get mode()
@@ -259,7 +272,7 @@ const { _ud = "undefined", $scope } = constants;
          */
         get prefix()
         {
-            return asString( this.#prefix, true );
+            return asString( this.#prefix, true ).replace( /^[_-]+/, _mt ).trim().replace( /[_-]+$/, _mt ).trim();
         }
 
         get restrictKeys()
@@ -276,7 +289,7 @@ const { _ud = "undefined", $scope } = constants;
          */
         createKey( pKey )
         {
-            return createKey( this.prefix, ucase( asString( pKey, true ) ) );
+            return createKey( this.prefix, ucase( (asString( pKey, true ).replace( new RegExp( `^${this.prefix}[_-]`, "i" ), _mt )) ) );
         }
 
         /**
@@ -293,7 +306,7 @@ const { _ud = "undefined", $scope } = constants;
                 const k = asString( pKey, true );
                 const uK = ucase( asString( k, true ) );
 
-                const arr = this.excludeFromCache;
+                const arr = asArray( this.excludeFromCache ?? [] );
 
                 return !(arr.includes( k ) || arr.includes( uK ) || arr.includes( this.createKey( k ) )) && isMap( this.#cache );
             }
@@ -310,7 +323,7 @@ const { _ud = "undefined", $scope } = constants;
          */
         resolveKey( pKey )
         {
-            return asString( pKey, true ).replaceAll( /_/g, _hyphen );
+            return this.createKey( asString( pKey, true ) ).replaceAll( /_/g, _hyphen ).replace( /^-+/, _mt ).replace( /-+$/, _mt );
         }
 
         /**
@@ -323,7 +336,7 @@ const { _ud = "undefined", $scope } = constants;
          */
         resolveSecretValue( pSecret )
         {
-            return isNonNullObject( pSecret ) ? (pSecret?.value || pSecret?.Value || pSecret) : pSecret;
+            return isNonNullObject( pSecret ) ? readProperty( pSecret, "value", "Value", "data", "Data" ) || asString( pSecret ) : asString( pSecret ) || _mt;
         }
 
         /**
@@ -343,7 +356,7 @@ const { _ud = "undefined", $scope } = constants;
             {
                 if ( this.allowCache && this.canCache( pKey ) && isMap( this.#cache ) )
                 {
-                    this.#cache.set( this.createKey( pKey ), pSecret );
+                    this.#cache.set( this.resolveKey( pKey ), pSecret );
                     this.#cache.set( pKey, pSecret );
                     this.#cache.set( ucase( asString( pKey, true ) ), pSecret );
                 }
@@ -360,8 +373,7 @@ const { _ud = "undefined", $scope } = constants;
          */
         async getSecret( pKey )
         {
-            // implemented in subclass
-            return undefined;
+            throw new NotImplementedError( `This method must be implemented in each secure-store-specific subclass`, { key: pKey }, pKey );
         }
 
         /**
@@ -373,7 +385,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             let key = this.resolveKey( pKey );
 
-            if ( this.#restrictKeys && !(SecretsManager.isValidKey( key ) || SecretsManager.isValidKey( pKey )) )
+            if ( this.#restrictKeys && !(SecretsManager.isValidKey( pKey ) || SecretsManager.isValidKey( key )) )
             {
                 return null;
             }
@@ -390,11 +402,11 @@ const { _ud = "undefined", $scope } = constants;
             // call the subclass method to get the value from the key store
             secret = await this.getSecret( key ) ||
                      await this.getSecret( ucase( asString( key, true ) ) ) ||
-                     await this.getSecret( this.createKey( key ) );
+                     await this.getSecret( this.resolveKey( key ) );
 
             secret = this.resolveSecretValue( secret );
 
-            if ( !isNull( secret ) )
+            if ( !isNull( secret ) && ( !isString( secret ) || !isBlank( secret )) )
             {
                 // if the value returned can be cached, cache it for the next call to this method
                 if ( this.canCache( pKey ) )
@@ -426,10 +438,10 @@ const { _ud = "undefined", $scope } = constants;
             }
 
             // try to get the value from the cache
-            let secret = this.#cache.get( this.createKey( key ) ) || this.#cache.get( key ) || this.#cache.get( ucase( asString( key, true ) ) );
+            let secret = this.#cache.get( key ) || this.#cache.get( ucase( asString( key, true ) ) ) || this.#cache.get( pKey );
 
             // if it is found, we simply return it
-            if ( !isNull( secret ) )
+            if ( !isNull( secret ) && ( !isString( secret ) || !isBlank( secret )) )
             {
                 return this.resolveSecretValue( secret );
             }
@@ -451,16 +463,15 @@ const { _ud = "undefined", $scope } = constants;
                 const uK = ucase( asString( k, true ) );
 
                 // use the normal asynchronous method to retrieve the value
-                secret = await asyncAttempt( async() => await THIZ.getSecret( THIZ.createKey( uK ) ) ) ||
+                secret = await asyncAttempt( async() => await THIZ.getSecret( THIZ.resolveKey( uK ) ) ) ||
                          await asyncAttempt( async() => await THIZ.getSecret( uK ) ) ||
-                         await asyncAttempt( async() => await THIZ.getSecret( k ) );
+                         await asyncAttempt( async() => await THIZ.getSecret( k ) ) ||
+                         await asyncAttempt( async() => await THIZ.getSecret( pKey ) );
 
                 // if it is found, try to cache it for next time
-                if ( !isNull( secret ) )
+                if ( !isNull( secret ) && ( !isString( secret ) || !isBlank( secret )) )
                 {
-                    secret = isNonNullObject( secret ) ? (secret?.value || secret) : secret;
-
-                    if ( THIZ.canCache( k ) )
+                    if ( !isNull( secret ) && THIZ.canCache( k ) )
                     {
                         THIZ.cacheSecret( k, secret );
                     }
@@ -470,7 +481,7 @@ const { _ud = "undefined", $scope } = constants;
             }( key ));
 
             // return whatever value is currently stored in the secret variable
-            return isNonNullObject( secret ) ? (secret?.value || secret?.Value || secret) : secret;
+            return this.resolveSecretValue( secret );
         }
 
         // convenience method for a typical key
@@ -605,7 +616,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             if ( isJson( pJson ) )
             {
-                kvObj = attempt( () => parseJson( pJson ) );
+                kvObj = attempt( () => asObject( pJson ) );
             }
             else
             {
@@ -673,11 +684,11 @@ const { _ud = "undefined", $scope } = constants;
      */
     class LocalSecretsManager extends SecretsManager
     {
-        constructor( pSource = "./.env", pPrefix, pOptions = DEFAULT_OPTIONS )
+        constructor( pOptions = DEFAULT_OPTIONS, ...pArgs )
         {
-            super( pSource || calculateSecretsSource(), pPrefix, pOptions || {} );
+            super( pOptions, ...pArgs );
 
-            let path = pSource || this.source;
+            let path = this.source || pOptions?.source || pOptions?.path;
 
             if ( isFilePath( path ) && exists( path ) )
             {
@@ -697,7 +708,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             let key = this.resolveKey( pKey );
 
-            let secret = process.env[this.createKey( key )] || process.env[asString( key, true )];
+            let secret = process.env[key] || process.env[ucase( key )] || process.env[asString( pKey, true )] || process.env[ucase( asString( pKey, true ) )];
 
             secret = this.resolveSecretValue( secret );
 
@@ -708,16 +719,12 @@ const { _ud = "undefined", $scope } = constants;
         {
             let key = this.resolveKey( pKey );
 
-            if ( this.restrictKeys && !(SecretsManager.isValidKey( key ) || SecretsManager.isValidKey( pKey )) )
+            if ( this.restrictKeys && !(SecretsManager.isValidKey( pKey ) || SecretsManager.isValidKey( key )) )
             {
                 return null;
             }
 
-            let secret = this.getCachedSecret( this.createKey( key ) ) ||
-                         this.getCachedSecret( key ) ||
-                         await this.getSecret( key );
-
-            secret = this.resolveSecretValue( secret );
+            let secret = this.getCachedSecret( key ) || await this.getSecret( key ) || await this.getSecret( pKey );
 
             if ( !isNull( secret ) && this.canCache( key ) )
             {
@@ -731,16 +738,14 @@ const { _ud = "undefined", $scope } = constants;
         {
             let key = this.resolveKey( pKey );
 
-            if ( this.restrictKeys && !(SecretsManager.isValidKey( key ) || SecretsManager.isValidKey( pKey )) )
+            if ( this.restrictKeys && !(SecretsManager.isValidKey( pKey ) || SecretsManager.isValidKey( key )) )
             {
                 return null;
             }
 
-            let secret = super.getCachedSecret( this.createKey( key ) ) ||
-                         super.getCachedSecret( key ) ||
-                         process.env[this.createKey( key )] ||
+            let secret = super.getCachedSecret( key ) ||
                          process.env[key] ||
-                         process.env[ucase( asString( key, true ) )];
+                         process.env[ucase( key )];
 
             return this.resolveSecretValue( secret );
         }
@@ -935,7 +940,7 @@ const { _ud = "undefined", $scope } = constants;
 
         constructor( pId, pName, pOptions )
         {
-            const options = lock( { ...(DEFAULT_PROVIDER_OPTIONS), ...(pOptions ?? {}) } );
+            const options = lock( { ...(DEFAULT_PROVIDER_OPTIONS), ...(asObject( pOptions ?? {} )) } );
 
             this.#id = asInt( pId, options.id ) || options.id || Date.now();
 
@@ -945,7 +950,7 @@ const { _ud = "undefined", $scope } = constants;
 
             this.#keyStoreName = asString( options.keyStoreName || options.keyVaultName, true );
 
-            this.#options = options;
+            this.#options = lock( options );
         }
 
         get id()
@@ -983,29 +988,34 @@ const { _ud = "undefined", $scope } = constants;
             return LocalSecretsManager;
         }
 
-        getSecretsManager( pSource, pPrefix, pOptions )
+        getSecretsManager( pOptions, ...pArgs )
         {
-            const options = lock( { ...(DEFAULT_PROVIDER_OPTIONS), ...(this.options || {}), ...(pOptions ?? {}) } );
+            const options = lock( { ...(DEFAULT_PROVIDER_OPTIONS), ...(asObject( this.options || {} )), ...(asObject( pOptions ?? {} )) } );
 
-            const source = pSource || options.source || options.keyStoreName || options.keyVaultName || this.keyStoreName;
+            const args = asArray( pArgs ?? options?.args ?? [] );
 
-            const prefix = pPrefix || options.prefix || options.prefix;
+            options.source = options?.source || options?.keyStoreName || options?.keyVaultName || this.keyStoreName;
+
+            options.prefix = options?.prefix || ($ln( args ) > 0 ? args[0] : _mt);
+
+            options.args = args;
 
             const klass = this.secretsManagerClass;
 
             if ( isClass( klass ) )
             {
-                return new klass( source, prefix, options );
+                // noinspection JSCheckFunctionSignatures
+                return new klass( options, ...args );
             }
             else if ( isFunction( klass ) )
             {
-                return klass.call( this, source, prefix, options );
+                return klass.call( this, options, ...args );
             }
             else if ( isNonNullObject( klass ) && klass instanceof SecretsManager )
             {
                 return klass;
             }
-            return new LocalSecretsManager( source, prefix, options );
+            return new LocalSecretsManager( options, ...args );
         }
 
         get keyStoreName()
@@ -1066,14 +1076,14 @@ const { _ud = "undefined", $scope } = constants;
             return this.#secretsProvider;
         }
 
-        getSecretsManager( pSource = calculateSecretsSource(), pPrefix, pOptions = {} )
+        getSecretsManager( pOptions = {}, ...pArgs )
         {
             if ( isNonNullObject( this.secretsProvider ) )
             {
-                return this.secretsProvider.getSecretsManager( pSource, pPrefix, pOptions );
+                return this.secretsProvider.getSecretsManager( pOptions, ...pArgs );
             }
 
-            return new LocalSecretsManager( pSource, pPrefix, pOptions );
+            return new LocalSecretsManager( pOptions, ...pArgs );
         }
 
         static getModeByName( pName )
@@ -1119,6 +1129,7 @@ const { _ud = "undefined", $scope } = constants;
 
         if ( isNonNullObject( pObj ) )
         {
+            // noinspection JSUnresolvedReference
             let mode = new SecretsManagerMode( pObj.id, pObj.name, pObj.secretsProvider ?? pObj.provider ?? pObj );
 
             return populateProperties( mode, pObj );
@@ -1172,25 +1183,29 @@ const { _ud = "undefined", $scope } = constants;
 
         #options = {};
 
-        constructor( pMode, pKeyPath, pPrefix, pOptions = {} )
+        constructor( pOptions = {}, ...pArgs )
         {
-            this.#mode = SecretsManagerMode.resolveMode( pMode || toolBocksModule.executionMode );
+            const options = asObject( pOptions ?? {} );
 
-            this.#prefix = ucase( asString( pPrefix, true ) );
+            const args = asArray( pArgs ?? options?.args ?? [] );
 
-            this.#keyPath = pKeyPath || calculateSecretsSource( this.#mode ) || "./.env";
+            this.#mode = SecretsManagerMode.resolveMode( options?.mode ?? toolBocksModule.executionMode );
 
-            this.#options = populateOptions( pOptions || {}, {} );
+            this.#prefix = ucase( asString( options?.prefix || ($ln( args ) > 0 ? args[0] : _mt), true ) );
+
+            this.#keyPath = options?.keyPath || options?.mount || options.path || calculateSecretsSource( this.#mode ) || "./.env";
+
+            this.#options = lock( options ?? {} );
         }
 
         get mode()
         {
-            return this.#mode || ExecutionMode.calculate();
+            return this.#mode ?? ExecutionMode.calculate();
         }
 
         get prefix()
         {
-            return this.#prefix;
+            return asString( this.#prefix, true ).replace( /^[_-]+/, _mt ).trim().replace( /[_-]+$/, _mt ).trim();
         }
 
         get keyPath()
@@ -1203,26 +1218,31 @@ const { _ud = "undefined", $scope } = constants;
             return lock( Object.assign( {}, this.#options || {} ) );
         }
 
-        getSecretsManager( pOptions = {} )
+        getSecretsManager( pOptions = {}, ...pArgs )
         {
-            let options = lock( { ...(this.options || {}), ...(pOptions ?? {}) } );
+            let options = lock( { ...(asObject( this.options || {} )), ...(asObject( pOptions ?? {} )) } );
 
             let secretsManagerMode = options.mode || this.mode || SecretsManagerMode.from( ExecutionMode.calculate() );
 
-            return secretsManagerMode.getSecretsManager( this.keyPath, this.prefix, options );
+            return secretsManagerMode.getSecretsManager( options, ...pArgs );
         }
 
-        static getInstance( pMode, pSource, pPrefix, pOptions )
+        static getInstance( pOptions, ...pArgs )
         {
-            return new SecretsManagerFactory( pMode, pSource, pPrefix, pOptions );
+            return new SecretsManagerFactory( pOptions, ...pArgs );
         }
     }
 
-    SecretsManagerFactory.makeSecretsManager = function( pMode, pSource = calculateSecretsSource(), pPrefix, pOptions )
+    SecretsManagerFactory.makeSecretsManager = function( pOptions, ...pArgs )
     {
-        let factory = SecretsManagerFactory.getInstance( pMode, pSource || calculateSecretsSource(), pPrefix, pOptions );
+        let factory = SecretsManagerFactory.getInstance( pOptions, ...pArgs );
 
-        return factory.getSecretsManager( pOptions );
+        return factory.getSecretsManager( pOptions, ...pArgs );
+    };
+
+    SecretsManager.prototype.keys = function()
+    {
+        return lock( Object.values( SecretsManager.getKeys() ) );
     };
 
     /**
@@ -1255,13 +1275,13 @@ const { _ud = "undefined", $scope } = constants;
             LocalSecretsManager,
             SecretsManagerFactory,
             calculateSecretsSource,
-            getSecretsManager: function( pMode, pSource, pPrefix, pOptions )
+            getSecretsManager: function( pOptions, ...pArgs )
             {
-                return SecretsManagerFactory.makeSecretsManager( pMode, pSource, pPrefix, pOptions );
+                return SecretsManagerFactory.makeSecretsManager( pOptions, ...pArgs );
             },
-            getLocalSecretsManager: function( pSource, pPrefix, pOptions )
+            getLocalSecretsManager: function( pOptions, ...pArgs )
             {
-                return new LocalSecretsManager( pSource, pPrefix, pOptions );
+                return new LocalSecretsManager( pOptions, ...pArgs );
             },
             defineKeys: SecretsManager.defineKeys,
             addKey: SecretsManager.addKey,
