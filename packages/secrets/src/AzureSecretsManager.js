@@ -1,6 +1,14 @@
 (function exposeModule()
 {
+    const core = require( "@toolbocks/core" );
+
     const secretsModule = require( "./SecretsManager.js" );
+
+    const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
+
+    const { _hyphen } = constants;
+
+    const { asString, isBlank, ucase, lcase } = stringUtils;
 
     const { SecretsManager } = secretsModule;
 
@@ -18,17 +26,17 @@
         #credential;
         #client;
 
-        constructor( pSource, pPrefix, pOptions = {} )
+        constructor( pOptions = {}, ...pArgs )
         {
-            super( pSource, pPrefix, pOptions );
+            super( pOptions, ...pArgs );
 
-            this.#keyVaultName = ucase( asString( pSource, true ) );
+            this.#keyVaultName = ucase( asString( this.source, true ) );
             this.#keyVaultUrl = this.options.keyVaultUrl || `https://${lcase( this.source )}.vault.azure.net`;
         }
 
         get keyVaultName()
         {
-            return this.#keyVaultName ||  super.getCachedSecret( "KV-NAME" );
+            return this.#keyVaultName || super.getCachedSecret( "KV-NAME" );
         }
 
         get keyVaultUrl()
@@ -69,50 +77,47 @@
         {
             const me = this;
 
-            let key = asString( pKey, true ).replaceAll( /_/g, _hyphen );
+            let key = this.resolveKey( pKey ) || asString( pKey, true ).replaceAll( /_/g, _hyphen );
 
-            if ( this.invalidKeys.includes( key ) || !(SecretsManager.isValidKey( key ) || SecretsManager.isValidKey( pKey )) )
+            if ( this.restrictKeys && !(SecretsManager.isValidKey( key ) || SecretsManager.isValidKey( pKey )) )
             {
                 return null;
             }
 
             let client = (me || this).client || new SecretClient( this.keyVaultUrl, this.credential );
 
-            let secret = await asyncAttempt( async() => client.getSecret( createKey( (me || this).prefix, key ) ) );
+            let secret = await asyncAttempt( async() => client.getSecret( key ) );
 
-            secret = isNonNullObject( secret ) ? (secret?.value || secret) : secret;
+            secret = this.resolveSecretValue( secret );
 
             if ( isNull( secret ) || isBlank( secret ) )
             {
                 secret = await asyncAttempt( async() => client.getSecret( key ) );
             }
 
-            secret = isNonNullObject( secret ) ? (secret?.value || secret) : secret;
-
-            secret = (isString( secret ) && !isBlank( secret )) ? secret : ((isNonNullObject( secret ) ? secret.value : await super.getSecret( key )) || super.getSecret( key ));
+            secret = this.resolveSecretValue( secret );
 
             if ( !isNull( secret ) && this.allowCache && this.canCache( key ) )
             {
-                this.cacheSecret( createKey( this.prefix, key ), secret );
                 this.cacheSecret( key, secret );
                 this.cacheSecret( ucase( asString( key, true ) ), secret );
             }
 
-            return isNonNullObject( secret ) ? (secret?.value || secret) : secret;
+            return this.resolveSecretValue( secret );
         }
 
         async get( pKey )
         {
             let key = asString( pKey, true ).replaceAll( /_/g, _hyphen );
 
-            if ( this.invalidKeys.includes( key ) || !(SecretsManager.isValidKey( key ) || SecretsManager.isValidKey( pKey )) )
+            if ( this.restrictKeys || !(SecretsManager.isValidKey( key ) || SecretsManager.isValidKey( pKey )) )
             {
                 return null;
             }
 
             let secret = this.getCachedSecret( key );
 
-            secret = isNonNullObject( secret ) ? (secret?.value || secret?.Value || secret) : secret;
+            secret = this.resolveSecretValue( secret );
 
             if ( !isNull( secret ) && !isBlank( secret ) )
             {
@@ -121,14 +126,12 @@
 
             secret = await asyncAttempt( async() => await this.getSecret( key ) );
 
-            secret = isNonNullObject( secret ) ? (secret?.value || secret?.Value || secret) : secret;
-
             if ( secret && this.canCache( key ) )
             {
                 this.cacheSecret( key, secret );
             }
 
-            return isNonNullObject( secret ) ? (secret?.value || secret?.Value || secret) : secret;
+            return this.resolveSecretValue( secret );
         }
     }
 
