@@ -6551,6 +6551,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
     }
 
+    class NotImplementedError extends __Error
+    {
+        constructor( pMessage, pOptions, ...pArgs )
+        {
+            super( pMessage, pOptions, ...pArgs );
+        }
+    }
+
     function _fromErrorArray( pError, pMessage, pErrors )
     {
         let errors = (isArray( pError )) ? [...(pError || [])] : [pError];
@@ -9938,6 +9946,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             IllegalArgumentError,
             IllegalStateError,
             IllegalAccessError,
+            NotImplementedError,
             IterationCap,
             SourceInfo,
             StackTrace,
@@ -10037,6 +10046,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     IllegalArgumentError,
                     IllegalStateError,
                     IllegalAccessError,
+                    NotImplementedError,
                     IterationCap,
                     ModuleArgs,
                     ModuleEvent: ToolBocksModuleEvent,
