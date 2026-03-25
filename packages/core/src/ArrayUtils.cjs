@@ -30,7 +30,7 @@ const typeUtils = require( "./TypeUtils.cjs" );
 const stringUtils = require( "./StringUtils.cjs" );
 
 /* define a variable for typeof undefined */
-const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
+const { _ud = "undefined", $scope } = constants;
 
 // noinspection FunctionTooLongJS
 /**
@@ -48,45 +48,48 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         return $scope()[INTERNAL_NAME];
     }
 
-    const {
-        OBJECT_REGISTRY = $scope()["__BOCK_OBJECT_REGISTRY__"],
-        ModuleEvent,
-        ToolBocksModule,
-        IllegalArgumentError,
-        ObjectEntry,
-        objectKeys,
-        objectValues,
-        objectEntries,
-        objectToString,
-        populateOptions,
-        getProperty,
-        localCopy,
-        immutableCopy,
-        lock,
-        attempt,
-        asyncAttempt,
-        sleep,
-        $ln
-    } = moduleUtils;
+    const
+        {
+            OBJECT_REGISTRY = $scope()["__BOCK_OBJECT_REGISTRY__"],
+            ModuleEvent,
+            ToolBocksModule,
+            IllegalArgumentError,
+            ObjectEntry,
+            objectKeys,
+            objectValues,
+            objectEntries,
+            objectToString,
+            populateOptions,
+            getProperty,
+            localCopy,
+            immutableCopy,
+            lock,
+            attempt,
+            asyncAttempt,
+            sleep,
+            $ln
+        } = moduleUtils;
 
     /*
      * Create local variables for the imported values and functions we use.
      */
-    const {
-        _mt_str,
-        _spc,
-        _dot,
-        _str,
-        _fun,
-        _obj,
-        _num,
-        _big,
-        _bool,
-        _symbol,
-        S_WARN,
-        ignore,
-        AsyncFunction,
-    } = constants;
+    const
+        {
+            _mt_str,
+            _mt,
+            _spc,
+            _dot,
+            _str,
+            _fun,
+            _obj,
+            _num,
+            _big,
+            _bool,
+            _symbol,
+            S_WARN,
+            ignore,
+            AsyncFunction,
+        } = constants;
 
     /**
      * This is a dictionary of this module's dependencies.
@@ -125,65 +128,67 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
      */
     const modName = "ArrayUtils";
 
-    const {
-        ComparatorFactory,
-        VALID_TYPES,
-        TYPE_SORT_ORDER,
-        isUndefined,
-        isNull,
-        isNonNullValue,
-        isNonNullObject,
-        isNullOrNaN,
-        isPopulatedObject,
-        isString,
-        isEmptyString,
-        isPrimitive,
-        isRegExp,
-        isNumeric,
-        isNumber,
-        isInteger,
-        isObject,
-        isSet,
-        isMap,
-        isArray,
-        isLikeArray,
-        isTypedArray,
-        isIterable,
-        isSpreadable,
-        isBoolean,
-        isFunction,
-        isAsyncFunction,
-        isPromise,
-        isThenable,
-        isDate,
-        isClass,
-        areSameType,
-        areCompatibleTypes,
-        defaultFor,
-        castTo,
-        asObject,
-        toDecimal,
-        toHex,
-        toOctal,
-        toBinary,
-        clamp
-    } = typeUtils;
+    const
+        {
+            ComparatorFactory,
+            VALID_TYPES,
+            TYPE_SORT_ORDER,
+            isUndefined,
+            isNull,
+            isNonNullValue,
+            isNonNullObject,
+            isNullOrNaN,
+            isPopulatedObject,
+            isString,
+            isEmptyString,
+            isPrimitive,
+            isRegExp,
+            isNumeric,
+            isNumber,
+            isInteger,
+            isObject,
+            isSet,
+            isMap,
+            isArray,
+            isLikeArray,
+            isTypedArray,
+            isIterable,
+            isSpreadable,
+            isBoolean,
+            isFunction,
+            isAsyncFunction,
+            isPromise,
+            isThenable,
+            isDate,
+            isClass,
+            areSameType,
+            areCompatibleTypes,
+            defaultFor,
+            castTo,
+            asObject,
+            toDecimal,
+            toHex,
+            toOctal,
+            toBinary,
+            clamp
+        } = typeUtils;
 
-    const {
-        DEFAULT_AS_STRING_OPTIONS,
-        asString,
-        isBlank,
-        asInt,
-        asFloat,
-        lcase,
-        ucase,
-        isValidNumber,
-        isValidNumeric,
-        leftOfLast,
-        rightOfLast,
-        asUtf8ByteArray,
-        cartesian
-    } = stringUtils;
+    const
+        {
+            DEFAULT_AS_STRING_OPTIONS,
+            asString,
+            isBlank,
+            asInt,
+            asFloat,
+            lcase,
+            ucase,
+            isValidNumber,
+            isValidNumeric,
+            leftOfLast,
+            rightOfLast,
+            asUtf8ByteArray,
+            cartesian
+        } = stringUtils;
 
     /** The maximum limit that can be specified for the size of a bounded queue
      * @const
@@ -3639,6 +3644,87 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
     };
 
     /**
+     * Removes null or empty elements from the end of an array
+     * @param {Array<*>} pArr an array to truncate
+     * @param {boolean} [pTreatEmptyStringAsNull=false] indicates whether to treat empty strings as if they were null values
+     * @param {boolean} [pInPlace=false] indicates whether to modify the array specified
+     *                                   or to return a new array with null or empty elements removed from the end
+     */
+    const truncateArray = function( pArr, pTreatEmptyStringAsNull = false, pInPlace = false )
+    {
+        let arr = pInPlace ? asArray( pArr ) : [...(asArray( pArr ))];
+
+        while ( arr.length > 0 )
+        {
+            let e = arr[Math.max( 0, (arr.length - 1) )];
+
+            if ( (typeof e !== _ud) && (null !== e) && ( !isString( e ) || !pTreatEmptyStringAsNull || (_mt !== String( e ).trim())) )
+            {
+                break;
+            }
+
+            arr.pop();
+        }
+
+        return arr;
+    };
+
+    /**
+     * Replaces elements of the first array with the elements of the second array at the indices specified.
+     * If no indices are specified, replacing elements of the first array with non-null elements in the second array.
+     *
+     * @param {Array<*>} pArrA an array some of whose elements may be replaced with the corresponding elements of the second array
+     * @param {Array<*>} pArrB an array some of whose values will replace elements in the first array
+     *
+     * @param {...Number} pIndices zero or more numeric values indicating the elements that should be replaced.
+     *                             if no values are specified, then every non-null element of the second array will replace the corresponding element of the first array.
+     *
+     * @returns a new array formed by replacing zero or more elements of the first array with the corresponding elements of the second array
+     */
+    const replaceElements = function( pArrA, pArrB, ...pIndices )
+    {
+        const arrA = [...(asArray( pArrA ?? [] ))];
+        const arrB = [...(asArray( pArrB ?? [] ))];
+
+        const len = Math.max( arrA.length, arrB.length );
+
+        const indices = [...(asArray( pIndices ?? [] ))].filter( e => isNumeric( e ) && parseInt( e ) < len );
+
+        let arr = [...(asArray( arrA ?? [] ))];
+
+        if ( indices.length )
+        {
+            for( let i = 0; i < len; i++ )
+            {
+                // if indices include this index, replace the value
+                if ( indices.includes( i ) )
+                {
+                    arr[i] = arrB[i] ?? null;
+                }
+                // otherwise, null-fill any otherwise empty slots
+                else if ( i >= arr.length )
+                {
+                    arr[i] = null;
+                }
+            }
+
+            return arr;
+        }
+
+        for( let i = len; i--; )
+        {
+            let e = arrB[i];
+
+            if ( _ud !== typeof e && null !== e )
+            {
+                arr[i] = e;
+            }
+        }
+
+        return arr;
+    };
+
+    /**
      * @typedef {Object} EqualityOptions
      *
      * @property {boolean} [trim=true] Whether to ignore whitespace in string elements
@@ -5916,6 +6002,8 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             last,
             first,
             $nth,
+            replaceElements,
+            truncateArray,
             TRANSFORMATIONS: lock( TRANSFORMATIONS ),
             Filters: lock( Filters ),
             Mappers: lock( Mappers ),

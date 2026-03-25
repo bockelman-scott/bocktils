@@ -18,7 +18,9 @@ const {
     includesAny,
     unique,
     distinct,
-    toShuffled
+    toShuffled,
+    replaceElements,
+    truncateArray
 } = arrayUtils;
 
 const { moduleUtils, constants, stringUtils } = dependencies;
@@ -2633,7 +2635,7 @@ describe( "toShuffled", () =>
 
               let b = toShuffled( a );
 
-              let c = toShuffled ( a );
+              let c = toShuffled( a );
 
               // console.log( a, b );
 
@@ -2641,6 +2643,99 @@ describe( "toShuffled", () =>
               expect( a ).not.toEqual( c );
               expect( c ).not.toEqual( b );
 
+
+          } );
+} );
+
+describe( "truncateArray", () =>
+{
+    test( "truncating an array with no empty or null elements returns the same array",
+          () =>
+          {
+              let a = [1, 2, 3, 4, 5];
+
+              let b = truncateArray( a );
+
+              let c = truncateArray( a );
+
+              expect( a ).toEqual( b );
+              expect( a ).toEqual( c );
+              expect( c ).toEqual( b );
+          } );
+
+    test( "truncating an array with empty elements returns a smaller array",
+          () =>
+          {
+              let a = [1, 2, 3, null, undefined];
+
+              let b = truncateArray( a );
+
+              let c = truncateArray( b );
+
+              expect( a ).not.toEqual( b );
+              expect( a ).not.toEqual( c );
+              expect( c ).toEqual( b );
+
+              expect( a.length ).toEqual( 5 );
+              expect( b.length ).toEqual( 3 );
+              expect( c.length ).toEqual( b.length );
+
+              expect( b[2] ).toEqual( 3 );
+          } );
+
+    test( "truncating a sparse array only removes empty elements from the end",
+          () =>
+          {
+              let a = [1, 2, null, 3, undefined, "", null];
+
+              let b = truncateArray( a );
+
+              let c = truncateArray( a, true );
+
+              expect( a ).not.toEqual( b );
+              expect( a ).not.toEqual( c );
+              expect( c ).not.toEqual( b );
+
+              expect( a.length ).toEqual( 7 );
+              expect( b.length ).toEqual( 6 );
+              expect( c.length ).toEqual( 4 );
+
+              expect( b[2] ).toBe( null );
+              expect( b[3] ).toEqual( 3 );
+              expect( b[5] ).toEqual( "" );
+
+              expect( c[2] ).toBe( null );
+              expect( c[3] ).toEqual( 3 );
+              expect( typeof c[5] ).toBe( "undefined" );
+
+          } );
+} );
+
+
+describe( "replaceElements", () =>
+{
+    test( "replace any elements of array a with non-null or specified elements of array b",
+          () =>
+          {
+              let arrA = [1, 2, 3, 4, 5];
+              let arrB = [2, 4, 6, 8, 10];
+              let arrB2 = [null, 4, undefined, 8, ""];
+
+              let arrC = replaceElements( arrA, arrB );
+
+              expect( arrC ).toEqual( [2, 4, 6, 8, 10] );
+
+              let arrD = replaceElements( arrA, arrB2 );
+
+              expect( arrD ).toEqual( [1, 4, 3, 8, ""] );
+
+              let arrE = replaceElements( arrA, arrB, 2, 4 );
+
+              expect( arrE ).toEqual( [1, 2, 6, 4, 10] );
+
+              arrE = replaceElements( arrA, arrB2, 0, 2, 4 );
+
+              expect( arrE ).toEqual( [null, 2, null, 4, ""] );
 
           } );
 } );
