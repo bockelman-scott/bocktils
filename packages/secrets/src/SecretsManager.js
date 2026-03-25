@@ -24,6 +24,7 @@ const { _ud = "undefined", $scope } = constants;
     const
         {
             ToolBocksModule,
+            ILogger,
             ExecutionEnvironment,
             ExecutionMode,
             NotImplementedError,
@@ -48,7 +49,9 @@ const { _ud = "undefined", $scope } = constants;
             isClass,
             getClass,
             getClassName,
-            isFunction
+            isFunction,
+            firstMatchingType,
+            toObjectLiteral
         } = typeUtils;
 
     const { asString, isBlank, ucase, asInt, isFilePath, isJson } = stringUtils;
@@ -173,6 +176,8 @@ const { _ud = "undefined", $scope } = constants;
 
         #restrictKeys = false;
 
+        #logger;
+
         // noinspection GrazieInspection
         /**
          * Constructs an instance of this class.
@@ -190,17 +195,19 @@ const { _ud = "undefined", $scope } = constants;
          */
         constructor( pOptions = {}, ...pArgs )
         {
-            this.#options = { ...(DEFAULT_OPTIONS), ...(asObject( pOptions ?? {} )) };
+            this.#options = { ...(DEFAULT_OPTIONS), ...(toObjectLiteral( asObject( pOptions ?? {} ) )) };
 
             this.#args = asArray( pArgs ?? this.#args ?? [] );
+
+            this.#logger = ToolBocksModule.resolveLogger( this.#options?.logger, firstMatchingType( ILogger, ...(asArray( this.#args ?? [] )) ), ToolBocksModule.getGlobalLogger(), console );
 
             this.#mode = this.#options?.mode ?? SecretsManagerMode.fromExecutionMode( toolBocksModule.executionMode );
 
             this.#source = this.#options?.source || calculateSecretsSource( this.mode );
 
-            this.#prefix = asString( this.#options?.prefix, true ) || ($ln( this.#args ) > 0 ? this.#args[0] : _mt);
+            this.#prefix = asString( this.#options?.prefix || _mt, true ) || ($ln( this.#args ) > 0 ? this.#args[0] : _mt);
 
-            this.#prefix = asString( this.#prefix, true ).replace( /^[_-]+/, _mt ).trim().replace( /[_-]+$/, _mt ).trim();
+            this.#prefix = asString( this.#prefix || _mt, true ).replace( /^[_-]+/, _mt ).trim().replace( /[_-]+$/, _mt ).trim();
 
             this.#allowCache = (false !== this.#options?.allowCache);
 
@@ -231,6 +238,11 @@ const { _ud = "undefined", $scope } = constants;
         get options()
         {
             return lock( { ...(DEFAULT_OPTIONS), ...(this.#options ?? {}) } );
+        }
+
+        get logger()
+        {
+            return ToolBocksModule.resolveLogger( this.#logger, this.#options?.logger, ToolBocksModule.getGlobalLogger(), console );
         }
 
         /**
@@ -710,9 +722,7 @@ const { _ud = "undefined", $scope } = constants;
 
             let secret = process.env[key] || process.env[ucase( key )] || process.env[asString( pKey, true )] || process.env[ucase( asString( pKey, true ) )];
 
-            secret = this.resolveSecretValue( secret );
-
-            return !isNull( secret ) ? secret : super.getSecret( key );
+            return this.resolveSecretValue( secret );
         }
 
         async get( pKey )
