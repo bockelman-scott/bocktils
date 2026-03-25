@@ -3683,7 +3683,13 @@ const { _ud = "undefined", $scope } = constants;
      */
     const replaceElements = function( pArrA, pArrB, ...pIndices )
     {
-        const arrA = [...(asArray( pArrA ?? [] ))];
+        const arrA = isNull( pArrA ) ? [...(asArray( pArrB ?? [] ))] : [...(asArray( pArrA ?? [] ))];
+
+        if ( isNull( pArrB ) || !isArray( pArrB ) )
+        {
+            return arrA;
+        }
+
         const arrB = [...(asArray( pArrB ?? [] ))];
 
         const len = Math.max( arrA.length, arrB.length );
