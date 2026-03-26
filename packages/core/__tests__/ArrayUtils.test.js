@@ -2738,4 +2738,21 @@ describe( "replaceElements", () =>
               expect( arrE ).toEqual( [null, 2, null, 4, ""] );
 
           } );
+
+    test( "replace elements returns an array of the meximum length of either input array",
+          () =>
+          {
+              let arrA = [1, 2];
+              let arrB = [2, 4, 6, 8, 10];
+
+              let arrC = replaceElements( arrA, arrB );
+
+              expect( arrC ).toEqual( [2, 4, 6, 8, 10] );
+
+              let arrD = replaceElements( arrB, arrA );
+
+              expect( arrD ).toEqual( [1, 2, 6, 8, 10] );
+
+
+          } );
 } );
