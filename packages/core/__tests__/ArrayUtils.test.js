@@ -2739,7 +2739,7 @@ describe( "replaceElements", () =>
 
           } );
 
-    test( "replace elements returns an array of the meximum length of either input array",
+    test( "replace elements returns an array of the maximum length of either input array",
           () =>
           {
               let arrA = [1, 2];
