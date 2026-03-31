@@ -197,7 +197,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             this.#options = { ...(DEFAULT_OPTIONS), ...(toObjectLiteral( asObject( pOptions ?? {} ) )) };
 
-            this.#args = asArray( pArgs ?? this.#args ?? [] );
+            this.#args = asArray( pArgs ?? this.#options?.args ?? this.#args ?? [] );
 
             this.#logger = ToolBocksModule.resolveLogger( this.#options?.logger, firstMatchingType( ILogger, ...(asArray( this.#args ?? [] )) ), ToolBocksModule.getGlobalLogger(), console );
 
@@ -686,6 +686,21 @@ const { _ud = "undefined", $scope } = constants;
         return Object.keys( keys ).includes( pKey ) || Object.values( keys ).includes( pKey );
     };
 
+    SecretsManager.getDefaultInstance = function( pPrefix, pSource, pMode, pOptions )
+    {
+        let opts = (asObject( pOptions ?? {} ));
+
+        let options =
+            {
+                ...(asObject( opts ?? {} )),
+                ...({ prefix: asString( pPrefix, true ) || opts?.prefix }),
+                ...(asObject( { source: pSource ?? opts?.source } )),
+                ...(asObject( { mode: pMode ?? opts?.mode } )),
+            };
+
+        return new SecretsManager( options, ...(asArray( [(asString( pPrefix, true ) || _mt), pSource, pMode] )) );
+    };
+
     /**
      * This subclass of SecretsManager uses dotenvx
      * to read value from a .env file
@@ -932,6 +947,21 @@ const { _ud = "undefined", $scope } = constants;
             return asString( isBlank( url ) ? await this.getSecret( KEYS.AUTH_URL ) : url, true );
         }
     }
+
+    SecretsManager.getLocalInstance = function( pPrefix, pSource, pMode, pOptions )
+    {
+        let opts = { ...(DEFAULT_OPTIONS), ...(asObject( pOptions ?? DEFAULT_OPTIONS ?? {} )) };
+
+        let options =
+            {
+                ...(asObject( opts ?? {} )),
+                ...({ prefix: asString( pPrefix, true ) || opts?.prefix }),
+                ...(asObject( { source: pSource ?? opts?.source ?? "./.env" } )),
+                ...(asObject( { mode: pMode ?? opts?.mode } )),
+            };
+
+        return new LocalSecretsManager( options, ...(asArray( [(asString( pPrefix, true ) || _mt), pSource, pMode] )) );
+    };
 
     const DEFAULT_PROVIDER_OPTIONS =
         {
