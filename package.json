@@ -14,9 +14,9 @@
     "body-parser": "^2.2.0",
     "cookie-parser": "^1.4.7",
     "express": "^5.1.0",
-    "lerna": "^8.1.9",
+    "lerna": "^9.0.7",
     "mimetics": "^1.0.4",
-    "multer": "^2.0.2"
+    "multer": "2.1.1"
   },
   "type": "commonjs",
   "devDependencies": {
