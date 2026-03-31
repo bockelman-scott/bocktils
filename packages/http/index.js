@@ -23,15 +23,7 @@ const HttpClientUtils = require( "./src/HttpClient.js" );
 
 
 /** define a variable for typeof undefined **/
-const { _ud = "undefined" } = constants;
-
-/**
- * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
- */
-const $scope = constants?.$scope || function()
-{
-    return (_ud === typeof self ? ((_ud === typeof global) ? {} : (global || {})) : (self || {}));
-};
+const { _ud = "undefined", $scope } = constants;
 
 /**
  * This is the Immediately Invoked Function Expression (IIFE) that builds and returns the module
@@ -92,7 +84,11 @@ const $scope = constants?.$scope || function()
             isHeader,
             isContentType,
             resolveHttpMethod,
-            calculatePriority
+            calculatePriority,
+            HttpError,
+            ExceedsRateLimitError,
+            ExceedsMaximumRetriesError,
+            ExceedsMaximumRedirectsError
         } = HttpConstants;
 
     const
@@ -334,6 +330,10 @@ const $scope = constants?.$scope || function()
             HttpHeader,
             HttpStatus,
             HttpContentType,
+            HttpError,
+            ExceedsRateLimitError,
+            ExceedsMaximumRetriesError,
+            ExceedsMaximumRedirectsError,
             isVerb,
             isHeader,
             isContentType,

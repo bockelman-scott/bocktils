@@ -63,6 +63,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             ModuleEvent,
             ToolBocksModule,
+            __Error,
             IllegalArgumentError,
             ObjectEntry,
             objectEntries,
@@ -171,6 +172,38 @@ const { _ud = "undefined", $scope } = constants;
     {
         return Object.keys( VERBS );
     };
+
+    class HttpError extends __Error
+    {
+        constructor( pMsgOrErr, pOptions = {}, ...pArgs )
+        {
+            super( pMsgOrErr, pOptions, ...pArgs );
+        }
+    }
+
+    class ExceedsRateLimitError extends HttpError
+    {
+        constructor( pMsgOrErr, pOptions = {}, ...pArgs )
+        {
+            super( pMsgOrErr, pOptions, ...pArgs );
+        }
+    }
+
+    class ExceedsMaximumRetriesError extends HttpError
+    {
+        constructor( pMsgOrErr, pOptions = {}, ...pArgs )
+        {
+            super( pMsgOrErr, pOptions, ...pArgs );
+        }
+    }
+
+    class ExceedsMaximumRedirectsError extends HttpError
+    {
+        constructor( pMsgOrErr, pOptions = {}, ...pArgs )
+        {
+            super( pMsgOrErr, pOptions, ...pArgs );
+        }
+    }
 
     /**
      * Represents an HTTP verb and provides utility methods related to it.
@@ -1958,7 +1991,11 @@ const { _ud = "undefined", $scope } = constants;
                     HttpHeader,
                     HttpStatus,
                     HttpContentType,
-                    HttpPropertiesMerger
+                    HttpPropertiesMerger,
+                    HttpError,
+                    ExceedsRateLimitError,
+                    ExceedsMaximumRetriesError,
+                    ExceedsMaximumRedirectsError
                 },
             STATUS_CODES: lock( STATUS_CODES ),
             STATUS_TEXT: lock( STATUS_TEXT_BY_CODE_STRING ),
@@ -1979,6 +2016,10 @@ const { _ud = "undefined", $scope } = constants;
             HttpPropertyRule,
             HttpPropertiesMerger,
             HttpPropertyMergeRule,
+            HttpError,
+            ExceedsRateLimitError,
+            ExceedsMaximumRetriesError,
+            ExceedsMaximumRedirectsError,
             isVerb,
             isHeader,
             isContentType,
