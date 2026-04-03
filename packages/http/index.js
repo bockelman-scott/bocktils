@@ -64,6 +64,7 @@ const { _ud = "undefined", $scope } = constants;
 
     const
         {
+            ENCODING_TYPE_EXPRESSIONS,
             STATUS_CODES,
             STATUS_TEXT,
             STATUS_TEXT_ARRAY,
@@ -325,6 +326,7 @@ const { _ud = "undefined", $scope } = constants;
             CONTENT_TYPES,
             TYPES,
             HTTP_HEADERS,
+            ENCODING_TYPE_EXPRESSIONS,
             HttpVerb,
             HttpHeaderDefinition,
             HttpHeader,

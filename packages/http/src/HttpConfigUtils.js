@@ -191,6 +191,7 @@ const { _ud = "undefined", $scope } = constants;
     // import the functions, variables, and classes defined in the HttpConstants module that are used in this module
     const
         {
+            ENCODING_TYPE_EXPRESSIONS,
             HTTP_HEADERS,
             CONTENT_TYPES,
             EXTENSIONS,
@@ -414,6 +415,27 @@ const { _ud = "undefined", $scope } = constants;
         return false;
     };
 
+    const HTTP_CONFIG_PROPERTIES =
+        [
+            "responseType",
+            "baseURL",
+            "method",
+            "timeout",
+            "allowAbsoluteUrls",
+            "withCredentials",
+            "responseEncoding",
+            "xsrfCookieName",
+            "xsrfHeaderName",
+            "withXSRFToken",
+            "maxContentLength",
+            "maxBodyLength",
+            "maxRedirects",
+            "socketPath",
+            "proxy",
+            "decompress",
+            "maxRate"
+        ];
+
     class HttpConfig
     {
         #properties;
@@ -490,6 +512,12 @@ const { _ud = "undefined", $scope } = constants;
         get properties()
         {
             return { ...DEFAULT_CONFIG, ...(asObject( this.#properties || {} )) };
+        }
+
+        getProperty( pName )
+        {
+            const name = asString( pName, true );
+            return isNonNullObject( this.properties ) ? (this.properties[name] ?? this[name]) : this[name];
         }
 
         get responseType()
@@ -598,6 +626,16 @@ const { _ud = "undefined", $scope } = constants;
             return { ...this.headers };
         }
 
+        get allowAbsoluteUrls()
+        {
+            return (false !== this.properties?.allowAbsoluteUrls);
+        }
+
+        get baseURL()
+        {
+            return asString( this.properties?.baseURL || _mt, true ) || _mt;
+        }
+
         get url()
         {
             let url = asString( resolveUrl( this.#url, this.properties ), true );
@@ -646,6 +684,48 @@ const { _ud = "undefined", $scope } = constants;
         fixAgents( pForDownload )
         {
             fixAgents( this, pForDownload );
+        }
+
+        get timeout()
+        {
+            return this.properties?.timeout ?? 5_000;
+        }
+
+        get withCredentials()
+        {
+            return this.properties?.withCredentials ?? false;
+        }
+
+        get responseEncoding()
+        {
+            let encoding = asString( this.properties?.responseEncoding || "utf8", true ) || "utf8";
+
+            if ( ENCODING_TYPE_EXPRESSIONS.map( e => e.test( encoding ) ).some( e => true === e ) )
+            {
+                return encoding;
+            }
+
+            return "utf8";
+        }
+
+        get maxContentLength()
+        {
+            return this.properties?.maxContentLength ?? 50_000;
+        }
+
+        get maxBodyLength()
+        {
+            return this.properties?.maxBodyLength ?? 50_000;
+        }
+
+        get maxRedirects()
+        {
+            return this.properties?.maxRedirects ?? 5;
+        }
+
+        get decompress()
+        {
+            return (false !== this.properties?.decompress);
         }
 
         get data()
@@ -738,24 +818,7 @@ const { _ud = "undefined", $scope } = constants;
                 return is;
             }
 
-            let properties =
-                [
-                    "responseType",
-                    "baseURL",
-                    "method",
-                    "timeout",
-                    "withCredentials",
-                    "responseEncoding",
-                    "xsrfCookieName",
-                    "xsrfHeaderName",
-                    "withXSRFToken",
-                    "maxContentLength",
-                    "maxBodyLength",
-                    "maxRedirects",
-                    "socketPath",
-                    "proxy",
-                    "decompress",
-                    "maxRate"];
+            let properties = HTTP_CONFIG_PROPERTIES;
 
             while ( is && $ln( properties ) )
             {

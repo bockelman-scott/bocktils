@@ -1001,6 +1001,19 @@ const { _ud = "undefined", $scope } = constants;
 
     };
 
+    const ENCODING_TYPE_EXPRESSIONS =
+        [
+            /^utf-?(8|16)(le)?$/i,
+            /^ascii|ansi$/i,
+            /^binary$/i,
+            /^base64(url)?$/i,
+            /^hex$/i,
+            /^latin1$/i,
+            /^ucs-?2/i,
+            /^ISO-8859(-\d{1,2})?$/i,
+            /^IBM\d{3,4}$/i,
+        ];
+
     /**
      * Represents an HTTP header with a name, description, and category.<br>
      * <br>
@@ -1983,6 +1996,7 @@ const { _ud = "undefined", $scope } = constants;
 
     let mod =
         {
+            ENCODING_TYPE_EXPRESSIONS,
             dependencies,
             classes:
                 {
