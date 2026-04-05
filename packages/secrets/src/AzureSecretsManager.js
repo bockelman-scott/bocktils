@@ -1,16 +1,27 @@
 (function exposeModule()
 {
+    const azureIdentity = require( "@azure/identity" );
+    const azureSecrets = require( "@azure/keyvault-secrets" );
+
     const core = require( "@toolbocks/core" );
 
     const secretsModule = require( "./SecretsManager.js" );
 
     const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
-    const { _hyphen } = constants;
+    const { asyncAttempt } = moduleUtils;
+
+    const { _ud, _hyphen, $scope } = constants;
+
+    const { isNull } = typeUtils;
 
     const { asString, isBlank, ucase, lcase } = stringUtils;
 
-    const { SecretsManager } = secretsModule;
+    const { SECRETS_STRATEGY, SecretsManager, registerSecretsManagerClass } = secretsModule;
+
+    const { ChainedTokenCredential, DefaultAzureCredential } = azureIdentity;
+
+    const { SecretClient } = azureSecrets;
 
     /**
      * This subclass of SecretsManager uses the Azure Key Vault to store and retrieve values.
@@ -106,9 +117,9 @@
             return this.resolveSecretValue( secret );
         }
 
-        async get( pKey )
+        async get( pKey, pVersion, pIgnoreCache = false )
         {
-            let key = asString( pKey, true ).replaceAll( /_/g, _hyphen );
+            let key = this.resolveKey( pKey );
 
             if ( this.restrictKeys || !(SecretsManager.isValidKey( key ) || SecretsManager.isValidKey( pKey )) )
             {
@@ -117,11 +128,14 @@
 
             let secret = this.getCachedSecret( key );
 
-            secret = this.resolveSecretValue( secret );
-
-            if ( !isNull( secret ) && !isBlank( secret ) )
+            if ( !isNull( secret ) )
             {
-                return secret;
+                secret = this.resolveSecretValue( secret );
+
+                if ( !(isNull( secret ) || isBlank( secret )) )
+                {
+                    return secret;
+                }
             }
 
             secret = await asyncAttempt( async() => await this.getSecret( key ) );
@@ -135,12 +149,25 @@
         }
     }
 
-    const DEFAULT_AZURE_OPTIONS =
+    registerSecretsManagerClass( SECRETS_STRATEGY.AZURE, AzureSecretsManager );
+
+    const mod =
         {
-            secretsManagerClass: AzureSecretsManager,
-            keyStoreName: _mt
+            classes:
+                {
+                    SecretsManager,
+                    AzureSecretsManager
+                },
+            AzureSecretsManager
         };
 
+    if ( _ud !== typeof module )
+    {
+        module.exports = mod;
+    }
+
+    $scope["AzureSecretsManager"] = AzureSecretsManager;
+
+    return mod;
 
 }());
-

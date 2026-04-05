@@ -23,42 +23,44 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         return $scope()[INTERNAL_NAME];
     }
 
-    const {
-        ModuleEvent,
-        ToolBocksModule,
-        ExecutionMode,
-        StatefulListener,
-        StackTrace,
-        ILogger,
-        Konsole,
-        ConditionalLogger,
-        objectToString,
-        resolveError,
-        lock,
-        populateOptions,
-        attempt,
-        attemptSilent,
-        asyncAttempt,
-        $ln
-    } = moduleUtils;
+    const
+        {
+            ModuleEvent,
+            ToolBocksModule,
+            ExecutionMode,
+            StatefulListener,
+            StackTrace,
+            ILogger,
+            Konsole,
+            ConditionalLogger,
+            objectToString,
+            resolveError,
+            lock,
+            populateOptions,
+            attempt,
+            attemptSilent,
+            asyncAttempt,
+            $ln
+        } = moduleUtils;
 
-    const {
-        _mt_str,
-        _mt = _mt_str,
-        _spc,
-        _comma,
-        _colon,
-        _num,
-        _obj,
-        _fun,
-        _lf,
-        _crlf,
-        funcName,
-        _defaultLocaleString = "en-US",
-        S_ERROR = "error",
-        no_op,
-        ignore
-    } = constants;
+    const
+        {
+            _mt_str,
+            _mt = _mt_str,
+            _spc,
+            _comma,
+            _colon,
+            _num,
+            _obj,
+            _fun,
+            _lf,
+            _crlf,
+            funcName,
+            _defaultLocaleString = "en-US",
+            S_ERROR = "error",
+            no_op,
+            ignore
+        } = constants;
 
     /**
      * This is a dictionary of this module's dependencies.
@@ -72,36 +74,38 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
      * @type {Object}
      * @alias module:LoggingUtils#dependencies
      */
-    const dependencies = {
-        moduleUtils, constants, typeUtils, stringUtils, arrayUtils
-    };
+    const dependencies =
+        {
+            moduleUtils, constants, typeUtils, stringUtils, arrayUtils
+        };
 
     if ( _ud === typeof CustomEvent )
     {
         CustomEvent = ModuleEvent;
     }
 
-    const {
-        isNull,
-        isString,
-        isNumeric,
-        isNumber,
-        isObject,
-        isNonNullObject,
-        isArray,
-        isFunction,
-        isAsyncFunction,
-        isClass,
-        isDate,
-        isError,
-        firstError,
-        isEvent,
-        firstMatchingType,
-        getClass,
-        getClassName,
-        delegateTo,
-        toObjectLiteral
-    } = typeUtils;
+    const
+        {
+            isNull,
+            isString,
+            isNumeric,
+            isNumber,
+            isObject,
+            isNonNullObject,
+            isArray,
+            isFunction,
+            isAsyncFunction,
+            isClass,
+            isDate,
+            isError,
+            firstError,
+            isEvent,
+            firstMatchingType,
+            getClass,
+            getClassName,
+            delegateTo,
+            toObjectLiteral
+        } = typeUtils;
 
     const { asString, asInt, isBlank, toBool, lcase, ucase, trimLeadingCharacters } = stringUtils;
 
@@ -116,9 +120,10 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
     const DEBUG = "debug";
     const TRACE = "trace";
 
-    const LOGGER_METHODS = {
-        LOG, INFO, WARN, ERROR, DEBUG, TRACE
-    };
+    const LOGGER_METHODS =
+        {
+            LOG, INFO, WARN, ERROR, DEBUG, TRACE
+        };
 
     class LogLevel
     {
@@ -508,24 +513,26 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
      * @property {Object} dateFormattingOptions The options to specify for the Intl.DateFormatter that is used if dateFormatter is not specified
      */
 
-    const DEFAULT_DATE_FORMAT_OPTIONS = {
-        month: "2-digit",
-        day: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        fractionalSecondDigits: 3
-    };
+    const DEFAULT_DATE_FORMAT_OPTIONS =
+        {
+            month: "2-digit",
+            day: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            fractionalSecondDigits: 3
+        };
 
-    const DEFAULT_LOG_FORMATTER_OPTIONS = {
-        template: DEFAULT_TEMPLATE,
-        errorTemplate: DEFAULT_ERROR_TEMPLATE,
-        includeStackTrace: true,
-        dateFormatter: null,
-        locale: _defaultLocaleString,
-        dateFormattingOptions: DEFAULT_DATE_FORMAT_OPTIONS
-    };
+    const DEFAULT_LOG_FORMATTER_OPTIONS =
+        {
+            template: DEFAULT_TEMPLATE,
+            errorTemplate: DEFAULT_ERROR_TEMPLATE,
+            includeStackTrace: true,
+            dateFormatter: null,
+            locale: _defaultLocaleString,
+            dateFormattingOptions: DEFAULT_DATE_FORMAT_OPTIONS
+        };
 
     class LogFormatter
     {
@@ -905,7 +912,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         return new LogFormatter( options );
     }
 
-    class Logger extends StatefulListener
+    class Logger extends ILogger
     {
         #options;
         #loggers = [];
@@ -929,7 +936,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
         constructor( pOptions = DEFAULT_LOGGER_OPTIONS, ...pLoggers )
         {
-            super( pOptions?.name, populateOptions( pOptions, DEFAULT_LOGGER_OPTIONS ) );
+            super( pOptions?.id, pOptions?.name, populateOptions( pOptions, DEFAULT_LOGGER_OPTIONS ) );
 
             const options = populateOptions( pOptions || {}, DEFAULT_LOGGER_OPTIONS || {} );
 
@@ -1887,11 +1894,32 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         }
     }
 
-    let mod = {
-        dependencies,
-        classes: {
-            ModuleEvent,
-            StatefulListener,
+    let mod =
+        {
+            dependencies,
+            classes:
+                {
+                    ModuleEvent,
+                    StatefulListener,
+                    LogLevel,
+                    LogRecord,
+                    LogFormatter,
+                    LogFilter,
+                    Logger,
+                    AsyncLogger,
+                    BufferedLogger,
+                    ConsoleLogger,
+                    SimpleLogger,
+                    NullLogger
+                },
+            DEFAULT_TEMPLATE,
+            DEFAULT_ERROR_TEMPLATE,
+            DEFAULT_LOG_FORMATTER_OPTIONS,
+            DEFAULT_LOGGER_OPTIONS,
+            SIMPLE_LOGGER_LEVELS,
+            SIMPLE_LOGGER_DEFAULT_LEVEL,
+            DEFAULT_SIMPLE_LOGGER_OPTIONS,
+            ILogger,
             LogLevel,
             LogRecord,
             LogFormatter,
@@ -1900,41 +1928,23 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             AsyncLogger,
             BufferedLogger,
             ConsoleLogger,
+            resolveError,
+            resolveSource,
+            resolveFormatter,
+            resolveFilter,
+            SimpleLoggerOptions,
             SimpleLogger,
-            NullLogger
-        },
-        DEFAULT_TEMPLATE,
-        DEFAULT_ERROR_TEMPLATE,
-        DEFAULT_LOG_FORMATTER_OPTIONS,
-        DEFAULT_LOGGER_OPTIONS,
-        SIMPLE_LOGGER_LEVELS,
-        SIMPLE_LOGGER_DEFAULT_LEVEL,
-        DEFAULT_SIMPLE_LOGGER_OPTIONS,
-        ILogger,
-        LogLevel,
-        LogRecord,
-        LogFormatter,
-        LogFilter,
-        Logger,
-        AsyncLogger,
-        BufferedLogger,
-        ConsoleLogger,
-        resolveError,
-        resolveSource,
-        resolveFormatter,
-        resolveFilter,
-        SimpleLogger,
-        SimpleAsynchronousLogger,
-        SourcedSimpleLogger,
-        AsynchronousSimpleLogger: SimpleAsynchronousLogger,
-        NullLogger,
-        NULL_LOGGER,
-        SIMPLE_LOGGER,
-        SIMPLE_ASYNC_LOGGER,
-        dbg,
-        CallTrace,
-        CallStack
-    };
+            SimpleAsynchronousLogger,
+            SourcedSimpleLogger,
+            AsynchronousSimpleLogger: SimpleAsynchronousLogger,
+            NullLogger,
+            NULL_LOGGER,
+            SIMPLE_LOGGER,
+            SIMPLE_ASYNC_LOGGER,
+            dbg,
+            CallTrace,
+            CallStack
+        };
 
     // makes the properties of mod available as properties and methods of the modulePrototype
     mod = toolBocksModule.extend( mod );

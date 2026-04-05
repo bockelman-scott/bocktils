@@ -24,11 +24,13 @@ const { _ud = "undefined", $scope } = constants;
     const
         {
             ToolBocksModule,
+            ModuleEvent,
+            ObjectEntry,
+            __Error,
+            objectEntries,
+            objectValues,
             ILogger,
-            ExecutionEnvironment,
-            ExecutionMode,
             NotImplementedError,
-            populateProperties,
             readProperty,
             attempt,
             asyncAttempt,
@@ -42,19 +44,18 @@ const { _ud = "undefined", $scope } = constants;
         {
             isNull,
             isString,
-            isNumeric,
             isNonNullObject,
             isArray,
+            isDate,
             isMap,
             isClass,
             getClass,
-            getClassName,
-            isFunction,
             firstMatchingType,
-            toObjectLiteral
+            toObjectLiteral,
+            delegateTo
         } = typeUtils;
 
-    const { asString, isBlank, ucase, asInt, isFilePath, isJson } = stringUtils;
+    const { asString, isBlank, ucase, isFilePath, isJson } = stringUtils;
 
     const { asArray } = arrayUtils;
 
@@ -62,12 +63,156 @@ const { _ud = "undefined", $scope } = constants;
 
     const { asObject } = jsonUtils;
 
+    class SecretsManagerError extends __Error
+    {
+        constructor( pMsgOrErr, pOptions = {}, ...pArgs )
+        {
+            super( pMsgOrErr, (pOptions ?? {}), ...pArgs );
+        }
+    }
+
+    class KeyNotFoundError extends SecretsManagerError
+    {
+        constructor( pKey, pOptions = {}, ...pArgs )
+        {
+            super( `No Secret Defined for key, ${pKey}`, (pOptions ?? {}), ...pArgs );
+        }
+    }
+
+    const SECRETS_STRATEGY =
+        lock( {
+                  LOCAL: "LOCAL",
+                  AWS: "AWS",
+                  AZURE: "AZURE",
+                  GOOGLE: "GOOGLE",
+                  ORACLE: "ORACLE",
+                  DIGITAL_OCEAN: "DO",
+                  OTHER: "other"
+              } );
+
+    const STRATEGY_OPTIONS = lock( objectValues( SECRETS_STRATEGY ) );
+
+    const SECRETS_STRATEGY_ENV_VARIABLES =
+        lock( {
+                  AWS: lock( ["AWS_REGION", "AWS-REGION", "AWS_EXECUTION_ENV", "AWS-EXECUTION-ENV"] ),
+                  DIGITAL_OCEAN: lock( ["DO_REGION", "DO-REGION", "DO_EXECUTION_ENV", "DO-EXECUTION-ENV"] ),
+                  AZURE: lock( ["AZURE_REGION", "AZURE-REGION", "AZURE_EXECUTION_ENV", "AZURE-EXECUTION-ENV"] ),
+                  GOOGLE: lock( ["GOOGLE_REGION", "GOOGLE-REGION", "GOOGLE_EXECUTION_ENV", "GOOGLE-EXECUTION-ENV"] ),
+                  ORACLE: lock( ["ORACLE_REGION", "ORACLE-REGION", "ORACLE_EXECUTION_ENV", "ORACLE-EXECUTION-ENV"] )
+              } );
+
+    const ENV_VARIABLE_ENTRIES = lock( objectEntries( SECRETS_STRATEGY_ENV_VARIABLES ) );
+
+    const calculateStrategy = ( pOptions ) =>
+    {
+        const options = asObject( pOptions ?? {} );
+
+        // Allow an explicit override (for unit tests, for example)
+        if ( options?.strategy && STRATEGY_OPTIONS.includes( options.strategy ) )
+        {
+            return options.strategy;
+        }
+
+        const proc = (_ud !== typeof process ? process : $scope());
+        const ENV = proc?.env ?? $scope();
+
+        // Check for an explicit strategy; this must be set in the container configuration
+        if ( ENV.SECRETS_STRATEGY && STRATEGY_OPTIONS.includes( asString( ENV.SECRETS_STRATEGY, true ) ) )
+        {
+            return ENV.SECRETS_STRATEGY;
+        }
+
+        let strategy = null;
+
+        for( let entry of ENV_VARIABLE_ENTRIES )
+        {
+            const arr = asArray( ObjectEntry.getValue( entry ) ).map( asString );
+
+            for( let elem of arr )
+            {
+                if ( !isNull( ENV[elem] ) )
+                {
+                    strategy = asString( ObjectEntry.getKey( entry ), true );
+                    if ( STRATEGY_OPTIONS.includes( strategy ) )
+                    {
+                        break;
+                    }
+                }
+            }
+
+            if ( !isNull( strategy ) && STRATEGY_OPTIONS.includes( strategy ) )
+            {
+                break;
+            }
+        }
+
+        if ( !isNull( strategy ) && STRATEGY_OPTIONS.includes( strategy ) )
+        {
+            return strategy;
+        }
+
+        // Check for an explicit environment flag; this must be set in the container configuration
+        const environmentKeys = ["EXECUTION_ENVIRONMENT", "EXECUTION-ENVIRONMENT"];
+
+        for( let key of environmentKeys )
+        {
+            let environment = ENV[key];
+            if ( !isNull( environment ) && STRATEGY_OPTIONS.includes( asString( environment, true ) ) )
+            {
+                strategy = asString( environment, true );
+                break;
+            }
+        }
+
+        if ( !isNull( strategy ) && STRATEGY_OPTIONS.includes( strategy ) )
+        {
+            return strategy;
+        }
+
+        // Default to LOCAL
+        return SECRETS_STRATEGY.LOCAL;
+    };
+
+    const SECRET_VERSION =
+        lock( {
+                  CURRENT: "CURRENT",
+                  PREVIOUS: "PREVIOUS"
+              } );
+
     let KEYS =
         {
+            /**
+             * Possible values include "local", "AWS", "AZURE", "DO", "OCI", or "GOOGLE", for example
+             */
+            EXECUTION_ENVIRONMENT: "EXECUTION-ENVIRONMENT",
+
+            /**
+             * Possible values include "DEV", "TEST", "STAGING", and "PRODUCTION"
+             */
             EXECUTION_MODE: "EXECUTION-MODE",
-            TEST_SECRET: "TEST-SECRET",
+
+            /**
+             * Only applicable for HA deployments.
+             * Possible values are hosting-provider-specific
+             */
+            EXECUTION_REGION: "EXECUTION-REGION",
+
+            /**
+             * For secrets managers that require an explicit vault name, such as Azure Key Vault,
+             * this value needs to be manually added to the process.env object.
+             */
             KEY_VAULT_NAME: "KV-NAME",
+
+            /**
+             * For secrets managers that require an explicit store name, such as Azure Key Vault,
+             * this value needs to be manually added to the process.env object.
+             */
             KEY_STORE_NAME: "KEY-STORE-NAME",
+
+            /**
+             * This key can be used to store a value that indicates the key vault or secret store can be reached.
+             */
+            TEST_SECRET: "TEST-SECRET",
 
             SERVER_APPLICATION: "SERVER-APPLICATION",
 
@@ -132,26 +277,17 @@ const { _ud = "undefined", $scope } = constants;
     };
 
     const DEFAULT_OPTIONS =
-        {
-            source: "./.env",
-            allowCache: true,
-            excludeFromCache: [],
-            restrictKeys: false
-        };
+        lock( {
+                  source: "./.env",
+                  allowCache: true,
+                  excludeFromCache: [],
+                  restrictKeys: false
+              } );
 
     /**
      * The module that will be returned to expose the classes and functionality of the SecretsManager.
      */
     const toolBocksModule = new ToolBocksModule( "SecretsManager", INTERNAL_NAME );
-
-    const calculateSecretsSource = function( pExecutionMode )
-    {
-        let executionMode = pExecutionMode || ExecutionMode.calculate();
-
-        let secretsManagerMode = SecretsManagerMode.from( executionMode );
-
-        return "./.env";
-    };
 
     // noinspection JSUnusedLocalSymbols
     /**
@@ -163,8 +299,10 @@ const { _ud = "undefined", $scope } = constants;
      */
     class SecretsManager
     {
-        #mode;
+        #strategy;
+
         #source;
+
         #prefix = _mt;
 
         #options = {};
@@ -177,6 +315,10 @@ const { _ud = "undefined", $scope } = constants;
         #restrictKeys = false;
 
         #logger;
+
+        #initDate;
+
+        #zTarget = new EventTarget();
 
         // noinspection GrazieInspection
         /**
@@ -197,13 +339,13 @@ const { _ud = "undefined", $scope } = constants;
         {
             this.#options = { ...(DEFAULT_OPTIONS), ...(toObjectLiteral( asObject( pOptions ?? {} ) )) };
 
+            this.#strategy = calculateStrategy( this.#options );
+
             this.#args = asArray( pArgs ?? this.#options?.args ?? this.#args ?? [] );
 
             this.#logger = ToolBocksModule.resolveLogger( this.#options?.logger, firstMatchingType( ILogger, ...(asArray( this.#args ?? [] )) ), ToolBocksModule.getGlobalLogger(), console );
 
-            this.#mode = this.#options?.mode ?? SecretsManagerMode.fromExecutionMode( toolBocksModule.executionMode );
-
-            this.#source = this.#options?.source || calculateSecretsSource( this.mode );
+            this.#source = this.#options?.source || (SECRETS_STRATEGY.LOCAL === this.#strategy ? "./.env" : _mt);
 
             this.#prefix = asString( this.#options?.prefix || _mt, true ) || ($ln( this.#args ) > 0 ? this.#args[0] : _mt);
 
@@ -224,11 +366,8 @@ const { _ud = "undefined", $scope } = constants;
             }
 
             this.#options = lock( this.#options ?? {} );
-        }
 
-        get mode()
-        {
-            return lock( this.#mode );
+            delegateTo( this, this.#zTarget );
         }
 
         /**
@@ -264,7 +403,7 @@ const { _ud = "undefined", $scope } = constants;
          */
         get excludeFromCache()
         {
-            return [...(asArray( this.#excludeFromCache || [] ))];
+            return [...(asArray( this.#excludeFromCache ?? [] ))];
         }
 
         /**
@@ -273,7 +412,7 @@ const { _ud = "undefined", $scope } = constants;
          */
         get source()
         {
-            return this.#source || calculateSecretsSource( this.mode ) || this.#options?.source || DEFAULT_OPTIONS.source;
+            return this.#source || this.#options?.source || DEFAULT_OPTIONS.source;
         }
 
         /**
@@ -348,7 +487,7 @@ const { _ud = "undefined", $scope } = constants;
          */
         resolveSecretValue( pSecret )
         {
-            return isNonNullObject( pSecret ) ? readProperty( pSecret, "value", "Value", "data", "Data" ) || asString( pSecret ) : asString( pSecret ) || _mt;
+            return isNonNullObject( pSecret ) ? readProperty( pSecret, "value", "Value", "data", "Data", "SecretString", "SecretBinary" ) || asString( pSecret ) : asString( pSecret ) || _mt;
         }
 
         /**
@@ -391,9 +530,11 @@ const { _ud = "undefined", $scope } = constants;
         /**
          * Returns a Promise that resolves to the secret value stored under the specified key or null, if the value is not found
          * @param pKey
+         * @param pVersion
+         * @param pIgnoreCache
          * @returns {Promise<void>} a Promise that resolves to the secret value stored under the specified key or null, if the value is not found
          */
-        async get( pKey )
+        async get( pKey, pVersion = SECRET_VERSION.CURRENT, pIgnoreCache = false )
         {
             let key = this.resolveKey( pKey );
 
@@ -402,8 +543,10 @@ const { _ud = "undefined", $scope } = constants;
                 return null;
             }
 
+            let ignoreCache = !!pIgnoreCache;
+
             // try the cache first
-            let secret = this.getCachedSecret( key );
+            let secret = (ignoreCache ? null : this.getCachedSecret( key ));
 
             // if found in the cache... return the value
             if ( !isNull( secret ) )
@@ -425,6 +568,15 @@ const { _ud = "undefined", $scope } = constants;
                 {
                     this.cacheSecret( pKey, secret );
                 }
+            }
+            else
+            {
+                attempt( () => this.dispatchEvent( new ModuleEvent( "error",
+                                                                    {
+                                                                        key: pKey,
+                                                                        secret,
+                                                                        message: "Cannot find value for key, " + pKey
+                                                                    }, {} ) ) );
             }
 
             // return the value (or null if no value was found in either the cache or the key store)
@@ -494,6 +646,37 @@ const { _ud = "undefined", $scope } = constants;
 
             // return whatever value is currently stored in the secret variable
             return this.resolveSecretValue( secret );
+        }
+
+        clearCache()
+        {
+            if ( isMap( this.#cache ) )
+            {
+                this.#cache.clear();
+            }
+        }
+
+        get initialized()
+        {
+            return !isNull( this.#initDate ) && isDate( this.#initDate );
+        }
+
+        async init( ...pArgs )
+        {
+            if ( !this.initialized )
+            {
+                this.#initDate = lock( new Date() );
+            }
+
+            return this;
+        }
+
+        async dispose( ...pArgs )
+        {
+            this.clearCache();
+            this.#initDate = null;
+
+            return this;
         }
 
         // convenience method for a typical key
@@ -686,19 +869,17 @@ const { _ud = "undefined", $scope } = constants;
         return Object.keys( keys ).includes( pKey ) || Object.values( keys ).includes( pKey );
     };
 
-    SecretsManager.getDefaultInstance = function( pPrefix, pSource, pMode, pOptions )
+    SecretsManager.getDefaultInstance = function( pPrefix, pOptions )
     {
-        let opts = (asObject( pOptions ?? {} ));
+        let opts = (asObject( pOptions ?? { prefix: asString( pPrefix, true ) } ));
 
         let options =
             {
                 ...(asObject( opts ?? {} )),
-                ...({ prefix: asString( pPrefix, true ) || opts?.prefix }),
-                ...(asObject( { source: pSource ?? opts?.source } )),
-                ...(asObject( { mode: pMode ?? opts?.mode } )),
+                ...({ prefix: asString( pPrefix, true ) || opts?.prefix })
             };
 
-        return new SecretsManager( options, ...(asArray( [(asString( pPrefix, true ) || _mt), pSource, pMode] )) );
+        return new SecretsManager( options, ...(asArray( [(asString( pPrefix, true ) || _mt)] )) );
     };
 
     /**
@@ -715,7 +896,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             super( pOptions, ...pArgs );
 
-            let path = this.source || pOptions?.source || pOptions?.path;
+            let path = this.source || pOptions?.source || pOptions?.path || "./.env";
 
             if ( isFilePath( path ) && exists( path ) )
             {
@@ -733,14 +914,17 @@ const { _ud = "undefined", $scope } = constants;
 
         async getSecret( pKey )
         {
+            const proc = (_ud !== typeof process ? process : $scope());
+            const ENV = proc?.env ?? $scope();
+
             let key = this.resolveKey( pKey );
 
-            let secret = process.env[key] || process.env[ucase( key )] || process.env[asString( pKey, true )] || process.env[ucase( asString( pKey, true ) )];
+            let secret = ENV[key] || ENV[ucase( key )] || ENV[asString( pKey, true )] || ENV[ucase( asString( pKey, true ) )];
 
             return this.resolveSecretValue( secret );
         }
 
-        async get( pKey )
+        async get( pKey, pVersion = SECRET_VERSION.CURRENT, pIgnoreCache = false )
         {
             let key = this.resolveKey( pKey );
 
@@ -749,7 +933,11 @@ const { _ud = "undefined", $scope } = constants;
                 return null;
             }
 
-            let secret = this.getCachedSecret( key ) || await this.getSecret( key ) || await this.getSecret( pKey );
+            let ignoreCache = !!pIgnoreCache;
+
+            let secret = (ignoreCache ? null : this.getCachedSecret( key )) ||
+                         await this.getSecret( key ) ||
+                         await this.getSecret( pKey );
 
             if ( !isNull( secret ) && this.canCache( key ) )
             {
@@ -768,11 +956,31 @@ const { _ud = "undefined", $scope } = constants;
                 return null;
             }
 
-            let secret = super.getCachedSecret( key ) ||
-                         process.env[key] ||
-                         process.env[ucase( key )];
+            const proc = (_ud !== typeof process ? process : $scope());
+            const ENV = proc?.env ?? $scope();
+
+            let secret = super.getCachedSecret( key ) || ENV[key] || ENV[ucase( key )];
+
+            if ( !isNull( secret ) && this.canCache( key ) )
+            {
+                this.cacheSecret( key, secret );
+            }
 
             return this.resolveSecretValue( secret );
+        }
+
+        async init( ...pArgs )
+        {
+            let args = asArray( pArgs );
+
+            let path = asString( args.find( e => asString( e, true ).endsWith( ".env" ) ) || this.source || _mt ) || _mt;
+
+            if ( !isBlank( path ) && isFilePath( path ) && exists( path ) )
+            {
+                attempt( () => dotenvx.config( { path: path, overload: true } ) );
+            }
+
+            return super.init( ...pArgs );
         }
 
         async getDbConnectionString()
@@ -948,7 +1156,7 @@ const { _ud = "undefined", $scope } = constants;
         }
     }
 
-    SecretsManager.getLocalInstance = function( pPrefix, pSource, pMode, pOptions )
+    SecretsManager.getLocalInstance = function( pPrefix, pSource, pOptions )
     {
         let opts = { ...(DEFAULT_OPTIONS), ...(asObject( pOptions ?? DEFAULT_OPTIONS ?? {} )) };
 
@@ -956,254 +1164,27 @@ const { _ud = "undefined", $scope } = constants;
             {
                 ...(asObject( opts ?? {} )),
                 ...({ prefix: asString( pPrefix, true ) || opts?.prefix }),
-                ...(asObject( { source: pSource ?? opts?.source ?? "./.env" } )),
-                ...(asObject( { mode: pMode ?? opts?.mode } )),
+                ...(asObject( { source: pSource ?? opts?.source ?? "./.env" } ))
             };
 
-        return new LocalSecretsManager( options, ...(asArray( [(asString( pPrefix, true ) || _mt), pSource, pMode] )) );
+        return new LocalSecretsManager( options, ...(asArray( [(asString( pPrefix, true ) || _mt), pSource] )) );
     };
 
-    const DEFAULT_PROVIDER_OPTIONS =
+    const SECRETS_MANAGER_CLASSES =
         {
-            secretsManagerClass: LocalSecretsManager,
-            keyStoreName: ".env"
+            LOCAL: LocalSecretsManager
         };
 
-    class SecretsProvider
+    const registerSecretsManagerClass = function( pStrategy, pClass )
     {
-        #id;
-        #name;
+        let strategy = asString( pStrategy, true );
 
-        #options;
-        #secretsManagerClass;
-        #keyStoreName;
+        let clazz = isClass( pClass ) ? pClass : isNonNullObject( pClass ) ? getClass( pClass ) : SecretsManager;
 
-        constructor( pId, pName, pOptions )
+        if ( STRATEGY_OPTIONS.includes( pStrategy ) )
         {
-            const options = lock( { ...(DEFAULT_PROVIDER_OPTIONS), ...(asObject( pOptions ?? {} )) } );
-
-            this.#id = asInt( pId, options.id ) || options.id || Date.now();
-
-            this.#name = asString( pName || options.name, true ) || getClassName( this );
-
-            this.#secretsManagerClass = isClass( options.secretsManagerClass ) ? options.secretsManagerClass : isNonNullObject( options.secretsManagerClass ) ? getClass( options.secretsManagerClass ) || (() => options.secretsManagerClass) : LocalSecretsManager;
-
-            this.#keyStoreName = asString( options.keyStoreName || options.keyVaultName, true );
-
-            this.#options = lock( options );
+            SECRETS_MANAGER_CLASSES[strategy] = clazz;
         }
-
-        get id()
-        {
-            return asInt( this.#id );
-        }
-
-        get name()
-        {
-            return asString( this.#name, true );
-        }
-
-        get options()
-        {
-            return lock( { ...(DEFAULT_PROVIDER_OPTIONS), ...(this.#options ?? {}) } );
-        }
-
-        get secretsManagerClass()
-        {
-            if ( isClass( this.#secretsManagerClass ) )
-            {
-                return this.#secretsManagerClass;
-            }
-
-            if ( isNonNullObject( this.#secretsManagerClass ) )
-            {
-                return getClass( this.#secretsManagerClass ) || (() => this.#secretsManagerClass);
-            }
-
-            if ( isFunction( this.#secretsManagerClass ) )
-            {
-                return this.#secretsManagerClass;
-            }
-
-            return LocalSecretsManager;
-        }
-
-        getSecretsManager( pOptions, ...pArgs )
-        {
-            const options = lock( { ...(DEFAULT_PROVIDER_OPTIONS), ...(asObject( this.options || {} )), ...(asObject( pOptions ?? {} )) } );
-
-            const args = asArray( pArgs ?? options?.args ?? [] );
-
-            options.source = options?.source || options?.keyStoreName || options?.keyVaultName || this.keyStoreName;
-
-            options.prefix = options?.prefix || ($ln( args ) > 0 ? args[0] : _mt);
-
-            options.args = args;
-
-            const klass = this.secretsManagerClass;
-
-            if ( isClass( klass ) )
-            {
-                // noinspection JSCheckFunctionSignatures
-                return new klass( options, ...args );
-            }
-            else if ( isFunction( klass ) )
-            {
-                return klass.call( this, options, ...args );
-            }
-            else if ( isNonNullObject( klass ) && klass instanceof SecretsManager )
-            {
-                return klass;
-            }
-            return new LocalSecretsManager( options, ...args );
-        }
-
-        get keyStoreName()
-        {
-            return this.#keyStoreName;
-        }
-
-        get keyVaultName()
-        {
-            return this.#keyStoreName;
-        }
-
-        [Symbol.toPrimitive]( pHint )
-        {
-            return ucase( asString( this.name, true ) );
-        }
-    }
-
-    /**
-     * Class representing a mode for Secrets Manager, inheriting from ExecutionMode.
-     * This class defines specific configurations for interacting with a secrets manager
-     * in various execution modes.
-     *
-     * @class
-     */
-    class SecretsManagerMode extends ExecutionMode
-    {
-        static #modeMap = new Map();
-
-        #id;
-        #name;
-
-        #secretsProvider;
-
-        constructor( pId, pName, pSecretsProvider )
-        {
-            super( pName );
-
-            this.#id = asInt( pId );
-            this.#name = asString( pName, true );
-            this.#secretsProvider = pSecretsProvider;
-
-            SecretsManagerMode.#modeMap.set( ucase( pName ), this );
-        }
-
-        get id()
-        {
-            return asInt( this.#id );
-        }
-
-        get name()
-        {
-            return this.#name;
-        }
-
-        get secretsProvider()
-        {
-            return this.#secretsProvider;
-        }
-
-        getSecretsManager( pOptions = {}, ...pArgs )
-        {
-            if ( isNonNullObject( this.secretsProvider ) )
-            {
-                return this.secretsProvider.getSecretsManager( pOptions, ...pArgs );
-            }
-
-            return new LocalSecretsManager( pOptions, ...pArgs );
-        }
-
-        static getModeByName( pName )
-        {
-            SecretsManagerMode.#modeMap.get( ucase( pName ) );
-        }
-
-        static fromExecutionMode( pExecutionMode )
-        {
-            const executionMode = isNonNullObject( pExecutionMode ) && pExecutionMode instanceof ExecutionMode ? pExecutionMode : ExecutionMode.from( pExecutionMode );
-
-            switch ( executionMode )
-            {
-                case ExecutionMode.MODES.PROD:
-                case ExecutionMode.MODES.PRODUCTION:
-                    return new SecretsManagerMode( 1, "Production" );
-                case ExecutionMode.MODES.DEV:
-                case ExecutionMode.MODES.DEBUG:
-                case ExecutionMode.MODES.DEVELOPMENT:
-                case ExecutionMode.MODES.TEST:
-                default:
-                    return new SecretsManagerMode( 2, "Development", LocalSecretsManager );
-            }
-        }
-    }
-
-    SecretsManagerMode.from = function( pObj )
-    {
-        if ( pObj instanceof SecretsManagerMode )
-        {
-            return lock( pObj );
-        }
-
-        if ( pObj instanceof ExecutionMode )
-        {
-            return lock( SecretsManagerMode.fromExecutionMode( pObj ) );
-        }
-
-        if ( pObj instanceof ExecutionEnvironment )
-        {
-            return lock( SecretsManagerMode.fromExecutionMode( pObj?.mode ) );
-        }
-
-        if ( isNonNullObject( pObj ) )
-        {
-            // noinspection JSUnresolvedReference
-            let mode = new SecretsManagerMode( pObj.id, pObj.name, pObj.secretsProvider ?? pObj.provider ?? pObj );
-
-            return populateProperties( mode, pObj );
-        }
-
-        return new SecretsManagerMode( pObj?.id || pObj, pObj?.name || pObj, pObj?.secretsProvider ?? pObj?.provider ?? pObj );
-    };
-
-    SecretsManagerMode.resolveMode = function( pMode )
-    {
-        let mode = null;
-
-        if ( isString( pMode ) )
-        {
-            mode = SecretsManagerMode.getModeByName( pMode ) || SecretsManagerMode[ucase( asString( pMode, true ) )];
-        }
-
-        if ( isNull( mode ) )
-        {
-            if ( isNumeric( pMode ) )
-            {
-                mode = SecretsManagerMode.fromExecutionMode( ExecutionMode.from( pMode ) );
-            }
-
-            if ( isNull( mode ) )
-            {
-                if ( isNonNullObject( pMode ) )
-                {
-                    mode = SecretsManagerMode.from( pMode );
-                }
-            }
-        }
-
-        return mode;
     };
 
     /**
@@ -1215,7 +1196,7 @@ const { _ud = "undefined", $scope } = constants;
      */
     class SecretsManagerFactory
     {
-        #mode = SecretsManagerMode.from( ExecutionMode.calculate() );
+        #strategy;
 
         #keyPath = "./.env";
 
@@ -1229,42 +1210,58 @@ const { _ud = "undefined", $scope } = constants;
 
             const args = asArray( pArgs ?? options?.args ?? [] );
 
-            this.#mode = SecretsManagerMode.resolveMode( options?.mode ?? toolBocksModule.executionMode );
+            this.#strategy = calculateStrategy( options );
 
             this.#prefix = ucase( asString( options?.prefix || ($ln( args ) > 0 ? args[0] : _mt), true ) );
 
-            this.#keyPath = options?.keyPath || options?.mount || options.path || calculateSecretsSource( this.#mode ) || "./.env";
+            this.#keyPath = options?.keyPath || options?.mount || options.path || (SECRETS_STRATEGY.LOCAL === this.#strategy ? "./.env" : _mt);
 
             this.#options = lock( options ?? {} );
         }
 
-        get mode()
+        get options()
         {
-            return this.#mode ?? ExecutionMode.calculate();
+            return lock( { ...(asObject( this.#options ?? {} )) } );
+        }
+
+        get strategy()
+        {
+            return this.#strategy || calculateStrategy( this.options );
         }
 
         get prefix()
         {
-            return asString( this.#prefix, true ).replace( /^[_-]+/, _mt ).trim().replace( /[_-]+$/, _mt ).trim();
+            let s = asString( (this.#prefix || this.options.prefix), true );
+            s = s.replaceAll( /_+/, _hyphen );
+            s = s.replace( /^[_-]+/, _mt ).trim().replace( /[_-]+$/, _mt ).trim();
+            return asString( s, true );
         }
 
         get keyPath()
         {
-            return this.#keyPath || calculateSecretsSource( this.mode );
+            return this.#keyPath || this.options.keyPath || (SECRETS_STRATEGY.LOCAL === this.strategy ? "./.env" : _mt) || _mt;
         }
 
-        get options()
+        create( pOptions = {}, ...pArgs )
         {
-            return lock( Object.assign( {}, this.#options || {} ) );
-        }
+            const options = lock( { ...(asObject( this.options || {} )), ...(asObject( pOptions ?? {} )) } );
 
-        getSecretsManager( pOptions = {}, ...pArgs )
-        {
-            let options = lock( { ...(asObject( this.options || {} )), ...(asObject( pOptions ?? {} )) } );
+            const strategy = calculateStrategy( options );
 
-            let secretsManagerMode = options.mode || this.mode || SecretsManagerMode.from( ExecutionMode.calculate() );
+            let clazz = SECRETS_MANAGER_CLASSES[strategy] ?? SecretsManager;
 
-            return secretsManagerMode.getSecretsManager( options, ...pArgs );
+            if ( isClass( clazz ) )
+            {
+                return new clazz( options, ...pArgs );
+            }
+
+            if ( isNonNullObject( clazz ) )
+            {
+                clazz = getClass( clazz ) ?? SecretsManager;
+                return new clazz( options, ...pArgs );
+            }
+
+            return new SecretsManager( options, ...pArgs );
         }
 
         static getInstance( pOptions, ...pArgs )
@@ -1277,7 +1274,7 @@ const { _ud = "undefined", $scope } = constants;
     {
         let factory = SecretsManagerFactory.getInstance( pOptions, ...pArgs );
 
-        return factory.getSecretsManager( pOptions, ...pArgs );
+        return factory.create( pOptions, ...pArgs );
     };
 
     SecretsManager.prototype.keys = function()
@@ -1291,6 +1288,10 @@ const { _ud = "undefined", $scope } = constants;
      */
     let mod =
         {
+            SECRETS_STRATEGY,
+            STRATEGY_OPTIONS,
+            SECRETS_STRATEGY_ENV_VARIABLES,
+            SECRET_VERSION,
             dependencies:
                 {
                     dotenvx,
@@ -1303,18 +1304,17 @@ const { _ud = "undefined", $scope } = constants;
                 },
             classes:
                 {
-                    SecretsProvider,
-                    SecretsManagerMode,
+                    SecretsManagerError,
+                    KeyNotFoundError,
                     SecretsManager,
                     LocalSecretsManager,
                     SecretsManagerFactory
                 },
-            SecretsProvider,
-            SecretsManagerMode,
+            SecretsManagerError,
+            KeyNotFoundError,
             SecretsManager,
             LocalSecretsManager,
             SecretsManagerFactory,
-            calculateSecretsSource,
             getSecretsManager: function( pOptions, ...pArgs )
             {
                 return SecretsManagerFactory.makeSecretsManager( pOptions, ...pArgs );
@@ -1323,12 +1323,16 @@ const { _ud = "undefined", $scope } = constants;
             {
                 return new LocalSecretsManager( pOptions, ...pArgs );
             },
+            registerSecretsManagerClass,
             defineKeys: SecretsManager.defineKeys,
             addKey: SecretsManager.addKey,
             isValidKey: SecretsManager.isValidKey,
             getKeys: SecretsManager.getKeys,
             SECRETS_KEYS: lock( SecretsManager.getKeys() )
         };
+
+    $scope()["SecretsManager"] = SecretsManager;
+    $scope()["LocalSecretsManager"] = LocalSecretsManager;
 
     // extends the base module
     mod = toolBocksModule.extend( mod );

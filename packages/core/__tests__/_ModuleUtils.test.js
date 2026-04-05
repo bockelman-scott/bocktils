@@ -85,6 +85,8 @@ const
         formatElapsedTime,
         serialize,
         classes: moduleUtilsClasses,
+        Konsole,
+        ConditionalLogger
     } = moduleUtils;
 
 let {
@@ -1107,6 +1109,16 @@ describe( "Global Logging", () =>
 
      */
 
+} );
+
+describe( "Loggers", () =>
+{
+    test( "ConditionalLogger", () =>
+    {
+        const logger = new ConditionalLogger();
+
+        logger.info( `Logged` );
+    } );
 } );
 
 describe( "export/require/import modules", () =>

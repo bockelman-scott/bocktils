@@ -132,7 +132,7 @@ const _ud = "undefined";
 const _bock_std_out = ((_ud !== typeof process) ? ((_ud !== typeof process.stdout) ? process.stdout : { write: () => null }) : { write: () => null });
 
 // define variables for stdout and stderr (in a node.js runtime)
-const _bock_std_err = ((_ud !== typeof process) ? ((_ud !== typeof process.stdout) ? process.stdout : { write: () => null }) : { write: () => null });
+const _bock_std_err = ((_ud !== typeof process) ? ((_ud !== typeof process.stderr) ? process.stderr : _bock_std_out) : _bock_std_out);
 
 /**
  * This is a last resort 'logger' that writes directly to stdout or stderr if available
@@ -146,7 +146,7 @@ const _bock_write = ( pOut, ...pArgs ) =>
     {
         let message = [...(pArgs || [])].filter( e => _ud !== typeof e && null !== e ).map( e => String( e ) ).join( ", " );
 
-        let _out = (pOut && pOut.write) ? pOut : (_bock_std_out || _bock_std_err);
+        let _out = (pOut && pOut.write) ? pOut : (_bock_std_out ?? _bock_std_err);
 
         if ( _out )
         {
@@ -183,7 +183,7 @@ const mockConsole =
  * We create an alias for the console to reduce lint complaints.<br>
  * @type {ILogger|console|Console|{}}
  */
-const konsole = _ud === typeof console ? mockConsole : (console || mockConsole);
+const konsole = _ud === typeof console ? mockConsole : (console ?? mockConsole);
 
 /**
  * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
@@ -584,108 +584,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * If no arguments are passed, returns an empty array.<br>
      */
     const op_identity = ( ...pArg ) => [...(pArg || [])].length > 1 ? [...(pArg || [])] : [...(pArg || [])][0];
-
-    /**
-     * Enables DEBUG_MODE if it is not already enabled by checking the environment and command line arguments
-     * Note that DEBUG_MODE can only ever be turned on during execution.  It cannot be subsequently disabled.
-     * @returns {boolean}
-     */
-    function configureDebugMode()
-    {
-        if ( !DEBUG_MODE )
-        {
-            const _environs = pEnvironment || _ENV || { "get": function( pKey ) { return $scope()[pKey]; } };
-
-            DEBUG_MODE = DEBUG_MODE || (_fun === typeof (_environs?.get)) ? ["true", "1", S_DEBUG, S_TRACE, true].includes( _environs?.get( S_DEBUG ) ) : ["true", "1", S_DEBUG, S_TRACE, true].includes( _environs?.[S_DEBUG] );
-
-            DEBUG_MODE = DEBUG_MODE || [...(pArgs || CMD_LINE_ARGS || [])].includes( "-debug" );
-        }
-        return DEBUG_MODE;
-    }
-
-    // enabled DEBUG_MODE if it is not already enabled
-    DEBUG_MODE = DEBUG_MODE || configureDebugMode();
-
-    /**
-     * @typedef {Object} ILogger
-     * @property {function(...*)} log A function that takes one or more arguments and 'logs' them with log level, 'log'
-     * @property {function(...*)} info A function that takes one or more arguments and 'logs' them with log level, 'info'
-     * @property {function(...*)} warn A function that takes one or more arguments and 'logs' them with log level, 'warn'
-     * @property {function(...*)} debug A function that takes one or more arguments and 'logs' them with log level, 'debug'
-     * @property {function(...*)} error A function that takes one or more arguments and 'logs' them with log level, 'error'
-     */
-
-    /**
-     * Used as an 'interface' (or more technically, an Abstract Class).
-     * By extending EventTarget, this class and its subclasses
-     * can behave as listeners (for error events for example)
-     * and/or dispatch events instead of writing messages to a specific destination
-     *
-     * @class
-     */
-    class ILogger extends EventTarget
-    {
-        constructor()
-        {
-            super();
-        }
-
-        log( ...pData ) {};
-
-        info( ...pData ) {};
-
-        warn( ...pData ) {};
-
-        debug( ...pData ) {};
-
-        error( ...pData ) {};
-
-        trace( ...pData ) {};
-    }
-
-    /**
-     * Returns true if the specified value is a subclasses of ILogger
-     * or implements the 5 required methods (treating 'trace' as optional)
-     * expected of any logger, (log, info, warn, error, and debug)
-     *
-     * @param {*} pObj the value to evaluate, expected to be an object that implements the 5 required methods:log, info, warn, error, and debug
-     *
-     * @returns {boolean} true if the object can be used as a logger
-     */
-    ILogger.isLogger = function( pObj )
-    {
-        if ( _ud !== typeof pObj && _obj === typeof pObj && null !== pObj )
-        {
-            if ( pObj instanceof ILogger || console === pObj || konsole === pObj )
-            {
-                return true;
-            }
-
-            return (_fun === typeof pObj.log) &&
-                   (_fun === typeof pObj.info) &&
-                   (_fun === typeof pObj.warn) &&
-                   (_fun === typeof pObj.error) &&
-                   (_fun === typeof pObj.debug);
-        }
-
-        return false;
-    };
-
-    /**
-     * Defines a logger that implements the expected methods but does not do anything.<br>
-     * This is used when logging is disabled<br>
-     * which might be desirable if consumers prefer to handle errors via event listeners instead.<br>
-     * @type {ILogger}
-     */
-    let MockLogger = new ILogger();
-
-    // we add a property indicating that this logger does not actually do anything
-    // noinspection JSUndefinedPropertyAssignment
-    MockLogger.mocked = true;
-
-    // we also prevent this 'logger' from being modified
-    // noinspection JSUnusedAssignment
-    MockLogger = Object.freeze( Object.seal( MockLogger ) );
 
     /*
      * The following functions are used only in this base module,
@@ -1357,6 +1255,326 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const clamp = ( pNum, pMin, pMax ) => isNum( pNum ) ? Math.min( Math.max( pNum, pMin ), pMax ) : pNum;
 
+
+    /**
+     * Enables DEBUG_MODE if it is not already enabled by checking the environment and command line arguments
+     * Note that DEBUG_MODE can only ever be turned on during execution.  It cannot be subsequently disabled.
+     * @returns {boolean}
+     */
+    function configureDebugMode()
+    {
+        if ( !DEBUG_MODE )
+        {
+            const _environs = pEnvironment || _ENV || { "get": function( pKey ) { return $scope()[pKey]; } };
+
+            DEBUG_MODE = DEBUG_MODE || (_fun === typeof (_environs?.get)) ? ["true", "1", S_DEBUG, S_TRACE, true].includes( _environs?.get( S_DEBUG ) ) : ["true", "1", S_DEBUG, S_TRACE, true].includes( _environs?.[S_DEBUG] );
+
+            DEBUG_MODE = DEBUG_MODE || [...(pArgs || CMD_LINE_ARGS || [])].includes( "-debug" );
+        }
+        return DEBUG_MODE;
+    }
+
+    // enabled DEBUG_MODE if it is not already enabled
+    DEBUG_MODE = DEBUG_MODE || configureDebugMode();
+
+    /**
+     * @typedef {Object} IStatefulListener
+     * @property {function(Event,...*):void} handleEvent A method to handle an event
+     */
+
+    /**
+     * This is a base class that can be extended to implement IStatefulListener<br>
+     * <br>
+     * A stateful listener is any object that implements the IStatefulListener interface.<br>
+     * That is, it simply has to have a method named "handleEvent"<br>
+     * that accepts an Event (and optionally, one or more additional arguments)<br>
+     * <br>
+     * Stateful listeners can be useful<br>
+     * when the behavior of the handler depends on some state<br>
+     * that might be maintained by the listener.<br>
+     * <br>
+     * An example might be a listener that is notified<br>
+     * when fetch requests are made and when fetch requests complete<br>
+     * and keep track of the order in which the requests were made<br>
+     * in order to either process responses in a particular order<br>
+     * or to discard all but the most recent response.<br>
+     *
+     * @class
+     */
+    class StatefulListener extends EventTarget
+    {
+        /**
+         * @type {number}
+         */
+        #id;
+
+        /**
+         * @type {string}
+         */
+        #name;
+
+        /**
+         * @type {Object}
+         */
+        #options;
+
+        /**
+         * Generates the next unique identifier for a StatefulListener.
+         *
+         * This function increments and returns the next numeric identifier
+         * by accessing the `NEXT_ID` static property of the `StatefulListener` class.
+         * <br>
+         * <br>
+         * Suitable for creating unique IDs for internal mechanisms
+         * where distinguishing between different instances of listeners
+         * or components is required.
+         * <br>
+         * @function
+         * @protected
+         * @returns {number} The next unique identifier.
+         */
+        static nextId = () => StatefulListener.NEXT_ID++;
+
+        constructor( pName, pOptions )
+        {
+            super();
+
+            this.#options = Object.assign( {}, pOptions ?? {} );
+
+            this.#id = _asInt( this.#options?.id ) || StatefulListener.nextId();
+
+            if ( this.#id > 999_999_999 )
+            {
+                StatefulListener.NEXT_ID = 1;
+            }
+
+            this.#name = (isStr( pName ) ? String( pName ).trim() : this.#options?.name) || ("StatefulListener_" + String( this.#id ));
+
+            if ( !!(this.#options?.preserveHistory) )
+            {
+                this.eventsHandled = [];
+            }
+        }
+
+        /**
+         * Accessor property that specifies the constructor function to use when creating derived objects.<br>
+         * <br>
+         * This property is used to override the default constructor for certain methods that construct a new instance of the object.
+         *
+         * @return {Function} The constructor function to use for derived objects.
+         */
+        static get [Symbol.species]()
+        {
+            return this;
+        }
+
+        /**
+         * Handles an event.<br>
+         * This method is intended to be overridden in a subclass,<br>
+         * as it is not implemented in the base class.
+         * <br>
+         *
+         * @param {Event|ToolBocksModuleEvent} pEvent - The event object containing details about the event to handle.
+         * @param {...*} [pExtra] - Additional data or parameters that may be passed with the event.
+         */
+        handleEvent( pEvent, ...pExtra )
+        {
+            const evt = resolveEvent( pEvent );
+
+            // the only thing implemented in the base class is for debugging and testing modes
+            if ( isArray( this.eventsHandled ) )
+            {
+                this.eventsHandled.push( { event: evt, extra: [...(pExtra ?? [])] } );
+
+                if ( $ln( this.eventsHandled ) > 64 )
+                {
+                    attemptSilent( () => this.eventsHandled = [...(this.eventsHandled.slice( $ln( this.eventsHandled ) - 64, $ln( this.eventsHandled ) ))] );
+                }
+            }
+        }
+
+        /**
+         * Retrieves the unique identifier of this instance.
+         * @return {number} The unique identifier for this instance.
+         */
+        get id()
+        {
+            return this.#id;
+        }
+
+        /**
+         * Retrieves the name of this instance.
+         *
+         * @return {string} The name associated with this object.
+         */
+        get name()
+        {
+            return this.#name;
+        }
+
+        /**
+         * Retrieves an immutable copy of the options used when this instance was constructed.
+         *
+         * @return {Object} An immutable copy of the options used when this instance was constructed.
+         */
+        get options()
+        {
+            return immutableCopy( this.#options );
+        }
+
+        /**
+         * Retrieves the name of the constructor function of the current object.
+         * This is typically used to identify the class of an instance.
+         *
+         * @return {string|undefined} The name of the constructor function that created this instance
+         */
+        get type()
+        {
+            return this.constructor?.name;
+        }
+
+        /**
+         * Compares the current object with another object to determine equality.<br>
+         * @param {Object} pOther The object to compare with the current object.
+         * @return {boolean} Returns true if the objects are equal, otherwise false.
+         */
+        equals( pOther )
+        {
+            if ( null == pOther )
+            {
+                return false;
+            }
+
+            if ( this === pOther )
+            {
+                return true;
+            }
+
+            if ( pOther instanceof this.constructor || isFunc( pOther?.handleEvent ) )
+            {
+                return (this.#id === pOther?.id);
+            }
+        }
+
+        /**
+         * Compares this object with the specified object for order.
+         *
+         * @param {Object} pOther - The object to compare with this instance.<br>
+         * It must be of the same type or an object with a compatible structure.<br>
+         * If null, undefined, or not of the expected type,<br>
+         * -1 is returned, indicated that this instance should be considered less than the other object<br>
+         * <br>
+         * @return {number} A negative integer, zero, or a positive integer if this object is considered
+         * less than, equal to, or greater than the specified object, respectively.<br>
+         */
+        compareTo( pOther )
+        {
+            if ( null == pOther || !(pOther instanceof this.constructor || isFunc( pOther?.handleEvent )) )
+            {
+                return -1;
+            }
+
+            if ( this === pOther || this.equals( pOther ) )
+            {
+                return 0;
+            }
+
+            return (this.#id - (_asInt( pOther?.id || 1 )));
+        }
+    }
+
+    /**
+     * A static property that holds the next unique identifier to be used
+     * by StatefulListener instances. This property is used to ensure
+     * each StatefulListener instance receives a unique numeric ID.
+     *
+     * @type {number}
+     * @static
+     * @protected
+     */
+    StatefulListener.NEXT_ID = 1;
+
+    /**
+     * @typedef {Object} ILogger
+     * @property {function(...*)} log A function that takes one or more arguments and 'logs' them with log level, 'log'
+     * @property {function(...*)} info A function that takes one or more arguments and 'logs' them with log level, 'info'
+     * @property {function(...*)} warn A function that takes one or more arguments and 'logs' them with log level, 'warn'
+     * @property {function(...*)} debug A function that takes one or more arguments and 'logs' them with log level, 'debug'
+     * @property {function(...*)} error A function that takes one or more arguments and 'logs' them with log level, 'error'
+     */
+
+    /**
+     * Used as an 'interface' (or more technically, an Abstract Class).
+     * By extending EventTarget, this class and its subclasses
+     * can behave as listeners (for error events for example)
+     * and/or dispatch events instead of writing messages to a specific destination
+     *
+     * @class
+     */
+    class ILogger extends StatefulListener
+    {
+        constructor( pId = 0, pName = "Logger", pOptions = {} )
+        {
+            super( pName, { ...(pOptions ?? {}), id: pId } );
+        }
+
+        log( ...pData ) {};
+
+        info( ...pData ) {};
+
+        warn( ...pData ) {};
+
+        debug( ...pData ) {};
+
+        error( ...pData ) {};
+
+        trace( ...pData ) {};
+    }
+
+    /**
+     * Returns true if the specified value is a subclasses of ILogger
+     * or implements the 5 required methods (treating 'trace' as optional)
+     * expected of any logger, (log, info, warn, error, and debug)
+     *
+     * @param {*} pObj the value to evaluate, expected to be an object that implements the 5 required methods:log, info, warn, error, and debug
+     *
+     * @returns {boolean} true if the object can be used as a logger
+     */
+    ILogger.isLogger = function( pObj )
+    {
+        if ( _ud !== typeof pObj && _obj === typeof pObj && null !== pObj )
+        {
+            if ( pObj instanceof ILogger || console === pObj || konsole === pObj )
+            {
+                return true;
+            }
+
+            return (_fun === typeof pObj.log) &&
+                   (_fun === typeof pObj.info) &&
+                   (_fun === typeof pObj.warn) &&
+                   (_fun === typeof pObj.error) &&
+                   (_fun === typeof pObj.debug);
+        }
+
+        return false;
+    };
+
+    /**
+     * Defines a logger that implements the expected methods but does not do anything.<br>
+     * This is used when logging is disabled<br>
+     * which might be desirable if consumers prefer to handle errors via event listeners instead.<br>
+     * @type {ILogger}
+     */
+    let MOCK_LOGGER = new ILogger( -1, "MockLogger", { id: -1 } );
+
+    // we add a property indicating that this logger does not actually do anything
+    // noinspection JSUndefinedPropertyAssignment
+    MOCK_LOGGER.mocked = true;
+
+    // we also prevent this 'logger' from being modified
+    // noinspection JSUnusedAssignment
+    MOCK_LOGGER = Object.freeze( Object.seal( MOCK_LOGGER ) );
+
     /**
      * Rounds a number to the nearest specified multiple.
      *
@@ -1384,17 +1602,19 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * rounded to the nearest half percent
      * @param pDone
      * @param pTotal
+     * @param pRoundTo
      */
-    function calculatePercentComplete( pDone, pTotal )
+    function calculatePercentComplete( pDone, pTotal, pRoundTo = 0.5 )
     {
         let done = _asFloat( pDone );
         let total = _asFloat( pTotal, 1.0 );
+        let roundTo = Math.max( _asFloat( pRoundTo || 0.5, 0.5 ), 0.01 );
 
         const minValue = 0.000001;
 
         let ratio = Math.max( done, minValue ) / Math.max( total, minValue );
 
-        return roundToNearestMultiple( (ratio * 100), 0.5 );
+        return roundToNearestMultiple( (ratio * 100), Math.max( roundTo, 0.1 ) );
     }
 
     /**
@@ -1404,7 +1624,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     function calculateElapsedTime( pSince, pUntil = new Date() )
     {
-        return attempt( () => (new Date( pUntil || Date.now() ) - new Date( pSince ).getTime()) ) || 0;
+        return attempt( () => ((new Date( pUntil || Date.now() ).getTime()) - (new Date( pSince || Date.now() ).getTime())) ) || 0;
     }
 
     /**
@@ -1459,7 +1679,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
 
         // Calculate rate of progress (units per time)
-        let rate = done / elapsed;
+        let rate = Math.max( (done / elapsed), minValue );
 
         // Calculate remaining work
         let remaining = Math.max( total - done, 0 );
@@ -1662,7 +1882,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         constructor( pSink, pOptions = DEFAULT_KONSOLE_OPTIONS )
         {
-            super();
+            super( pOptions?.id, pOptions?.name, pOptions );
 
             const options = { ...DEFAULT_KONSOLE_OPTIONS, ...(pOptions || {}) };
 
@@ -1906,12 +2126,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             this.#levels = [...(pLevels || pOptions?.levels || [])].flat();
 
-            this.#levels = $ln( this.#levels ) < 1 ? [...(MODEST_LOG_LEVELS)] : this.#levels;
+            this.#levels = ($ln( this.#levels ) < 1 ? [...(MODEST_LOG_LEVELS)] : this.#levels).map( _asStr ).map( _lct ).filter( e => _mt !== _lct( e ) );
         }
 
         get levels()
         {
-            return [...(this.#levels || [])];
+            return [...(this.#levels || [])].map( _asStr ).map( _lct ).filter( e => _mt !== _lct( e ) );
         }
 
         isEnabledForLevel( pLevel )
@@ -3241,6 +3461,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
     }
 
+    // noinspection JSValidateTypes
     ObjectEntry.sort = function( pEntries, pCaseSensitive = false )
     {
         const arr = _asArr( pEntries ).filter( e => ObjectEntry.isValidEntry( e, true ) );
@@ -5412,6 +5633,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     }
 
     /**
+     * @event load
+     */
+
+    /**
      * Returns the type or name of an event based on the input provided.<br>
      *
      * The method supports various input types
@@ -6773,252 +6998,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
 
     /**
-     * @event load
-     */
-
-    /**
-     * @typedef {Object} IStatefulListener
-     * @property {function(Event,...*):void} handleEvent A method to handle an event
-     */
-
-    /**
-     * This is a base class that can be extended to implement IStatefulListener<br>
-     * <br>
-     * A stateful listener is any object that implements the IStatefulListener interface.<br>
-     * That is, it simply has to have a method named "handleEvent"<br>
-     * that accepts an Event (and optionally, one or more additional arguments)<br>
-     * <br>
-     * Stateful listeners can be useful<br>
-     * when the behavior of the handler depends on some state<br>
-     * that might be maintained by the listener.<br>
-     * <br>
-     * An example might be a listener that is notified<br>
-     * when fetch requests are made and when fetch requests complete<br>
-     * and keep track of the order in which the requests were made<br>
-     * in order to either process responses in a particular order<br>
-     * or to discard all but the most recent response.<br>
-     *
-     * @class
-     */
-    class StatefulListener
-    {
-        /**
-         * @type {number}
-         */
-        #id;
-
-        /**
-         * @type {string}
-         */
-        #name;
-
-        /**
-         * @type {Object}
-         */
-        #options;
-
-        /**
-         *
-         * @type ExecutionMode
-         */
-        #mode;
-
-        /**
-         * Generates the next unique identifier for a StatefulListener.
-         *
-         * This function increments and returns the next numeric identifier
-         * by accessing the `NEXT_ID` static property of the `StatefulListener` class.
-         * <br>
-         * <br>
-         * Suitable for creating unique IDs for internal mechanisms
-         * where distinguishing between different instances of listeners
-         * or components is required.
-         * <br>
-         * @function
-         * @protected
-         * @returns {number} The next unique identifier.
-         */
-        static nextId = () => StatefulListener.NEXT_ID++;
-
-        constructor( pName, pOptions )
-        {
-            this.#id = StatefulListener.nextId();
-
-            if ( this.#id > 999_999_999 )
-            {
-                StatefulListener.NEXT_ID = 1;
-            }
-
-            this.#options = Object.assign( {}, pOptions || {} );
-
-            this.#name = (isStr( pName ) ? pName : this.#options?.name) || ("StatefulListener_" + String( this.#id ));
-
-            this.#mode = this.#options?.mode instanceof ExecutionMode ? this.#options?.mode : CURRENT_MODE;
-
-            if ( ExecutionMode.MODES.TEST.equals( this.#mode ) || this.#mode?.traceEnabled )
-            {
-                this.eventsHandled = [];
-            }
-
-            this.clone = function()
-            {
-                let copy = { ...this };
-                copy.id = this.id;
-                copy.prototype = this.constructor;
-                copy.constructor = this.constructor;
-                return copy;
-            };
-        }
-
-        /**
-         * Accessor property that specifies the constructor function to use when creating derived objects.<br>
-         * <br>
-         * This property is used to override the default constructor for certain methods that construct a new instance of the object.
-         *
-         * @return {Function} The constructor function to use for derived objects.
-         */
-        static get [Symbol.species]()
-        {
-            return this;
-        }
-
-        /**
-         * Handles an event.<br>
-         * This method is intended to be overridden in a subclass,<br>
-         * as it is not implemented in the base class.
-         * <br>
-         *
-         * @param {Event|ToolBocksModuleEvent} pEvent - The event object containing details about the event to handle.
-         * @param {...*} [pExtra] - Additional data or parameters that may be passed with the event.
-         */
-        handleEvent( pEvent, ...pExtra )
-        {
-            const evt = resolveEvent( pEvent );
-
-            // the only thing implemented in the base class is for debugging and testing modes
-            if ( isArray( this.eventsHandled ) )
-            {
-                this.eventsHandled.push( { event: evt, extra: [...(pExtra || [])] } );
-
-                if ( $ln( this.eventsHandled ) > 64 )
-                {
-                    attemptSilent( () => this.eventsHandled = [...(this.eventsHandled.slice( 64 ))] );
-                }
-            }
-        }
-
-        /**
-         * Retrieves the unique identifier of this instance.
-         * @return {number} The unique identifier for this instance.
-         */
-        get id()
-        {
-            return this.#id;
-        }
-
-        /**
-         * Retrieves the name of this instance.
-         *
-         * @return {string} The name associated with this object.
-         */
-        get name()
-        {
-            return this.#name;
-        }
-
-        /**
-         * Retrieves an immutable copy of the options used when this instance was constructed.
-         *
-         * @return {Object} An immutable copy of the options used when this instance was constructed.
-         */
-        get options()
-        {
-            return immutableCopy( this.#options );
-        }
-
-        /**
-         * Retrieves the name of the constructor function of the current object.
-         * This is typically used to identify the class of an instance.
-         *
-         * @return {string|undefined} The name of the constructor function that created this instance
-         */
-        get type()
-        {
-            return this.constructor?.name;
-        }
-
-        get mode()
-        {
-            return this.#mode || CURRENT_MODE;
-        }
-
-        get traceEnabled()
-        {
-            return this.mode?.traceEnabled || false;
-        }
-
-        /**
-         * Compares the current object with another object to determine equality.<br>
-         * @param {Object} pOther The object to compare with the current object.
-         * @return {boolean} Returns true if the objects are equal, otherwise false.
-         */
-        equals( pOther )
-        {
-            if ( null == pOther )
-            {
-                return false;
-            }
-
-            if ( this === pOther )
-            {
-                return true;
-            }
-
-            if ( pOther instanceof this.constructor || isFunc( pOther?.handleEvent ) )
-            {
-                return (this.#id === pOther?.id);
-            }
-        }
-
-        /**
-         * Compares this object with the specified object for order.
-         *
-         * @param {Object} pOther - The object to compare with this instance.<br>
-         * It must be of the same type or an object with a compatible structure.<br>
-         * If null, undefined, or not of the expected type,<br>
-         * -1 is returned, indicated that this instance should be considered less than the other object<br>
-         * <br>
-         * @return {number} A negative integer, zero, or a positive integer if this object is considered
-         * less than, equal to, or greater than the specified object, respectively.<br>
-         */
-        compareTo( pOther )
-        {
-            if ( null == pOther || !(pOther instanceof this.constructor || isFunc( pOther?.handleEvent )) )
-            {
-                return -1;
-            }
-
-            if ( this === pOther || this.equals( pOther ) )
-            {
-                return 0;
-            }
-
-            return (this.#id - (pOther?.id || 1));
-        }
-    }
-
-    /**
-     * A static property that holds the next unique identifier to be used
-     * by StatefulListener instances. This property is used to ensure
-     * each StatefulListener instance receives a unique numeric ID.
-     *
-     * @type {number}
-     * @static
-     * @protected
-     */
-    StatefulListener.NEXT_ID = 1;
-
-    /**
      * Represents a visitor class to support the common Visitor Pattern.
      * This class also extends the EventTarget interface
      * to enable event dispatching, specifically for the "visit" event.
@@ -7685,7 +7664,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          * If logging is enabled, but neither an instance-specific nor a global logger is specified,
          * returns the Console object
          *
-         * @returns {ILogger|MockLogger|console} an object with the following methods: log, info, warn, debug, error, and trace
+         * @returns {ILogger|MOCK_LOGGER|console} an object with the following methods: log, info, warn, debug, error, and trace
          */
         get logger()
         {
@@ -7703,7 +7682,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 return logger instanceof ConditionalLogger ? logger : (DEBUG_MODE || CURRENT_MODE.traceEnabled) ? DEBUG_LOGGER : (ExecutionMode.isProduction( CURRENT_MODE ) ? PRODUCTION_LOGGER : INTERNAL_LOGGER);
             }
 
-            return logger || MockLogger;
+            return logger || MOCK_LOGGER;
         }
 
         /**
@@ -7788,7 +7767,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          */
         static getGlobalLogger()
         {
-            return ToolBocksModule.#globalLoggingEnabled ? ToolBocksModule.#globalLogger : MockLogger;
+            return ToolBocksModule.#globalLoggingEnabled ? ToolBocksModule.#globalLogger : MOCK_LOGGER;
         }
 
         /**
@@ -7850,7 +7829,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 return logger;
             }
 
-            return MockLogger;
+            return MOCK_LOGGER;
         }
 
         /**
