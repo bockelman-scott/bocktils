@@ -57,7 +57,7 @@ const { _ud = "undefined", $scope } = constants;
 
     const { asString, isBlank, ucase, isFilePath, isJson } = stringUtils;
 
-    const { asArray } = arrayUtils;
+    const { asArray, replaceElements } = arrayUtils;
 
     const { exists } = fileUtils;
 
@@ -284,6 +284,8 @@ const { _ud = "undefined", $scope } = constants;
                   restrictKeys: false
               } );
 
+    const isPrefix = ( pStr ) => isString( pStr ) && !isBlank( pStr ) && /[A-Z]{1,4}[_-]?/.test( pStr );
+
     /**
      * The module that will be returned to expose the classes and functionality of the SecretsManager.
      */
@@ -347,9 +349,11 @@ const { _ud = "undefined", $scope } = constants;
 
             this.#source = this.#options?.source || (SECRETS_STRATEGY.LOCAL === this.#strategy ? "./.env" : _mt);
 
-            this.#prefix = asString( this.#options?.prefix || _mt, true ) || ($ln( this.#args ) > 0 ? this.#args[0] : _mt);
+            this.#prefix = asString( this.#options?.prefix || this.#options?.secretsPrefix || _mt, true ) || ($ln( this.#args ) > 0 ? this.#args.find( isPrefix ) : _mt);
 
             this.#prefix = asString( this.#prefix || _mt, true ).replace( /^[_-]+/, _mt ).trim().replace( /[_-]+$/, _mt ).trim();
+
+            this.#prefix = asString( this.#prefix || _mt, true ).replaceAll( /^[_-]+/g, _hyphen ).trim();
 
             this.#allowCache = (false !== this.#options?.allowCache);
 
@@ -423,7 +427,7 @@ const { _ud = "undefined", $scope } = constants;
          */
         get prefix()
         {
-            return asString( this.#prefix, true ).replace( /^[_-]+/, _mt ).trim().replace( /[_-]+$/, _mt ).trim();
+            return asString( (this.#prefix || this.#options?.secretsPrefix), true ).replace( /^[_-]+/, _mt ).trim().replace( /[_-]+$/, _mt ).trim().replaceAll( /[_-]+/g, _hyphen ).trim();
         }
 
         get restrictKeys()
@@ -487,7 +491,7 @@ const { _ud = "undefined", $scope } = constants;
          */
         resolveSecretValue( pSecret )
         {
-            return isNonNullObject( pSecret ) ? readProperty( pSecret, "value", "Value", "data", "Data", "SecretString", "SecretBinary" ) || asString( pSecret ) : asString( pSecret ) || _mt;
+            return isNonNullObject( pSecret ) ? readProperty( pSecret, "value", "Value", "SecretString", "SecretBinary", "data", "Data" ) || asString( pSecret ) : asString( pSecret ) || _mt;
         }
 
         /**
@@ -896,7 +900,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             super( pOptions, ...pArgs );
 
-            let path = this.source || pOptions?.source || pOptions?.path || "./.env";
+            let path = this.source || pOptions?.source || pOptions?.path || asArray( pArgs ?? [] ).find( isFilePath ) || "./.env";
 
             if ( isFilePath( path ) && exists( path ) )
             {
@@ -1175,6 +1179,13 @@ const { _ud = "undefined", $scope } = constants;
             LOCAL: LocalSecretsManager
         };
 
+    /**
+     * Adds a class to the SECRETS_MANAGER_CLASSES object.
+     * Modules defining subclasses must call this function
+     * to make the class available to the SecretsManagerFactory.
+     * @param pStrategy - one of the values defined in SECRETS_STRATEGY that will be used to find the specified class
+     * @param pClass - a subclass of SecretsManager to be used when the strategy matches the specified value
+     */
     const registerSecretsManagerClass = function( pStrategy, pClass )
     {
         let strategy = asString( pStrategy, true );
@@ -1208,11 +1219,12 @@ const { _ud = "undefined", $scope } = constants;
         {
             const options = asObject( pOptions ?? {} );
 
-            const args = asArray( pArgs ?? options?.args ?? [] );
+            let args = asArray( options?.args ?? asArray( pArgs ?? [] ) ?? [] );
+            args = replaceElements( args, asArray( pArgs ?? args ?? [] ) );
 
             this.#strategy = calculateStrategy( options );
 
-            this.#prefix = ucase( asString( options?.prefix || ($ln( args ) > 0 ? args[0] : _mt), true ) );
+            this.#prefix = ucase( asString( (options?.prefix || options?.secretsPrefix) || ($ln( args ) > 0 ? args.find( isPrefix ) : _mt), true ) );
 
             this.#keyPath = options?.keyPath || options?.mount || options.path || (SECRETS_STRATEGY.LOCAL === this.#strategy ? "./.env" : _mt);
 
@@ -1231,8 +1243,8 @@ const { _ud = "undefined", $scope } = constants;
 
         get prefix()
         {
-            let s = asString( (this.#prefix || this.options.prefix), true );
-            s = s.replaceAll( /_+/, _hyphen );
+            let s = asString( (this.#prefix || this.options.prefix || this.options.secretsPrefix), true );
+            s = s.replaceAll( /_+/g, _hyphen );
             s = s.replace( /^[_-]+/, _mt ).trim().replace( /[_-]+$/, _mt ).trim();
             return asString( s, true );
         }
@@ -1244,24 +1256,38 @@ const { _ud = "undefined", $scope } = constants;
 
         create( pOptions = {}, ...pArgs )
         {
-            const options = lock( { ...(asObject( this.options || {} )), ...(asObject( pOptions ?? {} )) } );
+            const options = { ...(asObject( this.options || {} )), ...(asObject( pOptions ?? {} )) };
+
+            options.strategy = asString( options.strategy || this.strategy, true );
+            options.strategy = STRATEGY_OPTIONS.includes( options.strategy ) ? options.strategy : this.strategy;
+            options.strategy = STRATEGY_OPTIONS.includes( options.strategy ) ? options.strategy : null;
 
             const strategy = calculateStrategy( options );
 
             let clazz = SECRETS_MANAGER_CLASSES[strategy] ?? SecretsManager;
 
+            let args = asArray( options?.args ?? asArray( pArgs ?? [] ) ?? [] );
+            args = replaceElements( args, asArray( pArgs ?? args ?? [] ) );
+
+            let prefix = (options.prefix || options.secretsPrefix) ||
+                         (pOptions?.prefix || pOptions?.secretsPrefix) ||
+                         args.find( isPrefix ) || this.prefix;
+
+            options.prefix = prefix || this.prefix;
+            options.secretsPrefix = options.prefix || prefix || this.prefix;
+
             if ( isClass( clazz ) )
             {
-                return new clazz( options, ...pArgs );
+                return new clazz( options, ...args );
             }
 
             if ( isNonNullObject( clazz ) )
             {
                 clazz = getClass( clazz ) ?? SecretsManager;
-                return new clazz( options, ...pArgs );
+                return new clazz( options, ...args );
             }
 
-            return new SecretsManager( options, ...pArgs );
+            return new SecretsManager( options, ...args );
         }
 
         static getInstance( pOptions, ...pArgs )
