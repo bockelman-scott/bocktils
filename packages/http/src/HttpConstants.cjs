@@ -1949,12 +1949,17 @@ const { _ud = "undefined", $scope } = constants;
      */
     function resolveUrl( pUrl, pConfig )
     {
-        if ( isString( pUrl ) && !isBlank( pUrl ) )
+        let url = pUrl || pConfig?.url || pConfig;
+
+        if ( isString( url ) && !isBlank( url ) )
         {
-            return cleanUrl( asString( pUrl, true ) );
+            return cleanUrl( asString( url, true ), true );
         }
 
-        let url = pUrl || pConfig?.url || pConfig;
+        if ( _ud !== typeof URL && pUrl instanceof URL )
+        {
+            return resolveUrl( asString( pUrl.href || pUrl.toString(), true ), pConfig );
+        }
 
         if ( isNonNullObject( url ) )
         {
@@ -1962,21 +1967,21 @@ const { _ud = "undefined", $scope } = constants;
             {
                 if ( url instanceof Request )
                 {
-                    url = url.url || pConfig?.url;
+                    url = resolveUrl( url.url || pConfig?.url, pConfig );
                 }
                 else if ( pConfig instanceof Request )
                 {
-                    url = pConfig.url;
+                    url = resolveUrl( pConfig.url, pConfig );
                 }
             }
 
             if ( isUrl( url ) )
             {
-                url = cleanUrl( pUrl.href || asString( pUrl, true ) );
+                url = cleanUrl( pUrl.href || asString( pUrl, true ), true );
             }
             else if ( isUrl( pConfig ) )
             {
-                url = cleanUrl( pConfig.href || asString( pConfig, true ) );
+                url = cleanUrl( pConfig.href || asString( pConfig, true ), true );
             }
 
             // This code tries to "dig" the url out of some potentially nested object structure.
@@ -1991,7 +1996,7 @@ const { _ud = "undefined", $scope } = constants;
             }
         }
 
-        return isString( url ) ? cleanUrl( url || _mt ) : _mt;
+        return isString( url ) ? cleanUrl( url || _mt, true ) : _mt;
     }
 
     let mod =

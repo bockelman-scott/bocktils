@@ -466,7 +466,7 @@ const { _ud = "undefined", $scope } = constants;
             this.#method = resolveHttpMethod( pMethod || properties?.method );
 
             let url = asString( resolveUrl( pUrl, properties ), true );
-            this.#url = !isBlank( url ) ? cleanUrl( url ) : _mt;
+            this.#url = !isBlank( url ) ? cleanUrl( url, true ) : _mt;
 
             const type = lcase( asString( readScalarProperty( this.#properties, _str, "responseType" ) || _mt, true ) );
 
