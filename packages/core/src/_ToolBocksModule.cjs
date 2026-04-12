@@ -934,7 +934,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      *
      * @returns {*} The dereferenced value or a default value based on the specified expected type.
      */
-    const dereference = ( pObj, pType = Object ) =>
+    const dereference = ( pObj, pType ) =>
     {
         let target = ( !isNull( pObj ) && isRef( pObj )) ? (pObj.deref() ?? null) : pObj;
 
@@ -6138,6 +6138,66 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     };
 
     /**
+     * Recursively locks (freezes) every reachable object from the specified 'root' object
+     *
+     * @param {Object} pObject - the object for which to recursively lock its properties
+     *
+     * @param pOptions
+     *
+     * @param pVisited (used internally)
+     * @param pStack   (used internally)
+     *
+     * @returns {Object} the object that passed in, but now locked and with all of its properties that are objects also locked
+     */
+    const deepLock = function( pObject, pOptions = IMMUTABLE_COPY_OPTIONS, pVisited = new WeakMap(), pStack = [] )
+    {
+        const options = { ...IMMUTABLE_COPY_OPTIONS, ...(pOptions | {}) };
+
+        let obj = isNonNullObj( pObject ) ? pObject : isNull( pObject ) ? {} : { value: pObject };
+
+        const stack = [...(pStack ?? [])];
+        const visited = pVisited ?? new WeakMap();
+
+        let resolved = visited.get( obj );
+
+        if ( isNonNullObj( dereference( resolved ) ) )
+        {
+            return lock( resolved );
+        }
+
+        if ( detectCycles( stack ) )
+        {
+            visited.set( obj, lock( obj ) );
+            return lock( obj );
+        }
+
+        const entries = attempt( () => objectEntries( obj ) );
+
+        for( let entry of entries )
+        {
+            const key = ObjectEntry.getKey( entry );
+
+            let value = ObjectEntry.getValue( entry );
+
+            if ( isNonNullObj( value ) )
+            {
+                // Because this function is an in-place operation,
+                // it does not matter if the property is writable.
+                // Either the property accessor returns a reference
+                // to the (now frozen) object
+                // or it returns a defensive copy, in which case it doesn't matter if it is mutable
+                deepLock( value, options, visited, [...stack, key] );
+
+                visited.set( value, lock( value ) );
+            }
+        }
+
+        visited.set( obj, lock( obj ) );
+
+        return lock( obj );
+    };
+
+    /**
      * Provide a shim until https://github.com/tc39/proposal-is-error is widely available
      * @type {*|(function(*): (boolean|*))}
      */
@@ -9903,10 +9963,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             makeDeleter,
 
             lock,
-            deepFreeze,
+            deepLock,
 
             localCopy,
             immutableCopy,
+            deepFreeze,
 
             compareNullable,
 
