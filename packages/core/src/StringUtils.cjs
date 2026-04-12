@@ -2809,7 +2809,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             return isNumber( pStr ) || isBoolean( pStr );
         }
 
-        const str = tidy( asString( pStr, true ) ).trim().replace( /^[ \n\r\t]+/, _mt_str ).replace( /[ \n\r\t]+$/, _mt_str );
+        const str = tidy( asString( pStr, true ) ).trim().replace( /^\s+/, _mt_str ).replace( /\s+$/, _mt_str );
 
         if ( enclosed( str ) )
         {
@@ -2817,6 +2817,26 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         }
 
         return "null" === str || "void" === str || "undefined" === str || isNumber( str ) || !(/[^0-9-.]+/.test( str ));
+    };
+
+    const isJsonObject = function( pStr )
+    {
+        const s = asString( pStr, true ).replace( /^\s+/, _mt ).trim().replace( /\s+$/, _mt ).trim();
+        if ( isJson( s ) )
+        {
+            return /^\{/.test( s ) && /}$/.test( s );
+        }
+        return false;
+    };
+
+    const isJsonArray = function( pStr )
+    {
+        const s = asString( pStr, true ).replace( /^\s+/, _mt ).trim().replace( /\s+$/, _mt ).trim();
+        if ( isJson( s ) )
+        {
+            return /^\[/.test( s ) && /]$/.test( s );
+        }
+        return false;
     };
 
     /**
@@ -3903,21 +3923,43 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
     String.prototype.reverse = String.prototype.reverse || reverseString;
 
-    const LATIN_1_CHARACTER_MAP =
+    const SMART_QUOTES =
         {
             // Smart Quotes & Apostrophes
-            "’": "'", "‘": "'", "”": "\"", "“": "\"", "`": "'",
+            "’": "'", "‘": "'", "”": "\"", "“": "\"", "`": "'"
+        };
 
-            // Dashes
-            "–": "-", "—": "-",
+    const SMART_DASHES =
+        {
+            // Smart Quotes & Apostrophes
+            "–": "-", "—": "-"
+        };
 
+    const ACCENTED_CHARACTERS =
+        {
             // Commonly Accented 'Latin-1' characters
             "à": "a", "á": "a", "â": "a", "ã": "a", "ä": "a", "å": "a",
             "è": "e", "é": "e", "ê": "e", "ë": "e",
             "ì": "i", "í": "i", "î": "i", "ï": "i",
             "ò": "o", "ó": "o", "ô": "o", "õ": "o", "ö": "o",
             "ù": "u", "ú": "u", "û": "u", "ü": "u",
-            "ñ": "n", "ç": "c",
+            "ñ": "n", "ç": "c"
+        };
+
+    const EXOTIC_WHITESPACE =
+        {
+            "\u00A0": " ", "\u202F": " "
+        };
+
+    const LATIN_1_CHARACTER_MAP =
+        {
+            ...SMART_QUOTES,
+
+            // Dashes
+            ...SMART_DASHES,
+
+            // Commonly Accented 'Latin-1' characters
+            ...ACCENTED_CHARACTERS,
 
             // Some special cases
 
@@ -3928,7 +3970,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             "•": "-",
 
             // Whitespace (Non-breaking spaces)
-            "\u00A0": " ", "\u202F": " "
+            ...EXOTIC_WHITESPACE
         };
 
 
@@ -3945,7 +3987,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         const s = asString( pStr );
 
         // map of 'unsafe' characters to 'safe' characters
-        const characterMap = { ...LATIN_1_CHARACTER_MAP, ...(pCharacterMap || {}) };
+        const characterMap = { ...(pCharacterMap || LATIN_1_CHARACTER_MAP) };
 
         // Build a RegExp based on the map
         // We could escape special regex characters if necessary, but for now we just join keys
@@ -4569,6 +4611,11 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             DEFAULT_AS_STRING_OPTIONS,
             DEFAULT_NUMBER_SYMBOLS,
             PROPERCASE_OPTIONS,
+            LATIN_1_CHARACTER_MAP,
+            EXOTIC_WHITESPACE,
+            ACCENTED_CHARACTERS,
+            SMART_DASHES,
+            SMART_QUOTES,
             asString,
             _toStr,
             clean,
@@ -4624,6 +4671,8 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             isValidJsonArray,
             isValidJson,
             isJson,
+            isJsonObject,
+            isJsonArray,
             isLegalFileName,
             isFilePath,
             toLegalFileName,
