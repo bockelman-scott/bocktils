@@ -1563,6 +1563,37 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         return (_mt_str === asString( pStr, true ).trim()) || (_z === pStr);
     };
 
+    const _collapseWhitespaceCharacters = function( pStr, pTrimLines )
+    {
+        let s = asString( pStr );
+
+        const hasCarriageFeed = /\r/.test( s );
+
+        s = hasCarriageFeed ? s.replaceAll( /(\r\n)+/g, "\r\n" ) : s.replaceAll( /(\r?\n)+/g, "\n" );
+        s = hasCarriageFeed ? s.replaceAll( /\r+/g, "\r" ) : s.replaceAll( /\n+/g, "\n" );
+
+        s = s.replaceAll( /\t+/g, "\t" );
+        s = s.replaceAll( / +/g, _spc );
+
+        if ( pTrimLines )
+        {
+            let arr = s.split( /(\r?\n)/ ).map( e => asString( e, true ).replaceAll( /(\r?\n)/g, _mt ) ).filter( e => !isBlank( e ) );
+            s = hasCarriageFeed ? arr.join( "\r\n" ) : arr.join( "\n" );
+        }
+
+        return asString( s );
+    };
+
+    const collapseWhitespace = function( pStr, pPreserveCharacter = false, pTrimLines = false )
+    {
+        if ( pPreserveCharacter )
+        {
+            return _collapseWhitespaceCharacters( pStr, pTrimLines );
+        }
+        const s = asString( pStr, true, _aso( { removeRedundantSpaces: true } ) ).replaceAll( /\s+/g, _spc ).trim();
+        return asString( s, true ).replaceAll( /\s+/g, _spc ).trim();
+    };
+
     function _toArr( pVal )
     {
         return isArray( pVal ) ? [...pVal].flat().filter( e => isString( e ) && !isBlank( e ) ) : (isString( pVal ) ? asString( pVal, true ).split( _comma ).filter( e => !isBlank( e ) ) : []);
@@ -3780,14 +3811,14 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
         let localPart = asString( parts[0] || email, true );
 
-        let tld = (asString( (parts[1] || rightOfLast( email, "@" )), true ));
+        let domain = (asString( (parts[1] || rightOfLast( email, "@" )), true ));
 
-        if ( EMAIL_PROVIDERS_SUPPORTING_PLUS_VARIANTS.includes( tld ) )
+        if ( EMAIL_PROVIDERS_SUPPORTING_PLUS_VARIANTS.includes( domain ) )
         {
             localPart = localPart.replace( /\+\w+$/, _mt );
         }
 
-        if ( $ln( localPart ) > 64 || ($ln( localPart + "@" + tld ) > 255) )
+        if ( $ln( localPart ) > 64 || ($ln( localPart + "@" + domain ) > 255) )
         {
             return false;
         }
@@ -4620,6 +4651,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             _toStr,
             clean,
             cleanString: clean,
+            collapseWhitespace,
             isEmpty,
             isNotEmpty: s => !isEmpty( s ),
             isBlank,

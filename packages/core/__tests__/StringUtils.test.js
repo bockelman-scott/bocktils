@@ -22,7 +22,8 @@ const
         normalizeName,
         getFunctionName,
         transliterate,
-        toLegalFileName
+        toLegalFileName,
+        collapseWhitespace
     } = stringUtils;
 
 const repoName = "bocktils";
@@ -214,6 +215,46 @@ describe( "asString", () =>
               console.log( s );
           } );
 
+
+} );
+
+describe( "collapseWhitespace", () =>
+{
+    test( "Removes redundant spaces", () =>
+    {
+        let s = `This   string has too  many spaces . `;
+
+        expect( collapseWhitespace( s ) ).toEqual( `This string has too many spaces .` );
+    } );
+
+    test( "Converts all whitespace to spaces", () =>
+    {
+        let s = `This  string
+        
+        has too   much 
+        
+        
+        whitespace.
+        `;
+
+        expect( collapseWhitespace( s ) ).toEqual( `This string has too much whitespace.` );
+    } );
+
+    test( "Can preserve the whitespace character being collapsed", () =>
+    {
+        let s = "This string\n\nhas  too many \n\nline   breaks.\n";
+        let expected = "This string\nhas too many \nline breaks.\n";
+
+        expect( collapseWhitespace( s, true ) ).toEqual( expected );
+    } );
+
+    test( "Can trim lines when preserving the whitespace character being collapsed", () =>
+    {
+        let s = "\nThis string\n\nhas  too many \n\nline   breaks.\n";
+        let expected = "This string\nhas too many\nline breaks.";
+
+        expect( collapseWhitespace( s, true, true ) ).toEqual( expected );
+    } );
 
 } );
 
@@ -2222,8 +2263,6 @@ describe( "toLegalFileName", () =>
 
               fileName = "***.???";
               expect( toLegalFileName( fileName ) ).toEqual( "File_3" );
-
-
 
 
           } );
