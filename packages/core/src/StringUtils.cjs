@@ -86,6 +86,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             IllegalArgumentError,
             ObjectEntry,
             objectEntries,
+            objectValues,
             functionToString,
             populateOptions,
             attempt,
@@ -3178,10 +3179,28 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
      */
     const ucase = ( pStr ) => asString( pStr, false ).toUpperCase();
 
+    /**
+     * A collection of RegExp expressions to use to test whether a string is a recognized 'honorific'
+     * @type {{MR: RegExp, MRS: RegExp, MISS: RegExp, MZ: RegExp, DR: RegExp, SIR: RegExp, PROF: RegExp, TRH: RegExp}}
+     */
+    const COMMON_HONORIFICS =
+        {
+            MR: /^Mr\.?$/i,
+            MRS: /^Mrs\.?$/i,
+            MISS: /(^Ms\.?$)|(^Miss$)/i,
+            MZ: /(^Mz\.?$)|(^Ms\.?$)/i,
+            DR: /^Dr\.?$/i,
+            REVEREND: /^Rev\.?$/i,
+            SIR: /^Sir$/i,
+            PROF: /^Prof\.?(essor)?$/i,
+            TRH: /^The\s+Right\s+Honou?rable$/i
+        };
+
     const PROPERCASE_OPTIONS =
         lock( {
                   separator: _spc,
                   prefixes: ["Mc", "Mac", "O'"],
+                  honorifics: objectValues( COMMON_HONORIFICS ),
                   exceptions: ["von", "van", "de", "del", "la", "dos", "da", "der", "di", "du", "et", "al", "o'", "mc", "mac", "st"],
                   compounds: ["mary ellen", "dawn marie", "mary ann", "mary anne", "lisa marie", "anne marie", "mary jo"],
                   middles: ["ann", "jo", "marie", "jane", "sue", "lynn", "lynne", "beth", "may", "grace", "ray", "joe", "dean", "lee", "gene", "bob"],
@@ -3449,7 +3468,18 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         let name = _lct( asString( pName, true ) );
 
         // remove honorific prefixes
-        name = name.replace( /^(mr\s+|mrs?\.\s+|dr\s+|dr\.\s+|ms\s+|ms\.\s+)/gi, _mt ).trim();
+        if ( isArray( options.honorifics ) )
+        {
+            let rxs = [...(options.honorifics)].filter( isRegExp ).map( e => new RegExp( e ) );
+            for( let rx of rxs )
+            {
+                name = name.replace( rx, _mt ).trim();
+            }
+        }
+        else
+        {
+            name = name.replace( /^(mr\s+|mrs?\.\s+|dr\s+|dr\.\s+|ms\s+|ms\.\s+)/gi, _mt ).trim();
+        }
 
         name = name.replaceAll( /\s{2,}/g, _spc );
 
@@ -3490,7 +3520,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
                 return ucase( match );
             } );
 
-            // titles and honorifics
+            // titles
             formattedName = formattedName.replace( /\b(md|dds|m\.d\.|d\.d\.s\.)\b/gi, ( match ) =>
             {
                 return ucase( match );
