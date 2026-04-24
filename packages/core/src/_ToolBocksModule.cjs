@@ -1853,6 +1853,40 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         };
 
     /**
+     * This is the default error message used if there is no message available for an error
+     * @type {string}
+     * @const
+     * @see {@link S_ERR_PREFIX}
+     * @see {@link S_DEFAULT_OPERATION}
+     */
+    const DEFAULT_ERROR_MSG = [S_ERR_PREFIX, ": ", S_DEFAULT_OPERATION].join( _spc );
+
+    /**
+     * Returns a valid log level based on the specified value.<br>
+     * The method maps the input to a predefined set of log levels,
+     * corresponding to the methods of ILogger types.<br>
+     *
+     * @param {string|number} pLevel - the name or numeric value representing a log level.<br>
+     *                                 This can be a string (log level name) or a number (log level index).<br>
+     *                                 Valid strings are case-insensitive
+     *                                 and should correspond to predefined log levels.
+     *                                 Valid numbers are between 0 and 6,
+     *                                 corresponding to the following log levels:
+     *                                 0 = NONE, 1 = LOG, 2 = ERROR, 3 = WARN, 4 = INFO, 5 = DEBUG, 6 = TRACE
+     *
+     *
+     * @return {string} The resolved log level.<br>
+     *                  If the input is invalid or does not match any predefined log level,
+     *                  the default value, "error", is returned.
+     */
+    function resolveLogLevel( pLevel )
+    {
+        const levels = [S_NONE, S_LOG, S_ERROR, S_WARN, S_INFO, S_DEBUG, S_TRACE, S_LOG].map( e => _lcase( e.trim() ) );
+        let level = (isStr( pLevel )) ? _lcase( _asStr( pLevel ).trim() ) : (isNum( pLevel ) && pLevel >= 0 && pLevel <= 6 ? levels[pLevel] : S_ERROR);
+        return (levels.includes( level ) ? level : S_ERROR);
+    }
+
+    /**
      * A 'safe' implementation of ILogger
      * that uses the serialize function to stringify the message arguments.
      *
@@ -1968,7 +2002,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             try
             {
-                const level = _lct( pLevel || LOG_LEVELS.LOG ) || LOG_LEVELS.LOG;
+                const level = resolveLogLevel( _lct( pLevel || LOG_LEVELS.LOG ) ) || LOG_LEVELS.LOG;
 
                 const data = [...(pData || [])].map( e => serialize( e ) );
 
@@ -6423,40 +6457,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             this.#columnNumber = this.#columnNumber || this.parts?.columnNumber;
             return this.#columnNumber || this.parts?.columnNumber;
         }
-    }
-
-    /**
-     * This is the default error message used if there is no message available for an error
-     * @type {string}
-     * @const
-     * @see {@link S_ERR_PREFIX}
-     * @see {@link S_DEFAULT_OPERATION}
-     */
-    const DEFAULT_ERROR_MSG = [S_ERR_PREFIX, ": ", S_DEFAULT_OPERATION].join( _spc );
-
-    /**
-     * Returns a valid log level based on the specified value.<br>
-     * The method maps the input to a predefined set of log levels,
-     * corresponding to the methods of ILogger types.<br>
-     *
-     * @param {string|number} pLevel - the name or numeric value representing a log level.<br>
-     *                                 This can be a string (log level name) or a number (log level index).<br>
-     *                                 Valid strings are case-insensitive
-     *                                 and should correspond to predefined log levels.
-     *                                 Valid numbers are between 0 and 6,
-     *                                 corresponding to the following log levels:
-     *                                 0 = NONE, 1 = LOG, 2 = ERROR, 3 = WARN, 4 = INFO, 5 = DEBUG, 6 = TRACE
-     *
-     *
-     * @return {string} The resolved log level.<br>
-     *                  If the input is invalid or does not match any predefined log level,
-     *                  the default value, "error", is returned.
-     */
-    function resolveLogLevel( pLevel )
-    {
-        const levels = [S_NONE, S_LOG, S_ERROR, S_WARN, S_INFO, S_DEBUG, S_TRACE, S_LOG].map( e => _lcase( e.trim() ) );
-        let level = (isStr( pLevel )) ? _lcase( _asStr( pLevel ).trim() ) : (isNum( pLevel ) && pLevel >= 0 && pLevel <= 6 ? levels[pLevel] : S_ERROR);
-        return (levels.includes( level ) ? level : S_ERROR);
     }
 
     /**
