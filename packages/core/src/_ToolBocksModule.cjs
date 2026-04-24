@@ -2941,6 +2941,52 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return false;
     };
 
+    const includesAnyOfProperties = function( pObject, ...pPropertyName )
+    {
+        if ( !isNonNullObj( pObject ) )
+        {
+            return false;
+        }
+
+        let props = _asArr( pPropertyName );
+
+        let has = false;
+
+        let limit = 100;
+
+        let iterations = 0;
+
+        while ( !has && ($ln( props ) > 0) && (iterations++ < limit) )
+        {
+            has = hasProperty( pObject, props.shift() );
+        }
+
+        return has;
+    };
+
+    const includesAllProperties = function( pObject, ...pPropertyName )
+    {
+        if ( !isNonNullObj( pObject ) || !includesAnyOfProperties( pObject, ...pPropertyName ) )
+        {
+            return false;
+        }
+
+        let props = _asArr( pPropertyName );
+
+        let has = true;
+
+        let limit = 100;
+
+        let iterations = 0;
+
+        while ( has && ($ln( props ) > 0) && (iterations++ < limit) )
+        {
+            has = hasProperty( pObject, props.shift() );
+        }
+
+        return has;
+    };
+
     /**
      * Returns true if the specified property of the specified object is mutable.
      *
@@ -9951,6 +9997,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             getProperty,
             setProperty,
             hasProperty,
+
+            includesAnyOfProperties,
+            includesAllProperties,
 
             readProperty,
             readScalarProperty,
