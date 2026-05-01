@@ -1763,9 +1763,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
         let pairs = [["[", "]"], ["{", "}"], [_dblqt, _dblqt], [_sglqt, _sglqt], ["`", "`"]];
 
-        pairs = pairs.map( e => (str.startsWith( e[0] ) && str.endsWith( e[1] )) ).filter( isTrue );
-
-        return pairs.length > 0;
+        return pairs.some( e => (str.startsWith( e[0] ) && str.endsWith( e[1] )) );
     }
 
     /**
@@ -3206,7 +3204,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
                   middles: ["ann", "jo", "marie", "jane", "sue", "lynn", "lynne", "beth", "may", "grace", "ray", "joe", "dean", "lee", "gene", "bob"],
                   rxAddr: /\d+\s*((N|E|S|W|NE|NW|SE|SW)[. ]?)?\s*\w+\s*(AVE(NUE)?|BLVD|ST(REET|[ .])|ROAD|RD([ .])|CIR(CLE)?|COURT|CT([ .])|DR(IVE|[ .])|LANE|LN([ .])|PL(ACE|[ .])|PARKWAY|PKWY|SQ(UARE|[ .])|TER(RACE|[ .])|ROUTE|RT([ .])|AVENUE|BOULEVARD)/gi,
                   rxEmail: /\S+@\w+\.(com|edu|gov|org|net|co|info|biz|io)/gi,
-                  preserve: ["NE", "NW", "SE", "SW"]
+                  preserve: ["NE", "NW", "SE", "SW", "II", "III", "IV"]
               } );
 
     /**
@@ -3794,23 +3792,23 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         }
 
         // handle some common typos
-        email = asString( email, true ).replace( /\.(comm|con|cpm|cok|coj|co,|cim|xom|com[\w]|com[A-Z0-9]+)$/i, ".com" );
-        email = asString( email, true ).replace( /(gmsil|gmial|gnail|gnial|gamil|gmaill|ymail)\.co\w+$/i, "gmail.com" );
-        email = asString( email, true ).replace( /h[oi][ty][mn][as]il\.co\w+$/i, "hotmail.com" );
-        email = asString( email, true ).replace( /yah+o+\.com/i, "yahoo.com" );
-        email = asString( email, true ).replace( /@a[iop]l\.co\w+$/i, "@aol.com" );
+        email = asString( email, true ).replace( /\.(comm|con|cpm|cok|coj|co,|cim|xom|com\w+|com[A-Z0-9]+)\s*$/i, ".com" );
+        email = asString( email, true ).replace( /(gmsil|gmial|gnail|gnial|gamil|gmaill|ymail)\.co\w+\s*$/i, "gmail.com" );
+        email = asString( email, true ).replace( /h[oi][ty][mn][as]il\.co\w+\s*$/i, "hotmail.com" );
+        email = asString( email, true ).replace( /yah+o+\.co\w+\s*$/i, "yahoo.com" );
+        email = asString( email, true ).replace( /@a[iop]l\.co\w+\s*$/i, "@aol.com" );
 
         // remove "plus-addressing" from known providers that support it
-        const tld = rightOfLast( email, "@" );
+        const domain = rightOfLast( email, "@" );
 
-        if ( EMAIL_PROVIDERS_SUPPORTING_PLUS_VARIANTS.includes( tld ) )
+        if ( EMAIL_PROVIDERS_SUPPORTING_PLUS_VARIANTS.includes( domain ) )
         {
             email = asString( email, true ).replace( /\+[^@]+@/, "@" );
 
-            if ( pRemoveDots && (["gmail.com", "googlemail.com"].includes( tld )) )
+            if ( pRemoveDots && (["gmail.com", "googlemail.com"].includes( domain )) )
             {
                 let parts = email.split( "@" );
-                email = asString( parts[0], true ).replaceAll( /\./g, _mt ) + "@" + asString( parts[1] || tld, true );
+                email = asString( parts[0], true ).replaceAll( /\./g, _mt ) + "@" + asString( parts[1] || domain, true );
             }
         }
 
@@ -3820,9 +3818,15 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             if ( $ln( parts ) > 1 )
             {
                 let localPart = (asString( parts[0] || email, true ).slice( 0, 64 )).trim();
-                let domainPart = (asString( parts[1] || tld, true ).slice( 0, (254 - $ln( localPart ) - 1) )).trim();
-                email = (localPart.replaceAll( /[,\/;<]/g, "." ) + "@" + (domainPart || tld)).trim();
+                let domainPart = (asString( parts[1] || domain, true ).slice( 0, (254 - $ln( localPart ) - 1) )).trim();
+                email = (localPart.replaceAll( /[,\/;<]/g, "." ) + "@" + (domainPart || domain)).trim();
             }
+        }
+
+        if ( pRemoveDots && (["gmail.com", "googlemail.com"].includes( domain )) )
+        {
+            let parts = email.split( "@" );
+            email = asString( parts[0], true ).replaceAll( /\./g, _mt ) + "@" + asString( parts[1] || domain, true );
         }
 
         return _lct( email );
@@ -3909,6 +3913,83 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
     const toPascalCase = function( pStr )
     {
         return _toPascal( asString( pStr, false ) || _mt_str );
+    };
+
+    const TITLE_CASE_OPTIONS =
+        lock( {
+                  min_len_capitalized: 4,
+                  conjunctions: lock( ["and", "as", "but", "for", "if", "nor", "or", "so", "yet"] ),
+                  articles: lock( ["a", "an", "the"] ),
+                  prepositions: lock( ["as", "at", "by", "for", "in", "of", "off", "on", "per", "to", "up", "via"] ),
+                  exceptions: lock( ["I", "II", "III", "IV", "VI", "VII", "VIII", "IX", "X"] )
+              } );
+
+    /**
+     * Returns a string or phrase converted to Title Case
+     * @see https://apastyle.apa.org/style-grammar-guidelines/capitalization/title-case
+     *
+     * @param {string} pStr the string to convert to Title Case
+     * @param {object} pOptions an object describing the following options:
+     *                          min_len_capitalized: the minimum length a word must be to be capitalized (unless firt word)
+     *                          conjunctions: a list of words to be treated as conjuntions (lowercased, unless firt word)
+     *                          articles: a list of words to be considered articles (lowercased, unless firt word)
+     *                          prepositions: a list of words to be treated as prepositions (lowercased, unless firt word)
+     *
+     * @returns {string}
+     */
+    const toTitleCase = function( pStr, pOptions = TITLE_CASE_OPTIONS )
+    {
+        const options = { ...(TITLE_CASE_OPTIONS), ...(isNonNullObject( pOptions ) ? { ...(pOptions) } : TITLE_CASE_OPTIONS) };
+
+        options.conjunctions = [...(TITLE_CASE_OPTIONS.conjunctions), ...(options.conjunctions ?? [])];
+        options.articles = [...(TITLE_CASE_OPTIONS.articles), ...(options.articles ?? [])];
+        options.prepositions = [...(TITLE_CASE_OPTIONS.prepositions), ...(options.prepositions ?? [])];
+        options.exceptions = [...(TITLE_CASE_OPTIONS.exceptions), ...(options.exceptions ?? [])];
+
+        const s = asString( pStr, true );
+
+        if ( isBlank( s ) )
+        {
+            return s;
+        }
+
+        let arr = s.split( /\s+/ ).map( e => asString( e, true ) ).filter( e => !isBlank( e ) );
+
+        if ( $ln( arr ) < 2 )
+        {
+            return toProperCase( asString( arr.join( _spc ), true ), options );
+        }
+
+        let minLen = asInt( options.min_len_capitalized, 4 ) || 4;
+        let exclusions = [...(options.conjunctions ?? []), ...(options.articles ?? []), ...(options.prepositions ?? [])].filter( e => isString( e ) && !isBlank( e ) );
+        let inclusions = [...options.exceptions];
+
+        arr = arr.map( ( e, i ) =>
+                       {
+                           if ( (0 === i) ||
+                                inclusions.includes( e ) ||
+                                ($ln( e ) >= minLen && !exclusions.includes( e )) )
+                           {
+                               return toProperCase( asString( e, true ) );
+                           }
+
+                           return lcase( e );
+                       } );
+
+        return asString( arr.join( _spc ), true );
+    };
+
+    /**
+     * Returns a string or phrase converted to sentence case
+     * @see https://apastyle.apa.org/style-grammar-guidelines/capitalization/sentence-case
+     *
+     * @param {string} pStr
+     * @param {object} pOptions
+     * @returns {string}
+     */
+    const toSentenceCase = function( pStr, pOptions )
+    {
+        return pStr; // TBD
     };
 
     /**
@@ -4627,7 +4708,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
     const isValidPhoneNumber = function( pPhoneNumber )
     {
-        let phone = asString( pPhoneNumber, true ).replaceAll( /\D/g, _mt );
+        const phone = asString( pPhoneNumber, true ).replaceAll( /\D/g, _mt );
 
         // if there are no digits or not enough digits, the number is invalid
         if ( isBlank( phone ) || ($ln( phone ) < MIN_PHONE_NUM_LEN) )
@@ -4657,8 +4738,14 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             return false;
         }
 
+        // reject numbers like (xxx) 000-0000, (xxx) 999-9999, and (xxx) 111-1111
+        if ( /0{7}$/.test( phone ) || /9{7}$/.test( phone ) || /1{7}$/.test( phone ) )
+        {
+            return false;
+        }
+
         // it is possible that we will consider a "key mashed" or "key swiped" fake number as valid,
-        // but we will use a scoring algorithm to assign a confidence to all 'valid' numbers
+        // but we encourage the use of a scoring algorithm to assign a confidence to all 'valid' numbers
 
         // if the area code is 555, we check for the known fictional numbers and 2 special use/reserved numbers
         // and consider the number valid if it does not fall into that range
@@ -4672,6 +4759,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             DEFAULT_AS_STRING_OPTIONS,
             DEFAULT_NUMBER_SYMBOLS,
             PROPERCASE_OPTIONS,
+            TITLE_CASE_OPTIONS,
             LATIN_1_CHARACTER_MAP,
             EXOTIC_WHITESPACE,
             ACCENTED_CHARACTERS,
@@ -4746,6 +4834,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             toPascalCase,
             asProperCaseName,
             normalizeName,
+            toTitleCase,
             formatPhoneNumber,
             isValidPhoneNumber,
             normalizeEmailAddress,
