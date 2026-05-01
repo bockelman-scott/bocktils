@@ -9387,7 +9387,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         let value = null;
 
-        while ( (null === value || (isStr( value ) && !_isValidStr( value ))) && $ln( paths ) > 0 )
+        while ( ((_ud === typeof value) || (null === value) || (isStr( value ) && !_isValidStr( value ))) && $ln( paths ) > 0 )
         {
             let path = paths.shift();
 
