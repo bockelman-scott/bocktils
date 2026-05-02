@@ -96,6 +96,9 @@ let projectRootDirectory;
  */
 let defaultPath;
 
+const mimeTypesModule = require( "mime-types" );
+const magicBytes = require( "magic-bytes.js" );
+
 /**
  * The toolbocks/core package provides the building blocks
  * upon which other ToolBocks modules depend.<br>
@@ -129,6 +132,8 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
     {
         return $scope()[INTERNAL_NAME];
     }
+
+    const { mime } = mimeTypesModule;
 
     // declare variables to hold the execution environment-specific namespace(s)
     let _deno = null;
@@ -177,6 +182,7 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
             isString,
             isNumber,
             isArray,
+            isTypedArray,
             isDate,
             isNonNullObject,
             isFunction,
@@ -190,7 +196,20 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
             clamp
         } = typeUtils;
 
-    const { asString, asInt, toUnixPath, toBool, isBlank, leftOfLast, rightOfLast, isJson } = stringUtils;
+    const
+        {
+            asString,
+            asInt,
+            toUnixPath,
+            toBool,
+            isBlank,
+            lcase,
+            leftOfLast,
+            rightOfLast,
+            isJson,
+            isLegalFileName,
+            isFilePath
+        } = stringUtils;
 
     const { varargs, asArgs, flatArgs, asArray, unique, includesAll, Filters, AsyncBoundedQueue } = arrayUtils;
 
@@ -202,7 +221,8 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
             TextEncoder = $scope().TextEncoder,
             TextDecoder = $scope().TextDecoder,
             arrayFromBuffer,
-            typedArrayFromBuffer
+            typedArrayFromBuffer,
+            isBuffer
         } = bufferUtils;
 
     const { asObject } = jsonUtils;
@@ -4103,36 +4123,142 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
     FileObject.collect = findFiles;
 
     const supportedMimeTypes =
-        [
-            "application/json",
-            "application/xml",
-            "text/xml",
-            "text/html",
-            "text/plain",
-            "text/csv",
-            "application/zip",
-            "image/png",
-            "image/svg+xml"
-        ];
+        lock( [
+                  "application/json",
+                  "application/xml",
+                  "text/xml",
+                  "text/html",
+                  "text/plain",
+                  "text/csv",
+                  "application/zip",
+                  "image/png",
+                  "image/svg+xml"
+              ] );
 
     const supportedExtensions =
-        [
-            "json",
-            "xml",
-            "xml",
-            "html",
-            "text",
-            "csv",
-            "zip",
-            "png",
-            "svg"
-        ];
+        lock( [
+                  "json",
+                  "xml",
+                  "xml",
+                  "html",
+                  "text",
+                  "csv",
+                  "zip",
+                  "png",
+                  "svg"
+              ] );
+
 
     const calculateMimeType = async function( pBinaryData )
     {
-        if ( isNonNullObject( pBinaryData ) || isArray( pBinaryData ) )
+        let results = [];
+
+        if ( isTypedArray( pBinaryData ) || isBuffer( pBinaryData ) )
         {
-            // return await asyncAttempt( async() => await mimetics( pBinaryData ) );
+            const buffer = Buffer.from( pBinaryData?.buffer ?? pBinaryData, 0, 4099 );
+
+            results = magicBytes.filetypemime( buffer );
+        }
+        else if ( isFilePath( pBinaryData ) || isLegalFileName( pBinaryData ) )
+        {
+            const stream = attempt( () => fs.createReadStream( asString( pBinaryData, true ),
+                                                               {
+                                                                   start: 0,
+                                                                   end: 4099
+                                                               } ) );
+
+            if ( stream )
+            {
+                const chunks = [];
+
+                for await ( const chunk of stream )
+                {
+                    chunks.push( chunk );
+                }
+
+                const buffer = Buffer.concat( chunks );
+
+                results = magicBytes.filetypemime( buffer );
+            }
+        }
+
+        if ( 1 === $ln( results ) )
+        {
+            return asString( results[0], true );
+        }
+
+        return _mt;
+    };
+
+
+    const guessMimeType = function( pFilePath )
+    {
+        if ( !isString( pFilePath ) )
+        {
+            if ( isTypedArray( pFilePath ) || isBuffer( pFilePath ) )
+            {
+                return calculateMimeType( pFilePath );
+            }
+            return _mt;
+        }
+
+        const filePath = asString( pFilePath, true );
+
+        if ( isBlank( filePath ) )
+        {
+            return _mt;
+        }
+
+        const ext = lcase( rightOfLast( filePath, _dot ) );
+
+        if ( isBlank( ext ) )
+        {
+            return attempt( () => calculateMimeType( filePath ) );
+        }
+
+        switch ( ext )
+        {
+            case "png":
+                return "image/png";
+
+            case "svg":
+                return "image/svg+xml";
+
+            case "jpg":
+            case "jpeg":
+                return "image/jpeg";
+
+            case "pdf":
+                return "application/pdf";
+
+            case "doc":
+                return "application/vnd.ms-word";
+
+            case "docx":
+                return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+            case "xls":
+                return "application/vnd.ms-excel";
+
+            case "xlsx":
+                return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+            case "htm":
+            case "html":
+                return "text/html";
+
+            case "json":
+                return "application/json";
+
+            case "csv":
+            case "txt":
+                return "text/plain";
+
+            case "css":
+                return "text/css";
+
+            default:
+                return mime.lookup( filePath ) || calculateMimeType( filePath );
         }
     };
 
@@ -4254,9 +4380,10 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
             importNodeModules,
 
             calculateMimeType,
+            guessMimeType,
 
-            supportedMimeTypes,
-            supportedExtensions,
+            supportedMimeTypes: [...supportedMimeTypes],
+            supportedExtensions: [...supportedExtensions],
 
             getCurrentDirectory
         };

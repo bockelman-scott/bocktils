@@ -4,7 +4,9 @@
   "description": "Useful functions for working with the file system",
   "main": "src/index.js",
   "dependencies": {
-    "@toolbocks/core": "^1.0.0"
+    "@toolbocks/core": "^1.0.0",
+    "magic-bytes.js": "^1.13.0",
+    "mime-types": "^3.0.2"
   },
   "devDependencies": {
     "jest": "^29.7.0"

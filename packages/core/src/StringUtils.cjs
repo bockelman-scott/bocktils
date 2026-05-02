@@ -3198,6 +3198,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         lock( {
                   separator: _spc,
                   prefixes: ["Mc", "Mac", "O'"],
+                  handleMac: false,
                   honorifics: objectValues( COMMON_HONORIFICS ),
                   exceptions: ["von", "van", "de", "del", "la", "dos", "da", "der", "di", "du", "et", "al", "o'", "mc", "mac", "st"],
                   compounds: ["mary ellen", "dawn marie", "mary ann", "mary anne", "lisa marie", "anne marie", "mary jo"],
@@ -3408,7 +3409,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         {
             formattedName = formattedName.replace( /^(mc|mac)+?([a-z]{2,})/gi, ( match, prefix, remaining ) =>
             {
-                return toProperCase( prefix ) + (($ln( remaining ) > 2) ? toProperCase( remaining ) : remaining);
+                return toProperCase( prefix ) + (($ln( remaining ) >= 4) ? toProperCase( remaining ) : remaining);
             } );
         }
 
@@ -3499,7 +3500,10 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             // handle Mc/Mac-like exceptions (e.g., McNamara, McDonald)
             // capitalize the letter immediately after 'Mc' or 'Mac' if it exists
             // but avoid over-correction for names like "Machio"
-            formattedName = handleGaelic( formattedName );
+            if ( options.handleMac )
+            {
+                formattedName = handleGaelic( formattedName );
+            }
 
             // handle hyphens and apostrophes for double capitalization (e.g., Smith-Jones, O'Leary)
             formattedName = formattedName.replace( /([-' ])([a-z])/gi, ( match, separator, remaining ) =>

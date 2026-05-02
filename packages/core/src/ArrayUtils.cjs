@@ -230,7 +230,7 @@ const { _ud = "undefined", $scope } = constants;
      * @type {Array<string>}
      * @alias module:ArrayUtils#ARRAY_METHODS
      */
-    const ARRAY_METHODS = ["length", "GUID", "getUniqueObjectInstanceId"].concat( [].concat( Object.getOwnPropertyNames( Array.prototype ).filter( e => "function" === typeof [][e] ) ) );
+    const ARRAY_METHODS = lock( ["length", "GUID", "getUniqueObjectInstanceId"].concat( [].concat( Object.getOwnPropertyNames( Array.prototype ).filter( e => "function" === typeof [][e] ) ) ) );
 
     const COMPARE_TO = "compareTo";
 
