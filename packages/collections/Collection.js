@@ -76,6 +76,7 @@ const { _ud = "undefined", $scope } = constants;
                   [_big]: _big,
                   [_bool]: _bool,
                   [_fun]: _fun,
+                  [_obj]: _obj,
                   [_symbol]: _symbol
               } );
 
@@ -104,10 +105,9 @@ const { _ud = "undefined", $scope } = constants;
             case _obj:
                 if ( isArray( pType ) )
                 {
-                    type = Array;
-                    break;
+                    return Array;
                 }
-                return getClass( pType ) || TYPES.ANY;
+                return getClass( pType ) || TYPES[_obj];
 
             default:
                 return type;
@@ -128,7 +128,8 @@ const { _ud = "undefined", $scope } = constants;
      */
     const _isEqual = ( e, item ) =>
     {
-        // 1. Strict Equality (standard JavaScript check)
+        // use strict equality (standard JavaScript check)
+        // handles primitives and memory-identical objects
         if ( e === item )
         {
             return true;
@@ -142,12 +143,23 @@ const { _ud = "undefined", $scope } = constants;
                 return e.equals( item );
             }
 
+            if ( isFunction( item?.equals ) )
+            {
+                return item.equals( e );
+            }
+
             // use compareTo() method if defined
             if ( isFunction( e?.compareTo ) )
             {
                 return 0 === e.compareTo( item );
             }
 
+            if ( isFunction( item?.compareTo ) )
+            {
+                return 0 === item.compareTo( e );
+            }
+
+            // compare all properties for equality
             return OBJECT_REGISTRY.areEqual( e, item );
         }
 
@@ -193,6 +205,16 @@ const { _ud = "undefined", $scope } = constants;
 
         #eventsEnabled = true;
 
+        /**
+         * Creates a new Collection that can only hold elements of the specified Type.
+         *
+         * @param {string|function|object} pType the type of elements the collection will accept.
+         *                                       can be either one of the JavaScript Types (string, number, bigint, object, function, boolean, or symbol),
+         *                                       or a class (such as Array or UserDefinedClass),
+         *                                       or TYPES.Any, which allows the collection to be heterogenous.
+         *
+         * @param {...*} pCollection an iterable or spreadable collection of elements to add to the collection
+         */
         constructor( pType = TYPES.ANY, pCollection = null )
         {
             this.#type = calculateType( pType || "*" );
@@ -270,7 +292,7 @@ const { _ud = "undefined", $scope } = constants;
          */
         get size()
         {
-            return asInt( $ln( this.#arr || [] ) );
+            return asInt( $ln( this.#arr ?? [] ) );
         }
 
         /**
@@ -285,7 +307,7 @@ const { _ud = "undefined", $scope } = constants;
          */
         toArray( pMappingFunction = Mappers.IDENTITY )
         {
-            let arr = [...(asArray( this.#arr || [] ))];
+            let arr = [...(asArray( this.#arr ?? [] ))];
 
             if ( Filters.IS_MAPPER( pMappingFunction ) )
             {
@@ -300,16 +322,16 @@ const { _ud = "undefined", $scope } = constants;
          * the Collection's custom `contains` logic (which checks for `equals` or `compareTo`).
          *
          * @param {Function} [pMappingFunction] - A mapping function to apply to each element
-         * before adding it to the final Set.
+         *                                        before adding it to the Set that is returned.
          *
          * @return {Set} A new Set containing the unique elements from the collection,
-         * optionally transformed by the specified mapping function.
+         *               optionally transformed by the specified mapping function.
          */
         toSet( pMappingFunction )
         {
             let uniqueItems = [];
 
-            let tempCollection = new (this.constructor || getClass( this ))( this.type );
+            let tempCollection = new (getClass( this ) || this.constructor)( this.type );
 
             for( let elem of this.toArray() )
             {
@@ -332,7 +354,7 @@ const { _ud = "undefined", $scope } = constants;
          * Converts the current collection of elements into a Map,
          * where each element is keyed by a specified property.
          *
-         * @param {string} pKeyProperty - The property name to be used as the key for the Map. Defaults to "id".
+         * @param {string} [pKeyProperty="id"] - The property name to be used as the key for the Map. Defaults to "id".
          *
          * @return {Map} A Map where each element is keyed by the specified property or a default identifier.
          */
@@ -340,9 +362,11 @@ const { _ud = "undefined", $scope } = constants;
         {
             const map = new Map();
 
-            let keyProperty = asString( pKeyProperty, true ) || "id";
+            const keyProperty = asString( pKeyProperty, true ) || "id";
 
-            for( let elem of this.toArray() )
+            const arr = this.toArray();
+
+            for( let elem of arr )
             {
                 if ( isNonNullObject( elem ) )
                 {
@@ -499,13 +523,13 @@ const { _ud = "undefined", $scope } = constants;
             return true;
         }
 
-        isCompatibleWith( pOther )
+        _isCompatibleWith( pOther )
         {
             if ( isNonNullObject( pOther ) )
             {
                 return (isString( this.type ) && isString( pOther.type ) && this.type === pOther.type) ||
                        ((isClass( this.type ) && isClass( pOther.type )) &&
-                        (this.type instanceof pOther.type || pOther.type instanceof this.type));
+                        (this.type instanceof pOther.type || pOther.type instanceof this.type || pOther.type === this.type));
             }
             return false;
         }
@@ -524,9 +548,10 @@ const { _ud = "undefined", $scope } = constants;
             {
                 if ( this.size === pOther.size )
                 {
-                    if ( this.isCompatibleWith( pOther ) )
+                    if ( this._isCompatibleWith( pOther ) )
                     {
-                        return pOther.containsAll( ...(asArray( this.toArray() )) ) && this.containsAll( ...(asArray( pOther.toArray() )) );
+                        return (pOther.containsAll( ...(asArray( this.toArray() )) ) &&
+                                this.containsAll( ...(asArray( pOther.toArray() )) ));
                     }
                 }
             }
