@@ -107,10 +107,93 @@ describe( "SortedSet Constructors", () =>
               collection.add( new B( 2, "xyz", "uvw" ) );
 
               expect( collection.size ).toEqual( 2 );
+          } );
 
+    test( "Construct SortedSet of As",
+          () =>
+          {
+              let collection = new SortedSet( A, [] );
 
+              expect( collection instanceof SortedSet ).toBe( true );
+
+              expect( collection.type ).toEqual( A );
+
+              collection.add( new B( 1, "abc", "def" ) );
+              collection.add( new B( 2, "xyz", "uvw" ) );
+
+              expect( collection.size ).toEqual( 2 );
+
+              collection.add( new B( 1, "abc", "def" ) );
+              collection.add( new B( 2, "xyz", "uvw" ) );
+
+              expect( collection.size ).toEqual( 2 );
           } );
 
 } );
+
+describe( "SortedSet Methods", () =>
+{
+    test("SortedSet -- add", ()=>
+    {
+
+    });
+
+    test("SortedSet -- addAll", ()=>
+    {
+
+    });
+
+    test("SortedSet -- contains", ()=>
+    {
+
+    });
+
+    test("SortedSet -- containsAll", ()=>
+    {
+
+    });
+
+    test("SortedSet -- first", ()=>
+    {
+
+    });
+
+    test("SortedSet -- last", ()=>
+    {
+
+    });
+
+    test("SortedSet -- headSet", ()=>
+    {
+
+    });
+
+    test("SortedSet -- tailSet", ()=>
+    {
+
+    });
+
+    test("SortedSet -- subSet", ()=>
+    {
+
+    });
+
+    test("SortedSet -- remove", ()=>
+    {
+
+    });
+
+    test("SortedSet -- removeAll", ()=>
+    {
+
+    });
+
+    test("SortedSet -- retainAll", ()=>
+    {
+
+    });
+
+});
+
 
 

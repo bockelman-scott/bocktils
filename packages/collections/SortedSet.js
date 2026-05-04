@@ -14,17 +14,7 @@ const collectionModule = require( "./Collection.js" );
 const { constants } = core;
 
 /* define a variable for typeof undefined */
-const { _ud = "undefined" } = constants;
-
-/**
- * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
- * @type {function():Object}
- * @return {Object} The host environment scope, a.k.a. globalThis, (i.e., Browser 'window', Node.js 'global', or Worker 'self')
- */
-const $scope = constants?.$scope || function()
-{
-    return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-};
+const { _ud = "undefined", $scope } = constants;
 
 // noinspection FunctionTooLongJS
 /**
@@ -109,6 +99,10 @@ const $scope = constants?.$scope || function()
         {
             return 0 === e.compareTo( item );
         }
+        if ( isFunction( item?.compareTo ) )
+        {
+            return 0 === item.compareTo( e );
+        }
 
         // fallback to equals
         if ( isFunction( e?.equals ) )
@@ -148,13 +142,13 @@ const $scope = constants?.$scope || function()
     };
 
     /**
-     * Represents a generic collection of items, with support for type enforcement.
+     * Represents a unique collection of ordered items, with support for type enforcement.
      *
      * The class contains various methods to interact with and manipulate the collection,
      * such as adding, removing, checking for containment, type validation, and generating
      * iterable streams.
      *
-     * This class is inspired by java.util.collections#Collection
+     * This class is inspired by java.util.collections#SortedSet
      * @class
      */
     class SortedSet extends Collection
@@ -177,6 +171,9 @@ const $scope = constants?.$scope || function()
             let arr = this.toArray();
 
             arr = arr.sort( this.#comparator );
+
+            // remove any duplicates that were added by the superclass constructor
+            this.clear();
 
             this.addAll( ...arr );
         }
@@ -212,19 +209,28 @@ const $scope = constants?.$scope || function()
 
             const currentSize = this.size;
 
-            let arr = [...(asArray( this.toArray() ))];
+            let arr = this.toArray() ?? [];
 
-            let exists = arr.find( e => _isEqual( e, pItem ) );
-
-            if ( null === exists || _ud === typeof exists )
+            if ( currentSize <= 0 )
             {
                 arr.push( pItem );
 
-                arr = arr.sort( this.comparator );
-
-                this.clear();
-
                 super.addAll( ...arr );
+            }
+            else
+            {
+                let exists = arr.find( e => _isEqual( e, pItem, this.comparator ) );
+
+                if ( null === exists || _ud === typeof exists )
+                {
+                    arr.push( pItem );
+
+                    arr = arr.sort( this.comparator );
+
+                    this.clear();
+
+                    super.addAll( ...arr );
+                }
             }
 
             return this.size > currentSize;
@@ -248,7 +254,7 @@ const $scope = constants?.$scope || function()
 
             items.forEach( item =>
                            {
-                               let exists = arr.find( e => _isEqual( e, item ) );
+                               let exists = arr.find( e => _isEqual( e, item, this.comparator ) );
                                if ( null === exists || _ud === typeof exists )
                                {
                                    arr.push( item );
@@ -278,7 +284,7 @@ const $scope = constants?.$scope || function()
         {
             const arr = this.toArray();
 
-            const exists = arr.find( e => _isEqual( e, pItem ) );
+            const exists = arr.find( e => _isEqual( e, pItem, this.comparator ) );
 
             return !(null === exists || _ud === typeof exists);
         }
@@ -318,7 +324,7 @@ const $scope = constants?.$scope || function()
 
             let arr = this.toArray();
 
-            const index = arr.findIndex( e => _isEqual( e, pItem ) );
+            const index = arr.findIndex( e => _isEqual( e, pItem, this.comparator ) );
 
             if ( index > -1 )
             {
@@ -348,7 +354,7 @@ const $scope = constants?.$scope || function()
             let arr = this.toArray();
 
             // Create a new array that includes ONLY elements NOT contained in toRemove
-            const newArr = arr.filter( e => !toRemove.some( item => _isEqual( e, item ) ) );
+            const newArr = arr.filter( e => !toRemove.some( item => _isEqual( e, item, this.comparator ) ) );
 
             if ( newArr.length < currentSize )
             {
@@ -379,7 +385,7 @@ const $scope = constants?.$scope || function()
 
             let arr = this.toArray();
 
-            const newArr = arr.filter( e => toRetain.some( item => _isEqual( e, item ) ) );
+            const newArr = arr.filter( e => toRetain.some( item => _isEqual( e, item, this.comparator ) ) );
 
             if ( newArr.length !== currentSize )
             {
@@ -436,7 +442,7 @@ const $scope = constants?.$scope || function()
             let from = isNonNullValue( pFromElement ) ? pFromElement : this.first();
             let to = isNonNullValue( pToElement ) ? pToElement : this.last();
 
-            let arr = [...(asArray( this.toArray() ))];
+            let arr = this.toArray() ?? [];
 
             arr = arr.sort( this.comparator );
 
@@ -444,17 +450,23 @@ const $scope = constants?.$scope || function()
 
             arr = arr.filter( e => comparator( e, from ) >= 0 && comparator( e, to ) < 0 );
 
-            arr = arr.sort( this.comparator );
-
             return new SortedSet( this.type, arr, comparator );
         }
 
         tailSet( pFromElement )
         {
+            let from = isNonNullValue( pFromElement ) ? pFromElement : this.first();
 
+            let arr = this.toArray() ?? [];
+
+            arr = arr.sort( this.comparator );
+
+            let comparator = this.comparator;
+
+            arr = arr.filter( e => comparator( e, from ) >= 0 );
+
+            return new SortedSet( this.type, arr, comparator );
         }
-
-
     }
 
     let mod =
