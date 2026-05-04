@@ -31,11 +31,11 @@ describe( "TYPES exist", () =>
     test( "Enumerate TYPES",
           () =>
           {
-              expect( Object.keys( TYPES ).length ).toEqual( 7 );
-              expect( Object.values( TYPES ).length ).toEqual( 7 );
+              expect( Object.keys( TYPES ).length ).toEqual( 8 );
+              expect( Object.values( TYPES ).length ).toEqual( 8 );
 
-              expect( Object.keys( TYPES ) ).toEqual( ["ANY", "string", "number", "bigint", "boolean", "function", "symbol"] );
-              expect( Object.values( TYPES ) ).toEqual( ["*", "string", "number", "bigint", "boolean", "function", "symbol"] );
+              expect( Object.keys( TYPES ) ).toEqual( ["ANY", "string", "number", "bigint", "boolean", "function", "object", "symbol"] );
+              expect( Object.values( TYPES ) ).toEqual( ["*", "string", "number", "bigint", "boolean", "function", "object", "symbol"] );
           } );
 } );
 
@@ -99,11 +99,11 @@ describe( "Collection Constructors", () =>
           {
               let collection = new Collection( A );
 
-              collection.add( new A("Scott") );
+              collection.add( new A( "Scott" ) );
 
               expect( collection.size ).toEqual( 1 );
 
-              collection.add( new B("Debby","Cernich") );
+              collection.add( new B( "Debby", "Cernich" ) );
 
               expect( collection.size ).toEqual( 2 );
 
