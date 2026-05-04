@@ -2730,7 +2730,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
      * or a string containing the text "undefined", "null", or "void" (as can be the result of type coercion),
      * (unless the second argument is false or missing)
      */
-    const isValidString = function( pString, pRemoveCoercionArtifacts, pAcceptEmptyString )
+    const isValidString = function( pString, pRemoveCoercionArtifacts = false, pAcceptEmptyString = false )
     {
         if ( pString && (isString( pString )) )
         {
@@ -2740,6 +2740,34 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         }
 
         return false;
+    };
+
+    const isValidPropertyName = function( pString )
+    {
+        if ( isValidString( pString ) )
+        {
+            return /^[A-Z$_][A-Z0-9_]*$/i.test( pString ) && !pString.includes( _spc );
+        }
+        return false;
+    };
+
+    const toValidPropertyName = function( pString )
+    {
+        if ( isValidPropertyName( pString ) )
+        {
+            return pString.trim();
+        }
+
+        let s = String( pString ).trim();
+
+        while ( !isValidPropertyName( s ) && $ln( s ) > 0 )
+        {
+            s = s.replace( /^[0-9-]/, _mt );
+            s = s.replaceAll( /[\s!@#%^*&)(}{=+"'`:;,.-]/g, _mt );
+            s = s.replaceAll( /[^A-Z$_]/gi, _mt );
+        }
+
+        return isValidPropertyName( s ) ? s : ("property_" + String( new Date().getTime() ));
     };
 
     const _prepareJson = function( pString )
@@ -4821,6 +4849,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             isValidString,
             isValidNumber,
             isValidNumeric,
+            isValidPropertyName,
             isValidJsonObject,
             isValidJsonArray,
             isValidJson,
@@ -4836,6 +4865,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             toSnakeCase,
             toProperCase,
             toPascalCase,
+            toValidPropertyName,
             asProperCaseName,
             normalizeName,
             toTitleCase,
