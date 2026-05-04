@@ -240,7 +240,7 @@ const { _ud = "undefined", $scope } = constants;
         if ( !isBlank( preamble ) )
         {
             const parts = preamble.split( ";" );
-            return asString( asString( parts[0], true ).replace( /base64,/i, _mt ) || asString( preamble, true ).replace( /;base64,/i, _mt ), true );
+            return asString( asString( parts[0], true ).replace( /base64,?/i, _mt ) || asString( preamble, true ).replace( /;base64,?/i, _mt ), true );
         }
 
         return asString( pDefault, true ) || "text/plain";
