@@ -3198,7 +3198,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             return pClass;
         }
 
-        let klass = getClass( pClass || pDefaultClass );
+        let klass = getClass( pClass ?? pDefaultClass );
 
         klass = isClass( klass ) ? klass : isClass( pDefaultClass ) ? pDefaultClass : getClass( pDefaultClass );
 

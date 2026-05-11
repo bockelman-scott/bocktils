@@ -253,6 +253,15 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
             _rxBigInt = lock( /^[\d_]+n$/ ),
             RX_BIG_INT = lock( _rxBigInt ),
 
+            _rxNonDigits = lock( /\D+/gi ),
+            _rxDigits = lock( /\d+/gi ),
+
+            _rxNonDecimal = /[^\d,.-]+/gi,
+            _rxDecimal = /[\d,.-]+/gi,
+
+            _rxNonNumeric = _rxNonDigits,
+            _rxNumeric = /^-?(0[xob])?(\d{0,3},?)+(\.\d+)*([eE][-+]?\d+)/gi,
+
             _defaultLocaleString = "en-US",
             _defaultLocale = lock( new Intl.Locale( _defaultLocaleString ) ),
             _defaultCurrency = "USD",
@@ -313,6 +322,8 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
             BUILTIN_TYPE_NAMES = lock( [].concat( ...TYPED_ARRAY_NAMES ).concat( ...ERROR_TYPE_NAMES ).concat( ...GLOBAL_TYPE_NAMES ) ),
 
             SERIALIZABLE_TYPES = lock( [Object, String, Number, Boolean, Array, Date, RegExp, Error] ),
+
+            PRIMITIVE_TYPES = [_str, _num, _big, _bool, _symbol],
 
             /**
              * Strings that are interpreted as 'true' when encountered in JSON or other configuration contexts
@@ -582,7 +593,31 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
              */
             VARIABLE_TOKEN: _rxVariableToken,
             /** Regular expression for matching a string representing a BigInt value */
-            BIG_INT: _rxBigInt
+            BIG_INT: _rxBigInt,
+            /**
+             * Regular expression for matching all NON-digit characters
+             */
+            NON_DIGITS: _rxNonDigits,
+            /**
+             * Regular expression for matching all DIGITS characters
+             */
+            DIGITS: _rxDigits,
+            /**
+             * Regular expression for matching all NON-digit characters
+             */
+            NON_DECIMAL: _rxNonDecimal,
+            /**
+             * Regular expression for matching all DIGITS characters
+             */
+            DECIMAL: _rxDecimal,
+            /**
+             * Regular expression for matching all NON-digit characters
+             */
+            NON_NUMERIC: _rxNonNumeric,
+            /**
+             * Regular expression for matching all DIGITS characters
+             */
+            NUMERIC: _rxNumeric
         } );
 
     /**
@@ -1851,6 +1886,8 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
              */
             BUILTIN_TYPE_NAMES,
 
+            PRIMITIVE_TYPES,
+
             _rxFunctionSignature,
             _rxFunction,
             _rxClass,
@@ -1974,6 +2011,31 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
              * @alias module:Constants#DEFAULT_NUMBER_FORMATTING_SYMBOLS
              */
             DEFAULT_NUMBER_FORMATTING_SYMBOLS,
+
+            /**
+             * Regular expression for matching all NON-digit characters
+             */
+            _rxNonDigits,
+            /**
+             * Regular expression for matching all DIGITS characters
+             */
+            _rxDigits,
+            /**
+             * Regular expression for matching all NON-digit characters
+             */
+            _rxNonDecimal,
+            /**
+             * Regular expression for matching all DIGITS characters
+             */
+            _rxDecimal,
+            /**
+             * Regular expression for matching all NON-digit characters
+             */
+            _rxNonNumeric,
+            /**
+             * Regular expression for matching all DIGITS characters
+             */
+            _rxNumeric,
 
             /**
              * A function that does nothing.<br>
