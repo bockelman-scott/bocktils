@@ -4747,7 +4747,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
     {
         if ( isNull( pObject ) || !isObject( pObject ) || isPrimitiveWrapper( pObject ) || isObjectLiteral( pObject ) )
         {
-            return pObject;
+            return (isPrimitiveWrapper( pObject ) ? isFunction( pObject?.valueOf ) ? pObject.valueOf() : (asString( pObject ) ?? pObject) : pObject) ?? pObject;
         }
 
         const
@@ -4792,7 +4792,9 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         {
             let obj = {};
 
-            for( let entry of pObject.entries() )
+            const entries = pObject.entries() ?? objectEntries( pObject ?? {} );
+
+            for( let entry of entries )
             {
                 let k = ObjectEntry.getKey( entry );
 
@@ -4951,6 +4953,19 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         return obj;
     }
 
+    function toValidPropertyName( pStr )
+    {
+        let s = String( pStr );
+
+        s = s.trim();
+        s = s.replace( /^[0-9-]+/, _mt ).trim();
+        s = s.replaceAll( /\s+/g, _underscore ).trim();
+        s = s.replaceAll( /[\s!@#%^*&)(}{=+"'`:;,.-]/g, _mt ).trim();
+        s = s.replaceAll( /[^A-Z$_]/gi, _mt ).trim();
+
+        return s.trim();
+    }
+
     function transformObject( pObject, pOptions = DEFAULT_TRANSFORMER_PROPERTIES )
     {
         const options = { ...DEFAULT_TRANSFORMER_PROPERTIES, ...(pOptions || {}) };
@@ -4964,7 +4979,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             return pObject;
         }
 
-        let source = attempt( () => ({ ...(pObject || {}) }) );
+        let source = (isMap( pObject ) ? attempt( () => ({ ...(toObjectLiteral( pObject )) }) ) : attempt( () => ({ ...(pObject || {}) }) )) ?? pObject;
 
         let obj = {};
 
@@ -4975,22 +4990,22 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             entries.forEach( entry =>
                              {
                                  let key = ObjectEntry.getKey( entry );
-                                 key = keyTransformer( key ) || key;
+                                 key = toValidPropertyName( keyTransformer( key ) || key ) || key;
 
-                                 let value = ObjectEntry.getValue( entry );
+                                 const value = ObjectEntry.getValue( entry );
 
                                  if ( isObject( value ) && recursive && !isInstanceOfUserDefinedClass( value ) )
                                  {
-                                     obj[key] = transformObject( value, options );
+                                     obj[key] = transformObject( value, options ) ?? obj[key];
                                  }
                                  else
                                  {
-                                     obj[key] = valueTransformer( value );
+                                     obj[key] = valueTransformer( value ) || obj[key];
                                  }
                              } );
         }
 
-        return obj || pObject;
+        return obj ?? source ?? pObject;
     }
 
     let parseJson = function( pJson )
