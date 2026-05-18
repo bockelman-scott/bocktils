@@ -198,7 +198,7 @@ const { _ud = "undefined", $scope } = constants;
             formatDate,
             parseDate: function( pString )
             {
-                const date = attempt( () => parse( pString ) );
+                const date = attempt( () => parse( pString ) ) ?? resolveDate( pString );
 
                 if ( isValidDateInstance( date ) )
                 {
