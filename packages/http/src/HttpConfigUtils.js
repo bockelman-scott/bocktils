@@ -171,6 +171,8 @@ const { _ud = "undefined", $scope } = constants;
             asInt,
             isBlank,
             isJson,
+            isJsonObject,
+            isJsonArray,
             cleanUrl,
             lcase,
             ucase
@@ -455,7 +457,7 @@ const { _ud = "undefined", $scope } = constants;
         #httpAgent;
         #httpsAgent;
 
-        constructor( pProperties, pHeaders, pUrl, pMethod, pBody = null )
+        constructor( pProperties = {}, pHeaders = {}, pUrl = _mt, pMethod = "GET", pBody = null )
         {
             const properties = { ...DEFAULT_CONFIG, ...(asObject( pProperties || {} )) };
 
@@ -646,7 +648,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             let url = asString( resolveUrl( pUrl ), true );
 
-            this.#url = isBlank( url ) ? asString( this.#url || _mt, true ) : cleanUrl( url );
+            this.#url = isBlank( url ) ? asString( this.#url || _mt, true ) : cleanUrl( url, true );
         }
 
         get method()
@@ -728,20 +730,6 @@ const { _ud = "undefined", $scope } = constants;
             return (false !== this.properties?.decompress);
         }
 
-        get data()
-        {
-            return this.#data || this.#body;
-        }
-
-        set data( pData )
-        {
-            if ( pData )
-            {
-                this.#data = pData;
-                this.#body = pData;
-            }
-        }
-
         clearData()
         {
             this.#data = null;
@@ -755,23 +743,53 @@ const { _ud = "undefined", $scope } = constants;
 
         get body()
         {
-            return this.#body || this.#data || null;
+            return this.#body ?? this.#data ?? null;
         }
 
         set body( pBody )
         {
-            this.#body = pBody || null;
-            this.#data = pBody || null;
+            if ( isNonNullObject( pBody ) || isJsonObject( pBody ) )
+            {
+                const body = attempt( () => asObject( pBody ?? {} ) ) ?? {};
+
+                if ( body instanceof URLSearchParams )
+                {
+                    this.params = body;
+                }
+                else
+                {
+                    this.#body = body;
+                }
+            }
+            else
+            {
+                this.#body = isJsonArray( pBody ) ? attempt( () => parseJson( pBody ) ) : pBody;
+            }
+
+            this.#data = this.#body ?? null;
+        }
+
+        get data()
+        {
+            return this.#data ?? this.#body;
+        }
+
+        set data( pData )
+        {
+            if ( pData )
+            {
+                this.body = pData;
+            }
         }
 
         get params()
         {
-            return !isNull( this.#params ) ? new URLSearchParams( this.#params ) : null;
+            return !isNull( this.#params ) ? new URLSearchParams( this.#params ) : (isNonNullObject( this.#body ) && this.#body instanceof URLSearchParams ? new URLSearchParams( this.#body ) : null);
         }
 
         set params( pParams )
         {
-            let params = isNull( pParams ) ? null : new URLSearchParams( pParams );
+            const params = isNull( pParams ) ? null : (attempt( () => new URLSearchParams( pParams ) ) ?? pParams);
             this.#params = params || null;
         }
 
@@ -934,14 +952,26 @@ const { _ud = "undefined", $scope } = constants;
                     {
                         body = [...body];
                     }
+                    else if ( body instanceof URLSearchParams )
+                    {
+                        body = new URLSearchParams( body );
+                    }
                     else
                     {
                         body = { ...body };
                     }
                 }
+                else if ( isString( body ) && isJson( body ) )
+                {
+                    body = isJsonArray( body ) ? (attempt( () => parseJson( body ) ) ?? body) : isJsonObject( body ) ? attempt( () => asObject( body ) ) ?? body : asString( body );
+                }
             }
 
-            const httpConfig = new HttpConfig( this.properties, this.headers, asString( this.url, true ), asString( this.method, true ), body );
+            const httpConfig = new HttpConfig( this.properties,
+                                               this.headers,
+                                               asString( this.url, true ),
+                                               asString( this.method, true ),
+                                               (body ?? this.params) );
 
             return fixAgents( httpConfig );
         }
@@ -1294,7 +1324,7 @@ const { _ud = "undefined", $scope } = constants;
 
         if ( $ln( args ) > 0 && (args.every( e => isNonNullObject( e ) && (isHttpConfig( e ) || isFunction( e.toLiteral )) )) )
         {
-            args = args.map( e => new HttpConfig( e, e?.headers, e?.url, e?.method, e?.body || e?.data ) );
+            args = args.map( e => new HttpConfig( e, e?.headers, e?.url, e?.method, (e?.body ?? e?.data ?? e?.params) ) );
 
             return HttpConfig.mergeConfigs( ...args );
         }
@@ -1501,11 +1531,11 @@ const { _ud = "undefined", $scope } = constants;
 
         params = !isNull( params ) ? new URLSearchParams( params ) : null;
 
-        let config = new HttpConfig( httpConfig, httpConfig.headers, url, method );
+        let config = new HttpConfig( httpConfig, httpConfig.headers, url, method, params );
 
         config = HttpConfig.mergeConfigs( httpConfig, config );
 
-        config.params = params;
+        config.params = config.params ?? params;
 
         if ( isNull( config.data ) && isNull( config.body ) )
         {
