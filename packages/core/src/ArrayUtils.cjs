@@ -547,7 +547,7 @@ const { _ud = "undefined", $scope } = constants;
      */
     const varargs = function( ...pArgs )
     {
-        let arr = [...(asArray( pArgs || [] ) || [])];
+        let arr = [...(asArray( pArgs ?? [] ) ?? [])];
         return (arr.length < 2) ? (arr.length > 0 ? (isArray( arr[0] ) ? varargs( ...(arr[0]) ) : arr) : arr.flat()) : arr;
     };
 

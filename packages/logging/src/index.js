@@ -9,6 +9,8 @@
 
 const core = require( "@toolbocks/core" );
 
+const jsonUtils = require( "@toolbocks/json" );
+
 const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
 const { _ud = "undefined", konsole = console, $scope } = constants;
@@ -31,7 +33,6 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             StatefulListener,
             StackTrace,
             ILogger,
-            Konsole,
             ConditionalLogger,
             objectToString,
             resolveError,
@@ -51,6 +52,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             _comma,
             _colon,
             _num,
+            _str,
             _obj,
             _fun,
             _lf,
@@ -101,7 +103,6 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             firstError,
             isEvent,
             firstMatchingType,
-            getClass,
             getClassName,
             delegateTo,
             toObjectLiteral
@@ -110,6 +111,8 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
     const { asString, asInt, isBlank, toBool, lcase, ucase, trimLeadingCharacters } = stringUtils;
 
     const { asArray, varargs, Filters, concatenateConsecutiveStrings, unique, AsyncBoundedStack } = arrayUtils;
+
+    const { asObject } = jsonUtils;
 
     const toolBocksModule = new ToolBocksModule( "LoggingUtils", INTERNAL_NAME );
 
@@ -152,7 +155,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
         [Symbol.toStringTag]()
         {
-            return this.#name;
+            return `[object LogLevel::${this.id}, ${this.name}]`;
         }
 
         equals( pLevel )
@@ -209,7 +212,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
     LogLevel.getLevel = function( pIdOrName )
     {
-        return (pIdOrName instanceof LogLevel) ? pIdOrName : (LogLevel.CACHE[pIdOrName] || LogLevel.CACHE[lcase( asString( pIdOrName, true ) )]);
+        return (pIdOrName instanceof LogLevel) ? pIdOrName : (LogLevel.CACHE[pIdOrName] ?? LogLevel.CACHE[lcase( asString( pIdOrName, true ) )]);
     };
 
     LogLevel.resolveLevel = function( pLevel )
@@ -217,13 +220,13 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         return (pLevel instanceof LogLevel ? pLevel : LogLevel.getLevel( pLevel )) || LogLevel.DEFAULT;
     };
 
-    LogLevel.ALL = lock( new LogLevel( Number.MAX_SAFE_INTEGER, "ALL" ) );
+    LogLevel.ALL = lock( new LogLevel( Number.MIN_SAFE_INTEGER, "ALL" ) );
     LogLevel.ERROR = lock( new LogLevel( 200, ucase( ERROR ) ) );
     LogLevel.WARN = lock( new LogLevel( 300, ucase( WARN ) ) );
     LogLevel.INFO = lock( new LogLevel( 400, ucase( INFO ) ) );
     LogLevel.DEBUG = lock( new LogLevel( 500, ucase( DEBUG ) ) );
     LogLevel.TRACE = lock( new LogLevel( 600, ucase( TRACE ) ) );
-    LogLevel.OFF = lock( new LogLevel( 0, "OFF" ) );
+    LogLevel.OFF = lock( new LogLevel( Number.MAX_SAFE_INTEGER, "OFF" ) );
     LogLevel.NONE = lock( LogLevel.OFF );
 
     LogLevel.DEFAULT = LogLevel.INFO;
@@ -279,6 +282,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                 return source?.name || funcName( source );
 
             case _num:
+            case _str:
                 return asString( source );
 
             default:
@@ -309,22 +313,22 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             else if ( isError( pMessage ) )
             {
                 this.#message = pMessage?.message || pMessage?.name || _mt_str;
-                this.#level = pLevel instanceof LogLevel || isNumeric( pLevel ) ? LogLevel.resolveLevel( pLevel, { level: LogLevel.ERROR } ) : LogLevel.ERROR;
-                this.#error = resolveError( pMessage, pError?.message || pError ) || pError;
+                this.#error = resolveError( pMessage, pError?.message || pError ) ?? pError;
+                this.#level = isError( this.#error ) ? LogLevel.ERROR : LogLevel.resolveLevel( pLevel ) ?? LogLevel.DEFAULT;
                 this.#source = resolveSource( pSource, pMessage );
                 this.#data = asArray( varargs( ...pData ) ).filter( e => !isString( e ) || !isBlank( e ) );
             }
             else if ( isEvent( pMessage ) || isEvent( pSource ) )
             {
-                let evt = firstMatchingType( Event, pMessage || pSource, pMessage, pSource ) || pMessage || pSource;
+                let evt = firstMatchingType( Event, pMessage ?? pSource, pMessage, pSource ) ?? pMessage ?? pSource;
 
                 let type = evt?.type || evt?.name || S_ERROR;
                 let detail = evt?.detail || evt?.data || evt;
                 let target = evt?.target || evt;
 
                 this.#message = evt?.message || asString( detail?.message || (isString( evt ) ? asString( evt ) : type) ) || _mt_str;
-                this.#level = LogLevel.resolveLevel( detail?.level || type || S_ERROR ) || S_ERROR;
-                this.#error = resolveError( isError( pError ) ? pError : evt?.error, pError?.message );
+                this.#level = LogLevel.resolveLevel( detail?.level || pLevel || type || S_ERROR ) || S_ERROR;
+                this.#error = resolveError( isError( pError ) ? pError : (evt?.error ?? firstMatchingType( Error, pMessage, pSource ) ?? null), pError?.message );
                 this.#source = resolveSource( pSource || detail?.source || target?.name, this.#error || pMessage || pSource );
                 this.#data = asArray( varargs( ...(pData || asArray( detail?.data || detail )) ) ).filter( e => !isString( e ) || !isBlank( e ) );
             }
@@ -332,7 +336,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             {
                 this.#message = isString( pMessage ) ? asString( pMessage || pError?.message ) || pError?.message : pError?.message || _mt_str;
                 this.#level = LogLevel.resolveLevel( pLevel, { level: (isError( pError ) ? LogLevel.ERROR : LogLevel.DEFAULT) } );
-                this.#error = (isError( pError ) || isError( pMessage )) ? resolveError( firstError( pError, pMessage ), (pError?.message || pMessage?.message || this.#message) ) : null;
+                this.#error = (isError( pError ) || isError( pMessage )) ? resolveError( firstError( pError, pMessage, pSource ), (pError?.message || pMessage?.message || this.#message) ) : null;
                 this.#source = resolveSource( pSource, pError );
                 this.#data = asArray( varargs( ...pData ) ).filter( e => !isString( e ) || !isBlank( e ) );
             }
@@ -351,7 +355,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
             this.#level = LogLevel.resolveLevel( pLevel || pTarget?.level, { level: pTarget?.level || pLevel } );
 
-            this.#error = isError( pError ) ? pError || pTarget?.error : pTarget?.error || null;
+            this.#error = isError( pError ) ? pError ?? pTarget?.error : firstError( pTarget?.error, pTarget, pSource ) ?? null;
 
             this.#source = isString( pSource ) ? resolveSource( pSource || pTarget?.source, this.#error ) : resolveSource( pTarget?.source, pTarget?.error );
 
@@ -426,14 +430,14 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                 return pFormatter.format( this );
             }
 
-            return [this.timestamp, (this.level?.name || this.level), this.message, this.source, this.error, (this.stack || this.error?.stack), this.error?.message, ...this.data];
+            return [(this.level?.name || this.level), this.timestamp, this.message, this.source, this.error, (this.stack || this.error?.stack), this.error?.message, ...this.data];
         }
 
         toString()
         {
             const arr = this.format( {} );
 
-            let s = !isBlank( arr[1] ) ? "[" + arr[1] + "] " : _mt_str;
+            let s = !isBlank( arr[0] ) ? "[" + arr[0] + "] " : _mt_str;
             s += !isBlank( arr[3] ) ? " (" + arr[3] + ") " : _mt_str;
             s += !isBlank( arr[2] ) ? arr[2] : _mt_str;
 
@@ -459,7 +463,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
         get [Symbol.toStringTag]()
         {
-            return this.toString();
+            return `[object LogRecord::`;
         }
     }
 
@@ -551,9 +555,9 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
         constructor( pOptions = DEFAULT_LOG_FORMATTER_OPTIONS )
         {
-            const options = populateOptions( pOptions, DEFAULT_LOG_FORMATTER_OPTIONS );
+            const options = { ...DEFAULT_LOG_FORMATTER_OPTIONS, ...(asObject( pOptions ?? {} )) };
 
-            this.#options = options;
+            this.#options = lock( options );
 
             this.#template = options.template || DEFAULT_TEMPLATE;
             this.#errorTemplate = options.errorTemplate || DEFAULT_ERROR_TEMPLATE;
@@ -566,7 +570,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
         get options()
         {
-            return populateOptions( this.#options, DEFAULT_LOG_FORMATTER_OPTIONS );
+            return { ...DEFAULT_LOG_FORMATTER_OPTIONS, ...(asObject( this.#options ?? {} )) };
         }
 
         get locale()
@@ -593,9 +597,10 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         {
             const me = this;
 
-            this.#dateFormatter = (this.#dateFormatter || {
-                format: ( pDate ) => new Intl.DateTimeFormat( [me.locale], (me.#dateFormattingOptions || DEFAULT_DATE_FORMAT_OPTIONS) ).format( pDate )
-            });
+            this.#dateFormatter = (this.#dateFormatter ??
+                                   ({
+                                       format: ( pDate ) => new Intl.DateTimeFormat( [me.locale], (me.#dateFormattingOptions ?? DEFAULT_DATE_FORMAT_OPTIONS) ).format( pDate )
+                                   }));
 
             if ( isFunction( this.#dateFormatter?.format ) )
             {
@@ -606,9 +611,10 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                 this.#dateFormatter = { format: this.#dateFormatter };
             }
 
-            return this.#dateFormatter || {
-                format: ( pDate ) => new Intl.DateTimeFormat( [me.locale], (me.#dateFormattingOptions || DEFAULT_DATE_FORMAT_OPTIONS) ).format( pDate )
-            };
+            return this.#dateFormatter ??
+                {
+                    format: ( pDate ) => new Intl.DateTimeFormat( [me.locale], (me.#dateFormattingOptions || DEFAULT_DATE_FORMAT_OPTIONS) ).format( pDate )
+                };
         }
 
         _populateTemplate( pTimestamp, pLevel, pMessage, pSource )
@@ -621,15 +627,15 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
             let source = asString( pSource, true );
 
-            let template = this.template.replaceAll( "{timestamp}", timestamp ).replaceAll( "{0}", timestamp );
+            let template = this.template.replaceAll( "{timestamp}", timestamp ).replaceAll( "{1}", timestamp );
 
             if ( !isBlank( level ) )
             {
-                template = template.replaceAll( "{level}", level ).replaceAll( "{1}", level );
+                template = template.replaceAll( "{level}", level ).replaceAll( "{0}", level );
             }
             else
             {
-                template = template.replaceAll( /\[?\{level}]?/g, _mt_str ).replaceAll( /\[?\{1}]?/g, level );
+                template = template.replaceAll( /\[?\{level}]?/g, _mt_str ).replaceAll( /\[?\{0}]?/g, level );
             }
 
             if ( !isBlank( message ) )
@@ -774,7 +780,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             const error = logRecord.error;
             const data = asArray( logRecord.data );
 
-            return [timestamp, "[" + ucase( level ) + "]", message, source, error, ...data];
+            return ["[" + ucase( level ) + "]", timestamp, message, source, error, ...data];
         }
     }
 
@@ -1514,7 +1520,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                      pAddFormattingToEmptyMessages = false,
                      pEmitEvents = false )
         {
-            this.#levels.push( ...([asArray( pLevels || [] )]) );
+            this.#levels.push( ...([...(asArray( pLevels ?? [] ))]) );
 
             if ( $ln( this.#levels ) <= 0 )
             {
@@ -1531,7 +1537,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
         get levels()
         {
-            return [...asArray( this.#levels || [LOG, INFO, WARN, ERROR] )];
+            return [...(asArray( this.#levels ?? [LOG, INFO, WARN, ERROR] ))];
         }
 
         get addFormatting()
@@ -1556,13 +1562,14 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
         toLiteral()
         {
-            let obj = {
-                levels: this.levels,
-                addFormatting: this.addFormatting,
-                logEmptyMessages: this.logEmptyMessages,
-                addFormattingToEmptyMessages: this.addFormattingToEmptyMessages,
-                emitEvents: this.emitEvents
-            };
+            let obj =
+                {
+                    levels: [...(asArray( this.levels ?? [] ))],
+                    addFormatting: this.addFormatting,
+                    logEmptyMessages: this.logEmptyMessages,
+                    addFormattingToEmptyMessages: this.addFormattingToEmptyMessages,
+                    emitEvents: this.emitEvents
+                };
 
             return { ...obj };
         }
@@ -1584,9 +1591,13 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
             const data = [...asArray( pData || [] )];
 
-            let moduleEvent = new ModuleEvent( pLevel, data, {
-                date, logger: this, message: data.join( "\n" )
-            } );
+            const moduleEvent = new ModuleEvent( pLevel,
+                                                 data,
+                                                 {
+                                                     date,
+                                                     logger: this,
+                                                     message: data.join( "\n" )
+                                                 } );
 
             attemptSilent( () => this.dispatchEvent( moduleEvent ) );
         }
@@ -1623,7 +1634,11 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
             const options = toObjectLiteral( pOptions ?? DEFAULT_SIMPLE_LOGGER_OPTIONS );
 
-            const source = asString( isNonNullObject( options?.source ) ? isFunction( options?.source.toString ) ? options?.source.toString() : getClassName( options?.source ) : asString( options?.source || _mt, true ), true );
+            const source = asString( isNonNullObject( options?.source ) ?
+                                     (isFunction( options?.source.toString ) ?
+                                      options?.source.toString() :
+                                      getClassName( options?.source )) :
+                                     asString( options?.source || _mt, true ), true );
 
             if ( !isBlank( source ) )
             {
@@ -1653,7 +1668,12 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
         get logger()
         {
-            return ToolBocksModule.resolveLogger( super.logger, toolBocksModule.logger, ToolBocksModule.getGlobalLogger(), konsole, console ) || console;
+            return ToolBocksModule.resolveLogger( super.logger, ToolBocksModule.getGlobalLogger(), toolBocksModule.logger, konsole, console ) ?? console;
+        }
+
+        get source()
+        {
+            return asString( isNonNullObject( this.#origin ) ? isFunction( this.#origin.toString ) ? this.#origin.toString() : getClassName( this.#origin ) : asString( this.#origin || _mt, true ), true );
         }
 
         get emitEvents()
@@ -1696,7 +1716,20 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             attemptSilent( () => super.trace( ...pData ) );
             dispatch.call( this, TRACE, ...pData );
         }
+
+        clone()
+        {
+            return new SimpleLogger( this.logger, this.options );
+        }
+
+        cloneFor( pComponent )
+        {
+            const source = asString( pComponent, true );
+            const options = { ...(asObject( this.options ?? DEFAULT_SIMPLE_LOGGER_OPTIONS )), source };
+            return new SimpleLogger( this.logger, options ?? { source } );
+        }
     }
+
 
     const SIMPLE_LOGGER = new SimpleLogger( konsole );
 
@@ -1711,30 +1744,18 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
         constructor( pLogger, pSource, pOptions )
         {
-            super( pLogger, { ...toObjectLiteral( pOptions ?? DEFAULT_SIMPLE_LOGGER_OPTIONS ), source: pSource } );
-
-            this.#source = asString( isNonNullObject( pSource ) ? isFunction( pSource.toString ) ? pSource.toString() : getClassName( pSource ) : asString( pSource || _mt, true ), true );
-
-            if ( !isBlank( this.#source ) )
-            {
-                this.addSource = function( ...pMsg )
-                {
-                    let arr = [...pMsg];
-
-                    if ( !isBlank( this.source ) )
-                    {
-                        arr.unshift( this.source + " :: " );
-                    }
-
-                    return [...arr];
-
-                }.bind( this );
-            }
+            super( pLogger,
+                   {
+                       ...DEFAULT_SIMPLE_LOGGER_OPTIONS,
+                       ...toObjectLiteral( pOptions ?? DEFAULT_SIMPLE_LOGGER_OPTIONS ),
+                       source: pSource ?? pOptions?.source ?? pLogger?.source
+                   } );
         }
 
         get source()
         {
-            return asString( isNonNullObject( this.#source ) ? isFunction( this.#source.toString ) ? this.#source.toString() : getClassName( this.#source ) : asString( this.#source || _mt, true ), true );
+            const source = this.#source || super.source;
+            return asString( isNonNullObject( source ) ? isFunction( source.toString ) ? source.toString() : getClassName( this.#source ) : asString( this.#source || _mt, true ), true );
         }
     }
 

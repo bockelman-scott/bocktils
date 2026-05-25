@@ -1924,6 +1924,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             this.#logger = ILogger.isLogger( sink ) ? sink : konsole;
 
+            if ( this === this.#logger )
+            {
+                this.#logger = konsole;
+            }
+
             this.#addFormatting = options.addFormatting;
 
             this.#addFormattingToEmptyMessages = options.addFormattingToEmptyMessages;
@@ -1932,12 +1937,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             let count = 0;
 
-            while ( !isNull( this.#logger ) && this.#logger instanceof this.constructor && count++ < 5 )
+            while ( !isNull( this.#logger ) && (this.#logger instanceof this.constructor) && count++ < 5 )
             {
-                this.#logger = Object.getPrototypeOf( this.#logger ) || konsole;
+                this.#logger = ILogger.isLogger( this.#logger?.logger ) ? this.#logger.logger ?? Object.getPrototypeOf( this.#logger ) ?? konsole : Object.getPrototypeOf( this.#logger ) ?? konsole;
             }
 
-            this.#logger = this.#logger || konsole || mockConsole;
+            this.#logger = this.#logger ?? konsole ?? mockConsole;
         }
 
         static formatTimeStamp( pDate )
@@ -2114,9 +2119,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         let count = 0;
 
-        while ( !isNull( pSink ) && pSink instanceof Konsole && count++ < 5 )
+        while ( !isNull( sink ) && sink instanceof Konsole && count++ < 5 )
         {
-            sink = Object.getPrototypeOf( pSink );
+            sink = ILogger.isLogger( sink.logger ) ? sink.logger ?? Object.getPrototypeOf( pSink ) : Object.getPrototypeOf( pSink );
         }
 
         return sink || konsole || mockConsole;
