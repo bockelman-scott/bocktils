@@ -5794,7 +5794,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return {
                 type: resolveEventType( pEventName?.type || pEventName?.name || pEventName ),
                 data: (pEventName?.detail || pEventName?.data || pData),
-                options: populateOptions( pOptions, (pEventName?.detail || pEventName?.data || pData) )
+                options: populateOptions( pOptions, (pEventName?.detail ?? pEventName?.data ?? pData) )
             };
         }
 
@@ -5855,7 +5855,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         constructor( pEventName, pData, pOptions )
         {
             super( resolveEventOptions( pEventName, pData, pOptions )?.type || S_CUSTOM,
-                   resolveEventOptions( pEventName, pData, pOptions )?.options );
+                   resolveEventOptions( pEventName, pData, pOptions )?.options ?? pOptions ?? pData ?? pEventName );
 
             const { type, data, options } = resolveEventOptions( pEventName, pData, pOptions );
 
@@ -6994,11 +6994,13 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         let candidates =
             [
                 ...(isArray( lastError ) ? lastError : [lastError || {}]),
-                ...(isArray( pError ) ? pError : [pError || {}]),
+                ...(isArray( pError ) ? pError : [isError( pError ) ? pError : (isString( pError ) ? new __Error( pError ) ?? {} : {})]),
                 ...(isArray( pMessage ) ? pMessage : [pMessage || {}]),
                 ...(isArray( pMessage ) && _asArr( pMessage ).some( isString ) ? _asArr( pMessage ).filter( isString ).map( e => new __Error( e ) ) : []),
+                ...(isArray( pError ) && _asArr( pError ).some( isString ) ? _asArr( pError ).filter( isString ).map( e => new __Error( e ) ) : []),
+                ...(isString( pError ) ? [new __Error( pError, pMessage, ...pArgs )] : []),
                 ...pArgs
-            ].filter( e => isError( e ) || e instanceof __Error );
+            ].flat().filter( e => isError( e ) || e instanceof __Error );
 
         if ( $ln( candidates ) )
         {
