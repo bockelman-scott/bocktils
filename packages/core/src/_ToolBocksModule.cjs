@@ -6952,7 +6952,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     {
         const lastError = getLastError();
 
-        const resolver = ( e ) => resolveError( e, e?.message || (isString( pMessage ) ? pMessage : isString( pError ) ? pError : e?.message || (isError( pError ) ? pError?.message : _mt) || (isError( pMessage ) ? pMessage?.message : _mt) || (isError( lastError ) ? lastError?.message : _mt) || _mt) );
+        const resolver = ( e ) => resolveError( e, e?.message || (_isValidStr( pMessage ) ? pMessage : _isValidStr( pError ) ? pError : e?.message || (isError( pError ) ? pError?.message : _mt) || (isError( pMessage ) ? pMessage?.message : _mt) || (isError( lastError ) ? lastError?.message : _mt) || _mt) );
 
         let errors = [lastError || {}, pError || {}, pMessage || {}].filter( isError ).map( resolver );
 
@@ -6968,7 +6968,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return new __Error( DEFAULT_ERROR_MSG,
                             {
                                 errors: ([lastError, pError, pMessage].filter( isError ) || []),
-                                messages: ([lastError, pError, pMessage].filter( isString ) || []),
+                                messages: ([lastError, pError, pMessage].filter( _isValidStr ) || []),
                             } );
     }
 
@@ -6994,11 +6994,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         let candidates =
             [
                 ...(isArray( lastError ) ? lastError : [lastError || {}]),
-                ...(isArray( pError ) ? pError : [isError( pError ) ? pError : (isString( pError ) ? new __Error( pError ) ?? {} : {})]),
+                ...(isArray( pError ) ? pError : [isError( pError ) ? pError : (_isValidStr( pError ) ? new __Error( pError ) ?? {} : {})]),
                 ...(isArray( pMessage ) ? pMessage : [pMessage || {}]),
-                ...(isArray( pMessage ) && _asArr( pMessage ).some( isString ) ? _asArr( pMessage ).filter( isString ).map( e => new __Error( e ) ) : []),
-                ...(isArray( pError ) && _asArr( pError ).some( isString ) ? _asArr( pError ).filter( isString ).map( e => new __Error( e ) ) : []),
-                ...(isString( pError ) ? [new __Error( pError, pMessage, ...pArgs )] : []),
+                ...(isArray( pMessage ) && _asArr( pMessage ).some( _isValidStr ) ? _asArr( pMessage ).filter( _isValidStr ).map( e => new __Error( e ) ) : []),
+                ...(isArray( pError ) && _asArr( pError ).some( _isValidStr ) ? _asArr( pError ).filter( _isValidStr ).map( e => new __Error( e ) ) : []),
+                ...(_isValidStr( pError ) ? [new __Error( pError, pMessage, ...pArgs )] : []),
                 ...pArgs
             ].flat().filter( e => isError( e ) || e instanceof __Error );
 
@@ -7006,6 +7006,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             return new __Error( candidates[0] );
         }
+
         return null;
     }
 
