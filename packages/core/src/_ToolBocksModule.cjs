@@ -1343,7 +1343,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             this.#id = _asInt( this.#options?.id ) || StatefulListener.nextId();
 
-            if ( this.#id > 999_999_999 )
+            if ( this.#id >= 999_999_999 )
             {
                 StatefulListener.NEXT_ID = 1;
             }
@@ -1503,6 +1503,21 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @property {function(...*)} error A function that takes one or more arguments and 'logs' them with log level, 'error'
      */
 
+    let LOGGER_ID = 1;
+
+    const nextLoggerId = () =>
+    {
+        let id = LOGGER_ID++;
+
+        if ( id > 99_999 )
+        {
+            LOGGER_ID = 1;
+            id = LOGGER_ID++;
+        }
+
+        return id;
+    };
+
     /**
      * Used as an 'interface' (or more technically, an Abstract Class).
      * By extending EventTarget, this class and its subclasses
@@ -1513,7 +1528,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     class ILogger extends StatefulListener
     {
-        constructor( pId = 0, pName = "Logger", pOptions = {} )
+        constructor( pId = nextLoggerId(), pName = `Logger ${pId}`, pOptions = {} )
         {
             super( pName, { ...(pOptions ?? {}), id: pId } );
         }
@@ -1557,6 +1572,24 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
 
         return false;
+    };
+
+    ILogger.resolveLogger = function( ...pCandidates )
+    {
+        let logger = konsole;
+
+        let candidates = [...(pCandidates)].filter( isNonNullObj );
+
+        for( let candidate of candidates )
+        {
+            if ( ILogger.isLogger( candidate ) )
+            {
+                logger = candidate;
+                break;
+            }
+        }
+
+        return logger ?? konsole;
     };
 
     /**
@@ -1916,11 +1949,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         constructor( pSink, pOptions = DEFAULT_KONSOLE_OPTIONS )
         {
-            super( pOptions?.id, pOptions?.name, pOptions );
+            super( pOptions?.id || pSink?.id, pOptions?.name || pSink?.name, ({ ...DEFAULT_KONSOLE_OPTIONS, ...(pOptions || {}) }) );
 
-            const options = { ...DEFAULT_KONSOLE_OPTIONS, ...(pOptions || {}) };
+            const options = { ...DEFAULT_KONSOLE_OPTIONS, ...(pOptions ?? this.options ?? {}) };
 
-            const sink = pSink || options.defaultLogger;
+            const sink = pSink ?? options.defaultLogger;
 
             this.#logger = ILogger.isLogger( sink ) ? sink : konsole;
 
@@ -2124,7 +2157,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             sink = ILogger.isLogger( sink.logger ) ? sink.logger ?? Object.getPrototypeOf( pSink ) : Object.getPrototypeOf( pSink );
         }
 
-        return sink || konsole || mockConsole;
+        return sink ?? konsole ?? mockConsole;
     }
 
     /**

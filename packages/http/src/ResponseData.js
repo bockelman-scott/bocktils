@@ -1071,6 +1071,11 @@ const httpConfigUtils = require( "./HttpConfigUtils.js" );
         return ResponseData.isResponseData( pResponseData ) && attempt( () => pResponseData[("is" + pWhat)]() );
     };
 
+    ResponseData.isError = function( pResponseData )
+    {
+        return !ResponseData.isResponseData( pResponseData ) || ResponseData.is( pResponseData, "Error" );
+    };
+
     ResponseData.createErrorResponse = function( pError, pMsg )
     {
         let message = isString( pMsg ) ? (asString( pMsg || pError?.message, true )) : ((isError( pError ) ? asString( pError.message || asString( (isError( pMsg ) ? pMsg?.message || pMsg : pMsg), true ), true ) : asString( (isError( pMsg ) ? pMsg?.message || pMsg : pMsg), true ))) || "An error occurred ";

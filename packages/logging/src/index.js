@@ -105,7 +105,8 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             firstMatchingType,
             getClassName,
             delegateTo,
-            toObjectLiteral
+            toObjectLiteral,
+            clamp = moduleUtils.clamp
         } = typeUtils;
 
     const { asString, asInt, isBlank, toBool, lcase, ucase, trimLeadingCharacters } = stringUtils;
@@ -1754,16 +1755,68 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
         get source()
         {
-            const source = this.#source || super.source;
+            const source = this.#source ?? super.source;
             return asString( isNonNullObject( source ) ? isFunction( source.toString ) ? source.toString() : getClassName( this.#source ) : asString( this.#source || _mt, true ), true );
         }
     }
 
+    SourcedSimpleLogger.adapt = function( pLogger, pSource, pOptions )
+    {
+        let logger = ToolBocksModule.resolveLogger( pLogger, new SourcedSimpleLogger( pLogger, pSource, pOptions ) );
+
+        if ( isNonNullObject( logger ) )
+        {
+            if ( logger instanceof SourcedSimpleLogger )
+            {
+                if ( logger.source === pSource || asString( logger.source, true ) === asString( pSource, true ) )
+                {
+                    return logger;
+                }
+
+                while ( isNonNullObject( logger ) && (logger instanceof SourcedSimpleLogger) )
+                {
+                    if ( logger.source === pSource || asString( logger.source, true ) === asString( pSource, true ) )
+                    {
+                        return logger;
+                    }
+
+                    logger = logger?.logger;
+                }
+
+                logger = ToolBocksModule.resolveLogger( logger, ToolBocksModule.getGlobalLogger(), new SimpleLogger( console ) );
+
+                return new SourcedSimpleLogger( logger, pSource, pOptions );
+            }
+
+            logger = ToolBocksModule.resolveLogger( logger?.logger, logger, new SimpleLogger( ToolBocksModule.resolveLogger( ToolBocksModule.getGlobalLogger(), console ) ) );
+
+            const options = { ...(asObject( logger.options ?? {} )), ...(asObject( pOptions ?? logger.options ?? {} )) };
+
+            logger = new SourcedSimpleLogger( (logger ?? console),
+                                              pSource ?? logger?.source ?? logger?.origin ?? logger,
+                                              options );
+
+            return ToolBocksModule.resolveLogger( logger, pLogger, new SourcedSimpleLogger( new SimpleLogger( console ), pSource ?? pLogger, options ) );
+        }
+    };
+
     class SimpleAsynchronousLogger extends SimpleLogger
     {
+        #delay = 128;
+
         constructor( pLogger, pOptions )
         {
             super( pLogger, pOptions );
+
+            let opts = asObject( pOptions ?? this.options );
+
+            this.#delay = clamp( asInt( opts.delay ?? this.#delay, this.#delay ), 10, 30_000 );
+        }
+
+        get delay()
+        {
+            this.#delay = clamp( asInt( this.#delay, 128 ), 10, 30_000 );
+            return asInt( this.#delay );
         }
 
         async _log( pLevel, ...pData )
@@ -1772,7 +1825,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
             const data = asArray( pData );
 
-            return (ERROR === level) ? setImmediate( () => super[level]( ...data ) ) : setTimeout( () => super[level]( ...data ), 128 );
+            return (ERROR === level) ? setImmediate( () => super[level]( ...data ) ) : setTimeout( () => super[level]( ...data ), (this.delay || 128) );
         }
 
         async log( ...pData )

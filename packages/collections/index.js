@@ -52,7 +52,7 @@ const $scope = constants?.$scope || function()
 
     const { SortedSet } = sortedSetModule;
 
-    const { PropertyAccessMap, TreeMap, ValueOrderedMap } = mapsModule;
+    const { PropertyAccessMap, TreeMap, ValueOrderedMap, BoundedMap } = mapsModule;
 
     const modName = "BockCollectionUtils";
 
@@ -77,14 +77,16 @@ const $scope = constants?.$scope || function()
                     SortedSet,
                     PropertyAccessMap,
                     TreeMap,
-                    ValueOrderedMap
+                    ValueOrderedMap,
+                    BoundedMap
                 },
             TYPES,
             Collection,
             SortedSet,
             PropertyAccessMap,
             TreeMap,
-            ValueOrderedMap
+            ValueOrderedMap,
+            BoundedMap
         };
 
     mod = toolBocksModule.extend( mod );

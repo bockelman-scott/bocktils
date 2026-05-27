@@ -49,12 +49,14 @@ const { _ud = "undefined", $scope } = constants;
             objectValues,
             attempt,
             asyncAttempt,
+            dereference,
             sleep,
             lock,
+            deepLock,
             $ln
         } = moduleUtils;
 
-    const { _str, _num, _big, _bool, _obj, _fun, _symbol } = constants;
+    const { _mt, _str, _num, _big, _bool, _obj, _fun, _symbol } = constants;
 
     const
         {
@@ -62,6 +64,7 @@ const { _ud = "undefined", $scope } = constants;
             isNull,
             isNonNullObject,
             isNonNullValue,
+            isString,
             isNumeric,
             isArray,
             isDate,
@@ -70,13 +73,15 @@ const { _ud = "undefined", $scope } = constants;
             isClass,
             isIterable,
             isType,
+            isMap,
             getClass,
             getClassName,
             toIterable,
-            castTo
+            castTo,
+            clamp = moduleUtils.clamp
         } = typeUtils;
 
-    const { asString, asInt, asFloat } = stringUtils;
+    const { asString, asInt, asFloat, isBlank } = stringUtils;
 
     const { asArray, includesAll, Filters, Comparators } = arrayUtils;
 
@@ -571,6 +576,351 @@ const { _ud = "undefined", $scope } = constants;
         }
     }
 
+    class BoundedMap extends Map
+    {
+        #map;
+
+        #limit = 1_024;
+
+        #useWeakRef = false;
+
+        constructor( pMap, pLimit = 1_024, pUseWeakRef = false )
+        {
+            super();
+
+            this.#map = isMap( pMap ) ? new Map( pMap.entries() ) : isNonNullObject( pMap ) ? new Map( Object.entries( pMap ) ) : new Map();
+
+            this.#limit = clamp( asInt( pLimit, 1_024 ), 128, 4_096 );
+
+            this.#useWeakRef = !!(pUseWeakRef);
+        }
+
+        /**
+         * Returns the upper bound limit of the size of this cache
+         * @returns {number}
+         */
+        get limit()
+        {
+            return clamp( asInt( this.#limit, 1_024 ), 128, 4_096 );
+        }
+
+        /**
+         * @inheritDoc
+         */
+        clear()
+        {
+            super.clear();
+            this.#map.clear();
+        }
+
+        /**
+         * @inheritDoc
+         */
+        delete( key )
+        {
+            super.delete( key );
+            return this.#map.delete( key );
+        }
+
+        /**
+         * @inheritDoc
+         */
+        get( pKey )
+        {
+            const key = isNull( pKey ) ? _mt : pKey;
+
+            /*
+             * Empty keys are not supported
+             */
+            if ( isNull( pKey ) || (isString( key ) && isBlank( key )) )
+            {
+                return null;
+            }
+
+            let v = this.#map.get( key ) ?? super.get( key );
+
+            if ( !isNull( v ) )
+            {
+                switch ( typeof v )
+                {
+                    case _ud:
+                        return null;
+
+                    case _obj:
+                        v = dereference( v );
+
+                        if ( isNonNullObject( v ) )
+                        {
+                            v = lock( v );
+                        }
+
+                        break;
+
+                    default:
+                        break;
+                }
+
+                return v;
+            }
+
+            return null;
+        }
+
+        has( pKey )
+        {
+            const key = isNull( pKey ) ? _mt : pKey;
+
+            /*
+             * Empty keys are not supported
+             */
+            if ( isNull( pKey ) || (isString( key ) && isBlank( key )) )
+            {
+                return false;
+            }
+
+            /*
+             * If we don't have anything, even an empty WeakRef,
+             * we return false
+             */
+            if ( !(this.#map.has( key ) || super.has( key )) )
+            {
+                return false;
+            }
+
+            /*
+             * If we have an entry for the specified key,
+             * (which we can assume by reaching this statement),
+             * and we are not storing WeakRef objects,
+             * we return true
+             */
+            if ( !this.#useWeakRef )
+            {
+                return true;
+            }
+
+            const ref = this.get( key );
+
+            if ( isNonNullObject( ref ) )
+            {
+                /*
+                 * If we reach this statement,
+                 * we may be storing WeakRef objects,
+                 * so we have to retrieve the value,
+                 * dereference it
+                 * and return true if the dereferenced value is not undefined (or null)
+                 */
+                if ( isNonNullObject( dereference( ref ) ) )
+                {
+                    return true;
+                }
+                else
+                {
+                    /*
+                     * if we found a WeakRef whose object has been garbage-collected,
+                     * we remove the entry
+                     *
+                     * we do this here and in other accessors and mutators
+                     * as a 'lazy' healing technique
+                     */
+                    this.delete( key );
+                }
+            }
+            else if ( !isNull( ref ) )
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        set( pKey, pValue )
+        {
+            const key = isNull( pKey ) ? _mt : pKey;
+
+            /*
+             * Empty keys are not supported
+             */
+            if ( isNull( pKey ) || (isString( key ) && isBlank( key )) )
+            {
+                return false;
+            }
+
+            let value = pValue ?? this.get( key );
+
+            // by deleting the entry and then re-setting it,
+            // we move a potentially existing entry to the end of the collection,
+            // so we will not remove it prematurely
+            this.delete( key );
+
+            // we do not support storing null
+            if ( isNonNullObject( value ) )
+            {
+                // if the object passed in is a WeakRef,
+                // we dereference it first,
+                value = dereference( value );
+
+                // then we freeze (lock) the object
+                // cached objects must be immutable
+                if ( isNonNullObject( value ) )
+                {
+                    value = deepLock( value );
+
+                    // if this cache is configured to hold WeakRefs,
+                    // we wrap the value in a new WeakRef
+                    value = this.#useWeakRef ? new WeakRef( value ) : value;
+                }
+            }
+
+            // if this cache is at capacity
+            if ( this.size >= this.limit )
+            {
+                // we delete the oldest 'living' entry
+                // (which we assume to be identified by the first entry in the iterator)
+                const oldestKey = this.keys().next()?.value;
+
+                if ( !(isNull( oldestKey ) || isBlank( oldestKey )) )
+                {
+                    this.delete( oldestKey );
+                }
+                else
+                {
+                    // if our size >= our limit, but our iterator is empty,
+                    // that means ALL of our entries are 'dead'
+                    // (WeakRef wrappers whose payload has been garbage collected)
+                    // so we call clear() to recover
+                    this.clear();
+                }
+            }
+
+            // add the entry
+            if ( !isNull( value ) )
+            {
+                return this.#map.set( key, lock( value ) );
+            }
+
+            return false;
+        }
+
+        /**
+         *  Returns an iterator of the 'live' entries held in the cache.
+         *
+         *  We are overridding the superclass method with a generator function
+         *  to avoid loading all entries into memory
+         *  and to facilitate skipping over 'dead' entries.
+         */
+        * entries()
+        {
+            // We use super.entries() to get the raw Map iterator
+            for( const [key, val] of this.#map.entries() )
+            {
+                // dereference the value (in case we are configured to use WeakRef)
+                let value = isNonNullObject( val ) ? dereference( val ) : val;
+
+                // If it's a WeakRef that has been garbage collected, or it is null, we ignore and move on
+                if ( isNull( value ) )
+                {
+                    continue;
+                }
+
+                /*
+                 * yield the entry wrapped in our ObjectEntry structure.
+                 *
+                 * note that ObjectEntry extends Array, so consumers can use this method
+                 * exactly as they would the method of the superclass
+                 */
+                yield lock( new ObjectEntry( key, lock( value ), this ) );
+            }
+        }
+
+        /**
+         * @inheritDoc
+         */
+        [Symbol.iterator]()
+        {
+            return this.entries();
+        }
+
+        /**
+         * Executes the provided function or calls specified Vistor's visit method
+         * once for each 'live' entry in the collection (in insertion order)
+         *
+         * @param {function|Visitor} pCallback a function to call for each valid entry
+         *                                     or a Visitor whose visit method will be called for each entry
+         * @param {Object} [pThis=undefined]   an object to which to bind the provided function
+         *                                     so that 'this' within the function refers to that object
+         */
+        forEach( pCallback, pThis )
+        {
+            // Ensure we have a function,
+            // wrapping a Visitor in an arrow function
+            // that calls the visit method as a function bound to the Visitor
+            let callback = isFunction( pCallback ) ?
+                           pCallback :
+                           ((isNonNullObject( pCallback ) && pCallback instanceof Visitor) ?
+                            ( entry ) => pCallback.visit.call( pCallback, entry ) :
+                            no_op);
+
+            // declare a locale variable
+            // so we can wrap the function again
+            // to capture this closure as its scope
+            let cb = callback;
+
+            if ( isNonNullObject( pThis ) )
+            {
+                const me = this;
+                cb = function( pEntry )
+                {
+                    callback.call( pThis ?? me, pEntry );
+                }.bind( pThis ?? this );
+            }
+
+            for( let entry of this.entries() )
+            {
+                attempt( () => cb( entry ) );
+            }
+        }
+
+        /**
+         * Returns an iterator of the valid entries in this cache
+         * @returns {Generator<[K, V][0], void, *>}
+         */
+        * keys()
+        {
+            for( const [key, val] of this.entries() )
+            {
+                if ( isNull( val ) || (isNonNullObject( val ) && (this.#useWeakRef && isNull( dereference( val ) ))) )
+                {
+                    // do not return "dead" keys
+                    continue;
+                }
+
+                yield key;
+            }
+        }
+
+        /**
+         * Returns an iterator of the valid objects held in this cache
+         * @returns {Generator<*, void, *>}
+         */
+        * values()
+        {
+            for( let val of this.#map.values() )
+            {
+                // dereference the value (in case we are configured to use WeakRef)
+                let value = isNonNullObject( val ) ? dereference( val ) : val;
+
+                // If it's a WeakRef that has been garbage collected, or it is null, we ignore and move on
+                if ( isNull( value ) )
+                {
+                    continue;
+                }
+
+                // yield the value (always ensuring that it is immutable)
+                yield lock( value );
+            }
+        }
+    }
+
 
     let mod =
         {
@@ -590,11 +940,13 @@ const { _ud = "undefined", $scope } = constants;
                     Collection,
                     PropertyAccessMap,
                     TreeMap,
-                    ValueOrderedMap
+                    ValueOrderedMap,
+                    BoundedMap
                 },
             PropertyAccessMap,
             TreeMap,
-            ValueOrderedMap
+            ValueOrderedMap,
+            BoundedMap
         };
 
     mod = toolBocksModule.extend( mod );
