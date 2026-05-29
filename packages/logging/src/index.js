@@ -1538,7 +1538,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
         get levels()
         {
-            return [...(asArray( this.#levels ?? [LOG, INFO, WARN, ERROR] ))];
+            return lock( [...(asArray( this.#levels ?? [LOG, INFO, WARN, ERROR] ))] );
         }
 
         get addFormatting()
@@ -1565,7 +1565,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         {
             let obj =
                 {
-                    levels: [...(asArray( this.levels ?? [] ))],
+                    levels: lock( [...(asArray( this.levels ?? [] ))].map( e => lcase( asString( e, true ) ) ) ),
                     addFormatting: this.addFormatting,
                     logEmptyMessages: this.logEmptyMessages,
                     addFormattingToEmptyMessages: this.addFormattingToEmptyMessages,
@@ -1633,7 +1633,11 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         {
             super( pLogger, (isArray( pOptions ) || isString( pOptions ) ? DEFAULT_SIMPLE_LOGGER_OPTIONS : isNonNullObject( pOptions ) ? toObjectLiteral( pOptions ) : null), ...((asArray( isArray( pOptions ) || isString( pOptions ) ? asArray( pOptions ) : asArray( pOptions?.levels ) ).concat( asArray( arguments || [] ).slice( 2 ) )).flat()) );
 
-            const options = toObjectLiteral( pOptions ?? DEFAULT_SIMPLE_LOGGER_OPTIONS );
+            const options =
+                {
+                    ...(asObject( DEFAULT_SIMPLE_LOGGER_OPTIONS.toLiteral() )),
+                    ...(toObjectLiteral( pOptions ?? DEFAULT_SIMPLE_LOGGER_OPTIONS ))
+                };
 
             const source = asString( isNonNullObject( options?.source ) ?
                                      (isFunction( options?.source.toString ) ?
@@ -1751,6 +1755,9 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                        ...toObjectLiteral( pOptions ?? DEFAULT_SIMPLE_LOGGER_OPTIONS ),
                        source: pSource ?? pOptions?.source ?? pLogger?.source
                    } );
+
+            this.#source = super.source ?? pSource ?? pOptions?.source ?? pLogger?.source;
+            this.#source = asString( isNonNullObject( this.#source ) ? isFunction( this.#source.toString ) ? this.#source.toString() : getClassName( this.#source ) : asString( this.#source || _mt, true ), true );
         }
 
         get source()

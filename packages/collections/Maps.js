@@ -81,7 +81,7 @@ const { _ud = "undefined", $scope } = constants;
             clamp = moduleUtils.clamp
         } = typeUtils;
 
-    const { asString, asInt, asFloat, isBlank } = stringUtils;
+    const { asString, asInt, asFloat, isBlank, toBool } = stringUtils;
 
     const { asArray, includesAll, Filters, Comparators } = arrayUtils;
 
@@ -576,6 +576,10 @@ const { _ud = "undefined", $scope } = constants;
         }
     }
 
+    const MIN_BOUND = 16;
+    const MAX_BOUND = 4_096;
+    const DEFAULT_BOUND = 1_024;
+
     class BoundedMap extends Map
     {
         #map;
@@ -584,15 +588,27 @@ const { _ud = "undefined", $scope } = constants;
 
         #useWeakRef = false;
 
-        constructor( pMap, pLimit = 1_024, pUseWeakRef = false )
+        #lockValues = false;
+
+        constructor( pMap, pLimit = DEFAULT_BOUND, pUseWeakRef = false, pLockValues = false )
         {
             super();
 
-            this.#map = isMap( pMap ) ? new Map( pMap.entries() ) : isNonNullObject( pMap ) ? new Map( Object.entries( pMap ) ) : new Map();
-
-            this.#limit = clamp( asInt( pLimit, 1_024 ), 128, 4_096 );
+            this.#limit = clamp( asInt( pLimit, DEFAULT_BOUND ), MIN_BOUND, MAX_BOUND );
 
             this.#useWeakRef = !!(pUseWeakRef);
+
+            this.#lockValues = toBool( pLockValues );
+
+            this.#map = isMap( pMap ) ? new Map( pMap.entries() ) : isNonNullObject( pMap ) ? new Map( Object.entries( pMap ) ) : new Map();
+
+            // this is necessary in case the constructor is called with a Map that already has more than the upper bound limit
+            this.#trimToLimit();
+        }
+
+        get size()
+        {
+            return this.#map.size;
         }
 
         /**
@@ -601,7 +617,7 @@ const { _ud = "undefined", $scope } = constants;
          */
         get limit()
         {
-            return clamp( asInt( this.#limit, 1_024 ), 128, 4_096 );
+            return clamp( asInt( this.#limit, DEFAULT_BOUND ), MIN_BOUND, MAX_BOUND );
         }
 
         /**
@@ -620,6 +636,34 @@ const { _ud = "undefined", $scope } = constants;
         {
             super.delete( key );
             return this.#map.delete( key );
+        }
+
+        #trimToLimit()
+        {
+            const maxLoops = (1 + this.size);
+
+            let loops = 0;
+
+            // if this cache is at capacity
+            while ( (this.size >= this.limit) && (++loops <= maxLoops) )
+            {
+                // we delete the oldest 'living' entry
+                // (which we assume to be identified by the first entry in the iterator)
+                const oldestKey = this.keys().next()?.value;
+
+                if ( !(isNull( oldestKey ) || isBlank( oldestKey )) )
+                {
+                    this.delete( oldestKey );
+                }
+                else
+                {
+                    // if our size >= our limit, but our iterator is empty,
+                    // that means ALL of our entries are 'dead'
+                    // (WeakRef wrappers whose payload has been garbage collected)
+                    // so we call clear() to recover
+                    this.clear();
+                }
+            }
         }
 
         /**
@@ -651,7 +695,7 @@ const { _ud = "undefined", $scope } = constants;
 
                         if ( isNonNullObject( v ) )
                         {
-                            v = lock( v );
+                            v = (toBool( this.#lockValues ) ? lock( v ) : (v));
                         }
 
                         break;
@@ -763,7 +807,7 @@ const { _ud = "undefined", $scope } = constants;
                 // cached objects must be immutable
                 if ( isNonNullObject( value ) )
                 {
-                    value = deepLock( value );
+                    value = (toBool( this.#lockValues ) ? deepLock( value ) : (value));
 
                     // if this cache is configured to hold WeakRefs,
                     // we wrap the value in a new WeakRef
@@ -795,7 +839,7 @@ const { _ud = "undefined", $scope } = constants;
             // add the entry
             if ( !isNull( value ) )
             {
-                return this.#map.set( key, lock( value ) );
+                return this.#map.set( key, (toBool( this.#lockValues ) ? lock( value ) : (value)) );
             }
 
             return false;
@@ -828,7 +872,7 @@ const { _ud = "undefined", $scope } = constants;
                  * note that ObjectEntry extends Array, so consumers can use this method
                  * exactly as they would the method of the superclass
                  */
-                yield lock( new ObjectEntry( key, lock( value ), this ) );
+                yield lock( new ObjectEntry( key, (toBool( this.#lockValues ) ? lock( value ) : (value)), this ) );
             }
         }
 
@@ -916,7 +960,7 @@ const { _ud = "undefined", $scope } = constants;
                 }
 
                 // yield the value (always ensuring that it is immutable)
-                yield lock( value );
+                yield (toBool( this.#lockValues ) ? lock( value ) : (value));
             }
         }
     }
