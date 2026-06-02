@@ -3056,9 +3056,24 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
             return asString( this.#filepath, true );
         }
 
+        get filePath()
+        {
+            return this.filepath;
+        }
+
         get filename()
         {
             return getFileName( this.filepath );
+        }
+
+        get fileName()
+        {
+            return this.filename;
+        }
+
+        getBasename()
+        {
+            return removeExtension( this.filename );
         }
 
         get extension()
@@ -3093,7 +3108,7 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
 
         [Symbol.toStringTag]()
         {
-            return this.filepath;
+            return "[object FileObject]";
         }
 
         async getStats()
