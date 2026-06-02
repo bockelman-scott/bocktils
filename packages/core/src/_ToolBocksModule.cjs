@@ -5898,9 +5898,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             this.#traceEnabled = !!options.traceEnabled;
 
-            this.id = "Event_" + (options?.id || (Date.now()));
+            this.id = "Event_" + (this.#type || "Type") + "_" + (options?.id || (Date.now()));
 
-            this.#options = { ...(options || {}) };
+            this.#options = { ...(options ?? {}) };
 
             this.#occurred = (pEventName instanceof this.constructor ? pEventName?.occurred : new Date()) || new Date();
         }
@@ -6041,7 +6041,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return evt;
         }
 
-        return new ToolBocksModuleEvent( evt, (pData || evt.data || evt.detail), pOptions );
+        return new ToolBocksModuleEvent( evt, (pData || evt.data || evt.detail || evt), pOptions );
     };
 
     /**

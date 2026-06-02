@@ -401,7 +401,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         // poly-fill for isArray; probably obsolete with modern environments
         if ( _fun !== typeof Array.isArray )
         {
-            toolBocksModule.attempt( () => Array.isArray = _isArr );
+            attempt( () => Array.isArray = _isArr );
         }
     }
 
@@ -774,6 +774,8 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
      * @alias module:TypeUtils.isCustomObject
      */
     const isEvent = ( pObj ) => isObject( pObj ) && (pObj instanceof Event || pObj instanceof CustomEvent || pObj instanceof ModuleEvent);
+
+    const isEventListener = ( pObj ) => (isFunction( pObj ) && pObj.length >= 1) || (isNonNullObject( pObj ) && (isFunction( pObj?.handleEvent ) && pObj?.handleEvent?.length >= 1));
 
     /**
      * Returns true if the specified value is an array
@@ -6959,6 +6961,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             isPopulatedArray,
             isError,
             isEvent,
+            isEventListener,
             isScalar,
             asScalar,
             firstError,
