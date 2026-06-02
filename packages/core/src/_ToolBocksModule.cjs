@@ -983,10 +983,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 {
                     return [];
                 }
-                else if ( Object === pType )
-                {
-                    return {};
-                }
                 else if ( Date === pType )
                 {
                     return new Date( 0 );
@@ -1002,6 +998,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 else if ( String === pType )
                 {
                     return _mt_str;
+                }
+                else if ( Object === pType )
+                {
+                    return {};
                 }
                 else
                 {
@@ -1031,7 +1031,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 }
                 if ( isObj( pType ) )
                 {
-                    return { ...(pObj ?? {}) };
+                    return { ...(pType ?? {}) };
                 }
             }
         }
@@ -4237,18 +4237,94 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return entries.map( e => e instanceof ObjectEntry ? e : ObjectEntry.from( e ) );
     }
 
+    function valuesFromEntries( pEntries )
+    {
+        const entries = _asArr( pEntries ).filter( e => isNonNullObj( e ) && e instanceof ObjectEntry );
+        return entries.map( ObjectEntry.getValue );
+    }
+
+    function valuesFrom( pObject )
+    {
+        const entries = objectEntries( pObject );
+        return valuesFromEntries( entries );
+    }
+
+    function keysFromEntries( pEntries )
+    {
+        const entries = _asArr( pEntries ).filter( e => isNonNullObj( e ) && e instanceof ObjectEntry );
+        return entries.map( ObjectEntry.getKey );
+    }
+
+    function keysFrom( pObject )
+    {
+        const entries = objectEntries( pObject );
+        return keysFromEntries( entries );
+    }
+
     function objectValues( pObject )
     {
-        const values = [...((isNonNullObj( pObject ) ? (isMap( pObject ) || isSet( pObject ) || isFunc( pObject?.values ) ? attempt( () => [...(pObject.values() || Object.values( pObject || {} ) || [])] ) || attempt( () => [...(Object.values( pObject || {} ) || [])] ) : (Object.values( pObject || {} )) || []) : []) || [])];
-        attemptSilent( () => ([...((objectEntries( pObject || {} ) || []) || [])].filter( e => isArray( e ) && $ln( e ) > 1 )).forEach( e => values.push( e[1] ) ) );
-        return [...(new Set( _asArr( values ).filter( e => _ud !== typeof e && null !== e ) ))];
+        let values = [];
+
+        if ( isNonNullObj( pObject ) )
+        {
+            if ( isMap( pObject ) || isSet( pObject ) )
+            {
+                values = [...(pObject.values() ?? valuesFrom( pObject ))];
+            }
+            else if ( isArray( pObject ) )
+            {
+                values = [...(pObject)];
+            }
+            else
+            {
+                values = [...(valuesFrom( pObject ))];
+            }
+
+            values = values.map( e => dereference( e ) ).filter( e => !isNull( e ) );
+        }
+        else if ( isStr( pObject ) )
+        {
+            values.push( String( pObject ) );
+        }
+        else if ( !isNull( pObject ) )
+        {
+            values.push( pObject );
+        }
+
+        return values.map( e => dereference( e ) ).filter( e => !isNull( e ) );
     }
 
     function objectKeys( pObject )
     {
-        const keys = (isNonNullObj( pObject ) ? (isMap( pObject ) || isFunc( pObject?.keys ) ? [...(pObject.keys() || [])] : Object.keys( pObject || {} )) : []) || [];
-        attemptSilent( () => ([...((objectEntries( pObject || {} ) || []) || [])].filter( e => isArray( e ) && $ln( e ) > 0 )).forEach( e => keys.push( e[0] ) ) );
-        return [...(new Set( _asArr( keys ).filter( e => null != e && isStr( e ) && _isValidStr( e ) ) ))];
+        let keys = [];
+
+        if ( isNonNullObj( pObject ) )
+        {
+            if ( isMap( pObject ) || isFunc( pObject?.keys ) )
+            {
+                keys = [...(pObject.keys() ?? keysFrom( pObject ))];
+            }
+            else if ( isArray( pObject ) )
+            {
+                keys = [...(pObject)].map( ( e, i ) => i );
+            }
+            else
+            {
+                keys = [...(keysFrom( pObject ))];
+            }
+
+            keys = keys.map( e => dereference( e ) ).filter( e => !isNull( e ) );
+        }
+        else if ( isStr( pObject ) )
+        {
+            keys.push( String( pObject ) );
+        }
+        else if ( !isNull( pObject ) )
+        {
+            keys.push( pObject );
+        }
+
+        return keys.map( e => dereference( e ) ).filter( e => !isNull( e ) );
     }
 
     function toMap( pObject )

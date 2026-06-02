@@ -1986,7 +1986,7 @@ describe( "objectEntries - ObjectEntry", () =>
               expect( entries?.length ).toEqual( 9 );
           } );
 
-    test( "objectEntries works with built-on object types",
+    test( "objectEntries works with built-in object types",
           () =>
           {
               const date = new Date();
@@ -2011,6 +2011,110 @@ describe( "objectEntries - ObjectEntry", () =>
           } );
 } );
 
+describe( "objectValues", () =>
+{
+    test( "objectValues works for Map, Set, and Array", () =>
+    {
+        const map = new Map();
+        map.set( "a", "A" );
+        map.set( "b", "B" );
+        map.set( "c", "C" );
+
+        let values = objectValues( map );
+
+        expect( values ).toEqual( ["A", "B", "C"] );
+
+        map.clear();
+
+        const A = { value: "A" };
+        const B = { value: "B" };
+        const C = { value: "C" };
+
+        map.set( "a", new WeakRef( A ) );
+        map.set( "b", new WeakRef( B ) );
+        map.set( "c", new WeakRef( C ) );
+
+        values = objectValues( map );
+
+        expect( values ).toEqual( [{ value: "A" }, { value: "B" }, { value: "C" }] );
+
+        const set = new Set( ["A", "B", "A", "C", "B"] );
+
+        values = objectValues( set );
+
+        expect( values ).toEqual( ["A", "B", "C"] );
+
+        const arr = ["A", "B", "C"];
+
+        values = objectValues( arr );
+
+        expect( values ).toEqual( ["A", "B", "C"] );
+
+        const obj =
+            {
+                "a": "A",
+                "b": "B",
+                "c": "C"
+            };
+
+        values = objectValues( obj );
+
+        expect( values ).toEqual( ["A", "B", "C"] );
+    } );
+} );
+
+
+describe( "objectKeys", () =>
+{
+    test( "objectKeys works for Map, Set, and Array", () =>
+    {
+        const map = new Map();
+        map.set( "a", "A" );
+        map.set( "b", "B" );
+        map.set( "c", "C" );
+
+        let keys = objectKeys( map );
+
+        expect( keys ).toEqual( ["a", "b", "c"] );
+
+        map.clear();
+
+        const A = { value: "A" };
+        const B = { value: "B" };
+        const C = { value: "C" };
+
+        map.set( "a", new WeakRef( A ) );
+        map.set( "b", new WeakRef( B ) );
+        map.set( "c", new WeakRef( C ) );
+
+        keys = objectKeys( map );
+
+        expect( keys ).toEqual( ["a", "b", "c"] );
+
+        const set = new Set( ["A", "B", "A", "C", "B"] );
+
+        keys = objectKeys( set );
+
+        expect( keys ).toEqual( ["A", "B", "C"] );
+
+        const arr = ["A", "B", "C"];
+
+        keys = objectKeys( arr );
+
+        expect( keys ).toEqual( [0, 1, 2] );
+
+        const obj =
+            {
+                "a": "A",
+                "b": "B",
+                "c": "C"
+            };
+
+        keys = objectKeys( obj );
+
+        expect( keys ).toEqual( ["a", "b", "c"] );
+    } );
+} );
 
 describe( "objectMethods", () =>
 {
@@ -2022,7 +2126,6 @@ describe( "objectMethods", () =>
               console.log( methods );
           } );
 } );
-
 
 describe( "propertyDescriptors", () =>
 {
