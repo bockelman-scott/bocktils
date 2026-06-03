@@ -36,6 +36,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             ILogger,
             ConditionalLogger,
             objectToString,
+            readProperty,
             resolveError,
             lock,
             populateOptions,
@@ -1605,6 +1606,41 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         }
     }
 
+    const resolveLogSourceName = function( pSource )
+    {
+        let s = isNull( pSource ) ? _mt : pSource;
+
+        if ( isNonNullObject( pSource ) )
+        {
+            const id = attempt( () => readProperty( pSource, "id", "name", "instanceId" ) );
+
+            const suffix = isBlank( id ) ? _mt : (" (" + asString( id, true ) + ")");
+
+            s = getClassName( pSource ) + suffix;
+
+            if ( !isBlank( s ) )
+            {
+                return s;
+            }
+
+            if ( isFunction( pSource.toString ) )
+            {
+                s = attempt( () => pSource.toString() );
+
+                if ( !isBlank( s ) )
+                {
+                    s += suffix;
+
+                    return s;
+                }
+            }
+
+            s = asString( pSource, true );
+        }
+
+        return asString( s || (asString( isNonNullObject( pSource ) ? getClassName( pSource ) || objectToString( pSource ) : asString( pSource, true ) )), true );
+    };
+
     /**
      * A very simple wrapper for the console (or another console-like object).
      * Prepends the level and timestamp to the message(s) being logged.
@@ -1640,11 +1676,9 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                     ...(toObjectLiteral( pOptions ?? DEFAULT_SIMPLE_LOGGER_OPTIONS ))
                 };
 
-            const source = asString( isNonNullObject( options?.source ) ?
-                                     (isFunction( options?.source.toString ) ?
-                                      options?.source.toString() :
-                                      getClassName( options?.source )) :
-                                     asString( options?.source || _mt, true ), true );
+            const source = !isNull( options.source ?? options.origin ) ?
+                           attempt( () => resolveLogSourceName( options.source ?? options.origin ) ) :
+                           _mt;
 
             if ( !isBlank( source ) )
             {
@@ -1683,7 +1717,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
         get source()
         {
-            return asString( isNonNullObject( this.#origin ) ? isFunction( this.#origin.toString ) ? this.#origin.toString() : getClassName( this.#origin ) : asString( this.#origin || _mt, true ), true );
+            return resolveLogSourceName( this.#origin ) || _mt;
         }
 
         get emitEvents()
@@ -1757,18 +1791,32 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             super( pLogger,
                    {
                        ...DEFAULT_SIMPLE_LOGGER_OPTIONS,
-                       ...toObjectLiteral( pOptions ?? DEFAULT_SIMPLE_LOGGER_OPTIONS ),
+                       ...toObjectLiteral( pOptions ?? DEFAULT_SIMPLE_LOGGER_OPTIONS, { respectToLiteralMethod: false } ),
                        source: pSource ?? pOptions?.source ?? pLogger?.source
                    } );
 
-            this.#source = super.source ?? pSource ?? pOptions?.source ?? pLogger?.source;
-            this.#source = asString( isNonNullObject( this.#source ) ? isFunction( this.#source.toString ) ? this.#source.toString() : getClassName( this.#source ) : asString( this.#source || _mt, true ), true );
+            this.#source = pSource ?? pOptions?.source ?? pLogger?.source ?? super.source;
+        }
+
+        resolveSourceName( pSource )
+        {
+            let s = resolveLogSourceName( pSource );
+
+            if ( isBlank( s ) )
+            {
+                s = `[${getClassName( this )} missing source/origin]`;
+            }
+
+            this.#source = s;
+
+            return s;
         }
 
         get source()
         {
             const source = this.#source ?? super.source;
-            return asString( isNonNullObject( source ) ? isFunction( source.toString ) ? source.toString() : getClassName( this.#source ) : asString( this.#source || _mt, true ), true );
+
+            return this.resolveSourceName( source );
         }
     }
 
