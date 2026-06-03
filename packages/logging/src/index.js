@@ -111,7 +111,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             clamp = moduleUtils.clamp
         } = typeUtils;
 
-    const { asString, asInt, isBlank, toBool, lcase, ucase, trimLeadingCharacters } = stringUtils;
+    const { asString, asInt, isBlank, lcase, ucase, trimLeadingCharacters } = stringUtils;
 
     const { asArray, varargs, Filters, concatenateConsecutiveStrings, unique, AsyncBoundedStack } = arrayUtils;
 
@@ -872,11 +872,11 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
      * @property {LogLevel|string|number} level The finest-grained LogLevel this logger will log.<br>
      *                                          <br>
      *                                          For example, specifying LogLevel.WARN will allow this Logger
-     *                                          to log messages marked as warnings or errors,<br>
+     *                                          to log messages marked as warnings or errors, <br>
      *                                          but messages marked as informational, debugging, or trace<br>
      *                                          will be ignored
      *
-     * @property {ExecutionMode} [mode=ExecutionMode.CURRENT] The execution mode that determines debugging related behaviors<br>
+     * @property {ExecutionMode} [mode=ExecutionMode.CURRENT] The execution mode that determines debugging-related behaviors<br>
      *
      * @property {boolean} echoToConsole When true, anything written to the logger is also written to the console
      *
@@ -1668,12 +1668,12 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
          */
         constructor( pLogger = konsole, pOptions = DEFAULT_SIMPLE_LOGGER_OPTIONS )
         {
-            super( pLogger, (isArray( pOptions ) || isString( pOptions ) ? DEFAULT_SIMPLE_LOGGER_OPTIONS : isNonNullObject( pOptions ) ? toObjectLiteral( pOptions ) : null), ...((asArray( isArray( pOptions ) || isString( pOptions ) ? asArray( pOptions ) : asArray( pOptions?.levels ) ).concat( asArray( arguments || [] ).slice( 2 ) )).flat()) );
+            super( pLogger, (isArray( pOptions ) || isString( pOptions ) ? DEFAULT_SIMPLE_LOGGER_OPTIONS : isNonNullObject( pOptions ) ? toObjectLiteral( pOptions, { respectToLiteralMethod: false } ) : null), ...((asArray( isArray( pOptions ) || isString( pOptions ) ? asArray( pOptions ) : asArray( pOptions?.levels ) ).concat( asArray( arguments || [] ).slice( 2 ) )).flat()) );
 
             const options =
                 {
                     ...(asObject( DEFAULT_SIMPLE_LOGGER_OPTIONS.toLiteral() )),
-                    ...(toObjectLiteral( pOptions ?? DEFAULT_SIMPLE_LOGGER_OPTIONS ))
+                    ...(toObjectLiteral( pOptions ?? DEFAULT_SIMPLE_LOGGER_OPTIONS, { respectToLiteralMethod: false } ))
                 };
 
             const source = !isNull( options.source ?? options.origin ) ?
@@ -1768,12 +1768,13 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
         cloneFor( pComponent )
         {
-            const source = asString( pComponent, true );
+            const source = resolveLogSourceName( pComponent ) || asString( pComponent, true );
             const options = { ...(asObject( this.options ?? DEFAULT_SIMPLE_LOGGER_OPTIONS )), source };
-            return new SimpleLogger( this.logger, options ?? { source } );
+            return new SimpleLogger( this.logger, (options ?? { source }) );
         }
     }
 
+    SimpleLogger.resolveLogSourceName = resolveLogSourceName;
 
     const SIMPLE_LOGGER = new SimpleLogger( konsole );
 
@@ -1820,25 +1821,37 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         }
     }
 
+    SourcedSimpleLogger.resolveLogSourceName = resolveLogSourceName;
+
     SourcedSimpleLogger.adapt = function( pLogger, pSource, pOptions )
     {
+        const sourceName = resolveLogSourceName( pSource ?? pOptions?.source );
+
         if ( isNonNullObject( pLogger ) && pLogger instanceof SourcedSimpleLogger )
         {
-            if ( resolveLogSourceName( readProperty( pLogger, "source", "origin" ) ) === resolveLogSourceName( pSource ) )
+            if ( resolveLogSourceName( readProperty( pLogger, "source", "origin" ) ) === sourceName )
             {
                 return pLogger;
             }
         }
 
-        const simpleLogger = new SimpleLogger( pLogger, pOptions );
+        let options =
+            {
+                ...(asObject( pOptions ?? {} )),
+                source: sourceName
+            };
 
-        let logger = ToolBocksModule.resolveLogger( pLogger, ToolBocksModule.getGlobalLogger(), simpleLogger );
+        const simpleLogger = new SimpleLogger( pLogger, options );
+
+        let logger = ToolBocksModule.resolveLogger( pLogger,
+                                                    ToolBocksModule.getGlobalLogger(),
+                                                    simpleLogger );
 
         if ( isNonNullObject( logger ) )
         {
             if ( logger instanceof SourcedSimpleLogger )
             {
-                if ( resolveLogSourceName( logger.source ) === resolveLogSourceName( pSource ) )
+                if ( resolveLogSourceName( logger.source ) === sourceName )
                 {
                     return logger;
                 }
@@ -1847,7 +1860,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
                 while ( isNonNullObject( logger ) && (logger instanceof SourcedSimpleLogger) && !iterationCap.reached )
                 {
-                    if ( resolveLogSourceName( logger.source ) === resolveLogSourceName( pSource ) )
+                    if ( resolveLogSourceName( logger.source ) === sourceName )
                     {
                         return logger;
                     }
@@ -1855,9 +1868,11 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                     attempt( () => logger = logger?.logger );
                 }
 
-                logger = ToolBocksModule.resolveLogger( logger, ToolBocksModule.getGlobalLogger(), simpleLogger );
+                logger = ToolBocksModule.resolveLogger( logger,
+                                                        ToolBocksModule.getGlobalLogger(),
+                                                        simpleLogger );
 
-                return new SourcedSimpleLogger( logger, pSource, pOptions );
+                return new SourcedSimpleLogger( logger, sourceName, options );
             }
 
             logger = ToolBocksModule.resolveLogger( logger, simpleLogger );
@@ -1867,17 +1882,19 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                 return logger;
             }
 
-            const options =
+            options =
                 {
+                    ...(asObject( options ?? pOptions ?? {} )),
                     ...(asObject( logger.options ?? {} )),
-                    ...(asObject( pOptions ?? logger.options ?? {} ))
+                    source: sourceName
                 };
 
-            logger = new SourcedSimpleLogger( (logger ?? console),
-                                              pSource ?? logger?.source ?? logger?.origin ?? logger,
-                                              options );
+            logger = new SourcedSimpleLogger( (logger ?? console), sourceName, options );
 
-            return ToolBocksModule.resolveLogger( logger, pLogger, ToolBocksModule.getGlobalLogger(), simpleLogger );
+            return ToolBocksModule.resolveLogger( logger,
+                                                  pLogger,
+                                                  ToolBocksModule.getGlobalLogger(),
+                                                  simpleLogger );
         }
     };
 
