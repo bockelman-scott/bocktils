@@ -29,6 +29,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         {
             ModuleEvent,
             ToolBocksModule,
+            IterationCap,
             ExecutionMode,
             StatefulListener,
             StackTrace,
@@ -1769,7 +1770,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
     SourcedSimpleLogger.adapt = function( pLogger, pSource, pOptions )
     {
-        let logger = ToolBocksModule.resolveLogger( pLogger, new SourcedSimpleLogger( pLogger, pSource, pOptions ) );
+        let logger = ToolBocksModule.resolveLogger( pLogger, new SimpleLogger( pLogger, pOptions ) );
 
         if ( isNonNullObject( logger ) )
         {
@@ -1780,7 +1781,9 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                     return logger;
                 }
 
-                while ( isNonNullObject( logger ) && (logger instanceof SourcedSimpleLogger) )
+                const iterationCap = new IterationCap( 8 );
+
+                while ( isNonNullObject( logger ) && (logger instanceof SourcedSimpleLogger) && !iterationCap.reached )
                 {
                     if ( logger.source === pSource || asString( logger.source, true ) === asString( pSource, true ) )
                     {
@@ -1796,6 +1799,11 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             }
 
             logger = ToolBocksModule.resolveLogger( logger?.logger, logger, new SimpleLogger( ToolBocksModule.resolveLogger( ToolBocksModule.getGlobalLogger(), console ) ) );
+
+            if ( isNonNullObject( logger ) && logger instanceof SourcedSimpleLogger )
+            {
+                return logger;
+            }
 
             const options = { ...(asObject( logger.options ?? {} )), ...(asObject( pOptions ?? logger.options ?? {} )) };
 
