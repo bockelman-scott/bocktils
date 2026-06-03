@@ -1949,7 +1949,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         constructor( pSink, pOptions = DEFAULT_KONSOLE_OPTIONS )
         {
-            super( pOptions?.id || pSink?.id, pOptions?.name || pSink?.name, ({ ...DEFAULT_KONSOLE_OPTIONS, ...(pOptions || {}) }) );
+            super( pOptions?.id || pSink?.id,
+                   pOptions?.name || pSink?.name,
+                   ({ ...DEFAULT_KONSOLE_OPTIONS, ...(pOptions || {}) }) );
 
             const options = { ...DEFAULT_KONSOLE_OPTIONS, ...(pOptions ?? this.options ?? {}) };
 
