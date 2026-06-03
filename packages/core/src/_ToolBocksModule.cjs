@@ -4932,7 +4932,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             let stack = [...(pStack || [])];
 
-            if ( isInvalidObj( pSource ) || visited.has( OBJECT_REGISTRTY.getGuid( pSource ) ) )
+            if ( isInvalidObj( pSource ) || visited.has( OBJECT_REGISTRY.getGuid( pSource ) ) )
             {
                 return pTarget;
             }
