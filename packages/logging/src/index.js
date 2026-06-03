@@ -1674,7 +1674,11 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
         get logger()
         {
-            return ToolBocksModule.resolveLogger( super.logger, ToolBocksModule.getGlobalLogger(), toolBocksModule.logger, konsole, console ) ?? console;
+            return ToolBocksModule.resolveLogger( super.logger,
+                                                  ToolBocksModule.getGlobalLogger(),
+                                                  toolBocksModule.logger,
+                                                  konsole,
+                                                  console ) ?? console;
         }
 
         get source()
@@ -1690,19 +1694,19 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         log( ...pData )
         {
             attemptSilent( () => super.log( ...pData ) );
-            dispatch.call( this, LOG, ...pData );
+            this.emitEvents && dispatch.call( this, LOG, ...pData );
         }
 
         info( ...pData )
         {
             attemptSilent( () => super.info( ...pData ) );
-            dispatch.call( this, INFO, ...pData );
+            this.emitEvents && dispatch.call( this, INFO, ...pData );
         }
 
         warn( ...pData )
         {
             attemptSilent( () => super.warn( ...pData ) );
-            dispatch.call( this, WARN, ...pData );
+            this.emitEvents && dispatch.call( this, WARN, ...pData );
         }
 
         error( ...pData )
@@ -1714,13 +1718,13 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         debug( ...pData )
         {
             attemptSilent( () => super.debug( ...pData ) );
-            dispatch.call( this, DEBUG, ...pData );
+            this.emitEvents && dispatch.call( this, DEBUG, ...pData );
         }
 
         trace( ...pData )
         {
             attemptSilent( () => super.trace( ...pData ) );
-            dispatch.call( this, TRACE, ...pData );
+            this.emitEvents && dispatch.call( this, TRACE, ...pData );
         }
 
         clone()
