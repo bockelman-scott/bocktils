@@ -2159,7 +2159,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             sink = ILogger.isLogger( sink.logger ) ? sink.logger ?? Object.getPrototypeOf( pSink ) : Object.getPrototypeOf( pSink );
         }
 
-        return sink ?? konsole ?? mockConsole;
+        return ILogger.isLogger( sink ) ? sink : konsole ?? mockConsole;
     }
 
     /**
