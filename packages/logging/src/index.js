@@ -1822,6 +1822,14 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
     SourcedSimpleLogger.adapt = function( pLogger, pSource, pOptions )
     {
+        if ( isNonNullObject( pLogger ) && pLogger instanceof SourcedSimpleLogger )
+        {
+            if ( resolveLogSourceName( readProperty( pLogger, "source", "origin" ) ) === resolveLogSourceName( pSource ) )
+            {
+                return pLogger;
+            }
+        }
+
         const simpleLogger = new SimpleLogger( pLogger, pOptions );
 
         let logger = ToolBocksModule.resolveLogger( pLogger, ToolBocksModule.getGlobalLogger(), simpleLogger );
@@ -1830,7 +1838,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         {
             if ( logger instanceof SourcedSimpleLogger )
             {
-                if ( logger.source === pSource || asString( logger.source, true ) === asString( pSource, true ) )
+                if ( resolveLogSourceName( logger.source ) === resolveLogSourceName( pSource ) )
                 {
                     return logger;
                 }
@@ -1839,12 +1847,12 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
                 while ( isNonNullObject( logger ) && (logger instanceof SourcedSimpleLogger) && !iterationCap.reached )
                 {
-                    if ( logger.source === pSource || asString( logger.source, true ) === asString( pSource, true ) )
+                    if ( resolveLogSourceName( logger.source ) === resolveLogSourceName( pSource ) )
                     {
                         return logger;
                     }
 
-                    logger = logger?.logger;
+                    attempt( () => logger = logger?.logger );
                 }
 
                 logger = ToolBocksModule.resolveLogger( logger, ToolBocksModule.getGlobalLogger(), simpleLogger );
@@ -1852,14 +1860,18 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                 return new SourcedSimpleLogger( logger, pSource, pOptions );
             }
 
-            logger = ToolBocksModule.resolveLogger( logger?.logger, logger, simpleLogger );
+            logger = ToolBocksModule.resolveLogger( logger, simpleLogger );
 
             if ( isNonNullObject( logger ) && logger instanceof SourcedSimpleLogger )
             {
                 return logger;
             }
 
-            const options = { ...(asObject( logger.options ?? {} )), ...(asObject( pOptions ?? logger.options ?? {} )) };
+            const options =
+                {
+                    ...(asObject( logger.options ?? {} )),
+                    ...(asObject( pOptions ?? logger.options ?? {} ))
+                };
 
             logger = new SourcedSimpleLogger( (logger ?? console),
                                               pSource ?? logger?.source ?? logger?.origin ?? logger,
