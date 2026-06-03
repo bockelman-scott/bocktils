@@ -1770,7 +1770,9 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
     SourcedSimpleLogger.adapt = function( pLogger, pSource, pOptions )
     {
-        let logger = ToolBocksModule.resolveLogger( pLogger, new SimpleLogger( pLogger, pOptions ) );
+        const simpleLogger = new SimpleLogger( pLogger, pOptions );
+
+        let logger = ToolBocksModule.resolveLogger( pLogger, ToolBocksModule.getGlobalLogger(), simpleLogger );
 
         if ( isNonNullObject( logger ) )
         {
@@ -1793,12 +1795,12 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                     logger = logger?.logger;
                 }
 
-                logger = ToolBocksModule.resolveLogger( logger, ToolBocksModule.getGlobalLogger(), new SimpleLogger( console ) );
+                logger = ToolBocksModule.resolveLogger( logger, ToolBocksModule.getGlobalLogger(), simpleLogger );
 
                 return new SourcedSimpleLogger( logger, pSource, pOptions );
             }
 
-            logger = ToolBocksModule.resolveLogger( logger?.logger, logger, new SimpleLogger( ToolBocksModule.resolveLogger( ToolBocksModule.getGlobalLogger(), console ) ) );
+            logger = ToolBocksModule.resolveLogger( logger?.logger, logger, simpleLogger );
 
             if ( isNonNullObject( logger ) && logger instanceof SourcedSimpleLogger )
             {
@@ -1811,7 +1813,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                                               pSource ?? logger?.source ?? logger?.origin ?? logger,
                                               options );
 
-            return ToolBocksModule.resolveLogger( logger, pLogger, new SourcedSimpleLogger( new SimpleLogger( console ), pSource ?? pLogger, options ) );
+            return ToolBocksModule.resolveLogger( logger, pLogger, ToolBocksModule.getGlobalLogger(), simpleLogger );
         }
     };
 
