@@ -4592,7 +4592,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             trimStrings: false,
             omitFunctions: true,
             transientProperties: [],
-            privatePropertyPrefixes: [_hash],
+            privatePropertyPrefixes: [_hash, _underscore],
             skipPrivateProperties: true,
             preserveArrays: true,
             maxDepth: 32,
@@ -4770,18 +4770,15 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             return pObject;
         }
 
-        if ( !isNanOrInfinite( maxDepth ) && !isNanOrInfinite( depth ) && depth > maxDepth )
+        const exceedsMaxDepth = !isNanOrInfinite( maxDepth ) && !isNanOrInfinite( depth ) && depth > maxDepth;
+
+        if ( exceedsMaxDepth || detectCycles( stack, 5, 3 ) )
         {
-            return pObject || {};
+            return (isArray( pObject ) ? [...(pObject || [])] : isFunction( pObject.entries ) ? [...(pObject.entries() || [])] : { ...(resolveObject( pObject || {} )) });
         }
 
         const keyTransformer = isFunction( options?.keyTransformer ) ? options.keyTransformer : ( pKey ) => pKey;
         const valueTransformer = isFunction( options?.valueTransformer ) ? options.valueTransformer : ( pValue ) => pValue;
-
-        if ( depth > maxDepth || detectCycles( stack, 5, 3 ) )
-        {
-            return isArray( pObject ) ? [...(pObject || [])] : isFunction( pObject.entries ) ? [...(pObject.entries() || [])] : { ...(resolveObject( pObject || {} )) };
-        }
 
         const transientProperties = resolveTransientProperties( options );
 
@@ -4841,7 +4838,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
                 {
                     if ( !isEmptyString( prop ) || transientProperties.includes( prop ) )
                     {
-                        literal[prop] = pObject[prop];
+                        literal[prop] = literal[prop] ?? pObject[prop];
                     }
                 }
 
@@ -4864,12 +4861,15 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
         const obj = {};
 
+        const skipPrivate = !!options.skipPrivateProperties;
+        const prefixes = options.privatePropertyPrefixes;
+
         const includeProperty = ( pKey, pValue, pOptions ) =>
         {
             return ( !pOptions?.prune || isNonNullValue( pValue )) &&
                    ( !pOptions?.omitFunctions || !isFunction( pValue ))
                    && !transientProperties.includes( _toString( pKey ).trim() )
-                   && ( !options.skipPrivateProperties || !isPrivateProperty( pKey, options.privatePropertyPrefixes ));
+                   && ( !skipPrivate || !isPrivateProperty( pKey, prefixes ));
         };
 
         function updateObject( pKey, pValue, pOptions )
@@ -4883,7 +4883,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             }
             else if ( isFunction( pValue ) )
             {
-                if ( !options.skipPrivateProperties || !isPrivateMethod( pValue, options.privatePropertyPrefixes ) )
+                if ( !skipPrivate || !isPrivateMethod( pValue, prefixes ) )
                 {
                     methods.push( pValue.bind( obj ) );
                 }
@@ -4894,7 +4894,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         {
             let key = String( ObjectEntry.getKey( entry ) ).trim();
 
-            if ( transientProperties.includes( key ) || isPrivateProperty( key, options.privatePropertyPrefixes ) )
+            if ( transientProperties.includes( key ) || (skipPrivate && isPrivateProperty( key, prefixes )) )
             {
                 continue;
             }
@@ -4904,7 +4904,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             if ( !includeProperty( key, value, options ) )
             {
                 // even if we skip the property, we may want to restore the method(s)
-                if ( isFunction( value ) && ( !options.skipPrivateProperties || !isPrivateMethod( value, options.privatePropertyPrefixes )) )
+                if ( isFunction( value ) && ( !skipPrivate || !isPrivateMethod( value, prefixes )) )
                 {
                     methods.push( value.bind( obj ) );
                 }
@@ -4922,7 +4922,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
             if ( $ln( methods ) > 0 && !options?.omitFunctions )
             {
-                methods = methods.filter( e => isFunction( e ) && ( !options.skipPrivateProperties || !isPrivateMethod( e, options.privatePropertyPrefixes )) );
+                methods = methods.filter( e => isFunction( e ) && ( !skipPrivate || !isPrivateMethod( e, prefixes )) );
 
                 methods.forEach( method => obj[method?.name] = method.bind( obj ) );
             }
