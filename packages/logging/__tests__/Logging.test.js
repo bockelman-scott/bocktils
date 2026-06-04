@@ -221,17 +221,18 @@ describe( "AsyncLogger", () =>
     } );
 } );
 
+let MockSink =
+    {
+        log: ( ...pData ) => consoleMessages.push( ...pData ),
+        info: ( ...pData ) => consoleMessages.push( ...pData ),
+        warn: ( ...pData ) => consoleMessages.push( ...pData ),
+        error: ( ...pData ) => consoleMessages.push( ...pData ),
+        debug: ( ...pData ) => consoleMessages.push( ...pData ),
+        trace: ( ...pData ) => consoleMessages.push( ...pData )
+    };
+
 describe( "SimpleLogger", () =>
 {
-    let MockSink =
-        {
-            log: ( ...pData ) => consoleMessages.push( ...pData ),
-            info: ( ...pData ) => consoleMessages.push( ...pData ),
-            warn: ( ...pData ) => consoleMessages.push( ...pData ),
-            error: ( ...pData ) => consoleMessages.push( ...pData ),
-            debug: ( ...pData ) => consoleMessages.push( ...pData ),
-            trace: ( ...pData ) => consoleMessages.push( ...pData )
-        };
 
     test( "SimpleLogger is an alternative to the more complex Logging Framework",
           () =>
@@ -351,8 +352,79 @@ describe( "SimpleLogger", () =>
 
     test( "SourcedSimpleLogger - includes prefix", () =>
     {
+        class SomeInterestingClass
+        {
+            constructor() {}
+        }
+
+        class AnotherInterestingClass extends SomeInterestingClass
+        {
+            #id;
+
+            constructor( pId )
+            {
+                super();
+
+                this.#id = pId;
+            }
+
+            get id()
+            {
+                return this.#id;
+            }
+        }
+
+        class YetAnotherClass extends SomeInterestingClass
+        {
+            #name;
+
+            constructor( pName )
+            {
+                super();
+
+                this.#name = pName;
+            }
+
+            get name()
+            {
+                return this.#name;
+            }
+        }
+
+        const someInterestingClass = new SomeInterestingClass();
+        const anotherInterestingClass = new AnotherInterestingClass( 23 );
+        const yetAnotherClass = new YetAnotherClass( "Fred" );
+
+        const someLogger = new SourcedSimpleLogger( MockSink, someInterestingClass, {} );
+        const anotherLogger = new SourcedSimpleLogger( someLogger, anotherInterestingClass, {} );
+        const yetAnotherLogger = new SourcedSimpleLogger( someLogger, yetAnotherClass, {} );
+
+        someLogger.log( "Some Message" );
+        anotherLogger.log( "Another Message" );
+        yetAnotherLogger.warn( "Warning" );
+
+        console.log( consoleMessages );
 
     } );
+
+    test( "SourcedSimpleLogger::adapt - can wrap an existing logger with an instance-specific logger",
+          () =>
+          {
+              const adapted = SourcedSimpleLogger.adapt( MockSink, "The Component", {} );
+
+              const another = SourcedSimpleLogger.adapt( adapted, "Another Component", {} );
+
+              const oneMore = SourcedSimpleLogger.adapt( another, "One More Component", {} );
+
+              adapted.log( "Are you talking to me?" );
+
+              another.log( "I'm walkin' heeah" );
+
+              oneMore.log( "Do you feel lucky, punk?" );
+
+              console.log( consoleMessages );
+
+          } );
 
 } );
 

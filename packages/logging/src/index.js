@@ -105,17 +105,28 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             firstError,
             isEvent,
             firstMatchingType,
+            getClass,
             getClassName,
             delegateTo,
             toObjectLiteral,
             clamp = moduleUtils.clamp
         } = typeUtils;
 
-    const { asString, asInt, isBlank, lcase, ucase, trimLeadingCharacters } = stringUtils;
+    const
+        {
+            asString,
+            asInt,
+            isBlank,
+            lcase,
+            ucase,
+            trimLeadingCharacters,
+            isJsonObject,
+            isJsonArray
+        } = stringUtils;
 
     const { asArray, varargs, Filters, concatenateConsecutiveStrings, unique, AsyncBoundedStack } = arrayUtils;
 
-    const { asObject } = jsonUtils;
+    const { asObject, parseJson } = jsonUtils;
 
     const toolBocksModule = new ToolBocksModule( "LoggingUtils", INTERNAL_NAME );
 
@@ -1616,7 +1627,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
             const suffix = isBlank( id ) ? _mt : (" (" + asString( id, true ) + ")");
 
-            s = getClassName( pSource ) + suffix;
+            s = (asString( getClassName( pSource ) || getClass( pSource ), true ) + suffix);
 
             if ( !isBlank( s ) )
             {
@@ -1640,6 +1651,55 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
         return asString( s || (asString( isNonNullObject( pSource ) ? getClassName( pSource ) || objectToString( pSource ) : asString( pSource, true ) )), true );
     };
+
+    function resolveSimpleLoggerOptions( pOptions, pArguments )
+    {
+        let options = { ...(asObject( DEFAULT_SIMPLE_LOGGER_OPTIONS.toLiteral() )) };
+
+        if ( isArray( pOptions ) || isString( pOptions ) )
+        {
+            if ( isJsonObject( pOptions ) )
+            {
+                options = { ...(asObject( options )), ...(asObject( pOptions ) ?? {}) };
+            }
+            else if ( isJsonArray( pOptions ) )
+            {
+                options.args = options.levels = asArray( attempt( () => parseJson( pOptions ) ) ?? [] );
+            }
+            else
+            {
+                let args = [...(asArray( pOptions ?? [] ))].filter( e => isString( e ) && SIMPLE_LOGGER_LEVELS.includes( lcase( e ) ) );
+                options.args = options.levels = asArray( args ?? [] );
+            }
+        }
+        else if ( isNonNullObject( pOptions ) )
+        {
+            options = { ...(asObject( options )), ...(asObject( toObjectLiteral( pOptions, { respectToLiteralMethod: false } ) )) };
+        }
+
+        options.levels = asArray( options.levels ?? options.args ).filter( e => isString( e ) && SIMPLE_LOGGER_LEVELS.includes( lcase( e ) ) );
+
+        if ( pArguments )
+        {
+            try
+            {
+                options.levels = [...(asArray( options.levels )), ...(asArray( [...pArguments].slice( 2 ) ).flat())];
+                options.levels = asArray( options.levels ?? options.args ).filter( e => isString( e ) && SIMPLE_LOGGER_LEVELS.includes( lcase( e ) ) );
+                options.levels = unique( asArray( options.levels ) );
+            }
+            catch( ex )
+            {
+                console.error( ex );
+            }
+        }
+
+        if ( options?.source ?? options?.origin )
+        {
+            options.source = resolveLogSourceName( options?.source ?? options?.origin );
+        }
+
+        return options;
+    }
 
     /**
      * A very simple wrapper for the console (or another console-like object).
@@ -1668,12 +1728,12 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
          */
         constructor( pLogger = konsole, pOptions = DEFAULT_SIMPLE_LOGGER_OPTIONS )
         {
-            super( pLogger, (isArray( pOptions ) || isString( pOptions ) ? DEFAULT_SIMPLE_LOGGER_OPTIONS : isNonNullObject( pOptions ) ? toObjectLiteral( pOptions, { respectToLiteralMethod: false } ) : null), ...((asArray( isArray( pOptions ) || isString( pOptions ) ? asArray( pOptions ) : asArray( pOptions?.levels ) ).concat( asArray( arguments || [] ).slice( 2 ) )).flat()) );
+            super( pLogger, resolveSimpleLoggerOptions( pOptions ?? DEFAULT_SIMPLE_LOGGER_OPTIONS, arguments ) );
 
             const options =
                 {
                     ...(asObject( DEFAULT_SIMPLE_LOGGER_OPTIONS.toLiteral() )),
-                    ...(toObjectLiteral( pOptions ?? DEFAULT_SIMPLE_LOGGER_OPTIONS, { respectToLiteralMethod: false } ))
+                    ...(toObjectLiteral( resolveSimpleLoggerOptions( pOptions ) ))
                 };
 
             const source = !isNull( options.source ?? options.origin ) ?
@@ -1793,10 +1853,10 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                    {
                        ...DEFAULT_SIMPLE_LOGGER_OPTIONS,
                        ...toObjectLiteral( pOptions ?? DEFAULT_SIMPLE_LOGGER_OPTIONS, { respectToLiteralMethod: false } ),
-                       source: pSource ?? pOptions?.source ?? pLogger?.source
+                       source: resolveLogSourceName( pSource ?? pOptions?.source ?? pLogger?.source )
                    } );
 
-            this.#source = pSource ?? pOptions?.source ?? pLogger?.source ?? super.source;
+            this.#source = resolveLogSourceName( pSource ?? pOptions?.source ?? pLogger?.source ?? super.source );
         }
 
         resolveSourceName( pSource )
@@ -1807,8 +1867,10 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             {
                 s = `[${getClassName( this )} missing source/origin]`;
             }
-
-            this.#source = s;
+            else
+            {
+                this.#source = s;
+            }
 
             return s;
         }
@@ -1825,7 +1887,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
     SourcedSimpleLogger.adapt = function( pLogger, pSource, pOptions )
     {
-        const sourceName = resolveLogSourceName( pSource ?? pOptions?.source );
+        const sourceName = resolveLogSourceName( pSource ?? pOptions?.source ?? pLogger?.source );
 
         if ( isNonNullObject( pLogger ) && pLogger instanceof SourcedSimpleLogger )
         {
@@ -1896,6 +1958,8 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                                                   ToolBocksModule.getGlobalLogger(),
                                                   simpleLogger );
         }
+
+        return new SourcedSimpleLogger( new SimpleLogger( console ), pSource, pOptions );
     };
 
     class SimpleAsynchronousLogger extends SimpleLogger
