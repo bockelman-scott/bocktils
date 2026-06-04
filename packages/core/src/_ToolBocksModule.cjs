@@ -2198,7 +2198,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             super( unwrapKonsoleLogger( pSink ), pOptions );
 
-            this.#levels = [...(pLevels || pOptions?.levels || [])].flat();
+            this.#levels = [...(pLevels || pOptions?.levels || []), ...(pOptions.levels || [])].flat();
 
             this.#levels = ($ln( this.#levels ) < 1 ? [...(MODEST_LOG_LEVELS)] : this.#levels).map( _asStr ).map( _lct ).filter( e => _mt !== _lct( e ) );
         }
