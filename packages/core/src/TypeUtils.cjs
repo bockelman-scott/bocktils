@@ -3145,13 +3145,13 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
     const firstValidObject = function( ...pObjects )
     {
-        const finder = new Finder( ( e ) => isNonNullObject( e ) && objectKeys( e ).length > 0 );
+        const finder = new Finder( ( e ) => isNonNullObject( e ) && $ln( Object.keys( e ) ) > 0 );
         return finder.findFirst( ...pObjects );
     };
 
     const firstPopulatedObject = function( ...pObjects )
     {
-        const finder = new Finder( ( e ) => isNonNullObject( e ) && isPopulated( e ) );
+        const finder = new Finder( ( e ) => isNonNullObject( e ) && $ln( objectKeys( e ) ) > 0 && isPopulated( e ) );
         return finder.findFirst( ...pObjects );
     };
 
