@@ -157,7 +157,7 @@ const _bock_write = ( pOut, ...pArgs ) =>
             (_bock_std_out || _bock_std_err).write( message );
         }
     }
-    catch( e )
+    catch( ex )
     {
         // ignored
     }
@@ -803,6 +803,31 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const isClass = pObj => isFunc( pObj ) && (/^class\s/.test( (functionToString.call( pObj, pObj )).trim() ));
 
+    function isConstructable( pObj )
+    {
+        if ( !isFunc( pObj ) )
+        {
+            return false;
+        }
+
+        if ( isClass( pObj ) )
+        {
+            return true;
+        }
+
+        try
+        {
+            // We pass a proxy as the target to trick the engine into checking constructability
+            // without running the actual constructor logic.
+            Reflect.construct( function() {}, [], pObj );
+            return true;
+        }
+        catch( ex )
+        {
+            return false;
+        }
+    }
+
     /**
      * Returns true if the specified value is an instance of a class.
      *
@@ -1348,7 +1373,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 StatefulListener.NEXT_ID = 1;
             }
 
-            this.#name = (isStr( pName ) ? String( pName ).trim() : this.#options?.name) || ("StatefulListener_" + String( this.#id ));
+            this.#name = (isStr( pName ) ? String( pName ).trim() : this.#options?.name) ||
+                         ("StatefulListener_" + String( this.#id ));
 
             if ( !!(this.#options?.preserveHistory) )
             {
@@ -1388,7 +1414,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
                 if ( $ln( this.eventsHandled ) > 64 )
                 {
-                    attemptSilent( () => this.eventsHandled = [...(this.eventsHandled.slice( $ln( this.eventsHandled ) - 64, $ln( this.eventsHandled ) ))] );
+                    attemptSilent( () => this.eventsHandled.shift() );
                 }
             }
         }
@@ -1479,7 +1505,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 return 0;
             }
 
-            return (this.#id - (_asInt( pOther?.id || 1 )));
+            return (_asInt( this.#id ) - (_asInt( pOther?.id || 1 )));
         }
     }
 
@@ -1762,7 +1788,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     const nameFromSource = ( pFunction ) =>
     {
         let s = _asStr( functionToString.call( pFunction, pFunction ) ).trim();
-        s = s.replace( /function /, _mt_str ).trim().replace( /\s*\(.*\).*/, _mt_str ).trim();
+        s = s.replace( /function\s+/, _mt_str ).trim().replace( /\s*\(.*\).*/, _mt_str ).trim();
         return s.replace( /function\s+/, _mt_str ).trim().replace( /\s*\(.*\).*/, _mt_str ).trim();
     };
 
@@ -1810,6 +1836,10 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             if ( isFunc( value ) )
             {
+                if ( isClass( value ) )
+                {
+                    return `CLASS[${value?.name || String( value ) || "Anonymous Class"}]`;
+                }
                 return `FUNCTION[${value?.name || nameFromSource( value ) || "anonymous"}]`;
             }
 
@@ -1821,7 +1851,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     let val = value.valueOf();
                     if ( isBig( val ) )
                     {
-                        `${val.toString()}n`;
+                        return `${val.toString()}n`;
                     }
                     if ( isStr( val ) || (isNum( val ) && !isBig( val )) || isBool( val ) )
                     {
@@ -2198,7 +2228,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             super( unwrapKonsoleLogger( pSink ), pOptions );
 
-            this.#levels = [...(pLevels || pOptions?.levels || []), ...(pOptions.levels || [])].flat();
+            this.#levels = [...(pLevels || pOptions?.levels || []), ...(pOptions?.levels || [])].flat();
 
             this.#levels = ($ln( this.#levels ) < 1 ? [...(MODEST_LOG_LEVELS)] : this.#levels).map( _asStr ).map( _lct ).filter( e => _mt !== _lct( e ) );
         }
@@ -2210,7 +2240,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         isEnabledForLevel( pLevel )
         {
-            return (this.levels).map( _lcase ).includes( _lcase( pLevel ) );
+            return (this.levels).map( _lcase ).includes( _lcase( resolveLogLevel( pLevel ) ) );
         }
 
         log( ...pData )
