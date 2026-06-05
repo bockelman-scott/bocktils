@@ -1843,13 +1843,31 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         SIMPLE_LOGGER.debug( ...pData );
     }
 
+    function unwrapSimpleLogger( pLogger )
+    {
+        let logger = ToolBocksModule.resolveLogger( pLogger, ToolBocksModule.getGlobalLogger(), SIMPLE_LOGGER );
+
+        const iterationCap = new IterationCap( 8 );
+
+        while ( isNonNullObject( logger ) &&
+                isNonNullObject( logger?.logger ) &&
+                (logger instanceof SimpleLogger) &&
+                !iterationCap.reached )
+        {
+            // this does not loop forever due to use of IterationCap
+            logger = logger?.logger ?? logger;
+        }
+
+        return ToolBocksModule.resolveLogger( logger, ToolBocksModule.getGlobalLogger(), SIMPLE_LOGGER );
+    }
+
     class SourcedSimpleLogger extends SimpleLogger
     {
         #source;
 
         constructor( pLogger, pSource, pOptions )
         {
-            super( pLogger,
+            super( unwrapSimpleLogger( pLogger ),
                    {
                        ...DEFAULT_SIMPLE_LOGGER_OPTIONS,
                        ...toObjectLiteral( pOptions ?? DEFAULT_SIMPLE_LOGGER_OPTIONS, { respectToLiteralMethod: false } ),
@@ -1889,9 +1907,9 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
     {
         const sourceName = resolveLogSourceName( pSource ?? pOptions?.source ?? pLogger?.source );
 
-        if ( isNonNullObject( pLogger ) && pLogger instanceof SourcedSimpleLogger )
+        if ( isNonNullObject( pLogger ) && pLogger instanceof SimpleLogger )
         {
-            if ( resolveLogSourceName( readProperty( pLogger, "source", "origin" ) ) === sourceName )
+            if ( resolveLogSourceName( readProperty( pLogger, "source", "origin" ) ) === sourceName && isFunction( pLogger?.addSource ) )
             {
                 return pLogger;
             }
@@ -1911,23 +1929,23 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
         if ( isNonNullObject( logger ) )
         {
-            if ( logger instanceof SourcedSimpleLogger )
+            if ( logger instanceof SimpleLogger )
             {
-                if ( resolveLogSourceName( logger.source ) === sourceName )
+                if ( resolveLogSourceName( logger.source ) === sourceName && isFunction( logger.addSource ) )
                 {
                     return logger;
                 }
 
                 const iterationCap = new IterationCap( 8 );
 
-                while ( isNonNullObject( logger ) && (logger instanceof SourcedSimpleLogger) && !iterationCap.reached )
+                while ( isNonNullObject( logger ) && (logger instanceof SimpleLogger) && !iterationCap.reached )
                 {
-                    if ( resolveLogSourceName( logger.source ) === sourceName )
+                    if ( resolveLogSourceName( logger.source ) === sourceName && isFunction( logger.addSource ) )
                     {
                         return logger;
                     }
 
-                    attempt( () => logger = logger?.logger );
+                    attempt( () => logger = logger?.logger ?? logger );
                 }
 
                 logger = ToolBocksModule.resolveLogger( logger,
