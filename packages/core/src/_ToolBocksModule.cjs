@@ -2569,20 +2569,21 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     {
                         try
                         {
-                            handleAttempt.lastError = null;
-
                             return await pFunction( ...pArgs );
                         }
                         catch( ex )
                         {
-                            // ignored, silently, but we make the error available if desired
-                            handleAttempt.lastError = ex;
+                            // ignored, silently
+                            if ( !isError( handleAttempt.lastError ) )
+                            {
+                                handleAttempt.lastError = ex;
+                            }
                         }
                     }()).then( r => r ).catch( no_op );
                 }
                 catch( e2 )
                 {
-                    // ignored, silently, but made available unless it would obscure the error thrown from the nested try/catch
+                    // ignored, silently
                     if ( !isError( handleAttempt.lastError ) )
                     {
                         handleAttempt.lastError = e2;
@@ -2593,14 +2594,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             {
                 try
                 {
-                    handleAttempt.lastError = null;
-
                     return pFunction( ...pArgs );
                 }
                 catch( ex )
                 {
                     // ignored, silently
-                    handleAttempt.lastError = ex;
+                    if ( !isError( handleAttempt.lastError ) )
+                    {
+                        handleAttempt.lastError = ex;
+                    }
                 }
             }
         }
@@ -2629,14 +2631,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             try
             {
-                handleAttempt.lastError = null;
-
                 return await pFunction( ...pArgs );
             }
             catch( ex )
             {
                 // ignored, silently
-                handleAttempt.lastError = ex;
+                if ( !isError( handleAttempt.lastError ) )
+                {
+                    handleAttempt.lastError = ex;
+                }
             }
         }
 
