@@ -27,37 +27,43 @@ const { _ud = "undefined", $scope } = constants;
             arrayUtils
         };
 
-    const {
-        ToolBocksModule,
-        lock,
-        populateOptions,
-        mergeOptions,
-        merge,
-        IterationCap,
-        IllegalArgumentError,
-        no_op,
-        op_false,
-        objectEntries,
-        attemptMethod
-    } = moduleUtils;
+    const
+        {
+            ToolBocksModule,
+            attempt,
+            attemptMethod,
+            lock,
+            populateOptions,
+            mergeOptions,
+            merge,
+            IterationCap,
+            IllegalArgumentError,
+            no_op,
+            op_false,
+            objectEntries,
+            getLastError,
+            $ln
+        } = moduleUtils;
 
     const { _mt_str } = constants;
 
-    const {
-        Result,
-        isNull,
-        isString,
-        isDate,
-        isDateString,
-        isNumber,
-        isNumeric,
-        isFunction,
-        isNonNullObject,
-        isValidDateOrNumeric,
-        isValidDateInstance,
-        toDecimal,
-        clamp
-    } = typeUtils;
+    const
+        {
+            Result,
+            isNull,
+            isString,
+            isDate,
+            isDateString,
+            isNumber,
+            isNumeric,
+            isFunction,
+            isNonNullObject,
+            isValidDateOrNumeric,
+            isValidDateInstance,
+            isError,
+            toDecimal,
+            clamp
+        } = typeUtils;
 
     const {
         asString,
@@ -825,8 +831,11 @@ const { _ud = "undefined", $scope } = constants;
     const resolveUnit = ( pUnit ) =>
         isNull( pUnit ) ? new TimeUnit( 0, "NULL UNIT", 0, "getMilliseconds", "setMilliseconds", 0 ) :
         pUnit instanceof TimeUnit ? pUnit :
+        isNumeric( pUnit ) && pUnit < 1_000 ? TIME_UNITS_BY_ID[asInt( pUnit )] :
         isString( pUnit ) ? TIME_UNITS_BY_NAME[pUnit] || TIME_UNITS[ucase( pUnit )] || TIME_UNITS[ucase( pUnit.replace( /s$/i, _mt_str ) )] :
-        isNumber( pUnit ) && pUnit < 1_000 ? TIME_UNITS_BY_ID[pUnit] : new TimeUnit( pUnit, asString( pUnit ), pUnit, "getTime", "setTime", 0 );
+        new TimeUnit( pUnit, asString( pUnit ), pUnit, "getTime", "setTime", 0 );
+
+    TimeUnit.resolveUnit = resolveUnit;
 
     const DateConstants = lock(
         {
@@ -985,7 +994,16 @@ const { _ud = "undefined", $scope } = constants;
             errors.push( new IllegalArgumentError( "The second argument to transform must be a function with at least one parameter" ) );
         }
 
-        return (isFunction( pFunction ) ? toolBocksModule.attempt( pFunction, pDate ) : new Result( pDate, errors ));
+        const value = isFunction( pFunction ) ? attempt( pFunction, pDate ) : pDate;
+
+        const lastError = getLastError();
+
+        if ( isError( lastError ) )
+        {
+            errors.push( lastError );
+        }
+
+        return $ln( errors ) > 0 ? new Result( value, ...errors ) : new Result( value );
     };
 
     const _compare = function( pDateA, pDateB, pTransformerFunction )
@@ -993,8 +1011,8 @@ const { _ud = "undefined", $scope } = constants;
         const resultA = transform( pDateA, pTransformerFunction );
         const resultB = transform( pDateB, pTransformerFunction );
 
-        const dateA = resultA.hasErrors() ? pDateA : resultA.returnValue;
-        const dateB = resultB.hasErrors() ? pDateB : resultB.returnValue;
+        const dateA = resultA.hasErrors() ? pDateA : resultA.returnValue ?? resultA;
+        const dateB = resultB.hasErrors() ? pDateB : resultB.returnValue ?? resultB;
 
         const tsA = toTimestamp( dateA, Number.MAX_VALUE );
         const tsB = toTimestamp( dateB, Number.MIN_VALUE );
@@ -1704,7 +1722,7 @@ const { _ud = "undefined", $scope } = constants;
 
     const addDays = function( pDate, pNumDays )
     {
-        let numDays = isNumber( pNumDays ) ? asInt( pNumDays ) : 0;
+        let numDays = isNumeric( pNumDays ) ? asInt( pNumDays ) : 0;
 
         if ( 0 === numDays )
         {
