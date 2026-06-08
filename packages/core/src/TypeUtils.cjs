@@ -985,7 +985,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         {
             let n = parseFloat( pObj );
 
-            if ( isFloat( n, true ) )
+            if ( isFloat( n, true, pZeroIsFloat ) )
             {
                 let s = _mt_str + String( n );
 
