@@ -86,7 +86,8 @@ const
         serialize,
         classes: moduleUtilsClasses,
         Konsole,
-        ConditionalLogger
+        ConditionalLogger,
+        makeRetriable
     } = moduleUtils;
 
 let {
@@ -2507,4 +2508,49 @@ describe( "readScalarProperty", () =>
 
 
           } );
+} );
+
+describe( "makeRetriable - returns a function", () =>
+{
+    test( "retry 3 times", async() =>
+    {
+        let callCount = 0;
+
+        function f( pArg )
+        {
+            callCount += 1;
+
+            if ( 2 === pArg )
+            {
+                return 4;
+            }
+            throw new Error( `Arg was not 2` );
+        }
+
+        const func = makeRetriable( f, 3 );
+
+        const result2 = await func( 2 );
+
+        expect( result2 ).toEqual( 4 );
+
+        expect( callCount ).toEqual( 1 );
+
+        let result;
+
+        try
+        {
+            result = await func( 1 );
+        }
+        catch( ex )
+        {
+            expect( ex ).toBe( Error );
+        }
+
+        expect( callCount ).toEqual( 4 );
+
+        expect( typeof result ).toEqual( "undefined" );
+
+
+    }, 60_000 );
+
 } );

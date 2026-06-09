@@ -2949,6 +2949,117 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return pDefault ?? handleAttempt.lastError;
     };
 
+
+    /**
+     * Suspends the execution of the asynchronous function for a specified number of milliseconds.
+     *
+     * @param {number} pMilliseconds - The number of milliseconds to pause execution.
+     *
+     * @return {Promise<void>} A promise that resolves after the specified delay.
+     */
+    function sleep( pMilliseconds )
+    {
+        // noinspection DynamicallyGeneratedCodeJS,JSValidateTypes,TypeScriptUMDGlobal
+        return new Promise( resolve => setTimeout( resolve, pMilliseconds ) );
+    }
+
+    /**
+     * Suspends the execution of an asynchronous function
+     * for at least the specified number of milliseconds.
+     *
+     * The exact time to suspend execution is calculated
+     * by multiplying the specified value by a random number between 0.1 and 1
+     * and adding that value to the specified number of milliseconds.
+     *
+     * This can help in some scenarios by adding a little bit of 'jitter'
+     * to the forced delays between the execution of network calls
+     * that might otherwise become a 'thundering herd'
+     *
+     * @param {number} pMilliseconds - The minimum number of milliseconds to pause execution.
+     *
+     * @return {Promise<void>} A promise that resolves after the specified delay.
+     */
+    function doze( pMilliseconds )
+    {
+        const millis = pMilliseconds + ((Math.random() + 0.1) * pMilliseconds);
+        return sleep( Math.floor( millis ) );
+    }
+
+    // noinspection DynamicallyGeneratedCodeJS,JSValidateTypes,TypeScriptUMDGlobal
+    /**
+     * Potentially nudges garbage collection.
+     *
+     * @return {void}
+     */
+    const gc = () => new Promise( resolve => setImmediate( resolve ) );
+
+    /**
+     * Returns an asynchronous function that will be executed up to n times
+     * until it succeeds or throws an error.
+     *
+     * If after n attempts, the function does not complete successfully, it throws an error.
+     *
+     * @param {function} pFunction a function to execute up to n times until it succeeds
+     *
+     * @param {number} [pMaxRetries=3] the maximum number of times to execute the function until it either suceeds or throws an error
+     *
+     * @param {...*} [pArgs] zero or more arguments to bind to the function
+     *
+     * @returns {function(...[*]): Promise<*>} the function to call to execute the original function
+     */
+    const makeRetriable = function( pFunction, pMaxRetries = 3, ...pArgs )
+    {
+        if ( !isFunc( pFunction ) )
+        {
+            throw new IllegalArgumentError( `makeRetriable requires a function to execute; received ${pFunction}` );
+        }
+
+        const args = [...(pArgs ?? [])];
+
+        const maxAttempts = clamp( _asInt( pMaxRetries ), 2, 10 );
+
+        const defaultDelay = 256;
+
+        const f = pFunction.bind( $scope(), ...args );
+
+        // noinspection UnnecessaryLocalVariableJS
+        const func = async function( ...pArgs )
+        {
+            let result;
+
+            for( let i = 0, n = maxAttempts; i < n; i++ )
+            {
+                try
+                {
+                    result = await f( ...pArgs );
+
+                    if ( isError( result ) )
+                    {
+                        // noinspection ExceptionCaughtLocallyJS
+                        throw resolveError( result );
+                    }
+
+                    return result;
+                }
+                catch( ex )
+                {
+                    if ( i < n )
+                    {
+                        const delay = defaultDelay + Math.ceil( (Math.random() + 0.1) * (defaultDelay * (2 ** (n - 1))) );
+
+                        await asyncAttempt( async() => await sleep( delay ) );
+                    }
+                    else
+                    {
+                        throw resolveError( ex );
+                    }
+                }
+            }
+        };
+
+        return func;
+    };
+
     /**
      * Returns true if the specified value is an array and every element of that array is also an array.
      * @param pArray
@@ -6154,44 +6265,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         return new ToolBocksModuleEvent( evt, (pData || evt.data || evt.detail || evt), pOptions );
     };
-
-    /**
-     * Suspends the execution of the asynchronous function for a specified number of milliseconds.
-     *
-     * @param {number} pMilliseconds - The number of milliseconds to pause execution.
-     *
-     * @return {Promise<void>} A promise that resolves after the specified delay.
-     */
-    function sleep( pMilliseconds )
-    {
-        // noinspection DynamicallyGeneratedCodeJS,JSValidateTypes,TypeScriptUMDGlobal
-        return new Promise( resolve => setTimeout( resolve, pMilliseconds ) );
-    }
-
-    /**
-     * Suspends the execution of an asynchronous function
-     * for at least the specified number of milliseconds.
-     *
-     * The exact time to suspend execution is calculated
-     * by multiplying the specified value by a random number between 0.1 and 1
-     * and adding that value to the specified number of milliseconds.
-     *
-     * This can help in some scenarios by adding a little bit of 'jitter'
-     * to the forced delays between the execution of network calls
-     * that might otherwise become a 'thundering herd'
-     *
-     * @param {number} pMilliseconds - The minimum number of milliseconds to pause execution.
-     *
-     * @return {Promise<void>} A promise that resolves after the specified delay.
-     */
-    function doze( pMilliseconds )
-    {
-        const millis = pMilliseconds + ((Math.random() + 0.1) * pMilliseconds);
-        return sleep( Math.floor( millis ) );
-    }
-
-    // noinspection DynamicallyGeneratedCodeJS,JSValidateTypes,TypeScriptUMDGlobal
-    const gc = () => new Promise( resolve => setImmediate( resolve ) );
 
     /**
      * Default options for the bracketsToDots function,
@@ -10162,6 +10235,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             makeAccessor,
             makeAppender,
             makeDeleter,
+
+            makeRetriable,
 
             lock,
             deepLock,
