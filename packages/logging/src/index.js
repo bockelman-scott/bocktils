@@ -1591,6 +1591,9 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
     const DEFAULT_SIMPLE_LOGGER_OPTIONS = lock( new SimpleLoggerOptions( [LOG, INFO, WARN, ERROR], true, true, false, false ) );
 
+    const VERBOSE_SIMPLE_LOGGER_OPTIONS = lock( new SimpleLoggerOptions( [LOG, INFO, WARN, ERROR, DEBUG, TRACE], true, true, true, true ) );
+
+
     /**
      * This will be dynamically bound to SimpleLogger and its subclasses
      *
@@ -2173,6 +2176,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             SIMPLE_LOGGER_LEVELS,
             SIMPLE_LOGGER_DEFAULT_LEVEL,
             DEFAULT_SIMPLE_LOGGER_OPTIONS,
+            VERBOSE_SIMPLE_LOGGER_OPTIONS,
             ILogger,
             LogLevel,
             LogRecord,
