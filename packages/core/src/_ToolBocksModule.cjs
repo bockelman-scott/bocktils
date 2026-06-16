@@ -2243,6 +2243,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return (this.levels).map( _lcase ).includes( _lcase( resolveLogLevel( pLevel ) ) );
         }
 
+        enabledFor( pLevel )
+        {
+            return this.isEnabledForLevel( pLevel );
+        }
+
         log( ...pData )
         {
             if ( this.isEnabledForLevel( LOG_LEVELS.LOG ) )
@@ -2289,6 +2294,56 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             {
                 super.trace( ...pData );
             }
+        }
+
+        isDebugEnabled()
+        {
+            return this.isEnabledForLevel( LOG_LEVELS.DEBUG );
+        }
+
+        get debugEnabled()
+        {
+            return this.isDebugEnabled();
+        }
+
+        isTraceEnabled()
+        {
+            return this.isEnabledForLevel( LOG_LEVELS.TRACE );
+        }
+
+        get traceEnabled()
+        {
+            return this.isTraceEnabled();
+        }
+
+        isInfoEnabled()
+        {
+            return this.isEnabledForLevel( LOG_LEVELS.INFO );
+        }
+
+        get infoEnabled()
+        {
+            return this.isInfoEnabled();
+        }
+
+        isWarnEnabled()
+        {
+            return this.isEnabledForLevel( LOG_LEVELS.WARN );
+        }
+
+        get warnEnabled()
+        {
+            return this.isWarnEnabled();
+        }
+
+        isErrorEnabled()
+        {
+            return this.isEnabledForLevel( LOG_LEVELS.ERROR );
+        }
+
+        get errorEnabled()
+        {
+            return this.isErrorEnabled();
         }
     }
 
