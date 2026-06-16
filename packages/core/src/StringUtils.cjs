@@ -87,6 +87,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             ObjectEntry,
             objectEntries,
             objectValues,
+            readProperty,
             functionToString,
             populateOptions,
             attempt,
@@ -3205,28 +3206,45 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
      */
     const ucase = ( pStr ) => asString( pStr, false ).toUpperCase();
 
+    const RX_ILLEGAL_NAME_CHARS =
+        {
+            emailDomain: /@\w+\.(com|net|org|gov|edu)/,
+            start: /^[.,><|;:?!@#&*$_+=`'"-]+/,
+            end: /[,><|;:?!@#&*$_+=`'"-]+$/,
+            any: /[,><|;:?!@#&*$_+=`]+/g,
+            parenthesized: /\([^)]+\)/g
+        };
+
+    const RX_NAME_REPLACE = Object.values( RX_ILLEGAL_NAME_CHARS );
+
+    const rxIllegalStartChars = /^[.,><|;:?!@#&*$_+=`'"-]+/;
+    const rxIllegalEndChars = /[,><|;:?!@#&*$_+=`'"-]+$/;
+    const rxIllegalNameChars = /[,><|;:?!@#&*$_+=`]+/g;
+    const rxParenthesized = /\([^)]+\)/g;
+    const rxEmailDomain = /@\w+\.(com|net|org|gov|edu)/;
+
     /**
      * A collection of RegExp expressions to use to test whether a string is a recognized 'honorific'
      * @type {{MR: RegExp, MRS: RegExp, MISS: RegExp, MZ: RegExp, DR: RegExp, SIR: RegExp, PROF: RegExp, TRH: RegExp}}
      */
     const COMMON_HONORIFICS =
         {
-            MR: /^Mr\.?$/i,
-            MRS: /^Mrs\.?$/i,
-            MISS: /(^Ms\.?$)|(^Miss$)/i,
-            MZ: /(^Mz\.?$)|(^Ms\.?$)/i,
-            DR: /^Dr\.?$/i,
-            REVEREND: /^Rev\.?$/i,
-            SIR: /^Sir$/i,
-            PROF: /^Prof\.?(essor)?$/i,
-            TRH: /^The\s+Right\s+Honou?rable$/i
+            MR: /^((Mr\.)|Mr\.?)\b/i,
+            MRS: /^((Mrs\.)|Mrs\.?)\b/i,
+            MISS: /(^Ms\.|Ms\.?\b)|(^Miss\b)/i,
+            MZ: /(^Mz\.|Mz\.?\b)|(^Ms\.?\b)/i,
+            DR: /^(Dr\.|Dr\.?)\b/i,
+            REVEREND: /^(Rev\.|Rev\.?)\b/i,
+            SIR: /^(Sir)\b/i,
+            PROF: /^(Prof\.?(essor)?)\b/i,
+            TRH: /^(The\s+Right\s+Honou?rable)\b/i
         };
 
     const PROPERCASE_OPTIONS =
         lock( {
                   separator: _spc,
                   prefixes: ["Mc", "Mac", "O'"],
-                  handleMac: false,
+                  handleMac: true,
                   honorifics: objectValues( COMMON_HONORIFICS ),
                   exceptions: ["von", "van", "de", "del", "la", "dos", "da", "der", "di", "du", "et", "al", "o'", "mc", "mac", "st"],
                   compounds: ["mary ellen", "dawn marie", "mary ann", "mary anne", "lisa marie", "anne marie", "mary jo"],
@@ -3235,6 +3253,21 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
                   rxEmail: /\S+@\w+\.(com|edu|gov|org|net|co|info|biz|io)/gi,
                   preserve: ["NE", "NW", "SE", "SW", "II", "III", "IV"]
               } );
+
+    const _trimPersonName = function( pStr )
+    {
+        let s = asString( pStr, true );
+
+        for( let rx of RX_NAME_REPLACE )
+        {
+            s = asString( s.replace( rx, _mt ), true );
+        }
+
+        s = asString( s, true ).replaceAll( rxIllegalNameChars, _mt ).trim();
+
+        return collapseWhitespace( s );
+    };
+
 
     /**
      * Used by other methods to handle surnames with mix capitalization
@@ -3248,9 +3281,19 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
         let s = asString( pString, false ) || _mt_str;
 
+        if ( !(toBool( options.handleMac )) )
+        {
+            return s;
+        }
+
         let prefixes = ["Mc", "Mac", "O'"].concat( options?.prefixes || [] ).flat();
 
-        if ( !includesAny( s, ...prefixes ) )
+        if ( !includesAny( s, ...prefixes ) || $ln( s ) < 5 )
+        {
+            return s;
+        }
+
+        if ( (matchesAny( s, /c+hi[ao]$/, /caro$/, /ccone$/, /cena$/, /ad[aio]$/, /di[ao]$/ ) || /(?![a-zA-Z0-9_])\w/iu.test( s )) )
         {
             return s;
         }
@@ -3291,34 +3334,9 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         return out.trim();
     };
 
-    function handleDesignator( pStr )
-    {
-        let s = asString( pStr );
-
-        if ( /\b([1-9]+[0-9]{0,5})\s*([A-Z]+)\b|^\s*([1-9]+[0-9]{0,5})\s*([A-Z]+)\s*$/i.test( s ) )
-        {
-            s = asString( s, true ).replaceAll( /\s{2,}/g, _spc );
-            let matches = (/([1-9]+[0-9]{0,5})\s*([A-Z]+)/dgi).exec( s );
-            if ( matches )
-            {
-                let indices = matches?.indices;
-                if ( indices )
-                {
-                    s = attempt( () => (s.slice( matches.indices[1][0], matches.indices[1][1] ) + ucase( s.slice( matches.indices[2][0] ) )).replace( /\W$/, _mt ) );
-                }
-            }
-            if ( !isBlank( s ) )
-            {
-                return asString( s, true );
-            }
-        }
-
-        return _mt;
-    }
-
     // noinspection FunctionTooLongJS
     /**
-     * Returns a string formatted as a name in proper case
+     * Returns a string formatted as proper case
      * handling common surnames that include a hyphen, apostrophe, Mc, or Mac, etc
      * @param pStr the string to convert to ProperCase
      * @param pOptions an object defining the separator to use to split the string into 'words' as well as other behaviors
@@ -3331,12 +3349,6 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         let preserveCase = _toArr( options.preserve || [] );
 
         let s = asString( pStr, false ) || _mt_str;
-
-        let designator = handleDesignator( s );
-        if ( !isBlank( designator ) )
-        {
-            return ucase( designator );
-        }
 
         let out = _mt_str;
 
@@ -3395,9 +3407,12 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             }
         }
 
-        out = handleMc( out ) || out;
+        if ( options.handleMac )
+        {
+            out = handleMc( out ) || out;
+        }
 
-        return out;
+        return asString( out, true );
     };
 
     String.prototype.toProperCase = function()
@@ -3433,11 +3448,11 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
     {
         let formattedName = asString( pName );
 
-        if ( !(matchesAny( formattedName, /c+hi[ao]$/, /caro$/, /ccone$/, /cena$/, /ad[aio]$/, /di[ao]$/ ) || /(?![a-zA-Z0-9_])\w/iu.test( formattedName )) )
+        if ( $ln( formattedName ) > 4 && ( !(matchesAny( formattedName, /c+hi[ao]$/, /caro$/, /ccone$/, /cena$/, /ad[aio]$/, /di[ao]$/ ) || /(?![a-zA-Z0-9_])\w/iu.test( formattedName ))) )
         {
             formattedName = formattedName.replace( /^(mc|mac)+?([a-z]{2,})/gi, ( match, prefix, remaining ) =>
             {
-                return toProperCase( prefix ) + (($ln( remaining ) >= 4) ? toProperCase( remaining ) : remaining);
+                return toProperCase( prefix ) + (($ln( remaining ) >= 3) ? toProperCase( remaining ) : remaining);
             } );
         }
 
@@ -3487,25 +3502,37 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
     function asProperCaseName( pName, pOptions = PROPERCASE_OPTIONS, pIsFirstName = false )
     {
-        let options = { ...PROPERCASE_OPTIONS, ...(pOptions || PROPERCASE_OPTIONS) };
+        let options = { ...PROPERCASE_OPTIONS, ...(pOptions ?? PROPERCASE_OPTIONS) };
 
         let isFirstName = !!pIsFirstName;
+
+        if ( isBoolean( pOptions ) )
+        {
+            isFirstName = toBool( pOptions ) || isFirstName;
+        }
 
         // convert the name to lowercase and trim
         let name = _lct( asString( pName, true ) );
 
         // remove honorific prefixes
-        if ( isArray( options.honorifics ) )
+        if ( isFirstName )
         {
-            let rxs = [...(options.honorifics)].filter( isRegExp ).map( e => new RegExp( e ) );
-            for( let rx of rxs )
+            if ( isArray( options.honorifics ) )
             {
-                name = name.replace( rx, _mt ).trim();
+                let rxs = [...(options.honorifics)].filter( isRegExp ).map( e => new RegExp( e ) );
+                for( let rx of rxs )
+                {
+                    name = asString( name.replace( rx, _mt ).trim(), true );
+                    if ( isBlank( name ) )
+                    {
+                        break;
+                    }
+                }
             }
-        }
-        else
-        {
-            name = name.replace( /^(mr\s+|mrs?\.\s+|dr\s+|dr\.\s+|ms\s+|ms\.\s+)/gi, _mt ).trim();
+            else if ( $ln( name ) > 2 )
+            {
+                name = asString( name.replace( /^(mr\.?\s+|mrs?\.\s+|dr\.?\s+|ms\.?\s+)/gi, _mt ).trim(), true );
+            }
         }
 
         name = name.replaceAll( /\s{2,}/g, _spc );
@@ -3564,7 +3591,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
         formattedName = handlePreserveCase( formattedName, options ) || formattedName;
 
-        return asString( formattedName, true ).replace( /\s+/, _spc ).trim();
+        return _trimPersonName( asString( formattedName, true ) ).replace( /\s+/, _spc ).trim();
     }
 
     function _findSplitOnException( pNameParts, pExceptions = PROPERCASE_OPTIONS.exceptions )
@@ -3696,17 +3723,11 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
         const exceptions = _toArr( options.exceptions || PROPERCASE_OPTIONS.exceptions || [] ).filter( e => !isBlank( e ) ).map( e => _lct( e ) );
 
-        const rxIllegalStartChars = /^[.,><|;:?!@#&*$_+=`'"-]/;
-        const rxIllegalEndChars = /[,><|;:?!@#&*$_+=`'"-]$/;
-        const rxIllegalNameChars = /[,><|;:?!@#&*$_+=`]/g;
-        const rxParenthesized = /\([^)]+\)/g;
-        const rxEmailDomain = /@\w+\.(com|net|org|gov|edu)/;
+        let firstName = collapseWhitespace( asString( pFirstName, true ).replaceAll( / {2,}/g, _spc ).trim() );
+        let lastName = collapseWhitespace( asString( pLastName, true ).replaceAll( / {2,}/g, _spc ).trim() );
 
-        let firstName = asString( pFirstName, true ).replaceAll( / {2,}/g, _spc ).trim();
-        let lastName = asString( pLastName, true ).replaceAll( / {2,}/g, _spc ).trim();
-
-        firstName = asString( firstName.replace( rxParenthesized, _mt ), true ).trim();
-        lastName = asString( lastName.replace( rxParenthesized, _mt ), true ).trim();
+        firstName = collapseWhitespace( asString( firstName.replace( rxParenthesized, _mt ), true ).trim() );
+        lastName = collapseWhitespace( asString( lastName.replace( rxParenthesized, _mt ), true ).trim() );
 
         firstName = _fixNameTypos( firstName ) || firstName;
         lastName = _fixNameTypos( lastName ) || lastName;
@@ -3719,10 +3740,10 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
             let data = pData || {};
 
-            name = name.replace( (asString( data?.address, true ) || asString( data?.address_line_1 || _mt, true )), _mt );
-            name = name.replace( (asString( data?.phoneNumber || data?.phone || data?.phone_number || _mt, true )), _mt );
-            name = name.replace( (asString( data?.emailAddress || data?.email || data?.email_address || _mt, true )), _mt );
-            name = name.replace( normalizeEmailAddress( asString( data?.emailAddress || data?.email || data?.email_address ) || _mt, true ), _mt );
+            name = name.replace( (asString( readProperty( data, "address", "address_line_1", "line1" ) || _mt, true )), _mt );
+            name = name.replace( (asString( readProperty( data, "phone_number", "phone", "mobile_phone", "home_phone" ) || _mt, true )), _mt );
+            name = name.replace( (asString( readProperty( data, "email_address", "email" ) || _mt, true )), _mt );
+            name = name.replace( normalizeEmailAddress( asString( readProperty( data, "email_address", "email" ) || _mt, true ) ), _mt );
 
             return asString( name || inName, true ) || inName;
         }
@@ -3733,17 +3754,8 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             lastName = asProperCaseName( _removeContactData( lastName, pOtherContactData ), options, false );
         }
 
-        firstName = asString( firstName.replace( rxEmailDomain, _mt ), true ).trim();
-        lastName = asString( lastName.replace( rxEmailDomain, _mt ), true ).trim();
-
-        firstName = asString( firstName.replace( rxIllegalStartChars, _mt ), true ).replace( rxIllegalEndChars, _mt ).trim();
-        lastName = asString( lastName.replace( rxIllegalStartChars, _mt ), true ).replace( rxIllegalEndChars, _mt ).trim();
-
-        firstName = asString( firstName.replaceAll( rxIllegalNameChars, _mt ), true ).trim();
-        lastName = asString( lastName.replaceAll( rxIllegalNameChars, _mt ), true ).trim();
-
-        firstName = asString( firstName.replaceAll( /\d/g, _mt ), true ).trim();
-        lastName = asString( lastName.replaceAll( /\d/g, _mt ), true ).trim();
+        firstName = _trimPersonName( asString( firstName.replaceAll( /\d/g, _mt ), true ).trim() );
+        lastName = _trimPersonName( asString( lastName.replace( /^\d+/, _mt ), true ).trim() );
 
         firstName = asString( asProperCaseName( firstName, options, true ).replaceAll( /\s+/g, _spc ), true );
         lastName = asString( asProperCaseName( lastName, options, false ).replaceAll( /\s+/g, _spc ), true );
@@ -4100,13 +4112,18 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
     const SMART_QUOTES =
         {
             // Smart Quotes & Apostrophes
-            "’": "'", "‘": "'", "”": "\"", "“": "\"", "`": "'"
+            "’": "'",
+            "‘": "'",
+            "”": "\"",
+            "“": "\"",
+            "`": "'"
         };
 
     const SMART_DASHES =
         {
-            // Smart Quotes & Apostrophes
-            "–": "-", "—": "-"
+            // Hyphens and Em dashes
+            "–": "-",
+            "—": "-"
         };
 
     const ACCENTED_CHARACTERS =
@@ -4122,7 +4139,9 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
     const EXOTIC_WHITESPACE =
         {
-            "\u00A0": " ", "\u202F": " "
+            "\u00A0": " ",
+            "\u202F": " ",
+            "&nbsp;": " "
         };
 
     const LATIN_1_CHARACTER_MAP =
@@ -4167,7 +4186,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         // We could escape special regex characters if necessary, but for now we just join keys
         const pattern = new RegExp( Object.keys( characterMap ).join( "|" ), "g" );
 
-        return s.replace( pattern, ( matched ) => characterMap[matched] );
+        return s.replaceAll( pattern, ( matched ) => characterMap[matched] );
     }
 
     const DEFAULT_TIDY_OPTIONS =

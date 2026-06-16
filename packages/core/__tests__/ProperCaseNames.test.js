@@ -125,15 +125,16 @@ describe( "Proper Case Names", () =>
     {
         let s = "MR. MAnn";
 
-        expect( asProperCaseName( s ) ).toEqual( "Mann" );
+        expect( asProperCaseName( s ) ).toEqual( "Mr. Mann" );
+        expect( asProperCaseName( s, true ) ).toEqual( "Mann" );
 
         s = "Ms. gloria";
 
-        expect( asProperCaseName( s ) ).toEqual( "Gloria" );
+        expect( asProperCaseName( s, true ) ).toEqual( "Gloria" );
 
         s = "Mrs. del gato";
 
-        expect( asProperCaseName( s ) ).toEqual( "Del Gato" );
+        expect( asProperCaseName( s, true ) ).toEqual( "Del Gato" );
     } );
 
 
