@@ -20,7 +20,9 @@ const {
     distinct,
     toShuffled,
     replaceElements,
-    truncateArray
+    truncateArray,
+    sum,
+    avg
 } = arrayUtils;
 
 const { moduleUtils, constants, stringUtils } = dependencies;
@@ -2756,3 +2758,58 @@ describe( "replaceElements", () =>
 
           } );
 } );
+
+describe( "sum and avg return the total and average respectively",
+          () =>
+          {
+              test( "sum of [1,2,3,4] === 10", () =>
+              {
+                  let arr = [1, 2, 3, 4];
+                  let total = sum( ...arr );
+                  expect( total ).toEqual( 10 );
+              } );
+
+              test( "sum of [] === 0", () =>
+              {
+                  let arr = [];
+                  let total = sum( ...arr );
+                  expect( total ).toEqual( 0 );
+              } );
+
+              test( "sum of ['1','2','3','4'] === 10", () =>
+              {
+                  let arr = ["1", "2", "3", "4"];
+                  let total = sum( ...arr );
+                  expect( total ).toEqual( 10 );
+              } );
+
+              test( "sum of [1.5,2.5,3.5,4.5] === 12", () =>
+              {
+                  let arr = [1.5, 2.5, 3.5, 4.5];
+                  let total = sum( ...arr );
+                  expect( total ).toEqual( 12 );
+              } );
+
+              test( "sum of [1,2,3,4, 'what'] === 10", () =>
+              {
+                  let arr = [1, 2, 3, 4, "what"];
+                  let total = sum( ...arr );
+                  expect( total ).toEqual( 10 );
+              } );
+
+
+              test( "average of [1,2,3,4] === 10/4", () =>
+              {
+                  let arr = [1, 2, 3, 4];
+                  let average = avg( ...arr );
+                  expect( average ).toEqual( 10 / 4 );
+              } );
+
+              test( "average of [1,2,3,4, 'what'] === 10/4", () =>
+              {
+                  let arr = [1, 2, 3, 4, "what"];
+                  let average = avg( ...arr );
+                  expect( average ).toEqual( 10 / 4 );
+              } );
+
+          } );

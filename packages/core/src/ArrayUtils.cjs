@@ -67,7 +67,8 @@ const { _ud = "undefined", $scope } = constants;
             attempt,
             asyncAttempt,
             sleep,
-            $ln
+            $ln,
+            roundToNearestMultiple
         } = moduleUtils;
 
     /*
@@ -250,7 +251,7 @@ const { _ud = "undefined", $scope } = constants;
      *
      * @property {string|undefined|null} [splitOn=undefined] A character or string to split a string<br>
      * if the argument to the function is a string<br><br>
-     * For example, calling asArray("a.b.c") with splitOn:"." yields ["a","b","c"]<br>
+     * For example, calling asArray("a.b.c") with splitOn: "." yields ["a","b","c"]<br>
      *
      * @property {function|undefined|null} [filter=null] A function that will be used to filter the resulting array<br>
      *
@@ -5325,6 +5326,44 @@ const { _ud = "undefined", $scope } = constants;
         return !!pAsStrings ? arr.map( e => asString( e ) ) : arr;
     };
 
+    const sum = function( ...pArr )
+    {
+        const options =
+            {
+                sanitize: true,
+                removeNaN: true,
+                removeInfinity: true
+            };
+
+        const arr = asArray( pArr ?? [], options ).flat().filter( isNumeric ).map( asFloat );
+
+        return $ln( arr ) > 0 ? arr.reduce( ( a, c ) => a + c, 0 ) : 0;
+    };
+
+    const avg = function( ...pArr )
+    {
+        const options =
+            {
+                sanitize: true,
+                removeNaN: true,
+                removeInfinity: true
+            };
+
+        const arr = asArray( pArr ?? [], options ).flat().filter( isNumeric ).map( asFloat );
+
+        const total = sum( ...arr );
+
+        const len = $ln( arr );
+
+        if ( total > 0 && len > 0 )
+        {
+            return roundToNearestMultiple( total / len, 0.005 );
+        }
+
+        return 0;
+    };
+
+
     /**
      * Instances of this class are used to iterate a collection or Iterable at a controlled rate.
      * <br><br>
@@ -6054,6 +6093,8 @@ const { _ud = "undefined", $scope } = constants;
             combineConsecutive,
             concatenateConsecutiveStrings,
             concatMaps,
+            sum,
+            avg,
             ThrottledIterator,
             /**
              * @namespace
