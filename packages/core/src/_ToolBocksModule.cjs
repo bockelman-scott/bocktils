@@ -7387,7 +7387,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * Represents a visitor class to support the common Visitor Pattern.
      * This class also extends the EventTarget interface
      * to enable event dispatching, specifically for the "visit" event.
-     * Subclasses can use and/or extend its functionality to define their own visiting logic.
+     * Subclasses can use and/or extend the functionality to define their own visiting logic.
      */
     class Visitor extends EventTarget
     {

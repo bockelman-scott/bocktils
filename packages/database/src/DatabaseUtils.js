@@ -102,7 +102,7 @@ const $scope = constants?.$scope || function()
     {
         #options = { ...DEFAULT_DATABASE_OPTIONS };
 
-        #dbType; // "mongoose", "SqlServer", "etc"
+        #dbType; // "postgres", "mongoose", "SqlServer", "etc"
 
         #adminUserName;
 

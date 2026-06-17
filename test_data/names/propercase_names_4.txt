@@ -647,7 +647,7 @@ Bruce|Moise||Bruce|Moise
 Bruce|Smothers||Bruce|Smothers
 Bruno|Chavero||Bruno|Chavero
 Bryan|Baker||Bryan|Baker
-Bryan|Becerrilbryan30@Gmail.Com||Bryan|Becerrilbryan30@gmail.com
+Bryan|Becerrilbryan30Gmail.Com||Bryan|Becerrilbryan30@gmail.com
 Bryan|Casas||Bryan|Casas
 Bryan|Casas||Bryan|Casas
 Bryan|Gomez||Bryan|Gomez
@@ -1794,7 +1794,7 @@ Jaisohn|Meadors||Jaisohn|Meadors
 Jakail|Davis||Jakail|Davis
 Jake|Ellis||Jake|Ellis
 Jake|Watts||Jake|Watts
-Jakwanjns@Gmail.Com|Jones||jakwanjns@gmail.com|Jones
+JakwanjnsGmail.Com|Jones||jakwanjns@gmail.com|Jones
 Jalawrence|Delemar||Jalawrence|Delemar
 Jalen|Pratt||Jalen|Pratt
 Jalen|Smith||Jalen|Smith
@@ -3112,7 +3112,7 @@ Miguel|Sperber||Miguel|Sperber
 Miguel|Toledo||Miguel|Toledo
 Miguel|Vega||Miguel|Vega
 Miguel|Villalobos||Miguel|Villalobos
-Miguel60660@Gmail.Com|Onofre||Miguel60660@gmail.com|Onofre
+Miguel60660Gmail.Com|Onofre||Miguel60660@gmail.com|Onofre
 Miguelina|Tavarez||Miguelina|Tavarez
 Mihir|Patel||MIHIR|Patel
 Mihir|Patel||Mihir|Patel
@@ -3725,7 +3725,7 @@ Safi|Ullah||Safi|Ullah
 Saga|Mikaele||Saga|Mikaele
 Saharsh|Patel||Saharsh|Patel
 Said|Moursy||Said|Moursy
-Said_espinosa@Yahoo.Com|Espinosa||Said_espinosa@yahoo.com|Espinosa
+SaidespinosaYahoo.Com|Espinosa||Said_espinosa@yahoo.com|Espinosa
 Saiteja|Ravuri||Saiteja|Ravuri
 Sajid|Rashdi||Sajid|Rashdi
 Sajil|Shakya||Sajil|Shakya
