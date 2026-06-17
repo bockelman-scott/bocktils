@@ -43,6 +43,7 @@ const { _ud = "undefined", $scope } = constants;
             ModuleEvent,
             ToolBocksModule,
             IllegalArgumentError,
+            Visitor,
             ObjectEntry,
             objectEntries,
             objectKeys,
@@ -53,7 +54,8 @@ const { _ud = "undefined", $scope } = constants;
             sleep,
             lock,
             deepLock,
-            $ln
+            $ln,
+            no_op
         } = moduleUtils;
 
     const { _mt, _str, _num, _big, _bool, _obj, _fun, _symbol } = constants;
