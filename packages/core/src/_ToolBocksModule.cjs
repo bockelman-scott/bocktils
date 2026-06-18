@@ -2090,6 +2090,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     msg = this.addPrefix( new Date(), level, ...msg );
                 }
 
+                msg = [...(new Set( msg ))].filter( e => !isNull( e ) && _mt !== e && "{}" !== e );
+
                 if ( isFunc( this.logger[level] ) )
                 {
                     this.logger[level]( ...(msg || []) );
