@@ -2234,6 +2234,12 @@ describe( "transliteration", () =>
               s = `“The developer’s résumé—updated for 2026—shows João’s skills.”`;
               expect( transliterate( s ) ).toEqual( `"The developer's resume-updated for 2026-shows Joao's skills."` );
 
+              s = `776 ½ Carlton Street`;
+              expect( transliterate( s ) ).toEqual( `776 1/2 Carlton Street` );
+
+              s = `776 ½ Carlton Street ½`;
+              expect( transliterate( s ) ).toEqual( `776 1/2 Carlton Street 1/2` );
+
           } );
 } );
 

@@ -4116,7 +4116,8 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             "‘": "'",
             "”": "\"",
             "“": "\"",
-            "`": "'"
+            "`": "'",
+            "ʻ": "'"
         };
 
     const SMART_DASHES =
@@ -4144,6 +4145,19 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             "&nbsp;": " "
         };
 
+    const UNSUPPORTED_SYMBOLS =
+        {
+            "½": "1/2",
+            "⅓": "1/3",
+            "¼": "1/4",
+            "⅕": "1/5",
+            "⅙": "1/6",
+            "⅐": "1/7",
+            "⅛": "1/8",
+            "⅑": "1/9"
+
+        };
+
     const LATIN_1_CHARACTER_MAP =
         {
             ...SMART_QUOTES,
@@ -4163,7 +4177,9 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             "•": "-",
 
             // Whitespace (Non-breaking spaces)
-            ...EXOTIC_WHITESPACE
+            ...EXOTIC_WHITESPACE,
+
+            ...UNSUPPORTED_SYMBOLS
         };
 
 
