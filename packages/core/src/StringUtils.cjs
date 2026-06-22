@@ -3912,10 +3912,20 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
         if ( !rx.test( zip ) )
         {
-            zip = asString( zip, true ).slice( 0, 5 ).trim();
+            let temp = (asString( zip, true ).replaceAll( /\D/g, _mt )).trim();
+            if ( $ln( temp ) >= 9 )
+            {
+                zip = (asString( zip, true ).slice( 0, 5 ).trim() +
+                       _hyphen +
+                       asString( zip, true ).slice( 5, 9 ).trim());
+            }
+            else
+            {
+                zip = asString( zip, true ).slice( 0, 5 ).trim();
+            }
         }
 
-        return zip;
+        return asString( zip, true );
     };
 
     const isValidZipCode = function( pZipCode )
