@@ -4390,7 +4390,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     function objectEntries( ...pObject )
     {
-        let objects = [...(isArray( pObject ) ? _asArr( pObject ).filter( isNonNullObj ) : [pObject])].filter( e => _obj === typeof e );
+        let objects = [...(isArray( pObject ) ? _asArr( pObject ).filter( isNonNullObj ) : [pObject])].filter( isNonNullObj );
 
         objects = isNull( objects ) ? [] : (!isArray( objects ) ? [] : objects.filter( e => isNonNullObj( e ) && ($scope() !== e) ));
 
