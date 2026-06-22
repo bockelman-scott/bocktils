@@ -6436,9 +6436,9 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             return [];
         }
 
-        let target = isNonNullObject( pClass ) ? (pClass.prototype || Object.getPrototypeOf( pClass )) : isClass( pClass ) ? pClass : {};
+        let target = isNonNullObject( pClass ) ? pClass ?? (pClass.prototype || Object.getPrototypeOf( pClass )) : isClass( pClass ) ? pClass : {};
 
-        let entries = objectEntries( target );
+        let entries = attempt( () => objectEntries( target ?? pClass ) );
 
         let methods = [];
 
@@ -6771,7 +6771,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
         let omitted = [...(NON_DELEGATED_PROPERTIES || []), ...(pOmitted || [])];
 
-        let entries = attempt( () => objectEntries( delegate || {} ) );
+        let entries = attempt( () => objectEntries( delegate ?? {} ) );
 
         if ( entries && $ln( entries ) > 0 && isFunction( entries.forEach ) )
         {
