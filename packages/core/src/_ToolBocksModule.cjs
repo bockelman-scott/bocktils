@@ -3031,7 +3031,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         let returnValue = null;
 
-        if ( isFunction( pFunction ) || isCallable( pFunction ) )
+        if ( isFunc( pFunction ) || isCallable( pFunction ) )
         {
             if ( isClass( pFunction ) || isConstructable( pFunction ) )
             {
