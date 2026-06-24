@@ -6743,6 +6743,10 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             return delegated;
         }
 
+        let propertiesDelegated = [];
+
+        let omitted = [...(NON_DELEGATED_PROPERTIES || []), ...(pOmitted || [])];
+
         if ( !isObject( delegate ) )
         {
             if ( isFunction( delegate ) )
@@ -6752,12 +6756,12 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
                     const instance = attemptSilent( () => new delegate() );
                     if ( isNonNullObject( instance ) )
                     {
-                        return attempt( () => delegateTo( target, instance ) );
+                        return attempt( () => delegateTo( target, instance, omitted ) );
                     }
                 }
 
                 let name = _toString( delegate?.name || _mt );
-                if ( (isString( name ) && _mt !== name.trim()) )
+                if ( (isString( name ) && _mt !== name.trim()) && !omitted.includes( name ) )
                 {
                     attempt( () => target[name] = isFunction( target[name] ) ? target[name].bind( target ) : isAsyncFunction( delegate ) ? (async function( ...pArgs ) { return await asyncAttempt( async() => await delegate( ...pArgs ) ); }).bind( target ) : (function( ...pArgs ) { return attempt( () => delegate( ...pArgs ) ); }).bind( target ) );
                     delegated = isFunction( target[name] );
@@ -6766,10 +6770,6 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
             return delegated;
         }
-
-        let propertiesDelegated = [];
-
-        let omitted = [...(NON_DELEGATED_PROPERTIES || []), ...(pOmitted || [])];
 
         let entries = attempt( () => objectEntries( delegate ?? {} ) );
 
