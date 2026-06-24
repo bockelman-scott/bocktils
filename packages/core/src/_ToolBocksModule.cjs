@@ -901,6 +901,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const isThenable = pObj => !isNull( pObj ) && isObj( pObj ) && (isPromise( pObj ) || isFunc( pObj.then ));
 
+    const isCallable = pObj => isFunc( pObj ) || (isNonNullObj( pObj ) && isFunc( pObj.call ));
+
+    const canApply = pObj => isFunc( pObj ) || (isNonNullObj( pObj ) && isFunc( pObj.apply ));
+
+    const isExecutable = pObj => (isNonNullObj( pObj ) && isFunc( pObj.execute ));
+
     /**
      * Returns true if the specified value is immutable.<br>
      * <br>
@@ -3005,6 +3011,106 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         return pDefault ?? handleAttempt.lastError;
     };
+
+    /**
+     * Executes the specified function or method
+     * and returns its result along with information about the duration of the execution.
+     *
+     * The specified function will be called with its 'this' context
+     * set to the specified object or the global scope.
+     *
+     * @param pFunction
+     * @param pThis
+     * @param pArgs
+     */
+    async function timed( pFunction, pThis, ...pArgs )
+    {
+        const startTime = new Date();
+
+        const target = pThis || $scope();
+
+        let returnValue = null;
+
+        if ( isFunction( pFunction ) || isCallable( pFunction ) )
+        {
+            if ( isClass( pFunction ) || isConstructable( pFunction ) )
+            {
+                returnValue = attempt( () => new pFunction( ...([target, ...pArgs]) ) );
+                returnValue = returnValue ?? await asyncAttempt( async() => await pFunction.call( target, ...pArgs ) );
+            }
+            else if ( isAsyncFunction( pFunction ) )
+            {
+                returnValue = await asyncAttempt( async() => await pFunction.call( target, ...pArgs ) );
+            }
+            else
+            {
+                returnValue = attempt( () => pFunction.call( target, ...pArgs ) );
+            }
+        }
+        else if ( isNonNullObj( pFunction ) )
+        {
+            if ( canApply( pFunction ) )
+            {
+                returnValue = await asyncAttempt( async() => await pFunction.apply( target, [...pArgs] ) );
+            }
+            else if ( isExecutable( pFunction ) )
+            {
+                returnValue = await asyncAttempt( async() => await pFunction.execute( target, ...pArgs ) );
+            }
+        }
+        else if ( _isValidStr( pFunction ) )
+        {
+            returnValue = attempt( () => JSON.parse( String( pFunction ).trim() ) );
+        }
+        else
+        {
+            returnValue = await asyncAttempt( async() => await pFunction );
+        }
+
+        const endTime = new Date();
+
+        const lastError = getLastError();
+
+        const elapsedTime = calculateElapsedTime( startTime, endTime );
+
+        const formattedElapsedTime = attempt( () => formatElapsedTime( elapsedTime ) );
+
+        const evtTarget = (isNonNullObj( target ) && (target instanceof EventTarget || isFunc( target?.dispatchEvent )) ? target : new EventTarget());
+
+        const logger = ToolBocksModule.resolveLogger( target?.logger ?? ToolBocksModule.getGlobalLogger(), ToolBocksModule.getGlobalLogger(), konsole );
+
+        const result =
+            {
+                returnValue,
+                startTime,
+                endTime,
+                elapsedTime,
+                formattedElapsedTime,
+                lastError,
+                target,
+                evtTarget
+            };
+
+        logger.log( `Executed ${asString( target ) || "global"}.${nameFromSource( pFunction )}` );
+        logger.log( `Elapsed Time: ${formattedElapsedTime}` );
+
+        attemptSilent( () =>
+                       {
+                           const dispatcher = evtTarget ?? $scope();
+                           if ( dispatcher && isFunc( dispatcher.dispatchEvent ) )
+                           {
+                               dispatcher.dispatchEvent( new Event( "complete",
+                                                                    {
+                                                                        bubbles: true,
+                                                                        cancelable: true,
+                                                                        detail: results,
+                                                                        target
+                                                                    } ) );
+                           }
+                       } );
+
+        return result;
+    }
 
 
     /**
@@ -7844,6 +7950,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return this;
         }
 
+        [Symbol.toStringTag]()
+        {
+            return `[object ToolBocksModule::${this.moduleName}]`;
+        }
+
         get traceEnabled()
         {
             return !!this.#traceEnabled;
@@ -10209,7 +10320,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     _validTypes,
                     isPrimitiveWrapper,
                     isWeak,
-                    isRef
+                    isRef,
+                    isCallable,
+                    isConstructable,
+                    canApply,
+                    isExecutable
                 },
 
             TYPE_HELPERS:
@@ -10254,6 +10369,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             fireAndForget,
             executeCallback,
+
+            timed,
 
             asPhrase,
 
