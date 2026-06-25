@@ -1624,22 +1624,24 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
     {
         let s = isNull( pSource ) ? _mt : pSource;
 
-        if ( isNonNullObject( pSource ) )
+        if ( isNonNullObject( pSource ) || isJsonObject( pSource ) )
         {
-            const id = attempt( () => readProperty( pSource, "id", "name", "instanceId" ) );
+            const source = asObject( pSource );
+
+            const id = attempt( () => readProperty( source, "id", "name", "instanceId" ) );
 
             const suffix = isBlank( id ) ? _mt : (" (" + asString( id, true ) + ")");
 
-            s = (asString( getClassName( pSource ) || getClass( pSource ), true ) + suffix);
+            s = (asString( getClassName( source ) || getClass( source ), true ) + suffix);
 
             if ( !isBlank( s ) )
             {
                 return s;
             }
 
-            if ( isFunction( pSource.toString ) )
+            if ( isFunction( source.toString ) )
             {
-                s = attempt( () => pSource.toString() );
+                s = attempt( () => source.toString() );
 
                 if ( !isBlank( s ) )
                 {
@@ -1649,7 +1651,7 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                 }
             }
 
-            s = asString( pSource, true );
+            s = asString( source, true );
         }
 
         return asString( s || (asString( isNonNullObject( pSource ) ? getClassName( pSource ) || objectToString( pSource ) : asString( pSource, true ) )), true );
