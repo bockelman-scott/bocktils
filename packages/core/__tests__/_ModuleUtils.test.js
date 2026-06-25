@@ -2396,6 +2396,81 @@ describe( "serialize", () =>
           } );
 } );
 
+describe( "readProperty", () =>
+{
+    const testObj =
+        {
+            a:
+                {
+                    b: 2,
+                    c:
+                        {
+                            d: "abc"
+                        }
+                },
+            "object_id": 12,
+            "objectName": "Fred",
+            "name": "Roger",
+            "id": 777,
+            "chain_male":
+                {
+                    "helmet":
+                        {
+                            "plume": "feather",
+                            "color": "silver",
+                            "spaceTime": "Einstein"
+                        },
+                    "shinGuard": [1, 2]
+                },
+            "ghostBusters": "who ya gonna call?"
+        };
+
+    test( "readProperty - access testObj properties", () =>
+    {
+        let value = readProperty( testObj, "a" );
+
+        expect( typeof value ).toEqual( "object" );
+        expect( readProperty( value, "b" ) ).toEqual( 2 );
+        expect( readProperty( value, "c.d" ) ).toEqual( "abc" );
+
+        value = readProperty( testObj, "object_name", "object_id", "name", "id" );
+        expect( value ).toEqual( "Fred" );
+
+        value = readProperty( testObj, "chainMale.helmet.space_time", "chain_male.shin_guard.0" );
+        expect( value ).toEqual( "Einstein" );
+
+        value = readProperty( testObj, "chain_male.shin_guard.0" );
+        expect( value ).toEqual( 1 );
+    } );
+
+    test( "readProperty - handles WeakRef", () =>
+    {
+        const ref = new WeakRef( testObj );
+
+        let value = readProperty( ref, "a" );
+
+        expect( typeof value ).toEqual( "object" );
+        expect( readProperty( value, "b" ) ).toEqual( 2 );
+        expect( readProperty( value, "c.d" ) ).toEqual( "abc" );
+
+        value = readProperty( ref, "object_name", "object_id", "name", "id" );
+        expect( value ).toEqual( "Fred" );
+
+        value = readProperty( ref, "chainMale.helmet.space_time", "chain_male.shin_guard.0" );
+        expect( value ).toEqual( "Einstein" );
+
+        value = readProperty( testObj, "chain_male.shin_guard.0" );
+        expect( value ).toEqual( 1 );
+    } );
+
+    test( "readProperty - tries each variation of key only once", () =>
+    {
+        const code = readProperty( testObj, "code" );
+        expect( typeof code ).toEqual( "undefined" );
+    } );
+
+} );
+
 describe( "readScalarProperty", () =>
 {
     test( "readScalarProperty resolves issues between similarly shaped, differently named, semantically equivalent, objects",

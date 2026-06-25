@@ -3091,7 +3091,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 evtTarget
             };
 
-        logger.log( `Executed ${asString( target ) || "global"}.${nameFromSource( pFunction )}` );
+        logger.log( `Executed ${_asStr( target ) || "global"}.${nameFromSource( pFunction )}` );
         logger.log( `Elapsed Time: ${formattedElapsedTime}` );
 
         attemptSilent( () =>
@@ -9516,41 +9516,55 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const _prepareContainer = ( pObject, ...pPropertyPaths ) => (isNonNullObj( pObject ) || isArray( pObject )) ? pObject : isFunc( pObject ) ? () => attempt( () => pObject( ...pPropertyPaths ) ) : [...(pPropertyPaths || [])].reduce( ( acc, path ) => ({ ...acc, ...path.split( "." ).reduceRight( ( val, key ) => ({ [key]: val }), pObject ) }), {} );
 
+    const transformations = lock( [_toCamel, _toPascal, _toSnake, _toSnakeStrict, _ucase, _lcase] );
+
+    const _INVALID_KEY_ = "_INVALID_KEY_";
 
     const makeMutator = ( pObj, pName = _mt ) =>
     {
+        let key = _trim( _asStr( pName, true ).replace( /^#/, _mt ) );
+
         if ( isNull( pObj ) || !(isObj( pObj ) || isArray( pObj )) )
         {
-            return ( pKey = pName, pValue ) => new ObjectEntry( pKey, pValue, pObj );
+            return ( pKey = key, pValue ) => new ObjectEntry( (_trim( pKey || key || _INVALID_KEY_, true ).replace( /^#/, _mt )).trim(),
+                                                              pValue,
+                                                              (obj ?? {}) );
         }
 
-        if ( isArray( pObj ) )
+        let obj = (isRef( pObj ) ? dereference( pObj ) : pObj) ?? {};
+
+        if ( isArray( obj ) )
         {
-            return ( pKey = pName, pValue ) =>
+            return ( pKey = key, pValue ) =>
             {
                 if ( isNumeric( pKey ) )
                 {
                     let idx = _asInt( pKey );
-                    if ( idx < $ln( pObj ) )
+
+                    if ( idx < $ln( obj ) )
                     {
-                        return _asArr( pObj ).splice( idx, 0, pValue );
+                        return _asArr( obj ).splice( idx, 0, pValue );
                     }
-                    return [...(_asArr( pObj )), pValue];
+                    return [...(_asArr( obj )), pValue];
+                }
+                else
+                {
+                    return _asArr( obj );
                 }
             };
         }
 
-        if ( isMap( pObj ) || (isFunc( pObj?.set ) && (2 === $ln( pObj?.set ))) )
+        if ( isMap( obj ) || (isFunc( obj?.set ) && (2 === $ln( obj?.set ))) )
         {
-            return ( pKey = pName, pValue ) => pObj.set( pKey, pValue );
+            return ( pKey = key, pValue ) => attempt( () => obj.set( (_asStr( pKey || key || _INVALID_KEY_, true ).replace( /^#/, _mt )).trim(), pValue ) );
         }
 
-        if ( isFunc( pObj?.add ) )
+        if ( isFunc( obj?.add ) )
         {
-            return ( pKey = pName, pValue ) => pObj.add( pValue );
+            return ( pKey = key, pValue ) => attempt( () => obj.add( pValue ) );
         }
 
-        return ( pKey = pName, pValue ) => attempt( () => pObj[pKey] = pValue );
+        return ( pKey = key, pValue ) => attempt( () => pObj[(_asStr( pKey || key || _INVALID_KEY_, true ).replace( /^#/, _mt )).trim()] = pValue );
     };
 
     /**
@@ -9565,84 +9579,113 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const makeAccessor = ( pObj, pName = _mt ) =>
     {
-        if ( isMap( pObj ) || (isFunc( pObj?.get ) && (1 === $ln( pObj?.get ))) )
+        let obj = (isRef( pObj ) ? dereference( pObj ) : pObj) ?? {};
+
+        let key = _asStr( pName, true ).replace( /^#/, _mt ) || `~~!~~`;
+
+        if ( isMap( obj ) || (isFunc( obj?.get ) && (1 === $ln( obj?.get ))) )
         {
-            return ( pKey = pName ) => pObj.get( pKey );
+            return ( pKey = key ) => attempt( () => obj.get( (_asStr( pKey || key, true ).replace( /^#/, _mt )).trim() ) ) ?? attempt( () => obj.get( key ) );
         }
 
-        return ( pKey = pName ) => pObj[pKey];
+        if ( isArray( obj ) )
+        {
+            return ( pKey = key ) =>
+            {
+                if ( isNumeric( pKey ) && /^\d+$/.test( _asStr( pKey, true ) ) )
+                {
+                    attempt( () => obj[_asInt( pKey )] ?? obj[_asInt( key )] ?? obj[pKey] ?? obj[key] );
+                }
+            };
+        }
+
+        return ( pKey = key ) => attempt( () => obj[(pKey || key)] ?? obj[key] );
     };
 
     const makeDeleter = ( pObj, pName = _mt ) =>
     {
+        let key = _asStr( pName, true ).replace( /^#/, _mt );
+
         if ( isMap( pObj ) || (isFunc( pObj?.delete ) && (1 === $ln( pObj?.delete ))) )
         {
-            return ( pKey = pName ) => attempt( () => pObj.delete( pKey ) );
+            return ( pKey = key ) => attempt( () => pObj.delete( pKey || key ) );
         }
         else if ( (isFunc( pObj?.remove ) && (1 === $ln( pObj?.remove ))) )
         {
-            return ( pKey = pName ) => attempt( () => pObj.remove( pKey ) );
+            return ( pKey = key ) => attempt( () => pObj.remove( pKey || key ) );
         }
 
-        return ( pKey = pName ) => attempt( () => delete pObj[pKey] );
+        return ( pKey = key ) => attempt( () => delete pObj[(pKey || key)] );
     };
 
     const makeAppender = ( pObj, pName ) =>
     {
+        let key = _asStr( pName, true ).replace( /^#/, _mt );
+
         if ( isMap( pObj ) || (isFunc( pObj?.append ) && (2 === $ln( pObj?.append ))) )
         {
-            return ( pKey = pName, pValue ) => attempt( () => pObj.append( pKey, pValue ) );
+            return ( pKey = key, pValue ) => attempt( () => pObj.append( (pKey || key), pValue ) );
         }
         else if ( isFunc( pObj?.add ) )
         {
-            return ( pKey = pName, pValue ) => attempt( () => pObj.add( pValue ) );
+            return ( pKey = key, pValue ) => attempt( () => pObj.add( pValue ) );
         }
 
-        const accessor = makeAccessor( pObj, pName );
+        const accessor = makeAccessor( pObj, key );
 
-        return ( pKey = pName, pValue ) => attempt( () =>
-                                                    {
-                                                        let existing = accessor( pKey );
+        return ( pKey = key, pValue ) => attempt( () =>
+                                                  {
+                                                      let existing = accessor( pKey || key );
 
-                                                        let value = pValue ?? existing;
+                                                      let value = pValue ?? existing;
 
-                                                        if ( isArray( existing ) )
-                                                        {
-                                                            value = [...(new Set( [...existing, ...(isArray( pValue ) ? pValue : [pValue])] ))];
-                                                        }
-                                                        else if ( isNonNullObj( existing ) )
-                                                        {
-                                                            if ( (isFunction( existing?.equals ) && !existing.equals( pValue )) || !OBJECT_REGISTRY.areEqual( existing, pValue ) )
-                                                            {
-                                                                value = { ...existing, ...(isNonNullObj( pValue ) ? pValue : { [name]: pValue }) };
-                                                            }
-                                                            else
-                                                            {
-                                                                value = existing;
-                                                            }
-                                                        }
-                                                        else if ( isNumeric( existing ) || isNumeric( pValue ) || isBool( existing ) || isBool( pValue ) )
-                                                        {
-                                                            value = pValue ?? existing;
-                                                        }
-                                                        else if ( _isValidStr( existing ) )
-                                                        {
-                                                            let exStr = _asStr( existing || _mt ).replace( /undefined|null|void/, _mt );
-                                                            let newStr = _asStr( pValue || mt ).replace( /undefined|null|void/, _mt );
+                                                      if ( isArray( existing ) )
+                                                      {
+                                                          value = [...(new Set( [...existing, ...(isArray( pValue ) ? pValue : [pValue])] ))];
+                                                      }
+                                                      else if ( isNonNullObj( existing ) )
+                                                      {
+                                                          if ( (isFunction( existing?.equals ) && !existing.equals( pValue )) || !OBJECT_REGISTRY.areEqual( existing, pValue ) )
+                                                          {
+                                                              value = { ...existing, ...(isNonNullObj( pValue ) ? pValue : { [(pKey || key)]: pValue }) };
+                                                          }
+                                                          else
+                                                          {
+                                                              value = existing;
+                                                          }
+                                                      }
+                                                      else if ( isNumeric( existing ) || isNumeric( pValue ) || isBool( existing ) || isBool( pValue ) )
+                                                      {
+                                                          value = pValue ?? existing;
+                                                      }
+                                                      else if ( _isValidStr( existing ) )
+                                                      {
+                                                          let exStr = _asStr( existing || _mt ).replace( /undefined|null|void/, _mt );
+                                                          let newStr = _asStr( pValue || mt ).replace( /undefined|null|void/, _mt );
 
-                                                            value = (_ucase( exStr.trim() ) === _ucase( newStr.trim() )) ? exStr : (exStr + ", " + newStr);
-                                                        }
+                                                          value = (_ucase( exStr.trim() ) === _ucase( newStr.trim() )) ? exStr : (exStr + ", " + newStr);
+                                                      }
 
-                                                        return ((isFunc( pObj?.set ) && (2 === $ln( pObj?.set )))) ? attempt( () => pObj.set( pKey, value ) ) : attempt( () => pObj[pKey] = value );
-                                                    } );
+                                                      return ((isFunc( pObj?.set ) && (2 === $ln( pObj?.set )))) ? attempt( () => pObj.set( (pKey || key), value ) ) : attempt( () => pObj[(pKey || key)] = value );
+                                                  } );
     };
 
 
     function _property( pObject, pPropertyPath, pValue )
     {
-        if ( isNull( pObject ) || !isObj( pObject ) || (_ud === typeof pPropertyPath) || (_mt_str === String( pPropertyPath )) )
+        if ( isNull( pObject ) ||
+             !isObj( pObject ) ||
+             (_ud === typeof pPropertyPath) ||
+             (_mt_str === (String( pPropertyPath ).trim())) )
         {
             return pObject;
+        }
+
+        let object = isRef( pObject ) ? dereference( pObject ) : pObject;
+
+        if ( isNull( pObject ) || !isObj( pObject ) )
+        {
+            return object;
         }
 
         let keys = toNodePathArray( pPropertyPath );
@@ -9652,23 +9695,26 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             INTERNAL_LOGGER.debug( `_property called with keys: ${keys.join( _dot )}` );
         }
 
-        let mutator = ( !isNull( pValue ) || arguments.length > 2) ? ( object, key, value ) =>
+        let mutator = ( !isNull( pValue ) || arguments.length > 2) ? ( pObj = object, pKey, pVal = pValue ) =>
         {
-            if ( isMap( object ) || (isFunc( object?.set ) && (2 === $ln( object?.set ))) )
+            let key = _asStr( pKey, true ).replace( /^#/, _mt );
+
+            let obj = isRef( pObj ) ? dereference( pObj ) : pObj;
+
+            if ( isMap( obj ) || (isFunc( obj?.set ) && (2 === $ln( obj?.set ))) )
             {
-                attempt( () => object.set( key, ((keys.length > 0) ? (isMap( object ) ? object.get( key ) ?? new Map() : object[key] ?? {}) : value || pValue) ) );
-                return isFunction( object.get ) ? object.get( key ) : object[key];
+                attempt( () => obj.set( key, (((keys.length > 0) ? (isMap( obj ) ? obj.get( key ) ?? new Map() : obj[key] ?? {}) : (pVal ?? pValue))) ?? (pVal ?? pValue) ) );
+                return isFunction( obj.get ) ? obj.get( key ) : obj[key];
             }
             else
             {
-                attempt( () => object[key] = ((keys.length > 0) ? (isArray( pObject ) || (/^d+$/.test( String( key ) )) ? [] : {}) : (value || pValue)) );
+                attempt( () => pObj[key] = ((keys.length > 0) ? (isArray( pObj ) || (/^d+$/.test( String( key ) )) ? (pObj[_asInt( key )] ?? []) : (pObj[key] ?? {})) : (pVal || pValue)) );
             }
 
-            return _property( object, key );
-
+            return _property( obj, key );
         } : null;
 
-        let value = isRef( pObject ) ? dereference( pObject ) : pObject;
+        let value = isRef( object ) ? dereference( object ) : object;
 
         // create a temporary copy of the current node/value, so we can try different variations of the key
         let root = isArray( value ) ? [...(_asArr( value ))] : value;
@@ -9690,14 +9736,47 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
                 // try array index or key 'as-is'; this is the 'expected' property key
                 let accessor = makeAccessor( node );
+
                 value = (isArray( node ) && /^\d+$/.test( key )) ? node[_asInt( key )] : accessor( key );
 
-                // if the value is null, undefined, or an empty string, try PascalCase, camelCase, and snake_case variations
-                value = value || accessor( _toPascal( key ) ) || accessor( _toCamel( key ) ) || accessor( _toSnake( key ), node ) || accessor( _toSnakeStrict( key ), node ) || accessor( _ucase( key ) ) || accessor( _lcase( key ) );
+                if ( isNull( value ) || _ud === typeof value )
+                {
+                    let tried = [key];
+
+                    let funcs = [...(transformations ?? [])];
+
+                    while ( (isNull( value ) || _ud === typeof value) && $ln( funcs ) > 0 )
+                    {
+                        let k = funcs.shift().call( this, key );
+                        if ( !tried.includes( k ) )
+                        {
+                            tried.push( k );
+                            value = accessor( k );
+                        }
+                    }
+                }
 
                 // if the value is still null, undefined, or an empty string, try finding the property on the 'root'
                 accessor = makeAccessor( root );
-                value = value || accessor( key ) || accessor( _toPascal( key ) ) || accessor( _toCamel( key ) ) || accessor( _toSnake( key ) ) || accessor( _toSnakeStrict( key ) ) || accessor( _ucase( key ) ) || accessor( _lcase( key ) );
+
+                value = value || accessor( key );
+
+                if ( isNull( value ) || _ud === typeof value )
+                {
+                    let tried = [key];
+
+                    let funcs = [...(transformations ?? [])];
+
+                    while ( (isNull( value ) || _ud === typeof value) && $ln( funcs ) > 0 )
+                    {
+                        let k = funcs.shift().call( this, key );
+                        if ( !tried.includes( k ) )
+                        {
+                            tried.push( k );
+                            value = accessor( k );
+                        }
+                    }
+                }
             }
         }
 
@@ -9780,18 +9859,33 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         let value = null;
 
-        while ( ((_ud === typeof value) || (null === value) || (isStr( value ) && !_isValidStr( value ))) && $ln( paths ) > 0 )
+        function notFound( pValue )
+        {
+            return (_ud === typeof pValue) || (null === pValue) || (isStr( pValue ) && !_isValidStr( pValue ));
+        }
+
+        while ( notFound( value ) && $ln( paths ) > 0 )
         {
             let path = paths.shift();
 
-            // try the path as-is, as camelCase, as PascalCase, as snake_Case, and as snake_case
-            value = getProperty( obj, path ) ||
-                    getProperty( obj, _toCamel( path ) ) ||
-                    getProperty( obj, _toPascal( path ) ) ||
-                    getProperty( obj, _toSnake( path ) ) ||
-                    getProperty( obj, _toSnakeStrict( path ) ) ||
-                    getProperty( obj, _lcase( path ) ) ||
-                    getProperty( obj, _ucase( path ) );
+            value = getProperty( obj, path );
+
+            if ( notFound( value ) )
+            {
+                let tried = [path];
+
+                let funcs = [...(transformations ?? [])];
+
+                while ( notFound( value ) && $ln( funcs ) > 0 )
+                {
+                    let k = funcs.shift().call( this, path );
+                    if ( !tried.includes( k ) )
+                    {
+                        tried.push( k );
+                        value = getProperty( obj, k );
+                    }
+                }
+            }
         }
 
         return value;
