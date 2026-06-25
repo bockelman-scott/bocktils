@@ -9556,15 +9556,15 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         if ( isMap( obj ) || (isFunc( obj?.set ) && (2 === $ln( obj?.set ))) )
         {
-            return ( pKey = key, pValue ) => attempt( () => obj.set( (_asStr( pKey || key || _INVALID_KEY_, true ).replace( /^#/, _mt )).trim(), pValue ) );
+            return ( pKey = key, pValue ) => attemptSilent( () => obj.set( (_asStr( pKey || key || _INVALID_KEY_, true ).replace( /^#/, _mt )).trim(), pValue ) );
         }
 
         if ( isFunc( obj?.add ) )
         {
-            return ( pKey = key, pValue ) => attempt( () => obj.add( pValue ) );
+            return ( pKey = key, pValue ) => attemptSilent( () => obj.add( pValue ) );
         }
 
-        return ( pKey = key, pValue ) => attempt( () => pObj[(_asStr( pKey || key || _INVALID_KEY_, true ).replace( /^#/, _mt )).trim()] = pValue );
+        return ( pKey = key, pValue ) => attemptSilent( () => pObj[(_asStr( pKey || key || _INVALID_KEY_, true ).replace( /^#/, _mt )).trim()] = pValue );
     };
 
     /**
@@ -9585,7 +9585,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         if ( isMap( obj ) || (isFunc( obj?.get ) && (1 === $ln( obj?.get ))) )
         {
-            return ( pKey = key ) => attempt( () => obj.get( (_asStr( pKey || key, true ).replace( /^#/, _mt )).trim() ) ) ?? attempt( () => obj.get( key ) );
+            return ( pKey = key ) => attemptSilent( () => obj.get( (_asStr( pKey || key, true ).replace( /^#/, _mt )).trim() ) ) ?? attempt( () => obj.get( key ) );
         }
 
         if ( isArray( obj ) )
@@ -9594,12 +9594,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             {
                 if ( isNumeric( pKey ) && /^\d+$/.test( _asStr( pKey, true ) ) )
                 {
-                    attempt( () => obj[_asInt( pKey )] ?? obj[_asInt( key )] ?? obj[pKey] ?? obj[key] );
+                    return attemptSilent( () => obj[_asInt( pKey )] ?? obj[_asInt( key )] ?? obj[pKey] ?? obj[key] );
                 }
             };
         }
 
-        return ( pKey = key ) => attempt( () => obj[(pKey || key)] ?? obj[key] );
+        return ( pKey = key ) => attemptSilent( () => obj[(pKey || key)] ?? obj[key] );
     };
 
     const makeDeleter = ( pObj, pName = _mt ) =>
@@ -9624,50 +9624,50 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         if ( isMap( pObj ) || (isFunc( pObj?.append ) && (2 === $ln( pObj?.append ))) )
         {
-            return ( pKey = key, pValue ) => attempt( () => pObj.append( (pKey || key), pValue ) );
+            return ( pKey = key, pValue ) => attemptSilent( () => pObj.append( (pKey || key), pValue ) );
         }
         else if ( isFunc( pObj?.add ) )
         {
-            return ( pKey = key, pValue ) => attempt( () => pObj.add( pValue ) );
+            return ( pKey = key, pValue ) => attemptSilent( () => pObj.add( pValue ) );
         }
 
         const accessor = makeAccessor( pObj, key );
 
-        return ( pKey = key, pValue ) => attempt( () =>
-                                                  {
-                                                      let existing = accessor( pKey || key );
+        return ( pKey = key, pValue ) => attemptSilent( () =>
+                                                        {
+                                                            let existing = attemptSilent( () => accessor( pKey || key ) );
 
-                                                      let value = pValue ?? existing;
+                                                            let value = pValue ?? existing;
 
-                                                      if ( isArray( existing ) )
-                                                      {
-                                                          value = [...(new Set( [...existing, ...(isArray( pValue ) ? pValue : [pValue])] ))];
-                                                      }
-                                                      else if ( isNonNullObj( existing ) )
-                                                      {
-                                                          if ( (isFunction( existing?.equals ) && !existing.equals( pValue )) || !OBJECT_REGISTRY.areEqual( existing, pValue ) )
-                                                          {
-                                                              value = { ...existing, ...(isNonNullObj( pValue ) ? pValue : { [(pKey || key)]: pValue }) };
-                                                          }
-                                                          else
-                                                          {
-                                                              value = existing;
-                                                          }
-                                                      }
-                                                      else if ( isNumeric( existing ) || isNumeric( pValue ) || isBool( existing ) || isBool( pValue ) )
-                                                      {
-                                                          value = pValue ?? existing;
-                                                      }
-                                                      else if ( _isValidStr( existing ) )
-                                                      {
-                                                          let exStr = _asStr( existing || _mt ).replace( /undefined|null|void/, _mt );
-                                                          let newStr = _asStr( pValue || mt ).replace( /undefined|null|void/, _mt );
+                                                            if ( isArray( existing ) )
+                                                            {
+                                                                value = [...(new Set( [...existing, ...(isArray( pValue ) ? pValue : [pValue])] ))];
+                                                            }
+                                                            else if ( isNonNullObj( existing ) )
+                                                            {
+                                                                if ( (isFunction( existing?.equals ) && !existing.equals( pValue )) || !OBJECT_REGISTRY.areEqual( existing, pValue ) )
+                                                                {
+                                                                    value = { ...existing, ...(isNonNullObj( pValue ) ? pValue : { [(pKey || key)]: pValue }) };
+                                                                }
+                                                                else
+                                                                {
+                                                                    value = existing;
+                                                                }
+                                                            }
+                                                            else if ( isNumeric( existing ) || isNumeric( pValue ) || isBool( existing ) || isBool( pValue ) )
+                                                            {
+                                                                value = pValue ?? existing;
+                                                            }
+                                                            else if ( _isValidStr( existing ) )
+                                                            {
+                                                                let exStr = _asStr( existing || _mt ).replace( /undefined|null|void/, _mt );
+                                                                let newStr = _asStr( pValue || mt ).replace( /undefined|null|void/, _mt );
 
-                                                          value = (_ucase( exStr.trim() ) === _ucase( newStr.trim() )) ? exStr : (exStr + ", " + newStr);
-                                                      }
+                                                                value = (_ucase( exStr.trim() ) === _ucase( newStr.trim() )) ? exStr : (exStr + ", " + newStr);
+                                                            }
 
-                                                      return ((isFunc( pObj?.set ) && (2 === $ln( pObj?.set )))) ? attempt( () => pObj.set( (pKey || key), value ) ) : attempt( () => pObj[(pKey || key)] = value );
-                                                  } );
+                                                            return ((isFunc( pObj?.set ) && (2 === $ln( pObj?.set )))) ? attemptSilent( () => pObj.set( (pKey || key), value ) ) : attemptSilent( () => pObj[(pKey || key)] = value );
+                                                        } );
     };
 
 
@@ -9703,12 +9703,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             if ( isMap( obj ) || (isFunc( obj?.set ) && (2 === $ln( obj?.set ))) )
             {
-                attempt( () => obj.set( key, (((keys.length > 0) ? (isMap( obj ) ? obj.get( key ) ?? new Map() : obj[key] ?? {}) : (pVal ?? pValue))) ?? (pVal ?? pValue) ) );
+                attemptSilent( () => obj.set( key, (((keys.length > 0) ? (isMap( obj ) ? obj.get( key ) ?? new Map() : obj[key] ?? {}) : (pVal ?? pValue))) ?? (pVal ?? pValue) ) );
                 return isFunction( obj.get ) ? obj.get( key ) : obj[key];
             }
             else
             {
-                attempt( () => pObj[key] = ((keys.length > 0) ? (isArray( pObj ) || (/^d+$/.test( String( key ) )) ? (pObj[_asInt( key )] ?? []) : (pObj[key] ?? {})) : (pVal || pValue)) );
+                attemptSilent( () => pObj[key] = ((keys.length > 0) ? (isArray( pObj ) || (/^d+$/.test( String( key ) )) ? (pObj[_asInt( key )] ?? []) : (pObj[key] ?? {})) : (pVal || pValue)) );
             }
 
             return _property( obj, key );
@@ -9727,7 +9727,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             if ( isFunc( mutator ) )
             {
-                value = mutator( value, key, pValue );
+                value = attempt( () => mutator( value, key, pValue ) );
             }
             else
             {
@@ -9737,7 +9737,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 // try array index or key 'as-is'; this is the 'expected' property key
                 let accessor = makeAccessor( node );
 
-                value = (isArray( node ) && /^\d+$/.test( key )) ? node[_asInt( key )] : accessor( key );
+                value = (isArray( node ) && /^\d+$/.test( key )) ? node[_asInt( key )] : attemptSilent( () => accessor( key ) );
 
                 if ( isNull( value ) || _ud === typeof value )
                 {
@@ -9751,7 +9751,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                         if ( !tried.includes( k ) )
                         {
                             tried.push( k );
-                            value = accessor( k );
+                            value = attemptSilent( () => accessor( k ) );
                         }
                     }
                 }
@@ -9759,7 +9759,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 // if the value is still null, undefined, or an empty string, try finding the property on the 'root'
                 accessor = makeAccessor( root );
 
-                value = value || accessor( key );
+                value = value || attemptSilent( () => accessor( key ) );
 
                 if ( isNull( value ) || _ud === typeof value )
                 {
@@ -9773,7 +9773,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                         if ( !tried.includes( k ) )
                         {
                             tried.push( k );
-                            value = accessor( k );
+                            value = attemptSilent( () => accessor( k ) );
                         }
                     }
                 }
@@ -9868,7 +9868,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             let path = paths.shift();
 
-            value = getProperty( obj, path );
+            value = attemptSilent( () => getProperty( obj, path ) );
 
             if ( notFound( value ) )
             {
@@ -9882,7 +9882,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     if ( !tried.includes( k ) )
                     {
                         tried.push( k );
-                        value = getProperty( obj, k );
+                        value = attemptSilent( () => getProperty( obj, k ) );
                     }
                 }
             }
