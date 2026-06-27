@@ -1628,6 +1628,35 @@ describe( "toProperCase", () =>
               let s = "mac mcnamara";
               expect( stringUtils.toProperCase( s ) ).toEqual( "Mac McNamara" );
           } );
+
+    test( "toProperCase('P.o. Box') === 'P.O. Box'", () =>
+    {
+        let s = "P.o. Box";
+        let ss = stringUtils.toProperCase( s );
+        expect( ss ).toEqual( "P.O. Box" );
+    } );
+
+    test( "toProperCase('J.p. morgan') === 'J.P. Morgan'", () =>
+    {
+        let s = "J.p. morgan";
+        let ss = stringUtils.toProperCase( s );
+        expect( ss ).toEqual( "J.P. Morgan" );
+    } );
+
+    test( "toProperCase('Mr. jones') === 'Mr. Jones'", () =>
+    {
+        let s = "Mr. jones";
+        let ss = stringUtils.toProperCase( s );
+        expect( ss ).toEqual( "Mr. Jones" );
+    } );
+
+    test( "toProperCase('M r. jones') === 'M R. Jones'", () =>
+    {
+        let s = "M r. jones";
+        let ss = stringUtils.toProperCase( s );
+        expect( ss ).toEqual( "M R. Jones" );
+    } );
+
 } );
 
 describe( "toCamelCase", () =>

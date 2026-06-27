@@ -3412,6 +3412,11 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             out = handleMc( out ) || out;
         }
 
+        out = out.replaceAll( /([^A-Z]+)([A-Z])(\.)/gi, ( match, p1, p2, p3 ) =>
+        {
+            return p1 + ucase( p2 ) + p3;
+        } );
+
         return asString( out, true );
     };
 

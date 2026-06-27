@@ -137,6 +137,35 @@ describe( "Proper Case Names", () =>
         expect( asProperCaseName( s, true ) ).toEqual( "Del Gato" );
     } );
 
+    test( "asProperCaseName('P.o. Box') === 'P.O. Box'", () =>
+    {
+        let s = "P.o. Box";
+        let ss = asProperCaseName( s );
+        expect( ss ).toEqual( "P.O. Box" );
+    } );
+
+    test( "asProperCaseName('J.p. morgan') === 'J.P. Morgan'", () =>
+    {
+        let s = "J.p. morgan";
+        let ss = asProperCaseName( s );
+        expect( ss ).toEqual( "J.P. Morgan" );
+    } );
+
+    test( "asProperCaseName('Mr. jones') === 'Mr. Jones'", () =>
+    {
+        let s = "Mr. jones";
+        let ss = asProperCaseName( s );
+        expect( ss ).toEqual( "Mr. Jones" );
+    } );
+
+    test( "asProperCaseName('M r. jones') === 'M R. Jones'", () =>
+    {
+        let s = "M r. jones";
+        let ss = asProperCaseName( s );
+        expect( ss ).toEqual( "M R. Jones" );
+    } );
+
+
 
     let testData = configureTestData( NUM_TEST_FILES, ENCODING );
 
