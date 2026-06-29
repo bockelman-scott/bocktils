@@ -1262,6 +1262,18 @@ const { _ud = "undefined", $scope } = constants;
 
     const endOfSecond = ( pDate ) => TIME_UNITS.SECOND.endsFor( pDate );
 
+    const isBetween = ( pDate, pStart, pEnd ) =>
+    {
+        if ( isDate( pDate ) && isDate( pStart ) && isDate( pEnd ) )
+        {
+            const candidate = asInt( pDate.getTime() );
+            const startTime = asInt( pStart.getTime() );
+            const endTime = asInt( pEnd.getTime() );
+            return candidate >= startTime && candidate < endTime;
+        }
+        return false;
+    };
+
     const DateFilters =
         {
             WEEKDAYS: ( e ) => isDate( e ) && ![Days.SUNDAY, Days.SATURDAY].includes( e.getDay() ),
@@ -2228,6 +2240,8 @@ const { _ud = "undefined", $scope } = constants;
             addWeeks,
             subtractDays,
             subtractWeeks,
+            toHour,
+            toMinute,
             toNoon,
             toMidnight,
             firstInstant: toMidnight,
@@ -2238,6 +2252,7 @@ const { _ud = "undefined", $scope } = constants;
             sortDates,
             earliest,
             latest,
+            isBetween,
             daysBetween,
             workDaysBetween,
             getWeekdays,
