@@ -10,6 +10,7 @@ const dateUtils = require( "./src/DateUtils.cjs" );
 const dateFormatTokenUtils = require( "./src/DateFormatTokenSet.cjs" );
 const dateFormatterUtils = require( "./src/DateFormatter.cjs" );
 const dateParserUtils = require( "./src/DateParser.cjs" );
+const timezoneUtils = require( "./src/TimeZoneUtils.js" );
 
 const { _ud = "undefined", $scope } = constants;
 
@@ -33,7 +34,8 @@ const { _ud = "undefined", $scope } = constants;
             dateUtils,
             dateFormatTokenUtils,
             dateFormatterUtils,
-            dateParserUtils
+            dateParserUtils,
+            timezoneUtils
         };
 
     const { Result, isDate, isValidDateInstance } = typeUtils;
@@ -108,6 +110,8 @@ const { _ud = "undefined", $scope } = constants;
             FORMATS
         } = localeUtils;
 
+    const { TimeZone, findTimeZone } = timezoneUtils;
+
     const modName = "BockDatesPackage";
 
     const toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
@@ -124,7 +128,8 @@ const { _ud = "undefined", $scope } = constants;
             classes:
                 {
                     DateFormatter,
-                    DateParser
+                    DateParser,
+                    TimeZone
                 },
             TOKENS:
                 {
@@ -143,6 +148,9 @@ const { _ud = "undefined", $scope } = constants;
                 },
             DateFormatter,
             DateParser,
+
+            TimeZone,
+            findTimeZone,
 
             Result,
             isDate,

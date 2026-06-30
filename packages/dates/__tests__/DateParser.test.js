@@ -230,17 +230,3 @@ describe( "DateParser", () =>
         }
     } );
 } );
-
-
-describe( "TimeZone", () =>
-{
-    test( "TimeZone.DATA can be loaded at runtime", async() =>
-    {
-        console.log( typeof TimeZone );
-
-        await TimeZone.loadTimeZoneData();
-
-        console.log( TimeZone.DATA );
-
-    } );
-} );

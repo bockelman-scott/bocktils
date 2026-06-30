@@ -1262,6 +1262,7 @@ const { _ud = "undefined", $scope } = constants;
 
     const endOfSecond = ( pDate ) => TIME_UNITS.SECOND.endsFor( pDate );
 
+
     const isBetween = ( pDate, pStart, pEnd ) =>
     {
         if ( isDate( pDate ) && isDate( pStart ) && isDate( pEnd ) )
@@ -1301,7 +1302,7 @@ const { _ud = "undefined", $scope } = constants;
                     const startDate = new Date( earliest( pStartDate, pEndDate ) );
                     const endDate = new Date( latest( pStartDate, pEndDate ) );
 
-                    return ( e ) => isDate( e ) && e > startDate && e <= endDate;
+                    return ( e ) => isBetween( e, startDate, endDate );
                 }
 
                 return op_false;

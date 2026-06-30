@@ -168,229 +168,12 @@ const { _ud = "undefined", $scope } = constants;
         return pattern;
     };
 
-    const DEFAULT_TIME_ZONE_DATA_LOCATION = "../time_zone_data/US-TimeZones.properties";
+    /*
+     const deriveFormat = function( pDateString, pLocale )
+     {
 
-    class TimeChange
-    {
-        #year;
-        #date;
-
-        #delta;
-        #utcOffset;
-
-        constructor( pYear, pDate, pDelta, pUtcOffset )
-        {
-
-        }
-    }
-
-    class TimeZone
-    {
-        #name;
-        #abbreviation;
-        #utcOffset;
-        #localOffset;
-
-        #timeChanges = {};
-
-        constructor( pName, pAbbreviation, pUtcOffset, pLocalOffset, pTimeChanges )
-        {
-            if ( isNull( pAbbreviation ) || arguments.length < 2 )
-            {
-                const timeZone = TimeZone.parse( pName );
-
-                this.#name = timeZone.#name;
-                this.#abbreviation = timeZone.#abbreviation;
-                this.#utcOffset = timeZone.#utcOffset;
-                this.#localOffset = timeZone.#localOffset;
-                this.#timeChanges = isNonNullObject( timeZone.#timeChanges ) ? timeZone.#timeChanges : {};
-            }
-            else
-            {
-                this.#name = asString( pName, true );
-                this.#abbreviation = asString( pAbbreviation, true );
-                this.#utcOffset = asInt( pUtcOffset );
-                this.#localOffset = asInt( pLocalOffset );
-                this.#timeChanges = isNonNullObject( pTimeChanges ) ? pTimeChanges : {};
-            }
-        }
-
-        get regExp()
-        {
-            return rxTz();
-        }
-
-        static parseDateOrString( pDateOrString )
-        {
-            const str = asString( isString( pDateOrString ) ? asString( pDateOrString, true ) : isDate( pDateOrString ) ? resolveDate( pDateOrString ).toString() : _mt_str, true );
-
-            const date = resolveDate( pDateOrString ) || Now();
-
-            let dateString = isDate( date ) ? date.toString() : str;
-
-            let matches = rxTz().exec( str ) || rxTz().exec( dateString );
-
-            if ( null === matches || matches.length < 2 )
-            {
-                matches = rxTz().exec( dateString ) || rxTz().exec( str );
-            }
-
-            return matches;
-        }
-
-        static parse( pDateOrString )
-        {
-            let matches = isValidDateOrNumeric( pDateOrString ) || isString( pDateOrString ) ? this.parseDateOrString( pDateOrString ) : isArray( pDateOrString ) || isLikeArray( pDateOrString ) ? pDateOrString : [];
-
-            if ( null !== matches && matches.length > 0 )
-            {
-                const matched = asString( matches[0], true ) || _mt_str;
-
-                const gmtPhrase = matches.length > 1 ? matches[1] : asString( matched, true );
-
-                const gmt = matches.length > 2 ? matches[2] : ucase( asString( matched, true ).replace( /[\d:;+-]/g, _mt_str ) );
-
-                const gmtOperator = matches.length > 3 ? matches[3] : matched;
-
-                const gmtHours = matches.length > 4 ? matches[4] : asInt( leftOf( rightOf( asString( matched, true ), (gmtOperator || _hyphen) ), _colon ).replace( /\D+/g, _mt_str ).replace( /^0+/, _mt_str ) );
-
-                const gmtMinutes = matches.length > 5 ? matches[5] : asInt( rightOfLast( asString( matched, true ), _colon ).replace( /\D+/g, _mt_str ).replace( /^0+/, _mt_str ) );
-
-                const tzPhrase = matches.length > 6 ? matches[6] || matches[7] : asString( matched, true );
-
-                let gmtOffset = asInt( gmtHours ) + gmtMinutes > 0 ? asInt( 60 / gmtMinutes ) : 0;
-
-                if ( ([_minus, _hyphen].includes( gmtOperator )) )
-                {
-                    gmtOffset = -1 * gmtOffset;
-                }
-
-                let localOffset = (Now().getTimezoneOffset() / 60) - gmtOffset;
-
-                return new TimeZone( tzPhrase, gmtPhrase, gmtOffset, localOffset );
-            }
-        }
-
-        calculateTimeChanges( pTimezone )
-        {
-
-            return {};
-        }
-
-        static loadTimeZoneDataFromJson( pJson )
-        {
-            const json = JSON.parse( pJson );
-            // TimeZone.DATA = merge( json, TimeZone.DATA );
-
-        }
-
-        static loadTimeZoneDataFromProperties( pContents )
-        {
-            const lines = asString( pContents, true ).split( "\n" ).map( line => line.trim() ).filter( line => !isBlank( line ) && !line.startsWith( "#" ) );
-
-            for( const line of lines )
-            {
-                let entry = asString( line, true );
-                if ( !isBlank( entry ) )
-                {
-                    const kv = entry.split( "=" );
-
-                    let key = asString( kv[0], true );
-                    let value = asString( kv[1] || _mt_str, true );
-
-                    const parts = value.split( "|" );
-
-                    const abbr = parts[0];
-
-                    const utcOffset = asString( parts[1], true ).split( _colon );
-                    const utcOffsetHours = asInt( utcOffset[0] );
-                    const utcOffsetMinutes = asInt( utcOffset[1] );
-
-                    TimeZone.DATA[key.replaceAll( / /g, _underscore )] =
-                        {
-                            abbr,
-                            utcOffset: utcOffsetHours + _colon + utcOffsetMinutes,
-                            utcOffsetHours,
-                            utcOffsetMinutes
-                        };
-                }
-            }
-
-            return TimeZone.DATA;
-        }
-
-        static async fetchTimeZoneData( pPath )
-        {
-            let dataLocation = asString( pPath, true );
-
-            let contents = _mt_str;
-
-            const executionEnvironment = toolBocksModule.executionEnvironment;
-
-            if ( /https?:\/\//.test( dataLocation ) )
-            {
-                const response = await fetch( dataLocation );
-                contents = await response.text();
-            }
-            else
-            {
-                let currentDirectory;
-
-                /*## environment-specific:node start ##*/
-                if ( executionEnvironment.isNode() )
-                {
-                    const fsAsync = require( "node:fs/promises" );
-                    const path = require( "node:path" );
-
-                    currentDirectory = path.dirname( __filename );
-
-                    let filePath = path.resolve( currentDirectory, toUnixPath( dataLocation ) );
-
-                    contents = asString( await fsAsync.readFile( filePath, { encoding: "utf-8" } ), true );
-                }
-                /*## environment-specific:node end ##*/
-                else if ( executionEnvironment.isDeno() )
-                {
-                    // TODO
-                }
-            }
-
-            return contents;
-        }
-
-        static async loadTimeZoneData( pPath )
-        {
-            let dataLocation = asString( pPath, true );
-
-            if ( isBlank( dataLocation ) )
-            {
-                dataLocation = DEFAULT_TIME_ZONE_DATA_LOCATION;
-            }
-
-            let contents = await TimeZone.fetchTimeZoneData( dataLocation );
-
-            if ( isString( contents ) && !isBlank( contents ) )
-            {
-                if ( contents.startsWith( "{" ) )
-                {
-                    TimeZone.loadTimeZoneDataFromJson( contents );
-                }
-                else
-                {
-                    TimeZone.loadTimeZoneDataFromProperties( contents );
-                }
-            }
-
-            return TimeZone.DATA;
-        }
-    }
-
-    TimeZone.DATA = {};
-
-    const deriveFormat = function( pDateString, pLocale )
-    {
-
-    };
+     };
+     */
 
     /**
      * Class to parse a string as a number, according to the Locale and Intl.NumberFormat Options specified
@@ -711,12 +494,8 @@ const { _ud = "undefined", $scope } = constants;
             dependencies,
             classes:
                 {
-                    TimeChange,
-                    TimeZone,
                     DateParser
                 },
-            TimeChange,
-            TimeZone,
             DateParser,
             parse: function( pString, pFormat = DEFAULT_FORMAT, pLocale = DEFAULT_LOCALE, pTokenSet = DEFAULT_TOKEN_SET, pOptions = {} )
             {
@@ -727,8 +506,6 @@ const { _ud = "undefined", $scope } = constants;
         };
 
     mod = toolBocksModule.extend( mod );
-
-    TimeZone.loadTimeZoneData( DEFAULT_TIME_ZONE_DATA_LOCATION ).then( no_op ).catch( no_op );
 
     return mod.expose( mod, INTERNAL_NAME, (_ud !== typeof module ? module : mod) ) || mod;
 }());
