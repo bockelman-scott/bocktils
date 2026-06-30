@@ -1839,6 +1839,8 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         }
     }
 
+    SimpleLogger.LEVELS = lock( ConditionalLogger.LEVELS );
+
     SimpleLogger.resolveLogSourceName = resolveLogSourceName;
 
     const SIMPLE_LOGGER = new SimpleLogger( konsole );
@@ -1905,6 +1907,8 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             return this.resolveSourceName( source );
         }
     }
+
+    SourcedSimpleLogger.LEVELS = lock( SimpleLogger.LEVELS );
 
     SourcedSimpleLogger.resolveLogSourceName = resolveLogSourceName;
 
@@ -2043,6 +2047,8 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
             return this._log( LOGGER_METHODS.TRACE, ...pData );
         }
     }
+
+    SimpleAsynchronousLogger.LEVELS = lock( SimpleLogger.LEVELS );
 
     const SIMPLE_ASYNC_LOGGER = new SimpleAsynchronousLogger( konsole );
 

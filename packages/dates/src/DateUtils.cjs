@@ -1867,6 +1867,64 @@ const { _ud = "undefined", $scope } = constants;
         return pDate;
     };
 
+    function addHours( pDate, pNumHours )
+    {
+        const numHours = isNumeric( pNumHours ) ? asInt( pNumHours ) : 0;
+
+        if ( 0 === numHours )
+        {
+            return pDate;
+        }
+
+        if ( isValidDateArgument( pDate ) )
+        {
+            let newDate = new Date( pDate );
+
+            return new Date( newDate.getTime() + (MILLIS_PER_HOUR * numHours) );
+        }
+    }
+
+    function subtractHours( pDate, pNumHours )
+    {
+        const numHours = isNumeric( pNumHours ) ? asInt( pNumHours ) : 0;
+
+        if ( 0 === numHours )
+        {
+            return pDate;
+        }
+
+        return addHours( pDate, -(numHours) );
+    }
+
+    function addMinutes( pDate, pNumMinutes )
+    {
+        const numMinutes = isNumeric( pNumMinutes ) ? asInt( pNumMinutes ) : 0;
+
+        if ( 0 === numMinutes )
+        {
+            return pDate;
+        }
+
+        if ( isValidDateArgument( pDate ) )
+        {
+            let newDate = new Date( pDate );
+
+            return new Date( newDate.getTime() + (MILLIS_PER_MINUTE * numMinutes) );
+        }
+    }
+
+    function subtractMinutes( pDate, pNumMinutes )
+    {
+        const numMinutes = isNumeric( pNumMinutes ) ? asInt( pNumMinutes ) : 0;
+
+        if ( 0 === numMinutes )
+        {
+            return pDate;
+        }
+
+        return addMinutes( pDate, -(numMinutes) );
+    }
+
     /**
      * Returns an array of dates representing holidays that fall on a weekday
      * given an array of holidays and/or dates.
@@ -2236,9 +2294,13 @@ const { _ud = "undefined", $scope } = constants;
             endOfDecade,
             avoidWeekend,
             generateHolidays,
+            addMinutes,
+            addHours,
             addDays,
             addWorkdays,
             addWeeks,
+            subtractMinutes,
+            subtractHours,
             subtractDays,
             subtractWeeks,
             toHour,
