@@ -1535,6 +1535,16 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @property {function(...*)} error A function that takes one or more arguments and 'logs' them with log level, 'error'
      */
 
+    const LOG_LEVELS =
+        freeze( {
+                    LOG: S_LOG,
+                    INFO: S_INFO,
+                    WARN: S_WARN,
+                    ERROR: S_ERROR,
+                    DEBUG: S_DEBUG,
+                    TRACE: S_TRACE
+                } );
+
     let LOGGER_ID = 1;
 
     const nextLoggerId = () =>
@@ -1624,6 +1634,17 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return logger ?? konsole;
     };
 
+    ILogger.LEVELS =
+        freeze( {
+                    ...(LOG_LEVELS),
+                    "log": S_LOG,
+                    "error": S_ERROR,
+                    "warn": S_WARN,
+                    "info": S_INFO,
+                    "debug": S_DEBUG,
+                    "trace": S_TRACE
+                } );
+
     /**
      * Defines a logger that implements the expected methods but does not do anything.<br>
      * This is used when logging is disabled<br>
@@ -1638,7 +1659,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     // we also prevent this 'logger' from being modified
     // noinspection JSUnusedAssignment
-    MOCK_LOGGER = Object.freeze( Object.seal( MOCK_LOGGER ) );
+    MOCK_LOGGER = freeze( Object.seal( MOCK_LOGGER ) );
 
     /**
      * Rounds a number to the nearest specified multiple.
@@ -1903,16 +1924,6 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }, pSpaces );
     }
 
-    const LOG_LEVELS =
-        {
-            LOG: S_LOG,
-            INFO: S_INFO,
-            WARN: S_WARN,
-            ERROR: S_ERROR,
-            DEBUG: S_DEBUG,
-            TRACE: S_TRACE
-        };
-
     const DEFAULT_KONSOLE_OPTIONS =
         {
             defaultLogger: konsole,
@@ -2155,6 +2166,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
     }
 
+    Konsole.LEVELS = freeze( ILogger.LEVELS );
+
     /**
      * nothing written to the log
      */
@@ -2354,6 +2367,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return this.isErrorEnabled();
         }
     }
+
+    ConditionalLogger.LEVELS = freeze( ILogger.LEVELS );
 
     const INTERNAL_LOGGER = new ConditionalLogger( (konsole || console || mockConsole), ...(DEBUG_MODE ? DEBUG_LOG_LEVELS : MODEST_LOG_LEVELS) );
     const DEBUG_LOGGER = new ConditionalLogger( (konsole || console || mockConsole), ...DEBUG_LOG_LEVELS );
