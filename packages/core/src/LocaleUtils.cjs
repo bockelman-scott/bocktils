@@ -32,26 +32,29 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
     const
         {
             ToolBocksModule,
+            IllegalArgumentError,
             attempt,
             lock,
             resolveError,
             objectValues,
             runtimeLocaleString,
             getRuntimeLocale,
-            getMessagesLocaleString
+            $ln
         } = moduleUtils;
 
     // Create local aliases for values imported from other modules
     const
         {
-            _mt_str,
-            _hyphen,
+            _mt,
             _str,
             _num,
             _big,
             _bool,
             _obj,
             _fun,
+            _spc,
+            _hyphen,
+            _underscore,
             S_WARN,
             S_ERROR,
         } = constants;
@@ -84,6 +87,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             isBlank,
             lcase,
             ucase,
+            toProperCase,
             DEFAULT_NUMBER_SYMBOLS,
             deriveDecimalSymbols,
             calculateDecimalSymbols,
@@ -191,6 +195,134 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             ISO_OUTLIERS: lock( ["US", "CA", "BR", "JP", "KP", "KR", "MX", "CN", "TW", "AS", "GU", "UM", "VI"] )
 
         } );
+
+    const US_STATES =
+        {
+            "AL": "Alabama",
+            "AK": "Alaska",
+            "AZ": "Arizona",
+            "AR": "Arkansas",
+            "CA": "California",
+            "CO": "Colorado",
+            "CT": "Connecticut",
+            "DC": "District of Columbia",
+            "DE": "Delaware",
+            "FL": "Florida",
+            "GA": "Georgia",
+            "HI": "Hawaii",
+            "ID": "Idaho",
+            "IL": "Illinois",
+            "IN": "Indiana",
+            "IA": "Iowa",
+            "KS": "Kansas",
+            "KY": "Kentucky",
+            "LA": "Louisiana",
+            "ME": "Maine",
+            "MD": "Maryland",
+            "MA": "Massachusetts",
+            "MI": "Michigan",
+            "MN": "Minnesota",
+            "MS": "Mississippi",
+            "MO": "Missouri",
+            "MT": "Montana",
+            "NE": "Nebraska",
+            "NV": "Nevada",
+            "NH": "New Hampshire",
+            "NJ": "New Jersey",
+            "NM": "New Mexico",
+            "NY": "New York",
+            "NC": "North Carolina",
+            "ND": "North Dakota",
+            "OH": "Ohio",
+            "OK": "Oklahoma",
+            "OR": "Oregon",
+            "PA": "Pennsylvania",
+            "PR": "Puerto Rico",
+            "RI": "Rhode Island",
+            "SC": "South Carolina",
+            "SD": "South Dakota",
+            "TN": "Tennessee",
+            "TX": "Texas",
+            "UT": "Utah",
+            "VT": "Vermont",
+            "VA": "Virginia",
+            "WA": "Washington",
+            "WV": "West Virginia",
+            "WI": "Wisconsin",
+            "WY": "Wyoming"
+        };
+
+    const US_STATES_KEYS = lock( Object.keys( US_STATES ) );
+    const US_STATES_VALUES = lock( Object.values( US_STATES ) );
+
+    const US_STATES_BY_NAME = {};
+
+    try
+    {
+        for( let [k, v] of Object.entries( US_STATES ) )
+        {
+            attempt( () => US_STATES_BY_NAME[asString( v, true ).replaceAll( /\s+/g, _underscore )] = k );
+        }
+    }
+    catch( ex )
+    {
+        console.error( ex.message, ex );
+    }
+
+    const resolveUsStateName = function( pVal )
+    {
+        if ( isString( pVal ) )
+        {
+            const val = asString( pVal, true );
+            if ( $ln( val ) <= 2 )
+            {
+                return US_STATES[ucase( val.slice( 0, 2 ) )];
+            }
+
+            if ( US_STATES_VALUES.includes( val ) ||
+                 US_STATES_VALUES.map( e => asString( e, true ).replaceAll( /\s+/g, _underscore ) ).map( ucase ).includes( ucase( val.replaceAll( /\s+/g, _underscore ) ) ) )
+            {
+                return toProperCase( asString( val, true ) );
+            }
+        }
+
+        throw new IllegalArgumentError( `Cannot resolve specified value as the name of a U.S. State`,
+                                        {
+                                            detail: pVal,
+                                            source: this
+                                        }, pVal, this );
+    };
+
+    const resolveUsStateAbbr = function( pVal )
+    {
+        let abbr = _mt;
+
+        if ( isString( pVal ) )
+        {
+            const val = asString( pVal, true );
+            if ( $ln( val ) <= 2 && !isNull( US_STATES[ucase( val.slice( 0, 2 ) )] ) )
+            {
+                abbr = ucase( val.slice( 0, 2 ) );
+            }
+            else if ( US_STATES_VALUES.includes( val ) ||
+                      US_STATES_VALUES.map( e => asString( e, true ).replaceAll( /\s+/g, _underscore ) ).map( ucase ).includes( ucase( val.replaceAll( /\s+/g, _underscore ) ) ) )
+            {
+                let abbr = US_STATES_BY_NAME[toProperCase( asString( val, true ).replaceAll( /_+/g, _spc ) )];
+                abbr = abbr || US_STATES_BY_NAME[val] || US_STATES_BY_NAME[toProperCase( asString( val, true ).replaceAll( /\s+/g, _underscore ) )];
+            }
+        }
+
+        if ( !(isNull( abbr ) || isBlank( abbr )) )
+        {
+            return ucase( abbr.slice( 0, 2 ) );
+        }
+
+        throw new IllegalArgumentError( `Cannot resolve the specified value as the abbreviation of a U.S. State`,
+                                        {
+                                            detail: pVal,
+                                            source: this
+                                        }, pVal, this );
+    };
 
     // local variable used to generate locale-specific month names and abbreviations
     const SAMPLE_MONTH_DATES = DEFAULTS.MONTH_NAMES.map( ( e, i ) => new Date( 2024, i, 1, 12, 0, 0, 0 ) );
@@ -421,7 +553,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
         const dateTimeFormat = new Intl.DateTimeFormat( locale.baseName, { month: pFormat } );
 
-        return SAMPLE_MONTH_DATES.map( date => asString( dateTimeFormat.format( date ).replace( /\d+/g, _mt_str ), true ) );
+        return SAMPLE_MONTH_DATES.map( date => asString( dateTimeFormat.format( date ).replace( /\d+/g, _mt ), true ) );
     };
 
     /**
@@ -454,7 +586,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
      *
      * @returns {Array<string>} The full name of the month of the date for the specified locale.
      */
-    const getMonthName = ( pDate, pLocale ) => isDate( pDate ) ? asArray( getMonthNames( resolveLocale( pLocale ) ) )[pDate.getMonth()] : isLocale( pDate ) ? getMonthNames( pDate, pLocale ) : _mt_str;
+    const getMonthName = ( pDate, pLocale ) => isDate( pDate ) ? asArray( getMonthNames( resolveLocale( pLocale ) ) )[pDate.getMonth()] : isLocale( pDate ) ? getMonthNames( pDate, pLocale ) : _mt;
 
     /**
      * Returns an array of abbreviated month names for a given locale.
@@ -482,7 +614,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
      *
      * @returns {Array<string>} The short name of the month of the date for the specified locale.
      */
-    const getMonthAbbr = ( pDate, pLocale ) => isDate( pDate ) ? asArray( getMonthAbbreviations( resolveLocale( pLocale ) ) )[pDate.getMonth()] : isLocale( pDate ) ? getMonthAbbreviations( pDate, pLocale ) : _mt_str;
+    const getMonthAbbr = ( pDate, pLocale ) => isDate( pDate ) ? asArray( getMonthAbbreviations( resolveLocale( pLocale ) ) )[pDate.getMonth()] : isLocale( pDate ) ? getMonthAbbreviations( pDate, pLocale ) : _mt;
 
     /**
      * Returns an array of 1 or 2 character month signifiers for a given locale.
@@ -511,7 +643,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
      *
      * @returns {Array<string>} The narrow name of the month of the date for the specified locale.
      */
-    const getMonthLtr = ( pDate, pLocale ) => isDate( pDate ) ? asArray( getMonthLetters( resolveLocale( pLocale ) ) )[pDate.getMonth()] : isLocale( pDate ) ? getMonthLetters( pDate, pLocale ) : _mt_str;
+    const getMonthLtr = ( pDate, pLocale ) => isDate( pDate ) ? asArray( getMonthLetters( resolveLocale( pLocale ) ) )[pDate.getMonth()] : isLocale( pDate ) ? getMonthLetters( pDate, pLocale ) : _mt;
 
     const getDayDisplayValues = function( pLocale, pFormat )
     {
@@ -531,15 +663,15 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
     const getDayNames = ( pLocale ) => isDate( pLocale ) ? getDayName( pLocale ) : getDayDisplayValues( pLocale, FORMAT_LONG );
 
-    const getDayName = ( pDate, pLocale ) => isDate( pDate ) ? asArray( getDayNames( resolveLocale( pLocale ) ) )[pDate.getDay()] : isLocale( pDate ) ? getDayNames( pDate, pLocale ) : _mt_str;
+    const getDayName = ( pDate, pLocale ) => isDate( pDate ) ? asArray( getDayNames( resolveLocale( pLocale ) ) )[pDate.getDay()] : isLocale( pDate ) ? getDayNames( pDate, pLocale ) : _mt;
 
     const getDayAbbreviations = ( pLocale ) => getDayDisplayValues( pLocale, FORMAT_SHORT );
 
-    const getDayAbbr = ( pDate, pLocale ) => isDate( pDate ) ? asArray( getDayAbbreviations( pLocale ) )[pDate.getDay()] : _mt_str;
+    const getDayAbbr = ( pDate, pLocale ) => isDate( pDate ) ? asArray( getDayAbbreviations( pLocale ) )[pDate.getDay()] : _mt;
 
     const getDayLetters = ( pLocale ) => getDayDisplayValues( pLocale, FORMAT_NARROW );
 
-    const getDayLtr = ( pDate, pLocale ) => isDate( pDate ) ? asArray( getDayLetters( pLocale ) )[pDate.getDay()] : _mt_str;
+    const getDayLtr = ( pDate, pLocale ) => isDate( pDate ) ? asArray( getDayLetters( pLocale ) )[pDate.getDay()] : _mt;
 
     const getDayOrdinal = ( pDayNumber ) =>
     {
@@ -596,8 +728,8 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
                 {
                     start: era.start,
                     end: era.end,
-                    name: asString( dfShort.format( era.start || era.end ) ).replace( /[\d\/\\]/g, _mt_str ).trim(),
-                    longName: asString( dfLong.format( era.start || era.end ) ).replace( /[\d\/\\]/g, _mt_str ).trim()
+                    name: asString( dfShort.format( era.start || era.end ) ).replace( /[\d\/\\]/g, _mt ).trim(),
+                    longName: asString( dfLong.format( era.start || era.end ) ).replace( /[\d\/\\]/g, _mt ).trim()
                 } ) );
         }
 
@@ -619,7 +751,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
                                                             hourCycle: "h12"
                                                         } );
 
-        return AM_PM_DATES.map( e => asString( dateTimeFormat.format( e ) ).replace( /(0?8|20)[: ]?(00)([: ]?(00))?/, _mt_str ).trim() );
+        return AM_PM_DATES.map( e => asString( dateTimeFormat.format( e ) ).replace( /(0?8|20)[: ]?(00)([: ]?(00))?/, _mt ).trim() );
     };
 
     const getWeekData = function( pLocale )
@@ -736,7 +868,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             return lock( arr );
         }
 
-        let splitArg = "word" === pGranularity ? /\b/ : _mt_str;
+        let splitArg = "word" === pGranularity ? /\b/ : _mt;
 
         let arr = str.split( splitArg );
 
@@ -756,10 +888,10 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         const localeParts = localeCode.split( _hyphen );
 
         const language = locale?.language || (localeParts.length > 0 ? localeParts[0] : DEFAULTS.LANGUAGE);
-        const script = locale?.script || (localeParts.length > 1 ? localeParts[1] : _mt_str);
-        const region = locale?.region || (localeParts.length > 2 ? localeParts[2] : _mt_str);
+        const script = locale?.script || (localeParts.length > 1 ? localeParts[1] : _mt);
+        const region = locale?.region || (localeParts.length > 2 ? localeParts[2] : _mt);
 
-        const variant = localeParts.length > 3 ? localeParts[3] : _mt_str;
+        const variant = localeParts.length > 3 ? localeParts[3] : _mt;
 
         return { locale, localeCode, language, script, region, variant };
     }
@@ -773,14 +905,14 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
         if ( !isNull( language ) )
         {
-            const langScriptKey = !isBlank( script ) ? language + _hyphen + script : _mt_str;
-            const langRegionKey = !isBlank( region ) ? language + _hyphen + region : _mt_str;
-            const langVariantKey = !isBlank( variant ) ? language + _hyphen + variant : _mt_str;
+            const langScriptKey = !isBlank( script ) ? language + _hyphen + script : _mt;
+            const langRegionKey = !isBlank( region ) ? language + _hyphen + region : _mt;
+            const langVariantKey = !isBlank( variant ) ? language + _hyphen + variant : _mt;
 
-            const langRegionVariantKey = !(isBlank( region ) || isBlank( variant )) ? language + _hyphen + region + _hyphen + variant : _mt_str;
-            const langScriptVariantKey = !(isBlank( script ) || isBlank( variant )) ? language + _hyphen + script + _hyphen + variant : _mt_str;
-            const langScriptRegionKey = !(isBlank( script ) || isBlank( region )) ? language + _hyphen + script + _hyphen + region : _mt_str;
-            const langScriptRegionVariantKey = !(isBlank( script ) || isBlank( region ) || isBlank( variant )) ? language + _hyphen + script + _hyphen + region + _hyphen + variant : _mt_str;
+            const langRegionVariantKey = !(isBlank( region ) || isBlank( variant )) ? language + _hyphen + region + _hyphen + variant : _mt;
+            const langScriptVariantKey = !(isBlank( script ) || isBlank( variant )) ? language + _hyphen + script + _hyphen + variant : _mt;
+            const langScriptRegionKey = !(isBlank( script ) || isBlank( region )) ? language + _hyphen + script + _hyphen + region : _mt;
+            const langScriptRegionVariantKey = !(isBlank( script ) || isBlank( region ) || isBlank( variant )) ? language + _hyphen + script + _hyphen + region + _hyphen + variant : _mt;
 
             keys =
                 [
@@ -1104,6 +1236,10 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
                           TWO_DIGIT: FORMAT_2DIGIT,
                           NUMERIC: FORMAT_NUMERIC,
                       } ),
+            US_STATES,
+            US_STATES_KEYS,
+            US_STATES_VALUES,
+            US_STATES_BY_NAME,
             isLocale,
             resolveLocale,
             isDefaultLocale,
@@ -1148,6 +1284,8 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             calculateDecimalSymbols,
             toCanonicalNumericFormat,
             LocaleResourcesBase,
+            resolveUsStateName,
+            resolveUsStateAbbr,
             parseLocale,
             buildLocaleKeyPermutations,
             createGeoLocation: ( pLatitude, pLongitude ) =>
