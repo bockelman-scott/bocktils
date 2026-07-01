@@ -12,6 +12,7 @@ const core = require( "@toolbocks/core" );
 const collectionModule = require( "./Collection.js" );
 const mapsModule = require( "./Maps.js" );
 const sortedSetModule = require( "./SortedSet.js" );
+const entityGenerator = require( "./EntityGenerator.js" );
 
 const { constants } = core;
 
@@ -54,6 +55,8 @@ const $scope = constants?.$scope || function()
 
     const { PropertyAccessMap, TreeMap, ValueOrderedMap, BoundedMap } = mapsModule;
 
+    const { EntityGenerator, AsyncEntityGenerator, PaginatedEntityGenerator } = entityGenerator;
+
     const modName = "BockCollectionUtils";
 
     let toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
@@ -69,7 +72,8 @@ const $scope = constants?.$scope || function()
                     arrayUtils,
                     collectionModule,
                     mapsModule,
-                    sortedSetModule
+                    sortedSetModule,
+                    entityGenerator
                 },
             classes:
                 {
@@ -78,7 +82,10 @@ const $scope = constants?.$scope || function()
                     PropertyAccessMap,
                     TreeMap,
                     ValueOrderedMap,
-                    BoundedMap
+                    BoundedMap,
+                    EntityGenerator,
+                    AsyncEntityGenerator,
+                    PaginatedEntityGenerator
                 },
             TYPES,
             Collection,
@@ -86,7 +93,10 @@ const $scope = constants?.$scope || function()
             PropertyAccessMap,
             TreeMap,
             ValueOrderedMap,
-            BoundedMap
+            BoundedMap,
+            EntityGenerator,
+            AsyncEntityGenerator,
+            PaginatedEntityGenerator
         };
 
     mod = toolBocksModule.extend( mod );
