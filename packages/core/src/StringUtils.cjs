@@ -201,6 +201,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             clamp,
             NVL,
             toTypedArray,
+            toRegExp
         } = typeUtils;
 
     const modName = "StringUtils";
@@ -2513,6 +2514,8 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
      Boolean.prototype.evaluate = Boolean.evaluate = evaluateBoolean;
      String.prototype.toBool = String.toBool = evaluateBoolean;
      */
+
+    const asRegExp = ( s, ...f ) => toRegExp( s, ...f );
 
     /**
      * This function converts all (carriage return + line feed) sequences to line feed only sequences
@@ -4950,6 +4953,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             toByteArray,
             asUtf8ByteArray,
             fromUtf8ByteArray,
+            asRegExp,
             _trim,
             _isMt,
             _lcase,

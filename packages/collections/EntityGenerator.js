@@ -86,9 +86,9 @@ const { _ud = "undefined", $scope } = constants;
          * An object specifying rate limits in terms of allowed requests per second, minute, hour, and/or day.
          * @type {{SECOND: number, MINUTE: number}}
          */
-        #fetchesPer = { SECOND: 10, MINUTE: 250 };
+        #fetchesPer = { SECOND: 0, MINUTE: 0 };
 
-        constructor( pIds = [], pFetchEntityFunction = passThrough, pFetchesPer = { SECOND: 10, MINUTE: 250 } )
+        constructor( pIds = [], pFetchEntityFunction = passThrough, pFetchesPer = { SECOND: 0, MINUTE: 0 } )
         {
             super();
 
@@ -108,6 +108,11 @@ const { _ud = "undefined", $scope } = constants;
             return lock( asArray( this.#ids ?? [] ) );
         }
 
+        _addIds( ...pIds )
+        {
+            this.#ids.push( ...(asArray( pIds ?? [] )) );
+        }
+
         get fetchEntityFunction()
         {
             return (async( pId ) => await (this.#fetchEntityFunction ?? no_op)( pId ));
@@ -115,12 +120,12 @@ const { _ud = "undefined", $scope } = constants;
 
         get numFetchesPerSecond()
         {
-            return clamp( asInt( this.#fetchesPer["SECOND"], 10 ) || 10, 5, 1_000 );
+            return clamp( asInt( this.#fetchesPer["SECOND"], 0 ) || 0, 0, 1_000 );
         }
 
         get numFetchesPerMinute()
         {
-            return clamp( asInt( this.#fetchesPer["MINUTE"], 100 ) || 100, 50, 3_600 );
+            return clamp( asInt( this.#fetchesPer["MINUTE"], 0 ) || 0, 0, 3_600 );
         }
 
         get numFetchesPerHour()
@@ -141,8 +146,8 @@ const { _ud = "undefined", $scope } = constants;
         {
             let perSecond = this.numFetchesPerSecond;
             let perMinute = this.numFetchesPerMinute;
-            let perHour = this.numFetchesPerHour;
-            let perDay = this.numFetchesPerDay;
+            let perHour = this.numFetchesPerHour || asInt( perMinute * 60 );
+            let perDay = this.numFetchesPerDay || asInt( perHour * 24 );
 
             if ( perSecond <= 0 && perMinute <= 0 )
             {
@@ -157,7 +162,7 @@ const { _ud = "undefined", $scope } = constants;
             let lowerBound = Math.floor( millisPerSecond / perSecond );
             let upperBound = Math.floor( millisPerMinute / perMinute );
 
-            return clamp( Math.max( lowerBound, upperBound ), 32, Math.floor( millisPerDay / perDay ) * 2 );
+            return clamp( Math.max( lowerBound, upperBound ), 0, Math.floor( millisPerDay / Math.max( 1, perDay ) ) * 2 );
         }
 
         [Symbol.asyncIterator]()
@@ -194,37 +199,15 @@ const { _ud = "undefined", $scope } = constants;
                         {
                             return { value: entity, done: false };
                         }
-
-                        let tries = 0;
-
-                        while ( (isNull( entity ) || !isObject( entity )) && (tries++ < 3) )
+                        else
                         {
-                            await sleep( 64 * (1 + tries) );
-                            entity = await asyncAttempt( async() => await fetchEntity( currentId ) );
-                        }
+                            let tries = 0;
 
-                        if ( isNonNullObject( entity ) )
-                        {
-                            attempt( () => this.dispatchEvent( new ModuleEvent( "NextEntity",
-                                                                                {
-                                                                                    detail: currentId,
-                                                                                    entity,
-                                                                                    target: this
-                                                                                }, currentId, entity, this ) ) );
-                            return { value: entity, done: false };
-                        }
-
-                        if ( index < (ids.length - 1) )
-                        {
-                            attempt( () => this.dispatchEvent( new ModuleEvent( "FetchFailed",
-                                                                                {
-                                                                                    detail: currentId,
-                                                                                    target: this
-                                                                                }, currentId, this ) ) );
-
-                            currentId = ids[index++];
-
-                            entity = await asyncAttempt( async() => await fetchEntity( currentId ) );
+                            while ( (isNull( entity ) || !isObject( entity )) && (tries++ < 3) )
+                            {
+                                await sleep( 64 * (1 + tries) );
+                                entity = await asyncAttempt( async() => await fetchEntity( currentId ) );
+                            }
 
                             if ( isNonNullObject( entity ) )
                             {
@@ -235,6 +218,32 @@ const { _ud = "undefined", $scope } = constants;
                                                                                         target: this
                                                                                     }, currentId, entity, this ) ) );
                                 return { value: entity, done: false };
+                            }
+                            else
+                            {
+                                if ( index < (ids.length - 1) )
+                                {
+                                    attempt( () => this.dispatchEvent( new ModuleEvent( "FetchFailed",
+                                                                                        {
+                                                                                            detail: currentId,
+                                                                                            target: this
+                                                                                        }, currentId, this ) ) );
+
+                                    currentId = ids[index++];
+
+                                    entity = await asyncAttempt( async() => await fetchEntity( currentId ) );
+
+                                    if ( isNonNullObject( entity ) )
+                                    {
+                                        attempt( () => this.dispatchEvent( new ModuleEvent( "NextEntity",
+                                                                                            {
+                                                                                                detail: currentId,
+                                                                                                entity,
+                                                                                                target: this
+                                                                                            }, currentId, entity, this ) ) );
+                                        return { value: entity, done: false };
+                                    }
+                                }
                             }
                         }
                     }
@@ -260,7 +269,7 @@ const { _ud = "undefined", $scope } = constants;
      */
     class AsyncEntityGenerator extends EntityGenerator
     {
-        constructor( pIds = [], pFetchEntityFunction = no_op, pFetchesPer = { SECOND: 10, MINUTE: 250 } )
+        constructor( pIds = [], pFetchEntityFunction = no_op, pFetchesPer = { SECOND: 0, MINUTE: 0 } )
         {
             super( pIds, pFetchEntityFunction, pFetchesPer );
         }
@@ -294,46 +303,50 @@ const { _ud = "undefined", $scope } = constants;
                                                                             }, id, entity, this ) ) );
                         yield entity;
                     }
-
-                    let tries = 0;
-
-                    while ( (isNull( entity ) || !isObject( entity )) && (tries++ < 3) )
+                    else
                     {
-                        await sleep( 64 * (1 + tries) );
-                        entity = await asyncAttempt( async() => await this.fetchEntityFunction( id ) );
+                        let tries = 0;
+
+                        while ( (isNull( entity ) || !isObject( entity )) && (tries++ < 3) )
+                        {
+                            await sleep( 64 * (1 + tries) );
+                            entity = await asyncAttempt( async() => await this.fetchEntityFunction( id ) );
+                        }
+
+                        if ( isNonNullObject( entity ) )
+                        {
+                            attempt( () => this.dispatchEvent( new ModuleEvent( "NextEntity",
+                                                                                {
+                                                                                    detail: id,
+                                                                                    entity,
+                                                                                    target: this,
+                                                                                    retries: tries
+                                                                                }, id, entity, tries, this ) ) );
+                            yield entity;
+                        }
+                        else
+                        {
+                            if ( $ln( arr ) > 0 )
+                            {
+                                await sleep( delay );
+
+                                id = arr.shift();
+                                entity = await asyncAttempt( async() => await this.fetchEntityFunction( id ) );
+                            }
+
+                            if ( isNonNullObject( entity ) )
+                            {
+                                attempt( () => this.dispatchEvent( new ModuleEvent( "NextEntity",
+                                                                                    {
+                                                                                        detail: id,
+                                                                                        entity,
+                                                                                        target: this
+                                                                                    }, id, entity, this ) ) );
+                            }
+
+                            yield entity;
+                        }
                     }
-
-                    if ( isNonNullObject( entity ) )
-                    {
-                        attempt( () => this.dispatchEvent( new ModuleEvent( "NextEntity",
-                                                                            {
-                                                                                detail: id,
-                                                                                entity,
-                                                                                target: this,
-                                                                                retries: tries
-                                                                            }, id, entity, tries, this ) ) );
-                        yield entity;
-                    }
-
-                    if ( $ln( arr ) > 0 )
-                    {
-                        await sleep( delay );
-
-                        id = arr.shift();
-                        entity = await asyncAttempt( async() => await this.fetchEntityFunction( id ) );
-                    }
-
-                    if ( isNonNullObject( entity ) )
-                    {
-                        attempt( () => this.dispatchEvent( new ModuleEvent( "NextEntity",
-                                                                            {
-                                                                                detail: id,
-                                                                                entity,
-                                                                                target: this
-                                                                            }, id, entity, this ) ) );
-                    }
-
-                    yield entity;
                 }
                 catch( error )
                 {

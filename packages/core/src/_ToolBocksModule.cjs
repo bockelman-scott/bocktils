@@ -8439,7 +8439,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
                 let level = resolveLogLevel( _lcase( _asStr( pLevel ).trim() ) );
 
-                level = [S_LOG, S_INFO, S_WARN, S_ERROR, S_DEBUG].includes( level || S_ERROR ) ? level : S_ERROR;
+                level = [S_LOG, S_INFO, S_WARN, S_ERROR, S_DEBUG, S_TRACE].includes( level || S_ERROR ) ? level : S_ERROR;
 
                 let extra = S_TRACE === level ? [...pExtra] : [];
 

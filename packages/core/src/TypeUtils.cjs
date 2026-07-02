@@ -2780,7 +2780,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
         const s = _mt_str + (isString( pObject ) ? String( pObject ) : (isFunction( pObject.toString ) ? pObject.toString() : objectToString.call( pObject, pObject )));
 
-        let pattern = s.replace( /\/[gimsuy]+$/, "/" ).trim();
+        let pattern = s.replace( /\/[dgimsuy]+$/, "/" ).trim();
 
         if ( /^\/.+\/$/.test( pattern ) )
         {
@@ -2798,6 +2798,64 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         }
 
         return false;
+    };
+
+    const toRegExp = function( pPattern, ...pFlags )
+    {
+        const toLowerCase = ( e ) => String( e ).toLowerCase();
+        const trimFlag = ( e ) => String( e ).trim();
+
+        const flags = ([...(pFlags ?? [])]).map( e => String( e ).split( _mt ) ).flat().map( trimFlag ).map( toLowerCase );
+        const newFlags = [];
+
+        if ( isRegExp( pPattern, true ) )
+        {
+            const existing = String( pPattern.flags ).split( _mt ).map( trimFlag ).map( toLowerCase );
+
+            attempt( () => newFlags.push( ...(existing ?? []) ) );
+
+            if ( $ln( flags ) > 0 )
+            {
+                for( let flag of flags )
+                {
+                    if ( _mt !== flag && !(existing.includes( flag ) || newFlags.includes( flag )) )
+                    {
+                        newFlags.push( flag );
+                    }
+                }
+            }
+
+            return $ln( newFlags ) > 0 ? new RegExp( pPattern, newFlags.join( _mt ) ) : new RegExp( pPattern );
+        }
+        else if ( isString( pPattern ) )
+        {
+            attempt( () => newFlags.push( ...(flags ?? []) ) );
+
+            if ( isRegExp( pPattern ) )
+            {
+                let s = String( pPattern ).replace( /\/[dgimsuy]+$/, "/" ).trim();
+                s = String( s ).replace( /\/$/, _mt_str ).replace( /^\//, _mt_str );
+
+                return attempt( () => $ln( newFlags ) > 0 ? new RegExp( s, newFlags.join( _mt ) ) : new RegExp( s ) );
+            }
+
+            let rx;
+
+            try
+            {
+                let s = String( pPattern ).replace( /\/[dgimsuy]+$/, "/" ).trim();
+                s = String( s ).replace( /\/$/, _mt_str ).replace( /^\//, _mt_str );
+                s = String( s ).replaceAll( "\\", "\\\\" );
+
+                rx = $ln( newFlags ) > 0 ? new RegExp( s, newFlags.join( _mt ) ) : new RegExp( s );
+
+                return rx;
+            }
+            catch( ex )
+            {
+                toolBocksModule.handleError( ex );
+            }
+        }
     };
 
     /**
@@ -7028,6 +7086,8 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             $isFun,
             $isNum,
             $isStr,
+
+            toRegExp,
 
             toDecimal,
             toHex,
