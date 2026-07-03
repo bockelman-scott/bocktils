@@ -113,6 +113,11 @@ const { _ud = "undefined", $scope } = constants;
             this.#ids.push( ...(asArray( pIds ?? [] )) );
         }
 
+        get size()
+        {
+            return $ln( this.ids );
+        }
+
         get fetchEntityFunction()
         {
             return (async( pId ) => await (this.#fetchEntityFunction ?? no_op)( pId ));
