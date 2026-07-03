@@ -3850,6 +3850,9 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         email = asString( email, true ).replace( /yah+o+\.co\w+\s*$/i, "yahoo.com" );
         email = asString( email, true ).replace( /@a[iop]l\.co\w+\s*$/i, "@aol.com" );
 
+        // ensure we have a single @ character
+        email = asString( email, true ).replace( /@+/, "@" );
+
         // remove "plus-addressing" from known providers that support it
         const domain = rightOfLast( email, "@" );
 
@@ -3860,7 +3863,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             if ( pRemoveDots && (["gmail.com", "googlemail.com"].includes( domain )) )
             {
                 let parts = email.split( "@" );
-                email = asString( parts[0], true ).replaceAll( /\./g, _mt ) + "@" + asString( parts[1] || domain, true );
+                email = asString( parts[0], true ).replaceAll( /\./g, _mt ) + "@" + asString( domain || parts[1], true );
             }
         }
 
@@ -3870,7 +3873,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             if ( $ln( parts ) > 1 )
             {
                 let localPart = (asString( parts[0] || email, true ).slice( 0, 64 )).trim();
-                let domainPart = (asString( parts[1] || domain, true ).slice( 0, (254 - $ln( localPart ) - 1) )).trim();
+                let domainPart = (asString( domain || parts[1], true ).slice( 0, (254 - $ln( localPart ) - 1) )).trim();
                 email = (localPart.replaceAll( /[,\/;<]/g, "." ) + "@" + (domainPart || domain)).trim();
             }
         }
@@ -3878,7 +3881,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         if ( pRemoveDots && (["gmail.com", "googlemail.com"].includes( domain )) )
         {
             let parts = email.split( "@" );
-            email = asString( parts[0], true ).replaceAll( /\./g, _mt ) + "@" + asString( parts[1] || domain, true );
+            email = asString( parts[0], true ).replaceAll( /\./g, _mt ) + "@" + asString( domain || parts[1], true );
         }
 
         return _lct( email );
