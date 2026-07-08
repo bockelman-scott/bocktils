@@ -87,10 +87,11 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             ObjectEntry,
             objectEntries,
             objectValues,
+            attempt,
+            attemptSilent,
             readProperty,
             functionToString,
             populateOptions,
-            attempt,
             lock,
             getRuntimeLocale,
             getMessagesLocale,
@@ -3510,14 +3511,14 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
     function asProperCaseName( pName, pOptions = PROPERCASE_OPTIONS, pIsFirstName = false )
     {
-        let options = { ...PROPERCASE_OPTIONS, ...(pOptions ?? PROPERCASE_OPTIONS) };
-
         let isFirstName = !!pIsFirstName;
 
         if ( isBoolean( pOptions ) )
         {
             isFirstName = toBool( pOptions ) || isFirstName;
         }
+
+        let options = isBoolean( pOptions ) ? { ...PROPERCASE_OPTIONS } : { ...PROPERCASE_OPTIONS, ...(pOptions ?? PROPERCASE_OPTIONS) };
 
         // convert the name to lowercase and trim
         let name = _lct( asString( pName, true ) );
@@ -3575,7 +3576,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             } );
 
             // handle Roman Numerals (IV, III) and Ordinals (3rd)
-            formattedName = formattedName.replace( /\b(i{1,3}|iv|v|vi{1,3}|ix|x)\b/gi, ( match ) =>
+            formattedName = formattedName.replace( /\b(i{1,3}|iv|v|vi{2,3}|ix|x)\b/gi, ( match ) =>
             {
                 return ucase( match );
             } );
@@ -3748,10 +3749,10 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
             let data = pData || {};
 
-            name = name.replace( (asString( readProperty( data, "address", "address_line_1", "line1" ) || _mt, true )), _mt );
-            name = name.replace( (asString( readProperty( data, "phone_number", "phone", "mobile_phone", "home_phone" ) || _mt, true )), _mt );
-            name = name.replace( (asString( readProperty( data, "email_address", "email" ) || _mt, true )), _mt );
-            name = name.replace( normalizeEmailAddress( asString( readProperty( data, "email_address", "email" ) || _mt, true ) ), _mt );
+            name = attemptSilent( () => name.replace( (asString( readProperty( data, "address", "address_line_1", "line1" ) || _mt, true )), _mt ) ) ?? name;
+            name = attemptSilent( () => name.replace( (asString( readProperty( data, "phone_number", "phone", "mobile_phone", "home_phone" ) || _mt, true )), _mt ) ?? name );
+            name = attemptSilent( () => name.replace( (asString( readProperty( data, "email_address", "email" ) || _mt, true )), _mt ) ) ?? name;
+            name = attemptSilent( () => name.replace( normalizeEmailAddress( asString( readProperty( data, "email_address", "email" ) || _mt, true ) ), _mt ) ) ?? name;
 
             return asString( name || inName, true ) || inName;
         }
