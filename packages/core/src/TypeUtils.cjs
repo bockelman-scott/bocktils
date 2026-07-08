@@ -5492,7 +5492,8 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         }
 
         entries()
-        { // cannot use objectEntries here, as that would call this method infinitely
+        {
+            // cannot use objectEntries here, as that would call this method infinitely
             return ObjectEntry.fromEntries( Object.entries( this ) );
         }
 

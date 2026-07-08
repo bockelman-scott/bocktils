@@ -458,6 +458,12 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
      * @alias module:Constants#REG_EXP_DOT
      */
     const REG_EXP_DOT = lock( /\./ );
+    const REG_EXP_DOT_G = ( /\./g );
+
+    const REG_EXP_BRACKET_OPEN = lock( /^\[/ );
+    const REG_EXP_BRACKET_CLOSE = lock( /]$/ );
+
+    const REG_EXP_COMMA = lock( /,/ );
 
     /**
      * This is a regular expression that matches a single dot character at the start of a string<br>
@@ -476,6 +482,12 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
      * @alias module:Constants#REG_EXP_TRAILING_DOT
      */
     const REG_EXP_TRAILING_DOT = lock( /\.$/ );
+
+    /**
+     * This is a regular expression that matches any VALID US ZipCode.
+     * Matches either exactly 5 digits or 5 digits followed by a hypen and exactly 4 digits.
+     */
+    const REG_EXP_ZIP_CODE = lock( /^\d{5}(-\d{4})?$/ );
 
     /**
      * @namespace {object} REG_EXP
@@ -497,6 +509,16 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
              * @alias module:Constants#REG_EXP#DOT
              */
             DOT: REG_EXP_DOT,
+            /**
+             * A regular expression matching ALL dot characters ('.') in a string
+             */
+            DOT_G: REG_EXP_DOT_G,
+
+            COMMA: REG_EXP_COMMA,
+
+            OPEN_BRACKET: REG_EXP_BRACKET_OPEN,
+
+            CLOSE_BRACKET: REG_EXP_BRACKET_CLOSE,
             /**
              * Regular expression for matching a single leading dot<br>
              * Used to identify and process strings that begin with a period<br>
@@ -617,7 +639,11 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
             /**
              * Regular expression for matching all DIGITS characters
              */
-            NUMERIC: _rxNumeric
+            NUMERIC: _rxNumeric,
+            /**
+             * A regular expression that matches any VALID US ZipCode
+             */
+            ZIP_CODE: REG_EXP_ZIP_CODE
         } );
 
     /**
@@ -2036,6 +2062,9 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
              * Regular expression for matching all DIGITS characters
              */
             _rxNumeric,
+
+            REG_EXP_DOT_G,
+            REG_EXP_ZIP_CODE,
 
             /**
              * A function that does nothing.<br>
