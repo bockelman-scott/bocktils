@@ -10129,18 +10129,63 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         return new Intl.Collator( [...(pLocales ?? ["en", "es"])], options );
     };
 
+    const resolveCollator = ( pCollator ) =>
+    {
+        if ( isNonNullObj( pCollator ) )
+        {
+            if ( pCollator instanceof Intl.Collator )
+            {
+                return pCollator;
+            }
+
+            if ( pCollator instanceof Intl.Locale )
+            {
+                return new Intl.Collator( [pCollator.baseName], DEFAULT_COLLATOR_OPTIONS );
+            }
+
+            if ( isArray( pCollator ) )
+            {
+                let locales = [...(pCollator)].filter( e => isNonNullObj( e ) && e instanceof Intl.Locale );
+                if ( $ln( locales ) > 0 )
+                {
+                    return new Intl.Collator( locales.map( e => e.baseName ), DEFAULT_COLLATOR_OPTIONS );
+                }
+
+                let localeStrings = [...(pCollator)].filter( e => isString( e ) && $ln( e.trim() ) >= 2 );
+                if ( $ln( localeStrings ) > 0 )
+                {
+                    return new Intl.Collator( locales.map( e => _lct( e ) ), DEFAULT_COLLATOR_OPTIONS );
+                }
+
+                let collator = ([...(pCollator)].find( e => isNonNullObj( e ) && e instanceof Intl.Collator ));
+                if ( isNonNullObj( collator ) )
+                {
+                    return collator;
+                }
+            }
+        }
+        else if ( isString( pCollator ) && $ln( pCollator.trim() ) >= 2 )
+        {
+            return new Intl.Collator( [_lct( pCollator ), "en", "es"], DEFAULT_COLLATOR_OPTIONS );
+        }
+
+        return CASE_INSENSITIVE_COLLATOR;
+    };
+
     const COMPARE_LESS_THAN = -1;
     const COMPARE_EQUAL = 0;
     const COMPARE_GREATER_THAN = 1;
 
     const resolveComparator = ( pComparator ) => isFunc( pComparator?.compare ) ? pComparator : (isFunc( pComparator ) && $ln( pComparator ) >= 2) ? { compare: pComparator } : { compare: ( a, b ) => (isNum( a ) && isNum( b )) ? (a - b) : ((a > b) ? 1 : ((a < b) ? 1 : 0)) };
 
-    const compareStrings = ( a, b ) =>
+    const compareStrings = ( a, b, pCollator = CASE_INSENSITIVE_COLLATOR ) =>
     {
         const aa = _asStr( a );
         const bb = _asStr( b );
 
-        return CASE_INSENSITIVE_COLLATOR.compare( aa, bb );
+        const collator = resolveCollator( pCollator ?? CASE_INSENSITIVE_COLLATOR );
+
+        return collator.compare( aa, bb );
     };
 
     const compareInts = ( a, b ) =>
