@@ -803,6 +803,18 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     const isClass = pObj => isFunc( pObj ) && (/^class\s/.test( (functionToString.call( pObj, pObj )).trim() ));
 
+    const isFloat = pObj =>
+    {
+        if ( isNull( pObj ) || !(isNum( pObj ) || isNumeric( pObj ) || pObj instanceof Number) )
+        {
+            return false;
+        }
+
+        let n = (pObj instanceof Number) ? pObj.valueOf() : parseFloat( pObj );
+
+        return !isNaN( n ) && isFinite( n ) && (n !== Math.round( n ));
+    };
+
     function isConstructable( pObj )
     {
         if ( !isFunc( pObj ) )
@@ -3118,7 +3130,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                                                                     {
                                                                         bubbles: true,
                                                                         cancelable: true,
-                                                                        detail: results,
+                                                                        detail: result,
                                                                         target
                                                                     } ) );
                            }
@@ -5624,7 +5636,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         const resolvedOptions = format?.resolvedOptions();
 
-        return resolvedOptions?.locale || new Intl.Locale( DEFAULT_LOCALE_STRING );
+        let locale = resolvedOptions?.locale || new Intl.Locale( DEFAULT_LOCALE_STRING );
+
+        return isStr( locale ) ? new Intl.Locale( locale ) : locale;
     }
 
     const runtimeLocaleString = () => getRuntimeLocale()?.baseName || DEFAULT_LOCALE_STRING;
@@ -5641,6 +5655,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         if ( locale instanceof Intl.Locale )
         {
             return locale;
+        }
+
+        if ( isStr( locale ) )
+        {
+            return attemptSilent( () => new Intl.Locale( locale ) ?? getRuntimeLocale() ) ?? getRuntimeLocale();
         }
 
         return getRuntimeLocale();
@@ -6347,7 +6366,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
          */
         get type()
         {
-            return this.#type || super.type;
+            return this.#type || super.type || super.name;
         }
 
         get message()
@@ -6441,7 +6460,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return evt;
         }
 
-        return new ToolBocksModuleEvent( evt, (pData || evt.data || evt.detail || evt), pOptions );
+        return new ToolBocksModuleEvent( evt, (pData || evt.detail || evt.data || evt), pOptions );
     };
 
     /**
@@ -10091,32 +10110,208 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
     IterationCap.MAX_CAP = MAX_ITERATIONS;
 
+    const DEFAULT_COLLATOR_OPTIONS =
+        {
+            usage: "sort",
+            localeMatcher: "best fit",
+            numeric: true,
+            caseFirst: false,
+            sensitivity: "base",
+            ignorePunctuation: true
+        };
+
+    const CASE_INSENSITIVE_COLLATOR = new Intl.Collator( ["en", "es"], { sensitivity: "base", numeric: true } );
+    const CASE_SENSITIVE_COLLATOR = new Intl.Collator( ["en", "es"], { sensitivity: "case", numeric: true } );
+
+    const getCollator = function( pOptions = DEFAULT_COLLATOR_OPTIONS, ...pLocales )
+    {
+        const options = { ...(DEFAULT_COLLATOR_OPTIONS), ...(pOptions ?? {}) };
+        return new Intl.Collator( [...(pLocales ?? ["en", "es"])], options );
+    };
+
     const COMPARE_LESS_THAN = -1;
     const COMPARE_EQUAL = 0;
     const COMPARE_GREATER_THAN = 1;
 
     const resolveComparator = ( pComparator ) => isFunc( pComparator?.compare ) ? pComparator : (isFunc( pComparator ) && $ln( pComparator ) >= 2) ? { compare: pComparator } : { compare: ( a, b ) => (isNum( a ) && isNum( b )) ? (a - b) : ((a > b) ? 1 : ((a < b) ? 1 : 0)) };
 
+    const compareStrings = ( a, b ) =>
+    {
+        const aa = _asStr( a );
+        const bb = _asStr( b );
+
+        return CASE_INSENSITIVE_COLLATOR.compare( aa, bb );
+    };
+
+    const compareInts = ( a, b ) =>
+    {
+        const aIsNumeric = isNumeric( a );
+        const bIsNumeric = isNumeric( b );
+
+        if ( aIsNumeric && bIsNumeric )
+        {
+            const aa = _asInt( a );
+            const bb = _asInt( b );
+
+            return aa < bb ? -1 : aa > bb ? 1 : 0;
+        }
+        else if ( aIsNumeric )
+        {
+            return -1;
+        }
+        else if ( bIsNumeric )
+        {
+            return 1;
+        }
+
+        return compareStrings( a, b );
+    };
+
+    const compareFloats = ( a, b ) =>
+    {
+        const aa = attempt( () => parseFloat( a ) );
+        const bb = attempt( () => parseFloat( b ) );
+
+        if ( isNaN( aa ) || isNull( aa ) )
+        {
+            if ( isNaN( bb ) || isNull( bb ) )
+            {
+                return 0;
+            }
+            return 1;
+        }
+        else if ( isNaN( bb ) || isNull( bb ) )
+        {
+            return -1;
+        }
+
+        let comp = aa - bb;
+
+        if ( Math.abs( comp ) > 0.0000001 )
+        {
+            return aa < bb ? -1 : (aa > bb ? 1 : 0);
+        }
+
+        return 0;
+    };
+
+    const compareBooleans = ( a, b ) =>
+    {
+        const aIsBool = isBool( a ) || isNull( a ) || ["true", "false"].includes( _asStr( a ) );
+        const bIsBool = isBool( b ) || isNull( b ) || ["true", "false"].includes( _asStr( b ) );
+
+        if ( aIsBool && bIsBool )
+        {
+            const aa = ("true" === _lct( a )) || ("false" === _lct( a ) ? false : !!a);
+            const bb = ("true" === _lct( b )) || ("false" === _lct( b ) ? false : !!b);
+
+            if ( (aa && bb) || ( !aa && !bb) )
+            {
+                return 0;
+            }
+
+            return aa ? -1 : bb ? 1 : 0;
+        }
+
+        return compareInts( a, b );
+    };
+
+    const compareSymbols = ( a, b ) =>
+    {
+        return compareStrings( String( a ), String( b ) );
+    };
+
     const compare = ( pFirst, pSecond, pNullsFirst = true ) =>
     {
         let comp = COMPARE_EQUAL;
 
-        if ( isFunc( pFirst?.lessThan ) )
+        if ( isNonNullObj( pFirst ) && isNonNullObj( pSecond ) )
         {
-            comp = pFirst.lessThan( pSecond, pNullsFirst ) ? COMPARE_LESS_THAN : COMPARE_EQUAL;
+            if ( isFunc( pFirst?.lessThan ) )
+            {
+                comp = pFirst.lessThan( pSecond, pNullsFirst ) ? COMPARE_LESS_THAN : COMPARE_EQUAL;
+            }
+
+            if ( COMPARE_EQUAL === comp && (isFunc( pSecond?.lessThan )) )
+            {
+                comp = pSecond.lessThan( pFirst, pNullsFirst ) ? COMPARE_GREATER_THAN : COMPARE_EQUAL;
+            }
+
+            if ( COMPARE_EQUAL === comp && (isFunc( pFirst?.compareTo )) )
+            {
+                comp = pFirst.compareTo( pSecond );
+            }
+
+            if ( COMPARE_EQUAL === comp && (isFunc( pSecond?.compareTo )) )
+            {
+                comp = -(pSecond.compareTo( pFirst ));
+            }
+
+            if ( COMPARE_EQUAL === comp )
+            {
+                return attempt( () => pFirst < pSecond ? COMPARE_LESS_THAN : (pFirst > pSecond ? COMPARE_GREATER_THAN : COMPARE_EQUAL) ) ?? 0;
+            }
+
+            return comp;
         }
 
-        if ( COMPARE_EQUAL === comp && (isFunc( pSecond?.lessThan )) )
-        {
-            comp = pSecond.lessThan( pFirst, pNullsFirst ) ? COMPARE_GREATER_THAN : COMPARE_EQUAL;
-        }
+        let type = typeof pFirst || typeof pSecond;
+        type = _ud === type ? typeof pSecond : type;
+        type = _ud === type ? _str : type;
 
-        if ( COMPARE_EQUAL === comp )
+        switch ( type )
         {
-            return pFirst < pSecond ? COMPARE_LESS_THAN : (pFirst > pSecond ? COMPARE_GREATER_THAN : COMPARE_EQUAL);
-        }
+            case _ud:
+            case _str:
+                return compareStrings( pFirst, pSecond );
 
-        return comp;
+            case _num:
+            case _big:
+                if ( isFloat( pFirst ) || isFloat( pSecond ) )
+                {
+                    return compareFloats( pFirst, pSecond );
+                }
+                return compareInts( pFirst, pSecond );
+
+            case _bool:
+                return compareBooleans( pFirst, pSecond );
+
+            case _symbol:
+                return compareSymbols( pFirst, pSecond );
+
+            case _fun:
+                if ( isFunc( pFirst ) && isFunc( pSecond ) )
+                {
+                    return compareStrings( nameFromSource( pFirst ), nameFromSource( pSecond ) );
+                }
+                else if ( isFunc( pFirst ) )
+                {
+                    return compareStrings( nameFromSource( pFirst ), _asStr( pSecond ) );
+                }
+                else if ( isFunc( pSecond ) )
+                {
+                    return compareStrings( _asStr( pFirst ), nameFromSource( pSecond ) );
+                }
+                return compareStrings( _asStr( pFirst ), _asStr( pSecond ) );
+
+            case _obj:
+                if ( isFunc( pFirst?.compareTo ) )
+                {
+                    return pFirst.compareTo( pSecond );
+                }
+                if ( isFunc( pSecond?.compareTo ) )
+                {
+                    return -(pSecond.compareTo( pFirst ));
+                }
+
+                let nameA = readProperty( pFirst, "name", "code", "id" ) ?? isFunc( pFirst?.toString ) ? pFirst?.toString() : objectToString( pFirst );
+                let nameB = readProperty( pSecond, "name", "code", "id" ) ?? isFunc( pSecond?.toString ) ? pSecond?.toString() : objectToString( pSecond );
+
+                return compareStrings( nameA || _mt, nameB || _mt );
+
+            default:
+                return 0;
+        }
     };
 
     const compareTo = ( pFirst, pSecond, pNullsFirst = true ) =>
@@ -10351,6 +10546,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             ENDIAN,
 
+            CASE_SENSITIVE_COLLATOR,
+            CASE_INSENSITIVE_COLLATOR,
+
+            getCollator,
+
             detectCycles,
 
             resolveError,
@@ -10407,6 +10607,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     isRegExp,
                     isNum,
                     isBig,
+                    isFloat,
                     isBool,
                     isSymbol,
                     isNull,
@@ -10527,6 +10728,13 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             localCopy,
             immutableCopy,
             deepFreeze,
+
+            compareStrings,
+            compareInts,
+            compareFloats,
+            compareBooleans,
+            compareSymbols,
+            compare,
 
             compareNullable,
 

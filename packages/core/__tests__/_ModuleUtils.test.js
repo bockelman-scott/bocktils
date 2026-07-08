@@ -87,7 +87,13 @@ const
         classes: moduleUtilsClasses,
         Konsole,
         ConditionalLogger,
-        makeRetriable
+        makeRetriable,
+        compareStrings,
+        compareInts,
+        compareFloats,
+        compareBooleans,
+        compareSymbols,
+        compare
     } = moduleUtils;
 
 let {
@@ -2628,4 +2634,30 @@ describe( "makeRetriable - returns a function", () =>
 
     }, 60_000 );
 
+} );
+
+describe( "compare functions", () =>
+{
+    test( "compareStrings", () =>
+    {
+        let s1 = "ABC";
+        let s2 = "abc";
+
+        expect( compareStrings( s1, s2 ) ).toEqual( 0 );
+
+        ////
+    } );
+
+    test( "compareFloats", ()=>
+    {
+        let f1 = 1.00000005;
+        let f2 = 1.00000006;
+
+        expect( compareFloats( f1, f2 ) ).toEqual( 0 );
+
+        f1 = 1.0005;
+        f2 = 1.0006;
+
+        expect( compareFloats( f1, f2 ) ).toEqual( -1 );
+    });
 } );

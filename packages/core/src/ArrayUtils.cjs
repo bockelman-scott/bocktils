@@ -2067,6 +2067,23 @@ const { _ud = "undefined", $scope } = constants;
                     if ( !isNullOrNaN( n1 ) && !isNullOrNaN( n2 ) )
                     {
                         comp = (n1 - n2);
+
+                        if ( Math.abs( comp ) > 0.0000001 )
+                        {
+                            comp = n1 < n2 ? -1 : (n1 > n2 ? 1 : 0);
+                        }
+                        else
+                        {
+                            return 0;
+                        }
+                    }
+                    else if ( isNullOrNaN( n1 ) )
+                    {
+                        return isNullOrNaN( n2 ) ? 0 : 1;
+                    }
+                    else if ( isNullOrNaN( n2 ) )
+                    {
+                        return isNullOrNaN( n1 ) ? 0 : -1;
                     }
                 }
 
@@ -2191,9 +2208,6 @@ const { _ud = "undefined", $scope } = constants;
 
                 let n1 = isNumeric( a ) ? asFloat( a ) : (isFunction( a?.valueOf ) ? asFloat( a.valueOf() ) : 0);
                 let n2 = isNumeric( b ) ? asFloat( b ) : (isFunction( b?.valueOf ) ? asFloat( b.valueOf() ) : 0);
-
-                n1 = isNullOrNaN( n1 ) ? 0 : n1;
-                n2 = isNullOrNaN( n2 ) ? 0 : n2;
 
                 let comp = Comparators._compareNumeric( n1, n2 );
 
