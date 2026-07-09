@@ -940,7 +940,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
     {
         let is = (0 === pObj) || (isNumber( pObj ) && !isNanOrInfinite( pObj ) && (parseInt( pObj ) === pObj));
 
-        if ( !is && !pStrict && isString( pObj ) && isNumeric( pObj ) )
+        if ( !is && !pStrict && isNumeric( pObj ) )
         {
             let n = parseFloat( pObj );
 
@@ -974,14 +974,21 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
      */
     const isFloat = function( pObj, pStrict = true, pZeroIsFloat = true )
     {
+        if ( isNull( pObj ) || !(isNumber( pObj ) || isNumeric( pObj ) || pObj instanceof Number) )
+        {
+            return false;
+        }
+
         if ( 0 === pObj )
         {
             return !!pZeroIsFloat;
         }
 
-        let is = isNumber( pObj ) && !isNaN( parseFloat( pObj ) ) && ((parseFloat( pObj ) !== parseInt( pObj )) || parseFloat( pObj ) % 1 !== 0);
+        let f = (pObj instanceof Number) ? pObj.valueOf() : (isNumber( pObj ) ? parseFloat( pObj ) : NaN);
 
-        if ( !is && !pStrict && isString( pObj ) && isNumeric( pObj ) )
+        let is = !isNaN( f ) && isFinite( f ) && ((f !== parseInt( pObj )) || (f % 1) !== 0 || f !== Math.round( f ));
+
+        if ( !is && !pStrict && isNumeric( pObj ) )
         {
             let n = parseFloat( pObj );
 
@@ -989,7 +996,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             {
                 let s = _mt_str + String( n );
 
-                return s === pObj;
+                return (String( s ) === String( pObj )) && ((/\d+.[123456789]+/).test( String( n ) ));
             }
         }
 
