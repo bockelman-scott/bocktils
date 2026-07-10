@@ -2879,25 +2879,31 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             return true;
         }
 
-        return "null" === str || "void" === str || "undefined" === str || isNumber( str ) || !(/[^0-9-.]+/.test( str ));
+        return "null" === str || "void" === str || "undefined" === str || isNumeric( str );
     };
 
     const isJsonObject = function( pStr )
     {
-        const s = asString( pStr, true ).replace( /^\s+/, _mt ).trim().replace( /\s+$/, _mt ).trim();
-        if ( isJson( s ) )
+        if ( isString( pStr ) )
         {
-            return /^\{/.test( s ) && /}$/.test( s );
+            const s = asString( pStr, true ).replace( /^\s+/, _mt ).trim().replace( /\s+$/, _mt ).trim();
+            if ( isJson( s ) )
+            {
+                return /^\{/.test( s ) && /}$/.test( s );
+            }
         }
         return false;
     };
 
     const isJsonArray = function( pStr )
     {
-        const s = asString( pStr, true ).replace( /^\s+/, _mt ).trim().replace( /\s+$/, _mt ).trim();
-        if ( isJson( s ) )
+        if ( isString( pStr ) )
         {
-            return /^\[/.test( s ) && /]$/.test( s );
+            const s = asString( pStr, true ).replace( /^\s+/, _mt ).trim().replace( /\s+$/, _mt ).trim();
+            if ( isJson( s ) )
+            {
+                return /^\[/.test( s ) && /]$/.test( s );
+            }
         }
         return false;
     };

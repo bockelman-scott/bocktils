@@ -10,6 +10,9 @@ const
         asKey,
         isEmpty,
         isBlank,
+        isJson,
+        isJsonArray,
+        isJsonObject,
         asInt,
         toCanonicalNumericFormat,
         findDuplicatedSubstrings,
@@ -738,7 +741,7 @@ describe( "isJson", () =>
           () =>
           {
               const s = "{}";
-              expect( stringUtils.isJson( s ) ).toBe( true );
+              expect( isJson( s ) ).toBe( true );
           }
     );
 
@@ -746,7 +749,7 @@ describe( "isJson", () =>
           () =>
           {
               const s = "[]";
-              expect( stringUtils.isJson( s ) ).toBe( true );
+              expect( isJson( s ) ).toBe( true );
           }
     );
 
@@ -754,9 +757,74 @@ describe( "isJson", () =>
           () =>
           {
               const s = null;
-              expect( stringUtils.isJson( s ) ).toBe( false );
+              expect( isJson( s ) ).toBe( false );
           }
     );
+
+    test( "isJsonAray - literal array", () =>
+    {
+        expect( isJsonArray( [] ) ).toBe( false );
+    } );
+
+    test( "isJsonAray - object", () =>
+    {
+        expect( isJsonArray( {} ) ).toBe( false );
+        expect( isJsonArray( "{}" ) ).toBe( false );
+
+        class A
+        {
+            #id;
+            #name;
+
+            constructor( id, name )
+            {
+                this.#id = id;
+                this.#name = name;
+                this.#id = id;
+                this.#name = name;
+            }
+
+            get id()
+            {
+                return this.#id;
+            }
+
+            get name()
+            {
+                return this.#name;
+            }
+        }
+
+        const a = new A();
+
+        expect( isJsonArray( a ) ).toBe( false );
+        expect( isJsonArray( JSON.stringify( a ) ) ).toBe( false );
+        expect( isJsonArray( Object.values( a ) ) ).toBe( false );
+        expect( isJsonArray( JSON.stringify( Object.values( a ) ) ) ).toBe( true );
+    } );
+
+    test( "isJsonAray - JSON array", () =>
+    {
+        expect( isJsonArray( "[]" ) ).toBe( true );
+        expect( isJsonArray( "[1,2,'a']" ) ).toBe( true );
+    } );
+
+    test( "isJsonObject - literal object", () =>
+    {
+        expect( isJsonObject( {} ) ).toBe( false );
+        expect( isJsonObject( "{}" ) ).toBe( true );
+
+        const obj =
+            {
+                a:1,
+                b:2,
+                c:"moon rocks"
+            };
+
+        expect( isJsonObject( obj ) ).toBe( false );
+        expect( isJsonObject( JSON.stringify(obj) ) ).toBe( true );
+    } );
+
 } );
 
 describe( "trimming", () =>
