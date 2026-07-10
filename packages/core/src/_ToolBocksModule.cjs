@@ -3303,13 +3303,13 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 while ( isNonNullObj( o ) && $ln( paths ) > 0 )
                 {
                     let key = _asStr( paths.shift() ).trim();
-                    o = o[key];
+                    o = o[key] ?? readProperty( o, key );
                 }
 
                 return $ln( paths ) <= 0 && !isNull( o );
             }
 
-            return Object.hasOwn( obj, propertyName ) || (propertyName in obj);
+            return Object.hasOwn( obj, propertyName ) || (propertyName in obj) || !isNull( readProperty( obj, ...pPropertyName ) );
         }
 
         return false;
