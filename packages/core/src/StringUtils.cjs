@@ -1498,6 +1498,8 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         return _replaceInvalidIdentifier( asString( s, true ), options );
     };
 
+    const toLegalIdentifier = validIdentifier;
+
     const DEFAULT_AS_KEY_OPTIONS = { supportDotNotation: false, defaultIdentifier: _underscore };
 
     /**
@@ -4896,6 +4898,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             safeIndex,
             clamp,
             validIdentifier,
+            toLegalIdentifier,
             asKey,
             endsWithAny,
             startsWithAny,
