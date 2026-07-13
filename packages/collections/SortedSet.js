@@ -9,6 +9,8 @@
 /* import dependencies */
 const core = require( "@toolbocks/core" );
 
+const jsonUtils = require( "@toolbocks/json" );
+
 const collectionModule = require( "./Collection.js" );
 
 const { constants } = core;
@@ -40,10 +42,13 @@ const { _ud = "undefined", $scope } = constants;
             ModuleEvent,
             ToolBocksModule,
             IllegalArgumentError,
+            ObjectEntry,
+            objectValues,
             attempt,
             sleep,
             lock,
-            $ln
+            $ln,
+            compareStrings
         } = moduleUtils;
 
     const { _str, _num, _big, _bool, _obj, _fun, _symbol } = constants;
@@ -52,10 +57,17 @@ const { _ud = "undefined", $scope } = constants;
         {
             JS_TYPES,
             isNull,
+            isObject,
             isNonNullObject,
             isNonNullValue,
+            isString,
+            isNumeric,
             isArray,
             isFunction,
+            isSet,
+            isWeakSet,
+            isMap,
+            isWeakMap,
             isClass,
             isIterable,
             getClass,
@@ -63,9 +75,11 @@ const { _ud = "undefined", $scope } = constants;
             toIterable
         } = typeUtils;
 
-    const { asString, asInt } = stringUtils;
+    const { asString, isBlank, isJsonArray, isJsonObject, toBool } = stringUtils;
 
-    const { asArray, includesAll, Filters, Comparators } = arrayUtils;
+    const { asArray, unique, Filters, Comparators } = arrayUtils;
+
+    const { asObject, asJson, parseJson } = jsonUtils;
 
     const { TYPES, Collection } = collectionModule;
 
@@ -135,7 +149,17 @@ const { _ud = "undefined", $scope } = constants;
         }
         else
         {
-            comp = (a < b) ? -1 : ((a > b) ? 1 : 0);
+            try
+            {
+                comp = (a < b) ? -1 : ((a > b) ? 1 : 0);
+            }
+            catch( ex )
+            {
+                const sA = asString( a, true );
+                const sB = asString( b, true );
+
+                comp = compareStrings( sA, sB );
+            }
         }
 
         return comp;
@@ -153,24 +177,24 @@ const { _ud = "undefined", $scope } = constants;
      */
     class SortedSet extends Collection
     {
-        #comparator = DEFAULT_COMPARATOR;
+        _comparator = DEFAULT_COMPARATOR;
 
         constructor( pType = TYPES.ANY, pCollection = null, pComparator = DEFAULT_COMPARATOR )
         {
             super( pType, pCollection );
 
-            this.#comparator = Comparators.isComparator( pComparator ) ? pComparator : DEFAULT_COMPARATOR;
+            this._comparator = Comparators.isComparator( pComparator ) ? pComparator : DEFAULT_COMPARATOR;
 
-            if ( isNonNullObject( this.#comparator ) && Comparators.isComparator( this.#comparator.compare ) )
+            if ( isNonNullObject( this._comparator ) && Comparators.isComparator( this._comparator.compare ) )
             {
-                let func = (this.#comparator.compare || this.#comparator).bind( this.#comparator );
+                let func = (this._comparator.compare || this._comparator).bind( this._comparator );
 
-                this.#comparator = ( a, b ) => func( a, b );
+                this._comparator = (function( a, b ) { return func.compare.call( func, a, b ); }).bind( this );
             }
 
             let arr = this.toArray();
 
-            arr = arr.sort( this.#comparator );
+            arr = arr.sort( this._comparator );
 
             // remove any duplicates that were added by the superclass constructor
             this.clear();
@@ -180,15 +204,14 @@ const { _ud = "undefined", $scope } = constants;
 
         get comparator()
         {
-            let func = Comparators.isComparator( this.#comparator ) ? this.#comparator : DEFAULT_COMPARATOR;
+            let func = Comparators.isComparator( this._comparator ) ? this._comparator : DEFAULT_COMPARATOR;
 
             if ( isNonNullObject( func ) && Comparators.isComparator( func.compare ) )
             {
-                func = this.#comparator.compare.bind( this.#comparator );
-                return ( a, b ) => func.compare( a, b );
+                return (function( a, b ) { return func.compare.call( func, a, b ); }).bind( this );
             }
 
-            return func;
+            return func.bind( this );
         }
 
         /**
@@ -207,6 +230,8 @@ const { _ud = "undefined", $scope } = constants;
                 return false;
             }
 
+            const me = this;
+
             const currentSize = this.size;
 
             let arr = this.toArray() ?? [];
@@ -219,13 +244,22 @@ const { _ud = "undefined", $scope } = constants;
             }
             else
             {
-                let exists = arr.find( e => _isEqual( e, pItem, this.comparator ) );
+                const comparator = this.comparator.bind( me );
+
+                const isEqualPredicate = function( pElem, pItem )
+                {
+                    return _isEqual.call( me, pElem, pItem, comparator );
+                };
+
+                const item = pItem;
+
+                let exists = arr.find( e => isEqualPredicate( e, item ) );
 
                 if ( null === exists || _ud === typeof exists )
                 {
-                    arr.push( pItem );
+                    arr.push( item );
 
-                    arr = arr.sort( this.comparator );
+                    arr = arr.sort( comparator );
 
                     this.clear();
 
@@ -246,15 +280,25 @@ const { _ud = "undefined", $scope } = constants;
          */
         addAll( ...pItems )
         {
+            const me = this;
+
             const currentSize = this.size;
 
             const items = asArray( pItems );
 
             let arr = [...(this.toArray())];
 
+            const comparator = this.comparator.bind( me );
+
+            const isEqualPredicate = (function( pElem, pItem )
+            {
+                return _isEqual.call( me, pElem, pItem, comparator );
+            }).bind( me );
+
             items.forEach( item =>
                            {
-                               let exists = arr.find( e => _isEqual( e, item, this.comparator ) );
+                               const exists = arr.find( e => isEqualPredicate( e, item ) );
+
                                if ( null === exists || _ud === typeof exists )
                                {
                                    arr.push( item );
@@ -263,7 +307,7 @@ const { _ud = "undefined", $scope } = constants;
 
             if ( $ln( arr ) > currentSize )
             {
-                arr = arr.sort( this.comparator );
+                arr = arr.sort( comparator );
 
                 this.clear();
 
@@ -282,9 +326,18 @@ const { _ud = "undefined", $scope } = constants;
          */
         contains( pItem )
         {
+            const me = this;
+
             const arr = this.toArray();
 
-            const exists = arr.find( e => _isEqual( e, pItem, this.comparator ) );
+            const comparator = this.comparator.bind( me );
+
+            const isEqualPredicate = (function( pElem, pItem )
+            {
+                return _isEqual.call( me, pElem, pItem, comparator );
+            }).bind( me );
+
+            const exists = arr.find( e => e => isEqualPredicate( e, pItem ) );
 
             return !(null === exists || _ud === typeof exists);
         }
@@ -320,17 +373,28 @@ const { _ud = "undefined", $scope } = constants;
          */
         remove( pItem )
         {
+            const me = this;
+
             const currentSize = this.size;
 
             let arr = this.toArray();
 
-            const index = arr.findIndex( e => _isEqual( e, pItem, this.comparator ) );
+            const item = pItem;
+
+            const comparator = this.comparator.bind( me );
+
+            const isEqualPredicate = (function( pElem, pItem )
+            {
+                return _isEqual.call( me, pElem, pItem, comparator );
+            }).bind( me );
+
+            const index = arr.findIndex( e => isEqualPredicate( e, item ) );
 
             if ( index > -1 )
             {
                 arr.splice( index, 1 );
 
-                arr = arr.sort( this.comparator );
+                arr = arr.sort( comparator );
 
                 super._replace( ...arr );
             }
@@ -347,20 +411,29 @@ const { _ud = "undefined", $scope } = constants;
          */
         removeAll( ...pItems )
         {
+            const me = this;
+
             const currentSize = this.size;
 
             const toRemove = asArray( pItems );
 
             let arr = this.toArray();
 
+            const comparator = this.comparator.bind( me );
+
+            const isEqualPredicate = (function( pElem, pItem )
+            {
+                return _isEqual.call( me, pElem, pItem, comparator );
+            }).bind( me );
+
             // Create a new array that includes ONLY elements NOT contained in toRemove
-            const newArr = arr.filter( e => !toRemove.some( item => _isEqual( e, item, this.comparator ) ) );
+            const newArr = arr.filter( e => !toRemove.some( item => isEqualPredicate( e, item ) ) );
 
             if ( newArr.length < currentSize )
             {
                 arr = newArr;
 
-                arr = arr.sort( this.comparator );
+                arr = arr.sort( comparator );
 
                 return super._replace( ...arr );
             }
@@ -379,19 +452,28 @@ const { _ud = "undefined", $scope } = constants;
          */
         retainAll( ...pItems )
         {
+            const me = this;
+
             const currentSize = this.size;
 
             const toRetain = asArray( pItems || [] );
 
             let arr = this.toArray();
 
-            const newArr = arr.filter( e => toRetain.some( item => _isEqual( e, item, this.comparator ) ) );
+            const comparator = this.comparator.bind( me );
+
+            const isEqualPredicate = (function( pElem, pItem )
+            {
+                return _isEqual.call( me, pElem, pItem, comparator );
+            }).bind( me );
+
+            const newArr = arr.filter( e => toRetain.some( item => isEqualPredicate( e, item ) ) );
 
             if ( newArr.length !== currentSize )
             {
                 arr = newArr;
 
-                arr = arr.sort( this.comparator );
+                arr = arr.sort( comparator );
 
                 return super._replace( ...arr );
             }
@@ -468,6 +550,84 @@ const { _ud = "undefined", $scope } = constants;
             return new SortedSet( this.type, arr, comparator );
         }
     }
+
+    SortedSet.from = function( pData, pComparator = DEFAULT_COMPARATOR )
+    {
+        let arr = isArray( pData ) ? asArray( pData ).filter( e => !isNull( e ) ) : [];
+
+        if ( isArray( pData ) )
+        {
+            arr = asArray( pData ).filter( e => !isNull( e ) ) ?? arr;
+        }
+        else if ( isString( pData ) )
+        {
+            if ( isJsonArray( pData ) )
+            {
+                arr = attempt( () => parseJson( asString( pData, true ) ) ) ?? asArray( asString( pData, true ).split( /[,;|\n]/ ) );
+            }
+            else if ( isJsonObject( pData ) )
+            {
+                const obj = asObject( pData );
+                if ( isFunction( obj?.toArray ) )
+                {
+                    arr = attempt( () => obj.toArray() );
+                }
+                else
+                {
+                    arr = [...(asArray( Object.values( obj ) ))];
+                }
+            }
+            arr = asString( pData, true ).split( /[,;|\n]/ ).map( e => asString( e, true ) ).filter( e => !isBlank( e ) );
+        }
+        else
+        {
+            switch ( typeof pData )
+            {
+                case _ud:
+                    break;
+
+                case _str:
+                    arr = asString( pData, true ).split( /[,;|\n]/ ).map( e => asString( e, true ) ).filter( e => !isBlank( e ) );
+                    break;
+
+                case _num:
+                case _big:
+                case _symbol:
+                case _fun:
+                    arr = [pData];
+                    break;
+
+                case _bool:
+                    arr = [toBool( pData )];
+                    break;
+
+                case _obj:
+                    if ( isSet( pData ) )
+                    {
+                        arr = Array.from( pData );
+                    }
+                    else if ( isMap( pData ) )
+                    {
+                        arr = Array.from( pData.values() );
+                    }
+                    else
+                    {
+                        arr = attempt( () => objectValues( pData ) ) ?? [pData];
+                    }
+                    break;
+
+                default:
+                    arr = [pData];
+                    break;
+            }
+        }
+
+        const types = unique( arr.map( e => typeof e ) );
+
+        const setType = (1 === $ln( types )) ? types[0] : TYPES.ANY;
+
+        return new SortedSet( setType, arr, pComparator ?? DEFAULT_COMPARATOR );
+    };
 
     let mod =
         {

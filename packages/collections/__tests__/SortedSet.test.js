@@ -107,6 +107,13 @@ describe( "SortedSet Constructors", () =>
               collection.add( new B( 2, "xyz", "uvw" ) );
 
               expect( collection.size ).toEqual( 2 );
+
+
+              let arr = [new B( 1, "abc", "def" ), new B( 2, "xyz", "uvw" ), new B( 1, "abc", "def" ), new B( 2, "xyz", "uvw" )];
+
+              collection = SortedSet.from( arr );
+
+              expect( collection.size ).toEqual( 2 );
           } );
 
     test( "Construct SortedSet of As",
@@ -133,67 +140,67 @@ describe( "SortedSet Constructors", () =>
 
 describe( "SortedSet Methods", () =>
 {
-    test("SortedSet -- add", ()=>
+    test( "SortedSet -- add", () =>
     {
 
-    });
+    } );
 
-    test("SortedSet -- addAll", ()=>
+    test( "SortedSet -- addAll", () =>
     {
 
-    });
+    } );
 
-    test("SortedSet -- contains", ()=>
+    test( "SortedSet -- contains", () =>
     {
 
-    });
+    } );
 
-    test("SortedSet -- containsAll", ()=>
+    test( "SortedSet -- containsAll", () =>
     {
 
-    });
+    } );
 
-    test("SortedSet -- first", ()=>
+    test( "SortedSet -- first", () =>
     {
 
-    });
+    } );
 
-    test("SortedSet -- last", ()=>
+    test( "SortedSet -- last", () =>
     {
 
-    });
+    } );
 
-    test("SortedSet -- headSet", ()=>
+    test( "SortedSet -- headSet", () =>
     {
 
-    });
+    } );
 
-    test("SortedSet -- tailSet", ()=>
+    test( "SortedSet -- tailSet", () =>
     {
 
-    });
+    } );
 
-    test("SortedSet -- subSet", ()=>
+    test( "SortedSet -- subSet", () =>
     {
 
-    });
+    } );
 
-    test("SortedSet -- remove", ()=>
+    test( "SortedSet -- remove", () =>
     {
 
-    });
+    } );
 
-    test("SortedSet -- removeAll", ()=>
+    test( "SortedSet -- removeAll", () =>
     {
 
-    });
+    } );
 
-    test("SortedSet -- retainAll", ()=>
+    test( "SortedSet -- retainAll", () =>
     {
 
-    });
+    } );
 
-});
+} );
 
 
 
