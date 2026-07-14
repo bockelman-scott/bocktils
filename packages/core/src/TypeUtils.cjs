@@ -150,6 +150,8 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             _pipe,
 
             _affirmatives,
+            _negatives,
+            _booleanStrings,
 
             DIGITS,
             DIGITS_MAP,
@@ -1673,6 +1675,8 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
      * @alias module:TypeUtils.isBoolean
      */
     const isBoolean = ( pValue ) => ((_bool === typeof pValue) && ((false === pValue) || true === pValue)) || pValue instanceof Boolean;
+
+    const isBoolCompatible = ( pValue ) => isBoolean( pValue ) || _booleanStrings.includes( String( _toString( pValue ) ).trim().toLowerCase() );
 
     /**
      * Returns true if the specified value,<br>
@@ -7056,6 +7060,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             isScientificNotation,
             isNanOrInfinite,
             isBoolean,
+            isBoolCompatible,
             isArray,
             isTypedArray,
             is2dArray,

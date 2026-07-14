@@ -330,6 +330,13 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
              */
             _affirmatives = lock( [...([S_TRUE, "1", "on", S_ENABLED, "t", S_YES])] ),
 
+            /**
+             * Strings that are interpreted as 'false' when encountered in JSON or other configuration contexts
+             */
+            _negatives = lock( [...([S_FALSE, "0", "off", S_DISABLED, "f", S_NO])] ),
+
+            _booleanStrings = lock( [...(_affirmatives), ...(_negatives)] ),
+
             ignore = no_op,
 
             RESERVED_WORDS = lock(
@@ -458,7 +465,7 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
      * @alias module:Constants#REG_EXP_DOT
      */
     const REG_EXP_DOT = lock( /\./ );
-    const REG_EXP_DOT_G = ( /\./g );
+    const REG_EXP_DOT_G = (/\./g);
 
     const REG_EXP_BRACKET_OPEN = lock( /^\[/ );
     const REG_EXP_BRACKET_CLOSE = lock( /]$/ );
@@ -1738,7 +1745,7 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
             S_DOT: _dot,
 
             /**
-             * An array of strings that are interpreted as 'true'<br>
+             * An array of strings that are interpreted as true<br>
              * when encountered in configuration contexts
              *
              * @const
@@ -1746,6 +1753,25 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
              * @alias module:Constants#_affirmatives
              */
             _affirmatives,
+
+            /**
+             * An array of strings that are interpreted as false<br>
+             * when encountered in configuration contexts
+             *
+             * @const
+             * @type {Array<string>}
+             * @alias module:Constants#_negatives
+             */
+            _negatives,
+
+            /**
+             * An array of strings that can be coerced to booleans
+             *
+             * @const
+             * @type {Array<string>}
+             * @alias module:Constants#_booleanStrings
+             */
+            _booleanStrings,
 
             /**
              * The character sequence that indicates the beginning of block comment in source code<br>
