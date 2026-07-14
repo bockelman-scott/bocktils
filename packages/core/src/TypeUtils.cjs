@@ -3231,25 +3231,26 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
      * <br>
      * @param {Object|function} pObject An instance of some class or a function that is a class
      *
+     * @param pStrict
      * @returns {function} The class of which the object is an instance
      *                     or the class itself if the object is a class function
      *
      * @alias module:TypeUtils.getClass
      */
-    const getClass = function( pObject )
+    const getClass = function( pObject, pStrict = true )
     {
         const options = { rejectPrimitiveWrappers: false, allowEmptyObjects: true, rejectNull: true };
 
-        const obj = isObject( pObject, options ) || isFunction( pObject ) || isClass( pObject ) ? pObject : null;
+        const obj = isObject( pObject, options ) || isFunction( pObject ) || isClass( pObject, pStrict ) ? pObject : null;
 
         if ( isNull( obj ) )
         {
             return null;
         }
 
-        let clazz = isClass( obj ) ? obj : [obj?.constructor, obj?.prototype, Object.getPrototypeOf( obj ), obj?.prototype?.constructor, Object.getPrototypeOf( obj )?.constructor].find( e => isClass( e ) );
+        let clazz = isClass( obj, pStrict ) ? obj : [obj?.constructor, obj?.prototype, Object.getPrototypeOf( obj ), obj?.prototype?.constructor, Object.getPrototypeOf( obj )?.constructor].find( e => isClass( e, pStrict ) );
 
-        if ( isClass( clazz ) )
+        if ( isClass( clazz, pStrict ) )
         {
             return clazz;
         }
