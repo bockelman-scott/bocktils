@@ -136,6 +136,20 @@ describe( "SortedSet Constructors", () =>
               expect( collection.size ).toEqual( 2 );
           } );
 
+    test( "Construct SortedSet of Dates",
+          () =>
+          {
+              const _now = new Date();
+
+              let dates = [_now, new Date( _now.getTime() - 864_000 ), new Date( 2025, 3, 3, 3, 3 ), _now];
+
+              const sortedSet = SortedSet.from( dates );
+
+              expect( sortedSet.type === Date ).toBe( true );
+
+              expect( sortedSet.size ).toEqual( 3 );
+          } );
+
 } );
 
 describe( "SortedSet Methods", () =>

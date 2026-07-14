@@ -39,14 +39,9 @@ const { _ud = "undefined", $scope } = constants;
     const
         {
             OBJECT_REGISTRY = $scope()["__BOCK_OBJECT_REGISTRY__"],
-            ModuleEvent,
             ToolBocksModule,
-            IllegalArgumentError,
-            ObjectEntry,
             objectValues,
             attempt,
-            sleep,
-            lock,
             $ln,
             compareStrings
         } = moduleUtils;
@@ -55,7 +50,6 @@ const { _ud = "undefined", $scope } = constants;
 
     const
         {
-            JS_TYPES,
             isNull,
             isObject,
             isNonNullObject,
@@ -250,7 +244,7 @@ const { _ud = "undefined", $scope } = constants;
             {
                 if ( TYPES.ANY !== this.type )
                 {
-                    if ( isClass( this.type ) )
+                    if ( isClass( this.type, false ) )
                     {
                         collection = collection.map( e => isNonNullObject( e ) && e instanceof this.type ? e : (isFunction( this.type.from ) ? attempt( () => this.type.from( e ) ) : attempt( () => new this.type( e ) )) );
                         collection = collection.filter( e => isNonNullObject( e ) && e instanceof this.type );
@@ -310,11 +304,11 @@ const { _ud = "undefined", $scope } = constants;
         /**
          * Adds an item to the collection if it matches the specified type or class and is not null.
          *
-         * @param {*} pItem -   The item to be added to the collection.
-         *                      It must match the specified type or class of the collection.
+         * @param {*} pItem - The item to be added to the collection.
+         *                    It must match the specified type or class of the collection.
          *
-         * @return {boolean}    Returns `true` if the item was successfully added to the collection, otherwise `false`.
-         *                      Throws an error if the item type does not match and cannot be added.
+         * @return {boolean}  Returns `true` if the item was successfully added to the collection, otherwise `false`.
+         *                    Throws an error if the item type does not match and cannot be added.
          */
         add( pItem )
         {
@@ -368,8 +362,9 @@ const { _ud = "undefined", $scope } = constants;
          * If the collection accepts any type, all items are added.
          * Otherwise, items are filtered based on the specified type.
          *
-         * @param {...*} pItems -   The items to be added to the collection. Can be a single item or an iterable.
-         * @return {boolean} -      Returns true if the collection size increased, otherwise false.
+         * @param {...*} pItems - The items to be added to the collection. Can be a single item or an iterable.
+         *
+         * @return {boolean}      Returns true if the collection size increased, otherwise false.
          */
         addAll( ...pItems )
         {
@@ -430,7 +425,7 @@ const { _ud = "undefined", $scope } = constants;
                 return _isEqual.call( me, pElem, pItem, comparator );
             }).bind( me );
 
-            const exists = arr.find( e => e => isEqualPredicate( e, pItem ) );
+            const exists = arr.find( e => isEqualPredicate( e, pItem ) );
 
             return !(null === exists || _ud === typeof exists);
         }
@@ -642,6 +637,27 @@ const { _ud = "undefined", $scope } = constants;
 
             return new SortedSet( this.type, arr, comparator );
         }
+
+        equals( pOther )
+        {
+            if ( isNull( pOther ) || !isObject( pOther ) )
+            {
+                return false;
+            }
+
+            const other = asObject( pOther );
+
+            // the superclass does not consider order
+            if ( super.equals( other ) )
+            {
+                const arrA = this.toArray();
+                const arrB = other.toArray();
+
+                return arrA.every( ( e, i, a ) => isFunction( e?.equals ) ? e.equals( arrB[i] ) : isFunction( arrB[i]?.equals ) ? arrB[i]?.equals( e ) : (e ?? a[i]) === arrB[i] );
+            }
+
+            return false;
+        }
     }
 
     SortedSet.from = function( pData, pComparator = DEFAULT_COMPARATOR )
@@ -670,7 +686,10 @@ const { _ud = "undefined", $scope } = constants;
                     arr = [...(asArray( Object.values( obj ) ))];
                 }
             }
-            arr = asString( pData, true ).split( /[,;|\n]/ ).map( e => asString( e, true ) ).filter( e => !isBlank( e ) );
+            else
+            {
+                arr = asString( pData, true ).split( /[,;|\n]/ ).map( e => asString( e, true ) ).filter( e => !isBlank( e ) );
+            }
         }
         else
         {
@@ -715,9 +734,26 @@ const { _ud = "undefined", $scope } = constants;
             }
         }
 
-        const types = unique( arr.map( e => typeof e ) );
+        const types = unique( arr.map( e => typeof e ) ).filter( e => !isBlank( e ) && (_ud !== e) );
 
-        const setType = (1 === $ln( types )) ? types[0] : TYPES.ANY;
+        let setType = (1 === $ln( types )) ? types[0] : TYPES.ANY;
+
+        if ( _obj === setType )
+        {
+            let classNames = unique( arr.map( e => getClassName( e ) ) ).filter( e => !isNull( e ) && !isBlank( e ) && !["Object", "Array"].includes( e ) );
+            if ( 1 === $ln( classNames ) )
+            {
+                let classes = unique( arr.map( e => getClass( e, false ) ) ).filter( e => !isNull( e ) && isClass( e, false ) && ![Object, Array].includes( e ) );
+                if ( 1 === $ln( classes ) )
+                {
+                    setType = classes.find( e => !isNull( e ) && isClass( e, false ) ) ?? getClass( arr[0], false );
+                    if ( [Object, Array].includes( setType ) )
+                    {
+                        setType = _obj;
+                    }
+                }
+            }
+        }
 
         return new SortedSet( setType, arr, pComparator ?? DEFAULT_COMPARATOR );
     };
