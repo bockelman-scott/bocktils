@@ -38,6 +38,7 @@ const { _ud = "undefined", $scope } = constants;
             ModuleEvent,
             ToolBocksModule,
             IllegalArgumentError,
+            readProperty,
             sleep,
             lock,
             $ln
@@ -56,8 +57,7 @@ const { _ud = "undefined", $scope } = constants;
             isIterable,
             isString,
             getClass,
-            getClassName,
-            toIterable
+            getClassName
         } = typeUtils;
 
     const { asString, asInt } = stringUtils;
@@ -80,6 +80,25 @@ const { _ud = "undefined", $scope } = constants;
                   [_symbol]: _symbol
               } );
 
+    const EVENTS =
+        lock( {
+                  ERROR: "error",
+
+                  STREAM_CANCELLED: "StreamCancelled",
+
+                  VALUE_YIELDED: "ValueYielded",
+
+                  ITEM_ADDED: "ItemAdded",
+                  ITEMS_ADDED: "ItemsAdded",
+
+                  ITEM_REMOVED: "ItemRemoved",
+                  ITEMS_REMOVED: "ItemsRemoved",
+
+                  ITEMS_RETAINED: "ItemsRetained",
+
+                  CLEARED: "Cleared"
+              } );
+
     function calculateType( pType = "*" )
     {
         let type = TYPES.ANY;
@@ -94,7 +113,7 @@ const { _ud = "undefined", $scope } = constants;
                 return JS_TYPES.includes( type ) ? type : TYPES.ANY;
 
             case _fun:
-                if ( isClass( pType ) )
+                if ( isClass( pType, false ) )
                 {
                     type = pType;
                     return type;
@@ -276,7 +295,7 @@ const { _ud = "undefined", $scope } = constants;
 
             if ( this.#eventsEnabled )
             {
-                this.dispatchEvent( new ModuleEvent( "error",
+                this.dispatchEvent( new ModuleEvent( EVENTS.ERROR,
                                                      {
                                                          error: error,
                                                          item: pItem,
@@ -389,11 +408,11 @@ const { _ud = "undefined", $scope } = constants;
         /**
          * Adds an item to the collection if it matches the specified type or class and is not null.
          *
-         * @param {*} pItem -   The item to be added to the collection.
-         *                      It must match the specified type or class of the collection.
+         * @param {*} pItem - The item to be added to the collection.
+         *                    It must match the specified type or class of the collection.
          *
-         * @return {boolean}    Returns `true` if the item was successfully added to the collection, otherwise `false`.
-         *                      Throws an error if the item type does not match and cannot be added.
+         * @return {boolean}  Returns `true` if the item was successfully added to the collection, otherwise `false`.
+         *                    Throws an error if the item type does not match and cannot be added.
          */
         add( pItem )
         {
@@ -419,7 +438,7 @@ const { _ud = "undefined", $scope } = constants;
 
             if ( this.size > currentSize && this.#eventsEnabled )
             {
-                this.dispatchEvent( new ModuleEvent( "ItemAdded", { item: pItem, collection: this } ) );
+                this.dispatchEvent( new ModuleEvent( EVENTS.ITEM_ADDED, { item: pItem, collection: this } ) );
             }
 
             return this.size > currentSize;
@@ -430,8 +449,9 @@ const { _ud = "undefined", $scope } = constants;
          * If the collection accepts any type, all items are added.
          * Otherwise, items are filtered based on the specified type.
          *
-         * @param {...*} pItems -   The items to be added to the collection. Can be a single item or an iterable.
-         * @return {boolean} -      Returns true if the collection size increased, otherwise false.
+         * @param {...*} pItems - The items to be added to the collection. Can be a single item or an iterable.
+         *
+         * @return {boolean} - true if the collection size increased, otherwise false.
          */
         addAll( ...pItems )
         {
@@ -451,7 +471,7 @@ const { _ud = "undefined", $scope } = constants;
                 }
                 else
                 {
-                    if ( isClass( this.type ) )
+                    if ( isClass( this.type, false ) )
                     {
                         arr = arr.filter( e => isNonNullObject( e ) && e instanceof this.type );
                     }
@@ -466,7 +486,7 @@ const { _ud = "undefined", $scope } = constants;
 
             if ( this.size > currentSize && this.#eventsEnabled )
             {
-                this.dispatchEvent( new ModuleEvent( "ItemsAdded", { collection: this } ) );
+                this.dispatchEvent( new ModuleEvent( EVENTS.ITEMS_ADDED, { collection: this } ) );
             }
 
             return this.size > currentSize;
@@ -484,7 +504,7 @@ const { _ud = "undefined", $scope } = constants;
 
             if ( this.#eventsEnabled )
             {
-                this.dispatchEvent( new ModuleEvent( "Cleared", { collection: this } ) );
+                this.dispatchEvent( new ModuleEvent( EVENTS.CLEARED, { collection: this } ) );
             }
         }
 
@@ -541,7 +561,7 @@ const { _ud = "undefined", $scope } = constants;
         /**
          * Compares the current instance with another object to determine equality.
          * Another object is equal to this collection if it is an instance of this class or a subclass of this class
-         * and contains the same number of elements, each of which evaluates to being equal to an element in this collection.
+         * and contains the same number of elements, each of which evaluates as equal to an element in this collection.
          *
          * @param {Object} pOther - The object to compare with the current instance.
          * @return {boolean}        Returns true if the given object is equal to the current instance, otherwise false.
@@ -581,7 +601,8 @@ const { _ud = "undefined", $scope } = constants;
          */
         [Symbol.iterator]()
         {
-            return toIterable( this.toArray() );
+            const arr = asArray( this.toArray() );
+            return (arr[Symbol.iterator]()) ?? (arr.values());
         }
 
         /**
@@ -593,9 +614,27 @@ const { _ud = "undefined", $scope } = constants;
          * @return {AsyncIterableIterator<*>} An asynchronous iterable iterator created
          * from the object's data.
          */
-        [Symbol.asyncIterator]()
+        async* [Symbol.asyncIterator]()
         {
-            return toIterable( this.toArray(), true );
+            const me = this;
+
+            const arr = asArray( this.toArray() );
+
+            for( const item of arr )
+            {
+                const elem = await item;
+
+                if ( this.#eventsEnabled )
+                {
+                    this.dispatchEvent( new ModuleEvent( EVENTS.VALUE_YIELDED,
+                                                         {
+                                                             item: elem,
+                                                             collection: (me ?? this)
+                                                         } ) );
+                }
+
+                yield elem;
+            }
         }
 
         /**
@@ -605,7 +644,12 @@ const { _ud = "undefined", $scope } = constants;
          */
         iterator()
         {
-            return toIterable( this.toArray(), true );
+            return this[Symbol.iterator]();
+        }
+
+        asyncIterator()
+        {
+            return this[Symbol.asyncIterator]();
         }
 
         /**
@@ -628,7 +672,7 @@ const { _ud = "undefined", $scope } = constants;
 
             if ( this.size < currentSize && this.#eventsEnabled )
             {
-                this.dispatchEvent( new ModuleEvent( "ItemRemoved", { item: pItem, collection: this } ) );
+                this.dispatchEvent( new ModuleEvent( EVENTS.ITEM_REMOVED, { item: pItem, collection: this } ) );
             }
 
             return this.size < currentSize;
@@ -655,7 +699,7 @@ const { _ud = "undefined", $scope } = constants;
 
                 if ( this.#eventsEnabled )
                 {
-                    this.dispatchEvent( new ModuleEvent( "ItemsRemoved", { collection: this } ) );
+                    this.dispatchEvent( new ModuleEvent( EVENTS.ITEMS_REMOVED, { collection: this } ) );
                 }
 
                 return true;
@@ -691,7 +735,7 @@ const { _ud = "undefined", $scope } = constants;
 
             if ( this.size < currentSize && this.#eventsEnabled )
             {
-                this.dispatchEvent( new ModuleEvent( "ItemsRemoved", { collection: this } ) );
+                this.dispatchEvent( new ModuleEvent( EVENTS.ITEMS_REMOVED, { collection: this } ) );
             }
 
             return this.size < currentSize;
@@ -721,7 +765,7 @@ const { _ud = "undefined", $scope } = constants;
 
             if ( this.size !== currentSize && this.#eventsEnabled )
             {
-                this.dispatchEvent( new ModuleEvent( "ItemsRetained", { collection: this } ) );
+                this.dispatchEvent( new ModuleEvent( EVENTS.ITEMS_RETAINED, { collection: this } ) );
             }
 
             return this.size !== currentSize;
@@ -771,12 +815,14 @@ const { _ud = "undefined", $scope } = constants;
             {
                 await sleep( 10 );
 
+                const elem = await item;
+
                 if ( this.#eventsEnabled )
                 {
-                    this.dispatchEvent( new ModuleEvent( "YieldedValue", { item: item, collection: me } ) );
+                    this.dispatchEvent( new ModuleEvent( EVENTS.VALUE_YIELDED, { item: elem, collection: me } ) );
                 }
 
-                yield item;
+                yield elem;
             }
         }
 
@@ -785,7 +831,7 @@ const { _ud = "undefined", $scope } = constants;
          *
          * @protected
          *
-         * @return {Readable} A readable stream object in object mode, emitting the values of the current instance.
+         * @return {Readable|ReadableStream|Stream} A readable stream object in object mode, emitting the values of the current instance.
          */
         _getNodeStream()
         {
@@ -828,7 +874,7 @@ const { _ud = "undefined", $scope } = constants;
                                            {
                                                if ( this.#eventsEnabled )
                                                {
-                                                   me.dispatchEvent( new ModuleEvent( "StreamCancelled",
+                                                   me.dispatchEvent( new ModuleEvent( EVENTS.STREAM_CANCELLED,
                                                                                       {
                                                                                           reason: asString( pReason ),
                                                                                           source: this,
@@ -907,21 +953,12 @@ const { _ud = "undefined", $scope } = constants;
         }
     }
 
-    Collection.EVENTS =
-        {
-            ERROR: "error",
-            ITEM_ADDED: "ItemAdded",
-            MULTIPLE_ITEMS_ADDED: "ItemsAdded",
-            CLEARED: "Cleared",
-            ITEM_REMOVED: "ItemRemoved",
-            MULTIPLE_ITEMS_REMOVED: "ItemsRemoved",
-            MULTIPLE_ITEMS_RETAINED: "ItemsRetained",
-            YIELDED_VALUE: "YieldedValue",
-            STREAM_CANCELLED: "StreamCancelled"
-        };
+    Collection.EVENTS = EVENTS;
 
     let mod =
         {
+            TYPES,
+            EVENTS,
             dependencies:
                 {
                     moduleUtils,
@@ -934,7 +971,6 @@ const { _ud = "undefined", $scope } = constants;
                 {
                     Collection
                 },
-            TYPES,
             Collection
         };
 
