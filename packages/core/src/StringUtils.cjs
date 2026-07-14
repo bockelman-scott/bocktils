@@ -3389,7 +3389,9 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
                 temp = word.substring( 1, word.length ).toLowerCase();
 
-                if ( temp.indexOf( _apos ) >= 0 )
+                const idxApos = temp.indexOf( _apos );
+
+                if ( idxApos >= 0 && idxApos < $ln( temp ) - 2 )
                 {
                     //handle O'Leary
                     temp = _apos + toProperCase( temp, Object.assign( { ...options }, { separator: _apos } ) );

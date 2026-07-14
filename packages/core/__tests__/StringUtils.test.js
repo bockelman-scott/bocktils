@@ -26,7 +26,8 @@ const
         getFunctionName,
         transliterate,
         toLegalFileName,
-        collapseWhitespace
+        collapseWhitespace,
+        toProperCase
     } = stringUtils;
 
 const repoName = "bocktils";
@@ -217,8 +218,6 @@ describe( "asString", () =>
 
               console.log( s );
           } );
-
-
 } );
 
 describe( "collapseWhitespace", () =>
@@ -816,13 +815,13 @@ describe( "isJson", () =>
 
         const obj =
             {
-                a:1,
-                b:2,
-                c:"moon rocks"
+                a: 1,
+                b: 2,
+                c: "moon rocks"
             };
 
         expect( isJsonObject( obj ) ).toBe( false );
-        expect( isJsonObject( JSON.stringify(obj) ) ).toBe( true );
+        expect( isJsonObject( JSON.stringify( obj ) ) ).toBe( true );
     } );
 
 } );
@@ -1680,49 +1679,79 @@ describe( "toProperCase", () =>
           () =>
           {
               let s = "courtney thorne-smith";
-              expect( stringUtils.toProperCase( s ) ).toEqual( "Courtney Thorne-Smith" );
+              expect( toProperCase( s ) ).toEqual( "Courtney Thorne-Smith" );
           } );
 
     test( "toProperCase('thomas o\'neil') === 'Thomas O\'Neil'",
           () =>
           {
               let s = "thomas o'neil";
-              expect( stringUtils.toProperCase( s ) ).toEqual( "Thomas O'Neil" );
+              expect( toProperCase( s ) ).toEqual( "Thomas O'Neil" );
           } );
 
     test( "toProperCase('mac mcnamara') === 'Mac McNamara'",
           () =>
           {
               let s = "mac mcnamara";
-              expect( stringUtils.toProperCase( s ) ).toEqual( "Mac McNamara" );
+              expect( toProperCase( s ) ).toEqual( "Mac McNamara" );
           } );
+
+
+    test( "toProperCase('Toby Mack') === 'Toby Mack'",
+          () =>
+          {
+              let s = "Toby Mack";
+              expect( toProperCase( s ) ).toEqual( "Toby Mack" );
+
+              s = "TOby macK";
+              expect( toProperCase( s ) ).toEqual( "Toby Mack" );
+
+          } );
+
+    test( "toProperCase('Toby Mackenzie') === 'Toby Mackenzie'",
+          () =>
+          {
+              let s = "Toby Mackenzie";
+              expect( toProperCase( s ) ).toEqual( "Toby Mackenzie" );
+
+              s = "Toby MacKenzie";
+              expect( toProperCase( s ) ).toEqual( "Toby Mackenzie" );
+          } );
+
 
     test( "toProperCase('P.o. Box') === 'P.O. Box'", () =>
     {
         let s = "P.o. Box";
-        let ss = stringUtils.toProperCase( s );
+        let ss = toProperCase( s );
         expect( ss ).toEqual( "P.O. Box" );
     } );
 
     test( "toProperCase('J.p. morgan') === 'J.P. Morgan'", () =>
     {
         let s = "J.p. morgan";
-        let ss = stringUtils.toProperCase( s );
+        let ss = toProperCase( s );
         expect( ss ).toEqual( "J.P. Morgan" );
     } );
 
     test( "toProperCase('Mr. jones') === 'Mr. Jones'", () =>
     {
         let s = "Mr. jones";
-        let ss = stringUtils.toProperCase( s );
+        let ss = toProperCase( s );
         expect( ss ).toEqual( "Mr. Jones" );
     } );
 
     test( "toProperCase('M r. jones') === 'M R. Jones'", () =>
     {
         let s = "M r. jones";
-        let ss = stringUtils.toProperCase( s );
+        let ss = toProperCase( s );
         expect( ss ).toEqual( "M R. Jones" );
+    } );
+
+    test( "toProperCase('Sarah\'s Way') === 'Sarah\'s Way'", () =>
+    {
+        let s = "Sarah's Way";
+        let pc = toProperCase( s );
+        expect( pc ).toEqual( s );
     } );
 
 } );
