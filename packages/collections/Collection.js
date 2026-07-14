@@ -105,9 +105,13 @@ const { _ud = "undefined", $scope } = constants;
             case _obj:
                 if ( isArray( pType ) )
                 {
-                    return Array;
+                    type = Array;
                 }
-                return getClass( pType ) || TYPES[_obj];
+                else
+                {
+                    type = getClass( pType ) || TYPES[_obj];
+                }
+                break;
 
             default:
                 return type;
@@ -225,7 +229,7 @@ const { _ud = "undefined", $scope } = constants;
             {
                 this.addAll( ...(pCollection) );
             }
-            else if ( isNonNullObject( pCollection ) && pCollection instanceof getClass( this ) )
+            else if ( isNonNullObject( pCollection ) && (pCollection instanceof getClass( this ) || isFunction( pCollection?.toArray )) )
             {
                 this.addAll( ...(asArray( pCollection.toArray() )) );
             }
@@ -370,7 +374,7 @@ const { _ud = "undefined", $scope } = constants;
             {
                 if ( isNonNullObject( elem ) )
                 {
-                    const key = asString( elem[keyProperty] || elem["instanceId"] || asString( elem ), true );
+                    const key = asString( readProperty( elem, keyProperty ) || elem[keyProperty] || elem["instanceId"] || asString( elem ), true );
 
                     if ( !map.has( key ) )
                     {

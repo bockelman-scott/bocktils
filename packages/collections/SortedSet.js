@@ -61,7 +61,10 @@ const { _ud = "undefined", $scope } = constants;
             isNonNullObject,
             isNonNullValue,
             isString,
+            isNumber,
             isNumeric,
+            isBoolean,
+            isBoolCompatible,
             isArray,
             isFunction,
             isSet,
@@ -181,23 +184,20 @@ const { _ud = "undefined", $scope } = constants;
 
         constructor( pType = TYPES.ANY, pCollection = null, pComparator = DEFAULT_COMPARATOR )
         {
-            super( pType, pCollection );
+            super( pType, [] );
 
             this._comparator = Comparators.isComparator( pComparator ) ? pComparator : DEFAULT_COMPARATOR;
 
             if ( isNonNullObject( this._comparator ) && Comparators.isComparator( this._comparator.compare ) )
             {
-                let func = (this._comparator.compare || this._comparator).bind( this._comparator );
+                let func = (this._comparator.compare ?? this._comparator).bind( this._comparator );
 
                 this._comparator = (function( a, b ) { return func.compare.call( func, a, b ); }).bind( this );
             }
 
-            let arr = this.toArray();
+            let arr = attempt( () => this.#resolveCollection( pCollection ) ) ?? [];
 
-            arr = arr.sort( this._comparator );
-
-            // remove any duplicates that were added by the superclass constructor
-            this.clear();
+            arr = arr.sort( this.comparator );
 
             this.addAll( ...arr );
         }
@@ -212,6 +212,99 @@ const { _ud = "undefined", $scope } = constants;
             }
 
             return func.bind( this );
+        }
+
+        #resolveCollection( pCollection )
+        {
+            const notNull = ( pVal ) => null !== pVal && _ud !== typeof pVal;
+
+            let collection = (isArray( pCollection ) ?
+                              asArray( pCollection ).filter( notNull ) :
+                              (isJsonArray( pCollection ) ?
+                               (attempt( () => parseJson( asString( pCollection, true ) ) ) ?? asString( pCollection, true )) :
+                               pCollection)) ?? pCollection;
+
+            collection = (isArray( collection ) ?
+                          asArray( collection ).filter( notNull ) :
+                          (isNonNullObject( collection ) || isJsonObject( collection )) ?
+                          asObject( collection ) :
+                          collection) ?? collection ?? pCollection;
+
+            if ( !isArray( collection ) && isNonNullObject( collection ) )
+            {
+                if ( collection instanceof this.constructor || isFunction( collection.toArray ) )
+                {
+                    collection = asArray( attempt( () => collection.toArray() ) ).filter( notNull );
+                }
+                else if ( isIterable( collection ) )
+                {
+                    collection = asArray( [...(collection)] ).filter( notNull );
+                }
+                else
+                {
+                    collection = (asArray( collection ?? [collection] ) ?? [collection]).filter( notNull );
+                }
+            }
+
+            if ( isArray( collection ) )
+            {
+                if ( TYPES.ANY !== this.type )
+                {
+                    if ( isClass( this.type ) )
+                    {
+                        collection = collection.map( e => isNonNullObject( e ) && e instanceof this.type ? e : (isFunction( this.type.from ) ? attempt( () => this.type.from( e ) ) : attempt( () => new this.type( e ) )) );
+                        collection = collection.filter( e => isNonNullObject( e ) && e instanceof this.type );
+                    }
+                    else
+                    {
+                        switch ( this.type )
+                        {
+                            case _ud:
+                                break;
+
+                            case _str:
+                                collection = collection.map( e => asString( e ) );
+                                collection = collection.filter( e => !isBlank( e ) );
+                                break;
+
+                            case _num:
+                                collection = collection.map( e => isNumeric( e ) ? attempt( () => parseFloat( e ) ) : NaN );
+                                collection = collection.filter( e => isNumber( e ) && !isNaN( e ) && isFinite( e ) );
+                                break;
+
+                            case _big:
+                                collection = collection.filter( e => notNull( e ) && (_big === typeof e || !isNaN( asString( e, true ).replace( /\D+$/, _mt ) )) && ( !isString( e ) || !isBlank( e )) );
+                                collection = collection.map( e => _big === typeof e ? e : isNumeric( e ) ? attempt( () => BigInt( asString( e, true ).replace( /\D+$/, _mt ) ) ) ?? (attempt( () => BigInt( e ) ) ?? NaN) : NaN );
+                                collection = collection.filter( e => _big === typeof e );
+                                break;
+
+                            case _bool:
+                                collection = collection.filter( e => notNull( e ) && (isBoolean( e ) || isBoolCompatible( e )) );
+                                collection = collection.map( e => isBoolean( e ) ? e : toBool( e ) );
+                                collection = collection.filter( e => notNull( e ) && isBoolean( e ) );
+                                break;
+
+                            case _fun:
+                                collection = collection.filter( e => !isNull( e ) && isFunction( e ) );
+                                break;
+
+                            case _symbol:
+                                collection = collection.filter( e => _symbol === typeof e );
+                                break;
+
+                            case _obj:
+                                collection = collection.filter( isNonNullObject );
+                                break;
+
+                            default:
+                                collection = collection.filter( notNull );
+                                break;
+                        }
+                    }
+                }
+            }
+
+            return asArray( collection );
         }
 
         /**
