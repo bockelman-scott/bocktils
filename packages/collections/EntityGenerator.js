@@ -34,7 +34,7 @@ const { _ud = "undefined", $scope } = constants;
 
     const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
-    const { ToolBocksModule, ModuleEvent, attempt, asyncAttempt, sleep, lock, no_op, $ln } = moduleUtils;
+    const { ToolBocksModule, ModuleEvent, attempt, asyncAttempt, isReadOnly, sleep, lock, no_op, $ln } = moduleUtils;
 
     const { isNull, isObject, isNonNullObject, isFunction, clamp = moduleUtils.clamp } = typeUtils;
 
@@ -105,11 +105,16 @@ const { _ud = "undefined", $scope } = constants;
 
         get ids()
         {
-            return lock( asArray( this.#ids ?? [] ) );
+            return lock( [...(asArray( this.#ids ?? [] ))] );
         }
 
         _addIds( ...pIds )
         {
+            if ( isReadOnly( this.#ids ) )
+            {
+                this.#ids = [...(asArray( this.#ids ?? [] ))];
+            }
+
             this.#ids.push( ...(asArray( pIds ?? [] )) );
         }
 
