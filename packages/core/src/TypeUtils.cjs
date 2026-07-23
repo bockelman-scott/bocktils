@@ -1727,6 +1727,36 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
     };
 
     /**
+     * Returns true if, in addition to being iterable,
+     * the object's iterable items are themselves entries.
+     * this should be used when the most important concern
+     * is the safety of calling something like new Map() rather than performance.
+     * If you can trust an object that is iterable to meet the criteria without calling this function,
+     * it is better to simply call #isIterable.
+     *
+     * @param {object|*} pObj the value to evaluate
+     *
+     * @returns {boolean} if the specified value is an iterable of arrays or ObjectEntry objects
+     */
+    const isIterableEntries = ( pObj ) =>
+    {
+        if ( !isIterable( pObj ) )
+        {
+            return false;
+        }
+
+        for( const entry of pObj )
+        {
+            if ( !isArray( entry ) || $ln( entry ) < 2 )
+            {
+                return false;
+            }
+        }
+
+        return true;
+    };
+
+    /**
      * Returns true if the specified value is asynchronously iterable.<br>
      * That is, the value can be used in a "for await ... of" loop<br>
      *
@@ -7067,6 +7097,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             is2dArray,
             isKeyValueArray,
             isIterable,
+            isIterableEntries,
             isAsyncIterable,
             isLikeArray,
             isSpreadable,
