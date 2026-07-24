@@ -4466,7 +4466,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         if ( isSet( pObject ) || isFunc( pObject?.values ) )
         {
-            return [...(pObject.values() || [])].map( mapper );
+            const iterable = (pObject.values() || []);
+
+            return !isNull( iterable[Symbol.iterator] ) ? [...(iterable)].map( mapper ) : attempt( () => iterable.map( mapper ) );
         }
 
         if ( pObject instanceof WeakRef )
