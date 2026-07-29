@@ -114,7 +114,7 @@ const { _ud = "undefined", $scope } = constants;
         }
 
         const proc = (_ud !== typeof process ? process : $scope());
-        const ENV = proc?.env ?? $scope();
+        const ENV = proc?.env ?? proc?.ENV ?? $scope();
 
         // Check for an explicit strategy; this must be set in the container configuration
         if ( ENV.SECRETS_STRATEGY && STRATEGY_OPTIONS.includes( asString( ENV.SECRETS_STRATEGY, true ) ) )
@@ -284,7 +284,7 @@ const { _ud = "undefined", $scope } = constants;
                   restrictKeys: false
               } );
 
-    const isPrefix = ( pStr ) => isString( pStr ) && !isBlank( pStr ) && /[A-Z]{1,4}[_-]?/.test( pStr );
+    const isPrefix = ( pStr ) => isString( pStr ) && !isBlank( pStr ) && /[A-Z]{1,4}[_-]?/.test( pStr ) && !(/[;:/\\]/i).test( pStr );
 
     /**
      * The module that will be returned to expose the classes and functionality of the SecretsManager.
@@ -347,13 +347,17 @@ const { _ud = "undefined", $scope } = constants;
 
             this.#logger = ToolBocksModule.resolveLogger( this.#options?.logger, firstMatchingType( ILogger, ...(asArray( this.#args ?? [] )) ), ToolBocksModule.getGlobalLogger(), console );
 
-            this.#source = this.#options?.source || (SECRETS_STRATEGY.LOCAL === this.#strategy ? "./.env" : _mt);
-
             this.#prefix = asString( this.#options?.prefix || this.#options?.secretsPrefix || _mt, true ) || ($ln( this.#args ) > 0 ? this.#args.find( isPrefix ) : _mt);
 
             this.#prefix = asString( this.#prefix || _mt, true ).replace( /^[_-]+/, _mt ).trim().replace( /[_-]+$/, _mt ).trim();
 
-            this.#prefix = asString( this.#prefix || _mt, true ).replaceAll( /^[_-]+/g, _hyphen ).trim();
+            this.#prefix = asString( this.#prefix || _mt, true ).replaceAll( /[_-]+/g, _hyphen ).trim();
+
+            this.#source = this.#options?.source ||
+                           ($ln( this.#args ) > 0 ?
+                            this.#args.find( e => !isNull( e ) && isString( pStr ) && !isBlank( pStr ) && pStr !== this.#prefix ) :
+                            (SECRETS_STRATEGY.LOCAL === this.#strategy ? "./.env" : _mt)) ||
+                           (SECRETS_STRATEGY.LOCAL === this.#strategy ? "./.env" : _mt);
 
             this.#allowCache = (false !== this.#options?.allowCache);
 
@@ -444,7 +448,7 @@ const { _ud = "undefined", $scope } = constants;
          */
         createKey( pKey )
         {
-            return createKey( this.prefix, ucase( (asString( pKey, true ).replace( new RegExp( `^${this.prefix}[_-]`, "i" ), _mt )) ) );
+            return createKey( this.prefix, ucase( (asString( pKey, true ).replace( new RegExp( `^${this.prefix}[_-]`, "i" ), _mt )) ).replaceAll( /[_-]+/g, _hyphen ) );
         }
 
         /**
