@@ -2775,7 +2775,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         }
 
         // Try parsing if input is a string
-        const date = _parseDate( pObj, pDateParser );
+        const date = attempt( () => _parseDate( pObj, pDateParser ) );
 
         return isDate( date, true ) && isValidDateInstance( date );
     };
