@@ -2022,6 +2022,36 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         return asString( s, true );
     }
 
+    function toOrdinal( pNumericString )
+    {
+        if ( !isNumeric( pNumericString ) )
+        {
+            return String( pNumericString );
+        }
+
+        const num = parseInt( pNumericString, 10 );
+        const mod100 = num % 100;
+
+        // Handle teens (11th, 12th, 13th)
+        if ( mod100 >= 11 && mod100 <= 13 )
+        {
+            return `${num}th`;
+        }
+
+        // Handle standard ending digits
+        switch ( num % 10 )
+        {
+            case 1:
+                return `${num}st`;
+            case 2:
+                return `${num}nd`;
+            case 3:
+                return `${num}rd`;
+            default:
+                return `${num}th`;
+        }
+    }
+
     function _warnIntegerOutOfRange( pInput, pSource = AS_INT )
     {
         const msg = ["asInt cannot return values greater than", Number.MAX_SAFE_INTEGER, "or less than", Number.MIN_SAFE_INTEGER, _dot, _spc, (pInput || "the specified value"), "cannot be converted to an Integer"].join( _spc );
@@ -4934,6 +4964,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             toProperCase,
             toPascalCase,
             toValidPropertyName,
+            toOrdinal,
             asProperCaseName,
             normalizeName,
             toTitleCase,
