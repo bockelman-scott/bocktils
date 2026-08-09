@@ -38,6 +38,7 @@ const { _ud = "undefined", $scope } = constants;
             merge,
             IterationCap,
             IllegalArgumentError,
+            IllegalStateError,
             no_op,
             op_false,
             objectEntries,
@@ -45,7 +46,7 @@ const { _ud = "undefined", $scope } = constants;
             $ln
         } = moduleUtils;
 
-    const { _mt_str } = constants;
+    const { _mt } = constants;
 
     const
         {
@@ -62,16 +63,19 @@ const { _ud = "undefined", $scope } = constants;
             isValidDateInstance,
             isError,
             toDecimal,
+            getClass,
+            getClassName,
             clamp
         } = typeUtils;
 
-    const {
-        asString,
-        isBlank,
-        asInt,
-        toBool,
-        ucase
-    } = stringUtils;
+    const
+        {
+            asString,
+            isBlank,
+            asInt,
+            toBool,
+            ucase
+        } = stringUtils;
 
     const { asArray, varargs, Filters } = arrayUtils;
 
@@ -245,15 +249,15 @@ const { _ud = "undefined", $scope } = constants;
             this[DATE_PARTS.YEAR] = -1;
 
             this[DATE_PARTS.MONTH] = -1;
-            this[DATE_PARTS.MONTH_NAME] = _mt_str;
-            this[DATE_PARTS.MONTH_ABBR] = _mt_str;
+            this[DATE_PARTS.MONTH_NAME] = _mt;
+            this[DATE_PARTS.MONTH_ABBR] = _mt;
 
             this[DATE_PARTS.DAY] = -1;
             this[DATE_PARTS.DAY_OF_WEEK] = -1;
             this[DATE_PARTS.DAY_OF_MONTH] = -1;
             this[DATE_PARTS.DAY_OF_YEAR] = -1;
-            this[DATE_PARTS.DAY_NAME] = _mt_str;
-            this[DATE_PARTS.DAY_ABBR] = _mt_str;
+            this[DATE_PARTS.DAY_NAME] = _mt;
+            this[DATE_PARTS.DAY_ABBR] = _mt;
 
             this[DATE_PARTS.HOUR] = -1;
             this[DATE_PARTS.HOUR_OF_DAY_12] = -1;
@@ -269,7 +273,7 @@ const { _ud = "undefined", $scope } = constants;
 
             this[DATE_PARTS.TIME_ZONE] = null;
 
-            this[DATE_PARTS.AM_PM] = _mt_str;
+            this[DATE_PARTS.AM_PM] = _mt;
         }
 
         initialize( pDate, pLocale )
@@ -329,7 +333,7 @@ const { _ud = "undefined", $scope } = constants;
 
         for( const key of keys )
         {
-            buffer[key] = source[key] || (/_/.test( key ) && !(/hour/i).test( key ) ? _mt_str : -1);
+            buffer[key] = source[key] || (/_/.test( key ) && !(/hour/i).test( key ) ? _mt : -1);
         }
 
         buffer.adjustedForPm = source.adjustedForPm || buffer.adjustedForPm;
@@ -392,7 +396,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             const calculator = this.#calculator;
 
-            return isFunction( calculator ) ? calculator.bind( this ) : isCalculator( calculator ) ? calculator.calculate.bind( this ) : () => _mt_str;
+            return isFunction( calculator ) ? calculator.bind( this ) : isCalculator( calculator ) ? calculator.calculate.bind( this ) : () => _mt;
         }
 
         get formatter()
@@ -422,7 +426,7 @@ const { _ud = "undefined", $scope } = constants;
                 return false;
             }
 
-            const otherName = pOther instanceof this.constructor ? pOther?.name : isString( pOther ) ? asString( pOther, true ) : _mt_str;
+            const otherName = pOther instanceof this.constructor ? pOther?.name : isString( pOther ) ? asString( pOther, true ) : _mt;
 
             return ucase( this.name ) === ucase( otherName );
         }
@@ -431,7 +435,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             const calculator = isCalculator( pCalculator ) ? pCalculator : this.calculator;
 
-            return isFunction( calculator ) ? attemptMethod( this, calculator, resolveDate( pDate ), pLocale ) : _mt_str;
+            return isFunction( calculator ) ? attemptMethod( this, calculator, resolveDate( pDate ), pLocale ) : _mt;
         }
 
         format( pDate, pLocale, pFormatter )
@@ -440,7 +444,7 @@ const { _ud = "undefined", $scope } = constants;
 
             const locale = resolveLocale( pLocale );
 
-            return isFunction( formatter ) ? attemptMethod( this, formatter, resolveDate( pDate ), locale ) : _mt_str;
+            return isFunction( formatter ) ? attemptMethod( this, formatter, resolveDate( pDate ), locale ) : _mt;
         }
     }
 
@@ -466,7 +470,7 @@ const { _ud = "undefined", $scope } = constants;
     DatePart.TIME_ZONE = new DatePart( DATE_PARTS.TIME_ZONE, "z", ( pDate ) =>
     {
         const matches = (/(\([\w ]+\))/i).exec( resolveDate( pDate ).toString() );
-        return matches && matches.length > 1 ? matches[1] : _mt_str;
+        return matches && matches.length > 1 ? matches[1] : _mt;
     } );
 
     const MILLISECONDS_PER_SECOND = 1_000;
@@ -712,7 +716,7 @@ const { _ud = "undefined", $scope } = constants;
                     if ( this.greaterThan( value ) )
                     {
                         const mutator = value.getMutator();
-                        toolBocksModule.attempt( () => mutator.call( date, asInt( value.minimumValue ) ) );
+                        attempt( () => mutator.call( date, asInt( value.minimumValue ) ) );
                     }
                 }
             }
@@ -768,6 +772,11 @@ const { _ud = "undefined", $scope } = constants;
             let date = resolveDate( pDate );
 
             let adjustment = asInt( pAdjustment );
+
+            if ( Object.isFrozen( date ) || Object.isSealed( date ) )
+            {
+                date = new Date( date.getTime() );
+            }
 
             date.setFullYear( date.getFullYear() + (10 - (date.getFullYear() % 10)) );
 
@@ -832,8 +841,10 @@ const { _ud = "undefined", $scope } = constants;
         isNull( pUnit ) ? new TimeUnit( 0, "NULL UNIT", 0, "getMilliseconds", "setMilliseconds", 0 ) :
         pUnit instanceof TimeUnit ? pUnit :
         isNumeric( pUnit ) && pUnit < 1_000 ? TIME_UNITS_BY_ID[asInt( pUnit )] :
-        isString( pUnit ) ? TIME_UNITS_BY_NAME[pUnit] || TIME_UNITS[ucase( pUnit )] || TIME_UNITS[ucase( pUnit.replace( /s$/i, _mt_str ) )] :
+        isString( pUnit ) ? TIME_UNITS_BY_NAME[pUnit.trim()] || TIME_UNITS[ucase( pUnit.trim() )] || TIME_UNITS[ucase( pUnit.replace( /s$/i, _mt ).trim() )] :
         new TimeUnit( pUnit, asString( pUnit ), pUnit, "getTime", "setTime", 0 );
+
+    const resolveTimeUnit = resolveUnit;
 
     TimeUnit.resolveUnit = resolveUnit;
 
@@ -1098,7 +1109,7 @@ const { _ud = "undefined", $scope } = constants;
     /**
      * Returns true if the first date is the same date as the second date.
      *
-     * If either argument is not a valid date or a number, returns false.
+     * If either argument is not a valid date or number, the function returns false.
      * *
      * @param pDateA a date to compare to another date
      * @param pDateB a date to which to compare the first date
@@ -1140,6 +1151,33 @@ const { _ud = "undefined", $scope } = constants;
     {
         const year = resolveFullYear( isDate( pYear ) ? pYear.getFullYear() : (isNumeric( pYear ) ? asInt( pYear ) : Now().getFullYear()) );
         return (isLeapYear( year )) ? 366 : 365;
+    };
+
+    /**
+     * Null-safe way of calling toISOString on a Date.
+     *
+     * @param {Date|number} pDate
+     */
+    const toISOString = function( pDate )
+    {
+        if ( isDate( pDate ) )
+        {
+            return pDate.toISOString();
+        }
+
+        if ( isNumeric( pDate ) )
+        {
+            const date = resolveDate( new Date( asInt( pDate ) ) );
+            return isDate( date ) ? date.toISOString() : _mt;
+        }
+
+        if ( isString( pDate ) && isDateString( pDate ) )
+        {
+            const date = asDate( pDate );
+            return toISOString( resolveDate( date ) );
+        }
+
+        return _mt;
     };
 
     const toYear = function( pDate, pYear = Now().getFullYear() )
@@ -1268,10 +1306,20 @@ const { _ud = "undefined", $scope } = constants;
         if ( isDate( pDate ) && isDate( pStart ) && isDate( pEnd ) )
         {
             const candidate = asInt( pDate.getTime() );
-            const startTime = asInt( pStart.getTime() );
-            const endTime = asInt( pEnd.getTime() );
+
+            let startTime = asInt( pStart.getTime() );
+            let endTime = asInt( pEnd.getTime() );
+
+            if ( startTime > endTime )
+            {
+                let vals = [startTime, endTime].sort();
+                startTime = vals[0];
+                endTime = vals[1];
+            }
+
             return candidate >= startTime && candidate < endTime;
         }
+
         return false;
     };
 
@@ -2225,6 +2273,436 @@ const { _ud = "undefined", $scope } = constants;
 
     const getBusinessDays = ( pStartDate, pEndDate, pOptions = DATES_ITERABLE_WORKDAY_OPTIONS ) => new DatesIterable( pStartDate, pEndDate, pOptions );
 
+    const __ConstructorHelper = function( ...pArgs )
+    {
+        let arr = asArray( pArgs );
+
+        let numArgs = $ln( arr );
+
+        if ( 1 === numArgs )
+        {
+            const arg = arr[0];
+            arr = (isDate( arg ) || isDateString( arg ) || isNumeric( arg )) ? [new Date( arg )] : [new Date()];
+        }
+        else if ( numArgs > 1 )
+        {
+            arr = arr.filter( e => (null === e || isNumeric( e ) || isDate( e )) );
+
+            numArgs = $ln( arr );
+
+            if ( 1 === numArgs )
+            {
+                return __ConstructorHelper( ...arr );
+            }
+
+            arr = arr.filter( e => (null === e || isNumeric( e )) );
+        }
+
+        return new Date( ...(asArray( arr )) );
+    };
+
+    /**
+     * An immutable subclass of the built-in Date object
+     * that also supports several of the functions defined in this module
+     * as instance methods
+     */
+    class ImmutableDate extends Date
+    {
+        #date;
+
+        constructor( ...pArgs )
+        {
+            super( __ConstructorHelper( ...pArgs ) );
+
+            const timestamp = super.valueOf();
+
+            this.#date = !isNaN( timestamp ) && isNumeric( timestamp ) ? new Date( timestamp ) : new Date();
+
+            this.#date = isDate( this.#date ) ? this.#date : new Date();
+
+            attempt( () => super.setTime( this.#date.getTime() ) );
+
+            this.#date = lock( this.#date );
+
+            lock( this );
+        }
+
+        clone()
+        {
+            return new ImmutableDate( this.#date ?? this );
+        }
+
+        toString()
+        {
+            return this.#date.toString();
+        }
+
+        toDateString()
+        {
+            return this.#date.toDateString();
+        }
+
+        toTimeString()
+        {
+            return this.#date.toTimeString();
+        }
+
+        toLocaleString()
+        {
+            return this.#date.toLocaleString();
+        }
+
+        toLocaleDateString()
+        {
+            return this.#date.toLocaleDateString();
+        }
+
+        toLocaleTimeString()
+        {
+            return this.#date.toLocaleTimeString();
+        }
+
+        valueOf()
+        {
+            return asInt( this.#date.valueOf() );
+        }
+
+        getTime()
+        {
+            return asInt( this.#date.getTime() );
+        }
+
+        getFullYear()
+        {
+            return this.#date.getFullYear();
+        }
+
+        getUTCFullYear()
+        {
+            return this.#date.getUTCFullYear();
+        }
+
+        getMonth()
+        {
+            return this.#date.getMonth();
+        }
+
+        getUTCMonth()
+        {
+            return this.#date.getUTCMonth();
+        }
+
+        getDate()
+        {
+            return this.#date.getDate();
+        }
+
+        getUTCDate()
+        {
+            return this.#date.getUTCDate();
+        }
+
+        getDay()
+        {
+            return this.#date.getDay();
+        }
+
+        getUTCDay()
+        {
+            return this.#date.getUTCDay();
+        }
+
+        getHours()
+        {
+            return this.#date.getHours();
+        }
+
+        getUTCHours()
+        {
+            return this.#date.getUTCHours();
+        }
+
+        getMinutes()
+        {
+            return this.#date.getMinutes();
+        }
+
+        getUTCMinutes()
+        {
+            return this.#date.getUTCMinutes();
+        }
+
+        getSeconds()
+        {
+            return this.#date.getSeconds();
+        }
+
+        getUTCSeconds()
+        {
+            return this.#date.getUTCSeconds();
+        }
+
+        getMilliseconds()
+        {
+            return this.#date.getMilliseconds();
+        }
+
+        getUTCMilliseconds()
+        {
+            return this.#date.getUTCMilliseconds();
+        }
+
+        getTimezoneOffset()
+        {
+            return this.#date.getTimezoneOffset();
+        }
+
+        setTime( time )
+        {
+            throw new IllegalStateError( `Instances of ${getClassName( this )} are immutable` );
+        }
+
+        setMilliseconds( ms )
+        {
+            throw new IllegalStateError( `Instances of ${getClassName( this )} are immutable` );
+        }
+
+        setUTCMilliseconds( ms )
+        {
+            throw new IllegalStateError( `Instances of ${getClassName( this )} are immutable` );
+        }
+
+        setSeconds( sec, ms )
+        {
+            throw new IllegalStateError( `Instances of ${getClassName( this )} are immutable` );
+        }
+
+        setUTCSeconds( sec, ms )
+        {
+            throw new IllegalStateError( `Instances of ${getClassName( this )} are immutable` );
+        }
+
+        setMinutes( min, sec, ms )
+        {
+            throw new IllegalStateError( `Instances of ${getClassName( this )} are immutable` );
+        }
+
+        setUTCMinutes( min, sec, ms )
+        {
+            throw new IllegalStateError( `Instances of ${getClassName( this )} are immutable` );
+        }
+
+        setHours( hours, min, sec, ms )
+        {
+            throw new IllegalStateError( `Instances of ${getClassName( this )} are immutable` );
+        }
+
+        setUTCHours( hours, min, sec, ms )
+        {
+            throw new IllegalStateError( `Instances of ${getClassName( this )} are immutable` );
+        }
+
+        setDate( date )
+        {
+            throw new IllegalStateError( `Instances of ${getClassName( this )} are immutable` );
+        }
+
+        setUTCDate( date )
+        {
+            throw new IllegalStateError( `Instances of ${getClassName( this )} are immutable` );
+        }
+
+        setMonth( month, date )
+        {
+            throw new IllegalStateError( `Instances of ${getClassName( this )} are immutable` );
+        }
+
+        setUTCMonth( month, date )
+        {
+            throw new IllegalStateError( `Instances of ${getClassName( this )} are immutable` );
+        }
+
+        setFullYear( year, month, date )
+        {
+            throw new IllegalStateError( `Instances of ${getClassName( this )} are immutable` );
+        }
+
+        setUTCFullYear( year, month, date )
+        {
+            throw new IllegalStateError( `Instances of ${getClassName( this )} are immutable` );
+        }
+
+        toUTCString()
+        {
+            return this.#date.toUTCString();
+        }
+
+        toISOString()
+        {
+            return this.#date.toISOString();
+        }
+
+        toJSON()
+        {
+            return this.#date.toJSON();
+        }
+
+        #prepareOtherTimestamp( pOther )
+        {
+            if ( isNonNullObject( pOther ) )
+            {
+                if ( pOther instanceof Date || isFunction( pOther.getTime ) )
+                {
+                    return asInt( pOther.getTime() );
+                }
+            }
+            else if ( isDateString( pOther ) || isValidDateArgument( pOther ) )
+            {
+                const other = new Date( pOther );
+                return asInt( other.getTime() );
+            }
+            return 0;
+        }
+
+        equals( pOther )
+        {
+            const otherTimestamp = this.#prepareOtherTimestamp( pOther );
+            return otherTimestamp === this.getTime();
+        }
+
+        compareTo( pOther )
+        {
+            const otherTimestamp = this.#prepareOtherTimestamp( pOther );
+            const thisTimestamp = this.getTime();
+
+            return thisTimestamp < otherTimestamp ? -1 : thisTimestamp > otherTimestamp ? 1 : 0;
+        }
+
+        isBefore( pOther )
+        {
+            return this.compareTo( pOther ) < 0;
+        }
+
+        isAfter( pOther )
+        {
+            return this.compareTo( pOther ) > 0;
+        }
+
+        isBetween( pFirstDate, pLastDate )
+        {
+            const firstDate = isDate( pFirstDate ) ? pFirstDate : isDateString( pFirstDate ) ? new Date( pFirstDate ) : null;
+            const lastDate = isDate( pLastDate ) ? pLastDate : isDateString( pLastDate ) ? new Date( pLastDate ) : null;
+
+            if ( isNull( firstDate ) )
+            {
+                return this.isBefore( lastDate ?? new Date() );
+            }
+
+            if ( isNull( lastDate ) )
+            {
+                return this.isAfter( firstDate ?? startOfDay( new Date() ) );
+            }
+
+            return isBetween( this.#date, firstDate, lastDate );
+        }
+
+        isWeekend()
+        {
+            return isWeekend( this.#date );
+        }
+
+        isWeekday()
+        {
+            return !isWeekend( this.#date );
+        }
+
+        addWeeks( pNumWeeks )
+        {
+            return new ImmutableDate( addWeeks( this.#date, pNumWeeks ) );
+        }
+
+        addDays( pNumDays )
+        {
+            return new ImmutableDate( addDays( this.#date, pNumDays ) );
+        }
+
+        addWorkdays( pNumDays )
+        {
+            return new ImmutableDate( addWorkdays( this.#date, pNumDays ) );
+        }
+
+        addHours( pNumHours )
+        {
+            return new ImmutableDate( addHours( this.#date, pNumHours ) );
+        }
+
+        addMinutes( pNumMinutes )
+        {
+            return new ImmutableDate( addMinutes( this.#date, pNumMinutes ) );
+        }
+
+        get tomorrow()
+        {
+            return addDays( this.#date, 1 );
+        }
+
+        get yesterday()
+        {
+            return addDays( this.#date, -1 );
+        }
+
+        toNextWeekday()
+        {
+            return avoidWeekend( this.tomorrow );
+        }
+
+        toLastWeekday()
+        {
+            return avoidWeekend( this.yesterday, Direction.PAST );
+        }
+
+        truncateTo( pTimeUnit = TIME_UNITS.DAY )
+        {
+            const unit = resolveTimeUnit( pTimeUnit );
+
+            const id = asInt( isNonNullObject( unit ) ? unit.id : asInt( pTimeUnit, 0 ) );
+
+            switch ( id )
+            {
+                case 0:
+                case TIME_UNITS.MILLISECOND.id:
+                    return new ImmutableDate( toMillisecond( this.#date ) );
+
+                case TIME_UNITS.SECOND.id:
+                    return new ImmutableDate( toSecond( this.#date ) );
+
+                case TIME_UNITS.MINUTE.id:
+                    return new ImmutableDate( toMinute( this.#date ) );
+
+                case TIME_UNITS.HOUR.id:
+                    return new ImmutableDate( toHour( this.#date ) );
+
+                case TIME_UNITS.DAY.id:
+                    return new ImmutableDate( toMonthDay( this.#date, this.getDate() ) );
+
+                case TIME_UNITS.WEEK.id:
+                    return new ImmutableDate( startOfWeek( this.#date ) );
+
+                case TIME_UNITS.MONTH.id:
+                    return new ImmutableDate( toMonthDay( this.#date, 1 ) );
+
+                case TIME_UNITS.YEAR.id:
+                    return new ImmutableDate( toYear( this.#date ) );
+
+                case TIME_UNITS.DECADE.id:
+                    return new ImmutableDate( TIME_UNITS.DECADE.startsFor( this.#date ) );
+
+                default:
+                    return this;
+            }
+        }
+    }
+
     let mod =
         {
             dependencies,
@@ -2240,7 +2718,8 @@ const { _ud = "undefined", $scope } = constants;
                     HolidayRelativeDefinition,
                     Month,
                     February,
-                    DatesIterable
+                    DatesIterable,
+                    ImmutableDate
                 },
             DateFilters,
             MILLIS_PER,
@@ -2267,10 +2746,12 @@ const { _ud = "undefined", $scope } = constants;
             DatePart,
             TimeUnit,
             DateBuffer,
+            ImmutableDate,
             isDate,
             isValidDateArgument,
             isValidDate,
             resolveDate,
+            toISOString,
             isLeapYear,
             isWeekend,
             isHoliday,

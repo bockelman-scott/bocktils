@@ -14,6 +14,8 @@ const
     {
         DateConstants,
 
+        ImmutableDate,
+
         US_HOLIDAYS,
 
         ONE_DAY,
@@ -1012,6 +1014,24 @@ describe( "Work Day / Business Days functionality", () =>
               // expect( addWorkdays( dateA, daysAccountingForHolidays, US_HOLIDAYS ) ).toEqual( avoidWeekend( dateB, -1 ) );
 
           } );
+} );
+
+describe( "ImmutableDate - construction and methods", () =>
+{
+    test( "ImmutableDate - construction", () =>
+    {
+        let date = new ImmutableDate();
+
+        expect( Math.abs( new Date().getTime() - date.getTime() ) < 100 ).toBe( true );
+
+        let expected = new Date( 2024, 9, 20, 9, 37, 0, 0 );
+        date = new ImmutableDate( sunday );
+
+        expect( date.getTime() ).toEqual( expected.getTime() );
+
+        console.log( date.toISOString() );
+    } );
+
 } );
 
 
