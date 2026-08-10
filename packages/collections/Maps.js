@@ -563,7 +563,7 @@ const { _ud = "undefined", $scope } = constants;
         keys()
         {
             const entries = this.entries();
-            return entries.map( e => ObjectEntry.getKey( e ) ) || asArray( super.values() ).sort( this.comparator );
+            return entries.map( e => ObjectEntry.getKey( e ) ) || asArray( super.keys() );
         }
 
         values()
