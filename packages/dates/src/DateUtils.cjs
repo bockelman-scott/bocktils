@@ -108,22 +108,37 @@ const { _ud = "undefined", $scope } = constants;
         return new Date();
     };
 
+    const _resolveDefaultDate = ( pDefault ) =>
+    {
+        if ( isDate( pDefault ) || isDateString( pDefault ) )
+        {
+            const date = new Date( pDefault );
+            return isDate( date ) ? date : new Date();
+        }
+
+        if ( isNumeric( pDefault ) )
+        {
+            const date = new Date( asInt( toDecimal( pDefault ) ) );
+            return isDate( date ) ? date : new Date();
+        }
+
+        return new Date();
+    };
+
     const asDate = ( pVal, pDefault = new Date() ) =>
     {
         let date = pVal;
 
-        const defaultDate = (isDate( pDefault ) || isDateString( pDefault )) ? new Date( pDefault ) : new Date();
-
         if ( !isNull( pVal ) && (isDate( pVal ) || isDateString( pVal )) )
         {
-            date = new Date( pVal || defaultDate || new Date() ) || new Date();
+            date = new Date( pVal || _resolveDefaultDate( pDefault ) || new Date() ) || new Date();
         }
         else if ( isNumeric( pVal ) )
         {
-            date = new Date( asInt( toDecimal( pVal ) ) ) || defaultDate || new Date();
+            date = new Date( asInt( toDecimal( pVal ) ) ) || _resolveDefaultDate( pDefault ) || new Date();
         }
 
-        return resolveDate( date, defaultDate );
+        return resolveDate( date, pDefault );
     };
 
     const daysAgo = ( pDays = 1 ) => new Date( Date.now() - (ONE_DAY * Math.max( 1, asInt( pDays ) )) );

@@ -124,6 +124,7 @@ const { _ud = "undefined", $scope } = constants;
             DateFormatTokenSetUtils: dateFormatTokenUtils,
             DateFormatterUtils: dateFormatterUtils,
             DateParserUtils: dateParserUtils,
+            TimeZoneUtils: timezoneUtils,
 
             classes:
                 {
@@ -146,64 +147,75 @@ const { _ud = "undefined", $scope } = constants;
                     FORMATS,
                     REPETITION_RULES,
                 },
-            DateFormatter,
-            DateParser,
 
-            TimeZone,
-            findTimeZone,
+            ...dateUtils,
+            ...dateFormatTokenUtils,
+            ...dateFormatterUtils,
+            ...dateParserUtils,
 
-            Result,
-            isDate,
+            ...timezoneUtils,
 
-            DateConstants,
-            DateFilters,
+            /*
+             DateFormatter,
+             DateParser,
 
-            isValidDateArgument,
-            avoidWeekend,
-            addDays,
-            addWorkdays,
-            addWeeks,
-            subtractDays,
-            subtractWeeks,
-            toNoon,
-            toMidnight,
-            firstInstant,
-            lastInstant,
-            before,
-            after,
-            equal,
-            sortDates,
-            earliest,
-            latest,
-            daysBetween,
-            workDaysBetween,
+             TimeZone,
+             findTimeZone,
 
-            getMonthNames,
-            getMonthAbbreviations,
+             Result,
+             isDate,
 
-            getDayNames,
-            getDayAbbreviations,
-            getDayLetters,
+             DateConstants,
+             DateFilters,
 
-            getEras,
+             isValidDateArgument,
+             avoidWeekend,
+             addDays,
+             addWorkdays,
+             addWeeks,
+             subtractDays,
+             subtractWeeks,
+             toNoon,
+             toMidnight,
+             firstInstant,
+             lastInstant,
+             before,
+             after,
+             equal,
+             sortDates,
+             earliest,
+             latest,
+             daysBetween,
+             workDaysBetween,
 
-            getAmPmStrings,
+             getMonthNames,
+             getMonthAbbreviations,
 
-            getFirstDayOfWeek,
+             getDayNames,
+             getDayAbbreviations,
+             getDayLetters,
 
-            numDaysInMonth,
-            numDaysInYear,
+             getEras,
 
-            FORMATS,
+             getAmPmStrings,
 
-            resolveDate,
-            resolveLocale,
+             getFirstDayOfWeek,
 
-            DEFAULT_LOCALE,
-            DEFAULT_TOKEN_SET,
-            DEFAULT_FORMAT,
+             numDaysInMonth,
+             numDaysInYear,
 
-            formatDate,
+             FORMATS,
+
+             resolveDate,
+             resolveLocale,
+
+             DEFAULT_LOCALE,
+             DEFAULT_TOKEN_SET,
+             DEFAULT_FORMAT,
+
+             formatDate,
+             */
+
             parseDate: function( pString )
             {
                 const date = attempt( () => parse( pString ) ) ?? resolveDate( pString );
