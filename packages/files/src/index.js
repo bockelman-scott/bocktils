@@ -271,6 +271,8 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
         {
             _deno = executionEnvironment.DenoGlobal;
             currentDirectory = _deno.cwd();
+
+            fs = _deno;
         }
         catch( ex )
         {
@@ -428,11 +430,11 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
         {
             if ( _isNode )
             {
-                this.#libraryModule = path || require( "node:path" );
+                this.#libraryModule = path ?? require( "node:path" );
             }
             else if ( _isDeno )
             {
-                this.#libraryModule = _deno.path || path || this;
+                this.#libraryModule = _deno.path ?? path ?? this;
             }
             else if ( _isBrowser )
             {
@@ -482,7 +484,8 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
         isAbsolute( pPath )
         {
             const s = toUnixPath( asString( pPath, true ) );
-            return (s.startsWith( _pathSep ) || s.startsWith( _backslash ) || /^[A-Z]?:/.test( s ));
+            let is = (s.startsWith( _pathSep ) || s.startsWith( _backslash ) || /^[A-Z]:/.test( s ));
+            return is && !(s.includes( "../" ) || s.includes( "./" ));
         }
 
         normalize( pPath )
@@ -518,7 +521,7 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
                     }
                     else if ( !hadRoot )
                     {
-                        // If it started relative and we're at the beginning (parts is empty),
+                        // If the path started as a relative path and we're now at the beginning (that is, parts is empty),
                         // and we encounter '..', we need to keep it to signify going "up"
                         // from the current directory.
                         parts.push( part );
@@ -611,6 +614,23 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
 
             return resolvedPath;
         }
+
+
+        relative( pFrom, pTo )
+        {
+            if ( this !== this.libraryModule )
+            {
+                return this.libraryModule.relative( pFrom, pTo );
+            }
+
+            let from = asString( this.normalize( this.resolve( pFrom ) ), true );
+            let to = asString( this.normalize( this.resolve( to ) ), true );
+
+            // TODO: find longest common subpath, return relative path from pFrom
+
+            return to;
+        }
+
 
         join( ...parts )
         {
@@ -1234,12 +1254,25 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
     const MILLIS_PER_HOUR = 60 * MILLIS_PER_MINUTE;
     const MILLIS_PER_DAY = 24 * MILLIS_PER_HOUR;
 
+    function normalize( pPath )
+    {
+        const pathLib = PathUtils.instance();
+
+        if ( isNull( pPath ) || !isString( pPath ) || isBlank( pPath ) )
+        {
+            return pathLib.resolve( "." );
+        }
+
+        return pathLib.normalize( pPath );
+    }
+
     /**
      * Resolves a given input to an absolute, normalized Unix-style file system path.
      *
      * @param {string|Array|string[]|Object} pPath - The path input to resolve.
      *        It can be a string, an array of path segments, or an object containing path information.
      *        If null or undefined, a default empty string path is returned.
+     *
      * @return {string} The resolved and normalized Unix-style path as a string.
      */
     function resolvePath( ...pPath )
@@ -1294,6 +1327,18 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
     {
         const pathLib = PathUtils.instance();
         return toUnixPath( isString( pDirectoryPath ) ? attempt( () => pathLib.resolve( toUnixPath( asString( pDirectoryPath, true ) ) ) ) : resolvePath( pDirectoryPath ) );
+    }
+
+    function relativePath( pFrom, pTo )
+    {
+        const pathLib = PathUtils.instance();
+        return pathLib.relative( pFrom, pTo );
+    }
+
+    function join( ...pParts )
+    {
+        const pathLib = PathUtils.instance();
+        return pathLib.join( ...pParts );
     }
 
     /**
@@ -4300,8 +4345,11 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
             isFile,
             isDirectory,
             isSymbolicLink,
+            join,
+            normalize,
             resolvePath,
             resolveDirectoryPath,
+            relativePath,
             extractPathSeparator,
             getFilePathData,
             getFileName,
