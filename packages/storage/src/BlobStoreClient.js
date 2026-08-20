@@ -20,7 +20,7 @@ const jsonUtils = require( "@toolbocks/json" );
 
 const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
-const { _ud, _mt = "", _hyphen, _fun, $scope } = constants;
+const { _ud, _mt = "", _hyphen, _pathSep = "/", _fun, $scope } = constants;
 
 (function exposeModule()
 {
@@ -70,7 +70,7 @@ const { _ud, _mt = "", _hyphen, _fun, $scope } = constants;
             isSubclassOf
         } = typeUtils;
 
-    const { asString, asInt, _lct, isBlank } = stringUtils;
+    const { asString, asInt, _lct, isBlank, toBool } = stringUtils;
 
     const { asArray } = arrayUtils;
 
@@ -105,72 +105,192 @@ const { _ud, _mt = "", _hyphen, _fun, $scope } = constants;
             }
         }
 
+        /**
+         * Initialize any underlying resources,
+         * such as authentication headers.
+         *
+         * @param {...*} pArgs any arguments required to initialize a specific instance
+         *
+         * @returns {Promise<BlobStorageClient>}
+         */
         async init( ...pArgs )
         {
             return this;
         }
 
+        /**
+         * Performs any necessary disposal of underlying resources.
+         *
+         * @param {...*} pArgs any arguments necessary to gracefully dispose this instance.
+         *
+         * @returns {Promise<BlobStorageClient>}
+         */
         async dispose( ...pArgs )
         {
             return this;
         }
 
+        /**
+         * Stores the provided data under the specified key.
+         *
+         * For subclasses that are constructed with a container, bucket, or root folder,
+         * this key should be relative to that path.
+         *
+         * @param {string} pKey the key,
+         *                      relative to the root container, bucket, folder, site, or document library
+         *                      under which to store the specified content.
+         *
+         * @param {Buffer|TypedArray|String} pData the content to store under the specified key
+         *
+         * @param {Object} [pOptions={}] (optional) an object specifying the encoding to use for string data
+         *                               and/or metadata to store with the content.
+         *
+         * @returns {Promise<Object>} an object with the resolve path, key, ETag, and other storage-specific information identifying the persisted content
+         */
         async upload( pKey, pData, pOptions = {} )
         {
             throw new NotImplementedError( "Method 'upload()' must be implemented." );
         }
 
+        /**
+         * Returns a ReadStream of the bytes requested.
+         *
+         * @param {string} pKey path relative to the root
+         *
+         * @param {object} [pOptions={}] (optional) an object specifying the range of bytes to return
+         *                               example: {start: 0, end: 4099}
+         *
+         * @returns {Promise<ReadStream>} a stream to consume
+         */
         async download( pKey, pOptions = {} )
         {
             throw new NotImplementedError( "Method 'download()' must be implemented." );
         }
 
+        /**
+         * Removes the content stored at the specified key as well as any associated metadata.
+         *
+         * @param {string} pKey the path, relative to the root, to the item to delete
+         *
+         * @returns {Promise<boolean>} true if the item and its metadata are successfully removed
+         */
         async delete( pKey )
         {
             throw new NotImplementedError( "Method 'delete()' must be implemented." );
         }
 
+        /**
+         * Removes one or more items and associated metadata in the blob store.
+         *
+         * @param {...string} pKeys one or more paths, relative to the root, indicating which items to remove
+         *
+         * @returns {Promise<{deleted: *[], failed: *[]}>} an object with an array of the items successfully deleted
+         *                                                 and an array of the items that could not be removed.
+         */
         async deleteMany( ...pKeys )
         {
             throw new NotImplementedError( "Method 'deleteMany()' must be implemented." );
         }
 
+        /**
+         * Returns true if the specified key exists in the blob store (file system)
+         *
+         * @param {string} pKey path, or key, relative to the root, for which to search the store
+         *
+         * @returns {Promise<boolean>} true if the blob store contains an item at the indicated path/key
+         */
         async exists( pKey )
         {
             throw new NotImplementedError( "Method 'exists()' must be implemented." );
         }
 
+        /**
+         * Returns any metadata stored with the content found at the specified key
+         *
+         * @param {string} pKey path, or key, relative to the root for which metadata will be returned
+         *
+         * @returns {Promise<Object>} an object with available metadata for the item stored under the specified key
+         */
         async getMetadata( pKey )
         {
             throw new NotImplementedError( "Method 'getMetadata()' must be implemented." );
         }
 
+        /**
+         * Returns an object containing a collection of metadata
+         * for items found under the specified prefix (path).
+         *
+         * @param {string} pPrefix
+         * @param {Object} pOptions
+         *
+         * @returns {Promise<Object>}
+         */
         async list( pPrefix = _mt, pOptions = {} )
         {
             throw new NotImplementedError( "Method 'list()' must be implemented." );
         }
 
         /**
-         * Async generator that yields objects one by one across page boundaries.
-         * @returns {AsyncGenerator<*>}
-         * @param pPrefix
-         * @param pOptions
+         * Async generator that yields objects
+         * containing metadata for items found under the specified prefix (path)
+         * one by one across page boundaries.
+         *
+         * @param {string} pPrefix the path, relative to the root container, bucket, folder, site, or document library
+         *                         for which to yield metadata objects for each item contained therein
+         *
+         * @param {Object} [pOptions={}] an object specifying storage-specific parameters
+         *
+         * @returns {AsyncGenerator<Object>}
          */
         async* listStream( pPrefix = "", pOptions = {} )
         {
             throw new NotImplementedError( "Method 'listStream()' must be implemented." );
         }
 
+        /**
+         * Returns a URI that can be used by anyone to download the item stored under the specified key.
+         * This URI may be configured to expire after some period of time.
+         *
+         * (NOTE: This method may not be applicable to all subclasses, for example, when storing to a local file system)
+         *
+         * @param {String} pKey
+         * @param {String} pOperation one of either "read" or "write" (which implies "read")
+         *                            specifying what operation(s) the URI performs or allows.
+         *
+         * @param {Object} [pOptions={}] - Additional options for the presigned URL, such as the expiration time
+         * @param {number} [pOptions.expiresInSeconds=3600] - The time (in seconds) until the URI expires
+         *
+         * @returns {Promise<String>}
+         */
         async getPresignedUrl( pKey, pOperation = BLOB_STORE_OPERATIONS.READ, pOptions = {} )
         {
             throw new NotImplementedError( "Method 'getPresignedUrl()' must be implemented." );
         }
 
-        async copy( sourceKey, destinationKey )
+        /**
+         * Copies the content found at the specified source key
+         * to a new path specified by the destination key.
+         *
+         * @param {string} pSourceKey
+         * @param {string} pDestinationKey
+         *
+         * @param {boolean} [pOverwrite=true] specifies whether to replace
+         *                                    any content that might already exist
+         *                                    at the specified destination.
+         *                                    <b>Defaults to true</b>
+         *
+         * @returns {Promise<boolean>} true if the content is successfully copied
+         */
+        async copy( pSourceKey, pDestinationKey, pOverwrite = true )
         {
             throw new NotImplementedError( "Method 'copy()' must be implemented." );
         }
 
+        /**
+         * Returns a string used when JavaScript coerces this object to a string.
+         *
+         * @returns {string} a string of the form, "[object ClassName]"
+         */
         [Symbol.toStringTag]()
         {
             return `[object ${getClassName( this )}]`;
@@ -178,6 +298,9 @@ const { _ud, _mt = "", _hyphen, _fun, $scope } = constants;
     }
 
 
+    /**
+     * Adapted version of the pipeline function for use in an asynchronous context
+     */
     const streamPipeline = promisify( pipeline );
 
     /**
@@ -230,7 +353,7 @@ const { _ud, _mt = "", _hyphen, _fun, $scope } = constants;
             const safeKey = normalize( key ).replace( /^(\.\.[\/\\])+/, _mt );
             const fullPath = resolvePath( join( this.rootFolder, safeKey ) );
 
-            if ( !fullPath.startsWith( this.rootFolder ) )
+            if ( fullPath !== this.rootFolder && !fullPath.startsWith( this.rootFolder + _pathSep ) )
             {
                 throw new IllegalArgumentError( "Directory traversal out of root folder is forbidden.", { detail: key }, key );
             }
@@ -299,7 +422,8 @@ const { _ud, _mt = "", _hyphen, _fun, $scope } = constants;
 
                 await asyncAttempt( async() => await streamPipeline( pData, writeStream ) );
 
-                await asyncAttempt( async() => writeStream.close() );
+                // pipeline handles closing the stream
+                // await asyncAttempt( async() => writeStream.close() );
             }
             else
             {
@@ -492,7 +616,8 @@ const { _ud, _mt = "", _hyphen, _fun, $scope } = constants;
         }
 
         /**
-         * Returns an object containing a collection of files found under the specified prefix (path).
+         * Returns an object containing a collection of metadata
+         * for files found under the specified prefix (path).
          *
          *
          * @param {string} pPrefix
@@ -556,49 +681,57 @@ const { _ud, _mt = "", _hyphen, _fun, $scope } = constants;
 
             const options = asObject( pOptions ?? {} );
 
-            const targetDir = join( this.rootFolder, prefix );
+            const recursive = toBool( readProperty( options, "recursive", "include_sub_folders" ) );
 
-            async function* walkDir( currentDir, rootFolder )
+            const targetDir = this.#resolvePath( prefix );
+
+            async function* walkDir( currentDir, rootFolder, pRecursive = recursive )
             {
                 const entries = await asyncAttempt( async() => await fsAsync.readdir( currentDir, { withFileTypes: true } ) );
 
-                for( const entry of entries )
+                if ( entries )
                 {
-                    const fileName = asString( entry.name, true );
-
-                    // omit metadata files
-                    if ( fileName.endsWith( ".meta.json" ) )
+                    for( const entry of entries )
                     {
-                        continue;
-                    }
+                        const fileName = asString( entry.name, true );
 
-                    const fullPath = join( currentDir, fileName );
+                        // omit metadata files
+                        if ( fileName.endsWith( ".meta.json" ) )
+                        {
+                            continue;
+                        }
 
-                    if ( entry.isDirectory() )
-                    {
-                        yield* walkDir( fullPath, rootFolder );
-                    }
-                    else if ( entry.isFile() )
-                    {
-                        const relativeKey = relativePath( rootFolder, fullPath ).replace( /\\/g, "/" );
+                        const fullPath = join( currentDir, fileName );
 
-                        const stats = await fsAsync.stat( fullPath );
-
-                        const obj =
+                        if ( entry.isDirectory() )
+                        {
+                            if ( toBool( pRecursive ) )
                             {
-                                fullPath,
-                                key: relativeKey,
-                                size: stats.size,
-                                lastModified: stats.mtime,
-                                etag: `"${stats.mtimeMs.toString( 16 )}-${stats.size.toString( 16 )}"`,
-                            };
+                                yield* walkDir( fullPath, rootFolder, pRecursive );
+                            }
+                        }
+                        else if ( entry.isFile() )
+                        {
+                            const relativeKey = relativePath( rootFolder, fullPath ).replace( /\\/g, "/" );
 
-                        yield lock( obj );
+                            const stats = await asyncAttempt( async() => await fsAsync.stat( fullPath ) );
+
+                            const obj =
+                                {
+                                    fullPath,
+                                    key: relativeKey,
+                                    size: asInt( stats?.size ),
+                                    lastModified: stats?.mtime || Date.now(),
+                                    etag: isNonNullObject( stats ) ? `"${stats.mtimeMs.toString( 16 )}-${stats.size.toString( 16 )}"` : _mt,
+                                };
+
+                            yield lock( obj );
+                        }
                     }
                 }
             }
 
-            yield* walkDir( targetDir, this.rootFolder );
+            yield* walkDir( targetDir, this.rootFolder, recursive );
         }
 
         /**
@@ -617,10 +750,11 @@ const { _ud, _mt = "", _hyphen, _fun, $scope } = constants;
 
             const options = asObject( pOptions ?? {} );
 
+            const operation = pOperation || readProperty( options, "operation", "op" ) || BLOB_STORE_OPERATIONS.READ;
+
             // For local testing, returns a direct HTTP endpoint mock
             return `${this.baseUrl}/${key}?op=${operation}&expires=${options.expiresInSeconds || 3600}`;
         }
-
 
         /**
          * Copies the content found at the specified source key to a new path specified by the destination key.
@@ -628,9 +762,11 @@ const { _ud, _mt = "", _hyphen, _fun, $scope } = constants;
          * @param {string} pSourceKey
          * @param {string} pDestinationKey
          *
+         * @param {boolean} pOverwrite specifies whether to overwrite an existing file
+         *
          * @returns {Promise<boolean>} true if the content is successfully copied
          */
-        async copy( pSourceKey, pDestinationKey )
+        async copy( pSourceKey, pDestinationKey, pOverwrite = true )
         {
             const sourceKey = asString( pSourceKey, true );
             const destinationKey = asString( pDestinationKey, true );
@@ -648,7 +784,32 @@ const { _ud, _mt = "", _hyphen, _fun, $scope } = constants;
                 throw new IllegalArgumentError( `The source and destination paths cannot be the same`, { detail: [srcPath, destPath] }, srcPath, destPath, sourceKey, destinationKey );
             }
 
+            const overwrite = toBool( pOverwrite );
+
             await asyncAttempt( async() => await fsAsync.mkdir( getDirectoryName( destPath ), { recursive: true } ) );
+
+            if ( !overwrite )
+            {
+                const alreadyExists = await this.exists( destPath );
+                if ( alreadyExists )
+                {
+                    return false;
+                }
+            }
+
+            try
+            {
+                await fsAsync.rename( srcPath, destPath );
+                return await this.exists( destPath );
+            }
+            catch( ex )
+            {
+                attempt( () => this.dispatchEvent( new ModuleEvent( "error",
+                                                                    { detail: new __Error( `Could not rename ${srcPath} to ${destPath}` ) },
+                                                                    { sourceKey, destinationKey } ) ) );
+
+            }
+
             await asyncAttempt( async() => await fsAsync.copyFile( srcPath, destPath ) );
 
             const copied = await this.exists( destPath );
@@ -665,6 +826,15 @@ const { _ud, _mt = "", _hyphen, _fun, $scope } = constants;
             return copied;
         }
 
+        /**
+         * Moves an item to a new path/key within the same container, document library, bucket, or other root.
+         * Returns true if the item is successfully moved.
+         *
+         * @param {String} pSourceKey
+         * @param {String} pDestinationKey
+         *
+         * @returns {Promise<boolean>} true if the item was successfully moved
+         */
         async move( pSourceKey, pDestinationKey )
         {
             const sourceKey = asString( pSourceKey, true );
@@ -721,12 +891,31 @@ const { _ud, _mt = "", _hyphen, _fun, $scope } = constants;
         #classes = new Map();
         #instances = new Map();
 
+        /**
+         * Constructs an instance of the class.
+         * This is a no-argument constructor that initializes the instance
+         * without additional setup or input parameters.
+         *
+         * @return {Object} A new instance of the class.
+         */
         constructor()
         {
             // no-args/no-op
             super();
         }
 
+        /**
+         * Associates a subclass of BlobStorageClient with a key.
+         *
+         * @param {String} pKey the key to use to retrieve the specified class
+         *
+         * @param {Function|Object} pClass a JavaScript class (or function that supports the "new" operator)
+         *                                 or an instance of the class to associate with the specified key
+         *
+         * @returns {void} does not return a value
+         *
+         * @emits "registerClass"
+         */
         registerClass( pKey, pClass )
         {
             const key = asString( pKey, true );
@@ -741,6 +930,17 @@ const { _ud, _mt = "", _hyphen, _fun, $scope } = constants;
             }
         }
 
+        /**
+         * Associates an instance of a subclass of BlobStorageClient with a key.
+         *
+         * @param {String} pKey the key to use to retrieve the specified class
+         *
+         * @param {BlobStorageClient} pInstance  an instance of a subclass of BlobStorageClient to associate with the specified key
+         *
+         * @returns {void} does not return a value
+         *
+         * @emits "registerSingleton"
+         */
         registerSingleton( pKey, pInstance )
         {
             const key = asString( pKey, true );
@@ -762,15 +962,36 @@ const { _ud, _mt = "", _hyphen, _fun, $scope } = constants;
             }
         }
 
+        /**
+         * Returns an instance of BlobStorageClient according to the key provided.
+         * If no subclass of BlobStorageClient exists for the specified key, throws an IllegalArgumentException
+         *
+         * @param {String} pKey the string used to identify a storage-system-specific subclass of BlobStorageClient
+         *
+         * @param {...*} [pArgs] any arguments to pass to the subclass constructor
+         *                       NOTE: if no arguments are specified,
+         *                             this method <i>may</i> return an existing instance
+         *                             which may also be in use by other consumers.
+         *
+         *
+         * @returns {BlobStorageClient}
+         *
+         * @throws IllegalArgumentError if no subclass is registered/exists for the specified key
+         */
         getClient( pKey, ...pArgs )
         {
             const key = asString( pKey, true );
+
+            if ( isBlank( key ) )
+            {
+                throw new IllegalArgumentError( `A valid key is required`, { detail: pKey }, pKey );
+            }
 
             const args = asArray( pArgs ?? [] );
 
             let instance = null;
 
-            if ( $ln( args ) > 0 )
+            if ( $ln( args ) <= 0 )
             {
                 instance = this.#instances.get( key );
             }
@@ -789,22 +1010,51 @@ const { _ud, _mt = "", _hyphen, _fun, $scope } = constants;
 
             if ( isNonNullObject( instance ) && instance instanceof BlobStorageClient )
             {
-                this.registerSingleton( key, instance );
+                if ( $ln( args ) <= 0 )
+                {
+                    this.registerSingleton( key, instance );
+                }
 
                 return instance;
             }
+
+            throw new IllegalArgumentError( `No class registered for key, ${key}`, { detail: pKey }, pKey );
         }
 
+        /**
+         * Returns an iterator of all registered keys and their associated classes.
+         *
+         * @return {Iterator<[String, Function]>} An iterator containing the entries of registered classes,
+         * where each entry is a key-value pair of the string key and the associated class/function.
+         */
         getRegisteredClasses()
         {
             return this.#classes.entries();
         }
 
+        /**
+         * Retrieves an iterator of any registered singletons.
+         *
+         * The method returns an iterator over the key-value pairs where the key
+         * represents the identifier of the singleton and the value is the corresponding
+         * singleton instance.
+         *
+         * @return {Iterator<[String, BlobStorageClient]>} An iterator containing entries of registered singletons.
+         */
         getRegisteredSingletons()
         {
             return this.#instances.entries();
         }
 
+        /**
+         * Removes the class associated with the specified key
+         *
+         * @param {String} pKey
+         *
+         * @returns {boolean} true if the class was removed
+         *
+         * @emits "unregisterClass"
+         */
         unregisterClass( pKey )
         {
             const key = asString( pKey, true );
@@ -821,6 +1071,15 @@ const { _ud, _mt = "", _hyphen, _fun, $scope } = constants;
             return deleted;
         }
 
+        /**
+         * Removes the instance associated with the specified key
+         *
+         * @param {String} pKey
+         *
+         * @returns {boolean} true if the instance was removed
+         *
+         * @emits "unregisterSingleton"
+         */
         unregisterSingleton( pKey )
         {
             const key = asString( pKey, true );
@@ -835,6 +1094,13 @@ const { _ud, _mt = "", _hyphen, _fun, $scope } = constants;
             return deleted;
         }
 
+        /**
+         * Clears all stored instances and classes and dispatches a "clear" event.
+         *
+         * @return {void} This method does not return a value.
+         *
+         * @emits "clear"
+         */
         clear()
         {
             attempt( () => this.#instances.clear() );
@@ -849,6 +1115,20 @@ const { _ud, _mt = "", _hyphen, _fun, $scope } = constants;
         }
     }
 
+    /**
+     * An object representing the supported keys for various blob storage clients.
+     * This variable provides a centralized list of identifiers for different
+     * storage providers that can be used to configure or interact with specific
+     * blob storage systems.
+     *
+     * Available keys:
+     * - FILE_SYSTEM: Represents a local file system storage.
+     * - AWS_S3: Represents Amazon Web Services S3 storage.
+     * - AZURE: Represents Microsoft Azure Blob storage.
+     * - GOOGLE_CLOUD: Represents Google Cloud Storage.
+     * - GOOGLE_DRIVE: Represents Google Drive storage.
+     * - SHAREPOINT: Represents Microsoft SharePoint storage.
+     */
     const BLOB_STORE_CLIENT_KEYS =
         lock( {
                   FILE_SYSTEM: "FILE_SYSTEM",
@@ -859,10 +1139,23 @@ const { _ud, _mt = "", _hyphen, _fun, $scope } = constants;
                   SHAREPOINT: "SHAREPOINT"
               } );
 
+    /**
+     * The singleton instance of the BlobStoreClientFactory
+     * @type {BlobStoreClientFactory}
+     */
     const BLOB_STORE_CLIENT_FACTORY = new BlobStoreClientFactory();
 
+    // register the LocalDiskStorageClient
     BLOB_STORE_CLIENT_FACTORY.registerClass( BLOB_STORE_CLIENT_KEYS.FILE_SYSTEM, LocalDiskStorageClient );
 
+    /*
+     * Applications are responsible for registering any other subclasses
+     */
+
+    /**
+     * The module to be returned when this function executes.
+     * @type {{BLOB_STORE_OPERATIONS: *, BLOB_STORE_CLIENT_KEYS: *, BLOB_STORE_CLIENT_FACTORY: BlobStoreClientFactory, classes: {BlobStorageClient: BlobStorageClient, LocalDiskStorageClient: LocalDiskStorageClient, BlobStoreClientFactory: BlobStoreClientFactory}, EVENTS: string[], BlobStorageClient: BlobStorageClient, LocalDiskStorageClient: LocalDiskStorageClient, BlobStoreClientFactory: BlobStoreClientFactory}}
+     */
     const mod =
         {
             BLOB_STORE_OPERATIONS,
@@ -871,13 +1164,11 @@ const { _ud, _mt = "", _hyphen, _fun, $scope } = constants;
             classes:
                 {
                     BlobStorageClient,
-                    LocalDiskStorageClient,
-                    BlobStoreClientFactory
+                    LocalDiskStorageClient
                 },
             EVENTS: ["clear", "delete", "registerClass", "unregisterClass", "registerSingleton", "unregisterSingleton", "upload", "copy"],
             BlobStorageClient,
-            LocalDiskStorageClient,
-            BlobStoreClientFactory
+            LocalDiskStorageClient
         };
 
     if ( _ud !== typeof module )
