@@ -53,6 +53,9 @@
      */
     class S3BlobStorageClient extends BlobStorageClient
     {
+        #region;
+        #bucket;
+
         #s3Client;
 
         /**
@@ -69,8 +72,8 @@
 
             const options = asObject( pOptions ?? {} );
 
-            this.bucket = asString( options.bucket || options.bucketName, true );
-            this.region = asString( options.region || "us-east-1", true );
+            this.#region = asString( readProperty( options, "region"), true ) || "us-east-1";
+            this.#bucket = asString( readProperty( options, "bucket", "bucket_name" ), true );
 
             if ( isBlank( this.bucket ) )
             {
@@ -89,6 +92,21 @@
             }
 
             this.#s3Client = options.s3Client || new S3Client( clientConfig );
+        }
+
+        get region()
+        {
+            return this.#region;
+        }
+
+        get bucket()
+        {
+            return this.#bucket;
+        }
+
+        getRoot()
+        {
+            return this.#bucket;
         }
 
         /**

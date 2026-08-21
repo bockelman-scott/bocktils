@@ -130,6 +130,11 @@ const { _ud, _mt = "", _hyphen, _pathSep = "/", _fun, $scope } = constants;
             return this;
         }
 
+        getRoot()
+        {
+            throw new NotImplementedError( `${getClassName( this )} does not implement the getRoot method.  Subclasses should implement this method to return the top-level container, bucket, site/document library, or root folder, as is appropriate to its backing store` );
+        }
+
         /**
          * Stores the provided data under the specified key.
          *
@@ -329,11 +334,16 @@ const { _ud, _mt = "", _hyphen, _pathSep = "/", _fun, $scope } = constants;
 
             const options = asObject( pOptions ?? {} );
 
-            const root = asString( options.rootFolder || getTempDirectory(), true ) || getTempDirectory();
+            const root = asString( readProperty( options, "rootFolder", "root_folder", "root_directory", "directory", "folder", "root" ) || getTempDirectory(), true ) || getTempDirectory();
 
             this.rootFolder = resolvePath( root );
 
             this.baseUrl = options.baseUrl || asString( `file:///${this.rootFolder}/` ).replaceAll( /\/{4}/g, "///" );
+        }
+
+        getRoot()
+        {
+            return this.rootFolder;
         }
 
         /**
