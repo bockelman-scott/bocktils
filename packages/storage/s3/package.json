@@ -1,0 +1,27 @@
+{
+  "name": "@toolbocks/storage-s3",
+  "version": "1.0.0",
+  "description": "Classes and functions for working with AWS S3 blob storage",
+  "main": "index.js",
+  "dependencies": {
+    "@dotenvx/dotenvx": "^1.44.1",
+    "@toolbocks/core": "^1.0.0",
+    "@toolbocks/files": "^1.0.0",
+    "@toolbocks/json": "^1.0.0",
+    "@toolbocks/storage": "^1.0.0",
+    "@aws-sdk/client-s3": "^3.1115.0",
+    "@aws-sdk/lib-storage": "^3.1115.0",
+    "@aws-sdk/s3-request-presigner": "^3.1115.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "scripts": {
+    "test": "jest",
+    "doc": "jsdoc -c ../../jsdoc.config.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bockelman-scott/bocktils.git"
+  }
+}
