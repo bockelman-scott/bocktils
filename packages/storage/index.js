@@ -8,7 +8,7 @@
 
     const { _ud, $scope } = constants;
 
-    const blobStoreClient = require( "src/BlobStoreClient.js" );
+    const blobStoreClient = require( "./src/BlobStoreClient.js" );
 
     if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
     {
