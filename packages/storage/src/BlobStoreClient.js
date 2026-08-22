@@ -52,6 +52,7 @@ const { _ud, _mt = "", _hyphen, _pathSep = "/", _fun, $scope } = constants;
             attempt,
             attemptSilent,
             asyncAttempt,
+            populateOptions,
             lock,
             $ln
         } = moduleUtils;
@@ -70,7 +71,7 @@ const { _ud, _mt = "", _hyphen, _pathSep = "/", _fun, $scope } = constants;
             isSubclassOf
         } = typeUtils;
 
-    const { asString, asInt, _lct, isBlank, toBool } = stringUtils;
+    const { asString, asInt, _lct, isBlank, isJsonObject, toBool, toUnixPath } = stringUtils;
 
     const { asArray } = arrayUtils;
 
@@ -218,7 +219,12 @@ const { _ud, _mt = "", _hyphen, _pathSep = "/", _fun, $scope } = constants;
          */
         async getMetadata( pKey )
         {
-            throw new NotImplementedError( "Method 'getMetadata()' must be implemented." );
+            throw new NotImplementedError( "Method 'getMetadata( key )' must be implemented." );
+        }
+
+        async updateMetadata( pKey, pMetadata )
+        {
+            throw new NotImplementedError( "Method 'updateMetadata( key, pMetadata )' must be implemented." );
         }
 
         /**
@@ -291,6 +297,53 @@ const { _ud, _mt = "", _hyphen, _pathSep = "/", _fun, $scope } = constants;
             throw new NotImplementedError( "Method 'copy()' must be implemented." );
         }
 
+        async move( pSourceKey, pDestinationKey, pOverwrite = true )
+        {
+            // subclasses should override this method, but the superclass falls back to copy + delete
+
+            const sourceKey = asString( pSourceKey, true );
+            const destinationKey = asString( pDestinationKey, true );
+
+            if ( isBlank( sourceKey ) || isBlank( destinationKey ) )
+            {
+                throw new IllegalArgumentError( `Both a source path and destination path are required`, { detail: [sourceKey, destinationKey] }, sourceKey, destinationKey );
+            }
+
+            if ( _lct( sourceKey ) === _lct( destinationKey ) )
+            {
+                throw new IllegalArgumentError( `The source and destination cannot be the same`, { detail: [sourceKey, destinationKey] }, sourceKey, destinationKey );
+            }
+
+            const overwrite = toBool( pOverwrite );
+
+            if ( !overwrite )
+            {
+                const alreadyExists = await this.exists( destinationKey );
+                if ( alreadyExists )
+                {
+                    return false;
+                }
+            }
+
+            const copied = await asyncAttempt( async() => this.copy( sourceKey, destinationKey, overwrite ) );
+
+            if ( copied )
+            {
+                const deleted = await asyncAttempt( async() => await this.delete( sourceKey ) );
+
+                if ( !deleted )
+                {
+                    attempt( () => this.dispatchEvent( new ModuleEvent( "error",
+                                                                        { detail: new __Error( `Could not complete the move of ${srcPath} to ${destPath}; the source could not be removed` ) },
+                                                                        { copied, deleted } ) ) );
+                }
+
+                return copied && deleted;
+            }
+
+            return false;
+        }
+
         /**
          * Returns a string used when JavaScript coerces this object to a string.
          *
@@ -336,14 +389,14 @@ const { _ud, _mt = "", _hyphen, _pathSep = "/", _fun, $scope } = constants;
 
             const root = asString( readProperty( options, "rootFolder", "root_folder", "root_directory", "directory", "folder", "root" ) || getTempDirectory(), true ) || getTempDirectory();
 
-            this.rootFolder = resolvePath( root );
+            this.rootFolder = toUnixPath( asString( resolvePath( root ), true ) );
 
             this.baseUrl = options.baseUrl || asString( `file:///${this.rootFolder}/` ).replaceAll( /\/{4}/g, "///" );
         }
 
         getRoot()
         {
-            return this.rootFolder;
+            return toUnixPath( this.rootFolder );
         }
 
         /**
@@ -361,7 +414,7 @@ const { _ud, _mt = "", _hyphen, _pathSep = "/", _fun, $scope } = constants;
             const key = asString( pKey, true );
 
             const safeKey = normalize( key ).replace( /^(\.\.[\/\\])+/, _mt );
-            const fullPath = resolvePath( join( this.rootFolder, safeKey ) );
+            const fullPath = toUnixPath( resolvePath( join( this.rootFolder, safeKey ) ) );
 
             if ( fullPath !== this.rootFolder && !fullPath.startsWith( this.rootFolder + _pathSep ) )
             {
@@ -509,18 +562,19 @@ const { _ud, _mt = "", _hyphen, _pathSep = "/", _fun, $scope } = constants;
             const key = asString( pKey, true );
 
             const filePath = this.#resolvePath( key );
-            const metaPath = this.#getMetadataPath( filePath );
 
             await asyncAttempt( async() => await fsAsync.unlink( filePath ).catch( () => {} ) );
-            await asyncAttempt( async() => await fsAsync.unlink( metaPath ).catch( () => {} ) );
-
             const fileExists = await this.exists( key );
 
             if ( !fileExists )
             {
+                // if the file has been deleted, delete the metadata, too
+                const metaPath = this.#getMetadataPath( filePath );
+                await asyncAttempt( async() => await fsAsync.unlink( metaPath ).catch( () => {} ) );
+
                 attempt( () => this.dispatchEvent( new ModuleEvent( "delete",
-                                                                    { detail: [key, fileExists] },
-                                                                    { key, fileExists } ) ) );
+                                                                    { detail: [key, filePath] },
+                                                                    { key, filePath } ) ) );
             }
 
             return !fileExists;
@@ -604,7 +658,7 @@ const { _ud, _mt = "", _hyphen, _pathSep = "/", _fun, $scope } = constants;
             try
             {
                 const data = await fsAsync.readFile( this.#getMetadataPath( filePath ), "utf-8" );
-                meta = asObject( data );
+                meta = asObject( data ?? meta ) ?? meta;
             }
             catch
             {
@@ -615,12 +669,36 @@ const { _ud, _mt = "", _hyphen, _pathSep = "/", _fun, $scope } = constants;
                 {
                     ...(asObject( meta )),
                     ...(asObject( meta?.customMetadata ?? {} )),
+                    stats,
                     size: stats.size,
                     lastModified: stats.mtime,
                     contentType: readProperty( meta, "content_type", "mime_type" ) || "application/octet-stream",
                     etag: `"${stats.mtimeMs.toString( 16 )}-${stats.size.toString( 16 )}"`,
                     customMetadata: meta?.customMetadata ?? {}
                 };
+
+            return lock( obj );
+        }
+
+        async updateMetadata( pKey, pMetadata )
+        {
+            let existing = await asyncAttempt( async() => await this.getMetadata( pKey ) );
+            existing = asObject( existing ?? {} ) ?? {};
+
+            let metadata = pMetadata ?? existing;
+
+            if ( isNonNullObject( metadata ) || isJsonObject( metadata ) )
+            {
+                metadata = asObject( metadata ?? {} ) ?? {};
+            }
+
+            const obj = attempt( () => populateOptions( metadata, existing ) ) ?? { ...(asObject( existing )), ...(asObject( metadata )) };
+
+            if ( isNonNullObject( obj ) )
+            {
+                const filePath = this.#getMetadataPath( pKey );
+                await fsAsync.writeFile( filePath, asJson( obj ), "utf-8" );
+            }
 
             return lock( obj );
         }
@@ -800,29 +878,16 @@ const { _ud, _mt = "", _hyphen, _pathSep = "/", _fun, $scope } = constants;
 
             if ( !overwrite )
             {
-                const alreadyExists = await this.exists( destPath );
+                const alreadyExists = await this.exists( destinationKey );
                 if ( alreadyExists )
                 {
                     return false;
                 }
             }
 
-            try
-            {
-                await fsAsync.rename( srcPath, destPath );
-                return await this.exists( destPath );
-            }
-            catch( ex )
-            {
-                attempt( () => this.dispatchEvent( new ModuleEvent( "error",
-                                                                    { detail: new __Error( `Could not rename ${srcPath} to ${destPath}` ) },
-                                                                    { sourceKey, destinationKey } ) ) );
-
-            }
-
             await asyncAttempt( async() => await fsAsync.copyFile( srcPath, destPath ) );
 
-            const copied = await this.exists( destPath );
+            const copied = await this.exists( destinationKey );
 
             if ( copied )
             {
@@ -843,9 +908,10 @@ const { _ud, _mt = "", _hyphen, _pathSep = "/", _fun, $scope } = constants;
          * @param {String} pSourceKey
          * @param {String} pDestinationKey
          *
+         * @param pOverwrite
          * @returns {Promise<boolean>} true if the item was successfully moved
          */
-        async move( pSourceKey, pDestinationKey )
+        async move( pSourceKey, pDestinationKey, pOverwrite = true )
         {
             const sourceKey = asString( pSourceKey, true );
             const destinationKey = asString( pDestinationKey, true );
@@ -863,7 +929,54 @@ const { _ud, _mt = "", _hyphen, _pathSep = "/", _fun, $scope } = constants;
                 throw new IllegalArgumentError( `The source and destination paths cannot be the same`, { detail: [srcPath, destPath] }, srcPath, destPath, sourceKey, destinationKey );
             }
 
-            const copied = await asyncAttempt( async() => this.copy( sourceKey, destinationKey ) );
+            const overwrite = toBool( pOverwrite );
+
+            if ( !overwrite )
+            {
+                const alreadyExists = await this.exists( destinationKey );
+                if ( alreadyExists )
+                {
+                    return false;
+                }
+            }
+
+            try
+            {
+                await fsAsync.rename( srcPath, destPath );
+
+                const moved = await this.exists( destinationKey );
+
+                if ( moved )
+                {
+                    // move the metadata
+                    const metaMoved = await fsAsync.rename( this.#getMetadataPath( srcPath ), this.#getMetadataPath( destPath ) );
+
+                    if ( !metaMoved )
+                    {
+                        attempt( () => this.dispatchEvent( new ModuleEvent( "error",
+                                                                            { detail: new __Error( `Could not rename ${this.#getMetadataPath( srcPath )} to ${this.#getMetadataPath( destPath )}` ) },
+                                                                            { sourceKey, destinationKey } ) ) );
+
+                        const metadata = await asyncAttempt( async() => await this.getMetadata( sourceKey ) );
+                        if ( isNonNullObject( metadata ) )
+                        {
+                            await asyncAttempt( async() => await fsAsync.writeFile( this.#getMetadataPath( destPath ), asJson( metadata ), "utf-8" ) );
+                            await asyncAttempt( async() => await fsAsync.unlink( this.#getMetadataPath( srcPath ) ) );
+                        }
+                    }
+                }
+
+                return moved;
+            }
+            catch( ex )
+            {
+                attempt( () => this.dispatchEvent( new ModuleEvent( "error",
+                                                                    { detail: new __Error( `Could not rename ${srcPath} to ${destPath}` ) },
+                                                                    { sourceKey, destinationKey } ) ) );
+
+            }
+
+            const copied = await asyncAttempt( async() => this.copy( sourceKey, destinationKey, overwrite ) );
 
             if ( copied )
             {

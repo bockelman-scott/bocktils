@@ -14,13 +14,13 @@
 
     const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
-    const { ModuleEvent, attempt, asyncAttempt, readProperty, lock } = moduleUtils;
+    const { ModuleEvent, attempt, asyncAttempt, readProperty, lock, populateOptions } = moduleUtils;
 
     const { _ud, _mt = "", _fun, $scope } = constants;
 
     const { isNull, isNonNullObject, isString, isArray, isTypedArray, isClass, getClass, getClassName } = typeUtils;
 
-    const { asString, asInt, toBool, isBlank } = stringUtils;
+    const { asString, asInt, toBool, isBlank, isJsonObject } = stringUtils;
 
     const { asArray } = arrayUtils;
 
@@ -72,7 +72,7 @@
 
             const options = asObject( pOptions ?? {} );
 
-            this.#region = asString( readProperty( options, "region"), true ) || "us-east-1";
+            this.#region = asString( readProperty( options, "region" ), true ) || "us-east-1";
             this.#bucket = asString( readProperty( options, "bucket", "bucket_name" ), true );
 
             if ( isBlank( this.bucket ) )
@@ -292,6 +292,49 @@
                 };
 
             return lock( obj );
+        }
+
+        /**
+         * Updates or replaces metadata for an existing S3 object.
+         *
+         * @param {string} pKey - S3 key
+         * @param {Object} pMetadata - Metadata object
+         *
+         * @returns {Promise<Object>} Updated metadata object
+         */
+        async updateMetadata( pKey, pMetadata )
+        {
+            const key = this.#resolveKey( pKey );
+
+            let existing = await asyncAttempt( async() => await this.getMetadata( key ) );
+            existing = asObject( existing ?? {} ) ?? {};
+
+            let metadata = pMetadata ?? existing;
+
+            if ( isNonNullObject( metadata ) || isJsonObject( metadata ) )
+            {
+                metadata = asObject( metadata ?? existing ?? {} ) ?? existing ?? {};
+            }
+
+            const obj = attempt( () => populateOptions( metadata, existing ) ) ?? { ...(asObject( existing )), ...(asObject( metadata )) };
+
+            const contentType = readProperty( obj, "content_type", "mime_type" ) ||
+                                readProperty( existing, "content_type", "mime_type" ) ||
+                                "application/octet-stream";
+
+            const copySource = encodeURI( `${this.bucket}/${key}` );
+
+            // 3. Issue in-place CopyObjectCommand with MetadataDirective REPLACE
+            await this.#s3Client.send( new CopyObjectCommand( {
+                                                                  Bucket: this.bucket,
+                                                                  Key: key,
+                                                                  CopySource: copySource,
+                                                                  MetadataDirective: "REPLACE",
+                                                                  ContentType: asString( contentType, true ) || "application/octet-stream",
+                                                                  Metadata: obj ?? existing
+                                                              } ) );
+
+            return await this.getMetadata( key );
         }
 
         async list( pPrefix = _mt, pOptions = {} )
