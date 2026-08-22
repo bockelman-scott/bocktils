@@ -2,7 +2,7 @@
 {
     const { BlobStorageClient } = require( "@toolbocks/storage" );
 
-    const { S3BlobStorageClient } = require( "../src/S3BlobStorageClient.js" );
+    const { S3BlobStorageClient } = require( "./src/S3BlobStorageClient.js" );
 
     const mod =
         {
