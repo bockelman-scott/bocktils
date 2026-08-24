@@ -426,7 +426,12 @@
             return await getSignedUrl( this.#s3Client, command, { expiresIn } );
         }
 
-        async copy( pSourceKey, pDestinationKey, pOverwrite = true )
+        async getUrl( pKey, pOperation = BLOB_STORE_OPERATIONS.READ, pOptions = {} )
+        {
+            return await this.getPresignedUrl( pKey, pOperation, pOptions );
+        }
+
+        async copy( pSourceKey, pDestinationKey, pOverwrite = false )
         {
             const sourceKey = this.#resolveKey( pSourceKey );
             const destinationKey = this.#resolveKey( pDestinationKey );

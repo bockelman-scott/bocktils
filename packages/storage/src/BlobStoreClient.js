@@ -278,6 +278,11 @@ const { _ud, _mt = "", _hyphen, _pathSep = "/", _fun, $scope } = constants;
             throw new NotImplementedError( "Method 'getPresignedUrl()' must be implemented." );
         }
 
+        async getUrl( pKey, pOperation = BLOB_STORE_OPERATIONS.READ, pOptions = {} )
+        {
+            return await this.getPresignedUrl( pKey, pOperation, pOptions );
+        }
+
         /**
          * Copies the content found at the specified source key
          * to a new path specified by the destination key.
@@ -292,12 +297,12 @@ const { _ud, _mt = "", _hyphen, _pathSep = "/", _fun, $scope } = constants;
          *
          * @returns {Promise<boolean>} true if the content is successfully copied
          */
-        async copy( pSourceKey, pDestinationKey, pOverwrite = true )
+        async copy( pSourceKey, pDestinationKey, pOverwrite = false )
         {
             throw new NotImplementedError( "Method 'copy()' must be implemented." );
         }
 
-        async move( pSourceKey, pDestinationKey, pOverwrite = true )
+        async move( pSourceKey, pDestinationKey, pOverwrite = false )
         {
             // subclasses should override this method, but the superclass falls back to copy + delete
 
@@ -844,6 +849,11 @@ const { _ud, _mt = "", _hyphen, _pathSep = "/", _fun, $scope } = constants;
             return `${this.baseUrl}/${key}?op=${operation}&expires=${options.expiresInSeconds || 3600}`;
         }
 
+        async getUrl( pKey, pOperation = BLOB_STORE_OPERATIONS.READ, pOptions = {} )
+        {
+            return await this.getPresignedUrl( pKey, pOperation, pOptions );
+        }
+
         /**
          * Copies the content found at the specified source key to a new path specified by the destination key.
          *
@@ -854,9 +864,10 @@ const { _ud, _mt = "", _hyphen, _pathSep = "/", _fun, $scope } = constants;
          *
          * @returns {Promise<boolean>} true if the content is successfully copied
          */
-        async copy( pSourceKey, pDestinationKey, pOverwrite = true )
+        async copy( pSourceKey, pDestinationKey, pOverwrite = false )
         {
             const sourceKey = asString( pSourceKey, true );
+
             const destinationKey = asString( pDestinationKey, true );
 
             if ( isBlank( sourceKey ) || isBlank( destinationKey ) )
@@ -881,6 +892,7 @@ const { _ud, _mt = "", _hyphen, _pathSep = "/", _fun, $scope } = constants;
                 const alreadyExists = await this.exists( destinationKey );
                 if ( alreadyExists )
                 {
+                    this.dispatchEvent( new ModuleEvent( "error", { detail: `Content already exists at ${destPath}` }, `Content already exists at ${destPath}` ) );
                     return false;
                 }
             }
@@ -911,9 +923,10 @@ const { _ud, _mt = "", _hyphen, _pathSep = "/", _fun, $scope } = constants;
          * @param pOverwrite
          * @returns {Promise<boolean>} true if the item was successfully moved
          */
-        async move( pSourceKey, pDestinationKey, pOverwrite = true )
+        async move( pSourceKey, pDestinationKey, pOverwrite = false )
         {
             const sourceKey = asString( pSourceKey, true );
+
             const destinationKey = asString( pDestinationKey, true );
 
             if ( isBlank( sourceKey ) || isBlank( destinationKey ) )
@@ -936,6 +949,7 @@ const { _ud, _mt = "", _hyphen, _pathSep = "/", _fun, $scope } = constants;
                 const alreadyExists = await this.exists( destinationKey );
                 if ( alreadyExists )
                 {
+                    this.dispatchEvent( new ModuleEvent( "error", { detail: `Content already exists at ${destPath}` }, `Content already exists at ${destPath}` ) );
                     return false;
                 }
             }

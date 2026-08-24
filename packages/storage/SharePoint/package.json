@@ -9,6 +9,7 @@
     "@toolbocks/files": "^1.0.0",
     "@toolbocks/json": "^1.0.0",
     "@toolbocks/storage": "^1.0.0",
+    "@azure/identity": "^4.0.0",
     "@microsoft/microsoft-graph-client": "^3.0.7"
   },
   "devDependencies": {
