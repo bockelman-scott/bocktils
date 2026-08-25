@@ -28,6 +28,7 @@ const { _ud = "undefined", $scope } = constants;
     const {
         ToolBocksModule,
         ObjectEntry,
+        dereference,
         detectCycles,
         objectEntries,
         populateOptions,
@@ -366,15 +367,15 @@ const { _ud = "undefined", $scope } = constants;
 
     function asObject( pObject, pClone = false )
     {
-        let obj = pObject;
+        let obj = attempt( () => dereference( pObject ) ?? pObject ) ?? pObject;
 
-        if ( isNonNullObject( pObject ) || isArray( pObject ) || isTypedArray( pObject ) )
+        if ( isNonNullObject( obj ) || isArray( obj ) || isTypedArray( obj ) )
         {
             if ( !!pClone )
             {
-                if ( isFunction( pObject?.clone ) )
+                if ( isFunction( obj?.clone ) )
                 {
-                    obj = attempt( () => (pObject).clone() ) || pObject || obj;
+                    obj = attempt( () => (obj).clone() ) ?? obj ?? pObject;
                 }
                 return isArray( obj ) || isTypedArray( obj ) ? [...obj] : { ...obj };
             }
