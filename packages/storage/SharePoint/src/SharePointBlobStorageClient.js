@@ -40,7 +40,14 @@
 
     const { asObject } = jsonUtils;
 
-    const { BLOB_STORE_OPERATIONS, BLOB_STORE_CLIENT_KEYS, BLOB_STORE_CLIENT_FACTORY, BlobStorageClient } = storageBase;
+    const
+        {
+            BLOB_STORE_OPERATIONS,
+            BLOB_STORE_CLIENT_KEYS,
+            BLOB_STORE_CLIENT_FACTORY,
+            BlobStorageClient,
+            writeStreamToLocalFile
+        } = storageBase;
 
     const { Client } = require( "@microsoft/microsoft-graph-client" );
 
@@ -934,6 +941,8 @@
 
     }
 
+    SharePointBlobStorageClient.writeStreamToLocalFile = BlobStorageClient.writeStreamToLocalFile ?? writeStreamToLocalFile;
+
     BLOB_STORE_CLIENT_FACTORY.registerClass( BLOB_STORE_CLIENT_KEYS.SHAREPOINT, SharePointBlobStorageClient );
 
     const mod =
@@ -948,7 +957,8 @@
                     SharePointBlobStorageClient
                 },
             BlobStorageClient,
-            SharePointBlobStorageClient
+            SharePointBlobStorageClient,
+            writeStreamToLocalFile
         };
 
     if ( _ud !== typeof module )

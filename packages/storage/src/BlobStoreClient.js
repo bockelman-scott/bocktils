@@ -52,6 +52,8 @@ const { _ud, _mt = "", _hyphen, _pathSep = "/", _fun, $scope } = constants;
             attempt,
             attemptSilent,
             asyncAttempt,
+            getLastError,
+            resolveError,
             populateOptions,
             lock,
             $ln
@@ -62,6 +64,7 @@ const { _ud, _mt = "", _hyphen, _pathSep = "/", _fun, $scope } = constants;
             isNull,
             isNonNullObject,
             isFunction,
+            isError,
             isString,
             isArray,
             isTypedArray,
@@ -71,11 +74,22 @@ const { _ud, _mt = "", _hyphen, _pathSep = "/", _fun, $scope } = constants;
             isSubclassOf
         } = typeUtils;
 
-    const { asString, asInt, _lct, isBlank, isJsonObject, toBool, toUnixPath } = stringUtils;
+    const { asString, asInt, _lct, isBlank, isJsonObject, toBool, isFilePath, toUnixPath } = stringUtils;
 
     const { asArray } = arrayUtils;
 
-    const { join, normalize, resolvePath, relativePath, getDirectoryName, getTempDirectory } = fileUtils;
+    const
+        {
+            join,
+            normalize,
+            resolvePath,
+            relativePath,
+            getDirectoryName,
+            getTempDirectory,
+            createTempFile,
+            exists,
+            asyncExists
+        } = fileUtils;
 
     const { asObject, asJson, parseJson } = jsonUtils;
 
@@ -376,6 +390,8 @@ const { _ud, _mt = "", _hyphen, _pathSep = "/", _fun, $scope } = constants;
      */
     class LocalDiskStorageClient extends BlobStorageClient
     {
+        #fileUtils = fileUtils;
+
         /**
          * Constructs an instance of LocalDiskStorageClient
          * and initializes it with the provided options.
@@ -397,6 +413,8 @@ const { _ud, _mt = "", _hyphen, _pathSep = "/", _fun, $scope } = constants;
             this.rootFolder = toUnixPath( asString( resolvePath( root ), true ) );
 
             this.baseUrl = options.baseUrl || asString( `file:///${this.rootFolder}/` ).replaceAll( /\/{4}/g, "///" );
+
+            this.#fileUtils = this.#fileUtils ?? fileUtils;
         }
 
         getRoot()
@@ -1015,6 +1033,38 @@ const { _ud, _mt = "", _hyphen, _pathSep = "/", _fun, $scope } = constants;
         }
     }
 
+    async function writeStreamToLocalFile( pStream, pLocalPath )
+    {
+        const stream = !isNull( pStream ) ? pStream : createReadStream( pStream ?? createTempFile() );
+
+        const filePath = isFilePath( pLocalPath ) ? toUnixPath( resolvePath( pLocalPath ) ) : createTempFile();
+
+        const writeStream = createWriteStream( filePath );
+
+        await asyncAttempt( async() => await pipeline( stream, writeStream ) );
+
+        const lastError = getLastError();
+
+        if ( isError( lastError ) )
+        {
+            const defaultError = new Error( `Could not write ${filePath}` );
+
+            const error = resolveError( lastError ?? defaultError );
+
+            const options =
+                {
+                    lastError,
+                    filePath,
+                    stream
+                };
+
+            throw new __Error( error, options, pStream, pLocalPath );
+        }
+
+        return await asyncExists( filePath );
+    }
+
+    BlobStorageClient.writeStreamToLocalFile = writeStreamToLocalFile;
 
     /**
      * Factory for returning a BlobStorageClient
@@ -1305,7 +1355,8 @@ const { _ud, _mt = "", _hyphen, _pathSep = "/", _fun, $scope } = constants;
                 },
             EVENTS: ["clear", "delete", "registerClass", "unregisterClass", "registerSingleton", "unregisterSingleton", "upload", "copy"],
             BlobStorageClient,
-            LocalDiskStorageClient
+            LocalDiskStorageClient,
+            writeStreamToLocalFile
         };
 
     if ( _ud !== typeof module )

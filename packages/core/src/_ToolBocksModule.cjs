@@ -7409,18 +7409,18 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         let candidates =
             [
-                ...(isArray( lastError ) ? lastError : [lastError || {}]),
-                ...(isArray( pError ) ? pError : [isError( pError ) ? pError : (_isValidStr( pError ) ? new __Error( pError ) ?? {} : {})]),
-                ...(isArray( pMessage ) ? pMessage : [pMessage || {}]),
+                ...(isArray( pError ) ? pError : [isError( pError ) ? pError : (_isValidStr( pError ) ? new __Error( pError ) ?? lastError : lastError)]),
+                ...(isArray( lastError ) ? lastError : [lastError ?? pError ?? {}]),
+                ...(isArray( pMessage ) ? pMessage : [pMessage || pError || {}]),
                 ...(isArray( pMessage ) && _asArr( pMessage ).some( _isValidStr ) ? _asArr( pMessage ).filter( _isValidStr ).map( e => new __Error( e ) ) : []),
                 ...(isArray( pError ) && _asArr( pError ).some( _isValidStr ) ? _asArr( pError ).filter( _isValidStr ).map( e => new __Error( e ) ) : []),
                 ...(_isValidStr( pError ) ? [new __Error( pError, pMessage, ...pArgs )] : []),
                 ...pArgs
-            ].flat().filter( e => isError( e ) || e instanceof __Error );
+            ].flat().filter( isNonNullObj ).filter( e => isError( e ) || e instanceof __Error );
 
         if ( $ln( candidates ) )
         {
-            return new __Error( candidates[0] );
+            return new __Error( candidates.find( e => isError( e ) || e instanceof __Error ) ?? candidates[0] );
         }
 
         return null;

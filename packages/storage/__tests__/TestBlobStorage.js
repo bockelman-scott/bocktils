@@ -228,11 +228,18 @@ describe( "BlobStorage", () =>
         let srcKey = "retainers/signed_retainer.pdf";
         let destKey = "signed_retainer.pdf";
 
-        // defaults to overwrite=true
+        // defaults to overwrite=false
         let moved = await blobStorageClient.move( srcKey, destKey );
+
+        expect( moved ).toBe( false );
+        expect( await blobStorageClient.exists( destKey ) ).toBe( true );
+
+        // overwrite
+        moved = await blobStorageClient.move( srcKey, destKey, true );
 
         expect( moved ).toBe( true );
         expect( await blobStorageClient.exists( destKey ) ).toBe( true );
+
     } );
 
 

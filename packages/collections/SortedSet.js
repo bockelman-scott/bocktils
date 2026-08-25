@@ -186,7 +186,7 @@ const { _ud = "undefined", $scope } = constants;
             {
                 let func = (this._comparator.compare ?? this._comparator).bind( this._comparator );
 
-                this._comparator = (function( a, b ) { return func.compare.call( func, a, b ); }).bind( this );
+                this._comparator = (function( a, b ) { return (func.compare ?? func).call( func, a, b ); }).bind( this );
             }
 
             let arr = attempt( () => this.#resolveCollection( pCollection ) ) ?? [];
@@ -202,7 +202,7 @@ const { _ud = "undefined", $scope } = constants;
 
             if ( isNonNullObject( func ) && Comparators.isComparator( func.compare ) )
             {
-                return (function( a, b ) { return func.compare.call( func, a, b ); }).bind( this );
+                return (function( a, b ) { return (func.compare ?? func).call( func, a, b ); }).bind( this );
             }
 
             return func.bind( this );
@@ -327,7 +327,7 @@ const { _ud = "undefined", $scope } = constants;
             {
                 arr.push( pItem );
 
-                super.addAll( ...arr );
+                super.addAll( pItem );
             }
             else
             {
