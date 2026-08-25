@@ -6,7 +6,7 @@ const constants = require( "../src/Constants.cjs" );
 
 const { _num, _str, _bool, _obj, _fun, _symbol, _big, _ud } = constants;
 
-const { ModuleEvent, lock, serialize, attempt, asyncAttempt } = moduleUtils;
+const { ModuleEvent, objectEntries, lock, serialize, attempt, asyncAttempt } = moduleUtils;
 
 const typeUtils = require( "../src/TypeUtils.cjs" );
 
@@ -66,6 +66,7 @@ const
         isArray,
         isTypedArray,
         isIterable,
+        isIterableEntries,
         isAsyncIterable,
         isLikeArray,
         isSpreadable,
@@ -2099,6 +2100,61 @@ describe( "isIterable",
                         expect( isIterable( obj ) ).toBe( true );
                     } );
 
+              test( "isIterable( [].entries() ) === true",
+                    () =>
+                    {
+                        expect( isIterable( [].entries() ) ).toBe( true );
+                    } );
+
+              test( "isIterable( {} ) === false",
+                    () =>
+                    {
+                        expect( isIterable( {} ) ).toBe( false );
+                    } );
+
+              test( "isIterable( objectEntries({}) ) === true",
+                    () =>
+                    {
+                        expect( isIterable( objectEntries( {} ) ) ).toBe( true );
+                    } );
+
+              test( "isIterable( objectEntries({a:1,b:2}) ) === true",
+                    () =>
+                    {
+                        expect( isIterable( objectEntries( { a: 1, b: 2 } ) ) ).toBe( true );
+                    } );
+
+              test( "isIterableEntries( objectEntries({}) ) === false",
+                    () =>
+                    {
+                        expect( isIterableEntries( objectEntries( {} ) ) ).toBe( true );
+                    } );
+
+              test( "isIterableEntries( objectEntries({a:1,b:2}) ) === true",
+                    () =>
+                    {
+                        expect( isIterableEntries( objectEntries( { a: 1, b: 2 } ) ) ).toBe( true );
+                    } );
+
+              test( "isIterableEntries( [] ) === true",
+                    () =>
+                    {
+                        expect( isIterableEntries( [] ) ).toBe( true );
+                    } );
+
+              test( "isIterableEntries( {} ) === false",
+                    () =>
+                    {
+                        expect( isIterableEntries( {} ) ).toBe( false );
+                    } );
+
+              test( "isIterableEntries( {a:1,b:2} ) === false",
+                    () =>
+                    {
+                        expect( isIterableEntries( { a: 1, b: 2 } ) ).toBe( false );
+                        expect( isIterableEntries( objectEntries( { a: 1, b: 2 } ) ) ).toBe( true );
+
+                    } );
           } );
 
 describe( "isSpreadable",
