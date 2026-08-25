@@ -25,16 +25,18 @@ const { _ud = "undefined", $scope } = constants;
             jsonInterpolationUtils
         };
 
-    const {
-        ToolBocksModule,
-        ObjectEntry,
-        dereference,
-        detectCycles,
-        objectEntries,
-        populateOptions,
-        isWritable,
-        attempt
-    } = moduleUtils;
+    const
+        {
+            ToolBocksModule,
+            ObjectEntry,
+            dereference,
+            detectCycles,
+            objectEntries,
+            populateOptions,
+            localCopy,
+            isWritable,
+            attempt
+        } = moduleUtils;
 
     const
         {
@@ -377,7 +379,7 @@ const { _ud = "undefined", $scope } = constants;
                 {
                     obj = attempt( () => (obj).clone() ) ?? obj ?? pObject;
                 }
-                return isArray( obj ) || isTypedArray( obj ) ? [...obj] : { ...obj };
+                return isArray( obj ) || isTypedArray( obj ) ? [...obj] : localCopy( obj );
             }
             return (obj || pObject);
         }
