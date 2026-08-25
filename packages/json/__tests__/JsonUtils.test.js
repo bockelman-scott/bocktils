@@ -113,6 +113,9 @@ describe( "JsonUtils", () =>
         expect( object.length ).toEqual( 9 );
         expect( object[5] ).toEqual( "b" );
 
+        let oo = asObject( "some string" );
+        expect( typeof oo ).toEqual( "object" );
+        expect( String( oo ) ).toEqual( "some string" );
 
     } );
 
