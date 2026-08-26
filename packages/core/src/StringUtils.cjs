@@ -1600,6 +1600,14 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         return asString( s, true ).replaceAll( /\s+/g, _spc ).trim();
     };
 
+    const removeBlankLines = function( pStr )
+    {
+        let s = asString( pStr, true );
+        s = toUnixLinebreaks( s );
+        s = s.replaceAll( /\n{2,}/g, "\n" );
+        return asString( s, true );
+    };
+
     function _toArr( pVal )
     {
         return isArray( pVal ) ? [...pVal].flat().filter( e => isString( e ) && !isBlank( e ) ) : (isString( pVal ) ? asString( pVal, true ).split( _comma ).filter( e => !isBlank( e ) ) : []);
@@ -4397,7 +4405,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
         if ( !!options?.removeArtifacts )
         {
-            str = asString( str, !!options?.trim ).replace( /(undefined)|(void)|(null)/i, _mt_str );
+            str = asString( str, !!options?.trim ).replace( /(undefined)|(void)|(null)/, _mt_str );
         }
 
         if ( !!options.transliterate )
@@ -4899,6 +4907,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             clean,
             cleanString: clean,
             collapseWhitespace,
+            removeBlankLines,
             isEmpty,
             isNotEmpty: s => !isEmpty( s ),
             isBlank,
