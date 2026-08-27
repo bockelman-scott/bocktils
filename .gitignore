@@ -3,6 +3,7 @@ jsdoc-templates
 logs
 
 **/*.log
+**/.env
 
 package-lock.json
 
@@ -35,3 +36,5 @@ packages/resources/messages/form-assembly-sandbox
 test_data/1011.edi
 
 test_data/text_1.txt
+
+/packages/secrets/.env
