@@ -1956,9 +1956,9 @@ const { _ud = "undefined", $scope } = constants;
             return cleanUrl( asString( url, true ), true );
         }
 
-        if ( _ud !== typeof URL && pUrl instanceof URL )
+        if ( _ud !== typeof URL && url instanceof URL )
         {
-            return resolveUrl( asString( pUrl.href || pUrl.toString(), true ), pConfig );
+            return resolveUrl( asString( url.href || url.toString(), true ), pConfig );
         }
 
         if ( isNonNullObject( url ) )
