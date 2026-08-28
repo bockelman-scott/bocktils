@@ -6924,6 +6924,48 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             this.#columnNumber = this.#columnNumber || this.parts?.columnNumber;
             return this.#columnNumber || this.parts?.columnNumber;
         }
+
+        toString()
+        {
+            return String( this.stack ) || _mt;
+        }
+
+        [Symbol.toPrimitive]()
+        {
+            return this.toString();
+        }
+
+        [Symbol.toStringTag]()
+        {
+            let data = (this.fileName || _mt);
+
+            data += (_isValidStr( data ) ? ", " : _mt) + (this.methodName || _mt);
+            data += (_isValidStr( data ) ? ", " : _mt) + (this.lineNumber || _mt);
+            data += (_isValidStr( data ) ? ", " : _mt) + (this.columnNumber || _mt);
+
+            return "[object StackTrace" + (_isValidStr( data ) ? "::" + data : _mt) + "]";
+        }
+
+        toLiteral()
+        {
+            const obj =
+                {
+                    stack: String( this.stack ) || _mt,
+                    frames: this.frames ?? [],
+                    parts: this.parts ?? {},
+                    methodName: this.methodName || _mt,
+                    fileName: this.fileName || _mt,
+                    lineNumber: this.lineNumber || "0",
+                    columnNumber: this.columnNumber || "0"
+                };
+            return Object.freeze( obj );
+        }
+
+        toJSON()
+        {
+            const literal = attempt( () => this.toLiteral() ) ?? this;
+            return attempt( () => JSON.stringify( literal ) ) || attempt( () => JSON.stringify( this.toString() ) ) || "{}";
+        }
     }
 
     /**
@@ -7146,6 +7188,24 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             options.stackTrace = options.stackTrace || this.stackTrace || this.#trace;
 
             return new this.constructor( this.message, options );
+        }
+
+        toLiteral()
+        {
+            const obj =
+                {
+                    name: String( this.name || _mt ) || _mt,
+                    type: String( this.type || this.name || _mt ) || _mt,
+                    code: String( this.code || _mt ) || _mt,
+                    referenceId: String( this.referenceId || _mt ) || _mt,
+                    message: String( this.message || _mt ) || _mt,
+                    occurred: new Date( this.occurred ?? Date.now() ) ?? new Date(),
+                    stackTrace: this.stackTrace ?? {},
+                    fileName: String( this.fileName || _mt ) || _mt,
+                    lineNumber: String( this.lineNumber || _mt ) || _mt,
+                    columnNumber: String( this.columnNumber || _mt ) || _mt
+                };
+            return Object.freeze( obj );
         }
     }
 
@@ -7409,7 +7469,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         let candidates =
             [
-                ...(isArray( pError ) ? pError : [isError( pError ) ? pError : (_isValidStr( pError ) ? new __Error( pError ) ?? lastError : lastError)]),
+                ...(isArray( pError ) ? pError : [isError( pError ) ? pError : (_isValidStr( pError ) ? new __Error( pError, pMessage, ...pArgs ) ?? lastError : lastError)]),
                 ...(isArray( lastError ) ? lastError : [lastError ?? pError ?? {}]),
                 ...(isArray( pMessage ) ? pMessage : [pMessage || pError || {}]),
                 ...(isArray( pMessage ) && _asArr( pMessage ).some( _isValidStr ) ? _asArr( pMessage ).filter( _isValidStr ).map( e => new __Error( e ) ) : []),
