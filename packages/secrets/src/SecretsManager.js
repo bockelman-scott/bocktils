@@ -582,7 +582,6 @@ const { _ud = "undefined", $scope } = constants;
                 attempt( () => this.dispatchEvent( new ModuleEvent( "error",
                                                                     {
                                                                         key: pKey,
-                                                                        secret,
                                                                         message: "Cannot find value for key, " + pKey
                                                                     }, {} ) ) );
             }
@@ -610,7 +609,9 @@ const { _ud = "undefined", $scope } = constants;
             }
 
             // try to get the value from the cache
-            let secret = this.#cache.get( key ) || this.#cache.get( ucase( asString( key, true ) ) ) || this.#cache.get( pKey );
+            let secret = this.#cache.get( key ) ||
+                         this.#cache.get( ucase( asString( key, true ) ) ) ||
+                         this.#cache.get( pKey );
 
             // if it is found, we simply return it
             if ( !isNull( secret ) && ( !isString( secret ) || !isBlank( secret )) )
@@ -943,9 +944,8 @@ const { _ud = "undefined", $scope } = constants;
 
             let ignoreCache = !!pIgnoreCache;
 
-            let secret = (ignoreCache ? null : this.getCachedSecret( key )) ||
-                         await this.getSecret( key ) ||
-                         await this.getSecret( pKey );
+            let secret = (ignoreCache ? null : this.getCachedSecret( key ) || this.getCachedSecret( pKey )) ||
+                         await this.getSecret( key ) || await this.getSecret( pKey );
 
             if ( !isNull( secret ) && this.canCache( key ) )
             {
@@ -968,6 +968,7 @@ const { _ud = "undefined", $scope } = constants;
             const ENV = proc?.env ?? $scope();
 
             let secret = super.getCachedSecret( key ) || ENV[key] || ENV[ucase( key )];
+            secret = secret || super.getCachedSecret( pKey ) || ENV[pKey] || ENV[ucase( pKey )];
 
             if ( !isNull( secret ) && this.canCache( key ) )
             {
