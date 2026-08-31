@@ -67,7 +67,7 @@ const { _ud = "undefined", $scope } = constants;
             clamp = moduleUtils.clamp
         } = typeUtils;
 
-    const { asString, asInt, isBlank, getFunctionName } = stringUtils;
+    const { asString, asInt, toBool, isBlank, isJsonObject, getFunctionName, ucase } = stringUtils;
 
     const { asArray } = arrayUtils;
 
@@ -100,6 +100,8 @@ const { _ud = "undefined", $scope } = constants;
         return (MARKER_PREFIX + asString( nextMarkerId(), true ));
     };
 
+    const COMPARATOR = ( a, b ) => a.timestamp > b.timestamp ? 1 : a.timestamp < b.timestamp ? -1 : 0;
+
     class Marker
     {
         #name;
@@ -120,7 +122,51 @@ const { _ud = "undefined", $scope } = constants;
         {
             return asInt( this.#timestamp );
         }
+
+        compareTo( pOther )
+        {
+            if ( isNull( pOther ) )
+            {
+                return -1;
+            }
+
+            const other = Marker.from( pOther );
+
+            return COMPARATOR( this, other );
+        }
     }
+
+    Marker.from = function( pObject )
+    {
+        if ( isNull( pObject ) )
+        {
+            return new Marker( "NULL" );
+        }
+
+        if ( isNonNullObject( pObject ) || isJsonObject( pObject ) )
+        {
+            const obj = asObject( pObject );
+
+            if ( obj instanceof Marker )
+            {
+                return obj;
+            }
+
+            return new Marker( obj.name || obj.id, obj.timestamp ?? obj.date );
+        }
+
+        if ( isNumeric( pObject ) || isDate( pObject ) )
+        {
+            return new Marker( "ANONYMOUS", new Date( pObject ).getTime() );
+        }
+
+        if ( isString( pObject ) )
+        {
+            return new Marker( asString( pObject, true ) );
+        }
+
+        return new Marker( asString( pObject, true ) );
+    };
 
     class PerformanceRecord
     {
@@ -163,6 +209,86 @@ const { _ud = "undefined", $scope } = constants;
         }
     }
 
+    class NullTiming extends EventTarget
+    {
+        #FIRST_MARKER;
+        #LAST_MARKER;
+
+        constructor()
+        {
+            super();
+
+            this.#FIRST_MARKER = lock( Marker.from( "FIRST" ) );
+            this.#LAST_MARKER = lock( Marker.from( "LAST" ) );
+        }
+
+        add( pName, pTimestamp )
+        {
+            // no op
+        }
+
+        get comparator()
+        {
+            return COMPARATOR;
+        }
+
+        get markers()
+        {
+            return lock( [this.#FIRST_MARKER, this.#LAST_MARKER] );
+        }
+
+        get firstMarker()
+        {
+            return lock( this.#FIRST_MARKER );
+        }
+
+        get lastMarker()
+        {
+            return lock( this.#LAST_MARKER );
+        }
+
+        getMarker( pName )
+        {
+            const name = asString( pName, true );
+            if ( ["FIRST", "LAST"].includes( ucase( name ) ) )
+            {
+                return "LAST" === ucase( name ) ? this.#LAST_MARKER : this.#FIRST_MARKER;
+            }
+            return new Marker( name );
+        }
+
+        get elapsedTime()
+        {
+            return 0;
+        }
+
+        measureElapsedTime( pMarkerStartName, pMarkerEndName )
+        {
+            return 0;
+        }
+
+        get report()
+        {
+            return [];
+        }
+
+        reset()
+        {
+            this.#FIRST_MARKER = lock( Marker.from( "FIRST" ) );
+            this.#LAST_MARKER = lock( Marker.from( "LAST" ) );
+        }
+
+        logResults( pLogger )
+        {
+            // no op
+        }
+
+        dispatch( pEvent )
+        {
+            this.dispatchEvent( resolveEvent( pEvent ) );
+        }
+    }
+
     /**
      * The Timing class provides functionality
      * for managing performance markers
@@ -170,17 +296,17 @@ const { _ud = "undefined", $scope } = constants;
      *
      * It is useful for tracking events, their timestamps, and generating performance reports.
      */
-    class Timing
+    class Timing extends NullTiming
     {
         #zTarget = new EventTarget();
 
         #markers = [];
 
-        #comparator = ( a, b ) => a.timestamp > b.timestamp ? 1 : a.timestamp < b.timestamp ? -1 : 0;
+        #comparator = COMPARATOR;
 
         constructor()
         {
-            // nothing to see here
+            super();
         }
 
         addEventListener( pEventName, pListener, pOptions )
@@ -406,7 +532,8 @@ const { _ud = "undefined", $scope } = constants;
                         "mark": mark.name,
                         "incrementalTime": incrementalTime,
                         "elapsedTime": elapsed,
-                        "total": totalTime
+                        "total": totalTime,
+                        "totalTime": totalTime
                     };
 
                 records.push( record );
@@ -420,6 +547,25 @@ const { _ud = "undefined", $scope } = constants;
                                             }, { markers: this.markers } ) );
 
             return records;
+        }
+
+        logResults( pLogger )
+        {
+            const logger = ToolBocksModule.resolveLogger( pLogger, ToolBocksModule.getGlobalLogger(), console );
+
+            const records = asArray( this.report );
+
+            if ( $ln( records ) > 0 )
+            {
+                let s = `"marker","incremental_time","elapsed_time","total_time"` + "\n";
+
+                for( let record of records )
+                {
+                    s += `"${record.mark}", "${record.incrementalTime}", "${record.elapsedTime}", "${record.totalTime}"` + "\n";
+                }
+
+                attempt( () => logger.log( s ) );
+            }
         }
 
         /**
@@ -556,10 +702,16 @@ const { _ud = "undefined", $scope } = constants;
                 {
                     Marker,
                     PerformanceRecord,
+                    NullTiming,
                     Timing
                 },
+            NullTiming,
             Timing,
             PerformanceRecord,
+            getPerformanceTimer: function( pIsDebug = false )
+            {
+                return toBool( pIsDebug ) ? new Timing() : new NullTiming();
+            },
             GLOBAL_TIMER,
             getGlobalTimer,
             addPerformanceMarker,
