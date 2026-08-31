@@ -144,7 +144,7 @@ const _bock_write = ( pOut, ...pArgs ) =>
 {
     try
     {
-        let message = [...(pArgs || [])].filter( e => _ud !== typeof e && null !== e ).map( e => String( e ) ).join( ", " );
+        let message = [...(pArgs || [])].filter( e => _ud !== typeof e && null !== e ).map( e => String( e ) ).join( " " );
 
         let _out = (pOut && pOut.write) ? pOut : (_bock_std_out ?? _bock_std_err);
 
@@ -1732,14 +1732,22 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     function formatElapsedTime( pElapsedMilliseconds )
     {
-        let totalSeconds = Math.floor( _asInt( pElapsedMilliseconds ) / 1_000 );
-        let hours = Math.floor( totalSeconds / 3600 );
-        let minutes = Math.floor( (totalSeconds % 3600) / 60 );
-        let seconds = totalSeconds % 60;
+        const elapsed = _asInt( pElapsedMilliseconds );
 
-        let hoursPart = (hours > 0) ? (_asStr( hours, true ).padStart( 2, "0" ) + ":") : "00:";
-        let minutesPart = (minutes > 0) ? ((hours > 0) ? (_asStr( minutes, true ).padStart( 2, "0" ) + ".") : (_asStr( minutes, true ) + ".")) : "00.";
-        let secondsPart = (minutes > 0 || hours > 0) ? _asStr( seconds, true ).padStart( 2, "0" ) : _asStr( seconds, true ).padStart( 2, "0" ) || "00";
+        if ( elapsed <= 0 )
+        {
+            // Explicitly handle 0 elapsed time
+            return "00:00.00";
+        }
+
+        const totalSeconds = Math.floor( elapsed / 1_000 );
+        const hours = Math.floor( totalSeconds / 3600 );
+        const minutes = Math.floor( (totalSeconds % 3600) / 60 );
+        const seconds = totalSeconds % 60;
+
+        const hoursPart = (hours > 0) ? (_asStr( hours, true ).padStart( 2, "0" ) + ":") : "00:";
+        const minutesPart = (minutes > 0) ? ((hours > 0) ? (_asStr( minutes, true ).padStart( 2, "0" ) + ".") : (_asStr( minutes, true ) + ".")) : "00.";
+        const secondsPart = (minutes > 0 || hours > 0) ? _asStr( seconds, true ).padStart( 2, "0" ) : _asStr( seconds, true ).padStart( 2, "0" ) || "00";
 
         if ( hours > 0 || minutes > 0 || seconds > 0 )
         {
@@ -1769,6 +1777,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         // Avoid division by zero by using a minimum value
         done = Math.max( done, minValue );
+
+        if ( done >= total )
+        {
+            return 0;
+        }
 
         // If nothing is done yet or elapsed time is 0, we can't estimate
         if ( done <= minValue || elapsed <= 0 )
@@ -3182,6 +3195,18 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @return {void}
      */
     const gc = () => new Promise( resolve => setImmediate( resolve ) );
+
+    const globalGc = () =>
+    {
+        const func = $scope()?.gc ?? gc;
+
+        if ( isFunc( func ) )
+        {
+            asyncAttempt( func ).then( no_op ).catch( konsole.error );
+        }
+
+        return asyncAttempt( async() => await gc() ).then( no_op ).catch( konsole.error );
+    };
 
     /**
      * Returns an asynchronous function that will be executed up to n times
@@ -10685,6 +10710,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             sleep,
             doze,
             gc,
+
+            globalGc,
 
             functionToString,
             objectToString,
