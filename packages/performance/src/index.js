@@ -4,7 +4,7 @@
  */
 const core = require( "@toolbocks/core" );
 
-let jsonUtils = require( "@toolbocks/json" );
+const jsonUtils = require( "@toolbocks/json" );
 
 /**
  * Establish separate constants for each of the common utilities imported
@@ -24,48 +24,22 @@ const { _ud = "undefined", $scope } = constants;
         return $scope()[INTERNAL_NAME];
     }
 
-    const {
-        ModuleEvent,
-        ToolBocksModule,
-        IllegalArgumentError,
-        ObjectEntry,
-        objectEntries,
-        populateOptions,
-        resolveEvent,
-        resolveError,
-        getLastError,
-        lock,
-        localCopy,
-        attempt,
-        asyncAttempt,
-        isWritable,
-        $ln,
-        $nth,
-        $last
-    } = moduleUtils;
-
-    const { _mt_str = "", _mt = _mt_str, _slash = "/" } = constants;
-
     const
         {
-            isNull,
-            isNonNullObject,
-            isNonNullValue,
-            isError,
-            isFunction,
-            isAsyncFunction,
-            isString,
-            isJson,
-            isNumeric,
-            isNullOrNaN,
-            isDate,
-            isDateString,
-            isReadOnly,
-            isPromise,
-            isScalar,
-            firstMatchingType,
-            clamp = moduleUtils.clamp
-        } = typeUtils;
+            ModuleEvent,
+            ToolBocksModule,
+            IllegalArgumentError,
+            resolveEvent,
+            lock,
+            attempt,
+            asyncAttempt,
+            $ln,
+            $last
+        } = moduleUtils;
+
+    const { _mt } = constants;
+
+    const { isNull, isNonNullObject, isFunction, isAsyncFunction, isString, isNumeric, isDate } = typeUtils;
 
     const { asString, asInt, toBool, isBlank, isJsonObject, getFunctionName, ucase } = stringUtils;
 
@@ -175,12 +149,16 @@ const { _ud = "undefined", $scope } = constants;
         #elapsedTime;
         #totalTime;
 
+        #timestamp;
+
         constructor( pMarker, pIncrementalTime, pElapsedTime, pTotalTime )
         {
             this.#mark = resolveMarkerName( pMarker );
             this.#incrementalTime = asInt( pIncrementalTime );
             this.#elapsedTime = asInt( pElapsedTime );
             this.#totalTime = asInt( pTotalTime );
+
+            this.#timestamp = isNonNullObject( pMarker ) ? pMarker?.timestamp : Date.now();
         }
 
         get mark()
@@ -203,12 +181,23 @@ const { _ud = "undefined", $scope } = constants;
             return asInt( this.#totalTime );
         }
 
+        get timestamp()
+        {
+            return this.#timestamp;
+        }
+
         toLiteral()
         {
             return asJson( this );
         }
     }
 
+    class MemoryRecord
+    {
+
+    }
+
+    // noinspection JSUnusedLocalSymbols
     class NullTiming extends EventTarget
     {
         #FIRST_MARKER;
@@ -222,6 +211,7 @@ const { _ud = "undefined", $scope } = constants;
             this.#LAST_MARKER = lock( Marker.from( "LAST" ) );
         }
 
+        // noinspection JSUnusedLocalSymbols
         add( pName, pTimestamp )
         {
             // no op
@@ -302,6 +292,8 @@ const { _ud = "undefined", $scope } = constants;
 
         #markers = [];
 
+        #records = [];
+
         #comparator = COMPARATOR;
 
         constructor()
@@ -334,7 +326,7 @@ const { _ud = "undefined", $scope } = constants;
          *
          * @return {PerformanceRecord} - Returns a PerformanceRecord with the incremental, elapsed, and total time
          */
-        add( pName, pTimestamp = Date.now() )
+        add( pName, pTimestamp = (pName?.timestamp ?? Date.now()) )
         {
             const timestamp = (isNumeric( pTimestamp ) || isDate( pTimestamp )) ?
                               pTimestamp :
@@ -350,7 +342,9 @@ const { _ud = "undefined", $scope } = constants;
 
             const incremental = (isNonNullObject( priorMarker )) ? this.measureElapsedTime( priorMarker, marker ) : 0;
 
-            const record = new PerformanceRecord( marker, incremental, this.elapsedTime, this.measureElapsedTime( this.firstMarker, marker ) );
+            const record = lock( new PerformanceRecord( marker, incremental, this.elapsedTime, this.measureElapsedTime( this.firstMarker, marker ) ) );
+
+            this.#records.push( record );
 
             this.dispatch( new ModuleEvent( "MarkAdded", { detail: record, target: this, occurred: timestamp }, {} ) );
 
@@ -427,6 +421,15 @@ const { _ud = "undefined", $scope } = constants;
         }
 
         /**
+         * Returns an array of the performance records captured
+         * @returns {Array.<PerformanceRecord>} an array of the performance records captured
+         */
+        get records()
+        {
+            return [...(asArray( this.#records ?? [] ))];
+        }
+
+        /**
          * Calculates the elapsed time in milliseconds between the first and last markers.
          * If no markers are present, returns 0.
          *
@@ -489,83 +492,33 @@ const { _ud = "undefined", $scope } = constants;
          * Generates a performance report based on the currently recorded performance markers,
          * calculating incremental, elapsed, and total times for each.
          *
-         * @return {Array<Object>} An array of objects,
-         *                         each containing the following properties:
-         *
-         *                          - `mark` {string}: The name of the mark.
-         *                          - `incrementalTime` {number}: The time difference between the current mark and the previous one.
-         *                          - `elapsedTime` {number}: The time difference between the current mark and the first mark.
-         *                          - `total` {number}: The total time between the first and last marks.
-         *
-         * If no markers are available,
-         * returns a default object with all values equal to zero and "NO MARKERS" as the mark name.
+         * @return {string} a CSV compatible string, consisting of one line for each performance record.
          */
         get report()
         {
-            let markers = asArray( this.markers || [] );
+            let records = [...(asArray( this.records ?? [] ))];
 
-            if ( $ln( markers ) <= 0 )
+            if ( $ln( records ) > 0 )
             {
-                return [{ "mark": "NO MARKERS", "incrementalTime": 0, "elapsedTime": 0, "totalTime": 0 }];
+                const totalTime = this.elapsedTime;
+
+                let s = `"marker","incremental_time","elapsed_time","total_time"` + "\n";
+
+                for( let record of records )
+                {
+                    s += `"${record.mark}", "${record.incrementalTime}", "${record.elapsedTime}", "${totalTime || record.totalTime}"` + "\n";
+                }
+
+                return s;
             }
 
-            const records = [];
-
-            const marks = markers.sort( this.comparator );
-
-            const head = marks[0];
-            const tail = $last( marks ) || head;
-
-            const totalTime = asInt( (tail || head).timestamp ) - asInt( head.timestamp );
-
-            let prior = head;
-
-            for( let i = 0, n = $ln( marks ); i < n; i++ )
-            {
-                const mark = marks[i];
-
-                let incrementalTime = asInt( mark.timestamp ) - asInt( prior?.timestamp || mark.timestamp );
-                let elapsed = asInt( mark.timestamp ) - asInt( head?.timestamp || prior?.timestamp || mark.timestamp );
-
-                let record =
-                    {
-                        "mark": mark.name,
-                        "incrementalTime": incrementalTime,
-                        "elapsedTime": elapsed,
-                        "total": totalTime,
-                        "totalTime": totalTime
-                    };
-
-                records.push( record );
-            }
-
-            this.dispatch( new ModuleEvent( "ReportGenerated",
-                                            {
-                                                detail: records,
-                                                target: this,
-                                                occurred: Date.now()
-                                            }, { markers: this.markers } ) );
-
-            return records;
+            return _mt;
         }
 
         logResults( pLogger )
         {
             const logger = ToolBocksModule.resolveLogger( pLogger, ToolBocksModule.getGlobalLogger(), console );
-
-            const records = asArray( this.report );
-
-            if ( $ln( records ) > 0 )
-            {
-                let s = `"marker","incremental_time","elapsed_time","total_time"` + "\n";
-
-                for( let record of records )
-                {
-                    s += `"${record.mark}", "${record.incrementalTime}", "${record.elapsedTime}", "${record.totalTime}"` + "\n";
-                }
-
-                attempt( () => logger.log( s ) );
-            }
+            attempt( () => logger.log( "\n" + this.report + "\n" ) );
         }
 
         /**
