@@ -518,7 +518,13 @@ const { _ud = "undefined", $scope } = constants;
         logResults( pLogger )
         {
             const logger = ToolBocksModule.resolveLogger( pLogger, ToolBocksModule.getGlobalLogger(), console );
-            attempt( () => logger.log( "\n" + this.report + "\n" ) );
+
+            const message = asString( this.report );
+
+            if ( !isBlank( message ) )
+            {
+                attempt( () => logger.log( "\n" + message + "\n" ) );
+            }
         }
 
         /**
