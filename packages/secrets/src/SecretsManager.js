@@ -48,6 +48,7 @@ const { _ud = "undefined", $scope } = constants;
             isArray,
             isDate,
             isMap,
+            isNumeric,
             isClass,
             getClass,
             firstMatchingType,
@@ -276,12 +277,20 @@ const { _ud = "undefined", $scope } = constants;
         return (ucase( isBlank( prefix ) ? keyPart : (prefix + _hyphen + keyPart) )).replace( /^[_-]+/, _mt ).trim().replace( /[_-]+$/, _mt ).trim();
     };
 
+    /**
+     * How long (in milliseconds) a failed lookup is remembered before the key
+     * is retried. Without a back-off, a key the store does not hold is re-fetched
+     * on every single call, because only successful lookups are ever cached.
+     */
+    const DEFAULT_FAILED_LOOKUP_TTL_MS = 60_000;
+
     const DEFAULT_OPTIONS =
         lock( {
                   source: "./.env",
                   allowCache: true,
                   excludeFromCache: [],
-                  restrictKeys: false
+                  restrictKeys: false,
+                  failedLookupTtl: DEFAULT_FAILED_LOOKUP_TTL_MS
               } );
 
     const isPrefix = ( pStr ) => isString( pStr ) && !isBlank( pStr ) && /[A-Z]{1,4}[_-]?/.test( pStr ) && !(/[;:/\\]/i).test( pStr );
@@ -313,6 +322,14 @@ const { _ud = "undefined", $scope } = constants;
         #cache;
         #allowCache = true;
         #excludeFromCache = [];
+
+        // keys whose lookup failed, mapped to the time of that failure
+        #failedLookups = new Map();
+
+        // keys with a background lookup already in flight
+        #pendingLookups = new Set();
+
+        #failedLookupTtl = DEFAULT_FAILED_LOOKUP_TTL_MS;
 
         #restrictKeys = false;
 
@@ -372,6 +389,10 @@ const { _ud = "undefined", $scope } = constants;
             {
                 this.#cache = new Map();
             }
+
+            const ttl = this.#options?.failedLookupTtl;
+
+            this.#failedLookupTtl = (isNumeric( ttl ) && Number( ttl ) >= 0) ? Number( ttl ) : DEFAULT_FAILED_LOOKUP_TTL_MS;
 
             this.#options = lock( this.#options ?? {} );
 
@@ -518,6 +539,9 @@ const { _ud = "undefined", $scope } = constants;
                     this.#cache.set( this.resolveKey( pKey ), pSecret );
                     this.#cache.set( pKey, pSecret );
                     this.#cache.set( ucase( asString( pKey, true ) ), pSecret );
+
+                    // a value that has now been found is no longer a failed lookup
+                    this.#failedLookups.delete( this.resolveKey( pKey ) );
                 }
             }
         }
@@ -619,10 +643,25 @@ const { _ud = "undefined", $scope } = constants;
                 return this.resolveSecretValue( secret );
             }
 
+            // Only successful lookups are ever cached, so a key the store does not
+            // hold would otherwise re-fire the fetch below on every single call.
+            // Skip the fetch while one is already in flight for this key, or while
+            // a recent failure for it is still inside the back-off window.
+            const lastFailure = this.#failedLookups.get( key );
+
+            const backingOff = (undefined !== lastFailure) && ((Date.now() - lastFailure) < this.#failedLookupTtl);
+
+            if ( this.#pendingLookups.has( key ) || backingOff )
+            {
+                return this.resolveSecretValue( secret );
+            }
+
             // if the value was not found, kick off an asynchronous function
             // that will populate for the NEXT CALL to this method for that key
             // create an alias for this instance to use within the async closure
             const me = this;
+
+            this.#pendingLookups.add( key );
 
             // invoke the async function as an IIFE,
             // but know that we won't get the results for this method to return.
@@ -635,21 +674,31 @@ const { _ud = "undefined", $scope } = constants;
                 const k = asString( pVariableName || pKey, true ) || asString( pKey, true );
                 const uK = ucase( asString( k, true ) );
 
-                // use the normal asynchronous method to retrieve the value
-                secret = await asyncAttempt( async() => await THIZ.getSecret( THIZ.resolveKey( uK ) ) ) ||
-                         await asyncAttempt( async() => await THIZ.getSecret( uK ) ) ||
-                         await asyncAttempt( async() => await THIZ.getSecret( k ) ) ||
-                         await asyncAttempt( async() => await THIZ.getSecret( pKey ) );
-
-                // if it is found, try to cache it for next time
-                if ( !isNull( secret ) && ( !isString( secret ) || !isBlank( secret )) )
+                try
                 {
-                    if ( !isNull( secret ) && THIZ.canCache( k ) )
+                    // use the normal asynchronous method to retrieve the value
+                    const found = await asyncAttempt( async() => await THIZ.getSecret( THIZ.resolveKey( uK ) ) ) ||
+                                  await asyncAttempt( async() => await THIZ.getSecret( uK ) ) ||
+                                  await asyncAttempt( async() => await THIZ.getSecret( k ) ) ||
+                                  await asyncAttempt( async() => await THIZ.getSecret( pKey ) );
+
+                    // if it is found, try to cache it for next time
+                    if ( !isNull( found ) && ( !isString( found ) || !isBlank( found )) )
                     {
-                        THIZ.cacheSecret( k, secret );
+                        if ( THIZ.canCache( k ) )
+                        {
+                            THIZ.cacheSecret( k, found );
+                        }
+
+                        return THIZ.resolveSecretValue( found );
                     }
 
-                    return THIZ.resolveSecretValue( secret );
+                    // remember the miss so the next call backs off instead of refetching
+                    THIZ.#failedLookups.set( key, Date.now() );
+                }
+                finally
+                {
+                    THIZ.#pendingLookups.delete( key );
                 }
             }( key ));
 
@@ -663,6 +712,8 @@ const { _ud = "undefined", $scope } = constants;
             {
                 this.#cache.clear();
             }
+
+            this.#failedLookups.clear();
         }
 
         get initialized()
@@ -928,7 +979,20 @@ const { _ud = "undefined", $scope } = constants;
 
             let key = this.resolveKey( pKey );
 
-            let secret = ENV[key] || ENV[ucase( key )] || ENV[asString( pKey, true )] || ENV[ucase( asString( pKey, true ) )];
+            const rawKey = asString( pKey, true );
+
+            // resolveKey hyphenates to match key stores such as AWS Secrets Manager
+            // (LD_MAX_FILE_SIZE_SMALL -> LD-MAX-FILE-SIZE-SMALL), but environment
+            // variables cannot contain hyphens. A caller that hands us an already
+            // resolved key would never match without also trying the underscored form.
+            const underscored = ( pStr ) => ucase( asString( pStr, true ) ).replaceAll( /-/g, _underscore );
+
+            let secret = ENV[key] ||
+                         ENV[ucase( key )] ||
+                         ENV[underscored( key )] ||
+                         ENV[rawKey] ||
+                         ENV[ucase( rawKey )] ||
+                         ENV[underscored( rawKey )];
 
             return this.resolveSecretValue( secret );
         }
