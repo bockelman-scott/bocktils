@@ -5,23 +5,38 @@
 
     const core = require( "@toolbocks/core" );
 
-    const secretsModule = require( "./SecretsManager.js" );
+    const secretsModule = require( "@toolbocks/secrets" );
 
-    const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
+    const { moduleUtils, constants, typeUtils, stringUtils } = core;
 
-    const { asyncAttempt } = moduleUtils;
+    const { asyncAttempt, lock } = moduleUtils;
 
-    const { _ud, _hyphen, $scope } = constants;
+    const { _ud, _mt, _hyphen, $scope } = constants;
 
     const { isNull } = typeUtils;
 
     const { asString, isBlank, ucase, lcase } = stringUtils;
 
-    const { SECRETS_STRATEGY, SecretsManager, registerSecretsManagerClass } = secretsModule;
+    const
+        {
+            SECRETS_STRATEGY,
+            SECRET_VERSION,
+            DEFAULT_OPTIONS,
+            SecretsManager,
+            registerSecretsManagerClass
+        } = secretsModule;
 
     const { ChainedTokenCredential, DefaultAzureCredential } = azureIdentity;
 
     const { SecretClient } = azureSecrets;
+
+    const AZURE_OPTIONS =
+        lock( {
+                  ...DEFAULT_OPTIONS,
+                  source: _mt,
+                  separator: _hyphen
+              } );
+
 
     /**
      * This subclass of SecretsManager uses the Azure Key Vault to store and retrieve values.
@@ -37,7 +52,7 @@
         #credential;
         #client;
 
-        constructor( pOptions = {}, ...pArgs )
+        constructor( pOptions = { ...AZURE_OPTIONS }, ...pArgs )
         {
             super( pOptions, ...pArgs );
 
@@ -84,7 +99,7 @@
             this.#client = (pClient instanceof SecretClient) ? pClient : (this.#client || new SecretClient( this.keyVaultUrl, this.credential ));
         }
 
-        async getSecret( pKey )
+        async getSecret( pKey, pVersion = SECRET_VERSION.CURRENT )
         {
             const me = this;
 
@@ -99,14 +114,14 @@
 
             let secret = await asyncAttempt( async() => client.getSecret( key ) );
 
-            secret = this.resolveSecretValue( secret );
+            secret = this.resolveSecretValue( secret, key );
 
             if ( isNull( secret ) || isBlank( secret ) )
             {
                 secret = await asyncAttempt( async() => client.getSecret( key ) );
             }
 
-            secret = this.resolveSecretValue( secret );
+            secret = this.resolveSecretValue( secret, key );
 
             if ( !isNull( secret ) && this.allowCache && this.canCache( key ) )
             {
@@ -114,8 +129,17 @@
                 this.cacheSecret( ucase( asString( key, true ) ), secret );
             }
 
-            return this.resolveSecretValue( secret );
+            return this.resolveSecretValue( secret, key );
         }
+
+
+        /*
+         * IMPORTANT!!!  THE METHOD SIGNATURE FOR get MUST NOT PROVIDE A DEFAULT FOR pVersion
+         * This is because of how JavaScript determines the 'length' of a function.
+         * We do not want this 'get' to appear to have length === 1,
+         * because readProperty will try to call it.
+         * TRUST ME!
+         */
 
         async get( pKey, pVersion, pIgnoreCache = false )
         {
@@ -130,7 +154,7 @@
 
             if ( !isNull( secret ) )
             {
-                secret = this.resolveSecretValue( secret );
+                secret = this.resolveSecretValue( secret, key );
 
                 if ( !(isNull( secret ) || isBlank( secret )) )
                 {
@@ -145,7 +169,7 @@
                 this.cacheSecret( key, secret );
             }
 
-            return this.resolveSecretValue( secret );
+            return this.resolveSecretValue( secret, key );
         }
     }
 
@@ -163,11 +187,11 @@
 
     if ( _ud !== typeof module )
     {
-        module.exports = mod;
+        module.exports = lock( mod );
     }
 
     $scope["AzureSecretsManager"] = AzureSecretsManager;
 
-    return mod;
+    return lock( mod );
 
 }());
