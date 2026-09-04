@@ -318,10 +318,30 @@ const { _ud = "undefined", $scope } = constants;
         return asString( resolved, true );
     };
 
+    /**
+     * Returns true if the specified string starts with a hash sign (#) or 2 slashes (//)
+     * @param {string} pStr the string to evaluate (usually a line of text read from a file)
+     * @returns {boolean} true if the specified string starts with a hash sign (#) or 2 slashes (//)
+     */
     const isComment = ( pStr ) => isString( pStr ) && (asString( pStr, true ).startsWith( "#" ) || asString( pStr, true ).startsWith( "//" ));
 
+    /**
+     * Returns true if the specified string appears to be a "secrets prefix",
+     * a short string to distinguish between secrets of the same name, for example "API_KEY"
+     *
+     * @param {string} pStr the string to evaluate
+     *
+     * @returns {boolean} true if the specified string appears to be a "secrets prefix"
+     */
     const isPrefix = ( pStr ) => isString( pStr ) && !isBlank( pStr ) && /[A-Z]{1,4}[_.-]?/.test( pStr ) && !(/[;:/\\]/i).test( pStr );
 
+    /**
+     * Returns true if the specified value is not null or an empty string
+     *
+     * @param {Object|string|*} pSecret the value to evaluate
+     *
+     * @returns {boolean} true if the specified value is not null or an empty string
+     */
     const isValidSecret = ( pSecret ) => !(isNull( pSecret ) || (isString( pSecret ) && isBlank( pSecret )));
 
     /**
@@ -339,28 +359,112 @@ const { _ud = "undefined", $scope } = constants;
      */
     class SecretsManager
     {
+        /**
+         * The constant value indicating the Secrets Store this instance expects to use.
+         * Examples include" "AWS", "AZURE", and "LOCAL"
+         */
         #strategy;
 
+        /**
+         * The origin of the secrets.
+         * For LOCAL startageies, this is the filePath to the .env file, for example
+         */
         #source;
 
+        /**
+         * The prefix to prepend to secret keys for retrieval.
+         *
+         * @type {string}
+         */
         #prefix = _mt;
+
+        /**
+         * The character (or string) to use to separate the prefix from the key
+         * or that is expected to seperate parts of a key.
+         *
+         * For example, a key might be stored as "SP-API-KEY" in one store, but "SP_API_KEY" in another.
+         *
+         * @type {string}
+         */
         #separator = DEFAULT_OPTIONS.separator;
 
+        /**
+         * An object used to provide additional configuration values
+         * to an instance of SecretsManager or one of its subclasses.
+         * Properties vary by subclass.
+         *
+         * @type {Object}
+         */
         #options = {};
+
+        /**
+         * An array of any additional arguments passed to the constructor.
+         *
+         * @type {Array.<*>}
+         */
         #args = [];
 
+        /**
+         * An internal cache of values already retrieved and resolved.
+         * Caching behavior can be disabled for a specific instance
+         * or for specific keys.
+         *
+         * @type {Map<string, any>}
+         */
         #cache = new Map();
+
+        /**
+         * Specifies whether to cache secrets retrieved from the external secrets store.
+         * If set to false, no secrets are cached and must be retrieved from the secrets store on every request.
+         *
+         * @type {boolean}
+         */
         #allowCache = true;
+
+        /**
+         * An array of keys for secrets that should not be cached.
+         * This provides finer-grained control that the 'allowCache' property.
+         *
+         * @type {Array.<string>}
+         */
         #excludeFromCache = [];
 
+        /**
+         * Specifies whether this instance supports retrieval of keys not defined prior to the construction of the instance.
+         * When true, only keys that have been predefined will return values.
+         * When false, any key that exists in the cache or the secrets sore can be retrieved
+         *
+         * @type {boolean}
+         */
         #restrictKeys = false;
 
+        /**
+         * An array of keys for which no secret can be found in the secrets store.
+         * This is used to prevent repeated attempts to get a secret that does not exist.
+         *
+         * @type {Array.<string>}
+         */
         #missing = [];
 
+        /**
+         * The Logger to use to report errors or write other important messages to a log
+         */
         #logger;
 
+        /**
+         * The date/time this instance was initialized.
+         * Used to indicate the instance is ready for use.
+         * Can also be used to refresh the cache, if necessay
+         *
+         * @type {Date|null}
+         */
         #initDate;
 
+        /**
+         * The object used to dispatch or receive events,
+         * allowing instances of SecretsManager to behave as EventTargets
+         * @type {EventTarget | __EventTarget}
+         */
         #zTarget = new EventTarget();
 
         // noinspection GrazieInspection
@@ -547,6 +651,11 @@ const { _ud = "undefined", $scope } = constants;
             return false;
         }
 
+        isValidSecret( pSecret )
+        {
+            return isValidSecret( pSecret ) || !(isNull( pSecret ) || (isString( pSecret ) && isBlank( pSecret )));
+        }
+
         /**
          * Override for subclasses to reflect different key formatting.
          *
@@ -658,7 +767,7 @@ const { _ud = "undefined", $scope } = constants;
                 return null;
             }
 
-            let ignoreCache = toBool( pIgnoreCache );
+            const ignoreCache = toBool( pIgnoreCache );
 
             // try the cache first
             let secret = (ignoreCache ? null : this.getCachedSecret( key ));
@@ -709,7 +818,7 @@ const { _ud = "undefined", $scope } = constants;
                                                                         version: version || pVersion,
                                                                         message: "Cannot find value for key, " + key
                                                                     }, {} ) ) );
-                this.#missing.push( key );
+                attemptSilent( () => this.#missing.push( key ) );
             }
 
             // return the value (or null if no value was found in either the cache or the key store)
@@ -797,7 +906,7 @@ const { _ud = "undefined", $scope } = constants;
                 {
                     attempt( () => THIZ.#missing.push( k ) );
                 }
-            }.bind( me ?? this )( key )).catch( (this.logger ?? console).error );
+            }.bind( me ?? this )( key )).catch( ((me ?? this).logger ?? console).error );
 
             // return whatever value is currently stored in the secret variable
             return this.resolveSecretValue( secret );
@@ -819,7 +928,7 @@ const { _ud = "undefined", $scope } = constants;
         {
             const prefix = asString( pPrefix, true ) || this.prefix;
             const key = createKey( prefix, pKey, this.separator );
-            return isMap( this.#cache ) ? this.#cache.delete( key ) : true;
+            return isMap( this.#cache ) ? this.#cache.delete( key ) && this.#cache.delete( ucase( key ) ) : true;
         }
 
         get initialized()
@@ -1042,6 +1151,8 @@ const { _ud = "undefined", $scope } = constants;
     };
 
     SecretsManager.isValidSecret = isValidSecret;
+    SecretsManager.isPrefix = isPrefix;
+    SecretsManager.isComment = isComment;
 
     SecretsManager.getDefaultInstance = function( pPrefix, pOptions )
     {
@@ -1092,8 +1203,8 @@ const { _ud = "undefined", $scope } = constants;
 
         #populateExistingEnvirnmentVariables()
         {
-            const proc = (_ud !== typeof process ? process : $scope());
-            const ENV = proc?.env ?? $scope();
+            const proc = PROCESS ?? (_ud !== typeof process ? process : $scope());
+            const ENV = ENVIRONMENT ?? proc?.env ?? $scope();
             const variables = attempt( () => objectKeys( ENV ) );
             if ( !isNull( variables ) && isArray( variables ) )
             {
@@ -1125,12 +1236,12 @@ const { _ud = "undefined", $scope } = constants;
 
             let key = this.resolveKey( pKey );
 
-            let secret = ENV[key] || ENV[ucase( key )] || ENV[asString( pKey, true )] || ENV[ucase( asString( pKey, true ) )];
-
             if ( this.isMissing( key ) )
             {
                 return null;
             }
+
+            let secret = ENV[key] || ENV[ucase( key )] || ENV[asString( pKey, true )] || ENV[ucase( asString( pKey, true ) )];
 
             if ( isValidSecret( secret ) )
             {

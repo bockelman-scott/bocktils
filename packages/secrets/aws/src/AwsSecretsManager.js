@@ -16,7 +16,7 @@
 
     const { _ud, _mt, _underscore, $scope } = constants;
 
-    const { isNull, isNonNullObject, isString } = typeUtils;
+    const { isNull, isNonNullObject } = typeUtils;
 
     const { asString, isBlank, toBool, ucase } = stringUtils;
 
@@ -87,22 +87,25 @@
                                                              } );
 
             this.#sdkClient = this.#sdkClient ?? client ?? new SecretsManagerClient( config ?? {} );
+
+            this.#fallback = new LocalSecretsManager( { ...DEFAULT_AWS_OPTIONS, ...asObject( pOptions ) }, ...pArgs ) ?? this.#fallback;
         }
 
         #resolveOptions( pOptions = DEFAULT_AWS_OPTIONS )
         {
             let options = { ...DEFAULT_AWS_OPTIONS, ...(asObject( pOptions ?? {} )) };
 
-            let config = null;
+            let config = { ...(asObject( options.config ?? {} )) };
 
             if ( isNonNullObject( options.credentials ) )
             {
-                config = { credentials: options.credentials };
+                config = { ...(asObject( config )), credentials: options.credentials };
             }
             else if ( !(isBlank( options.accessKeyId ) || isBlank( options.secretAccessKey )) )
             {
                 config =
                     {
+                        ...(asObject( config )),
                         credentials:
                             {
                                 accessKeyId: options.accessKeyId,
@@ -116,7 +119,7 @@
                 }
             }
 
-            if ( null !== config && isNonNullObject( config ) )
+            if ( isNonNullObject( config ) )
             {
                 config.credentials = config.credentials ?? {};
                 if ( !(isBlank( options.accessKeyId ) || isBlank( options.secretAccessKey )) )
@@ -161,7 +164,7 @@
 
             if ( isNull( this.#sdkClient ) )
             {
-                return (ENV[key] ?? ENV[pKey] ?? await this.#fallback.getSecret( pKey, pVersion ) ?? super.getSecret( pKey, pVersion ));
+                return (ENV[key] ?? ENV[pKey] ?? await this.#fallback.getSecret( pKey, pVersion ) ?? super.get( pKey, pVersion ));
             }
 
             const payload = { SecretId: key };
@@ -187,8 +190,10 @@
                 secret = secret ?? super.resolveSecretValue( obj, key );
             }
 
-            if ( !isNull( secret ) && ( !isString( secret ) || !isBlank( secret )) )
+            if ( this.isValidSecret( secret ) )
             {
+                secret = this.resolveSecretValue( secret, key );
+
                 if ( this.canCache( key ) )
                 {
                     this.cacheSecret( key, secret );
@@ -197,6 +202,7 @@
                         this.cacheSecret( arn, secret );
                     }
                 }
+                return this.resolveSecretValue( secret, key );
             }
 
             return secret;
@@ -214,21 +220,28 @@
         {
             const key = this.resolveKey( pKey );
 
-            let ignoreCache = toBool( pIgnoreCache );
+            const ignoreCache = toBool( pIgnoreCache );
 
             // try the cache first
-            let secret = (ignoreCache ? null : this.getCachedSecret( key ));
+            let secret = (ignoreCache ? null : this.getCachedSecret( key ) ?? ENV[key]) ?? ENV[key];
 
             // if found in the cache... return the value
-            if ( !isNull( secret ) && ( !isString( secret ) || !isBlank( secret )) )
+            if ( this.isValidSecret( secret ) )
             {
                 return this.resolveSecretValue( secret, key );
             }
 
+            if ( this.isMissing( key ) )
+            {
+                return ENV[key] ?? null;
+            }
+
             secret = await this.getSecret( key, pVersion ) ?? ENV[key] ?? ENV[pKey];
 
-            if ( !isNull( secret ) && ( !isString( secret ) || !isBlank( secret )) )
+            if ( this.isValidSecret( secret ) )
             {
+                attempt( () => this.cacheSecret( key, secret ) );
+
                 return this.resolveSecretValue( secret, key );
             }
 
@@ -241,6 +254,8 @@
                                                                     message: "Cannot find value for key, " + pKey + ", version: " + version
                                                                 }, {} ) ) );
 
+            attempt( () => this.recordMissingKeys( key ) );
+
             return null;
         }
 
@@ -249,5 +264,26 @@
             // use ListSecretsCommand, BatchGetSecretValueCommand to precache secrets
         }
     }
+
+    registerSecretsManagerClass( SECRETS_STRATEGY.AWS, AwsSecretsManager );
+
+    const mod =
+        {
+            classes:
+                {
+                    SecretsManager,
+                    AwsSecretsManager
+                },
+            AwsSecretsManager
+        };
+
+    if ( _ud !== typeof module )
+    {
+        module.exports = lock( mod );
+    }
+
+    $scope["AwsSecretsManager"] = AwsSecretsManager;
+
+    return lock( mod );
 
 }());

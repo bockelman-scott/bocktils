@@ -15,7 +15,7 @@
 
     const { isNull } = typeUtils;
 
-    const { asString, isBlank, ucase, lcase } = stringUtils;
+    const { asString, ucase, lcase } = stringUtils;
 
     const
         {
@@ -116,14 +116,14 @@
 
             secret = this.resolveSecretValue( secret, key );
 
-            if ( isNull( secret ) || isBlank( secret ) )
+            if ( !this.isValidSecret( secret ) )
             {
                 secret = await asyncAttempt( async() => client.getSecret( key ) );
             }
 
             secret = this.resolveSecretValue( secret, key );
 
-            if ( !isNull( secret ) && this.allowCache && this.canCache( key ) )
+            if ( this.isValidSecret( secret ) && this.allowCache && this.canCache( key ) )
             {
                 this.cacheSecret( key, secret );
                 this.cacheSecret( ucase( asString( key, true ) ), secret );
@@ -152,11 +152,11 @@
 
             let secret = this.getCachedSecret( key );
 
-            if ( !isNull( secret ) )
+            if ( this.isValidSecret( secret ) )
             {
                 secret = this.resolveSecretValue( secret, key );
 
-                if ( !(isNull( secret ) || isBlank( secret )) )
+                if ( this.isValidSecret( secret ) )
                 {
                     return secret;
                 }
@@ -164,10 +164,16 @@
 
             secret = await asyncAttempt( async() => await this.getSecret( key ) );
 
-            if ( secret && this.canCache( key ) )
+            if ( this.isValidSecret( secret ) )
             {
-                this.cacheSecret( key, secret );
+                if ( this.canCache( key ) )
+                {
+                    this.cacheSecret( key, secret );
+                }
+                return this.resolveSecretValue( secret, key );
             }
+
+            this.recordMissingKeys( key );
 
             return this.resolveSecretValue( secret, key );
         }
