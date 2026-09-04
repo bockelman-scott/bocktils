@@ -232,7 +232,7 @@
                 return this.resolveSecretValue( secret, key );
             }
 
-            const version = (SECRET_VERSION.CURRENT === asString(pVersion,true) ? "AWSCURRENT" : pVersion) || "AWSCURRENT";
+            const version = (SECRET_VERSION.CURRENT === asString( pVersion, true ) ? "AWSCURRENT" : pVersion) || "AWSCURRENT";
 
             attempt( () => this.dispatchEvent( new ModuleEvent( "error",
                                                                 {
@@ -246,7 +246,7 @@
 
         async preload()
         {
-
+            // use ListSecretsCommand, BatchGetSecretValueCommand to precache secrets
         }
     }
 
