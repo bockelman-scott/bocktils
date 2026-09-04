@@ -3445,7 +3445,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             {
                 const uuid = "00000000-0000-0000-0000-000000000000";
 
-                return uuid.replaceAll( /0/g, () => parseInt( Math.random() * 10 ) );
+                return uuid.replaceAll( /0/g, () => parseInt( Math.random() * 9 ) );
             }
 
             return this.#krypto.randomUUID();
@@ -4242,9 +4242,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return _mt;
         }
 
-        const ctr = isClass( pObject ) || isFunc( pObject ) ? pObject : (pObject?.constructor || Object.getPrototypeOf( pObject )?.constructor);
+        const ctr = isFunc( pObject ) || isClass( pObject ) ? pObject : (pObject?.constructor || Object.getPrototypeOf( pObject )?.constructor);
 
-        return isClass( ctr ) || isFunc( ctr ) ? functionToString.call( ctr ) : _mt;
+        return isFunc( ctr ) || isClass( ctr ) ? functionToString.call( ctr ) : _mt;
     }
 
     function extractClassName( pObject )
@@ -4258,7 +4258,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         if ( _isValidStr( s ) )
         {
-            const rx = /\s*class\s*(\w+)\s+/;
+            const rx = /\s*class\s+(\w+)\s+/;
             const matches = rx.exec( s );
             return (matches && $ln( matches ) > 1) ? _trim( matches[1] ) : _mt;
         }
@@ -5774,7 +5774,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             this.#DenoGlobal = _ud === typeof Deno && _ud === typeof globalScope?.Deno ? null : (_ud !== typeof Deno ? Deno : null) || globalScope?.Deno;
 
-            this.#process = _ud !== typeof process ? process : this.#DenoGlobal || null;
+            this.#process = _ud !== typeof process ? process : this.#DenoGlobal || $scope();
 
             this.#versions = this.#process?.versions || this.#DenoGlobal?.version || {};
 
@@ -5962,7 +5962,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         get ENV()
         {
-            return lock( this.#ENV || {} );
+            return lock( { ...(this.#ENV ?? _ENV ?? {}) } );
         }
 
         get ARGUMENTS()
@@ -6710,7 +6710,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 // Because this function is an in-place operation,
                 // it does not matter if the property is writable.
                 // Either the property accessor returns a reference
-                // to the (now frozen) object
+                // to the (now frozen) object,
                 // or it returns a defensive copy, in which case it doesn't matter if it is mutable
                 deepLock( value, options, visited, [...stack, key] );
 
@@ -7254,7 +7254,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     {
         let nextId = ++__Error.NEXT_REF_ID;
 
-        nextId = nextId > 999_999 ? 10_000 : nextId;
+        if ( nextId > 999_999 )
+        {
+            __Error.NEXT_REF_ID = 10_000;
+            nextId = 10_000;
+        }
 
         const code = pCode || pError?.code;
 
@@ -7293,6 +7297,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             {
                 this.#illegalArguments.push( ...(options.arguments || options.illegalArguments || []) );
             }
+            this.#illegalArguments.push( [...(pArgs ?? [])] );
         }
 
         /**
@@ -9635,7 +9640,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      * @param pPropertyPaths
      * @returns {*}
      */
-    const _prepareContainer = ( pObject, ...pPropertyPaths ) => (isNonNullObj( pObject ) || isArray( pObject )) ? pObject : isFunc( pObject ) ? () => attempt( () => pObject( ...pPropertyPaths ) ) : [...(pPropertyPaths || [])].reduce( ( acc, path ) => ({ ...acc, ...path.split( "." ).reduceRight( ( val, key ) => ({ [key]: val }), pObject ) }), {} );
+    const _prepareContainer = ( pObject, ...pPropertyPaths ) => (isNonNullObj( pObject ) || isArray( pObject ) || isClass( pObject )) ? pObject : isFunc( pObject ) ? () => attempt( () => pObject( ...pPropertyPaths ) ) : [...(pPropertyPaths || [])].reduce( ( acc, path ) => ({ ...acc, ...path.split( "." ).reduceRight( ( val, key ) => ({ [key]: val }), pObject ) }), {} );
 
     const transformations = lock( [_toCamel, _toPascal, _toSnake, _toSnakeStrict, _ucase, _lcase] );
 
@@ -9685,6 +9690,18 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return ( pKey = key, pValue ) => attemptSilent( () => obj.add( pValue ) );
         }
 
+        if ( isNonNullObj( obj ) )
+        {
+            return ( pKey = key, pValue ) =>
+            {
+                const k = _asStr( pKey || key ).trim() || "value";
+                const mutatorName = `set${_ucase( k.slice( 0, 1 ) + k.slice( 1 ) )}`;
+                const mutator = isFunc( obj[mutatorName] ) ? () => attemptSilent( () => obj[mutatorName]( pValue ) ) : null;
+
+                attemptSilent( () => isFunc( mutator ) ? attemptSilent( () => mutator( pValue ) ) : obj[pKey || k || key] = pValue );
+            };
+        }
+
         return ( pKey = key, pValue ) => attemptSilent( () => pObj[(_asStr( pKey || key || _INVALID_KEY_, true ).replace( /^#/, _mt )).trim()] = pValue );
     };
 
@@ -9706,7 +9723,30 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         if ( isMap( obj ) || (isFunc( obj?.get ) && (1 === $ln( obj?.get ))) )
         {
-            return ( pKey = key ) => attemptSilent( () => obj.get( (_asStr( pKey || key, true ).replace( /^#/, _mt )).trim() ) ) ?? attempt( () => obj.get( key ) );
+            return ( pKey = key ) =>
+            {
+                const k = (_asStr( pKey || key, true ).replace( /^#/, _mt )).trim();
+
+                let value = attemptSilent( () => obj.get( k ) ) ?? attempt( () => obj.get( key ) );
+
+                if ( _ud === typeof value || isNull( value ) )
+                {
+                    value = obj[pKey || key];
+
+                    if ( _ud === typeof value || isNull( value ) )
+                    {
+                        const accessorName = `get${_ucase( k.slice( 0, 1 ) ) + k.slice( 1 )}`;
+                        const accessor = isFunc( obj[accessorName] ) ? () => attemptSilent( () => obj[accessorName]() ) : null;
+
+                        if ( isFunc( accessor ) )
+                        {
+                            value = attemptSilent( () => accessor.call( obj ) );
+                        }
+                    }
+                }
+
+                return value;
+            };
         }
 
         if ( isArray( obj ) )
@@ -9715,12 +9755,44 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             {
                 if ( isNumeric( pKey ) && /^\d+$/.test( _asStr( pKey, true ) ) )
                 {
-                    return attemptSilent( () => obj[_asInt( pKey )] ?? obj[_asInt( key )] ?? obj[pKey] ?? obj[key] );
+                    return attemptSilent( () => (obj ?? this ?? {})[_asInt( pKey )] ?? (obj ?? this ?? {})[_asInt( key )] ?? (obj ?? this ?? {})[pKey] ?? (obj ?? this ?? {})[key] );
+                }
+                else if ( isFunc( pKey ) && !isClass( pKey ) )
+                {
+                    return attemptSilent( () => _asArr( obj ?? this ?? {} ).find( pKey ) );
                 }
             };
         }
 
-        return ( pKey = key ) => attemptSilent( () => obj[(pKey || key)] ?? obj[key] );
+        if ( isNonNullObj( obj ) )
+        {
+            return ( pKey = key ) =>
+            {
+                const k = _asStr( pKey || key ).trim() || "value";
+
+                let v = obj[pKey || k || key];
+
+                if ( _ud === typeof v || isNull( v ) )
+                {
+                    const accessorName = `get${_ucase( k.slice( 0, 1 ) ) + k.slice( 1 )}`;
+                    const accessor = isFunc( obj[accessorName] ) ? () => attemptSilent( () => obj[accessorName]() ) : null;
+
+                    if ( isFunc( accessor ) )
+                    {
+                        v = attemptSilent( () => accessor.call( obj ) );
+                    }
+                }
+
+                if ( isFunc( v ) && !isClass( v ) )
+                {
+                    v = v.call( obj ?? {} );
+                }
+
+                return v;
+            };
+        }
+
+        return ( pKey = key ) => attemptSilent( () => (obj ?? this ?? {})[(pKey || key)] ?? (obj ?? this ?? {})[key] );
     };
 
     const makeDeleter = ( pObj, pName = _mt ) =>
@@ -9752,7 +9824,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             return ( pKey = key, pValue ) => attemptSilent( () => pObj.add( pValue ) );
         }
 
-        const accessor = makeAccessor( pObj, key );
+        const accessor = makeAccessor( pObj ?? {}, key );
 
         return ( pKey = key, pValue ) => attemptSilent( () =>
                                                         {
@@ -9791,30 +9863,25 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                                                         } );
     };
 
+    const isValidPropertyTarget = ( pObject ) => isNonNullObj( pObject ) || isClass( pObject );
+
+    const isValidPropertyPath = ( pPropertyPath ) => _isValidStr( pPropertyPath );
 
     function _property( pObject, pPropertyPath, pValue )
     {
-        if ( isNull( pObject ) ||
-             !isObj( pObject ) ||
-             (_ud === typeof pPropertyPath) ||
-             (_mt_str === (String( pPropertyPath ).trim())) )
+        if ( !isValidPropertyTarget( pObject ) || !isValidPropertyPath( pPropertyPath ) )
         {
-            return pObject;
+            return null;
         }
 
         let object = isRef( pObject ) ? dereference( pObject ) : pObject;
 
-        if ( isNull( pObject ) || !isObj( pObject ) )
+        if ( !isValidPropertyTarget( object ) )
         {
-            return object;
+            return null;
         }
 
         let keys = toNodePathArray( pPropertyPath );
-
-        if ( DEBUG_MODE )
-        {
-            INTERNAL_LOGGER.debug( `_property called with keys: ${keys.join( _dot )}` );
-        }
 
         let mutator = ( !isNull( pValue ) || arguments.length > 2) ? ( pObj = object, pKey, pVal = pValue ) =>
         {
@@ -9837,14 +9904,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         let value = isRef( object ) ? dereference( object ) : object;
 
-        // create a temporary copy of the current node/value, so we can try different variations of the key
-        let root = isArray( value ) ? [...(_asArr( value ))] : value;
-
-        while ( keys.length > 0 && isNonNullObj( value ) )
+        while ( keys.length > 0 && isValidPropertyTarget( value ) )
         {
             const key = String( keys.shift() ).trim().replace( /^#/, _mt_str );
-
-            INTERNAL_LOGGER.debug( `Trying key: ${key}, of ${$ln( keys )} remaining` );
 
             if ( isFunc( mutator ) )
             {
@@ -9856,54 +9918,34 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 let node = isArray( value ) ? [...(_asArr( value ))] : value;
 
                 // try array index or key 'as-is'; this is the 'expected' property key
-                let accessor = makeAccessor( node );
+                let accessor = makeAccessor( node ?? value );
 
-                value = (isArray( node ) && /^\d+$/.test( key )) ? node[_asInt( key )] : attemptSilent( () => accessor( key ) );
-
-                if ( isNull( value ) || _ud === typeof value )
+                if ( isArray( node ) && /^\d+$/.test( key ) )
                 {
-                    let tried = [key];
-
-                    let funcs = [...(transformations ?? [])];
-
-                    while ( (isNull( value ) || _ud === typeof value) && $ln( funcs ) > 0 )
-                    {
-                        let k = funcs.shift().call( this, key );
-                        if ( !tried.includes( k ) )
-                        {
-                            tried.push( k );
-                            value = attemptSilent( () => accessor( k ) );
-                        }
-                    }
+                    value = node[_asInt( key )];
+                }
+                else
+                {
+                    value = attemptSilent( () => accessor.call( (node ?? value ?? {}), key ) );
                 }
 
-                // if the value is still null, undefined, or an empty string, try finding the property on the 'root'
-                accessor = makeAccessor( root );
-
-                value = value || attemptSilent( () => accessor( key ) );
-
-                if ( isNull( value ) || _ud === typeof value )
+                if ( _ud === typeof value || isNull( value ) )
                 {
                     let tried = [key];
 
                     let funcs = [...(transformations ?? [])];
 
-                    while ( (isNull( value ) || _ud === typeof value) && $ln( funcs ) > 0 )
+                    while ( (_ud === typeof value || isNull( value )) && $ln( funcs ) > 0 )
                     {
                         let k = funcs.shift().call( this, key );
                         if ( !tried.includes( k ) )
                         {
                             tried.push( k );
-                            value = attemptSilent( () => accessor( k ) );
+                            value = attemptSilent( () => accessor.call( node ?? {}, k ) );
                         }
                     }
                 }
             }
-        }
-
-        if ( $ln( keys ) > 0 )
-        {
-            INTERNAL_LOGGER.debug( `There are ${$ln( keys )} keys remaining` );
         }
 
         return value;
@@ -9933,7 +9975,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
      */
     function getProperty( pObject, pPropertyPath )
     {
-        if ( isNull( pObject ) || !isObj( pObject ) || isNull( pPropertyPath ) || (isStr( pPropertyPath ) && !_isValidStr( pPropertyPath )) )
+        if ( !isValidPropertyTarget( pObject ) || !isValidPropertyPath( pPropertyPath ) )
         {
             INTERNAL_LOGGER.debug( `getProperty called on ${isNull( pObject ) ? "a null value, returning null" : !isObj( pObject ) ? "a scalar value, returning that value" : "without a valid property name or path, returning the target"}` );
 
@@ -9989,7 +10031,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             let path = paths.shift();
 
-            value = attemptSilent( () => getProperty( obj, path ) );
+            value = attemptSilent( () => getProperty( obj ?? {}, path ) );
 
             if ( notFound( value ) )
             {
@@ -10003,7 +10045,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                     if ( !tried.includes( k ) )
                     {
                         tried.push( k );
-                        value = attemptSilent( () => getProperty( obj, k ) );
+                        value = attemptSilent( () => getProperty( obj ?? this ?? {}, k ) );
                     }
                 }
             }
