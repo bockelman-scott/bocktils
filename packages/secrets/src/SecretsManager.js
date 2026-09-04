@@ -762,7 +762,7 @@ const { _ud = "undefined", $scope } = constants;
 
             let key = this.resolveKey( pKey );
 
-            if ( this.#restrictKeys && !(SecretsManager.isValidKey( pKey ) || SecretsManager.isValidKey( key )) )
+            if ( this.restrictKeys && !(SecretsManager.isValidKey( pKey ) || SecretsManager.isValidKey( key )) )
             {
                 return null;
             }
@@ -775,7 +775,7 @@ const { _ud = "undefined", $scope } = constants;
             // if found in the cache... return the value
             if ( !isNull( secret ) )
             {
-                secret = this.resolveSecretValue( secret );
+                secret = this.resolveSecretValue( secret, key );
                 if ( isValidSecret( secret ) )
                 {
                     return secret;
@@ -796,7 +796,7 @@ const { _ud = "undefined", $scope } = constants;
                          await this.getSecret( ucase( asString( key, true ) ), version ) ||
                          await this.getSecret( asString( pKey, true ), version );
 
-                secret = this.resolveSecretValue( secret );
+                secret = this.resolveSecretValue( secret, key );
             }
             catch( ex )
             {
@@ -807,7 +807,7 @@ const { _ud = "undefined", $scope } = constants;
             if ( isValidSecret( secret ) )
             {
                 // if the value returned can be cached, cache it for the next call to this method
-                secret = this.resolveSecretValue( secret );
+                secret = this.resolveSecretValue( secret, key );
                 this.cacheSecret( key, secret );
             }
             else
@@ -822,7 +822,7 @@ const { _ud = "undefined", $scope } = constants;
             }
 
             // return the value (or null if no value was found in either the cache or the key store)
-            return this.resolveSecretValue( secret );
+            return this.resolveSecretValue( secret, key );
         }
 
         /**
@@ -858,7 +858,7 @@ const { _ud = "undefined", $scope } = constants;
             // if it is found, we simply return it
             if ( isValidSecret( secret ) )
             {
-                return this.resolveSecretValue( secret );
+                return this.resolveSecretValue( secret, key );
             }
 
             if ( this.isMissing( key ) )
@@ -888,7 +888,7 @@ const { _ud = "undefined", $scope } = constants;
                     secret = await asyncAttempt( async() => await THIZ.getSecret( k ) ) ||
                              await asyncAttempt( async() => await THIZ.getSecret( uK ) );
 
-                    secret = THIZ.resolveSecretValue( secret );
+                    secret = THIZ.resolveSecretValue( secret, k );
                 }
                 catch( ex )
                 {
@@ -900,7 +900,7 @@ const { _ud = "undefined", $scope } = constants;
                 if ( isValidSecret( secret ) )
                 {
                     THIZ.cacheSecret( k, secret );
-                    return THIZ.resolveSecretValue( secret );
+                    return THIZ.resolveSecretValue( secret, k );
                 }
                 else
                 {
@@ -909,7 +909,7 @@ const { _ud = "undefined", $scope } = constants;
             }.bind( me ?? this )( key )).catch( ((me ?? this).logger ?? console).error );
 
             // return whatever value is currently stored in the secret variable
-            return this.resolveSecretValue( secret );
+            return this.resolveSecretValue( secret, key );
         }
 
         clearCache()
@@ -1024,7 +1024,7 @@ const { _ud = "undefined", $scope } = constants;
         }
 
         // convenience method for a typical key
-        async getApiVersion( pPrefix, pDefault = "v1" )
+        async getApiVersion( pPrefix, pDefault = _mt )
         {
             // should be overridden in subclasses
             return await asyncAttempt( async() => this.get( KEYS.API_VERSION ) ) || asString( pDefault, true );
@@ -1245,16 +1245,16 @@ const { _ud = "undefined", $scope } = constants;
 
             if ( isValidSecret( secret ) )
             {
-                secret = this.resolveSecretValue( secret );
+                secret = this.resolveSecretValue( secret, key );
 
                 this.cacheSecret( key, secret );
 
-                return this.resolveSecretValue( secret );
+                return this.resolveSecretValue( secret, key );
             }
 
             this.recordMissingKeys( key );
 
-            return this.resolveSecretValue( secret );
+            return this.resolveSecretValue( secret, key );
         }
 
 
@@ -1296,11 +1296,11 @@ const { _ud = "undefined", $scope } = constants;
 
             if ( isValidSecret( secret ) )
             {
-                secret = this.resolveSecretValue( secret );
+                secret = this.resolveSecretValue( secret, key );
                 this.cacheSecret( key, secret );
             }
 
-            return this.resolveSecretValue( secret );
+            return this.resolveSecretValue( secret, key );
         }
 
         getCachedSecret( pKey )
@@ -1325,11 +1325,11 @@ const { _ud = "undefined", $scope } = constants;
 
             if ( isValidSecret( secret ) )
             {
-                secret = this.resolveSecretValue( secret );
+                secret = this.resolveSecretValue( secret, key );
                 this.cacheSecret( key, secret );
             }
 
-            return this.resolveSecretValue( secret );
+            return this.resolveSecretValue( secret, key );
         }
 
         async init( ...pArgs )
