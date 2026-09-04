@@ -376,7 +376,7 @@ const { _ud = "undefined", $scope } = constants;
         if ( isPromise( body ) || isThenable( body ) )
         {
             body = isPromise( body ) ? await asyncAttempt( async() => await body ) : await Promise.resolve( body ).then( b => b );
-            return resolveBody( body, pConfig );
+            return resolveBody( body, pConfig, pParseJson );
         }
 
         if ( isNonNullObject( body ) && pParseJson )
@@ -607,14 +607,26 @@ const { _ud = "undefined", $scope } = constants;
             super();
         }
 
-        async sendRequest( pMethod, pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
+        async sendRequest( pMethod, pUrl, pConfig, pBody, pRedirects = 0, pRetries = 0, pResolve, pReject )
         {
 
+        }
+
+        async fetch( pUrl, pConfig )
+        {
+            const config = asObject( pConfig ?? { method: VERBS.GET, url: pUrl } );
+
+            return this.sendRequest( (config.method ?? VERBS.GET), (pUrl || config.url), config, (config?.body ?? config?.data) );
         }
 
         async sendGetRequest( pUrl, pConfig, pRedirects = 0, pRetries = 0, pResolve, pReject )
         {
 
+        }
+
+        async get( pUrl, pConfig )
+        {
+            return this.sendGetRequest( pUrl, pConfig );
         }
 
         async getRequestedData( pUrl, pConfig, pRedirects = 0, pRetries = 0, pResolve, pReject )
@@ -625,6 +637,24 @@ const { _ud = "undefined", $scope } = constants;
         async sendPostRequest( pUrl, pConfig, pBody, pRedirects, pRetries, pResolve, pReject )
         {
 
+        }
+
+        async post( pUrl, pConfig, pBody )
+        {
+            return this.sendPostRequest( pUrl, pConfig, pBody ?? pConfig?.body ?? pConfig?.data );
+        }
+
+        async head( pUrl, pConfig )
+        {
+            const config = asObject( pConfig ?? {} );
+            return this.sendRequest( pUrl,
+                                     {
+                                         ...(asObject( DEFAULT_HTTP_CONFIG )),
+                                         ...(asObject( config )),
+                                         ...{ url: pUrl, method: head, headers: config.headers },
+                                         httpAgent: config.httpAgent ?? DEFAULT_HTTP_CONFIG.httpAgent,
+                                         httpsAgent: config.httpsAgent ?? DEFAULT_HTTP_CONFIG.httpsAgent
+                                     } );
         }
     }
 
@@ -667,7 +697,7 @@ const { _ud = "undefined", $scope } = constants;
 
         const method = resolveHttpMethod( pMethod || config?.method );
 
-        let body = await (pBody || config?.data || config?.body || pConfig?.data || pConfig?.body);
+        const body = await (pBody || config?.data || config?.body || pConfig?.data || pConfig?.body);
 
         let cfg = config;
 
@@ -1115,7 +1145,7 @@ const { _ud = "undefined", $scope } = constants;
 
         get logger()
         {
-            return ToolBocksModule.resolveLogger( this.#logger, toolBocksModule?.logger, konsole );
+            return ToolBocksModule.resolveLogger( this.#logger, toolBocksModule?.logger, ToolBocksModule.getGlobalLogger(), konsole );
         }
 
         set logger( pLogger )
@@ -3668,7 +3698,7 @@ const { _ud = "undefined", $scope } = constants;
                 attempt( () => (me || this).#logger.log( "Throttler State:", state ) );
             }
 
-            super.increment();
+            super.reset();
         }
     }
 

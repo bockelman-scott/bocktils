@@ -921,7 +921,7 @@ const { _ud = "undefined", $scope } = constants;
 
             delete obj["properties"];
 
-            return lock( fixAgents( obj ) );
+            return fixAgents( obj );
         }
 
         merge( ...pConfigs )
