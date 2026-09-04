@@ -5,6 +5,7 @@ const dotenvx = require( "@dotenvx/dotenvx" );
 const core = require( "@toolbocks/core" );
 const fileUtils = require( "@toolbocks/files" );
 const jsonUtils = require( "@toolbocks/json" );
+const logUtils = require( "@toolbocks/logging" );
 
 const { constants } = core;
 
@@ -19,6 +20,8 @@ const { _ud = "undefined", $scope } = constants;
         return $scope()[INTERNAL_NAME];
     }
 
+    const dotEnvxOptions = { overload: true, quiet: true, logLevel: "error" };
+
     const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
     const
@@ -29,10 +32,12 @@ const { _ud = "undefined", $scope } = constants;
             __Error,
             objectEntries,
             objectValues,
+            objectKeys,
             ILogger,
             NotImplementedError,
             readProperty,
             attempt,
+            attemptSilent,
             asyncAttempt,
             lock,
             $ln
@@ -50,18 +55,24 @@ const { _ud = "undefined", $scope } = constants;
             isMap,
             isClass,
             getClass,
+            getClassName,
             firstMatchingType,
             toObjectLiteral,
             delegateTo
         } = typeUtils;
 
-    const { asString, isBlank, ucase, isFilePath, isJson } = stringUtils;
+    const { asString, toBool, isBlank, ucase, isFilePath, isJson } = stringUtils;
 
-    const { asArray, replaceElements } = arrayUtils;
+    const { asArray, unique, replaceElements } = arrayUtils;
 
     const { exists } = fileUtils;
 
     const { asObject } = jsonUtils;
+
+    const { SimpleLogger, SourcedSimpleLogger } = logUtils;
+
+    const PROCESS = (_ud !== typeof process ? process : $scope());
+    const ENVIRONMENT = PROCESS?.env ?? $scope();
 
     class SecretsManagerError extends __Error
     {
@@ -113,8 +124,8 @@ const { _ud = "undefined", $scope } = constants;
             return options.strategy;
         }
 
-        const proc = (_ud !== typeof process ? process : $scope());
-        const ENV = proc?.env ?? proc?.ENV ?? $scope();
+        const proc = PROCESS ?? (_ud !== typeof process ? process : $scope());
+        const ENV = ENVIRONMENT ?? proc?.env ?? proc?.ENV ?? $scope();
 
         // Check for an explicit strategy; this must be set in the container configuration
         if ( ENV.SECRETS_STRATEGY && STRATEGY_OPTIONS.includes( asString( ENV.SECRETS_STRATEGY, true ) ) )
@@ -216,7 +227,7 @@ const { _ud = "undefined", $scope } = constants;
 
             SERVER_APPLICATION: "SERVER-APPLICATION",
 
-            SUPPORTED_DATABASE_TYPES: "SUPPORTED_DATABASE-TYPES",
+            SUPPORTED_DATABASE_TYPES: "SUPPORTED-DATABASE-TYPES",
             DATABASE_TYPE: "DATABASE-TYPE",
             DATABASE_NAME: "DATABASE-NAME",
 
@@ -232,14 +243,14 @@ const { _ud = "undefined", $scope } = constants;
             PORT: "PORT",
             AUTH_DATABASE: "AUTH-DATABASE",
             DEFAULT_DATABASE: "DEFAULT-DATABASE",
-            DEFAULT_COLLECTION_NAME: "DEFAULT_COLLECTION-NAME",
+            DEFAULT_COLLECTION_NAME: "DEFAULT-COLLECTION-NAME",
 
             LOGIN_NAME: "LOGIN-NAME",
             LOGIN_PWD: "LOGIN-PWD",
 
-            CORS_ALLOWED_ORIGIN: "CORS_ALLOWED-ORIGIN",
-            RATE_LIMIT_MS: "RATE_LIMIT-MS",
-            RATE_LIMIT_MS_MAX: "RATE_LIMIT_MS-MAX",
+            CORS_ALLOWED_ORIGIN: "CORS-ALLOWED-ORIGIN",
+            RATE_LIMIT_MS: "RATE-LIMIT-MS",
+            RATE_LIMIT_MS_MAX: "RATE-LIMIT-MS-MAX",
 
             INSTANCE: "INSTANCE",
             INSTANCE_URL: "INSTANCE-URL",
@@ -261,30 +272,57 @@ const { _ud = "undefined", $scope } = constants;
 
             SCOPES: "SCOPES",
 
-            ADMIN_LOGIN_NAME: "ADMIN_LOGIN-NAME",
-            ADMIN_LOGIN_PWD: "ADMIN_LOGIN-PWD"
+            ADMIN_LOGIN_NAME: "ADMIN-LOGIN-NAME",
+            ADMIN_LOGIN_PWD: "ADMIN-LOGIN-PWD"
         };
 
-    const createKey = ( pPrefix, pKey ) =>
-    {
-        let prefix = ucase( asString( pPrefix, true ) );
-
-        let key = asString( pKey, true ).replace( new RegExp( ("^" + prefix), "i" ), _mt ).trim().replace( /^[_-]+/, _mt ).trim().replace( /[_-]+$/, _mt ).trim();
-
-        let keyPart = (ucase( asString( key, true ) )).replace( new RegExp( ("^" + prefix), "i" ), _mt ).trim().replace( /^[_-]+/, _mt ).trim().replace( /[_-]+$/, _mt ).trim();
-
-        return (ucase( isBlank( prefix ) ? keyPart : (prefix + _hyphen + keyPart) )).replace( /^[_-]+/, _mt ).trim().replace( /[_-]+$/, _mt ).trim();
-    };
+    const DEFAULT_KEYS = lock( { ...KEYS } );
 
     const DEFAULT_OPTIONS =
         lock( {
                   source: "./.env",
                   allowCache: true,
                   excludeFromCache: [],
-                  restrictKeys: false
+                  restrictKeys: false,
+                  separator: _hyphen
               } );
 
-    const isPrefix = ( pStr ) => isString( pStr ) && !isBlank( pStr ) && /[A-Z]{1,4}[_-]?/.test( pStr ) && !(/[;:/\\]/i).test( pStr );
+    const createKey = ( pPrefix, pKey, pSeparator = DEFAULT_OPTIONS.separator ) =>
+    {
+        const prefix = asString( pPrefix, true );
+
+        const separator = asString( pSeparator, true ) || DEFAULT_OPTIONS.separator;
+
+        const rxPrefix = new RegExp( ("^" + (prefix || "#")), "i" );
+
+        const rxStartSep = new RegExp( "^" + (separator || "~") + "+" );
+
+        const rxEndSep = new RegExp( (separator || "~") + "+" + "$" );
+
+        const rxDuplicated = new RegExp( `${(separator||"~")}{2,}`, "g" );
+
+        const key = asString( pKey, true ).replace( rxPrefix, _mt ).replace( rxStartSep, _mt ).trim();
+
+        const keyPart = asString( key, true ).replace( rxPrefix, _mt ).replace( rxStartSep, _mt ).trim();
+
+        let resolved = ((isBlank( prefix ) ? keyPart : (prefix + separator + keyPart))).trim();
+
+        if ( !isBlank( separator ) )
+        {
+            resolved = asString( resolved, true ).replaceAll( /[_.-]+/g, separator );
+            resolved = asString( resolved, true ).replaceAll( rxDuplicated, separator );
+            resolved = asString( resolved, true ).replace( rxStartSep, _mt );
+            resolved = asString( resolved, true ).replace( rxEndSep, _mt );
+        }
+
+        return asString( resolved, true );
+    };
+
+    const isComment = ( pStr ) => isString( pStr ) && (asString( pStr, true ).startsWith( "#" ) || asString( pStr, true ).startsWith( "//" ));
+
+    const isPrefix = ( pStr ) => isString( pStr ) && !isBlank( pStr ) && /[A-Z]{1,4}[_.-]?/.test( pStr ) && !(/[;:/\\]/i).test( pStr );
+
+    const isValidSecret = ( pSecret ) => !(isNull( pSecret ) || (isString( pSecret ) && isBlank( pSecret )));
 
     /**
      * The module that will be returned to expose the classes and functionality of the SecretsManager.
@@ -306,15 +344,18 @@ const { _ud = "undefined", $scope } = constants;
         #source;
 
         #prefix = _mt;
+        #separator = DEFAULT_OPTIONS.separator;
 
         #options = {};
         #args = [];
 
-        #cache;
+        #cache = new Map();
         #allowCache = true;
         #excludeFromCache = [];
 
         #restrictKeys = false;
+
+        #missing = [];
 
         #logger;
 
@@ -339,19 +380,20 @@ const { _ud = "undefined", $scope } = constants;
          */
         constructor( pOptions = {}, ...pArgs )
         {
-            this.#options = { ...(DEFAULT_OPTIONS), ...(toObjectLiteral( asObject( pOptions ?? {} ) )) };
+            this.#options = { ...(DEFAULT_OPTIONS), ...(asObject( pOptions ?? {} )) };
 
             this.#strategy = calculateStrategy( this.#options );
 
             this.#args = asArray( pArgs ?? this.#options?.args ?? this.#args ?? [] );
 
             this.#logger = ToolBocksModule.resolveLogger( this.#options?.logger, firstMatchingType( ILogger, ...(asArray( this.#args ?? [] )) ), ToolBocksModule.getGlobalLogger(), console );
+            this.#logger = (this.#logger instanceof SourcedSimpleLogger) ? this.#logger : SourcedSimpleLogger.adapt( this.#logger ?? new SimpleLogger( console ), this );
 
             this.#prefix = asString( this.#options?.prefix || this.#options?.secretsPrefix || _mt, true ) || ($ln( this.#args ) > 0 ? this.#args.find( isPrefix ) : _mt);
 
-            this.#prefix = asString( this.#prefix || _mt, true ).replace( /^[_-]+/, _mt ).trim().replace( /[_-]+$/, _mt ).trim();
+            this.#prefix = asString( this.#prefix || _mt, true );
 
-            this.#prefix = asString( this.#prefix || _mt, true ).replaceAll( /[_-]+/g, _hyphen ).trim();
+            this.#separator = asString( this.#options?.separator, true );
 
             this.#source = this.#options?.source ||
                            ($ln( this.#args ) > 0 ?
@@ -366,11 +408,13 @@ const { _ud = "undefined", $scope } = constants;
                 this.#excludeFromCache = [...(asArray( this.#options.excludeFromCache || [] ) || [])].filter( e => !isBlank( e ) );
             }
 
-            this.#restrictKeys = !!(this.#options?.restrictKeys);
+            this.#restrictKeys = toBool( this.#options?.restrictKeys );
 
-            if ( this.#allowCache )
+            this.#missing = asArray( this.#missing ?? [] );
+
+            if ( !(toBool( this.#allowCache )) )
             {
-                this.#cache = new Map();
+                this.#cache = {};
             }
 
             this.#options = lock( this.#options ?? {} );
@@ -389,7 +433,32 @@ const { _ud = "undefined", $scope } = constants;
 
         get logger()
         {
-            return ToolBocksModule.resolveLogger( this.#logger, this.#options?.logger, ToolBocksModule.getGlobalLogger(), console );
+            return ToolBocksModule.resolveLogger( this.#logger,
+                                                  this.#options?.logger,
+                                                  ToolBocksModule.getGlobalLogger(),
+                                                  new SourcedSimpleLogger( console, this ) );
+        }
+
+        get missing()
+        {
+            return [...(asArray( this.#missing ?? [] ))];
+        }
+
+        isMissing( pKey )
+        {
+            if ( isBlank( pKey ) )
+            {
+                return true;
+            }
+
+            const absent = asArray( this.missing ?? [] );
+
+            return absent.includes( pKey ) || absent.includes( this.resolveKey( pKey ) );
+        }
+
+        recordMissingKeys( ...pKeys )
+        {
+            this.#missing.push( ...(asArray( pKeys ).map( e => asString( e, true ) ).filter( e => !isBlank( e ) )) );
         }
 
         /**
@@ -402,7 +471,7 @@ const { _ud = "undefined", $scope } = constants;
          */
         get allowCache()
         {
-            return !!this.#allowCache;
+            return toBool( this.#allowCache );
         }
 
         /**
@@ -431,12 +500,17 @@ const { _ud = "undefined", $scope } = constants;
          */
         get prefix()
         {
-            return asString( (this.#prefix || this.#options?.secretsPrefix), true ).replace( /^[_-]+/, _mt ).trim().replace( /[_-]+$/, _mt ).trim().replaceAll( /[_-]+/g, _hyphen ).trim();
+            return asString( (this.#prefix || this.#options?.secretsPrefix), true ).trim();
+        }
+
+        get separator()
+        {
+            return asString( this.#separator, true ) || DEFAULT_OPTIONS?.separator;
         }
 
         get restrictKeys()
         {
-            return !!this.#restrictKeys;
+            return toBool( this.#restrictKeys );
         }
 
         /**
@@ -448,7 +522,7 @@ const { _ud = "undefined", $scope } = constants;
          */
         createKey( pKey )
         {
-            return createKey( this.prefix, ucase( (asString( pKey, true ).replace( new RegExp( `^${this.prefix}[_-]`, "i" ), _mt )) ).replaceAll( /[_-]+/g, _hyphen ) );
+            return createKey( this.prefix, pKey, this.separator );
         }
 
         /**
@@ -467,22 +541,23 @@ const { _ud = "undefined", $scope } = constants;
 
                 const arr = asArray( this.excludeFromCache ?? [] );
 
-                return !(arr.includes( k ) || arr.includes( uK ) || arr.includes( this.createKey( k ) )) && isMap( this.#cache );
+                return isMap( this.#cache ) && !(arr.includes( k ) || arr.includes( uK ));
             }
 
             return false;
         }
 
         /**
-         * Replaces underscores with hyphens.
-         * Override for subclasses that require different key formatting.
+         * Override for subclasses to reflect different key formatting.
          *
          * @param {String} pKey a key under which a secret is stored
-         * @returns {String} a string that adheres to the formatting conventions or restrictions of the key store
+         *
+         * @returns {String} a string that adheres to the formatting conventions or restrictions
+         *                   of the key store
          */
         resolveKey( pKey )
         {
-            return this.createKey( asString( pKey, true ) ).replaceAll( /_/g, _hyphen ).replace( /^-+/, _mt ).replace( /-+$/, _mt );
+            return this.createKey( asString( pKey, true ) );
         }
 
         /**
@@ -493,9 +568,24 @@ const { _ud = "undefined", $scope } = constants;
          *
          * @returns {*}  the value of the secret if that value is a property of the returned value or the returned value otherwise
          */
-        resolveSecretValue( pSecret )
+        resolveSecretValue( pSecret, pKey )
         {
-            return isNonNullObject( pSecret ) ? readProperty( pSecret, "value", "Value", "SecretString", "SecretBinary", "data", "Data" ) || asString( pSecret ) : asString( pSecret ) || _mt;
+            const data = isNonNullObject( pSecret ) || isJson( pSecret ) ? asObject( pSecret ) : asString( pSecret );
+
+            const value = isNonNullObject( data ) ?
+                          readProperty( data,
+                                        "value",
+                                        "Value",
+                                        "SecretString",
+                                        "SecretBinary",
+                                        "data",
+                                        "Data",
+                                        "secret",
+                                        (asString( pKey, true ) || "~"),
+                                        this.resolveKey( (asString( pKey, true ) || "~") ) ) || asString( data ) :
+                          asString( data ) || _mt;
+
+            return value ?? asString( pSecret );
         }
 
         /**
@@ -511,11 +601,10 @@ const { _ud = "undefined", $scope } = constants;
          */
         cacheSecret( pKey, pSecret )
         {
-            if ( !isNull( pSecret ) )
+            if ( isValidSecret( pSecret ) )
             {
-                if ( this.allowCache && this.canCache( pKey ) && isMap( this.#cache ) )
+                if ( this.allowCache && isMap( this.#cache ) && this.canCache( pKey ) )
                 {
-                    this.#cache.set( this.resolveKey( pKey ), pSecret );
                     this.#cache.set( pKey, pSecret );
                     this.#cache.set( ucase( asString( pKey, true ) ), pSecret );
                 }
@@ -530,10 +619,23 @@ const { _ud = "undefined", $scope } = constants;
          * @param pKey
          * @returns {Promise<void>} a Promise that resolves to the secret value stored under the specified key or null, if the value is not found
          */
-        async getSecret( pKey )
+        async getSecret( pKey, pVersion = SECRET_VERSION.CURRENT )
         {
-            throw new NotImplementedError( `This method must be implemented in each secure-store-specific subclass`, { key: pKey }, pKey );
+            const msg = `This method must be implemented in each secure-store-specific subclass`;
+            throw new NotImplementedError( msg,
+                                           {
+                                               key: pKey,
+                                               className: getClassName( this )
+                                           }, pKey, getClassName( this ) );
         }
+
+        /*
+         * IMPORTANT!!!  THE METHOD SIGNATURE FOR get MUST NOT PROVIDE A DEFAULT FOR pVersion
+         * This is because of how JavaScript determines the 'length' of a function.
+         * We do not want this 'get' to appear to have length === 1,
+         * because readProperty will try to call it.
+         * TRUST ME!
+         */
 
         /**
          * Returns a Promise that resolves to the secret value stored under the specified key or null, if the value is not found
@@ -542,8 +644,13 @@ const { _ud = "undefined", $scope } = constants;
          * @param pIgnoreCache
          * @returns {Promise<void>} a Promise that resolves to the secret value stored under the specified key or null, if the value is not found
          */
-        async get( pKey, pVersion = SECRET_VERSION.CURRENT, pIgnoreCache = false )
+        async get( pKey, pVersion, pIgnoreCache = false )
         {
+            if ( isBlank( pKey ) )
+            {
+                return null;
+            }
+
             let key = this.resolveKey( pKey );
 
             if ( this.#restrictKeys && !(SecretsManager.isValidKey( pKey ) || SecretsManager.isValidKey( key )) )
@@ -551,7 +658,7 @@ const { _ud = "undefined", $scope } = constants;
                 return null;
             }
 
-            let ignoreCache = !!pIgnoreCache;
+            let ignoreCache = toBool( pIgnoreCache );
 
             // try the cache first
             let secret = (ignoreCache ? null : this.getCachedSecret( key ));
@@ -559,31 +666,50 @@ const { _ud = "undefined", $scope } = constants;
             // if found in the cache... return the value
             if ( !isNull( secret ) )
             {
-                return this.resolveSecretValue( secret );
+                secret = this.resolveSecretValue( secret );
+                if ( isValidSecret( secret ) )
+                {
+                    return secret;
+                }
+            }
+
+            if ( this.isMissing( key ) )
+            {
+                return null;
             }
 
             // call the subclass method to get the value from the key store
-            secret = await this.getSecret( key ) ||
-                     await this.getSecret( ucase( asString( key, true ) ) ) ||
-                     await this.getSecret( this.resolveKey( key ) );
 
-            secret = this.resolveSecretValue( secret );
+            const version = pVersion || SECRET_VERSION.CURRENT;
+            try
+            {
+                secret = await this.getSecret( key, version ) ||
+                         await this.getSecret( ucase( asString( key, true ) ), version ) ||
+                         await this.getSecret( asString( pKey, true ), version );
 
-            if ( !isNull( secret ) && ( !isString( secret ) || !isBlank( secret )) )
+                secret = this.resolveSecretValue( secret );
+            }
+            catch( ex )
+            {
+                attemptSilent( () => this.logger.error( ex.message, ex ) );
+                attemptSilent( () => toolBocksModule.reportError( ex, ex.message, "error", getClassName( this ), "getSecret", key, pVersion, pIgnoreCache ) );
+            }
+
+            if ( isValidSecret( secret ) )
             {
                 // if the value returned can be cached, cache it for the next call to this method
-                if ( this.canCache( pKey ) )
-                {
-                    this.cacheSecret( pKey, secret );
-                }
+                secret = this.resolveSecretValue( secret );
+                this.cacheSecret( key, secret );
             }
             else
             {
                 attempt( () => this.dispatchEvent( new ModuleEvent( "error",
                                                                     {
-                                                                        key: pKey,
-                                                                        message: "Cannot find value for key, " + pKey
+                                                                        key: key,
+                                                                        version: version || pVersion,
+                                                                        message: "Cannot find value for key, " + key
                                                                     }, {} ) ) );
+                this.#missing.push( key );
             }
 
             // return the value (or null if no value was found in either the cache or the key store)
@@ -601,22 +727,34 @@ const { _ud = "undefined", $scope } = constants;
          */
         getCachedSecret( pKey )
         {
+            if ( isBlank( pKey ) )
+            {
+                return null;
+            }
+
             let key = this.resolveKey( pKey );
 
-            if ( this.#restrictKeys && !(SecretsManager.isValidKey( key ) || SecretsManager.isValidKey( pKey )) )
+            if ( this.#restrictKeys && !(SecretsManager.isValidKey( pKey ) || SecretsManager.isValidKey( key )) )
             {
                 return null;
             }
 
             // try to get the value from the cache
-            let secret = this.#cache.get( key ) ||
-                         this.#cache.get( ucase( asString( key, true ) ) ) ||
-                         this.#cache.get( pKey );
+            let secret = isMap( this.#cache ) ? (this.#cache.get( key ) ||
+                                                 this.#cache.get( ucase( asString( key, true ) ) ) ||
+                                                 this.#cache.get( asString( pKey ) )) : (ENVIRONMENT[key] ?? null);
+
+            secret = secret || ENVIRONMENT[key];
 
             // if it is found, we simply return it
-            if ( !isNull( secret ) && ( !isString( secret ) || !isBlank( secret )) )
+            if ( isValidSecret( secret ) )
             {
                 return this.resolveSecretValue( secret );
+            }
+
+            if ( this.isMissing( key ) )
+            {
+                return null;
             }
 
             // if the value was not found, kick off an asynchronous function
@@ -636,22 +774,30 @@ const { _ud = "undefined", $scope } = constants;
                 const uK = ucase( asString( k, true ) );
 
                 // use the normal asynchronous method to retrieve the value
-                secret = await asyncAttempt( async() => await THIZ.getSecret( THIZ.resolveKey( uK ) ) ) ||
-                         await asyncAttempt( async() => await THIZ.getSecret( uK ) ) ||
-                         await asyncAttempt( async() => await THIZ.getSecret( k ) ) ||
-                         await asyncAttempt( async() => await THIZ.getSecret( pKey ) );
+                try
+                {
+                    secret = await asyncAttempt( async() => await THIZ.getSecret( k ) ) ||
+                             await asyncAttempt( async() => await THIZ.getSecret( uK ) );
+
+                    secret = THIZ.resolveSecretValue( secret );
+                }
+                catch( ex )
+                {
+                    attemptSilent( () => this.logger.error( ex.message, ex ) );
+                    attemptSilent( () => toolBocksModule.reportError( ex, ex.message, "error", getClassName( this ), "getSecret", key, pVersion, pIgnoreCache ) );
+                }
 
                 // if it is found, try to cache it for next time
-                if ( !isNull( secret ) && ( !isString( secret ) || !isBlank( secret )) )
+                if ( isValidSecret( secret ) )
                 {
-                    if ( !isNull( secret ) && THIZ.canCache( k ) )
-                    {
-                        THIZ.cacheSecret( k, secret );
-                    }
-
+                    THIZ.cacheSecret( k, secret );
                     return THIZ.resolveSecretValue( secret );
                 }
-            }( key ));
+                else
+                {
+                    attempt( () => THIZ.#missing.push( k ) );
+                }
+            }.bind( me ?? this )( key )).catch( (this.logger ?? console).error );
 
             // return whatever value is currently stored in the secret variable
             return this.resolveSecretValue( secret );
@@ -663,6 +809,17 @@ const { _ud = "undefined", $scope } = constants;
             {
                 this.#cache.clear();
             }
+        }
+
+        /**
+         * Removes an entry from the internal cache
+         * @param {string} pKey
+         */
+        delete( pKey, pPrefix )
+        {
+            const prefix = asString( pPrefix, true ) || this.prefix;
+            const key = createKey( prefix, pKey, this.separator );
+            return isMap( this.#cache ) ? this.#cache.delete( key ) : true;
         }
 
         get initialized()
@@ -686,6 +843,12 @@ const { _ud = "undefined", $scope } = constants;
             this.#initDate = null;
 
             return this;
+        }
+
+        async refresh()
+        {
+            await this.dispose();
+            return this.init();
         }
 
         // convenience method for a typical key
@@ -825,16 +988,16 @@ const { _ud = "undefined", $scope } = constants;
             else
             {
                 let lines = asString( pJson, true ).split( /(\r?\n)/ ).filter( e => !isBlank( e ) );
-                lines = lines.map( e => asString( e, true ) ).filter( e => !isBlank( e ) );
+                lines = lines.map( e => asString( e, true ) ).filter( e => !isBlank( e ) && !isComment( e ) );
                 if ( $ln( lines ) > 0 )
                 {
                     lines.forEach( line =>
                                    {
-                                       if ( line && !isBlank( line ) )
+                                       if ( line && !isBlank( line ) && !isComment( line ) )
                                        {
                                            let kv = line.split( /=:/ ).map( e => asString( e, true ) );
-                                           let k = asString( $ln( kv ) > 0 ? kv[0] : _mt, true ).replace( /_-/g, _underscore );
-                                           let v = asString( $ln( kv ) > 0 ? kv[1] : _mt, true ).replace( /_-/g, _hyphen );
+                                           let k = asString( $ln( kv ) > 0 ? kv[0] : _mt, true );
+                                           let v = asString( $ln( kv ) > 1 ? kv[1] || kv[0] : kv[0] || _mt, true );
 
                                            if ( !isBlank( k ) )
                                            {
@@ -857,8 +1020,8 @@ const { _ud = "undefined", $scope } = constants;
 
     SecretsManager.addKey = function( pKey )
     {
-        let keyName = asString( pKey, true ).replace( /_-/g, _underscore );
-        let key = asString( (pKey || keyName), true ).replace( /_-/g, _hyphen );
+        let keyName = asString( pKey, true );
+        let key = asString( (pKey || keyName), true );
         if ( !(isBlank( keyName ) || isBlank( key )) )
         {
             let obj = { [keyName]: key };
@@ -869,7 +1032,7 @@ const { _ud = "undefined", $scope } = constants;
 
     SecretsManager.getKeys = function()
     {
-        return SecretsManager.defineKeys( {} );
+        return { ...(SecretsManager.defineKeys( {} ) ?? { ...DEFAULT_KEYS, ...KEYS }) };
     };
 
     SecretsManager.isValidKey = function( pKey )
@@ -877,6 +1040,8 @@ const { _ud = "undefined", $scope } = constants;
         let keys = SecretsManager.getKeys();
         return Object.keys( keys ).includes( pKey ) || Object.values( keys ).includes( pKey );
     };
+
+    SecretsManager.isValidSecret = isValidSecret;
 
     SecretsManager.getDefaultInstance = function( pPrefix, pOptions )
     {
@@ -901,6 +1066,8 @@ const { _ud = "undefined", $scope } = constants;
      */
     class LocalSecretsManager extends SecretsManager
     {
+        #existingEnvironmentVariables = [];
+
         constructor( pOptions = DEFAULT_OPTIONS, ...pArgs )
         {
             super( pOptions, ...pArgs );
@@ -909,32 +1076,92 @@ const { _ud = "undefined", $scope } = constants;
 
             if ( isFilePath( path ) && exists( path ) )
             {
-                attempt( () => dotenvx.config( { path: path, overload: true } ) );
+                attempt( () => dotenvx.config( { path: path, ...dotEnvxOptions } ) );
             }
             else
             {
                 path = "./.env";
                 if ( isFilePath( path ) && exists( path ) )
                 {
-                    attempt( () => dotenvx.config( { path: path, overload: true } ) );
+                    attempt( () => dotenvx.config( { path: path, ...dotEnvxOptions } ) );
                 }
             }
+
+            attempt( () => this.#populateExistingEnvirnmentVariables() );
         }
 
-        async getSecret( pKey )
+        #populateExistingEnvirnmentVariables()
         {
             const proc = (_ud !== typeof process ? process : $scope());
             const ENV = proc?.env ?? $scope();
+            const variables = attempt( () => objectKeys( ENV ) );
+            if ( !isNull( variables ) && isArray( variables ) )
+            {
+                this.#existingEnvironmentVariables.push( ...(asArray( variables )) );
+                this.#existingEnvironmentVariables = unique( this.#existingEnvironmentVariables );
+            }
+            return variables ?? [];
+        }
+
+        get existingEnvironmentVariables()
+        {
+            return [...(asArray( this.#existingEnvironmentVariables ?? [] ))];
+        }
+
+        isMissing( pKey )
+        {
+            return super.isMissing( pKey ) && !this.existingEnvironmentVariables.includes( pKey );
+        }
+
+        async getSecret( pKey, pVersion = SECRET_VERSION.CURRENT )
+        {
+            if ( isBlank( pKey ) )
+            {
+                return null;
+            }
+
+            const proc = PROCESS ?? (_ud !== typeof process ? process : $scope());
+            const ENV = ENVIRONMENT ?? proc?.env ?? $scope();
 
             let key = this.resolveKey( pKey );
 
             let secret = ENV[key] || ENV[ucase( key )] || ENV[asString( pKey, true )] || ENV[ucase( asString( pKey, true ) )];
 
+            if ( this.isMissing( key ) )
+            {
+                return null;
+            }
+
+            if ( isValidSecret( secret ) )
+            {
+                secret = this.resolveSecretValue( secret );
+
+                this.cacheSecret( key, secret );
+
+                return this.resolveSecretValue( secret );
+            }
+
+            this.recordMissingKeys( key );
+
             return this.resolveSecretValue( secret );
         }
 
-        async get( pKey, pVersion = SECRET_VERSION.CURRENT, pIgnoreCache = false )
+
+        /*
+         * IMPORTANT!!!  THE METHOD SIGNATURE FOR get MUST NOT PROVIDE A DEFAULT FOR pVersion
+         * This is because of how JavaScript determines the 'length' of a function.
+         * We do not want this 'get' to appear to have length === 1,
+         * because readProperty will try to call it.
+         * TRUST ME!
+         */
+
+        async get( pKey, pVersion, pIgnoreCache = false )
         {
+            if ( isBlank( pKey ) )
+            {
+                return null;
+            }
+
             let key = this.resolveKey( pKey );
 
             if ( this.restrictKeys && !(SecretsManager.isValidKey( pKey ) || SecretsManager.isValidKey( key )) )
@@ -942,13 +1169,23 @@ const { _ud = "undefined", $scope } = constants;
                 return null;
             }
 
-            let ignoreCache = !!pIgnoreCache;
+            const proc = PROCESS ?? (_ud !== typeof process ? process : $scope());
+            const ENV = ENVIRONMENT ?? proc?.env ?? $scope();
 
-            let secret = (ignoreCache ? null : this.getCachedSecret( key ) || this.getCachedSecret( pKey )) ||
-                         await this.getSecret( key ) || await this.getSecret( pKey );
+            let ignoreCache = toBool( pIgnoreCache );
 
-            if ( !isNull( secret ) && this.canCache( key ) )
+            let secret = (ignoreCache ? null : this.getCachedSecret( key )) || ENV[key] || ENV[pKey];
+
+            if ( !isValidSecret( secret ) && this.isMissing( key ) )
             {
+                return null;
+            }
+
+            secret = secret || await this.getSecret( key ) || await super.get( pKey, pVersion, ignoreCache );
+
+            if ( isValidSecret( secret ) )
+            {
+                secret = this.resolveSecretValue( secret );
                 this.cacheSecret( key, secret );
             }
 
@@ -957,6 +1194,11 @@ const { _ud = "undefined", $scope } = constants;
 
         getCachedSecret( pKey )
         {
+            if ( isBlank( pKey ) )
+            {
+                return null;
+            }
+
             let key = this.resolveKey( pKey );
 
             if ( this.restrictKeys && !(SecretsManager.isValidKey( pKey ) || SecretsManager.isValidKey( key )) )
@@ -964,14 +1206,15 @@ const { _ud = "undefined", $scope } = constants;
                 return null;
             }
 
-            const proc = (_ud !== typeof process ? process : $scope());
-            const ENV = proc?.env ?? $scope();
+            const proc = PROCESS ?? (_ud !== typeof process ? process : $scope());
+            const ENV = ENVIRONMENT ?? proc?.env ?? $scope();
 
             let secret = super.getCachedSecret( key ) || ENV[key] || ENV[ucase( key )];
-            secret = secret || super.getCachedSecret( pKey ) || ENV[pKey] || ENV[ucase( pKey )];
+            secret = secret || ENV[pKey] || ENV[ucase( pKey )];
 
-            if ( !isNull( secret ) && this.canCache( key ) )
+            if ( isValidSecret( secret ) )
             {
+                secret = this.resolveSecretValue( secret );
                 this.cacheSecret( key, secret );
             }
 
@@ -986,7 +1229,8 @@ const { _ud = "undefined", $scope } = constants;
 
             if ( !isBlank( path ) && isFilePath( path ) && exists( path ) )
             {
-                attempt( () => dotenvx.config( { path: path, overload: true } ) );
+                attempt( () => dotenvx.config( { path: path, ...dotEnvxOptions } ) );
+                attempt( () => this.#populateExistingEnvirnmentVariables() );
             }
 
             return super.init( ...pArgs );
@@ -1090,7 +1334,7 @@ const { _ud = "undefined", $scope } = constants;
          * @param {string }pDefault
          * @returns {Promise<*|void>}
          */
-        async getApiVersion( pPrefix, pDefault = "v1" )
+        async getApiVersion( pPrefix, pDefault = _mt )
         {
             let prefix = asString( pPrefix || this.prefix, true );
 
@@ -1218,6 +1462,8 @@ const { _ud = "undefined", $scope } = constants;
 
         #prefix = _mt;
 
+        #separator = DEFAULT_OPTIONS.separator;
+
         #options = {};
 
         constructor( pOptions = {}, ...pArgs )
@@ -1229,11 +1475,22 @@ const { _ud = "undefined", $scope } = constants;
 
             this.#strategy = calculateStrategy( options );
 
-            this.#prefix = ucase( asString( (options?.prefix || options?.secretsPrefix) || ($ln( args ) > 0 ? args.find( isPrefix ) : _mt), true ) );
+            this.#prefix = (asString( (options?.prefix || options?.secretsPrefix) || ($ln( args ) > 0 ? args.find( isPrefix ) : _mt), true ));
+
+            this.#separator = asString( asString( options.separator, true ) || this.#separator || DEFAULT_OPTIONS.separator, true );
 
             this.#keyPath = options?.keyPath || options?.mount || options.path || (SECRETS_STRATEGY.LOCAL === this.#strategy ? "./.env" : _mt);
 
-            this.#options = lock( options ?? {} );
+            this.#options = lock( {
+                                      ...(asObject( options ?? {} )),
+                                      ...({
+                                          strategy: this.#strategy,
+                                          prefix: this.#prefix || options.prefix || options.secretsPrefix || _mt,
+                                          separator: this.#separator || options.separator || DEFAULT_OPTIONS.separator,
+                                          keyPath: this.#keyPath || options.keyPath || options.mount || options.path || _mt,
+                                          args: [...asArray( args ?? [] )]
+                                      })
+                                  } );
         }
 
         get options()
@@ -1249,8 +1506,6 @@ const { _ud = "undefined", $scope } = constants;
         get prefix()
         {
             let s = asString( (this.#prefix || this.options.prefix || this.options.secretsPrefix), true );
-            s = s.replaceAll( /_+/g, _hyphen );
-            s = s.replace( /^[_-]+/, _mt ).trim().replace( /[_-]+$/, _mt ).trim();
             return asString( s, true );
         }
 
@@ -1274,9 +1529,7 @@ const { _ud = "undefined", $scope } = constants;
             let args = asArray( options?.args ?? asArray( pArgs ?? [] ) ?? [] );
             args = replaceElements( args, asArray( pArgs ?? args ?? [] ) );
 
-            let prefix = (options.prefix || options.secretsPrefix) ||
-                         (pOptions?.prefix || pOptions?.secretsPrefix) ||
-                         args.find( isPrefix ) || this.prefix;
+            let prefix = (options.prefix || options.secretsPrefix) || this.prefix;
 
             options.prefix = prefix || this.prefix;
             options.secretsPrefix = options.prefix || prefix || this.prefix;
@@ -1323,6 +1576,8 @@ const { _ud = "undefined", $scope } = constants;
             STRATEGY_OPTIONS,
             SECRETS_STRATEGY_ENV_VARIABLES,
             SECRET_VERSION,
+            DEFAULT_OPTIONS,
+            DEFAULT_KEYS,
             dependencies:
                 {
                     dotenvx,
