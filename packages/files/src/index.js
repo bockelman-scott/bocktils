@@ -3888,7 +3888,7 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
                     searchState.addResult( dirInfo );
                 }
 
-                const visitor = resolveVisitor( searchState.visitor,
+                const visitor = resolveVisitor( (searchState.visitor ?? this.visitor),
                                                 {
                                                     dir: dirInfo,
                                                     fileFilter: inclusionFilter,
@@ -3926,7 +3926,7 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
 
                     searchState.addResult( entryInfo );
 
-                    const visitor = resolveVisitor( searchState.visitor,
+                    const visitor = resolveVisitor( (searchState.visitor ?? this.visitor),
                                                     {
                                                         entry: entryInfo,
                                                         fileFilter: fileFilter,
@@ -4012,7 +4012,7 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
 
         async visit( pDirectory, pVisitor )
         {
-            this.#visitor = resolveVisitor( pVisitor || this.visitor ) || resolveVisitor( this.visitor ) || new NullVisitor();
+            this.#visitor = resolveVisitor( pVisitor ?? this.visitor ) ?? resolveVisitor( this.visitor ) ?? new NullVisitor();
             return await this.collect( pDirectory );
         }
 
