@@ -23,7 +23,8 @@
             EVENTS = ["clear", "delete", "registerClass", "unregisterClass", "registerSingleton", "unregisterSingleton", "upload", "copy"],
             BlobStorageClient,
             LocalDiskStorageClient,
-            BlobStoreClientFactory
+            BlobStoreClientFactory,
+            writeStreamToLocalFile
         } = blobStoreClient;
 
     const mod =
@@ -35,7 +36,8 @@
             EVENTS,
             BlobStorageClient,
             LocalDiskStorageClient,
-            BlobStoreClientFactory
+            BlobStoreClientFactory,
+            writeStreamToLocalFile
         };
 
     if ( _ud !== typeof module )
