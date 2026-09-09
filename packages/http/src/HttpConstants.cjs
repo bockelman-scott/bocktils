@@ -61,7 +61,6 @@ const { _ud = "undefined", $scope } = constants;
 
     const
         {
-            ModuleEvent,
             ToolBocksModule,
             __Error,
             IllegalArgumentError,
@@ -81,11 +80,21 @@ const { _ud = "undefined", $scope } = constants;
             $ln
         } = moduleUtils;
 
-    const { _mt_str = "", _mt = _mt_str, _comma, _str, _num, _big, _bool, _obj, _fun } = constants;
+    const
+        {
+            CASE_INSENSITIVE_COLLATOR,
+            _mt_str = "",
+            _mt = _mt_str,
+            _str,
+            _num,
+            _big,
+            _bool,
+            _obj,
+            _fun
+        } = constants;
 
     const
         {
-            DEFAULT_OBJECT_LITERAL_OPTIONS,
             FAST_OBJECT_LITERAL_OPTIONS,
             isNull,
             isObject,
@@ -100,28 +109,19 @@ const { _ud = "undefined", $scope } = constants;
             isPromise,
             isThenable,
             isReadOnly,
+            getClassName,
             toObjectLiteral,
         } = typeUtils;
 
-    const { asString, isBlank, asInt, lcase, ucase, capitalize, isJson, cleanUrl } = stringUtils;
+    const { asString, isBlank, asInt, lcase, ucase, capitalize, isJson, isJsonObject, cleanUrl } = stringUtils;
 
     const { asArray } = arrayUtils;
 
     const { isBuffer } = bufferUtils;
 
-    const { parseJson } = jsonUtils;
+    const { asObject, asJson, parseJson } = jsonUtils;
 
-    const
-        {
-            BockEntity,
-            BockIdentified,
-            BockNamed,
-            BockDescribed,
-            populateProperties,
-            overwriteProperties,
-            asObject,
-            same
-        } = entityUtils;
+    const { BockNamed, BockDescribed } = entityUtils;
 
     const modName = "HttpConstants";
 
@@ -141,7 +141,7 @@ const { _ud = "undefined", $scope } = constants;
      * - PUT: Represents an HTTP PUT request, typically used to update or create a resource.<br>
      * - PATCH: Represents an HTTP PATCH request, typically used to make partial updates to a resource.<br>
      * - HEAD: Represents an HTTP HEAD request, used to retrieve metadata or headers for a resource.<br>
-     * - OPTIONS: Represents an HTTP OPTIONS request, used to obtain information about communication options.<br>
+     * - OPTIONS: Represents an HTTP OPTIONS request, used to get information about communication options.<br>
      * - DELETE: Represents an HTTP DELETE request, used to remove a resource.<br>
      * - CONNECT: Represents an HTTP CONNECT request, typically used to establish a tunnel to the server.<br>
      * - TRACE: Represents an HTTP TRACE request, typically used for testing and diagnostic purposes.<br>
@@ -221,7 +221,9 @@ const { _ud = "undefined", $scope } = constants;
          */
         constructor( pVerb )
         {
-            super( VERBS.indexOf( ucase( pVerb || VERBS.GET ) ), ucase( asString( (pVerb || VERBS.GET), true ) ) );
+            super( VERBS.indexOf( ucase( pVerb || VERBS.GET ) ),
+                   ucase( asString( (pVerb || VERBS.GET), true ) ) );
+
             this.#verb = ucase( asString( (pVerb || VERBS.GET), true ) );
         }
 
@@ -247,12 +249,24 @@ const { _ud = "undefined", $scope } = constants;
 
         toString()
         {
+            // noinspection JSUnresolvedReference
             return ucase( this.name || this.#verb );
         }
 
-        [Symbol.toPrimitive]( pHint )
+        toLowerCase()
+        {
+            // noinspection JSUnresolvedReference
+            return lcase( this.name || this.#verb );
+        }
+
+        [Symbol.toPrimitive]()
         {
             return this.toString();
+        }
+
+        [Symbol.toStringTag]()
+        {
+            return `[object ${getClassName( this )}::${this.toString()}]`;
         }
     }
 
@@ -416,6 +430,7 @@ const { _ud = "undefined", $scope } = constants;
             ECMASCRIPT: "application/ecmascript",
             BINARY_STREAM: "application/octet-stream",
             MS_WORD: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            MS_EXCEL: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             MULTIPART: "multipart/form-data",
             FORM_URLENCODED: "application/x-www-form-urlencoded",
             XML: "text/xml",
@@ -434,6 +449,7 @@ const { _ud = "undefined", $scope } = constants;
             "application/json": ".json",
             "application/xml": ".xml",
             "application/zip": ".zip",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
             "application/msword": ".doc",
             "application/vnd.ms-excel": ".xls",
@@ -447,6 +463,16 @@ const { _ud = "undefined", $scope } = constants;
             "audio/mpeg": ".mp3",
             "video/mp4": ".mp4"
         };
+
+    const TYPES_BY_EXTENSION = {};
+
+    objectEntries( EXTENSIONS ).forEach( entry =>
+                                         {
+                                             const key = asString( ObjectEntry.getKey( entry ), true );
+                                             const value = asString( ObjectEntry.getValue( entry ), true );
+
+                                             TYPES_BY_EXTENSION[value] = key;
+                                         } );
 
     /**
      * Represents an HTTP content type (or mime-type).
@@ -688,13 +714,14 @@ const { _ud = "undefined", $scope } = constants;
      */
     const STATUS_TEXT_BY_CODE_STRING = {};
 
-
     /**
      * Holds an object whose keys are the integer values of statuses
      * and whose values are the text associated with that status
      * @type {Object}
      */
     const STATUS_TEXT_BY_INT_VALUE = {};
+
+    const STATUS_CODES_BY_TEXT = {};
 
     const OK_STATUSES = lock( [STATUS_CODES.OK, STATUS_CODES.ACCEPTED, STATUS_CODES.CREATED, STATUS_CODES.NO_CONTENT] );
 
@@ -770,7 +797,10 @@ const { _ud = "undefined", $scope } = constants;
 
         constructor( pCode, pText )
         {
-            super( asInt( pCode ), asString( pText || STATUS_TEXT_BY_CODE_STRING[ucase( asString( pCode, true ) )] || STATUS_TEXT_BY_INT_VALUE[asInt( pCode )], true ) );
+            super( asInt( pCode ),
+                   asString( pText ||
+                             STATUS_TEXT_BY_CODE_STRING[ucase( asString( pCode, true ) )] ||
+                             STATUS_TEXT_BY_INT_VALUE[asInt( pCode )], true ) );
 
             this.#code = asInt( pCode );
         }
@@ -778,6 +808,12 @@ const { _ud = "undefined", $scope } = constants;
         get code()
         {
             return asInt( this.#code );
+        }
+
+        get text()
+        {
+            // noinspection JSUnresolvedReference
+            return asString( this.name || STATUS_TEXT_BY_INT_VALUE[asInt( this.code )], true );
         }
 
         isInformational()
@@ -853,29 +889,148 @@ const { _ud = "undefined", $scope } = constants;
         {
             return STATUSES_FORBIDDING_BODY.includes( this.code );
         }
+
+        toString()
+        {
+            return asString( this.text || this.code, true );
+        }
+
+        [Symbol.toPrimitive]()
+        {
+            return asInt( this.code );
+        }
+
+        [Symbol.toStringTag]()
+        {
+            return `[object ${getClassName( this )}::${this.code}]`;
+        }
+
+        equals( pOther )
+        {
+            if ( isNull( pOther ) )
+            {
+                return false;
+            }
+
+            switch ( typeof pOther )
+            {
+                case _ud:
+                    return false;
+
+                case _str:
+                    return (0 === CASE_INSENSITIVE_COLLATOR.compare( this.text, asString( pOther, true ) )) || asInt( this.code ) === asInt( pOther );
+
+                case _num:
+                    return asInt( this.code ) === asInt( pOther );
+
+                case _obj:
+                    return (asInt( this.code ) === asInt( pOther.code )) || (0 === CASE_INSENSITIVE_COLLATOR.compare( this.text, pOther.text ));
+
+                default:
+                    break;
+            }
+
+            return pOther === this;
+        }
+
+        compareTo( pOther )
+        {
+            if ( isNull( pOther ) )
+            {
+                return -1;
+            }
+
+            let comp = 0;
+
+            switch ( typeof pOther )
+            {
+                case _ud:
+                    return -1;
+
+                case _str:
+                    comp = (CASE_INSENSITIVE_COLLATOR.compare( this.text, asString( pOther, true ) )) || (isNumeric( pOther ) ? (asInt( this.code ) - asInt( pOther )) : 0);
+                    break;
+
+                case _num:
+                    comp = (asInt( this.code ) - asInt( pOther ));
+                    break;
+
+                case _obj:
+                    comp = (CASE_INSENSITIVE_COLLATOR.compare( this.text, pOther.text )) || ((asInt( this.code ) - asInt( pOther.code )));
+                    break;
+
+                default:
+                    break;
+            }
+
+            if ( 0 === comp )
+            {
+                comp = CASE_INSENSITIVE_COLLATOR.compare( this.toString(), asString( pOther ) );
+            }
+
+            return comp;
+        }
+
+        toLiteral()
+        {
+            const obj =
+                {
+                    code: this.code,
+                    text: this.text,
+                    is_ok: this.isOk() || asInt( this.code ) >= 200 && asInt( this.code ) < 300,
+                    is_valid: this.isOk() || this.isValid(),
+                    is_success: this.isSuccess(),
+                    is_redirect: this.isRedirect(),
+                    is_informational: this.isInformational(),
+                    is_error: this.isError(),
+                    is_server_error: this.isServerError(),
+                    is_client_error: this.isClientError(),
+                    allows_body: this.allowsBody,
+                    forbids_body: this.forbidsBody,
+                    can_retry: this.canRetry(),
+                    is_retry: this.canRetry()
+                };
+            return lock( obj );
+        }
+
+        toJSON()
+        {
+            const literal = this.toLiteral();
+            return attempt( () => asJson( literal ?? this ) ) || attempt( () => JSON.stringify( literal ?? this ) );
+        }
     }
 
     HttpStatus.fromLiteral = function( pObject )
     {
         if ( isNonNullObject( pObject ) && isNumeric( pObject.code ) )
         {
-            return new HttpStatus( pObject.code, pObject?.name || pObject?.statusText );
+            return new HttpStatus( pObject.code, pObject?.name || pObject?.statusText || STATUS_TEXT_BY_INT_VALUE[asInt( pObject?.code || pObject )] );
         }
         else if ( isNumeric( pObject ) )
         {
-            return new HttpStatus( pObject );
+            return new HttpStatus( asInt( pObject ), STATUS_TEXT_BY_INT_VALUE[asInt( pObject )] );
         }
         else if ( isString( pObject ) )
         {
-            if ( "ok" === lcase( asString( pObject, true ) ) )
+            const str = asString( pObject, true );
+
+            if ( isJsonObject( str ) )
             {
-                return new HttpStatus( 200, pObject );
+                return HttpStatus.fromLiteral( asObject( str ) );
             }
 
-            const code = STATUS_CODES[ucase( asString( pObject, true ) )];
+            if ( "ok" === lcase( str ) )
+            {
+                return new HttpStatus( 200, str );
+            }
+
+            const code = asInt( STATUS_CODES[ucase( str )] ||
+                                STATUS_CODES[str] ||
+                                STATUS_CODES_BY_TEXT[str] );
+
             if ( !isNull( code ) && asInt( code ) > 0 )
             {
-                return new HttpStatus( asInt( code ), STATUS_TEXT_BY_INT_VALUE[code] );
+                return new HttpStatus( asInt( code ), STATUS_TEXT_BY_INT_VALUE[asInt( code )] || str );
             }
         }
         return null;
@@ -904,6 +1059,14 @@ const { _ud = "undefined", $scope } = constants;
                                                STATUS_TEXT_BY_CODE_STRING[ucase( asString( code, true ) )] = name;
                                                STATUS_TEXT_BY_INT_VALUE[asInt( code )] = name;
 
+                                               STATUS_CODES_BY_TEXT[name] = code;
+                                               STATUS_CODES_BY_TEXT[ucase( name )] = code;
+                                               STATUS_CODES_BY_TEXT[capitalize( name )] = code;
+
+                                               STATUS_CODES_BY_TEXT[name.replace( /http/i, "HTTP" )] = code;
+                                               STATUS_CODES_BY_TEXT[ucase( name ).replace( /http/i, "HTTP" )] = code;
+                                               STATUS_CODES_BY_TEXT[capitalize( name ).replace( /http/i, "HTTP" )] = code;
+
                                                HttpStatus[name] = new HttpStatus( code, capitalize( name ).replace( /http/i, "HTTP" ) );
                                            } );
 
@@ -914,22 +1077,23 @@ const { _ud = "undefined", $scope } = constants;
 
     HttpStatus.isStatusText = function( pText )
     {
-        return asArray( objectKeys( STATUS_CODES ) ).includes( asInt( pText ) );
+        return asArray( objectKeys( STATUS_CODES ) ).includes( ucase( asString( pText, true ) ) );
     };
 
     HttpStatus.fromResponse = function( pResponse, pOptions )
     {
         let response = pResponse?.response || pResponse || pOptions?.response || pOptions;
 
-        let code = response?.status?.code || response?.status;
-        let text = response?.statusText || response?.status?.name;
+        let code = response?.status?.code || response?.status || response;
+        let text = response?.statusText || response?.status?.name || response?.status || response;
 
         if ( HttpStatus.isStatusCode( code ) || HttpStatus.isStatusText( text ) )
         {
-            return new HttpStatus( code, text );
+            return new HttpStatus( asInt( HttpStatus.isStatusCode( code ) ? asInt( code || STATUS_CODES[ucase( asString( text, true ) )] ) : STATUS_CODES[ucase( asString( text, true ) )] ),
+                                   (text || STATUS_TEXT_BY_INT_VALUE[asInt( code )]) );
         }
 
-        const httpStatus = HttpStatus.fromLiteral( response ) ?? HttpStatus.fromLiteral( response?.status ) ?? HttpStatus.fromLiteral( response?.statusText );
+        const httpStatus = HttpStatus.fromLiteral( response?.status ?? response ) ?? HttpStatus.fromLiteral( response?.statusText ) ?? HttpStatus.fromLiteral( response );
 
         if ( !isNull( httpStatus ) )
         {
@@ -971,11 +1135,13 @@ const { _ud = "undefined", $scope } = constants;
         {
             const name = STATUS_TEXT_BY_CODE_STRING[ucase( asString( pCode, true ) )];
 
-            const num = asInt( STATUS_CODES[ucase( name ).replace( /http/i, _mt_str ).replace( /^_/, _mt_str )] );
+            const num = asInt( STATUS_CODES[ucase( name ).replace( /http/i, "HTTP" ).replace( /^_/, _mt_str )] );
 
             if ( HttpStatus.isStatusCode( num ) || HttpStatus.isStatusText( name ) )
             {
-                return new HttpStatus( num, name );
+                const id = asInt( HttpStatus.isStatusCode( num ) ? asInt( num || STATUS_CODES[ucase( asString( name, true ) )] ) : STATUS_CODES[ucase( asString( name, true ) )] );
+                const text = (name || STATUS_TEXT_BY_INT_VALUE[asInt( id )]);
+                return new HttpStatus( (id || num), (text || name) );
             }
         }
 
@@ -1030,7 +1196,7 @@ const { _ud = "undefined", $scope } = constants;
             super( HttpHeaderDefinition.nextId(),
                    asString( pName, true ),
                    asString( pName, true ),
-                   asString( pDescription || pName, true ) );
+                   asString( pDescription || pName || pCategory, true ) );
 
             this.#category = asString( pCategory, true );
         }
@@ -1045,13 +1211,68 @@ const { _ud = "undefined", $scope } = constants;
             return asString( this.name, true );
         }
 
-        [Symbol.toPrimitive]( pHint )
+        [Symbol.toPrimitive]()
         {
-            if ( _str === lcase( asString( pHint, true ) ) )
-            {
-                return this.toString();
-            }
             return this.toString();
+        }
+
+        [Symbol.toStringTag]()
+        {
+            return `[object ${getClassName( this )}::${this.category}::${this.toString()}]`;
+        }
+
+        toLiteral()
+        {
+            const obj =
+                {
+                    id: this.id,
+                    category: this.category,
+                    name: this.name,
+                    className: getClassName( this )
+                };
+            return lock( obj );
+        }
+
+        toJSON()
+        {
+            const literal = this.toLiteral();
+            return attempt( () => asJson( literal ?? this ) );
+        }
+
+        equals( pOther )
+        {
+            if ( isNull( pOther ) || !isObject( pOther ) )
+            {
+                return false;
+            }
+
+            const other = asObject( pOther );
+
+            return other.category === this.category && other.name === this.name;
+        }
+
+        compareTo( pOther )
+        {
+            if ( isNull( pOther ) || !isObject( pOther ) )
+            {
+                return -1;
+            }
+
+            const other = asObject( pOther );
+
+            let comp = CASE_INSENSITIVE_COLLATOR.compare( this.category, other.category );
+
+            if ( 0 === comp )
+            {
+                comp = CASE_INSENSITIVE_COLLATOR.compare( this.name, other.name );
+            }
+
+            if ( 0 === comp )
+            {
+                comp = CASE_INSENSITIVE_COLLATOR.compare( this.toString(), asString( other, true ) );
+            }
+
+            return comp;
         }
     }
 
@@ -1421,6 +1642,67 @@ const { _ud = "undefined", $scope } = constants;
         toJSON()
         {
             return `{"${this.name}":"${this.value}}`;
+        }
+
+        toLiteral()
+        {
+            const obj =
+                {
+                    definition: attempt( () => this.definition.toLiteral() ) ?? asObject( this.definition ),
+                    category: asString( this.definition?.category, true ),
+                    name: asString( this.name, true ),
+                    value: this.value || this.name
+                };
+            return lock( obj );
+        }
+
+        equals( pOther )
+        {
+            if ( isNull( pOther ) || !isObject( pOther ) )
+            {
+                return false;
+            }
+
+            const other = asObject( pOther );
+
+            if ( other === this )
+            {
+                return true;
+            }
+
+            if ( this.definition === other.definition || HttpHeaderDefinition.from( this.definition ?? this ).equals( HttpHeaderDefinition.from( other.definition ?? other ) ) )
+            {
+                if ( 0 === CASE_INSENSITIVE_COLLATOR.compare( this.name, other.name ) )
+                {
+                    return (0 === CASE_INSENSITIVE_COLLATOR.compare( asString( this.value, true ), asString( other.value, true ) ));
+                }
+            }
+
+            return false;
+        }
+
+        compareTo( pOther )
+        {
+            if ( isNull( pOther ) || !isObject( pOther ) )
+            {
+                return -1;
+            }
+
+            const other = asObject( pOther );
+
+            let comp = HttpHeaderDefinition.from( this.definition ?? this ).compareTo( HttpHeaderDefinition.from( other.definition ?? other ) );
+
+            if ( 0 === comp )
+            {
+                comp = CASE_INSENSITIVE_COLLATOR.compare( this.name, other.name );
+            }
+
+            if ( 0 === comp )
+            {
+                comp = CASE_INSENSITIVE_COLLATOR.compare( asString( this.value, true ), asString( other.value, true ) );
+            }
+
+            return comp;
         }
     }
 
@@ -2002,6 +2284,8 @@ const { _ud = "undefined", $scope } = constants;
     let mod =
         {
             ENCODING_TYPE_EXPRESSIONS,
+            EXTENSIONS: lock( EXTENSIONS ),
+            TYPES_BY_EXTENSION: lock( TYPES_BY_EXTENSION ),
             dependencies,
             classes:
                 {
