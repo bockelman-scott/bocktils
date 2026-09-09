@@ -1282,6 +1282,7 @@ const { _ud = "undefined", $scope } = constants;
     HttpConfig.isHttpConfig = isHttpConfig;
     HttpConfig.resolveHttpConfig = resolveHttpConfig;
     HttpConfig.toHttpConfigLiteral = toHttpConfigLiteral;
+    HttpConfig.fixAgents = fixAgents;
 
     HttpConfig.mergeConfigs = function( ...pConfigs )
     {
