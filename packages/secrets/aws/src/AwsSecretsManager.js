@@ -12,7 +12,7 @@
 
     const { moduleUtils, constants, typeUtils, stringUtils } = core;
 
-    const { ExecutionEnvironment, ModuleEvent, readProperty, attempt, asyncAttempt, lock } = moduleUtils;
+    const { ToolBocksModule, ExecutionEnvironment, ModuleEvent, readProperty, attempt, asyncAttempt, lock } = moduleUtils;
 
     const { _ud, _mt, _underscore, $scope } = constants;
 
