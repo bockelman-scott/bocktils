@@ -27,7 +27,8 @@
     "uglify-js": "^3.19.3"
   },
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "packages/*/*"
   ],
   "scripts": {
     "test": "jest"
