@@ -2138,7 +2138,19 @@ const moduleUtils = require( "./_ToolBocksModule.cjs" );
 
             MESSAGES_LOCALE_CODE,
 
-            NumberProperties
+            NumberProperties,
+
+            CASE_INSENSITIVE_COLLATOR: new Intl.Collator( ["en", "es", MESSAGES_LOCALE_CODE],
+                                                          {
+                                                              sensitivity: "base",
+                                                              numeric: true
+                                                          } ),
+
+            CASE_SENSITIVE_COLLATOR: new Intl.Collator( ["en", "es", MESSAGES_LOCALE_CODE],
+                                                        {
+                                                            sensitivity: "case",
+                                                            numeric: true
+                                                        } )
         };
 
     // makes the properties of mod available as properties and methods of the modulePrototype
