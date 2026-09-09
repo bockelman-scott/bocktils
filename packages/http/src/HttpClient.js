@@ -66,6 +66,7 @@ const fileUtils = require( "@toolbocks/files" );
  */
 const jsonUtils = require( "@toolbocks/json" );
 
+const logUtils = require( "@toolbocks/logging" );
 /**
  * Imports the EntityUtils module for the base classes available.
  */
@@ -122,8 +123,6 @@ const { _ud = "undefined", $scope } = constants;
     {
         return $scope()[INTERNAL_NAME];
     }
-
-    const konsole = console;
 
     // import the specific modules from @toolbocks/core that are necessary for this module
     const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
@@ -246,6 +245,8 @@ const { _ud = "undefined", $scope } = constants;
     // import the functions from the JSON Utilities that we use in this module
     const { parseJson, asJson } = jsonUtils;
 
+    const { SimpleLogger, SourcedSimpleLogger } = logUtils;
+
     // import the base classes required for the classes defined in this module, as well as related functions
     const { BockNamed, asObject } = entityUtils;
 
@@ -318,6 +319,7 @@ const { _ud = "undefined", $scope } = constants;
 
     let toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
 
+    const konsole = moduleUtils.konsole ?? console;
 
     // define module-level constants
     const MIN_TIMEOUT_MILLISECONDS = 10_000; // 10 seconds
@@ -1065,15 +1067,15 @@ const { _ud = "undefined", $scope } = constants;
 
     class HttpClient extends IHttpClient
     {
-        #config;
+        #config = DEFAULT_HTTP_CONFIG;
 
         #options = { ...DEFAULT_HTTP_CLIENT_OPTIONS };
 
         #delegates = new Map();
 
-        #defaultDelegate;
+        #defaultDelegate = new HttpFetchClient();
 
-        #logger;
+        #logger = new SourcedSimpleLogger( new SimpleLogger( konsole ), "HttpClient" );
 
         #maxRedirects = MAX_REDIRECTS;
 
@@ -1091,7 +1093,8 @@ const { _ud = "undefined", $scope } = constants;
 
             this.#populateDelegates( (pDelegates || this.#options?.delegates || this.#config?.delegates), this.#defaultDelegate );
 
-            this.#logger = ToolBocksModule.resolveLogger( this.#options?.logger, toolBocksModule?.logger, konsole );
+            this.#logger = ToolBocksModule.resolveLogger( this.#options?.logger, toolBocksModule?.logger, ToolBocksModule.getGlobalLogger(), konsole );
+            this.#logger = SourcedSimpleLogger.adapt( this.#logger, this, this.#options );
 
             this.streamToFile = streamToFile.bind( this );
 
@@ -1683,6 +1686,7 @@ const { _ud = "undefined", $scope } = constants;
         }
     }
 
+    HttpClient.isHttpClient = isHttpClient;
     HttpClient.resolveUrl = resolveUrl;
     HttpClient.updateContext = updateContext;
     HttpClient.calculateFileName = calculateFileName;
