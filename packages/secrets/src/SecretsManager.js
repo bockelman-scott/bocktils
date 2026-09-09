@@ -53,6 +53,7 @@ const { _ud = "undefined", $scope } = constants;
             isArray,
             isDate,
             isMap,
+            isFunction,
             isClass,
             getClass,
             getClassName,
@@ -105,7 +106,7 @@ const { _ud = "undefined", $scope } = constants;
 
     const SECRETS_STRATEGY_ENV_VARIABLES =
         lock( {
-                  AWS: lock( ["AWS_REGION", "AWS-REGION", "AWS_EXECUTION_ENV", "AWS-EXECUTION-ENV"] ),
+                  AWS: lock( ["AWS_REGION", "AWS_EXECUTION_ENV"] ),
                   DIGITAL_OCEAN: lock( ["DO_REGION", "DO-REGION", "DO_EXECUTION_ENV", "DO-EXECUTION-ENV"] ),
                   AZURE: lock( ["AZURE_REGION", "AZURE-REGION", "AZURE_EXECUTION_ENV", "AZURE-EXECUTION-ENV"] ),
                   GOOGLE: lock( ["GOOGLE_REGION", "GOOGLE-REGION", "GOOGLE_EXECUTION_ENV", "GOOGLE-EXECUTION-ENV"] ),
@@ -1577,9 +1578,9 @@ const { _ud = "undefined", $scope } = constants;
 
         #options = {};
 
-        constructor( pOptions = {}, ...pArgs )
+        constructor( pOptions = { ...DEFAULT_OPTIONS }, ...pArgs )
         {
-            const options = asObject( pOptions ?? {} );
+            const options = { ...DEFAULT_OPTIONS, ...(asObject( pOptions ?? {} )) };
 
             let args = asArray( options?.args ?? asArray( pArgs ?? [] ) ?? [] );
             args = replaceElements( args, asArray( pArgs ?? args ?? [] ) );
@@ -1625,13 +1626,18 @@ const { _ud = "undefined", $scope } = constants;
             return this.#keyPath || this.options.keyPath || (SECRETS_STRATEGY.LOCAL === this.strategy ? "./.env" : _mt) || _mt;
         }
 
-        create( pOptions = {}, ...pArgs )
+        create( pOptions = { ...DEFAULT_OPTIONS }, ...pArgs )
         {
-            const options = { ...(asObject( this.options || {} )), ...(asObject( pOptions ?? {} )) };
+            const options =
+                {
+                    ...DEFAULT_OPTIONS,
+                    ...(asObject( this.options || {} )),
+                    ...(asObject( pOptions ?? {} ))
+                };
 
             options.strategy = asString( options.strategy || this.strategy, true );
             options.strategy = STRATEGY_OPTIONS.includes( options.strategy ) ? options.strategy : this.strategy;
-            options.strategy = STRATEGY_OPTIONS.includes( options.strategy ) ? options.strategy : null;
+            options.strategy = STRATEGY_OPTIONS.includes( options.strategy ) ? options.strategy : calculateStrategy( {} );
 
             const strategy = calculateStrategy( options );
 
@@ -1652,7 +1658,13 @@ const { _ud = "undefined", $scope } = constants;
 
             if ( isNonNullObject( clazz ) )
             {
+                if ( clazz instanceof SecretsManager )
+                {
+                    return asObject( clazz ) ?? (isFunction( getClass( clazz )?.from ) ? getClass( clazz ).from( { ...(asObject( clazz ?? {} )), ...(asObject( options ?? pOptions ?? {} )) }, ...(asArray( args ?? pArgs ?? [] )) ) : new getClass( clazz )( options, ...args ));
+                }
+
                 clazz = getClass( clazz ) ?? SecretsManager;
+
                 return new clazz( options, ...args );
             }
 
