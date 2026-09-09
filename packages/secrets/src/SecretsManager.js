@@ -853,7 +853,23 @@ const { _ud = "undefined", $scope } = constants;
                                                  this.#cache.get( ucase( asString( key, true ) ) ) ||
                                                  this.#cache.get( asString( pKey ) )) : (ENVIRONMENT[key] ?? null);
 
-            secret = secret || ENVIRONMENT[key];
+            // Also try the underscored spelling of the key.
+            //
+            // POSIX defines an environment variable NAME as letters, digits and
+            // underscore; a hyphen is outside that set, and a shell cannot express
+            // "FV-SCOPES=x" as an assignment at all. Platforms that honour that
+            // constraint -- ECS among them -- accept a hyphenated name in their
+            // configuration and then never deliver it: the variable is visible in the
+            // task definition and absent from process.env.
+            //
+            // Keys here are hyphenated because that is what the secure store is keyed
+            // by (FV-CLIENT-SECRET), and that must not change. Only the ENVIRONMENT
+            // rung needs to tolerate both spellings, which is what the AWS subclass
+            // already does for its own lookups.
+            //
+            // Hyphen first: a .env loaded through the Node API keeps its hyphens, so
+            // an explicitly configured local value still wins.
+            secret = secret || ENVIRONMENT[key] || ENVIRONMENT[ucase( asString( key, true ) ).replaceAll( "-", "_" )];
 
             // if it is found, we simply return it
             if ( isValidSecret( secret ) )
