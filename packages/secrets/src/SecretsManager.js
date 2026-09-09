@@ -862,8 +862,9 @@ const { _ud = "undefined", $scope } = constants;
             // configuration and then never deliver it: the variable is visible in the
             // task definition and absent from process.env.
             //
-            // Keys here are hyphenated because that is what the secure store is keyed
-            // by (FV-CLIENT-SECRET), and that must not change. Only the ENVIRONMENT
+            // Keys here are hyphenated because that is what the secure store (AWS SecretsManager) 
+            // is currently keyed by (FV-CLIENT-SECRET), any change to that must be coordianted with 
+            // changes in the brysonOps-githubActions repo. Only the ENVIRONMENT (PLAINTEXT variables)
             // rung needs to tolerate both spellings, which is what the AWS subclass
             // already does for its own lookups.
             //
