@@ -707,7 +707,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
      */
     const isNonNullObject = function( pObject, pStrict = false, pOptions = IS_NON_NULL_OBJECT_OPTIONS, pStack = [] )
     {
-        const options = { ...IS_NON_NULL_OBJECT_OPTIONS, ...(pOptions || {}) };
+        const options = { ...IS_NON_NULL_OBJECT_OPTIONS, ...(pOptions ?? (isObject( pStrict ) ? pStrict ?? {} : {})) };
 
         if ( !isNull( pObject, pStrict ) && isObject( pObject, options ) )
         {
@@ -3271,26 +3271,93 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
     {
         const options = { rejectPrimitiveWrappers: false, allowEmptyObjects: true, rejectNull: true };
 
-        const obj = isObject( pObject, options ) || isFunction( pObject ) || isClass( pObject, pStrict ) ? pObject : null;
+        const obj = isNonNullObject( pObject, options ) ||
+                    isPrimitiveWrapper( pObject ) ||
+                    isFunction( pObject ) ||
+                    isClass( pObject, pStrict )
+                    ? pObject
+                    : null;
 
         if ( isNull( obj ) )
         {
             return null;
         }
 
-        let clazz = isClass( obj, pStrict ) ? obj : [obj?.constructor, obj?.prototype, Object.getPrototypeOf( obj ), obj?.prototype?.constructor, Object.getPrototypeOf( obj )?.constructor].find( e => isClass( e, pStrict ) );
+        let clazz = isClass( obj, pStrict ) ? obj :
+                    attemptSilent( () => objectToString.call( obj, obj ) ) === "[object Object]" ? Object :
+                    isClass( obj?.constructor, pStrict ) ? obj?.constructor :
+                    isClass( obj?.prototype, pStrict ) ? obj?.prototype :
+                    isClass( obj?.constructor?.prototype, pStrict ) ? obj?.constructor?.prototype :
+                    isClass( obj?.prototype?.constructor, pStrict ) ? obj?.prototype?.constructor :
+                    [
+                        obj?.constructor,
+                        Object.getPrototypeOf( obj )?.constructor,
+                        Object.getPrototypeOf( obj?.prototype ?? obj )?.constructor
+                    ].filter( e => !isNull( e ) ).find( e => isClass( e, pStrict ) );
 
         if ( isClass( clazz, pStrict ) )
         {
             return clazz;
         }
 
-        if ( ( !options?.rejectPrimitiveWrappers && isPrimitiveWrapper( pObject )) || instanceOfAny( pObject, ...BUILTIN_TYPES ) )
+        if ( ( !options?.rejectPrimitiveWrappers && isPrimitiveWrapper( pObject )) ||
+             instanceOfAny( pObject, ...BUILTIN_TYPES ) )
         {
-            return pObject?.constructor;
+            let klass = isClass( pObject?.constructor, false ) ? pObject?.constructor :
+                        isClass( pObject?.prototype, false ) ? pObject?.prototype :
+                        isClass( pObject?.constructor?.prototype, false ) ? pObject?.constructor?.prototype :
+                        isClass( pObject?.prototype?.constructor, false ) ? pObject?.prototype?.constructor :
+                        Object.getPrototypeOf( pObject ?? {} )?.constructor ?? Object.getPrototypeOf( pObject ?? {} )?.prototype;
+
+            if ( isClass( klass, false ) )
+            {
+                return klass;
+            }
+
+            klass = isClass( klass, false ) ?
+                    klass :
+                    isNonNullObject( klass ) ?
+                    [
+                        klass?.prototype?.constructor,
+                        Object.getPrototypeOf( klass )?.constructor,
+                        Object.getPrototypeOf( klass )?.prototype?.constructor,
+                        Object.getPrototypeOf( klass?.prototype )?.constructor,
+                    ].filter( e => !isNull( e ) ).find( e => isClass( e, false ) ) : null;
+
+            if ( !isNull( klass ) )
+            {
+                if ( isClass( klass, false ) )
+                {
+                    return klass;
+                }
+                else if ( isNonNullObject( klass ) )
+                {
+                    const candidates = [...BUILTIN_TYPES].filter( e => isNonNullObject( pObject ) && pObject instanceof e );
+
+                    if ( $ln( candidates ) > 0 )
+                    {
+                        klass = $last( candidates );
+                    }
+
+                    if ( isClass( klass, false ) )
+                    {
+                        return klass;
+                    }
+
+                    let classString = attemptSilent( () => objectToString.call( obj, obj ) ) || attemptSilent( () => objectToString.call( klass, klass ) );
+                    classString = String( classString ).replace( /^\[object\s*/, _mt ).replace( /]\s*$/, _mt );
+                    classString = String( String( classString ).split( /[\s:]+/ )[0] );
+                    klass = $scope()[classString] ?? klass;
+                }
+
+                if ( isClass( klass, false ) )
+                {
+                    return klass;
+                }
+            }
         }
 
-        return clazz;
+        return isClass( clazz, pStrict ) ? clazz : (isNonNullObject( pObject ) ? Object : null);
     };
 
     const resolveClass = function( pClass, pDefaultClass )
@@ -3321,8 +3388,8 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
      */
     const getClassName = function( pObject )
     {
-        const clazz = getClass( pObject );
-        return (!isNull( clazz ) ? clazz?.name || objectToString.call( clazz, clazz ).replace( /\[object\s+/, _mt_str ).replace( /\s*]\s*$/, _mt_str ) : _mt_str) || _mt_str;
+        const clazz = getClass( pObject ) ?? resolveClass( pObject, pObject );
+        return (!isNull( clazz ) ? clazz?.name || attemptSilent( () => objectToString.call( clazz, clazz ).replace( /\[object\s+/, _mt_str ).replace( /\s*]\s*$/, _mt_str ) ) : _mt_str) || _mt_str;
     };
 
     const classFrom = function( pValue )
