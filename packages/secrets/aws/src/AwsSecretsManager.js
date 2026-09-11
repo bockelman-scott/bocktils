@@ -54,18 +54,13 @@
             excludeFromCache: [],
             restrictKeys: false,
             separator: _underscore,
+            // Region only. No credentials are seeded here, deliberately: the AWS
+            // SDK reads the mere PRESENCE of a `credentials` key as "use these and
+            // do not consult the default provider chain", so placeholders do not
+            // degrade to the chain, they replace it. See #resolveOptions.
             config:
                 {
-                    region: ENV["AWS_REGION"] || "us-east-1",
-                    accessKeyId: _mt,
-                    secretAccessKey: _mt,
-                    sessionToken: _mt,
-                    credentials:
-                        {
-                            accessKeyId: _mt,
-                            secretAccessKey: _mt,
-                            sessionToken: _mt
-                        }
+                    region: ENV["AWS_REGION"] || "us-east-1"
                 },
             logger: new SourcedSimpleLogger( new SimpleLogger( ToolBocksModule.getGlobalLogger() ?? console ), "AwsSecretsManager" )
         };
@@ -97,41 +92,44 @@
 
             let config = { ...(asObject( options.config ?? {} )) };
 
-            if ( isNonNullObject( options.credentials ) )
-            {
-                config = { ...(asObject( config )), credentials: options.credentials };
-            }
-            else if ( !(isBlank( options.accessKeyId ) || isBlank( options.secretAccessKey )) )
-            {
-                config =
-                    {
-                        ...(asObject( config )),
-                        credentials:
-                            {
-                                accessKeyId: options.accessKeyId,
-                                secretAccessKey: options.secretAccessKey
-                            }
-                    };
+            // Credentials are attached ONLY when real static keys are supplied.
+            //
+            // The AWS SDK treats the presence of a `credentials` key as "use these
+            // and do not consult the default provider chain" -- so a placeholder or
+            // half-populated object does not fall back to the chain, it replaces it,
+            // and every request is signed with an empty token. On ECS or EC2 that
+            // turns a perfectly good task role into
+            // "The security token included in the request is invalid".
+            //
+            // Anything blank or partial is therefore discarded rather than passed
+            // through, leaving the chain to find the task role, the instance
+            // profile, the environment, or a local profile, in that order.
+            const supplied = isNonNullObject( options.credentials ) ? options.credentials :
+                             isNonNullObject( config.credentials ) ? config.credentials : options;
 
-                if ( !isBlank( options.sessionToken ) )
+            const accessKeyId = asString( supplied?.accessKeyId ?? options.accessKeyId, true );
+            const secretAccessKey = asString( supplied?.secretAccessKey ?? options.secretAccessKey, true );
+            const sessionToken = asString( supplied?.sessionToken ?? options.sessionToken, true );
+
+            if ( !(isBlank( accessKeyId ) || isBlank( secretAccessKey )) )
+            {
+                config.credentials = { accessKeyId, secretAccessKey };
+
+                if ( !isBlank( sessionToken ) )
                 {
-                    config.credentials.sessionToken = options.sessionToken;
+                    config.credentials.sessionToken = sessionToken;
                 }
+            }
+            else
+            {
+                delete config.credentials;
             }
 
-            if ( isNonNullObject( config ) )
-            {
-                config.credentials = config.credentials ?? {};
-                if ( !(isBlank( options.accessKeyId ) || isBlank( options.secretAccessKey )) )
-                {
-                    config.credentials.accessKeyId = config.credentials.accessKeyId || options.accessKeyId;
-                    config.credentials.secretAccessKey = config.credentials.secretAccessKey || options.secretAccessKey;
-                }
-                if ( !isBlank( options.sessionToken ) )
-                {
-                    config.credentials.sessionToken = config.credentials.sessionToken || options.sessionToken;
-                }
-            }
+            // The SDK ignores these at the top level of a client config; they are
+            // removed so nothing downstream reads them and assumes otherwise.
+            delete config.accessKeyId;
+            delete config.secretAccessKey;
+            delete config.sessionToken;
 
             let awsClient = readProperty( options, "sdkClient", "awsClient", "client" ) ?? options.sdkClient ?? options.client;
 
