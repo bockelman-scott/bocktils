@@ -1868,6 +1868,26 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         return ToolBocksModule.resolveLogger( logger, ToolBocksModule.getGlobalLogger(), SIMPLE_LOGGER );
     }
 
+    SimpleLogger.from = function( pData )
+    {
+        const data = asObject( pData );
+
+        if ( isNonNullObject( data ) )
+        {
+            if ( data instanceof SimpleLogger )
+            {
+                return data;
+            }
+
+            if ( ToolBocksModule.isLogger( data ) )
+            {
+                return new SimpleLogger( data );
+            }
+        }
+
+        return new SimpleLogger( ToolBocksModule.resolveLogger( ToolBocksModule.getGlobalLogger(), konsole, console ) );
+    };
+
     class SourcedSimpleLogger extends SimpleLogger
     {
         #source;
@@ -1908,33 +1928,66 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
         }
     }
 
+    function unwrapSourcedSimpleLogger( pLogger )
+    {
+        let logger = ToolBocksModule.resolveLogger( pLogger, ToolBocksModule.getGlobalLogger(), SIMPLE_LOGGER );
+
+        const iterationCap = new IterationCap( 8 );
+
+        while ( isNonNullObject( logger ) &&
+                isNonNullObject( logger?.logger ) &&
+                (logger instanceof SourcedSimpleLogger) &&
+                !iterationCap.reached )
+        {
+            // this does not loop forever due to use of IterationCap
+            logger = logger?.logger ?? logger;
+        }
+
+        return SimpleLogger.from( ToolBocksModule.resolveLogger( logger, ToolBocksModule.getGlobalLogger(), SIMPLE_LOGGER ) );
+    }
+
     SourcedSimpleLogger.LEVELS = lock( SimpleLogger.LEVELS );
 
     SourcedSimpleLogger.resolveLogSourceName = resolveLogSourceName;
 
     SourcedSimpleLogger.adapt = function( pLogger, pSource, pOptions )
     {
-        const sourceName = resolveLogSourceName( pSource ?? pOptions?.source ?? pLogger?.source );
+        const sourceName = resolveLogSourceName( pSource ?? pOptions?.source ?? pLogger?.source ?? pLogger?.origin );
 
         if ( isNonNullObject( pLogger ) && pLogger instanceof SimpleLogger )
         {
-            if ( resolveLogSourceName( readProperty( pLogger, "source", "origin" ) ) === sourceName && isFunction( pLogger?.addSource ) )
+            if ( (resolveLogSourceName( readProperty( pLogger, "source", "origin" ) ) === sourceName) &&
+                 isFunction( pLogger?.addSource ) )
             {
                 return pLogger;
+            }
+
+            let options =
+                {
+                    ...(asObject( pOptions ?? {} )),
+                    source: sourceName,
+                    origin: sourceName
+                };
+
+            const logger = (asObject( pLogger ?? {} ) instanceof SourcedSimpleLogger) ?
+                           attempt( () => unwrapSourcedSimpleLogger( pLogger ) ) :
+                           attempt( () => unwrapSimpleLogger( pLogger ) );
+
+            if ( ToolBocksModule.isLogger( logger ) )
+            {
+                return new SourcedSimpleLogger( logger, sourceName, options );
             }
         }
 
         let options =
             {
                 ...(asObject( pOptions ?? {} )),
-                source: sourceName
+                source: sourceName,
+                origin: sourceName
             };
 
-        const simpleLogger = new SimpleLogger( pLogger, options );
-
-        let logger = ToolBocksModule.resolveLogger( pLogger,
-                                                    ToolBocksModule.getGlobalLogger(),
-                                                    simpleLogger );
+        let logger = ToolBocksModule.resolveLogger( pLogger, ToolBocksModule.getGlobalLogger() ) ??
+                     new SimpleLogger( (pLogger ?? konsole ?? console), options );
 
         if ( isNonNullObject( logger ) )
         {
@@ -1959,12 +2012,12 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
 
                 logger = ToolBocksModule.resolveLogger( logger,
                                                         ToolBocksModule.getGlobalLogger(),
-                                                        simpleLogger );
+                                                        new SimpleLogger( pLogger ?? konsole ?? console, options ) );
 
                 return new SourcedSimpleLogger( logger, sourceName, options );
             }
 
-            logger = ToolBocksModule.resolveLogger( logger, simpleLogger );
+            logger = ToolBocksModule.resolveLogger( logger, new SimpleLogger( pLogger ?? konsole ?? console, options ) );
 
             if ( isNonNullObject( logger ) && logger instanceof SourcedSimpleLogger )
             {
@@ -1975,18 +2028,17 @@ const { _ud = "undefined", konsole = console, $scope } = constants;
                 {
                     ...(asObject( options ?? pOptions ?? {} )),
                     ...(asObject( logger.options ?? {} )),
-                    source: sourceName
+                    source: sourceName,
+                    origin: sourceName
                 };
 
-            logger = new SourcedSimpleLogger( (logger ?? console), sourceName, options );
+            logger = new SourcedSimpleLogger( (logger ?? konsole ?? console), sourceName, options );
 
-            return ToolBocksModule.resolveLogger( logger,
-                                                  pLogger,
-                                                  ToolBocksModule.getGlobalLogger(),
-                                                  simpleLogger );
+            return ToolBocksModule.resolveLogger( logger, pLogger, ToolBocksModule.getGlobalLogger() ) ??
+                   new SourcedSimpleLogger( (pLogger ?? konsole ?? console), sourceName, options );
         }
 
-        return new SourcedSimpleLogger( new SimpleLogger( console ), pSource, pOptions );
+        return new SourcedSimpleLogger( new SimpleLogger( konsole ?? console ), pSource, pOptions );
     };
 
     class SimpleAsynchronousLogger extends SimpleLogger
