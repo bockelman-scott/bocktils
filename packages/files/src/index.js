@@ -208,7 +208,16 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
             rightOfLast,
             isJson,
             isLegalFileName,
-            isFilePath
+            isFilePath,
+            isRelativePath,
+            toAbsolutePath,
+            toLegalFileName,
+            toUnixLinebreaks,
+            toWindowsLinebreaks,
+            toByteArray,
+            asUtf8ByteArray,
+            fromUtf8ByteArray,
+            isCsv
         } = stringUtils;
 
     const { varargs, asArgs, flatArgs, asArray, unique, includesAll, Filters, AsyncBoundedQueue } = arrayUtils;
@@ -4324,6 +4333,7 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
 
     let mod =
         {
+            NO_ATTRIBUTES,
             dependencies,
             classes:
                 {
@@ -4333,7 +4343,20 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
                     FileObject,
                     PathUtils
                 },
-            NO_ATTRIBUTES,
+            isLegalFileName,
+            isFilePath,
+            isRelativePath,
+            toAbsolutePath,
+            toUnixPath,
+            toLegalFileName,
+            toUnixLinebreaks,
+            toWindowsLinebreaks,
+            toByteArray,
+            asUtf8ByteArray,
+            fromUtf8ByteArray,
+
+            isCsv,
+
             exists,
             asyncExists,
             makeDirectory,
