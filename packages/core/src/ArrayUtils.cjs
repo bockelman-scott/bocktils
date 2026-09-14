@@ -3962,6 +3962,46 @@ const { _ud = "undefined", $scope } = constants;
         return a.every( e => contains( b, e ) );
     };
 
+    const removeElements = function( pArr, ...pElements )
+    {
+        const elements = [...(asArray( pElements ?? [] ))];
+
+        let arr = [...(asArray( pArr ))];
+
+        for( const elem of elements )
+        {
+            const index = arr.indexOf( elem );
+
+            if ( index >= 0 )
+            {
+                // beware, do not do something like:
+                // arr = arr.splice(index, 1)
+                // because splice mutates in-place,
+                // but returns the element(s) removed
+                arr.splice( index, 1 );
+            }
+        }
+
+        return arr ?? pArr;
+    };
+
+    const removeMatchingElements = function( pArr, pFilter )
+    {
+        let arr = [...(asArray( pArr ))];
+
+        if ( Filters.IS_FILTER( pFilter ) )
+        {
+            let matching = arr.filter( pFilter );
+
+            if ( $ln( matching ) > 0 )
+            {
+                arr = removeElements( arr, ...matching );
+            }
+        }
+
+        return arr ?? pArr;
+    };
+
     /**
      * Returns the first (or last) non-array/non-object value found in the specified array
      * @param {Array<*>|Object|string} pArr An array, object, or string from which to extract a scalar value
@@ -6062,6 +6102,8 @@ const { _ud = "undefined", $scope } = constants;
             first,
             $nth,
             replaceElements,
+            removeElements,
+            removeMatchingElements,
             truncateArray,
             TRANSFORMATIONS: lock( TRANSFORMATIONS ),
             Filters: lock( Filters ),

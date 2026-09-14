@@ -20,6 +20,8 @@ const {
     distinct,
     toShuffled,
     replaceElements,
+    removeElements,
+    removeMatchingElements,
     truncateArray,
     sum,
     avg
@@ -2713,6 +2715,57 @@ describe( "truncateArray", () =>
           } );
 } );
 
+describe( "removeElements", () =>
+{
+    test( "remove single element", () =>
+    {
+        let arr = [1, 2, 3, 4, 5];
+        let arr2 = removeElements( arr, 3 );
+        expect( arr2 ).toEqual( [1, 2, 4, 5] );
+        expect( arr ).toEqual( [1, 2, 3, 4, 5] );
+
+        arr = ["a", "b", "c", "d", "e"];
+        arr2 = removeElements( arr, "b" );
+        expect( arr2 ).toEqual( ["a", "c", "d", "e"] );
+        expect( arr ).toEqual( ["a", "b", "c", "d", "e"] );
+    } );
+
+    test( "remove multiple elements", () =>
+    {
+        let arr = [1, 2, 3, 4, 5];
+        let arr2 = removeElements( arr, 3, 5 );
+        expect( arr2 ).toEqual( [1, 2, 4] );
+        expect( arr ).toEqual( [1, 2, 3, 4, 5] );
+
+        arr = ["a", "b", "c", "d", "e"];
+        arr2 = removeElements( arr, "b", "d" );
+        expect( arr2 ).toEqual( ["a", "c", "e"] );
+        expect( arr ).toEqual( ["a", "b", "c", "d", "e"] );
+    } );
+
+} );
+
+describe( "removeMatchingElements", () =>
+{
+    test( "remove elements matching filter", () =>
+    {
+        let arr = [1, 2, 3, 4, 5];
+        let arr2 = removeMatchingElements( arr, ( e ) => parseInt( e ) > 3 );
+        expect( arr2 ).toEqual( [1, 2, 3] );
+        expect( arr ).toEqual( [1, 2, 3, 4, 5] );
+
+        const isVowel = function( e )
+        {
+            return ["a", "e", "i", "o", "u"].includes( String( e ) );
+        };
+
+        arr = ["a", "b", "c", "d", "e"];
+        arr2 = removeMatchingElements( arr, isVowel );
+        expect( arr2 ).toEqual( ["b", "c", "d"] );
+        expect( arr ).toEqual( ["a", "b", "c", "d", "e"] );
+    } );
+
+} );
 
 describe( "replaceElements", () =>
 {
