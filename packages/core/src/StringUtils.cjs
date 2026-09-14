@@ -3014,6 +3014,12 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             ...DEFAULT_NUMBER_SYMBOLS
         } );
 
+    /**
+     * "as number options"
+     * @param pOptions
+     * @returns {*}
+     * @private
+     */
     const _ano = ( pOptions ) => { return { ...DEFAULT_VALID_NUMBER_OPTIONS, ...(pOptions || {}) }; };
 
     /**
@@ -3238,6 +3244,22 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         }
 
         return false;
+    };
+
+    /**
+     * Returns true if the specified content appears to be comma-separated values.
+     * Tests the string against a regular expression
+     * that matches if the string starts with a quote, a character, or whitespace
+     * followed by either a quoted value or text value
+     * that is immediately followed by a comma and at least one more quoted value or text value
+     *
+     * @param {string} pContent the content to be evaluated
+     *
+     * @returns {boolean} true if the content is LIKELY to be comma-separated data
+     */
+    const isCsv = function( pContent )
+    {
+        return /^("?)[\w\s']+(\1)\s*,\s*("?[\w\s']+"?\s*,?)+\n?/.test( asString( pContent, true ) );
     };
 
     /**
@@ -4966,6 +4988,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             isLegalFileName,
             isFilePath,
             toLegalFileName,
+            isCsv,
             lcase,
             ucase,
             toCamelCase,

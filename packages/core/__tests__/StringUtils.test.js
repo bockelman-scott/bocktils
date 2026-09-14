@@ -13,6 +13,7 @@ const
         isJson,
         isJsonArray,
         isJsonObject,
+        isCsv,
         asInt,
         toCanonicalNumericFormat,
         findDuplicatedSubstrings,
@@ -2369,6 +2370,47 @@ describe( "transliteration", () =>
           } );
 } );
 
+describe( "isCsv", () =>
+{
+    test( "isCsv returns true for comma-separated data", () =>
+    {
+        let data = `abc,def`;
+        expect( isCsv( data ) ).toBe( true );
+
+        data = `  abc, def ` + "\n";
+        expect( isCsv( data ) ).toBe( true );
+
+        data = `"abc", "def"` + "\n";
+        expect( isCsv( data ) ).toBe( true );
+
+        data = `abc, def ` + "\n" + `ghi, "jkl"`;
+        expect( isCsv( data ) ).toBe( true );
+    } );
+
+    test( "isCsv returns false for other data", () =>
+    {
+        let data = `abcdef`;
+        expect( isCsv( data ) ).toBe( false );
+
+        data = `  abc def ` + "\n";
+        expect( isCsv( data ) ).toBe( false );
+
+        data = `{"abc":"def"}` + "\n";
+        expect( isCsv( data ) ).toBe( false );
+
+        data = `{"abc,def":"def,ghi"}` + "\n";
+        expect( isCsv( data ) ).toBe( false );
+
+        data = {"abc":"def","def":"gh,i"};
+        expect( isCsv( data ) ).toBe( false );
+
+        data = "# This is a comment, not csv data";
+        expect( isCsv( data ) ).toBe( false );
+
+    } );
+
+
+} );
 
 describe( "toLegalFileName", () =>
 {
