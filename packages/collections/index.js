@@ -6,30 +6,6 @@
  * @license MIT
  */
 
-/* import dependencies */
-const core = require( "@toolbocks/core" );
-
-const collectionModule = require( "./Collection.js" );
-const mapsModule = require( "./Maps.js" );
-const sortedSetModule = require( "./SortedSet.js" );
-const entityGenerator = require( "./EntityGenerator.js" );
-const cacheModule = require( "./Cache.js" );
-
-const { constants } = core;
-
-/* define a variable for typeof undefined */
-const { _ud = "undefined" } = constants;
-
-/**
- * This function returns the host environment scope (Browser window, Node.js global, or Worker self)
- * @type {function():Object}
- * @return {Object} The host environment scope, a.k.a. globalThis, (i.e., Browser 'window', Node.js 'global', or Worker 'self')
- */
-const $scope = constants?.$scope || function()
-{
-    return (_ud === typeof self ? ((_ud === typeof global) ? ((_ud === typeof globalThis ? {} : globalThis)) : (global || {})) : (self || {}));
-};
-
 // noinspection FunctionTooLongJS
 /**
  * This module is constructed by an Immediately Invoked Function Expression (IIFE).
@@ -37,14 +13,15 @@ const $scope = constants?.$scope || function()
  */
 (function exposeModule()
 {
-    // defines a key we can use to store this module in global scope
-    const INTERNAL_NAME = "__BOCK_COLLECTION_UTILS__";
+    const core = require( "@toolbocks/core" );
 
-    // if we've already executed this code, just return the module
-    if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
-    {
-        return $scope()[INTERNAL_NAME];
-    }
+    const datesModule = require( "@toolbocks/dates" );
+
+    const collectionModule = require( "./Collection.js" );
+    const mapsModule = require( "./Maps.js" );
+    const sortedSetModule = require( "./SortedSet.js" );
+    const entityGenerator = require( "./EntityGenerator.js" );
+    const cacheModule = require( "./Cache.js" );
 
     const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
@@ -59,6 +36,18 @@ const $scope = constants?.$scope || function()
     const { EntityGenerator, AsyncEntityGenerator, PaginatedEntityGenerator } = entityGenerator;
 
     const { BoundedCache, ExpiringCache, createKey } = cacheModule;
+
+    /* define a variable for typeof undefined */
+    const { _ud = "undefined", $scope } = constants;
+
+    // defines a key we can use to store this module in global scope
+    const INTERNAL_NAME = "__BOCK_COLLECTION_UTILS__";
+
+    // if we've already executed this code, just return the module
+    if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
+    {
+        return $scope()[INTERNAL_NAME];
+    }
 
     const modName = "BockCollectionUtils";
 
@@ -89,7 +78,9 @@ const $scope = constants?.$scope || function()
                     BoundedMap,
                     EntityGenerator,
                     AsyncEntityGenerator,
-                    PaginatedEntityGenerator
+                    PaginatedEntityGenerator,
+                    BoundedCache,
+                    ExpiringCache
                 },
             TYPES,
             Collection,

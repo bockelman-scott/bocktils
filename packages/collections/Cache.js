@@ -49,7 +49,7 @@
     const { asObject, asJson } = jsonUtils;
 
     // defines a key we can use to store this module in global scope
-    const INTERNAL_NAME = "__BOCK_COLLECTION_UTILS_COLLECTION_";
+    const INTERNAL_NAME = "__BOCK_CACHE_UTILS__";
 
     // if we've already executed this code, just return the module
     if ( $scope() && (null != $scope()[INTERNAL_NAME]) )
@@ -545,7 +545,7 @@
         #useWeakRef = false;
 
         /**
-         * Creates a new SimpleBoundedCache, which is an extension of Map
+         * Creates a new BoundedCache, which is an extension of Map
          * that will evict older entries to avoid growing beyond the configured limit.
          *
          * @param {number} pLimit - the greatest number of entries this cache will hold
@@ -939,7 +939,7 @@
         #keys = [];
 
         /**
-         * Creates a new SimpleBoundedCache, which is an extension of Map
+         * Creates a new BoundedCache, which is an extension of WeakMap
          * that will evict older entries to avoid growing beyond the configured limit.
          *
          * @param {number} pLimit - the greatest number of entries this cache will hold
@@ -1355,7 +1355,7 @@
     {
         #maxSize = 4_096;
 
-        constructor( pUseWeakRef = false, pUseWeakMap = false, pMaxSize = 4_096 )
+        constructor( pMaxSize = 4_096, pUseWeakRef = false, pUseWeakMap = false )
         {
             super( pUseWeakRef, pUseWeakMap );
             this.#maxSize = clamp( asInt( pMaxSize ) || 4_096, 16, 32_768 );
@@ -1435,9 +1435,9 @@
     {
         #ttl = ONE_HOUR;
 
-        constructor( pUseWeakRef = false, pUseWeakMap = false, pMaxSize = 4_096, pTimeToLive = ONE_HOUR )
+        constructor( pMaxSize = 4_096, pTimeToLive = ONE_HOUR, pUseWeakRef = false, pUseWeakMap = false )
         {
-            super( pUseWeakRef, pUseWeakMap, asInt( pMaxSize || 4_096 ) );
+            super( asInt( pMaxSize || 4_096 ), pUseWeakRef, pUseWeakMap );
             this.#ttl = clamp( asInt( pTimeToLive ), ONE_MINUTE, (ONE_WEEK * 4) );
         }
 
