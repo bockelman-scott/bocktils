@@ -2676,11 +2676,11 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
     const canBeDateTime = function( pObj )
     {
-        let date = isObject( pObj ) && pObj instanceof Number
+        let date = (isObject( pObj ) && pObj instanceof Number && !isFloat( pObj.valueOf() ))
                    ? new Date( pObj.valueOf() )
-                   : isNumber( pObj )
+                   : (isNumber( pObj ) && !isFloat( pObj ))
                      ? new Date( pObj )
-                     : isNumeric( pObj ) ? new Date( toInteger( toDecimal( pObj ) ) ) : null;
+                     : isNumeric( pObj ) ? (( !isFloat( toDecimal( pObj ) )) ? new Date( toInteger( toDecimal( pObj ) ) ) : null) : null;
 
         if ( date && isValidDateInstance( date ) )
         {
