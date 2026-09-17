@@ -2591,7 +2591,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
         if ( isNonNullObject( pObject ) )
         {
-            if ( pObject instanceof WeakMap )
+            if ( pObject instanceof WeakMap || pObject instanceof Map )
             {
                 return true;
             }

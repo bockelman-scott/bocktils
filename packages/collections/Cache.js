@@ -1,5 +1,11 @@
 (function exposeModule()
 {
+    const MIN_CACHE_CAPACITY = 8;
+    const DEFAULT_CACHE_CAPACITY = 4_096;
+    const MAX_CACHE_CAPACITY = 32_767;
+
+    const HASH_ALGORITHM = "sha256";
+
     const core = require( "@toolbocks/core" );
 
     const datesModule = require( "@toolbocks/dates" );
@@ -13,8 +19,10 @@
             ObjectEntry,
             Visitor,
             __Error,
+            readProperty,
             dereference,
             attempt,
+            attemptSilent,
             no_op,
             lock,
             deepLock,
@@ -32,9 +40,11 @@
             isFunction,
             isIterable,
             isMap,
+            isWeakMap,
             isBool,
             isNumber,
             isBigInt,
+            getClass,
             getClassName,
             clamp = moduleUtils.clamp,
             toObjectLiteral,
@@ -56,6 +66,10 @@
     {
         return $scope()[INTERNAL_NAME];
     }
+
+    const MIN_CACHE_EXPIRATION = ONE_MINUTE;
+    const MAX_CACHE_EXPIRATION = (ONE_WEEK * 4);
+
 
     class CacheException extends __Error
     {
@@ -85,12 +99,12 @@
 
         get hash()
         {
-            return asString( this.#hash || guidUtils.hashSync( this.key, "sha256" ) );
+            return asString( this.#hash || guidUtils.hashSync( this.key, HASH_ALGORITHM ) );
         }
 
         toLiteral()
         {
-            return { key: this.key, hash: this.hash || guidUtils.hashSync( this.key, "sha256" ) };
+            return { key: this.key, hash: this.hash || guidUtils.hashSync( this.key, HASH_ALGORITHM ) };
         }
 
         toJSON()
@@ -232,7 +246,7 @@
         {
             super( pValue, pKey );
             this.#cachedDate = Date.now();
-            this.#expirationDate = isNull( pValue ) ? this.#cachedDate : asInt( asInt( this.#cachedDate ) + clamp( asInt( pTimeToLive ?? ONE_HOUR, ONE_HOUR ), ONE_MINUTE, (ONE_WEEK * 4) ) );
+            this.#expirationDate = isNull( pValue ) ? this.#cachedDate : asInt( asInt( this.#cachedDate ) + clamp( asInt( pTimeToLive ?? ONE_HOUR, ONE_HOUR ), MIN_CACHE_EXPIRATION, MAX_CACHE_EXPIRATION ) );
         }
 
         get value()
@@ -265,7 +279,6 @@
         }
     }
 
-
     class BaseCache
     {
         #useWeakRef = false;
@@ -273,12 +286,12 @@
 
         #map;
 
-        constructor( pUseWeakRef = false, pUseWeakMap = false )
+        constructor( pUseWeakRef = false, pUseWeakMap = false, pMaxSize = -1 )
         {
             this.#useWeakRef = toBool( pUseWeakRef );
             this.#useWeakMap = toBool( pUseWeakMap );
 
-            this.#map = this._resolveMap();
+            this.#map = this._resolveMap( pMaxSize );
         }
 
         get useWeakRef()
@@ -291,13 +304,17 @@
             return toBool( this.#useWeakMap );
         }
 
-        _resolveMap()
+        _resolveMap( pMaxSize = -1 )
         {
-            if ( this.useWeakMap )
+            if ( isNull( this.#map ) )
             {
-                return new WeakMap();
+                if ( this.useWeakMap )
+                {
+                    return new WeakMap();
+                }
+                return new Map();
             }
-            return new Map();
+            return this.#map ?? (this.useWeakMap ? new WeakMap : new Map());
         }
 
         _createKey( pKey )
@@ -382,7 +399,7 @@
                 }
                 else
                 {
-                    return cachedValue.value ?? null;
+                    return cachedValue.value ?? cachedValue;
                 }
             }
 
@@ -407,7 +424,23 @@
 
         clear()
         {
-            return this.#map.clear();
+            return isFunction( this.#map.clear ) ? this.#map.clear() : attempt( () => this._clearWeakMap() );
+        }
+
+        _clearWeakMap()
+        {
+            if ( isNull( this.#map ) || isWeakMap( this.#map ) )
+            {
+                this.#map = isNonNullObject( this.#map ) ? attempt( () => (new (getClass( this.#map ))()) ) ?? new WeakMap() : new WeakMap();
+                return this.#map;
+            }
+            else if ( isMap( this.#map ) || isFunction( this.#map.clear ) )
+            {
+                this.#map.clear();
+                return this.#map;
+            }
+
+            this.#map = isNonNullObject( this.#map ) ? attempt( () => (new (getClass( this.#map ))()) ) ?? new WeakMap() : new WeakMap();
         }
 
         /**
@@ -537,11 +570,16 @@
                 cb( entry );
             }
         }
+
+        asMap()
+        {
+            return new Map( this.entries() );
+        }
     }
 
     class __BoundedCache extends Map
     {
-        #limit = 1_000;
+        #limit = DEFAULT_CACHE_CAPACITY;
         #useWeakRef = false;
 
         /**
@@ -555,14 +593,14 @@
          *                                holds a string reference to the object.
          * @param pInitialEntries
          */
-        constructor( pLimit = 1_000, pUseWeakRef = false, pInitialEntries = null )
+        constructor( pLimit = DEFAULT_CACHE_CAPACITY, pUseWeakRef = false, pInitialEntries = null )
         {
             super();
 
             /**
              * The bounds must be >= 10 and <= 10,000
              */
-            this.#limit = clamp( asInt( pLimit, 1_000 ), 10, 10_000 );
+            this.#limit = clamp( asInt( pLimit, DEFAULT_CACHE_CAPACITY ), MIN_CACHE_CAPACITY, MAX_CACHE_CAPACITY );
 
             /**
              * Allows objects held in this cache to be garbage collected
@@ -604,7 +642,12 @@
          */
         get limit()
         {
-            return clamp( asInt( this.#limit, 1_000 ), 10, 10_000 );
+            return clamp( asInt( this.#limit, DEFAULT_CACHE_CAPACITY ), MIN_CACHE_CAPACITY, MAX_CACHE_CAPACITY );
+        }
+
+        get maxSize()
+        {
+            return this.limit;
         }
 
         isEmpty()
@@ -929,11 +972,16 @@
                 yield lock( value );
             }
         }
+
+        clone()
+        {
+            return new __BoundedCache( this.limit, this.useWeakRef, new Map( this.entries() ).entries() );
+        }
     }
 
     class __BoundedWeakCache extends WeakMap
     {
-        #limit = 1_000;
+        #limit = DEFAULT_CACHE_CAPACITY;
         #useWeakRef = false;
 
         #keys = [];
@@ -948,14 +996,14 @@
          *                                This allows the objects to be garbage collected if no other scope
          *                                holds a string reference to the object.
          */
-        constructor( pLimit = 1_000, pUseWeakRef = false )
+        constructor( pLimit = DEFAULT_CACHE_CAPACITY, pUseWeakRef = false )
         {
             super();
 
             /**
              * The bounds must be >= 10 and <= 10,000
              */
-            this.#limit = clamp( asInt( pLimit, 1_000 ), 10, 10_000 );
+            this.#limit = clamp( asInt( pLimit, DEFAULT_CACHE_CAPACITY ), MIN_CACHE_CAPACITY, MAX_CACHE_CAPACITY );
 
             /**
              * Allows objects held in this cache to be garbage collected
@@ -992,7 +1040,12 @@
          */
         get limit()
         {
-            return clamp( asInt( this.#limit, 1_000 ), 10, 10_000 );
+            return clamp( asInt( this.#limit, DEFAULT_CACHE_CAPACITY ), MIN_CACHE_CAPACITY, MAX_CACHE_CAPACITY );
+        }
+
+        get maxSize()
+        {
+            return this.limit;
         }
 
         get size()
@@ -1223,6 +1276,8 @@
 
                     // add the entry
                     super.set( key, lock( value ) );
+
+                    this.#keys.push( key );
                 }
             }
         }
@@ -1353,21 +1408,36 @@
 
     class BoundedCache extends BaseCache
     {
-        #maxSize = 4_096;
+        #maxSize = DEFAULT_CACHE_CAPACITY;
 
-        constructor( pMaxSize = 4_096, pUseWeakRef = false, pUseWeakMap = false )
+        constructor( pMaxSize = DEFAULT_CACHE_CAPACITY, pUseWeakRef = false, pUseWeakMap = false )
         {
-            super( pUseWeakRef, pUseWeakMap );
-            this.#maxSize = clamp( asInt( pMaxSize ) || 4_096, 16, 32_768 );
+            super( pUseWeakRef, pUseWeakMap, pMaxSize || DEFAULT_CACHE_CAPACITY );
+            this.#maxSize = clamp( asInt( pMaxSize ) || DEFAULT_CACHE_CAPACITY, MIN_CACHE_CAPACITY, MAX_CACHE_CAPACITY );
         }
 
-        _resolveMap()
+        get maxSize()
         {
-            if ( this.useWeakMap )
+            return asInt( this.#maxSize );
+        }
+
+        get limit()
+        {
+            return this.maxSize;
+        }
+
+        _resolveMap( pMaxSize = attemptSilent( () => readProperty( this, "max_size", "limit" ) ) )
+        {
+            const capacity = asInt( pMaxSize || attemptSilent( () => readProperty( this, "max_size", "limit" ) ) || this.maxSize );
+
+            const withWeakRef = toBool( this.useWeakRef ?? attemptSilent( () => readProperty( this, "use_weak_ref", "useWeakRef" ) ) );
+            const withWeakMap = toBool( this.useWeakMap ?? attemptSilent( () => readProperty( this, "use_weak_map", "useWeakMap" ) ) );
+
+            if ( withWeakMap )
             {
-                return new __BoundedWeakCache( this.maxSize, this.useWeakRef );
+                return new __BoundedWeakCache( capacity, withWeakRef );
             }
-            return new __BoundedCache( this.maxSize, this.useWeakRef );
+            return new __BoundedCache( capacity, withWeakRef );
         }
 
         get useWeakRef()
@@ -1435,20 +1505,46 @@
     {
         #ttl = ONE_HOUR;
 
-        constructor( pMaxSize = 4_096, pTimeToLive = ONE_HOUR, pUseWeakRef = false, pUseWeakMap = false )
+        constructor( pMaxSize = DEFAULT_CACHE_CAPACITY, pTimeToLive = ONE_HOUR, pUseWeakRef = false, pUseWeakMap = false )
         {
-            super( asInt( pMaxSize || 4_096 ), pUseWeakRef, pUseWeakMap );
-            this.#ttl = clamp( asInt( pTimeToLive ), ONE_MINUTE, (ONE_WEEK * 4) );
+            super( asInt( pMaxSize || DEFAULT_CACHE_CAPACITY ), pUseWeakRef, pUseWeakMap );
+            this.#ttl = clamp( asInt( pTimeToLive ), MIN_CACHE_EXPIRATION, MAX_CACHE_EXPIRATION );
         }
 
         get ttl()
         {
-            return clamp( asInt( this.#ttl ), ONE_MINUTE, (ONE_WEEK * 4) );
+            return clamp( asInt( this.#ttl ), MIN_CACHE_EXPIRATION, MAX_CACHE_EXPIRATION );
         }
 
         _createCacheEntry( pKey, pValue )
         {
             return new ExpiringCacheEntry( pValue, pKey, this.ttl );
+        }
+
+        get( pKey )
+        {
+            let value = super.get( pKey );
+
+            if ( isNonNullObject( value ) )
+            {
+                value = dereference( value );
+
+                if ( value instanceof ExpiringCacheEntry || isFunction( value.isExpired ) )
+                {
+                    if ( value.isExpired() || value.expired )
+                    {
+                        super.delete( pKey );
+                        return null;
+                    }
+                }
+
+                if ( value instanceof CacheEntry )
+                {
+                    return dereference( value.value ?? value ) ?? value;
+                }
+            }
+
+            return value;
         }
     }
 
