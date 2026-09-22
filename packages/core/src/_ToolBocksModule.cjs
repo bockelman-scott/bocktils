@@ -4886,7 +4886,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         #guidGenerator = $scope().crypto || ((isDeno() && _ud !== typeof Deno) ? Deno.crypto : attempt( () => require( "node:crypto" ) )) || attempt( () => require( "crypto" ) ) || new UUIDGenerator();
 
-        #finalizerRegistry;
+        // #finalizerRegistry;
 
         constructor( pRegisterPrimitives = false, pRegisterPredefined = false, pRegisterArrays = false, pRegisterFunctions = false )
         {
@@ -4895,9 +4895,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             this.#registerArrays = !!pRegisterArrays;
             this.#registerFunctions = !!pRegisterFunctions;
 
-            const me = this;
-
-            this.#finalizerRegistry = new FinalizationRegistry( ( pHeld ) => (me ?? this).unregister( isNonNullObj( pHeld ) ? dereference( pHeld ) : pHeld ) );
+            // const me = this;
+            //
+            // this.#finalizerRegistry = new FinalizationRegistry( ( pHeld ) => (me ?? this).unregister( isNonNullObj( pHeld ) ? dereference( pHeld ) : pHeld ) );
         }
 
         #generateGuid()
@@ -4958,7 +4958,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
                 this.#created.set( obj, timestamp );
 
-                this.#finalizerRegistry.register( obj, new WeakRef( obj ), obj );
+                // this.#finalizerRegistry.register( obj, new WeakRef( obj ), obj );
             }
 
             return guid;
@@ -4972,7 +4972,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
             if ( result )
             {
-                return attempt( () => this.#finalizerRegistry.unregister( obj ) );
+                // return attempt( () => this.#finalizerRegistry.unregister( obj ) );
             }
 
             return result;
@@ -5167,9 +5167,9 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     }
 
     ObjectRegistry.NOT_REGISTERED = "__unregistered__";
-    ObjectRegistry.DEFAULT_INSTANCE = new ObjectRegistry();
+    ObjectRegistry.CACHE_KEY = "__BOCK_OBJECT_REGISTRY__";
 
-    const OBJECT_REGISTRY = $scope()["__BOCK_OBJECT_REGISTRY__"] = ($scope()["__BOCK_OBJECT_REGISTRY__"] || ObjectRegistry.DEFAULT_INSTANCE);
+    const OBJECT_REGISTRY = $scope()[ObjectRegistry.CACHE_KEY] = ObjectRegistry.DEFAULT_INSTANCE = ($scope()[ObjectRegistry.CACHE_KEY] || (ObjectRegistry.DEFAULT_INSTANCE = new ObjectRegistry()));
 
     class Merger
     {
@@ -5205,7 +5205,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         resolveObject( pObj, pAsArray = false )
         {
-            return isNull( pObj ) ? (!!pAsArray ? [] : {}) : !isObj( pObj ) ? (!!pAsArray ? [pObj] : { value: pObj }) : pObj;
+            return (isNull( pObj ) ?
+                    (!!pAsArray ? [] : {}) :
+                    !isObj( pObj ) ?
+                    (!!pAsArray ? [pObj] :
+                        {
+                            value: pObj,
+                            valueOf: () => pObj
+                        }) : pObj);
         }
 
         calculateValue( pValue, pDefault )
@@ -5294,6 +5301,17 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                         }
                     }
                 }
+            }
+
+            // unregister compared objects
+            const registeredEntries = objectEntries( visited );
+            if ( registeredEntries && isFunc( registeredEntries.forEach ) )
+            {
+                registeredEntries.forEach( entry =>
+                                           {
+                                               const obj = ObjectEntry.getValue( entry );
+                                               attempt( () => ObjectRegistry.DEFAULT_INSTANCE.unregister( obj ) );
+                                           } );
             }
 
             return Object.assign( {}, obj );
@@ -9013,7 +9031,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     ToolBocksModule.MODULE_CACHE = ToolBocksModule.MODULE_CACHE || MODULE_CACHE;
     MODULE_CACHE = ToolBocksModule.MODULE_CACHE;
 
-    ToolBocksModule.OBJECT_REGISTRY = ToolBocksModule.OBJECT_REGISTRY = $scope()["__BOCK_OBJECT_REGISTRY__"] = ($scope()["__BOCK_OBJECT_REGISTRY__"] || OBJECT_REGISTRY || new ObjectRegistry());
+    ToolBocksModule.OBJECT_REGISTRY = ToolBocksModule.OBJECT_REGISTRY = $scope()[ObjectRegistry.CACHE_KEY] = ($scope()[ObjectRegistry.CACHE_KEY] || OBJECT_REGISTRY || new ObjectRegistry());
 
     /**
      * Defines a private instance of the ToolBocksModule
@@ -9072,7 +9090,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
     {
         let mod = (isNonNullObj( pObject ) || isClass( pObject ) ? pObject : {}) || {};
 
-        const cacheKey = isStr( pCacheKey ) && _mt_str !== _asStr( pCacheKey ).trim() ? _asStr( pCacheKey ).trim() : mod?.moduleName || ObjectRegistry.DEFAULT_INSTANCE.register( mod );
+        const cacheKey = isStr( pCacheKey ) && _mt_str !== _asStr( pCacheKey ).trim() ? _asStr( pCacheKey ).trim() : mod?.moduleName || Date.now(); /*ObjectRegistry.DEFAULT_INSTANCE.register( mod )*/
+        ;
 
         if ( isNonNullObj( mod ) && (mod instanceof ToolBocksModule) )
         {
