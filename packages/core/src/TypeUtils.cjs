@@ -4964,6 +4964,11 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             {
                 let k = ObjectEntry.getKey( entry );
 
+                if ( isNonNullObject( k ) )
+                {
+                    k = _toString( k ) || attemptSilent( () => JSON.stringify( k ) );
+                }
+
                 if ( !isBlankString( k ) || transientProperties.includes( k ) )
                 {
                     k = keyTransformer( k );
