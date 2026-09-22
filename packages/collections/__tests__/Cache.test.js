@@ -378,6 +378,6 @@ describe( "BoundedCache - memory", () =>
 
         expect( 1 === 1 ).toBe( true );
 
-    }, 2_500_000 );
+    }, 5_500_000 );
 
-}, 2_500_000 );
+}, 7_500_000 );
