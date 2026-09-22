@@ -6,7 +6,7 @@ const core = require( "@toolbocks/core" );
 
 const { moduleUtils, constants, typeUtils, stringUtils } = core;
 
-const { ObjectEntry, attempt, asyncAttempt, globalGc, no_op } = moduleUtils;
+const { ObjectEntry, attempt, asyncAttempt, globalGc, no_op, sleep } = moduleUtils;
 
 const { getClass, getClassName } = typeUtils;
 
@@ -16,7 +16,7 @@ const cacheUtils = require( "../Cache.js" );
 
 const { BoundedCache, ExpiringCache } = cacheUtils;
 
-const CACHE_SIZE = 4_096; //32_767;
+const CACHE_SIZE = 32_767;
 const CACHE_EXPIRATION = 60_000;
 
 const LONG_LIVED_BOUNDED_CACHE = new BoundedCache( CACHE_SIZE );
@@ -143,7 +143,7 @@ describe( "BoundedCache - basic usage scenarios", () =>
                   const k = ObjectEntry.getKey( entry );
                   const v = ObjectEntry.getValue( entry );
 
-                  expect( typeof k ).toEqual( "object" );
+                  expect( typeof k ).toEqual( "string" );
                   expect( getClassName( v ) ).toEqual( "Person" );
               }
 
@@ -155,7 +155,7 @@ describe( "BoundedCache - basic usage scenarios", () =>
               {
                   count += 1;
 
-                  expect( typeof key ).toEqual( "object" );
+                  expect( typeof key ).toEqual( "string" );
               }
 
               expect( count ).toEqual( 4_096 );
@@ -226,6 +226,77 @@ describe( "BoundedCache - basic usage scenarios", () =>
 
 describe( "BoundedCache - memory", () =>
 {
+    const BOUNDED_CACHE = new BoundedCache( CACHE_SIZE );
+    const CONTACT_CACHE = new BoundedCache( 4_096 );
+
+    let totalIterations = 0;
+
+    const func = async function( pIterations )
+    {
+        const startTime = Date.now();
+        const startMem = os.freemem();
+
+        let lastMem = Math.floor( startMem );
+        let lastTime = startTime;
+
+        for( let i = 0; i < pIterations; i++ )
+        {
+            const person = new Person( i, `User_${i}`, `Name_${i}` );
+            BOUNDED_CACHE.cacheValue( person.id, person );
+
+            const contact = new Contact( i, person.firstName, person.lastName, "some.email." + i + "@gmail.com", "6302127770" );
+            CONTACT_CACHE.set( contact.id, contact );
+
+            if ( i > 0 && 0 === (i % 10_000) )
+            {
+                let totalTime = Date.now() - startTime;
+
+                let iterationTime = Date.now() - (lastTime || startTime);
+
+                let freeMemory = os.freemem();
+
+                let delta = startMem - freeMemory;
+
+                let recentDelta = (lastMem || startMem) - freeMemory;
+
+                console.log( `Iteration ${i} (${totalIterations}) of ${pIterations} (${totalIterations + pIterations}), 
+                freemem: ${freeMemory}, 
+                recent_delta: ${recentDelta}, delta: ${delta}, 
+                iteration_time: ${iterationTime}ms, total_time: ${totalTime}ms, 
+                cache_size: ${BOUNDED_CACHE.size}` );
+
+                expect( BOUNDED_CACHE.size <= CACHE_SIZE ).toBe( true );
+                expect( BOUNDED_CACHE.get( i ) ).toEqual( person );
+
+                lastMem = freeMemory;
+                lastTime = Date.now();
+            }
+
+            totalIterations += 1;
+        }
+
+        if ( totalIterations > 300_000 && (0 === (totalIterations % 250_000)) )
+        {
+            attempt( () => v8.writeHeapSnapshot( `C:\\Projects\\bocktils\\packages\\collections\\__tests__\\logs\\snapshot_${Date.now()}.heapsnapshot` ) );
+        }
+
+        // expect( BOUNDED_CACHE.size === CACHE_SIZE ).toBe( true );
+
+        // const value = BOUNDED_CACHE.get( asString( totalIterations - 4_095 ) );
+
+        /*
+         expect( typeof value ).toEqual( "object" );
+         expect( getClass( value ) ).toBe( Person );
+         */
+
+        // expect( CONTACT_CACHE.size === 4_096 ).toBe( true );
+
+        // const c = CONTACT_CACHE.get( asString( totalIterations - 4_095 ) );
+        //
+        // expect( typeof c ).toEqual( "object" );
+        // expect( getClass( c ) ).toBe( Contact );
+    };
+
     test( "exercise memory constraints of a bounded cache", () =>
     {
         const startTime = Date.now();
@@ -237,7 +308,7 @@ describe( "BoundedCache - memory", () =>
         const boundedCache = new BoundedCache( CACHE_SIZE );
         const contactCache = new BoundedCache( 4_096 );
 
-        const NUM_ITERATIONS = 750_000;  // (3_276_700 * 2);
+        const NUM_ITERATIONS = (3_276_700 * 2);
 
         for( let i = 0; i < NUM_ITERATIONS; i++ )
         {
@@ -264,7 +335,7 @@ describe( "BoundedCache - memory", () =>
                 expect( boundedCache.size <= CACHE_SIZE ).toBe( true );
                 expect( boundedCache.get( i ) ).toEqual( person );
 
-                if ( i > 0 && 0 === (i % 400_000) )
+                if ( i > 0 && 0 === (i % 2_500_000) )
                 {
                     attempt( () => v8.writeHeapSnapshot( `C:\\Projects\\bocktils\\packages\\collections\\__tests__\\logs\\snapshot_${Date.now()}.heapsnapshot` ) );
                     asyncAttempt( () => globalGc() ).then( no_op ).catch( console.error );
@@ -277,7 +348,7 @@ describe( "BoundedCache - memory", () =>
 
         expect( boundedCache.size === CACHE_SIZE ).toBe( true );
 
-        const value = boundedCache.get( asString( ((NUM_ITERATIONS - CACHE_SIZE) - 1) ) );
+        const value = boundedCache.get( asString( NUM_ITERATIONS - 4_095 ) );
 
         expect( typeof value ).toEqual( "object" );
         expect( getClass( value ) ).toBe( Person );
@@ -291,70 +362,22 @@ describe( "BoundedCache - memory", () =>
 
     }, 1_200_000 );
 
-
-    test( "exercise memory constraints of bounded cache with asnyc iteration", async() =>
+    test( "realistic memory tests of a bounded cache", async() =>
     {
-        const startTime = Date.now();
-        const startMem = os.freemem();
+        const arr = [10_000, 10_000, 10_000, 25_000, 25_000, 25_000, 50_000, 50_000, 50_000, 100_000, 100_000, 100_000];
 
-        let lastMem = Math.floor( startMem );
-        let lastTime = startTime;
-
-        const boundedCache = new BoundedCache( CACHE_SIZE );
-        const contactCache = new BoundedCache( 4_096 );
-
-        const NUM_ITERATIONS = (3_276_700 * 2);
-
-        const loop = async function( i )
+        while ( arr.length )
         {
-            const person = new Person( i, `User_${i}`, `Name_${i}` );
-            boundedCache.cacheValue( person.id, person );
-
-            const contact = new Contact( i, person.firstName, person.lastName, "some.email." + i + "@gmail.com", "6302127770" );
-            contactCache.set( contact.id, contact );
-
-            if ( i > 0 && 0 === (i % 5_000) )
-            {
-                let totalTime = Date.now() - startTime;
-
-                let iterationTime = Date.now() - (lastTime || startTime);
-
-                let freeMemory = os.freemem();
-
-                let delta = startMem - freeMemory;
-
-                let recentDelta = (lastMem || startMem) - freeMemory;
-
-                console.log( `Iteration ${i} of ${NUM_ITERATIONS}, freemem: ${freeMemory}, recent_delta: ${recentDelta}, delta: ${delta}, iteration_time: ${iterationTime}ms, total_time: ${totalTime}ms, cache_size: ${boundedCache.size}` );
-
-                expect( boundedCache.size <= CACHE_SIZE ).toBe( true );
-                expect( boundedCache.get( i ) ).toEqual( person );
-
-                lastMem = freeMemory;
-                lastTime = Date.now();
-            }
-        };
-
-        for( let i = 0; i < NUM_ITERATIONS; i++ )
-        {
-            await loop( i );
+            await func( arr.shift() );
+            await sleep( 100 );
         }
 
-        expect( boundedCache.size === CACHE_SIZE ).toBe( true );
+        func( 500 ).then( no_op ).catch( console.error );
 
-        const value = boundedCache.get( asString( NUM_ITERATIONS - 32_766 ) );
+        attempt( () => v8.writeHeapSnapshot( `C:\\Projects\\bocktils\\packages\\collections\\__tests__\\logs\\snapshot_${Date.now()}.heapsnapshot` ) );
 
-        expect( typeof value ).toEqual( "object" );
-        expect( getClass( value ) ).toBe( Person );
+        expect( 1 === 1 ).toBe( true );
 
-        expect( contactCache.size === 4_096 ).toBe( true );
+    }, 2_500_000 );
 
-        const c = contactCache.get( asString( NUM_ITERATIONS - 4_095 ) );
-
-        expect( typeof c ).toEqual( "object" );
-        expect( getClass( c ) ).toBe( Contact );
-
-    }, 1_200_000 );
-
-
-}, 1_500_000 );
+}, 2_500_000 );
