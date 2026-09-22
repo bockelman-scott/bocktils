@@ -3205,7 +3205,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             asyncAttempt( func ).then( no_op ).catch( konsole.error );
         }
 
-        return asyncAttempt( async() => await gc() ).then( no_op ).catch( konsole.error );
+        return asyncAttempt( async() => gc() ).then( no_op ).catch( konsole.error );
     };
 
     /**
@@ -4886,12 +4886,18 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         #guidGenerator = $scope().crypto || ((isDeno() && _ud !== typeof Deno) ? Deno.crypto : attempt( () => require( "node:crypto" ) )) || attempt( () => require( "crypto" ) ) || new UUIDGenerator();
 
+        #finalizerRegistry;
+
         constructor( pRegisterPrimitives = false, pRegisterPredefined = false, pRegisterArrays = false, pRegisterFunctions = false )
         {
             this.#registerPrimitives = !!pRegisterPrimitives;
             this.#registerPredefined = !!pRegisterPredefined;
             this.#registerArrays = !!pRegisterArrays;
             this.#registerFunctions = !!pRegisterFunctions;
+
+            const me = this;
+
+            this.#finalizerRegistry = new FinalizationRegistry( ( pHeld ) => (me ?? this).unregister( isNonNullObj( pHeld ) ? dereference( pHeld ) : pHeld ) );
         }
 
         #generateGuid()
@@ -4911,45 +4917,75 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 return ObjectRegistry.NOT_REGISTERED;
             }
 
-            let guid = this.#map.get( pObject );
+            const obj = dereference( pObject );
+
+            let guid = this.#map.get( obj );
 
             if ( isNull( guid ) || String( guid ).startsWith( ObjectRegistry.NOT_REGISTERED ) )
             {
-                if ( isNull( pObject ) || !(isObj( pObject ) || ( !this.#registerFunctions && isFunc( pObject ))) )
+                if ( isNull( obj ) || !(isObj( obj ) || ( !this.#registerFunctions && isFunc( obj ))) )
                 {
                     return ObjectRegistry.NOT_REGISTERED;
                 }
 
-                if ( !(this.#registerPrimitives || this.#registerPredefined) && isPrimitiveWrapper( pObject ) )
+                if ( !(this.#registerPrimitives || this.#registerPredefined) && isPrimitiveWrapper( obj ) )
                 {
                     return ObjectRegistry.NOT_REGISTERED;
                 }
-                else if ( !this.#registerPredefined && isGlobalType( pObject ) )
+                else if ( !this.#registerPredefined && isGlobalType( obj ) )
                 {
-                    if ( !this.#registerArrays || !(isArray( pObject ) || isSet( pObject )) )
+                    if ( !this.#registerArrays || !(isArray( obj ) || isSet( obj )) )
                     {
                         return ObjectRegistry.NOT_REGISTERED;
                     }
                 }
 
-                if ( isFunc( pObject ) && this.#registerFunctions )
+                if ( isFunc( obj ) && this.#registerFunctions )
                 {
                     if ( !this.#registerPredefined &&
-                         isClass( pObject ) &&
-                         GLOBAL_TYPES.includes( pObject ) )
+                         isClass( obj ) &&
+                         GLOBAL_TYPES.includes( obj ) )
                     {
                         return ObjectRegistry.NOT_REGISTERED;
                     }
                 }
 
-                guid = this.#generateGuid( pObject );
-                this.#map.set( pObject, guid );
+                guid = guid || this.#generateGuid( obj );
 
-                let timestamp = this.#created.get( pObject ) || this.#generateTimestamp();
-                this.#created.set( pObject, timestamp );
+                this.#map.set( obj, guid );
+
+                const timestamp = this.#created.get( obj ) || this.#generateTimestamp();
+
+                this.#created.set( obj, timestamp );
+
+                this.#finalizerRegistry.register( obj, new WeakRef( obj ), obj );
             }
 
             return guid;
+        }
+
+        unregister( pObject )
+        {
+            const obj = dereference( pObject );
+
+            const result = attempt( () => this.#map.delete( obj ) && this.#created.delete( obj ) );
+
+            if ( result )
+            {
+                return attempt( () => this.#finalizerRegistry.unregister( obj ) );
+            }
+
+            return result;
+        }
+
+        reclaim( pObject )
+        {
+            return this.unregister( pObject );
+        }
+
+        delete( pObject )
+        {
+            return this.unregister( pObject );
         }
 
         getGuid( pObject )
@@ -5933,6 +5969,24 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 os,
                 cpu
             };
+        }
+
+        get operatingSystemModule()
+        {
+            if ( this.isNode() )
+            {
+                return attempt( () => require( "os" ) ) ?? attempt( () => require( "node:os" ) );
+            }
+            if ( this.isDeno() )
+            {
+                // TODO: no direct analog
+                return {};
+            }
+            if ( this.isBrowser() )
+            {
+                return this.navigator;
+            }
+            return {};
         }
 
         get operatingSystem()
