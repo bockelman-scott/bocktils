@@ -4,59 +4,64 @@
     const DEFAULT_CACHE_CAPACITY = 4_096;
     const MAX_CACHE_CAPACITY = 32_767;
 
-    const HASH_ALGORITHM = "sha256";
-
     const core = require( "@toolbocks/core" );
 
     const datesModule = require( "@toolbocks/dates" );
 
     const jsonUtils = require( "@toolbocks/json" );
 
-    const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils, guidUtils } = core;
+    const logUtils = require( "@toolbocks/logging" );
+
+    const { moduleUtils, constants, typeUtils, stringUtils, arrayUtils } = core;
 
     const
         {
+            ToolBocksModule,
             ObjectEntry,
             Visitor,
             __Error,
+            konsole,
+            objectKeys,
             readProperty,
             dereference,
             attempt,
             attemptSilent,
             no_op,
             lock,
-            deepLock,
             $ln
         } = moduleUtils;
 
-    const { _ud = "undefined", _mt, $scope, _num, _big } = constants;
+    const { _ud = "undefined", _mt, _str, _num, _big, _symbol, $scope } = constants;
 
     const
         {
             isNull,
-            isObject,
             isNonNullObject,
             isNonNullValue,
             isFunction,
+            isClass,
             isIterable,
             isMap,
-            isWeakMap,
-            isBool,
+            isBoolean,
+            isBoolCompatible,
             isNumber,
             isBigInt,
-            getClass,
+            isString,
+            isWeakRef,
             getClassName,
             clamp = moduleUtils.clamp,
             toObjectLiteral,
         } = typeUtils;
 
-    const { asString, asInt, asFloat, toBool, isJsonObject, isSymbol } = stringUtils;
+    const { asString, asInt, asFloat, toBool, isBlank, isJsonObject, isSymbol } = stringUtils;
 
     const { asArray } = arrayUtils;
 
     const { ONE_MINUTE, ONE_HOUR, ONE_WEEK } = datesModule;
 
     const { asObject, asJson } = jsonUtils;
+
+    const { SimpleLogger, SourcedSimpleLogger } = logUtils;
 
     // defines a key we can use to store this module in global scope
     const INTERNAL_NAME = "__BOCK_CACHE_UTILS__";
@@ -67,9 +72,13 @@
         return $scope()[INTERNAL_NAME];
     }
 
+    const DEFAULT_LOGGER = new SimpleLogger( konsole );
+    const LOGGER = SourcedSimpleLogger.adapt( DEFAULT_LOGGER, "ToolBocks/Cache", {} );
+
     const MIN_CACHE_EXPIRATION = ONE_MINUTE;
     const MAX_CACHE_EXPIRATION = (ONE_WEEK * 4);
 
+    const MISSING_VALUE = lock( {} );
 
     class CacheException extends __Error
     {
@@ -79,90 +88,44 @@
         }
     }
 
-    const MISSING_VALUE = lock( {} );
-
-    class CacheKey
-    {
-        #key;
-        #hash;
-
-        constructor( pKey )
-        {
-            this.#key = isNonNullObject( pKey ) && pKey instanceof this.constructor ? pKey.key : asString( isNull( pKey ) ? Date.now() : pKey );
-            this.#hash = isNonNullObject( pKey ) && pKey instanceof this.constructor ? pKey.hash || guidUtils.hashSync( this.#key, "sha256" ) : guidUtils.hashSync( asString( this.#key ), "sha256" );
-        }
-
-        get key()
-        {
-            return asString( this.#key );
-        }
-
-        get hash()
-        {
-            return asString( this.#hash || guidUtils.hashSync( this.key, HASH_ALGORITHM ) );
-        }
-
-        toLiteral()
-        {
-            return { key: this.key, hash: this.hash || guidUtils.hashSync( this.key, HASH_ALGORITHM ) };
-        }
-
-        toJSON()
-        {
-            const literal = this.toLiteral();
-            return attempt( () => asJson( literal ) ) || attempt( () => JSON.stringify( literal ) ) || attempt( () => asJson( this ) );
-        }
-
-        toString()
-        {
-            return `${asString( this.key )}::${this.hash}}`;
-        }
-
-        [Symbol.toPrimitive]()
-        {
-            return this.toString();
-        }
-
-        [Symbol.toStringTag]()
-        {
-            const s = this.toString();
-            return `[object ${getClassName( this )}::${s}]`;
-        }
-
-        equals( pOther )
-        {
-            if ( isNull( pOther ) )
-            {
-                return false;
-            }
-
-            const other = isObject( pOther ) || isJsonObject( pOther ) ? asObject( pOther ?? createKey( pOther ) ) ?? createKey( pOther ) : createKey( pOther );
-
-            return other === this || (other.key === this.key && other.hash === this.hash) || asString( other, true ) === asString( this, true );
-        }
-    }
-
     const createKey = function( pKey )
     {
         if ( isNull( pKey ) )
         {
-            throw new CacheException( `Invalid Key, ${pKey}` );
+            throw new CacheException( `null as a cache key is not supported`, { detail: pKey }, pKey );
+        }
+
+        if ( (isString( pKey ) && !isBlank( pKey )) || [_num, _big, _symbol, _str].includes( typeof pKey ) )
+        {
+            return asString( pKey, true );
+        }
+
+        if ( isFunction( pKey ) )
+        {
+            if ( isClass( pKey ) )
+            {
+                return createKey( getClassName( pKey ) );
+            }
+
+            let key = attempt( () => pKey.call( pKey, pKey ) );
+            return createKey( key ?? pKey?.name );
         }
 
         if ( isNonNullObject( pKey ) )
         {
-            const key = dereference( pKey );
-            if ( !isNull( key ) )
+            let key = dereference( pKey );
+            if ( key instanceof CacheEntry )
             {
-                if ( key instanceof CacheKey || pKey instanceof CacheKey )
-                {
-                    return lock( key ?? pKey );
-                }
-                return new CacheKey( asString( key ) );
+                return createKey( key?.key ?? key?.cacheKey ?? key?.id );
             }
-        }
 
-        return new CacheKey( pKey );
+            if ( isFunction( key.valueOf ) )
+            {
+                key = asString( key.valueOf(), true );
+            }
+
+            return asString( key, true );
+        }
     };
 
     class CacheEntry
@@ -172,22 +135,32 @@
 
         constructor( pValue, pKey = (pValue?.cacheKey ?? pValue?.id) )
         {
-            this.#value = isNull( pValue ) ? MISSING_VALUE : isNonNullObject( pValue ) ? lock( pValue ) : pValue;
-            this.#key = createKey( pKey ?? ((isNonNullObject( pValue )) ? (pValue?.cacheKey ?? pValue?.id) : pValue) );
+            let key = createKey( pKey ?? (isNonNullObject( pValue ) ? (pValue?.cacheKey ?? pValue?.id ?? pValue?.key) : pValue) );
+
+            const value = unwrapValue( isNull( pValue ) ? MISSING_VALUE : pValue );
+            this.#value = new WeakRef( value );
+
+            key = createKey( key ?? ((isNonNullObject( value )) ? (value?.cacheKey ?? value?.id ?? value?.key) : this.#value) );
+
+            this.#key = asString( key, true );
         }
 
         get value()
         {
             if ( !(isNull( this.#value ) || (MISSING_VALUE === this.#value)) )
             {
-                return this.#value;
+                const value = unwrapValue( this.#value );
+                if ( !(isNull( value ) || (MISSING_VALUE === value)) )
+                {
+                    return lock( dereference( value ) );
+                }
             }
             return null;
         }
 
         get key()
         {
-            return this.#key;
+            return createKey( isNonNullObject( this.#key ) ? dereference( this.#key ) : this.#key );
         }
 
         [Symbol.toPrimitive]()
@@ -196,21 +169,23 @@
 
             if ( isNonNullObject( val ) )
             {
-                if ( isFunction( val.valueOf ) )
+                let value = dereference( val );
+
+                if ( isFunction( value.valueOf ) )
                 {
-                    return val.valueOf();
+                    return value.valueOf() || (isFunction( value.toString ) ? value.toString() : asString( value ?? val ));
                 }
                 else
                 {
-                    return attempt( () => asJson( toObjectLiteral( val ) ) ) ?? asString( val );
+                    return attempt( () => asJson( toObjectLiteral( value ) ) ) ?? asString( value );
                 }
             }
             else if ( [_num, _big].includes( typeof val ) )
             {
                 if ( isBigInt( val ) )
                 {
-                    const s = asString( val ).replace( /n$/, _mt );
-                    const n = attempt( () => asInt( s ) );
+                    const s = asString( val, true ).replace( /n$/, _mt ).replaceAll( /\D/g, _mt );
+                    const n = attemptSilent( () => asInt( s ) );
                     if ( isNumber( n ) && !isNaN( n ) && isFinite( n ) )
                     {
                         return n;
@@ -219,7 +194,7 @@
                 }
                 return asFloat( val );
             }
-            else if ( isBool( val ) )
+            else if ( isBoolean( val ) || isBoolCompatible( val ) )
             {
                 return toBool( val );
             }
@@ -228,12 +203,35 @@
                 return String( val );
             }
 
-            return asString( val, true );
+            return val;
         }
 
         [Symbol.toStringTag]()
         {
             return `[object ${getClassName( this )}::${this.key}=${this.value}]`;
+        }
+
+        equals( pOther )
+        {
+            if ( isNull( pOther ) )
+            {
+                return false;
+            }
+
+            if ( pOther === this )
+            {
+                return true;
+            }
+
+            if ( isNonNullObject( pOther ) || isJsonObject( pOther ) )
+            {
+                const other = dereference( asObject( pOther ?? {} ) );
+                const key = dereference( other.key ?? createKey( other?.cacheKey ?? other?.id ?? other?.key ?? other?.value?.key ?? other ) );
+                return (other === this) || (key === this.key);
+            }
+
+            const otherKey = createKey( pOther );
+            return (otherKey === this.key);
         }
     }
 
@@ -246,7 +244,7 @@
         {
             super( pValue, pKey );
             this.#cachedDate = Date.now();
-            this.#expirationDate = isNull( pValue ) ? this.#cachedDate : asInt( asInt( this.#cachedDate ) + clamp( asInt( pTimeToLive ?? ONE_HOUR, ONE_HOUR ), MIN_CACHE_EXPIRATION, MAX_CACHE_EXPIRATION ) );
+            this.#expirationDate = isNull( super.value ) ? this.#cachedDate : asInt( asInt( this.#cachedDate ) + clamp( asInt( pTimeToLive ?? ONE_HOUR, ONE_HOUR ), MIN_CACHE_EXPIRATION, MAX_CACHE_EXPIRATION ) );
         }
 
         get value()
@@ -273,58 +271,185 @@
             return (asInt( Date.now() ) >= asInt( this.#expirationDate ));
         }
 
+        get expired()
+        {
+            return this.isExpired();
+        }
+
         [Symbol.toStringTag]()
         {
             return `[object ${getClassName( this )}::${this.key}=${this.value}:: expires: ${this.expirationDate}]`;
         }
     }
 
-    class BaseCache
+    const unwrapValue = function( pValue )
     {
-        #useWeakRef = false;
-        #useWeakMap = false;
+        let value = isNonNullObject( pValue ) || isJsonObject( pValue ) ? asObject( pValue ) : pValue;
 
-        #map;
-
-        constructor( pUseWeakRef = false, pUseWeakMap = false, pMaxSize = -1 )
+        while ( isNonNullObject( value ) && isWeakRef( value ) )
         {
-            this.#useWeakRef = toBool( pUseWeakRef );
-            this.#useWeakMap = toBool( pUseWeakMap );
+            value = dereference( value );
 
-            this.#map = this._resolveMap( pMaxSize );
-        }
-
-        get useWeakRef()
-        {
-            return toBool( this.#useWeakRef );
-        }
-
-        get useWeakMap()
-        {
-            return toBool( this.#useWeakMap );
-        }
-
-        _resolveMap( pMaxSize = -1 )
-        {
-            if ( isNull( this.#map ) )
+            while ( isNonNullObject( value ) && value instanceof CacheEntry )
             {
-                if ( this.useWeakMap )
+                if ( value instanceof ExpiringCacheEntry && value.expired )
                 {
-                    return new WeakMap();
+                    value = null;
+                    break;
                 }
-                return new Map();
+
+                value = dereference( value.value );
+
+                if ( isWeakRef( value ) )
+                {
+                    value = dereference( value );
+                }
             }
-            return this.#map ?? (this.useWeakMap ? new WeakMap : new Map());
         }
 
-        _createKey( pKey )
+        while ( isNonNullObject( value ) && value instanceof CacheEntry )
+        {
+            if ( value instanceof ExpiringCacheEntry && value.expired )
+            {
+                value = null;
+                break;
+            }
+
+            value = dereference( value.value );
+
+            while ( isNonNullObject( value ) && isWeakRef( value ) )
+            {
+                value = dereference( value );
+
+                if ( isNonNullObject( value ) && value instanceof CacheEntry )
+                {
+                    if ( value instanceof ExpiringCacheEntry && value.expired )
+                    {
+                        value = null;
+                        break;
+                    }
+
+                    value = dereference( value.value );
+                }
+            }
+        }
+
+        return value;
+    };
+
+    CacheEntry.create = function( pValue, pKey, pTimeToLive = -1 )
+    {
+        let value = unwrapValue( pValue );
+        let key = createKey( pKey ?? value?.cacheKey ?? value?.id );
+        let ttl = clamp( asInt( pTimeToLive ), 0, MAX_CACHE_EXPIRATION );
+
+        if ( ttl >= MIN_CACHE_EXPIRATION )
+        {
+            return new ExpiringCacheEntry( value, key, ttl );
+        }
+
+        return new CacheEntry( value, key );
+    };
+
+    ExpiringCacheEntry.create = CacheEntry.create;
+
+    let NEXT_CACHE_ID = 0;
+
+    const nextCacheId = ( pClass ) =>
+    {
+        const className = asString( getClassName( pClass ) );
+
+        let id = ++NEXT_CACHE_ID;
+
+        if ( id >= 10_000 )
+        {
+            NEXT_CACHE_ID = 0;
+            id = ++NEXT_CACHE_ID;
+        }
+
+        return `${className}_${id}`;
+    };
+
+    class __BoundedCache extends Map
+    {
+        #limit = DEFAULT_CACHE_CAPACITY;
+
+        #logger = LOGGER;
+
+        /**
+         * Creates a new BoundedCache, which is an extension of Map
+         * that will evict older entries to avoid growing beyond the configured limit.
+         *
+         * @param {number} pLimit - the greatest number of entries this cache will hold
+         *
+         * @param {Iterable} [pInitialEntries]
+         */
+        constructor( pLimit = DEFAULT_CACHE_CAPACITY, pInitialEntries = null )
+        {
+            super();
+
+            /**
+             * The bounds must be >= 10 and <= 10,000
+             */
+            this.#limit = clamp( asInt( pLimit, DEFAULT_CACHE_CAPACITY ), MIN_CACHE_CAPACITY, MAX_CACHE_CAPACITY );
+
+            this.#logger = SourcedSimpleLogger.adapt( DEFAULT_LOGGER, this );
+
+            if ( !isNull( pInitialEntries ) && isIterable( pInitialEntries ) )
+            {
+                attempt( () => this.addAll( pInitialEntries, false ) );
+            }
+        }
+
+        get logger()
+        {
+            return ToolBocksModule.resolveLogger( this.#logger, LOGGER, ToolBocksModule.getGlobalLogger(), konsole );
+        }
+
+        resolveKey( pKey )
         {
             return createKey( pKey );
         }
 
-        _createCacheEntry( pKey, pValue )
+        isSupportedKey( pKey )
         {
-            return new CacheEntry( pValue, pKey );
+            return !isNull( pKey ) && [_str, _num, _big, _symbol].includes( typeof pKey ) && !isBlank( asString( pKey, true ) );
+        }
+
+        /**
+         * Returns the upper bound limit of the size of this cache
+         * @returns {number}
+         */
+        get limit()
+        {
+            return clamp( asInt( this.#limit, DEFAULT_CACHE_CAPACITY ), MIN_CACHE_CAPACITY, MAX_CACHE_CAPACITY );
+        }
+
+        get maxSize()
+        {
+            return this.limit;
+        }
+
+        isEmpty()
+        {
+            return asInt( this.size ) <= 0;
+        }
+
+        /**
+         * @inheritDoc
+         */
+        clear()
+        {
+            super.clear();
+        }
+
+        /**
+         * @inheritDoc
+         */
+        delete( pKey )
+        {
+            const key = this.resolveKey( pKey );
+            return super.delete( key ) || super.delete( pKey );
         }
 
         // noinspection JSUnusedLocalSymbols
@@ -343,47 +468,471 @@
             return this;
         }
 
-        cacheValue( pKey, pValue )
+        /**
+         * @inheritDoc
+         */
+        get( pKey )
         {
-            let key = pKey ?? ((isNonNullObject( pValue )) ? (pValue?.cacheKey ?? pValue?.id) : pValue);
+            const key = this.resolveKey( pKey );
 
-            if ( isNull( key ) )
+            if ( !this.isSupportedKey( key ) )
+            {
+                return null;
+            }
+
+            const v = super.get( key );
+
+            if ( !isNull( v ) )
+            {
+                let obj = dereference( v );
+
+                if ( isNonNullObject( obj ) )
+                {
+                    if ( obj instanceof CacheEntry )
+                    {
+                        if ( obj instanceof ExpiringCacheEntry && obj.expired )
+                        {
+                            // if the key holds an expired value, remove it
+                            attempt( () => this.delete( key ) );
+                            return null;
+                        }
+
+                        let value = dereference( obj.value );
+
+                        if ( isNull( value ) )
+                        {
+                            // if the key holds a 'dead' ref or null value, remove it
+                            attempt( () => this.delete( key ) );
+                            return null;
+                        }
+
+                        value = unwrapValue( value );
+
+                        if ( isNull( value ) )
+                        {
+                            attempt( () => this.delete( key ) );
+                            return null;
+                        }
+
+                        return lock( value );
+                    }
+
+                    return lock( unwrapValue( obj ) );
+                }
+                else if ( isNonNullValue( obj ) )
+                {
+                    return obj;
+                }
+
+                // if the key holds a 'dead' ref or null value, remove it
+                attempt( () => this.delete( key ) );
+            }
+
+            return null;
+        }
+
+        /**
+         * Returns true if this cache contains an object (that has not been garbage collected)
+         * associated with the specified key
+         *
+         * @param {String} pKey the string value with which an object in this cache may be associated
+         * @returns {boolean} true if this cache contains an object (that has not been garbage collected) associated with the specified key
+         */
+        has( pKey )
+        {
+            // objects are stored using string or integer keys
+            const key = this.resolveKey( pKey );
+
+            if ( !this.isSupportedKey( key ) )
+            {
+                return false;
+            }
+
+            /*
+             * If we don't have anything, even an empty WeakRef,
+             * we return false
+             */
+            if ( !(super.has( key )) )
+            {
+                return false;
+            }
+
+            /*
+             * If we reach this statement,
+             * we are storing WeakRef objects,
+             * so we have to retrieve the value,
+             * dereference it
+             * and return true if the dereferenced value is not undefined (or null)
+             */
+            const ref = super.get( key );
+
+            if ( !isNull( ref ) )
+            {
+                const value = unwrapValue( dereference( ref ) );
+
+                if ( isNull( value ) )
+                {
+                    attempt( () => this.delete( key ) );
+                    return false;
+                }
+
+                return true;
+            }
+
+            /*
+             * if we found a WeakRef whose object has been garbage-collected,
+             * we remove the entry
+             *
+             * we do this here and in other accessors and mutators
+             * as a 'lazily' healing technique
+             */
+            attempt( () => this.delete( key ) );
+
+            return false;
+        }
+
+        /**
+         * Adds a new entry to the cache.
+         * If the entry already exists,
+         * the entry is moved to the end of the collection,
+         * so it is less likely to be a candidate for removal
+         * if the cache reaches capacity (exceeds the limit specified when the cache was constructed)
+         *
+         * @param {string} pKey the key with which the cached object can be retrieved
+         * @param {Object} pValue the object to store in the cache associated with the specified key
+         */
+        set( pKey, pValue )
+        {
+            let key = this.resolveKey( pKey );
+
+            if ( !this.isSupportedKey( key ) )
+            {
+                return false;
+            }
+
+            let value = pValue ?? this.get( key );
+
+            // by deleting the entry and then re-setting it,
+            // we move a potentially existing entry to the end of the collection,
+            // so we will not remove it prematurely
+            attempt( () => this.delete( key ) );
+
+            // we do not support storing null
+            if ( isNonNullValue( value ) )
+            {
+                value = unwrapValue( value );
+
+                // then we freeze (lock) the object
+                // cached objects must be immutable
+                if ( isNonNullValue( value ) )
+                {
+                    if ( value instanceof CacheEntry )
+                    {
+                        value = dereference( value.value );
+                    }
+
+                    value = dereference( value ) ?? value;
+
+                    value = isNonNullObject( value ) ? lock( dereference( value ) ) : value;
+
+                    // we wrap the value in a new WeakRef
+                    value = isNonNullObject( value ) ? new WeakRef( lock( value ) ) : value;
+
+                    // if this cache is at capacity
+                    if ( this.size >= this.limit )
+                    {
+                        // we delete the oldest 'living' entry
+                        // (which we assume to be identified by the first entry in the iterator)
+                        const oldestKey = this.keys().next()?.value;
+
+                        if ( !isNull( oldestKey ) )
+                        {
+                            attempt( () => this.delete( oldestKey ) );
+                            attemptSilent( () => this.delete( createKey( oldestKey, this ) ) );
+                        }
+                        else
+                        {
+                            // if our size >= our limit, but our iterator is empty,
+                            // that means ALL of our entries are 'dead'
+                            // (WeakRef wrappers whose payload has been garbage collected),
+                            // so we call clear() to recover
+                            super.clear();
+                        }
+                    }
+
+                    // add the entry
+                    super.set( key, new WeakRef( new CacheEntry( value, key ) ) );
+                }
+            }
+        }
+
+        addAll( ...pEntries )
+        {
+            const entries = asArray( pEntries );
+
+            for( let entry of entries )
+            {
+                const key = ObjectEntry.getKey( entry );
+                const value = ObjectEntry.getValue( entry );
+
+                this.set( key, value );
+            }
+        }
+
+        /**
+         *  Returns an iterator of the 'live' entries held in the cache.
+         *
+         *  We are overriding the superclass method with a generator function
+         *  to avoid loading all entries into memory
+         *  and to facilitate skipping over 'dead' entries.
+         */
+        * entries()
+        {
+            // We use super.entries() to get the raw Map iterator
+            const entries = super.entries();
+
+            for( const [key, val] of entries )
+            {
+                // dereference the value (in case we are configured to use WeakRef)
+                let value = isNonNullObject( val ) ? dereference( val ) : val;
+
+                if ( isNonNullObject( value ) )
+                {
+                    if ( value instanceof ExpiringCacheEntry && value.expired )
+                    {
+                        attempt( () => this.delete( key ) );
+                        continue;
+                    }
+                }
+
+                value = unwrapValue( value );
+
+                // If it's a WeakRef that has been garbage collected or an expired entry,
+                // we delete the entry and move on
+                if ( isNull( value ) )
+                {
+                    attempt( () => this.delete( key ) );
+                    continue;
+                }
+
+                /*
+                 * yield the entry wrapped in our ObjectEntry structure.
+                 *
+                 * note that ObjectEntry extends Array, so consumers can use this method
+                 * exactly as they would the method of the superclass
+                 */
+                yield lock( new ObjectEntry( key, lock( value ), this ) );
+            }
+        }
+
+        /**
+         * @inheritDoc
+         */
+        [Symbol.iterator]()
+        {
+            return this.entries();
+        }
+
+        /**
+         * Executes the provided function or calls specified Vistor's visit method
+         * once for each 'live' entry in the collection (in insertion order)
+         *
+         * @param {function|Visitor} pCallback a function to call for each valid entry
+         *                                     or a Visitor whose visit method will be called for each entry
+         * @param {Object} [pThis=undefined]   an object to which to bind the provided function
+         *                                     so that 'this' within the function refers to that object
+         */
+        forEach( pCallback, pThis )
+        {
+            // Ensure we have a function,
+            // wrapping a Visitor in an arrow function
+            // that calls the visit method as a function bound to the Visitor
+            let callback = isFunction( pCallback ) ?
+                           pCallback :
+                           ((isNonNullObject( pCallback ) && pCallback instanceof Visitor) ?
+                            ( entry ) => pCallback.visit.call( pCallback, entry ) :
+                            no_op);
+
+            // declare a locale variable
+            // so we can wrap the function again
+            // to capture this closure as its scope
+            let cb = callback;
+
+            if ( isNonNullObject( pThis ) )
+            {
+                const me = this;
+                cb = function( pEntry )
+                {
+                    callback.call( pThis ?? me, pEntry );
+                }.bind( pThis ?? me );
+            }
+
+            for( let entry of this.entries() )
+            {
+                cb( entry );
+            }
+        }
+
+        /**
+         * Returns an iterator of the valid entries in this cache
+         * @returns {Generator<[K, V][0], void, *>}
+         */
+        * keys()
+        {
+            for( const [key, val] of this.entries() )
+            {
+                if ( isNull( dereference( val ) ) )
+                {
+                    // do not return "dead" keys
+                    continue;
+                }
+                yield key;
+            }
+        }
+
+        /**
+         * Returns an iterator of the valid objects held in this cache
+         * @returns {Generator<*, void, *>}
+         */
+        * values()
+        {
+            for( let val of super.values() )
+            {
+                // unwrap the value
+                let value = unwrapValue( val );
+
+                if ( isNull( value ) )
+                {
+                    continue;
+                }
+
+                // yield the value (always ensuring that it is immutable)
+                yield lock( value );
+            }
+        }
+
+        clone()
+        {
+            return new __BoundedCache( this.limit, new Map( this.entries() ).entries() );
+        }
+
+        toLiteral()
+        {
+            const obj =
+                {
+                    maxSize: this.limit || this.maxSize,
+                    map: toObjectLiteral( new Map( this.entries() ) )
+                };
+            return lock( obj );
+        }
+
+        toJSON()
+        {
+            const literal = this.toLiteral();
+            return attempt( () => asJson( literal ) );
+        }
+    }
+
+    class BaseCache
+    {
+        #id;
+
+        #map;
+
+        #logger = LOGGER;
+
+        constructor( pMaxSize = -1 )
+        {
+            this.#id = nextCacheId( this );
+
+            this.#map = this._resolveMap( pMaxSize );
+
+            this.#logger = ToolBocksModule.resolveLogger( DEFAULT_LOGGER, LOGGER, ToolBocksModule.getGlobalLogger(), konsole );
+            this.#logger = SourcedSimpleLogger.adapt( this.#logger, this );
+        }
+
+        get id()
+        {
+            this.#id = this.#id || nextCacheId( this );
+            return this.#id;
+        }
+
+        get logger()
+        {
+            return ToolBocksModule.resolveLogger( this.#logger, DEFAULT_LOGGER, LOGGER, ToolBocksModule.getGlobalLogger(), konsole );
+        }
+
+        _resolveMap( pMaxSize = -1 )
+        {
+            return this.#map ?? new __BoundedCache( pMaxSize );
+        }
+
+        _createKey( pKey )
+        {
+            return createKey( pKey );
+        }
+
+        _createCacheEntry( pKey, pValue )
+        {
+            return new CacheEntry.create( pValue, pKey );
+        }
+
+        // noinspection JSUnusedLocalSymbols
+        async init( ...pArgs )
+        {
+            // no op
+
+            return this;
+        }
+
+        // noinspection JSUnusedGlobalSymbols,JSUnusedLocalSymbols
+        async dispose( ...pArgs )
+        {
+            attempt( () => this.clear() );
+
+            return this;
+        }
+
+        isSupportedKey( pKey )
+        {
+            return isFunction( this.#map?.isSupportedKey ) ? this.#map.isSupportedKey( pKey ) : ([_str, _num, _big, _symbol].includes( typeof pKey ) && !isBlank( asString( pKey, true ) ));
+        }
+
+        cacheValue( pKey, pValue, pTimeToLive = -1 )
+        {
+            if ( !this.isSupportedKey( pKey ) )
             {
                 throw new CacheException( `Invalid Key, ${pKey}` );
             }
 
-            if ( this.useWeakMap )
+            if ( !isNull( pValue ) )
             {
-                key = this._createKey( key );
-            }
+                const value = unwrapValue( pValue );
 
-            let value = pValue;
+                const cachedValue = CacheEntry.create( value, pKey, (asInt( pTimeToLive, -1 ) || -1) );
 
-            if ( this.useWeakRef && isNonNullObject( value ) )
-            {
-                value = dereference( value ) ?? this.get( key );
-                value = new WeakRef( value );
-            }
+                const key = this._createKey( pKey ?? cachedValue?.key );
 
-            if ( !isNull( value ) )
-            {
-                this.#map.set( key, this._createCacheEntry( key, value ) );
+                if ( !isNull( cachedValue ) )
+                {
+                    this.#map.set( key, cachedValue );
+                }
             }
         }
 
-        put( pKey, pValue )
+        put( pKey, pValue, pTimeToLive = -1 )
         {
-            this.cacheValue( pKey, pValue );
+            this.cacheValue( pKey, pValue, pTimeToLive );
         }
 
-        set( pKey, pValue )
+        set( pKey, pValue, pTimeToLive = -1 )
         {
-            this.cacheValue( pKey, pValue );
+            this.cacheValue( pKey, pValue, pTimeToLive );
         }
 
         get( pKey )
         {
-            const key = this._createKey( pKey );
+            const key = this._createKey( pKey, this );
 
             const cachedValue = this.#map.get( key );
 
@@ -399,7 +948,7 @@
                 }
                 else
                 {
-                    return cachedValue.value ?? cachedValue;
+                    return dereference( cachedValue instanceof CacheEntry ? cachedValue.value ?? cachedValue : cachedValue );
                 }
             }
 
@@ -408,7 +957,7 @@
 
         delete( pKey )
         {
-            const key = this._createKey( pKey );
+            const key = this._createKey( pKey, this );
             return this.#map.delete( key ) || this.#map.delete( pKey );
         }
 
@@ -424,23 +973,47 @@
 
         clear()
         {
-            return isFunction( this.#map.clear ) ? this.#map.clear() : attempt( () => this._clearWeakMap() );
-        }
-
-        _clearWeakMap()
-        {
-            if ( isNull( this.#map ) || isWeakMap( this.#map ) )
-            {
-                this.#map = isNonNullObject( this.#map ) ? attempt( () => (new (getClass( this.#map ))()) ) ?? new WeakMap() : new WeakMap();
-                return this.#map;
-            }
-            else if ( isMap( this.#map ) || isFunction( this.#map.clear ) )
+            if ( isFunction( this.#map.clear ) )
             {
                 this.#map.clear();
-                return this.#map;
             }
 
-            this.#map = isNonNullObject( this.#map ) ? attempt( () => (new (getClass( this.#map ))()) ) ?? new WeakMap() : new WeakMap();
+            const keys = isFunction( this.#map.keys ) ? this.#map.keys() : attempt( () => objectKeys( this.#map ) );
+
+            for( let key of keys )
+            {
+                attempt( () => this.#map.delete( key ) );
+            }
+
+            return this.isEmpty();
+        }
+
+        equals( pOther )
+        {
+            if ( isNonNullObject( pOther ) || isJsonObject( pOther ) )
+            {
+                const other = asObject( pOther );
+                return ((other.id === this.id) && getClassName( other ) === getClassName( this )) && (this.size === other.size);
+            }
+            return false;
+        }
+
+        toLiteral()
+        {
+            const obj =
+                {
+                    id: this.id,
+                    mapClass: getClassName( this.#map ),
+                    map: toObjectLiteral( this.asMap() )
+                };
+
+            return lock( obj );
+        }
+
+        toJSON()
+        {
+            const literal = this.toLiteral();
+            return attempt( () => asJson( literal ) );
         }
 
         /**
@@ -452,33 +1025,34 @@
          */
         * entries()
         {
-            if ( this.useWeakMap )
+            // We use super.entries() to get the raw Map iterator
+            for( const [key, val] of this.#map.entries() )
             {
-                // TODO
-                return [].entries();
-            }
-            else
-            {
-                // We use super.entries() to get the raw Map iterator
-                for( const [key, val] of this.#map.entries() )
-                {
-                    // dereference the value (in case we are configured to use WeakRef)
-                    let value = isNonNullObject( val ) ? dereference( val ) : val;
+                // dereference the value (in case we are configured to use WeakRef)
+                let value = isNonNullObject( val ) ? dereference( val ) : val;
 
-                    // If it's a WeakRef that has been garbage collected, we ignore and move on
-                    if ( this.useWeakRef && isNull( value ) )
+                if ( value instanceof CacheEntry )
+                {
+                    if ( value instanceof ExpiringCacheEntry && value.expired )
                     {
                         continue;
                     }
-
-                    /*
-                     * yield the entry wrapped in our ObjectEntry structure.
-                     *
-                     * note that ObjectEntry extends Array, so consumers can use this method
-                     * exactly as they would the method of the superclass
-                     */
-                    yield lock( new ObjectEntry( key, lock( value ), this ) );
+                    value = dereference( value.value );
                 }
+
+                // If it's a WeakRef that has been garbage collected, we ignore and move on
+                if ( isNull( value ) )
+                {
+                    continue;
+                }
+
+                /*
+                 * yield the entry wrapped in our ObjectEntry structure.
+                 *
+                 * note that ObjectEntry extends Array, so consumers can use this method
+                 * exactly as they would the method of the superclass
+                 */
+                yield lock( new ObjectEntry( key, lock( value ), this ) );
             }
         }
 
@@ -498,7 +1072,7 @@
         {
             for( const [key, val] of this.entries() )
             {
-                if ( this.useWeakRef && isNull( dereference( val ) ) )
+                if ( isNull( dereference( val ) ) )
                 {
                     // do not return "dead" keys
                     continue;
@@ -516,7 +1090,7 @@
             for( let [key, val] of this.entries() )
             {
                 // dereference the value (in case we are configured to use WeakRef)
-                const v = dereference( (val ?? this.get( key )) ) || this.get( key );
+                const v = dereference( (val ?? this.get( key )) ) || dereference( this.get( key ) );
 
                 const value = isNonNullObject( v ) ? dereference( v ) : v;
 
@@ -527,7 +1101,7 @@
                 }
 
                 // yield the value (always ensuring that it is immutable)
-                yield lock( value );
+                yield lock( dereference( value ) );
             }
         }
 
@@ -577,842 +1151,13 @@
         }
     }
 
-    class __BoundedCache extends Map
-    {
-        #limit = DEFAULT_CACHE_CAPACITY;
-        #useWeakRef = false;
-
-        /**
-         * Creates a new BoundedCache, which is an extension of Map
-         * that will evict older entries to avoid growing beyond the configured limit.
-         *
-         * @param {number} pLimit - the greatest number of entries this cache will hold
-         *
-         * @param {boolean} pUseWeakRef - Set this to true to store objects in this cache wrapped in WeakRef
-         *                                This allows the objects to be garbage collected if no other scope
-         *                                holds a string reference to the object.
-         * @param pInitialEntries
-         */
-        constructor( pLimit = DEFAULT_CACHE_CAPACITY, pUseWeakRef = false, pInitialEntries = null )
-        {
-            super();
-
-            /**
-             * The bounds must be >= 10 and <= 10,000
-             */
-            this.#limit = clamp( asInt( pLimit, DEFAULT_CACHE_CAPACITY ), MIN_CACHE_CAPACITY, MAX_CACHE_CAPACITY );
-
-            /**
-             * Allows objects held in this cache to be garbage collected
-             * @type {boolean}
-             */
-            this.#useWeakRef = !!(pUseWeakRef);
-
-            if ( !isNull( pInitialEntries ) && isIterable( pInitialEntries ) )
-            {
-                attempt( () => this.addAll( pInitialEntries, false ) );
-            }
-        }
-
-        get useWeakRef()
-        {
-            return this.#useWeakRef;
-        }
-
-        // noinspection JSUnusedGlobalSymbols
-        get useWeakMap()
-        {
-            return false;
-        }
-
-        resolveKey( pKey )
-        {
-            return createKey( pKey );
-        }
-
-        isSupportedKey( pKey )
-        {
-            const key = this.resolveKey( pKey );
-            return (isNonNullObject( key ));
-        }
-
-        /**
-         * Returns the upper bound limit of the size of this cache
-         * @returns {number}
-         */
-        get limit()
-        {
-            return clamp( asInt( this.#limit, DEFAULT_CACHE_CAPACITY ), MIN_CACHE_CAPACITY, MAX_CACHE_CAPACITY );
-        }
-
-        get maxSize()
-        {
-            return this.limit;
-        }
-
-        isEmpty()
-        {
-            return asInt( this.size ) <= 0;
-        }
-
-        /**
-         * @inheritDoc
-         */
-        clear()
-        {
-            super.clear();
-        }
-
-        /**
-         * @inheritDoc
-         */
-        delete( pKey )
-        {
-            const key = this.resolveKey( pKey );
-            return super.delete( key );
-        }
-
-        // noinspection JSUnusedLocalSymbols
-        async init( ...pArgs )
-        {
-            // no op
-
-            return this;
-        }
-
-        // noinspection JSUnusedGlobalSymbols,JSUnusedLocalSymbols
-        async dispose( ...pArgs )
-        {
-            this.clear();
-
-            return this;
-        }
-
-        /**
-         * @inheritDoc
-         */
-        get( pKey )
-        {
-            const key = this.resolveKey( pKey );
-
-            /*
-             * Keys have to be Objects
-             */
-            if ( !this.isSupportedKey( key ) )
-            {
-                return null;
-            }
-
-            const v = super.get( key );
-
-            if ( !isNull( v ) )
-            {
-                let obj = dereference( v );
-
-                if ( isNonNullValue( obj ) )
-                {
-                    return isNonNullObject( obj ) ? lock( obj ) : obj;
-                }
-
-                // if the key holds a 'dead' ref or null value, remove it
-                this.delete( key );
-            }
-
-            return null;
-        }
-
-        /**
-         * Returns true if this cache contains an object (that has not been garbage collected)
-         * associated with the specified key
-         *
-         * @param {String} pKey the string value with which an object in this cache may be associated
-         * @returns {boolean} true if this cache contains an object (that has not been garbage collected) associated with the specified key
-         */
-        has( pKey )
-        {
-            // objects are stored using string or integer keys
-            const key = this.resolveKey( pKey );
-
-            if ( !this.isSupportedKey( key ) )
-            {
-                return false;
-            }
-
-            /*
-             * If we don't have anything, even an empty WeakRef,
-             * we return false
-             */
-            if ( !(super.has( key )) )
-            {
-                return false;
-            }
-
-            /*
-             * If we have an entry for the specified key,
-             * (which we can assume by reaching this statement),
-             * and we are not storing WeakRef objects,
-             * we return true
-             */
-            if ( !this.#useWeakRef )
-            {
-                // we know that super.has returned true, otherwise we would already have returned false
-                return true;
-            }
-
-            /*
-             * If we reach this statement,
-             * we are storing WeakRef objects,
-             * so we have to retrieve the value,
-             * dereference it
-             * and return true if the dereferenced value is not undefined (or null)
-             */
-            const ref = super.get( key );
-            if ( !isNull( ref ) && isNonNullObject( dereference( ref ) ) )
-            {
-                return true;
-            }
-
-            /*
-             * if we found a WeakRef whose object has been garbage-collected,
-             * we remove the entry
-             *
-             * we do this here and in other accessors and mutators
-             * as a 'lazily' healing technique
-             */
-            attempt( () => this.delete( key ) );
-
-            return false;
-        }
-
-        /**
-         * Adds a new entry to the cache.
-         * If the entry already exists,
-         * the entry is moved to the end of the collection,
-         * so it is less likely to be a candidate for removal
-         * if the cache reaches capacity (exceeds the limit specified when the cache was constructed)
-         *
-         * @param {string} pKey the key with which the cached object can be retrieved
-         * @param {Object} pValue the object to store in the cache associated with the specified key
-         */
-        set( pKey, pValue )
-        {
-            // keys must be strings or integers
-            let key = this.resolveKey( pKey );
-
-            if ( !this.isSupportedKey( key ) )
-            {
-                return;
-            }
-
-            let value = pValue ?? this.get( key );
-
-            // by deleting the entry and then re-setting it,
-            // we move a potentially existing entry to the end of the collection,
-            // so we will not remove it prematurely
-            attempt( () => this.delete( key ) );
-
-            // we do not support storing null
-            if ( isNonNullValue( value ) )
-            {
-                // if the object passed in is a WeakRef,
-                // we dereference it first,
-                value = isNonNullObject( value ) ? dereference( value ) : value;
-
-                // then we freeze (lock) the object
-                // cached objects must be immutable
-                if ( isNonNullValue( value ) )
-                {
-                    value = isNonNullObject( value ) ? deepLock( value ) : value;
-
-                    // if this cache is configured to hold WeakRefs,
-                    // we wrap the value in a new WeakRef
-                    value = (isNonNullObject( value ) && this.#useWeakRef) ? new WeakRef( value ) : value;
-
-                    // if this cache is at capacity
-                    if ( this.size >= this.limit )
-                    {
-                        // we delete the oldest 'living' entry
-                        // (which we assume to be identified by the first entry in the iterator)
-                        const oldestKey = this.keys().next()?.value;
-
-                        if ( !(isNull( oldestKey ) || this.isSupportedKey( oldestKey )) )
-                        {
-                            attempt( () => this.delete( oldestKey ) );
-                        }
-                        else
-                        {
-                            // if our size >= our limit, but our iterator is empty,
-                            // that means ALL of our entries are 'dead'
-                            // (WeakRef wrappers whose payload has been garbage collected),
-                            // so we call clear() to recover
-                            super.clear();
-                        }
-                    }
-
-                    // add the entry
-                    super.set( key, lock( value ) );
-                }
-            }
-        }
-
-        /**
-         *  Returns an iterator of the 'live' entries held in the cache.
-         *
-         *  We are overriding the superclass method with a generator function
-         *  to avoid loading all entries into memory
-         *  and to facilitate skipping over 'dead' entries.
-         */
-        * entries()
-        {
-            // We use super.entries() to get the raw Map iterator
-            for( const [key, val] of super.entries() )
-            {
-                // dereference the value (in case we are configured to use WeakRef)
-                let value = isNonNullObject( val ) ? dereference( val ) : val;
-
-                // If it's a WeakRef that has been garbage collected, we ignore and move on
-                if ( this.useWeakRef && isNull( value ) )
-                {
-                    continue;
-                }
-
-                /*
-                 * yield the entry wrapped in our ObjectEntry structure.
-                 *
-                 * note that ObjectEntry extends Array, so consumers can use this method
-                 * exactly as they would the method of the superclass
-                 */
-                yield lock( new ObjectEntry( key, lock( value ), this ) );
-            }
-        }
-
-        /**
-         * @inheritDoc
-         */
-        [Symbol.iterator]()
-        {
-            return this.entries();
-        }
-
-        /**
-         * Executes the provided function or calls specified Vistor's visit method
-         * once for each 'live' entry in the collection (in insertion order)
-         *
-         * @param {function|Visitor} pCallback a function to call for each valid entry
-         *                                     or a Visitor whose visit method will be called for each entry
-         * @param {Object} [pThis=undefined]   an object to which to bind the provided function
-         *                                     so that 'this' within the function refers to that object
-         */
-        forEach( pCallback, pThis )
-        {
-            // Ensure we have a function,
-            // wrapping a Visitor in an arrow function
-            // that calls the visit method as a function bound to the Visitor
-            let callback = isFunction( pCallback ) ?
-                           pCallback :
-                           ((isNonNullObject( pCallback ) && pCallback instanceof Visitor) ?
-                            ( entry ) => pCallback.visit.call( pCallback, entry ) :
-                            no_op);
-
-            // declare a locale variable
-            // so we can wrap the function again
-            // to capture this closure as its scope
-            let cb = callback;
-
-            if ( isNonNullObject( pThis ) )
-            {
-                const me = this;
-                cb = function( pEntry )
-                {
-                    callback.call( pThis ?? me, pEntry );
-                }.bind( pThis ?? me );
-            }
-
-            for( let entry of this.entries() )
-            {
-                cb( entry );
-            }
-        }
-
-        /**
-         * Returns an iterator of the valid entries in this cache
-         * @returns {Generator<[K, V][0], void, *>}
-         */
-        * keys()
-        {
-            for( const [key, val] of super.entries() )
-            {
-                if ( this.useWeakRef && isNull( dereference( val ) ) )
-                {
-                    // do not return "dead" keys
-                    continue;
-                }
-                yield key;
-            }
-        }
-
-        /**
-         * Returns an iterator of the valid objects held in this cache
-         * @returns {Generator<*, void, *>}
-         */
-        * values()
-        {
-            for( let val of super.values() )
-            {
-                // dereference the value (in case we are configured to use WeakRef)
-                let value = isNonNullObject( val ) ? dereference( val ) : val;
-
-                // If it's a WeakRef that has been garbage collected, we ignore and move on
-                if ( isNull( value ) )
-                {
-                    continue;
-                }
-
-                // yield the value (always ensuring that it is immutable)
-                yield lock( value );
-            }
-        }
-
-        clone()
-        {
-            return new __BoundedCache( this.limit, this.useWeakRef, new Map( this.entries() ).entries() );
-        }
-    }
-
-    class __BoundedWeakCache extends WeakMap
-    {
-        #limit = DEFAULT_CACHE_CAPACITY;
-        #useWeakRef = false;
-
-        #keys = [];
-
-        /**
-         * Creates a new BoundedCache, which is an extension of WeakMap
-         * that will evict older entries to avoid growing beyond the configured limit.
-         *
-         * @param {number} pLimit - the greatest number of entries this cache will hold
-         *
-         * @param {boolean} pUseWeakRef - Set this to true to store objects in this cache wrapped in WeakRef
-         *                                This allows the objects to be garbage collected if no other scope
-         *                                holds a string reference to the object.
-         */
-        constructor( pLimit = DEFAULT_CACHE_CAPACITY, pUseWeakRef = false )
-        {
-            super();
-
-            /**
-             * The bounds must be >= 10 and <= 10,000
-             */
-            this.#limit = clamp( asInt( pLimit, DEFAULT_CACHE_CAPACITY ), MIN_CACHE_CAPACITY, MAX_CACHE_CAPACITY );
-
-            /**
-             * Allows objects held in this cache to be garbage collected
-             * @type {boolean}
-             */
-            this.#useWeakRef = !!(pUseWeakRef);
-        }
-
-        get useWeakRef()
-        {
-            return this.#useWeakRef;
-        }
-
-        // noinspection JSUnusedGlobalSymbols
-        get useWeakMap()
-        {
-            return true;
-        }
-
-        resolveKey( pKey )
-        {
-            return createKey( pKey );
-        }
-
-        isSupportedKey( pKey )
-        {
-            const key = this.resolveKey( pKey );
-            return (isNonNullObject( key ));
-        }
-
-        /**
-         * Returns the upper bound limit of the size of this cache
-         * @returns {number}
-         */
-        get limit()
-        {
-            return clamp( asInt( this.#limit, DEFAULT_CACHE_CAPACITY ), MIN_CACHE_CAPACITY, MAX_CACHE_CAPACITY );
-        }
-
-        get maxSize()
-        {
-            return this.limit;
-        }
-
-        get size()
-        {
-            return asInt( $ln( this.#keys ) );
-        }
-
-        isEmpty()
-        {
-            return asInt( $ln( this.#keys ) ) <= 0;
-        }
-
-        /**
-         * @inheritDoc
-         */
-        clear()
-        {
-            let keys = [...(asArray( this.#keys ))];
-
-            for( let i = 0, n = $ln( keys ); i < n; i++ )
-            {
-                const key = keys[i];
-
-                attempt( () => super.delete( key ) );
-
-                this.#keys[i] = null;
-            }
-
-            this.#keys = asArray( this.#keys ?? [] ).filter( e => !isNull( e ) );
-        }
-
-        delete( pKey )
-        {
-            const key = this.resolveKey( pKey );
-
-            const existingKey = this.#keys.find( e => e === key || e.equals( key ) );
-
-            const result = super.delete( key );
-
-            if ( existingKey )
-            {
-                const index = this.#keys.findIndex( e => e.equals( existingKey ) || (e === key || e.equals( key )) );
-                if ( index >= 0 )
-                {
-                    this.#keys.splice( index, 1 );
-                }
-            }
-
-            return result;
-        }
-
-        // noinspection JSUnusedLocalSymbols
-        async init( ...pArgs )
-        {
-            // no op
-
-            return this;
-        }
-
-        // noinspection JSUnusedGlobalSymbols,JSUnusedLocalSymbols
-        async dispose( ...pArgs )
-        {
-            this.clear();
-
-            return this;
-        }
-
-        /**
-         * @inheritDoc
-         */
-        get( pKey )
-        {
-            const key = this.resolveKey( pKey );
-
-            /*
-             * Keys have to be Objects
-             */
-            if ( !this.isSupportedKey( key ) )
-            {
-                return null;
-            }
-
-            const v = super.get( key );
-
-            if ( !isNull( v ) )
-            {
-                let obj = dereference( v );
-
-                if ( isNonNullValue( obj ) )
-                {
-                    return isNonNullObject( obj ) ? lock( obj ) : obj;
-                }
-
-                // if the key holds a 'dead' ref or null value, remove it
-                this.delete( key );
-            }
-
-            return null;
-        }
-
-        /**
-         * Returns true if this cache contains an object (that has not been garbage collected)
-         * associated with the specified key
-         *
-         * @param {String} pKey the string value with which an object in this cache may be associated
-         * @returns {boolean} true if this cache contains an object (that has not been garbage collected) associated with the specified key
-         */
-        has( pKey )
-        {
-            // objects are stored using string or integer keys
-            const key = this.resolveKey( pKey );
-
-            if ( !this.isSupportedKey( key ) )
-            {
-                return false;
-            }
-
-            /*
-             * If we don't have anything, even an empty WeakRef,
-             * we return false
-             */
-            if ( !(super.has( key )) )
-            {
-                return false;
-            }
-
-            /*
-             * If we have an entry for the specified key,
-             * (which we can assume by reaching this statement),
-             * and we are not storing WeakRef objects,
-             * we return true
-             */
-            if ( !this.useWeakRef )
-            {
-                // we know that super.has returned true, otherwise we would already have returned false
-                return true;
-            }
-
-            /*
-             * If we reach this statement,
-             * we are storing WeakRef objects,
-             * so we have to retrieve the value,
-             * dereference it
-             * and return true if the dereferenced value is not undefined (or null)
-             */
-            const ref = super.get( key );
-            if ( !isNull( ref ) && isNonNullObject( dereference( ref ) ) )
-            {
-                return true;
-            }
-
-            /*
-             * if we found a WeakRef whose object has been garbage-collected,
-             * we remove the entry
-             *
-             * we do this here and in other accessors and mutators
-             * as a 'lazily' healing technique
-             */
-            attempt( () => this.delete( key ) );
-
-            return false;
-        }
-
-        /**
-         * Adds a new entry to the cache.
-         * If the entry already exists,
-         * the entry is moved to the end of the collection,
-         * so it is less likely to be a candidate for removal
-         * if the cache reaches capacity (exceeds the limit specified when the cache was constructed)
-         *
-         * @param {string} pKey the key with which the cached object can be retrieved
-         * @param {Object} pValue the object to store in the cache associated with the specified key
-         */
-        set( pKey, pValue )
-        {
-            // keys must be strings or integers
-            let key = this.resolveKey( pKey );
-
-            if ( !this.isSupportedKey( key ) )
-            {
-                return;
-            }
-
-            let value = pValue ?? this.get( key );
-
-            // by deleting the entry and then re-setting it,
-            // we move a potentially existing entry to the end of the collection,
-            // so we will not remove it prematurely
-            attempt( () => this.delete( key ) );
-
-            // we do not support storing null
-            if ( isNonNullValue( value ) )
-            {
-                // if the object passed in is a WeakRef,
-                // we dereference it first,
-                value = isNonNullObject( value ) ? dereference( value ) : value;
-
-                // then we freeze (lock) the object
-                // cached objects must be immutable
-                if ( isNonNullValue( value ) )
-                {
-                    value = isNonNullObject( value ) ? deepLock( value ) : value;
-
-                    // if this cache is configured to hold WeakRefs,
-                    // we wrap the value in a new WeakRef
-                    value = (isNonNullObject( value ) && this.#useWeakRef) ? new WeakRef( value ) : value;
-
-                    // if this cache is at capacity
-                    if ( this.size >= this.limit )
-                    {
-                        // we delete the oldest 'living' entry
-                        // (which we assume to be identified by the first entry in the iterator)
-                        const oldestKey = this.keys().next()?.value;
-
-                        if ( !(isNull( oldestKey ) || this.isSupportedKey( oldestKey )) )
-                        {
-                            attempt( () => this.delete( oldestKey ) );
-                        }
-                        else
-                        {
-                            // if our size >= our limit, but our iterator is empty,
-                            // that means ALL of our entries are 'dead'
-                            // (WeakRef wrappers whose payload has been garbage collected),
-                            // so we call clear() to recover
-                            this.clear();
-                        }
-                    }
-
-                    // add the entry
-                    super.set( key, lock( value ) );
-
-                    this.#keys.push( key );
-                }
-            }
-        }
-
-        /**
-         *  Returns an iterator of the 'live' entries held in the cache.
-         *
-         *  We are overriding the superclass method with a generator function
-         *  to avoid loading all entries into memory
-         *  and to facilitate skipping over 'dead' entries.
-         */
-        * entries()
-        {
-            const keys = [...(asArray( this.#keys ?? [] ))];
-
-            // We use super.entries() to get the raw Map iterator
-            for( const key of keys )
-            {
-                const val = this.get( key );
-
-                // dereference the value (in case we are configured to use WeakRef)
-                const value = isNonNullObject( val ) ? dereference( val ) : val;
-
-                // If it's a WeakRef that has been garbage collected, we ignore and move on
-                if ( this.useWeakRef && isNull( value ) )
-                {
-                    this.delete( key );
-                    continue;
-                }
-
-                /*
-                 * yield the entry wrapped in our ObjectEntry structure.
-                 *
-                 * note that ObjectEntry extends Array, so consumers can use this method
-                 * exactly as they would the method of the superclass
-                 */
-                yield lock( new ObjectEntry( key, lock( value ), this ) );
-            }
-        }
-
-        /**
-         * @inheritDoc
-         */
-        [Symbol.iterator]()
-        {
-            return this.entries();
-        }
-
-        /**
-         * Executes the provided function or calls specified Vistor's visit method
-         * once for each 'live' entry in the collection (in insertion order)
-         *
-         * @param {function|Visitor} pCallback a function to call for each valid entry
-         *                                     or a Visitor whose visit method will be called for each entry
-         * @param {Object} [pThis=undefined]   an object to which to bind the provided function
-         *                                     so that 'this' within the function refers to that object
-         */
-        forEach( pCallback, pThis )
-        {
-            // Ensure we have a function,
-            // wrapping a Visitor in an arrow function
-            // that calls the visit method as a function bound to the Visitor
-            let callback = isFunction( pCallback ) ?
-                           pCallback :
-                           ((isNonNullObject( pCallback ) && pCallback instanceof Visitor) ?
-                            ( entry ) => pCallback.visit.call( pCallback, entry ) :
-                            no_op);
-
-            // declare a locale variable
-            // so we can wrap the function again
-            // to capture this closure as its scope
-            let cb = callback;
-
-            if ( isNonNullObject( pThis ) )
-            {
-                const me = this;
-                cb = function( pEntry )
-                {
-                    callback.call( pThis ?? me, pEntry );
-                }.bind( pThis ?? me );
-            }
-
-            for( let entry of this.entries() )
-            {
-                cb( entry );
-            }
-        }
-
-        /**
-         * Returns an iterator of the valid entries in this cache
-         * @returns {Generator<[K, V][0], void, *>}
-         */
-        * keys()
-        {
-            for( const [key, val] of this.entries() )
-            {
-                if ( this.useWeakRef && isNull( dereference( val ) ) )
-                {
-                    // do not return "dead" keys
-                    continue;
-                }
-                yield key;
-            }
-        }
-
-        /**
-         * Returns an iterator of the valid objects held in this cache
-         * @returns {Generator<*, void, *>}
-         */
-        * values()
-        {
-            for( const [key, val] of this.entries() )
-            {
-                // dereference the value (in case we are configured to use WeakRef)
-                let value = isNonNullObject( (val ?? this.get( key )) ) ? dereference( (val ?? this.get( key )) ) : (val ?? this.get( key ));
-
-                // If it's a WeakRef that has been garbage collected, we ignore and move on
-                if ( isNull( value ) )
-                {
-                    continue;
-                }
-
-                // yield the value (always ensuring that it is immutable)
-                yield lock( value );
-            }
-        }
-    }
-
     class BoundedCache extends BaseCache
     {
         #maxSize = DEFAULT_CACHE_CAPACITY;
 
-        constructor( pMaxSize = DEFAULT_CACHE_CAPACITY, pUseWeakRef = false, pUseWeakMap = false )
+        constructor( pMaxSize = DEFAULT_CACHE_CAPACITY )
         {
-            super( pUseWeakRef, pUseWeakMap, pMaxSize || DEFAULT_CACHE_CAPACITY );
+            super( pMaxSize || DEFAULT_CACHE_CAPACITY );
             this.#maxSize = clamp( asInt( pMaxSize ) || DEFAULT_CACHE_CAPACITY, MIN_CACHE_CAPACITY, MAX_CACHE_CAPACITY );
         }
 
@@ -1430,24 +1175,7 @@
         {
             const capacity = asInt( pMaxSize || attemptSilent( () => readProperty( this, "max_size", "limit" ) ) || this.maxSize );
 
-            const withWeakRef = toBool( this.useWeakRef ?? attemptSilent( () => readProperty( this, "use_weak_ref", "useWeakRef" ) ) );
-            const withWeakMap = toBool( this.useWeakMap ?? attemptSilent( () => readProperty( this, "use_weak_map", "useWeakMap" ) ) );
-
-            if ( withWeakMap )
-            {
-                return new __BoundedWeakCache( capacity, withWeakRef );
-            }
-            return new __BoundedCache( capacity, withWeakRef );
-        }
-
-        get useWeakRef()
-        {
-            return super.useWeakRef;
-        }
-
-        get useWeakMap()
-        {
-            return super.useWeakMap;
+            return new __BoundedCache( capacity );
         }
 
         _createKey( pKey )
@@ -1460,19 +1188,19 @@
             return super._createCacheEntry( pKey, pValue );
         }
 
-        cacheValue( pKey, pValue )
+        cacheValue( pKey, pValue, pTimeToLive = -1 )
         {
-            super.cacheValue( pKey, pValue );
+            super.cacheValue( pKey, pValue, pTimeToLive );
         }
 
-        put( pKey, pValue )
+        put( pKey, pValue, pTimeToLive = -1 )
         {
-            super.put( pKey, pValue );
+            super.put( pKey, pValue, pTimeToLive );
         }
 
-        set( pKey, pValue )
+        set( pKey, pValue, pTimeToLive = -1 )
         {
-            super.set( pKey, pValue );
+            super.set( pKey, pValue, pTimeToLive );
         }
 
         get( pKey )
@@ -1499,21 +1227,88 @@
         {
             return super.clear();
         }
+
+        async init( ...pArgs )
+        {
+            return super.init( ...pArgs );
+        }
+
+        async dispose( ...pArgs )
+        {
+            return super.dispose( ...pArgs );
+        }
+
+        toLiteral()
+        {
+            const obj = { ...(asObject( super.toLiteral() )) };
+
+            obj.maxSize = this.maxSize || this.limit;
+
+            return lock( obj );
+        }
     }
 
     class ExpiringCache extends BoundedCache
     {
         #ttl = ONE_HOUR;
 
-        constructor( pMaxSize = DEFAULT_CACHE_CAPACITY, pTimeToLive = ONE_HOUR, pUseWeakRef = false, pUseWeakMap = false )
+        #timer;
+
+        constructor( pMaxSize = DEFAULT_CACHE_CAPACITY, pTimeToLive = ONE_HOUR )
         {
-            super( asInt( pMaxSize || DEFAULT_CACHE_CAPACITY ), pUseWeakRef, pUseWeakMap );
+            super( asInt( pMaxSize || DEFAULT_CACHE_CAPACITY ) );
+
+            const me = this;
+
             this.#ttl = clamp( asInt( pTimeToLive ), MIN_CACHE_EXPIRATION, MAX_CACHE_EXPIRATION );
+
+            const sweep = function( pThis )
+            {
+                const thiz = pThis ?? me ?? this;
+
+                try
+                {
+                    let keys = isFunction( thiz.keys ) ? asArray( thiz.keys() ?? thiz.asMap()?.keys() ) : isFunction( thiz.asMap ) ? asArray( thiz.asMap()?.keys() ?? thiz ) : asArray( thiz.keys ?? asArray( this ) );
+
+                    for( let key of keys )
+                    {
+                        const k = dereference( key ) ?? key;
+
+                        const v = attempt( () => thiz.get( k ) );
+
+                        if ( isNull( v ) || isNull( dereference( v ) ) || v.expired || (dereference( v ).expired) )
+                        {
+                            attempt( () => thiz.delete( k ) || thiz.delete( createKey( k, this ) ) );
+                        }
+                    }
+                }
+                catch( ex )
+                {
+                    const logger = ToolBocksModule.resolveLogger( thiz.logger, DEFAULT_LOGGER, ToolBocksModule.getGlobalLogger(), konsole );
+                    logger.error( `An error occurred while 'sweeping' an ExpiringCache`, ex.message, ex );
+                }
+            }.bind( me ?? this );
+
+            this.#timer = attempt( () => setInterval( sweep, (ONE_MINUTE * 20), me ?? this ) );
+
+            // do not prevent the event loop from terminating just because this time is active
+            if ( isFunction( this.#timer.unref ) )
+            {
+                attempt( () => this.#timer.unref() );
+            }
         }
 
         get ttl()
         {
             return clamp( asInt( this.#ttl ), MIN_CACHE_EXPIRATION, MAX_CACHE_EXPIRATION );
+        }
+
+        async dispose( ...pArgs )
+        {
+            attempt( () => this.clear() );
+            attempt( () => clearInterval( this.#timer ) );
+
+            return super.dispose( ...pArgs );
         }
 
         _createCacheEntry( pKey, pValue )
@@ -1523,7 +1318,9 @@
 
         get( pKey )
         {
-            let value = super.get( pKey );
+            const k = createKey( isNonNullObject( pKey ) ? dereference( pKey ) : pKey );
+
+            let value = super.get( k ) ?? super.get( pKey );
 
             if ( isNonNullObject( value ) )
             {
@@ -1533,18 +1330,33 @@
                 {
                     if ( value.isExpired() || value.expired )
                     {
-                        super.delete( pKey );
+                        attempt( () => super.delete( k ) );
+                        attemptSilent( () => super.delete( pKey ) );
                         return null;
                     }
                 }
 
                 if ( value instanceof CacheEntry )
                 {
-                    return dereference( value.value ?? value ) ?? value;
+                    value = dereference( value.value ?? value );
+                    if ( isNull( value ) )
+                    {
+                        attempt( () => super.delete( k ) );
+                        attemptSilent( () => super.delete( pKey ) );
+                        return null;
+                    }
+                }
+
+                value = unwrapValue( value );
+
+                if ( isNull( value ) )
+                {
+                    attempt( () => super.delete( k ) );
+                    attemptSilent( () => super.delete( pKey ) );
                 }
             }
 
-            return value;
+            return unwrapValue( value );
         }
     }
 
@@ -1560,12 +1372,10 @@
             classes:
                 {
                     CacheException,
-                    CacheKey,
                     CacheEntry,
                     ExpiringCacheEntry,
                     BaseCache,
                     __BoundedCache,
-                    __BoundedWeakCache,
                     BoundedCache,
                     ExpiringCache
                 },

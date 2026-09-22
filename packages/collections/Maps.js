@@ -13,6 +13,8 @@ const core = require( "@toolbocks/core" );
 
 const jsonUtils = require( "@toolbocks/json" );
 
+const logUtils = require( "@toolbocks/logging" );
+
 const collectionModule = require( "./Collection.js" );
 
 const { constants } = core;
@@ -50,6 +52,7 @@ const { _ud = "undefined", $scope } = constants;
             objectValues,
             attempt,
             asyncAttempt,
+            konsole,
             dereference,
             sleep,
             lock,
@@ -91,9 +94,51 @@ const { _ud = "undefined", $scope } = constants;
 
     const { TYPES, Collection } = collectionModule;
 
+    const { SimpleLogger, SourcedSimpleLogger } = logUtils;
+
     const modName = "BockCollectionUtils_Maps";
 
     let toolBocksModule = new ToolBocksModule( modName, INTERNAL_NAME );
+
+    const DEFAULT_LOGGER = new SimpleLogger( konsole );
+
+    const LOGGER = SourcedSimpleLogger.adapt( DEFAULT_LOGGER, "ToolBocks/Collections/Maps" );
+
+    const removeOldestEntry = function( pMap )
+    {
+        const map = isMap( pMap ) || isFunction( pMap?.keys ) ? pMap : new Map();
+
+        const oldestKey = dereference( attempt( () => map.keys().next()?.value ) );
+
+        if ( !(isNull( oldestKey ) || (isString( oldestKey ) && isBlank( oldestKey ))) )
+        {
+            attempt( () => map.delete( oldestKey ) || map.delete( dereference( oldestKey ) ) );
+        }
+
+        return map ?? pMap ?? new Map();
+    };
+
+    const trimMap = function( pMap, pMaxSize = pMap?.size )
+    {
+        let map = isMap( pMap ) || isFunction( pMap?.keys ) ? pMap : new Map();
+
+        let maxSize = clamp( asInt( pMaxSize || map.size ), 0, Number.MAX_SAFE_INTEGER - 1 );
+
+        if ( maxSize >= 0 && maxSize < Number.MAX_SAFE_INTEGER )
+        {
+            if ( maxSize > 0 && map.size > maxSize )
+            {
+                let numIterations = 0;
+                let maxIterations = clamp( map.size + 1, 1, 1_000 );
+                while ( map.size > maxSize && (numIterations++ < maxIterations) )
+                {
+                    map = removeOldestEntry( map ) ?? map;
+                }
+            }
+        }
+
+        return map ?? pMap ?? new Map();
+    };
 
 
     /**
@@ -102,12 +147,17 @@ const { _ud = "undefined", $scope } = constants;
      */
     class PropertyAccessMap extends Map
     {
+        #logger;
+
         constructor( pEntries, ...pExcludedProperties )
         {
             // Call the parent Map constructor to initialize the map's data
             super( isArray( pEntries ) ? pEntries : isNonNullObject( pEntries ) ? objectEntries( pEntries ) : [[]] );
 
             const me = this;
+
+            this.#logger = ToolBocksModule.resolveLogger( DEFAULT_LOGGER, LOGGER, ToolBocksModule.getGlobalLogger(), konsole );
+            this.#logger = SourcedSimpleLogger.adapt( this.#logger, this );
 
             const excludedProperties = asArray( pExcludedProperties );
 
@@ -592,6 +642,8 @@ const { _ud = "undefined", $scope } = constants;
 
         #lockValues = false;
 
+        #logger;
+
         constructor( pMap, pLimit = DEFAULT_BOUND, pUseWeakRef = false, pLockValues = false )
         {
             super();
@@ -604,13 +656,26 @@ const { _ud = "undefined", $scope } = constants;
 
             this.#map = isMap( pMap ) ? new Map( pMap.entries() ) : isNonNullObject( pMap ) ? new Map( Object.entries( pMap ) ) : new Map();
 
+            this.#logger = ToolBocksModule.resolveLogger( DEFAULT_LOGGER, LOGGER, ToolBocksModule.getGlobalLogger(), konsole );
+            this.#logger = SourcedSimpleLogger.adapt( this.#logger, this );
+
             // this is necessary in case the constructor is called with a Map that already has more than the upper bound limit
             this.#trimToLimit();
         }
 
+        get logger()
+        {
+            return ToolBocksModule.resolveLogger( this.#logger, DEFAULT_LOGGER, LOGGER, ToolBocksModule.getGlobalLogger(), konsole );
+        }
+
+        get errorHandler()
+        {
+            return this.logger.error;
+        }
+
         get size()
         {
-            return this.#map.size;
+            return this.#map?.size || super.size;
         }
 
         /**
@@ -620,6 +685,11 @@ const { _ud = "undefined", $scope } = constants;
         get limit()
         {
             return clamp( asInt( this.#limit, DEFAULT_BOUND ), MIN_BOUND, MAX_BOUND );
+        }
+
+        get maxSize()
+        {
+            return this.limit;
         }
 
         /**
@@ -653,7 +723,7 @@ const { _ud = "undefined", $scope } = constants;
                 // (which we assume to be identified by the first entry in the iterator)
                 const oldestKey = this.keys().next()?.value;
 
-                if ( !(isNull( oldestKey ) || isBlank( oldestKey )) )
+                if ( isNull( oldestKey ) )
                 {
                     this.delete( oldestKey );
                 }
@@ -817,6 +887,11 @@ const { _ud = "undefined", $scope } = constants;
                 }
             }
 
+            if ( isNull( value ) )
+            {
+                return false;
+            }
+
             // if this cache is at capacity
             if ( this.size >= this.limit )
             {
@@ -824,7 +899,7 @@ const { _ud = "undefined", $scope } = constants;
                 // (which we assume to be identified by the first entry in the iterator)
                 const oldestKey = this.keys().next()?.value;
 
-                if ( !(isNull( oldestKey ) || isBlank( oldestKey )) )
+                if ( !isNull( oldestKey ) )
                 {
                     this.delete( oldestKey );
                 }
@@ -856,6 +931,8 @@ const { _ud = "undefined", $scope } = constants;
          */
         * entries()
         {
+            const me = this;
+
             // We use super.entries() to get the raw Map iterator
             for( const [key, val] of this.#map.entries() )
             {
@@ -865,6 +942,7 @@ const { _ud = "undefined", $scope } = constants;
                 // If it's a WeakRef that has been garbage collected, or it is null, we ignore and move on
                 if ( isNull( value ) )
                 {
+                    asyncAttempt( async() => attempt( () => (me ?? this).delete( key ) ) ).then( no_op ).catch( (me ?? this)?.errorHandler ?? console.error );
                     continue;
                 }
 
@@ -992,7 +1070,9 @@ const { _ud = "undefined", $scope } = constants;
             PropertyAccessMap,
             TreeMap,
             ValueOrderedMap,
-            BoundedMap
+            BoundedMap,
+            removeOldestEntry,
+            trimMap
         };
 
     mod = toolBocksModule.extend( mod );
