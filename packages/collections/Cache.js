@@ -95,9 +95,9 @@
             throw new CacheException( `null as a cache key is not supported`, { detail: pKey }, pKey );
         }
 
-        if ( (isString( pKey ) && !isBlank( pKey )) || [_num, _big, _symbol, _str].includes( typeof pKey ) )
+        if ( (isString( pKey ) && !isBlank( pKey )) || [_num, _big, _symbol].includes( typeof pKey ) )
         {
-            return asString( pKey, true );
+            return (isNumber( pKey ) && asInt( pKey ) > 0) ? asInt( pKey ) : asString( pKey, true );
         }
 
         if ( isFunction( pKey ) )
@@ -767,9 +767,23 @@
                 }.bind( pThis ?? me );
             }
 
-            for( let entry of this.entries() )
+            try
             {
-                cb( entry );
+                for( let entry of this.entries() )
+                {
+                    attempt( () => cb( entry ) );
+                }
+            }
+            catch( ex )
+            {
+                throw new CacheException( ex,
+                                          {
+                                              detail:
+                                                  {
+                                                      callback: pCallback,
+                                                      cache: this
+                                                  }
+                                          }, pThis, pCallback, callback, cb );
             }
         }
 
@@ -1362,6 +1376,9 @@
 
     const mod =
         {
+            MIN_CACHE_CAPACITY,
+            DEFAULT_CACHE_CAPACITY,
+            MAX_CACHE_CAPACITY,
             dependencies:
                 {
                     core,

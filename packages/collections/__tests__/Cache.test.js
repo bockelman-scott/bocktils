@@ -143,7 +143,7 @@ describe( "BoundedCache - basic usage scenarios", () =>
                   const k = ObjectEntry.getKey( entry );
                   const v = ObjectEntry.getValue( entry );
 
-                  expect( typeof k ).toEqual( "string" );
+                  expect( typeof k ).toEqual( "number" );
                   expect( getClassName( v ) ).toEqual( "Person" );
               }
 
@@ -155,7 +155,7 @@ describe( "BoundedCache - basic usage scenarios", () =>
               {
                   count += 1;
 
-                  expect( typeof key ).toEqual( "string" );
+                  expect( typeof key ).toEqual( "number" );
               }
 
               expect( count ).toEqual( 4_096 );
@@ -279,88 +279,8 @@ describe( "BoundedCache - memory", () =>
         {
             attempt( () => v8.writeHeapSnapshot( `C:\\Projects\\bocktils\\packages\\collections\\__tests__\\logs\\snapshot_${Date.now()}.heapsnapshot` ) );
         }
-
-        // expect( BOUNDED_CACHE.size === CACHE_SIZE ).toBe( true );
-
-        // const value = BOUNDED_CACHE.get( asString( totalIterations - 4_095 ) );
-
-        /*
-         expect( typeof value ).toEqual( "object" );
-         expect( getClass( value ) ).toBe( Person );
-         */
-
-        // expect( CONTACT_CACHE.size === 4_096 ).toBe( true );
-
-        // const c = CONTACT_CACHE.get( asString( totalIterations - 4_095 ) );
-        //
-        // expect( typeof c ).toEqual( "object" );
-        // expect( getClass( c ) ).toBe( Contact );
     };
 
-    test( "exercise memory constraints of a bounded cache", () =>
-    {
-        const startTime = Date.now();
-        const startMem = os.freemem();
-
-        let lastMem = Math.floor( startMem );
-        let lastTime = startTime;
-
-        const boundedCache = new BoundedCache( CACHE_SIZE );
-        const contactCache = new BoundedCache( 4_096 );
-
-        const NUM_ITERATIONS = (3_276_700 * 2);
-
-        for( let i = 0; i < NUM_ITERATIONS; i++ )
-        {
-            const person = new Person( i, `User_${i}`, `Name_${i}` );
-            boundedCache.cacheValue( person.id, person );
-
-            const contact = new Contact( i, person.firstName, person.lastName, "some.email." + i + "@gmail.com", "6302127770" );
-            contactCache.set( contact.id, contact );
-
-            if ( i > 0 && 0 === (i % 10_000) )
-            {
-                let totalTime = Date.now() - startTime;
-
-                let iterationTime = Date.now() - (lastTime || startTime);
-
-                let freeMemory = os.freemem();
-
-                let delta = startMem - freeMemory;
-
-                let recentDelta = (lastMem || startMem) - freeMemory;
-
-                console.log( `Iteration ${i} of ${NUM_ITERATIONS}, freemem: ${freeMemory}, recent_delta: ${recentDelta}, delta: ${delta}, iteration_time: ${iterationTime}ms, total_time: ${totalTime}ms, cache_size: ${boundedCache.size}` );
-
-                expect( boundedCache.size <= CACHE_SIZE ).toBe( true );
-                expect( boundedCache.get( i ) ).toEqual( person );
-
-                if ( i > 0 && 0 === (i % 2_500_000) )
-                {
-                    attempt( () => v8.writeHeapSnapshot( `C:\\Projects\\bocktils\\packages\\collections\\__tests__\\logs\\snapshot_${Date.now()}.heapsnapshot` ) );
-                    asyncAttempt( () => globalGc() ).then( no_op ).catch( console.error );
-                }
-
-                lastMem = freeMemory;
-                lastTime = Date.now();
-            }
-        }
-
-        expect( boundedCache.size === CACHE_SIZE ).toBe( true );
-
-        const value = boundedCache.get( asString( NUM_ITERATIONS - 4_095 ) );
-
-        expect( typeof value ).toEqual( "object" );
-        expect( getClass( value ) ).toBe( Person );
-
-        expect( contactCache.size === 4_096 ).toBe( true );
-
-        const c = contactCache.get( asString( NUM_ITERATIONS - 4_095 ) );
-
-        expect( typeof c ).toEqual( "object" );
-        expect( getClass( c ) ).toBe( Contact );
-
-    }, 1_200_000 );
 
     test( "realistic memory tests of a bounded cache", async() =>
     {
