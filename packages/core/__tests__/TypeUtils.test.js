@@ -73,6 +73,7 @@ const
         isMap,
         isSet,
         isDate,
+        isDateString,
         isRegExp,
         isClass,
         isUserDefinedClass,
@@ -3201,6 +3202,30 @@ describe( "isDate", () =>
               let dateString = "09/12/2024";
               expect( isDate( dateString ) ).toBe( false );
           } );
+} );
+
+describe( "isDateString", () =>
+{
+    test( "isDateString('2026-06-18') === true", () =>
+    {
+        expect( isDateString( "2026-06-18" ) ).toBe( true );
+    } );
+
+    test( "isDateString('2026-06-') === true", () =>
+    {
+        // console.log( new Date( "2026-06-" ) );
+        expect( isDateString( "2026-06-" ) ).toBe( true );
+    } );
+
+    test( "isDateString('') === false", () =>
+    {
+        expect( isDateString( "" ) ).toBe( false );
+    } );
+
+    test( "isDateString('abc') === false", () =>
+    {
+        expect( isDateString( "abc" ) ).toBe( false );
+    } );
 } );
 
 describe( "isRegExp", () =>
