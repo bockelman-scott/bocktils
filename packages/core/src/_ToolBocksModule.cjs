@@ -10542,6 +10542,11 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
                 return compareStrings( _asStr( pFirst ), _asStr( pSecond ) );
 
             case _obj:
+                if ( isDate( pFirst ) && isDate( pSecond ) )
+                {
+                    return compareDates( pFirst, pSecond );
+                }
+
                 if ( isFunc( pFirst?.compareTo ) )
                 {
                     return pFirst.compareTo( pSecond );
@@ -10605,6 +10610,30 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         }
 
         return COMPARE_EQUAL;
+    };
+
+    const compareDates = function( pFirst, pSecond, pNullsFirst = false )
+    {
+        const a = isDate( pFirst ) || isDate( attempt( () => new Date( pFirst ) ) ) ? new Date( pFirst ) : null;
+        const b = isDate( pSecond ) || isDate( attempt( () => new Date( pSecond ) ) ) ? new Date( pSecond ) : null;
+
+        return compareNullable( a, b,
+                                pNullsFirst,
+                                ( dateA, dateB ) =>
+                                {
+                                    // more recent
+                                    if ( (dateA ?? a).getTime() > (dateB ?? b).getTime() )
+                                    {
+                                        return -1;
+                                    }
+                                    // less recent
+                                    else if ( (dateA ?? a).getTime() < (dateB ?? b).getTime() )
+                                    {
+                                        return 1;
+                                    }
+                                    // or same date
+                                    return 0;
+                                } );
     };
 
     /**
@@ -10978,14 +11007,14 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
             immutableCopy,
             deepFreeze,
 
+            compareNullable,
             compareStrings,
             compareInts,
             compareFloats,
             compareBooleans,
             compareSymbols,
+            compareDates,
             compare,
-
-            compareNullable,
 
             $ln,
             $nth,
