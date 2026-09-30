@@ -288,17 +288,23 @@ const { _ud = "undefined", $scope } = constants;
                   separator: _hyphen
               } );
 
+    const TRANSFORMED_KEYS = { ...DEFAULT_KEYS };
+    for( let entry of objectEntries( TRANSFORMED_KEYS ) )
+    {
+        TRANSFORMED_KEYS[ObjectEntry.getKey( entry )] = asString( ObjectEntry.getValue( entry ), true ).replaceAll( /[_.\/\\-]/g, _underscore );
+    }
+
     const createKey = ( pPrefix, pKey, pSeparator = DEFAULT_OPTIONS.separator ) =>
     {
         const prefix = asString( pPrefix, true );
 
-        const separator = asString( pSeparator, true ) || DEFAULT_OPTIONS.separator;
+        const separator = asString( pSeparator || DEFAULT_OPTIONS.separator, true ) || DEFAULT_OPTIONS.separator;
 
         const rxPrefix = new RegExp( ("^" + (prefix || "#")), "i" );
 
-        const rxStartSep = new RegExp( "^" + (separator || "~") + "+" );
+        const rxStartSep = new RegExp( "^" + (separator || "~") + "+", "i" );
 
-        const rxEndSep = new RegExp( (separator || "~") + "+" + "$" );
+        const rxEndSep = new RegExp( (separator || "~") + "+" + "$", "i" );
 
         const rxDuplicated = new RegExp( `${(separator||"~")}{2,}`, "g" );
 
@@ -498,7 +504,7 @@ const { _ud = "undefined", $scope } = constants;
 
             this.#prefix = asString( this.#prefix || _mt, true );
 
-            this.#separator = asString( this.#options?.separator, true );
+            this.#separator = asString( this.#options?.separator || DEFAULT_OPTIONS.separator, true );
 
             this.#source = this.#options?.source ||
                            ($ln( this.#args ) > 0 ?
@@ -761,7 +767,7 @@ const { _ud = "undefined", $scope } = constants;
                 return null;
             }
 
-            let key = this.resolveKey( pKey );
+            const key = this.resolveKey( pKey );
 
             if ( this.restrictKeys && !(SecretsManager.isValidKey( pKey ) || SecretsManager.isValidKey( key )) )
             {
@@ -842,7 +848,7 @@ const { _ud = "undefined", $scope } = constants;
                 return null;
             }
 
-            let key = this.resolveKey( pKey );
+            const key = this.resolveKey( pKey );
 
             if ( this.#restrictKeys && !(SecretsManager.isValidKey( pKey ) || SecretsManager.isValidKey( key )) )
             {
@@ -854,7 +860,7 @@ const { _ud = "undefined", $scope } = constants;
                                                  this.#cache.get( ucase( asString( key, true ) ) ) ||
                                                  this.#cache.get( asString( pKey ) )) : (ENVIRONMENT[key] ?? null);
 
-            secret = secret || ENVIRONMENT[key];
+            secret = secret || ENVIRONMENT[key] || ENVIRONMENT[asString( key, true ).replaceAll( /[_.\/\\-]/g, _underscore )];
 
             // if it is found, we simply return it
             if ( isValidSecret( secret ) )
@@ -1199,10 +1205,10 @@ const { _ud = "undefined", $scope } = constants;
                 }
             }
 
-            attempt( () => this.#populateExistingEnvirnmentVariables() );
+            attempt( () => this.#populateExistingEnvironmentVariables() );
         }
 
-        #populateExistingEnvirnmentVariables()
+        #populateExistingEnvironmentVariables()
         {
             const proc = PROCESS ?? (_ud !== typeof process ? process : $scope());
             const ENV = ENVIRONMENT ?? proc?.env ?? $scope();
@@ -1235,14 +1241,21 @@ const { _ud = "undefined", $scope } = constants;
             const proc = PROCESS ?? (_ud !== typeof process ? process : $scope());
             const ENV = ENVIRONMENT ?? proc?.env ?? $scope();
 
-            let key = this.resolveKey( pKey );
+            const key = this.resolveKey( pKey );
 
             if ( this.isMissing( key ) )
             {
                 return null;
             }
 
-            let secret = ENV[key] || ENV[ucase( key )] || ENV[asString( pKey, true )] || ENV[ucase( asString( pKey, true ) )];
+            let secret = ENV[key] ||
+                         ENV[ucase( key )] ||
+                         ENV[asString( pKey, true )] ||
+                         ENV[ucase( asString( pKey, true ) )] ||
+                         ENV[asString( key, true ).replaceAll( /[_.\/\\-]/g, _underscore )] ||
+                         ENV[ucase( key ).replaceAll( /[_.\/\\-]/g, _underscore )] ||
+                         ENV[asString( pKey, true ).replaceAll( /[_.\/\\-]/g, _underscore )] ||
+                         ENV[ucase( asString( pKey, true ) ).replaceAll( /[_.\/\\-]/g, _underscore )];
 
             if ( isValidSecret( secret ) )
             {
@@ -1253,7 +1266,7 @@ const { _ud = "undefined", $scope } = constants;
                 return this.resolveSecretValue( secret, key );
             }
 
-            this.recordMissingKeys( key );
+            this.recordMissingKeys( key, pKey, ucase( key ), ucase( pKey ) );
 
             return this.resolveSecretValue( secret, key );
         }
@@ -1274,7 +1287,7 @@ const { _ud = "undefined", $scope } = constants;
                 return null;
             }
 
-            let key = this.resolveKey( pKey );
+            const key = this.resolveKey( pKey );
 
             if ( this.restrictKeys && !(SecretsManager.isValidKey( pKey ) || SecretsManager.isValidKey( key )) )
             {
@@ -1311,7 +1324,7 @@ const { _ud = "undefined", $scope } = constants;
                 return null;
             }
 
-            let key = this.resolveKey( pKey );
+            const key = this.resolveKey( pKey );
 
             if ( this.restrictKeys && !(SecretsManager.isValidKey( pKey ) || SecretsManager.isValidKey( key )) )
             {
@@ -1335,14 +1348,14 @@ const { _ud = "undefined", $scope } = constants;
 
         async init( ...pArgs )
         {
-            let args = asArray( pArgs );
+            const args = asArray( pArgs );
 
-            let path = asString( args.find( e => asString( e, true ).endsWith( ".env" ) ) || this.source || _mt ) || _mt;
+            const path = asString( args.find( e => asString( e, true ).endsWith( ".env" ) ) || this.source || _mt ) || _mt;
 
             if ( !isBlank( path ) && isFilePath( path ) && exists( path ) )
             {
                 attempt( () => dotenvx.config( { path: path, ...dotEnvxOptions } ) );
-                attempt( () => this.#populateExistingEnvirnmentVariables() );
+                attempt( () => this.#populateExistingEnvironmentVariables() );
             }
 
             return super.init( ...pArgs );
@@ -1418,12 +1431,12 @@ const { _ud = "undefined", $scope } = constants;
 
         async getApiKey( pPrefix )
         {
-            let prefix = asString( pPrefix || this.prefix, true );
+            const prefix = asString( pPrefix || this.prefix, true );
 
-            let secret = this.getCachedSecret( KEYS.API_KEY ) ||
-                         await this.getSecret( createKey( prefix, KEYS.API_KEY ) );
+            const secret = this.getCachedSecret( KEYS.API_KEY ) ||
+                           await this.getSecret( createKey( prefix, KEYS.API_KEY ) );
 
-            let apiKey = this.resolveSecretValue( secret );
+            const apiKey = this.resolveSecretValue( secret );
 
             return asString( isBlank( apiKey ) ? await this.getSecret( KEYS.API_KEY ) : apiKey, true );
         }
@@ -1689,6 +1702,14 @@ const { _ud = "undefined", $scope } = constants;
         return lock( Object.values( SecretsManager.getKeys() ) );
     };
 
+    SecretsManagerFactory.scanForClasses = function( pRoot, pPattern )
+    {
+        // TODO: walk directories from the root in search of files matching pPattern
+        // require each matching module,
+        // expecting that any SecretsManager classes
+        // will register themselves as available strategies
+    };
+
     /**
      * The actual functionality to be exposed via the toolBocksModule.
      *
@@ -1701,6 +1722,7 @@ const { _ud = "undefined", $scope } = constants;
             SECRET_VERSION,
             DEFAULT_OPTIONS,
             DEFAULT_KEYS,
+            TRANSFORMED_KEYS: lock( TRANSFORMED_KEYS ),
             dependencies:
                 {
                     dotenvx,
