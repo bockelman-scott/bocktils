@@ -39,6 +39,7 @@ const { _ud = "undefined", $scope } = constants;
             populateOptions,
             attempt,
             asyncAttempt,
+            attemptSilent,
             resolveError,
             getLastError,
             lock,
@@ -430,12 +431,12 @@ const { _ud = "undefined", $scope } = constants;
 
     if ( _ud === typeof localStorage )
     {
-        $scope().localStorage = $scope().localStorage || new HttpLocalStorage();
+        attemptSilent( () => $scope().localStorage = $scope().localStorage || new HttpLocalStorage() );
     }
 
     if ( _ud === typeof sessionStorage )
     {
-        $scope().sessionStorage = $scope().sessionStorage || new HttpSessionStorage();
+        attemptSilent( () => $scope().sessionStorage = $scope().sessionStorage || new HttpSessionStorage() );
     }
 
     let mod =
@@ -452,8 +453,8 @@ const { _ud = "undefined", $scope } = constants;
             HttpLocalStorage,
             HttpSessionStorage,
             HttpStorageEvent,
-            sessionStorage: $scope().sessionStorage || new HttpSessionStorage(),
-            localStorage: $scope().localStorage || new HttpLocalStorage()
+            sessionStorage: attemptSilent( () => $scope().sessionStorage || new HttpSessionStorage() ),
+            localStorage: attemptSilent( () => $scope().localStorage || new HttpLocalStorage() )
         };
 
     mod = modulePrototype.extend( mod );
