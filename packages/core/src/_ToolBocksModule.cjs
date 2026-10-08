@@ -7986,6 +7986,8 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         // a map of stateful listeners by event (string)
         #statefulListeners = {};
 
+        #evtTarget = new EventTarget();
+
         /**
          * Constructs a new instance, or module, to expose functionality to consumers.
          * <br>
@@ -8170,7 +8172,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         addEventListener( pType, pCallback, pOptions )
         {
-            super.addEventListener( pType, pCallback, pOptions );
+            if ( !isReadOnly( this ) )
+            {
+                attemptSilent( () => super.addEventListener( pType, pCallback, pOptions ) );
+            }
+
+            attemptSilent( () => this.#evtTarget.addEventListener( pType, pCallback, pOptions ) );
 
             if ( this.traceEnabled )
             {
@@ -8220,7 +8227,7 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
         {
             const evt = resolveEvent( pEvent, pData, pOptions );
 
-            const dispatched = super.dispatchEvent( evt );
+            const dispatched = !isReadOnly( this ) ? attemptSilent( () => super.dispatchEvent( evt ) ) || attemptSilent( () => this.#evtTarget.dispatchEvent( evt ) ) : attemptSilent( () => this.#evtTarget.dispatchEvent( evt ) );
 
             if ( dispatched )
             {
@@ -8245,7 +8252,12 @@ const CMD_LINE_ARGS = [...(_ud !== typeof process ? process?.argv || [] : (_ud !
 
         removeEventListener( pType, pCallback, pOptions )
         {
-            super.removeEventListener( pType, pCallback, pOptions );
+            if ( !isReadOnly( this ) )
+            {
+                attemptSilent( () => super.removeEventListener( pType, pCallback, pOptions ) );
+            }
+
+            attemptSilent( () => this.#evtTarget.removeEventListener( pType, pCallback, pOptions ) );
 
             if ( pCallback instanceof StatefulListener )
             {
