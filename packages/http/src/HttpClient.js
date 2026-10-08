@@ -1118,7 +1118,7 @@ const { _ud = "undefined", $scope } = constants;
 
                         if ( isMap( value ) )
                         {
-                            const mapEntries = objectEntries( value );
+                            const mapEntries = value.entries() ?? objectEntries( value );
 
                             const valueMap = new Map();
 
@@ -2366,11 +2366,12 @@ const { _ud = "undefined", $scope } = constants;
 
                         if ( parsed && isMap( parsed ) )
                         {
-                            const entries = objectEntries( parsed );
+                            const entries = isFunction( parsed.entries ) ? parsed.entries() ?? objectEntries( parsed ) : objectEntries( parsed );
+
                             entries.forEach( entry =>
                                              {
-                                                 const key = ObjectEntry.getKey( entry );
-                                                 const value = ObjectEntry.getValue( entry );
+                                                 const key = ObjectEntry.getKey( entry ) || entry[0];
+                                                 const value = ObjectEntry.getValue( entry ) ?? entry[1];
                                                  const window = me.getRequestWindow( key );
                                                  window.numAllowed = asInt( value );
                                              } );
@@ -2680,16 +2681,17 @@ const { _ud = "undefined", $scope } = constants;
 
                 if ( isBlank( groupName ) )
                 {
-                    const entries = objectEntries( this.expressionMap );
+                    const entries = isFunction( this.expressionMap?.entries ) ? this.expressionMap?.entries() ?? objectEntries( this.expressionMap ) : objectEntries( this.expressionMap );
+
                     for( let entry of entries )
                     {
-                        const key = ObjectEntry.getKey( entry );
+                        const key = ObjectEntry.getKey( entry ) || entry[0];
 
                         if ( isRegExp( key ) )
                         {
                             if ( key.test( path ) )
                             {
-                                groupName = ObjectEntry.getValue( entry );
+                                groupName = ObjectEntry.getValue( entry ) || entry[1];
                                 break;
                             }
                             else
@@ -2698,7 +2700,7 @@ const { _ud = "undefined", $scope } = constants;
                                 {
                                     if ( key.test( p ) )
                                     {
-                                        groupName = ObjectEntry.getValue( entry );
+                                        groupName = ObjectEntry.getValue( entry ) || entry[1];
                                         break;
                                     }
                                 }

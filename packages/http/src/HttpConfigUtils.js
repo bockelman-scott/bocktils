@@ -559,12 +559,12 @@ const { _ud = "undefined", $scope } = constants;
 
             let rtnValue = {};
 
-            let entries = objectEntries( headers || {} ) || [];
+            let entries = isFunction( headers?.entries ) ? headers.entries() ?? objectEntries( headers ?? {} ) ?? [] : objectEntries( headers ?? {} ) ?? [];
 
             entries.forEach( entry =>
                              {
-                                 let key = asString( ObjectEntry.getKey( entry ), true );
-                                 let value = asString( ObjectEntry.getValue( entry ), true );
+                                 const key = asString( ObjectEntry.getKey( entry ) || entry[0], true );
+                                 const value = asString( ObjectEntry.getValue( entry ) || entry[1], true );
 
                                  if ( !(isBlank( key ) || isBlank( value )) )
                                  {
