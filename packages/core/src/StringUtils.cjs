@@ -1941,7 +1941,12 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
     const deriveDecimalSymbols = function( pNumString, pOptions )
     {
-        const options = { ...DEFAULT_NUMBER_SYMBOLS, ...(pOptions || calculateDecimalSymbols() || {}) };
+        const options =
+            {
+                ...DEFAULT_NUMBER_SYMBOLS,
+                ...DEFAULT_DECIMAL_SYMBOLS,
+                ...(isNonNullObject( pOptions ) ? pOptions ?? DEFAULT_DECIMAL_SYMBOLS : DEFAULT_DECIMAL_SYMBOLS ?? calculateDecimalSymbols() ?? {})
+            };
 
         let s = asString( pNumString );
 
@@ -1975,6 +1980,8 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
         return lock( obj );
     };
 
+    const DEFAULT_DECIMAL_SYMBOLS = calculateDecimalSymbols() ?? DEFAULT_NUMBER_FORMATTING_SYMBOLS;
+
     /**
      * Returns a string representing a numeric value with the grouping separator(s) removed,
      * currency symbol removed,
@@ -1990,16 +1997,22 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
      */
     function toCanonicalNumericFormat( pInput, pOptions )
     {
-        const options = { ...DEFAULT_NUMBER_SYMBOLS, ...(pOptions || calculateDecimalSymbols() || {}) };
+        const options =
+            {
+                ...DEFAULT_NUMBER_SYMBOLS,
+                ...DEFAULT_DECIMAL_SYMBOLS,
+                ...(isNonNullObject( pOptions ) ? pOptions ?? DEFAULT_DECIMAL_SYMBOLS ?? calculateDecimalSymbols() ?? {} : DEFAULT_DECIMAL_SYMBOLS ?? DEFAULT_NUMBER_SYMBOLS ?? calculateDecimalSymbols())
+            };
 
         let s = asString( pInput );
 
-        let {
-            corrected_value,
-            decimal_point,
-            grouping_separator,
-            currency_symbol
-        } = deriveDecimalSymbols( s, options );
+        let
+            {
+                corrected_value,
+                decimal_point,
+                grouping_separator,
+                currency_symbol
+            } = deriveDecimalSymbols( s, options );
 
         s = asString( corrected_value );
 
@@ -2076,7 +2089,13 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
         const dflt = isNumber( pDefault ) || isString( pDefault ) ? pDefault : zero;
 
-        const options = populateOptions( { ...(pOptions || calculateDecimalSymbols()) }, (isObject( pDefault ) ? pDefault : pOptions), DEFAULT_NUMBER_SYMBOLS );
+        const options =
+            {
+                ...(DEFAULT_DECIMAL_SYMBOLS ?? DEFAULT_NUMBER_SYMBOLS ?? calculateDecimalSymbols()),
+                ...((isNonNullObject( pOptions ) ? pOptions ?? {} : {}) ?? DEFAULT_DECIMAL_SYMBOLS ?? calculateDecimalSymbols()),
+                ...((isNonNullObject( pDefault ) ? pDefault : isNonNullObject( pOptions ) ? pOptions ?? {} : {})),
+                ...((isNonNullObject( pOptions ) ? pOptions ?? {} : isNonNullObject( pDefault ) ? pDefault ?? {} : {}))
+            };
 
         let input = _resolveInput.call( (this ?? pValue), pValue );
 
@@ -2154,7 +2173,12 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
     {
         let ipt = pValue ?? _resolveInput.call( (this ?? pValue), pValue ) ?? pValue;
 
-        let symbols = pOptions || calculateDecimalSymbols();
+        if ( isNumber( ipt ) )
+        {
+            return Math.round( ipt );
+        }
+
+        let symbols = pOptions ?? DEFAULT_DECIMAL_SYMBOLS ?? calculateDecimalSymbols();
 
         const
             {
@@ -2287,14 +2311,19 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
     {
         let ipt = pValue ?? _resolveInput.call( (this ?? pValue), pValue ) ?? pValue;
 
-        let symbols = isObject( pOptions ) ? (pOptions?.decimalFormatSymbol ?? pOptions?.decimalSymbols ?? pOptions?.symbols ?? pOptions ?? calculateDecimalSymbols()) : calculateDecimalSymbols();
+        if ( isNumber( ipt ) )
+        {
+            return parseFloat( asString( ipt, true ).replace( /n$/, _mt ) );
+        }
+
+        let symbols = isNonNullObject( pOptions ) ? (pOptions?.decimalFormatSymbol ?? pOptions?.decimalSymbols ?? pOptions?.symbols ?? pOptions ?? DEFAULT_DECIMAL_SYMBOLS ?? calculateDecimalSymbols()) : calculateDecimalSymbols();
 
         const
             {
                 input = ipt ?? pValue,
                 dflt = pDefault ?? 0.0,
                 options = symbols
-            } = _resolveAsArguments( true, ipt ?? pValue, pDefault ?? 0.0, symbols ?? calculateDecimalSymbols() );
+            } = _resolveAsArguments( true, ipt ?? pValue, pDefault ?? 0.0, symbols ?? DEFAULT_DECIMAL_SYMBOLS ?? calculateDecimalSymbols() );
 
         let val = !isNumber( input ) ? attempt( () => _asFloatFromType( input, dflt, options ) ) : parseFloat( input );
 
@@ -2318,7 +2347,12 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
     const toNumberWithinRange = function( pStr, pMin, pMax, converter, pOptions )
     {
-        const options = { ...DEFAULT_NUMBER_SYMBOLS, ...(pOptions || calculateDecimalSymbols() || {}) };
+        const options =
+            {
+                ...DEFAULT_NUMBER_SYMBOLS,
+                ...DEFAULT_DECIMAL_SYMBOLS,
+                ...(isNonNullObject( pOptions ) ? pOptions ?? DEFAULT_DECIMAL_SYMBOLS ?? calculateDecimalSymbols() ?? {} : DEFAULT_DECIMAL_SYMBOLS ?? DEFAULT_NUMBER_SYMBOLS ?? calculateDecimalSymbols())
+            };
 
         const value = converter( pStr, 0, options );
 
@@ -2333,12 +2367,12 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
 
     const toIntWithinRange = function( pStr, pMin, pMax, pOptions )
     {
-        return toNumberWithinRange( pStr, pMin, pMax, asInt, (pOptions || calculateDecimalSymbols()) );
+        return toNumberWithinRange( pStr, pMin, pMax, asInt, (pOptions ?? DEFAULT_DECIMAL_SYMBOLS ?? calculateDecimalSymbols()) );
     };
 
     const toFloatWithinRange = function( pStr, pMin, pMax, pOptions )
     {
-        return toNumberWithinRange( pStr, pMin, pMax, asFloat, (pOptions || calculateDecimalSymbols()) );
+        return toNumberWithinRange( pStr, pMin, pMax, asFloat, (pOptions ?? DEFAULT_DECIMAL_SYMBOLS ?? calculateDecimalSymbols()) );
     };
 
     /**
@@ -4917,6 +4951,7 @@ const { _ud = "undefined", $scope = moduleUtils.$scope } = constants;
             EMAIL_PROVIDERS_SUPPORTING_PLUS_VARIANTS,
             DEFAULT_AS_STRING_OPTIONS,
             DEFAULT_NUMBER_SYMBOLS,
+            DEFAULT_DECIMAL_SYMBOLS,
             PROPERCASE_OPTIONS,
             TITLE_CASE_OPTIONS,
             LATIN_1_CHARACTER_MAP,
