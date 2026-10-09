@@ -60,6 +60,16 @@ const { _ud = "undefined", $scope } = constants;
 
     const resolveDate = ( pDate ) => isDate( pDate ) ? pDate : isNumeric( pDate ) ? new Date( asInt( pDate ) ) : isDateString( pDate ) ? new Date( pDate ) : new Date();
 
+    /**
+     * Ensures localized date/time abbreviations don't break across line wraps.
+     * Replaces standard spaces inside 'a. m.' or 'p. m.' patterns with NNBSP (\u202F) or NBSP (\u00A0).
+     */
+    function _protectLocalizedTimeFormat( formattedStr )
+    {
+        // Fixes Spanish/French style 'a. m.' or 'p. m.' dot-spaced designators
+        return formattedStr.replace( /([ap]\b\.)\s+(\bm\b\.)/gi, "$1\u202F$2" );
+    }
+
     class DateFormatter
     {
         #locale = DEFAULT_LOCALE;
@@ -228,7 +238,7 @@ const { _ud = "undefined", $scope } = constants;
 
                 format = format.map( e => e.format( date ) );
 
-                return format.join( _mt_str );
+                return _protectLocalizedTimeFormat( format.join( _mt_str ) );
             }
 
             if ( isObject( this.options ) )
@@ -237,7 +247,7 @@ const { _ud = "undefined", $scope } = constants;
 
                 const dateTimeFormat = new Intl.DateTimeFormat( this.locale.baseName, options );
 
-                return dateTimeFormat.format( date );
+                return _protectLocalizedTimeFormat( dateTimeFormat.format( date ) );
             }
 
             return date.toLocaleString( [this.locale, DEFAULT_LOCALE] );

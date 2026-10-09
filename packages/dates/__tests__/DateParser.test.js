@@ -222,6 +222,8 @@ describe( "DateParser", () =>
                         passed: success
                     };
 
+                console.log( "Expected:", expected, "Parsed:", parsed, "Locale:", example.locale, "Format:", example.format );
+
                 const expectedResults = Object.assign( {}, results );
                 expectedResults.passed = true;
 

@@ -48,51 +48,54 @@ const { _ud = "undefined", $scope } = constants;
 
     const { ToolBocksModule, mergeOptions } = moduleUtils;
 
-    const { _mt_str, _str, _num, _obj, no_op, _hyphen, _minus, _underscore, _colon } = constants;
+    const { _mt_str, _mt = _mt_str, _spc, _str, _num, _obj, no_op, _hyphen, _minus, _underscore, _colon } = constants;
 
-    const {
-        isNull,
-        isString,
-        isDate,
-        isDateString,
-        isValidDateInstance,
-        isNumber,
-        isNumeric,
-        isNanOrInfinite,
-        isValidDateOrNumeric,
-        isArray,
-        isLikeArray,
-        isNonNullObject,
-        firstMatchingType,
-        clamp
-    } = typeUtils;
+    const
+        {
+            isNull,
+            isString,
+            isDate,
+            isDateString,
+            isValidDateInstance,
+            isNumber,
+            isNumeric,
+            isNanOrInfinite,
+            isValidDateOrNumeric,
+            isArray,
+            isLikeArray,
+            isNonNullObject,
+            firstMatchingType,
+            clamp
+        } = typeUtils;
 
-    const {
-        asInt,
-        asString,
-        lcase,
-        ucase,
-        isBlank,
-        toUnixPath,
-        leftOf,
-        rightOf,
-        rightOfLast
-    } = stringUtils;
+    const
+        {
+            asInt,
+            asString,
+            lcase,
+            ucase,
+            isBlank,
+            toUnixPath,
+            leftOf,
+            rightOf,
+            rightOfLast
+        } = stringUtils;
 
     const { asArray, flatArgs, includesAny } = arrayUtils;
 
     const { resolveLocale, isSameLocale } = localeUtils;
 
-    const {
-        resolveDate,
-        DATE_PARTS,
-        DateBuffer,
-        numDaysInMonth,
-        calculateNthOccurrenceOfDay,
-        merge = moduleUtils.merge,
-        rxTz = () => /((GMT|UTC)([+-])?(\d{1,2})?:?(\d{2})?)|(((\w+ )*)(Time)?$)/gd,
-        Now = () => new Date()
-    } = dateUtils;
+    const
+        {
+            resolveDate,
+            DATE_PARTS,
+            DateBuffer,
+            numDaysInMonth,
+            calculateNthOccurrenceOfDay,
+            merge = moduleUtils.merge,
+            rxTz = () => /((GMT|UTC)([+-])?(\d{1,2})?:?(\d{2})?)|(((\w+ )*)(Time)?$)/gd,
+            Now = () => new Date()
+        } = dateUtils;
 
     const { classes: TokenSetClasses, getDefaultTokenSet, SUPPORTED_INTL_OPTIONS } = tokenSetUtils;
 
@@ -390,7 +393,8 @@ const { _ud = "undefined", $scope } = constants;
         {
             if ( (isDate( pString ) || isDateString( pString )) || (isNumber( pString ) && !isNanOrInfinite( pString ) && !this.isPattern( pString )) )
             {
-                let date = new Date( pString );
+                const date = isString( pString ) ? new Date( asString( pString, true ).replaceAll( /[\s\u00A0\u202F]/g, _spc ) ) : new Date( pString );
+
                 if ( isValidDateInstance( date ) )
                 {
                     return date;

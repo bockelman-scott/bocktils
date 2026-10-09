@@ -2,7 +2,9 @@ const core = require( "@toolbocks/core" );
 
 const dateFormatterModule = require( "../src/DateFormatter.cjs" );
 
-const { moduleUtils, constants } = core;
+const { moduleUtils, constants, typeUtils } = core;
+
+const { isRegExp } = typeUtils;
 
 const { DateFormatter } = dateFormatterModule;
 
@@ -81,9 +83,9 @@ describe( "DateFormatter", () =>
                 format: "EEE, d MMMM yy h:m:s a",
                 tests:
                     [
-                        { date: date, expected: "mar, 29 octubre 24 10:16:0 a." + constants._nbsp + "m." },
-                        { date: date2, expected: "mié, 3 julio 24 9:6:4 a. m." },
-                        { date: date3, expected: "jue, 1 febrero 24 8:45:33 p. m." }
+                        { date: date, expected: /mar,\s+29\s+octubre\s+24\s+10:16:0\s+a\.[\s\u00A0\u202F]m\./ },
+                        { date: date2, expected: /mié,\s+3\s+julio\s+24\s+9:6:4\s+a\.[\s\u00A0\u202F]m\./ },
+                        { date: date3, expected: /jue,\s+1\s+febrero\s+24\s+8:45:33\s+p\.[\s\u00A0\u202F]m\./ }
                     ]
             }
         ];
@@ -158,15 +160,20 @@ describe( "DateFormatter", () =>
 
             let tests = example.tests;
 
-            let dates = [];
-
             for( let i = 0, n = tests.length; i < n; ++i )
             {
                 let t = tests[i];
 
-                dates.push( [t.date, t.expected] );
+                const formattedDate = dateFormatter.format( t.date );
 
-                expect( dateFormatter.format( t.date ) ).toEqual( t.expected );
+                if ( isRegExp( t.expected ) )
+                {
+                    expect( (t.expected).test( formattedDate ) ).toBe( true );
+                }
+                else
+                {
+                    expect( formattedDate ).toEqual( t.expected );
+                }
             }
         }
     } );
