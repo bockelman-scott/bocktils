@@ -1662,6 +1662,33 @@ describe( "isObjectLiteral", () =>
 
         expect( isObjectLiteral( obj ) ).toBe( true );
 
+        expect( isObjectLiteral( { a: 1, b: new Map() } ) ).toBe( false );
+
+        expect( isObjectLiteral( 1 ) ).toBe( false );
+
+        expect( isObjectLiteral( "Blah blah blah" ) ).toBe( false );
+
+        expect( isObjectLiteral( isObjectLiteral ) ).toBe( false );
+
+        expect( isObjectLiteral( false ) ).toBe( false );
+
+        expect( isObjectLiteral( true ) ).toBe( false );
+
+        expect( isObjectLiteral( Symbol.for( "kIsObjectLiteral" ) ) ).toBe( false );
+
+        expect( isObjectLiteral( BigInt( 34567909876545678900987 ) ) ).toBe( false );
+
+        expect( isObjectLiteral( { recursive: true } ) ).toBe( true );
+
+        expect( isObjectLiteral( { "recursive": true } ) ).toBe( true );
+
+        expect( isObjectLiteral( { "recursive": "true" } ) ).toBe( true );
+
+        expect( isObjectLiteral( `{ "recursive": true }` ) ).toBe( false );
+
+        expect( isObjectLiteral( Object.create( null ) ) ).toBe( true );
+
+
         class NonLiteralClass
         {
             #attribute;
@@ -2648,7 +2675,7 @@ describe( "compare functions", () =>
         ////
     } );
 
-    test( "compareFloats", ()=>
+    test( "compareFloats", () =>
     {
         let f1 = 1.00000005;
         let f2 = 1.00000006;
@@ -2659,5 +2686,5 @@ describe( "compare functions", () =>
         f2 = 1.0006;
 
         expect( compareFloats( f1, f2 ) ).toEqual( -1 );
-    });
+    } );
 } );
