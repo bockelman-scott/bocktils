@@ -951,7 +951,7 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
         {
             const options = mergeOptions( pOptions, { recurse: true, force: true, maxRetries: 3, retryDelay: 150 } );
             const filePath = resolveDirectoryPath( pPath );
-            fs.rm( filePath, options );
+            (fs.rmSync ?? fs.rm)( filePath, options );
         } : _deno?.removeSync,
 
         readdirSync = _isNode ? fs.readdirSync : _deno?.readDirSync,
@@ -1557,7 +1557,7 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
     {
         let dirPath = attempt( () => resolveDirectoryPath( pDirectoryPath ) );
 
-        attempt( () => rmdirSync( dirPath, { recursive: true } ) );
+        attempt( () => removeSync( dirPath, { recursive: true } ) );
 
         return !exists( dirPath );
     };
@@ -1582,7 +1582,12 @@ const { _ud = "undefined", $scope, konsole = console } = constants;
     {
         let dirPath = attempt( () => resolveDirectoryPath( pDirectoryPath ) );
 
-        await asyncAttempt( async() => await rmdir( dirPath, { recursive: true, maxRetries: 3, retryDelay: 150 } ) );
+        await asyncAttempt( async() => await remove( dirPath,
+                                                     {
+                                                         recursive: true,
+                                                         maxRetries: 3,
+                                                         retryDelay: 150
+                                                     } ) );
 
         return !await asyncExists( dirPath );
     };

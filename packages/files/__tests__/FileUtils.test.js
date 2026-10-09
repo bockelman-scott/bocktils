@@ -77,8 +77,13 @@ const PACKAGES =
         "performance\\package.json",
         "regex\\package.json",
         "secrets\\package.json",
+        "storage\\package.json",
         "http\\server\\package.json",
-        "loggers\\FileLogger\\package.json"
+        "loggers\\FileLogger\\package.json",
+        "secrets\\aws\\package.json",
+        "secrets\\azure\\package.json",
+        "storage\\s3\\package.json",
+        "storage\\SharePoint\\package.json",
     ];
 
 describe( "FileUtils", () =>
@@ -219,7 +224,7 @@ describe( "FileUtils::findFiles", () =>
 {
     test( "'findFiles' can perform breadth-first searches", async() =>
     {
-        const directoryFilter = ( entry ) => (null !== entry) && (entry?.name || entry) !== "__tests__";
+        const directoryFilter = ( entry ) => isFunction( entry?.isDirectory ) && entry.isDirectory() && !["__tests__", "node_modules"].includes( entry.name );
 
         const fileFilter = ( entry ) => (null !== entry) && path.basename( resolvePath( entry?.filepath || entry ) ) === "package.json";
 
@@ -227,7 +232,7 @@ describe( "FileUtils::findFiles", () =>
 
         let mapped = (found.map( ( entry ) => entry.filepath ));
 
-        expect( mapped.length ).toBe( 23 );
+        expect( mapped.length ).toBe( 28 );
 
         mapped = mapped.map( ( entry ) => path.relative( packagesDirectory, entry ) );
 
@@ -236,7 +241,7 @@ describe( "FileUtils::findFiles", () =>
 
     test( "'findFiles' can take a Visitor", async() =>
     {
-        const directoryFilter = ( entry ) => isFunction( entry?.isDirectory ) && entry.isDirectory() && entry.name !== "__tests__";
+        const directoryFilter = ( entry ) => isFunction( entry?.isDirectory ) && entry.isDirectory() && !["__tests__", "node_modules"].includes( entry.name );
 
         const fileFilter = ( entry ) => path.basename( entry.filepath || entry ) === "package.json";
 
@@ -244,7 +249,7 @@ describe( "FileUtils::findFiles", () =>
 
         let mapped = (found.map( ( entry ) => entry.filepath ));
 
-        expect( mapped.length ).toBe( 23 );
+        expect( mapped.length ).toBe( 28 );
 
         mapped = mapped.map( ( entry ) => path.relative( packagesDirectory, entry ) );
 
@@ -253,7 +258,7 @@ describe( "FileUtils::findFiles", () =>
 
     test( "'find' can perform depth-first searches", async() =>
     {
-        const directoryFilter = ( entry ) => isFunction( entry?.isDirectory ) && entry.isDirectory() && entry.name !== "__tests__";
+        const directoryFilter = ( entry ) => isFunction( entry?.isDirectory ) && entry.isDirectory() && !["__tests__", "node_modules"].includes( entry.name );
 
         const fileFilter = ( entry ) => path.basename( entry.filepath || entry ) === "package.json";
 
@@ -261,7 +266,7 @@ describe( "FileUtils::findFiles", () =>
 
         let mapped = (found.map( ( entry ) => entry.filepath ));
 
-        expect( mapped.length ).toBe( 23 );
+        expect( mapped.length ).toBe( 28 );
 
         mapped = mapped.map( ( entry ) => path.relative( packagesDirectory, entry ) );
 
@@ -288,7 +293,12 @@ describe( "FileUtils::findFiles", () =>
                                       "package.json",
                                       "performance\\package.json",
                                       "regex\\package.json",
+                                      "secrets\\aws\\package.json",
+                                      "secrets\\azure\\package.json",
                                       "secrets\\package.json",
+                                      "storage\\package.json",
+                                      "storage\\s3\\package.json",
+                                      "storage\\SharePoint\\package.json"
                                   ] );
     }, 120_000 );
 } );
